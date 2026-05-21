@@ -77,7 +77,7 @@ export class Stage {
     const github = el('a', {
       className: 'olv-github',
       text: 'GitHub',
-      href: 'https://github.com/your-org/openlidarviewer',
+      href: 'https://github.com/aurtechmx/openlidarviewer',
       ariaLabel: 'OpenLiDARViewer on GitHub',
     });
     github.target = '_blank';

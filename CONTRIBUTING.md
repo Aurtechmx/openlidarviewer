@@ -1,43 +1,66 @@
 # Contributing to OpenLiDARViewer
 
-Thanks for your interest in improving OpenLiDARViewer.
+Thanks for your interest in improving OpenLiDARViewer. It is an R&D-stage,
+open-source project, and contributions are welcome.
 
 ## Getting started
 
 ```bash
+git clone https://github.com/aurtechmx/openlidarviewer.git
+cd openlidarviewer
 npm install
 npm run dev
 ```
 
-## Project layout
+## Reporting bugs
 
-- `src/io/` — one file per format or per IO concern (sniffer, LAS header, coordinate bridge, loaders).
-- `src/model/` — the normalized `PointCloud` model.
-- `src/process/` — voxel downsampling.
-- `src/render/` — the three.js viewer and color modes.
-- `src/analysis/` — the analysis-module API and the validation modules.
-- `src/ui/` — the DOM shell (stage, drop zone, Inspector, tool dock).
-- `tests/` — Vitest unit tests; `tests/e2e/` — Playwright end-to-end tests.
+Open a GitHub issue and include:
 
-## Working style
+- what you expected to happen, and what actually happened
+- steps to reproduce
+- your browser, OS, and GPU if it is relevant
+- the file format involved
 
-- The algorithmic core is test-first. Each IO, processing, and analysis module has a matching `tests/*.test.ts`. Add a failing test, then the implementation.
-- TypeScript runs strict (`verbatimModuleSyntax`, `erasableSyntaxOnly`). Use `import type` for type-only imports; no `enum` or `namespace`.
-- Analysis modules consume `PointCloud` only — they must not import three.js.
+Please do not attach confidential scan data. Use a small, non-sensitive sample
+instead, or describe the file's structure. See [SECURITY.md](SECURITY.md).
 
-## Before opening a pull request
+## Suggesting features
+
+Open an issue describing the use case and the problem it would solve. Check
+[`docs/roadmap.md`](docs/roadmap.md) first, since it may already be planned.
+
+## Pull requests
+
+Branch from `main` and keep each change focused. Before opening a PR, run:
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm test            # Vitest unit suite
-npm run build       # production build
-npm run test:e2e    # Playwright (run `npx playwright install --with-deps chromium` once)
+npm run typecheck
+npm test
+npm run build
 ```
 
-All four must pass. CI runs the same checks.
+Add or update tests with your change. The algorithmic core is test-first
+(Vitest), and the renderer is covered by Playwright. Keep the module
+boundaries intact: one file per format or concern, and analysis modules must
+not import the renderer.
 
-## Scope
+## Coding style
 
-v1 is intentionally small — see `docs/implementation-plan.md` for what is in scope and what is deferred to v2. New formats, the compute-rasterization core, and additional analysis modules are welcome as v2 work.
+- Strict TypeScript (`verbatimModuleSyntax`, `erasableSyntaxOnly`)
+- Conventional Commits — `type(scope): description`
+- See the [Developer Manual](docs/developer-manual.md) for the full standard
 
-Licensed under MIT — by contributing you agree your contributions are licensed the same way.
+## Documentation
+
+Documentation lives in `README.md` and `docs/`. If a change affects behavior,
+update the docs in the same pull request.
+
+## A note on honesty
+
+Do not describe a format, feature, or accuracy level as supported unless the
+code actually supports it. Anything still in progress belongs in
+[`docs/roadmap.md`](docs/roadmap.md), not the feature list. Measurement is for
+visual inspection, so please do not describe it as survey-grade.
+
+Licensed under MIT. By contributing, you agree your contributions are licensed
+the same way.
