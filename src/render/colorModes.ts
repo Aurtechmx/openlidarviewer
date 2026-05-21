@@ -1,0 +1,247 @@
+/**
+ * colorModes.ts
+ *
+ * Pure functions that derive a flat Uint8Array of interleaved RGB colours
+ * (3 bytes per point) from a PointCloud for a given colour mode.
+ *
+ * No three.js dependency — safe to import in Node/Vitest tests.
+ */
+
+import type { PointCloud } from '../model/PointCloud';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The four ways a point cloud can be coloured in the viewer. */
+export type ColorMode = 'rgb' | 'intensity' | 'elevation' | 'classification';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevation colour ramp  (blue → teal → green → amber → red)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A set of control points for a linear colour ramp.
+ * Each entry is [t, r, g, b] with t in [0, 1] and rgb in [0, 255].
+ */
+const ELEVATION_RAMP: ReadonlyArray<readonly [number, number, number, number]> = [
+  [0.00,   0,   0, 255],  // pure blue
+  [0.25,   0, 200, 200],  // teal
+  [0.50,   0, 220,   0],  // green
+  [0.75, 255, 180,   0],  // amber
+  [1.00, 255,   0,   0],  // pure red
+];
+
+/**
+ * Interpolate the elevation ramp at normalised value `t` ∈ [0, 1].
+ * Returns [r, g, b] in 0-255.
+ */
+function sampleRamp(t: number): [number, number, number] {
+  // Clamp to [0,1] to handle the degenerate single-point cloud case.
+  const tc = Math.max(0, Math.min(1, t));
+
+  // Find the two bracketing control points.
+  let lo = ELEVATION_RAMP[0];
+  let hi = ELEVATION_RAMP[ELEVATION_RAMP.length - 1];
+
+  for (let i = 0; i < ELEVATION_RAMP.length - 1; i++) {
+    if (tc >= ELEVATION_RAMP[i][0] && tc <= ELEVATION_RAMP[i + 1][0]) {
+      lo = ELEVATION_RAMP[i];
+      hi = ELEVATION_RAMP[i + 1];
+      break;
+    }
+  }
+
+  const span = hi[0] - lo[0];
+  const f = span === 0 ? 0 : (tc - lo[0]) / span;
+
+  return [
+    Math.round(lo[1] + f * (hi[1] - lo[1])),
+    Math.round(lo[2] + f * (hi[2] - lo[2])),
+    Math.round(lo[3] + f * (hi[3] - lo[3])),
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Classification palette
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Categorical colour palette keyed by ASPRS class code.
+ * Unmapped codes fall back to a deterministic hue derived from the code.
+ * Values are [r, g, b] in 0-255.
+ */
+const CLASS_PALETTE: Readonly<Record<number, readonly [number, number, number]>> = {
+  0:  [200, 200, 200],   // Created / never classified  — light grey
+  1:  [150, 150, 150],   // Unclassified               — mid grey
+  2:  [139,  90,  43],   // Ground                     — brown
+  3:  [  0, 160,  80],   // Low vegetation             — light green
+  4:  [  0, 120,  50],   // Medium vegetation          — mid green
+  5:  [  0,  80,  20],   // High vegetation            — dark green
+  6:  [220,  80,  80],   // Building                   — salmon red
+  7:  [255, 140,   0],   // Low point / noise          — orange
+  8:  [200, 200,   0],   // Reserved                   — yellow
+  9:  [ 30, 100, 220],   // Water                      — blue
+  10: [180, 220, 240],   // Rail                       — light blue
+  11: [240, 240, 240],   // Road surface               — near-white
+  12: [200, 180, 120],   // Reserved                   — tan
+  13: [120,  50, 200],   // Wire guard / shield        — purple
+  14: [ 80,  20, 160],   // Wire conductor / phase     — violet
+  15: [ 50, 200, 230],   // Transmission tower         — cyan
+  16: [230, 180, 255],   // Wire connector             — light violet
+  17: [255, 255,   0],   // Bridge deck                — bright yellow
+  18: [255,   0, 255],   // High noise                 — magenta
+};
+
+/**
+ * Generate a deterministic colour for an unmapped classification code
+ * by spreading codes around the hue wheel.
+ */
+function fallbackClassColour(code: number): [number, number, number] {
+  const hue = (code * 47) % 360;
+  return hsvToRgb(hue, 0.75, 0.85);
+}
+
+/** Convert HSV (h∈[0,360), s,v∈[0,1]) to RGB (each in 0-255). */
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+  const hi = Math.floor(h / 60) % 6;
+  const f = h / 60 - Math.floor(h / 60);
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  let r = 0, g = 0, b = 0;
+  switch (hi) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    case 5: r = v; g = p; b = q; break;
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Compute a flat interleaved RGB colour array (3 bytes per point) for `cloud`
+ * using the specified `mode`.
+ *
+ * Throws if the cloud lacks the attribute required by the requested mode
+ * (e.g. `'rgb'` when `cloud.colors` is undefined).
+ */
+export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
+  const n = cloud.pointCount;
+
+  switch (mode) {
+    // ── rgb ─────────────────────────────────────────────────────────────────
+    case 'rgb': {
+      if (!cloud.colors) {
+        throw new Error(`colorForMode('rgb'): cloud "${cloud.name}" has no colors attribute`);
+      }
+      return cloud.colors;
+    }
+
+    // ── intensity ───────────────────────────────────────────────────────────
+    case 'intensity': {
+      if (!cloud.intensity) {
+        throw new Error(`colorForMode('intensity'): cloud "${cloud.name}" has no intensity attribute`);
+      }
+      const src = cloud.intensity;
+      const out = new Uint8Array(n * 3);
+
+      // Compute min/max for normalisation.
+      let minI = src[0];
+      let maxI = src[0];
+      for (let i = 1; i < n; i++) {
+        if (src[i] < minI) minI = src[i];
+        if (src[i] > maxI) maxI = src[i];
+      }
+      const range = maxI - minI;
+
+      for (let i = 0; i < n; i++) {
+        const grey = range === 0 ? 0 : Math.round(((src[i] - minI) / range) * 255);
+        out[i * 3]     = grey;
+        out[i * 3 + 1] = grey;
+        out[i * 3 + 2] = grey;
+      }
+      return out;
+    }
+
+    // ── elevation ───────────────────────────────────────────────────────────
+    case 'elevation': {
+      const pos = cloud.positions;
+      const out = new Uint8Array(n * 3);
+
+      // Collect Z values (index 2, 5, 8, …)
+      let minZ = pos[2];
+      let maxZ = pos[2];
+      for (let i = 0; i < n; i++) {
+        const z = pos[i * 3 + 2];
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
+      }
+      const rangeZ = maxZ - minZ;
+
+      for (let i = 0; i < n; i++) {
+        const z = pos[i * 3 + 2];
+        const t = rangeZ === 0 ? 0 : (z - minZ) / rangeZ;
+        const [r, g, b] = sampleRamp(t);
+        out[i * 3]     = r;
+        out[i * 3 + 1] = g;
+        out[i * 3 + 2] = b;
+      }
+      return out;
+    }
+
+    // ── classification ──────────────────────────────────────────────────────
+    case 'classification': {
+      if (!cloud.classification) {
+        throw new Error(
+          `colorForMode('classification'): cloud "${cloud.name}" has no classification attribute`,
+        );
+      }
+      const src = cloud.classification;
+      const out = new Uint8Array(n * 3);
+
+      // Cache computed fallback colours to avoid repeated calculation.
+      const cache = new Map<number, readonly [number, number, number]>();
+
+      for (let i = 0; i < n; i++) {
+        const code = src[i];
+        let colour = cache.get(code);
+        if (!colour) {
+          colour = CLASS_PALETTE[code] ?? fallbackClassColour(code);
+          cache.set(code, colour);
+        }
+        out[i * 3]     = colour[0];
+        out[i * 3 + 1] = colour[1];
+        out[i * 3 + 2] = colour[2];
+      }
+      return out;
+    }
+  }
+}
+
+/**
+ * Return only the colour modes for which `cloud` has the required data.
+ * `'elevation'` is always available (it uses position Z which is always present).
+ */
+export function availableModes(cloud: PointCloud): ColorMode[] {
+  const modes: ColorMode[] = [];
+  if (cloud.colors)         modes.push('rgb');
+  if (cloud.intensity)      modes.push('intensity');
+  modes.push('elevation');
+  if (cloud.classification) modes.push('classification');
+  return modes;
+}
+
+/**
+ * Choose the best default colour mode for `cloud`.
+ * Prefers `'rgb'` when the cloud carries colour data; falls back to `'elevation'`.
+ */
+export function defaultMode(cloud: PointCloud): ColorMode {
+  return cloud.colors ? 'rgb' : 'elevation';
+}
