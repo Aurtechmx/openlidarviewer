@@ -48,6 +48,8 @@ pnpm-debug.log*
 _*.mjs
 verify-*.mjs
 trycheck*.mjs
+*.tmp
+_rmtest*
 
 # ── Editor / OS ──────────────────────────────────────────────────────────────
 .vscode/*
