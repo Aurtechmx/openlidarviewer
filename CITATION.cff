@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use OpenLiDARViewer in your research, please cite it."
+title: OpenLiDARViewer
+abstract: >-
+  A single-page, open-source, browser-based point-cloud viewer that opens
+  drone LiDAR surveys and phone scans from one drag-and-drop — no install,
+  no upload, no conversion — with built-in scan validation.
+type: software
+authors:
+  - name: "OpenLiDARViewer contributors"
+license: MIT
+repository-code: "https://github.com/your-org/openlidarviewer"
+version: 0.1.0
+date-released: "2026-05-20"
+keywords:
+  - lidar
+  - point-cloud
+  - webgpu
+  - three.js
+  - visualization
