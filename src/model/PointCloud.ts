@@ -21,6 +21,12 @@ export interface PointCloudOptions {
    * integrity check can compare it against the actually-loaded count.
    */
   declaredPointCount?: number;
+  /**
+   * The point count actually decoded from the file, before any downsampling.
+   * Survives voxel downsampling so the Health Check compares the file's
+   * declared count against what was decoded — not against the reduced count.
+   */
+  decodedPointCount?: number;
 }
 
 /**
@@ -38,6 +44,7 @@ export class PointCloud {
   readonly sourceFormat: SourceFormat;
   readonly name: string;
   readonly declaredPointCount?: number;
+  readonly decodedPointCount?: number;
 
   constructor(options: PointCloudOptions) {
     this.positions = options.positions;
@@ -48,6 +55,7 @@ export class PointCloud {
     this.sourceFormat = options.sourceFormat;
     this.name = options.name;
     this.declaredPointCount = options.declaredPointCount;
+    this.decodedPointCount = options.decodedPointCount;
   }
 
   /** Number of points: three position components per point. */

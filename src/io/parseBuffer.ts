@@ -4,7 +4,7 @@ import { loadPly } from './loadPly';
 import { loadLas } from './loadLas';
 import { loadObj } from './loadObj';
 import { loadGltf } from './loadGltf';
-import { voxelDownsample, voxelSizeForBudget } from '../process/voxelDownsample';
+import { downsampleToBudget } from '../process/voxelDownsample';
 
 /** Maximum points kept before a cloud is voxel-downsampled on load. */
 export const POINT_BUDGET = 4_000_000;
@@ -62,16 +62,8 @@ export async function parseBuffer(
   const cloud = await loader(buffer, name);
   const originalPointCount = cloud.pointCount;
 
-  if (originalPointCount <= budget) {
-    return { cloud, originalPointCount, downsampled: false };
-  }
-
-  // Over budget: downsample, growing the voxel size until the cloud fits.
-  let voxelSize = voxelSizeForBudget(cloud, budget);
-  let reduced = voxelDownsample(cloud, voxelSize);
-  for (let attempt = 0; attempt < 8 && reduced.pointCount > budget; attempt++) {
-    voxelSize *= 1.5;
-    reduced = voxelDownsample(cloud, voxelSize);
-  }
-  return { cloud: reduced, originalPointCount, downsampled: true };
+  // Voxel-downsample if the cloud exceeds the budget. `downsampleToBudget`
+  // returns the same cloud object untouched when it already fits.
+  const reduced = downsampleToBudget(cloud, budget);
+  return { cloud: reduced, originalPointCount, downsampled: reduced !== cloud };
 }

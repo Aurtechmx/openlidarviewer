@@ -91,14 +91,25 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     sourceFormat: cloud.sourceFormat,
     name: cloud.name,
     declaredPointCount: cloud.declaredPointCount,
+    // Preserve the decoded count so the Health Check still compares against
+    // what was read from the file, not this reduced cloud.
+    decodedPointCount: cloud.decodedPointCount,
   });
 }
 
 /**
- * Estimate a voxel size that brings `cloud` near `maxPoints`, from the
- * bounding-box volume divided by the target count. It is only an estimate —
- * point clouds are rarely uniformly dense — so callers may downsample
- * iteratively, growing the size, if the first pass overshoots the budget.
+ * Estimate a voxel size that brings `cloud` near `maxPoints`.
+ *
+ * LiDAR and scan data lies on a roughly two-dimensional surface, not a filled
+ * three-dimensional volume. A volume-based estimate (`cbrt(volume / target)`)
+ * therefore picks a voxel far too large — it would crush a multi-million-point
+ * survey down to a few tens of thousands of points. Sizing the voxel from the
+ * dominant face of the bounding box (`sqrt(area / target)`) instead lands
+ * close to the budget for surface-like data.
+ *
+ * It is still only an estimate — clouds are rarely uniformly dense — so
+ * callers downsample iteratively, growing or shrinking the size, to converge
+ * on the budget.
  */
 export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number {
   const { min, max } = cloud.bounds();
@@ -106,5 +117,47 @@ export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number
   const dy = Math.max(max[1] - min[1], 1e-6);
   const dz = Math.max(max[2] - min[2], 1e-6);
   const target = Math.max(maxPoints, 1);
-  return Math.cbrt((dx * dy * dz) / target);
+  const dominantFace = Math.max(dx * dy, dx * dz, dy * dz);
+  return Math.sqrt(dominantFace / target);
+}
+
+/**
+ * Downsample `cloud` so it fits within `maxPoints`.
+ *
+ * Starts from `voxelSizeForBudget`'s estimate, then converges on the budget
+ * from both sides: it grows the voxel while the cloud is over budget, then
+ * shrinks it while the cloud sits wastefully far under budget — without ever
+ * letting the result exceed `maxPoints`. The pass count is capped so a
+ * pathological cloud cannot loop indefinitely.
+ *
+ * If `cloud` already fits, the *same object* is returned untouched, so callers
+ * can detect "was it downsampled?" with a simple identity check.
+ */
+export function downsampleToBudget(cloud: PointCloud, maxPoints: number): PointCloud {
+  if (cloud.pointCount <= maxPoints) return cloud;
+
+  const MAX_PASSES = 14;
+  let voxelSize = voxelSizeForBudget(cloud, maxPoints);
+  let reduced = voxelDownsample(cloud, voxelSize);
+  let passes = 1;
+
+  // Still too many points: grow the voxel until the cloud fits the budget.
+  while (reduced.pointCount > maxPoints && passes < MAX_PASSES) {
+    voxelSize *= 1.4;
+    reduced = voxelDownsample(cloud, voxelSize);
+    passes++;
+  }
+
+  // Wastefully far under budget: the voxel is too large and detail is being
+  // thrown away. Shrink it to recover points — but never past the size that
+  // would push the cloud back over the budget.
+  while (reduced.pointCount < maxPoints * 0.6 && passes < MAX_PASSES) {
+    const candidate = voxelDownsample(cloud, voxelSize / 1.4);
+    if (candidate.pointCount > maxPoints) break;
+    voxelSize /= 1.4;
+    reduced = candidate;
+    passes++;
+  }
+
+  return reduced;
 }

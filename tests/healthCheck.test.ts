@@ -3,6 +3,7 @@ import { PointCloud } from '../src/model/PointCloud';
 
 function makeCloud(positions: number[], opts?: {
   declaredPointCount?: number;
+  decodedPointCount?: number;
   classification?: Uint8Array;
 }): PointCloud {
   return new PointCloud({
@@ -82,6 +83,19 @@ describe('healthCheck module', () => {
     const cloud = makeCloud([1, 2, 3, 4, 5, 6], { declaredPointCount: 2 });
     const row = rowByLabel(healthCheck.run(cloud), 'Declared vs Decoded Count');
     expect(row.status).toBe('pass');
+  });
+
+  test('downsampled cloud — declared matches decoded → pass, not a false mismatch', () => {
+    // A 3-point cloud decoded from a 100-point file, then voxel-downsampled.
+    // The check compares declared vs the decoded count (100 vs 100), so it
+    // passes — it must not flag the reduced point count as a mismatch.
+    const cloud = makeCloud([1, 2, 3, 4, 5, 6, 7, 8, 9], {
+      declaredPointCount: 100,
+      decodedPointCount: 100,
+    });
+    const row = rowByLabel(healthCheck.run(cloud), 'Declared vs Decoded Count');
+    expect(row.status).toBe('pass');
+    expect(row.value).toContain('100');
   });
 
   test('duplicate points → warn with correct count', () => {

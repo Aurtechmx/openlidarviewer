@@ -87,7 +87,9 @@ function checkEmptyCloud(cloud: PointCloud): AnalysisRow {
 }
 
 function checkDeclaredVsDecoded(cloud: PointCloud): AnalysisRow {
-  const decoded = cloud.pointCount;
+  // The count decoded from the file — not `pointCount`, which a downsampled
+  // cloud would report as the reduced count and falsely flag as a mismatch.
+  const decoded = cloud.decodedPointCount ?? cloud.pointCount;
   if (cloud.declaredPointCount === undefined) {
     return {
       label: 'Declared vs Decoded Count',

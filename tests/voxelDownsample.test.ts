@@ -1,4 +1,4 @@
-import { voxelDownsample, voxelSizeForBudget } from '../src/process/voxelDownsample';
+import { voxelDownsample, voxelSizeForBudget, downsampleToBudget } from '../src/process/voxelDownsample';
 import { PointCloud } from '../src/model/PointCloud';
 
 function makeCloud(positions: number[], colors?: number[]): PointCloud {
@@ -76,4 +76,44 @@ test('downsampling reduces the point count of a dense cloud', () => {
   const out = voxelDownsample(makeCloud(pts), 0.5);
   expect(out.pointCount).toBeLessThan(1000);
   expect(out.pointCount).toBeLessThanOrEqual(8);
+});
+
+/** A ~flat surface cloud — side × side points on a near-2D plane. */
+function surfaceCloud(side: number): PointCloud {
+  const pts: number[] = [];
+  for (let i = 0; i < side; i++) {
+    for (let j = 0; j < side; j++) {
+      pts.push(i, j, ((i * 7 + j * 13) % 5) * 0.01); // z ∈ [0, 0.04] — near-flat
+    }
+  }
+  return makeCloud(pts);
+}
+
+test('downsampleToBudget returns the same cloud untouched when it already fits', () => {
+  const cloud = makeCloud([0, 0, 0, 1, 1, 1, 2, 2, 2]);
+  expect(downsampleToBudget(cloud, 100)).toBe(cloud);
+});
+
+test('downsampleToBudget converges near the budget for a surface cloud', () => {
+  // Regression guard: a volume-based voxel estimate sized the voxel far too
+  // large for surface-like LiDAR data and crushed clouds to a tiny fraction
+  // of the budget. The result must land at or under budget — but not collapse.
+  const cloud = surfaceCloud(200); // 40,000 points on a near-flat plane
+  const budget = 5000;
+  const out = downsampleToBudget(cloud, budget);
+  expect(out.pointCount).toBeLessThanOrEqual(budget);
+  expect(out.pointCount).toBeLessThan(cloud.pointCount);
+  expect(out.pointCount).toBeGreaterThan(budget * 0.3); // not gutted
+});
+
+test('downsampleToBudget keeps a dense 3D cloud at or under budget', () => {
+  const pts: number[] = [];
+  for (let i = 0; i < 30; i++) {
+    for (let j = 0; j < 30; j++) {
+      for (let k = 0; k < 30; k++) pts.push(i, j, k); // 27,000-point filled cube
+    }
+  }
+  const out = downsampleToBudget(makeCloud(pts), 4000);
+  expect(out.pointCount).toBeLessThanOrEqual(4000);
+  expect(out.pointCount).toBeLessThan(27000);
 });

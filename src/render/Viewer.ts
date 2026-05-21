@@ -5,12 +5,28 @@
  * minimal, typed API for loading/managing point-cloud layers, switching colour
  * modes, and camera control.
  *
+ * ## Why points are drawn as instanced quads
+ *
+ * A `THREE.Points` object is rendered with the GPU's native point primitive.
+ * On the WebGPU backend that primitive is **locked to one pixel** — three.js
+ * cannot enlarge it (see `PointsNodeMaterial`'s own documentation). A scan
+ * therefore renders as invisible one-pixel dust on WebGPU while looking fine
+ * on WebGL 2, which is exactly the kind of backend-specific bug that is hard
+ * to catch.
+ *
+ * To render identically on both backends every point is instead drawn as a
+ * camera-facing quad: one shared unit quad, instanced once per point, with the
+ * per-point centre and colour supplied as instanced attributes. `three/tsl`'s
+ * `PointsNodeMaterial` expands those quads to a real, controllable pixel size
+ * on WebGPU *and* WebGL 2 — the same node graph compiles to both.
+ *
  * Import note: this file imports from 'three/webgpu' (browser globals required)
  * and must NOT be imported in Node / Vitest tests.
  */
 
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { instancedBufferAttribute } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
 import { colorForMode, defaultMode } from './colorModes';
@@ -22,9 +38,30 @@ import type { ColorMode } from './colorModes';
 
 interface CloudEntry {
   cloud: PointCloud;
-  points: THREE.Points;
-  /** Current colour mode applied to the geometry's color attribute. */
+  /** The instanced-quad mesh that draws this cloud. */
+  mesh: THREE.Mesh;
+  /** The cloud's point material (one per cloud so colours are independent). */
+  material: THREE.PointsNodeMaterial;
+  /** Per-point colour, as an instanced attribute, so colour modes can swap it. */
+  colorAttr: THREE.InstancedBufferAttribute;
+  /** Current colour mode applied to the colour attribute. */
   mode: ColorMode;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The four corners of the unit billboard quad shared by every point. */
+const QUAD_CORNERS = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
+/** Two triangles covering the quad. */
+const QUAD_INDEX = [0, 1, 2, 0, 2, 3];
+
+/** Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute. */
+function toFloatColors(u8: Uint8Array): Float32Array {
+  const f = new Float32Array(u8.length);
+  for (let i = 0; i < u8.length; i++) f[i] = u8[i] / 255;
+  return f;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,8 +95,9 @@ export class Viewer {
   private readonly _clouds = new Map<string, CloudEntry>();
   private _nextId = 0;
 
-  // ── Shared point size (applied to all materials) ─────────────────────────
-  private _pointSize = 1.5;
+  // ── Shared point size in screen pixels (applied to all materials) ────────
+  // Matches the Inspector's point-size slider initial value.
+  private _pointSize = 2;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Constructor
@@ -116,9 +154,10 @@ export class Viewer {
   /**
    * Add a point cloud to the scene.
    *
-   * Builds a `THREE.Points` mesh with a `BufferGeometry` carrying:
-   * - `position` attribute from `cloud.positions` (Float32, xyz local coords)
-   * - `color` attribute from the default colour mode, normalised to [0, 1]
+   * Builds an `InstancedBufferGeometry`: one shared unit quad drawn once per
+   * point. The per-point centre (`cloud.positions`) and colour are supplied as
+   * instanced attributes and consumed by a `PointsNodeMaterial`, which expands
+   * each instance into a camera-facing, pixel-sized quad on both GPU backends.
    *
    * @returns A string ID that identifies this cloud in subsequent calls.
    */
@@ -126,32 +165,48 @@ export class Viewer {
     const id = `cloud_${this._nextId++}`;
     const mode = defaultMode(cloud);
 
-    const geometry = new THREE.BufferGeometry();
-
-    // Position attribute — three.js needs Float32, 3 items per vertex.
+    // ── Shared billboard quad ─────────────────────────────────────────────
+    const geometry = new THREE.InstancedBufferGeometry();
     geometry.setAttribute(
       'position',
-      new THREE.Float32BufferAttribute(cloud.positions, 3),
+      new THREE.Float32BufferAttribute(QUAD_CORNERS, 3),
+    );
+    geometry.setIndex(QUAD_INDEX);
+    geometry.instanceCount = cloud.pointCount;
+
+    // ── Per-point instance data ───────────────────────────────────────────
+    // Positions are reused as-is (Float32, xyz local coords); colours are
+    // expanded to Float32 [0,1] so the attribute needs no normalisation.
+    const positionAttr = new THREE.InstancedBufferAttribute(cloud.positions, 3);
+    const colorAttr = new THREE.InstancedBufferAttribute(
+      toFloatColors(colorForMode(mode, cloud)),
+      3,
     );
 
-    // Colour attribute — our colorForMode returns Uint8 [0-255]; pass
-    // normalized=true so three.js maps them to [0,1] floats in the shader.
-    const rawColors = colorForMode(mode, cloud);
-    geometry.setAttribute(
-      'color',
-      new THREE.Uint8BufferAttribute(rawColors, 3, true),
-    );
+    // ── Material — drives the quad expansion on WebGPU and WebGL 2 ────────
+    // `instancedBufferAttribute` is typed as a broad node-type union; narrow
+    // it to each property's accepted type. The runtime value is correct — the
+    // attribute's itemSize (3) makes it a vec3.
+    const material = new THREE.PointsNodeMaterial();
+    material.positionNode = instancedBufferAttribute(positionAttr) as NonNullable<
+      typeof material.positionNode
+    >;
+    material.colorNode = instancedBufferAttribute(colorAttr) as NonNullable<
+      typeof material.colorNode
+    >;
+    material.size = this._pointSize;
+    // Constant screen-space size: a cloud stays visible whatever its world
+    // scale (a 2 m phone scan or a 2 km survey) and whatever the zoom.
+    material.sizeAttenuation = false;
+    material.transparent = false;
 
-    const material = new THREE.PointsMaterial({
-      size: this._pointSize,
-      vertexColors: true,
-      sizeAttenuation: true,
-    });
+    const mesh = new THREE.Mesh(geometry, material);
+    // The geometry's bounds are just the unit quad, so per-object frustum
+    // culling would wrongly cull the whole cloud — disable it.
+    mesh.frustumCulled = false;
+    this._scene.add(mesh);
 
-    const points = new THREE.Points(geometry, material);
-    this._scene.add(points);
-
-    this._clouds.set(id, { cloud, points, mode });
+    this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
     return id;
   }
 
@@ -161,9 +216,9 @@ export class Viewer {
   removeCloud(id: string): void {
     const entry = this._clouds.get(id);
     if (!entry) return;
-    this._scene.remove(entry.points);
-    entry.points.geometry.dispose();
-    (entry.points.material as THREE.PointsMaterial).dispose();
+    this._scene.remove(entry.mesh);
+    entry.mesh.geometry.dispose();
+    entry.material.dispose();
     this._clouds.delete(id);
   }
 
@@ -175,7 +230,7 @@ export class Viewer {
   /** Show or hide a cloud. */
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);
-    if (entry) entry.points.visible = visible;
+    if (entry) entry.mesh.visible = visible;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -183,18 +238,18 @@ export class Viewer {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Swap the colour attribute of a cloud's geometry to a different mode.
-   * The geometry's `color` attribute is replaced in-place so the existing
-   * material and draw call are reused.
+   * Swap a cloud's colour mode by rewriting its instanced colour attribute
+   * in place — the geometry, material, and draw call are all reused.
    */
   setColorMode(id: string, mode: ColorMode): void {
     const entry = this._clouds.get(id);
     if (!entry) return;
     if (entry.mode === mode) return;
 
-    const rawColors = colorForMode(mode, entry.cloud);
-    const attr = new THREE.Uint8BufferAttribute(rawColors, 3, true);
-    entry.points.geometry.setAttribute('color', attr);
+    const raw = colorForMode(mode, entry.cloud);
+    const arr = entry.colorAttr.array as Float32Array;
+    for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+    entry.colorAttr.needsUpdate = true;
     entry.mode = mode;
   }
 
@@ -204,8 +259,8 @@ export class Viewer {
    */
   setPointSize(size: number): void {
     this._pointSize = size;
-    for (const { points } of this._clouds.values()) {
-      (points.material as THREE.PointsMaterial).size = size;
+    for (const { material } of this._clouds.values()) {
+      material.size = size;
     }
   }
 
@@ -223,8 +278,8 @@ export class Viewer {
     if (this._clouds.size === 0) return;
 
     const box = new THREE.Box3();
-    for (const { points, cloud } of this._clouds.values()) {
-      if (!points.visible) continue;
+    for (const { mesh, cloud } of this._clouds.values()) {
+      if (!mesh.visible) continue;
       const b = cloud.bounds();
       box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
       box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));

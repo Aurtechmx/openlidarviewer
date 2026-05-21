@@ -202,5 +202,6 @@ export async function loadLas(
     sourceFormat,
     name,
     declaredPointCount: header.pointCount,
+    decodedPointCount: pointCount,
   });
 }
