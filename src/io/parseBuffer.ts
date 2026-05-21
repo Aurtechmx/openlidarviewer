@@ -4,6 +4,7 @@ import { loadPly } from './loadPly';
 import { loadLas } from './loadLas';
 import { loadObj } from './loadObj';
 import { loadGltf } from './loadGltf';
+import { loadXyz } from './loadXyz';
 import { downsampleToBudget } from '../process/voxelDownsample';
 
 /** Maximum points kept before a cloud is voxel-downsampled on load. */
@@ -39,6 +40,8 @@ export function pickLoader(format: DetectedFormat): LoaderFn {
       return (buffer, name) => loadGltf(buffer, 'glb', name);
     case 'gltf':
       return (buffer, name) => loadGltf(buffer, 'gltf', name);
+    case 'xyz':
+      return (buffer, name) => loadXyz(buffer, name);
     case 'unknown':
       throw new Error('Unsupported or unrecognised file format');
     default: {

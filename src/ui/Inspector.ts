@@ -1,12 +1,21 @@
 import { el, formatCount } from './dom';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import type { ColorMode } from '../render/colorModes';
+import type { ExportFormat } from '../io/exporters';
 
 export interface InspectorCallbacks {
   onColorMode: (mode: ColorMode) => void;
   onPointSize: (size: number) => void;
   onToggleVisible: (id: string, visible: boolean) => void;
   onRemove: (id: string) => void;
+  /** Export the active cloud to a file format. */
+  onExport: (format: ExportFormat) => void;
+  /** Save the current camera viewpoint. */
+  onSaveView: () => void;
+  /** Fly to a saved viewpoint by index. */
+  onApplyView: (index: number) => void;
+  /** Delete a saved viewpoint by index. */
+  onDeleteView: (index: number) => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -15,6 +24,8 @@ const MODE_LABELS: Record<ColorMode, string> = {
   elevation: 'Height',
   classification: 'Class',
 };
+
+const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
 
 function section(label: string, body: HTMLElement): HTMLElement {
   return el('div', { className: 'olv-section' }, [
@@ -25,8 +36,8 @@ function section(label: string, body: HTMLElement): HTMLElement {
 
 /**
  * The floating Inspector panel: the cloud layer list, the color-by chips, a
- * point-size slider, the Detail readout (honest "shown / total"), and the
- * Scan Report — the output of the validation modules.
+ * point-size slider, the Detail readout, the Scan Report, saved camera views,
+ * and the export buttons.
  */
 export class Inspector {
   readonly element: HTMLElement;
@@ -35,6 +46,7 @@ export class Inspector {
   private readonly _chips = el('div', { className: 'olv-chips' });
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
+  private readonly _viewList = el('div', { className: 'olv-views' });
   private readonly _layerRows = new Map<string, HTMLElement>();
 
   constructor(callbacks: InspectorCallbacks) {
@@ -48,6 +60,29 @@ export class Inspector {
     slider.value = '2';
     slider.addEventListener('input', () => this._cb.onPointSize(slider.valueAsNumber));
 
+    // Saved views: a "save" button above a list of stored viewpoints.
+    const saveView = el('button', { className: 'olv-view-save', text: '+ Save current view' });
+    saveView.addEventListener('click', () => {
+      saveView.blur();
+      this._cb.onSaveView();
+    });
+    const views = el('div', {}, [saveView, this._viewList]);
+
+    // Export: one button per supported output format.
+    const exportButtons = EXPORT_FORMATS.map((format) => {
+      const button = el('button', {
+        className: 'olv-export-btn',
+        text: format.toUpperCase(),
+        title: `Export the cloud as ${format.toUpperCase()}`,
+      });
+      button.addEventListener('click', () => {
+        button.blur();
+        this._cb.onExport(format);
+      });
+      return button;
+    });
+    const exporter = el('div', { className: 'olv-export' }, exportButtons);
+
     this.element = el('aside', { className: 'olv-inspector' }, [
       el('div', { className: 'olv-panel-title', text: 'Inspector' }),
       section('Layers', this._layers),
@@ -55,8 +90,11 @@ export class Inspector {
       section('Point size', slider),
       section('Detail', this._detail),
       section('Scan report', this._report),
+      section('Saved views', views),
+      section('Export', exporter),
     ]);
     this._showReportPlaceholder();
+    this._showViewsPlaceholder();
   }
 
   /** Add a loaded cloud to the layer list. */
@@ -132,6 +170,26 @@ export class Inspector {
     }
   }
 
+  /** Render the saved-view list — one clickable row per stored viewpoint. */
+  setViews(names: string[]): void {
+    this._viewList.replaceChildren();
+    if (names.length === 0) {
+      this._showViewsPlaceholder();
+      return;
+    }
+    names.forEach((name, index) => {
+      const go = el('button', { className: 'olv-view-name', text: name });
+      go.addEventListener('click', () => this._cb.onApplyView(index));
+      const del = el('button', {
+        className: 'olv-layer-x',
+        text: '×',
+        ariaLabel: `Delete ${name}`,
+      });
+      del.addEventListener('click', () => this._cb.onDeleteView(index));
+      this._viewList.append(el('div', { className: 'olv-view-row' }, [go, del]));
+    });
+  }
+
   /** Reset the panel to its empty state. */
   clear(): void {
     this._layers.replaceChildren();
@@ -139,11 +197,18 @@ export class Inspector {
     this._chips.replaceChildren();
     this._detail.replaceChildren();
     this._showReportPlaceholder();
+    this._showViewsPlaceholder();
   }
 
   private _showReportPlaceholder(): void {
     this._report.replaceChildren(
       el('div', { className: 'olv-report-empty', text: 'Drop a scan to validate it.' }),
+    );
+  }
+
+  private _showViewsPlaceholder(): void {
+    this._viewList.replaceChildren(
+      el('div', { className: 'olv-report-empty', text: 'No saved views yet.' }),
     );
   }
 }

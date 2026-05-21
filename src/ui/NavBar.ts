@@ -103,9 +103,16 @@ export class NavBar {
       ]),
     ]);
 
+    // Project version, shown beside the mode switcher.
+    const version = el('span', {
+      className: 'olv-nav-version',
+      text: `v${__APP_VERSION__}`,
+      title: `OpenLiDARViewer ${__APP_VERSION__}`,
+    });
+
     this.element = el('div', { className: 'olv-navbar' }, [
       this._hud,
-      el('div', { className: 'olv-nav-row' }, [switcher, this._speed]),
+      el('div', { className: 'olv-nav-row' }, [switcher, version, this._speed]),
     ]);
 
     this.prompt = el('div', { className: 'olv-nav-prompt' }, [

@@ -35,6 +35,12 @@ import type { Vec3 } from './navMath';
 /** The three navigation modes. */
 export type NavMode = 'orbit' | 'walk' | 'fly';
 
+/** A saveable camera viewpoint: where it sits and what it looks at. */
+export interface CameraPose {
+  position: [number, number, number];
+  target: [number, number, number];
+}
+
 /** Hooks the app wires up so the UI and viewer can react to navigation. */
 export interface NavCallbacks {
   /** Fired whenever the active mode changes. */
@@ -240,6 +246,21 @@ export class NavController {
       const pos = point.clone().addScaledVector(this._vForward, -backoff);
       this.tweenTo(pos, point, 0.7);
     }
+  }
+
+  /** Capture the current camera viewpoint, so it can be restored later. */
+  getPose(): CameraPose {
+    const t = this._currentLookTarget();
+    const p = this._camera.position;
+    return { position: [p.x, p.y, p.z], target: [t.x, t.y, t.z] };
+  }
+
+  /** Glide the camera to a previously captured viewpoint. */
+  applyPose(pose: CameraPose): void {
+    this.tweenTo(
+      new THREE.Vector3(pose.position[0], pose.position[1], pose.position[2]),
+      new THREE.Vector3(pose.target[0], pose.target[1], pose.target[2]),
+    );
   }
 
   /** Advance navigation by `dt` seconds. Called once per rendered frame. */

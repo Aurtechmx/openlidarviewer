@@ -296,12 +296,101 @@ button:disabled { cursor: not-allowed; }
   50% { box-shadow: 0 0 0 3px rgba(226, 75, 74, 0.22); }
 }
 
+/* Project version, beside the mode switcher */
+.olv-nav-version {
+  font-size: 10px; font-family: var(--mono); color: var(--text-faint);
+  padding: 0 4px; user-select: none;
+}
+
+/* Export buttons (Inspector) */
+.olv-export { display: flex; gap: 5px; }
+.olv-export-btn {
+  flex: 1; font-size: 10.5px; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 4px;
+  transition: color 130ms ease, border-color 130ms ease,
+    background 130ms ease, transform 90ms ease;
+}
+.olv-export-btn:hover { color: var(--text); border-color: var(--accent); }
+.olv-export-btn:active { transform: scale(0.95); }
+.olv-export-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Saved views (Inspector) */
+.olv-view-save {
+  width: 100%; font-size: 11px; color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(52, 211, 189, 0.3);
+  border-radius: 7px; padding: 6px;
+  transition: background 130ms ease, transform 90ms ease;
+}
+.olv-view-save:hover { background: rgba(52, 211, 189, 0.24); }
+.olv-view-save:active { transform: scale(0.98); }
+.olv-views { display: flex; flex-direction: column; gap: 5px; margin-top: 7px; }
+.olv-view-row { display: flex; align-items: center; gap: 6px; }
+.olv-view-name {
+  flex: 1; text-align: left; font-size: 11.5px; color: #d6d9de;
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 8px;
+  transition: color 130ms ease, border-color 130ms ease, transform 90ms ease;
+}
+.olv-view-name:hover { color: var(--accent); border-color: rgba(52, 211, 189, 0.4); }
+.olv-view-name:active { transform: scale(0.98); }
+
+/* "Project ready" summary card */
+.olv-project-card {
+  position: absolute; top: 56px; left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  width: 290px;
+  background: rgba(18, 21, 27, 0.9);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(52, 211, 189, 0.28);
+  border-radius: 12px; padding: 13px 15px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+.olv-project-card.olv-visible {
+  opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
+}
+.olv-pc-head { display: flex; align-items: center; justify-content: space-between; }
+.olv-pc-title {
+  font-size: 11px; color: var(--accent);
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.olv-pc-dismiss {
+  background: none; border: none; color: var(--text-faint);
+  font-size: 16px; line-height: 1; padding: 0 2px;
+  transition: color 130ms ease;
+}
+.olv-pc-dismiss:hover { color: var(--text); }
+.olv-pc-name {
+  font-size: 12px; font-family: var(--mono); color: #d6d9de;
+  margin: 8px 0 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-pc-grid { display: flex; flex-direction: column; gap: 5px; }
+.olv-pc-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.olv-pc-label { font-size: 11.5px; color: var(--text-faint); flex-shrink: 0; }
+.olv-pc-value {
+  font-size: 11.5px; color: var(--text); font-family: var(--mono);
+  text-align: right;
+}
+.olv-pc-countdown {
+  height: 2px; background: var(--accent); border-radius: 1px;
+  margin-top: 11px; width: 100%;
+  animation: olv-pc-deplete 7s linear forwards;
+}
+@keyframes olv-pc-deplete { from { width: 100%; } to { width: 0%; } }
+
 /* Respect the OS "reduce motion" setting — disable all non-essential motion */
 @media (prefers-reduced-motion: reduce) {
   .olv-inspector, .olv-navbar, .olv-dock, .olv-backend,
-  .olv-status-warn, .olv-status-fail, .olv-nav-prompt.olv-visible {
+  .olv-status-warn, .olv-status-fail, .olv-nav-prompt.olv-visible,
+  .olv-pc-countdown {
     animation: none;
   }
   .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
-  .olv-mode, .olv-nav-prompt { transition: none; }
+  .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
+  .olv-view-name, .olv-view-save { transition: none; }
 }

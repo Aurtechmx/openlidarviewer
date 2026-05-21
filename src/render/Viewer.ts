@@ -37,7 +37,7 @@ import type { PointCloud } from '../model/PointCloud';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
 import { NavController } from './NavController';
-import type { NavMode } from './NavController';
+import type { NavMode, CameraPose } from './NavController';
 import { speedForSize, nearestPointAlongRay } from './navMath';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -318,6 +318,21 @@ export class Viewer {
     this._navListeners = listeners;
   }
 
+  /** Capture the current camera viewpoint for a saved view. */
+  getCameraPose(): CameraPose {
+    return this._nav.getPose();
+  }
+
+  /** Glide the camera to a previously saved viewpoint. */
+  applyCameraPose(pose: CameraPose): void {
+    this._nav.applyPose(pose);
+  }
+
+  /** Look up a loaded cloud by id — used by the app to export it. */
+  getCloud(id: string): PointCloud | undefined {
+    return this._clouds.get(id)?.cloud;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Camera
   // ─────────────────────────────────────────────────────────────────────────
@@ -398,8 +413,10 @@ export class Viewer {
 
   /** Configure navigation (up-axis, speed, clip planes) for the loaded clouds. */
   private _configureForClouds(latest: PointCloud): void {
-    // LAS/LAZ surveys are Z-up; phone-scan formats are Y-up.
-    const zUp = latest.sourceFormat === 'las' || latest.sourceFormat === 'laz';
+    // LAS/LAZ/XYZ surveys are Z-up; phone-scan formats are Y-up.
+    const zUp = latest.sourceFormat === 'las'
+      || latest.sourceFormat === 'laz'
+      || latest.sourceFormat === 'xyz';
     this._worldUp.set(0, 0, zUp ? 1 : 0);
     if (!zUp) this._worldUp.set(0, 1, 0);
     this._nav.setWorldUp(this._worldUp);

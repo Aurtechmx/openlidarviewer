@@ -5,7 +5,7 @@
  */
 
 /** Every format the sniffer can report, including the catch-all `unknown`. */
-export type DetectedFormat = 'ply' | 'las' | 'laz' | 'obj' | 'glb' | 'gltf' | 'unknown';
+export type DetectedFormat = 'ply' | 'las' | 'laz' | 'obj' | 'glb' | 'gltf' | 'xyz' | 'unknown';
 
 /** A concrete, loadable source format — `DetectedFormat` minus `unknown`. */
 export type SourceFormat = Exclude<DetectedFormat, 'unknown'>;
@@ -30,8 +30,11 @@ function extensionOf(filename: string): string {
  *
  * Detection order:
  *  1. Magic bytes — `ply`, `LASF`, `glTF` — are authoritative.
- *  2. File extension — `.obj/.ply/.las/.laz/.glb/.gltf`.
+ *  2. File extension — `.obj/.ply/.las/.laz/.glb/.gltf/.xyz/.csv`.
  *  3. Otherwise `unknown`.
+ *
+ * `.xyz` and `.csv` are plain text with no magic bytes, so they are detected
+ * by extension only.
  */
 export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedFormat {
   const magic = readAscii(buffer, 4);
@@ -58,6 +61,9 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
       return 'glb';
     case 'gltf':
       return 'gltf';
+    case 'xyz':
+    case 'csv':
+      return 'xyz';
     default:
       return 'unknown';
   }
