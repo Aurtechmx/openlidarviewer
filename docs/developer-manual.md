@@ -4,17 +4,19 @@ A single-page, open-source, browser-based point-cloud viewer. This manual is
 the reference for building, testing, extending, and shipping the project.
 
 - **Project README:** [`../README.md`](../README.md)
-- **Implementation plan:** [`implementation-plan.md`](implementation-plan.md)
-- **Git & release runbook:** [`git-and-release.md`](git-and-release.md)
+- **Architecture map:** [`architecture.md`](architecture.md)
+- **Contributing guide:** [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+- **Roadmap:** [`roadmap.md`](roadmap.md)
 
 ---
 
 ## 1. Purpose
 
-OpenLiDARViewer opens drone LiDAR surveys (`.las` / `.laz`) and phone scans
-(`.ply` / `.obj` / `.glb` / `.gltf`) from one drag-and-drop — no install, no
-upload, no conversion step — and validates them with built-in scan-quality
-checks. It runs entirely in the browser; no scan data ever leaves the device.
+OpenLiDARViewer opens drone LiDAR surveys and phone scans from one
+drag-and-drop, with no install, no upload, and no conversion step. It runs
+entirely in the browser; no scan data ever leaves the device. Once a scan is
+open you can navigate it in 3D, recolor it, measure distances, read a Scan
+Intelligence report, and export the result.
 
 ---
 
@@ -25,26 +27,28 @@ checks. It runs entirely in the browser; no scan data ever leaves the device.
 | ID | Requirement |
 |------|-------------|
 | FR-1 | Open a scan by dropping a single file anywhere on the window. |
-| FR-2 | Support six formats: `.las`, `.laz`, `.ply`, `.obj`, `.glb`, `.gltf`. |
+| FR-2 | Import eight formats: `.las`, `.laz`, `.ply`, `.obj`, `.glb`, `.gltf`, `.xyz`, `.csv`. |
 | FR-3 | Detect format from magic bytes first, file extension second. |
 | FR-4 | Parse and downsample off the main thread, in a Web Worker. |
-| FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within ≤1e-3 m error. |
+| FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within a small bounded error. |
 | FR-6 | Voxel-downsample clouds above the point budget; always display the honest `shown / total` count. |
-| FR-7 | Render with three.js using WebGPU, with an automatic WebGL2 fallback. |
+| FR-7 | Render with three.js using WebGPU, with an automatic WebGL 2 fallback. |
 | FR-8 | Color by RGB, height, intensity, or classification; auto-select the best mode on load; offer only the modes the file actually contains. |
 | FR-9 | Hold multiple clouds in one scene, rebased onto a shared origin. |
-| FR-10 | Run validation modules (Health Check, Scan Report) through an open analysis-module API and show the results in the Inspector. |
-| FR-11 | Provide an empty state with one-click sample scans, an Inspector panel, a tool dock, and a backend indicator. |
-| FR-12 | Save the current view as a PNG, client-side. |
-| FR-13 | Support an embed mode (`?embed=1`) that strips the chrome for `<iframe>` use. |
+| FR-10 | Navigate the cloud in Orbit, Walk, and Fly modes, with WASD movement and pointer-lock mouse-look. |
+| FR-11 | Measure straight-line distance between two picked points inside the cloud. |
+| FR-12 | Run validation modules (Health Check, Scan Report) through an open analysis-module API and show the results in the Scan Intelligence panel. |
+| FR-13 | Export the cloud to PLY, OBJ, XYZ, or CSV, and save the current view as a PNG, all client-side. |
+| FR-14 | Save and restore named camera views. |
+| FR-15 | Support an embed mode (`?embed=1`) that strips the chrome for `<iframe>` use. |
 
 ### 2.2 Non-functional requirements
 
 | ID | Requirement |
 |------|-------------|
 | NFR-1 | **Privacy** — 100% client-side. No server, no upload, no telemetry, no accounts. |
-| NFR-2 | **Performance** — parsing runs in a worker; clouds are capped at a 4M-point budget by voxel downsampling. |
-| NFR-3 | **Compatibility** — works on modern evergreen browsers; WebGPU where available, WebGL2 everywhere else. |
+| NFR-2 | **Performance** — parsing runs in a worker; clouds are capped by voxel downsampling at a point budget. |
+| NFR-3 | **Compatibility** — works on modern evergreen browsers; WebGPU where available, WebGL 2 everywhere else. |
 | NFR-4 | **Zero friction** — usable with no install and no file conversion. |
 | NFR-5 | **Quality** — strict TypeScript; the algorithmic core is test-first; CI gates every change. |
 | NFR-6 | **Licensing** — MIT; citable via `CITATION.cff`. |
@@ -57,11 +61,11 @@ checks. It runs entirely in the browser; no scan data ever leaves the device.
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| Language | TypeScript (strict) | Type safety across the IO, model, and render layers. |
+| Language | TypeScript (strict) | Type safety across the IO, model, render, and UI layers. |
 | Build / dev | Vite 8 | Fast dev server, first-class Web Worker and WASM handling. |
-| Rendering | three.js 0.184 (`three/webgpu`) | WebGPU renderer with a built-in WebGL2 fallback. |
+| Rendering | three.js 0.184 (`three/webgpu`, `three/tsl`) | WebGPU renderer with a built-in WebGL 2 fallback. |
 | Parsing | loaders.gl (`las`, `ply`, `obj`, `gltf`) + `laz-perf` | Battle-tested format loaders; `laz-perf` WASM decodes LAZ. |
-| Unit tests | Vitest 4 | Fast, ESM-native, Node environment for the algorithmic core. |
+| Unit tests | Vitest | Fast, ESM-native, Node environment for the algorithmic core. |
 | E2E tests | Playwright | Drives the built app in a real browser. |
 
 ---
@@ -69,16 +73,14 @@ checks. It runs entirely in the browser; no scan data ever leaves the device.
 ## 4. Prerequisites
 
 - **Node.js 22+** and npm 10+.
-- A modern browser for development (Chrome/Edge recommended for WebGPU).
+- A modern browser for development (Chrome or Edge recommended for WebGPU).
 
 ---
 
 ## 5. Getting started
 
-The full git history ships as a bundle (see the git & release runbook):
-
 ```bash
-git clone openlidarviewer.bundle openlidarviewer
+git clone https://github.com/aurtechmx/openlidarviewer.git
 cd openlidarviewer
 npm install
 npm run dev
@@ -92,33 +94,39 @@ Open the printed local URL and drop a scan, or click a built-in sample.
 
 ```
 src/
-  io/            One file per format or per IO concern.
-    sniffFormat.ts       Format detection (magic bytes → extension).
-    lasHeader.ts         LAS public-header parser.
-    coordinateBridge.ts  f64→f32 recentre — precision-critical.
-    loadPly/Las/Obj/Gltf.ts   Format → PointCloud loaders.
-    parseBuffer.ts       Loader dispatch + downsample (DOM-free).
-    loadFile.ts          File → PointCloud via the worker.
-    parseWorker.ts       The Web Worker entry.
+  io/                    One file per format or per IO concern.
+    sniffFormat.ts         Format detection (magic bytes -> extension).
+    lasHeader.ts           LAS public-header parser.
+    coordinateBridge.ts    f64 -> f32 recentre — precision-critical.
+    loadLas/Ply/Obj/Gltf/Xyz.ts   Format -> PointCloud loaders.
+    parseBuffer.ts         Loader dispatch + downsample (DOM-free).
+    loadFile.ts            File -> PointCloud via the worker.
+    parseWorker.ts         The Web Worker entry.
+    lazPerfWasm.ts         laz-perf WASM glue for LAZ decoding.
+    exporters.ts           PointCloud -> PLY / OBJ / XYZ / CSV text.
   model/
-    PointCloud.ts        Normalized in-memory cloud model.
+    PointCloud.ts          Normalized in-memory cloud model.
   process/
-    voxelDownsample.ts   Voxel-grid downsampling.
+    voxelDownsample.ts     Voxel-grid downsampling.
   render/
-    Viewer.ts            three.js WebGPU/WebGL2 scene.
-    colorModes.ts        RGB / height / intensity / classification.
+    Viewer.ts              three.js WebGPU / WebGL 2 scene.
+    colorModes.ts          RGB / height / intensity / classification.
+    navMath.ts             Pure navigation math (unit-tested).
+    NavController.ts       Orbit / Walk / Fly, keyboard, pointer-lock, tweens.
+    MeasureTool.ts         Two-point distance measurement.
   analysis/
-    ModuleApi.ts         Analysis-module interface + registry.
-    modules/             healthCheck.ts, scanReport.ts.
+    ModuleApi.ts           Analysis-module interface + registry.
+    modules/               healthCheck.ts, scanReport.ts.
   ui/
-    Stage / DropZone / Inspector / toolDock / dom.ts
-  main.ts                Wires the viewer, UI, and modules together.
-tests/                   Vitest unit tests; e2e/ holds Playwright specs.
+    Stage / DropZone / Inspector / NavBar / ProjectCard / toolDock / dom.ts
+  main.ts                  Wires the viewer, navigation, UI, and modules.
+tests/                     Vitest unit tests; tests/e2e/ holds Playwright specs.
 ```
 
 Rule of thumb: each `src/io/*` file owns exactly one format or one concern;
 `Viewer.ts` owns all three.js state; analysis modules consume `PointCloud`
-only and never import three.js.
+only and never import three.js. The "Scan Intelligence" panel is built in
+`src/ui/Inspector.ts`.
 
 ---
 
@@ -127,9 +135,9 @@ only and never import three.js.
 Data flow for a dropped file:
 
 ```
-drop → sniffFormat → Web Worker { pickLoader → parse → coordinate bridge
-       → voxel downsample } → PointCloud → Viewer (WebGPU/WebGL2)
-                                         → analysis modules → Inspector
+drop -> sniffFormat -> Web Worker { pickLoader -> parse -> coordinate bridge
+        -> voxel downsample } -> PointCloud -> Viewer (WebGPU / WebGL 2)
+                                            -> analysis modules -> Scan Intelligence
 ```
 
 Three load-bearing decisions:
@@ -144,6 +152,8 @@ Three load-bearing decisions:
 3. **The analysis API.** A module is `{ id, label, run(cloud, selection?) }`
    returning pass/warn/fail rows. Modules are pure functions over
    `PointCloud` — decoupled from rendering and easy to unit-test.
+
+See [`architecture.md`](architecture.md) for the full map.
 
 ---
 
@@ -164,16 +174,17 @@ Three load-bearing decisions:
 ## 9. Testing strategy
 
 - **Unit (Vitest, Node).** The algorithmic core is test-first: format
-  sniffer, LAS header parser, coordinate bridge, `PointCloud`, all loaders,
-  voxel downsampling, parse dispatch, color modes, and both analysis modules.
-  Tests assert against deterministic fixtures generated by
-  `scripts/make-fixtures.py` with ground truth recorded in
-  `tests/fixtures/FIXTURES.md`.
+  sniffer, LAS header parser, coordinate bridge, `PointCloud`, every loader,
+  voxel downsampling, parse dispatch, color modes, navigation math, the
+  exporters, and both analysis modules. Tests assert against deterministic
+  fixtures generated by `scripts/make-fixtures.py`, with ground truth recorded
+  in `tests/fixtures/FIXTURES.md`.
 - **End-to-end (Playwright).** `tests/e2e/viewer.spec.ts` drives the built
   app: load a sample, confirm the cloud renders and the Scan Report appears,
   load a second cloud, and check embed mode.
-- **Not unit-tested:** `Viewer.ts` and the worker entry require a browser/GPU
-  and are covered by E2E plus manual checks.
+- **Not unit-tested:** `Viewer.ts`, `NavController.ts`, `MeasureTool.ts`, and
+  the worker entry require a browser/GPU and are covered by E2E plus manual
+  checks. Their pure logic lives in `navMath.ts`, which *is* unit-tested.
 
 ---
 
@@ -181,7 +192,7 @@ Three load-bearing decisions:
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-- **build-and-test** — `npm ci` → `npm run typecheck` → `npm test` → `npm run build`.
+- **build-and-test** — `npm ci` -> `npm run typecheck` -> `npm test` -> `npm run build`.
 - **e2e** — installs Chromium and runs `npm run test:e2e`.
 
 Pre-merge checklist for any PR into `main`: all review threads resolved, both
@@ -197,7 +208,7 @@ CI jobs green, branch rebased on the latest `main`.
 - **Conventional Commits** — `type(scope): description`; `feat`, `fix`,
   `docs`, `test`, `ci`, `chore`, `refactor`, `perf`.
 - **Branching** — trunk-based; short-lived `feature/*` and `fix/*` branches,
-  merged into `main` via pull request. See `docs/git-and-release.md`.
+  merged into `main` via pull request.
 
 ---
 
@@ -242,13 +253,13 @@ matching `tests/myModule.test.ts`.
 
 ## 14. Browser & platform support
 
-| Browser | WebGPU | WebGL2 fallback |
-|---------|--------|-----------------|
+| Browser | WebGPU | WebGL 2 fallback |
+|---------|--------|------------------|
 | Chrome / Edge | Default | Yes |
 | Firefox | Windows; macOS on Apple Silicon | Yes |
 | Safari | iOS / macOS 26+ | Yes |
 
-Where WebGPU is unavailable the viewer automatically uses WebGL2 — a fully
+Where WebGPU is unavailable the viewer automatically uses WebGL 2 — a fully
 tested path, not a degraded one. The active backend is shown in the UI.
 
 ---
@@ -261,40 +272,19 @@ component. For embedding, serve the same build and link with `?embed=1`.
 
 ---
 
-## 16. Verification status
+## 16. Roadmap
 
-Verified in the build environment (fresh command output):
-
-```
-tsc --noEmit     → exit 0, zero errors
-vitest run       → 132 tests passed, 14 files
-vite build       → 458 modules transformed, exit 0
-```
-
-Not verifiable without a browser/GPU, and therefore not claimed as passing:
-live WebGPU/WebGL rendering and the Playwright E2E run. Run these locally:
-
-```bash
-npm run dev          # manual render check
-npx playwright install --with-deps chromium
-npm run test:e2e
-```
+Deferred by design: octree LOD streaming for very large clouds, expanded
+format support (E57, COPC LAZ, 3D Tiles / PNTS), capture-sensor and date
+metadata detection, polyline/area/height-difference measurement, slicing and
+clipping tools, A/B cloud compare, and a deeper analysis suite. See
+[`roadmap.md`](roadmap.md) for the full list.
 
 ---
 
-## 17. Roadmap (v2)
+## 17. Known limitations
 
-Deferred by design: octree LOD streaming for billion-point clouds,
-click-to-measure, a slice/section tool, E57 and USDZ loaders, Gaussian-splat
-rendering, A/B cloud compare, and a deeper analysis suite. See
-`docs/implementation-plan.md` for the full v2 list.
-
----
-
-## 18. Known limitations
-
-- `Viewer.ts` and the UI were authored and type-checked but not runtime-tested
-  in the build environment — verify rendering locally.
-- The git history is delivered as `openlidarviewer.bundle` because the build
-  environment's filesystem could not host a working `.git`. Adopt it per
-  `docs/git-and-release.md`.
+OpenLiDARViewer is an R&D-stage viewer, not a survey-grade processing suite.
+Measurement is for visual inspection, large files are bound by browser memory
+and GPU limits, and OBJ/glTF meshes are shown as their vertices. See
+[`limitations.md`](limitations.md) for the full list.
