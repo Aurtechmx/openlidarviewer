@@ -47,6 +47,7 @@ export class NavBar {
 
   private _mode: NavMode = 'orbit';
   private _locked = false;
+  private _measuring = false;
   private _helpPinned = false;
   private _hintTimer: number | null = null;
 
@@ -135,6 +136,15 @@ export class NavBar {
     this._render();
   }
 
+  /**
+   * Reflect whether the Measure tool is active. While measuring, the
+   * "click to look around" prompt is suppressed — clicks pick points.
+   */
+  setMeasuring(measuring: boolean): void {
+    this._measuring = measuring;
+    this._render();
+  }
+
   /** Toggle the controls HUD (the `H` key / help action). */
   toggleHelp(): void {
     this._helpPinned = !this._helpPinned;
@@ -161,7 +171,11 @@ export class NavBar {
     this._speed.classList.toggle('olv-hidden', !navigating);
     // HUD shows while navigating, or when the user pinned it with H.
     this._hud.classList.toggle('olv-hidden', !(navigating || this._helpPinned));
-    // The prompt appears only when navigating without the cursor captured.
-    this.prompt.classList.toggle('olv-visible', navigating && !this._locked);
+    // The prompt appears only when navigating without the cursor captured —
+    // and never while the Measure tool owns clicks.
+    this.prompt.classList.toggle(
+      'olv-visible',
+      navigating && !this._locked && !this._measuring,
+    );
   }
 }

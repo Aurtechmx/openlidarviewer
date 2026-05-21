@@ -85,6 +85,8 @@ viewer.setNavListeners({
 viewer.setMeasureListeners({
   onModeChange: (active) => {
     dock.setMeasureActive(active);
+    // Hide the "click to look around" prompt — measuring owns the clicks.
+    navBar.setMeasuring(active);
     // The summary card and the measure hint share the top-centre slot.
     if (active) projectCard.hide();
   },
