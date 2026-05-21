@@ -6,6 +6,8 @@ export interface AnalysisRow {
   label: string;
   value: string;
   status: AnalysisStatus;
+  /** When true, the row is a diagnostic shown under "Advanced report". */
+  advanced?: boolean;
 }
 
 export interface AnalysisResult {

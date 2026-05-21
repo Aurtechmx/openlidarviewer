@@ -131,6 +131,25 @@ button:disabled { cursor: not-allowed; }
 .olv-status-warn { background: #ef9f27; }
 .olv-status-fail { background: #e24b4a; }
 
+/* Advanced report — collapsible diagnostics under the headline metrics */
+.olv-advanced { margin-top: 2px; }
+.olv-advanced-summary {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-faint); padding: 5px 0;
+  transition: color 130ms ease;
+}
+.olv-advanced-summary::-webkit-details-marker { display: none; }
+.olv-advanced-summary::before {
+  content: ""; width: 0; height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3px solid transparent; border-bottom: 3px solid transparent;
+  transition: transform 130ms ease;
+}
+.olv-advanced[open] .olv-advanced-summary::before { transform: rotate(90deg); }
+.olv-advanced-summary:hover { color: var(--text-dim); }
+.olv-advanced-body { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+
 /* Tool dock + backend indicator */
 .olv-dock {
   position: absolute; bottom: 14px; left: 16px;
@@ -480,6 +499,7 @@ button:disabled { cursor: not-allowed; }
   }
   .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
   .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
-  .olv-view-name, .olv-view-save,
+  .olv-view-name, .olv-view-save, .olv-advanced-summary,
+  .olv-advanced-summary::before,
   .olv-measure-clear, .olv-measure-done { transition: none; }
 }

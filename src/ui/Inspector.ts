@@ -84,7 +84,7 @@ export class Inspector {
     const exporter = el('div', { className: 'olv-export' }, exportButtons);
 
     this.element = el('aside', { className: 'olv-inspector' }, [
-      el('div', { className: 'olv-panel-title', text: 'Inspector' }),
+      el('div', { className: 'olv-panel-title', text: 'Scan Intelligence' }),
       section('Layers', this._layers),
       section('Color by', this._chips),
       section('Point size', slider),
@@ -156,18 +156,37 @@ export class Inspector {
     );
   }
 
-  /** Render the validation rows (Health Check + Scan Report). */
+  /**
+   * Render the report rows. Headline metrics show directly; rows marked
+   * `advanced` (the health diagnostics) are tucked into a collapsible
+   * "Advanced report" so the default view stays clean.
+   */
   setReport(rows: AnalysisRow[]): void {
     this._report.replaceChildren();
+    const advanced: AnalysisRow[] = [];
     for (const row of rows) {
+      if (row.advanced) advanced.push(row);
+      else this._report.append(this._reportRow(row));
+    }
+    if (advanced.length > 0) {
+      const body = el('div', { className: 'olv-advanced-body' });
+      for (const row of advanced) body.append(this._reportRow(row));
       this._report.append(
-        el('div', { className: 'olv-report-row' }, [
-          el('span', { className: `olv-status olv-status-${row.status}` }),
-          el('span', { className: 'olv-report-label', text: row.label }),
-          el('span', { className: 'olv-report-value', text: row.value }),
+        el('details', { className: 'olv-advanced' }, [
+          el('summary', { className: 'olv-advanced-summary', text: 'Advanced report' }),
+          body,
         ]),
       );
     }
+  }
+
+  /** Build a single status / label / value report row. */
+  private _reportRow(row: AnalysisRow): HTMLElement {
+    return el('div', { className: 'olv-report-row' }, [
+      el('span', { className: `olv-status olv-status-${row.status}` }),
+      el('span', { className: 'olv-report-label', text: row.label }),
+      el('span', { className: 'olv-report-value', text: row.value }),
+    ]);
   }
 
   /** Render the saved-view list — one clickable row per stored viewpoint. */

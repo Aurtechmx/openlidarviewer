@@ -23,17 +23,17 @@ export class ToolDock {
     const frame = this._tool('Frame', 'Fit the camera to all clouds', false);
     frame.addEventListener('click', callbacks.onFrameAll);
 
-    const snapshot = this._tool('Save PNG', 'Save the current view as a PNG', false);
+    const snapshot = this._tool('Snapshot', 'Save the current view as a PNG', false);
     snapshot.addEventListener('click', callbacks.onSnapshot);
 
     // Measure starts disabled — enabled by setMeasureEnabled once a scan loads.
-    this._measure = this._tool('Measure', 'Measure straight-line distance', true);
+    this._measure = this._tool('Measure', 'Load a scan to enable measurement', true);
     this._measure.addEventListener('click', () => {
       this._measure.blur();
       callbacks.onMeasureToggle();
     });
 
-    const slice = this._tool('Slice', 'Slice / section plane — ships in v2', true);
+    const slice = this._tool('Slice', 'Section & slice plane — coming soon', true);
 
     this.dock = el('div', { className: 'olv-dock' }, [frame, snapshot, this._measure, slice]);
 
@@ -52,6 +52,9 @@ export class ToolDock {
   /** Enable or disable the Measure tool — enabled once a scan is loaded. */
   setMeasureEnabled(enabled: boolean): void {
     this._measure.disabled = !enabled;
+    this._measure.title = enabled
+      ? 'Measure straight-line distance'
+      : 'Load a scan to enable measurement';
     if (!enabled) this.setMeasureActive(false);
   }
 

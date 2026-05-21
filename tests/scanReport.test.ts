@@ -50,42 +50,42 @@ describe('scanReport module', () => {
 
     test('extent rows', () => {
       const result = scanReport.run(cloud);
-      const widthRow = rowByLabel(result, 'Width (X)');
-      const depthRow = rowByLabel(result, 'Depth (Y)');
-      const heightRow = rowByLabel(result, 'Height (Z)');
+      const widthRow = rowByLabel(result, 'Width');
+      const depthRow = rowByLabel(result, 'Depth');
+      const heightRow = rowByLabel(result, 'Height');
       expect(parseFloat(widthRow.value)).toBeCloseTo(2, 3);
       expect(parseFloat(depthRow.value)).toBeCloseTo(2, 3);
       expect(parseFloat(heightRow.value)).toBeCloseTo(1, 3);
     });
 
     test('point density row', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Point Density');
+      const row = rowByLabel(scanReport.run(cloud), 'Density');
       // density = 4/(2*2) = 1.0 pts/m²
       expect(parseFloat(row.value)).toBeCloseTo(1.0, 3);
       expect(row.status).toBe('info');
     });
 
     test('estimated point spacing row', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Est. Point Spacing');
+      const row = rowByLabel(scanReport.run(cloud), 'Spacing');
       // spacing = sqrt(4/4) = 1.0
       expect(parseFloat(row.value)).toBeCloseTo(1.0, 3);
       expect(row.status).toBe('info');
     });
 
     test('has RGB row', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Has RGB');
+      const row = rowByLabel(scanReport.run(cloud), 'RGB');
       expect(row.value.toLowerCase()).toContain('yes');
       expect(row.status).toBe('info');
     });
 
     test('has intensity row', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Has Intensity');
+      const row = rowByLabel(scanReport.run(cloud), 'Intensity');
       expect(row.value.toLowerCase()).toContain('yes');
       expect(row.status).toBe('info');
     });
 
     test('has classification row', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Has Classification');
+      const row = rowByLabel(scanReport.run(cloud), 'Classification');
       expect(row.value.toLowerCase()).toContain('yes');
       expect(row.status).toBe('info');
     });
@@ -107,17 +107,17 @@ describe('scanReport module', () => {
     });
 
     test('has RGB → no', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Has RGB');
+      const row = rowByLabel(scanReport.run(cloud), 'RGB');
       expect(row.value.toLowerCase()).toContain('no');
     });
 
     test('has intensity → no', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Has Intensity');
+      const row = rowByLabel(scanReport.run(cloud), 'Intensity');
       expect(row.value.toLowerCase()).toContain('no');
     });
 
     test('has classification → no', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Has Classification');
+      const row = rowByLabel(scanReport.run(cloud), 'Classification');
       expect(row.value.toLowerCase()).toContain('no');
     });
   });
@@ -132,12 +132,12 @@ describe('scanReport module', () => {
     });
 
     test('density → warn or info on zero-area footprint', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Point Density');
+      const row = rowByLabel(scanReport.run(cloud), 'Density');
       expect(['warn', 'info']).toContain(row.status);
     });
 
     test('spacing → warn or info on zero-area footprint', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Est. Point Spacing');
+      const row = rowByLabel(scanReport.run(cloud), 'Spacing');
       expect(['warn', 'info']).toContain(row.status);
     });
   });

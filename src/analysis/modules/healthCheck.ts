@@ -188,14 +188,14 @@ export const healthCheck: AnalysisModule = {
   label: 'Health Check',
 
   run(cloud: PointCloud): AnalysisResult {
-    return {
-      rows: [
-        checkInvalidCoordinates(cloud),
-        checkEmptyCloud(cloud),
-        checkDeclaredVsDecoded(cloud),
-        checkDuplicatePoints(cloud),
-        checkStrayOutliers(cloud),
-      ],
-    };
+    // Every health-check row is a diagnostic — surfaced under "Advanced report".
+    const rows = [
+      checkInvalidCoordinates(cloud),
+      checkEmptyCloud(cloud),
+      checkDeclaredVsDecoded(cloud),
+      checkDuplicatePoints(cloud),
+      checkStrayOutliers(cloud),
+    ];
+    return { rows: rows.map((row) => ({ ...row, advanced: true })) };
   },
 };
