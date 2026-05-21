@@ -4,6 +4,7 @@ import {
   speedForSize,
   easeInOutCubic,
   nearestPointAlongRay,
+  formatDistance,
 } from '../src/render/navMath';
 import type { MoveKeys, Vec3 } from '../src/render/navMath';
 
@@ -89,6 +90,18 @@ describe('easeInOutCubic', () => {
   test('clamps out-of-range input', () => {
     expect(easeInOutCubic(-1)).toBe(0);
     expect(easeInOutCubic(2)).toBe(1);
+  });
+});
+
+describe('formatDistance', () => {
+  test('shows centimetres below one metre', () => {
+    expect(formatDistance(0.5)).toBe('50.0 cm');
+  });
+  test('shows metres up to a kilometre', () => {
+    expect(formatDistance(12.484)).toBe('12.48 m');
+  });
+  test('shows kilometres beyond', () => {
+    expect(formatDistance(2500)).toBe('2.500 km');
   });
 });
 

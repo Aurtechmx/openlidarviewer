@@ -3,16 +3,21 @@ import { el } from './dom';
 export interface ToolDockCallbacks {
   onFrameAll: () => void;
   onSnapshot: () => void;
+  /** Toggle distance-measurement mode. */
+  onMeasureToggle: () => void;
 }
 
 /**
- * The bottom-left tool dock and the bottom-right backend indicator. Measure
- * and Slice are present but disabled — they ship in v2.
+ * The bottom-left tool dock and the bottom-right backend indicator.
+ *
+ * Frame and Save PNG are always available. Measure becomes available once a
+ * scan is loaded and toggles distance-measurement mode. Slice ships in v2.
  */
 export class ToolDock {
   readonly dock: HTMLElement;
   readonly backend: HTMLElement;
   private readonly _backendText: HTMLElement;
+  private readonly _measure: HTMLButtonElement;
 
   constructor(callbacks: ToolDockCallbacks) {
     const frame = this._tool('Frame', 'Fit the camera to all clouds', false);
@@ -21,10 +26,16 @@ export class ToolDock {
     const snapshot = this._tool('Save PNG', 'Save the current view as a PNG', false);
     snapshot.addEventListener('click', callbacks.onSnapshot);
 
-    const measure = this._tool('Measure', 'Measure distance and area — ships in v2', true);
+    // Measure starts disabled — enabled by setMeasureEnabled once a scan loads.
+    this._measure = this._tool('Measure', 'Measure straight-line distance', true);
+    this._measure.addEventListener('click', () => {
+      this._measure.blur();
+      callbacks.onMeasureToggle();
+    });
+
     const slice = this._tool('Slice', 'Slice / section plane — ships in v2', true);
 
-    this.dock = el('div', { className: 'olv-dock' }, [frame, snapshot, measure, slice]);
+    this.dock = el('div', { className: 'olv-dock' }, [frame, snapshot, this._measure, slice]);
 
     this._backendText = el('span', { className: 'olv-backend-text', text: 'initialising…' });
     this.backend = el('div', { className: 'olv-backend' }, [
@@ -36,6 +47,18 @@ export class ToolDock {
   /** Report which GPU backend the renderer initialised. */
   setBackend(backend: 'webgpu' | 'webgl2'): void {
     this._backendText.textContent = backend === 'webgpu' ? 'WebGPU' : 'WebGL2';
+  }
+
+  /** Enable or disable the Measure tool — enabled once a scan is loaded. */
+  setMeasureEnabled(enabled: boolean): void {
+    this._measure.disabled = !enabled;
+    if (!enabled) this.setMeasureActive(false);
+  }
+
+  /** Reflect whether measurement mode is currently active. */
+  setMeasureActive(active: boolean): void {
+    this._measure.classList.toggle('olv-tool-active', active);
+    this._measure.textContent = active ? 'Measuring…' : 'Measure';
   }
 
   private _tool(label: string, title: string, disabled: boolean): HTMLButtonElement {

@@ -102,6 +102,9 @@ export class NavController {
   // ── Pointer lock ───────────────────────────────────────────────────────
   private _locked = false;
 
+  // ── Input gate — cleared while another tool (e.g. Measure) owns input ──
+  private _inputEnabled = true;
+
   // ── Camera tween ───────────────────────────────────────────────────────
   private _tween: Tween | null = null;
 
@@ -185,6 +188,28 @@ export class NavController {
     this._hasCloud = hasCloud;
   }
 
+  /**
+   * Enable or disable all navigation input. Disabling freezes the camera so
+   * another tool — distance measurement — can own pointer clicks cleanly.
+   */
+  setInputEnabled(enabled: boolean): void {
+    this._inputEnabled = enabled;
+    if (!enabled) {
+      this._keys.forward = false;
+      this._keys.backward = false;
+      this._keys.left = false;
+      this._keys.right = false;
+      this._keys.up = false;
+      this._keys.down = false;
+      this._sprint = false;
+      this._velocity = [0, 0, 0];
+      this._controls.enabled = false;
+      this._exitPointerLock();
+    } else {
+      this._controls.enabled = this._mode === 'orbit';
+    }
+  }
+
   /** Switch navigation mode, syncing camera state across the transition. */
   setMode(mode: NavMode): void {
     if (mode === this._mode) return;
@@ -266,6 +291,13 @@ export class NavController {
   /** Advance navigation by `dt` seconds. Called once per rendered frame. */
   update(dt: number): void {
     const step = Math.min(Math.max(dt, 0), MAX_DT);
+
+    // Input disabled (e.g. measuring): keep the camera frozen — but still let
+    // any in-progress tween finish.
+    if (!this._inputEnabled) {
+      if (this._tween) this._advanceTween(step);
+      return;
+    }
 
     if (this._tween) {
       this._advanceTween(step);
@@ -389,7 +421,7 @@ export class NavController {
     // Never steal keys while the user is typing in a form control.
     const el = document.activeElement;
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
-    if (!this._hasCloud) return;
+    if (!this._hasCloud || !this._inputEnabled) return;
 
     // Mode + shortcut keys work in any mode.
     switch (e.code) {
@@ -428,6 +460,7 @@ export class NavController {
   }
 
   private _handleCanvasClick(): void {
+    if (!this._inputEnabled) return;
     if ((this._mode === 'walk' || this._mode === 'fly') && !this._locked) {
       void this._canvas.requestPointerLock();
     }
@@ -444,7 +477,8 @@ export class NavController {
 
   private _handleMouseMove(e: MouseEvent): void {
     if (!this._locked) return;
-    this._yaw -= e.movementX * LOOK_SENSITIVITY;
+    // Mouse right → look right, mouse left → look left.
+    this._yaw += e.movementX * LOOK_SENSITIVITY;
     this._pitch -= e.movementY * LOOK_SENSITIVITY;
     this._pitch = THREE.MathUtils.clamp(this._pitch, -MAX_PITCH, MAX_PITCH);
   }

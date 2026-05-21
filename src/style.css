@@ -247,7 +247,8 @@ button:disabled { cursor: not-allowed; }
   50% { border-color: rgba(52, 211, 189, 0.6); }
 }
 
-.olv-hidden { display: none; }
+/* Utility — always wins over a component's own `display`. */
+.olv-hidden { display: none !important; }
 
 /* ───────────────────────────────────────────────────────────────────────────
    Micro-interactions — tactile feedback, eased states, entrance motion
@@ -383,14 +384,93 @@ button:disabled { cursor: not-allowed; }
 }
 @keyframes olv-pc-deplete { from { width: 100%; } to { width: 0%; } }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Measure tool — active button, SVG overlay, instruction hint
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-tool-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(52, 211, 189, 0.65);
+  box-shadow: 0 0 16px rgba(52, 211, 189, 0.22);
+}
+
+/* The SVG layer that draws markers, lines and labels */
+.olv-measure-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; overflow: visible;
+}
+.olv-measure-line {
+  stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 6 4;
+}
+.olv-measure-dot {
+  fill: var(--accent); stroke: #0c0e12; stroke-width: 1.5;
+}
+.olv-measure-dot-pending {
+  fill: none; stroke: var(--accent); stroke-width: 2;
+  animation: olv-measure-pulse 1.5s ease-in-out infinite;
+}
+@keyframes olv-measure-pulse {
+  0%, 100% { r: 4.5; opacity: 1; }
+  50% { r: 7; opacity: 0.6; }
+}
+.olv-measure-label {
+  fill: var(--accent);
+  font: 600 12px var(--mono);
+  paint-order: stroke;
+  stroke: #0c0e12; stroke-width: 4px; stroke-linejoin: round;
+}
+
+/* The instruction hint shown while measuring */
+.olv-measure-hint {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(18, 21, 27, 0.9);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(52, 211, 189, 0.34);
+  border-radius: 11px; padding: 9px 13px;
+}
+.olv-measure-hint-row { display: flex; align-items: center; gap: 9px; }
+.olv-measure-badge {
+  font-size: 10px; color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(52, 211, 189, 0.3);
+  border-radius: 6px; padding: 3px 7px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.olv-measure-hint-text { font-size: 12px; color: var(--text); }
+.olv-measure-actions { display: flex; gap: 6px; }
+.olv-measure-clear, .olv-measure-done {
+  font-size: 11px;
+  border-radius: 6px; padding: 5px 10px;
+  transition: color 130ms ease, background 130ms ease,
+    border-color 130ms ease, transform 90ms ease;
+}
+.olv-measure-clear {
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+}
+.olv-measure-clear:hover { color: var(--text); }
+.olv-measure-done {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(52, 211, 189, 0.3);
+}
+.olv-measure-done:hover { background: rgba(52, 211, 189, 0.24); }
+.olv-measure-clear:active, .olv-measure-done:active { transform: scale(0.95); }
+.olv-measure-clear:focus-visible, .olv-measure-done:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
 /* Respect the OS "reduce motion" setting — disable all non-essential motion */
 @media (prefers-reduced-motion: reduce) {
   .olv-inspector, .olv-navbar, .olv-dock, .olv-backend,
   .olv-status-warn, .olv-status-fail, .olv-nav-prompt.olv-visible,
-  .olv-pc-countdown {
+  .olv-pc-countdown, .olv-measure-dot-pending {
     animation: none;
   }
   .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
   .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
-  .olv-view-name, .olv-view-save { transition: none; }
+  .olv-view-name, .olv-view-save,
+  .olv-measure-clear, .olv-measure-done { transition: none; }
 }

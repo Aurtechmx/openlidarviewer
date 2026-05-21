@@ -38,6 +38,7 @@ import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
 import { NavController } from './NavController';
 import type { NavMode, CameraPose } from './NavController';
+import { MeasureTool } from './MeasureTool';
 import { speedForSize, nearestPointAlongRay } from './navMath';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -61,6 +62,11 @@ export interface NavListeners {
   onModeChange?: (mode: NavMode) => void;
   onPointerLockChange?: (locked: boolean) => void;
   onToggleHelp?: () => void;
+}
+
+/** UI-facing measurement events the app can subscribe to. */
+export interface MeasureListeners {
+  onModeChange?: (active: boolean) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,6 +128,11 @@ export class Viewer {
   private _navListeners: NavListeners = {};
   private readonly _raycaster = new THREE.Raycaster();
 
+  // ── Measurement ──────────────────────────────────────────────────────────
+  private readonly _measure: MeasureTool;
+  private _measureMode = false;
+  private _measureListeners: MeasureListeners = {};
+
   // ─────────────────────────────────────────────────────────────────────────
   // Constructor
   // ─────────────────────────────────────────────────────────────────────────
@@ -170,6 +181,15 @@ export class Viewer {
 
     // Double-click a point to focus / fly to it.
     canvas.addEventListener('dblclick', (e) => this._handleDoubleClick(e, canvas));
+
+    // Distance measurement — while measuring, a canvas click picks a point.
+    this._measure = new MeasureTool(this._camera, canvas, {
+      onExit: () => this.setMeasureMode(false),
+    });
+    canvas.addEventListener('click', (e) => this._handleMeasureClick(e, canvas));
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this._measureMode) this.setMeasureMode(false);
+    });
 
     // ── Async backend init + render loop ──────────────────────────────────
     this.ready = this._renderer.init().then(() => {
@@ -334,6 +354,39 @@ export class Viewer {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Measurement
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Enter or leave distance-measurement mode (freezes navigation). */
+  setMeasureMode(on: boolean): void {
+    if (on === this._measureMode) return;
+    this._measureMode = on;
+    this._measure.setActive(on);
+    this._nav.setInputEnabled(!on);
+    this._measureListeners.onModeChange?.(on);
+  }
+
+  /** Whether distance measurement is currently active. */
+  get measureMode(): boolean {
+    return this._measureMode;
+  }
+
+  /** Remove all measurements. */
+  clearMeasurements(): void {
+    this._measure.clear();
+  }
+
+  /** Subscribe to measurement events (mode change). */
+  setMeasureListeners(listeners: MeasureListeners): void {
+    this._measureListeners = listeners;
+  }
+
+  /** The Measure tool's overlay + hint DOM elements, for the app to mount. */
+  get measureElements(): { overlay: SVGSVGElement; hint: HTMLElement } {
+    return { overlay: this._measure.overlay, hint: this._measure.hint };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Camera
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -403,6 +456,7 @@ export class Viewer {
       this.removeCloud(id);
     }
     this._nav.dispose();
+    this._measure.dispose();
     this._controls.dispose();
     this._renderer.dispose();
   }
@@ -484,10 +538,19 @@ export class Viewer {
   }
 
   private _handleDoubleClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
+    if (this._measureMode) return; // clicks are for picking measurement points
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
     const point = this._pickPoint(ndcX, ndcY);
     if (point) this._nav.focusOn(point);
+  }
+
+  /** While measuring, a canvas click picks the point under the cursor. */
+  private _handleMeasureClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
+    if (!this._measureMode) return;
+    const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
+    const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+    this._measure.addPoint(this._pickPoint(ndcX, ndcY));
   }
 
   /** `F` key — focus on whatever point is centred in the view. */
@@ -502,6 +565,8 @@ export class Viewer {
       this._rafId = requestAnimationFrame(loop);
       this._nav.update(this._clock.getDelta());
       this._renderer.render(this._scene, this._camera);
+      // After render, camera matrices are current — project the measurements.
+      this._measure.render();
     };
     loop();
   }

@@ -102,6 +102,17 @@ export function easeInOutCubic(t: number): number {
 }
 
 /**
+ * Format a distance in metres for a measurement label: centimetres below a
+ * metre, metres up to a kilometre, kilometres beyond.
+ */
+export function formatDistance(meters: number): string {
+  if (!Number.isFinite(meters)) return '—';
+  if (meters < 1) return `${(meters * 100).toFixed(1)} cm`;
+  if (meters < 1000) return `${meters.toFixed(2)} m`;
+  return `${(meters / 1000).toFixed(3)} km`;
+}
+
+/**
  * Find the point in `positions` (interleaved xyz) closest to the ray defined
  * by `origin` and the **normalised** `dir`. Points behind the origin are
  * ignored; returns null for an empty array or a ray that misses everything

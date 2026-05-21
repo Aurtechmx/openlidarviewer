@@ -69,6 +69,7 @@ const inspector = new Inspector({
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
+  onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
 });
 
 // Game-style navigation: mode switcher, speed slider, controls HUD.
@@ -80,6 +81,13 @@ viewer.setNavListeners({
   onModeChange: (mode) => navBar.setMode(mode),
   onPointerLockChange: (locked) => navBar.setLocked(locked),
   onToggleHelp: () => navBar.toggleHelp(),
+});
+viewer.setMeasureListeners({
+  onModeChange: (active) => {
+    dock.setMeasureActive(active);
+    // The summary card and the measure hint share the top-centre slot.
+    if (active) projectCard.hide();
+  },
 });
 
 const projectCard = new ProjectCard();
@@ -93,6 +101,9 @@ navBar.element.classList.add('olv-hidden');
 stage.overlay.append(navBar.element, navBar.prompt);
 
 if (!embed) {
+  // The measure overlay goes in first so the panels paint above it.
+  stage.overlay.append(viewer.measureElements.overlay);
+  stage.overlay.append(viewer.measureElements.hint);
   stage.overlay.append(inspector.element);
   stage.overlay.append(dock.dock);
   stage.overlay.append(dock.backend);
@@ -151,6 +162,7 @@ async function handleFile(file: File): Promise<void> {
     inspector.setReport(runModules(result.cloud));
     inspector.setViews([]);
     dock.setBackend(viewer.activeBackend());
+    dock.setMeasureEnabled(true);
 
     navBar.element.classList.remove('olv-hidden');
     navBar.setMode('orbit');
@@ -200,6 +212,8 @@ function removeCloud(id: string): void {
   inspector.removeCloud(id);
   if (activeId === id) activeId = null;
   if (viewer.clouds().length === 0) {
+    viewer.setMeasureMode(false);
+    dock.setMeasureEnabled(false);
     inspector.clear();
     stage.showEmptyState();
     navBar.element.classList.add('olv-hidden');
