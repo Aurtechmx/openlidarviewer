@@ -3,7 +3,7 @@
  *
  * Wraps three.js WebGPURenderer (auto-falls-back to WebGL 2) and exposes a
  * minimal, typed API for loading/managing point-cloud layers, switching colour
- * modes, and camera control.
+ * modes, and camera navigation.
  *
  * ## Why points are drawn as instanced quads
  *
@@ -11,14 +11,19 @@
  * On the WebGPU backend that primitive is **locked to one pixel** — three.js
  * cannot enlarge it (see `PointsNodeMaterial`'s own documentation). A scan
  * therefore renders as invisible one-pixel dust on WebGPU while looking fine
- * on WebGL 2, which is exactly the kind of backend-specific bug that is hard
- * to catch.
+ * on WebGL 2.
  *
  * To render identically on both backends every point is instead drawn as a
  * camera-facing quad: one shared unit quad, instanced once per point, with the
  * per-point centre and colour supplied as instanced attributes. `three/tsl`'s
  * `PointsNodeMaterial` expands those quads to a real, controllable pixel size
  * on WebGPU *and* WebGL 2 — the same node graph compiles to both.
+ *
+ * ## Navigation
+ *
+ * Camera control is delegated to `NavController` (orbit / walk / fly). The
+ * Viewer owns the render loop, the cloud geometry, framing, and double-click
+ * point picking; the controller owns input and camera motion.
  *
  * Import note: this file imports from 'three/webgpu' (browser globals required)
  * and must NOT be imported in Node / Vitest tests.
@@ -31,6 +36,9 @@ import { instancedBufferAttribute } from 'three/tsl';
 import type { PointCloud } from '../model/PointCloud';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
+import { NavController } from './NavController';
+import type { NavMode } from './NavController';
+import { speedForSize, nearestPointAlongRay } from './navMath';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data per loaded cloud
@@ -46,6 +54,13 @@ interface CloudEntry {
   colorAttr: THREE.InstancedBufferAttribute;
   /** Current colour mode applied to the colour attribute. */
   mode: ColorMode;
+}
+
+/** UI-facing navigation events the app can subscribe to. */
+export interface NavListeners {
+  onModeChange?: (mode: NavMode) => void;
+  onPointerLockChange?: (locked: boolean) => void;
+  onToggleHelp?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +104,8 @@ export class Viewer {
   private readonly _scene: THREE.Scene;
   private readonly _camera: THREE.PerspectiveCamera;
   private readonly _controls: OrbitControls;
+  private readonly _nav: NavController;
+  private readonly _clock = new THREE.Clock();
   private _rafId: number | null = null;
 
   // ── Cloud registry ───────────────────────────────────────────────────────
@@ -99,16 +116,19 @@ export class Viewer {
   // Matches the Inspector's point-size slider initial value.
   private _pointSize = 2;
 
+  // ── Navigation state ─────────────────────────────────────────────────────
+  /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
+  private readonly _worldUp = new THREE.Vector3(0, 1, 0);
+  private _navListeners: NavListeners = {};
+  private readonly _raycaster = new THREE.Raycaster();
+
   // ─────────────────────────────────────────────────────────────────────────
   // Constructor
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Create the renderer attached to `canvas`, wire up a perspective camera
-   * with OrbitControls, and kick off the render loop.
-   *
-   * The renderer attempts to use a native WebGPU backend; if WebGPU is
-   * unavailable it falls back automatically to WebGL 2.
+   * with OrbitControls and a NavController, and kick off the render loop.
    *
    * @param canvas - The `<canvas>` element to render into.
    */
@@ -129,13 +149,27 @@ export class Viewer {
 
     // ── Camera ────────────────────────────────────────────────────────────
     const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
-    this._camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1_000_000);
+    this._camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 5_000_000);
     this._camera.position.set(0, 0, 100);
 
     // ── OrbitControls ─────────────────────────────────────────────────────
     this._controls = new OrbitControls(this._camera, canvas);
     this._controls.enableDamping = true;
-    this._controls.dampingFactor = 0.07;
+    this._controls.dampingFactor = 0.08;
+    this._controls.zoomToCursor = true;
+    this._controls.rotateSpeed = 0.85;
+
+    // ── Navigation controller ─────────────────────────────────────────────
+    this._nav = new NavController(this._camera, canvas, this._controls, {
+      onModeChange: (m) => this._navListeners.onModeChange?.(m),
+      onPointerLockChange: (l) => this._navListeners.onPointerLockChange?.(l),
+      onToggleHelp: () => this._navListeners.onToggleHelp?.(),
+      onReset: () => this.frameAll(),
+      onFocusCenter: () => this._focusCenter(),
+    });
+
+    // Double-click a point to focus / fly to it.
+    canvas.addEventListener('dblclick', (e) => this._handleDoubleClick(e, canvas));
 
     // ── Async backend init + render loop ──────────────────────────────────
     this.ready = this._renderer.init().then(() => {
@@ -175,8 +209,6 @@ export class Viewer {
     geometry.instanceCount = cloud.pointCount;
 
     // ── Per-point instance data ───────────────────────────────────────────
-    // Positions are reused as-is (Float32, xyz local coords); colours are
-    // expanded to Float32 [0,1] so the attribute needs no normalisation.
     const positionAttr = new THREE.InstancedBufferAttribute(cloud.positions, 3);
     const colorAttr = new THREE.InstancedBufferAttribute(
       toFloatColors(colorForMode(mode, cloud)),
@@ -195,18 +227,15 @@ export class Viewer {
       typeof material.colorNode
     >;
     material.size = this._pointSize;
-    // Constant screen-space size: a cloud stays visible whatever its world
-    // scale (a 2 m phone scan or a 2 km survey) and whatever the zoom.
     material.sizeAttenuation = false;
     material.transparent = false;
 
     const mesh = new THREE.Mesh(geometry, material);
-    // The geometry's bounds are just the unit quad, so per-object frustum
-    // culling would wrongly cull the whole cloud — disable it.
     mesh.frustumCulled = false;
     this._scene.add(mesh);
 
     this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
+    this._configureForClouds(cloud);
     return id;
   }
 
@@ -220,6 +249,7 @@ export class Viewer {
     entry.mesh.geometry.dispose();
     entry.material.dispose();
     this._clouds.delete(id);
+    if (this._clouds.size === 0) this._nav.setHasCloud(false);
   }
 
   /** Return an array of all currently loaded cloud IDs. */
@@ -265,44 +295,56 @@ export class Viewer {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Navigation
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Switch the navigation mode (orbit / walk / fly). */
+  setMode(mode: NavMode): void {
+    this._nav.setMode(mode);
+  }
+
+  /** The active navigation mode. */
+  get navMode(): NavMode {
+    return this._nav.mode;
+  }
+
+  /** Set the user speed multiplier for walk/fly (from the speed slider). */
+  setNavSpeed(multiplier: number): void {
+    this._nav.setSpeedMultiplier(multiplier);
+  }
+
+  /** Subscribe to navigation events (mode change, pointer lock, help toggle). */
+  setNavListeners(listeners: NavListeners): void {
+    this._navListeners = listeners;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Camera
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Fit the camera to encompass all visible clouds.
-   *
-   * Computes the combined world-space bounding sphere and positions the
-   * camera so the full sphere fits within the viewport.
+   * Fit the camera to encompass all visible clouds, gliding to an oblique
+   * overview rather than snapping there.
    */
   frameAll(): void {
-    if (this._clouds.size === 0) return;
+    const sphere = this._visibleBoundingSphere();
+    if (!sphere) return;
 
-    const box = new THREE.Box3();
-    for (const { mesh, cloud } of this._clouds.values()) {
-      if (!mesh.visible) continue;
-      const b = cloud.bounds();
-      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
-      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
-    }
-    if (box.isEmpty()) return;
-
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-
-    const center = sphere.center;
     const radius = sphere.radius === 0 ? 1 : sphere.radius;
-
-    // Distance needed so the sphere fills ~80 % of the vertical FOV.
     const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
-    const dist = radius / Math.sin(fovRad / 2) * 1.2;
+    const dist = (radius / Math.sin(fovRad / 2)) * 1.2;
 
-    this._camera.position.set(center.x, center.y, center.z + dist);
-    this._camera.near = dist * 0.001;
-    this._camera.far = dist * 100;
-    this._camera.updateProjectionMatrix();
+    // An oblique direction: a horizontal heading lifted ~35° toward world-up,
+    // so a scan opens at a natural three-quarter angle, not flat top-down.
+    const horiz = this._horizontalAxis();
+    const dir = horiz
+      .multiplyScalar(Math.cos(0.61))
+      .addScaledVector(this._worldUp, Math.sin(0.61))
+      .normalize();
 
-    this._controls.target.copy(center);
-    this._controls.update();
+    const target = sphere.center.clone();
+    const pos = target.clone().addScaledVector(dir, dist);
+    this._nav.tweenTo(pos, target, 0.7);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -311,21 +353,15 @@ export class Viewer {
 
   /**
    * Report which GPU backend is active.
-   *
-   * Reads `renderer.backend.isWebGPUBackend` which is set to `true` by the
-   * WebGPU backend class after init.  Call after `await viewer.ready`.
+   * Call after `await viewer.ready`.
    */
   activeBackend(): 'webgpu' | 'webgl2' {
-    // The `backend` property is defined on Renderer as `this.backend`.
-    // three.js sets `isWebGPUBackend = true` on WebGPUBackend instances.
     const backend = (this._renderer as unknown as { backend: { isWebGPUBackend?: boolean } }).backend;
     return backend?.isWebGPUBackend === true ? 'webgpu' : 'webgl2';
   }
 
   /**
    * Render one frame and capture the canvas as a PNG `Blob`.
-   *
-   * Waits for the backend to be ready before rendering.
    */
   async snapshot(): Promise<Blob> {
     await this.ready;
@@ -348,11 +384,10 @@ export class Viewer {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
-
     for (const id of [...this._clouds.keys()]) {
       this.removeCloud(id);
     }
-
+    this._nav.dispose();
     this._controls.dispose();
     this._renderer.dispose();
   }
@@ -361,10 +396,94 @@ export class Viewer {
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
 
+  /** Configure navigation (up-axis, speed, clip planes) for the loaded clouds. */
+  private _configureForClouds(latest: PointCloud): void {
+    // LAS/LAZ surveys are Z-up; phone-scan formats are Y-up.
+    const zUp = latest.sourceFormat === 'las' || latest.sourceFormat === 'laz';
+    this._worldUp.set(0, 0, zUp ? 1 : 0);
+    if (!zUp) this._worldUp.set(0, 1, 0);
+    this._nav.setWorldUp(this._worldUp);
+
+    const sphere = this._visibleBoundingSphere();
+    const size = sphere ? sphere.radius * 2 : 100;
+    this._nav.setBaseSpeed(speedForSize(size));
+    this._nav.setHasCloud(true);
+
+    // Generous clip planes so flying around never clips the cloud.
+    this._camera.near = Math.max(size * 0.0002, 0.01);
+    this._camera.far = Math.max(size * 100, 1000);
+    this._camera.updateProjectionMatrix();
+  }
+
+  /** Combined bounding sphere of every visible cloud, or null if none. */
+  private _visibleBoundingSphere(): THREE.Sphere | null {
+    const box = new THREE.Box3();
+    let any = false;
+    for (const { mesh, cloud } of this._clouds.values()) {
+      if (!mesh.visible) continue;
+      const b = cloud.bounds();
+      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
+      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
+      any = true;
+    }
+    if (!any || box.isEmpty()) return null;
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    return sphere;
+  }
+
+  /** A unit horizontal axis perpendicular to the current world-up. */
+  private _horizontalAxis(): THREE.Vector3 {
+    const seed = Math.abs(this._worldUp.z) < 0.9
+      ? new THREE.Vector3(0, 0, 1)
+      : new THREE.Vector3(1, 0, 0);
+    return new THREE.Vector3().crossVectors(this._worldUp, seed).normalize();
+  }
+
+  /** Pick the cloud point under normalised device coords, or null if none. */
+  private _pickPoint(ndcX: number, ndcY: number): THREE.Vector3 | null {
+    this._raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._camera);
+    const o = this._raycaster.ray.origin;
+    const d = this._raycaster.ray.direction;
+
+    let best: THREE.Vector3 | null = null;
+    let bestScore = Infinity;
+    for (const { mesh, cloud } of this._clouds.values()) {
+      if (!mesh.visible) continue;
+      const hit = nearestPointAlongRay(
+        cloud.positions,
+        [o.x, o.y, o.z],
+        [d.x, d.y, d.z],
+      );
+      if (!hit) continue;
+      const score = hit.offset / hit.along; // angular miss
+      // Accept only a reasonably on-target hit (~within 4° of the ray).
+      if (score < 0.07 && score < bestScore) {
+        bestScore = score;
+        best = new THREE.Vector3(hit.point[0], hit.point[1], hit.point[2]);
+      }
+    }
+    return best;
+  }
+
+  private _handleDoubleClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
+    const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
+    const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+    const point = this._pickPoint(ndcX, ndcY);
+    if (point) this._nav.focusOn(point);
+  }
+
+  /** `F` key — focus on whatever point is centred in the view. */
+  private _focusCenter(): void {
+    const point = this._pickPoint(0, 0);
+    if (point) this._nav.focusOn(point);
+    else this.frameAll();
+  }
+
   private _startLoop(): void {
     const loop = () => {
       this._rafId = requestAnimationFrame(loop);
-      this._controls.update();
+      this._nav.update(this._clock.getDelta());
       this._renderer.render(this._scene, this._camera);
     };
     loop();

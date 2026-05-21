@@ -32,3 +32,21 @@ test('embed mode strips the top bar', async ({ page }) => {
   await expect(page.locator('.olv-topbar')).toHaveCount(0);
   await expect(page.locator('.olv-canvas')).toBeVisible();
 });
+
+test('switches navigation modes and reveals the speed control', async ({ page }) => {
+  await page.goto('/');
+  await page.getByText('Drone survey').click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+  // The nav bar appears with Orbit selected by default.
+  await expect(page.locator('.olv-mode-active')).toHaveText('Orbit');
+
+  // Switching to Fly activates that mode and reveals the speed slider.
+  await page.locator('.olv-mode', { hasText: 'Fly' }).click();
+  await expect(page.locator('.olv-mode-active')).toHaveText('Fly');
+  await expect(page.locator('.olv-nav-speed')).toBeVisible();
+
+  // The keyboard shortcut '2' switches to Walk mode.
+  await page.keyboard.press('Digit2');
+  await expect(page.locator('.olv-mode-active')).toHaveText('Walk');
+});

@@ -158,3 +158,150 @@ button:disabled { cursor: not-allowed; }
 .olv-toast-text { font-size: 12px; color: var(--text); }
 .olv-toast-error { border-color: rgba(226, 75, 74, 0.5); }
 .olv-toast-error .olv-toast-dot { background: #e24b4a; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Navigation bar — bottom-centre mode switcher, speed slider, controls HUD
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-navbar {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.olv-nav-row { display: flex; align-items: center; gap: 8px; }
+
+/* Segmented mode switcher */
+.olv-modes {
+  display: flex; gap: 2px;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 9px; padding: 4px;
+}
+.olv-mode {
+  font-size: 11.5px; color: var(--text-dim);
+  background: transparent; border: none;
+  border-radius: 6px; padding: 6px 15px;
+  transition: background 140ms ease, color 140ms ease, transform 90ms ease;
+}
+.olv-mode:hover:not(.olv-mode-active) { color: var(--text); }
+.olv-mode:active { transform: scale(0.95); }
+.olv-mode-active {
+  color: var(--accent); background: var(--accent-soft);
+  box-shadow: inset 0 0 0 0.5px rgba(52, 211, 189, 0.4);
+}
+
+/* Speed slider */
+.olv-nav-speed {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 9px; padding: 7px 12px;
+}
+.olv-nav-speed-label {
+  font-size: 11px; color: var(--text-faint);
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.olv-speed-slider { width: 116px; }
+.olv-speed-readout {
+  font-size: 11px; font-family: var(--mono); color: var(--text-dim);
+  min-width: 30px; text-align: right;
+}
+
+/* Controls HUD */
+.olv-nav-hud {
+  background: rgba(18, 21, 27, 0.82);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid var(--hairline);
+  border-radius: 11px; padding: 10px 13px;
+  max-width: 640px;
+}
+.olv-nav-hud-title {
+  font-size: 10.5px; color: var(--text-faint);
+  letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 8px;
+}
+.olv-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.olv-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.olv-legend-text { font-size: 11px; color: var(--text-dim); }
+.olv-key {
+  font-family: var(--mono); font-size: 10px; color: #cdd1d7;
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid var(--hairline);
+  border-bottom-width: 1.5px;
+  border-radius: 4px; padding: 2px 5px; min-width: 16px; text-align: center;
+}
+
+/* Centred "click to look" prompt */
+.olv-nav-prompt {
+  position: absolute; top: 46%; left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: rgba(18, 21, 27, 0.86);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid rgba(52, 211, 189, 0.34);
+  border-radius: 12px; padding: 13px 22px;
+  font-size: 13px; color: var(--text);
+  pointer-events: none; /* clicks pass through to the canvas */
+  opacity: 0; transition: opacity 220ms ease;
+}
+.olv-nav-prompt.olv-visible { opacity: 1; animation: olv-prompt-breathe 2.6s ease-in-out infinite; }
+.olv-nav-prompt-sub { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+
+@keyframes olv-prompt-breathe {
+  0%, 100% { border-color: rgba(52, 211, 189, 0.22); }
+  50% { border-color: rgba(52, 211, 189, 0.6); }
+}
+
+.olv-hidden { display: none; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Micro-interactions — tactile feedback, eased states, entrance motion
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x {
+  transition: color 130ms ease, border-color 130ms ease,
+    background 130ms ease, transform 90ms ease;
+}
+.olv-tool:active:not(:disabled),
+.olv-chip:active,
+.olv-sample:active,
+.olv-layer-x:active { transform: scale(0.95); }
+.olv-chip-active { transition: color 130ms ease, background 130ms ease, border-color 130ms ease; }
+
+/* Keyboard focus — visible, on-brand, never on mouse click */
+.olv-tool:focus-visible, .olv-chip:focus-visible, .olv-mode:focus-visible,
+.olv-sample:focus-visible, .olv-github:focus-visible, .olv-layer-x:focus-visible,
+.olv-slider:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* Panels glide in rather than snapping */
+.olv-inspector, .olv-navbar, .olv-dock, .olv-backend {
+  animation: olv-rise-in 260ms ease both;
+}
+@keyframes olv-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* The nav bar keeps its horizontal centring while rising */
+.olv-navbar { animation-name: olv-rise-in-centred; }
+@keyframes olv-rise-in-centred {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* A health issue gently pulses so the eye is drawn to it */
+.olv-status-warn, .olv-status-fail { animation: olv-dot-pulse 2.4s ease-in-out infinite; }
+@keyframes olv-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 159, 39, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(239, 159, 39, 0.18); }
+}
+.olv-status-fail { animation-name: olv-dot-pulse-fail; }
+@keyframes olv-dot-pulse-fail {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(226, 75, 74, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(226, 75, 74, 0.22); }
+}
+
+/* Respect the OS "reduce motion" setting — disable all non-essential motion */
+@media (prefers-reduced-motion: reduce) {
+  .olv-inspector, .olv-navbar, .olv-dock, .olv-backend,
+  .olv-status-warn, .olv-status-fail, .olv-nav-prompt.olv-visible {
+    animation: none;
+  }
+  .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
+  .olv-mode, .olv-nav-prompt { transition: none; }
+}

@@ -5,6 +5,7 @@ import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
 import { ToolDock } from './ui/toolDock';
+import { NavBar } from './ui/NavBar';
 import { loadFile } from './io/loadFile';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
@@ -47,8 +48,24 @@ const dock = new ToolDock({
   onSnapshot: () => void saveSnapshot(),
 });
 
+// Game-style navigation: mode switcher, speed slider, controls HUD.
+const navBar = new NavBar({
+  onMode: (mode) => viewer.setMode(mode),
+  onSpeed: (multiplier) => viewer.setNavSpeed(multiplier),
+});
+viewer.setNavListeners({
+  onModeChange: (mode) => navBar.setMode(mode),
+  onPointerLockChange: (locked) => navBar.setLocked(locked),
+  onToggleHelp: () => navBar.toggleHelp(),
+});
+
 const dropZone = new DropZone(document.body, (file) => void handleFile(file));
 stage.overlay.append(dropZone.toast);
+
+// The nav bar is core interaction — shown in embed mode too. Hidden until a
+// scan is loaded.
+navBar.element.classList.add('olv-hidden');
+stage.overlay.append(navBar.element, navBar.prompt);
 
 if (!embed) {
   stage.overlay.append(inspector.element);
@@ -73,6 +90,9 @@ async function handleFile(file: File): Promise<void> {
     stage.hideEmptyState();
     const id = viewer.addCloud(result.cloud);
     activeId = id;
+
+    // A freshly opened scan starts in the orbit overview, then glides in.
+    viewer.setMode('orbit');
     viewer.frameAll();
 
     const mode = defaultMode(result.cloud);
@@ -83,6 +103,11 @@ async function handleFile(file: File): Promise<void> {
     inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
     inspector.setReport(runModules(result.cloud));
     dock.setBackend(viewer.activeBackend());
+
+    navBar.element.classList.remove('olv-hidden');
+    navBar.setMode('orbit');
+    navBar.flashHelp();
+
     dropZone.setProgress(null);
   } catch (err) {
     dropZone.setError(err instanceof Error ? err.message : 'Failed to load the file');
@@ -110,6 +135,7 @@ function removeCloud(id: string): void {
   if (viewer.clouds().length === 0) {
     inspector.clear();
     stage.showEmptyState();
+    navBar.element.classList.add('olv-hidden');
   }
 }
 
