@@ -1,14 +1,19 @@
 :root {
   color-scheme: dark;
-  --bg: #0c0e12;
-  --panel: #15181e;
-  --hairline: rgba(255, 255, 255, 0.09);
-  --text: #e9ebef;
-  --text-dim: #969ca5;
-  --text-faint: #6b7079;
-  --accent: #34d3bd;
-  --accent-soft: rgba(52, 211, 189, 0.16);
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* OpenLiDARViewer brand palette */
+  --bg: #0a0e1a;          /* Deep Navy */
+  --panel: #0f172a;       /* Midnight Blue */
+  --hairline: rgba(140, 170, 230, 0.14);
+  --text: #eef3fb;
+  --text-dim: #9aa6bd;
+  --text-faint: #6b768f;
+  --accent: #00b2ff;      /* Electric Blue */
+  --accent-soft: rgba(0, 178, 255, 0.16);
+  --cyan: #00f0ff;        /* Cyan */
+  --teal: #00d4c8;        /* Teal */
+  --ice: #c9f6ff;         /* Ice Blue */
+  --brand-gradient: linear-gradient(90deg, #00b2ff 0%, #00f0ff 52%, #00d4c8 100%);
+  --font: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -41,8 +46,8 @@ button:disabled { cursor: not-allowed; }
 .olv-topbar-right { display: flex; align-items: center; gap: 10px; }
 .olv-badge {
   font-size: 11px; color: var(--accent);
-  background: rgba(52, 211, 189, 0.1);
-  border: 0.5px solid rgba(52, 211, 189, 0.24);
+  background: rgba(0, 178, 255, 0.1);
+  border: 0.5px solid rgba(0, 178, 255, 0.24);
   border-radius: 7px; padding: 5px 9px;
 }
 .olv-github {
@@ -59,7 +64,11 @@ button:disabled { cursor: not-allowed; }
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 14px; text-align: center; padding: 24px;
 }
-.olv-empty-title { font-size: 26px; font-weight: 500; }
+.olv-empty-title {
+  font-size: 28px; font-weight: 600; letter-spacing: -0.01em;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
 .olv-empty-sub { font-size: 13px; color: var(--text-dim); max-width: 440px; line-height: 1.6; }
 .olv-samples { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
 .olv-sample {
@@ -105,11 +114,11 @@ button:disabled { cursor: not-allowed; }
 .olv-chip:hover { color: var(--text); }
 .olv-chip-active {
   color: var(--accent); background: var(--accent-soft);
-  border-color: rgba(52, 211, 189, 0.4);
+  border-color: rgba(0, 178, 255, 0.4);
 }
 .olv-slider { width: 100%; accent-color: var(--accent); }
 .olv-detail-bar { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
-.olv-detail-fill { height: 100%; background: var(--accent); }
+.olv-detail-fill { height: 100%; background: var(--brand-gradient); }
 .olv-detail-text { font-size: 11px; color: var(--text-dim); font-family: var(--mono); margin-top: 6px; }
 .olv-report { display: flex; flex-direction: column; gap: 6px; }
 .olv-report-empty { font-size: 11.5px; color: var(--text-faint); }
@@ -117,7 +126,7 @@ button:disabled { cursor: not-allowed; }
 .olv-report-label { flex: 1; font-size: 11.5px; color: #d6d9de; }
 .olv-report-value { font-size: 11px; font-family: var(--mono); color: var(--text-dim); text-align: right; }
 .olv-status { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.olv-status-pass { background: #34d3bd; }
+.olv-status-pass { background: var(--teal); }
 .olv-status-info { background: #6b7079; }
 .olv-status-warn { background: #ef9f27; }
 .olv-status-fail { background: #e24b4a; }
@@ -184,7 +193,7 @@ button:disabled { cursor: not-allowed; }
 .olv-mode:active { transform: scale(0.95); }
 .olv-mode-active {
   color: var(--accent); background: var(--accent-soft);
-  box-shadow: inset 0 0 0 0.5px rgba(52, 211, 189, 0.4);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 178, 255, 0.4);
 }
 
 /* Speed slider */
@@ -205,7 +214,7 @@ button:disabled { cursor: not-allowed; }
 
 /* Controls HUD */
 .olv-nav-hud {
-  background: rgba(18, 21, 27, 0.82);
+  background: rgba(11, 17, 33,0.82);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--hairline);
   border-radius: 11px; padding: 10px 13px;
@@ -231,9 +240,9 @@ button:disabled { cursor: not-allowed; }
   position: absolute; top: 46%; left: 50%;
   transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  background: rgba(18, 21, 27, 0.86);
+  background: rgba(11, 17, 33,0.86);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(52, 211, 189, 0.34);
+  border: 0.5px solid rgba(0, 178, 255, 0.34);
   border-radius: 12px; padding: 13px 22px;
   font-size: 13px; color: var(--text);
   pointer-events: none; /* clicks pass through to the canvas */
@@ -243,8 +252,8 @@ button:disabled { cursor: not-allowed; }
 .olv-nav-prompt-sub { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
 
 @keyframes olv-prompt-breathe {
-  0%, 100% { border-color: rgba(52, 211, 189, 0.22); }
-  50% { border-color: rgba(52, 211, 189, 0.6); }
+  0%, 100% { border-color: rgba(0, 178, 255, 0.22); }
+  50% { border-color: rgba(0, 178, 255, 0.6); }
 }
 
 /* Utility — always wins over a component's own `display`. */
@@ -321,11 +330,11 @@ button:disabled { cursor: not-allowed; }
 .olv-view-save {
   width: 100%; font-size: 11px; color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(52, 211, 189, 0.3);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
   border-radius: 7px; padding: 6px;
   transition: background 130ms ease, transform 90ms ease;
 }
-.olv-view-save:hover { background: rgba(52, 211, 189, 0.24); }
+.olv-view-save:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-view-save:active { transform: scale(0.98); }
 .olv-views { display: flex; flex-direction: column; gap: 5px; margin-top: 7px; }
 .olv-view-row { display: flex; align-items: center; gap: 6px; }
@@ -336,7 +345,7 @@ button:disabled { cursor: not-allowed; }
   border-radius: 6px; padding: 5px 8px;
   transition: color 130ms ease, border-color 130ms ease, transform 90ms ease;
 }
-.olv-view-name:hover { color: var(--accent); border-color: rgba(52, 211, 189, 0.4); }
+.olv-view-name:hover { color: var(--accent); border-color: rgba(0, 178, 255, 0.4); }
 .olv-view-name:active { transform: scale(0.98); }
 
 /* "Project ready" summary card */
@@ -344,9 +353,9 @@ button:disabled { cursor: not-allowed; }
   position: absolute; top: 56px; left: 50%;
   transform: translateX(-50%) translateY(-6px);
   width: 290px;
-  background: rgba(18, 21, 27, 0.9);
+  background: rgba(11, 17, 33,0.9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(52, 211, 189, 0.28);
+  border: 0.5px solid rgba(0, 178, 255, 0.28);
   border-radius: 12px; padding: 13px 15px;
   opacity: 0; pointer-events: none;
   transition: opacity 240ms ease, transform 240ms ease;
@@ -378,7 +387,7 @@ button:disabled { cursor: not-allowed; }
   text-align: right;
 }
 .olv-pc-countdown {
-  height: 2px; background: var(--accent); border-radius: 1px;
+  height: 2px; background: var(--brand-gradient); border-radius: 1px;
   margin-top: 11px; width: 100%;
   animation: olv-pc-deplete 7s linear forwards;
 }
@@ -390,8 +399,8 @@ button:disabled { cursor: not-allowed; }
 .olv-tool-active {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: rgba(52, 211, 189, 0.65);
-  box-shadow: 0 0 16px rgba(52, 211, 189, 0.22);
+  border-color: rgba(0, 178, 255, 0.65);
+  box-shadow: 0 0 16px rgba(0, 178, 255, 0.22);
 }
 
 /* The SVG layer that draws markers, lines and labels */
@@ -403,7 +412,7 @@ button:disabled { cursor: not-allowed; }
   stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 6 4;
 }
 .olv-measure-dot {
-  fill: var(--accent); stroke: #0c0e12; stroke-width: 1.5;
+  fill: var(--accent); stroke: #0a0e1a; stroke-width: 1.5;
 }
 .olv-measure-dot-pending {
   fill: none; stroke: var(--accent); stroke-width: 2;
@@ -417,23 +426,23 @@ button:disabled { cursor: not-allowed; }
   fill: var(--accent);
   font: 600 12px var(--mono);
   paint-order: stroke;
-  stroke: #0c0e12; stroke-width: 4px; stroke-linejoin: round;
+  stroke: #0a0e1a; stroke-width: 4px; stroke-linejoin: round;
 }
 
 /* The instruction hint shown while measuring */
 .olv-measure-hint {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 14px;
-  background: rgba(18, 21, 27, 0.9);
+  background: rgba(11, 17, 33,0.9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(52, 211, 189, 0.34);
+  border: 0.5px solid rgba(0, 178, 255, 0.34);
   border-radius: 11px; padding: 9px 13px;
 }
 .olv-measure-hint-row { display: flex; align-items: center; gap: 9px; }
 .olv-measure-badge {
   font-size: 10px; color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(52, 211, 189, 0.3);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
   border-radius: 6px; padding: 3px 7px;
   letter-spacing: 0.05em; text-transform: uppercase;
 }
@@ -454,9 +463,9 @@ button:disabled { cursor: not-allowed; }
 .olv-measure-done {
   color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(52, 211, 189, 0.3);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
 }
-.olv-measure-done:hover { background: rgba(52, 211, 189, 0.24); }
+.olv-measure-done:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-measure-clear:active, .olv-measure-done:active { transform: scale(0.95); }
 .olv-measure-clear:focus-visible, .olv-measure-done:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;

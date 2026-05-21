@@ -25,6 +25,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
     "@loaders.gl/core": "^4.4.2",
     "@loaders.gl/gltf": "^4.4.2",
     "@loaders.gl/las": "^4.4.2",

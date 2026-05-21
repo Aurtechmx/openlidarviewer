@@ -156,7 +156,8 @@ export class Viewer {
 
     // ── Scene ─────────────────────────────────────────────────────────────
     this._scene = new THREE.Scene();
-    this._scene.background = new THREE.Color(0x1a1a2e);
+    // Deep Navy — the brand background colour.
+    this._scene.background = new THREE.Color(0x0a0e1a);
 
     // ── Camera ────────────────────────────────────────────────────────────
     const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
