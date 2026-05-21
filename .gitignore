@@ -1,13 +1,57 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
 node_modules
+.pnp
+.pnp.*
+
+# ── Build output ─────────────────────────────────────────────────────────────
 dist
 dist-ssr
+build
+vbuild
+distcheck
 coverage
+*.tsbuildinfo
+
+# ── Test / tooling output ────────────────────────────────────────────────────
+test-results
+playwright-report
+playwright/.cache
+
+# ── Secrets & local environment — never publish these ───────────────────────
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+*.p12
+*.keystore
+secrets.*
 *.local
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
-.DS_Store
+logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ── Generated archives & packaged deliverables ───────────────────────────────
+# Keeps local deploy / package artifacts from drifting into a GitHub upload.
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.bundle
+
+# ── Local scratch & verification scripts (not for publishing) ────────────────
+_*.mjs
+verify-*.mjs
+trycheck*.mjs
+
+# ── Editor / OS ──────────────────────────────────────────────────────────────
 .vscode/*
 !.vscode/extensions.json
 .idea
-test-results
-playwright-report
-distcheck
+.DS_Store
+Thumbs.db
