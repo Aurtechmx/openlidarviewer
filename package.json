@@ -1,0 +1,43 @@
+{
+  "name": "openlidarviewer",
+  "version": "0.1.0",
+  "description": "Open any 3D scan — drone LiDAR or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "lidar",
+    "point-cloud",
+    "las",
+    "laz",
+    "ply",
+    "gltf",
+    "viewer",
+    "three.js",
+    "webgpu"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@loaders.gl/core": "^4.4.2",
+    "@loaders.gl/gltf": "^4.4.2",
+    "@loaders.gl/las": "^4.4.2",
+    "@loaders.gl/obj": "^4.4.2",
+    "@loaders.gl/ply": "^4.4.2",
+    "laz-perf": "^0.0.7",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/three": "^0.184.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.7"
+  }
+}
