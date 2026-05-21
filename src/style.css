@@ -299,7 +299,7 @@ button:disabled { cursor: not-allowed; }
 }
 
 /* Panels glide in rather than snapping */
-.olv-inspector, .olv-navbar, .olv-dock, .olv-backend {
+.olv-inspector, .olv-navbar, .olv-dock, .olv-backend, .olv-version {
   animation: olv-rise-in 260ms ease both;
 }
 @keyframes olv-rise-in {
@@ -325,10 +325,12 @@ button:disabled { cursor: not-allowed; }
   50% { box-shadow: 0 0 0 3px rgba(226, 75, 74, 0.22); }
 }
 
-/* Project version, beside the mode switcher */
-.olv-nav-version {
-  font-size: 10px; font-family: var(--mono); color: var(--text-faint);
-  padding: 0 4px; user-select: none;
+/* Version mark — bottom-right corner, revealed once a scan loads */
+.olv-version {
+  position: absolute; bottom: 13px; right: 14px;
+  font-size: 10px; line-height: 1; font-family: var(--mono);
+  letter-spacing: 0.03em; color: var(--text-faint);
+  pointer-events: auto; user-select: none;
 }
 
 /* Export buttons (Inspector) */

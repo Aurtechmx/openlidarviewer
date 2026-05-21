@@ -36,13 +36,15 @@ const MARK = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
 
 /**
  * The app shell — the full-bleed canvas (the "stage"), the transparent top
- * bar, and the empty state. Floating panels mount into `overlay`.
+ * bar, the empty state, and a small version badge. Floating panels mount
+ * into `overlay`.
  */
 export class Stage {
   readonly root: HTMLElement;
   readonly canvas: HTMLCanvasElement;
   readonly overlay: HTMLElement;
   private readonly _empty: HTMLElement;
+  private readonly _version: HTMLElement;
 
   constructor(mount: HTMLElement, options: StageOptions = {}) {
     this.canvas = el('canvas', { className: 'olv-canvas' });
@@ -52,17 +54,30 @@ export class Stage {
     if (!options.embed) this.overlay.append(this._buildTopBar());
     this._empty = this._buildEmptyState(options);
     this.overlay.append(this._empty);
+
+    // A quiet version mark in the bottom-right corner, revealed with the
+    // first scan so the empty state stays uncluttered.
+    this._version = el('div', {
+      className: 'olv-version',
+      text: `v${__APP_VERSION__}`,
+      title: `OpenLiDARViewer ${__APP_VERSION__}`,
+    });
+    this._version.style.display = 'none';
+    this.overlay.append(this._version);
+
     mount.append(this.root);
   }
 
-  /** Hide the empty state once the first cloud loads. */
+  /** Hide the empty state once the first cloud loads; reveal the version. */
   hideEmptyState(): void {
     this._empty.style.display = 'none';
+    this._version.style.display = 'block';
   }
 
   /** Show the empty state again (e.g. after the last cloud is removed). */
   showEmptyState(): void {
     this._empty.style.display = 'flex';
+    this._version.style.display = 'none';
   }
 
   private _buildTopBar(): HTMLElement {
