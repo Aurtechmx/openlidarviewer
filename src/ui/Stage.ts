@@ -17,10 +17,22 @@ export interface StageOptions {
   onSample?: (url: string, name: string) => void;
 }
 
-const MARK = `<svg width="18" height="18" viewBox="0 0 17 17" aria-hidden="true">
-<circle cx="4" cy="5" r="1.7" fill="#34d3bd"/><circle cx="9" cy="3.4" r="1.7" fill="#5dcaa5"/>
-<circle cx="13.4" cy="6" r="1.7" fill="#34d3bd"/><circle cx="6.2" cy="10.5" r="1.7" fill="#9fe1cb"/>
-<circle cx="11.6" cy="11.8" r="1.7" fill="#34d3bd"/><circle cx="3.4" cy="14" r="1.5" fill="#5dcaa5"/></svg>`;
+/**
+ * The OpenLiDARViewer brand mark — a glowing central sphere ringed by two
+ * dotted orbital bands with a vertical axis of dots, drawn as a crisp SVG so
+ * it stays sharp at the 18 px top-bar size.
+ */
+const MARK = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+<defs><radialGradient id="olvLogoCore" cx="42%" cy="38%" r="70%">
+<stop offset="0%" stop-color="#eafdff"/><stop offset="46%" stop-color="#22dcff"/>
+<stop offset="100%" stop-color="#0083dc"/></radialGradient></defs>
+<ellipse cx="12" cy="9.8" rx="9" ry="2.5" fill="none" stroke="#00b2ff" stroke-width="1.15"
+ stroke-linecap="round" stroke-dasharray="0 2.1"/>
+<ellipse cx="12" cy="14.2" rx="9" ry="2.5" fill="none" stroke="#00b2ff" stroke-width="1.15"
+ stroke-linecap="round" stroke-dasharray="0 2.1"/>
+<circle cx="12" cy="7" r="1.3" fill="#36d9ff"/><circle cx="12" cy="3.9" r="0.8" fill="#2bb6ef"/>
+<circle cx="12" cy="17" r="1.3" fill="#36d9ff"/><circle cx="12" cy="20.1" r="0.8" fill="#2bb6ef"/>
+<circle cx="12" cy="12" r="3.2" fill="url(#olvLogoCore)"/></svg>`;
 
 /**
  * The app shell — the full-bleed canvas (the "stage"), the transparent top
