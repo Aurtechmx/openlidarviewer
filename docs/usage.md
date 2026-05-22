@@ -1,6 +1,7 @@
 # Usage
 
-How to open, inspect, navigate, measure, and export a scan.
+How to open, inspect, navigate, measure, and export a scan. To try it without
+installing anything, open the live version at <https://lidar.aurtech.mx/>.
 
 ## Opening a scan
 
@@ -26,11 +27,15 @@ In Walk and Fly, click the scan to capture the cursor for mouse-look, and press 
 
 ## Inspecting with Scan Intelligence
 
-The Scan report shows the headline metrics: point count, width, depth, height, density, spacing, and which attributes (RGB, intensity, classification) are present. Open the Advanced report for integrity diagnostics, including invalid coordinates, duplicate points, stray outliers, and a declared-vs-decoded point-count check.
+The Scan report shows the headline metrics: point count, width, depth, height, density, spacing, and which attributes (RGB, intensity, classification) are present. When a LAS or LAZ file records them, it also shows the capture sensor, the source software, and the capture date. Open the Advanced report for the scan's georeferenced bounding box (the min and max corners in real-world coordinates) and integrity diagnostics, including invalid coordinates, duplicate points, stray outliers, and a declared-vs-decoded point-count check.
 
 ## Measuring
 
 Click Measure in the tool dock, then click two points on the scan. The straight-line distance is drawn and labelled in cm, m, or km. Click two more points to add another measurement, Clear to remove them, or Esc to exit. Measurement is for visual inspection. See the note in [limitations.md](limitations.md).
+
+## Inspecting a point
+
+Click Inspect in the tool dock, then click any point on the scan. A glowing marker drops on the nearest point and a compact card shows its real-world coordinates, distance from the camera, intensity, classification, RGB colour, source layer, and index — with attributes the file does not carry shown as "Not available". For a georeferenced LAS or LAZ survey the coordinates are the absolute survey position, which is what engineers and topographers need. The Copy button puts the point's data on the clipboard as clean text. Clicking another point replaces the selection; Esc, Done, or clicking Inspect again exits. Measure and Inspect are mutually exclusive — turning one on turns the other off.
 
 ## Saved views
 

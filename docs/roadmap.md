@@ -44,7 +44,6 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 
 ## Research features
 
-- [ ] Scan metadata: detect the capture sensor or equipment and the date from the file header (for example the LAS System Identifier, Generating Software, and creation date) and show them in the Scan Report
 - [ ] Slicing and clipping tools
 - [ ] Box-selection feeding the analysis modules
 - [ ] A deeper analysis-module suite

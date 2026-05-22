@@ -5,9 +5,11 @@
 ![Privacy](https://img.shields.io/badge/privacy-local--first-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-![OpenLiDARViewer](docs/screenshots/openlidarviewer-main.png)
+![OpenLiDARViewer — point-cloud exploration without the desktop overhead](docs/screenshots/openlidarviewer-promo.jpg)
 
 **A lightweight, browser-based LiDAR and point-cloud viewer for fast local inspection, 3D navigation, measurement, and scan intelligence.**
+
+**Live version: [https://lidar.aurtech.mx/](https://lidar.aurtech.mx/)**
 
 ---
 
@@ -42,6 +44,7 @@ It already opens georeferenced drone LiDAR surveys in LAS and LAZ, and it opens 
 - Game-like navigation: Orbit, Walk, and Fly modes with WASD and mouse-look.
 - A small, focused interface that stays out of the way and keeps you on the scan.
 - Measure straight-line distance directly inside the point cloud for inspection and documentation.
+- Inspect any point: click it to read its exact coordinates, intensity, classification, and colour, then copy them in one click.
 - A Scan Intelligence panel that reports point count, dimensions, density, spacing, and detected attributes.
 - Color by height, intensity, classification, or stored RGB.
 - Save camera viewpoints and return to them for inspection, reports, and presentations.
@@ -61,7 +64,9 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Adjustable point size, and a Detail control that shows an honest `shown / total` count
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
 - Distance measurement inside the point cloud
+- Point inspection — click a point to read its coordinates and attributes, with one-click copy to the clipboard
 - A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
+- Capture provenance from LAS/LAZ headers — sensor, source software, and date — shown in the Scan Report when the file carries them
 - A "Project ready" summary card on load, with a suggested navigation mode
 - Saved camera views for repeatable inspection
 - A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates precise
@@ -71,10 +76,10 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 
 | | |
 |---|---|
-| ![Scan Intelligence panel](docs/screenshots/scan-intelligence-panel.png) | ![Navigation modes](docs/screenshots/navigation-modes.png) |
-| The Scan Intelligence panel: point count, dimensions, density, spacing, detected attributes, rendering controls, saved views, and export actions. | Game-like navigation. Orbit, Walk, and Fly modes for point-cloud exploration. |
-| ![Measurement tool](docs/screenshots/measurement-tool.png) | ![Main viewer](docs/screenshots/openlidarviewer-main.png) |
-| Measurement: pick two points and read the straight-line distance inside the cloud. | The main viewer with a large scan, height coloring, and the navigation modes. |
+| ![Main viewer](docs/screenshots/openlidarviewer-main.jpg) | ![Measuring a distance](docs/screenshots/measurement-tool.jpg) |
+| A 9.6M-point drone survey, height-colored, with the Scan Intelligence panel and the Orbit / Walk / Fly navigation. | Measuring straight-line distance — pick two points and read the result inside the cloud. |
+| ![Inspecting a point](docs/screenshots/inspect-tool.jpg) | ![Scan Intelligence panel](docs/screenshots/scan-intelligence-panel.jpg) |
+| Inspecting a point: a glowing marker and a card with its real-world coordinates and attributes. | The Scan Intelligence panel — point count, dimensions, density, spacing, attributes, and the Advanced report. |
 
 More in [`docs/screenshots.md`](docs/screenshots.md).
 
@@ -205,6 +210,8 @@ OpenLiDARViewer is deliberately modular, with one file per format and one file p
 ## Performance Notes
 
 Performance depends on point count, browser memory, GPU capability, point size, rendering detail, the color mode in use, the file format, and how the data was prepared. Clouds above a roughly 4M-point budget are voxel-downsampled to stay responsive, and the Detail readout always shows the honest `shown / total` count.
+
+For real-world figures — a 9.6M-point drone LAZ survey and a 55K-point iPhone scan, both opened from one drag-and-drop — see [`docs/benchmarks.md`](docs/benchmarks.md).
 
 Planned performance work includes tiled datasets, COPC LAZ, 3D Tiles / PNTS, level-of-detail controls, and streaming. See [`docs/performance.md`](docs/performance.md).
 

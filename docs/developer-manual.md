@@ -114,6 +114,8 @@ src/
     navMath.ts             Pure navigation math (unit-tested).
     NavController.ts       Orbit / Walk / Fly, keyboard, pointer-lock, tweens.
     MeasureTool.ts         Two-point distance measurement.
+    InspectTool.ts         Click a point to read its attributes.
+    pointInfo.ts           Pure picked-point data + serialisation (unit-tested).
   analysis/
     ModuleApi.ts           Analysis-module interface + registry.
     modules/               healthCheck.ts, scanReport.ts.
@@ -182,9 +184,10 @@ See [`architecture.md`](architecture.md) for the full map.
 - **End-to-end (Playwright).** `tests/e2e/viewer.spec.ts` drives the built
   app: load a sample, confirm the cloud renders and the Scan Report appears,
   load a second cloud, and check embed mode.
-- **Not unit-tested:** `Viewer.ts`, `NavController.ts`, `MeasureTool.ts`, and
-  the worker entry require a browser/GPU and are covered by E2E plus manual
-  checks. Their pure logic lives in `navMath.ts`, which *is* unit-tested.
+- **Not unit-tested:** `Viewer.ts`, `NavController.ts`, `MeasureTool.ts`,
+  `InspectTool.ts`, and the worker entry require a browser/GPU and are covered
+  by E2E plus manual checks. Their pure logic lives in `navMath.ts` and
+  `pointInfo.ts`, which *are* unit-tested.
 
 ---
 
@@ -275,10 +278,9 @@ component. For embedding, serve the same build and link with `?embed=1`.
 ## 16. Roadmap
 
 Deferred by design: octree LOD streaming for very large clouds, expanded
-format support (E57, COPC LAZ, 3D Tiles / PNTS), capture-sensor and date
-metadata detection, polyline/area/height-difference measurement, slicing and
-clipping tools, A/B cloud compare, and a deeper analysis suite. See
-[`roadmap.md`](roadmap.md) for the full list.
+format support (E57, COPC LAZ, 3D Tiles / PNTS), polyline/area/height-difference
+measurement, slicing and clipping tools, A/B cloud compare, and a deeper
+analysis suite. See [`roadmap.md`](roadmap.md) for the full list.
 
 ---
 

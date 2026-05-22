@@ -1,31 +1,37 @@
 # Screenshots
 
-Reference screenshots used in the README and documentation. The files live in `docs/screenshots/`.
+Reference images used in the README and documentation. The files live in
+`docs/screenshots/`. They are captured from the running app, then resized and
+saved as compressed JPEGs so they stay light in the repository.
 
-## openlidarviewer-main.png
+## openlidarviewer-promo.jpg
 
-![Main viewer](screenshots/openlidarviewer-main.png)
+The promotional banner at the top of the README — the project name, the
+one-line pitch, a viewer screenshot, and a side-by-side comparison against
+traditional desktop LiDAR tools. A designed graphic rather than a raw capture.
 
-OpenLiDARViewer showing a large point-cloud dataset with height-based coloring, the Scan Intelligence panel, the "Project ready" summary card, and the Orbit / Walk / Fly navigation modes.
+## openlidarviewer-main.jpg
 
-## scan-intelligence-panel.png
+The main viewer: a 9.6M-point drone LiDAR survey, height-colored, with the
+Scan Intelligence panel on the right and the navigation HUD below.
 
-![Scan Intelligence panel](screenshots/scan-intelligence-panel.png)
+## measurement-tool.jpg
 
-The Scan Intelligence panel: point count, dimensions, density, spacing, detected attributes, rendering controls, an Advanced report of integrity diagnostics, saved views, and export actions.
+The measurement workflow — two picked points and the straight-line distance
+read directly inside the point cloud.
 
-## navigation-modes.png
+## inspect-tool.jpg
 
-![Navigation modes](screenshots/navigation-modes.png)
+The Inspect tool: a glowing marker on the selected point and a compact card
+showing its real-world coordinates, attributes, layer, and index.
 
-Game-like navigation, with a controls HUD and the Orbit / Walk / Fly modes for point-cloud exploration.
+## scan-intelligence-panel.jpg
 
-## measurement-tool.png
-
-![Measurement tool](screenshots/measurement-tool.png)
-
-The measurement workflow: selecting two points and reading the straight-line distance inside the point cloud.
+The Scan Intelligence panel — point count, dimensions, density, spacing,
+detected attributes, and the Advanced report of integrity diagnostics.
 
 ## Notes
 
-Screenshots are captured from the running app at 1280x800. Re-capture them after significant UI changes so the documentation stays accurate.
+Re-capture these after significant UI changes so the documentation stays
+accurate. Keep them resized and compressed; full-resolution screenshots are
+too heavy to commit.
