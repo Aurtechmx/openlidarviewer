@@ -20,7 +20,7 @@ Viewer (WebGPU / WebGL 2)  ->  analysis modules  ->  Scan Intelligence panel
 
 **File loading and format detection.** `sniffFormat` identifies the format from magic bytes first, then the extension. `loadFile` reads the file and dispatches to a per-format loader.
 
-**Point parsing.** There is one loader per format (`loadLas`, `loadPly`, `loadObj`, `loadGltf`, `loadXyz`). LAS and LAZ point records are decoded by hand for full float64 precision, and LAZ is decompressed with the `laz-perf` WASM module.
+**Point parsing.** There is one loader per format (`loadLas`, `loadE57`, `loadPly`, `loadObj`, `loadGltf`, `loadXyz`). LAS and LAZ point records are decoded by hand for full float64 precision, and LAZ is decompressed with the `laz-perf` WASM module. E57 is parsed by a from-scratch TypeScript module set under `io/e57/` — header de-paging, a minimal XML reader, and a `CompressedVector` binary decoder — which `loadE57` adapts into a `PointCloud`, merging multi-scan files and applying each scan's pose.
 
 **Coordinate bridge.** Large georeferenced (UTM-scale) coordinates overflow 32-bit floats. Every cloud is recentered about an integer origin, and the subtraction happens in float64 before the float32 downcast.
 
@@ -28,11 +28,11 @@ Viewer (WebGPU / WebGL 2)  ->  analysis modules  ->  Scan Intelligence panel
 
 **Voxel downsampling.** Clouds above the point budget are reduced on a voxel grid. The Detail control always reports the honest `shown / total` count.
 
-**Visualization modes.** `colorModes` derives per-point RGB for height, intensity, classification, or stored RGB.
+**Visualization modes.** `colorModes` derives per-point RGB for height, intensity, classification, stored RGB, or surface-normal direction.
 
 **Navigation.** `NavController` owns the orbit, walk, and fly modes, keyboard input, pointer-lock mouse-look, and eased camera tweens. The movement maths is a separate, pure, unit-tested module.
 
-**Measurement.** The measure tool picks points by ray and draws markers, lines, and distance labels as an SVG overlay.
+**Measurement.** The measurement toolkit (`render/measure/`) supports six kinds — distance, polyline, area, height, angle, and slope. The geometry, value formatting, session serialization, and label layout are pure, unit-tested modules with no three.js or DOM dependency. A controller picks points by ray, supports draggable editing, and draws markers, lines, polygons, and anti-overlapping labels as an SVG overlay — backend-agnostic across WebGPU and WebGL 2.
 
 **Inspection.** The inspect tool picks the nearest point to a ray and shows its real-world coordinates and attributes in a floating card. The picked-point data shape and its clipboard and JSON forms live in a pure, unit-tested module.
 

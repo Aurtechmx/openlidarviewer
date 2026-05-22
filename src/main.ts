@@ -9,8 +9,11 @@ import { Inspector } from './ui/Inspector';
 import { ToolDock } from './ui/toolDock';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
+import { MeasurePanel } from './ui/MeasurePanel';
 import { loadFile, MOBILE_POINT_BUDGET } from './io/loadFile';
+import { isZUpFormat } from './io/sniffFormat';
 import { exportCloud } from './io/exporters';
+import { serializeSession, parseSession } from './render/measure/serialization';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -82,6 +85,7 @@ const dock = new ToolDock({
   onSnapshot: () => void saveSnapshot(),
   onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
+  onClose: () => closeScan(),
 });
 
 // Game-style navigation: mode switcher, speed slider, controls HUD.
@@ -101,6 +105,7 @@ viewer.setMeasureListeners({
     navBar.setMeasuring(viewer.measureMode || viewer.inspectMode);
     // The summary card and the tool hint share the top-centre slot.
     if (active) projectCard.hide();
+    refreshMeasurePanel();
   },
 });
 viewer.setInspectListeners({
@@ -112,6 +117,15 @@ viewer.setInspectListeners({
 });
 
 const projectCard = new ProjectCard();
+
+// The Measurements panel lists placed measurements; the controller drives it.
+const measurePanel = new MeasurePanel({
+  onDelete: (id) => viewer.measure.removeMeasurement(id),
+  onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
+  onExport: () => exportSession(),
+  onImport: (file) => void importSession(file),
+});
+viewer.measure.setOnChange(refreshMeasurePanel);
 
 const dropZone = new DropZone(document.body, (file) => void handleFile(file));
 stage.overlay.append(dropZone.toast);
@@ -128,6 +142,7 @@ if (!embed) {
   stage.overlay.append(viewer.inspectElements.overlay);
   stage.overlay.append(viewer.inspectElements.hint);
   stage.overlay.append(inspector.element);
+  stage.overlay.append(measurePanel.element);
   stage.overlay.append(dock.dock);
   stage.overlay.append(dock.backend);
   stage.overlay.append(projectCard.element);
@@ -159,6 +174,41 @@ function downloadText(filename: string, text: string): void {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/** Refresh the Measurements panel's contents and visibility. */
+function refreshMeasurePanel(): void {
+  measurePanel.update(viewer.measure.getSummaries());
+  const hasMeasurements = viewer.measure.getMeasurements().length > 0;
+  measurePanel.setVisible(viewer.measureMode || hasMeasurements);
+}
+
+/** Export the measurement session — measurements and saved views — as JSON. */
+function exportSession(): void {
+  const cloud = activeId ? viewer.getCloud(activeId) : undefined;
+  const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
+  const json = serializeSession({
+    upAxis,
+    origin: cloud ? cloud.origin : [0, 0, 0],
+    unitSystem: viewer.measure.unitSystem,
+    views: savedViews.map((v) => v.pose),
+    measurements: viewer.measure.getMeasurements(),
+  });
+  downloadText('openlidarviewer-session.json', json);
+}
+
+/** Import a measurement session: restore its measurements and saved views. */
+async function importSession(file: File): Promise<void> {
+  try {
+    const session = parseSession(await file.text());
+    viewer.measure.loadMeasurements(session.measurements);
+    savedViews = session.views.map((pose, i) => ({ name: `View ${i + 1}`, pose }));
+    viewCounter = savedViews.length;
+    inspector.setViews(savedViews.map((v) => v.name));
+    refreshMeasurePanel();
+  } catch (err) {
+    dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
+  }
 }
 
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
@@ -193,6 +243,7 @@ async function handleFile(file: File): Promise<void> {
     dock.setBackend(viewer.activeBackend());
     dock.setMeasureEnabled(true);
     dock.setInspectEnabled(true);
+    dock.setCloseEnabled(true);
 
     navBar.element.classList.remove('olv-hidden');
     navBar.setMode('orbit');
@@ -241,24 +292,49 @@ async function loadFromUrl(url: string, name: string): Promise<void> {
   }
 }
 
+/**
+ * Tear the session down to the empty state. Shared by removing the last cloud
+ * and by the Close action: clears tools, measurements, saved views, and the
+ * panels, then shows the empty state so another scan can be loaded.
+ */
+function resetToEmptyState(): void {
+  viewer.setMeasureMode(false);
+  viewer.setInspectMode(false);
+  viewer.clearMeasurements();
+  dock.setMeasureEnabled(false);
+  dock.setInspectEnabled(false);
+  dock.setCloseEnabled(false);
+  inspector.clear();
+  stage.showEmptyState();
+  navBar.element.classList.add('olv-hidden');
+  navBar.hideTouchHint();
+  projectCard.hide();
+  // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
+  document.body.classList.remove('olv-has-scan');
+  activeId = null;
+  savedViews = [];
+  viewCounter = 0;
+  refreshMeasurePanel();
+}
+
 /** Remove a cloud from the scene and the Inspector. */
 function removeCloud(id: string): void {
   viewer.removeCloud(id);
   inspector.removeCloud(id);
   if (activeId === id) activeId = null;
-  if (viewer.clouds().length === 0) {
-    viewer.setMeasureMode(false);
-    dock.setMeasureEnabled(false);
-    dock.setInspectEnabled(false);
-    inspector.clear();
-    stage.showEmptyState();
-    navBar.element.classList.add('olv-hidden');
-    navBar.hideTouchHint();
-    projectCard.hide();
-    // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
-    document.body.classList.remove('olv-has-scan');
-    savedViews = [];
+  if (viewer.clouds().length === 0) resetToEmptyState();
+}
+
+/**
+ * Close the current scan: remove every loaded cloud and return to the empty
+ * state, ready for another scan to be dropped, opened, or sampled.
+ */
+function closeScan(): void {
+  for (const id of viewer.clouds()) {
+    viewer.removeCloud(id);
+    inspector.removeCloud(id);
   }
+  resetToEmptyState();
 }
 
 /** Save the current view as a PNG — entirely client-side. */

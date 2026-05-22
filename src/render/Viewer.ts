@@ -34,11 +34,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { instancedBufferAttribute } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
+import { isZUpFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
 import { NavController } from './NavController';
 import type { NavMode, CameraPose } from './NavController';
-import { MeasureTool } from './MeasureTool';
+import { MeasureController } from './measure/MeasureController';
 import { InspectTool } from './InspectTool';
 import { makePointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
@@ -142,12 +143,19 @@ export class Viewer {
   private readonly _raycaster = new THREE.Raycaster();
 
   // ── Picking tools (measure / inspect) ────────────────────────────────────
-  private readonly _measure: MeasureTool;
+  private readonly _canvas: HTMLCanvasElement;
+  private readonly _measure: MeasureController;
   private readonly _inspect: InspectTool;
   /** Which picking tool currently owns canvas clicks. */
   private _toolMode: ToolMode = 'none';
   private _measureListeners: MeasureListeners = {};
   private _inspectListeners: InspectListeners = {};
+  /** Last pointer position over the canvas, in NDC, for the measure preview. */
+  private _pointerNdcX = 0;
+  private _pointerNdcY = 0;
+  private _pointerOnCanvas = false;
+  /** Set when the pointer moved, so the preview re-picks at most once per frame. */
+  private _pointerMoved = false;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Constructor
@@ -200,8 +208,13 @@ export class Viewer {
     canvas.addEventListener('dblclick', (e) => this._handleDoubleClick(e, canvas));
 
     // Picking tools — while one is active, a canvas click picks a point.
-    this._measure = new MeasureTool(this._camera, canvas, {
+    this._canvas = canvas;
+    this._measure = new MeasureController({
       onExit: () => this.setMeasureMode(false),
+    });
+    this._measure.setPicker((ndcX, ndcY) => {
+      const hit = this._pickPoint(ndcX, ndcY);
+      return hit ? [hit.x, hit.y, hit.z] : null;
     });
     this._inspect = new InspectTool(this._camera, canvas, {
       onExit: () => this.setInspectMode(false),
@@ -209,6 +222,17 @@ export class Viewer {
     canvas.addEventListener('click', (e) => {
       if (this._toolMode === 'measure') this._handleMeasureClick(e, canvas);
       else if (this._toolMode === 'inspect') this._handleInspectClick(e, canvas);
+    });
+    // Track the pointer so the measure tool can preview toward the cursor.
+    canvas.addEventListener('pointermove', (e) => {
+      this._pointerNdcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
+      this._pointerNdcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+      this._pointerOnCanvas = true;
+      this._pointerMoved = true;
+    });
+    canvas.addEventListener('pointerleave', () => {
+      this._pointerOnCanvas = false;
+      this._pointerMoved = true;
     });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
@@ -415,9 +439,14 @@ export class Viewer {
     this._inspectListeners = listeners;
   }
 
-  /** The Measure tool's overlay + hint DOM elements, for the app to mount. */
+  /** The Measure tool's overlay + toolbar DOM elements, for the app to mount. */
   get measureElements(): { overlay: SVGSVGElement; hint: HTMLElement } {
     return { overlay: this._measure.overlay, hint: this._measure.hint };
+  }
+
+  /** The measurement controller, so the app can wire the Measurements panel. */
+  get measure(): MeasureController {
+    return this._measure;
   }
 
   /** The Inspect tool's overlay, hint and card DOM elements, for the app to mount. */
@@ -440,6 +469,11 @@ export class Viewer {
     this._measure.setActive(mode === 'measure');
     this._inspect.setActive(mode === 'inspect');
     this._nav.setInputEnabled(mode === 'none');
+    // Inspect manages its own cursor; the measure cursor is owned here — set
+    // the crosshair for measure and clear it when no tool is active, so this
+    // does not rely on another tool's deactivation as a side effect.
+    if (mode === 'measure') this._canvas.style.cursor = 'crosshair';
+    else if (mode === 'none') this._canvas.style.cursor = '';
     this._measureListeners.onModeChange?.(mode === 'measure');
     this._inspectListeners.onModeChange?.(mode === 'inspect');
   }
@@ -526,13 +560,15 @@ export class Viewer {
 
   /** Configure navigation (up-axis, speed, clip planes) for the loaded clouds. */
   private _configureForClouds(latest: PointCloud): void {
-    // LAS/LAZ/XYZ surveys are Z-up; phone-scan formats are Y-up.
-    const zUp = latest.sourceFormat === 'las'
-      || latest.sourceFormat === 'laz'
-      || latest.sourceFormat === 'xyz';
+    // LAS/LAZ/XYZ/E57 surveys are Z-up; phone-scan formats are Y-up.
+    const zUp = isZUpFormat(latest.sourceFormat);
     this._worldUp.set(0, 0, zUp ? 1 : 0);
     if (!zUp) this._worldUp.set(0, 1, 0);
     this._nav.setWorldUp(this._worldUp);
+    this._measure.setContext({
+      worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+      origin: latest.origin,
+    });
 
     const sphere = this._visibleBoundingSphere();
     const size = sphere ? sphere.radius * 2 : 100;
@@ -620,7 +656,8 @@ export class Viewer {
   private _handleMeasureClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
-    this._measure.addPoint(this._pickPoint(ndcX, ndcY));
+    const hit = this._pickPoint(ndcX, ndcY);
+    this._measure.addPoint(hit ? [hit.x, hit.y, hit.z] : null);
   }
 
   /** While inspecting, a canvas click selects the point under the cursor. */
@@ -664,7 +701,14 @@ export class Viewer {
       this._nav.update(this._clock.getDelta());
       this._renderer.render(this._scene, this._camera);
       // After render, camera matrices are current — project the tool overlays.
-      this._measure.render();
+      if (this._toolMode === 'measure' && !this._measure.dragging && this._pointerMoved) {
+        this._pointerMoved = false;
+        const hit = this._pointerOnCanvas
+          ? this._pickPoint(this._pointerNdcX, this._pointerNdcY)
+          : null;
+        this._measure.setCursor(hit ? [hit.x, hit.y, hit.z] : null);
+      }
+      this._measure.render(this._camera, this._canvas);
       this._inspect.render();
     };
     loop();

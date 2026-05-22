@@ -23,6 +23,7 @@ const MODE_LABELS: Record<ColorMode, string> = {
   intensity: 'Intensity',
   elevation: 'Height',
   classification: 'Class',
+  normal: 'Normal',
 };
 
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];

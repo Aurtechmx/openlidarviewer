@@ -3,18 +3,20 @@ message: "If you use OpenLiDARViewer in your research, please cite it."
 title: OpenLiDARViewer
 abstract: >-
   A single-page, open-source, browser-based point-cloud viewer that opens
-  drone LiDAR surveys and phone scans from one drag-and-drop, with no install,
-  no upload, and no conversion step, plus built-in scan validation.
+  drone LiDAR surveys, terrestrial laser scans (E57), and phone scans from one
+  drag-and-drop, with no install, no upload, and no conversion step, plus a
+  measurement toolkit and built-in scan validation.
 type: software
 authors:
   - name: "Aurtech"
 license: MIT
 repository-code: "https://github.com/aurtechmx/openlidarviewer"
-version: 0.1.0
-date-released: "2026-05-21"
+version: 0.2.0
+date-released: "2026-05-22"
 keywords:
   - lidar
   - point-cloud
+  - e57
   - webgpu
   - three.js
   - visualization

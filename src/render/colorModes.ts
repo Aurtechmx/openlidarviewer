@@ -13,8 +13,8 @@ import type { PointCloud } from '../model/PointCloud';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The four ways a point cloud can be coloured in the viewer. */
-export type ColorMode = 'rgb' | 'intensity' | 'elevation' | 'classification';
+/** The ways a point cloud can be coloured in the viewer. */
+export type ColorMode = 'rgb' | 'intensity' | 'elevation' | 'classification' | 'normal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation colour ramp  (blue → teal → green → amber → red)
@@ -196,6 +196,34 @@ export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
       return out;
     }
 
+    // ── normal ──────────────────────────────────────────────────────────────
+    case 'normal': {
+      if (!cloud.normals) {
+        throw new Error(`colorForMode('normal'): cloud "${cloud.name}" has no normals attribute`);
+      }
+      const src = cloud.normals;
+      const out = new Uint8Array(n * 3);
+
+      // Encode each unit normal direction as RGB: component −1…+1 → 0…255.
+      // The vector is normalised first so un-normalised file normals still map
+      // into range.
+      for (let i = 0; i < n; i++) {
+        let nx = src[i * 3];
+        let ny = src[i * 3 + 1];
+        let nz = src[i * 3 + 2];
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (len > 0) {
+          nx /= len;
+          ny /= len;
+          nz /= len;
+        }
+        out[i * 3]     = Math.round((nx + 1) * 0.5 * 255);
+        out[i * 3 + 1] = Math.round((ny + 1) * 0.5 * 255);
+        out[i * 3 + 2] = Math.round((nz + 1) * 0.5 * 255);
+      }
+      return out;
+    }
+
     // ── classification ──────────────────────────────────────────────────────
     case 'classification': {
       if (!cloud.classification) {
@@ -235,6 +263,7 @@ export function availableModes(cloud: PointCloud): ColorMode[] {
   if (cloud.intensity)      modes.push('intensity');
   modes.push('elevation');
   if (cloud.classification) modes.push('classification');
+  if (cloud.normals)        modes.push('normal');
   return modes;
 }
 

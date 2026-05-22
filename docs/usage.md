@@ -9,13 +9,19 @@ Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well)
 
 A "Project ready" card then appears with a quick summary: format, point count, bounding box, detected attributes, a suggested navigation mode, and a performance estimate. It dismisses on its own.
 
-Supported imports are `LAS`, `LAZ`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, and `CSV`. Nothing is uploaded. The file is read and rendered entirely in your browser.
+Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, and `CSV`. Nothing is uploaded. The file is read and rendered entirely in your browser.
+
+Dropping a second file opens it as an additional layer alongside the first; the Layers section of the Scan Intelligence panel lists every open scan, each with a visibility toggle and a remove control.
+
+## Closing a scan
+
+Click Close in the tool dock to clear the current scan — and any additional layers — and return to the empty state. From there you can drop, open, or sample another scan. Closing also clears the session's measurements and saved views, so the next scan starts clean; export a measurement session first if you want to keep it.
 
 ## Styling the cloud
 
 The Scan Intelligence panel has three controls for how the cloud looks:
 
-- **Color by** switches between Height, Intensity, Classification, and RGB. Only the modes the file actually contains are offered, and the best one is selected automatically.
+- **Color by** switches between Height, Intensity, Classification, RGB, and Normal. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans.
 - **Point size** sets the on-screen size of each point.
 - **Detail** shows the honest `shown / total` count. Large clouds are voxel-downsampled to a point budget so the viewer stays responsive.
 
@@ -31,7 +37,18 @@ The Scan report shows the headline metrics: point count, width, depth, height, d
 
 ## Measuring
 
-Click Measure in the tool dock, then click two points on the scan. The straight-line distance is drawn and labelled in cm, m, or km. Click two more points to add another measurement, Clear to remove them, or Esc to exit. Measurement is for visual inspection. See the note in [limitations.md](limitations.md).
+Click Measure in the tool dock to open the measurement toolbar. Pick a tool from it, then click points on the scan:
+
+- **Distance** — two points; the straight-line distance between them.
+- **Polyline** — any number of points; the total path length. Double-click or press Done to finish.
+- **Area** — three or more points forming a polygon; reports both the true area in the polygon's own plane and the horizontal map-projected area.
+- **Height** — two points; the vertical difference between them.
+- **Angle** — three points; the angle at the middle vertex.
+- **Slope** — two points; the rise, run, slope angle, and grade percentage.
+
+While placing, undo removes the last point. Once placed, drag any point to move it, and a measurement can be renamed or deleted from the Measurements panel. Clear all empties the list. The units toggle switches every readout between metric and imperial. Export saves all measurements to a JSON session file, and Import loads one back. Measurements persist for the browser session.
+
+Measurement is for visual inspection. See the note in [limitations.md](limitations.md).
 
 ## Inspecting a point
 

@@ -7,12 +7,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 
-- Expanded format support — E57, COPC LAZ, 3D Tiles / PNTS
-- Polyline, area, and height-difference measurement
+- Expanded format support — PCD, PTS/PTX, COPC LAZ, 3D Tiles / PNTS
+- Cross-section and profile measurement
 - Slicing, clipping, and annotation tools
 - Large-scale dataset streaming and level-of-detail
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.2.0] - 2026-05-22
+
+### Added
+
+- E57 import — terrestrial laser-scanner data in the ASTM E2807 E57 format,
+  read entirely in the browser by a from-scratch TypeScript parser. Decodes
+  Cartesian coordinates, RGB colour, intensity, classification, and surface
+  normals; applies each scan's pose; and merges multi-scan files into one
+  cloud. Verified against Trimble scanner exports.
+- Measurement toolkit — six tools replacing the single distance tool:
+  distance, polyline, area, height, angle, and slope. The area tool reports
+  both the true (own-plane) area and the horizontal map-projected area.
+- Measurement editing — drag points to reposition them, undo the last point
+  while placing, rename a measurement, and clear all.
+- Measurements panel — a compact list of every placed measurement, with
+  in-session persistence.
+- Units toggle — one switch flips all measurement readouts between metric
+  and imperial.
+- Measurement sessions — export every measurement to a JSON session file
+  and re-import it later.
+- Surface-normal color mode — shades each point by its normal direction,
+  available when a file (such as an E57) carries per-point normals.
+- Close scan — a Close action in the tool dock clears the current scan and
+  returns to the empty state, ready for another file to be opened.
+
+### Changed
+
+- The distance measurement from 0.1.0 is preserved as the toolkit's Distance
+  tool, with no change to its behaviour.
+- Capture provenance — source software — is now also read from E57 file
+  headers and shown in the Scan Report.
 
 ## [0.1.0] - 2026-05-21
 

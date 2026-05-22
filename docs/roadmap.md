@@ -10,8 +10,9 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 
 ## Format support
 
+- [x] E57 import — terrestrial laser-scanner data (ASTM E2807)
 - [ ] Broaden LAS / LAZ point-format coverage
-- [ ] E57 import
+- [ ] Broaden E57 coverage — spherical coordinates, uncommon schema features
 - [ ] PCD, PTS / PTX import
 - [ ] COPC LAZ for cloud-optimised point clouds
 - [ ] 3D Tiles / PNTS streaming
@@ -26,9 +27,11 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 
 ## Measurement
 
-- [ ] Polyline measurement
-- [ ] Area measurement
-- [ ] Height-difference measurement
+- [x] Polyline measurement
+- [x] Area measurement — own-plane and horizontal
+- [x] Height-difference measurement
+- [x] Angle and slope measurement
+- [x] Measurement editing, units toggle, and JSON session export/import
 - [ ] Cross-section and profile tools
 - [ ] Annotation tools
 

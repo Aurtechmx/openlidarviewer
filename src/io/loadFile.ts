@@ -16,6 +16,7 @@ interface CloudPayload {
   colors?: Uint8Array;
   intensity?: Uint16Array;
   classification?: Uint8Array;
+  normals?: Float32Array;
   origin: [number, number, number];
   sourceFormat: SourceFormat;
   name: string;

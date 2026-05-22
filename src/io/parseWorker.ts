@@ -33,6 +33,7 @@ ctx.onmessage = (event: MessageEvent): void => {
       if (cloud.colors) transfer.push(cloud.colors.buffer as ArrayBuffer);
       if (cloud.intensity) transfer.push(cloud.intensity.buffer as ArrayBuffer);
       if (cloud.classification) transfer.push(cloud.classification.buffer as ArrayBuffer);
+      if (cloud.normals) transfer.push(cloud.normals.buffer as ArrayBuffer);
 
       ctx.postMessage(
         {
@@ -42,6 +43,7 @@ ctx.onmessage = (event: MessageEvent): void => {
             colors: cloud.colors,
             intensity: cloud.intensity,
             classification: cloud.classification,
+            normals: cloud.normals,
             origin: cloud.origin,
             sourceFormat: cloud.sourceFormat,
             name: cloud.name,

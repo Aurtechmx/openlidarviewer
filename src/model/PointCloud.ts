@@ -23,6 +23,8 @@ export interface PointCloudOptions {
   intensity?: Uint16Array;
   /** Optional per-point ASPRS classification code. */
   classification?: Uint8Array;
+  /** Optional interleaved per-point normal vectors (xyz). */
+  normals?: Float32Array;
   /** The integer world-space origin that was subtracted from the positions. */
   origin: [number, number, number];
   /** Which file format this cloud was loaded from. */
@@ -55,6 +57,7 @@ export class PointCloud {
   readonly colors?: Uint8Array;
   readonly intensity?: Uint16Array;
   readonly classification?: Uint8Array;
+  readonly normals?: Float32Array;
   readonly origin: [number, number, number];
   readonly sourceFormat: SourceFormat;
   readonly name: string;
@@ -67,6 +70,7 @@ export class PointCloud {
     this.colors = options.colors;
     this.intensity = options.intensity;
     this.classification = options.classification;
+    this.normals = options.normals;
     this.origin = options.origin;
     this.sourceFormat = options.sourceFormat;
     this.name = options.name;

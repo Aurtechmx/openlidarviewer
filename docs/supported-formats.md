@@ -8,6 +8,7 @@ Format support is still evolving. This page separates what works today from what
 |---|---|---|
 | `LAS` | Drone / aerial LiDAR | Georeferenced; coordinate bridge applied |
 | `LAZ` | Drone / aerial LiDAR | Compressed LAS, decoded in-browser (laz-perf WASM) |
+| `E57` | Terrestrial laser scanners | ASTM E2807; coordinates, RGB, intensity, classification, normals; multi-scan files merged |
 | `PLY` | iPhone / mobile scans | Point clouds and meshes; RGB supported |
 | `OBJ` | Mesh scans, 3D tools | Mesh vertices used as points |
 | `GLB` / `GLTF` | AR tools, mobile scans | Mesh vertices used as points |
@@ -20,13 +21,21 @@ Format support is still evolving. This page separates what works today from what
 
 ## iPhone and mobile scan exports
 
-OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format. `PLY`, `OBJ`, `GLB`/`GLTF`, `XYZ`, and `CSV` all work today. `USDZ` and `E57` exports need conversion to a supported format first. What works depends on the app's export format, the file structure, browser memory, and the current implementation.
+OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format. `PLY`, `OBJ`, `GLB`/`GLTF`, `XYZ`, and `CSV` all work today. `USDZ` exports need conversion to a supported format first. What works depends on the app's export format, the file structure, browser memory, and the current implementation.
 
-## Drone LiDAR and professional point clouds
+## Terrestrial laser scanners (E57)
+
+`E57` (ASTM E2807) is the standard exchange format for terrestrial laser scanners and is read directly in the browser by a from-scratch TypeScript parser — nothing is uploaded and no conversion step is needed.
+
+The parser decodes Cartesian coordinates, RGB colour, intensity, classification, and per-point surface normals. It applies each scan's recorded pose (rotation and translation), drops points the file flags as invalid, and bridges global coordinates into the viewer's local space with the same coordinate bridge the LAS loader uses. Multi-scan E57 files are merged into a single cloud, and the file's generating software is read from the header and shown in the Scan Report.
+
+E57 exports from Trimble survey scanners have been tested directly. Other standard E57 files — from Leica, FARO, Matterport, and similar systems — follow the same ASTM format and are expected to work; E57 files that use uncommon or non-standard schema features may not.
+
+## Drone LiDAR and other professional point clouds
 
 Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large UTM-scale coordinates handled by the coordinate bridge.
 
-Planned support: `E57`, the common terrestrial and mixed-scan exchange format; `PCD`, the Point Cloud Library format; and `PTS` / `PTX`, the terrestrial scanner formats.
+Planned support: `PCD`, the Point Cloud Library format; and `PTS` / `PTX`, the terrestrial scanner text formats.
 
 ## Large-scale and web formats
 

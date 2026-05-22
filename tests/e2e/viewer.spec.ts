@@ -43,6 +43,24 @@ test('loads a second scan as a separate layer', async ({ page }) => {
   await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
 });
 
+test('opens a dropped E57 scan', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+
+  // Drop the bundled E57 fixture — exercises the full sniff → parse → render path.
+  const e57 = readFileSync(fileURLToPath(new URL('../bunnyFloat.e57', import.meta.url)));
+  const dataTransfer = await page.evaluateHandle((bytes) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(bytes)], 'bunny.e57'));
+    return dt;
+  }, [...e57]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-layer')).toHaveCount(1);
+  await expect(page.locator('.olv-report-row').first()).toBeVisible();
+});
+
 test('embed mode strips the top bar', async ({ page }) => {
   await page.goto('/?embed=1');
   await expect(page.locator('.olv-topbar')).toHaveCount(0);
@@ -65,4 +83,21 @@ test('switches navigation modes and reveals the speed control', async ({ page })
   // The keyboard shortcut '2' switches to Walk mode.
   await page.keyboard.press('Digit2');
   await expect(page.locator('.olv-mode-active')).toHaveText('Walk');
+});
+
+test('closes a scan and returns to the empty state, ready for another', async ({ page }) => {
+  await page.goto('/');
+  await page.getByText('Drone survey', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-layer')).toHaveCount(1);
+
+  // Close the scan — the empty state returns and the layer is gone.
+  await page.locator('.olv-tool', { hasText: 'Close' }).click();
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+  await expect(page.locator('.olv-layer')).toHaveCount(0);
+
+  // A second scan can be loaded straight away from the empty state.
+  await page.getByText('Phone scan', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-layer')).toHaveCount(1);
 });

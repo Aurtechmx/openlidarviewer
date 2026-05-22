@@ -33,20 +33,20 @@ Most LiDAR tools are powerful, but a lot of them are heavy, desktop-first, and G
 
 OpenLiDARViewer takes a lighter path. It runs in the browser with nothing to install. Files are read and rendered locally, so there is no server to upload to. It keeps the interface small and the navigation game-like instead of GIS-like. And it is built to be a testbed for browser-native spatial computing rather than a full GIS replacement.
 
-It already opens georeferenced drone LiDAR surveys in LAS and LAZ, and it opens compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF). More professional point-cloud formats are on the roadmap as the pipeline matures.
+It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-scanner data in E57 — including exports from Trimble and other survey scanners — and compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF). More professional point-cloud formats are on the roadmap as the pipeline matures.
 
 ## Key Advantages
 
 - Inspect point-cloud datasets directly in a modern web interface, with nothing to install.
 - Local-first by design: files are read and rendered in your browser, with no upload, which suits sensitive survey data.
 - Opens compatible iPhone and mobile scan exports when saved as PLY, OBJ, GLB/GLTF, XYZ, or CSV.
-- Opens georeferenced drone LiDAR surveys in LAS and LAZ today, with a coordinate bridge that keeps large survey coordinates precise.
+- Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, with a coordinate bridge that keeps large survey coordinates precise.
 - Game-like navigation: Orbit, Walk, and Fly modes with WASD and mouse-look.
 - A small, focused interface that stays out of the way and keeps you on the scan.
-- Measure straight-line distance directly inside the point cloud for inspection and documentation.
+- A full measurement toolkit — distance, polyline, area, height, angle, and slope — with editable points, in-session persistence, and JSON export/import.
 - Inspect any point: click it to read its exact coordinates, intensity, classification, and colour, then copy them in one click.
 - A Scan Intelligence panel that reports point count, dimensions, density, spacing, and detected attributes.
-- Color by height, intensity, classification, or stored RGB.
+- Color by height, intensity, classification, stored RGB, or surface normal direction.
 - Save camera viewpoints and return to them for inspection, reports, and presentations.
 - Save PNG snapshots, or re-export the cloud as PLY, OBJ, XYZ, or CSV.
 - A clean dark interface aimed at researchers, developers, and geospatial work.
@@ -58,15 +58,16 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Browser-based point-cloud visualization
 - Local-first scan inspection: nothing is uploaded
 - WebGPU rendering with an automatic, fully tested WebGL 2 fallback
-- Import: LAS, LAZ, PLY, OBJ, GLB, GLTF, XYZ, CSV
+- Import: LAS, LAZ, E57, PLY, OBJ, GLB, GLTF, XYZ, CSV
 - Export: PLY, OBJ, XYZ, CSV, and PNG snapshots
-- Height, intensity, classification, and RGB color modes, picked automatically per file
+- Height, intensity, classification, RGB, and surface-normal color modes, picked automatically per file
 - Adjustable point size, and a Detail control that shows an honest `shown / total` count
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
-- Distance measurement inside the point cloud
+- A measurement toolkit with six tools — distance, polyline, area, height, angle, and slope — with draggable points, undo, rename, a units toggle, and JSON session export/import
+- Open multiple scans as layers, or close the current scan from the tool dock to start fresh with another
 - Point inspection — click a point to read its coordinates and attributes, with one-click copy to the clipboard
 - A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
-- Capture provenance from LAS/LAZ headers — sensor, source software, and date — shown in the Scan Report when the file carries them
+- Capture provenance from LAS/LAZ and E57 headers — sensor, source software, and date — shown in the Scan Report when the file carries them
 - A "Project ready" summary card on load, with a suggested navigation mode
 - Saved camera views for repeatable inspection
 - A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates precise
@@ -76,8 +77,8 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 
 | | |
 |---|---|
-| ![Main viewer](docs/screenshots/openlidarviewer-main.jpg) | ![Measuring a distance](docs/screenshots/measurement-tool.jpg) |
-| A 9.6M-point drone survey, height-colored, with the Scan Intelligence panel and the Orbit / Walk / Fly navigation. | Measuring straight-line distance — pick two points and read the result inside the cloud. |
+| ![Main viewer](docs/screenshots/openlidarviewer-main.jpg) | ![Measuring inside the cloud](docs/screenshots/measurement-tool.jpg) |
+| A 9.6M-point drone survey, height-colored, with the Scan Intelligence panel and the Orbit / Walk / Fly navigation. | The measurement toolkit — here a distance between two picked points; it also measures polyline, area, height, angle, and slope. |
 | ![Inspecting a point](docs/screenshots/inspect-tool.jpg) | ![Scan Intelligence panel](docs/screenshots/scan-intelligence-panel.jpg) |
 | Inspecting a point: a glowing marker and a card with its real-world coordinates and attributes. | The Scan Intelligence panel — point count, dimensions, density, spacing, attributes, and the Advanced report. |
 
@@ -106,25 +107,32 @@ Movement speed scales with the size of the loaded scan, so the controls feel rig
 
 ## Measurement
 
-OpenLiDARViewer includes a measurement tool for visual inspection and documentation. The current workflow lets you:
+OpenLiDARViewer includes a measurement toolkit for visual inspection and documentation. Open the Measure tool, pick a kind from the toolbar, and place points directly on the scan. Six tools are available:
 
-- pick two points directly on the scan,
-- read the straight-line distance between them,
-- see the result labelled in centimetres, metres, or kilometres,
-- clear measurements, and
-- use the result for inspection, snapshots, and reports.
+| Tool | What it measures |
+|---|---|
+| Distance | Straight-line distance between two points |
+| Polyline | Total length of a multi-segment path |
+| Area | Polygon area — both the true area in the polygon's own plane and the horizontal (map-projected) area |
+| Height | Vertical difference between two points |
+| Angle | The angle at a vertex between two arms |
+| Slope | Rise, run, slope angle, and grade percentage between two points |
 
-Measurement is meant for visual inspection and research, not survey-grade use. Treat it as survey-grade only if you have validated it against survey-grade data and procedures. Area, polyline, and height-difference measurement are on the [Roadmap](#roadmap).
+Every measurement is editable: drag a point to move it, undo the last point while placing, rename a measurement, or clear them all. Placed measurements are listed in a compact Measurements panel and persist for the session. A single toggle switches all readouts between metric and imperial units. The whole set can be exported to a JSON session file and re-imported later.
+
+Measurement is meant for visual inspection and research, not survey-grade use. Treat it as survey-grade only if you have validated it against survey-grade data and procedures.
 
 ## Supported / Target Formats
 
-**Current import formats:** `LAS`, `LAZ`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`.
+**Current import formats:** `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`.
 
 **Current export targets:** `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
 
-**iPhone and mobile scans.** OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format, usually PLY, OBJ, or GLB/GLTF (and XYZ/CSV). `USDZ` and `E57` exports need conversion to a supported format first.
+**iPhone and mobile scans.** OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format, usually PLY, OBJ, or GLB/GLTF (and XYZ/CSV). `USDZ` exports need conversion to a supported format first.
 
-**Drone LiDAR and professional point clouds.** Georeferenced drone LiDAR surveys in LAS and LAZ work today. Planned support includes `E57`, `PCD`, `PTS/PTX`, and cloud-optimised or streaming formats such as `COPC LAZ` and `3D Tiles / PNTS`.
+**Terrestrial laser scanners.** `E57` (ASTM E2807), the standard exchange format for terrestrial laser scanners, is read directly in the browser. The parser handles Cartesian coordinates, RGB colour, intensity, classification, surface normals, scan poses, and multi-scan files (every scan is merged into one cloud). E57 exports from Trimble survey scanners have been tested, and other standard E57 files — Leica, FARO, Matterport, and similar — follow the same ASTM format.
+
+**Drone LiDAR and professional point clouds.** Georeferenced drone LiDAR surveys in LAS and LAZ work today. Planned support includes `PCD`, `PTS/PTX`, and cloud-optimised or streaming formats such as `COPC LAZ` and `3D Tiles / PNTS`.
 
 Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Full detail is in [`docs/supported-formats.md`](docs/supported-formats.md).
 
@@ -186,16 +194,16 @@ The aim is not to replace full GIS or survey-grade processing. It is to give peo
 4. Point positions and attributes are decoded. Large georeferenced coordinates are recentered in double precision before the float32 downcast.
 5. Clouds above the point budget are voxel-downsampled, and the Detail control shows the honest `shown / total` count.
 6. The cloud renders through a WebGPU or WebGL 2 pipeline built on three.js.
-7. Color modes map height, intensity, classification, or RGB onto the points.
+7. Color modes map height, intensity, classification, RGB, or surface-normal direction onto the points.
 8. You explore with Orbit, Walk, or Fly navigation.
-9. Scan Intelligence summarizes the dataset, and the measurement tool inspects distances.
-10. You save viewpoints and export snapshots or re-exported point data.
+9. Scan Intelligence summarizes the dataset, and the measurement toolkit takes distance, area, height, angle, and slope measurements.
+10. You save viewpoints and export snapshots, re-exported point data, or a JSON measurement session.
 
 ## Technology Stack
 
 - TypeScript, in strict mode, across the IO, model, and render layers
 - three.js (`three/webgpu`), a WebGPU renderer with a WebGL 2 fallback
-- loaders.gl and laz-perf (WASM) for point-cloud format parsing
+- loaders.gl and laz-perf (WASM) for mesh and LAZ parsing, plus a from-scratch TypeScript E57 parser
 - Vite for the build and dev server, with Web Worker and WASM handling
 - Vitest and Playwright for unit and end-to-end tests
 - A client-side, local-first pipeline with no backend
@@ -222,13 +230,14 @@ npm run preview
 
 1. Open the app in a modern WebGL/WebGPU-capable browser.
 2. Drop a compatible point-cloud file onto the page.
-3. Choose a visual mode: Height, Intensity, Classification, or RGB.
+3. Choose a visual mode: Height, Intensity, Classification, RGB, or Normal.
 4. Adjust point size and rendering detail.
 5. Navigate with Orbit, Walk, or Fly mode.
 6. Read the Scan Intelligence panel for dataset metadata and quality.
-7. Measure distances inside the point cloud.
+7. Measure distance, polyline, area, height, angle, or slope inside the point cloud.
 8. Save viewpoints for repeated inspection.
-9. Export a PNG snapshot, or re-export the cloud as PLY, OBJ, XYZ, or CSV.
+9. Export a PNG snapshot, re-export the cloud as PLY, OBJ, XYZ, or CSV, or save a JSON measurement session.
+10. Close the scan from the tool dock to return to the start and open another.
 
 A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 
@@ -247,10 +256,10 @@ Planned performance work includes tiled datasets, COPC LAZ, 3D Tiles / PNTS, lev
 ## Roadmap
 
 - [ ] Broaden LAS / LAZ point-format coverage
-- [ ] Add E57 support
+- [ ] Add PCD and PTS/PTX support
 - [ ] Add COPC LAZ support for large cloud-optimised datasets
 - [ ] Add 3D Tiles / PNTS streaming
-- [ ] Polyline, area, and height-difference measurement
+- [ ] Cross-section and profile measurement
 - [ ] Slicing and clipping tools
 - [ ] Annotation tools
 - [ ] Camera path recording

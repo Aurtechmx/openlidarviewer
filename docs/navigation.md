@@ -43,4 +43,4 @@ The Frame button and double-click focus glide the camera with an eased transitio
 
 ## Up axis
 
-Navigation respects the scan's natural up axis: Z-up for LAS, LAZ, and XYZ surveys, and Y-up for phone-scan formats. "Up" stays up and the horizon stays level.
+Navigation respects the scan's natural up axis: Z-up for LAS, LAZ, E57, and XYZ surveys, and Y-up for phone-scan formats. "Up" stays up and the horizon stays level.

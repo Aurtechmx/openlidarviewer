@@ -38,6 +38,21 @@ function makePositionsOnlyCloud(): PointCloud {
   });
 }
 
+/** Cloud carrying per-point normals — three axis-aligned unit vectors. */
+function makeNormalsCloud(): PointCloud {
+  return new PointCloud({
+    positions: new Float32Array([0, 0, 0, 1, 1, 1, 2, 2, 2]),
+    normals: new Float32Array([
+      1, 0, 0, // +X
+      0, 1, 0, // +Y
+      0, 0, 1, // +Z
+    ]),
+    origin: [0, 0, 0],
+    sourceFormat: 'e57',
+    name: 'normals.e57',
+  });
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // colorForMode — rgb
 // ────────────────────────────────────────────────────────────────────────────
@@ -222,6 +237,50 @@ describe('colorForMode — classification', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// colorForMode — normal
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('colorForMode — normal', () => {
+  test('returns a Uint8Array with 3 bytes per point', () => {
+    const cloud = makeNormalsCloud();
+    const result = colorForMode('normal', cloud);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result.length).toBe(cloud.pointCount * 3);
+  });
+
+  test('encodes a unit normal direction as RGB (component −1…+1 → 0…255)', () => {
+    const cloud = makeNormalsCloud(); // normals: +X, +Y, +Z
+    const result = colorForMode('normal', cloud);
+    // +X normal → R full, G and B at the midpoint (0 → 127/128).
+    expect(result[0]).toBe(255);
+    expect(result[1]).toBeGreaterThanOrEqual(127);
+    expect(result[1]).toBeLessThanOrEqual(128);
+    // +Y normal → G full.
+    expect(result[4]).toBe(255);
+    // +Z normal → B full.
+    expect(result[8]).toBe(255);
+  });
+
+  test('normalises an un-normalised normal before encoding', () => {
+    const cloud = new PointCloud({
+      positions: new Float32Array([0, 0, 0]),
+      normals: new Float32Array([5, 0, 0]), // length 5, points +X
+      origin: [0, 0, 0],
+      sourceFormat: 'e57',
+      name: 'long-normal.e57',
+    });
+    const result = colorForMode('normal', cloud);
+    // After normalising, the +X direction still maps R to full.
+    expect(result[0]).toBe(255);
+  });
+
+  test('throws when normals are absent', () => {
+    const cloud = makePositionsOnlyCloud();
+    expect(() => colorForMode('normal', cloud)).toThrow();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // availableModes
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -244,6 +303,11 @@ describe('availableModes', () => {
   test('classification included only when classification present', () => {
     expect(availableModes(makeFullCloud())).toContain('classification');
     expect(availableModes(makePositionsOnlyCloud())).not.toContain('classification');
+  });
+
+  test('normal included only when normals present', () => {
+    expect(availableModes(makeNormalsCloud())).toContain('normal');
+    expect(availableModes(makeFullCloud())).not.toContain('normal');
   });
 
   test('positions-only cloud has exactly one mode', () => {

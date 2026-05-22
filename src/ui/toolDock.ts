@@ -7,14 +7,16 @@ export interface ToolDockCallbacks {
   onMeasureToggle: () => void;
   /** Toggle point-inspection mode. */
   onInspectToggle: () => void;
+  /** Close the current scan and return to the empty state. */
+  onClose: () => void;
 }
 
 /**
  * The bottom-left tool dock and the bottom-right backend indicator.
  *
- * Frame and Snapshot are always available. Measure and Inspect become
+ * Frame and Snapshot are always available. Measure, Inspect and Close become
  * available once a scan is loaded — Measure toggles distance measurement,
- * Inspect toggles point inspection. Slice ships in v2.
+ * Inspect toggles point inspection, Close clears the scan. Slice ships in v2.
  */
 export class ToolDock {
   readonly dock: HTMLElement;
@@ -22,6 +24,7 @@ export class ToolDock {
   private readonly _backendText: HTMLElement;
   private readonly _measure: HTMLButtonElement;
   private readonly _inspect: HTMLButtonElement;
+  private readonly _close: HTMLButtonElement;
 
   constructor(callbacks: ToolDockCallbacks) {
     const frame = this._tool('Frame', 'Fit the camera to all clouds', false);
@@ -46,12 +49,22 @@ export class ToolDock {
 
     const slice = this._tool('Slice', 'Section & slice plane — coming soon', true);
 
+    // Close starts disabled — enabled by setCloseEnabled once a scan loads.
+    // It clears the current scan and returns to the empty state.
+    this._close = this._tool('Close', 'Load a scan to enable', true);
+    this._close.classList.add('olv-tool-close');
+    this._close.addEventListener('click', () => {
+      this._close.blur();
+      callbacks.onClose();
+    });
+
     this.dock = el('div', { className: 'olv-dock' }, [
       frame,
       snapshot,
       this._measure,
       this._inspect,
       slice,
+      this._close,
     ]);
 
     this._backendText = el('span', { className: 'olv-backend-text', text: 'initialising…' });
@@ -94,6 +107,14 @@ export class ToolDock {
   setInspectActive(active: boolean): void {
     this._inspect.classList.toggle('olv-tool-active', active);
     this._inspect.textContent = active ? 'Inspecting…' : 'Inspect';
+  }
+
+  /** Enable or disable the Close action — enabled once a scan is loaded. */
+  setCloseEnabled(enabled: boolean): void {
+    this._close.disabled = !enabled;
+    this._close.title = enabled
+      ? 'Close the scan and return to the start'
+      : 'Load a scan to enable';
   }
 
   private _tool(label: string, title: string, disabled: boolean): HTMLButtonElement {

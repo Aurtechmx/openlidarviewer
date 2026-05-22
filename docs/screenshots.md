@@ -17,8 +17,9 @@ Scan Intelligence panel on the right and the navigation HUD below.
 
 ## measurement-tool.jpg
 
-The measurement workflow — two picked points and the straight-line distance
-read directly inside the point cloud.
+The measurement toolkit — a distance measurement between two picked points,
+read directly inside the point cloud. The toolkit also measures polyline,
+area, height, angle, and slope.
 
 ## inspect-tool.jpg
 

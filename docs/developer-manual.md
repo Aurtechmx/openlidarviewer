@@ -12,11 +12,11 @@ the reference for building, testing, extending, and shipping the project.
 
 ## 1. Purpose
 
-OpenLiDARViewer opens drone LiDAR surveys and phone scans from one
-drag-and-drop, with no install, no upload, and no conversion step. It runs
-entirely in the browser; no scan data ever leaves the device. Once a scan is
-open you can navigate it in 3D, recolor it, measure distances, read a Scan
-Intelligence report, and export the result.
+OpenLiDARViewer opens drone LiDAR surveys, terrestrial laser scans, and phone
+scans from one drag-and-drop, with no install, no upload, and no conversion
+step. It runs entirely in the browser; no scan data ever leaves the device.
+Once a scan is open you can navigate it in 3D, recolor it, measure it, read a
+Scan Intelligence report, and export the result.
 
 ---
 
@@ -27,21 +27,22 @@ Intelligence report, and export the result.
 | ID | Requirement |
 |------|-------------|
 | FR-1 | Open a scan by dropping a single file anywhere on the window. |
-| FR-2 | Import eight formats: `.las`, `.laz`, `.ply`, `.obj`, `.glb`, `.gltf`, `.xyz`, `.csv`. |
+| FR-2 | Import nine formats: `.las`, `.laz`, `.e57`, `.ply`, `.obj`, `.glb`, `.gltf`, `.xyz`, `.csv`. |
 | FR-3 | Detect format from magic bytes first, file extension second. |
 | FR-4 | Parse and downsample off the main thread, in a Web Worker. |
 | FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within a small bounded error. |
 | FR-6 | Voxel-downsample clouds above the point budget; always display the honest `shown / total` count. |
 | FR-7 | Render with three.js using WebGPU, with an automatic WebGL 2 fallback. |
-| FR-8 | Color by RGB, height, intensity, or classification; auto-select the best mode on load; offer only the modes the file actually contains. |
+| FR-8 | Color by RGB, height, intensity, classification, or surface normal; auto-select the best mode on load; offer only the modes the file actually contains. |
 | FR-9 | Hold multiple clouds in one scene, rebased onto a shared origin. |
 | FR-10 | Navigate the cloud in Orbit, Walk, and Fly modes, with WASD movement and pointer-lock mouse-look. |
-| FR-11 | Measure straight-line distance between two picked points inside the cloud. |
+| FR-11 | Measure distance, polyline, area, height, angle, and slope inside the cloud; support point editing, a metric/imperial toggle, and JSON session export/import. |
 | FR-12 | Run validation modules (Health Check, Scan Report) through an open analysis-module API and show the results in the Scan Intelligence panel. |
 | FR-13 | Export the cloud to PLY, OBJ, XYZ, or CSV, and save the current view as a PNG, all client-side. |
 | FR-14 | Save and restore named camera views. |
 | FR-15 | Support an embed mode (`?embed=1`) that strips the chrome for `<iframe>` use. |
 | FR-16 | Inspect a picked point — show its real-world coordinates and attributes, with one-click copy to the clipboard. |
+| FR-17 | Close the current scan — clear every loaded cloud and return to the empty state, ready for another file. |
 
 ### 2.2 Non-functional requirements
 
@@ -65,7 +66,7 @@ Intelligence report, and export the result.
 | Language | TypeScript (strict) | Type safety across the IO, model, render, and UI layers. |
 | Build / dev | Vite 8 | Fast dev server, first-class Web Worker and WASM handling. |
 | Rendering | three.js 0.184 (`three/webgpu`, `three/tsl`) | WebGPU renderer with a built-in WebGL 2 fallback. |
-| Parsing | loaders.gl (`las`, `ply`, `obj`, `gltf`) + `laz-perf` | Battle-tested format loaders; `laz-perf` WASM decodes LAZ. |
+| Parsing | loaders.gl (`las`, `ply`, `obj`, `gltf`) + `laz-perf` + a from-scratch E57 parser | Battle-tested loaders; `laz-perf` WASM decodes LAZ; E57 is parsed by an in-repo TypeScript module set. |
 | Unit tests | Vitest | Fast, ESM-native, Node environment for the algorithmic core. |
 | E2E tests | Playwright | Drives the built app in a real browser. |
 
@@ -99,7 +100,9 @@ src/
     sniffFormat.ts         Format detection (magic bytes -> extension).
     lasHeader.ts           LAS public-header parser.
     coordinateBridge.ts    f64 -> f32 recentre — precision-critical.
-    loadLas/Ply/Obj/Gltf/Xyz.ts   Format -> PointCloud loaders.
+    loadLas/E57/Ply/Obj/Gltf/Xyz.ts   Format -> PointCloud loaders.
+    e57/                   From-scratch E57 parser — header de-paging,
+                           a minimal XML reader, and a CompressedVector decoder.
     parseBuffer.ts         Loader dispatch + downsample (DOM-free).
     loadFile.ts            File -> PointCloud via the worker.
     parseWorker.ts         The Web Worker entry.
@@ -111,25 +114,28 @@ src/
     voxelDownsample.ts     Voxel-grid downsampling.
   render/
     Viewer.ts              three.js WebGPU / WebGL 2 scene.
-    colorModes.ts          RGB / height / intensity / classification.
+    colorModes.ts          RGB / height / intensity / classification / normal.
     navMath.ts             Pure navigation math (unit-tested).
     NavController.ts       Orbit / Walk / Fly, keyboard, pointer-lock, tweens.
-    MeasureTool.ts         Two-point distance measurement.
+    measure/               Measurement toolkit — pure geometry, formatting,
+                           serialisation, label layout, plus the controller
+                           and SVG overlay.
     InspectTool.ts         Click a point to read its attributes.
     pointInfo.ts           Pure picked-point data + serialisation (unit-tested).
   analysis/
     ModuleApi.ts           Analysis-module interface + registry.
     modules/               healthCheck.ts, scanReport.ts.
   ui/
-    Stage / DropZone / Inspector / NavBar / ProjectCard / toolDock / dom.ts
+    Stage / DropZone / Inspector / NavBar / ProjectCard / MeasurePanel /
+    toolDock / dom.ts
   main.ts                  Wires the viewer, navigation, UI, and modules.
 tests/                     Vitest unit tests; tests/e2e/ holds Playwright specs.
 ```
 
 Rule of thumb: each `src/io/*` file owns exactly one format or one concern;
-`Viewer.ts` owns all three.js state; analysis modules consume `PointCloud`
-only and never import three.js. The "Scan Intelligence" panel is built in
-`src/ui/Inspector.ts`.
+`Viewer.ts` owns all three.js state; analysis modules and the measurement
+core consume plain data only and never import three.js. The "Scan
+Intelligence" panel is built in `src/ui/Inspector.ts`.
 
 ---
 
@@ -178,17 +184,22 @@ See [`architecture.md`](architecture.md) for the full map.
 
 - **Unit (Vitest, Node).** The algorithmic core is test-first: format
   sniffer, LAS header parser, coordinate bridge, `PointCloud`, every loader,
-  voxel downsampling, parse dispatch, color modes, navigation math, the
-  exporters, and both analysis modules. Tests assert against deterministic
-  fixtures generated by `scripts/make-fixtures.py`, with ground truth recorded
-  in `tests/fixtures/FIXTURES.md`.
+  the E57 parser, voxel downsampling, parse dispatch, color modes, navigation
+  math, the measurement core (geometry, formatting, serialization, label
+  layout), the exporters, and both analysis modules. Tests assert against
+  deterministic fixtures — including a committed `bunnyFloat.e57` — generated
+  by `scripts/make-fixtures.py`, with ground truth in `tests/fixtures/FIXTURES.md`.
 - **End-to-end (Playwright).** `tests/e2e/viewer.spec.ts` drives the built
   app: load a sample, confirm the cloud renders and the Scan Report appears,
-  load a second cloud, and check embed mode.
-- **Not unit-tested:** `Viewer.ts`, `NavController.ts`, `MeasureTool.ts`,
-  `InspectTool.ts`, and the worker entry require a browser/GPU and are covered
-  by E2E plus manual checks. Their pure logic lives in `navMath.ts` and
-  `pointInfo.ts`, which *are* unit-tested.
+  load a second cloud, drop an E57 scan, close a scan and load another, and
+  check embed mode. `tests/e2e/measure.spec.ts` covers the measurement
+  toolbar, kind picker, units toggle, a distance placement round-trip, and
+  session export.
+- **Not unit-tested:** `Viewer.ts`, `NavController.ts`, the measurement
+  controller and SVG overlay, `InspectTool.ts`, and the worker entry require a
+  browser/GPU and are covered by E2E plus manual checks. Their pure logic
+  lives in `navMath.ts`, `pointInfo.ts`, and `render/measure/`, which *are*
+  unit-tested.
 
 ---
 
@@ -279,9 +290,9 @@ component. For embedding, serve the same build and link with `?embed=1`.
 ## 16. Roadmap
 
 Deferred by design: octree LOD streaming for very large clouds, expanded
-format support (E57, COPC LAZ, 3D Tiles / PNTS), polyline/area/height-difference
-measurement, slicing and clipping tools, A/B cloud compare, and a deeper
-analysis suite. See [`roadmap.md`](roadmap.md) for the full list.
+format support (PCD, PTS/PTX, COPC LAZ, 3D Tiles / PNTS), cross-section and
+profile measurement, slicing and clipping tools, A/B cloud compare, and a
+deeper analysis suite. See [`roadmap.md`](roadmap.md) for the full list.
 
 ---
 

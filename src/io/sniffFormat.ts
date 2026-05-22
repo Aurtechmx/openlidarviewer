@@ -5,10 +5,31 @@
  */
 
 /** Every format the sniffer can report, including the catch-all `unknown`. */
-export type DetectedFormat = 'ply' | 'las' | 'laz' | 'obj' | 'glb' | 'gltf' | 'xyz' | 'unknown';
+export type DetectedFormat =
+  | 'ply'
+  | 'las'
+  | 'laz'
+  | 'obj'
+  | 'glb'
+  | 'gltf'
+  | 'xyz'
+  | 'e57'
+  | 'unknown';
 
 /** A concrete, loadable source format — `DetectedFormat` minus `unknown`. */
 export type SourceFormat = Exclude<DetectedFormat, 'unknown'>;
+
+/**
+ * Whether a format's native coordinate frame is Z-up. Survey and scanner
+ * formats — LAS, LAZ, XYZ, and E57 — are Z-up; phone-scan mesh formats
+ * (PLY, OBJ, GLB/GLTF) are Y-up. Shared by the renderer and the session
+ * exporter so the two can never disagree on a format's up axis.
+ */
+export function isZUpFormat(format: SourceFormat): boolean {
+  return (
+    format === 'las' || format === 'laz' || format === 'xyz' || format === 'e57'
+  );
+}
 
 /** Read the first `count` bytes of `buffer` as an ASCII string. */
 function readAscii(buffer: ArrayBuffer, count: number): string {
@@ -37,15 +58,16 @@ function extensionOf(filename: string): string {
  * by extension only.
  */
 export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedFormat {
-  const magic = readAscii(buffer, 4);
+  const magic = readAscii(buffer, 8);
 
   // 1. Magic bytes win over the extension.
+  if (magic.startsWith('ASTM-E57')) return 'e57';
   if (magic.startsWith('ply')) return 'ply';
   if (magic.startsWith('LASF')) {
     return extensionOf(filename) === 'laz' ? 'laz' : 'las';
   }
   // glTF binary: 0x67 0x6C 0x54 0x46 == 'glTF'.
-  if (magic === 'glTF') return 'glb';
+  if (magic.startsWith('glTF')) return 'glb';
 
   // 2. Fall back to the file extension.
   switch (extensionOf(filename)) {
@@ -64,6 +86,8 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
     case 'xyz':
     case 'csv':
       return 'xyz';
+    case 'e57':
+      return 'e57';
     default:
       return 'unknown';
   }
