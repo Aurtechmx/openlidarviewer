@@ -9,7 +9,7 @@ import { Inspector } from './ui/Inspector';
 import { ToolDock } from './ui/toolDock';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
-import { loadFile } from './io/loadFile';
+import { loadFile, MOBILE_POINT_BUDGET } from './io/loadFile';
 import { exportCloud } from './io/exporters';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
@@ -28,8 +28,18 @@ const SAMPLES: Sample[] = [
   { label: 'Phone scan', detail: '.ply — local coordinates', url: 'samples/tiny.ply', name: 'sample-scan.ply' },
 ];
 
-const stage = new Stage(app, { embed, samples: SAMPLES, onSample: loadFromUrl });
+const stage = new Stage(app, {
+  embed,
+  samples: SAMPLES,
+  onSample: loadFromUrl,
+  onOpenFile: (file) => void handleFile(file),
+});
 const viewer = new Viewer(stage.canvas);
+
+/** True on phone-width viewports — drives the touch hint and point budget. */
+function isPhone(): boolean {
+  return window.matchMedia('(max-width: 767px)').matches;
+}
 
 const registry = new ModuleRegistry();
 registry.register(healthCheck);
@@ -107,9 +117,9 @@ const dropZone = new DropZone(document.body, (file) => void handleFile(file));
 stage.overlay.append(dropZone.toast);
 
 // The nav bar is core interaction — shown in embed mode too. Hidden until a
-// scan is loaded.
+// scan is loaded. The touch hint rides alongside it (phones only via CSS).
 navBar.element.classList.add('olv-hidden');
-stage.overlay.append(navBar.element, navBar.prompt);
+stage.overlay.append(navBar.element, navBar.prompt, navBar.touchHint);
 
 if (!embed) {
   // The tool overlays go in first so the panels paint above them.
@@ -123,6 +133,8 @@ if (!embed) {
   stage.overlay.append(projectCard.element);
   // The point-info card sits above the panels so its Copy button is reachable.
   stage.overlay.append(viewer.inspectElements.card);
+  // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
+  stage.overlay.append(inspector.sheetToggle);
 }
 
 /** Run every registered validation module and flatten the rows. */
@@ -153,7 +165,9 @@ function downloadText(filename: string, text: string): void {
 async function handleFile(file: File): Promise<void> {
   dropZone.setProgress(`Reading ${file.name}…`);
   try {
-    const result = await loadFile(file, (text) => dropZone.setProgress(text));
+    // Phones get a tighter point budget — limited GPU memory and fill-rate.
+    const budget = isPhone() ? MOBILE_POINT_BUDGET : undefined;
+    const result = await loadFile(file, (text) => dropZone.setProgress(text), budget);
     await viewer.ready;
 
     stage.hideEmptyState();
@@ -183,6 +197,11 @@ async function handleFile(file: File): Promise<void> {
     navBar.element.classList.remove('olv-hidden');
     navBar.setMode('orbit');
     navBar.flashHelp();
+
+    // Reveals the phone-only Scan Info launcher (CSS keyed off this class).
+    document.body.classList.add('olv-has-scan');
+    // Phones get a touch-gesture hint in place of the keyboard HUD.
+    if (isPhone()) navBar.flashTouchHint();
 
     if (!embed) showProjectCard(result.cloud, result.originalPointCount);
 
@@ -234,7 +253,10 @@ function removeCloud(id: string): void {
     inspector.clear();
     stage.showEmptyState();
     navBar.element.classList.add('olv-hidden');
+    navBar.hideTouchHint();
     projectCard.hide();
+    // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
+    document.body.classList.remove('olv-has-scan');
     savedViews = [];
   }
 }

@@ -5,7 +5,7 @@ import type { CloudMetadata } from '../model/PointCloud';
 import type { LoadResult } from './parseBuffer';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
-export { POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
+export { POINT_BUDGET, MOBILE_POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
 
 /** Called with a short human-readable status while a file loads. */
 export type ProgressFn = (text: string) => void;
@@ -34,8 +34,15 @@ type WorkerReply =
  * The format is sniffed on the main thread; the parse + downsample then runs
  * in a Web Worker so a large survey never freezes the UI. Nothing leaves the
  * browser — the File is read locally and the worker is local.
+ *
+ * `budget` caps the point count uploaded to the GPU; callers pass a lower
+ * value on phones. When omitted the worker uses the desktop default.
  */
-export async function loadFile(file: File, onProgress?: ProgressFn): Promise<LoadResult> {
+export async function loadFile(
+  file: File,
+  onProgress?: ProgressFn,
+  budget?: number,
+): Promise<LoadResult> {
   const buffer = await file.arrayBuffer();
   const format = sniffFormat(buffer, file.name);
   if (format === 'unknown') {
@@ -69,6 +76,6 @@ export async function loadFile(file: File, onProgress?: ProgressFn): Promise<Loa
     };
 
     // The ArrayBuffer is transferred (not copied) into the worker.
-    worker.postMessage({ buffer, format, name: file.name }, [buffer]);
+    worker.postMessage({ buffer, format, name: file.name, budget }, [buffer]);
   });
 }

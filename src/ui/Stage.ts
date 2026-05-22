@@ -15,6 +15,12 @@ export interface StageOptions {
   samples?: Sample[];
   /** Called when a sample is chosen. */
   onSample?: (url: string, name: string) => void;
+  /**
+   * Called when the user picks a file via the "Open scan from device"
+   * button — the touch-friendly path for phones, where drag-and-drop is
+   * unavailable.
+   */
+  onOpenFile?: (file: File) => void;
 }
 
 /**
@@ -109,6 +115,23 @@ export class Stage {
       text: 'Drone LiDAR (.las / .laz) or a phone scan (.ply / .obj / .glb / .gltf). Nothing leaves your device.',
     });
 
+    // "Open scan from device" — a native file picker so a phone, which has no
+    // drag-and-drop, can open a scan too. The picker accepts any file; the
+    // format is sniffed and validated on load. (No `accept` filter: iOS greys
+    // out files with point-cloud extensions it does not recognise.)
+    const fileInput = el('input', { className: 'olv-file-input', type: 'file' });
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (file) options.onOpenFile?.(file);
+      fileInput.value = ''; // let the same file be re-picked
+    });
+    const openButton = el('button', {
+      className: 'olv-open-btn',
+      type: 'button',
+      text: 'Open scan from device',
+    });
+    openButton.addEventListener('click', () => fileInput.click());
+
     const samples = el('div', { className: 'olv-samples' });
     for (const s of options.samples ?? []) {
       const btn = el('button', { className: 'olv-sample', type: 'button' }, [
@@ -119,6 +142,6 @@ export class Stage {
       samples.append(btn);
     }
 
-    return el('div', { className: 'olv-empty' }, [title, sub, samples]);
+    return el('div', { className: 'olv-empty' }, [title, sub, openButton, fileInput, samples]);
   }
 }

@@ -41,6 +41,12 @@ function section(label: string, body: HTMLElement): HTMLElement {
  */
 export class Inspector {
   readonly element: HTMLElement;
+  /**
+   * The floating "Scan Info" launcher — append to the overlay. It opens the
+   * Inspector as a bottom sheet; styling shows it on phones only, once a scan
+   * has loaded.
+   */
+  readonly sheetToggle: HTMLButtonElement;
   private readonly _cb: InspectorCallbacks;
   private readonly _layers = el('div', { className: 'olv-layers' });
   private readonly _chips = el('div', { className: 'olv-chips' });
@@ -83,8 +89,21 @@ export class Inspector {
     });
     const exporter = el('div', { className: 'olv-export' }, exportButtons);
 
-    this.element = el('aside', { className: 'olv-inspector' }, [
+    // The header carries the panel title and — on phones, where the panel is
+    // a bottom sheet — a close control.
+    const sheetClose = el('button', {
+      className: 'olv-sheet-close',
+      text: '×',
+      ariaLabel: 'Close scan info',
+    });
+    sheetClose.addEventListener('click', () => this.closeSheet());
+    const head = el('div', { className: 'olv-panel-head' }, [
       el('div', { className: 'olv-panel-title', text: 'Scan Intelligence' }),
+      sheetClose,
+    ]);
+
+    this.element = el('aside', { className: 'olv-inspector' }, [
+      head,
       section('Layers', this._layers),
       section('Color by', this._chips),
       section('Point size', slider),
@@ -95,6 +114,30 @@ export class Inspector {
     ]);
     this._showReportPlaceholder();
     this._showViewsPlaceholder();
+
+    // The phone-only launcher that slides the panel up as a bottom sheet.
+    this.sheetToggle = el('button', {
+      className: 'olv-scaninfo-btn',
+      type: 'button',
+      text: 'Scan Info',
+      ariaLabel: 'Show scan information',
+    });
+    this.sheetToggle.addEventListener('click', () => this.toggleSheet());
+  }
+
+  /** Open the Inspector as a bottom sheet (phones). */
+  openSheet(): void {
+    this.element.classList.add('olv-sheet-open');
+  }
+
+  /** Close the bottom sheet. */
+  closeSheet(): void {
+    this.element.classList.remove('olv-sheet-open');
+  }
+
+  /** Toggle the bottom sheet open or closed. */
+  toggleSheet(): void {
+    this.element.classList.toggle('olv-sheet-open');
   }
 
   /** Add a loaded cloud to the layer list. */
@@ -217,6 +260,7 @@ export class Inspector {
     this._detail.replaceChildren();
     this._showReportPlaceholder();
     this._showViewsPlaceholder();
+    this.closeSheet();
   }
 
   private _showReportPlaceholder(): void {

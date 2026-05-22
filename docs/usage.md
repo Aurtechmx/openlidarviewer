@@ -45,6 +45,16 @@ In the Saved views section of the panel, click Save current view to store the ca
 
 Snapshot, in the tool dock, saves the current view as a PNG. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates.
 
+## Mobile Usage
+
+1. Open OpenLiDARViewer on your phone.
+2. Tap "Open scan from device."
+3. Choose a compatible file from device storage or a cloud file provider.
+4. Use touch gestures to navigate — drag to rotate, pinch to zoom, two fingers to pan.
+5. Tap Measure to measure between points.
+6. Open Scan Info to view scan metadata.
+7. Export a snapshot or a supported file format.
+
 ## Embedding
 
 Append `?embed=1` to the URL to strip the chrome down to a bare canvas for use in an `<iframe>`.

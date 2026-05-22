@@ -32,6 +32,22 @@ Planned support: `E57`, the common terrestrial and mixed-scan exchange format; `
 
 For very large datasets, the planned direction is `COPC LAZ` (cloud-optimised point cloud), `3D Tiles` / `PNTS` (tiled, streamable point clouds), and tiled or streamed datasets with level-of-detail.
 
+## Mobile Scan Exports
+
+OpenLiDARViewer can open compatible files exported from mobile scanning apps when the exported format is supported by the viewer.
+
+Recommended mobile formats:
+
+- GLTF / GLB — practical for mobile mesh workflows and some free mobile scanning workflows
+- PLY — useful for point-cloud workflows when available
+- OBJ — common mesh format when available
+- XYZ / CSV — useful for raw point-coordinate workflows
+- LAS / LAZ — professional LiDAR formats if exported or converted
+
+Polycam note: According to Polycam's current help documentation, Polycam Free plan users can export GLTF files. Other export formats may require a paid Polycam plan. Export availability may change and varies by plan and format.
+
+Trademark note: OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Polycam.
+
 ## Notes
 
 Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Very large files may need downsampling, tiling, or conversion before they load smoothly. Anything listed as planned is not implemented yet. See [roadmap.md](roadmap.md).

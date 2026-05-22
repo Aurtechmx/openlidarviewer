@@ -39,6 +39,11 @@ export class NavBar {
   readonly element: HTMLElement;
   /** The centred "click to look around" prompt — append to the stage overlay. */
   readonly prompt: HTMLElement;
+  /**
+   * The touch-gesture hint shown on phones in place of the keyboard HUD —
+   * append to the stage overlay. Styled visible only on small screens.
+   */
+  readonly touchHint: HTMLElement;
 
   private readonly _cb: NavBarCallbacks;
   private readonly _hud: HTMLElement;
@@ -50,6 +55,7 @@ export class NavBar {
   private _measuring = false;
   private _helpPinned = false;
   private _hintTimer: number | null = null;
+  private _touchTimer: number | null = null;
 
   constructor(callbacks: NavBarCallbacks) {
     this._cb = callbacks;
@@ -114,7 +120,38 @@ export class NavBar {
       el('span', { className: 'olv-nav-prompt-sub', text: 'WASD to move · Esc to release' }),
     ]);
 
+    // ── Touch-gesture hint (phones) ───────────────────────────────────────
+    const touchDismiss = el('button', {
+      className: 'olv-touch-hint-x',
+      text: '×',
+      ariaLabel: 'Dismiss',
+    });
+    touchDismiss.addEventListener('click', () => this.hideTouchHint());
+    this.touchHint = el('div', { className: 'olv-touch-hint' }, [
+      el('span', { text: 'Drag to rotate · Pinch to zoom · Two fingers to pan' }),
+      touchDismiss,
+    ]);
+
     this._render();
+  }
+
+  /**
+   * Briefly reveal the touch-gesture hint (phones only — styling keeps it
+   * hidden on larger screens), then let it fade away on its own.
+   */
+  flashTouchHint(): void {
+    this.touchHint.classList.add('olv-visible');
+    if (this._touchTimer !== null) clearTimeout(this._touchTimer);
+    this._touchTimer = window.setTimeout(() => this.hideTouchHint(), 6500);
+  }
+
+  /** Dismiss the touch-gesture hint. */
+  hideTouchHint(): void {
+    if (this._touchTimer !== null) {
+      clearTimeout(this._touchTimer);
+      this._touchTimer = null;
+    }
+    this.touchHint.classList.remove('olv-visible');
   }
 
   /** Reflect the current navigation mode (no callback fired). */

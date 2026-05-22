@@ -10,17 +10,24 @@ interface ParseRequest {
   buffer: ArrayBuffer;
   format: DetectedFormat;
   name: string;
+  /** Optional point budget — phones pass a lower value than the desktop default. */
+  budget?: number;
 }
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
-  const { buffer, format, name } = event.data as ParseRequest;
+  const { buffer, format, name, budget } = event.data as ParseRequest;
 
   void (async (): Promise<void> => {
     try {
       ctx.postMessage({ type: 'progress', text: `Reading ${name}…` });
-      const { cloud, originalPointCount, downsampled } = await parseBuffer(buffer, format, name);
+      const { cloud, originalPointCount, downsampled } = await parseBuffer(
+        buffer,
+        format,
+        name,
+        budget,
+      );
 
       const transfer: ArrayBuffer[] = [cloud.positions.buffer as ArrayBuffer];
       if (cloud.colors) transfer.push(cloud.colors.buffer as ArrayBuffer);

@@ -10,6 +10,14 @@ import { downsampleToBudget } from '../process/voxelDownsample';
 /** Maximum points kept before a cloud is voxel-downsampled on load. */
 export const POINT_BUDGET = 4_000_000;
 
+/**
+ * A tighter point budget for phones. Mobile GPUs have far less memory and
+ * fill-rate than a desktop, so a phone downsamples more aggressively to keep
+ * a dropped survey interactive. The full-resolution file is never altered —
+ * only what is uploaded to the GPU.
+ */
+export const MOBILE_POINT_BUDGET = 1_500_000;
+
 /** A function that turns a file buffer into a normalized PointCloud. */
 export type LoaderFn = (buffer: ArrayBuffer, name: string) => Promise<PointCloud>;
 

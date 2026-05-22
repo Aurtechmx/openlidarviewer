@@ -552,3 +552,209 @@ button:disabled { cursor: not-allowed; }
   .olv-advanced-summary::before,
   .olv-measure-clear, .olv-measure-done, .olv-inspect-copy { transition: none; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Mobile & touch — safe-area insets, the file-picker button, responsive
+   layout, the Scan Info bottom sheet, and 44 px touch targets.
+
+   Desktop is unaffected: env() insets resolve to 0 with no display cut-out,
+   and every layout change lives behind a max-width media query.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* The hidden <input type=file> behind the "Open scan from device" button. */
+.olv-file-input { display: none; }
+
+/* "Open scan from device" — the primary file-picker action on the empty
+   state. Visible everywhere; it is the touch-friendly path on phones. */
+.olv-open-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: #04121f;
+  background: var(--brand-gradient);
+  border: none; border-radius: 9px; padding: 11px 20px;
+  transition: box-shadow 140ms ease, transform 90ms ease;
+}
+.olv-open-btn:hover { box-shadow: 0 6px 22px rgba(0, 178, 255, 0.32); }
+.olv-open-btn:active { transform: scale(0.97); }
+.olv-open-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The Scan Info launcher and the sheet's close control are phone-only —
+   hidden until the phone media query (and a loaded scan) reveal them. */
+.olv-scaninfo-btn { display: none; }
+.olv-sheet-close { display: none; }
+
+/* The touch-gesture hint replaces the keyboard HUD on phones. */
+.olv-touch-hint { display: none; }
+
+/* Honour display cut-outs (notch / home indicator) under viewport-fit=cover.
+   env() is 0 on displays without insets, so desktop layout is unchanged. */
+.olv-topbar {
+  padding-top: calc(14px + env(safe-area-inset-top));
+  padding-left: calc(18px + env(safe-area-inset-left));
+  padding-right: calc(18px + env(safe-area-inset-right));
+}
+.olv-dock {
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  left: calc(16px + env(safe-area-inset-left));
+}
+.olv-backend {
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  right: calc(18px + env(safe-area-inset-right));
+}
+.olv-navbar { bottom: calc(14px + env(safe-area-inset-bottom)); }
+.olv-version {
+  bottom: calc(13px + env(safe-area-inset-bottom));
+  right: calc(14px + env(safe-area-inset-right));
+}
+
+/* ── Phone layout (< 768 px) ──────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  /* Topbar: tighter padding so the wordmark, badge and link share one row. */
+  .olv-topbar {
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    gap: 8px;
+  }
+
+  /* Empty state can scroll if a short landscape viewport runs out of room. */
+  .olv-empty { overflow-y: auto; }
+
+  /* The keyboard HUD and pointer-lock prompt are meaningless without a
+     keyboard — hide them; the touch hint stands in. */
+  .olv-nav-hud { display: none !important; }
+  .olv-nav-prompt { display: none !important; }
+
+  /* The backend pill is desk-side detail; drop it to declutter the phone. */
+  .olv-backend { display: none; }
+
+  /* Tool dock: centre it and lift it clear above the navigation bar.
+     Centred via auto margins (not transform) so the rise-in animation,
+     which only touches transform, still works. */
+  .olv-dock {
+    left: 0; right: 0;
+    margin-left: auto; margin-right: auto;
+    width: max-content; max-width: calc(100vw - 20px);
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    flex-wrap: wrap; justify-content: center;
+  }
+
+  /* The mode switcher lets its speed slider wrap onto a second line. */
+  .olv-nav-row { flex-wrap: wrap; justify-content: center; }
+
+  /* Version mark moves to the free bottom-left corner. */
+  .olv-version {
+    left: calc(12px + env(safe-area-inset-left));
+    right: auto;
+  }
+
+  /* Transient top-centre cards clear the notch and never exceed the screen. */
+  .olv-project-card {
+    top: calc(58px + env(safe-area-inset-top));
+    width: min(290px, calc(100vw - 28px));
+  }
+  .olv-toast, .olv-measure-hint { top: calc(58px + env(safe-area-inset-top)); }
+
+  /* Touch-gesture hint — floats above the dock, fades out on its own. */
+  .olv-touch-hint {
+    position: absolute;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(148px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 8px;
+    max-width: calc(100vw - 24px);
+    background: rgba(11, 17, 33, 0.92);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 0.5px solid rgba(0, 178, 255, 0.34);
+    border-radius: 11px; padding: 9px 9px 9px 14px;
+    font-size: 12px; color: var(--text); text-align: left;
+    opacity: 0; pointer-events: none;
+    transition: opacity 240ms ease;
+  }
+  .olv-touch-hint.olv-visible { opacity: 1; pointer-events: auto; }
+  .olv-touch-hint-x {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--text-faint);
+    font-size: 17px; line-height: 1;
+    min-width: 44px; min-height: 44px;
+  }
+  .olv-touch-hint-x:hover { color: var(--text); }
+
+  /* Scan Info launcher — bottom-right, where the backend pill used to sit.
+     Revealed only once a scan has loaded. */
+  body.olv-has-scan .olv-scaninfo-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: fixed;
+    right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index: 40;
+    font-size: 12px; font-weight: 500; color: var(--accent);
+    background: rgba(11, 17, 33, 0.92);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 0.5px solid rgba(0, 178, 255, 0.42);
+    border-radius: 10px; padding: 0 16px;
+    min-height: 44px;
+    transition: transform 90ms ease;
+  }
+  body.olv-has-scan .olv-scaninfo-btn:active { transform: scale(0.97); }
+
+  /* Inspector becomes a dismissible bottom sheet. */
+  .olv-inspector {
+    position: fixed;
+    top: auto; left: 0; right: 0; bottom: 0;
+    width: auto; max-height: 54vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    z-index: 60;
+    animation: none;
+    transform: translateY(110%);
+    transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    box-shadow: 0 -14px 38px rgba(0, 0, 0, 0.55);
+  }
+  .olv-inspector.olv-sheet-open { transform: translateY(0); }
+  /* A grip handle so the sheet reads as bottom-sheet furniture. */
+  .olv-inspector::before {
+    content: "";
+    position: absolute; top: 7px; left: 50%;
+    transform: translateX(-50%);
+    width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(140, 170, 230, 0.32);
+  }
+
+  /* Sheet header: the title row gains a close control. */
+  .olv-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .olv-panel-head .olv-panel-title { margin-bottom: 0; }
+  .olv-sheet-close {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 22px; line-height: 1;
+    min-width: 44px; min-height: 44px;
+    margin: -8px -10px -8px 0;
+  }
+  .olv-sheet-close:hover { color: var(--text); }
+
+  /* 44 px touch targets for every interactive control. */
+  .olv-tool, .olv-mode {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-export-btn, .olv-chip, .olv-view-name, .olv-view-save,
+  .olv-measure-clear, .olv-measure-done, .olv-inspect-copy {
+    min-height: 44px;
+  }
+  .olv-open-btn { min-height: 48px; }
+  .olv-sample { min-height: 52px; }
+  .olv-layer-x, .olv-pc-dismiss {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px;
+  }
+}
+
+/* Reduced motion: the bottom sheet and touch hint appear without sliding.
+   Placed last so it overrides the transitions set in the phone block. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-inspector { transition: none; }
+  .olv-touch-hint { transition: none; }
+}

@@ -25,6 +25,17 @@ import {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/**
+ * Touch devices have no mouse — the instructions say "Tap" rather than
+ * "Click", and point at the on-screen Done button instead of the Esc key.
+ */
+const COARSE_POINTER =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(pointer: coarse)').matches;
+const PICK_VERB = COARSE_POINTER ? 'Tap' : 'Click';
+const FINISH_HINT = COARSE_POINTER ? 'tap Done to finish' : 'Esc to finish';
+
 /** Hooks the tool calls back into. */
 export interface InspectCallbacks {
   /** The user dismissed the tool (the "Done" button). */
@@ -157,7 +168,7 @@ export class InspectTool {
     this.hint.classList.toggle('olv-hidden', !on);
     this._canvas.style.cursor = on ? 'crosshair' : '';
     if (on) {
-      this._setHint('Click a point to view its data');
+      this._setHint(`${PICK_VERB} a point to view its data`);
     } else {
       // Leaving the tool clears the selection, marker and card.
       this._selected = null;
@@ -175,14 +186,14 @@ export class InspectTool {
     if (!info || !world) {
       this._selected = null;
       this.card.classList.add('olv-hidden');
-      this._setHint('No point selected. Click directly on the point cloud.');
+      this._setHint(`No point selected. ${PICK_VERB} directly on the point cloud.`);
       this.render();
       return;
     }
     this._selected = { info, world: world.clone() };
     this._fillCard(info);
     this.card.classList.remove('olv-hidden');
-    this._setHint('Click another point, or Esc to finish');
+    this._setHint(`${PICK_VERB} another point, or ${FINISH_HINT}`);
     this.render();
   }
 

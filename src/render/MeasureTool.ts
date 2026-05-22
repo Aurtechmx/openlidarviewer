@@ -20,6 +20,17 @@ import { formatDistance } from './navMath';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/**
+ * Touch devices have no mouse — the instructions say "Tap" rather than
+ * "Click", and point at the on-screen Done button instead of the Esc key.
+ */
+const COARSE_POINTER =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(pointer: coarse)').matches;
+const PICK_VERB = COARSE_POINTER ? 'Tap' : 'Click';
+const FINISH_HINT = COARSE_POINTER ? 'tap Done to finish' : 'Esc to finish';
+
 /** A completed measurement between two picked points. */
 interface Measurement {
   a: THREE.Vector3;
@@ -106,7 +117,7 @@ export class MeasureTool {
     this._pending = null; // discard any half-finished measurement
     this.hint.classList.toggle('olv-hidden', !on);
     this._canvas.style.cursor = on ? 'crosshair' : '';
-    if (on) this._setHint('Click the first point on the scan');
+    if (on) this._setHint(`${PICK_VERB} the first point on the scan`);
     this.render();
   }
 
@@ -117,18 +128,18 @@ export class MeasureTool {
   addPoint(point: THREE.Vector3 | null): void {
     if (!this._active) return;
     if (!point) {
-      this._setHint('No point there — click directly on the scan');
+      this._setHint(`No point there — ${PICK_VERB.toLowerCase()} directly on the scan`);
       return;
     }
     if (!this._pending) {
       this._pending = point.clone();
-      this._setHint('Click the second point');
+      this._setHint(`${PICK_VERB} the second point`);
     } else {
       const a = this._pending;
       const b = point.clone();
       this._measurements.push({ a, b, distance: a.distanceTo(b) });
       this._pending = null;
-      this._setHint('Click two more points to measure again, or Esc to finish');
+      this._setHint(`${PICK_VERB} two more points to measure again, or ${FINISH_HINT}`);
     }
     this.render();
   }
@@ -137,7 +148,7 @@ export class MeasureTool {
   clear(): void {
     this._measurements = [];
     this._pending = null;
-    if (this._active) this._setHint('Click the first point on the scan');
+    if (this._active) this._setHint(`${PICK_VERB} the first point on the scan`);
     this.render();
   }
 

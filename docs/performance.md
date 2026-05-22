@@ -49,3 +49,17 @@ Tiled datasets, COPC LAZ, 3D Tiles / PNTS streaming, level-of-detail controls, a
 ## Privacy
 
 OpenLiDARViewer is built around local-first inspection. Files are read, parsed, and rendered in the browser, and there is no server to upload them to. That makes it suitable for sensitive survey data. See [SECURITY.md](../SECURITY.md).
+
+## Mobile Performance
+
+Mobile devices have stricter memory and GPU limits than desktop systems.
+
+Recommendations:
+
+- Start with smaller GLTF / GLB / PLY files.
+- Use Mobile Safe or Balanced detail.
+- Avoid very large LAS/LAZ datasets on phones unless they are optimized.
+- Use a desktop for heavy drone LiDAR datasets.
+- Close unused browser tabs.
+- Keep hardware acceleration enabled when available.
+- WebGPU support may vary; the WebGL 2 fallback should remain reliable.

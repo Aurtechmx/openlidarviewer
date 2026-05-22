@@ -143,6 +143,35 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 
 Very large LiDAR datasets may need downsampling, preprocessing, or future streaming formats. Full detail is in [`docs/performance.md`](docs/performance.md).
 
+## Mobile Browser Support
+
+OpenLiDARViewer includes a mobile-friendly interface for opening compatible point-cloud and 3D scan files from phones and tablets.
+
+On mobile:
+
+- Files can be opened from the device file picker.
+- Users can open compatible exports saved to device storage or cloud file providers.
+- Scan Intelligence is shown as a compact panel after loading a scan.
+- Navigation uses touch gestures instead of keyboard shortcuts.
+- Measurement uses tap-based point selection.
+- Rendering defaults to a mobile-safe performance mode.
+
+Recommended mobile workflow:
+
+1. Export a compatible scan from a mobile scanning app.
+2. Save it to device storage or a cloud file provider such as iCloud Drive.
+3. Open OpenLiDARViewer in a mobile browser.
+4. Tap "Open scan from device."
+5. Inspect, measure, and export.
+
+Mobile scanning app note: OpenLiDARViewer can open compatible files exported from mobile scanning apps when the exported format is supported by the viewer. One practical testing workflow is to scan with the Polycam app, export GLTF when available, save the file to the device, and open it in OpenLiDARViewer. According to Polycam's current help documentation, Polycam Free plan users can export GLTF files; other formats may require a paid plan. Export availability may change and varies by plan and format.
+
+Mobile performance note: Mobile performance depends on browser, GPU, memory, file size, and point count. Very large datasets may require desktop hardware, downsampling, tiling, or optimized formats.
+
+Trademark note: All third-party product names are used only for descriptive compatibility and workflow documentation. OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple, Polycam, or other third-party scanning apps.
+
+Full detail is in [`docs/mobile-browser-support.md`](docs/mobile-browser-support.md).
+
 ## Research & Development Focus
 
 OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It looks at browser-native point-cloud rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, local-first workflows for sensitive data, and simpler interfaces for complex datasets.
