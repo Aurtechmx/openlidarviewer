@@ -492,6 +492,53 @@ button:disabled { cursor: not-allowed; }
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Inspect tool — selected-point marker and floating info card
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-inspect-halo { fill: var(--accent); opacity: 0.2; }
+.olv-inspect-dot {
+  fill: var(--cyan); stroke: #0a0e1a; stroke-width: 1.5;
+}
+
+.olv-inspect-card {
+  position: absolute; width: 212px;
+  background: rgba(11, 17, 33, 0.94);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border-radius: 11px; padding: 11px 12px;
+  pointer-events: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.olv-inspect-card-title {
+  font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 9px;
+}
+.olv-inspect-rows { display: flex; flex-direction: column; gap: 5px; }
+.olv-inspect-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.olv-inspect-row-label { font-size: 11px; color: var(--text-faint); }
+.olv-inspect-row-value {
+  font-size: 11.5px; font-family: var(--mono); color: var(--text);
+  text-align: right; max-width: 128px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-inspect-card-foot {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 11px; padding-top: 9px;
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-inspect-copy {
+  font-size: 11px; color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: 6px; padding: 5px 13px;
+  transition: background 130ms ease, transform 90ms ease;
+}
+.olv-inspect-copy:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-inspect-copy:active { transform: scale(0.95); }
+.olv-inspect-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-inspect-copied { font-size: 10.5px; color: var(--teal); }
+
 /* Respect the OS "reduce motion" setting — disable all non-essential motion */
 @media (prefers-reduced-motion: reduce) {
   .olv-inspector, .olv-navbar, .olv-dock, .olv-backend,
@@ -503,5 +550,5 @@ button:disabled { cursor: not-allowed; }
   .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
   .olv-view-name, .olv-view-save, .olv-advanced-summary,
   .olv-advanced-summary::before,
-  .olv-measure-clear, .olv-measure-done { transition: none; }
+  .olv-measure-clear, .olv-measure-done, .olv-inspect-copy { transition: none; }
 }

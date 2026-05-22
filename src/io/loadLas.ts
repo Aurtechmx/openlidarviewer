@@ -36,7 +36,9 @@ import { createLazPerf } from 'laz-perf';
 // build, which cannot locate its WASM in a browser bundle.)
 import { LAZ_PERF_WASM_BASE64 } from './lazPerfWasm';
 import { PointCloud } from '../model/PointCloud';
+import type { CloudMetadata } from '../model/PointCloud';
 import { parseLasHeader } from './lasHeader';
+import type { LasHeader } from './lasHeader';
 import { computeOrigin, recenter } from './coordinateBridge';
 
 // --- LAS public-header byte offsets we need beyond `parseLasHeader` --------
@@ -71,24 +73,31 @@ function readPointFormat(buffer: ArrayBuffer): number {
   return new DataView(buffer).getUint8(104) & 0x3f;
 }
 
-/** Decode one point record into the output arrays at point index `i`. */
+/**
+ * Decode one point record into the output arrays at point index `i`.
+ *
+ * `view` spans a buffer that holds the record; `base` is the record's byte
+ * offset within it. Taking an offset rather than a per-record `DataView`
+ * lets the caller reuse one `DataView` across millions of points.
+ */
 function decodeRecord(
-  record: DataView,
+  view: DataView,
+  base: number,
   i: number,
   scale: [number, number, number],
   offset: [number, number, number],
   classificationOffset: number,
   out: RawPoints,
 ): void {
-  const xi = record.getInt32(0, true);
-  const yi = record.getInt32(4, true);
-  const zi = record.getInt32(8, true);
+  const xi = view.getInt32(base, true);
+  const yi = view.getInt32(base + 4, true);
+  const zi = view.getInt32(base + 8, true);
   // int * scale + offset, all in float64.
   out.global[i * 3 + 0] = xi * scale[0] + offset[0];
   out.global[i * 3 + 1] = yi * scale[1] + offset[1];
   out.global[i * 3 + 2] = zi * scale[2] + offset[2];
-  out.intensity[i] = record.getUint16(RECORD_INTENSITY, true);
-  out.classification[i] = record.getUint8(classificationOffset);
+  out.intensity[i] = view.getUint16(base + RECORD_INTENSITY, true);
+  out.classification[i] = view.getUint8(base + classificationOffset);
 }
 
 /** Decode every record of an uncompressed `.las` file. */
@@ -107,9 +116,11 @@ function decodeLas(buffer: ArrayBuffer, pointCount: number): RawPoints {
     classification: new Uint8Array(pointCount),
   };
 
+  // One DataView over the whole file, indexed by an absolute byte offset —
+  // no per-record allocation in this multi-million-iteration loop.
   for (let i = 0; i < pointCount; i++) {
-    const record = new DataView(buffer, pointsOffset + i * recordLength, recordLength);
-    decodeRecord(record, i, header.scale, header.offset, classificationOffset, out);
+    const base = pointsOffset + i * recordLength;
+    decodeRecord(view, base, i, header.scale, header.offset, classificationOffset, out);
   }
   return out;
 }
@@ -149,15 +160,17 @@ async function decodeLaz(buffer: ArrayBuffer, pointCount: number): Promise<RawPo
       classification: new Uint8Array(pointCount),
     };
 
+    // A DataView over the WASM heap, reused across records. laz-perf can grow
+    // its heap mid-stream, which detaches the old buffer — so the view is
+    // refreshed only on the rare growth, never allocated per point.
+    let heap = new DataView(lazPerf.HEAPU8.buffer);
     for (let i = 0; i < pointCount; i++) {
       // Decompress record `i` into the scratch buffer, then read it.
       reader.getPoint(pointPtr);
-      const record = new DataView(
-        lazPerf.HEAPU8.buffer,
-        pointPtr,
-        recordLength,
-      );
-      decodeRecord(record, i, header.scale, header.offset, classificationOffset, out);
+      if (heap.buffer !== lazPerf.HEAPU8.buffer) {
+        heap = new DataView(lazPerf.HEAPU8.buffer);
+      }
+      decodeRecord(heap, pointPtr, i, header.scale, header.offset, classificationOffset, out);
     }
     return out;
   } finally {
@@ -165,6 +178,36 @@ async function decodeLaz(buffer: ArrayBuffer, pointCount: number): Promise<RawPo
     if (pointPtr) lazPerf._free(pointPtr);
     lazPerf._free(filePtr);
   }
+}
+
+/**
+ * Format a LAS header creation date. The header stores a day-of-year and a
+ * year; a plausible year is required, and a valid day refines it to a date.
+ */
+function formatCreationDate(year: number, day: number): string | undefined {
+  if (year < 1990 || year > 2100) return undefined;
+  if (day < 1 || day > 366) return String(year);
+  const date = new Date(Date.UTC(year, 0, day));
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * Build provenance metadata from a LAS header — the capture sensor, the
+ * software that wrote the file, and the creation date — keeping only the
+ * fields the header actually filled in.
+ */
+function lasMetadata(header: LasHeader): CloudMetadata | undefined {
+  const metadata: CloudMetadata = {};
+  if (header.systemIdentifier) metadata.captureSensor = header.systemIdentifier;
+  if (header.generatingSoftware) metadata.sourceSoftware = header.generatingSoftware;
+  const captureDate = formatCreationDate(header.creationYear, header.creationDay);
+  if (captureDate) metadata.captureDate = captureDate;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 /**
@@ -203,5 +246,6 @@ export async function loadLas(
     name,
     declaredPointCount: header.pointCount,
     decodedPointCount: pointCount,
+    metadata: lasMetadata(header),
   });
 }

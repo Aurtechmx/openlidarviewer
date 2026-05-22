@@ -39,6 +39,8 @@ import type { ColorMode } from './colorModes';
 import { NavController } from './NavController';
 import type { NavMode, CameraPose } from './NavController';
 import { MeasureTool } from './MeasureTool';
+import { InspectTool } from './InspectTool';
+import { makePointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +70,17 @@ export interface NavListeners {
 export interface MeasureListeners {
   onModeChange?: (active: boolean) => void;
 }
+
+/** UI-facing point-inspection events the app can subscribe to. */
+export interface InspectListeners {
+  onModeChange?: (active: boolean) => void;
+}
+
+/**
+ * The picking tool that currently owns canvas clicks, if any. Only one is
+ * ever active. `slice` is reserved for a future section tool.
+ */
+export type ToolMode = 'none' | 'measure' | 'inspect' | 'slice';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -128,10 +141,13 @@ export class Viewer {
   private _navListeners: NavListeners = {};
   private readonly _raycaster = new THREE.Raycaster();
 
-  // ── Measurement ──────────────────────────────────────────────────────────
+  // ── Picking tools (measure / inspect) ────────────────────────────────────
   private readonly _measure: MeasureTool;
-  private _measureMode = false;
+  private readonly _inspect: InspectTool;
+  /** Which picking tool currently owns canvas clicks. */
+  private _toolMode: ToolMode = 'none';
   private _measureListeners: MeasureListeners = {};
+  private _inspectListeners: InspectListeners = {};
 
   // ─────────────────────────────────────────────────────────────────────────
   // Constructor
@@ -183,13 +199,19 @@ export class Viewer {
     // Double-click a point to focus / fly to it.
     canvas.addEventListener('dblclick', (e) => this._handleDoubleClick(e, canvas));
 
-    // Distance measurement — while measuring, a canvas click picks a point.
+    // Picking tools — while one is active, a canvas click picks a point.
     this._measure = new MeasureTool(this._camera, canvas, {
       onExit: () => this.setMeasureMode(false),
     });
-    canvas.addEventListener('click', (e) => this._handleMeasureClick(e, canvas));
+    this._inspect = new InspectTool(this._camera, canvas, {
+      onExit: () => this.setInspectMode(false),
+    });
+    canvas.addEventListener('click', (e) => {
+      if (this._toolMode === 'measure') this._handleMeasureClick(e, canvas);
+      else if (this._toolMode === 'inspect') this._handleInspectClick(e, canvas);
+    });
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this._measureMode) this.setMeasureMode(false);
+      if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
     });
 
     // ── Async backend init + render loop ──────────────────────────────────
@@ -355,21 +377,27 @@ export class Viewer {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Measurement
+  // Picking tools — measurement & point inspection
   // ─────────────────────────────────────────────────────────────────────────
 
   /** Enter or leave distance-measurement mode (freezes navigation). */
   setMeasureMode(on: boolean): void {
-    if (on === this._measureMode) return;
-    this._measureMode = on;
-    this._measure.setActive(on);
-    this._nav.setInputEnabled(!on);
-    this._measureListeners.onModeChange?.(on);
+    this._setToolMode(on ? 'measure' : 'none');
+  }
+
+  /** Enter or leave point-inspection mode (freezes navigation). */
+  setInspectMode(on: boolean): void {
+    this._setToolMode(on ? 'inspect' : 'none');
   }
 
   /** Whether distance measurement is currently active. */
   get measureMode(): boolean {
-    return this._measureMode;
+    return this._toolMode === 'measure';
+  }
+
+  /** Whether point inspection is currently active. */
+  get inspectMode(): boolean {
+    return this._toolMode === 'inspect';
   }
 
   /** Remove all measurements. */
@@ -382,9 +410,38 @@ export class Viewer {
     this._measureListeners = listeners;
   }
 
+  /** Subscribe to point-inspection events (mode change). */
+  setInspectListeners(listeners: InspectListeners): void {
+    this._inspectListeners = listeners;
+  }
+
   /** The Measure tool's overlay + hint DOM elements, for the app to mount. */
   get measureElements(): { overlay: SVGSVGElement; hint: HTMLElement } {
     return { overlay: this._measure.overlay, hint: this._measure.hint };
+  }
+
+  /** The Inspect tool's overlay, hint and card DOM elements, for the app to mount. */
+  get inspectElements(): { overlay: SVGSVGElement; hint: HTMLElement; card: HTMLElement } {
+    return {
+      overlay: this._inspect.overlay,
+      hint: this._inspect.hint,
+      card: this._inspect.card,
+    };
+  }
+
+  /**
+   * Switch the active picking tool. Only one tool owns canvas clicks at a
+   * time, so activating one deactivates the other; navigation input is frozen
+   * whenever a tool is active and restored when the mode returns to `none`.
+   */
+  private _setToolMode(mode: ToolMode): void {
+    if (mode === this._toolMode) return;
+    this._toolMode = mode;
+    this._measure.setActive(mode === 'measure');
+    this._inspect.setActive(mode === 'inspect');
+    this._nav.setInputEnabled(mode === 'none');
+    this._measureListeners.onModeChange?.(mode === 'measure');
+    this._inspectListeners.onModeChange?.(mode === 'inspect');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -458,6 +515,7 @@ export class Viewer {
     }
     this._nav.dispose();
     this._measure.dispose();
+    this._inspect.dispose();
     this._controls.dispose();
     this._renderer.dispose();
   }
@@ -514,32 +572,44 @@ export class Viewer {
 
   /** Pick the cloud point under normalised device coords, or null if none. */
   private _pickPoint(ndcX: number, ndcY: number): THREE.Vector3 | null {
+    return this._pickDetailed(ndcX, ndcY)?.point ?? null;
+  }
+
+  /**
+   * Pick the cloud point under normalised device coords, returning the cloud
+   * it belongs to and its buffer index alongside the position — or null on a
+   * miss. Selection minimises the angular miss, so a near and a far point are
+   * judged fairly; only a reasonably on-target hit (~within 4°) is accepted.
+   */
+  private _pickDetailed(
+    ndcX: number,
+    ndcY: number,
+  ): { cloud: PointCloud; index: number; point: THREE.Vector3 } | null {
     this._raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._camera);
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
 
-    let best: THREE.Vector3 | null = null;
+    let best: { cloud: PointCloud; index: number; point: THREE.Vector3 } | null = null;
     let bestScore = Infinity;
     for (const { mesh, cloud } of this._clouds.values()) {
       if (!mesh.visible) continue;
-      const hit = nearestPointAlongRay(
-        cloud.positions,
-        [o.x, o.y, o.z],
-        [d.x, d.y, d.z],
-      );
+      const hit = nearestPointAlongRay(cloud.positions, [o.x, o.y, o.z], [d.x, d.y, d.z]);
       if (!hit) continue;
       const score = hit.offset / hit.along; // angular miss
-      // Accept only a reasonably on-target hit (~within 4° of the ray).
       if (score < 0.07 && score < bestScore) {
         bestScore = score;
-        best = new THREE.Vector3(hit.point[0], hit.point[1], hit.point[2]);
+        best = {
+          cloud,
+          index: hit.index,
+          point: new THREE.Vector3(hit.point[0], hit.point[1], hit.point[2]),
+        };
       }
     }
     return best;
   }
 
   private _handleDoubleClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
-    if (this._measureMode) return; // clicks are for picking measurement points
+    if (this._toolMode !== 'none') return; // clicks belong to the active tool
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
     const point = this._pickPoint(ndcX, ndcY);
@@ -548,10 +618,37 @@ export class Viewer {
 
   /** While measuring, a canvas click picks the point under the cursor. */
   private _handleMeasureClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
-    if (!this._measureMode) return;
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
     this._measure.addPoint(this._pickPoint(ndcX, ndcY));
+  }
+
+  /** While inspecting, a canvas click selects the point under the cursor. */
+  private _handleInspectClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
+    const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
+    const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+    const hit = this._pickDetailed(ndcX, ndcY);
+    if (!hit) {
+      this._inspect.showPoint(null, null);
+      return;
+    }
+    const { cloud, index, point } = hit;
+    const rgb: [number, number, number] | null = cloud.colors
+      ? [cloud.colors[index * 3], cloud.colors[index * 3 + 1], cloud.colors[index * 3 + 2]]
+      : null;
+    const info = makePointInfo({
+      layer: cloud.name,
+      index,
+      // `point` is in local space; the cloud's origin restores real-world
+      // coordinates — the absolute survey position engineers expect.
+      local: [point.x, point.y, point.z],
+      origin: cloud.origin,
+      distance: this._camera.position.distanceTo(point),
+      intensity: cloud.intensity ? cloud.intensity[index] : null,
+      classification: cloud.classification ? cloud.classification[index] : null,
+      rgb,
+    });
+    this._inspect.showPoint(info, point);
   }
 
   /** `F` key — focus on whatever point is centred in the view. */
@@ -566,8 +663,9 @@ export class Viewer {
       this._rafId = requestAnimationFrame(loop);
       this._nav.update(this._clock.getDelta());
       this._renderer.render(this._scene, this._camera);
-      // After render, camera matrices are current — project the measurements.
+      // After render, camera matrices are current — project the tool overlays.
       this._measure.render();
+      this._inspect.render();
     };
     loop();
   }

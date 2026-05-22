@@ -1,5 +1,18 @@
 import type { SourceFormat } from '../io/sniffFormat';
 
+/**
+ * Provenance metadata recovered from a file header, when the format carries
+ * it. Every field is optional — most scan files fill in only some, or none.
+ */
+export interface CloudMetadata {
+  /** Capture hardware or sensor, e.g. the LAS System Identifier field. */
+  captureSensor?: string;
+  /** Software that produced the file, e.g. the LAS Generating Software field. */
+  sourceSoftware?: string;
+  /** Human-readable capture / file-creation date. */
+  captureDate?: string;
+}
+
 /** Options accepted by the `PointCloud` constructor. */
 export interface PointCloudOptions {
   /** Interleaved xyz positions in local (recentered) coordinates. */
@@ -27,6 +40,8 @@ export interface PointCloudOptions {
    * declared count against what was decoded — not against the reduced count.
    */
   decodedPointCount?: number;
+  /** Provenance metadata read from the file header, when available. */
+  metadata?: CloudMetadata;
 }
 
 /**
@@ -45,6 +60,7 @@ export class PointCloud {
   readonly name: string;
   readonly declaredPointCount?: number;
   readonly decodedPointCount?: number;
+  readonly metadata?: CloudMetadata;
 
   constructor(options: PointCloudOptions) {
     this.positions = options.positions;
@@ -56,6 +72,7 @@ export class PointCloud {
     this.name = options.name;
     this.declaredPointCount = options.declaredPointCount;
     this.decodedPointCount = options.decodedPointCount;
+    this.metadata = options.metadata;
   }
 
   /** Number of points: three position components per point. */

@@ -39,6 +39,7 @@ ctx.onmessage = (event: MessageEvent): void => {
             sourceFormat: cloud.sourceFormat,
             name: cloud.name,
             declaredPointCount: cloud.declaredPointCount,
+            metadata: cloud.metadata,
           },
           originalPointCount,
           downsampled,

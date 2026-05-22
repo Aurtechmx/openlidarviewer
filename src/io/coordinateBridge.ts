@@ -32,11 +32,14 @@ export function computeOrigin(min: number[]): [number, number, number] {
  */
 export function recenter(coords: Float64Array, origin: [number, number, number]): Float32Array {
   const out = new Float32Array(coords.length);
-  for (let i = 0; i < coords.length; i++) {
-    // origin cycles x, y, z across the interleaved buffer.
-    const o = origin[i % 3];
-    // f64 subtraction; the assignment into `out` is the single f32 downcast.
-    out[i] = coords[i] - o;
+  const [ox, oy, oz] = origin;
+  // Step three at a time so the x/y/z origin is applied without a per-element
+  // modulo. The buffer is interleaved xyz, so its length is a multiple of 3.
+  // Each f64 subtraction narrows to f32 only on assignment into `out`.
+  for (let i = 0; i < coords.length; i += 3) {
+    out[i] = coords[i] - ox;
+    out[i + 1] = coords[i + 1] - oy;
+    out[i + 2] = coords[i + 2] - oz;
   }
   return out;
 }

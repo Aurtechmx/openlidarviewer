@@ -61,6 +61,23 @@ export const scanReport: AnalysisModule = {
     const hasClassification = cloud.classification !== undefined;
     rows.push(rowInfo('Classification', hasClassification ? 'Yes' : 'No'));
 
+    // Capture provenance — shown only when the file header carried it.
+    const meta = cloud.metadata;
+    if (meta?.captureSensor) rows.push(rowInfo('Capture Sensor', meta.captureSensor));
+    if (meta?.sourceSoftware) rows.push(rowInfo('Source Software', meta.sourceSoftware));
+    if (meta?.captureDate) rows.push(rowInfo('Captured', meta.captureDate));
+
+    // Georeferenced bounding box — the scan's extent in real-world
+    // coordinates (local bounds plus the origin subtracted on load). Shown
+    // under the Advanced report; survey and topographic work needs absolute
+    // coordinates, not the viewer's internal recentred values.
+    const origin = cloud.origin;
+    const corner = (c: [number, number, number]): string =>
+      `${(c[0] + origin[0]).toFixed(3)}, ${(c[1] + origin[1]).toFixed(3)}, ` +
+      `${(c[2] + origin[2]).toFixed(3)}`;
+    rows.push({ label: 'Min corner', value: corner(bounds.min), status: 'info', advanced: true });
+    rows.push({ label: 'Max corner', value: corner(bounds.max), status: 'info', advanced: true });
+
     // Classification coverage — the share of points with a non-zero class
     // code. A diagnostic, shown under "Advanced report".
     let coverage = 'N/A';

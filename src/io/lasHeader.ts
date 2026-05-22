@@ -15,6 +15,14 @@ export interface LasHeader {
   min: [number, number, number];
   max: [number, number, number];
   versionMinor: number;
+  /** System Identifier field — often the capture hardware. Trimmed; may be ''. */
+  systemIdentifier: string;
+  /** Generating Software field — the tool that wrote the file. Trimmed; may be ''. */
+  generatingSoftware: string;
+  /** File creation day-of-year (1–366), or 0 when the header leaves it unset. */
+  creationDay: number;
+  /** File creation year, or 0 when the header leaves it unset. */
+  creationYear: number;
 }
 
 // --- ASPRS LAS public-header byte offsets (little-endian) ------------------
@@ -37,11 +45,35 @@ const OFFSET_MAX_Z = 211;
 const OFFSET_MIN_Z = 219;
 /** LAS 1.4 — extended number of point records — uint64. */
 const OFFSET_EXTENDED_POINT_COUNT = 247;
+/** System Identifier — 32-byte ASCII field. */
+const OFFSET_SYSTEM_IDENTIFIER = 26;
+/** Generating Software — 32-byte ASCII field. */
+const OFFSET_GENERATING_SOFTWARE = 58;
+/** File creation day-of-year — uint16. */
+const OFFSET_CREATION_DAY = 90;
+/** File creation year — uint16. */
+const OFFSET_CREATION_YEAR = 92;
+/** Length of the System Identifier and Generating Software char fields. */
+const CHAR_FIELD_LENGTH = 32;
 
 const SIGNATURE = 'LASF';
 const F64 = 8;
 /** Version minor at which the uint64 extended point count appears. */
 const LAS_1_4_MINOR = 4;
+
+/**
+ * Read a fixed-length ASCII field, stopping at the first NUL and trimming
+ * surrounding whitespace. LAS pads these fields with NUL bytes or spaces.
+ */
+function readAscii(view: DataView, offset: number, length: number): string {
+  let s = '';
+  for (let i = 0; i < length; i++) {
+    const c = view.getUint8(offset + i);
+    if (c === 0) break;
+    s += String.fromCharCode(c);
+  }
+  return s.trim();
+}
 
 /** Parse the public header block of a LAS file. */
 export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
@@ -88,5 +120,22 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
     view.getFloat64(OFFSET_MAX_Z, true),
   ];
 
-  return { pointCount, scale, offset, min, max, versionMinor };
+  // Provenance fields — present in the header for every LAS version.
+  const systemIdentifier = readAscii(view, OFFSET_SYSTEM_IDENTIFIER, CHAR_FIELD_LENGTH);
+  const generatingSoftware = readAscii(view, OFFSET_GENERATING_SOFTWARE, CHAR_FIELD_LENGTH);
+  const creationDay = view.getUint16(OFFSET_CREATION_DAY, true);
+  const creationYear = view.getUint16(OFFSET_CREATION_YEAR, true);
+
+  return {
+    pointCount,
+    scale,
+    offset,
+    min,
+    max,
+    versionMinor,
+    systemIdentifier,
+    generatingSoftware,
+    creationDay,
+    creationYear,
+  };
 }

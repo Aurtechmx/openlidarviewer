@@ -71,6 +71,7 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
+  onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
 });
 
 // Game-style navigation: mode switcher, speed slider, controls HUD.
@@ -86,9 +87,16 @@ viewer.setNavListeners({
 viewer.setMeasureListeners({
   onModeChange: (active) => {
     dock.setMeasureActive(active);
-    // Hide the "click to look around" prompt — measuring owns the clicks.
-    navBar.setMeasuring(active);
-    // The summary card and the measure hint share the top-centre slot.
+    // Hide the "click to look around" prompt — a picking tool owns the clicks.
+    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode);
+    // The summary card and the tool hint share the top-centre slot.
+    if (active) projectCard.hide();
+  },
+});
+viewer.setInspectListeners({
+  onModeChange: (active) => {
+    dock.setInspectActive(active);
+    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode);
     if (active) projectCard.hide();
   },
 });
@@ -104,13 +112,17 @@ navBar.element.classList.add('olv-hidden');
 stage.overlay.append(navBar.element, navBar.prompt);
 
 if (!embed) {
-  // The measure overlay goes in first so the panels paint above it.
+  // The tool overlays go in first so the panels paint above them.
   stage.overlay.append(viewer.measureElements.overlay);
   stage.overlay.append(viewer.measureElements.hint);
+  stage.overlay.append(viewer.inspectElements.overlay);
+  stage.overlay.append(viewer.inspectElements.hint);
   stage.overlay.append(inspector.element);
   stage.overlay.append(dock.dock);
   stage.overlay.append(dock.backend);
   stage.overlay.append(projectCard.element);
+  // The point-info card sits above the panels so its Copy button is reachable.
+  stage.overlay.append(viewer.inspectElements.card);
 }
 
 /** Run every registered validation module and flatten the rows. */
@@ -166,6 +178,7 @@ async function handleFile(file: File): Promise<void> {
     inspector.setViews([]);
     dock.setBackend(viewer.activeBackend());
     dock.setMeasureEnabled(true);
+    dock.setInspectEnabled(true);
 
     navBar.element.classList.remove('olv-hidden');
     navBar.setMode('orbit');
@@ -217,6 +230,7 @@ function removeCloud(id: string): void {
   if (viewer.clouds().length === 0) {
     viewer.setMeasureMode(false);
     dock.setMeasureEnabled(false);
+    dock.setInspectEnabled(false);
     inspector.clear();
     stage.showEmptyState();
     navBar.element.classList.add('olv-hidden');

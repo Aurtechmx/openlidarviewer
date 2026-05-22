@@ -5,19 +5,23 @@ export interface ToolDockCallbacks {
   onSnapshot: () => void;
   /** Toggle distance-measurement mode. */
   onMeasureToggle: () => void;
+  /** Toggle point-inspection mode. */
+  onInspectToggle: () => void;
 }
 
 /**
  * The bottom-left tool dock and the bottom-right backend indicator.
  *
- * Frame and Save PNG are always available. Measure becomes available once a
- * scan is loaded and toggles distance-measurement mode. Slice ships in v2.
+ * Frame and Snapshot are always available. Measure and Inspect become
+ * available once a scan is loaded — Measure toggles distance measurement,
+ * Inspect toggles point inspection. Slice ships in v2.
  */
 export class ToolDock {
   readonly dock: HTMLElement;
   readonly backend: HTMLElement;
   private readonly _backendText: HTMLElement;
   private readonly _measure: HTMLButtonElement;
+  private readonly _inspect: HTMLButtonElement;
 
   constructor(callbacks: ToolDockCallbacks) {
     const frame = this._tool('Frame', 'Fit the camera to all clouds', false);
@@ -33,9 +37,22 @@ export class ToolDock {
       callbacks.onMeasureToggle();
     });
 
+    // Inspect starts disabled — enabled by setInspectEnabled once a scan loads.
+    this._inspect = this._tool('Inspect', 'Load a scan to enable inspection', true);
+    this._inspect.addEventListener('click', () => {
+      this._inspect.blur();
+      callbacks.onInspectToggle();
+    });
+
     const slice = this._tool('Slice', 'Section & slice plane — coming soon', true);
 
-    this.dock = el('div', { className: 'olv-dock' }, [frame, snapshot, this._measure, slice]);
+    this.dock = el('div', { className: 'olv-dock' }, [
+      frame,
+      snapshot,
+      this._measure,
+      this._inspect,
+      slice,
+    ]);
 
     this._backendText = el('span', { className: 'olv-backend-text', text: 'initialising…' });
     this.backend = el('div', { className: 'olv-backend' }, [
@@ -62,6 +79,21 @@ export class ToolDock {
   setMeasureActive(active: boolean): void {
     this._measure.classList.toggle('olv-tool-active', active);
     this._measure.textContent = active ? 'Measuring…' : 'Measure';
+  }
+
+  /** Enable or disable the Inspect tool — enabled once a scan is loaded. */
+  setInspectEnabled(enabled: boolean): void {
+    this._inspect.disabled = !enabled;
+    this._inspect.title = enabled
+      ? 'Inspect point attributes'
+      : 'Load a scan to enable inspection';
+    if (!enabled) this.setInspectActive(false);
+  }
+
+  /** Reflect whether point-inspection mode is currently active. */
+  setInspectActive(active: boolean): void {
+    this._inspect.classList.toggle('olv-tool-active', active);
+    this._inspect.textContent = active ? 'Inspecting…' : 'Inspect';
   }
 
   private _tool(label: string, title: string, disabled: boolean): HTMLButtonElement {

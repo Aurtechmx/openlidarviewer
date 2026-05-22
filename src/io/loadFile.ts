@@ -1,6 +1,7 @@
 import { sniffFormat } from './sniffFormat';
 import type { SourceFormat } from './sniffFormat';
 import { PointCloud } from '../model/PointCloud';
+import type { CloudMetadata } from '../model/PointCloud';
 import type { LoadResult } from './parseBuffer';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
@@ -19,6 +20,7 @@ interface CloudPayload {
   sourceFormat: SourceFormat;
   name: string;
   declaredPointCount?: number;
+  metadata?: CloudMetadata;
 }
 
 type WorkerReply =

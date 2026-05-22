@@ -1,6 +1,15 @@
 import { PointCloud } from '../model/PointCloud';
 
 /**
+ * Voxel-grid stride for packing a 3-D voxel index into one numeric Map key.
+ * A numeric key avoids building a string for every point — the dominant cost
+ * when downsampling a multi-million-point cloud. Packing as `(gx*S + gy)*S + gz`
+ * stays collision-free while each grid index is within ±(S / 2), i.e. ±65536
+ * voxels per axis, which every realistic scan extent and voxel size satisfies.
+ */
+const GRID_STRIDE = 131072;
+
+/**
  * Voxel-grid downsample.
  *
  * Points are bucketed into a regular grid of cubic voxels of side `voxelSize`.
@@ -23,63 +32,77 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
   const intensity = cloud.intensity;
   const classification = cloud.classification;
 
-  interface Voxel {
-    x: number;
-    y: number;
-    z: number;
-    r: number;
-    g: number;
-    b: number;
-    intensity: number;
-    classification: number;
-    n: number;
-  }
+  // Per-voxel running sums, kept in flat arrays indexed by a first-seen slot.
+  // Avoiding a per-voxel object keeps allocation out of this hot loop, which
+  // runs once for every point in the cloud.
+  const slotOf = new Map<number, number>();
+  const sumX: number[] = [];
+  const sumY: number[] = [];
+  const sumZ: number[] = [];
+  const sumR: number[] = [];
+  const sumG: number[] = [];
+  const sumB: number[] = [];
+  const sumI: number[] = [];
+  const firstClass: number[] = [];
+  const counts: number[] = [];
 
-  const grid = new Map<string, Voxel>();
   for (let i = 0; i < count; i++) {
     const x = pos[i * 3];
     const y = pos[i * 3 + 1];
     const z = pos[i * 3 + 2];
-    const key =
-      Math.floor(x / voxelSize) + ',' + Math.floor(y / voxelSize) + ',' + Math.floor(z / voxelSize);
+    // Pack the voxel's 3-D grid index into a single numeric key — far cheaper
+    // than concatenating a string key for every point.
+    const gx = Math.floor(x / voxelSize);
+    const gy = Math.floor(y / voxelSize);
+    const gz = Math.floor(z / voxelSize);
+    const key = (gx * GRID_STRIDE + gy) * GRID_STRIDE + gz;
 
-    let v = grid.get(key);
-    if (v === undefined) {
-      v = { x: 0, y: 0, z: 0, r: 0, g: 0, b: 0, intensity: 0, classification: 0, n: 0 };
-      grid.set(key, v);
+    let slot = slotOf.get(key);
+    if (slot === undefined) {
+      slot = sumX.length;
+      slotOf.set(key, slot);
+      sumX.push(0);
+      sumY.push(0);
+      sumZ.push(0);
+      sumR.push(0);
+      sumG.push(0);
+      sumB.push(0);
+      sumI.push(0);
+      firstClass.push(0);
+      counts.push(0);
     }
-    v.x += x;
-    v.y += y;
-    v.z += z;
+    sumX[slot] += x;
+    sumY[slot] += y;
+    sumZ[slot] += z;
     if (colors !== undefined) {
-      v.r += colors[i * 3];
-      v.g += colors[i * 3 + 1];
-      v.b += colors[i * 3 + 2];
+      sumR[slot] += colors[i * 3];
+      sumG[slot] += colors[i * 3 + 1];
+      sumB[slot] += colors[i * 3 + 2];
     }
-    if (intensity !== undefined) v.intensity += intensity[i];
-    if (classification !== undefined && v.n === 0) v.classification = classification[i];
-    v.n++;
+    if (intensity !== undefined) sumI[slot] += intensity[i];
+    // Classification is categorical — keep the first member's code.
+    if (classification !== undefined && counts[slot] === 0) firstClass[slot] = classification[i];
+    counts[slot]++;
   }
 
-  const out = grid.size;
+  const out = slotOf.size;
   const outPositions = new Float32Array(out * 3);
   const outColors = colors !== undefined ? new Uint8Array(out * 3) : undefined;
   const outIntensity = intensity !== undefined ? new Uint16Array(out) : undefined;
   const outClass = classification !== undefined ? new Uint8Array(out) : undefined;
 
-  let i = 0;
-  for (const v of grid.values()) {
-    outPositions[i * 3] = v.x / v.n;
-    outPositions[i * 3 + 1] = v.y / v.n;
-    outPositions[i * 3 + 2] = v.z / v.n;
+  for (let s = 0; s < out; s++) {
+    const n = counts[s];
+    outPositions[s * 3] = sumX[s] / n;
+    outPositions[s * 3 + 1] = sumY[s] / n;
+    outPositions[s * 3 + 2] = sumZ[s] / n;
     if (outColors !== undefined) {
-      outColors[i * 3] = Math.round(v.r / v.n);
-      outColors[i * 3 + 1] = Math.round(v.g / v.n);
-      outColors[i * 3 + 2] = Math.round(v.b / v.n);
+      outColors[s * 3] = Math.round(sumR[s] / n);
+      outColors[s * 3 + 1] = Math.round(sumG[s] / n);
+      outColors[s * 3 + 2] = Math.round(sumB[s] / n);
     }
-    if (outIntensity !== undefined) outIntensity[i] = Math.round(v.intensity / v.n);
-    if (outClass !== undefined) outClass[i] = v.classification;
-    i++;
+    if (outIntensity !== undefined) outIntensity[s] = Math.round(sumI[s] / n);
+    if (outClass !== undefined) outClass[s] = firstClass[s];
   }
 
   return new PointCloud({
@@ -94,6 +117,8 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     // Preserve the decoded count so the Health Check still compares against
     // what was read from the file, not this reduced cloud.
     decodedPointCount: cloud.decodedPointCount,
+    // Provenance metadata is independent of point count — carry it through.
+    metadata: cloud.metadata,
   });
 }
 
@@ -124,11 +149,13 @@ export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number
 /**
  * Downsample `cloud` so it fits within `maxPoints`.
  *
- * Starts from `voxelSizeForBudget`'s estimate, then converges on the budget
- * from both sides: it grows the voxel while the cloud is over budget, then
- * shrinks it while the cloud sits wastefully far under budget — without ever
- * letting the result exceed `maxPoints`. The pass count is capped so a
- * pathological cloud cannot loop indefinitely.
+ * The first voxel size is estimated for a target slightly under the budget,
+ * so a typical estimate lands the first pass at or under `maxPoints` with no
+ * further full-cloud passes. When the estimate misses, the size is corrected
+ * proportionally — point count scales about `1 / size²` for surface-like
+ * data — so it converges within a pass or two rather than creeping by a fixed
+ * factor. The pass count is capped so a pathological cloud cannot loop
+ * indefinitely, and the returned cloud never exceeds `maxPoints`.
  *
  * If `cloud` already fits, the *same object* is returned untouched, so callers
  * can detect "was it downsampled?" with a simple identity check.
@@ -136,14 +163,18 @@ export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number
 export function downsampleToBudget(cloud: PointCloud, maxPoints: number): PointCloud {
   if (cloud.pointCount <= maxPoints) return cloud;
 
-  const MAX_PASSES = 14;
-  let voxelSize = voxelSizeForBudget(cloud, maxPoints);
+  const MAX_PASSES = 12;
+  // Aim the first estimate a little under budget. The estimate is usually
+  // close, so undershooting the target lands the first pass at or under the
+  // budget — and when it does, both loops below are skipped entirely.
+  let voxelSize = voxelSizeForBudget(cloud, maxPoints * 0.9);
   let reduced = voxelDownsample(cloud, voxelSize);
   let passes = 1;
 
-  // Still too many points: grow the voxel until the cloud fits the budget.
+  // Over budget: grow the voxel by a proportional correction until it fits.
   while (reduced.pointCount > maxPoints && passes < MAX_PASSES) {
-    voxelSize *= 1.4;
+    const ratio = Math.sqrt(reduced.pointCount / maxPoints);
+    voxelSize *= Math.min(Math.max(ratio, 1.05), 3);
     reduced = voxelDownsample(cloud, voxelSize);
     passes++;
   }
@@ -152,9 +183,11 @@ export function downsampleToBudget(cloud: PointCloud, maxPoints: number): PointC
   // thrown away. Shrink it to recover points — but never past the size that
   // would push the cloud back over the budget.
   while (reduced.pointCount < maxPoints * 0.6 && passes < MAX_PASSES) {
-    const candidate = voxelDownsample(cloud, voxelSize / 1.4);
+    const ratio = Math.sqrt(reduced.pointCount / maxPoints);
+    const nextSize = voxelSize * Math.min(Math.max(ratio, 0.5), 0.95);
+    const candidate = voxelDownsample(cloud, nextSize);
     if (candidate.pointCount > maxPoints) break;
-    voxelSize /= 1.4;
+    voxelSize = nextSize;
     reduced = candidate;
     passes++;
   }
