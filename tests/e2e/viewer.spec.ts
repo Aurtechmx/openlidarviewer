@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Drop-and-render coverage. The sample buttons load the bundled fixture
@@ -23,8 +25,22 @@ test('loads a second scan as a separate layer', async ({ page }) => {
   await page.goto('/');
   await page.getByText('Drone survey').click();
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await page.getByText('Phone scan').click();
-  await expect(page.locator('.olv-layer')).toHaveCount(2);
+  await expect(page.locator('.olv-layer')).toHaveCount(1);
+
+  // The empty-state sample buttons are gone once a scan is open, so a second
+  // scan arrives the way a real one does — dropped onto the window. Simulate
+  // dropping the bundled .ply fixture on the document body.
+  const ply = readFileSync(
+    fileURLToPath(new URL('../../public/samples/tiny.ply', import.meta.url)),
+  );
+  const dataTransfer = await page.evaluateHandle((bytes) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(bytes)], 'second-scan.ply'));
+    return dt;
+  }, [...ply]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+
+  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
 });
 
 test('embed mode strips the top bar', async ({ page }) => {

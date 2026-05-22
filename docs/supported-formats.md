@@ -44,9 +44,9 @@ Recommended mobile formats:
 - XYZ / CSV — useful for raw point-coordinate workflows
 - LAS / LAZ — professional LiDAR formats if exported or converted
 
-Polycam note: According to Polycam's current help documentation, Polycam Free plan users can export GLTF files. Other export formats may require a paid Polycam plan. Export availability may change and varies by plan and format.
+Mobile scanning apps: Several iPhone LiDAR scanning apps — such as Polycam, Scaniverse, or 3D Scanner App — can export scans in these formats. Available formats and free-tier options differ between apps and can change, so check each app's current help documentation. Some formats may require a paid plan.
 
-Trademark note: OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Polycam.
+Trademark note: OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or any third-party scanning app.
 
 ## Notes
 

@@ -164,7 +164,7 @@ Recommended mobile workflow:
 4. Tap "Open scan from device."
 5. Inspect, measure, and export.
 
-Mobile scanning app note: OpenLiDARViewer can open compatible files exported from mobile scanning apps when the exported format is supported by the viewer. One practical testing workflow is to scan with the Polycam app, export GLTF when available, save the file to the device, and open it in OpenLiDARViewer. According to Polycam's current help documentation, Polycam Free plan users can export GLTF files; other formats may require a paid plan. Export availability may change and varies by plan and format.
+Mobile scanning app note: OpenLiDARViewer can open compatible files exported from mobile scanning apps when the exported format is supported by the viewer. A practical testing workflow is to capture a scan with an iPhone LiDAR scanning app — such as Polycam, Scaniverse, or 3D Scanner App — export it in a supported format (GLTF/GLB, OBJ, or PLY), save the file to the device, and open it in OpenLiDARViewer. Available export formats, free-tier options, and pricing differ between apps and can change over time, so check each app's current help documentation. Some formats may require a paid plan.
 
 Mobile performance note: Mobile performance depends on browser, GPU, memory, file size, and point count. Very large datasets may require desktop hardware, downsampling, tiling, or optimized formats.
 

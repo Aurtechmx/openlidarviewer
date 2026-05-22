@@ -33,9 +33,9 @@ OpenLiDARViewer can open compatible exports from mobile scanning apps. Useful fo
 - XYZ / CSV for raw point-coordinate workflows
 - LAS / LAZ, which are more common in drone and professional LiDAR workflows
 
-According to Polycam's current help documentation, Polycam Free plan users can export GLTF files; other formats such as OBJ, FBX, STL, point-cloud formats, and floor-plan exports may require a paid plan. Export availability may change and varies by plan and format.
+Several iPhone LiDAR scanning apps — such as Polycam, Scaniverse, or 3D Scanner App — can export scans in formats OpenLiDARViewer reads, including GLTF/GLB, OBJ, and PLY. Export formats, free-tier availability, and pricing differ between apps and can change over time, so check each app's current help documentation before relying on a particular export. Some formats may require a paid plan.
 
-OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple, Polycam, or any third-party scanning app. Third-party product names are used only for descriptive compatibility and workflow documentation.
+OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or any third-party scanning app, including those named above. Third-party product names are used only for descriptive compatibility and workflow documentation.
 
 ## Touch Navigation
 
