@@ -34,6 +34,8 @@ Viewer (WebGPU / WebGL 2)  ->  analysis modules  ->  Scan Intelligence panel
 
 **Measurement.** The measure tool picks points by ray and draws markers, lines, and distance labels as an SVG overlay.
 
+**Inspection.** The inspect tool picks the nearest point to a ray and shows its real-world coordinates and attributes in a floating card. The picked-point data shape and its clipboard and JSON forms live in a pure, unit-tested module.
+
 **Scan Intelligence.** The analysis modules (`healthCheck`, `scanReport`) are pure functions over a `PointCloud`. They return rows and never touch the renderer. New modules register through an open API.
 
 **Export.** Pure serializers turn a `PointCloud` back into PLY, OBJ, XYZ, or CSV text.

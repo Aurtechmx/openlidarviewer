@@ -41,6 +41,7 @@ Intelligence report, and export the result.
 | FR-13 | Export the cloud to PLY, OBJ, XYZ, or CSV, and save the current view as a PNG, all client-side. |
 | FR-14 | Save and restore named camera views. |
 | FR-15 | Support an embed mode (`?embed=1`) that strips the chrome for `<iframe>` use. |
+| FR-16 | Inspect a picked point — show its real-world coordinates and attributes, with one-click copy to the clipboard. |
 
 ### 2.2 Non-functional requirements
 

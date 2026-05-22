@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Planned
+
+- Expanded format support — E57, COPC LAZ, 3D Tiles / PNTS
+- Polyline, area, and height-difference measurement
+- Slicing, clipping, and annotation tools
+- Large-scale dataset streaming and level-of-detail
+
+See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.1.0] - 2026-05-21
+
 ### Added
 
 - Browser-based, local-first point-cloud viewer with drag-and-drop loading
@@ -32,12 +43,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Faster loading of large LAS/LAZ scans — a lighter voxel-downsample inner
   loop and a single-pass budget search cut parsing time substantially
-
-### Planned
-
-- Expanded format support — E57, COPC LAZ, 3D Tiles / PNTS
-- Polyline, area, and height-difference measurement
-- Slicing, clipping, and annotation tools
-- Large-scale dataset streaming and level-of-detail
-
-See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
