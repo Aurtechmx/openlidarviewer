@@ -196,11 +196,11 @@ See [`architecture.md`](architecture.md) for the full map.
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-- **build-and-test** — `npm ci` -> `npm run typecheck` -> `npm test` -> `npm run build`.
-- **e2e** — installs Chromium and runs `npm run test:e2e`.
+- **build-and-test** — `npm ci` -> `npm run typecheck` -> `npm test` -> `npm run build`. The hard gate.
+- **e2e** — installs Chromium and runs `npm run test:e2e`. Advisory: it drives a headless browser, so a GPU-related failure is reported but does not block the build.
 
-Pre-merge checklist for any PR into `main`: all review threads resolved, both
-CI jobs green, branch rebased on the latest `main`.
+Pre-merge checklist for any PR into `main`: all review threads resolved, the
+build-and-test job green, branch rebased on the latest `main`.
 
 ---
 

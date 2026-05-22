@@ -221,7 +221,6 @@ Planned performance work includes tiled datasets, COPC LAZ, 3D Tiles / PNTS, lev
 - [ ] Add E57 support
 - [ ] Add COPC LAZ support for large cloud-optimised datasets
 - [ ] Add 3D Tiles / PNTS streaming
-- [ ] Scan metadata: detect the capture sensor and date from the file header, and show them in the Scan Report
 - [ ] Polyline, area, and height-difference measurement
 - [ ] Slicing and clipping tools
 - [ ] Annotation tools
