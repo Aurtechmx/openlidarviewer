@@ -37,6 +37,9 @@ See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
 - Capture provenance — sensor, source software, and creation date read from
   the LAS/LAZ header and shown in the Scan Report when the file carries them
 - Embed mode (`?embed=1`)
+- Mobile browser support — a touch-friendly file picker, a Scan Info
+  bottom sheet, touch-gesture navigation, safe-area layout, and a
+  mobile-tuned point budget
 - Documentation suite (`README`, `docs/`) and reference screenshots
 
 ### Changed
