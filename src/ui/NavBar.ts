@@ -77,7 +77,11 @@ export class NavBar {
     const switcher = el('div', { className: 'olv-modes' }, segments);
 
     // ── Speed slider (walk / fly only) ────────────────────────────────────
-    const slider = el('input', { className: 'olv-slider olv-speed-slider', type: 'range' });
+    const slider = el('input', {
+      className: 'olv-slider olv-speed-slider',
+      type: 'range',
+      title: 'Drag to set how fast Walk and Fly movement is — Shift also sprints',
+    });
     slider.min = '0.25';
     slider.max = '4';
     slider.step = '0.25';

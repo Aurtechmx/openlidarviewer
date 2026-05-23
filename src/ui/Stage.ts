@@ -129,12 +129,17 @@ export class Stage {
       className: 'olv-open-btn',
       type: 'button',
       text: 'Open scan from device',
+      title: 'Choose a point-cloud file from your device — or drag one onto the page',
     });
     openButton.addEventListener('click', () => fileInput.click());
 
     const samples = el('div', { className: 'olv-samples' });
     for (const s of options.samples ?? []) {
-      const btn = el('button', { className: 'olv-sample', type: 'button' }, [
+      const btn = el('button', {
+        className: 'olv-sample',
+        type: 'button',
+        title: `Load the bundled ${s.label.toLowerCase()} sample — no file needed`,
+      }, [
         el('span', { className: 'olv-sample-label', text: s.label }),
         el('span', { className: 'olv-sample-detail', text: s.detail }),
       ]);

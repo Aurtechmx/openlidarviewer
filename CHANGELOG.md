@@ -16,6 +16,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
 
+## [0.2.6] - 2026-05-23
+
+### Added
+
+- Hover tooltips across the interface. Every tool-dock button, colour-mode and
+  rendering control, navigation mode, measurement tool, panel action, and
+  layer control now shows a short, plain-language hint on hover — explaining
+  what it does and how to use it, written for a first-time user.
+- Remember settings across sessions. Point size, the render-quality settings
+  (Eye Dome Lighting on/off and strength, point-size mode, antialiasing), and
+  the measurement unit system are saved to the browser and restored on the
+  next visit. A saved Eye Dome Lighting choice overrides the backend default.
+  Storage failures (private mode, blocked storage) fall back to defaults
+  silently.
+
+### Changed
+
+- A loaded cloud's bounding box is computed once and cached, instead of being
+  re-scanned several times per load (framing, the Scan Report, the project
+  card) — less work when opening a large survey.
+
+### Fixed
+
+- Eye Dome Lighting no longer shimmers while orbiting. The camera's far clip
+  plane was wide enough to leave the depth buffer imprecise, and EDL — which
+  reads depth — picked that noise up as flicker. The far plane is now tighter,
+  and EDL ignores depth differences below a small threshold, so only genuine
+  edges are shaded.
+
 ## [0.2.5] - 2026-05-22
 
 A rendering-quality release: depth cueing, distance-aware point sizing, and
@@ -44,6 +73,11 @@ softer points, with controls to tune them.
   enabled; the direct render path is unchanged when it is off.
 - The device-pixel-ratio is now capped at 2, bounding the render cost on
   high-density displays with no perceptible loss of sharpness.
+- The live deployment build (`npm run build:live`) obfuscates the project's
+  own application code, so the deployed site ships unreadable JavaScript; the
+  default `npm run build` stays a plain, readable build. The readable source
+  stays on GitHub, and a startup console message points there. Third-party
+  libraries and the parse worker are left plain-minified.
 
 ## [0.2.0] - 2026-05-22
 

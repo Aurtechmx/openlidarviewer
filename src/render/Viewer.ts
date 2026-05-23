@@ -55,7 +55,7 @@ import type { PointCloud } from '../model/PointCloud';
 import { isZUpFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
-import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
+import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
 import { NavController } from './NavController';
@@ -167,11 +167,14 @@ function buildEdlOutputNode(
   return Fn((): TslNode => {
     const texel: TslNode = vec2(radiusPx, radiusPx).div(screenSize);
     const logC: TslNode = log2(eyeDistAt(screenUV));
+    // A neighbour contributes only when it is deeper by more than the bias —
+    // gating depth-buffer noise so EDL does not shimmer as the camera moves.
+    const bias: TslNode = float(EDL_DEPTH_BIAS);
     const sum: TslNode = float(0).toVar();
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(texel.x, 0)))))));
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(texel.x, 0)))))));
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(0, texel.y)))))));
-    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(0, texel.y)))))));
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(texel.x, 0))))).sub(bias)));
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(texel.x, 0))))).sub(bias)));
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(0, texel.y))))).sub(bias)));
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(0, texel.y))))).sub(bias)));
     const shade: TslNode = exp(sum.mul(strength).negate());
     return vec4(colorNode.rgb.mul(shade), colorNode.a);
   })();
@@ -514,6 +517,11 @@ export class Viewer {
     }
   }
 
+  /** The current base point size, in screen pixels. */
+  get pointSize(): number {
+    return this._pointSize;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Render quality — Eye Dome Lighting, point sizing, antialiasing
   // ─────────────────────────────────────────────────────────────────────────
@@ -799,9 +807,13 @@ export class Viewer {
     this._nav.setBaseSpeed(speedForSize(size));
     this._nav.setHasCloud(true);
 
-    // Generous clip planes so flying around never clips the cloud.
+    // Clip planes generous enough to fly around the cloud, but no wider — a
+    // very wide near/far range leaves the depth buffer with poor precision,
+    // which makes the depth-based Eye Dome Lighting shimmer as the camera
+    // moves. `size` is the cloud's diameter; 16× still lets the camera pull
+    // well clear of it.
     this._camera.near = Math.max(size * 0.0002, 0.01);
-    this._camera.far = Math.max(size * 100, 1000);
+    this._camera.far = Math.max(size * 16, 1000);
     this._camera.updateProjectionMatrix();
 
     // Keep the EDL depth-linearisation uniforms in step with the camera, and

@@ -65,6 +65,16 @@ export class PointCloud {
   readonly decodedPointCount?: number;
   readonly metadata?: CloudMetadata;
 
+  /**
+   * Cached min/max bounds. Positions are immutable, so the O(n) scan in
+   * `bounds()` runs at most once — it is otherwise repeated several times per
+   * load (framing, the Scan Report, the project card).
+   */
+  private _bounds: {
+    min: [number, number, number];
+    max: [number, number, number];
+  } | null = null;
+
   constructor(options: PointCloudOptions) {
     this.positions = options.positions;
     this.colors = options.colors;
@@ -84,17 +94,29 @@ export class PointCloud {
     return this.positions.length / 3;
   }
 
-  /** Compute the local-coordinate min/max bounds over all positions. */
+  /**
+   * The local-coordinate min/max bounds over all positions.
+   *
+   * The scan is computed once and cached; each call returns a fresh copy, so a
+   * caller can never corrupt the cached value.
+   */
   bounds(): { min: [number, number, number]; max: [number, number, number] } {
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-    for (let i = 0; i < this.positions.length; i += 3) {
-      for (let axis = 0; axis < 3; axis++) {
-        const v = this.positions[i + axis];
-        if (v < min[axis]) min[axis] = v;
-        if (v > max[axis]) max[axis] = v;
+    if (this._bounds === null) {
+      const min: [number, number, number] = [Infinity, Infinity, Infinity];
+      const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < this.positions.length; i += 3) {
+        for (let axis = 0; axis < 3; axis++) {
+          const v = this.positions[i + axis];
+          if (v < min[axis]) min[axis] = v;
+          if (v > max[axis]) max[axis] = v;
+        }
       }
+      this._bounds = { min, max };
     }
-    return { min, max };
+    const { min, max } = this._bounds;
+    return {
+      min: [min[0], min[1], min[2]],
+      max: [max[0], max[1], max[2]],
+    };
   }
 }

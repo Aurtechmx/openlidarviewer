@@ -14,12 +14,23 @@ import { loadFile, MOBILE_POINT_BUDGET } from './io/loadFile';
 import { isZUpFormat } from './io/sniffFormat';
 import { exportCloud } from './io/exporters';
 import { serializeSession, parseSession } from './render/measure/serialization';
+import { loadPrefs, savePrefs } from './prefs';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
 import { scanReport } from './analysis/modules/scanReport';
 import { availableModes, defaultMode } from './render/colorModes';
 import type { PointCloud } from './model/PointCloud';
+
+// A pointer to the open-source repository for anyone who opens the console on
+// the live site. The deployed bundle is obfuscated; the readable source — and
+// the full documentation — live on GitHub.
+console.log(
+  `%cOpenLiDARViewer%c v${__APP_VERSION__} — open source under the MIT license.\n` +
+    `View the source and docs on GitHub: https://github.com/aurtechmx/openlidarviewer`,
+  'font-weight:600;color:#22dcff',
+  'color:#9aa3ad',
+);
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('OpenLiDARViewer: #app mount point not found');
@@ -58,7 +69,10 @@ const inspector = new Inspector({
   onColorMode: (mode) => {
     if (activeId) viewer.setColorMode(activeId, mode);
   },
-  onPointSize: (size) => viewer.setPointSize(size),
+  onPointSize: (size) => {
+    viewer.setPointSize(size);
+    persistPrefs();
+  },
   onToggleVisible: (id, visible) => viewer.setCloudVisible(id, visible),
   onRemove: (id) => removeCloud(id),
   onExport: (format) => {
@@ -78,10 +92,22 @@ const inspector = new Inspector({
     savedViews.splice(index, 1);
     inspector.setViews(savedViews.map((v) => v.name));
   },
-  onEdlToggle: (on) => viewer.setEdlEnabled(on),
-  onEdlStrength: (strength) => viewer.setEdlStrength(strength),
-  onPointSizeMode: (mode) => viewer.setPointSizeMode(mode),
-  onAntialiasing: (on) => viewer.setAntialiasing(on),
+  onEdlToggle: (on) => {
+    viewer.setEdlEnabled(on);
+    persistPrefs();
+  },
+  onEdlStrength: (strength) => {
+    viewer.setEdlStrength(strength);
+    persistPrefs();
+  },
+  onPointSizeMode: (mode) => {
+    viewer.setPointSizeMode(mode);
+    persistPrefs();
+  },
+  onAntialiasing: (on) => {
+    viewer.setAntialiasing(on);
+    persistPrefs();
+  },
 });
 
 const dock = new ToolDock({
@@ -130,6 +156,12 @@ const measurePanel = new MeasurePanel({
   onImport: (file) => void importSession(file),
 });
 viewer.measure.setOnChange(refreshMeasurePanel);
+// Persist the unit choice whenever it changes.
+viewer.measure.setOnUnitChange(persistPrefs);
+
+// Apply any preferences saved in a previous session, once the GPU backend has
+// initialised (so a saved EDL choice overrides the backend's default gate).
+void viewer.ready.then(applyPrefs);
 
 const dropZone = new DropZone(document.body, (file) => void handleFile(file));
 stage.overlay.append(dropZone.toast);
@@ -178,6 +210,33 @@ function downloadText(filename: string, text: string): void {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/** Read the current viewer settings and persist them for the next session. */
+function persistPrefs(): void {
+  savePrefs({
+    pointSize: viewer.pointSize,
+    edlEnabled: viewer.edlEnabled,
+    edlStrength: viewer.edlStrength,
+    pointSizeMode: viewer.pointSizeMode,
+    antialiasing: viewer.antialiasing,
+    unitSystem: viewer.measure.unitSystem,
+  });
+}
+
+/**
+ * Apply preferences saved in a previous session. Each key is applied only when
+ * it was stored, so anything absent keeps the viewer's own default — including
+ * the backend-dependent EDL default.
+ */
+function applyPrefs(): void {
+  const p = loadPrefs();
+  if (p.pointSize !== undefined) viewer.setPointSize(p.pointSize);
+  if (p.edlEnabled !== undefined) viewer.setEdlEnabled(p.edlEnabled);
+  if (p.edlStrength !== undefined) viewer.setEdlStrength(p.edlStrength);
+  if (p.pointSizeMode !== undefined) viewer.setPointSizeMode(p.pointSizeMode);
+  if (p.antialiasing !== undefined) viewer.setAntialiasing(p.antialiasing);
+  if (p.unitSystem !== undefined) viewer.measure.setUnitSystem(p.unitSystem);
 }
 
 /** Refresh the Measurements panel's contents and visibility. */
@@ -247,6 +306,7 @@ async function handleFile(file: File): Promise<void> {
     // The render-quality controls reflect the viewer's state — EDL defaults
     // depend on the GPU backend, known only once `viewer.ready` resolved.
     inspector.syncRendering({
+      pointSize: viewer.pointSize,
       edlEnabled: viewer.edlEnabled,
       edlStrength: viewer.edlStrength,
       pointSizeMode: viewer.pointSizeMode,

@@ -28,13 +28,27 @@ export const EDL_STRENGTH_RANGE = { min: 0, max: 1.5 } as const;
 const MIN_DIST = 1e-4;
 
 /**
+ * Noise gate, in log2(eye-distance) units. A neighbour must sit at least this
+ * much deeper before it contributes any obscurance.
+ *
+ * The depth buffer has finite precision, so a perfectly flat surface still
+ * yields tiny, jittery depth differences between a pixel and its neighbours.
+ * Un-gated, that jitter makes EDL shading shimmer as the camera moves. Real
+ * depth discontinuities are far larger than this threshold (a neighbour twice
+ * as far away is a full 1.0 in log2 space), so gating sub-threshold
+ * differences removes the shimmer without weakening genuine edges.
+ */
+export const EDL_DEPTH_BIAS = 0.1;
+
+/**
  * EDL obscurance for one pixel: the summed amount by which the pixel sits
  * *behind* its screen-space neighbours, measured in log2(eye-distance) space.
  *
  * Working in log2 of the eye-space distance makes the effect scale-invariant —
  * it reads the same on a kilometre-wide survey and a single room. A pixel
- * deeper than a neighbour contributes a positive term; a pixel in front of a
- * neighbour contributes nothing. The result is always >= 0.
+ * deeper than a neighbour by more than `EDL_DEPTH_BIAS` contributes a positive
+ * term; smaller differences (including depth-buffer noise) contribute nothing.
+ * The result is always >= 0.
  *
  * @param centerEyeDist - Eye-space distance of the pixel (world units, > 0).
  * @param neighbourEyeDists - Eye-space distances of the sampled neighbours.
@@ -47,7 +61,7 @@ export function edlObscurance(
   let sum = 0;
   for (const n of neighbourEyeDists) {
     const logN = Math.log2(Math.max(n, MIN_DIST));
-    sum += Math.max(0, logC - logN);
+    sum += Math.max(0, logC - logN - EDL_DEPTH_BIAS);
   }
   return sum;
 }

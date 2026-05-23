@@ -175,6 +175,7 @@ See [`architecture.md`](architecture.md) for the full map.
 |---------|---------|
 | `npm run dev` | Vite dev server with hot reload. |
 | `npm run build` | Typecheck then produce the static production build in `dist/`. |
+| `npm run build:live` | The deployment build — same as `build`, plus obfuscation of the project's own code (Vite mode `live`). Used only for the public live site. |
 | `npm run preview` | Serve the production build locally. |
 | `npm run typecheck` | `tsc --noEmit` — strict type checking. |
 | `npm test` | Run the Vitest unit suite once. |

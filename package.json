@@ -1,6 +1,6 @@
 {
   "name": "openlidarviewer",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
   "license": "MIT",
   "type": "module",
@@ -19,6 +19,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:live": "tsc --noEmit && vite build --mode live",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -40,6 +41,7 @@
     "@types/three": "^0.184.1",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
+    "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitest": "^4.1.7"
   }
 }

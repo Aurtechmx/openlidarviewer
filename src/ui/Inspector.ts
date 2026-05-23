@@ -7,6 +7,7 @@ import type { ExportFormat } from '../io/exporters';
 
 /** The render-quality state the Inspector's Rendering controls reflect. */
 export interface RenderingState {
+  pointSize: number;
   edlEnabled: boolean;
   edlStrength: number;
   pointSizeMode: PointSizeMode;
@@ -44,6 +45,15 @@ const MODE_LABELS: Record<ColorMode, string> = {
   normal: 'Normal',
 };
 
+/** Hover hints for each colour mode — what the chip does, for first-time users. */
+const MODE_TITLES: Record<ColorMode, string> = {
+  rgb: 'Colour points by their stored RGB colour',
+  intensity: 'Colour points by LiDAR return intensity',
+  elevation: 'Colour points by height — low to high',
+  classification: 'Colour points by their ASPRS classification code',
+  normal: 'Colour points by surface-normal direction',
+};
+
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
 
 function section(label: string, body: HTMLElement): HTMLElement {
@@ -54,8 +64,12 @@ function section(label: string, body: HTMLElement): HTMLElement {
 }
 
 /** A small on/off chip button; the active class reflects the on state. */
-function toggleChip(label: string, onChange: (on: boolean) => void): HTMLButtonElement {
-  const chip = el('button', { className: 'olv-chip', text: label, type: 'button' });
+function toggleChip(
+  label: string,
+  title: string,
+  onChange: (on: boolean) => void,
+): HTMLButtonElement {
+  const chip = el('button', { className: 'olv-chip', text: label, title, type: 'button' });
   chip.addEventListener('click', () => {
     chip.blur();
     const on = !chip.classList.contains('olv-chip-active');
@@ -86,6 +100,7 @@ export class Inspector {
   private readonly _viewList = el('div', { className: 'olv-views' });
   private readonly _layerRows = new Map<string, HTMLElement>();
   // ── Rendering controls ──
+  private readonly _pointSizeSlider: HTMLInputElement;
   private readonly _edlChip: HTMLButtonElement;
   private readonly _edlStrengthSlider: HTMLInputElement;
   private readonly _edlStrengthRow: HTMLElement;
@@ -96,19 +111,28 @@ export class Inspector {
     this._cb = callbacks;
 
     // ── Point size: an adaptive/fixed mode toggle above the size slider ──
-    const slider = el('input', { className: 'olv-slider', type: 'range' });
+    const slider = el('input', {
+      className: 'olv-slider',
+      type: 'range',
+      title: 'Drag to set the base on-screen size of each point',
+    });
     slider.type = 'range';
     slider.min = '1';
     slider.max = '8';
     slider.step = '0.5';
     slider.value = '2';
     slider.addEventListener('input', () => this._cb.onPointSize(slider.valueAsNumber));
+    this._pointSizeSlider = slider;
 
     this._sizeModeChips = (['adaptive', 'fixed'] as PointSizeMode[]).map((mode) => {
       const chip = el('button', {
         className: 'olv-chip',
         type: 'button',
         text: mode === 'adaptive' ? 'Adaptive' : 'Fixed',
+        title:
+          mode === 'adaptive'
+            ? 'Points scale with camera distance — far points stay visible, near ones do not bloat'
+            : 'Every point keeps a constant on-screen size',
       });
       chip.addEventListener('click', () => {
         chip.blur();
@@ -125,13 +149,25 @@ export class Inspector {
     ]);
 
     // ── Rendering: Eye Dome Lighting toggle + strength, antialiasing ──
-    this._edlChip = toggleChip('Eye Dome Lighting', (on) => {
-      this._edlStrengthRow.classList.toggle('olv-hidden', !on);
-      this._cb.onEdlToggle(on);
-    });
-    this._aaChip = toggleChip('Antialiasing', (on) => this._cb.onAntialiasing(on));
+    this._edlChip = toggleChip(
+      'Eye Dome Lighting',
+      'Toggle Eye Dome Lighting — depth shading that makes 3D structure far more readable',
+      (on) => {
+        this._edlStrengthRow.classList.toggle('olv-hidden', !on);
+        this._cb.onEdlToggle(on);
+      },
+    );
+    this._aaChip = toggleChip(
+      'Antialiasing',
+      'Toggle antialiasing — smooths the edge of every point',
+      (on) => this._cb.onAntialiasing(on),
+    );
 
-    this._edlStrengthSlider = el('input', { className: 'olv-slider', type: 'range' });
+    this._edlStrengthSlider = el('input', {
+      className: 'olv-slider',
+      type: 'range',
+      title: 'Drag to set how pronounced the depth shading is',
+    });
     this._edlStrengthSlider.type = 'range';
     this._edlStrengthSlider.min = String(EDL_STRENGTH_RANGE.min);
     this._edlStrengthSlider.max = String(EDL_STRENGTH_RANGE.max);
@@ -150,7 +186,11 @@ export class Inspector {
     ]);
 
     // Saved views: a "save" button above a list of stored viewpoints.
-    const saveView = el('button', { className: 'olv-view-save', text: '+ Save current view' });
+    const saveView = el('button', {
+      className: 'olv-view-save',
+      text: '+ Save current view',
+      title: 'Store the current camera angle so you can return to it later',
+    });
     saveView.addEventListener('click', () => {
       saveView.blur();
       this._cb.onSaveView();
@@ -226,7 +266,7 @@ export class Inspector {
 
   /** Add a loaded cloud to the layer list. */
   addCloud(id: string, name: string, pointCount: number): void {
-    const visible = el('input', { type: 'checkbox' });
+    const visible = el('input', { type: 'checkbox', title: 'Show or hide this scan' });
     visible.type = 'checkbox';
     visible.checked = true;
     visible.addEventListener('change', () => this._cb.onToggleVisible(id, visible.checked));
@@ -234,6 +274,7 @@ export class Inspector {
     const remove = el('button', {
       className: 'olv-layer-x',
       text: '×',
+      title: `Remove ${name} from the scene`,
       ariaLabel: `Remove ${name}`,
     });
     remove.addEventListener('click', () => this._cb.onRemove(id));
@@ -258,7 +299,11 @@ export class Inspector {
   setColorModes(modes: ColorMode[], active: ColorMode): void {
     this._chips.replaceChildren();
     for (const mode of modes) {
-      const chip = el('button', { className: 'olv-chip', text: MODE_LABELS[mode] });
+      const chip = el('button', {
+        className: 'olv-chip',
+        text: MODE_LABELS[mode],
+        title: MODE_TITLES[mode],
+      });
       if (mode === active) chip.classList.add('olv-chip-active');
       chip.addEventListener('click', () => {
         for (const other of this._chips.children) other.classList.remove('olv-chip-active');
@@ -271,6 +316,7 @@ export class Inspector {
 
   /** Reflect the viewer's current render-quality state in the controls. */
   syncRendering(state: RenderingState): void {
+    this._pointSizeSlider.value = String(state.pointSize);
     this._edlChip.classList.toggle('olv-chip-active', state.edlEnabled);
     this._edlStrengthRow.classList.toggle('olv-hidden', !state.edlEnabled);
     this._edlStrengthSlider.value = String(state.edlStrength);
@@ -335,11 +381,16 @@ export class Inspector {
       return;
     }
     names.forEach((name, index) => {
-      const go = el('button', { className: 'olv-view-name', text: name });
+      const go = el('button', {
+        className: 'olv-view-name',
+        text: name,
+        title: 'Glide the camera back to this saved viewpoint',
+      });
       go.addEventListener('click', () => this._cb.onApplyView(index));
       const del = el('button', {
         className: 'olv-layer-x',
         text: '×',
+        title: `Delete ${name}`,
         ariaLabel: `Delete ${name}`,
       });
       del.addEventListener('click', () => this._cb.onDeleteView(index));

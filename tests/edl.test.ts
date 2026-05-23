@@ -41,6 +41,19 @@ describe('edlObscurance', () => {
     expect(Number.isFinite(result)).toBe(true);
     expect(result).toBeGreaterThan(0);
   });
+
+  test('a near-flat surface within the depth bias yields zero obscurance', () => {
+    // ±2% depth jitter — the kind a finite-precision depth buffer produces on
+    // a flat surface. The noise gate must suppress it so EDL does not shimmer.
+    expect(edlObscurance(10, [10.2, 10.2, 9.8, 9.8])).toBe(0);
+  });
+
+  test('a sub-bias depth step is ignored, but a larger step still counts', () => {
+    // log2(10 / 9.6) ≈ 0.06 — below the 0.1 bias → ignored.
+    expect(edlObscurance(10, [9.6])).toBe(0);
+    // log2(10 / 7) ≈ 0.51 — well above the bias → a real edge, counted.
+    expect(edlObscurance(10, [7])).toBeGreaterThan(0);
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

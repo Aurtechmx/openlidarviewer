@@ -27,10 +27,18 @@ export class ToolDock {
   private readonly _close: HTMLButtonElement;
 
   constructor(callbacks: ToolDockCallbacks) {
-    const frame = this._tool('Frame', 'Fit the camera to all clouds', false);
+    const frame = this._tool(
+      'Frame',
+      'Fit the whole scan back in view — also the R key',
+      false,
+    );
     frame.addEventListener('click', callbacks.onFrameAll);
 
-    const snapshot = this._tool('Snapshot', 'Save the current view as a PNG', false);
+    const snapshot = this._tool(
+      'Snapshot',
+      'Save the current view as a PNG image to your device',
+      false,
+    );
     snapshot.addEventListener('click', callbacks.onSnapshot);
 
     // Measure starts disabled — enabled by setMeasureEnabled once a scan loads.
@@ -83,7 +91,7 @@ export class ToolDock {
   setMeasureEnabled(enabled: boolean): void {
     this._measure.disabled = !enabled;
     this._measure.title = enabled
-      ? 'Measure straight-line distance'
+      ? 'Measure distance, area, height, angle and slope on the scan'
       : 'Load a scan to enable measurement';
     if (!enabled) this.setMeasureActive(false);
   }
@@ -98,7 +106,7 @@ export class ToolDock {
   setInspectEnabled(enabled: boolean): void {
     this._inspect.disabled = !enabled;
     this._inspect.title = enabled
-      ? 'Inspect point attributes'
+      ? 'Click any point to read its coordinates and attributes'
       : 'Load a scan to enable inspection';
     if (!enabled) this.setInspectActive(false);
   }

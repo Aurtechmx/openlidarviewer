@@ -39,12 +39,20 @@ export class MeasurePanel {
       if (file) this._cb.onImport(file);
       fileInput.value = ''; // let the same file be re-picked
     });
-    const exportBtn = el('button', { className: 'olv-mp-action', text: 'Export' });
+    const exportBtn = el('button', {
+      className: 'olv-mp-action',
+      text: 'Export',
+      title: 'Save all measurements and saved views to a JSON session file',
+    });
     exportBtn.addEventListener('click', () => {
       exportBtn.blur();
       this._cb.onExport();
     });
-    const importBtn = el('button', { className: 'olv-mp-action', text: 'Import' });
+    const importBtn = el('button', {
+      className: 'olv-mp-action',
+      text: 'Import',
+      title: 'Load measurements and saved views from a JSON session file',
+    });
     importBtn.addEventListener('click', () => {
       importBtn.blur();
       fileInput.click();
@@ -76,7 +84,10 @@ export class MeasurePanel {
   private _row(s: MeasurementSummary): HTMLElement {
     const dot = el('span', { className: 'olv-mp-kind', title: s.kind });
 
-    const name = el('input', { className: 'olv-mp-name' });
+    const name = el('input', {
+      className: 'olv-mp-name',
+      title: 'Type to rename this measurement',
+    });
     name.value = s.name;
     name.addEventListener('change', () => this._cb.onRename(s.id, name.value));
 
@@ -85,6 +96,7 @@ export class MeasurePanel {
     const del = el('button', {
       className: 'olv-mp-del',
       text: '×',
+      title: `Delete ${s.name}`,
       ariaLabel: `Delete ${s.name}`,
     });
     del.addEventListener('click', () => this._cb.onDelete(s.id));

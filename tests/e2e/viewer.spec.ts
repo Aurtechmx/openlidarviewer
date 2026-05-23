@@ -85,6 +85,47 @@ test('switches navigation modes and reveals the speed control', async ({ page })
   await expect(page.locator('.olv-mode-active')).toHaveText('Walk');
 });
 
+test('interface controls carry hover tooltips', async ({ page }) => {
+  await page.goto('/');
+  await page.getByText('Drone survey', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+  // Tool-dock buttons explain themselves on hover.
+  await expect(page.locator('.olv-tool', { hasText: 'Frame' })).toHaveAttribute(
+    'title',
+    /view/i,
+  );
+  await expect(page.locator('.olv-tool', { hasText: 'Measure' })).toHaveAttribute(
+    'title',
+    /measure/i,
+  );
+  // Colour-mode chips carry a hint describing the mode.
+  await expect(page.locator('.olv-chip', { hasText: 'Height' })).toHaveAttribute(
+    'title',
+    /height/i,
+  );
+});
+
+test('remembers a settings change across a page reload', async ({ page }) => {
+  await page.goto('/');
+  await page.getByText('Drone survey', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+  // Switch point sizing to Fixed — a persisted preference.
+  await page.locator('.olv-chip', { hasText: 'Fixed' }).click();
+  await expect(page.locator('.olv-chip', { hasText: 'Fixed' })).toHaveClass(
+    /olv-chip-active/,
+  );
+
+  // Reload the page and open a scan again — the choice should have survived.
+  await page.reload();
+  await page.getByText('Drone survey', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-chip', { hasText: 'Fixed' })).toHaveClass(
+    /olv-chip-active/,
+  );
+});
+
 test('closes a scan and returns to the empty state, ready for another', async ({ page }) => {
   await page.goto('/');
   await page.getByText('Drone survey', { exact: true }).click();

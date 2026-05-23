@@ -54,6 +54,16 @@ const KIND_LABEL: Record<MeasurementKind, string> = {
   slope: 'Slope',
 };
 
+/** Hover hints for the kind picker — what each tool measures and how. */
+const KIND_TITLE: Record<MeasurementKind, string> = {
+  distance: 'Distance — straight line between two picked points',
+  polyline: 'Polyline — total length of a multi-point path',
+  area: 'Area — polygon area, both true (own-plane) and horizontal',
+  height: 'Height — vertical difference between two points',
+  angle: 'Angle — the angle at a vertex between two arms',
+  slope: 'Slope — rise, run, grade and inclination between two points',
+};
+
 /** Kind order for the picker buttons. */
 const KIND_ORDER: MeasurementKind[] = [
   'distance',
@@ -91,6 +101,8 @@ export class MeasureController {
   private readonly _unitsBtn: HTMLButtonElement;
   private readonly _kindButtons = new Map<MeasurementKind, HTMLButtonElement>();
   private _onChange: (() => void) | null = null;
+  /** Called when the unit system changes — used to persist the preference. */
+  private _onUnitChange: (() => void) | null = null;
 
   /** Re-picks a cloud point at the given NDC — injected by the Viewer. */
   private _picker: ((ndcX: number, ndcY: number) => Vec3 | null) | null = null;
@@ -132,7 +144,7 @@ export class MeasureController {
       const btn = el('button', {
         className: 'olv-mkind',
         text: KIND_LABEL[k],
-        title: `Measure ${KIND_LABEL[k].toLowerCase()}`,
+        title: KIND_TITLE[k],
       });
       btn.addEventListener('click', () => {
         btn.blur();
@@ -145,7 +157,11 @@ export class MeasureController {
     // ── Instruction text + action buttons ─────────────────────────────────
     this._hintEl = el('span', { className: 'olv-measure-hint-text' });
 
-    const undoBtn = el('button', { className: 'olv-measure-undo', text: 'Undo point' });
+    const undoBtn = el('button', {
+      className: 'olv-measure-undo',
+      text: 'Undo point',
+      title: 'Remove the last point you placed',
+    });
     undoBtn.addEventListener('click', () => {
       undoBtn.blur();
       this.undoLastPoint();
@@ -153,17 +169,26 @@ export class MeasureController {
     this._clearBtn = el('button', {
       className: 'olv-measure-clear olv-hidden',
       text: 'Clear all',
+      title: 'Delete every measurement on the scan',
     });
     this._clearBtn.addEventListener('click', () => {
       this._clearBtn.blur();
       this.clear();
     });
-    this._unitsBtn = el('button', { className: 'olv-units-toggle', text: 'Metric' });
+    this._unitsBtn = el('button', {
+      className: 'olv-units-toggle',
+      text: 'Metric',
+      title: 'Switch all readouts between metric and imperial units',
+    });
     this._unitsBtn.addEventListener('click', () => {
       this._unitsBtn.blur();
       this.setUnitSystem(this._units === 'metric' ? 'imperial' : 'metric');
     });
-    const doneBtn = el('button', { className: 'olv-measure-done', text: 'Done' });
+    const doneBtn = el('button', {
+      className: 'olv-measure-done',
+      text: 'Done',
+      title: 'Finish the current measurement and exit the Measure tool',
+    });
     doneBtn.addEventListener('click', () => {
       doneBtn.blur();
       this.finishCurrent();
@@ -235,6 +260,11 @@ export class MeasureController {
     this._onChange = cb;
   }
 
+  /** Register a callback fired whenever the unit system changes. */
+  setOnUnitChange(cb: () => void): void {
+    this._onUnitChange = cb;
+  }
+
   /** Inject the cloud-point picker used while dragging a vertex handle. */
   setPicker(pick: (ndcX: number, ndcY: number) => Vec3 | null): void {
     this._picker = pick;
@@ -290,6 +320,7 @@ export class MeasureController {
     this._unitsBtn.textContent = units === 'metric' ? 'Metric' : 'Imperial';
     this._updateHint();
     this._emitChange();
+    this._onUnitChange?.();
   }
 
   /** Place a vertex at a picked point. `null` means a click that missed. */
