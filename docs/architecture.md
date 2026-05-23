@@ -24,11 +24,13 @@ Viewer (WebGPU / WebGL 2)  ->  analysis modules  ->  Scan Intelligence panel
 
 **Coordinate bridge.** Large georeferenced (UTM-scale) coordinates overflow 32-bit floats. Every cloud is recentered about an integer origin, and the subtraction happens in float64 before the float32 downcast.
 
-**Render-buffer generation.** Each point becomes a camera-facing instanced quad, so it has a real, controllable size on both the WebGPU and WebGL 2 backends.
+**Render-buffer generation.** Each point becomes a camera-facing instanced quad, so it has a real, controllable size on both the WebGPU and WebGL 2 backends. A circular alpha mask plus alpha-to-coverage makes each point a round, antialiased dot, and the point size is either fixed or adaptively scaled with camera distance.
 
 **Voxel downsampling.** Clouds above the point budget are reduced on a voxel grid. The Detail control always reports the honest `shown / total` count.
 
 **Visualization modes.** `colorModes` derives per-point RGB for height, intensity, classification, stored RGB, or surface-normal direction.
+
+**Eye Dome Lighting.** When enabled, the scene renders into a `three/tsl` post-processing `pass`; an EDL node then compares each pixel's depth with its screen-space neighbours and darkens depth discontinuities, adding readable depth cueing. The one node graph compiles to both backends. The depth maths is mirrored by the pure, unit-tested `edl.ts`; the adaptive point-size curve by `pointStyle.ts`.
 
 **Navigation.** `NavController` owns the orbit, walk, and fly modes, keyboard input, pointer-lock mouse-look, and eased camera tweens. The movement maths is a separate, pure, unit-tested module.
 

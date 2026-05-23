@@ -19,11 +19,19 @@ Click Close in the tool dock to clear the current scan — and any additional la
 
 ## Styling the cloud
 
-The Scan Intelligence panel has three controls for how the cloud looks:
+The Scan Intelligence panel controls how the cloud looks:
 
 - **Color by** switches between Height, Intensity, Classification, RGB, and Normal. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans.
-- **Point size** sets the on-screen size of each point.
+- **Point size** sets the base on-screen size of each point.
 - **Detail** shows the honest `shown / total` count. Large clouds are voxel-downsampled to a point budget so the viewer stays responsive.
+
+## Rendering
+
+The Rendering section of the panel tunes how the cloud is drawn:
+
+- **Eye Dome Lighting** toggles screen-space depth shading. It darkens depth discontinuities so edges and 3D structure stand out, and the strength slider sets how pronounced the effect is. It is on by default on desktop WebGPU, and off on the WebGL 2 fallback and on phones — where it can still be switched on.
+- **Point size mode** switches between Adaptive — points scale with camera distance, clamped so far points stay visible and near ones do not bloat — and Fixed, a constant on-screen size. The point-size slider sets the base size for both.
+- **Antialiasing** toggles the smoothing of each point's round edge.
 
 ## Navigating
 

@@ -117,6 +117,10 @@ button:disabled { cursor: not-allowed; }
   border-color: rgba(0, 178, 255, 0.4);
 }
 .olv-slider { width: 100%; accent-color: var(--accent); }
+/* Rendering controls — stacked groups and a labelled slider row. */
+.olv-render-group { display: flex; flex-direction: column; gap: 8px; }
+.olv-render-row { display: flex; align-items: center; gap: 8px; }
+.olv-render-label { font-size: 11px; color: #8a909a; min-width: 52px; }
 .olv-detail-bar { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
 .olv-detail-fill { height: 100%; background: var(--brand-gradient); }
 .olv-detail-text { font-size: 11px; color: var(--text-dim); font-family: var(--mono); margin-top: 6px; }

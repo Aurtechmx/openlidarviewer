@@ -8,6 +8,15 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 - [ ] Level-of-detail rendering
 - [ ] Sample datasets and demo scenes
 
+## Rendering
+
+- [x] Eye Dome Lighting depth shading
+- [x] Adaptive point sizing, with a fixed mode
+- [x] Round, antialiased points
+- [ ] Background themes — dark / scientific / presentation (0.3.0)
+- [ ] Premium loading-state transitions (0.3.0)
+- [ ] Mobile-adaptive rendering — graceful degradation on weak GPUs (0.3.0)
+
 ## Format support
 
 - [x] E57 import — terrestrial laser-scanner data (ASTM E2807)

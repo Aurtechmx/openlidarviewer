@@ -1,7 +1,17 @@
 import { el, formatCount } from './dom';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import type { ColorMode } from '../render/colorModes';
+import type { PointSizeMode } from '../render/pointStyle';
+import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { ExportFormat } from '../io/exporters';
+
+/** The render-quality state the Inspector's Rendering controls reflect. */
+export interface RenderingState {
+  edlEnabled: boolean;
+  edlStrength: number;
+  pointSizeMode: PointSizeMode;
+  antialiasing: boolean;
+}
 
 export interface InspectorCallbacks {
   onColorMode: (mode: ColorMode) => void;
@@ -16,6 +26,14 @@ export interface InspectorCallbacks {
   onApplyView: (index: number) => void;
   /** Delete a saved viewpoint by index. */
   onDeleteView: (index: number) => void;
+  /** Toggle Eye Dome Lighting depth shading. */
+  onEdlToggle: (on: boolean) => void;
+  /** Set the EDL strength. */
+  onEdlStrength: (strength: number) => void;
+  /** Switch between adaptive and fixed point sizing. */
+  onPointSizeMode: (mode: PointSizeMode) => void;
+  /** Toggle point-edge antialiasing. */
+  onAntialiasing: (on: boolean) => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -33,6 +51,18 @@ function section(label: string, body: HTMLElement): HTMLElement {
     el('div', { className: 'olv-section-label', text: label }),
     body,
   ]);
+}
+
+/** A small on/off chip button; the active class reflects the on state. */
+function toggleChip(label: string, onChange: (on: boolean) => void): HTMLButtonElement {
+  const chip = el('button', { className: 'olv-chip', text: label, type: 'button' });
+  chip.addEventListener('click', () => {
+    chip.blur();
+    const on = !chip.classList.contains('olv-chip-active');
+    chip.classList.toggle('olv-chip-active', on);
+    onChange(on);
+  });
+  return chip;
 }
 
 /**
@@ -55,10 +85,17 @@ export class Inspector {
   private readonly _report = el('div', { className: 'olv-report' });
   private readonly _viewList = el('div', { className: 'olv-views' });
   private readonly _layerRows = new Map<string, HTMLElement>();
+  // ── Rendering controls ──
+  private readonly _edlChip: HTMLButtonElement;
+  private readonly _edlStrengthSlider: HTMLInputElement;
+  private readonly _edlStrengthRow: HTMLElement;
+  private readonly _aaChip: HTMLButtonElement;
+  private readonly _sizeModeChips: { mode: PointSizeMode; chip: HTMLButtonElement }[];
 
   constructor(callbacks: InspectorCallbacks) {
     this._cb = callbacks;
 
+    // ── Point size: an adaptive/fixed mode toggle above the size slider ──
     const slider = el('input', { className: 'olv-slider', type: 'range' });
     slider.type = 'range';
     slider.min = '1';
@@ -66,6 +103,51 @@ export class Inspector {
     slider.step = '0.5';
     slider.value = '2';
     slider.addEventListener('input', () => this._cb.onPointSize(slider.valueAsNumber));
+
+    this._sizeModeChips = (['adaptive', 'fixed'] as PointSizeMode[]).map((mode) => {
+      const chip = el('button', {
+        className: 'olv-chip',
+        type: 'button',
+        text: mode === 'adaptive' ? 'Adaptive' : 'Fixed',
+      });
+      chip.addEventListener('click', () => {
+        chip.blur();
+        for (const c of this._sizeModeChips) {
+          c.chip.classList.toggle('olv-chip-active', c.mode === mode);
+        }
+        this._cb.onPointSizeMode(mode);
+      });
+      return { mode, chip };
+    });
+    const pointSizeBody = el('div', { className: 'olv-render-group' }, [
+      el('div', { className: 'olv-chips' }, this._sizeModeChips.map((c) => c.chip)),
+      slider,
+    ]);
+
+    // ── Rendering: Eye Dome Lighting toggle + strength, antialiasing ──
+    this._edlChip = toggleChip('Eye Dome Lighting', (on) => {
+      this._edlStrengthRow.classList.toggle('olv-hidden', !on);
+      this._cb.onEdlToggle(on);
+    });
+    this._aaChip = toggleChip('Antialiasing', (on) => this._cb.onAntialiasing(on));
+
+    this._edlStrengthSlider = el('input', { className: 'olv-slider', type: 'range' });
+    this._edlStrengthSlider.type = 'range';
+    this._edlStrengthSlider.min = String(EDL_STRENGTH_RANGE.min);
+    this._edlStrengthSlider.max = String(EDL_STRENGTH_RANGE.max);
+    this._edlStrengthSlider.step = '0.05';
+    this._edlStrengthSlider.value = String(EDL_DEFAULTS.strength);
+    this._edlStrengthSlider.addEventListener('input', () =>
+      this._cb.onEdlStrength(this._edlStrengthSlider.valueAsNumber),
+    );
+    this._edlStrengthRow = el('div', { className: 'olv-render-row olv-hidden' }, [
+      el('span', { className: 'olv-render-label', text: 'Strength' }),
+      this._edlStrengthSlider,
+    ]);
+    const renderingBody = el('div', { className: 'olv-render-group' }, [
+      el('div', { className: 'olv-chips' }, [this._edlChip, this._aaChip]),
+      this._edlStrengthRow,
+    ]);
 
     // Saved views: a "save" button above a list of stored viewpoints.
     const saveView = el('button', { className: 'olv-view-save', text: '+ Save current view' });
@@ -107,7 +189,8 @@ export class Inspector {
       head,
       section('Layers', this._layers),
       section('Color by', this._chips),
-      section('Point size', slider),
+      section('Point size', pointSizeBody),
+      section('Rendering', renderingBody),
       section('Detail', this._detail),
       section('Scan report', this._report),
       section('Saved views', views),
@@ -183,6 +266,17 @@ export class Inspector {
         this._cb.onColorMode(mode);
       });
       this._chips.append(chip);
+    }
+  }
+
+  /** Reflect the viewer's current render-quality state in the controls. */
+  syncRendering(state: RenderingState): void {
+    this._edlChip.classList.toggle('olv-chip-active', state.edlEnabled);
+    this._edlStrengthRow.classList.toggle('olv-hidden', !state.edlEnabled);
+    this._edlStrengthSlider.value = String(state.edlStrength);
+    this._aaChip.classList.toggle('olv-chip-active', state.antialiasing);
+    for (const c of this._sizeModeChips) {
+      c.chip.classList.toggle('olv-chip-active', c.mode === state.pointSizeMode);
     }
   }
 

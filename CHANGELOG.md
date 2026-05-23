@@ -7,12 +7,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 
+- 0.3.0 — the complete rendering overhaul: background themes, premium loading
+  states, and full mobile-adaptive rendering, building on the 0.2.5 pipeline
 - Expanded format support — PCD, PTS/PTX, COPC LAZ, 3D Tiles / PNTS
 - Cross-section and profile measurement
 - Slicing, clipping, and annotation tools
 - Large-scale dataset streaming and level-of-detail
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.2.5] - 2026-05-22
+
+A rendering-quality release: depth cueing, distance-aware point sizing, and
+softer points, with controls to tune them.
+
+### Added
+
+- Eye Dome Lighting — screen-space depth shading that traces every depth
+  discontinuity, making point-cloud structure far more readable. It runs as a
+  post-processing pass built from one node graph that targets both the WebGPU
+  and WebGL 2 backends. On by default on desktop WebGPU; off by default on the
+  WebGL 2 fallback and on mobile, where it can still be enabled by hand.
+- Adaptive point sizing — points scale with camera distance, clamped so far
+  points stay visible and near points do not bloat. A Fixed mode keeps the
+  constant-size behaviour of earlier releases.
+- Round, soft-edged points with point-edge antialiasing, replacing the hard
+  square points — overlapping points now blend cleanly instead of stacking
+  into visual noise.
+- A Rendering section in the Scan Intelligence panel: an Eye Dome Lighting
+  toggle and strength slider, an Adaptive / Fixed point-size switch, and an
+  antialiasing toggle.
+
+### Changed
+
+- Rendering runs through a post-processing pipeline when Eye Dome Lighting is
+  enabled; the direct render path is unchanged when it is off.
+- The device-pixel-ratio is now capped at 2, bounding the render cost on
+  high-density displays with no perceptible loss of sharpness.
 
 ## [0.2.0] - 2026-05-22
 

@@ -28,6 +28,12 @@ Clouds above a point budget of roughly 4M points are voxel-downsampled on load t
 
 OpenLiDARViewer uses the WebGPU renderer when the browser supports it, and falls back automatically to WebGL 2 otherwise. The active backend is shown in the bottom-right indicator. Points are drawn as instanced, camera-facing quads, so they render at a real, controllable size on both backends.
 
+The device-pixel-ratio is capped at 2, which bounds the render cost on high-density displays with no perceptible loss of sharpness.
+
+## Eye Dome Lighting
+
+Eye Dome Lighting adds a single full-screen post-processing pass that samples scene depth — a small, fixed cost independent of point count, and cheap next to drawing the cloud itself. It is on by default on desktop WebGPU and off by default on the WebGL 2 fallback and on phones, so a weaker device is never dropped below interactive on load. It can be toggled, and its strength tuned, from the Rendering section of the panel. Turning it off restores the direct render path with no post-processing overhead.
+
 ## Browser settings
 
 For best performance, enable hardware acceleration, use a modern Chromium-based browser, and close unnecessary tabs when loading large point clouds. Use the detail and point-size controls for heavy datasets, and prefer optimised, tiled, or downsampled files for very large scans.

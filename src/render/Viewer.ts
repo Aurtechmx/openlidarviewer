@@ -31,12 +31,33 @@
 
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { instancedBufferAttribute } from 'three/tsl';
+import {
+  instancedBufferAttribute,
+  pass,
+  Fn,
+  vec2,
+  vec4,
+  float,
+  uniform,
+  screenUV,
+  screenSize,
+  log2,
+  exp,
+  max,
+  length,
+  smoothstep,
+  positionView,
+  positionGeometry,
+  perspectiveDepthToViewZ,
+} from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
 import { isZUpFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
+import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
+import { POINT_STYLE_DEFAULTS } from './pointStyle';
+import type { PointSizeMode } from './pointStyle';
 import { NavController } from './NavController';
 import type { NavMode, CameraPose } from './NavController';
 import { MeasureController } from './measure/MeasureController';
@@ -92,11 +113,91 @@ const QUAD_CORNERS = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
 /** Two triangles covering the quad. */
 const QUAD_INDEX = [0, 1, 2, 0, 2, 3];
 
+/**
+ * Device-pixel-ratio cap. High-density displays render at up to DPR² the pixel
+ * area; capping at 2 bounds the cost — most visible once the EDL pass adds a
+ * full-screen render target — with no perceptible loss of sharpness.
+ */
+const MAX_PIXEL_RATIO = 2;
+
 /** Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute. */
 function toFloatColors(u8: Uint8Array): Float32Array {
   const f = new Float32Array(u8.length);
   for (let i = 0; i < u8.length; i++) f[i] = u8[i] / 255;
   return f;
+}
+
+/*
+ * TSL (three.js Shading Language) is a dynamically-typed embedded DSL: its
+ * node chains (`.mul`, `.negate`, `.sample`, `.addAssign`, …) are not tracked
+ * by TypeScript, so the node values inside the builders below are typed
+ * `TslNode` (an alias for `any`) by necessity. The shader maths is verified by
+ * the pure unit tests in `edl.ts` and `pointStyle.ts` — which these builders
+ * mirror exactly — and by the Playwright render tests.
+ */
+/** A TSL node value — see the note above on why this is `any`. */
+type TslNode = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/**
+ * Build the Eye Dome Lighting output node for a scene pass.
+ *
+ * For each screen pixel it samples the pass colour, then compares the pixel's
+ * eye-space depth against four neighbours on a ring of `radiusPx` pixels and
+ * darkens the pixel in proportion to how far it recedes behind them. Works in
+ * `log2(eye distance)` so the cue is scale-invariant. Mirrors `edlObscurance`
+ * and `edlShade` in `edl.ts`, which are unit-tested.
+ */
+function buildEdlOutputNode(
+  scenePass: ReturnType<typeof pass>,
+  strength: TslNode,
+  near: TslNode,
+  far: TslNode,
+  radiusPx: number,
+): TslNode {
+  const colorNode: TslNode = scenePass.getTextureNode();
+  const depthNode: TslNode = scenePass.getTextureNode('depth');
+
+  // Positive eye-space distance at a screen UV, floored away from zero so the
+  // following log2 is always finite.
+  const eyeDistAt = Fn(([sampleUv]: TslNode[]): TslNode => {
+    const raw: TslNode = depthNode.sample(sampleUv).r;
+    return max(perspectiveDepthToViewZ(raw, near, far).negate(), float(1e-4));
+  });
+
+  return Fn((): TslNode => {
+    const texel: TslNode = vec2(radiusPx, radiusPx).div(screenSize);
+    const logC: TslNode = log2(eyeDistAt(screenUV));
+    const sum: TslNode = float(0).toVar();
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(texel.x, 0)))))));
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(texel.x, 0)))))));
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.add(vec2(0, texel.y)))))));
+    sum.addAssign(max(float(0), logC.sub(log2(eyeDistAt(screenUV.sub(vec2(0, texel.y)))))));
+    const shade: TslNode = exp(sum.mul(strength).negate());
+    return vec4(colorNode.rgb.mul(shade), colorNode.a);
+  })();
+}
+
+/**
+ * Build the adaptive point-size node: a point's pixel size is `base × ref /
+ * eyeDistance`, clamped to `[minSizePx, base × maxSizeFactor]`. Mirrors
+ * `adaptivePointSize` in `pointStyle.ts`. `positionView` is the point's
+ * instance centre in view space, so `-z` is its eye-space distance.
+ */
+function buildAdaptiveSizeNode(base: TslNode, attnRef: TslNode): TslNode {
+  const eyeDist: TslNode = max((positionView as TslNode).z.negate(), float(1e-4));
+  const attenuated: TslNode = base.mul(attnRef).div(eyeDist);
+  const maxSize: TslNode = base.mul(POINT_STYLE_DEFAULTS.maxSizeFactor);
+  return attenuated.clamp(float(POINT_STYLE_DEFAULTS.minSizePx), maxSize);
+}
+
+/**
+ * Build the circular point-mask opacity node: `positionGeometry.xy` is the
+ * sprite-quad coordinate in [-0.5, 0.5]², so the point renders as a round dot
+ * with a soft, antialiased rim instead of a hard square.
+ */
+function buildPointMaskNode(): TslNode {
+  const r: TslNode = length((positionGeometry as TslNode).xy);
+  return smoothstep(float(0.42), float(0.5), r).oneMinus();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,6 +236,32 @@ export class Viewer {
   // ── Shared point size in screen pixels (applied to all materials) ────────
   // Matches the Inspector's point-size slider initial value.
   private _pointSize = 2;
+
+  // ── Render-quality pipeline (Eye Dome Lighting post-processing) ──────────
+  /** Post-processing pipeline — driven only while EDL is enabled. */
+  private readonly _post: THREE.PostProcessing;
+  /** The scene render pass that feeds the post-processing pipeline. */
+  private readonly _scenePass: ReturnType<typeof pass>;
+  /** Whether EDL is on; defaulted by the capability gate once the backend is known. */
+  private _edlEnabled = false;
+  /** EDL strength, and the camera near/far, as live uniforms. */
+  private readonly _edlStrength = uniform(EDL_DEFAULTS.strength);
+  private readonly _edlNear = uniform(0.1);
+  private readonly _edlFar = uniform(5_000_000);
+
+  // ── Point styling ────────────────────────────────────────────────────────
+  /** Adaptive (distance-scaled) or fixed point size. */
+  private _pointSizeMode: PointSizeMode = POINT_STYLE_DEFAULTS.mode;
+  /** Whether point-edge antialiasing (alpha-to-coverage) is on. */
+  private _antialiasing = true;
+  /** Base point size and the adaptive reference distance, as live uniforms. */
+  private readonly _pointSizeUniform = uniform(2);
+  private readonly _attnRef = uniform(100);
+  /** The shared adaptive size node, assigned to every cloud's material. */
+  private readonly _adaptiveSizeNode = buildAdaptiveSizeNode(
+    this._pointSizeUniform,
+    this._attnRef,
+  );
 
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
@@ -175,7 +302,7 @@ export class Viewer {
       alpha: false,
     } as ConstructorParameters<typeof THREE.WebGPURenderer>[0]);
 
-    this._renderer.setPixelRatio(window.devicePixelRatio);
+    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this._renderer.setSize(canvas.clientWidth || 800, canvas.clientHeight || 600);
 
     // ── Scene ─────────────────────────────────────────────────────────────
@@ -187,6 +314,20 @@ export class Viewer {
     const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
     this._camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 5_000_000);
     this._camera.position.set(0, 0, 100);
+
+    // ── Post-processing pipeline (Eye Dome Lighting) ──────────────────────
+    // The scene renders into a pass; the EDL node shades it from the pass's
+    // colour and depth. The pipeline is driven only while EDL is enabled (see
+    // the render loop); its node graph compiles lazily on first use.
+    this._scenePass = pass(this._scene, this._camera);
+    this._post = new THREE.PostProcessing(this._renderer);
+    this._post.outputNode = buildEdlOutputNode(
+      this._scenePass,
+      this._edlStrength,
+      this._edlNear,
+      this._edlFar,
+      EDL_DEFAULTS.radiusPx,
+    ) as typeof this._post.outputNode;
 
     // ── OrbitControls ─────────────────────────────────────────────────────
     this._controls = new OrbitControls(this._camera, canvas);
@@ -240,6 +381,9 @@ export class Viewer {
 
     // ── Async backend init + render loop ──────────────────────────────────
     this.ready = this._renderer.init().then(() => {
+      // EDL defaults on for desktop WebGPU; off on the WebGL 2 fallback and on
+      // mobile, so a weak device is never dropped below interactive on load.
+      this._edlEnabled = edlDefaultEnabled(this.activeBackend(), this._isMobile());
       this._startLoop();
     });
 
@@ -296,6 +440,13 @@ export class Viewer {
     material.size = this._pointSize;
     material.sizeAttenuation = false;
     material.transparent = false;
+    // Round, soft-edged points — a circular alpha mask kept depth-correct via
+    // alpha-to-coverage (no transparency sort, no draw-order artefacts).
+    material.opacityNode = buildPointMaskNode() as typeof material.opacityNode;
+    material.alphaTest = 0.5;
+    material.alphaToCoverage = this._antialiasing;
+    // Adaptive sizing scales points with camera distance; fixed uses `.size`.
+    this._applySizeMode(material);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.frustumCulled = false;
@@ -356,9 +507,63 @@ export class Viewer {
    */
   setPointSize(size: number): void {
     this._pointSize = size;
+    // The uniform feeds the adaptive size node; `.size` feeds fixed mode.
+    this._pointSizeUniform.value = size;
     for (const { material } of this._clouds.values()) {
       material.size = size;
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render quality — Eye Dome Lighting, point sizing, antialiasing
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Enable or disable Eye Dome Lighting depth shading. */
+  setEdlEnabled(on: boolean): void {
+    this._edlEnabled = on;
+  }
+
+  /** Whether Eye Dome Lighting is currently enabled. */
+  get edlEnabled(): boolean {
+    return this._edlEnabled;
+  }
+
+  /** Set the EDL strength (0 = no shading). Negative values are clamped to 0. */
+  setEdlStrength(strength: number): void {
+    this._edlStrength.value = Math.max(0, strength);
+  }
+
+  /** The current EDL strength. */
+  get edlStrength(): number {
+    return Number(this._edlStrength.value);
+  }
+
+  /** Switch between adaptive (distance-scaled) and fixed point sizing. */
+  setPointSizeMode(mode: PointSizeMode): void {
+    this._pointSizeMode = mode;
+    for (const { material } of this._clouds.values()) {
+      this._applySizeMode(material);
+      material.needsUpdate = true;
+    }
+  }
+
+  /** The current point-size mode. */
+  get pointSizeMode(): PointSizeMode {
+    return this._pointSizeMode;
+  }
+
+  /** Enable or disable point-edge antialiasing (alpha-to-coverage). */
+  setAntialiasing(on: boolean): void {
+    this._antialiasing = on;
+    for (const { material } of this._clouds.values()) {
+      material.alphaToCoverage = on;
+      material.needsUpdate = true;
+    }
+  }
+
+  /** Whether point-edge antialiasing is currently on. */
+  get antialiasing(): boolean {
+    return this._antialiasing;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -525,7 +730,10 @@ export class Viewer {
    */
   async snapshot(): Promise<Blob> {
     await this.ready;
-    this._renderer.render(this._scene, this._camera);
+    // Render through the same path the loop uses, so the snapshot matches the
+    // on-screen image — EDL included when it is enabled.
+    if (this._edlEnabled) this._post.render();
+    else this._renderer.render(this._scene, this._camera);
 
     return new Promise<Blob>((resolve, reject) => {
       const canvas = this._renderer.domElement as HTMLCanvasElement;
@@ -551,12 +759,28 @@ export class Viewer {
     this._measure.dispose();
     this._inspect.dispose();
     this._controls.dispose();
+    // Release the post-processing pipeline's render targets before the renderer.
+    this._post.dispose();
+    this._scenePass.dispose();
     this._renderer.dispose();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
+
+  /** Apply the current point-size mode to one material. */
+  private _applySizeMode(material: THREE.PointsNodeMaterial): void {
+    material.sizeNode = (
+      this._pointSizeMode === 'adaptive' ? this._adaptiveSizeNode : null
+    ) as typeof material.sizeNode;
+  }
+
+  /** A coarse mobile check — a small viewport, matching the app's phone heuristic. */
+  private _isMobile(): boolean {
+    return typeof window !== 'undefined'
+      && window.matchMedia('(max-width: 767px)').matches;
+  }
 
   /** Configure navigation (up-axis, speed, clip planes) for the loaded clouds. */
   private _configureForClouds(latest: PointCloud): void {
@@ -579,6 +803,15 @@ export class Viewer {
     this._camera.near = Math.max(size * 0.0002, 0.01);
     this._camera.far = Math.max(size * 100, 1000);
     this._camera.updateProjectionMatrix();
+
+    // Keep the EDL depth-linearisation uniforms in step with the camera, and
+    // set the adaptive-sizing reference distance to the framing distance — so
+    // a freshly framed scan shows points at close to the chosen base size.
+    this._edlNear.value = this._camera.near;
+    this._edlFar.value = this._camera.far;
+    const radius = sphere && sphere.radius > 0 ? sphere.radius : 1;
+    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
+    this._attnRef.value = (radius / Math.sin(fovRad / 2)) * 1.2;
   }
 
   /** Combined bounding sphere of every visible cloud, or null if none. */
@@ -699,7 +932,10 @@ export class Viewer {
     const loop = () => {
       this._rafId = requestAnimationFrame(loop);
       this._nav.update(this._clock.getDelta());
-      this._renderer.render(this._scene, this._camera);
+      // EDL on → render through the post-processing pipeline; off → render
+      // the scene directly, the v0.2 path, for zero post-processing overhead.
+      if (this._edlEnabled) this._post.render();
+      else this._renderer.render(this._scene, this._camera);
       // After render, camera matrices are current — project the tool overlays.
       if (this._toolMode === 'measure' && !this._measure.dragging && this._pointerMoved) {
         this._pointerMoved = false;

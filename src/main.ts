@@ -78,6 +78,10 @@ const inspector = new Inspector({
     savedViews.splice(index, 1);
     inspector.setViews(savedViews.map((v) => v.name));
   },
+  onEdlToggle: (on) => viewer.setEdlEnabled(on),
+  onEdlStrength: (strength) => viewer.setEdlStrength(strength),
+  onPointSizeMode: (mode) => viewer.setPointSizeMode(mode),
+  onAntialiasing: (on) => viewer.setAntialiasing(on),
 });
 
 const dock = new ToolDock({
@@ -240,6 +244,14 @@ async function handleFile(file: File): Promise<void> {
     inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
     inspector.setReport(runModules(result.cloud));
     inspector.setViews([]);
+    // The render-quality controls reflect the viewer's state — EDL defaults
+    // depend on the GPU backend, known only once `viewer.ready` resolved.
+    inspector.syncRendering({
+      edlEnabled: viewer.edlEnabled,
+      edlStrength: viewer.edlStrength,
+      pointSizeMode: viewer.pointSizeMode,
+      antialiasing: viewer.antialiasing,
+    });
     dock.setBackend(viewer.activeBackend());
     dock.setMeasureEnabled(true);
     dock.setInspectEnabled(true);

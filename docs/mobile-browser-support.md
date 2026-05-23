@@ -50,10 +50,15 @@ To measure on mobile, open the Measure tool, pick a kind from the toolbar — di
 
 Measurements are intended for visual inspection and documentation workflows unless validated against survey-grade data and procedures.
 
+## Mobile Rendering
+
+Eye Dome Lighting — the screen-space depth shading — is off by default on phones and on the WebGL 2 backend, so a scan opens at full speed on a weaker mobile GPU. It can still be switched on from the Rendering section of the Scan Intelligence panel if your device handles it comfortably. Adaptive point sizing and round, antialiased points are on by default on mobile, the same as on desktop.
+
 ## Mobile Performance Tips
 
 - Start with smaller GLTF / GLB / PLY files.
 - Use Mobile Safe or Balanced detail.
+- Leave Eye Dome Lighting off on weaker devices; the depth cue costs a full-screen pass.
 - Close other browser tabs.
 - Use modern phones and tablets when possible.
 - Very large LAS/LAZ datasets are better handled on desktop.
@@ -63,6 +68,7 @@ Measurements are intended for visual inspection and documentation workflows unle
 - Browser memory limits can affect what loads.
 - Large files may fail to load or feel slow.
 - WebGPU support varies by browser and device.
+- Eye Dome Lighting is off by default on mobile; it can be enabled manually.
 - Available file formats depend on implementation status.
 - Measurements are not survey-grade by default.
 
@@ -85,6 +91,7 @@ Measurements are intended for visual inspection and documentation workflows unle
 - [ ] Two-finger pan works
 - [ ] The measurement button is usable on phone
 - [ ] Tap-to-measure works or explains the limitation gracefully
+- [ ] The Rendering controls are reachable and usable on phone
 - [ ] The top bar does not overlap the notch/safe area
 - [ ] Bottom controls remain usable
 - [ ] Landscape orientation does not break the layout

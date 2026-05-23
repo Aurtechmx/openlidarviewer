@@ -58,10 +58,11 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Browser-based point-cloud visualization
 - Local-first scan inspection: nothing is uploaded
 - WebGPU rendering with an automatic, fully tested WebGL 2 fallback
+- Eye Dome Lighting depth shading that makes point-cloud structure far more readable, with a strength control
 - Import: LAS, LAZ, E57, PLY, OBJ, GLB, GLTF, XYZ, CSV
 - Export: PLY, OBJ, XYZ, CSV, and PNG snapshots
 - Height, intensity, classification, RGB, and surface-normal color modes, picked automatically per file
-- Adjustable point size, and a Detail control that shows an honest `shown / total` count
+- Adaptive or fixed point sizing, round antialiased points, and a Detail control that shows an honest `shown / total` count
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
 - A measurement toolkit with six tools — distance, polyline, area, height, angle, and slope — with draggable points, undo, rename, a units toggle, and JSON session export/import
 - Open multiple scans as layers, or close the current scan from the tool dock to start fresh with another
@@ -104,6 +105,18 @@ OpenLiDARViewer has a game-like navigation system, so a scan can be explored lik
 Orbit mode is best for inspecting an object or area from the outside. Walk mode suits interiors, buildings, corridors, and street-level scans. Fly mode is for drone LiDAR, terrain, forests, and wide-area scans.
 
 Movement speed scales with the size of the loaded scan, so the controls feel right whether the dataset is a small room or a kilometre-wide survey. Full detail is in [`docs/navigation.md`](docs/navigation.md).
+
+## Rendering
+
+OpenLiDARViewer is tuned so a point cloud reads as a 3D surface, not a flat wash of dots.
+
+**Eye Dome Lighting** adds screen-space depth shading: it darkens every depth discontinuity, so edges, ridges, and the separation between near and far structure all become legible. It runs as a post-processing pass that targets both the WebGPU and WebGL 2 backends from one node graph. It is on by default on desktop WebGPU, and off by default on the WebGL 2 fallback and on mobile, where it can still be switched on.
+
+**Adaptive point sizing** scales points with camera distance — clamped so far points stay visible and near points do not bloat — so density reads correctly across a scan. A Fixed mode keeps a constant on-screen size.
+
+Points render as round, soft-edged dots with point-edge antialiasing, so overlapping points blend cleanly instead of stacking into visual noise.
+
+All of this is tunable from the Rendering section of the Scan Intelligence panel: the Eye Dome Lighting toggle and strength, the Adaptive / Fixed point-size switch, and the antialiasing toggle.
 
 ## Measurement
 
@@ -193,8 +206,8 @@ The aim is not to replace full GIS or survey-grade processing. It is to give peo
 3. The file is parsed off the main thread, inside a Web Worker.
 4. Point positions and attributes are decoded. Large georeferenced coordinates are recentered in double precision before the float32 downcast.
 5. Clouds above the point budget are voxel-downsampled, and the Detail control shows the honest `shown / total` count.
-6. The cloud renders through a WebGPU or WebGL 2 pipeline built on three.js.
-7. Color modes map height, intensity, classification, RGB, or surface-normal direction onto the points.
+6. The cloud renders through a WebGPU or WebGL 2 pipeline built on three.js; Eye Dome Lighting adds screen-space depth shading as a post-processing pass.
+7. Color modes map height, intensity, classification, RGB, or surface-normal direction onto the points, which are sized adaptively with distance.
 8. You explore with Orbit, Walk, or Fly navigation.
 9. Scan Intelligence summarizes the dataset, and the measurement toolkit takes distance, area, height, angle, and slope measurements.
 10. You save viewpoints and export snapshots, re-exported point data, or a JSON measurement session.
@@ -203,6 +216,7 @@ The aim is not to replace full GIS or survey-grade processing. It is to give peo
 
 - TypeScript, in strict mode, across the IO, model, and render layers
 - three.js (`three/webgpu`), a WebGPU renderer with a WebGL 2 fallback
+- A `three/tsl` node-graph post-processing pipeline (Eye Dome Lighting) that targets both backends from one shader description
 - loaders.gl and laz-perf (WASM) for mesh and LAZ parsing, plus a from-scratch TypeScript E57 parser
 - Vite for the build and dev server, with Web Worker and WASM handling
 - Vitest and Playwright for unit and end-to-end tests
@@ -282,6 +296,7 @@ OpenLiDARViewer is an active R&D-stage project focused on lightweight visualizat
 - Classification visualization depends on attributes present in the file.
 - Very large datasets may need tiling, downsampling, or streaming formats.
 - WebGPU feature support varies by browser, and the WebGL 2 fallback is used otherwise.
+- Eye Dome Lighting is a screen-space depth cue, not physically-based lighting; it is off by default on the WebGL 2 fallback and on mobile.
 
 Full detail is in [`docs/limitations.md`](docs/limitations.md).
 

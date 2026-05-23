@@ -20,6 +20,8 @@ Very large datasets, on the order of billions of points, need tiling, downsampli
 
 WebGPU feature support varies by browser. Where it is unavailable, the viewer uses its WebGL 2 fallback.
 
+Eye Dome Lighting is a screen-space depth cue, not physically-based lighting — it shades depth discontinuities to make structure readable, and does not model real light, shadows, or materials. It runs as a post-processing pass and is off by default on the WebGL 2 fallback and on mobile, where it can still be enabled by hand.
+
 OBJ and glTF meshes are shown as their vertices. Faces and materials are not rendered.
 
 ## Not in scope, for now
