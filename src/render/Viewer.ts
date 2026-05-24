@@ -237,8 +237,8 @@ export class Viewer {
   private _nextId = 0;
 
   // ── Shared point size in screen pixels (applied to all materials) ────────
-  // Matches the Inspector's point-size slider initial value.
-  private _pointSize = 2;
+  // Defaults to the smallest size; matches the Inspector slider's initial value.
+  private _pointSize = 1;
 
   // ── Render-quality pipeline (Eye Dome Lighting post-processing) ──────────
   /** Post-processing pipeline — driven only while EDL is enabled. */
@@ -258,7 +258,7 @@ export class Viewer {
   /** Whether point-edge antialiasing (alpha-to-coverage) is on. */
   private _antialiasing = true;
   /** Base point size and the adaptive reference distance, as live uniforms. */
-  private readonly _pointSizeUniform = uniform(2);
+  private readonly _pointSizeUniform = uniform(1);
   private readonly _attnRef = uniform(100);
   /** The shared adaptive size node, assigned to every cloud's material. */
   private readonly _adaptiveSizeNode = buildAdaptiveSizeNode(

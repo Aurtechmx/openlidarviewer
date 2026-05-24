@@ -186,12 +186,26 @@ button:disabled { cursor: not-allowed; }
 /* Progress toast */
 .olv-toast {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; gap: 7px;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: 8px; padding: 8px 14px;
+  min-width: 220px; max-width: 360px;
 }
-.olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.olv-toast-text { font-size: 12px; color: var(--text); }
+.olv-toast-row { display: flex; align-items: center; gap: 8px; }
+.olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+/* `pre-line` lets the multi-line preload summary break on its newlines. */
+.olv-toast-text { font-size: 12px; color: var(--text); white-space: pre-line; line-height: 1.5; flex: 1; }
+.olv-toast-cancel {
+  flex: none; font-size: 11px; color: var(--text); opacity: 0.7;
+  background: transparent; border: 0.5px solid var(--hairline);
+  border-radius: 5px; padding: 3px 9px; cursor: pointer;
+}
+.olv-toast-cancel:hover { opacity: 1; border-color: var(--accent); }
+.olv-toast-bar { height: 3px; border-radius: 2px; background: var(--hairline); overflow: hidden; }
+.olv-toast-bar-fill {
+  display: block; height: 100%; width: 0%;
+  background: var(--accent); transition: width 0.2s ease;
+}
 .olv-toast-error { border-color: rgba(226, 75, 74, 0.5); }
 .olv-toast-error .olv-toast-dot { background: #e24b4a; }
 

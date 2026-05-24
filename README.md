@@ -61,6 +61,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Eye Dome Lighting depth shading that makes point-cloud structure far more readable, with a strength control
 - Import: LAS, LAZ, E57, PLY, OBJ, GLB, GLTF, XYZ, CSV
 - Export: PLY, OBJ, XYZ, CSV, and PNG snapshots
+- Budget-aware fast loading of large LAS/LAZ surveys — header preflight, stride decoding, a memory-safety guard, staged progress, and a load that can be cancelled mid-flight
 - Height, intensity, classification, RGB, and surface-normal color modes, picked automatically per file
 - Adaptive or fixed point sizing, round antialiased points, and a Detail control that shows an honest `shown / total` count
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
@@ -261,7 +262,7 @@ OpenLiDARViewer is deliberately modular, with one file per format and one file p
 
 ## Performance Notes
 
-Performance depends on point count, browser memory, GPU capability, point size, rendering detail, the color mode in use, the file format, and how the data was prepared. Clouds above a roughly 4M-point budget are voxel-downsampled to stay responsive, and the Detail readout always shows the honest `shown / total` count.
+Performance depends on point count, browser memory, GPU capability, point size, rendering detail, the color mode in use, the file format, and how the data was prepared. A LAS/LAZ file is planned from its header before it is fully read: a cloud above the roughly 4M-point budget is loaded at reduced density — voxel-downsampled, or stride-decoded when far over budget so it is never fully held in memory — with a memory-safety guard, staged progress, and a cancellable load. The Detail readout always shows the honest `shown / total` count.
 
 For real-world figures — a 9.6M-point drone LAZ survey and a 55K-point iPhone scan, both opened from one drag-and-drop — see [`docs/benchmarks.md`](docs/benchmarks.md).
 

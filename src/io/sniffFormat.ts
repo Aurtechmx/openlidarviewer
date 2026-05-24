@@ -39,6 +39,12 @@ function readAscii(buffer: ArrayBuffer, count: number): string {
   return out;
 }
 
+/**
+ * Byte offset of the point-data-record-format field in the LAS public header.
+ * Its high bit (0x80) is set by LAZ to flag that the records are compressed.
+ */
+const LAS_POINT_FORMAT_OFFSET = 104;
+
 /** Extract the lowercased file extension (without the dot), or '' if none. */
 function extensionOf(filename: string): string {
   const dot = filename.lastIndexOf('.');
@@ -54,6 +60,10 @@ function extensionOf(filename: string): string {
  *  2. File extension — `.obj/.ply/.las/.laz/.glb/.gltf/.xyz/.csv`.
  *  3. Otherwise `unknown`.
  *
+ * For a `LASF` file, LAS vs LAZ is decided by the compression bit in the
+ * point-format byte (offset 104) — the authoritative signal — when the buffer
+ * is long enough to reach it; a short buffer falls back to the extension.
+ *
  * `.xyz` and `.csv` are plain text with no magic bytes, so they are detected
  * by extension only.
  */
@@ -64,6 +74,13 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
   if (magic.startsWith('ASTM-E57')) return 'e57';
   if (magic.startsWith('ply')) return 'ply';
   if (magic.startsWith('LASF')) {
+    // LAZ is LAS with the records compressed; the high bit of the point-format
+    // byte is authoritative. The v0.2.7 head slice always reaches it; a short
+    // buffer (older callers, tests) falls back to the file extension.
+    if (buffer.byteLength > LAS_POINT_FORMAT_OFFSET) {
+      const compressed = (new Uint8Array(buffer)[LAS_POINT_FORMAT_OFFSET] & 0x80) !== 0;
+      return compressed ? 'laz' : 'las';
+    }
     return extensionOf(filename) === 'laz' ? 'laz' : 'las';
   }
   // glTF binary: 0x67 0x6C 0x54 0x46 == 'glTF'.

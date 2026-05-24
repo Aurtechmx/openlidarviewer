@@ -46,6 +46,7 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 
 ## Performance
 
+- [x] Budget-aware fast loading — header preflight, stride decode, memory guard (0.2.7)
 - [ ] Tiled and streamed point-cloud datasets
 - [ ] Streaming workflows for billion-point clouds
 

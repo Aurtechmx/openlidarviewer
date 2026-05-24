@@ -22,7 +22,15 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 
 Small point clouds work on most modern laptops. Medium datasets benefit from 16 GB of RAM and a modern GPU. Very large LiDAR datasets may need downsampling, preprocessing, tiling, or future streaming formats such as COPC LAZ or 3D Tiles, and browser memory limits can affect extremely large scans.
 
-Clouds above a point budget of roughly 4M points are voxel-downsampled on load to stay responsive. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
+Clouds above a point budget of roughly 4M points are downsampled on load to stay responsive — see *Loading large files* below. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
+
+## Loading large files
+
+A dropped LAS or LAZ file is planned before it is fully read. A small header slice reveals the point count and byte size, and from those a load strategy is chosen: a cloud within the point budget is decoded in full; a cloud moderately over budget is decoded and voxel-downsampled; a cloud far over budget is *stride-decoded* down to a memory-safe intermediate — a stratified, jittered one-in-N sample of the records — which is then voxel-downsampled to the budget. The cloud is never fully held in memory, and because the final step is the same voxel pass medium clouds get, the result keeps uniform density: no scan-line aliasing, and no flight-strip density blocks. For uncompressed LAS the stride step also makes the decode proportionally faster; for LAZ, whose records must be decompressed in sequence, it lowers the memory peak but not the decode time.
+
+Before any large allocation, the load estimates the memory it will need. If that is risky for the device, it automatically falls back to a sparser load and says so in the status toast, rather than risking an out-of-memory crash.
+
+The load reports staged progress — detecting format, reading, decoding with a live point counter, optimizing, rendering — and can be cancelled at any point from the Cancel control on the progress toast. Adding `?debug=1` to the URL logs a per-stage timing breakdown to the browser console.
 
 ## Rendering backend
 

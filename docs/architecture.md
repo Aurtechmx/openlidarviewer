@@ -7,9 +7,13 @@ OpenLiDARViewer keeps one file per format and one file per concern. This page is
 ```
 drop a file
    |
-sniff format (magic bytes, then extension)
+preflight (main thread):  read a 4 KB head slice -> sniff format
+                          -> for LAS/LAZ, parse the header -> build a load plan
    |
-Web Worker:  pick loader -> parse -> coordinate bridge -> voxel downsample
+read the whole file
+   |
+Web Worker:  decode per the plan (all / voxel / stride) -> coordinate bridge
+             -> voxel downsample (when the plan calls for it)
    |
 PointCloud (normalized in-memory model)
    |
@@ -18,9 +22,11 @@ Viewer (WebGPU / WebGL 2)  ->  analysis modules  ->  Scan Intelligence panel
 
 ## Modules
 
-**File loading and format detection.** `sniffFormat` identifies the format from magic bytes first, then the extension. `loadFile` reads the file and dispatches to a per-format loader.
+**File loading and format detection.** `loadFile` runs a preflight on the main thread: it reads only a 4 KB head slice, identifies the format from magic bytes (then the extension), and — for LAS/LAZ — parses the public header. An unsupported file fails here, before the whole file is ever read. The full file is then handed to a long-lived parse worker, reused across loads. A load reports staged progress and can be cancelled mid-flight through an `AbortSignal`.
 
-**Point parsing.** There is one loader per format (`loadLas`, `loadE57`, `loadPly`, `loadObj`, `loadGltf`, `loadXyz`). LAS and LAZ point records are decoded by hand for full float64 precision, and LAZ is decompressed with the `laz-perf` WASM module. E57 is parsed by a from-scratch TypeScript module set under `io/e57/` — header de-paging, a minimal XML reader, and a `CompressedVector` binary decoder — which `loadE57` adapts into a `PointCloud`, merging multi-scan files and applying each scan's pose.
+**Load planning.** For LAS/LAZ, `loadPlan` turns the header's point count and the file size into a budget-aware plan: decode every point when the cloud is within the point budget, decode-then-voxel-reduce at a moderate overshoot, or — when it is far over budget — *stride-decode* the cloud down to a memory-safe intermediate (a stratified, jittered sample, `strideSample.ts`) and then voxel-downsample that to the budget. A huge survey is never fully held in memory, and because every over-budget path ends in the same voxel pass, the fast-loaded cloud keeps uniform density — no scan-line aliasing, no flight-strip density blocks. A memory estimate guards the plan — a load that would risk an out-of-memory crash on the device is automatically downgraded to a sparser one. `loadPlan` and `strideSample` are pure, unit-tested modules.
+
+**Point parsing.** There is one loader per format (`loadLas`, `loadE57`, `loadPly`, `loadObj`, `loadGltf`, `loadXyz`). LAS and LAZ point records are decoded by hand, straight into the local coordinate frame — the float64 arithmetic happens before the float32 store, so precision is preserved with no intermediate global-coordinate pass. LAZ is decompressed with the `laz-perf` WASM module, which is instantiated once and reused across loads. E57 is parsed by a from-scratch TypeScript module set under `io/e57/` — header de-paging, a minimal XML reader, and a `CompressedVector` binary decoder — which `loadE57` adapts into a `PointCloud`, merging multi-scan files and applying each scan's pose.
 
 **Coordinate bridge.** Large georeferenced (UTM-scale) coordinates overflow 32-bit floats. Every cloud is recentered about an integer origin, and the subtraction happens in float64 before the float32 downcast.
 

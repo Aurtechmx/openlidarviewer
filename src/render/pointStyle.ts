@@ -17,8 +17,14 @@ export const POINT_STYLE_DEFAULTS = {
   minSizePx: 1,
   /** Near points never exceed `base size × this`. */
   maxSizeFactor: 3,
-  /** Sizing mode applied to a freshly loaded cloud. */
-  mode: 'adaptive' as PointSizeMode,
+  /**
+   * Sizing mode applied to a freshly loaded cloud. Defaults to `fixed`: a
+   * constant 1-pixel point is the most honest first view of a cloud — no
+   * distance-driven size gradient to read as banding on an oblique surface,
+   * no fat overlapping points to exaggerate density variation. Adaptive
+   * sizing stays one tap away and is remembered once chosen.
+   */
+  mode: 'fixed' as PointSizeMode,
 } as const;
 
 /**

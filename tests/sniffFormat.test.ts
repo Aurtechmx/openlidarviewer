@@ -68,6 +68,39 @@ describe('sniffFormat — extension fallback', () => {
   });
 });
 
+/** Build a LASF buffer with an explicit point-format byte at offset 104. */
+function lasfBuffer(pointFormatByte: number, totalLen = 256): ArrayBuffer {
+  const buf = new ArrayBuffer(totalLen);
+  const view = new Uint8Array(buf);
+  view[0] = 0x4c; // 'L'
+  view[1] = 0x41; // 'A'
+  view[2] = 0x53; // 'S'
+  view[3] = 0x46; // 'F'
+  view[104] = pointFormatByte;
+  return buf;
+}
+
+describe('sniffFormat — LAS/LAZ compression bit', () => {
+  test('a set compression bit (0x80) means LAZ even with a .las filename', () => {
+    expect(sniffFormat(lasfBuffer(0x80 | 6), 'scan.las')).toBe('laz');
+  });
+
+  test('a clear compression bit means LAS even with a .laz filename', () => {
+    expect(sniffFormat(lasfBuffer(6), 'scan.laz')).toBe('las');
+  });
+
+  test('the compression bit is authoritative regardless of the extension', () => {
+    expect(sniffFormat(lasfBuffer(0x80), 'scan.bin')).toBe('laz');
+    expect(sniffFormat(lasfBuffer(0x00), 'scan.bin')).toBe('las');
+  });
+
+  test('a buffer too short to reach byte 104 falls back to the extension', () => {
+    // bufWithMagic builds a 64-byte buffer — no point-format byte to read.
+    expect(sniffFormat(bufWithMagic('LASF'), 'scan.laz')).toBe('laz');
+    expect(sniffFormat(bufWithMagic('LASF'), 'scan.las')).toBe('las');
+  });
+});
+
 describe('sniffFormat — unknown', () => {
   test('returns unknown for unrecognized extension and no magic', () => {
     expect(sniffFormat(bufWithBytes([0, 0, 0, 0]), 'mystery.dat')).toBe('unknown');

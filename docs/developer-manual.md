@@ -31,7 +31,7 @@ Scan Intelligence report, and export the result.
 | FR-3 | Detect format from magic bytes first, file extension second. |
 | FR-4 | Parse and downsample off the main thread, in a Web Worker. |
 | FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within a small bounded error. |
-| FR-6 | Voxel-downsample clouds above the point budget; always display the honest `shown / total` count. |
+| FR-6 | Keep clouds within a point budget — voxel-downsampling, or stride decoding when far over budget — and always display the honest `shown / total` count. |
 | FR-7 | Render with three.js using WebGPU, with an automatic WebGL 2 fallback. |
 | FR-8 | Color by RGB, height, intensity, classification, or surface normal; auto-select the best mode on load; offer only the modes the file actually contains. |
 | FR-9 | Hold multiple clouds in one scene, rebased onto a shared origin. |
@@ -44,6 +44,7 @@ Scan Intelligence report, and export the result.
 | FR-16 | Inspect a picked point — show its real-world coordinates and attributes, with one-click copy to the clipboard. |
 | FR-17 | Close the current scan — clear every loaded cloud and return to the empty state, ready for another file. |
 | FR-18 | Render with Eye Dome Lighting depth shading, adaptive or fixed point sizing, and antialiased round points — all tunable from the Rendering panel. |
+| FR-19 | Plan a LAS/LAZ load from its header — fast-load huge clouds by stride decoding, guard against out-of-memory, report staged progress, and allow the load to be cancelled mid-flight. |
 
 ### 2.2 Non-functional requirements
 
@@ -101,12 +102,16 @@ src/
     sniffFormat.ts         Format detection (magic bytes -> extension).
     lasHeader.ts           LAS public-header parser.
     coordinateBridge.ts    f64 -> f32 recentre — precision-critical.
+    loadPlan.ts            Budget-aware load planning (pure, unit-tested).
+    strideSample.ts        Stratified jittered stride sampling (pure, unit-tested).
+    loadProgress.ts        Staged-progress vocabulary (pure, unit-tested).
+    loadTelemetry.ts       Per-stage load timing (pure, unit-tested).
     loadLas/E57/Ply/Obj/Gltf/Xyz.ts   Format -> PointCloud loaders.
     e57/                   From-scratch E57 parser — header de-paging,
                            a minimal XML reader, and a CompressedVector decoder.
-    parseBuffer.ts         Loader dispatch + downsample (DOM-free).
-    loadFile.ts            File -> PointCloud via the worker.
-    parseWorker.ts         The Web Worker entry.
+    parseBuffer.ts         Loader dispatch + budget-aware routing (DOM-free).
+    loadFile.ts            File -> PointCloud: preflight + the parse worker.
+    parseWorker.ts         The persistent Web Worker entry.
     lazPerfWasm.ts         laz-perf WASM glue for LAZ decoding.
     exporters.ts           PointCloud -> PLY / OBJ / XYZ / CSV text.
   model/
@@ -147,7 +152,8 @@ Intelligence" panel is built in `src/ui/Inspector.ts`.
 Data flow for a dropped file:
 
 ```
-drop -> sniffFormat -> Web Worker { pickLoader -> parse -> coordinate bridge
+drop -> preflight { head-slice sniff -> LAS/LAZ header -> load plan }
+     -> persistent Web Worker { decode per plan -> coordinate bridge
         -> voxel downsample } -> PointCloud -> Viewer (WebGPU / WebGL 2)
                                             -> analysis modules -> Scan Intelligence
 ```
@@ -157,10 +163,14 @@ Three load-bearing decisions:
 1. **The coordinate bridge.** Georeferenced LAS data uses large UTM
    coordinates that overflow 32-bit floats. Every cloud is recentered to an
    integer local origin; the subtraction is done in float64 *before* the
-   float32 downcast. `.las` is decoded from raw int32 records and `.laz` via
-   the `laz-perf` WASM decoder, so both keep full precision.
-2. **Parse in a worker.** Parsing and downsampling never touch the main
-   thread, so the UI stays responsive on large surveys.
+   float32 downcast. `.las`/`.laz` records are decoded straight into that
+   local frame — the float64 arithmetic precedes the float32 store — so both
+   keep full precision with no intermediate global-coordinate pass.
+2. **Preflight, then parse in a worker.** The format and, for LAS/LAZ, a
+   budget-aware load plan are decided on the main thread from a 4 KB head
+   slice — so an unsupported file fails before any large read. Parsing and
+   downsampling then run in a long-lived worker, reused across loads, so the
+   UI stays responsive on large surveys.
 3. **The analysis API.** A module is `{ id, label, run(cloud, selection?) }`
    returning pass/warn/fail rows. Modules are pure functions over
    `PointCloud` — decoupled from rendering and easy to unit-test.
@@ -182,16 +192,20 @@ See [`architecture.md`](architecture.md) for the full map.
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:e2e` | Playwright end-to-end tests (run `npx playwright install --with-deps chromium` first). |
 
+A `?debug=1` URL parameter logs a per-stage load-timing breakdown — read, decode, downsample, GPU upload, total — to the browser console. It is useful when profiling the load pipeline and is off in normal use.
+
 ---
 
 ## 9. Testing strategy
 
 - **Unit (Vitest, Node).** The algorithmic core is test-first: format
   sniffer, LAS header parser, coordinate bridge, `PointCloud`, every loader,
-  the E57 parser, voxel downsampling, parse dispatch, color modes, navigation
-  math, the Eye Dome Lighting depth maths and the adaptive point-size curve,
-  the measurement core (geometry, formatting, serialization, label layout),
-  the exporters, and both analysis modules. Tests assert against deterministic
+  the E57 parser, voxel downsampling, parse dispatch, the load planner, the
+  stratified stride sampler, the staged-progress and telemetry helpers, color
+  modes, navigation math, the
+  Eye Dome Lighting depth maths and the adaptive point-size curve, the
+  measurement core (geometry, formatting, serialization, label layout), the
+  exporters, and both analysis modules. Tests assert against deterministic
   fixtures — including a committed `bunnyFloat.e57` — generated by
   `scripts/make-fixtures.py`, with ground truth in `tests/fixtures/FIXTURES.md`.
 - **End-to-end (Playwright).** `tests/e2e/viewer.spec.ts` drives the built

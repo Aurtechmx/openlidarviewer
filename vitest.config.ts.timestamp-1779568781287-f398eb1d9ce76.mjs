@@ -1,0 +1,12 @@
+import "node:module";
+import { defineConfig } from "vitest/config";
+import.meta.url;
+var vitest_config_default = defineConfig({ test: {
+	globals: true,
+	environment: "node",
+	include: ["tests/*.{test,spec}.ts"]
+} });
+//#endregion
+export { vitest_config_default as default };
+
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidml0ZXN0LmNvbmZpZy5qcyIsIm5hbWVzIjpbXSwic291cmNlcyI6WyIvc2Vzc2lvbnMvY2hhcm1pbmctdmlnaWxhbnQtaGVpc2VuYmVyZy9tbnQvT1BFTkxJREFSL29wZW5saWRhcnZpZXdlci1wdWJsaXNoL3ZpdGVzdC5jb25maWcudHMiXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgZGVmaW5lQ29uZmlnIH0gZnJvbSAndml0ZXN0L2NvbmZpZyc7XG5cbmV4cG9ydCBkZWZhdWx0IGRlZmluZUNvbmZpZyh7XG4gIHRlc3Q6IHtcbiAgICBnbG9iYWxzOiB0cnVlLFxuICAgIGVudmlyb25tZW50OiAnbm9kZScsXG4gICAgLy8gVW5pdCB0ZXN0cyBvbmx5IOKAlCBQbGF5d3JpZ2h0IHNwZWNzIHVuZGVyIHRlc3RzL2UyZS8gYXJlIGV4Y2x1ZGVkLlxuICAgIGluY2x1ZGU6IFsndGVzdHMvKi57dGVzdCxzcGVjfS50cyddLFxuICB9LFxufSk7XG4iXSwibWFwcGluZ3MiOiI7OztBQUVBLElBQUEsd0JBQWUsYUFBYSxFQUMxQixNQUFNO0NBQ0osU0FBUztDQUNULGFBQWE7Q0FFYixTQUFTLENBQUMsd0JBQXdCO0FBQ3BDLEVBQ0YsQ0FBQyJ9

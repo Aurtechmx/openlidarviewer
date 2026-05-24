@@ -7,6 +7,8 @@ installing anything, open the live version at <https://lidar.aurtech.mx/>.
 
 Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well). Drag a point-cloud file anywhere onto the page, or click a built-in sample on the empty state. The format is detected automatically and parsing runs in the background.
 
+For LAS and LAZ files a short preload summary appears first — the format, the source point count, and how the file will be loaded. A status toast then tracks the load through its stages — reading, decoding, optimizing — and a very large file shows a live point counter and a progress bar. A Cancel control on the toast stops a load in progress; nothing is added to the scene if you cancel.
+
 A "Project ready" card then appears with a quick summary: format, point count, bounding box, detected attributes, a suggested navigation mode, and a performance estimate. It dismisses on its own.
 
 Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, and `CSV`. Nothing is uploaded. The file is read and rendered entirely in your browser.
@@ -23,14 +25,14 @@ The Scan Intelligence panel controls how the cloud looks:
 
 - **Color by** switches between Height, Intensity, Classification, RGB, and Normal. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans.
 - **Point size** sets the base on-screen size of each point.
-- **Detail** shows the honest `shown / total` count. Large clouds are voxel-downsampled to a point budget so the viewer stays responsive.
+- **Detail** shows the honest `shown / total` count. A cloud larger than the point budget is loaded at reduced density so the viewer stays responsive — see [performance.md](performance.md).
 
 ## Rendering
 
 The Rendering section of the panel tunes how the cloud is drawn:
 
 - **Eye Dome Lighting** toggles screen-space depth shading. It darkens depth discontinuities so edges and 3D structure stand out, and the strength slider sets how pronounced the effect is. It is on by default on desktop WebGPU, and off on the WebGL 2 fallback and on phones — where it can still be switched on.
-- **Point size mode** switches between Adaptive — points scale with camera distance, clamped so far points stay visible and near ones do not bloat — and Fixed, a constant on-screen size. The point-size slider sets the base size for both.
+- **Point size mode** switches between Adaptive — points scale with camera distance, clamped so far points stay visible and near ones do not bloat — and Fixed, a constant on-screen size. A cloud opens at the smallest size in Fixed mode — the most honest first view, with no distance-driven size gradient — and the point-size slider sets the base size for both modes. A size or mode you choose is remembered for the next session.
 - **Antialiasing** toggles the smoothing of each point's round edge.
 
 ## Navigating

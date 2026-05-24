@@ -10,7 +10,9 @@ import { ToolDock } from './ui/toolDock';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
 import { MeasurePanel } from './ui/MeasurePanel';
-import { loadFile, MOBILE_POINT_BUDGET } from './io/loadFile';
+import { loadFile, LoadCancelledError, MOBILE_POINT_BUDGET, POINT_BUDGET } from './io/loadFile';
+import { formatProgress } from './io/loadProgress';
+import { formatTelemetry } from './io/loadTelemetry';
 import { isZUpFormat } from './io/sniffFormat';
 import { exportCloud } from './io/exporters';
 import { serializeSession, parseSession } from './render/measure/serialization';
@@ -36,6 +38,8 @@ const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('OpenLiDARViewer: #app mount point not found');
 
 const embed = new URLSearchParams(window.location.search).has('embed');
+/** `?debug=1` (or just `?debug`) logs per-load performance telemetry. */
+const debug = new URLSearchParams(window.location.search).has('debug');
 
 const SAMPLES: Sample[] = [
   { label: 'Drone survey', detail: '.las — georeferenced', url: 'samples/tiny.las', name: 'sample-survey.las' },
@@ -55,6 +59,12 @@ function isPhone(): boolean {
   return window.matchMedia('(max-width: 767px)').matches;
 }
 
+/** `navigator.deviceMemory` in GB, when the browser reports it. */
+function deviceMemoryGB(): number | undefined {
+  const m = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return typeof m === 'number' && m > 0 ? m : undefined;
+}
+
 const registry = new ModuleRegistry();
 registry.register(healthCheck);
 registry.register(scanReport);
@@ -64,6 +74,8 @@ let activeId: string | null = null;
 /** Saved camera viewpoints for the current scan. */
 let savedViews: { name: string; pose: CameraPose }[] = [];
 let viewCounter = 0;
+/** True while a file load is in flight — one load at a time (see `handleFile`). */
+let loading = false;
 
 const inspector = new Inspector({
   onColorMode: (mode) => {
@@ -276,20 +288,44 @@ async function importSession(file: File): Promise<void> {
 
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
 async function handleFile(file: File): Promise<void> {
+  // One load at a time. The shared parse worker decodes a single file; a
+  // second load started mid-flight would hijack the first one's worker. The
+  // in-progress load carries a Cancel control if the user wants to switch.
+  if (loading) return;
+  loading = true;
+  const controller = new AbortController();
   dropZone.setProgress(`Reading ${file.name}…`);
+  dropZone.setCancelHandler(() => controller.abort());
   try {
     // Phones get a tighter point budget — limited GPU memory and fill-rate.
-    const budget = isPhone() ? MOBILE_POINT_BUDGET : undefined;
-    const result = await loadFile(file, (text) => dropZone.setProgress(text), budget);
+    const result = await loadFile(
+      file,
+      {
+        onProgress: (u) => dropZone.setProgress(formatProgress(u), u.fraction),
+        onPreload: (lines) => dropZone.setPreload(lines),
+      },
+      {
+        budget: isPhone() ? MOBILE_POINT_BUDGET : POINT_BUDGET,
+        isMobile: isPhone(),
+        deviceMemoryGB: deviceMemoryGB(),
+        signal: controller.signal,
+      },
+    );
     await viewer.ready;
 
+    dropZone.setProgress(formatProgress({ stage: 'uploading' }));
     stage.hideEmptyState();
+    const uploadStartedAt = performance.now();
     const id = viewer.addCloud(result.cloud);
+    const gpuUploadMs = performance.now() - uploadStartedAt;
     activeId = id;
 
+    dropZone.setProgress(formatProgress({ stage: 'rendering' }));
+    const renderStartedAt = performance.now();
     // A freshly opened scan starts in the orbit overview, then glides in.
     viewer.setMode('orbit');
     viewer.frameAll();
+    const firstRenderMs = performance.now() - renderStartedAt;
 
     const mode = defaultMode(result.cloud);
     viewer.setColorMode(id, mode);
@@ -328,9 +364,25 @@ async function handleFile(file: File): Promise<void> {
 
     if (!embed) showProjectCard(result.cloud, result.originalPointCount);
 
+    if (debug && result.telemetry) {
+      console.log(
+        '%cOpenLiDARViewer — load telemetry',
+        'font-weight:600;color:#22dcff',
+        '\n' + formatTelemetry({ ...result.telemetry, gpuUploadMs, firstRenderMs }),
+      );
+    }
+    dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
   } catch (err) {
-    dropZone.setError(err instanceof Error ? err.message : 'Failed to load the file');
+    dropZone.setCancelHandler(null);
+    if (err instanceof LoadCancelledError) {
+      // A cancelled load is a quiet no-op — no error toast, nothing was added.
+      dropZone.setProgress(null);
+    } else {
+      dropZone.setError(err instanceof Error ? err.message : 'Failed to load the file');
+    }
+  } finally {
+    loading = false;
   }
 }
 

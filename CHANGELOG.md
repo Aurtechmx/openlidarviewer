@@ -16,6 +16,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
 
+## [0.2.7] - 2026-05-23
+
+A performance and loading-optimization release. Dropped files reach the screen
+faster, with a far lower memory peak on large surveys, a transparent staged
+progress display, and the ability to cancel a load in flight.
+
+### Added
+
+- Header-only format detection. A small head slice is read first; the format
+  is detected — and, for LAS/LAZ, the public header parsed — before the whole
+  file is read into memory. An unsupported file now fails immediately instead
+  of after a multi-gigabyte read.
+- Budget-aware fast load. From the LAS/LAZ point count, a load plan is chosen:
+  decode every point when within budget, decode-then-voxel-reduce at a moderate
+  overshoot, or — when a cloud is far over budget — stride-decode it down to a
+  memory-safe intermediate (a stratified, jittered one-in-N sample) and then
+  voxel-downsample that to the budget. A huge survey is never fully
+  materialised in memory, and because every over-budget path ends in the same
+  voxel pass, the fast-loaded cloud keeps uniform density — no scan-line
+  aliasing and no flight-strip density blocks.
+- A preload summary. Between the drop and the decode, the toast shows what the
+  file is — "LAS file detected", "18.2M source points", "Fast load mode
+  enabled", "Target render budget: 4M points".
+- Staged load progress. The status toast advances through named stages —
+  detecting format, reading file, parsing metadata, decoding (with a live point
+  counter and a progress bar), optimizing, preparing GPU buffers, rendering —
+  in place of a single static line.
+- Cancel loading. A Cancel control on the progress toast stops a load in
+  flight, terminating the parse worker cleanly with no orphaned worker and no
+  leaked memory.
+- A memory-safety guard. Before a large allocation the load estimates the
+  memory it will need; when that is risky for the device it automatically
+  falls back to a sparser, stride-decoded load and says so, rather than
+  risking an out-of-memory crash.
+- Performance telemetry. With `?debug=1`, each load logs a per-stage timing
+  table — read, decode, downsample, GPU upload, total — to the console.
+
+### Changed
+
+- LAS/LAZ decoding writes directly into local coordinate space. The render
+  origin is computed from the header before decoding, so each record is
+  converted straight into the final Float32 buffer — the intermediate Float64
+  global array and the separate recentre pass are gone. Coordinate precision
+  is bit-for-bit unchanged.
+- One parse worker is now reused across loads, and the LAZ decoder's WASM
+  module is instantiated once and reused — a second LAZ file skips decoder
+  setup.
+- Phones reach the stride-decode path sooner and at a tighter point budget.
+- Point size now defaults to the smallest size in Fixed mode — the most
+  honest first view of a cloud, with no distance-driven size gradient to read
+  as banding on an oblique surface. Adaptive sizing and a larger size remain
+  one tap away in the Rendering panel and are still remembered between
+  sessions once chosen.
+
+### Fixed
+
+- Legacy LAS classification (point formats 0-5) is now masked to the low five
+  bits. The synthetic / key-point / withheld flag bits in the classification
+  byte are no longer mistaken for part of the class — which had produced wrong
+  colours in classification mode and phantom classes in the Scan Report.
+- A LAS header that declares more points than the file contains is clamped to
+  what the file holds, instead of throwing partway through the decode.
+- A file too small to contain a LAS header now reports a clear error instead
+  of an opaque internal one.
+- LAS and LAZ are distinguished by the compression bit in the file header, not
+  the file extension alone, so a renamed file is decoded correctly.
+
 ## [0.2.6] - 2026-05-23
 
 ### Added

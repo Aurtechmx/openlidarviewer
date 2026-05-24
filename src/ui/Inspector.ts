@@ -120,7 +120,7 @@ export class Inspector {
     slider.min = '1';
     slider.max = '8';
     slider.step = '0.5';
-    slider.value = '2';
+    slider.value = '1';
     slider.addEventListener('input', () => this._cb.onPointSize(slider.valueAsNumber));
     this._pointSizeSlider = slider;
 

@@ -44,11 +44,26 @@ describe('parseLasHeader — tiny.las fixture (ground truth from FIXTURES.md)', 
     expect(header.max[1]).toBeCloseTo(4100887.5, 3);
     expect(header.max[2]).toBeCloseTo(215.0, 3);
   });
+
+  test('pointFormat is 6 (per FIXTURES.md)', () => {
+    expect(header.pointFormat).toBe(6);
+  });
+
+  test('the point-record layout is self-consistent with the file size', () => {
+    expect(header.offsetToPointData).toBeGreaterThanOrEqual(227);
+    expect(header.pointDataRecordLength).toBeGreaterThan(0);
+    // The 12 records must fit between the data offset and the 735-byte file.
+    expect(header.offsetToPointData + 12 * header.pointDataRecordLength).toBe(735);
+  });
 });
 
 describe('parseLasHeader — validation', () => {
   test('throws on a buffer without the LASF signature', () => {
     const bogus = new ArrayBuffer(256);
     expect(() => parseLasHeader(bogus)).toThrow();
+  });
+
+  test('throws a clear error on a buffer too small to hold a header', () => {
+    expect(() => parseLasHeader(new ArrayBuffer(100))).toThrow(/too small/i);
   });
 });

@@ -2,21 +2,41 @@ import { el } from './dom';
 
 /**
  * Full-window drag-and-drop. The whole document is a drop target; a slim
- * progress toast reports load status. No file ever leaves the browser.
+ * toast reports load status — a preload summary, staged progress with an
+ * optional progress bar, a Cancel control, or an error. No file ever leaves
+ * the browser.
  */
 export class DropZone {
-  /** The progress toast — mount it into the overlay. */
+  /** The toast element — mount it into the overlay. */
   readonly toast: HTMLElement;
-  private readonly _toastText: HTMLElement;
-  private readonly _onFile: (file: File) => void;
+  private readonly _text: HTMLElement;
+  private readonly _bar: HTMLElement;
+  private readonly _barFill: HTMLElement;
+  private readonly _cancel: HTMLButtonElement;
+  private _onCancel: (() => void) | null = null;
 
   constructor(target: HTMLElement, onFile: (file: File) => void) {
-    this._onFile = onFile;
-    this._toastText = el('span', { className: 'olv-toast-text' });
-    this.toast = el('div', { className: 'olv-toast' }, [
+    this._text = el('span', { className: 'olv-toast-text' });
+
+    this._cancel = el('button', {
+      className: 'olv-toast-cancel',
+      text: 'Cancel',
+      ariaLabel: 'Cancel loading',
+    });
+    this._cancel.type = 'button';
+    this._cancel.style.display = 'none';
+    this._cancel.addEventListener('click', () => this._onCancel?.());
+
+    this._barFill = el('span', { className: 'olv-toast-bar-fill' });
+    this._bar = el('div', { className: 'olv-toast-bar' }, [this._barFill]);
+    this._bar.style.display = 'none';
+
+    const row = el('div', { className: 'olv-toast-row' }, [
       el('span', { className: 'olv-toast-dot' }),
-      this._toastText,
+      this._text,
+      this._cancel,
     ]);
+    this.toast = el('div', { className: 'olv-toast' }, [row, this._bar]);
     this.toast.style.display = 'none';
 
     target.addEventListener('dragover', (e) => {
@@ -30,25 +50,63 @@ export class DropZone {
       e.preventDefault();
       target.classList.remove('olv-dragging');
       const file = e.dataTransfer?.files?.[0];
-      if (file) this._onFile(file);
+      if (file) onFile(file);
     });
   }
 
-  /** Show a progress message, or pass `null` to hide the toast. */
-  setProgress(text: string | null): void {
+  /**
+   * Show a progress message, optionally with a 0..1 completion bar. Pass
+   * `null` to hide the toast entirely.
+   */
+  setProgress(text: string | null, fraction?: number): void {
     if (text === null) {
       this.toast.style.display = 'none';
+      this._bar.style.display = 'none';
       return;
     }
     this.toast.classList.remove('olv-toast-error');
-    this._toastText.textContent = text;
+    this._text.textContent = text;
     this.toast.style.display = 'flex';
+    if (fraction === undefined) {
+      this._bar.style.display = 'none';
+    } else {
+      const pct = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
+      this._barFill.style.width = `${pct}%`;
+      this._bar.style.display = 'block';
+    }
+  }
+
+  /**
+   * Show a multi-line preload summary — what the file's header revealed and
+   * how it will be loaded — before the decode begins. Each entry is one line.
+   */
+  setPreload(lines: string[]): void {
+    if (lines.length === 0) {
+      this.setProgress(null);
+      return;
+    }
+    this.toast.classList.remove('olv-toast-error');
+    this._text.textContent = lines.join('\n');
+    this._bar.style.display = 'none';
+    this.toast.style.display = 'flex';
+  }
+
+  /**
+   * Wire (or clear) the Cancel control. Passing a handler shows the control
+   * and runs it on click; passing `null` hides the control.
+   */
+  setCancelHandler(handler: (() => void) | null): void {
+    this._onCancel = handler;
+    this._cancel.style.display = handler ? '' : 'none';
   }
 
   /** Show an error message in the toast. */
   setError(text: string): void {
+    this._onCancel = null;
+    this._cancel.style.display = 'none';
+    this._bar.style.display = 'none';
     this.toast.classList.add('olv-toast-error');
-    this._toastText.textContent = text;
+    this._text.textContent = text;
     this.toast.style.display = 'flex';
     window.setTimeout(() => {
       this.toast.style.display = 'none';

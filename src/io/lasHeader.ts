@@ -7,6 +7,8 @@
  * for the fields we touch).
  */
 
+import type { PointAttributes } from './loadPlan';
+
 /** Parsed subset of the LAS public header block. */
 export interface LasHeader {
   pointCount: number;
@@ -15,6 +17,12 @@ export interface LasHeader {
   min: [number, number, number];
   max: [number, number, number];
   versionMinor: number;
+  /** Point data record format id (0–10); the LAZ compression bit is masked off. */
+  pointFormat: number;
+  /** Byte offset from the file start to the first point record. */
+  offsetToPointData: number;
+  /** Length of one point record, in bytes. */
+  pointDataRecordLength: number;
   /** System Identifier field — often the capture hardware. Trimmed; may be ''. */
   systemIdentifier: string;
   /** Generating Software field — the tool that wrote the file. Trimmed; may be ''. */
@@ -30,6 +38,12 @@ export interface LasHeader {
 const OFFSET_SIGNATURE = 0;
 /** Version minor — uint8. */
 const OFFSET_VERSION_MINOR = 25;
+/** Offset to the first point record — uint32. */
+const OFFSET_TO_POINT_DATA = 96;
+/** Point data record format id — uint8 (the high bit flags LAZ compression). */
+const OFFSET_POINT_FORMAT = 104;
+/** Point data record length — uint16. */
+const OFFSET_POINT_RECORD_LENGTH = 105;
 /** Legacy number of point records — uint32 (LAS < 1.4, also a fallback). */
 const OFFSET_LEGACY_POINT_COUNT = 107;
 /** Scale factor X/Y/Z — three consecutive float64. */
@@ -60,6 +74,10 @@ const SIGNATURE = 'LASF';
 const F64 = 8;
 /** Version minor at which the uint64 extended point count appears. */
 const LAS_1_4_MINOR = 4;
+/** Smallest buffer that can hold every public-header field this parser reads. */
+const MIN_PUBLIC_HEADER_BYTES = 227;
+/** LAS 1.4 additionally carries the uint64 point count at byte 247. */
+const MIN_LAS_1_4_HEADER_BYTES = OFFSET_EXTENDED_POINT_COUNT + 8;
 
 /**
  * Read a fixed-length ASCII field, stopping at the first NUL and trimming
@@ -79,6 +97,14 @@ function readAscii(view: DataView, offset: number, length: number): string {
 export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
   const view = new DataView(buffer);
 
+  // A buffer too short to hold the header would otherwise throw an opaque
+  // "Offset is outside the bounds of the DataView"; fail with a clear message
+  // instead. This also protects the v0.2.7 head-slice path, where a whole file
+  // smaller than the header can legitimately reach this parser.
+  if (buffer.byteLength < MIN_PUBLIC_HEADER_BYTES) {
+    throw new Error('Not a valid LAS file: the file is too small to contain a header');
+  }
+
   // Validate the file signature.
   let signature = '';
   for (let i = 0; i < 4; i++) {
@@ -93,6 +119,9 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
   // Point count: LAS 1.4 carries a uint64; older versions a uint32.
   let pointCount = view.getUint32(OFFSET_LEGACY_POINT_COUNT, true);
   if (versionMinor >= LAS_1_4_MINOR) {
+    if (buffer.byteLength < MIN_LAS_1_4_HEADER_BYTES) {
+      throw new Error('Not a valid LAS 1.4 file: the header is truncated');
+    }
     pointCount = Number(view.getBigUint64(OFFSET_EXTENDED_POINT_COUNT, true));
   }
 
@@ -126,6 +155,12 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
   const creationDay = view.getUint16(OFFSET_CREATION_DAY, true);
   const creationYear = view.getUint16(OFFSET_CREATION_YEAR, true);
 
+  // Point-record layout — where the records begin, how long each is, and the
+  // record format (the high bit, set by LAZ to flag compression, is masked).
+  const pointFormat = view.getUint8(OFFSET_POINT_FORMAT) & 0x3f;
+  const offsetToPointData = view.getUint32(OFFSET_TO_POINT_DATA, true);
+  const pointDataRecordLength = view.getUint16(OFFSET_POINT_RECORD_LENGTH, true);
+
   return {
     pointCount,
     scale,
@@ -133,9 +168,26 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
     min,
     max,
     versionMinor,
+    pointFormat,
+    offsetToPointData,
+    pointDataRecordLength,
     systemIdentifier,
     generatingSoftware,
     creationDay,
     creationYear,
   };
 }
+
+/**
+ * The per-point attributes a decoded LAS/LAZ cloud carries in this viewer.
+ *
+ * The loader decodes position, intensity, and classification — not RGB or
+ * surface normals — so this set is fixed regardless of the LAS point format.
+ * It sizes the v0.2.7 load-memory estimate (`estimateMemoryBytes`).
+ */
+export const LAS_DECODED_ATTRIBUTES: PointAttributes = {
+  hasColor: false,
+  hasIntensity: true,
+  hasClassification: true,
+  hasNormals: false,
+};
