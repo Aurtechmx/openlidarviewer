@@ -13,9 +13,18 @@ import { MeasurePanel } from './ui/MeasurePanel';
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
-import { loadFile, LoadCancelledError, MOBILE_POINT_BUDGET, POINT_BUDGET } from './io/loadFile';
+import { LoadCancelledError } from './io/loadFile';
+import { describeLoadError } from './io/loadErrors';
+import { LocalFileSource } from './io/LocalFileSource';
+import { deviceCaps } from './render/deviceProfile';
+import { parseEmbedConfig } from './ui/embedConfig';
+import { startEmbedBridge } from './ui/embedBridge';
+import { encodeShareState, decodeShareState } from './io/shareState';
+import type { ShareState } from './io/shareState';
 import { formatProgress } from './io/loadProgress';
 import { formatTelemetry } from './io/loadTelemetry';
+import { buildBenchmarkResult, formatBenchmarkResult } from './io/benchmark';
+import { DebugOverlay } from './ui/DebugOverlay';
 import { isZUpFormat } from './io/sniffFormat';
 import { exportCloud } from './io/exporters';
 import { serializeSession, parseSession } from './io/session';
@@ -25,6 +34,7 @@ import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
 import { scanReport } from './analysis/modules/scanReport';
 import { availableModes, defaultMode } from './render/colorModes';
+import type { ColorMode } from './render/colorModes';
 import type { PointCloud } from './model/PointCloud';
 
 // A pointer to the open-source repository for anyone who opens the console on
@@ -40,13 +50,21 @@ console.log(
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('OpenLiDARViewer: #app mount point not found');
 
-const embed = new URLSearchParams(window.location.search).has('embed');
-/** `?debug=1` (or just `?debug`) logs per-load performance telemetry. */
-const debug = new URLSearchParams(window.location.search).has('debug');
+/** The embed configuration parsed from the URL — the documented embed API. */
+const embedConfig = parseEmbedConfig(window.location.search);
+/** True in embed mode (`?embed=1`) — strips the top bar, enables the bridge. */
+const embed = embedConfig.embed;
+/** True when the dock and panels are hidden — embed mode or `?ui=minimal`. */
+const bareMode = embed || embedConfig.uiMinimal;
+const urlParams = new URLSearchParams(window.location.search);
+/** `?debug=1` (or just `?debug`) shows the performance overlay and telemetry. */
+const debug = urlParams.has('debug');
+/** `?benchmark=1` emits a structured benchmark result for each file load. */
+const benchmark = urlParams.has('benchmark');
 
 const SAMPLES: Sample[] = [
-  { label: 'Drone survey', detail: '.las — georeferenced', url: 'samples/tiny.las', name: 'sample-survey.las' },
-  { label: 'Phone scan', detail: '.ply — local coordinates', url: 'samples/tiny.ply', name: 'sample-scan.ply' },
+  { id: 'survey', label: 'Drone survey', detail: '.las — georeferenced', url: 'samples/tiny.las', name: 'sample-survey.las' },
+  { id: 'scan', label: 'Phone scan', detail: '.ply — local coordinates', url: 'samples/tiny.ply', name: 'sample-scan.ply' },
 ];
 
 const stage = new Stage(app, {
@@ -68,6 +86,17 @@ function deviceMemoryGB(): number | undefined {
   return typeof m === 'number' && m > 0 ? m : undefined;
 }
 
+/**
+ * The device's capability tier and safe render budget — computed once at
+ * startup. A weak device loads fewer points and gets degraded rendering
+ * defaults, so a large survey never crashes the GPU.
+ */
+const deviceCapsValue = deviceCaps({
+  deviceMemoryGB: deviceMemoryGB(),
+  hardwareConcurrency: navigator.hardwareConcurrency,
+  isMobile: isPhone(),
+});
+
 const registry = new ModuleRegistry();
 registry.register(healthCheck);
 registry.register(scanReport);
@@ -80,8 +109,27 @@ let viewCounter = 0;
 /** True while a file load is in flight — one load at a time (see `handleFile`). */
 let loading = false;
 
+/** The active colour mode — tracked so a share link can record it. */
+let currentColorMode: ColorMode | undefined;
+
+/** True once the renderer backend has finished initialising. */
+let viewerReady = false;
+/** The `?debug=1` / `?benchmark=1` performance overlay, when one is shown. */
+let debugOverlay: DebugOverlay | null = null;
+
+/**
+ * A viewer state decoded from a `#s=` share link, applied once the next scan
+ * loads. A share link carries no scan data — the recipient opens the scan and
+ * the saved view is restored on top.
+ */
+let pendingShareState: ShareState | null = (() => {
+  const hash = window.location.hash;
+  return hash.startsWith('#s=') ? decodeShareState(hash.slice(3)) : null;
+})();
+
 const inspector = new Inspector({
   onColorMode: (mode) => {
+    currentColorMode = mode;
     if (activeId) viewer.setColorMode(activeId, mode);
   },
   onPointSize: (size) => {
@@ -134,6 +182,7 @@ const helpOverlay = new HelpOverlay();
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
+  onShare: () => void copyShareLink(),
   onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
@@ -210,7 +259,13 @@ viewer.annotate.setOnChange(refreshAnnotationPanel);
 
 // Apply any preferences saved in a previous session, once the GPU backend has
 // initialised (so a saved EDL choice overrides the backend's default gate).
-void viewer.ready.then(applyPrefs);
+void viewer.ready.then(() => {
+  viewerReady = true;
+  // Degraded defaults for a weak device come first; a saved user preference,
+  // applied immediately after, still wins.
+  applyDeviceDefaults();
+  applyPrefs();
+});
 
 const dropZone = new DropZone(document.body, (file) => void handleFile(file));
 stage.overlay.append(dropZone.toast);
@@ -220,7 +275,7 @@ stage.overlay.append(dropZone.toast);
 navBar.element.classList.add('olv-hidden');
 stage.overlay.append(navBar.element, navBar.prompt, navBar.touchHint);
 
-if (!embed) {
+if (!bareMode) {
   // The tool overlays go in first so the panels paint above them.
   stage.overlay.append(viewer.measureElements.overlay);
   stage.overlay.append(viewer.measureElements.hint);
@@ -277,6 +332,56 @@ if (!embed) {
       if (!helpOverlay.isOpen) viewer.annotate.redo();
     },
   });
+} else {
+  // Bare mode (embed / ?ui=minimal): the dock and panels are hidden, but
+  // ?measurements=1 / ?annotations=1 can each surface one tool's layer.
+  const panels: HTMLElement[] = [];
+  if (embedConfig.forceMeasurements) {
+    stage.overlay.append(viewer.measureElements.overlay, viewer.measureElements.hint);
+    panels.push(measurePanel.element);
+  }
+  if (embedConfig.forceAnnotations) {
+    stage.overlay.append(
+      viewer.annotateElements.overlay,
+      viewer.annotateElements.hint,
+      viewer.annotateElements.editor,
+    );
+    panels.push(annotationPanel.element);
+  }
+  if (panels.length > 0) {
+    const leftPanels = document.createElement('div');
+    leftPanels.className = 'olv-left-panels';
+    leftPanels.append(...panels);
+    stage.overlay.append(leftPanels);
+  }
+}
+
+// The cross-frame control bridge — active only in embed mode.
+if (embed) {
+  startEmbedBridge({
+    onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
+    onJumpCamera: (camera) => viewer.applyCameraState(camera),
+    onToggleLayer: (id, visible) => viewer.setCloudVisible(id, visible),
+    onFocusAnnotation: (id) => viewer.jumpToAnnotation(id),
+  });
+}
+
+// `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).
+if (embedConfig.autoloadSample) {
+  const sample = SAMPLES.find((s) => s.id === embedConfig.autoloadSample);
+  if (sample) void loadFromUrl(sample.url, sample.name);
+}
+
+// The developer performance overlay — surfaced only by `?debug=1` or
+// `?benchmark=1`. It polls the viewer for live frame stats on a throttled
+// cadence; the load path feeds it telemetry and any benchmark result.
+if (debug || benchmark) {
+  debugOverlay = new DebugOverlay(() => ({
+    backend: viewerReady ? viewer.activeBackend() : null,
+    stats: viewerReady ? viewer.frameStats() : null,
+  }));
+  stage.overlay.append(debugOverlay.element);
+  debugOverlay.start();
 }
 
 /** Run every registered validation module and flatten the rows. */
@@ -320,6 +425,18 @@ function persistPrefs(): void {
  * it was stored, so anything absent keeps the viewer's own default — including
  * the backend-dependent EDL default.
  */
+/**
+ * Apply degraded rendering defaults on a low-capability device — Eye Dome
+ * Lighting and antialiasing off — so a weak GPU stays interactive. Runs before
+ * `applyPrefs`, so an explicit saved preference still takes precedence.
+ */
+function applyDeviceDefaults(): void {
+  if (deviceCapsValue.tier === 'low') {
+    viewer.setEdlEnabled(false);
+    viewer.setAntialiasing(false);
+  }
+}
+
 function applyPrefs(): void {
   const p = loadPrefs();
   if (p.pointSize !== undefined) viewer.setPointSize(p.pointSize);
@@ -353,6 +470,52 @@ function hasScan(): boolean {
 function saveCurrentView(): void {
   savedViews.push({ name: `View ${++viewCounter}`, pose: viewer.getCameraPose() });
   inspector.setViews(savedViews.map((v) => v.name));
+}
+
+/**
+ * Copy a link that reproduces the current view — camera, colour mode, point
+ * sizing, and the selected annotation — to the clipboard. No scan data is
+ * encoded; the recipient opens the same scan and the view is restored on top.
+ */
+async function copyShareLink(): Promise<void> {
+  const state: ShareState = {
+    camera: viewer.getCameraState(),
+    pointSize: viewer.pointSize,
+    pointSizeMode: viewer.pointSizeMode,
+  };
+  if (currentColorMode) state.colorMode = currentColorMode;
+  const selected = viewer.annotate.selectedId;
+  if (selected) state.selectedAnnotation = selected;
+
+  const encoded = encodeShareState(state);
+  const link = `${window.location.origin}${window.location.pathname}#s=${encoded}`;
+  try {
+    await navigator.clipboard.writeText(link);
+  } catch {
+    // Clipboard unavailable (e.g. an insecure context) — leave the state in
+    // the address bar so the user can still copy the link from there.
+    window.location.hash = `s=${encoded}`;
+  }
+}
+
+/** Restore a decoded share-link state onto the freshly loaded scan. */
+function applyShareState(state: ShareState, cloud: PointCloud): void {
+  if (state.pointSize !== undefined) viewer.setPointSize(state.pointSize);
+  if (state.pointSizeMode === 'adaptive' || state.pointSizeMode === 'fixed') {
+    viewer.setPointSizeMode(state.pointSizeMode);
+  }
+  if (state.colorMode && activeId) {
+    const modes = availableModes(cloud);
+    if (modes.includes(state.colorMode as ColorMode)) {
+      currentColorMode = state.colorMode as ColorMode;
+      viewer.setColorMode(activeId, currentColorMode);
+      inspector.setColorModes(modes, currentColorMode);
+    }
+  }
+  // The camera tween runs last, so it wins over the load-time framing.
+  if (state.camera) viewer.applyCameraState(state.camera);
+  // `select` is a safe no-op when the annotation is not in this scan.
+  if (state.selectedAnnotation) viewer.annotate.select(state.selectedAnnotation);
 }
 
 /**
@@ -402,14 +565,18 @@ async function handleFile(file: File): Promise<void> {
   dropZone.setCancelHandler(() => controller.abort());
   try {
     // Phones get a tighter point budget — limited GPU memory and fill-rate.
-    const result = await loadFile(
-      file,
+    // The dropped file is wrapped in a LocalFileSource — the v0.2.9 source
+    // abstraction; v0.3 streaming sources slot in beside it.
+    const source = new LocalFileSource(file);
+    const result = await source.load(
       {
         onProgress: (u) => dropZone.setProgress(formatProgress(u), u.fraction),
         onPreload: (lines) => dropZone.setPreload(lines),
       },
       {
-        budget: isPhone() ? MOBILE_POINT_BUDGET : POINT_BUDGET,
+        // The point budget is the device's safe render budget — full on a
+        // capable machine, reduced on a weak one to keep the GPU stable.
+        budget: deviceCapsValue.renderBudget,
         isMobile: isPhone(),
         deviceMemoryGB: deviceMemoryGB(),
         signal: controller.signal,
@@ -432,6 +599,7 @@ async function handleFile(file: File): Promise<void> {
     const firstRenderMs = performance.now() - renderStartedAt;
 
     const mode = defaultMode(result.cloud);
+    currentColorMode = mode;
     viewer.setColorMode(id, mode);
 
     // A new scan resets the saved viewpoints and annotations.
@@ -445,6 +613,13 @@ async function handleFile(file: File): Promise<void> {
     inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
     inspector.setReport(runModules(result.cloud));
     inspector.setViews([]);
+
+    // A share link, if one opened this page, restores its view onto this scan.
+    if (pendingShareState) {
+      applyShareState(pendingShareState, result.cloud);
+      pendingShareState = null;
+    }
+
     // The render-quality controls reflect the viewer's state — EDL defaults
     // depend on the GPU backend, known only once `viewer.ready` resolved.
     inspector.syncRendering({
@@ -470,14 +645,36 @@ async function handleFile(file: File): Promise<void> {
     // Phones get a touch-gesture hint in place of the keyboard HUD.
     if (isPhone()) navBar.flashTouchHint();
 
-    if (!embed) showProjectCard(result.cloud, result.originalPointCount);
+    if (!bareMode) showProjectCard(result.cloud, result.originalPointCount);
 
-    if (debug && result.telemetry) {
-      console.log(
-        '%cOpenLiDARViewer — load telemetry',
-        'font-weight:600;color:#22dcff',
-        '\n' + formatTelemetry({ ...result.telemetry, gpuUploadMs, firstRenderMs }),
-      );
+    // Developer diagnostics — the merged telemetry feeds the debug console
+    // block, the performance overlay, and (under ?benchmark=1) a benchmark.
+    if ((debug || benchmark) && result.telemetry) {
+      const telemetry = { ...result.telemetry, gpuUploadMs, firstRenderMs };
+      if (debug) {
+        console.log(
+          '%cOpenLiDARViewer — load telemetry',
+          'font-weight:600;color:#22dcff',
+          '\n' + formatTelemetry(telemetry),
+        );
+      }
+      debugOverlay?.setTelemetry(telemetry);
+      if (benchmark) {
+        const text = formatBenchmarkResult(
+          buildBenchmarkResult(
+            result.cloud.name,
+            result.cloud.sourceFormat,
+            result.cloud.pointCount,
+            telemetry,
+          ),
+        );
+        console.log(
+          '%cOpenLiDARViewer — benchmark',
+          'font-weight:600;color:#22dcff',
+          '\n' + text,
+        );
+        debugOverlay?.setBenchmark('benchmark\n' + text);
+      }
     }
     dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
@@ -487,7 +684,10 @@ async function handleFile(file: File): Promise<void> {
       // A cancelled load is a quiet no-op — no error toast, nothing was added.
       dropZone.setProgress(null);
     } else {
-      dropZone.setError(err instanceof Error ? err.message : 'Failed to load the file');
+      // The toast shows a clear, categorised message; the raw error still
+      // reaches the console for developers under ?debug=1.
+      if (debug) console.error('OpenLiDARViewer — load error', err);
+      dropZone.setError(describeLoadError(err));
     }
   } finally {
     loading = false;

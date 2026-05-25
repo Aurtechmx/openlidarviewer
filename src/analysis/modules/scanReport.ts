@@ -66,6 +66,15 @@ export const scanReport: AnalysisModule = {
     if (meta?.captureSensor) rows.push(rowInfo('Capture Sensor', meta.captureSensor));
     if (meta?.sourceSoftware) rows.push(rowInfo('Source Software', meta.sourceSoftware));
     if (meta?.captureDate) rows.push(rowInfo('Captured', meta.captureDate));
+    if (meta?.scannerOrigin) {
+      const [sx, sy, sz] = meta.scannerOrigin;
+      rows.push(
+        rowInfo(
+          'Scanner Origin',
+          `${sx.toFixed(2)}, ${sy.toFixed(2)}, ${sz.toFixed(2)}`,
+        ),
+      );
+    }
 
     // Georeferenced bounding box — the scan's extent in real-world
     // coordinates (local bounds plus the origin subtracted on load). Shown

@@ -14,6 +14,9 @@ export type DetectedFormat =
   | 'gltf'
   | 'xyz'
   | 'e57'
+  | 'pcd'
+  | 'ptx'
+  | 'pts'
   | 'unknown';
 
 /** A concrete, loadable source format — `DetectedFormat` minus `unknown`. */
@@ -21,13 +24,19 @@ export type SourceFormat = Exclude<DetectedFormat, 'unknown'>;
 
 /**
  * Whether a format's native coordinate frame is Z-up. Survey and scanner
- * formats — LAS, LAZ, XYZ, and E57 — are Z-up; phone-scan mesh formats
+ * formats — LAS, LAZ, XYZ, E57, and PCD — are Z-up; phone-scan mesh formats
  * (PLY, OBJ, GLB/GLTF) are Y-up. Shared by the renderer and the session
  * exporter so the two can never disagree on a format's up axis.
  */
 export function isZUpFormat(format: SourceFormat): boolean {
   return (
-    format === 'las' || format === 'laz' || format === 'xyz' || format === 'e57'
+    format === 'las' ||
+    format === 'laz' ||
+    format === 'xyz' ||
+    format === 'e57' ||
+    format === 'pcd' ||
+    format === 'ptx' ||
+    format === 'pts'
   );
 }
 
@@ -86,6 +95,14 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
   // glTF binary: 0x67 0x6C 0x54 0x46 == 'glTF'.
   if (magic.startsWith('glTF')) return 'glb';
 
+  // PCD has no fixed magic byte, but its header is ASCII and always carries a
+  // `VERSION` line and a `FIELDS` line — together a near-certain PCD signal.
+  // (Binary and binary_compressed PCD still have this ASCII header prefix.)
+  const head = readAscii(buffer, 256);
+  if (/(^|\n)VERSION[ \t]/.test(head) && /(^|\n)FIELDS[ \t]/.test(head)) {
+    return 'pcd';
+  }
+
   // 2. Fall back to the file extension.
   switch (extensionOf(filename)) {
     case 'obj':
@@ -105,6 +122,12 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
       return 'xyz';
     case 'e57':
       return 'e57';
+    case 'pcd':
+      return 'pcd';
+    case 'ptx':
+      return 'ptx';
+    case 'pts':
+      return 'pts';
     default:
       return 'unknown';
   }

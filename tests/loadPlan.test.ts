@@ -274,46 +274,6 @@ describe('planLoad — memory guard', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// planLoad — the preload summary (Task 11)
-// ────────────────────────────────────────────────────────────────────────────
-
-describe('planLoad — preload summary', () => {
-  test('a full load names the format and the source count', () => {
-    const plan = planLoad(input({ sourceCount: 1_000_000, format: 'las' }));
-    expect(plan.preloadSummary).toContain('LAS file detected');
-    expect(plan.preloadSummary).toContain('1M source points');
-    expect(plan.preloadSummary).toContain('Loading at full resolution');
-  });
-
-  test('a stride load announces fast-load mode and the render budget', () => {
-    const plan = planLoad(input({ sourceCount: 18_200_000, format: 'laz' }));
-    expect(plan.preloadSummary).toContain('LAZ file detected');
-    expect(plan.preloadSummary).toContain('18.2M source points');
-    expect(plan.preloadSummary).toContain('Fast load mode enabled');
-    expect(plan.preloadSummary).toContain('Target render budget: 4M points');
-  });
-
-  test('a guarded load tells the user density was reduced', () => {
-    const plan = planLoad(
-      input({
-        sourceCount: 10_000_000,
-        fileBytes: 100_000_000,
-        deviceMemoryGB: 0.25,
-        attributes: {
-          hasColor: true,
-          hasIntensity: true,
-          hasClassification: true,
-          hasNormals: false,
-        },
-      }),
-    );
-    expect(plan.preloadSummary).toContain(
-      'Large file — loading at reduced density to fit available memory',
-    );
-  });
-});
-
-// ────────────────────────────────────────────────────────────────────────────
 // formatPointCount — human-readable counts
 // ────────────────────────────────────────────────────────────────────────────
 

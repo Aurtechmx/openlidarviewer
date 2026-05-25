@@ -9,6 +9,10 @@ import { planLoad } from './loadPlan';
 import type { LoadPlan } from './loadPlan';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
+import { formatInfo } from './formatInfo';
+import type { SourceMetadata } from './PointCloudSource';
+import { buildPreloadSummary } from './preloadSummary';
+import { LoadError } from './loadErrors';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
 export { POINT_BUDGET, MOBILE_POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
@@ -34,8 +38,9 @@ export interface LoadCallbacks {
   /** Staged progress while the file is read and decoded. */
   onProgress?: (update: ProgressUpdate) => void;
   /**
-   * Multi-line preload summary, emitted once a LAS/LAZ header has been read —
-   * the format, the source point count, and how the file will be loaded.
+   * Multi-line preload summary, emitted once the format has been detected —
+   * the format, the source size, the point count where the header reveals one,
+   * and how the file will be loaded. Shown for every format, before the decode.
    */
   onPreload?: (lines: string[]) => void;
 }
@@ -112,6 +117,95 @@ function buildLasPlan(
   }
 }
 
+/**
+ * A file's detected format plus, for LAS/LAZ, its budget-aware load plan, and
+ * for PTS the point count read from its optional header line.
+ */
+interface FilePreflight {
+  format: SourceFormat;
+  plan?: LoadPlan;
+  /** Point count from a header that exposes one without a plan (PTS). */
+  headerPointCount?: number;
+}
+
+/**
+ * A PTS file may open with a lone-integer point count on its first line. Read
+ * it from the head slice when present — it lets the preload summary show a
+ * count for PTS, the one text format whose header reveals one. Returns
+ * `undefined` when the first line is not a bare non-negative integer.
+ */
+function readPtsHeaderCount(headSlice: ArrayBuffer): number | undefined {
+  const prefix = new Uint8Array(headSlice, 0, Math.min(64, headSlice.byteLength));
+  const firstLine = new TextDecoder().decode(prefix).split('\n', 1)[0].trim();
+  if (!/^\d+$/.test(firstLine)) return undefined;
+  const count = Number(firstLine);
+  return Number.isSafeInteger(count) ? count : undefined;
+}
+
+/**
+ * Cheap preflight — read a small head slice, detect the format, and read what
+ * the header reveals: a budget-aware load plan for LAS/LAZ, a point count for
+ * PTS. No file body is decoded. Throws a typed `LoadError` when the format is
+ * unrecognised.
+ */
+async function preflightFile(
+  file: File,
+  budget: number,
+  options: LoadOptions,
+): Promise<FilePreflight> {
+  const headSlice = await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
+  const format = sniffFormat(headSlice, file.name);
+  if (format === 'unknown') {
+    throw new LoadError(
+      'unsupported-format',
+      `Unrecognised file format: ${file.name}`,
+    );
+  }
+  const preflight: FilePreflight = { format };
+  if (format === 'las' || format === 'laz') {
+    preflight.plan = buildLasPlan(headSlice, format, file.size, budget, options);
+  } else if (format === 'pts') {
+    preflight.headerPointCount = readPtsHeaderCount(headSlice);
+  }
+  return preflight;
+}
+
+/**
+ * Assemble the source metadata — the cheap preflight result the UI shows — from
+ * a finished preflight. Shared by `fileMetadata` and `loadFile` so both surface
+ * exactly the same facts without a second head-slice read.
+ */
+function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetadata {
+  const { format, plan, headerPointCount } = preflight;
+  const meta: SourceMetadata = {
+    format,
+    label: formatInfo(format).label,
+    byteSize: file.size,
+  };
+  if (plan) {
+    meta.estimatedPointCount = plan.sourceCount;
+    meta.loadModeSummary =
+      plan.mode === 'all' ? 'Standard load' : 'Large-file optimization enabled';
+  } else if (headerPointCount !== undefined) {
+    meta.estimatedPointCount = headerPointCount;
+  }
+  return meta;
+}
+
+/**
+ * The cheap source-metadata preflight behind `LocalFileSource.metadata()` — the
+ * detected format, its label, the file size, and (for formats whose header
+ * reveals it) the point count and chosen load mode. Decodes no file body.
+ */
+export async function fileMetadata(
+  file: File,
+  options: LoadOptions = {},
+): Promise<SourceMetadata> {
+  const budget = options.budget ?? POINT_BUDGET;
+  const preflight = await preflightFile(file, budget, options);
+  return buildSourceMetadata(file, preflight);
+}
+
 // --- Persistent parse worker ------------------------------------------------
 // One long-lived worker is reused across loads so the laz-perf WASM module
 // (memoised inside it) survives between files. It is created lazily on first
@@ -157,22 +251,13 @@ export async function loadFile(
   throwIfCancelled();
   const startedAt = performance.now();
 
-  // --- Preflight: detect the format from a small head slice. ---
+  // --- Preflight: detect the format and read what its header reveals. ---
   onProgress?.({ stage: 'detecting-format' });
-  const headSlice = await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
+  const preflight = await preflightFile(file, budget, options);
+  const { format, plan } = preflight;
   throwIfCancelled();
-  const format = sniffFormat(headSlice, file.name);
-  if (format === 'unknown') {
-    throw new Error(`Unrecognised file format: ${file.name}`);
-  }
-
-  // For LAS/LAZ the public header sits inside the head slice — read it now to
-  // build a load plan and show what the file is and how it will load.
-  let plan: LoadPlan | undefined;
-  if (format === 'las' || format === 'laz') {
-    plan = buildLasPlan(headSlice, format, file.size, budget, options);
-    if (plan) onPreload?.(plan.preloadSummary);
-  }
+  // The universal preload summary — shown for every format, before the decode.
+  onPreload?.(buildPreloadSummary(buildSourceMetadata(file, preflight)));
   const sniffMs = performance.now() - startedAt;
 
   // --- Now read the whole file — only once the format is known. ---

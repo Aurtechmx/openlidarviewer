@@ -45,7 +45,6 @@ function plan(over: Partial<LoadPlan>): LoadPlan {
     budget: 4_000_000,
     memoryEstimateBytes: 0,
     memoryGuardTriggered: false,
-    preloadSummary: [],
     ...over,
   };
 }

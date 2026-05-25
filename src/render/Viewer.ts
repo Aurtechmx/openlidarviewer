@@ -66,6 +66,7 @@ import { AnnotationController } from './annotate/AnnotationController';
 import type { SavedCameraState } from './annotate/types';
 import { loadSvgImage } from './snapshotSvg';
 import { LiveProbe } from './LiveProbe';
+import { downsampleToBudget } from '../process/voxelDownsample';
 import { makePointInfo } from './pointInfo';
 import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
@@ -132,6 +133,26 @@ export interface SnapshotOptions {
   measurements?: boolean;
 }
 
+/**
+ * A lightweight rendering-performance sample, surfaced by {@link Viewer.frameStats}
+ * for the `?debug=1` overlay. Reading it allocates only the returned object —
+ * no per-frame cost — so the overlay can poll it on a throttled cadence.
+ */
+export interface FrameStats {
+  /** Frames per second, derived from the rolling-average frame time. */
+  fps: number;
+  /** Rolling-average frame time, in milliseconds. */
+  frameMs: number;
+  /** GPU draw calls recorded for the last rendered frame. */
+  drawCalls: number;
+  /** Points uploaded to the GPU across the visible clouds. */
+  displayedPoints: number;
+  /** Points across every loaded cloud, visible or not. */
+  totalPoints: number;
+  /** Rough GPU memory held by the visible clouds' instance attributes, in bytes. */
+  gpuBytesEstimate: number;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,6 +171,30 @@ const MAX_PIXEL_RATIO = 2;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
+
+/**
+ * Absolute GPU-upload point ceiling. The device-aware load budget already
+ * sizes a cloud to the machine; this is the last-resort guard so that no path
+ * — a future session restore, a streaming source — can ever upload a cloud
+ * large enough to risk a GPU out-of-memory crash. It sits above every load
+ * budget, so a normally-loaded cloud is never touched.
+ */
+const GPU_HARD_POINT_CEILING = 5_000_000;
+
+/**
+ * Frame-time history length for {@link Viewer.frameStats}. Sixty samples is
+ * about one second at 60 fps — long enough to smooth jitter, short enough that
+ * the reported rate still tracks a real change in load.
+ */
+const FRAME_SAMPLE_COUNT = 60;
+
+/**
+ * Rough GPU bytes held per displayed point: an instanced position (vec3 f32,
+ * 12 B) and an instanced colour (vec3 f32, 12 B). Used only for the debug
+ * overlay's memory estimate — an attribute-size figure, not a precise driver
+ * allocation.
+ */
+const BYTES_PER_GPU_POINT = 24;
 
 /** Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute. */
 function toFloatColors(u8: Uint8Array): Float32Array {
@@ -262,6 +307,14 @@ export class Viewer {
   private readonly _nav: NavController;
   private readonly _clock = new THREE.Clock();
   private _rafId: number | null = null;
+
+  // ── Frame timing (debug overlay) ─────────────────────────────────────────
+  /** Rolling buffer of recent frame times, in ms — feeds {@link frameStats}. */
+  private readonly _frameTimes = new Float64Array(FRAME_SAMPLE_COUNT);
+  /** Next write index into the frame-time ring buffer. */
+  private _frameWrite = 0;
+  /** Number of valid samples in the ring buffer (≤ its length). */
+  private _frameCount = 0;
 
   // ── Cloud registry ───────────────────────────────────────────────────────
   private readonly _clouds = new Map<string, CloudEntry>();
@@ -457,7 +510,14 @@ export class Viewer {
    *
    * @returns A string ID that identifies this cloud in subsequent calls.
    */
-  addCloud(cloud: PointCloud): string {
+  addCloud(input: PointCloud): string {
+    // GPU-safety net — no caller may upload a cloud beyond the hard point
+    // ceiling. The device-aware load budget already sizes clouds to the
+    // machine; this guards any other path that might reach the GPU.
+    const cloud =
+      input.pointCount > GPU_HARD_POINT_CEILING
+        ? downsampleToBudget(input, GPU_HARD_POINT_CEILING)
+        : input;
     const id = `cloud_${this._nextId++}`;
     const mode = defaultMode(cloud);
 
@@ -888,6 +948,41 @@ export class Viewer {
   }
 
   /**
+   * Sample the current rendering performance — frame rate, draw calls, and the
+   * point and memory footprint. Cheap enough for the `?debug=1` overlay to poll
+   * on a throttled cadence; returns zeroed counters before the first frame has
+   * been timed.
+   */
+  frameStats(): FrameStats {
+    let sum = 0;
+    for (let i = 0; i < this._frameCount; i++) sum += this._frameTimes[i];
+    const frameMs = this._frameCount > 0 ? sum / this._frameCount : 0;
+
+    let displayedPoints = 0;
+    let totalPoints = 0;
+    for (const { cloud, mesh } of this._clouds.values()) {
+      totalPoints += cloud.pointCount;
+      if (mesh.visible) displayedPoints += cloud.pointCount;
+    }
+
+    // three.js names this counter `drawCalls` on the WebGPU backend and
+    // `calls` on WebGL 2 — read whichever the active backend populated.
+    const render = (this._renderer.info as {
+      render?: { calls?: number; drawCalls?: number };
+    }).render;
+    const drawCalls = render?.drawCalls ?? render?.calls ?? 0;
+
+    return {
+      fps: frameMs > 0 ? 1000 / frameMs : 0,
+      frameMs,
+      drawCalls,
+      displayedPoints,
+      totalPoints,
+      gpuBytesEstimate: displayedPoints * BYTES_PER_GPU_POINT,
+    };
+  }
+
+  /**
    * Render one frame and capture it as a PNG `Blob`.
    *
    * With no options (or all off) this returns the bare rendered cloud — the
@@ -980,6 +1075,19 @@ export class Viewer {
     material.sizeNode = (
       this._pointSizeMode === 'adaptive' ? this._adaptiveSizeNode : null
     ) as typeof material.sizeNode;
+  }
+
+  /**
+   * Record one frame's duration into the rolling buffer. A non-positive or
+   * very large delta — the first frame, or a return from a backgrounded tab —
+   * is dropped so a spurious gap cannot skew the reported frame rate.
+   */
+  private _recordFrame(deltaSeconds: number): void {
+    const ms = deltaSeconds * 1000;
+    if (ms <= 0 || ms > 1000) return;
+    this._frameTimes[this._frameWrite] = ms;
+    this._frameWrite = (this._frameWrite + 1) % this._frameTimes.length;
+    if (this._frameCount < this._frameTimes.length) this._frameCount++;
   }
 
   /** A coarse mobile check — a small viewport, matching the app's phone heuristic. */
@@ -1185,7 +1293,9 @@ export class Viewer {
   private _startLoop(): void {
     const loop = () => {
       this._rafId = requestAnimationFrame(loop);
-      this._nav.update(this._clock.getDelta());
+      const delta = this._clock.getDelta();
+      this._recordFrame(delta);
+      this._nav.update(delta);
       // EDL on → render through the post-processing pipeline; off → render
       // the scene directly, the v0.2 path, for zero post-processing overhead.
       if (this._edlEnabled) this._post.render();

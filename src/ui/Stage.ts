@@ -2,6 +2,8 @@ import { el } from './dom';
 
 /** A built-in sample scan offered on the empty state. */
 export interface Sample {
+  /** Stable short id — the `?autoload=sample:<id>` embed target. */
+  id: string;
   label: string;
   detail: string;
   url: string;

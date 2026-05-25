@@ -11,6 +11,12 @@ export interface CloudMetadata {
   sourceSoftware?: string;
   /** Human-readable capture / file-creation date. */
   captureDate?: string;
+  /**
+   * The scanner's registered world position, when the format records it (the
+   * PTX per-scan transform). Real-world coordinates, before the load-time
+   * origin shift.
+   */
+  scannerOrigin?: [number, number, number];
 }
 
 /** Options accepted by the `PointCloud` constructor. */

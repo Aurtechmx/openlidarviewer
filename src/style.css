@@ -183,6 +183,29 @@ button:disabled { cursor: not-allowed; }
 .olv-backend-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .olv-backend-text { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
 
+/* Developer performance overlay (?debug=1) */
+.olv-debug {
+  position: absolute; top: 14px; left: 14px; z-index: 70;
+  max-width: 320px;
+  background: rgba(10, 14, 26, 0.92);
+  border: 0.5px solid var(--hairline);
+  border-radius: 9px; padding: 9px 11px;
+  pointer-events: none;
+}
+.olv-debug-title {
+  font-size: 11px; font-weight: 600; color: var(--accent);
+  margin-bottom: 6px;
+}
+.olv-debug-label {
+  font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 7px 0 2px;
+}
+.olv-debug-block {
+  margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  color: var(--text-dim); white-space: pre;
+}
+
 /* Progress toast */
 .olv-toast {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);

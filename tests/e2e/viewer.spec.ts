@@ -142,3 +142,34 @@ test('closes a scan and returns to the empty state, ready for another', async ({
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(1);
 });
+
+test('?debug=1 shows the performance overlay and fills in load telemetry', async ({ page }) => {
+  await page.goto('/?debug=1');
+  // The overlay is present from startup, before any scan is open.
+  const overlay = page.locator('.olv-debug');
+  await expect(overlay).toBeVisible();
+  await expect(overlay).toContainText('no scan loaded yet');
+
+  await page.getByText('Drone survey', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+  // The live block reports a backend, and the telemetry block fills in.
+  await expect(overlay).toContainText(/WebGPU|WebGL 2/);
+  await expect(overlay).toContainText('total', { timeout: 10_000 });
+});
+
+test('?benchmark=1 emits a benchmark result into the overlay', async ({ page }) => {
+  await page.goto('/?benchmark=1');
+  await page.getByText('Drone survey', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+  await expect(page.locator('.olv-debug')).toContainText('benchmark', {
+    timeout: 10_000,
+  });
+  await expect(page.locator('.olv-debug')).toContainText('time to render');
+});
+
+test('a normal session shows no debug overlay', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.olv-debug')).toHaveCount(0);
+});

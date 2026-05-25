@@ -33,14 +33,15 @@ Most LiDAR tools are powerful, but a lot of them are heavy, desktop-first, and G
 
 OpenLiDARViewer takes a lighter path. It runs in the browser with nothing to install. Files are read and rendered locally, so there is no server to upload to. It keeps the interface small and the navigation game-like instead of GIS-like. And it is built to be a testbed for browser-native spatial computing rather than a full GIS replacement.
 
-It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-scanner data in E57 — including exports from Trimble and other survey scanners — and compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF). More professional point-cloud formats are on the roadmap as the pipeline matures.
+It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-scanner data in E57, PTX, and PTS — including exports from Trimble and other survey scanners — compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF), and Point Cloud Library (PCD) files. More cloud-optimised and streaming formats are on the roadmap as the pipeline matures.
 
 ## Key Advantages
 
 - Inspect point-cloud datasets directly in a modern web interface, with nothing to install.
 - Local-first by design: files are read and rendered in your browser, with no upload, which suits sensitive survey data.
 - Opens compatible iPhone and mobile scan exports when saved as PLY, OBJ, GLB/GLTF, XYZ, or CSV.
-- Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, with a coordinate bridge that keeps large survey coordinates precise.
+- Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates precise.
+- Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
 - Game-like navigation: Orbit, Walk, and Fly modes with WASD and mouse-look.
 - A small, focused interface that stays out of the way and keeps you on the scan.
 - A full measurement toolkit — distance, polyline, area, height, angle, and slope — with editable points, in-session persistence, and JSON export/import.
@@ -60,9 +61,11 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Local-first scan inspection: nothing is uploaded
 - WebGPU rendering with an automatic, fully tested WebGL 2 fallback
 - Eye Dome Lighting depth shading that makes point-cloud structure far more readable, with a strength control
-- Import: LAS, LAZ, E57, PLY, OBJ, GLB, GLTF, XYZ, CSV
+- Import: LAS, LAZ, E57, PLY, OBJ, GLB, GLTF, XYZ, CSV, PCD, PTX, PTS
 - Export: PLY, OBJ, XYZ, CSV, and PNG snapshots
 - Budget-aware fast loading of large LAS/LAZ surveys — header preflight, stride decoding, a memory-safety guard, staged progress, and a load that can be cancelled mid-flight
+- Chunked, bounded-memory reading of large text point clouds (XYZ, CSV, PTS), and graceful degradation on weak devices so a large survey reduces in density instead of crashing
+- A universal file-open summary and clear, categorised load-error messages
 - Height, intensity, classification, RGB, and surface-normal color modes, picked automatically per file
 - Adaptive or fixed point sizing, round antialiased points, and a Detail control that shows an honest `shown / total` count
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
@@ -78,7 +81,9 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - A "Project ready" summary card on load, with a suggested navigation mode
 - Saved, renamable camera views for repeatable inspection
 - A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates precise
-- An embed mode for `<iframe>` use (`?embed=1`)
+- Shareable view links — the Share tool copies a link that reproduces the current view (camera, colour mode, point sizing); no scan data is shared
+- An embed mode for `<iframe>` use (`?embed=1`), with a validated `postMessage` bridge for host-page control
+- Developer diagnostics — a live performance overlay (`?debug=1`) and a structured benchmark mode (`?benchmark=1`)
 
 ## Screenshots
 
@@ -143,7 +148,7 @@ Measurement is meant for visual inspection and research, not survey-grade use. T
 
 ## Supported / Target Formats
 
-**Current import formats:** `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`.
+**Current import formats:** `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTX`, `PTS`.
 
 **Current export targets:** `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
 
@@ -151,7 +156,7 @@ Measurement is meant for visual inspection and research, not survey-grade use. T
 
 **Terrestrial laser scanners.** `E57` (ASTM E2807), the standard exchange format for terrestrial laser scanners, is read directly in the browser. The parser handles Cartesian coordinates, RGB colour, intensity, classification, surface normals, scan poses, and multi-scan files (every scan is merged into one cloud). E57 exports from Trimble survey scanners have been tested, and other standard E57 files — Leica, FARO, Matterport, and similar — follow the same ASTM format.
 
-**Drone LiDAR and professional point clouds.** Georeferenced drone LiDAR surveys in LAS and LAZ work today. Planned support includes `PCD`, `PTS/PTX`, and cloud-optimised or streaming formats such as `COPC LAZ` and `3D Tiles / PNTS`.
+**Drone LiDAR and professional point clouds.** Georeferenced drone LiDAR surveys in LAS and LAZ work today. `PCD` (the Point Cloud Library format, in ASCII, binary, and binary-compressed variants) and the terrestrial-scanner text formats `PTX` and `PTS` are read directly in the browser. Planned support includes cloud-optimised or streaming formats such as `COPC LAZ` and `3D Tiles / PNTS`.
 
 Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Full detail is in [`docs/supported-formats.md`](docs/supported-formats.md).
 

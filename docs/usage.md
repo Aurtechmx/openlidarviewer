@@ -103,6 +103,39 @@ Snapshot, in the tool dock, saves the current view as a PNG; any placed measurem
 
 The annotation editor and panel use touch-sized controls on phones. The live probe is a hover tool, so it is desktop-only.
 
+## Sharing a view
+
+The **Share** tool in the bottom dock copies a link that reproduces the current view — the camera position and target, the colour mode, the point sizing, and the selected annotation. The link carries **no scan data**: the recipient opens the same scan themselves, and the saved view is applied on top. This keeps "share this view" working with no upload and no backend.
+
 ## Embedding
 
-Append `?embed=1` to the URL to strip the chrome down to a bare canvas for use in an `<iframe>`.
+Append `?embed=1` to the URL to strip the chrome down to a bare canvas for use in an `<iframe>`. The embed surface is a small, documented set of URL flags and a validated `postMessage` bridge.
+
+### URL flags
+
+| Flag | Effect |
+|---|---|
+| `?embed=1` | Embed mode — hides the dock and panels, enables the bridge |
+| `?ui=minimal` | Hides the dock and panels without enabling the bridge |
+| `?measurements=1` | Surfaces the measurement tool layer in a bare view |
+| `?annotations=1` | Surfaces the annotation tool layer in a bare view |
+| `?autoload=sample:<id>` | Opens a built-in sample on startup (`survey` or `scan`) |
+
+### postMessage bridge
+
+In embed mode the viewer posts one `ready` message to the host page once the renderer has initialised: `{ source: 'openlidarviewer', type: 'ready', version }`. The host page may then send commands with `iframe.contentWindow.postMessage(...)`. Each command is validated against a small, closed set of verbs; anything unrecognised or malformed is ignored:
+
+| Command | Shape |
+|---|---|
+| Load a file | `{ type: 'load-file', buffer: ArrayBuffer, name: string }` |
+| Jump the camera | `{ type: 'jump-camera', camera: { position, target, mode?, fov? } }` |
+| Toggle a layer | `{ type: 'toggle-layer', id: string, visible: boolean }` |
+| Focus an annotation | `{ type: 'focus-annotation', id: string }` |
+
+## Developer diagnostics
+
+Two URL flags surface developer diagnostics; neither appears in a normal session.
+
+`?debug=1` shows a live performance overlay — frame rate and frame time, the GPU backend (WebGPU or WebGL 2), draw calls, the displayed and total point counts, and an estimated GPU memory figure — refreshed about four times a second, alongside the most recent load's stage-by-stage telemetry. The raw error detail for any failed load is also logged to the console under this flag.
+
+`?benchmark=1` emits a structured benchmark result for each load — the time to first render and the full per-stage timing breakdown — to both the overlay and the console, so loading performance can be compared across versions.

@@ -9,12 +9,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - 0.3.0 — the complete rendering overhaul: background themes, premium loading
   states, and full mobile-adaptive rendering, building on the 0.2.5 pipeline
-- Expanded format support — PCD, PTS/PTX, COPC LAZ, 3D Tiles / PNTS
+- Cloud-optimised and streaming formats — COPC LAZ, 3D Tiles / PNTS
 - Cross-section and profile measurement
 - Slicing and clipping tools
 - Large-scale dataset streaming and level-of-detail
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.2.9] - 2026-05-25
+
+A professional-interoperability release. OpenLiDARViewer reads three more
+point-cloud formats, loads very large text datasets without freezing, degrades
+gracefully on weak devices, and gains developer diagnostics, a documented embed
+API, and shareable view links — all browser-native, with nothing uploaded.
+
+### Added
+
+- PCD point clouds. The Point Cloud Library format opens directly — ASCII,
+  binary, and binary-compressed variants — with position, RGB colour,
+  intensity, surface normals, and labels read where the file carries them.
+- PTX and PTS terrestrial-scanner formats. PTX multi-scan files apply each
+  scan's pose matrix and record the scanner origin; PTS files read the
+  optional header count and the standard 3/4/6/7-column layouts. Both decode
+  entirely in the browser.
+- A universal file-open summary. Every dropped file — not just LAS/LAZ — now
+  shows what the viewer detected before the decode begins: the format, the
+  source size, the point count where the header reveals one, and the chosen
+  load mode.
+- Categorised load errors. A failed load shows a clear, plain-language message
+  — an unsupported format, a malformed file, a memory limit, a decode failure
+  — instead of a raw error string. The raw detail still reaches the console
+  under `?debug=1`.
+- A performance overlay. `?debug=1` shows a live panel — frame rate, GPU
+  backend, draw calls, displayed and total point counts, and an estimated GPU
+  memory figure — alongside the most recent load's stage-by-stage telemetry.
+- Benchmark mode. `?benchmark=1` emits a structured, comparable benchmark
+  result for each load — time to first render and the full per-stage breakdown
+  — to the overlay and the console.
+- Shareable view links. The Share tool copies a link that reproduces the
+  current view — camera, colour mode, point sizing, and the selected
+  annotation. The link carries no scan data; the recipient opens the same scan
+  and the saved view is restored on top.
+- A hardened embed API. The `?embed=1` embed mode gains a validated
+  `postMessage` bridge: a host page can load a file, jump the camera, toggle a
+  layer, or focus an annotation through a small, closed set of verified
+  commands, and `?ui=minimal`, `?autoload`, and force-tool flags round out the
+  documented embedding surface.
+
+### Changed
+
+- Large text point clouds — XYZ, CSV, and PTS — are now read in bounded chunks,
+  so a very large text dataset loads without exhausting browser memory.
+- Graceful degradation on weak devices. The viewer profiles the device on
+  startup and picks a safe render budget and quality defaults; a hard GPU
+  point ceiling guards every load path, so a large survey degrades in density
+  rather than risking a GPU crash.
+- Internal architecture. The decoders moved behind a loader registry, and a
+  `PointCloudSource` abstraction now sits between the app and the file — a
+  clean seam for the planned v0.3 streaming sources. No workflow changed, and
+  every v0.2.7 / v0.2.8 workflow still passes unchanged.
 
 ## [0.2.8] - 2026-05-24
 

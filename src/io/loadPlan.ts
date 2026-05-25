@@ -61,8 +61,6 @@ export interface LoadPlan {
   memoryEstimateBytes: number;
   /** True when the memory guard downgraded the plan. */
   memoryGuardTriggered: boolean;
-  /** Human-readable lines for the preload UI. */
-  preloadSummary: string[];
 }
 
 /** A point count plus the attributes and file context the estimate needs. */
@@ -223,33 +221,6 @@ export function formatPointCount(n: number): string {
   return String(Math.round(v));
 }
 
-/** The preload-UI lines for a finished plan. */
-function buildPreloadSummary(
-  format: SourceFormat,
-  sourceCount: number,
-  mode: LoadMode,
-  budget: number,
-  memoryGuardTriggered: boolean,
-): string[] {
-  const lines: string[] = [
-    `${format.toUpperCase()} file detected`,
-    `${formatPointCount(sourceCount)} source points`,
-  ];
-  if (mode === 'all') {
-    lines.push('Loading at full resolution');
-  } else if (mode === 'voxel') {
-    lines.push('Optimizing to the render budget');
-    lines.push(`Target render budget: ${formatPointCount(budget)} points`);
-  } else {
-    lines.push('Fast load mode enabled');
-    lines.push(`Target render budget: ${formatPointCount(budget)} points`);
-  }
-  if (memoryGuardTriggered) {
-    lines.push('Large file — loading at reduced density to fit available memory');
-  }
-  return lines;
-}
-
 // --- the plan --------------------------------------------------------------
 
 /**
@@ -266,7 +237,7 @@ function buildPreloadSummary(
  * the estimated peak: if it exceeds what the device can safely give, the plan
  * is forced to `stride` (which caps the decoded set) and its budget shrunk
  * until the estimate fits — never below `MIN_BUDGET_FLOOR`. A guard adjustment
- * is always surfaced through `preloadSummary`, never applied silently.
+ * is recorded in `memoryGuardTriggered`, never applied silently.
  */
 export function planLoad(input: LoadPlanInput): LoadPlan {
   const sourceCount = Math.max(0, Math.floor(input.sourceCount));
@@ -324,6 +295,5 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     budget,
     memoryEstimateBytes: plan.estimate,
     memoryGuardTriggered,
-    preloadSummary: buildPreloadSummary(format, sourceCount, plan.mode, budget, memoryGuardTriggered),
   };
 }

@@ -12,8 +12,11 @@ Format support is still evolving. This page separates what works today from what
 | `PLY` | iPhone / mobile scans | Point clouds and meshes; RGB supported |
 | `OBJ` | Mesh scans, 3D tools | Mesh vertices used as points |
 | `GLB` / `GLTF` | AR tools, mobile scans | Mesh vertices used as points |
-| `XYZ` | Survey / generic export | Whitespace-delimited text; optional RGB |
-| `CSV` | Survey / generic export | Comma-delimited text; optional RGB |
+| `XYZ` | Survey / generic export | Whitespace-delimited text; optional RGB; chunked, bounded-memory reading |
+| `CSV` | Survey / generic export | Comma-delimited text; optional RGB; chunked, bounded-memory reading |
+| `PCD` | Point Cloud Library | ASCII, binary, and binary-compressed; position, RGB, intensity, normals, labels |
+| `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded |
+| `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
 
 ## Current export targets
 
@@ -35,7 +38,9 @@ E57 exports from Trimble survey scanners have been tested directly. Other standa
 
 Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large UTM-scale coordinates handled by the coordinate bridge.
 
-Planned support: `PCD`, the Point Cloud Library format; and `PTS` / `PTX`, the terrestrial scanner text formats.
+`PCD` — the Point Cloud Library format — is read directly in the browser in its ASCII, binary, and binary-compressed variants, with position, RGB colour, intensity, surface normals, and labels decoded where the file carries them.
+
+`PTX` and `PTS`, the terrestrial laser-scanner text formats, are also read in the browser. PTX multi-scan files apply each scan's recorded pose matrix, merge every scan into one cloud, and record the scanner origin (shown in the Scan Report). PTS files read the optional leading point-count line and the standard 3-, 4-, 6-, and 7-column layouts; like XYZ and CSV they are read in bounded chunks so a very large text scan loads without exhausting memory.
 
 ## Large-scale and web formats
 

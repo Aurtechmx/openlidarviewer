@@ -8,10 +8,16 @@
  * Comment lines (starting with `#`) and a non-numeric header row are skipped.
  * Coordinates may be large (survey eastings/northings), so the same float64
  * coordinate bridge used for LAS is applied here.
+ *
+ * The file is streamed line-by-line through {@link readTextLines} — the whole
+ * file is never held as one string, so a very large text cloud stays within a
+ * bounded memory footprint.
  */
 
 import { PointCloud } from '../model/PointCloud';
 import { computeOrigin, recenter } from './coordinateBridge';
+import { readTextLines } from './textChunkReader';
+import type { ProgressUpdate } from './loadProgress';
 
 /** Split a line into tokens on any run of whitespace or commas. */
 function tokenize(line: string): string[] {
@@ -21,13 +27,15 @@ function tokenize(line: string): string[] {
 /**
  * Load a `.xyz` / `.csv` point cloud into a `PointCloud`.
  *
- * @param buffer Raw file bytes.
- * @param name   Display name (defaults to `"cloud.xyz"`).
+ * @param buffer     Raw file bytes.
+ * @param name       Display name (defaults to `"cloud.xyz"`).
+ * @param onProgress Optional staged-progress callback for the chunked decode.
  */
-export async function loadXyz(buffer: ArrayBuffer, name = 'cloud.xyz'): Promise<PointCloud> {
-  const text = new TextDecoder().decode(buffer);
-  const lines = text.split(/\r?\n/);
-
+export async function loadXyz(
+  buffer: ArrayBuffer,
+  name = 'cloud.xyz',
+  onProgress?: (u: ProgressUpdate) => void,
+): Promise<PointCloud> {
   const xs: number[] = [];
   const ys: number[] = [];
   const zs: number[] = [];
@@ -37,42 +45,51 @@ export async function loadXyz(buffer: ArrayBuffer, name = 'cloud.xyz'): Promise<
   let colorMax = 0;
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
 
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (line === '' || line[0] === '#') continue;
+  readTextLines(
+    buffer,
+    (raw) => {
+      const line = raw.trim();
+      if (line === '' || line[0] === '#') return;
 
-    const tok = tokenize(line);
-    const x = Number(tok[0]);
-    const y = Number(tok[1]);
-    const z = Number(tok[2]);
-    // A non-numeric line (e.g. a "x,y,z" header) is silently skipped.
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      const tok = tokenize(line);
+      const x = Number(tok[0]);
+      const y = Number(tok[1]);
+      const z = Number(tok[2]);
+      // A non-numeric line (e.g. a "x,y,z" header) is silently skipped.
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
 
-    if (hasColor === null) {
-      hasColor = tok.length >= 6
-        && Number.isFinite(Number(tok[3]))
-        && Number.isFinite(Number(tok[4]))
-        && Number.isFinite(Number(tok[5]));
-    }
+      if (hasColor === null) {
+        hasColor =
+          tok.length >= 6 &&
+          Number.isFinite(Number(tok[3])) &&
+          Number.isFinite(Number(tok[4])) &&
+          Number.isFinite(Number(tok[5]));
+      }
 
-    xs.push(x);
-    ys.push(y);
-    zs.push(z);
-    if (x < min[0]) min[0] = x;
-    if (y < min[1]) min[1] = y;
-    if (z < min[2]) min[2] = z;
+      xs.push(x);
+      ys.push(y);
+      zs.push(z);
+      if (x < min[0]) min[0] = x;
+      if (y < min[1]) min[1] = y;
+      if (z < min[2]) min[2] = z;
 
-    if (hasColor) {
-      const r = Number(tok[3]);
-      const g = Number(tok[4]);
-      const b = Number(tok[5]);
-      const rr = Number.isFinite(r) ? r : 0;
-      const gg = Number.isFinite(g) ? g : 0;
-      const bb = Number.isFinite(b) ? b : 0;
-      rgb.push(rr, gg, bb);
-      colorMax = Math.max(colorMax, rr, gg, bb);
-    }
-  }
+      if (hasColor) {
+        const r = Number(tok[3]);
+        const g = Number(tok[4]);
+        const b = Number(tok[5]);
+        const rr = Number.isFinite(r) ? r : 0;
+        const gg = Number.isFinite(g) ? g : 0;
+        const bb = Number.isFinite(b) ? b : 0;
+        rgb.push(rr, gg, bb);
+        colorMax = Math.max(colorMax, rr, gg, bb);
+      }
+    },
+    {
+      onProgress: onProgress
+        ? (fraction) => onProgress({ stage: 'decoding', fraction })
+        : undefined,
+    },
+  );
 
   const count = xs.length;
   if (count === 0) throw new Error('XYZ file has no readable points');

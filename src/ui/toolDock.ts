@@ -3,6 +3,8 @@ import { el } from './dom';
 export interface ToolDockCallbacks {
   onFrameAll: () => void;
   onSnapshot: () => void;
+  /** Copy a shareable link that reproduces the current view. */
+  onShare: () => void;
   /** Toggle distance-measurement mode. */
   onMeasureToggle: () => void;
   /** Toggle point-inspection mode. */
@@ -28,6 +30,8 @@ export class ToolDock {
   readonly dock: HTMLElement;
   readonly backend: HTMLElement;
   private readonly _backendText: HTMLElement;
+  private readonly _share: HTMLButtonElement;
+  private _shareTimer: number | undefined;
   private readonly _measure: HTMLButtonElement;
   private readonly _inspect: HTMLButtonElement;
   private readonly _probe: HTMLButtonElement;
@@ -48,6 +52,19 @@ export class ToolDock {
       false,
     );
     snapshot.addEventListener('click', callbacks.onSnapshot);
+
+    // Share copies a link that reproduces the current view (camera, sizing) —
+    // no scan data, just the viewpoint, for a recipient who opens the scan.
+    this._share = this._tool(
+      'Share',
+      'Copy a link that reproduces this view — no scan data is shared',
+      false,
+    );
+    this._share.addEventListener('click', () => {
+      this._share.blur();
+      callbacks.onShare();
+      this._flashShare();
+    });
 
     const help = this._tool('Help', 'Workflows, navigation and keyboard shortcuts — also the ? key', false);
     help.addEventListener('click', () => {
@@ -99,6 +116,7 @@ export class ToolDock {
     this.dock = el('div', { className: 'olv-dock' }, [
       frame,
       snapshot,
+      this._share,
       help,
       this._measure,
       this._inspect,
@@ -186,6 +204,16 @@ export class ToolDock {
     this._close.title = enabled
       ? 'Close the scan and return to the start'
       : 'Load a scan to enable';
+  }
+
+  /** Briefly confirm a share link was copied, then restore the label. */
+  private _flashShare(): void {
+    if (this._shareTimer !== undefined) window.clearTimeout(this._shareTimer);
+    this._share.textContent = 'Link copied';
+    this._shareTimer = window.setTimeout(() => {
+      this._share.textContent = 'Share';
+      this._shareTimer = undefined;
+    }, 2000);
   }
 
   private _tool(label: string, title: string, disabled: boolean): HTMLButtonElement {
