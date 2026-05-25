@@ -1,7 +1,8 @@
 # Usage
 
-How to open, inspect, navigate, measure, and export a scan. To try it without
-installing anything, open the live version at <https://lidar.aurtech.mx/>.
+How to open, navigate, measure, annotate, inspect, and export a scan. To try
+it without installing anything, open the live version at
+<https://lidar.aurtech.mx/>.
 
 ## Opening a scan
 
@@ -17,7 +18,7 @@ Dropping a second file opens it as an additional layer alongside the first; the 
 
 ## Closing a scan
 
-Click Close in the tool dock to clear the current scan — and any additional layers — and return to the empty state. From there you can drop, open, or sample another scan. Closing also clears the session's measurements and saved views, so the next scan starts clean; export a measurement session first if you want to keep it.
+Click Close in the tool dock to clear the current scan — and any additional layers — and return to the empty state. From there you can drop, open, or sample another scan. Closing also clears the session's measurements, annotations, and saved views, so the next scan starts clean; export the session first if you want to keep it.
 
 ## Styling the cloud
 
@@ -60,17 +61,35 @@ While placing, undo removes the last point. Once placed, drag any point to move 
 
 Measurement is for visual inspection. See the note in [limitations.md](limitations.md).
 
+## Annotating
+
+Annotations mark points of interest for review. Click Annotate in the tool dock, then click a point on the scan: a numbered marker drops on it and a compact card opens. Give the annotation a title, choose a category — note, info, warning, or issue — and add an optional note. Keep the "Save current camera view" checkbox ticked to store the exact viewpoint you placed it from. Save commits the annotation; Cancel discards the draft, so an abandoned card never leaves a stray marker.
+
+You can also link an annotation to a measurement: when the scan has measurements, the editor offers a "Linked measurement" selector, and a linked annotation shows the measurement's name in the panel.
+
+The Annotations panel lists every placed marker with its category badge, title, and when it was last edited. Sort the list by created time, recent edit, category, or title, and use the search box to filter by title, note, or type. Each row jumps the camera to its annotation — restoring the saved viewpoint when one was captured — and offers Edit and delete; Clear all empties the list with a confirm step. Hovering a row highlights the matching marker in the scene.
+
+Every scan stays on your device. Export the session (see Exporting) to save the whole inspection — measurements, annotations, and named views — to a JSON file and reload it later.
+
 ## Inspecting a point
 
-Click Inspect in the tool dock, then click any point on the scan. A glowing marker drops on the nearest point and a compact card shows its real-world coordinates, distance from the camera, intensity, classification, RGB colour, source layer, and index — with attributes the file does not carry shown as "Not available". For a georeferenced LAS or LAZ survey the coordinates are the absolute survey position, which is what engineers and topographers need. The Copy button puts the point's data on the clipboard as clean text. Clicking another point replaces the selection; Esc, Done, or clicking Inspect again exits. Measure and Inspect are mutually exclusive — turning one on turns the other off.
+Click Inspect in the tool dock, then click any point on the scan. A glowing marker drops on the nearest point and a compact card shows its real-world coordinates, distance from the camera, intensity, classification, RGB colour, source layer, and index — with attributes the file does not carry shown as "Not available". For a LAS or LAZ point the card also shows the return number and count, the point source ID, and the GPS time when the file records them, and the surface normal for clouds that carry one; those rows are simply omitted when the data is absent. For a georeferenced LAS or LAZ survey the coordinates are the absolute survey position, which is what engineers and topographers need. The Copy button puts the point's data on the clipboard as clean text. Clicking another point replaces the selection; Esc, Done, or clicking Inspect again exits.
+
+The **live probe** (desktop) is Inspect without the click: turn on Probe in the tool dock and a small readout follows the cursor, showing the point under it as you hover. Navigation stays fully live, so you can orbit and probe at once. Probe is a hover affordance, so it is not offered on touch devices.
+
+The picking tools — Measure, Inspect, Annotate, and Probe — are mutually exclusive; turning one on turns the others off.
 
 ## Saved views
 
-In the Saved views section of the panel, click Save current view to store the camera position. Click a saved view to glide back to it. This is useful for inspection, reports, and presentations.
+In the Saved views section of the panel, click Save current view — or press `V` — to store the camera position. Each saved view can be renamed in place; click Go to glide the camera back to it, or the `×` to delete it. Saved views are kept in the session file, so they survive an export and import. This is useful for inspection, reports, and presentations.
+
+## Keyboard shortcuts
+
+`A`, `M`, and `I` toggle the Annotate, Measure, and Inspect tools; `V` saves the current camera view; `Delete` removes the selected annotation; `Ctrl`/`Cmd`+`Z` undoes an annotation change and adding `Shift` redoes it; `Esc` cancels the active tool; and `?` opens the help overlay. Shortcuts are suppressed while you are typing in a field. Navigation keeps its own keys — `1`/`2`/`3` for the modes, `R` to frame the scan, `F` to focus the centre. The Help button in the tool dock opens a reference card covering all of this.
 
 ## Exporting
 
-Snapshot, in the tool dock, saves the current view as a PNG. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates.
+Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates. The session Export saves measurements, annotations, and named views to a JSON file, and Import loads one back — older measurement-only session files still open.
 
 ## Mobile Usage
 
@@ -78,9 +97,11 @@ Snapshot, in the tool dock, saves the current view as a PNG. Export, in the pane
 2. Tap "Open scan from device."
 3. Choose a compatible file from device storage or a cloud file provider.
 4. Use touch gestures to navigate — drag to rotate, pinch to zoom, two fingers to pan.
-5. Tap Measure to measure between points.
+5. Tap Measure to measure between points, or Annotate to mark and note a point of interest.
 6. Open Scan Info to view scan metadata.
 7. Export a snapshot or a supported file format.
+
+The annotation editor and panel use touch-sized controls on phones. The live probe is a hover tool, so it is desktop-only.
 
 ## Embedding
 

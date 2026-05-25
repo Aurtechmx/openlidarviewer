@@ -44,6 +44,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Game-like navigation: Orbit, Walk, and Fly modes with WASD and mouse-look.
 - A small, focused interface that stays out of the way and keeps you on the scan.
 - A full measurement toolkit — distance, polyline, area, height, angle, and slope — with editable points, in-session persistence, and JSON export/import.
+- Annotations: mark points of interest with categorised, titled notes, revisit them, and save the whole inspection to a file.
 - Inspect any point: click it to read its exact coordinates, intensity, classification, and colour, then copy them in one click.
 - A Scan Intelligence panel that reports point count, dimensions, density, spacing, and detected attributes.
 - Color by height, intensity, classification, stored RGB, or surface normal direction.
@@ -66,12 +67,16 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Adaptive or fixed point sizing, round antialiased points, and a Detail control that shows an honest `shown / total` count
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
 - A measurement toolkit with six tools — distance, polyline, area, height, angle, and slope — with draggable points, undo, rename, a units toggle, and JSON session export/import
+- Annotations — drop categorised, titled markers with notes, browse and search them in a panel, capture the camera viewpoint with each, and undo/redo changes
 - Open multiple scans as layers, or close the current scan from the tool dock to start fresh with another
-- Point inspection — click a point to read its coordinates and attributes, with one-click copy to the clipboard
+- Point inspection — click a point to read its coordinates and attributes (including LAS return number, point source ID, and GPS time), with one-click copy; or hover with the live probe for a click-free readout
+- Inspection sessions — export measurements, annotations, and named views to one JSON file and reload them later
+- Screenshot export that burns in the placed measurements and annotations as inspection evidence
+- Keyboard shortcuts for the tools plus a built-in help overlay
 - A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
 - Capture provenance from LAS/LAZ and E57 headers — sensor, source software, and date — shown in the Scan Report when the file carries them
 - A "Project ready" summary card on load, with a suggested navigation mode
-- Saved camera views for repeatable inspection
+- Saved, renamable camera views for repeatable inspection
 - A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates precise
 - An embed mode for `<iframe>` use (`?embed=1`)
 
@@ -250,8 +255,9 @@ npm run preview
 5. Navigate with Orbit, Walk, or Fly mode.
 6. Read the Scan Intelligence panel for dataset metadata and quality.
 7. Measure distance, polyline, area, height, angle, or slope inside the point cloud.
-8. Save viewpoints for repeated inspection.
-9. Export a PNG snapshot, re-export the cloud as PLY, OBJ, XYZ, or CSV, or save a JSON measurement session.
+8. Annotate points of interest with categorised notes, and inspect or probe individual points.
+9. Save viewpoints for repeated inspection.
+10. Export a PNG snapshot, re-export the cloud as PLY, OBJ, XYZ, or CSV, or save a JSON inspection session.
 10. Close the scan from the tool dock to return to the start and open another.
 
 A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
@@ -276,7 +282,6 @@ Planned performance work includes tiled datasets, COPC LAZ, 3D Tiles / PNTS, lev
 - [ ] Add 3D Tiles / PNTS streaming
 - [ ] Cross-section and profile measurement
 - [ ] Slicing and clipping tools
-- [ ] Annotation tools
 - [ ] Camera path recording
 - [ ] Exportable scan reports
 - [ ] Performance presets and level-of-detail for large datasets

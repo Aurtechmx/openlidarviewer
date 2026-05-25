@@ -60,6 +60,10 @@ ctx.onmessage = (event: MessageEvent): void => {
       if (cloud.intensity) transfer.push(cloud.intensity.buffer as ArrayBuffer);
       if (cloud.classification) transfer.push(cloud.classification.buffer as ArrayBuffer);
       if (cloud.normals) transfer.push(cloud.normals.buffer as ArrayBuffer);
+      if (cloud.returnNumber) transfer.push(cloud.returnNumber.buffer as ArrayBuffer);
+      if (cloud.returnCount) transfer.push(cloud.returnCount.buffer as ArrayBuffer);
+      if (cloud.pointSourceId) transfer.push(cloud.pointSourceId.buffer as ArrayBuffer);
+      if (cloud.gpsTime) transfer.push(cloud.gpsTime.buffer as ArrayBuffer);
 
       ctx.postMessage(
         {
@@ -70,6 +74,10 @@ ctx.onmessage = (event: MessageEvent): void => {
             intensity: cloud.intensity,
             classification: cloud.classification,
             normals: cloud.normals,
+            returnNumber: cloud.returnNumber,
+            returnCount: cloud.returnCount,
+            pointSourceId: cloud.pointSourceId,
+            gpsTime: cloud.gpsTime,
             origin: cloud.origin,
             sourceFormat: cloud.sourceFormat,
             name: cloud.name,

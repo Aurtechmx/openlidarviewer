@@ -34,15 +34,17 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 - [ ] Mobile and tablet inspection mode
 - [ ] Configurable control bindings
 
-## Measurement
+## Measurement and inspection
 
 - [x] Polyline measurement
 - [x] Area measurement — own-plane and horizontal
 - [x] Height-difference measurement
 - [x] Angle and slope measurement
 - [x] Measurement editing, units toggle, and JSON session export/import
+- [x] Annotations — categorised markers, notes, panel, and search (0.2.8)
+- [x] Camera-state capture and inspection-session persistence (0.2.8)
+- [x] Live point probe and an extended point inspector (0.2.8)
 - [ ] Cross-section and profile tools
-- [ ] Annotation tools
 
 ## Performance
 
@@ -52,6 +54,7 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 
 ## Export and reporting
 
+- [x] Screenshot export with measurement and annotation overlays (0.2.8)
 - [ ] Exportable scan reports
 - [ ] More export targets
 

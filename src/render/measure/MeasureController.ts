@@ -376,6 +376,11 @@ export class MeasureController {
     this._draw.render(this._buildModel(), camera, canvas);
   }
 
+  /** The current frame's geometry as a standalone SVG — used by the screenshot export. */
+  overlaySVG(): string {
+    return this._draw.toSVGString();
+  }
+
   /** Free DOM references. */
   dispose(): void {
     this._endDrag();

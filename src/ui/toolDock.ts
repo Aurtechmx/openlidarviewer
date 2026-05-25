@@ -7,6 +7,12 @@ export interface ToolDockCallbacks {
   onMeasureToggle: () => void;
   /** Toggle point-inspection mode. */
   onInspectToggle: () => void;
+  /** Toggle the live-probe (hover readout) mode. */
+  onProbeToggle: () => void;
+  /** Toggle annotation mode. */
+  onAnnotateToggle: () => void;
+  /** Open the help overlay. */
+  onHelp: () => void;
   /** Close the current scan and return to the empty state. */
   onClose: () => void;
 }
@@ -24,6 +30,8 @@ export class ToolDock {
   private readonly _backendText: HTMLElement;
   private readonly _measure: HTMLButtonElement;
   private readonly _inspect: HTMLButtonElement;
+  private readonly _probe: HTMLButtonElement;
+  private readonly _annotate: HTMLButtonElement;
   private readonly _close: HTMLButtonElement;
 
   constructor(callbacks: ToolDockCallbacks) {
@@ -36,10 +44,16 @@ export class ToolDock {
 
     const snapshot = this._tool(
       'Snapshot',
-      'Save the current view as a PNG image to your device',
+      'Save the current view as a PNG image — placed measurements and annotations included',
       false,
     );
     snapshot.addEventListener('click', callbacks.onSnapshot);
+
+    const help = this._tool('Help', 'Workflows, navigation and keyboard shortcuts — also the ? key', false);
+    help.addEventListener('click', () => {
+      help.blur();
+      callbacks.onHelp();
+    });
 
     // Measure starts disabled — enabled by setMeasureEnabled once a scan loads.
     this._measure = this._tool('Measure', 'Load a scan to enable measurement', true);
@@ -53,6 +67,22 @@ export class ToolDock {
     this._inspect.addEventListener('click', () => {
       this._inspect.blur();
       callbacks.onInspectToggle();
+    });
+
+    // Probe starts disabled — enabled by setProbeEnabled once a scan loads.
+    // It is a desktop-only hover affordance; CSS hides the button on phones.
+    this._probe = this._tool('Probe', 'Load a scan to enable the live probe', true);
+    this._probe.classList.add('olv-tool-probe');
+    this._probe.addEventListener('click', () => {
+      this._probe.blur();
+      callbacks.onProbeToggle();
+    });
+
+    // Annotate starts disabled — enabled by setAnnotateEnabled once a scan loads.
+    this._annotate = this._tool('Annotate', 'Load a scan to enable annotation', true);
+    this._annotate.addEventListener('click', () => {
+      this._annotate.blur();
+      callbacks.onAnnotateToggle();
     });
 
     const slice = this._tool('Slice', 'Section & slice plane — coming soon', true);
@@ -69,8 +99,11 @@ export class ToolDock {
     this.dock = el('div', { className: 'olv-dock' }, [
       frame,
       snapshot,
+      help,
       this._measure,
       this._inspect,
+      this._probe,
+      this._annotate,
       slice,
       this._close,
     ]);
@@ -91,7 +124,7 @@ export class ToolDock {
   setMeasureEnabled(enabled: boolean): void {
     this._measure.disabled = !enabled;
     this._measure.title = enabled
-      ? 'Measure distance, area, height, angle and slope on the scan'
+      ? 'Measure distance, area, height, angle and slope on the scan — also the M key'
       : 'Load a scan to enable measurement';
     if (!enabled) this.setMeasureActive(false);
   }
@@ -106,7 +139,7 @@ export class ToolDock {
   setInspectEnabled(enabled: boolean): void {
     this._inspect.disabled = !enabled;
     this._inspect.title = enabled
-      ? 'Click any point to read its coordinates and attributes'
+      ? 'Click any point to read its coordinates and attributes — also the I key'
       : 'Load a scan to enable inspection';
     if (!enabled) this.setInspectActive(false);
   }
@@ -115,6 +148,36 @@ export class ToolDock {
   setInspectActive(active: boolean): void {
     this._inspect.classList.toggle('olv-tool-active', active);
     this._inspect.textContent = active ? 'Inspecting…' : 'Inspect';
+  }
+
+  /** Enable or disable the live Probe — enabled once a scan is loaded. */
+  setProbeEnabled(enabled: boolean): void {
+    this._probe.disabled = !enabled;
+    this._probe.title = enabled
+      ? 'Hover the scan to read each point live, with no click'
+      : 'Load a scan to enable the live probe';
+    if (!enabled) this.setProbeActive(false);
+  }
+
+  /** Reflect whether live-probe mode is currently active. */
+  setProbeActive(active: boolean): void {
+    this._probe.classList.toggle('olv-tool-active', active);
+    this._probe.textContent = active ? 'Probing…' : 'Probe';
+  }
+
+  /** Enable or disable the Annotate tool — enabled once a scan is loaded. */
+  setAnnotateEnabled(enabled: boolean): void {
+    this._annotate.disabled = !enabled;
+    this._annotate.title = enabled
+      ? 'Mark points of interest with notes and findings — also the A key'
+      : 'Load a scan to enable annotation';
+    if (!enabled) this.setAnnotateActive(false);
+  }
+
+  /** Reflect whether annotation mode is currently active. */
+  setAnnotateActive(active: boolean): void {
+    this._annotate.classList.toggle('olv-tool-active', active);
+    this._annotate.textContent = active ? 'Annotating…' : 'Annotate';
   }
 
   /** Enable or disable the Close action — enabled once a scan is loaded. */

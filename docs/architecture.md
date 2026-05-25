@@ -42,7 +42,9 @@ Viewer (WebGPU / WebGL 2)  ->  analysis modules  ->  Scan Intelligence panel
 
 **Measurement.** The measurement toolkit (`render/measure/`) supports six kinds — distance, polyline, area, height, angle, and slope. The geometry, value formatting, session serialization, and label layout are pure, unit-tested modules with no three.js or DOM dependency. A controller picks points by ray, supports draggable editing, and draws markers, lines, polygons, and anti-overlapping labels as an SVG overlay — backend-agnostic across WebGPU and WebGL 2.
 
-**Inspection.** The inspect tool picks the nearest point to a ray and shows its real-world coordinates and attributes in a floating card. The picked-point data shape and its clipboard and JSON forms live in a pure, unit-tested module.
+**Inspection.** The inspect tool picks the nearest point to a ray and shows its real-world coordinates and attributes — including LAS return number, point source ID, and GPS time — in a floating card. The picked-point data shape and its clipboard and JSON forms live in a pure, unit-tested module. The live probe reuses the same picker and data shape for a click-free hover readout.
+
+**Annotations.** The annotation layer (`render/annotate/`) mirrors the measurement toolkit: a pure, unit-tested data model and session schema with no three.js or DOM dependency, a controller that owns the annotation list, selection, and a bounded undo history, and a persistent-element SVG overlay that draws one marker group per annotation — so a review with hundreds of markers costs no per-frame budget. An annotation can capture the camera viewpoint it was placed from and link to a measurement; the Annotations panel sorts, searches, and revisits the list.
 
 **Scan Intelligence.** The analysis modules (`healthCheck`, `scanReport`) are pure functions over a `PointCloud`. They return rows and never touch the renderer. New modules register through an open API.
 

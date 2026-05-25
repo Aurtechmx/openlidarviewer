@@ -10,12 +10,15 @@ import { ToolDock } from './ui/toolDock';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
 import { MeasurePanel } from './ui/MeasurePanel';
+import { AnnotationPanel } from './ui/AnnotationPanel';
+import { HelpOverlay } from './ui/HelpOverlay';
+import { bindShortcuts } from './ui/shortcuts';
 import { loadFile, LoadCancelledError, MOBILE_POINT_BUDGET, POINT_BUDGET } from './io/loadFile';
 import { formatProgress } from './io/loadProgress';
 import { formatTelemetry } from './io/loadTelemetry';
 import { isZUpFormat } from './io/sniffFormat';
 import { exportCloud } from './io/exporters';
-import { serializeSession, parseSession } from './render/measure/serialization';
+import { serializeSession, parseSession } from './io/session';
 import { loadPrefs, savePrefs } from './prefs';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
@@ -92,13 +95,17 @@ const inspector = new Inspector({
     if (!cloud) return;
     downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
   },
-  onSaveView: () => {
-    savedViews.push({ name: `View ${++viewCounter}`, pose: viewer.getCameraPose() });
-    inspector.setViews(savedViews.map((v) => v.name));
-  },
+  onSaveView: () => saveCurrentView(),
   onApplyView: (index) => {
     const view = savedViews[index];
     if (view) viewer.applyCameraPose(view.pose);
+  },
+  onRenameView: (index, name) => {
+    const view = savedViews[index];
+    if (view) {
+      view.name = name;
+      inspector.setViews(savedViews.map((v) => v.name));
+    }
   },
   onDeleteView: (index) => {
     savedViews.splice(index, 1);
@@ -122,11 +129,16 @@ const inspector = new Inspector({
   },
 });
 
+const helpOverlay = new HelpOverlay();
+
 const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
+  onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
+  onAnnotateToggle: () => viewer.setAnnotateMode(!viewer.annotateMode),
+  onHelp: () => helpOverlay.open(),
   onClose: () => closeScan(),
 });
 
@@ -144,7 +156,7 @@ viewer.setMeasureListeners({
   onModeChange: (active) => {
     dock.setMeasureActive(active);
     // Hide the "click to look around" prompt — a picking tool owns the clicks.
-    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode);
+    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
     // The summary card and the tool hint share the top-centre slot.
     if (active) projectCard.hide();
     refreshMeasurePanel();
@@ -153,8 +165,23 @@ viewer.setMeasureListeners({
 viewer.setInspectListeners({
   onModeChange: (active) => {
     dock.setInspectActive(active);
-    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode);
+    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
     if (active) projectCard.hide();
+  },
+});
+viewer.setProbeListeners({
+  onModeChange: (active) => {
+    dock.setProbeActive(active);
+    // The probe keeps navigation live, so the "look around" prompt stays.
+    if (active) projectCard.hide();
+  },
+});
+viewer.setAnnotateListeners({
+  onModeChange: (active) => {
+    dock.setAnnotateActive(active);
+    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
+    if (active) projectCard.hide();
+    refreshAnnotationPanel();
   },
 });
 
@@ -170,6 +197,16 @@ const measurePanel = new MeasurePanel({
 viewer.measure.setOnChange(refreshMeasurePanel);
 // Persist the unit choice whenever it changes.
 viewer.measure.setOnUnitChange(persistPrefs);
+
+// The Annotations panel lists placed annotations; the controller drives it.
+const annotationPanel = new AnnotationPanel({
+  onActivate: (id) => viewer.jumpToAnnotation(id),
+  onEdit: (id, x, y) => viewer.annotate.beginEdit(id, x, y),
+  onDelete: (id) => viewer.annotate.remove(id),
+  onClearAll: () => viewer.annotate.clear(),
+  onHover: (id) => viewer.annotate.hover(id),
+});
+viewer.annotate.setOnChange(refreshAnnotationPanel);
 
 // Apply any preferences saved in a previous session, once the GPU backend has
 // initialised (so a saved EDL choice overrides the backend's default gate).
@@ -189,15 +226,57 @@ if (!embed) {
   stage.overlay.append(viewer.measureElements.hint);
   stage.overlay.append(viewer.inspectElements.overlay);
   stage.overlay.append(viewer.inspectElements.hint);
+  stage.overlay.append(viewer.annotateElements.overlay);
+  stage.overlay.append(viewer.annotateElements.hint);
   stage.overlay.append(inspector.element);
-  stage.overlay.append(measurePanel.element);
+  // The measurement and annotation panels share a stacked left-side column.
+  const leftPanels = document.createElement('div');
+  leftPanels.className = 'olv-left-panels';
+  leftPanels.append(measurePanel.element, annotationPanel.element);
+  stage.overlay.append(leftPanels);
   stage.overlay.append(dock.dock);
   stage.overlay.append(dock.backend);
   stage.overlay.append(projectCard.element);
   // The point-info card sits above the panels so its Copy button is reachable.
   stage.overlay.append(viewer.inspectElements.card);
+  // The annotation editor card floats above everything while it is open.
+  stage.overlay.append(viewer.annotateElements.editor);
+  // The live-probe readout follows the cursor above the panels.
+  stage.overlay.append(viewer.probeElements.readout);
   // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
   stage.overlay.append(inspector.sheetToggle);
+  // The help overlay is a modal — appended last so it sits above everything.
+  stage.overlay.append(helpOverlay.element);
+
+  // Global keyboard shortcuts — single-key tool access, suppressed while
+  // typing. Only wired for the full app, never the minimal embed view.
+  // A tool shortcut needs a loaded scan and is inert behind the help modal.
+  const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen;
+  bindShortcuts({
+    onAnnotate: () => {
+      if (toolsReady()) viewer.setAnnotateMode(!viewer.annotateMode);
+    },
+    onMeasure: () => {
+      if (toolsReady()) viewer.setMeasureMode(!viewer.measureMode);
+    },
+    onInspect: () => {
+      if (toolsReady()) viewer.setInspectMode(!viewer.inspectMode);
+    },
+    onSaveView: () => {
+      if (toolsReady()) saveCurrentView();
+    },
+    onDeleteSelection: () => {
+      const id = viewer.annotate.selectedId;
+      if (id && !helpOverlay.isOpen) viewer.annotate.remove(id);
+    },
+    onToggleHelp: () => helpOverlay.toggle(),
+    onUndo: () => {
+      if (!helpOverlay.isOpen) viewer.annotate.undo();
+    },
+    onRedo: () => {
+      if (!helpOverlay.isOpen) viewer.annotate.redo();
+    },
+  });
 }
 
 /** Run every registered validation module and flatten the rows. */
@@ -258,7 +337,29 @@ function refreshMeasurePanel(): void {
   measurePanel.setVisible(viewer.measureMode || hasMeasurements);
 }
 
-/** Export the measurement session — measurements and saved views — as JSON. */
+/** Refresh the Annotations panel's contents and visibility. */
+function refreshAnnotationPanel(): void {
+  annotationPanel.update(viewer.annotate.getSummaries());
+  const hasAnnotations = viewer.annotate.getAnnotations().length > 0;
+  annotationPanel.setVisible(viewer.annotateMode || hasAnnotations);
+}
+
+/** Whether a scan is currently loaded — gates the tool keyboard shortcuts. */
+function hasScan(): boolean {
+  return viewer.clouds().length > 0;
+}
+
+/** Capture the current camera viewpoint as a named saved view. */
+function saveCurrentView(): void {
+  savedViews.push({ name: `View ${++viewCounter}`, pose: viewer.getCameraPose() });
+  inspector.setViews(savedViews.map((v) => v.name));
+}
+
+/**
+ * Export the inspection session — measurements, annotations and saved views —
+ * as JSON. The whole inspection state round-trips, so a review can be closed
+ * and reopened without loss.
+ */
 function exportSession(): void {
   const cloud = activeId ? viewer.getCloud(activeId) : undefined;
   const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
@@ -266,21 +367,24 @@ function exportSession(): void {
     upAxis,
     origin: cloud ? cloud.origin : [0, 0, 0],
     unitSystem: viewer.measure.unitSystem,
-    views: savedViews.map((v) => v.pose),
+    views: savedViews.map((v) => ({ name: v.name, camera: v.pose })),
     measurements: viewer.measure.getMeasurements(),
+    annotations: viewer.annotate.getAnnotations(),
   });
   downloadText('openlidarviewer-session.json', json);
 }
 
-/** Import a measurement session: restore its measurements and saved views. */
+/** Import an inspection session: restore measurements, annotations and views. */
 async function importSession(file: File): Promise<void> {
   try {
     const session = parseSession(await file.text());
     viewer.measure.loadMeasurements(session.measurements);
-    savedViews = session.views.map((pose, i) => ({ name: `View ${i + 1}`, pose }));
+    viewer.annotate.loadAnnotations(session.annotations);
+    savedViews = session.views.map((v) => ({ name: v.name, pose: v.camera }));
     viewCounter = savedViews.length;
     inspector.setViews(savedViews.map((v) => v.name));
     refreshMeasurePanel();
+    refreshAnnotationPanel();
   } catch (err) {
     dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
   }
@@ -330,9 +434,11 @@ async function handleFile(file: File): Promise<void> {
     const mode = defaultMode(result.cloud);
     viewer.setColorMode(id, mode);
 
-    // A new scan resets the saved viewpoints.
+    // A new scan resets the saved viewpoints and annotations.
     savedViews = [];
     viewCounter = 0;
+    viewer.annotate.clear();
+    refreshAnnotationPanel();
 
     inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
     inspector.setColorModes(availableModes(result.cloud), mode);
@@ -351,6 +457,8 @@ async function handleFile(file: File): Promise<void> {
     dock.setBackend(viewer.activeBackend());
     dock.setMeasureEnabled(true);
     dock.setInspectEnabled(true);
+    dock.setProbeEnabled(true);
+    dock.setAnnotateEnabled(true);
     dock.setCloseEnabled(true);
 
     navBar.element.classList.remove('olv-hidden');
@@ -427,6 +535,8 @@ function resetToEmptyState(): void {
   viewer.clearMeasurements();
   dock.setMeasureEnabled(false);
   dock.setInspectEnabled(false);
+  dock.setProbeEnabled(false);
+  dock.setAnnotateEnabled(false);
   dock.setCloseEnabled(false);
   inspector.clear();
   stage.showEmptyState();
@@ -438,7 +548,9 @@ function resetToEmptyState(): void {
   activeId = null;
   savedViews = [];
   viewCounter = 0;
+  viewer.annotate.clear();
   refreshMeasurePanel();
+  refreshAnnotationPanel();
 }
 
 /** Remove a cloud from the scene and the Inspector. */
@@ -461,10 +573,18 @@ function closeScan(): void {
   resetToEmptyState();
 }
 
-/** Save the current view as a PNG — entirely client-side. */
+/**
+ * Save the current view as a PNG — entirely client-side. Any placed
+ * measurements and annotations are burned into the image, so the snapshot is
+ * usable as inspection evidence; a clean scan with neither simply exports the
+ * bare render.
+ */
 async function saveSnapshot(): Promise<void> {
   try {
-    const blob = await viewer.snapshot();
+    const blob = await viewer.snapshot({
+      annotations: viewer.annotate.getAnnotations().length > 0,
+      measurements: viewer.measure.getMeasurements().length > 0,
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

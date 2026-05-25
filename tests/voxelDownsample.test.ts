@@ -117,3 +117,39 @@ test('downsampleToBudget keeps a dense 3D cloud at or under budget', () => {
   expect(out.pointCount).toBeLessThanOrEqual(4000);
   expect(out.pointCount).toBeLessThan(27000);
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// LAS inspection extras — carried through downsampling (v0.2.8)
+// ────────────────────────────────────────────────────────────────────────────
+
+test('LAS inspection extras are carried through, keeping the first member', () => {
+  // Two points in one voxel, two in a second — output is two centroids.
+  const cloud = new PointCloud({
+    positions: new Float32Array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2, 5.1, 5.1, 5.1, 5.2, 5.2, 5.2]),
+    returnNumber: new Uint8Array([1, 2, 3, 4]),
+    returnCount: new Uint8Array([2, 2, 4, 4]),
+    pointSourceId: new Uint16Array([10, 11, 20, 21]),
+    gpsTime: new Float64Array([100.5, 101.5, 200.5, 201.5]),
+    origin: [0, 0, 0],
+    sourceFormat: 'las',
+    name: 'test',
+  });
+  const out = voxelDownsample(cloud, 1.0);
+  expect(out.pointCount).toBe(2);
+  // Each output array exists and matches the reduced point count.
+  expect(out.returnNumber).toBeInstanceOf(Uint8Array);
+  expect(out.returnNumber!.length).toBe(2);
+  expect(out.gpsTime).toBeInstanceOf(Float64Array);
+  // The first member's discrete metadata is kept (the contract classification uses).
+  expect(Array.from(out.returnNumber!)).toEqual([1, 3]);
+  expect(Array.from(out.returnCount!)).toEqual([2, 4]);
+  expect(Array.from(out.pointSourceId!)).toEqual([10, 20]);
+  expect(Array.from(out.gpsTime!)).toEqual([100.5, 200.5]);
+});
+
+test('a cloud with no inspection extras yields none after downsampling', () => {
+  const out = voxelDownsample(makeCloud([0.1, 0.1, 0.1, 0.2, 0.2, 0.2]), 1.0);
+  expect(out.returnNumber).toBeUndefined();
+  expect(out.pointSourceId).toBeUndefined();
+  expect(out.gpsTime).toBeUndefined();
+});

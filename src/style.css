@@ -382,14 +382,24 @@ button:disabled { cursor: not-allowed; }
 .olv-views { display: flex; flex-direction: column; gap: 5px; margin-top: 7px; }
 .olv-view-row { display: flex; align-items: center; gap: 6px; }
 .olv-view-name {
-  flex: 1; text-align: left; font-size: 11.5px; color: #d6d9de;
+  flex: 1; min-width: 0; text-align: left; font-size: 11.5px; color: #d6d9de;
+  font-family: var(--font);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: 6px; padding: 5px 8px;
-  transition: color 130ms ease, border-color 130ms ease, transform 90ms ease;
+  transition: color 130ms ease, border-color 130ms ease;
 }
-.olv-view-name:hover { color: var(--accent); border-color: rgba(0, 178, 255, 0.4); }
-.olv-view-name:active { transform: scale(0.98); }
+.olv-view-name:hover { border-color: rgba(0, 178, 255, 0.4); }
+.olv-view-name:focus-visible { outline: none; border-color: var(--accent); }
+.olv-view-go {
+  flex-shrink: 0; font-size: 11px; color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: 6px; padding: 5px 10px;
+  transition: background 130ms ease;
+}
+.olv-view-go:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-view-go:active { transform: scale(0.98); }
 
 /* "Project ready" summary card */
 .olv-project-card {
@@ -648,6 +658,9 @@ button:disabled { cursor: not-allowed; }
   /* The backend pill is desk-side detail; drop it to declutter the phone. */
   .olv-backend { display: none; }
 
+  /* The live probe is a hover affordance — touch has no hover, so hide it. */
+  .olv-tool-probe { display: none; }
+
   /* Tool dock: centre it and lift it clear above the navigation bar.
      Centred via auto margins (not transform) so the rise-in animation,
      which only touches transform, still works. */
@@ -762,7 +775,7 @@ button:disabled { cursor: not-allowed; }
     min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center;
   }
-  .olv-export-btn, .olv-chip, .olv-view-name, .olv-view-save,
+  .olv-export-btn, .olv-chip, .olv-view-name, .olv-view-save, .olv-view-go,
   .olv-measure-clear, .olv-measure-done, .olv-inspect-copy {
     min-height: 44px;
   }
@@ -797,6 +810,99 @@ button:disabled { cursor: not-allowed; }
 .olv-m-label-primary { font-size: 13px; }
 .olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
 .olv-m-handle:active { cursor: grabbing; }
+
+/* ── Annotation markers ──────────────────────────────────────────────────── */
+.olv-anno-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; /* clicks pass through except on markers */
+  overflow: visible;
+}
+.olv-anno-marker { pointer-events: auto; cursor: pointer; }
+/* Dark halo keeps the marker readable over a dense, bright cloud. */
+.olv-anno-halo { fill: rgba(8, 13, 20, 0.82); }
+.olv-anno-disc { stroke: rgba(8, 13, 20, 0.9); stroke-width: 1; }
+.olv-anno-num {
+  font-size: 12px; font-weight: 700; user-select: none;
+}
+/* Type colours — note (blue), info (cyan), warning (amber), issue (red). */
+.olv-anno-note .olv-anno-disc { fill: #5b9bd5; }
+.olv-anno-info .olv-anno-disc { fill: #22dcff; }
+.olv-anno-warning .olv-anno-disc { fill: #f0b429; }
+.olv-anno-issue .olv-anno-disc { fill: #e24b4a; }
+.olv-anno-note .olv-anno-num,
+.olv-anno-info .olv-anno-num,
+.olv-anno-warning .olv-anno-num { fill: #06121a; }
+.olv-anno-issue .olv-anno-num { fill: #ffffff; }
+/* Hover lifts the marker; selection draws a white ring. */
+.olv-anno-marker:hover .olv-anno-disc,
+.olv-anno-hover .olv-anno-disc { filter: brightness(1.18); }
+.olv-anno-selected .olv-anno-disc { stroke: #ffffff; stroke-width: 2.25; }
+
+/* ── Annotation inline editor ────────────────────────────────────────────── */
+.olv-anno-editor {
+  position: absolute; z-index: 30;
+  display: flex; flex-direction: column; gap: 8px;
+  width: 264px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.olv-anno-editor-heading { font-size: 12px; font-weight: 600; color: var(--text); }
+.olv-anno-editor-title,
+.olv-anno-editor-note {
+  width: 100%; box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04); color: var(--text);
+  border: 0.5px solid var(--hairline); border-radius: 6px;
+  padding: 6px 8px; font: inherit; font-size: 12px;
+}
+.olv-anno-editor-note { resize: vertical; min-height: 52px; }
+.olv-anno-editor-types { display: flex; gap: 4px; }
+.olv-anno-chip {
+  flex: 1; font-size: 11px; padding: 4px 0; cursor: pointer;
+  background: transparent; color: var(--text); opacity: 0.6;
+  border: 0.5px solid var(--hairline); border-radius: 5px;
+}
+.olv-anno-chip-active { opacity: 1; border-color: var(--accent); }
+.olv-anno-chip-note.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #5b9bd5; }
+.olv-anno-chip-info.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #22dcff; }
+.olv-anno-chip-warning.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #f0b429; }
+.olv-anno-chip-issue.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #e24b4a; }
+.olv-anno-editor-camera {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none;
+}
+.olv-anno-editor-camera-box { margin: 0; cursor: pointer; accent-color: var(--accent); }
+.olv-anno-editor-link { display: flex; flex-direction: column; gap: 3px; }
+.olv-anno-editor-link-label { font-size: 11px; color: var(--text-dim); }
+.olv-anno-editor-link-select {
+  width: 100%; box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04); color: var(--text);
+  border: 0.5px solid var(--hairline); border-radius: 6px;
+  padding: 5px 8px; font: inherit; font-size: 12px;
+}
+.olv-anno-editor-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.olv-anno-editor-cancel,
+.olv-anno-editor-save {
+  font-size: 11px; padding: 5px 12px; cursor: pointer; border-radius: 5px;
+  border: 0.5px solid var(--hairline); background: transparent; color: var(--text);
+}
+.olv-anno-editor-save {
+  background: var(--accent); color: #06121a;
+  border-color: var(--accent); font-weight: 600;
+}
+
+/* ── Annotation hint bar ─────────────────────────────────────────────────── */
+.olv-anno-hint {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: 7px 14px;
+}
+.olv-anno-hint-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent);
+}
+.olv-anno-hint-text { font-size: 12px; color: var(--text); }
 
 /* ───────────────────────────────────────────────────────────────────────────
    Measurement toolbar (kind picker + actions) and the Measurements panel
@@ -849,11 +955,18 @@ button:disabled { cursor: not-allowed; }
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
+/* The measurement and annotation panels stack in one left-side column. */
+.olv-left-panels {
+  position: absolute; top: 56px; left: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: calc(100% - 80px); overflow-y: auto;
+  pointer-events: none;
+}
+.olv-left-panels > * { pointer-events: auto; }
 .olv-measure-panel {
-  position: absolute; top: 56px; left: 14px; width: 218px;
+  width: 218px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: 10px; padding: 12px;
-  max-height: calc(100% - 80px); overflow-y: auto;
 }
 .olv-mp-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
 .olv-mp-list { display: flex; flex-direction: column; gap: 6px; }
@@ -897,6 +1010,82 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-mp-action:hover { color: var(--text); border-color: var(--accent); }
 
+/* ── Annotations panel ───────────────────────────────────────────────────── */
+.olv-anno-panel {
+  width: 218px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+}
+.olv-ap-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; margin-bottom: 10px;
+}
+.olv-ap-title { font-size: 12px; font-weight: 500; }
+.olv-ap-sort {
+  font-size: 10.5px; color: var(--text-dim); font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: 5px; padding: 2px 4px;
+}
+.olv-ap-search {
+  width: 100%; box-sizing: border-box; margin-bottom: 8px;
+  font-size: 11px; color: var(--text); font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 8px;
+}
+.olv-ap-search::placeholder { color: var(--text-faint); }
+.olv-ap-search:focus-visible { outline: none; border-color: var(--accent); }
+.olv-ap-list { display: flex; flex-direction: column; gap: 4px; }
+.olv-ap-empty { font-size: 11.5px; color: var(--text-faint); }
+.olv-ap-row {
+  display: flex; align-items: center; gap: 6px;
+  border-radius: 6px; padding: 3px;
+}
+.olv-ap-row-selected { background: rgba(34, 220, 255, 0.1); }
+.olv-ap-badge {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700;
+}
+.olv-ap-badge.olv-anno-note { background: #5b9bd5; color: #06121a; }
+.olv-ap-badge.olv-anno-info { background: #22dcff; color: #06121a; }
+.olv-ap-badge.olv-anno-warning { background: #f0b429; color: #06121a; }
+.olv-ap-badge.olv-anno-issue { background: #e24b4a; color: #ffffff; }
+.olv-ap-name {
+  flex: 1; min-width: 0; text-align: left; font-size: 11.5px; color: var(--text);
+  font-family: var(--font); background: none; border: none; padding: 2px 0;
+  cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-ap-name:hover { color: var(--accent); }
+.olv-ap-link {
+  flex-shrink: 0; max-width: 70px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 9.5px; color: var(--accent);
+  background: var(--accent-soft); border-radius: 4px; padding: 1px 5px;
+}
+.olv-ap-time { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
+.olv-ap-edit {
+  font-size: 10px; color: var(--text-dim); font-family: var(--font);
+  background: none; border: 0.5px solid var(--hairline);
+  border-radius: 4px; padding: 2px 6px; flex-shrink: 0; cursor: pointer;
+}
+.olv-ap-edit:hover { color: var(--text); border-color: var(--accent); }
+.olv-ap-del {
+  background: none; border: none; color: var(--text-faint);
+  font-size: 14px; line-height: 1; flex-shrink: 0; padding: 0 2px; cursor: pointer;
+}
+.olv-ap-del:hover { color: var(--text); }
+.olv-ap-footer {
+  margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--hairline);
+}
+.olv-ap-action {
+  width: 100%; font-size: 11px; color: var(--text-dim); font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 6px; cursor: pointer;
+}
+.olv-ap-action:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.olv-ap-action:disabled { opacity: 0.4; cursor: default; }
+.olv-ap-action-armed { color: #e24b4a; border-color: rgba(226, 75, 74, 0.6); }
+
 /* Touch sizing for the measurement controls on phones */
 @media (max-width: 767px) {
   .olv-mkind, .olv-measure-undo, .olv-units-toggle, .olv-mp-action {
@@ -908,4 +1097,97 @@ button:disabled { cursor: not-allowed; }
     min-width: 44px; min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center;
   }
+
+  /* The left-side panels span the width on phones rather than a narrow column. */
+  .olv-left-panels {
+    left: calc(8px + env(safe-area-inset-left));
+    right: calc(8px + env(safe-area-inset-right));
+  }
+  .olv-measure-panel, .olv-anno-panel { width: auto; }
+
+  /* Annotation editor — 44 px touch targets for every control. */
+  .olv-anno-editor-cancel, .olv-anno-editor-save, .olv-anno-chip {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-anno-editor-title { min-height: 40px; }
+  .olv-anno-editor-camera { min-height: 36px; }
+
+  /* Annotations panel — touch-sized rows, controls and the sort select. */
+  .olv-ap-row { padding: 6px 4px; }
+  .olv-ap-name { min-height: 40px; }
+  .olv-ap-search { min-height: 44px; }
+  .olv-ap-sort, .olv-ap-action { min-height: 44px; }
+  .olv-ap-edit {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-ap-del {
+    min-width: 44px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Help overlay — a static, modal reference card (v0.2.8 #15)
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-help-backdrop {
+  position: absolute; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(6, 10, 20, 0.66);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.olv-help-card {
+  width: 440px; max-width: 100%; max-height: 100%;
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 12px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+.olv-help-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 0.5px solid var(--hairline);
+}
+.olv-help-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.olv-help-close {
+  font-size: 11px; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 12px;
+}
+.olv-help-close:hover { color: var(--text); border-color: var(--accent); }
+.olv-help-body { padding: 6px 16px 14px; overflow-y: auto; }
+.olv-help-section { margin-top: 14px; }
+.olv-help-heading {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--accent); margin-bottom: 7px;
+}
+.olv-help-rows { display: flex; flex-direction: column; gap: 5px; }
+.olv-help-row { display: flex; gap: 10px; align-items: baseline; }
+.olv-help-term {
+  flex: 0 0 92px; font-size: 11px; font-weight: 600; color: var(--text);
+  font-family: var(--mono);
+}
+.olv-help-desc { flex: 1; font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+
+@media (max-width: 767px) {
+  .olv-help-card { width: 100%; }
+  .olv-help-close { min-height: 44px; }
+  .olv-help-term { flex-basis: 78px; }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Live-probe readout — a cursor-following hover panel (v0.2.8 #17)
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-probe-readout {
+  position: absolute; z-index: 35;
+  /* Follows the cursor while the user orbits — it must never block a drag. */
+  pointer-events: none;
+  max-width: 232px;
+  background: rgba(11, 17, 33, 0.94);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border-radius: 8px; padding: 7px 10px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+}
+.olv-probe-coords { font-size: 11px; font-family: var(--mono); color: var(--text); }
+.olv-probe-attr { font-size: 10px; color: var(--text-dim); margin-top: 3px; }

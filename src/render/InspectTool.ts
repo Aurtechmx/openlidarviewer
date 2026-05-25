@@ -20,6 +20,10 @@ import {
   classificationText,
   intensityText,
   rgbText,
+  returnText,
+  pointSourceIdText,
+  gpsTimeText,
+  normalText,
   pointInfoCopyText,
 } from './pointInfo';
 
@@ -240,7 +244,7 @@ export class InspectTool {
 
   /** Populate the card rows from a point's data. */
   private _fillCard(info: PointInfo): void {
-    this._cardBody.replaceChildren(
+    const rows: HTMLElement[] = [
       infoRow('X', `${info.x} m`),
       infoRow('Y', `${info.y} m`),
       infoRow('Z', `${info.z} m`),
@@ -248,9 +252,20 @@ export class InspectTool {
       infoRow('Intensity', intensityText(info)),
       infoRow('Classification', classificationText(info)),
       infoRow('RGB', rgbText(info)),
-      infoRow('Layer', info.layer, info.layer),
-      infoRow('Index', info.index.toLocaleString('en-US')),
-    );
+    ];
+    // The LAS inspection extras get a row only when the cloud carries them —
+    // a non-LAS scan shows no empty "Not available" clutter.
+    const ret = returnText(info);
+    if (ret) rows.push(infoRow('Return', ret));
+    const source = pointSourceIdText(info);
+    if (source) rows.push(infoRow('Point source', source));
+    const gps = gpsTimeText(info);
+    if (gps) rows.push(infoRow('GPS time', gps, gps));
+    const normal = normalText(info);
+    if (normal) rows.push(infoRow('Normal', normal, normal));
+    rows.push(infoRow('Layer', info.layer, info.layer));
+    rows.push(infoRow('Index', info.index.toLocaleString('en-US')));
+    this._cardBody.replaceChildren(...rows);
     this._copyNote.classList.add('olv-hidden');
     this._copyBtn.textContent = 'Copy';
   }

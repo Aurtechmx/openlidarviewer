@@ -14,8 +14,10 @@ const GRID_STRIDE = 131072;
  *
  * Points are bucketed into a regular grid of cubic voxels of side `voxelSize`.
  * Each occupied voxel collapses to one output point at the centroid of its
- * members; colour and intensity are averaged. Classification is categorical,
- * so the first member's code is kept rather than averaged.
+ * members; colour and intensity are averaged. Classification and the LAS
+ * inspection extras (return number/count, point source ID, GPS time) are
+ * per-record metadata, not quantities to average — the first member's values
+ * are kept, the same contract classification has always used.
  *
  * Deterministic: voxels are emitted in first-seen (insertion) order, so the
  * same input always produces the same output — which is what makes this
@@ -31,6 +33,10 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
   const colors = cloud.colors;
   const intensity = cloud.intensity;
   const classification = cloud.classification;
+  const returnNumber = cloud.returnNumber;
+  const returnCount = cloud.returnCount;
+  const pointSourceId = cloud.pointSourceId;
+  const gpsTime = cloud.gpsTime;
 
   // Per-voxel running sums, kept in flat arrays indexed by a first-seen slot.
   // Avoiding a per-voxel object keeps allocation out of this hot loop, which
@@ -44,6 +50,11 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
   const sumB: number[] = [];
   const sumI: number[] = [];
   const firstClass: number[] = [];
+  // Per-record LAS metadata — kept from the first member, like classification.
+  const firstReturnNumber: number[] = [];
+  const firstReturnCount: number[] = [];
+  const firstSourceId: number[] = [];
+  const firstGpsTime: number[] = [];
   const counts: number[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -69,6 +80,10 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
       sumB.push(0);
       sumI.push(0);
       firstClass.push(0);
+      firstReturnNumber.push(0);
+      firstReturnCount.push(0);
+      firstSourceId.push(0);
+      firstGpsTime.push(0);
       counts.push(0);
     }
     sumX[slot] += x;
@@ -80,8 +95,14 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
       sumB[slot] += colors[i * 3 + 2];
     }
     if (intensity !== undefined) sumI[slot] += intensity[i];
-    // Classification is categorical — keep the first member's code.
-    if (classification !== undefined && counts[slot] === 0) firstClass[slot] = classification[i];
+    // Categorical / per-record metadata — keep the first member's values.
+    if (counts[slot] === 0) {
+      if (classification !== undefined) firstClass[slot] = classification[i];
+      if (returnNumber !== undefined) firstReturnNumber[slot] = returnNumber[i];
+      if (returnCount !== undefined) firstReturnCount[slot] = returnCount[i];
+      if (pointSourceId !== undefined) firstSourceId[slot] = pointSourceId[i];
+      if (gpsTime !== undefined) firstGpsTime[slot] = gpsTime[i];
+    }
     counts[slot]++;
   }
 
@@ -90,6 +111,10 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
   const outColors = colors !== undefined ? new Uint8Array(out * 3) : undefined;
   const outIntensity = intensity !== undefined ? new Uint16Array(out) : undefined;
   const outClass = classification !== undefined ? new Uint8Array(out) : undefined;
+  const outReturnNumber = returnNumber !== undefined ? new Uint8Array(out) : undefined;
+  const outReturnCount = returnCount !== undefined ? new Uint8Array(out) : undefined;
+  const outSourceId = pointSourceId !== undefined ? new Uint16Array(out) : undefined;
+  const outGpsTime = gpsTime !== undefined ? new Float64Array(out) : undefined;
 
   for (let s = 0; s < out; s++) {
     const n = counts[s];
@@ -103,6 +128,10 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     }
     if (outIntensity !== undefined) outIntensity[s] = Math.round(sumI[s] / n);
     if (outClass !== undefined) outClass[s] = firstClass[s];
+    if (outReturnNumber !== undefined) outReturnNumber[s] = firstReturnNumber[s];
+    if (outReturnCount !== undefined) outReturnCount[s] = firstReturnCount[s];
+    if (outSourceId !== undefined) outSourceId[s] = firstSourceId[s];
+    if (outGpsTime !== undefined) outGpsTime[s] = firstGpsTime[s];
   }
 
   return new PointCloud({
@@ -110,6 +139,10 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     colors: outColors,
     intensity: outIntensity,
     classification: outClass,
+    returnNumber: outReturnNumber,
+    returnCount: outReturnCount,
+    pointSourceId: outSourceId,
+    gpsTime: outGpsTime,
     origin: cloud.origin,
     sourceFormat: cloud.sourceFormat,
     name: cloud.name,

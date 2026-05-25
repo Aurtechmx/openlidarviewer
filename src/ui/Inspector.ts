@@ -25,6 +25,8 @@ export interface InspectorCallbacks {
   onSaveView: () => void;
   /** Fly to a saved viewpoint by index. */
   onApplyView: (index: number) => void;
+  /** Rename a saved viewpoint by index. */
+  onRenameView: (index: number, name: string) => void;
   /** Delete a saved viewpoint by index. */
   onDeleteView: (index: number) => void;
   /** Toggle Eye Dome Lighting depth shading. */
@@ -373,7 +375,10 @@ export class Inspector {
     ]);
   }
 
-  /** Render the saved-view list — one clickable row per stored viewpoint. */
+  /**
+   * Render the saved-view list — one row per stored viewpoint, each with an
+   * editable name, a Go button that flies the camera there, and a delete `×`.
+   */
   setViews(names: string[]): void {
     this._viewList.replaceChildren();
     if (names.length === 0) {
@@ -381,12 +386,35 @@ export class Inspector {
       return;
     }
     names.forEach((name, index) => {
-      const go = el('button', {
+      const nameInput = el('input', {
         className: 'olv-view-name',
-        text: name,
-        title: 'Glide the camera back to this saved viewpoint',
+        type: 'text',
+        title: 'Rename this saved view',
+      });
+      nameInput.value = name;
+      nameInput.maxLength = 60;
+      const commit = (): void => {
+        const next = nameInput.value.trim();
+        if (next && next !== name) this._cb.onRenameView(index, next);
+        else nameInput.value = name;
+      };
+      nameInput.addEventListener('change', commit);
+      nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') nameInput.blur();
+        else if (e.key === 'Escape') {
+          nameInput.value = name;
+          nameInput.blur();
+        }
+      });
+
+      const go = el('button', {
+        className: 'olv-view-go',
+        text: 'Go',
+        title: `Glide the camera back to ${name}`,
+        ariaLabel: `Go to ${name}`,
       });
       go.addEventListener('click', () => this._cb.onApplyView(index));
+
       const del = el('button', {
         className: 'olv-layer-x',
         text: '×',
@@ -394,7 +422,7 @@ export class Inspector {
         ariaLabel: `Delete ${name}`,
       });
       del.addEventListener('click', () => this._cb.onDeleteView(index));
-      this._viewList.append(el('div', { className: 'olv-view-row' }, [go, del]));
+      this._viewList.append(el('div', { className: 'olv-view-row' }, [nameInput, go, del]));
     });
   }
 

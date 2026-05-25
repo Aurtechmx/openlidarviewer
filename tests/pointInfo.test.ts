@@ -4,6 +4,10 @@ import {
   intensityText,
   classificationText,
   rgbText,
+  returnText,
+  pointSourceIdText,
+  gpsTimeText,
+  normalText,
   pointInfoCopyText,
   pointInfoJson,
 } from '../src/render/pointInfo';
@@ -128,4 +132,74 @@ test('pointInfoJson keeps nulls for missing attributes', () => {
   expect(json.intensity).toBeNull();
   expect(json.classification).toBeNull();
   expect(json.rgb).toBeNull();
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// LAS inspection extras — return, point source, GPS time, normal (v0.2.8)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** A raw picked point that also carries every v0.2.8 inspection extra. */
+function rawWithExtras(): RawPointInfo {
+  return {
+    ...fullRaw(),
+    returnNumber: 2,
+    returnCount: 3,
+    pointSourceId: 4097,
+    gpsTime: 312456.789012,
+    normal: [0.1234567, -0.7654321, 0.5],
+  };
+}
+
+test('makePointInfo threads the LAS extras through, rounding GPS time and the normal', () => {
+  const info = makePointInfo(rawWithExtras());
+  expect(info.returnNumber).toBe(2);
+  expect(info.returnCount).toBe(3);
+  expect(info.pointSourceId).toBe(4097);
+  expect(info.gpsTime).toBe(312456.789); // rounded to 3 decimals
+  expect(info.normal).toEqual([0.1235, -0.7654, 0.5]); // rounded to 4 decimals
+});
+
+test('makePointInfo leaves the extras undefined when the raw point has none', () => {
+  const info = makePointInfo(fullRaw());
+  expect(info.returnNumber).toBeUndefined();
+  expect(info.pointSourceId).toBeUndefined();
+  expect(info.gpsTime).toBeUndefined();
+  expect(info.normal).toBeUndefined();
+});
+
+test('extra text helpers format a value, or return null when absent', () => {
+  const withExtras = makePointInfo(rawWithExtras());
+  expect(returnText(withExtras)).toBe('2 of 3');
+  expect(pointSourceIdText(withExtras)).toBe('4097');
+  expect(gpsTimeText(withExtras)).toBe('312456.789');
+  expect(normalText(withExtras)).toBe('0.1235, -0.7654, 0.5');
+
+  const none = makePointInfo(fullRaw());
+  expect(returnText(none)).toBeNull();
+  expect(pointSourceIdText(none)).toBeNull();
+  expect(gpsTimeText(none)).toBeNull();
+  expect(normalText(none)).toBeNull();
+});
+
+test('pointInfoCopyText appends the extras only when present', () => {
+  const text = pointInfoCopyText(makePointInfo(rawWithExtras()));
+  expect(text).toContain('Return: 2 of 3');
+  expect(text).toContain('Point source: 4097');
+  expect(text).toContain('GPS time: 312456.789');
+  expect(text).toContain('Normal: 0.1235, -0.7654, 0.5');
+  // A point with no extras keeps the v0.2.7 nine-line block exactly.
+  expect(pointInfoCopyText(makePointInfo(fullRaw())).split('\n')).toHaveLength(9);
+});
+
+test('pointInfoJson adds the extras only when present', () => {
+  const json = pointInfoJson(makePointInfo(rawWithExtras()));
+  expect(json.returnNumber).toBe(2);
+  expect(json.returnCount).toBe(3);
+  expect(json.pointSourceId).toBe(4097);
+  expect(json.gpsTime).toBe(312456.789);
+  expect(json.normal).toEqual([0.1235, -0.7654, 0.5]);
+  // A non-LAS point's JSON keeps exactly the v0.2.7 shape.
+  expect(Object.keys(pointInfoJson(makePointInfo(fullRaw()))).sort()).toEqual(
+    ['classification', 'index', 'intensity', 'layer', 'rgb', 'x', 'y', 'z'].sort(),
+  );
 });

@@ -11,10 +11,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   states, and full mobile-adaptive rendering, building on the 0.2.5 pipeline
 - Expanded format support — PCD, PTS/PTX, COPC LAZ, 3D Tiles / PNTS
 - Cross-section and profile measurement
-- Slicing, clipping, and annotation tools
+- Slicing and clipping tools
 - Large-scale dataset streaming and level-of-detail
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.2.8] - 2026-05-24
+
+An inspection-workflows release. The viewer becomes a local, private review
+environment: open a scan, mark points of interest with categorised notes,
+revisit them later, save the whole inspection to a file, and export visual
+evidence — all in the browser, with nothing uploaded.
+
+### Added
+
+- Annotations. With the Annotate tool active, click a point on the scan to
+  drop a numbered marker and fill in a compact card — a title, an optional
+  note, and one of four categories: note, info, warning, or issue. Markers are
+  drawn as a screen-space overlay that stays crisp at any zoom and carries no
+  per-frame cost, so a review with hundreds of findings stays fluid.
+- Annotations panel. Every placed annotation is listed with its category
+  badge, title, and last-edited time. The list sorts by created time, recent
+  edit, category, or title; a search box filters by title, note, or type;
+  each row jumps the camera to its annotation, opens the editor, or deletes
+  it. Hovering a row highlights the matching marker in the scene.
+- Camera-state capture. An annotation can store the exact viewpoint it was
+  created from — position, target, navigation mode, and field of view.
+  Jumping to such an annotation restores the whole framing, not just the
+  point; annotations without a stored view simply focus on the marked point.
+- Inspection sessions. The session file now carries annotations and named
+  saved views alongside measurements, so a complete review exports to a
+  single JSON file and reopens with no loss. Older measurement-only session
+  files still import unchanged.
+- Screenshot export with overlays. A saved snapshot now burns in the placed
+  measurements and annotations, so the PNG is usable as inspection evidence.
+  A clean scan with neither still exports the bare render.
+- A richer point inspector. Inspecting a LAS/LAZ point now also reports its
+  return number and count, point source ID, and GPS time, plus the surface
+  normal for clouds that carry one. Each row appears only when the data is
+  present, and the Copy button includes the new fields.
+- Keyboard shortcuts. `A`, `M`, and `I` toggle the Annotate, Measure, and
+  Inspect tools; `V` saves the current view; `Delete` removes the selected
+  annotation; `Ctrl/Cmd+Z` undoes an annotation change and `Shift` redoes it;
+  `Esc` cancels the active tool; `?` opens the help overlay. Every shortcut is
+  suppressed while a text field has focus.
+- A help overlay. A compact reference card — opened from the dock's Help
+  button or the `?` key — covering the tools, the annotation workflow,
+  navigation, the keyboard shortcuts, and how work is saved.
+- Undo and redo for annotations. A bounded history covers creating, editing,
+  deleting, and clearing annotations; measurements are deliberately untouched.
+- Live probe (desktop). A hover tool that shows a live readout of the point
+  under the cursor with no click, while navigation stays fully interactive.
+- Saved-view rename. Saved viewpoints can be renamed in place and keep their
+  names through a session export and import.
+- Mobile annotation support. Annotation placement, the editor, and the panel
+  use touch-sized controls, and the panels span the width on phones.
+
+### Changed
+
+- The session file format advances to version 2 (additive — version 1 files
+  still load). Saved views now carry a name.
+- The LAS/LAZ load-memory estimate accounts for the new per-point inspection
+  attributes, so the v0.2.7 memory guard keeps planning loads accurately.
 
 ## [0.2.7] - 2026-05-23
 

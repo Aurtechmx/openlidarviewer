@@ -181,13 +181,17 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
 /**
  * The per-point attributes a decoded LAS/LAZ cloud carries in this viewer.
  *
- * The loader decodes position, intensity, and classification — not RGB or
- * surface normals — so this set is fixed regardless of the LAS point format.
- * It sizes the v0.2.7 load-memory estimate (`estimateMemoryBytes`).
+ * The loader decodes position, intensity, classification, and — since
+ * v0.2.8 — the inspection extras (return number/count, point source ID, GPS
+ * time); not RGB or surface normals. The set is fixed regardless of the LAS
+ * point format. It sizes the v0.2.7 load-memory estimate
+ * (`estimateMemoryBytes`); `hasLasExtras` keeps that estimate honest about the
+ * ~12 extra bytes per point the v0.2.8 attributes add.
  */
 export const LAS_DECODED_ATTRIBUTES: PointAttributes = {
   hasColor: false,
   hasIntensity: true,
   hasClassification: true,
   hasNormals: false,
+  hasLasExtras: true,
 };

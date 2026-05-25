@@ -21,6 +21,11 @@ export interface PointAttributes {
   hasIntensity: boolean;
   hasClassification: boolean;
   hasNormals: boolean;
+  /**
+   * The LAS-specific inspection attributes — return number/count, point
+   * source ID and GPS time. Optional because only LAS/LAZ clouds carry them.
+   */
+  hasLasExtras?: boolean;
 }
 
 /** Everything `planLoad` needs to choose a strategy. */
@@ -97,6 +102,9 @@ const BYTES_COLOR = 3; // Uint8 x3
 const BYTES_INTENSITY = 2; // Uint16
 const BYTES_CLASS = 1; // Uint8
 const BYTES_NORMAL = 12; // Float32 x3
+// LAS inspection extras: return number + count (Uint8 x2), point source ID
+// (Uint16) and GPS time (Float64) — 1 + 1 + 2 + 8 bytes per point.
+const BYTES_LAS_EXTRAS = 12;
 
 /** Fixed laz-perf WASM scratch allowance, on top of the heap's file copy. */
 const LAZ_SCRATCH_BYTES = 16_000_000;
@@ -140,7 +148,8 @@ function perPointBytes(a: PointAttributes): number {
     (a.hasColor ? BYTES_COLOR : 0) +
     (a.hasIntensity ? BYTES_INTENSITY : 0) +
     (a.hasClassification ? BYTES_CLASS : 0) +
-    (a.hasNormals ? BYTES_NORMAL : 0)
+    (a.hasNormals ? BYTES_NORMAL : 0) +
+    (a.hasLasExtras ? BYTES_LAS_EXTRAS : 0)
   );
 }
 

@@ -63,13 +63,27 @@ function decodingUpdate(done: number, total: number): ProgressUpdate {
 /** Intensity — uint16 LE, present in every point format at byte 12. */
 const RECORD_INTENSITY = 12;
 /**
+ * Return-bits byte — present in every point format at byte 14. It packs the
+ * return number and the number of returns; the bit split differs between the
+ * legacy and extended record layouts (see {@link decodeRecord}).
+ */
+const RECORD_RETURN_BITS = 14;
+/**
  * Classification byte offset. Point formats 0-5 store classification at
  * byte 15; the newer formats 6-10 store it at byte 16.
  */
 const RECORD_CLASSIFICATION_LEGACY = 15;
 const RECORD_CLASSIFICATION_EXT = 16;
+/** Point source ID — uint16 LE — byte 18 in legacy records, byte 20 in extended. */
+const RECORD_POINT_SOURCE_ID_LEGACY = 18;
+const RECORD_POINT_SOURCE_ID_EXT = 20;
+/** GPS time — float64 LE — byte 20 in legacy GPS records, byte 22 in extended. */
+const RECORD_GPS_TIME_LEGACY = 20;
+const RECORD_GPS_TIME_EXT = 22;
 /** First point format index that uses the extended record layout. */
 const FIRST_EXTENDED_FORMAT = 6;
+/** Legacy point formats (0-5) that carry a GPS-time field. */
+const LEGACY_GPS_FORMATS: readonly number[] = [1, 3, 4, 5];
 
 /**
  * Mask isolating the classification value within the LAS classification byte.
@@ -92,12 +106,33 @@ function classificationOffsetFor(pointFormat: number): number {
     : RECORD_CLASSIFICATION_LEGACY;
 }
 
+/**
+ * Byte offset of the GPS-time field for a point format, or `null` when the
+ * format carries none. A record length too short to hold the field (a
+ * malformed header) also yields `null`, so the decode never reads past a
+ * record.
+ */
+function gpsTimeOffsetFor(header: LasHeader): number | null {
+  const extended = header.pointFormat >= FIRST_EXTENDED_FORMAT;
+  if (!extended && !LEGACY_GPS_FORMATS.includes(header.pointFormat)) return null;
+  const offset = extended ? RECORD_GPS_TIME_EXT : RECORD_GPS_TIME_LEGACY;
+  return header.pointDataRecordLength >= offset + 8 ? offset : null;
+}
+
 /** Decoded local-coordinate positions plus per-point attributes. */
 interface RawPoints {
   /** Interleaved local xyz, float32 — already recentred about the origin. */
   positions: Float32Array;
   intensity: Uint16Array;
   classification: Uint8Array;
+  /** Return number (1-based) of the pulse this point belongs to. */
+  returnNumber: Uint8Array;
+  /** Total number of returns recorded for that pulse. */
+  returnCount: Uint8Array;
+  /** Point source ID — the flight line / source the point came from. */
+  pointSourceId: Uint16Array;
+  /** GPS time, or `null` when the point format carries no GPS-time field. */
+  gpsTime: Float64Array | null;
 }
 
 /** Per-file constants reused across every record of one decode. */
@@ -109,16 +144,28 @@ interface DecodeContext {
   classificationOffset: number;
   /** Mask applied to the classification byte. */
   classMask: number;
+  /** True for the extended record layout (point formats 6-10). */
+  extended: boolean;
+  /** Byte offset of the point source ID within a record. */
+  pointSourceIdOffset: number;
+  /** Byte offset of the GPS-time field, or `null` when the format has none. */
+  gpsTimeOffset: number | null;
 }
 
 /** Build the per-file decode context from a parsed header and its origin. */
 function decodeContext(header: LasHeader, origin: [number, number, number]): DecodeContext {
+  const extended = header.pointFormat >= FIRST_EXTENDED_FORMAT;
   return {
     scale: header.scale,
     offset: header.offset,
     origin,
     classificationOffset: classificationOffsetFor(header.pointFormat),
     classMask: classificationMaskFor(header.pointFormat),
+    extended,
+    pointSourceIdOffset: extended
+      ? RECORD_POINT_SOURCE_ID_EXT
+      : RECORD_POINT_SOURCE_ID_LEGACY,
+    gpsTimeOffset: gpsTimeOffsetFor(header),
   };
 }
 
@@ -146,14 +193,32 @@ function decodeRecord(
   out.positions[i * 3 + 2] = zi * ctx.scale[2] + ctx.offset[2] - ctx.origin[2];
   out.intensity[i] = view.getUint16(base + RECORD_INTENSITY, true);
   out.classification[i] = view.getUint8(base + ctx.classificationOffset) & ctx.classMask;
+  // Return bits: legacy formats pack return number into bits 0-2 and the
+  // return count into bits 3-5; extended formats widen each to 4 bits.
+  const returnBits = view.getUint8(base + RECORD_RETURN_BITS);
+  if (ctx.extended) {
+    out.returnNumber[i] = returnBits & 0x0f;
+    out.returnCount[i] = (returnBits >> 4) & 0x0f;
+  } else {
+    out.returnNumber[i] = returnBits & 0x07;
+    out.returnCount[i] = (returnBits >> 3) & 0x07;
+  }
+  out.pointSourceId[i] = view.getUint16(base + ctx.pointSourceIdOffset, true);
+  if (ctx.gpsTimeOffset !== null && out.gpsTime !== null) {
+    out.gpsTime[i] = view.getFloat64(base + ctx.gpsTimeOffset, true);
+  }
 }
 
 /** Allocate the output arrays for `count` points. */
-function allocRawPoints(count: number): RawPoints {
+function allocRawPoints(count: number, hasGpsTime: boolean): RawPoints {
   return {
     positions: new Float32Array(count * 3),
     intensity: new Uint16Array(count),
     classification: new Uint8Array(count),
+    returnNumber: new Uint8Array(count),
+    returnCount: new Uint8Array(count),
+    pointSourceId: new Uint16Array(count),
+    gpsTime: hasGpsTime ? new Float64Array(count) : null,
   };
 }
 
@@ -186,7 +251,7 @@ function decodeLas(
 
   const step = Math.max(1, Math.floor(stride));
   const total = Math.ceil(count / step);
-  const out = allocRawPoints(total);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null);
   // Report progress ~20 times across the decode — frequent enough to feel
   // live, sparse enough never to flood the worker's message channel.
   const reportEvery = Math.max(1, Math.floor(total / 20));
@@ -270,7 +335,7 @@ async function decodeLaz(
     const recordLength = reader.getPointLength();
     pointPtr = lazPerf._malloc(recordLength);
 
-    const out = allocRawPoints(total);
+    const out = allocRawPoints(total, ctx.gpsTimeOffset !== null);
     const reportEvery = Math.max(1, Math.floor(pointCount / 20));
 
     // step 1: store every record. step > 1: store one record per bucket, at a
@@ -376,6 +441,10 @@ export async function loadLas(
     positions: raw.positions,
     intensity: raw.intensity,
     classification: raw.classification,
+    returnNumber: raw.returnNumber,
+    returnCount: raw.returnCount,
+    pointSourceId: raw.pointSourceId,
+    gpsTime: raw.gpsTime ?? undefined,
     origin,
     sourceFormat,
     name,

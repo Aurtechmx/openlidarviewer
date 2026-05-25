@@ -25,6 +25,14 @@ export interface PointCloudOptions {
   classification?: Uint8Array;
   /** Optional interleaved per-point normal vectors (xyz). */
   normals?: Float32Array;
+  /** Optional per-point LAS return number (which return of a pulse this is). */
+  returnNumber?: Uint8Array;
+  /** Optional per-point LAS number of returns for the originating pulse. */
+  returnCount?: Uint8Array;
+  /** Optional per-point LAS point source ID (the originating flight line). */
+  pointSourceId?: Uint16Array;
+  /** Optional per-point LAS GPS time, in the file's GPS-time encoding. */
+  gpsTime?: Float64Array;
   /** The integer world-space origin that was subtracted from the positions. */
   origin: [number, number, number];
   /** Which file format this cloud was loaded from. */
@@ -58,6 +66,10 @@ export class PointCloud {
   readonly intensity?: Uint16Array;
   readonly classification?: Uint8Array;
   readonly normals?: Float32Array;
+  readonly returnNumber?: Uint8Array;
+  readonly returnCount?: Uint8Array;
+  readonly pointSourceId?: Uint16Array;
+  readonly gpsTime?: Float64Array;
   readonly origin: [number, number, number];
   readonly sourceFormat: SourceFormat;
   readonly name: string;
@@ -81,6 +93,10 @@ export class PointCloud {
     this.intensity = options.intensity;
     this.classification = options.classification;
     this.normals = options.normals;
+    this.returnNumber = options.returnNumber;
+    this.returnCount = options.returnCount;
+    this.pointSourceId = options.pointSourceId;
+    this.gpsTime = options.gpsTime;
     this.origin = options.origin;
     this.sourceFormat = options.sourceFormat;
     this.name = options.name;

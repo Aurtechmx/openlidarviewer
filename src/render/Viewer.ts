@@ -62,7 +62,12 @@ import { NavController } from './NavController';
 import type { NavMode, CameraPose } from './NavController';
 import { MeasureController } from './measure/MeasureController';
 import { InspectTool } from './InspectTool';
+import { AnnotationController } from './annotate/AnnotationController';
+import type { SavedCameraState } from './annotate/types';
+import { loadSvgImage } from './snapshotSvg';
+import { LiveProbe } from './LiveProbe';
 import { makePointInfo } from './pointInfo';
+import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,11 +103,34 @@ export interface InspectListeners {
   onModeChange?: (active: boolean) => void;
 }
 
+/** UI-facing annotation events the app can subscribe to. */
+export interface AnnotateListeners {
+  onModeChange?: (active: boolean) => void;
+}
+
+/** UI-facing live-probe events the app can subscribe to. */
+export interface ProbeListeners {
+  onModeChange?: (active: boolean) => void;
+}
+
 /**
  * The picking tool that currently owns canvas clicks, if any. Only one is
- * ever active. `slice` is reserved for a future section tool.
+ * ever active. `probe` is a passive hover-probe that keeps navigation live;
+ * `slice` is reserved for a future section tool.
  */
-export type ToolMode = 'none' | 'measure' | 'inspect' | 'slice';
+export type ToolMode = 'none' | 'measure' | 'inspect' | 'annotate' | 'probe' | 'slice';
+
+/**
+ * Which overlay layers to burn into a {@link Viewer.snapshot}. With every
+ * option off (the default) the snapshot is the bare rendered cloud, exactly as
+ * before; enabling a layer composites that overlay's SVG on top.
+ */
+export interface SnapshotOptions {
+  /** Include the annotation markers. */
+  annotations?: boolean;
+  /** Include the measurement geometry and value labels. */
+  measurements?: boolean;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -119,6 +147,9 @@ const QUAD_INDEX = [0, 1, 2, 0, 2, 3];
  * full-screen render target — with no perceptible loss of sharpness.
  */
 const MAX_PIXEL_RATIO = 2;
+
+/** Default vertical field of view, in degrees — the camera's construction value. */
+const DEFAULT_FOV = 60;
 
 /** Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute. */
 function toFloatColors(u8: Uint8Array): Float32Array {
@@ -276,13 +307,20 @@ export class Viewer {
   private readonly _canvas: HTMLCanvasElement;
   private readonly _measure: MeasureController;
   private readonly _inspect: InspectTool;
+  private readonly _annotate: AnnotationController;
+  private readonly _probe: LiveProbe;
   /** Which picking tool currently owns canvas clicks. */
   private _toolMode: ToolMode = 'none';
   private _measureListeners: MeasureListeners = {};
   private _inspectListeners: InspectListeners = {};
+  private _annotateListeners: AnnotateListeners = {};
+  private _probeListeners: ProbeListeners = {};
   /** Last pointer position over the canvas, in NDC, for the measure preview. */
   private _pointerNdcX = 0;
   private _pointerNdcY = 0;
+  /** Last pointer position in client pixels — anchors the live-probe readout. */
+  private _pointerClientX = 0;
+  private _pointerClientY = 0;
   private _pointerOnCanvas = false;
   /** Set when the pointer moved, so the preview re-picks at most once per frame. */
   private _pointerMoved = false;
@@ -315,7 +353,7 @@ export class Viewer {
 
     // ── Camera ────────────────────────────────────────────────────────────
     const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
-    this._camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 5_000_000);
+    this._camera = new THREE.PerspectiveCamera(DEFAULT_FOV, aspect, 0.1, 5_000_000);
     this._camera.position.set(0, 0, 100);
 
     // ── Post-processing pipeline (Eye Dome Lighting) ──────────────────────
@@ -363,14 +401,24 @@ export class Viewer {
     this._inspect = new InspectTool(this._camera, canvas, {
       onExit: () => this.setInspectMode(false),
     });
+    this._annotate = new AnnotationController();
+    // The annotation editor can link a finding to a measurement — feed it the
+    // current measurement list whenever it opens.
+    this._annotate.setMeasurementSource(() =>
+      this._measure.getMeasurements().map((m) => ({ id: m.id, name: m.name })),
+    );
+    this._probe = new LiveProbe();
     canvas.addEventListener('click', (e) => {
       if (this._toolMode === 'measure') this._handleMeasureClick(e, canvas);
       else if (this._toolMode === 'inspect') this._handleInspectClick(e, canvas);
+      else if (this._toolMode === 'annotate') this._handleAnnotateClick(e, canvas);
     });
     // Track the pointer so the measure tool can preview toward the cursor.
     canvas.addEventListener('pointermove', (e) => {
       this._pointerNdcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
       this._pointerNdcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+      this._pointerClientX = e.clientX;
+      this._pointerClientY = e.clientY;
       this._pointerOnCanvas = true;
       this._pointerMoved = true;
     });
@@ -608,6 +656,37 @@ export class Viewer {
     this._nav.applyPose(pose);
   }
 
+  /**
+   * Capture a richer camera state — pose plus navigation mode and field of
+   * view — for an annotation. The fov is recorded only when it differs from
+   * the default, keeping the serialised state minimal.
+   */
+  getCameraState(): SavedCameraState {
+    const pose = this._nav.getPose();
+    const state: SavedCameraState = {
+      position: pose.position,
+      target: pose.target,
+      mode: this._nav.mode,
+    };
+    if (this._camera.fov !== DEFAULT_FOV) state.fov = this._camera.fov;
+    return state;
+  }
+
+  /**
+   * Restore a camera state captured by {@link getCameraState}. The mode is
+   * applied first so the pose tween runs under the right navigation model;
+   * the fov, if present, is set before the tween starts.
+   */
+  applyCameraState(state: SavedCameraState): void {
+    if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
+    const fov = state.fov ?? DEFAULT_FOV;
+    if (this._camera.fov !== fov) {
+      this._camera.fov = fov;
+      this._camera.updateProjectionMatrix();
+    }
+    this._nav.applyPose({ position: state.position, target: state.target });
+  }
+
   /** Look up a loaded cloud by id — used by the app to export it. */
   getCloud(id: string): PointCloud | undefined {
     return this._clouds.get(id)?.cloud;
@@ -671,24 +750,99 @@ export class Viewer {
     };
   }
 
+  /** Enter or leave annotation mode (freezes navigation). */
+  setAnnotateMode(on: boolean): void {
+    this._setToolMode(on ? 'annotate' : 'none');
+  }
+
+  /** Whether annotation mode is currently active. */
+  get annotateMode(): boolean {
+    return this._toolMode === 'annotate';
+  }
+
+  /** The annotation controller, so the app can wire the Annotations panel. */
+  get annotate(): AnnotationController {
+    return this._annotate;
+  }
+
+  /** Subscribe to annotation events (mode change). */
+  setAnnotateListeners(listeners: AnnotateListeners): void {
+    this._annotateListeners = listeners;
+  }
+
+  /** The Annotate tool's overlay, hint and editor DOM elements, to mount. */
+  get annotateElements(): { overlay: SVGSVGElement; hint: HTMLElement; editor: HTMLElement } {
+    return {
+      overlay: this._annotate.overlay,
+      hint: this._annotate.hint,
+      editor: this._annotate.editorElement,
+    };
+  }
+
+  /** Enter or leave live-probe mode (a hover readout; navigation stays live). */
+  setProbeMode(on: boolean): void {
+    this._setToolMode(on ? 'probe' : 'none');
+  }
+
+  /** Whether live-probe mode is currently active. */
+  get probeMode(): boolean {
+    return this._toolMode === 'probe';
+  }
+
+  /** Subscribe to live-probe events (mode change). */
+  setProbeListeners(listeners: ProbeListeners): void {
+    this._probeListeners = listeners;
+  }
+
+  /** The live-probe readout element, for the app to mount. */
+  get probeElements(): { readout: HTMLElement } {
+    return { readout: this._probe.element };
+  }
+
+  /**
+   * Select an annotation and move the camera to it. When the annotation
+   * carries a saved camera state, the exact framing it was created with is
+   * restored; otherwise the camera simply focuses on the marked point.
+   */
+  jumpToAnnotation(id: string): void {
+    const a = this._annotate.get(id);
+    if (!a) return;
+    this._annotate.select(id);
+    if (a.cameraState) {
+      this.applyCameraState(a.cameraState);
+    } else {
+      this._nav.focusOn(
+        new THREE.Vector3(a.localPosition.x, a.localPosition.y, a.localPosition.z),
+      );
+    }
+  }
+
   /**
    * Switch the active picking tool. Only one tool owns canvas clicks at a
-   * time, so activating one deactivates the other; navigation input is frozen
-   * whenever a tool is active and restored when the mode returns to `none`.
+   * time, so activating one deactivates the others. Navigation input is frozen
+   * while a click-driven tool is active; the live probe is the exception — it
+   * is a passive hover readout, so navigation stays live during it.
    */
   private _setToolMode(mode: ToolMode): void {
     if (mode === this._toolMode) return;
     this._toolMode = mode;
     this._measure.setActive(mode === 'measure');
     this._inspect.setActive(mode === 'inspect');
-    this._nav.setInputEnabled(mode === 'none');
-    // Inspect manages its own cursor; the measure cursor is owned here — set
-    // the crosshair for measure and clear it when no tool is active, so this
-    // does not rely on another tool's deactivation as a side effect.
-    if (mode === 'measure') this._canvas.style.cursor = 'crosshair';
-    else if (mode === 'none') this._canvas.style.cursor = '';
+    this._annotate.setActive(mode === 'annotate');
+    this._probe.setActive(mode === 'probe');
+    // The probe keeps navigation live; every other tool freezes it.
+    this._nav.setInputEnabled(mode === 'none' || mode === 'probe');
+    // Inspect manages its own cursor; the measure, annotate and probe cursors
+    // are owned here — a crosshair while picking, cleared when no tool is active.
+    if (mode === 'measure' || mode === 'annotate' || mode === 'probe') {
+      this._canvas.style.cursor = 'crosshair';
+    } else if (mode === 'none') {
+      this._canvas.style.cursor = '';
+    }
     this._measureListeners.onModeChange?.(mode === 'measure');
     this._inspectListeners.onModeChange?.(mode === 'inspect');
+    this._annotateListeners.onModeChange?.(mode === 'annotate');
+    this._probeListeners.onModeChange?.(mode === 'probe');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -734,17 +888,59 @@ export class Viewer {
   }
 
   /**
-   * Render one frame and capture the canvas as a PNG `Blob`.
+   * Render one frame and capture it as a PNG `Blob`.
+   *
+   * With no options (or all off) this returns the bare rendered cloud — the
+   * original, fast path. With an overlay enabled it becomes a compositor: the
+   * rendered frame is drawn into a 2-D canvas at the GL drawing-buffer
+   * resolution (high-DPI preserved), then each requested overlay is projected
+   * with this exact camera, serialised to a self-styled SVG, rasterised and
+   * drawn on top — so markers land precisely where they sit in the live view.
    */
-  async snapshot(): Promise<Blob> {
+  async snapshot(options?: SnapshotOptions): Promise<Blob> {
     await this.ready;
     // Render through the same path the loop uses, so the snapshot matches the
     // on-screen image — EDL included when it is enabled.
     if (this._edlEnabled) this._post.render();
     else this._renderer.render(this._scene, this._camera);
 
+    const gl = this._renderer.domElement as HTMLCanvasElement;
+    const wantAnnotations = options?.annotations === true;
+    const wantMeasurements = options?.measurements === true;
+
+    // Fast path: no overlays requested — return the GL canvas untouched.
+    if (!wantAnnotations && !wantMeasurements) return this._canvasToBlob(gl);
+
+    // Composite path: draw the GL frame into a 2-D canvas at full resolution.
+    const out = document.createElement('canvas');
+    out.width = gl.width;
+    out.height = gl.height;
+    const ctx = out.getContext('2d');
+    if (!ctx) return this._canvasToBlob(gl);
+    ctx.drawImage(gl, 0, 0, out.width, out.height);
+
+    // Re-project each overlay with the export camera, then serialise it, so
+    // alignment with the rendered frame is exact. Measurements sit beneath the
+    // annotation markers, matching the live stacking order.
+    const layers: string[] = [];
+    if (wantMeasurements) {
+      this._measure.render(this._camera, this._canvas);
+      layers.push(this._measure.overlaySVG());
+    }
+    if (wantAnnotations) {
+      this._annotate.render(this._camera, this._canvas);
+      layers.push(this._annotate.markerSVG());
+    }
+    for (const svg of layers) {
+      const img = await loadSvgImage(svg);
+      if (img) ctx.drawImage(img, 0, 0, out.width, out.height);
+    }
+    return this._canvasToBlob(out);
+  }
+
+  /** Encode a canvas to a PNG `Blob`, rejecting if the browser returns none. */
+  private _canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
     return new Promise<Blob>((resolve, reject) => {
-      const canvas = this._renderer.domElement as HTMLCanvasElement;
       canvas.toBlob((blob) => {
         if (blob) resolve(blob);
         else reject(new Error('Viewer.snapshot(): canvas.toBlob returned null'));
@@ -766,6 +962,8 @@ export class Viewer {
     this._nav.dispose();
     this._measure.dispose();
     this._inspect.dispose();
+    this._annotate.dispose();
+    this._probe.dispose();
     this._controls.dispose();
     // Release the post-processing pipeline's render targets before the renderer.
     this._post.dispose();
@@ -905,6 +1103,29 @@ export class Viewer {
     this._measure.addPoint(hit ? [hit.x, hit.y, hit.z] : null);
   }
 
+  /**
+   * While annotating, a canvas click picks the point under the cursor and
+   * opens the inline editor on a hit, or reports a clear miss message on a
+   * miss — never creating an invalid annotation. Marker clicks are handled by
+   * the overlay itself; a click while the editor is open is left to the editor.
+   */
+  private _handleAnnotateClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
+    if (this._annotate.isEditing) return;
+    const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
+    const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+    const hit = this._pickPoint(ndcX, ndcY);
+    if (hit) {
+      this._annotate.beginDraft(
+        { x: hit.x, y: hit.y, z: hit.z },
+        e.clientX,
+        e.clientY,
+        this.getCameraState(),
+      );
+    } else {
+      this._annotate.pickMissed();
+    }
+  }
+
   /** While inspecting, a canvas click selects the point under the cursor. */
   private _handleInspectClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
@@ -914,11 +1135,25 @@ export class Viewer {
       this._inspect.showPoint(null, null);
       return;
     }
+    this._inspect.showPoint(this._infoForHit(hit), hit.point);
+  }
+
+  /**
+   * Build display-ready point info for a detailed pick hit. Shared by the
+   * Inspect tool's click and the live probe's hover, so both surface exactly
+   * the same per-point data.
+   */
+  private _infoForHit(hit: {
+    cloud: PointCloud;
+    index: number;
+    point: THREE.Vector3;
+  }): PointInfo {
     const { cloud, index, point } = hit;
     const rgb: [number, number, number] | null = cloud.colors
       ? [cloud.colors[index * 3], cloud.colors[index * 3 + 1], cloud.colors[index * 3 + 2]]
       : null;
-    const info = makePointInfo({
+    const normals = cloud.normals;
+    return makePointInfo({
       layer: cloud.name,
       index,
       // `point` is in local space; the cloud's origin restores real-world
@@ -929,8 +1164,15 @@ export class Viewer {
       intensity: cloud.intensity ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null,
       rgb,
+      // v0.2.8 inspection extras — passed only when the cloud carries them.
+      returnNumber: cloud.returnNumber ? cloud.returnNumber[index] : undefined,
+      returnCount: cloud.returnCount ? cloud.returnCount[index] : undefined,
+      pointSourceId: cloud.pointSourceId ? cloud.pointSourceId[index] : undefined,
+      gpsTime: cloud.gpsTime ? cloud.gpsTime[index] : undefined,
+      normal: normals
+        ? [normals[index * 3], normals[index * 3 + 1], normals[index * 3 + 2]]
+        : undefined,
     });
-    this._inspect.showPoint(info, point);
   }
 
   /** `F` key — focus on whatever point is centred in the view. */
@@ -956,8 +1198,22 @@ export class Viewer {
           : null;
         this._measure.setCursor(hit ? [hit.x, hit.y, hit.z] : null);
       }
+      // Live probe — at most one detailed pick per frame, only when the
+      // pointer actually moved, so a hover readout costs no idle frame budget.
+      if (this._toolMode === 'probe' && this._pointerMoved) {
+        this._pointerMoved = false;
+        const hit = this._pointerOnCanvas
+          ? this._pickDetailed(this._pointerNdcX, this._pointerNdcY)
+          : null;
+        this._probe.update(
+          hit ? this._infoForHit(hit) : null,
+          this._pointerClientX,
+          this._pointerClientY,
+        );
+      }
       this._measure.render(this._camera, this._canvas);
       this._inspect.render();
+      this._annotate.render(this._camera, this._canvas);
     };
     loop();
   }

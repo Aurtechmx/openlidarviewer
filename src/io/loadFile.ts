@@ -59,6 +59,10 @@ interface CloudPayload {
   intensity?: Uint16Array;
   classification?: Uint8Array;
   normals?: Float32Array;
+  returnNumber?: Uint8Array;
+  returnCount?: Uint8Array;
+  pointSourceId?: Uint16Array;
+  gpsTime?: Float64Array;
   origin: [number, number, number];
   sourceFormat: SourceFormat;
   name: string;

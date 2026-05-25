@@ -127,6 +127,38 @@ interface SynthPoint {
   intensity: number;
   /** Raw classification byte, including any flag bits in bits 5-7. */
   classByte: number;
+  /** Raw return-bits byte (byte 14) — return number and count packed. */
+  returnBits?: number;
+  /** Point source ID (uint16). */
+  sourceId?: number;
+  /** GPS time (float64) — only written by the point-format-1 builder. */
+  gpsTime?: number;
+}
+
+/** Write a LAS 1.2 public header for a point format and record length. */
+function writeLasHeader(
+  view: DataView,
+  u8: Uint8Array,
+  header: number,
+  pointFormat: number,
+  recordLength: number,
+  count: number,
+): void {
+  u8[0] = 0x4c; // 'L'
+  u8[1] = 0x41; // 'A'
+  u8[2] = 0x53; // 'S'
+  u8[3] = 0x46; // 'F'
+  view.setUint8(24, 1); // version major
+  view.setUint8(25, 2); // version minor — LAS 1.2
+  view.setUint16(94, header, true); // header size
+  view.setUint32(96, header, true); // offset to point data
+  view.setUint32(100, 0, true); // VLR count
+  view.setUint8(104, pointFormat); // point data record format
+  view.setUint16(105, recordLength, true); // point data record length
+  view.setUint32(107, count, true); // legacy point count
+  for (let a = 0; a < 3; a++) view.setFloat64(131 + a * 8, 0.001, true); // scale
+  for (let a = 0; a < 3; a++) view.setFloat64(155 + a * 8, 0, true); // offset
+  // Bounds are left at zero — they only seed the (irrelevant here) origin.
 }
 
 /** Build a minimal uncompressed LAS 1.2, point data record format 0. */
@@ -135,23 +167,7 @@ function makeLasFormat0(points: SynthPoint[], declaredCount?: number): ArrayBuff
   const REC = 20;
   const buf = new ArrayBuffer(HEADER + points.length * REC);
   const view = new DataView(buf);
-  const u8 = new Uint8Array(buf);
-
-  u8[0] = 0x4c; // 'L'
-  u8[1] = 0x41; // 'A'
-  u8[2] = 0x53; // 'S'
-  u8[3] = 0x46; // 'F'
-  view.setUint8(24, 1); // version major
-  view.setUint8(25, 2); // version minor — LAS 1.2
-  view.setUint16(94, HEADER, true); // header size
-  view.setUint32(96, HEADER, true); // offset to point data
-  view.setUint32(100, 0, true); // VLR count
-  view.setUint8(104, 0); // point data record format 0
-  view.setUint16(105, REC, true); // point data record length
-  view.setUint32(107, declaredCount ?? points.length, true); // legacy point count
-  for (let a = 0; a < 3; a++) view.setFloat64(131 + a * 8, 0.001, true); // scale
-  for (let a = 0; a < 3; a++) view.setFloat64(155 + a * 8, 0, true); // offset
-  // Bounds are left at zero — they only seed the (irrelevant here) origin.
+  writeLasHeader(view, new Uint8Array(buf), HEADER, 0, REC, declaredCount ?? points.length);
 
   for (let i = 0; i < points.length; i++) {
     const base = HEADER + i * REC;
@@ -159,7 +175,34 @@ function makeLasFormat0(points: SynthPoint[], declaredCount?: number): ArrayBuff
     view.setInt32(base + 4, points[i].y, true);
     view.setInt32(base + 8, points[i].z, true);
     view.setUint16(base + 12, points[i].intensity, true);
+    view.setUint8(base + 14, points[i].returnBits ?? 0); // return-bits byte
     view.setUint8(base + 15, points[i].classByte); // classification byte
+    view.setUint16(base + 18, points[i].sourceId ?? 0, true); // point source ID
+  }
+  return buf;
+}
+
+/**
+ * Build a minimal uncompressed LAS 1.2, point data record format 1 — the
+ * legacy format that carries a GPS-time field (float64 at byte 20).
+ */
+function makeLasFormat1(points: SynthPoint[]): ArrayBuffer {
+  const HEADER = 227;
+  const REC = 28;
+  const buf = new ArrayBuffer(HEADER + points.length * REC);
+  const view = new DataView(buf);
+  writeLasHeader(view, new Uint8Array(buf), HEADER, 1, REC, points.length);
+
+  for (let i = 0; i < points.length; i++) {
+    const base = HEADER + i * REC;
+    view.setInt32(base, points[i].x, true);
+    view.setInt32(base + 4, points[i].y, true);
+    view.setInt32(base + 8, points[i].z, true);
+    view.setUint16(base + 12, points[i].intensity, true);
+    view.setUint8(base + 14, points[i].returnBits ?? 0);
+    view.setUint8(base + 15, points[i].classByte);
+    view.setUint16(base + 18, points[i].sourceId ?? 0, true);
+    view.setFloat64(base + 20, points[i].gpsTime ?? 0, true); // GPS time
   }
   return buf;
 }
@@ -248,5 +291,53 @@ describe('loadLas — laz-perf module reuse', () => {
     for (let i = 0; i < a.positions.length; i++) {
       expect(b.positions[i]).toBe(a.positions[i]);
     }
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Inspection extras — return number/count, point source ID, GPS time (v0.2.8)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('loadLas — inspection extras', () => {
+  test('legacy format 0 decodes return number/count and point source ID', async () => {
+    // returnBits 0x1A → return number 2 (bits 0-2), return count 3 (bits 3-5).
+    const buf = makeLasFormat0([
+      { x: 0, y: 0, z: 0, intensity: 10, classByte: 2, returnBits: 0x1a, sourceId: 4097 },
+      { x: 1, y: 1, z: 1, intensity: 20, classByte: 2, returnBits: 0x09, sourceId: 7 },
+    ]);
+    const pc = await loadLas(buf, 'las');
+    expect(Array.from(pc.returnNumber!)).toEqual([2, 1]); // 0x1A→2, 0x09→1
+    expect(Array.from(pc.returnCount!)).toEqual([3, 1]); // 0x1A→3, 0x09→1
+    expect(Array.from(pc.pointSourceId!)).toEqual([4097, 7]);
+  });
+
+  test('format 0 carries no GPS time', async () => {
+    const buf = makeLasFormat0([{ x: 0, y: 0, z: 0, intensity: 10, classByte: 1 }]);
+    const pc = await loadLas(buf, 'las');
+    expect(pc.gpsTime).toBeUndefined();
+  });
+
+  test('format 1 decodes the GPS-time field', async () => {
+    const buf = makeLasFormat1([
+      { x: 0, y: 0, z: 0, intensity: 10, classByte: 2, gpsTime: 123456.789 },
+      { x: 1, y: 1, z: 1, intensity: 20, classByte: 2, gpsTime: 987654.321 },
+    ]);
+    const pc = await loadLas(buf, 'las');
+    expect(pc.gpsTime).toBeInstanceOf(Float64Array);
+    expect(pc.gpsTime!.length).toBe(2);
+    expect(pc.gpsTime![0]).toBeCloseTo(123456.789, 3);
+    expect(pc.gpsTime![1]).toBeCloseTo(987654.321, 3);
+  });
+
+  test('a stride decode keeps the extras arrays aligned with the sampled records', async () => {
+    const buf = makeLasFormat0([
+      { x: 0, y: 0, z: 0, intensity: 1, classByte: 1, returnBits: 0x1a, sourceId: 100 },
+      { x: 1, y: 0, z: 0, intensity: 1, classByte: 1, returnBits: 0x1a, sourceId: 100 },
+      { x: 2, y: 0, z: 0, intensity: 1, classByte: 1, returnBits: 0x1a, sourceId: 100 },
+      { x: 3, y: 0, z: 0, intensity: 1, classByte: 1, returnBits: 0x1a, sourceId: 100 },
+    ]);
+    const strided = await loadLas(buf, 'las', 'x.las', 2);
+    expect(strided.returnNumber!.length).toBe(strided.pointCount);
+    expect(strided.pointSourceId!.length).toBe(strided.pointCount);
   });
 });

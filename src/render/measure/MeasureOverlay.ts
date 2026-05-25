@@ -15,8 +15,29 @@ import * as THREE from 'three/webgpu';
 import type { Vec3 } from '../navMath';
 import { layoutLabels } from './labelLayout';
 import type { LabelBox } from './labelLayout';
+import { standaloneSvg, viewBoxSize } from '../snapshotSvg';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * Self-contained measurement styling for the screenshot export. The live
+ * overlay is styled by the app stylesheet; a serialised SVG rasterised on its
+ * own cannot reach it, so the snapshot carries these rules inline. Kept in
+ * sync with the `.olv-measure-*` / `.olv-m-*` blocks in `style.css`, with the
+ * accent colour resolved to its literal value.
+ */
+const SNAPSHOT_CSS = [
+  '.olv-measure-line{stroke:#00b2ff;stroke-width:1.6;stroke-dasharray:6 4}',
+  '.olv-m-preview{opacity:0.5}',
+  '.olv-measure-dot{fill:#00b2ff;stroke:#0a0e1a;stroke-width:1.5}',
+  '.olv-measure-dot-pending{fill:none;stroke:#00b2ff;stroke-width:2}',
+  '.olv-m-fill{fill:rgba(0,178,255,0.14);stroke:#00b2ff;stroke-width:1.3;stroke-dasharray:5 4}',
+  '.olv-m-leader{stroke:rgba(0,178,255,0.5);stroke-width:1}',
+  '.olv-m-handle{fill:transparent}',
+  '.olv-measure-label{fill:#00b2ff;font:600 12px ui-monospace,"SF Mono",Menlo,Consolas,monospace;',
+  'paint-order:stroke;stroke:#0a0e1a;stroke-width:4px;stroke-linejoin:round}',
+  '.olv-m-label-primary{font-size:13px}',
+].join('');
 
 /** A vertex marker. */
 export interface OverlayVertex {
@@ -184,6 +205,21 @@ export class MeasureOverlay {
   /** Clear all drawn geometry. */
   clear(): void {
     this.element.replaceChildren();
+  }
+
+  /**
+   * Serialise the current frame's geometry to a standalone, self-styled SVG
+   * string for the screenshot compositor. The document carries its own
+   * `<style>` so it rasterises correctly without the app stylesheet.
+   */
+  toSVGString(): string {
+    const [w, h] = viewBoxSize(this.element);
+    const serializer = new XMLSerializer();
+    let inner = '';
+    for (const child of Array.from(this.element.children)) {
+      inner += serializer.serializeToString(child);
+    }
+    return standaloneSvg(inner, w, h, SNAPSHOT_CSS);
   }
 
   /** Remove the SVG element from the DOM. */
