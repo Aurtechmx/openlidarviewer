@@ -70,6 +70,25 @@ import { downsampleToBudget } from '../process/voxelDownsample';
 import { makePointInfo } from './pointInfo';
 import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
+// The streaming render engine is type-only here and dynamically imported in
+// `attachStreamingCloud`, so `src/render/streaming/*` (scheduler, renderer,
+// octree, cache) stays out of the initial bundle and loads only when a COPC
+// scan is opened. `streamingBudget` is a tiny leaf kept static for the
+// synchronous `setStreamingQuality` path.
+import type { StreamingScheduler } from './streaming/StreamingScheduler';
+import type { StreamingRenderer } from './streaming/StreamingRenderer';
+import type { StreamingPointCloud } from './streaming/StreamingPointCloud';
+import { streamingBudgets } from './streaming/streamingBudget';
+import type { StreamingQuality } from './streaming/streamingBudget';
+// The streaming-engine `import()` split points live in `lazyChunks.ts` — a
+// module excluded from the live-build obfuscator so Vite can still emit the
+// chunks (see lazyChunks.ts).
+import {
+  loadStreamingRenderer,
+  loadStreamingScheduler,
+  loadStreamingColors,
+} from '../lazyChunks';
+import type { ChunkDecoder, DecodedChunk } from '../io/copc/copcChunkDecode';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data per loaded cloud
@@ -151,6 +170,20 @@ export interface FrameStats {
   totalPoints: number;
   /** Rough GPU memory held by the visible clouds' instance attributes, in bytes. */
   gpuBytesEstimate: number;
+}
+
+/** A built (but not yet mounted) instanced-quad point mesh and its handles. */
+export interface PointMeshHandle {
+  mesh: THREE.Mesh;
+  material: THREE.PointsNodeMaterial;
+  colorAttr: THREE.InstancedBufferAttribute;
+}
+
+/** The live COPC streaming subsystem — present only while a COPC is open. */
+interface StreamingSession {
+  cloud: StreamingPointCloud;
+  scheduler: StreamingScheduler;
+  renderer: StreamingRenderer;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,6 +352,16 @@ export class Viewer {
   // ── Cloud registry ───────────────────────────────────────────────────────
   private readonly _clouds = new Map<string, CloudEntry>();
   private _nextId = 0;
+
+  // ── Streaming COPC subsystem (set while a streaming cloud is open) ───────
+  /** Streaming node meshes — tracked so material settings reach them too. */
+  private readonly _streamingMeshes = new Set<THREE.Mesh>();
+  /** Per streaming mesh: its local positions, for point picking. */
+  private readonly _streamingPickData = new Map<THREE.Mesh, DecodedChunk>();
+  /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
+  private _streaming: StreamingSession | null = null;
+  /** Frames since the streaming scheduler last ran — for throttling. */
+  private _streamingFrame = 0;
 
   // ── Shared point size in screen pixels (applied to all materials) ────────
   // Defaults to the smallest size; matches the Inspector slider's initial value.
@@ -521,26 +564,38 @@ export class Viewer {
     const id = `cloud_${this._nextId++}`;
     const mode = defaultMode(cloud);
 
-    // ── Shared billboard quad ─────────────────────────────────────────────
+    const { mesh, material, colorAttr } = this.buildPointMesh(
+      cloud.positions,
+      colorForMode(mode, cloud),
+    );
+    this._scene.add(mesh);
+
+    this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
+    this._configureForClouds(cloud);
+    return id;
+  }
+
+  /**
+   * Build one instanced-quad point mesh from local positions and interleaved
+   * RGB colours — the shared primitive behind both static clouds and COPC
+   * streaming nodes. The mesh is *not* added to the scene; the caller mounts
+   * it. Picking up the viewer's current point size, size mode and
+   * antialiasing means a freshly built mesh matches the rest of the scene.
+   */
+  buildPointMesh(positions: Float32Array, colorsU8: Uint8Array): PointMeshHandle {
     const geometry = new THREE.InstancedBufferGeometry();
     geometry.setAttribute(
       'position',
       new THREE.Float32BufferAttribute(QUAD_CORNERS, 3),
     );
     geometry.setIndex(QUAD_INDEX);
-    geometry.instanceCount = cloud.pointCount;
+    geometry.instanceCount = positions.length / 3;
 
-    // ── Per-point instance data ───────────────────────────────────────────
-    const positionAttr = new THREE.InstancedBufferAttribute(cloud.positions, 3);
-    const colorAttr = new THREE.InstancedBufferAttribute(
-      toFloatColors(colorForMode(mode, cloud)),
-      3,
-    );
+    const positionAttr = new THREE.InstancedBufferAttribute(positions, 3);
+    const colorAttr = new THREE.InstancedBufferAttribute(toFloatColors(colorsU8), 3);
 
-    // ── Material — drives the quad expansion on WebGPU and WebGL 2 ────────
     // `instancedBufferAttribute` is typed as a broad node-type union; narrow
-    // it to each property's accepted type. The runtime value is correct — the
-    // attribute's itemSize (3) makes it a vec3.
+    // it to each property's accepted type — the itemSize (3) makes it a vec3.
     const material = new THREE.PointsNodeMaterial();
     material.positionNode = instancedBufferAttribute(positionAttr) as NonNullable<
       typeof material.positionNode
@@ -556,16 +611,149 @@ export class Viewer {
     material.opacityNode = buildPointMaskNode() as typeof material.opacityNode;
     material.alphaTest = 0.5;
     material.alphaToCoverage = this._antialiasing;
-    // Adaptive sizing scales points with camera distance; fixed uses `.size`.
     this._applySizeMode(material);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.frustumCulled = false;
-    this._scene.add(mesh);
+    return { mesh, material, colorAttr };
+  }
 
-    this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
-    this._configureForClouds(cloud);
-    return id;
+  /**
+   * Add a streaming COPC node's mesh to the scene. The node's decoded chunk is
+   * registered so the measurement tools, the inspector, and the live probe can
+   * pick points and read their per-point attributes on streaming nodes.
+   */
+  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk): void {
+    this._scene.add(mesh);
+    this._streamingMeshes.add(mesh);
+    this._streamingPickData.set(mesh, decoded);
+  }
+
+  /** Remove a streaming node's mesh from the scene and free its GPU buffers. */
+  removeStreamingMesh(mesh: THREE.Mesh): void {
+    this._scene.remove(mesh);
+    this._streamingMeshes.delete(mesh);
+    this._streamingPickData.delete(mesh);
+    mesh.geometry.dispose();
+    (mesh.material as THREE.Material).dispose();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Streaming COPC
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Attach a streaming COPC cloud: wire its scheduler to a renderer, configure
+   * navigation for its extent, and begin view-dependent streaming on the next
+   * render tick. Replaces any previously attached streaming cloud.
+   *
+   * Async: the streaming render engine is a lazily-imported chunk, fetched
+   * here on the first COPC open so it never weighs on the initial bundle.
+   */
+  async attachStreamingCloud(
+    cloud: StreamingPointCloud,
+    decoder: ChunkDecoder,
+    quality: StreamingQuality,
+    isMobile: boolean,
+  ): Promise<void> {
+    const [{ StreamingRenderer }, { StreamingScheduler }, { defaultStreamingMode }] =
+      await Promise.all([
+        loadStreamingRenderer(),
+        loadStreamingScheduler(),
+        loadStreamingColors(),
+      ]);
+    this.detachStreamingCloud();
+    const renderer = new StreamingRenderer(
+      this,
+      cloud,
+      defaultStreamingMode(cloud.metadata),
+    );
+    const scheduler = new StreamingScheduler(
+      cloud,
+      decoder,
+      {
+        onNodeReady: (node, decoded) => renderer.onNodeReady(node, decoded),
+        onNodeEvicted: (node) => renderer.onNodeEvicted(node),
+      },
+      streamingBudgets(quality, isMobile),
+    );
+    this._streaming = { cloud, scheduler, renderer };
+    this._streamingFrame = 0;
+    this._configureForStreaming(cloud);
+  }
+
+  /** Detach and fully dispose the current streaming cloud, if any. */
+  detachStreamingCloud(): void {
+    if (!this._streaming) return;
+    this._streaming.scheduler.stop();
+    this._streaming.renderer.dispose();
+    this._streaming = null;
+    if (this._clouds.size === 0) this._nav.setHasCloud(false);
+  }
+
+  /** Whether a streaming COPC cloud is currently open. */
+  get hasStreamingCloud(): boolean {
+    return this._streaming !== null;
+  }
+
+  /** The open streaming cloud, or null. */
+  get streamingCloud(): StreamingPointCloud | null {
+    return this._streaming?.cloud ?? null;
+  }
+
+  /** The streaming scheduler, or null — for the streaming panel and diagnostics. */
+  get streamingScheduler(): StreamingScheduler | null {
+    return this._streaming?.scheduler ?? null;
+  }
+
+  /** Switch the streaming cloud's colour mode. */
+  setStreamingColorMode(mode: ColorMode): void {
+    this._streaming?.renderer.setColorMode(mode);
+  }
+
+  /** Apply a new streaming quality preset (point/concurrency budgets). */
+  setStreamingQuality(quality: StreamingQuality, isMobile: boolean): void {
+    this._streaming?.scheduler.setBudgets(streamingBudgets(quality, isMobile));
+  }
+
+  /** Pause streaming — no new nodes load. */
+  pauseStreaming(): void {
+    this._streaming?.scheduler.pause();
+  }
+
+  /** Resume streaming. */
+  resumeStreaming(): void {
+    this._streaming?.scheduler.resume();
+  }
+
+  /** Drop the streaming compressed-chunk cache. */
+  clearStreamingCache(): void {
+    this._streaming?.scheduler.clearCache();
+  }
+
+  /** Configure navigation and clip planes for a streaming cloud's extent. */
+  private _configureForStreaming(cloud: StreamingPointCloud): void {
+    // COPC is LAS-derived — always Z-up.
+    this._worldUp.set(0, 0, 1);
+    this._nav.setWorldUp(this._worldUp);
+
+    const b = cloud.localBounds();
+    const size = Math.max(b[3] - b[0], b[4] - b[1], b[5] - b[2]) || 100;
+    this._nav.setBaseSpeed(speedForSize(size));
+    this._nav.setHasCloud(true);
+
+    this._camera.near = Math.max(size * 0.0002, 0.01);
+    this._camera.far = Math.max(size * 16, 1000);
+    this._camera.updateProjectionMatrix();
+    this._edlNear.value = this._camera.near;
+    this._edlFar.value = this._camera.far;
+
+    const radius = size / 2 || 1;
+    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
+    this._attnRef.value = (radius / Math.sin(fovRad / 2)) * 1.2;
+    this._applyOrbitBounds(radius);
+
+    this._measure.setContext({ worldUp: [0, 0, 1], origin: cloud.renderOrigin });
   }
 
   /**
@@ -623,6 +811,16 @@ export class Viewer {
     for (const { material } of this._clouds.values()) {
       material.size = size;
     }
+    for (const material of this._streamingMaterials()) {
+      material.size = size;
+    }
+  }
+
+  /** The point material of every resident streaming node mesh. */
+  private *_streamingMaterials(): Generator<THREE.PointsNodeMaterial> {
+    for (const mesh of this._streamingMeshes) {
+      yield mesh.material as THREE.PointsNodeMaterial;
+    }
   }
 
   /** The current base point size, in screen pixels. */
@@ -661,6 +859,10 @@ export class Viewer {
       this._applySizeMode(material);
       material.needsUpdate = true;
     }
+    for (const material of this._streamingMaterials()) {
+      this._applySizeMode(material);
+      material.needsUpdate = true;
+    }
   }
 
   /** The current point-size mode. */
@@ -672,6 +874,10 @@ export class Viewer {
   setAntialiasing(on: boolean): void {
     this._antialiasing = on;
     for (const { material } of this._clouds.values()) {
+      material.alphaToCoverage = on;
+      material.needsUpdate = true;
+    }
+    for (const material of this._streamingMaterials()) {
       material.alphaToCoverage = on;
       material.needsUpdate = true;
     }
@@ -934,6 +1140,18 @@ export class Viewer {
     this._nav.tweenTo(pos, target, 0.7);
   }
 
+  /**
+   * Bound the orbit dolly to the framed cloud: `radius` is the scan's bounding
+   * radius. The camera can pull in close enough to inspect a detail and back
+   * far enough to take in the whole scan with margin — but never so far the
+   * cloud is lost off-screen, nor so close it clips through the near plane.
+   */
+  private _applyOrbitBounds(radius: number): void {
+    const r = radius > 0 ? radius : 1;
+    this._controls.minDistance = r * 0.02;
+    this._controls.maxDistance = r * 16;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Utility
   // ─────────────────────────────────────────────────────────────────────────
@@ -1054,6 +1272,7 @@ export class Viewer {
     for (const id of [...this._clouds.keys()]) {
       this.removeCloud(id);
     }
+    this.detachStreamingCloud();
     this._nav.dispose();
     this._measure.dispose();
     this._inspect.dispose();
@@ -1130,6 +1349,7 @@ export class Viewer {
     const radius = sphere && sphere.radius > 0 ? sphere.radius : 1;
     const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
     this._attnRef.value = (radius / Math.sin(fovRad / 2)) * 1.2;
+    this._applyOrbitBounds(radius);
   }
 
   /** Combined bounding sphere of every visible cloud, or null if none. */
@@ -1141,6 +1361,14 @@ export class Viewer {
       const b = cloud.bounds();
       box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
       box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
+      any = true;
+    }
+    // A streaming COPC contributes its whole octree extent so framing works
+    // before any node has finished decoding.
+    if (this._streaming) {
+      const lb = this._streaming.cloud.localBounds();
+      box.expandByPoint(new THREE.Vector3(lb[0], lb[1], lb[2]));
+      box.expandByPoint(new THREE.Vector3(lb[3], lb[4], lb[5]));
       any = true;
     }
     if (!any || box.isEmpty()) return null;
@@ -1157,9 +1385,56 @@ export class Viewer {
     return new THREE.Vector3().crossVectors(this._worldUp, seed).normalize();
   }
 
-  /** Pick the cloud point under normalised device coords, or null if none. */
+  /**
+   * Pick the cloud point under normalised device coords, or null if none.
+   * Searches static clouds first, then resident streaming nodes — so
+   * measurement and focus work on a COPC scan as well as a static one.
+   */
   private _pickPoint(ndcX: number, ndcY: number): THREE.Vector3 | null {
-    return this._pickDetailed(ndcX, ndcY)?.point ?? null;
+    const onStatic = this._pickDetailed(ndcX, ndcY)?.point;
+    if (onStatic) return onStatic;
+    return this._pickStreaming(ndcX, ndcY);
+  }
+
+  /** Pick a point among the resident streaming node meshes, or null. */
+  private _pickStreaming(ndcX: number, ndcY: number): THREE.Vector3 | null {
+    return this._pickStreamingDetailed(ndcX, ndcY)?.point ?? null;
+  }
+
+  /**
+   * Pick the streaming node point under normalised device coords, returning
+   * the decoded chunk it belongs to and the point's index — so the inspector
+   * and live probe can read its per-point attributes.
+   */
+  private _pickStreamingDetailed(
+    ndcX: number,
+    ndcY: number,
+  ): { decoded: DecodedChunk; index: number; point: THREE.Vector3 } | null {
+    if (this._streamingPickData.size === 0) return null;
+    this._raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._camera);
+    const o = this._raycaster.ray.origin;
+    const d = this._raycaster.ray.direction;
+    let best: { decoded: DecodedChunk; index: number; point: THREE.Vector3 } | null = null;
+    let bestScore = Infinity;
+    for (const [mesh, decoded] of this._streamingPickData) {
+      if (!mesh.visible) continue;
+      const hit = nearestPointAlongRay(
+        decoded.positions,
+        [o.x, o.y, o.z],
+        [d.x, d.y, d.z],
+      );
+      if (!hit) continue;
+      const score = hit.offset / hit.along;
+      if (score < 0.07 && score < bestScore) {
+        bestScore = score;
+        best = {
+          decoded,
+          index: hit.index,
+          point: new THREE.Vector3(hit.point[0], hit.point[1], hit.point[2]),
+        };
+      }
+    }
+    return best;
   }
 
   /**
@@ -1239,11 +1514,17 @@ export class Viewer {
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
     const hit = this._pickDetailed(ndcX, ndcY);
-    if (!hit) {
-      this._inspect.showPoint(null, null);
+    if (hit) {
+      this._inspect.showPoint(this._infoForHit(hit), hit.point);
       return;
     }
-    this._inspect.showPoint(this._infoForHit(hit), hit.point);
+    // Fall back to the resident streaming nodes — COPC point inspection.
+    const streamHit = this._pickStreamingDetailed(ndcX, ndcY);
+    if (streamHit) {
+      this._inspect.showPoint(this._infoForStreamingHit(streamHit), streamHit.point);
+      return;
+    }
+    this._inspect.showPoint(null, null);
   }
 
   /**
@@ -1283,11 +1564,63 @@ export class Viewer {
     });
   }
 
+  /**
+   * Build display-ready point info for a streaming-node pick hit — the COPC
+   * equivalent of {@link _infoForHit}. The decoded chunk carries every
+   * per-point attribute, so a streaming scan inspects exactly like a static one.
+   */
+  private _infoForStreamingHit(hit: {
+    decoded: DecodedChunk;
+    index: number;
+    point: THREE.Vector3;
+  }): PointInfo {
+    const { decoded, index, point } = hit;
+    const cloud = this._streaming?.cloud;
+    const origin: [number, number, number] = cloud ? cloud.renderOrigin : [0, 0, 0];
+    const rgb: [number, number, number] | null = decoded.rgb
+      ? [decoded.rgb[index * 3], decoded.rgb[index * 3 + 1], decoded.rgb[index * 3 + 2]]
+      : null;
+    return makePointInfo({
+      layer: cloud ? cloud.name : 'COPC',
+      index,
+      local: [point.x, point.y, point.z],
+      origin,
+      distance: this._camera.position.distanceTo(point),
+      intensity: decoded.intensity[index],
+      classification: decoded.classification[index],
+      rgb,
+      returnNumber: decoded.returnNumber[index],
+      returnCount: decoded.returnCount[index],
+      pointSourceId: decoded.pointSourceId ? decoded.pointSourceId[index] : undefined,
+      gpsTime: decoded.gpsTime[index],
+      // COPC PDRF 6/7/8 carry no surface normals.
+      normal: undefined,
+    });
+  }
+
   /** `F` key — focus on whatever point is centred in the view. */
   private _focusCenter(): void {
     const point = this._pickPoint(0, 0);
     if (point) this._nav.focusOn(point);
     else this.frameAll();
+  }
+
+  /** Feed the current camera view to the streaming scheduler. */
+  private _tickStreaming(): void {
+    if (!this._streaming) return;
+    this._camera.updateMatrixWorld();
+    const viewProjection = new THREE.Matrix4().multiplyMatrices(
+      this._camera.projectionMatrix,
+      this._camera.matrixWorldInverse,
+    );
+    this._streaming.scheduler.update({
+      viewProjection: viewProjection.elements,
+      cameraPosition: [
+        this._camera.position.x,
+        this._camera.position.y,
+        this._camera.position.z,
+      ],
+    });
   }
 
   private _startLoop(): void {
@@ -1300,6 +1633,12 @@ export class Viewer {
       // the scene directly, the v0.2 path, for zero post-processing overhead.
       if (this._edlEnabled) this._post.render();
       else this._renderer.render(this._scene, this._camera);
+      // Streaming COPC — run the view-dependent scheduler on a throttled
+      // cadence (~10 Hz at 60 fps), never every frame.
+      if (this._streaming) {
+        this._streamingFrame++;
+        if (this._streamingFrame % 6 === 0) this._tickStreaming();
+      }
       // After render, camera matrices are current — project the tool overlays.
       if (this._toolMode === 'measure' && !this._measure.dragging && this._pointerMoved) {
         this._pointerMoved = false;
@@ -1312,14 +1651,21 @@ export class Viewer {
       // pointer actually moved, so a hover readout costs no idle frame budget.
       if (this._toolMode === 'probe' && this._pointerMoved) {
         this._pointerMoved = false;
-        const hit = this._pointerOnCanvas
-          ? this._pickDetailed(this._pointerNdcX, this._pointerNdcY)
-          : null;
-        this._probe.update(
-          hit ? this._infoForHit(hit) : null,
-          this._pointerClientX,
-          this._pointerClientY,
-        );
+        let info: PointInfo | null = null;
+        if (this._pointerOnCanvas) {
+          const hit = this._pickDetailed(this._pointerNdcX, this._pointerNdcY);
+          if (hit) {
+            info = this._infoForHit(hit);
+          } else {
+            // Fall back to resident streaming nodes — COPC live probe.
+            const streamHit = this._pickStreamingDetailed(
+              this._pointerNdcX,
+              this._pointerNdcY,
+            );
+            if (streamHit) info = this._infoForStreamingHit(streamHit);
+          }
+        }
+        this._probe.update(info, this._pointerClientX, this._pointerClientY);
       }
       this._measure.render(this._camera, this._canvas);
       this._inspect.render();

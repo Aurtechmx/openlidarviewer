@@ -18,7 +18,7 @@ Coordinate reference systems are handled only loosely. The viewer recenters larg
 
 Classification visualization depends on classification attributes actually being present in the file, and many scans carry none.
 
-Very large datasets, on the order of billions of points, need tiling, downsampling, or streaming formats that are not implemented yet.
+Very large datasets are handled in two ways. A COPC (Cloud Optimized Point Cloud) `.copc.laz` file — local or hosted at a CORS-enabled URL — opens through progressive, octree-based streaming: partial range reads, a view-dependent scheduler, bounded memory, and worker decoding, so a file far larger than memory renders without ever being read whole. Any other very large format still relies on the downsampling and stride-decode fallbacks above; full tiling for non-COPC datasets, on the order of billions of points, is not implemented yet.
 
 WebGPU feature support varies by browser. Where it is unavailable, the viewer uses its WebGL 2 fallback.
 

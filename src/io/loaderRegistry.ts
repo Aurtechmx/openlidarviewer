@@ -5,10 +5,12 @@
  * the former `pickLoader` switch: every decodable format maps to one loader
  * function.
  *
- * This module imports every decoder (laz-perf, PCDLoader, loaders.gl, …), so it
- * is heavy — it belongs on the worker decode path. The lightweight format facts
- * (labels, text/binary, header-count) live in `formatInfo.ts`, which imports no
- * decoder, so the preflight and the main-thread UI can stay lean.
+ * Each decoder is loaded **on demand** with a dynamic `import()`, so the heavy
+ * libraries — laz-perf's embedded WASM, loaders.gl, the E57 reader — are split
+ * into separate chunks and only the one format actually being opened is ever
+ * fetched. Opening a `.ply` never pulls in the laz-perf WASM, and vice versa.
+ * This module itself therefore imports no decoder and stays lightweight; the
+ * format facts (labels, text/binary, header-count) live in `formatInfo.ts`.
  *
  * Adding a format is one entry here plus one in `formatInfo.ts`.
  */
@@ -16,15 +18,6 @@
 import type { SourceFormat } from './sniffFormat';
 import type { PointCloud } from '../model/PointCloud';
 import type { ProgressUpdate } from './loadProgress';
-import { loadPly } from './loadPly';
-import { loadLas } from './loadLas';
-import { loadObj } from './loadObj';
-import { loadGltf } from './loadGltf';
-import { loadXyz } from './loadXyz';
-import { loadE57 } from './loadE57';
-import { loadPcd } from './loadPcd';
-import { loadPtx } from './loadPtx';
-import { loadPts } from './loadPts';
 
 /**
  * A function that turns a file buffer into a normalized `PointCloud`.
@@ -38,19 +31,25 @@ export type LoaderFn = (
   onProgress?: (update: ProgressUpdate) => void,
 ) => Promise<PointCloud>;
 
-/** The decoder for each registered format. */
+/**
+ * The decoder for each registered format. Every entry dynamically imports its
+ * decoder module on first call, so each format's heavy dependencies land in a
+ * separate, lazily-fetched chunk.
+ */
 const LOADERS: Record<SourceFormat, LoaderFn> = {
-  las: (buffer, name) => loadLas(buffer, 'las', name),
-  laz: (buffer, name) => loadLas(buffer, 'laz', name),
-  e57: (buffer, name) => loadE57(buffer, name),
-  ply: (buffer, name) => loadPly(buffer, name),
-  obj: (buffer, name) => loadObj(buffer, name),
-  glb: (buffer, name) => loadGltf(buffer, 'glb', name),
-  gltf: (buffer, name) => loadGltf(buffer, 'gltf', name),
-  xyz: (buffer, name, onProgress) => loadXyz(buffer, name, onProgress),
-  pcd: (buffer, name) => loadPcd(buffer, name),
-  ptx: (buffer, name) => loadPtx(buffer, name),
-  pts: (buffer, name, onProgress) => loadPts(buffer, name, onProgress),
+  las: async (buffer, name) => (await import('./loadLas')).loadLas(buffer, 'las', name),
+  laz: async (buffer, name) => (await import('./loadLas')).loadLas(buffer, 'laz', name),
+  e57: async (buffer, name) => (await import('./loadE57')).loadE57(buffer, name),
+  ply: async (buffer, name) => (await import('./loadPly')).loadPly(buffer, name),
+  obj: async (buffer, name) => (await import('./loadObj')).loadObj(buffer, name),
+  glb: async (buffer, name) => (await import('./loadGltf')).loadGltf(buffer, 'glb', name),
+  gltf: async (buffer, name) => (await import('./loadGltf')).loadGltf(buffer, 'gltf', name),
+  xyz: async (buffer, name, onProgress) =>
+    (await import('./loadXyz')).loadXyz(buffer, name, onProgress),
+  pcd: async (buffer, name) => (await import('./loadPcd')).loadPcd(buffer, name),
+  ptx: async (buffer, name) => (await import('./loadPtx')).loadPtx(buffer, name),
+  pts: async (buffer, name, onProgress) =>
+    (await import('./loadPts')).loadPts(buffer, name, onProgress),
 };
 
 /** The decoder for a format. Throws on an unregistered format. */

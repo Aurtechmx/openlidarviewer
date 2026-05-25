@@ -23,6 +23,11 @@ export interface StageOptions {
    * unavailable.
    */
   onOpenFile?: (file: File) => void;
+  /**
+   * Called with a URL when the user submits the "open from URL" field — the
+   * entry point for streaming a remote COPC scan.
+   */
+  onOpenUrl?: (url: string) => void;
 }
 
 /**
@@ -149,6 +154,59 @@ export class Stage {
       samples.append(btn);
     }
 
-    return el('div', { className: 'olv-empty' }, [title, sub, openButton, fileInput, samples]);
+    const urlRow = this._buildUrlRow(options);
+
+    return el('div', { className: 'olv-empty' }, [
+      title,
+      sub,
+      openButton,
+      fileInput,
+      samples,
+      urlRow,
+    ]);
+  }
+
+  /**
+   * The "open from URL" field — the entry point for streaming a remote COPC
+   * (`.copc.laz`) scan. It is a quiet, secondary affordance below the samples;
+   * the host must allow cross-origin range requests, which the hint states
+   * plainly so expectations stay honest.
+   */
+  private _buildUrlRow(options: StageOptions): HTMLElement {
+    const label = el('label', {
+      className: 'olv-url-label',
+      text: 'or stream a COPC file from a URL',
+    });
+
+    const input = el('input', {
+      className: 'olv-url-input',
+      type: 'url',
+      ariaLabel: 'COPC file URL',
+    });
+    input.placeholder = 'https://host/scan.copc.laz';
+
+    const submit = el('button', {
+      className: 'olv-url-btn',
+      text: 'Open',
+      title: 'Stream a Cloud Optimized Point Cloud from this URL',
+    });
+    submit.type = 'submit';
+
+    const hint = el('span', {
+      className: 'olv-url-hint',
+      text: 'COPC only. The host must allow cross-origin range requests.',
+    });
+
+    const form = el('form', { className: 'olv-empty-url' }, [
+      label,
+      el('div', { className: 'olv-url-controls' }, [input, submit]),
+      hint,
+    ]);
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const url = input.value.trim();
+      if (url) options.onOpenUrl?.(url);
+    });
+    return form;
   }
 }

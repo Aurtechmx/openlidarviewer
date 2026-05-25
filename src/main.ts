@@ -25,6 +25,8 @@ import { formatProgress } from './io/loadProgress';
 import { formatTelemetry } from './io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from './io/benchmark';
 import { DebugOverlay } from './ui/DebugOverlay';
+import type { StreamingDebugStats } from './ui/DebugOverlay';
+import { estimateGpuBytes } from './render/streaming/streamingBudget';
 import { isZUpFormat } from './io/sniffFormat';
 import { exportCloud } from './io/exporters';
 import { serializeSession, parseSession } from './io/session';
@@ -36,6 +38,26 @@ import { scanReport } from './analysis/modules/scanReport';
 import { availableModes, defaultMode } from './render/colorModes';
 import type { ColorMode } from './render/colorModes';
 import type { PointCloud } from './model/PointCloud';
+// `detectCopc` is a tiny leaf — kept static so `handleFile` can branch on it
+// synchronously. The rest of the COPC + streaming subsystem is dynamically
+// imported (in `openStreamingCopc` and `handleRemoteCopc`), so it lands in a
+// lazy chunk fetched only when a COPC scan is actually opened.
+import { detectCopc } from './io/copc/copcDetect';
+import { RangeReadError } from './io/range/RangeSource';
+import type { RangeSource } from './io/range/RangeSource';
+import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
+import { StreamingPanel } from './ui/StreamingPanel';
+import type { StreamingQuality } from './render/streaming/streamingBudget';
+// The COPC/streaming `import()` split points live in `lazyChunks.ts` — a
+// module excluded from the live-build obfuscator so Vite can still see the
+// dynamic-import specifiers and emit the chunks (see lazyChunks.ts).
+import {
+  loadStreamingPointCloud,
+  loadCopcWorkerClient,
+  loadStreamingColors,
+  loadLocalFileRangeSource,
+  loadHttpRangeSource,
+} from './lazyChunks';
 
 // A pointer to the open-source repository for anyone who opens the console on
 // the live site. The deployed bundle is obfuscated; the readable source — and
@@ -72,6 +94,7 @@ const stage = new Stage(app, {
   samples: SAMPLES,
   onSample: loadFromUrl,
   onOpenFile: (file) => void handleFile(file),
+  onOpenUrl: (url) => void handleRemoteCopc(url),
 });
 const viewer = new Viewer(stage.canvas);
 
@@ -117,6 +140,13 @@ let viewerReady = false;
 /** The `?debug=1` / `?benchmark=1` performance overlay, when one is shown. */
 let debugOverlay: DebugOverlay | null = null;
 
+/** The COPC decode worker client — created lazily on the first COPC open. */
+let copcDecoder: CopcWorkerClient | null = null;
+/** The active streaming quality preset. */
+let streamingQuality: StreamingQuality = 'balanced';
+/** Interval handle for the streaming-status poll, while a COPC is open. */
+let streamingStatusTimer: number | undefined;
+
 /**
  * A viewer state decoded from a `#s=` share link, applied once the next scan
  * loads. A share link carries no scan data — the recipient opens the scan and
@@ -144,10 +174,7 @@ const inspector = new Inspector({
     downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
   },
   onSaveView: () => saveCurrentView(),
-  onApplyView: (index) => {
-    const view = savedViews[index];
-    if (view) viewer.applyCameraPose(view.pose);
-  },
+  onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
     const view = savedViews[index];
     if (view) {
@@ -236,6 +263,23 @@ viewer.setAnnotateListeners({
 
 const projectCard = new ProjectCard();
 
+// The streaming-COPC panel — phase, live status, and streaming controls.
+const streamingPanel = new StreamingPanel({
+  onColorMode: (mode) => viewer.setStreamingColorMode(mode),
+  onQuality: (quality) => {
+    streamingQuality = quality;
+    viewer.setStreamingQuality(quality, isPhone());
+  },
+  onPauseToggle: (paused) => {
+    if (paused) viewer.pauseStreaming();
+    else viewer.resumeStreaming();
+  },
+  onClearCache: () => viewer.clearStreamingCache(),
+  onSaveView: () => saveCurrentView(),
+  onApplyView: (index) => applyView(index),
+  onDeleteView: (index) => deleteView(index),
+});
+
 // The Measurements panel lists placed measurements; the controller drives it.
 const measurePanel = new MeasurePanel({
   onDelete: (id) => viewer.measure.removeMeasurement(id),
@@ -284,6 +328,7 @@ if (!bareMode) {
   stage.overlay.append(viewer.annotateElements.overlay);
   stage.overlay.append(viewer.annotateElements.hint);
   stage.overlay.append(inspector.element);
+  stage.overlay.append(streamingPanel.element);
   // The measurement and annotation panels share a stacked left-side column.
   const leftPanels = document.createElement('div');
   leftPanels.className = 'olv-left-panels';
@@ -372,6 +417,12 @@ if (embedConfig.autoloadSample) {
   if (sample) void loadFromUrl(sample.url, sample.name);
 }
 
+// `?copc=<url>` — open a remote COPC scan on startup. A hosted COPC file is
+// thus a shareable, bookmarkable deep link — the format's core use case. The
+// streaming pipeline reads it progressively over HTTP range requests.
+const copcUrlParam = urlParams.get('copc');
+if (copcUrlParam) void handleRemoteCopc(copcUrlParam);
+
 // The developer performance overlay — surfaced only by `?debug=1` or
 // `?benchmark=1`. It polls the viewer for live frame stats on a throttled
 // cadence; the load path feeds it telemetry and any benchmark result.
@@ -379,9 +430,31 @@ if (debug || benchmark) {
   debugOverlay = new DebugOverlay(() => ({
     backend: viewerReady ? viewer.activeBackend() : null,
     stats: viewerReady ? viewer.frameStats() : null,
+    streaming: streamingDebugSample(),
   }));
   stage.overlay.append(debugOverlay.element);
   debugOverlay.start();
+}
+
+/** Sample live COPC streaming counters for the debug overlay, or null. */
+function streamingDebugSample(): StreamingDebugStats | null {
+  const cloud = viewer.streamingCloud;
+  const scheduler = viewer.streamingScheduler;
+  if (!cloud || !scheduler) return null;
+  const counts = cloud.counts();
+  const stats = scheduler.stats();
+  return {
+    knownNodes: counts.known,
+    visibleNodes: stats.visible,
+    queuedNodes: stats.queued,
+    loadingNodes: stats.loading,
+    residentNodes: counts.resident,
+    displayedPoints: cloud.residentPointCount,
+    sourcePoints: cloud.sourcePointCount,
+    cacheBytes: scheduler.cacheStats().byteSize,
+    gpuBytes: estimateGpuBytes(cloud.residentPointCount),
+    schedulerMs: stats.lastTickMs,
+  };
 }
 
 /** Run every registered validation module and flatten the rows. */
@@ -463,13 +536,32 @@ function refreshAnnotationPanel(): void {
 
 /** Whether a scan is currently loaded — gates the tool keyboard shortcuts. */
 function hasScan(): boolean {
-  return viewer.clouds().length > 0;
+  return viewer.clouds().length > 0 || viewer.hasStreamingCloud;
 }
 
 /** Capture the current camera viewpoint as a named saved view. */
 function saveCurrentView(): void {
   savedViews.push({ name: `View ${++viewCounter}`, pose: viewer.getCameraPose() });
-  inspector.setViews(savedViews.map((v) => v.name));
+  refreshViewsUI();
+}
+
+/** Push the saved-view names to whichever panel is currently shown. */
+function refreshViewsUI(): void {
+  const names = savedViews.map((v) => v.name);
+  if (viewer.hasStreamingCloud) streamingPanel.setViews(names);
+  else inspector.setViews(names);
+}
+
+/** Glide the camera to a saved view. */
+function applyView(index: number): void {
+  const view = savedViews[index];
+  if (view) viewer.applyCameraPose(view.pose);
+}
+
+/** Delete a saved view and refresh the list. */
+function deleteView(index: number): void {
+  savedViews.splice(index, 1);
+  refreshViewsUI();
 }
 
 /**
@@ -564,6 +656,21 @@ async function handleFile(file: File): Promise<void> {
   dropZone.setProgress(`Reading ${file.name}…`);
   dropZone.setCancelHandler(() => controller.abort());
   try {
+    // COPC files take the streaming pipeline, not the static loader. The
+    // range-source module is part of the lazy COPC chunk.
+    const headSlice = await file.slice(0, 4096).arrayBuffer();
+    if (detectCopc(headSlice).isCopc) {
+      const { LocalFileRangeSource } = await loadLocalFileRangeSource();
+      await openStreamingCopc(
+        new LocalFileRangeSource(file),
+        file.name,
+        controller.signal,
+      );
+      return;
+    }
+    // A static load replaces any open streaming scan.
+    if (viewer.hasStreamingCloud) closeStreaming();
+
     // Phones get a tighter point budget — limited GPU memory and fill-rate.
     // The dropped file is wrapped in a LocalFileSource — the v0.2.9 source
     // abstraction; v0.3 streaming sources slot in beside it.
@@ -688,9 +795,229 @@ async function handleFile(file: File): Promise<void> {
       // reaches the console for developers under ?debug=1.
       if (debug) console.error('OpenLiDARViewer — load error', err);
       dropZone.setError(describeLoadError(err));
+      // A streaming open that failed mid-flight leaves no scan — tidy up.
+      closeStreaming();
     }
   } finally {
     loading = false;
+  }
+}
+
+/**
+ * Open a COPC scan from any range-readable source — a local file or a remote
+ * HTTP URL — through the streaming pipeline: read the metadata and hierarchy,
+ * attach the streaming cloud to the viewer, and show the streaming panel.
+ * Point data then streams in progressively, driven by the camera.
+ */
+async function openStreamingCopc(
+  range: RangeSource,
+  displayName: string,
+  signal: AbortSignal,
+): Promise<void> {
+  await viewer.ready;
+  streamingPanel.setPhase('Reading metadata…');
+  streamingPanel.show();
+  inspector.element.classList.add('olv-hidden');
+  dropZone.setProgress('Reading COPC hierarchy…');
+
+  // The COPC + streaming subsystem is a lazy chunk — fetched only here, the
+  // moment a COPC scan is opened, so it never weighs on the initial payload.
+  // The `import()` split points live in `lazyChunks.ts` (see that file).
+  const [{ StreamingPointCloud }, { CopcWorkerClient }, streamingColors] =
+    await Promise.all([
+      loadStreamingPointCloud(),
+      loadCopcWorkerClient(),
+      loadStreamingColors(),
+    ]);
+
+  const cloud = await StreamingPointCloud.open(range, displayName, signal);
+  if (signal.aborted) throw new LoadCancelledError();
+
+  if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+
+  // A streaming scan is exclusive — clear any open static layers first.
+  for (const id of viewer.clouds()) {
+    viewer.removeCloud(id);
+    inspector.removeCloud(id);
+  }
+  stage.hideEmptyState();
+  await viewer.attachStreamingCloud(cloud, copcDecoder, streamingQuality, isPhone());
+  viewer.setMode('orbit');
+  viewer.frameAll();
+
+  streamingPanel.setColorModes(
+    streamingColors.availableStreamingModes(cloud.metadata),
+    streamingColors.defaultStreamingMode(cloud.metadata),
+  );
+  streamingPanel.setQuality(streamingQuality);
+  streamingPanel.setPhase('Loading coarse view…');
+
+  // The metadata-driven scan summary, and a fresh saved-views list.
+  const header = cloud.metadata.header;
+  streamingPanel.setSummary({
+    fileName: cloud.name,
+    pointFormat: header.pointDataRecordFormat,
+    sourcePoints: cloud.sourcePointCount,
+    width: header.max[0] - header.min[0],
+    depth: header.max[1] - header.min[1],
+    height: header.max[2] - header.min[2],
+    spacing: cloud.metadata.info.spacing,
+    octreeDepth: cloud.maxDepth(),
+    nodeCount: cloud.octree.nodes().length,
+  });
+  savedViews = [];
+  viewCounter = 0;
+  refreshViewsUI();
+
+  // Measure, annotate, inspect, probe and close all work on a streaming scan:
+  // each resident COPC node keeps its full decoded per-point attributes.
+  dock.setMeasureEnabled(true);
+  dock.setAnnotateEnabled(true);
+  dock.setInspectEnabled(true);
+  dock.setProbeEnabled(true);
+  dock.setCloseEnabled(true);
+  dock.setBackend(viewer.activeBackend());
+  navBar.element.classList.remove('olv-hidden');
+  navBar.setMode('orbit');
+  navBar.flashHelp();
+  document.body.classList.add('olv-has-scan');
+
+  startStreamingStatusPolling();
+  dropZone.setProgress(null);
+}
+
+/**
+ * Open a remote COPC scan over HTTP range requests. The host must allow
+ * cross-origin requests and serve byte ranges — `HttpRangeSource.probe()`
+ * checks both up front, so a misconfigured host fails fast with a precise
+ * reason rather than a stalled load.
+ */
+async function handleRemoteCopc(url: string): Promise<void> {
+  if (loading) return;
+  if (!isHttpUrl(url)) {
+    dropZone.setError('Enter an http:// or https:// URL to a COPC (.copc.laz) file.');
+    return;
+  }
+  loading = true;
+  const controller = new AbortController();
+  dropZone.setProgress(`Connecting to ${shortUrl(url)}…`);
+  dropZone.setCancelHandler(() => controller.abort());
+  try {
+    // The remote range source is part of the lazy COPC chunk.
+    const { HttpRangeSource } = await loadHttpRangeSource();
+    const range = new HttpRangeSource(url);
+    // A HEAD probe for range support runs before the streaming UI appears, so
+    // a host that cannot stream reports a precise reason instead of stalling.
+    await range.probe(controller.signal);
+    if (controller.signal.aborted) throw new LoadCancelledError();
+    if (viewer.hasStreamingCloud) closeStreaming();
+    await openStreamingCopc(range, remoteCopcName(url), controller.signal);
+    dropZone.setCancelHandler(null);
+    dropZone.setProgress(null);
+  } catch (err) {
+    dropZone.setCancelHandler(null);
+    if (err instanceof LoadCancelledError) {
+      dropZone.setProgress(null);
+    } else {
+      if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
+      dropZone.setError(describeRemoteCopcError(err, url));
+      // A remote open that failed mid-flight leaves no scan — tidy up.
+      closeStreaming();
+    }
+  } finally {
+    loading = false;
+  }
+}
+
+/** Whether a string is a usable http(s) URL — guards the remote-COPC entry. */
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** A short, readable form of a URL — its host — for progress and error text. */
+function shortUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** The display name for a remote COPC scan — the file name from its URL path. */
+function remoteCopcName(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const last = path.slice(path.lastIndexOf('/') + 1);
+    return last ? decodeURIComponent(last) : 'remote.copc.laz';
+  } catch {
+    return 'remote.copc.laz';
+  }
+}
+
+/**
+ * Turn a remote-COPC failure into a clear, honest message. `HttpRangeSource`
+ * already classifies range-read failures (an unreachable or CORS-blocked host,
+ * a host with no range support, a host that ignored the range); a non-range
+ * error from the pipeline most often means the URL is reachable but the file
+ * behind it is not a valid COPC.
+ */
+function describeRemoteCopcError(err: unknown, url: string): string {
+  if (err instanceof RangeReadError) {
+    if (err.code === 'range-unsupported') {
+      return `${err.message} Host the file where the server serves HTTP range requests — most static hosts and object stores do.`;
+    }
+    if (err.code === 'transport') {
+      return `${err.message} The host must also allow cross-origin (CORS) requests.`;
+    }
+    return err.message;
+  }
+  const detail = err instanceof Error ? err.message : 'unknown error';
+  return `${shortUrl(url)} was reached, but it could not be read as a COPC scan — ${detail}.`;
+}
+
+/** Close a streaming scan: stop polling, detach, restore the static panel. */
+function closeStreaming(): void {
+  stopStreamingStatusPolling();
+  viewer.detachStreamingCloud();
+  streamingPanel.hide();
+  inspector.element.classList.remove('olv-hidden');
+}
+
+/** Poll the streaming state ~4 Hz so the panel reflects progress. */
+function startStreamingStatusPolling(): void {
+  stopStreamingStatusPolling();
+  streamingStatusTimer = window.setInterval(() => {
+    const cloud = viewer.streamingCloud;
+    const scheduler = viewer.streamingScheduler;
+    if (!cloud || !scheduler) return;
+    const counts = cloud.counts();
+    streamingPanel.setStatus({
+      loadedNodes: counts.resident,
+      knownNodes: counts.known,
+      displayedPoints: cloud.residentPointCount,
+      sourcePoints: cloud.sourcePointCount,
+      cacheBytes: scheduler.cacheStats().byteSize,
+    });
+    if (counts.resident === 0) {
+      streamingPanel.setPhase('Loading coarse view…');
+    } else if (counts.loading > 0 || counts.queued > 0) {
+      streamingPanel.setPhase('Refining visible detail…');
+    } else {
+      streamingPanel.setPhase('Streaming ready');
+    }
+  }, 250);
+}
+
+/** Stop the streaming-status poll. */
+function stopStreamingStatusPolling(): void {
+  if (streamingStatusTimer !== undefined) {
+    window.clearInterval(streamingStatusTimer);
+    streamingStatusTimer = undefined;
   }
 }
 
@@ -766,6 +1093,7 @@ function removeCloud(id: string): void {
  * state, ready for another scan to be dropped, opened, or sampled.
  */
 function closeScan(): void {
+  if (viewer.hasStreamingCloud) closeStreaming();
   for (const id of viewer.clouds()) {
     viewer.removeCloud(id);
     inspector.removeCloud(id);

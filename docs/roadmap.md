@@ -23,7 +23,7 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 - [ ] Broaden LAS / LAZ point-format coverage
 - [ ] Broaden E57 coverage — spherical coordinates, uncommon schema features
 - [ ] PCD, PTS / PTX import
-- [ ] COPC LAZ for cloud-optimised point clouds
+- [x] COPC LAZ for cloud-optimised point clouds — progressive octree streaming (0.3.0)
 - [ ] 3D Tiles / PNTS streaming
 - [ ] Better iPhone LiDAR export compatibility
 - [ ] Better drone LiDAR workflow compatibility
@@ -49,7 +49,7 @@ OpenLiDARViewer is an R&D-stage project. This roadmap is intentionally ambitious
 ## Performance
 
 - [x] Budget-aware fast loading — header preflight, stride decode, memory guard (0.2.7)
-- [ ] Tiled and streamed point-cloud datasets
+- [x] Streamed point-cloud datasets — COPC progressive octree streaming (0.3.0)
 - [ ] Streaming workflows for billion-point clouds
 
 ## Export and reporting

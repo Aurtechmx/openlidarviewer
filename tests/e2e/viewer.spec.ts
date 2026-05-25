@@ -173,3 +173,57 @@ test('a normal session shows no debug overlay', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.olv-debug')).toHaveCount(0);
 });
+
+test('the start screen offers an open-from-URL field for remote COPC', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+
+  // The remote-COPC entry point is present on the empty state.
+  const urlInput = page.locator('.olv-url-input');
+  await expect(urlInput).toBeVisible();
+  await expect(page.locator('.olv-url-btn')).toBeVisible();
+
+  // A non-http(s) URL — valid enough to pass the input's native check, but
+  // rejected by the remote-COPC guard with a clear message. Deterministic,
+  // no network request.
+  await urlInput.fill('ftp://example.com/scan.copc.laz');
+  await page.locator('.olv-url-btn').click();
+  const toast = page.locator('.olv-toast.olv-toast-error');
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText(/https?:\/\//);
+});
+
+test('arrow keys orbit the camera in orbit mode', async ({ page, context }) => {
+  // The Share link encodes the camera pose; reading it before and after a
+  // keyboard orbit proves the arrow keys actually moved the camera.
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.getByText('Drone survey', { exact: true }).click();
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  // Let the load-framing tween settle so the camera starts at rest.
+  await page.waitForTimeout(1500);
+
+  const readShareLink = async (): Promise<string> => {
+    await page.locator('.olv-tool', { hasText: 'Share' }).click();
+    await page.waitForTimeout(200);
+    return page.evaluate(() =>
+      navigator.clipboard.readText().catch(() => window.location.hash),
+    );
+  };
+
+  const before = await readShareLink();
+
+  // Hold ArrowLeft to orbit, then let the eased motion settle.
+  await page.keyboard.down('ArrowLeft');
+  await page.waitForTimeout(900);
+  await page.keyboard.up('ArrowLeft');
+  await page.waitForTimeout(700);
+
+  const after = await readShareLink();
+
+  // The encoded camera pose must have changed — keyboard orbit moved it.
+  expect(before).not.toBe('');
+  expect(after).not.toBe(before);
+});

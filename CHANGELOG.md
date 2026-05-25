@@ -7,14 +7,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 
-- 0.3.0 — the complete rendering overhaul: background themes, premium loading
-  states, and full mobile-adaptive rendering, building on the 0.2.5 pipeline
-- Cloud-optimised and streaming formats — COPC LAZ, 3D Tiles / PNTS
+- 3D Tiles / PNTS streaming
 - Cross-section and profile measurement
 - Slicing and clipping tools
-- Large-scale dataset streaming and level-of-detail
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.3.0] - 2026-05-25
+
+A streaming-architecture release. OpenLiDARViewer gains real Cloud Optimized
+Point Cloud (COPC) support: a `.copc.laz` file opens through progressive,
+octree-based streaming — partial reads, a view-dependent scheduler, bounded
+memory, and worker-based decoding — never a full-file load. Every existing
+format and workflow is untouched.
+
+### Added
+
+- COPC streaming. A local `.copc.laz` file opens through a dedicated streaming
+  pipeline: the COPC hierarchy is read with partial range reads, a coarse view
+  renders almost immediately, and visible regions refine progressively as the
+  camera moves. The point data is never read or decoded whole.
+- A view-dependent scheduler. Each tick it frustum-culls the octree, scores
+  nodes coarse-first by on-screen size and depth, loads what fits the point
+  budget, evicts the rest, and cancels stale work — so streaming follows the
+  camera and memory stays bounded.
+- Worker-based LAZ chunk decoding. COPC node chunks are decompressed off the
+  main thread by a dedicated worker (laz-perf's per-chunk decoder), so the UI
+  never stalls on decode.
+- A bounded streaming cache. A least-recently-used cache of compressed chunks,
+  capped by a byte budget, lets a revisited region re-decode without re-reading
+  the file — and never grows without limit.
+- A streaming panel. While a COPC scan is open, a calm panel shows the load
+  phase, a metadata scan summary (format, source point count, extent, spacing,
+  octree depth), the live node and point counts, and the cache size — plus
+  controls for colour mode, quality (Low / Balanced / High), pause/resume,
+  clear cache, and saved camera views.
+- Streaming diagnostics. The `?debug=1` overlay gains a streaming section —
+  visible / queued / loading / resident nodes, displayed and source points,
+  cache and GPU estimates, and scheduler time.
+- Remote COPC streaming. A COPC scan hosted at a URL opens straight from the
+  start screen's "open from URL" field, or via a shareable `?copc=<url>` deep
+  link, and streams over HTTP range requests through the same pipeline as a
+  local file. A HEAD probe up front checks the host can serve byte ranges, so
+  a misconfigured server fails fast with a precise reason — CORS-blocked or
+  unreachable, no range support, or a host that ignored the range — rather
+  than a stalled load.
+
+### Changed
+
+- Streaming nodes render through the existing instanced-quad pipeline, so Eye
+  Dome Lighting, the colour modes (RGB, height, intensity, classification),
+  adaptive point sizing, and the WebGPU / WebGL2 backends all apply to a COPC
+  scan exactly as to a static one.
+- Lighter initial load. Each format decoder (LAS/LAZ, E57, PLY, OBJ/glTF, PCD,
+  PTS/PTX) is now a separate, on-demand chunk — opening one format never
+  fetches another's decoder or the laz-perf WASM it does not need. The whole
+  COPC and streaming subsystem is likewise a lazy chunk, fetched only when a
+  COPC scan is opened, so it no longer weighs on the initial app payload.
+- Measurement, annotation, point inspection, and the live probe all work on a
+  streaming COPC scan. Each resident node keeps its full decoded per-point
+  attributes, so clicking a streaming point reports the same real-world
+  coordinates, intensity, classification, return, GPS time, and point-source id
+  as on a static scan.
+- The decoded point colours of a static cloud are now produced through shared,
+  range-explicit colour helpers — no behaviour change.
 
 ## [0.2.9] - 2026-05-25
 

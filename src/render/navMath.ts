@@ -101,6 +101,94 @@ export function easeInOutCubic(t: number): number {
   return c < 0.5 ? 4 * c * c * c : 1 - Math.pow(-2 * c + 2, 3) / 2;
 }
 
+/** Which keyboard-orbit keys are held — arrow-key orbit in orbit mode. */
+export interface OrbitKeys {
+  /** Orbit the camera left around the scan. */
+  left: boolean;
+  /** Orbit the camera right around the scan. */
+  right: boolean;
+  /** Raise the viewpoint (orbit up, toward the world-up pole). */
+  up: boolean;
+  /** Lower the viewpoint (orbit down). */
+  down: boolean;
+}
+
+/**
+ * Rotate an orbit `offset` — the vector from the orbit target to the camera —
+ * by `yaw` (around `worldUp`) and `pitch` (toward / away from `worldUp`),
+ * preserving its length so the camera stays the same distance from the target.
+ * This is the keyboard-orbit counterpart of an OrbitControls mouse drag.
+ *
+ * `yaw` and `pitch` are radians; `+pitch` raises the viewpoint. The polar
+ * angle is clamped to keep at least `polarMargin` radians of clearance from
+ * each pole — close enough for a near-top-down survey view, while never
+ * letting the azimuth degenerate exactly at the pole.
+ *
+ * Pure — no three.js. A degenerate (zero-length) offset is returned unchanged.
+ */
+export function orbitOffset(
+  offset: Vec3,
+  worldUp: Vec3,
+  yaw: number,
+  pitch: number,
+  polarMargin = 0.02,
+): Vec3 {
+  const r = Math.hypot(offset[0], offset[1], offset[2]);
+  if (r < 1e-9) return [offset[0], offset[1], offset[2]];
+
+  // Unit up axis.
+  const uLen = Math.hypot(worldUp[0], worldUp[1], worldUp[2]) || 1;
+  const ux = worldUp[0] / uLen;
+  const uy = worldUp[1] / uLen;
+  const uz = worldUp[2] / uLen;
+
+  // Split the offset into a signed height along up and a horizontal part.
+  const v = offset[0] * ux + offset[1] * uy + offset[2] * uz;
+  let hx = offset[0] - v * ux;
+  let hy = offset[1] - v * uy;
+  let hz = offset[2] - v * uz;
+  let hLen = Math.hypot(hx, hy, hz);
+
+  // At a pole the horizontal direction is undefined — seed a stable one.
+  if (hLen < 1e-9) {
+    const sx = Math.abs(ux) < 0.9 ? 1 : 0;
+    const sy = Math.abs(ux) < 0.9 ? 0 : 1;
+    const sv = sx * ux + sy * uy;
+    hx = sx - sv * ux;
+    hy = sy - sv * uy;
+    hz = -sv * uz;
+    hLen = Math.hypot(hx, hy, hz) || 1;
+  }
+  hx /= hLen;
+  hy /= hLen;
+  hz /= hLen;
+
+  // Yaw: rotate the horizontal axis around up. (up × h) is its perpendicular.
+  const px = uy * hz - uz * hy;
+  const py = uz * hx - ux * hz;
+  const pz = ux * hy - uy * hx;
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const nhx = hx * cy + px * sy;
+  const nhy = hy * cy + py * sy;
+  const nhz = hz * cy + pz * sy;
+
+  // Pitch: shift the polar angle (from the up pole), clamped clear of a pole.
+  const phi = Math.acos(Math.min(1, Math.max(-1, v / r)));
+  const newPhi = Math.min(
+    Math.PI - polarMargin,
+    Math.max(polarMargin, phi - pitch),
+  );
+  const newH = r * Math.sin(newPhi);
+  const newV = r * Math.cos(newPhi);
+
+  return [
+    nhx * newH + ux * newV,
+    nhy * newH + uy * newV,
+    nhz * newH + uz * newV,
+  ];
+}
+
 /**
  * Format a distance in metres for a measurement label: centimetres below a
  * metre, metres up to a kilometre, kilometres beyond.

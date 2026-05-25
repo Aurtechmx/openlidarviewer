@@ -35,12 +35,21 @@ const pkg = JSON.parse(
 function obfuscatorPlugin() {
   return obfuscator({
     apply: 'build',
-    // `loadFile.ts` is left un-obfuscated: it carries the
-    // `new Worker(new URL('./parseWorker.ts', import.meta.url))` construct,
-    // which Vite must read statically to bundle the parse worker. Obfuscating
-    // it scrambles that pattern and the worker fails to load. Everything else
-    // in the project's own source is obfuscated.
-    exclude: [/node_modules/, /loadFile\.ts/],
+    // Three modules are left un-obfuscated because each carries an import
+    // specifier Vite must read *statically* to split a chunk or bundle a
+    // worker:
+    //   - `loadFile.ts`        — `new Worker(new URL('./parseWorker.ts', …))`
+    //   - `copcWorkerClient.ts`— `new Worker(new URL('./copcWorker.ts', …))`
+    //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
+    // The obfuscator's stringArray transform rewrites those literals, which
+    // breaks Vite's static analysis and the chunk/worker never gets emitted.
+    // Everything else in the project's own source is obfuscated.
+    exclude: [
+      /node_modules/,
+      /loadFile\.ts/,
+      /copcWorkerClient\.ts/,
+      /lazyChunks\.ts/,
+    ],
     options: {
       // A fixed RNG seed makes obfuscation deterministic — every `build:live`
       // produces an identical bundle, rather than varying run to run. This

@@ -1,6 +1,5 @@
 import type { DetectedFormat } from './sniffFormat';
 import { PointCloud } from '../model/PointCloud';
-import { loadLas } from './loadLas';
 import { loaderFor } from './loaderRegistry';
 import type { LoaderFn } from './loaderRegistry';
 import { isRegisteredFormat } from './formatInfo';
@@ -68,6 +67,9 @@ export async function parseBuffer(
   if (plan && (format === 'las' || format === 'laz')) {
     onProgress?.({ stage: 'decoding' });
     const stride = plan.mode === 'stride' ? plan.stride : 1;
+    // `loadLas` carries the laz-perf WASM — imported on demand so that heavy
+    // decoder is its own chunk, fetched only when a LAS/LAZ file is opened.
+    const { loadLas } = await import('./loadLas');
     const cloud = await loadLas(buffer, format, name, stride, onProgress);
 
     if (plan.mode === 'voxel') {

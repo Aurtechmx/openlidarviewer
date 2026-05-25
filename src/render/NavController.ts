@@ -29,8 +29,9 @@ import {
   desiredVelocity,
   smoothVelocity,
   easeInOutCubic,
+  orbitOffset,
 } from './navMath';
-import type { Vec3 } from './navMath';
+import type { Vec3, OrbitKeys } from './navMath';
 
 /** The three navigation modes. */
 export type NavMode = 'orbit' | 'walk' | 'fly';
@@ -72,6 +73,8 @@ const LOOK_SENSITIVITY = 0.0022;
 const MAX_PITCH = 1.535; // ~88°
 /** Largest delta-time step honoured — guards against huge jumps after a stall. */
 const MAX_DT = 0.1;
+/** Arrow-key orbit angular speed, radians per second (~4 s for a full turn). */
+const ORBIT_KEY_SPEED = 1.6;
 
 export class NavController {
   private readonly _camera: THREE.PerspectiveCamera;
@@ -98,6 +101,13 @@ export class NavController {
   private _velocity: Vec3 = [0, 0, 0];
   private _baseSpeed = 10;
   private _speedMultiplier = 1;
+
+  // ── Keyboard orbit (arrow keys, orbit mode) ────────────────────────────
+  private readonly _orbitKeys: OrbitKeys = {
+    left: false, right: false, up: false, down: false,
+  };
+  /** Eased angular velocity: [yawRate, pitchRate, unused] in radians/second. */
+  private _orbitVel: Vec3 = [0, 0, 0];
 
   // ── Pointer lock ───────────────────────────────────────────────────────
   private _locked = false;
@@ -203,6 +213,7 @@ export class NavController {
       this._keys.down = false;
       this._sprint = false;
       this._velocity = [0, 0, 0];
+      this._clearOrbitKeys();
       this._controls.enabled = false;
       this._exitPointerLock();
     } else {
@@ -217,6 +228,7 @@ export class NavController {
     this._mode = mode;
     this._tween = null;
     this._velocity = [0, 0, 0];
+    this._clearOrbitKeys();
 
     if (mode === 'orbit') {
       // Hand the camera back to OrbitControls: aim its target a sensible
@@ -305,6 +317,7 @@ export class NavController {
     }
 
     if (this._mode === 'orbit') {
+      this._applyKeyboardOrbit(step);
       this._controls.update();
       return;
     }
@@ -413,6 +426,45 @@ export class NavController {
     }
   }
 
+  /**
+   * Arrow-key orbit: yaw and pitch the camera around the OrbitControls target,
+   * preserving distance. The angular velocity is eased toward the key-driven
+   * target (frame-rate independent), so a tap nudges the view and a hold
+   * glides — then settles smoothly when the key is released. Mouse orbit,
+   * panning and zoom are untouched.
+   */
+  private _applyKeyboardOrbit(step: number): void {
+    const targetYaw =
+      ((this._orbitKeys.left ? 1 : 0) - (this._orbitKeys.right ? 1 : 0)) *
+      ORBIT_KEY_SPEED;
+    const targetPitch =
+      ((this._orbitKeys.up ? 1 : 0) - (this._orbitKeys.down ? 1 : 0)) *
+      ORBIT_KEY_SPEED;
+    this._orbitVel = smoothVelocity(
+      this._orbitVel,
+      [targetYaw, targetPitch, 0],
+      step,
+      8,
+    );
+
+    const yaw = this._orbitVel[0] * step;
+    const pitch = this._orbitVel[1] * step;
+    if (Math.abs(yaw) < 1e-6 && Math.abs(pitch) < 1e-6) return;
+
+    const t = this._controls.target;
+    const rotated = orbitOffset(
+      [
+        this._camera.position.x - t.x,
+        this._camera.position.y - t.y,
+        this._camera.position.z - t.z,
+      ],
+      [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+      yaw,
+      pitch,
+    );
+    this._camera.position.set(t.x + rotated[0], t.y + rotated[1], t.z + rotated[2]);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Input handling
   // ─────────────────────────────────────────────────────────────────────────
@@ -433,7 +485,14 @@ export class NavController {
       case 'KeyH': this._cb.onToggleHelp?.(); return;
     }
 
-    if (this._mode === 'orbit') return; // movement keys are inert in orbit
+    if (this._mode === 'orbit') {
+      // Arrow keys orbit the camera; WASD and the rest stay inert in orbit.
+      if (this._setOrbitKey(e.code, true)) {
+        this._tween = null; // a keyboard orbit cancels an in-progress tween
+        e.preventDefault();
+      }
+      return;
+    }
 
     if (this._setMovementKey(e.code, true)) {
       this._tween = null; // a movement key cancels an in-progress tween
@@ -443,6 +502,7 @@ export class NavController {
 
   private _handleKeyUp(e: KeyboardEvent): void {
     this._setMovementKey(e.code, false);
+    this._setOrbitKey(e.code, false);
   }
 
   /** Apply a key code to the movement state; returns true if it was a nav key. */
@@ -457,6 +517,29 @@ export class NavController {
       case 'ShiftLeft': case 'ShiftRight': this._sprint = pressed; return true;
       default: return false;
     }
+  }
+
+  /**
+   * Apply a key code to the keyboard-orbit state; returns true if it was an
+   * orbit key (the four arrows, used to orbit the camera in orbit mode).
+   */
+  private _setOrbitKey(code: string, pressed: boolean): boolean {
+    switch (code) {
+      case 'ArrowLeft': this._orbitKeys.left = pressed; return true;
+      case 'ArrowRight': this._orbitKeys.right = pressed; return true;
+      case 'ArrowUp': this._orbitKeys.up = pressed; return true;
+      case 'ArrowDown': this._orbitKeys.down = pressed; return true;
+      default: return false;
+    }
+  }
+
+  /** Release every keyboard-orbit key and zero its eased velocity. */
+  private _clearOrbitKeys(): void {
+    this._orbitKeys.left = false;
+    this._orbitKeys.right = false;
+    this._orbitKeys.up = false;
+    this._orbitKeys.down = false;
+    this._orbitVel = [0, 0, 0];
   }
 
   private _handleCanvasClick(): void {

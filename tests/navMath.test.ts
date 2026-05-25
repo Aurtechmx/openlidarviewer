@@ -3,6 +3,7 @@ import {
   smoothVelocity,
   speedForSize,
   easeInOutCubic,
+  orbitOffset,
   nearestPointAlongRay,
   formatDistance,
 } from '../src/render/navMath';
@@ -132,5 +133,52 @@ describe('nearestPointAlongRay', () => {
     const hit = nearestPointAlongRay(pts, origin, dir);
     expect(hit?.point).toEqual([0, 0, -8]);
     expect(hit?.along).toBeCloseTo(8, 6);
+  });
+});
+
+describe('orbitOffset', () => {
+  const Z_UP: Vec3 = [0, 0, 1];
+
+  test('zero yaw and pitch leaves the offset unchanged', () => {
+    const out = orbitOffset([10, 0, 0], Z_UP, 0, 0);
+    expect(out[0]).toBeCloseTo(10, 6);
+    expect(out[1]).toBeCloseTo(0, 6);
+    expect(out[2]).toBeCloseTo(0, 6);
+  });
+
+  test('yaw rotates the offset around the up axis', () => {
+    // A quarter turn around Z takes +X to +Y.
+    const out = orbitOffset([10, 0, 0], Z_UP, Math.PI / 2, 0);
+    expect(out[0]).toBeCloseTo(0, 6);
+    expect(out[1]).toBeCloseTo(10, 6);
+    expect(out[2]).toBeCloseTo(0, 6);
+  });
+
+  test('positive pitch raises the viewpoint toward the up pole', () => {
+    const out = orbitOffset([10, 0, 0], Z_UP, 0, Math.PI / 4);
+    expect(out[2]).toBeGreaterThan(0); // lifted along +Z
+    expect(mag(out)).toBeCloseTo(10, 6); // distance preserved
+  });
+
+  test('distance from the target is always preserved', () => {
+    const out = orbitOffset([3, -4, 12], Z_UP, 1.1, -0.6);
+    expect(mag(out)).toBeCloseTo(13, 6);
+  });
+
+  test('a huge pitch is clamped clear of the pole — the view never flips', () => {
+    // From the equator, an enormous up-pitch must stop just shy of the pole,
+    // not swing past it (which would invert the view).
+    const out = orbitOffset([10, 0, 0], Z_UP, 0, 100);
+    expect(out[2]).toBeGreaterThan(9.9); // almost straight above
+    expect(out[2]).toBeLessThan(10); // but never exactly at the pole
+  });
+
+  test('a degenerate zero-length offset is returned unchanged', () => {
+    expect(orbitOffset([0, 0, 0], Z_UP, 1, 1)).toEqual([0, 0, 0]);
+  });
+
+  test('yaw at a pole still preserves distance (seeded horizontal axis)', () => {
+    const out = orbitOffset([0, 0, 10], Z_UP, Math.PI / 3, 0);
+    expect(mag(out)).toBeCloseTo(10, 6);
   });
 });

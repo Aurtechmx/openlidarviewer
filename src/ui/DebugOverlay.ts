@@ -16,12 +16,28 @@ import type { FrameStats } from '../render/Viewer';
 import type { LoadTelemetry } from '../io/loadTelemetry';
 import { formatTelemetry } from '../io/loadTelemetry';
 
+/** Live COPC streaming counters — present only while a COPC scan is open. */
+export interface StreamingDebugStats {
+  knownNodes: number;
+  visibleNodes: number;
+  queuedNodes: number;
+  loadingNodes: number;
+  residentNodes: number;
+  displayedPoints: number;
+  sourcePoints: number;
+  cacheBytes: number;
+  gpuBytes: number;
+  schedulerMs: number;
+}
+
 /** A live snapshot the overlay polls each tick. */
 export interface DebugSample {
   /** The active GPU backend, or null before the renderer has initialised. */
   backend: 'webgpu' | 'webgl2' | null;
   /** Current frame stats, or null before the first frame has been timed. */
   stats: FrameStats | null;
+  /** Streaming counters, or null/absent when no COPC scan is streaming. */
+  streaming?: StreamingDebugStats | null;
 }
 
 /** Overlay refresh interval — about 4 Hz, deliberately never per frame. */
@@ -47,6 +63,8 @@ function formatInt(n: number): string {
 export class DebugOverlay {
   readonly element: HTMLElement;
   private readonly _live: HTMLElement;
+  private readonly _streamingLabel: HTMLElement;
+  private readonly _streaming: HTMLElement;
   private readonly _telemetry: HTMLElement;
   private readonly _benchmark: HTMLElement;
   private readonly _sample: () => DebugSample;
@@ -56,6 +74,13 @@ export class DebugOverlay {
     this._sample = sample;
 
     this._live = el('pre', { className: 'olv-debug-block', text: 'initialising…' });
+    this._streamingLabel = el('div', {
+      className: 'olv-debug-label',
+      text: 'streaming',
+    });
+    this._streaming = el('pre', { className: 'olv-debug-block' });
+    this._streamingLabel.style.display = 'none';
+    this._streaming.style.display = 'none';
     this._telemetry = el('pre', {
       className: 'olv-debug-block',
       text: '(no scan loaded yet)',
@@ -67,6 +92,8 @@ export class DebugOverlay {
       el('div', { className: 'olv-debug-title', text: 'OpenLiDARViewer · debug' }),
       el('div', { className: 'olv-debug-label', text: 'rendering' }),
       this._live,
+      this._streamingLabel,
+      this._streaming,
       el('div', { className: 'olv-debug-label', text: 'last load' }),
       this._telemetry,
       this._benchmark,
@@ -101,22 +128,38 @@ export class DebugOverlay {
 
   /** Re-read the sampler and repaint the live block. */
   private _refresh(): void {
-    const { backend, stats } = this._sample();
+    const { backend, stats, streaming } = this._sample();
     const backendLabel =
       backend === 'webgpu' ? 'WebGPU' : backend === 'webgl2' ? 'WebGL 2' : '—';
 
-    if (!stats) {
+    if (stats) {
+      this._live.textContent = [
+        `backend       ${backendLabel}`,
+        `fps           ${stats.fps.toFixed(0)}  (${stats.frameMs.toFixed(1)} ms)`,
+        `draw calls    ${stats.drawCalls}`,
+        `points        ${formatInt(stats.displayedPoints)} shown` +
+          ` / ${formatInt(stats.totalPoints)} total`,
+        `gpu estimate  ${formatBytes(stats.gpuBytesEstimate)}`,
+      ].join('\n');
+    } else {
       this._live.textContent = `backend       ${backendLabel}\n(initialising…)`;
-      return;
     }
 
-    this._live.textContent = [
-      `backend       ${backendLabel}`,
-      `fps           ${stats.fps.toFixed(0)}  (${stats.frameMs.toFixed(1)} ms)`,
-      `draw calls    ${stats.drawCalls}`,
-      `points        ${formatInt(stats.displayedPoints)} shown` +
-        ` / ${formatInt(stats.totalPoints)} total`,
-      `gpu estimate  ${formatBytes(stats.gpuBytesEstimate)}`,
-    ].join('\n');
+    if (streaming) {
+      this._streamingLabel.style.display = '';
+      this._streaming.style.display = '';
+      this._streaming.textContent = [
+        `nodes         ${streaming.residentNodes} resident / ${streaming.knownNodes} known`,
+        `visible       ${streaming.visibleNodes}`,
+        `queue         ${streaming.queuedNodes} queued / ${streaming.loadingNodes} decoding`,
+        `points        ${formatInt(streaming.displayedPoints)} / ${formatInt(streaming.sourcePoints)}`,
+        `chunk cache   ${formatBytes(streaming.cacheBytes)}`,
+        `gpu estimate  ${formatBytes(streaming.gpuBytes)}`,
+        `scheduler     ${streaming.schedulerMs.toFixed(1)} ms`,
+      ].join('\n');
+    } else {
+      this._streamingLabel.style.display = 'none';
+      this._streaming.style.display = 'none';
+    }
   }
 }

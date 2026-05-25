@@ -12,6 +12,7 @@ const ALL_CATEGORIES: LoadErrorCategory[] = [
   'memory-constraint',
   'gpu-limitation',
   'decode-failure',
+  'resource-load',
 ];
 
 test('a typed LoadError is described by its own category', () => {
@@ -36,6 +37,18 @@ test('untyped errors are classified best-effort from their message text', () => 
     'memory-constraint',
   );
   expect(classifyLoadError('something else entirely')).toBe('decode-failure');
+});
+
+test('a failed code-chunk fetch is a resource-load error, not file corruption', () => {
+  // The phrasings browsers use when a dynamically-imported chunk fails.
+  expect(
+    classifyLoadError('Failed to fetch dynamically imported module: https://x/y.js'),
+  ).toBe('resource-load');
+  expect(
+    classifyLoadError('error loading dynamically imported module: /assets/a.js'),
+  ).toBe('resource-load');
+  expect(classifyLoadError('Importing a module script failed.')).toBe('resource-load');
+  expect(classifyLoadError('Loading chunk 42 failed')).toBe('resource-load');
 });
 
 test('describeLoadError maps a plain Error through the classifier', () => {

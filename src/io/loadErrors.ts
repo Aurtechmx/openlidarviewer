@@ -21,7 +21,8 @@ export type LoadErrorCategory =
   | 'malformed-file'
   | 'memory-constraint'
   | 'gpu-limitation'
-  | 'decode-failure';
+  | 'decode-failure'
+  | 'resource-load';
 
 /** A load failure tagged with its category, so the UI can explain it clearly. */
 export class LoadError extends Error {
@@ -41,6 +42,8 @@ const CATEGORY_MESSAGE: Record<LoadErrorCategory, string> = {
   'gpu-limitation':
     "This scan exceeds what this device's GPU can display; it was reduced.",
   'decode-failure': 'Decoding failed — the file may be corrupt or truncated.',
+  'resource-load':
+    'Part of the viewer could not be loaded. Check your connection and reload the page.',
 };
 
 /** The user-facing message for a known failure category. */
@@ -54,6 +57,17 @@ export function messageForCategory(category: LoadErrorCategory): string {
  */
 export function classifyLoadError(message: string): LoadErrorCategory {
   const m = message.toLowerCase();
+  // A failed code-chunk fetch — not a problem with the file. Browsers phrase
+  // it as "failed to fetch dynamically imported module" (Chromium), "error
+  // loading dynamically imported module" (Firefox), "importing a module
+  // script failed" (Safari), or "loading chunk … failed".
+  if (
+    m.includes('dynamically imported module') ||
+    m.includes('importing a module script') ||
+    m.includes('loading chunk')
+  ) {
+    return 'resource-load';
+  }
   if (
     m.includes('unrecognised') ||
     m.includes('unrecognized') ||

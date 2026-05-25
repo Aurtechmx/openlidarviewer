@@ -70,7 +70,7 @@ export class HelpOverlay {
         ]),
         section('Navigation', [
           ['Orbit / Walk / Fly', 'Switch mode with 1, 2 and 3.'],
-          ['Look', 'Drag to rotate; scroll to zoom.'],
+          ['Look', 'Drag to rotate, or orbit with the arrow keys; scroll to zoom.'],
           ['Move', 'WASD in walk and fly; R frames the scan, F focuses the centre.'],
         ]),
         section('Keyboard shortcuts', [

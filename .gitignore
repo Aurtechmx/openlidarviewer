@@ -16,6 +16,8 @@ coverage
 test-results
 playwright-report
 playwright/.cache
+# Vite / Vitest transient config transpiles (e.g. vitest.config.ts.timestamp-*.mjs)
+*.timestamp-*.mjs
 
 # ── Secrets & local environment — never publish these ───────────────────────
 .env

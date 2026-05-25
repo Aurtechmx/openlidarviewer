@@ -33,7 +33,7 @@ Most LiDAR tools are powerful, but a lot of them are heavy, desktop-first, and G
 
 OpenLiDARViewer takes a lighter path. It runs in the browser with nothing to install. Files are read and rendered locally, so there is no server to upload to. It keeps the interface small and the navigation game-like instead of GIS-like. And it is built to be a testbed for browser-native spatial computing rather than a full GIS replacement.
 
-It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-scanner data in E57, PTX, and PTS — including exports from Trimble and other survey scanners — compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF), and Point Cloud Library (PCD) files. More cloud-optimised and streaming formats are on the roadmap as the pipeline matures.
+It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-scanner data in E57, PTX, and PTS — including exports from Trimble and other survey scanners — compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF), and Point Cloud Library (PCD) files. Large `COPC` (Cloud Optimized Point Cloud) files stream progressively, octree node by octree node, with bounded memory and no full-file load.
 
 ## Key Advantages
 
@@ -62,6 +62,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - WebGPU rendering with an automatic, fully tested WebGL 2 fallback
 - Eye Dome Lighting depth shading that makes point-cloud structure far more readable, with a strength control
 - Import: LAS, LAZ, E57, PLY, OBJ, GLB, GLTF, XYZ, CSV, PCD, PTX, PTS
+- COPC streaming — a `.copc.laz` file, on disk or hosted at a URL, opens through progressive, octree-based, view-dependent streaming with worker-based decoding and bounded memory; never a full-file load. A remote scan opens from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link
 - Export: PLY, OBJ, XYZ, CSV, and PNG snapshots
 - Budget-aware fast loading of large LAS/LAZ surveys — header preflight, stride decoding, a memory-safety guard, staged progress, and a load that can be cancelled mid-flight
 - Chunked, bounded-memory reading of large text point clouds (XYZ, CSV, PTS), and graceful degradation on weak devices so a large survey reduces in density instead of crashing
@@ -156,7 +157,9 @@ Measurement is meant for visual inspection and research, not survey-grade use. T
 
 **Terrestrial laser scanners.** `E57` (ASTM E2807), the standard exchange format for terrestrial laser scanners, is read directly in the browser. The parser handles Cartesian coordinates, RGB colour, intensity, classification, surface normals, scan poses, and multi-scan files (every scan is merged into one cloud). E57 exports from Trimble survey scanners have been tested, and other standard E57 files — Leica, FARO, Matterport, and similar — follow the same ASTM format.
 
-**Drone LiDAR and professional point clouds.** Georeferenced drone LiDAR surveys in LAS and LAZ work today. `PCD` (the Point Cloud Library format, in ASCII, binary, and binary-compressed variants) and the terrestrial-scanner text formats `PTX` and `PTS` are read directly in the browser. Planned support includes cloud-optimised or streaming formats such as `COPC LAZ` and `3D Tiles / PNTS`.
+**Drone LiDAR and professional point clouds.** Georeferenced drone LiDAR surveys in LAS and LAZ work today. `PCD` (the Point Cloud Library format, in ASCII, binary, and binary-compressed variants) and the terrestrial-scanner text formats `PTX` and `PTS` are read directly in the browser.
+
+**COPC streaming.** Large `COPC` (Cloud Optimized Point Cloud) `.copc.laz` files open through a dedicated streaming pipeline: the octree hierarchy is read with partial range requests, a coarse view renders almost immediately, and visible regions refine progressively as the camera moves. Decoding runs in a worker, memory stays bounded by a view-dependent budget, and the point data is never read whole. A COPC scan opens the same way whether it is on disk or hosted at a URL — a remote scan streams over HTTP range requests from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link, provided the host allows range and cross-origin requests. Full detail is in [`docs/streaming.md`](docs/streaming.md).
 
 Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Full detail is in [`docs/supported-formats.md`](docs/supported-formats.md).
 
@@ -173,7 +176,7 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 | GPU | Integrated GPU with WebGL 2.0 | Dedicated GPU, or modern Apple Silicon / integrated GPU |
 | Browser | WebGL 2.0 compatible | WebGL 2.0 and WebGPU-capable |
 
-Very large LiDAR datasets may need downsampling, preprocessing, or future streaming formats. Full detail is in [`docs/performance.md`](docs/performance.md).
+Very large LiDAR datasets are best handled as COPC, which streams progressively with bounded memory; other very large formats may need downsampling or preprocessing. Full detail is in [`docs/performance.md`](docs/performance.md).
 
 ## Mobile Browser Support
 
@@ -277,13 +280,13 @@ Performance depends on point count, browser memory, GPU capability, point size, 
 
 For real-world figures — a 9.6M-point drone LAZ survey and a 55K-point iPhone scan, both opened from one drag-and-drop — see [`docs/benchmarks.md`](docs/benchmarks.md).
 
-Planned performance work includes tiled datasets, COPC LAZ, 3D Tiles / PNTS, level-of-detail controls, and streaming. See [`docs/performance.md`](docs/performance.md).
+COPC streaming — local and remote — ships in v0.3.0. Planned performance work includes tiled datasets for non-COPC formats, 3D Tiles / PNTS, and level-of-detail controls. See [`docs/performance.md`](docs/performance.md).
 
 ## Roadmap
 
 - [ ] Broaden LAS / LAZ point-format coverage
 - [ ] Add PCD and PTS/PTX support
-- [ ] Add COPC LAZ support for large cloud-optimised datasets
+- [x] Add COPC LAZ support for large cloud-optimised datasets — local and remote streaming (0.3.0)
 - [ ] Add 3D Tiles / PNTS streaming
 - [ ] Cross-section and profile measurement
 - [ ] Slicing and clipping tools
@@ -305,7 +308,7 @@ OpenLiDARViewer is an active R&D-stage project focused on lightweight visualizat
 - Measurement is for visual inspection, not survey-grade use.
 - Coordinate reference system handling is basic and may need future work.
 - Classification visualization depends on attributes present in the file.
-- Very large datasets may need tiling, downsampling, or streaming formats.
+- Very large datasets stream as COPC (local or remote); other huge formats may still need tiling or downsampling.
 - WebGPU feature support varies by browser, and the WebGL 2 fallback is used otherwise.
 - Eye Dome Lighting is a screen-space depth cue, not physically-based lighting; it is off by default on the WebGL 2 fallback and on mobile.
 

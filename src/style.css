@@ -80,6 +80,32 @@ button:disabled { cursor: not-allowed; }
 .olv-sample-label { font-size: 13px; }
 .olv-sample-detail { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
 
+/* Open-from-URL — the quiet, secondary entry point for a remote COPC scan. */
+.olv-empty-url {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  margin-top: 6px;
+}
+.olv-url-label { font-size: 12px; color: var(--text-dim); }
+.olv-url-controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.olv-url-input {
+  width: 280px; max-width: 64vw;
+  font-size: 12px; color: var(--text); font-family: var(--mono);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: 8px 11px;
+}
+.olv-url-input::placeholder { color: var(--text-faint); }
+.olv-url-input:focus-visible { outline: none; border-color: var(--accent); }
+.olv-url-btn {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: 8px 16px;
+  transition: border-color 140ms ease, transform 90ms ease;
+}
+.olv-url-btn:hover { border-color: var(--accent); }
+.olv-url-btn:active { transform: scale(0.97); }
+.olv-url-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-url-hint { font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5; }
+
 /* Inspector */
 .olv-inspector {
   position: absolute; top: 56px; right: 14px; width: 232px;
@@ -205,6 +231,53 @@ button:disabled { cursor: not-allowed; }
   margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.5;
   color: var(--text-dim); white-space: pre;
 }
+
+/* Streaming COPC panel */
+.olv-streaming-panel {
+  position: absolute; top: 56px; right: 14px; width: 232px; z-index: 36;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+  max-height: calc(100vh - 84px); overflow-y: auto;
+}
+.olv-streaming-title { font-size: 12px; font-weight: 600; color: var(--text); }
+.olv-streaming-phase { font-size: 11px; color: var(--accent); margin: 4px 0 8px; }
+.olv-streaming-rows { display: flex; flex-direction: column; gap: 3px; }
+.olv-streaming-row {
+  display: flex; justify-content: space-between; gap: 10px; font-size: 11px;
+}
+.olv-streaming-key { color: var(--text-faint); flex: none; }
+.olv-streaming-stat {
+  color: var(--text-dim); font-family: var(--mono);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-streaming-views { display: flex; flex-direction: column; gap: 4px; }
+.olv-streaming-empty { font-size: 11px; color: var(--text-faint); }
+.olv-streaming-view { display: flex; gap: 4px; }
+.olv-streaming-view-name {
+  flex: 1; min-width: 0; text-align: left; font-size: 11px; color: #aab0b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline); border-radius: 7px; padding: 5px 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-streaming-view-name:hover { color: var(--text); border-color: var(--accent); }
+.olv-streaming-view-del {
+  flex: none; width: 26px; font-size: 13px; color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline); border-radius: 7px;
+}
+.olv-streaming-view-del:hover { color: #ff9a9a; border-color: rgba(255, 120, 120, 0.55); }
+.olv-streaming-label {
+  font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-faint); margin: 9px 0 3px;
+}
+.olv-streaming-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.olv-streaming-actions { display: flex; gap: 6px; margin-top: 11px; }
+.olv-streaming-btn {
+  flex: 1; font-size: 11px; color: #aab0b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline); border-radius: 7px; padding: 6px 8px;
+}
+.olv-streaming-btn:hover { color: var(--text); border-color: var(--accent); }
 
 /* Progress toast */
 .olv-toast {
@@ -804,6 +877,7 @@ button:disabled { cursor: not-allowed; }
   }
   .olv-open-btn { min-height: 48px; }
   .olv-sample { min-height: 52px; }
+  .olv-url-input, .olv-url-btn { min-height: 44px; }
   .olv-layer-x, .olv-pc-dismiss {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px;

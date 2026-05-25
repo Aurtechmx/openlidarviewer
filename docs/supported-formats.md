@@ -17,6 +17,7 @@ Format support is still evolving. This page separates what works today from what
 | `PCD` | Point Cloud Library | ASCII, binary, and binary-compressed; position, RGB, intensity, normals, labels |
 | `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded |
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
+| `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming — see [streaming.md](streaming.md) |
 
 ## Current export targets
 
@@ -44,7 +45,7 @@ Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large
 
 ## Large-scale and web formats
 
-For very large datasets, the planned direction is `COPC LAZ` (cloud-optimised point cloud), `3D Tiles` / `PNTS` (tiled, streamable point clouds), and tiled or streamed datasets with level-of-detail.
+`COPC` (Cloud Optimized Point Cloud) `.copc.laz` files stream today — opened progressively through their octree hierarchy with partial range reads, worker-based decoding, and bounded memory. See [streaming.md](streaming.md). Remote COPC over HTTP range requests is planned for v0.3.1. `3D Tiles` / `PNTS` (tiled, streamable point clouds) remain on the roadmap.
 
 ## Mobile Scan Exports
 

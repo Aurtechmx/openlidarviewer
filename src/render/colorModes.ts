@@ -125,6 +125,64 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Colour `count` points by Z over an explicit `[minZ, maxZ]` range. */
+export function colorByElevation(
+  positions: Float32Array,
+  count: number,
+  minZ: number,
+  maxZ: number,
+): Uint8Array {
+  const out = new Uint8Array(count * 3);
+  const range = maxZ - minZ;
+  for (let i = 0; i < count; i++) {
+    const t = range === 0 ? 0 : (positions[i * 3 + 2] - minZ) / range;
+    const [r, g, b] = sampleRamp(t);
+    out[i * 3] = r;
+    out[i * 3 + 1] = g;
+    out[i * 3 + 2] = b;
+  }
+  return out;
+}
+
+/** Colour `count` points by intensity over an explicit `[minI, maxI]` range. */
+export function colorByIntensity(
+  intensity: ArrayLike<number>,
+  count: number,
+  minI: number,
+  maxI: number,
+): Uint8Array {
+  const out = new Uint8Array(count * 3);
+  const range = maxI - minI;
+  for (let i = 0; i < count; i++) {
+    const grey = range === 0 ? 0 : Math.round(((intensity[i] - minI) / range) * 255);
+    out[i * 3] = grey;
+    out[i * 3 + 1] = grey;
+    out[i * 3 + 2] = grey;
+  }
+  return out;
+}
+
+/** Colour `count` points by ASPRS classification code. */
+export function colorByClassification(
+  classification: ArrayLike<number>,
+  count: number,
+): Uint8Array {
+  const out = new Uint8Array(count * 3);
+  const cache = new Map<number, readonly [number, number, number]>();
+  for (let i = 0; i < count; i++) {
+    const code = classification[i];
+    let colour = cache.get(code);
+    if (!colour) {
+      colour = CLASS_PALETTE[code] ?? fallbackClassColour(code);
+      cache.set(code, colour);
+    }
+    out[i * 3] = colour[0];
+    out[i * 3 + 1] = colour[1];
+    out[i * 3 + 2] = colour[2];
+  }
+  return out;
+}
+
 /**
  * Compute a flat interleaved RGB colour array (3 bytes per point) for `cloud`
  * using the specified `mode`.
@@ -150,32 +208,18 @@ export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
         throw new Error(`colorForMode('intensity'): cloud "${cloud.name}" has no intensity attribute`);
       }
       const src = cloud.intensity;
-      const out = new Uint8Array(n * 3);
-
-      // Compute min/max for normalisation.
       let minI = src[0];
       let maxI = src[0];
       for (let i = 1; i < n; i++) {
         if (src[i] < minI) minI = src[i];
         if (src[i] > maxI) maxI = src[i];
       }
-      const range = maxI - minI;
-
-      for (let i = 0; i < n; i++) {
-        const grey = range === 0 ? 0 : Math.round(((src[i] - minI) / range) * 255);
-        out[i * 3]     = grey;
-        out[i * 3 + 1] = grey;
-        out[i * 3 + 2] = grey;
-      }
-      return out;
+      return colorByIntensity(src, n, minI, maxI);
     }
 
     // ── elevation ───────────────────────────────────────────────────────────
     case 'elevation': {
       const pos = cloud.positions;
-      const out = new Uint8Array(n * 3);
-
-      // Collect Z values (index 2, 5, 8, …)
       let minZ = pos[2];
       let maxZ = pos[2];
       for (let i = 0; i < n; i++) {
@@ -183,17 +227,7 @@ export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
         if (z < minZ) minZ = z;
         if (z > maxZ) maxZ = z;
       }
-      const rangeZ = maxZ - minZ;
-
-      for (let i = 0; i < n; i++) {
-        const z = pos[i * 3 + 2];
-        const t = rangeZ === 0 ? 0 : (z - minZ) / rangeZ;
-        const [r, g, b] = sampleRamp(t);
-        out[i * 3]     = r;
-        out[i * 3 + 1] = g;
-        out[i * 3 + 2] = b;
-      }
-      return out;
+      return colorByElevation(pos, n, minZ, maxZ);
     }
 
     // ── normal ──────────────────────────────────────────────────────────────
@@ -231,24 +265,7 @@ export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
           `colorForMode('classification'): cloud "${cloud.name}" has no classification attribute`,
         );
       }
-      const src = cloud.classification;
-      const out = new Uint8Array(n * 3);
-
-      // Cache computed fallback colours to avoid repeated calculation.
-      const cache = new Map<number, readonly [number, number, number]>();
-
-      for (let i = 0; i < n; i++) {
-        const code = src[i];
-        let colour = cache.get(code);
-        if (!colour) {
-          colour = CLASS_PALETTE[code] ?? fallbackClassColour(code);
-          cache.set(code, colour);
-        }
-        out[i * 3]     = colour[0];
-        out[i * 3 + 1] = colour[1];
-        out[i * 3 + 2] = colour[2];
-      }
-      return out;
+      return colorByClassification(cloud.classification, n);
     }
   }
 }
