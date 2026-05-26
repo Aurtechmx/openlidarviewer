@@ -19,6 +19,12 @@ export class CompressedChunkCache {
   private readonly _maxBytes: number;
   private _bytes = 0;
 
+  // Cumulative outcome counters — survive a `clear()` so a session-wide
+  // streaming benchmark can report them. Reset only by `resetCounters()`.
+  private _hits = 0;
+  private _misses = 0;
+  private _evictions = 0;
+
   constructor(maxBytes: number) {
     this._maxBytes = Math.max(0, maxBytes);
   }
@@ -30,7 +36,11 @@ export class CompressedChunkCache {
    */
   get(id: string): ArrayBuffer | undefined {
     const buffer = this._entries.get(id);
-    if (buffer === undefined) return undefined;
+    if (buffer === undefined) {
+      this._misses += 1;
+      return undefined;
+    }
+    this._hits += 1;
     this._entries.delete(id);
     this._entries.set(id, buffer);
     return buffer;
@@ -55,6 +65,23 @@ export class CompressedChunkCache {
     return this._entries.has(id);
   }
 
+  /**
+   * Cache hysteresis (Task 13). Bump a cached entry to most-recently-used
+   * without returning it or counting it as a hit — the scheduler calls this
+   * the moment a resident node is evicted, so the compressed chunk outlives
+   * everything decoded before the eviction. A camera flick that pulls the
+   * region back finds the chunk warm and skips the network/disk read.
+   *
+   * Returns `true` if the id was present and bumped, `false` if absent.
+   */
+  touch(id: string): boolean {
+    const buffer = this._entries.get(id);
+    if (buffer === undefined) return false;
+    this._entries.delete(id);
+    this._entries.set(id, buffer);
+    return true;
+  }
+
   /** Drop every cached chunk. */
   clear(): void {
     this._entries.clear();
@@ -76,12 +103,38 @@ export class CompressedChunkCache {
     return this._maxBytes;
   }
 
+  /** Cumulative hits since construction or the last `resetCounters()`. */
+  get hits(): number {
+    return this._hits;
+  }
+
+  /** Cumulative misses since construction or the last `resetCounters()`. */
+  get misses(): number {
+    return this._misses;
+  }
+
+  /**
+   * Cumulative entries evicted by the byte-budget LRU since construction or
+   * the last `resetCounters()`. A `clear()` does NOT touch this counter.
+   */
+  get evictions(): number {
+    return this._evictions;
+  }
+
+  /** Zero the outcome counters — for a fresh benchmark window. */
+  resetCounters(): void {
+    this._hits = 0;
+    this._misses = 0;
+    this._evictions = 0;
+  }
+
   private _evictToFit(): void {
     while (this._bytes > this._maxBytes && this._entries.size > 0) {
       const oldest = this._entries.keys().next().value as string;
       const buffer = this._entries.get(oldest);
       if (buffer) this._bytes -= buffer.byteLength;
       this._entries.delete(oldest);
+      this._evictions += 1;
     }
   }
 }

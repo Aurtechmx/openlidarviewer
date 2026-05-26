@@ -36,12 +36,20 @@ export interface RangeSource {
   close?(): Promise<void>;
 }
 
-/** Why a range read failed — drives clear, categorised messaging. */
+/**
+ * Why a range read failed — drives clear, categorised messaging. The set is
+ * deliberately small but precise; Phase 5 added the `timeout`,
+ * `content-mismatch`, and `server-error` codes so the remote-COPC UX can show
+ * a specific message instead of falling back to a generic transport label.
+ */
 export type RangeReadErrorCode =
   | 'out-of-range'
   | 'aborted'
   | 'transport'
-  | 'range-unsupported';
+  | 'range-unsupported'
+  | 'timeout'
+  | 'content-mismatch'
+  | 'server-error';
 
 /** A typed range-read failure. */
 export class RangeReadError extends Error {
@@ -80,4 +88,67 @@ export function clampRange(offset: number, length: number, size: number): number
     );
   }
   return Math.min(length, size - offset);
+}
+
+/** Maximum acceptable length of a `?copc=` URL — guards URL-bomb input. */
+export const MAX_REMOTE_COPC_URL_LENGTH = 2048;
+
+/**
+ * Task 20 — URL hygiene for the remote-COPC entry. The URL must parse, use
+ * `http:` or `https:`, fit within {@link MAX_REMOTE_COPC_URL_LENGTH}, and
+ * carry no userinfo (`user:pass@…` — never expose credentials through a
+ * scan link). Returns the original URL on success and a precise reason on
+ * failure for the error UX.
+ */
+export function validateRemoteCopcUrl(
+  raw: string,
+):
+  | { ok: true; url: string }
+  | { ok: false; reason: string } {
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return { ok: false, reason: 'No URL was provided.' };
+  }
+  if (raw.length > MAX_REMOTE_COPC_URL_LENGTH) {
+    return {
+      ok: false,
+      reason: `URL is longer than ${MAX_REMOTE_COPC_URL_LENGTH} characters.`,
+    };
+  }
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return { ok: false, reason: 'URL is not parseable.' };
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return {
+      ok: false,
+      reason: 'Only http:// and https:// URLs are accepted.',
+    };
+  }
+  if (u.username !== '' || u.password !== '') {
+    return {
+      ok: false,
+      reason: 'URLs with embedded credentials are not accepted.',
+    };
+  }
+  return { ok: true, url: raw };
+}
+
+/**
+ * Strip userinfo (`user:pass@`) from a URL so it is safe to surface in error
+ * messages, telemetry, or logs. Falls back to a literal substring strip when
+ * the URL doesn't parse, so a malformed input is still scrubbed.
+ */
+export function sanitizeUrlForDisplay(raw: string): string {
+  try {
+    const u = new URL(raw);
+    u.username = '';
+    u.password = '';
+    return u.toString();
+  } catch {
+    // Best-effort textual scrub for inputs that won't parse — strip the
+    // first `userinfo@` segment between the scheme and the host.
+    return raw.replace(/^([a-zA-Z][a-zA-Z0-9+.\-]*:\/\/)[^/@]*@/, '$1');
+  }
 }

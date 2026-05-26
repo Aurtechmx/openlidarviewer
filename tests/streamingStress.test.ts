@@ -104,6 +104,11 @@ test('rapid camera movement keeps residency bounded and never crashes', async ()
     budgets,
   );
   // Jump the camera around — each update reprioritises and re-evicts.
+  // v0.3.1 introduces eviction hysteresis (Phase 3 Task 8): a node that
+  // leaves the wanted set is held briefly so a quick camera flick doesn't
+  // thrash. The bound becomes `budget × memoryPressureRatio` (1.5× by
+  // default) — over that, the scheduler drops deferred nodes immediately.
+  const cap = Math.ceil(budgets.pointBudget * 1.5);
   for (const cam of [
     [0, 0, 0],
     [200, 0, 0],
@@ -113,7 +118,7 @@ test('rapid camera movement keeps residency bounded and never crashes', async ()
   ] as [number, number, number][]) {
     scheduler.update({ viewProjection: WIDE, cameraPosition: cam });
     await drain(scheduler);
-    expect(cloud.residentPointCount).toBeLessThanOrEqual(budgets.pointBudget);
+    expect(cloud.residentPointCount).toBeLessThanOrEqual(cap);
   }
 });
 
@@ -139,5 +144,33 @@ test('scheduler.stop cancels in-flight decodes — nothing is left resident', as
   scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
   scheduler.stop(); // abort everything mid-flight
   await new Promise((r) => setTimeout(r, 90));
+  expect(cloud.counts().resident).toBe(0);
+});
+
+// --- Phase 10 Task 31 — abort signal discipline -----------------------------
+
+test('Task 31 — a decode that resolves AFTER stop never calls onNodeReady', async () => {
+  const cloud = await openBig();
+  // Worst case for Task 31's "post-close ghost chunks" invariant: a
+  // misbehaving decoder that ignores the AbortSignal and resolves anyway.
+  // The scheduler's post-decode `if (controller.signal.aborted)` guard is
+  // what saves us — onNodeReady must NOT fire for any of these resolutions.
+  const ignoresAbort: ChunkDecoder = {
+    decode: (_c, meta): Promise<DecodedChunk> =>
+      new Promise<DecodedChunk>((resolve) => {
+        setTimeout(() => resolve(fakeChunk(meta.pointCount)), 20);
+      }),
+  };
+  let readyCalls = 0;
+  const scheduler = new StreamingScheduler(
+    cloud,
+    ignoresAbort,
+    { onNodeReady: () => { readyCalls++; }, onNodeEvicted: () => {} },
+    streamingBudgets('low', false),
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  scheduler.stop();
+  await new Promise((r) => setTimeout(r, 60));
+  expect(readyCalls).toBe(0);
   expect(cloud.counts().resident).toBe(0);
 });

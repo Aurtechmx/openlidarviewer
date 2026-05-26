@@ -52,3 +52,24 @@ export const loadLocalFileRangeSource = () =>
 
 /** Load the HTTP range source (a remote COPC URL). */
 export const loadHttpRangeSource = () => import('./io/range/HttpRangeSource');
+
+/**
+ * Load the point-cloud exporter (PLY / OBJ / XYZ / CSV). Only the user
+ * clicking an export button reaches this, so the encoder ships in a chunk
+ * fetched on demand — not in the initial app payload.
+ */
+export const loadExporters = () => import('./io/exporters');
+
+/** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
+export const loadDebugOverlay = () => import('./ui/DebugOverlay');
+
+/**
+ * Load the streaming benchmark collector — used by both the overlay's live
+ * readout and the `?benchmark=1` post-session report.
+ */
+export const loadStreamingBenchmark = () =>
+  import('./render/streaming/streamingBenchmark');
+
+/** Load the instrumented RangeSource wrapper (network-bytes accounting). */
+export const loadInstrumentedRangeSource = () =>
+  import('./io/range/InstrumentedRangeSource');

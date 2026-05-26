@@ -41,6 +41,17 @@ const MOBILE_POINT_BUDGET: Record<StreamingQuality, number> = {
  */
 export const BYTES_PER_STREAMING_POINT = 24;
 
+/**
+ * CPU-side bytes per decoded point — the shape produced by the worker before
+ * GPU upload. Summed: positions (3 × f32 = 12 B), intensity (u16 = 2 B),
+ * classification (u8 = 1 B), returnNumber (u8 = 1 B), returnCount (u8 = 1 B),
+ * gpsTime (f64 = 8 B) → 25 B / point. Used by the three-tier debug-overlay
+ * metric (Task 14): in this architecture decoded data is transferred to the
+ * GPU atomically, so the decoded tier reports a CPU-residency estimate that
+ * mirrors the GPU estimate but with the full decoded attribute set.
+ */
+export const DECODED_BYTES_PER_POINT = 25;
+
 /** Compressed-chunk cache byte budget — smaller on mobile. */
 const DESKTOP_CHUNK_CACHE_BYTES = 48 * 1024 * 1024;
 const MOBILE_CHUNK_CACHE_BYTES = 16 * 1024 * 1024;
@@ -90,4 +101,13 @@ export function selectWithinBudget(
 /** Estimated GPU bytes for a resident point count. */
 export function estimateGpuBytes(residentPointCount: number): number {
   return residentPointCount * BYTES_PER_STREAMING_POINT;
+}
+
+/**
+ * Estimate CPU-side decoded bytes for a given resident point count — uses
+ * the full decoded attribute set (see {@link DECODED_BYTES_PER_POINT}).
+ * Powers the decoded tier of the Task 14 three-tier overlay.
+ */
+export function estimateDecodedBytes(residentPointCount: number): number {
+  return residentPointCount * DECODED_BYTES_PER_POINT;
 }

@@ -25,9 +25,40 @@ export interface StreamingDebugStats {
   residentNodes: number;
   displayedPoints: number;
   sourcePoints: number;
+  /** Compressed-cache LRU current bytes. */
   cacheBytes: number;
+  /**
+   * Task 14 — CPU-side decoded bytes currently held by resident nodes,
+   * estimated from `residentPointCount × DECODED_BYTES_PER_POINT`. Optional.
+   */
+  decodedBytes?: number;
+  /** GPU upload-estimate bytes. */
   gpuBytes: number;
+  /** Most recent scheduler tick wall time, in milliseconds. */
   schedulerMs: number;
+  /**
+   * Aggregate scheduler-tick stats over the recent window (last 60 by
+   * default). Optional — present only when the streaming benchmark is
+   * collecting (the overlay shows a single-tick value otherwise).
+   */
+  schedulerRecent?: {
+    count: number;
+    p50: number;
+    p95: number;
+    max: number;
+  };
+  /** Cumulative compressed-cache outcomes since the scan opened. Optional. */
+  cacheHits?: number;
+  cacheMisses?: number;
+  cacheEvictions?: number;
+  /**
+   * Task 14 — decoded / GPU tier cumulative event counts. Uploads = nodes
+   * becoming resident; evictions = nodes leaving the resident set. Optional.
+   */
+  nodesReady?: number;
+  nodesEvicted?: number;
+  /** Cumulative load → evict → reload events within the thrash window. Optional. */
+  thrashEvents?: number;
 }
 
 /** A live snapshot the overlay polls each tick. */
@@ -148,15 +179,59 @@ export class DebugOverlay {
     if (streaming) {
       this._streamingLabel.style.display = '';
       this._streaming.style.display = '';
-      this._streaming.textContent = [
+      const lines: string[] = [
         `nodes         ${streaming.residentNodes} resident / ${streaming.knownNodes} known`,
         `visible       ${streaming.visibleNodes}`,
         `queue         ${streaming.queuedNodes} queued / ${streaming.loadingNodes} decoding`,
         `points        ${formatInt(streaming.displayedPoints)} / ${formatInt(streaming.sourcePoints)}`,
-        `chunk cache   ${formatBytes(streaming.cacheBytes)}`,
-        `gpu estimate  ${formatBytes(streaming.gpuBytes)}`,
-        `scheduler     ${streaming.schedulerMs.toFixed(1)} ms`,
-      ].join('\n');
+      ];
+      // Task 14 — three-tier memory readout. Compressed (LRU bytes + cache
+      // outcomes); decoded (CPU-side, sized from the decoded attribute set);
+      // GPU (upload estimate). The decoded tier doesn't have its own cache
+      // in this architecture, so it shares the upload / evict counts with
+      // the GPU tier.
+      if (
+        streaming.cacheHits !== undefined &&
+        streaming.cacheMisses !== undefined &&
+        streaming.cacheEvictions !== undefined
+      ) {
+        const total = streaming.cacheHits + streaming.cacheMisses;
+        const ratio =
+          total > 0
+            ? `${((100 * streaming.cacheHits) / total).toFixed(1)}%`
+            : '—';
+        lines.push(
+          `compressed    ${formatBytes(streaming.cacheBytes)}` +
+            ` · hits=${streaming.cacheHits} misses=${streaming.cacheMisses}` +
+            ` (${ratio} hit) evict=${streaming.cacheEvictions}`,
+        );
+      } else {
+        lines.push(`compressed    ${formatBytes(streaming.cacheBytes)}`);
+      }
+      if (streaming.decodedBytes !== undefined) {
+        const events =
+          streaming.nodesReady !== undefined && streaming.nodesEvicted !== undefined
+            ? ` · uploads=${streaming.nodesReady} evict=${streaming.nodesEvicted}`
+            : '';
+        lines.push(`decoded       ${formatBytes(streaming.decodedBytes)}${events}`);
+      }
+      lines.push(`gpu estimate  ${formatBytes(streaming.gpuBytes)}`);
+      if (streaming.thrashEvents !== undefined) {
+        lines.push(`thrash        ${streaming.thrashEvents} event(s)`);
+      }
+      if (streaming.schedulerRecent && streaming.schedulerRecent.count > 0) {
+        const r = streaming.schedulerRecent;
+        lines.push(
+          `scheduler     last ${streaming.schedulerMs.toFixed(1)} ms` +
+            ` · n=${r.count}` +
+            ` p50=${r.p50.toFixed(2)}` +
+            ` p95=${r.p95.toFixed(2)}` +
+            ` max=${r.max.toFixed(2)} ms`,
+        );
+      } else {
+        lines.push(`scheduler     ${streaming.schedulerMs.toFixed(1)} ms`);
+      }
+      this._streaming.textContent = lines.join('\n');
     } else {
       this._streamingLabel.style.display = 'none';
       this._streaming.style.display = 'none';

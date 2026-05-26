@@ -179,3 +179,441 @@ test('a paused scheduler schedules no work', async () => {
   await drain(scheduler);
   expect(cloud.counts().resident).toBe(0);
 });
+
+// --- Phase 3 Task 8 — eviction hysteresis -----------------------------------
+
+test('hysteresis defers eviction within the configured window', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const evicted: StreamingNode[] = [];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: (n) => evicted.push(n) },
+    streamingBudgets('balanced', false),
+    // memoryPressureRatio: huge → disables the override path so we test
+    // the pure-hysteresis branch.
+    { now: () => clock, evictDeferMs: 1_000, memoryPressureRatio: 1_000 },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(cloud.counts().resident).toBe(5);
+
+  // Shrink the budget. With memory pressure disabled, the unwanted nodes
+  // are marked for deferred eviction but stay resident through the window.
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(evicted).toHaveLength(0);
+  expect(cloud.counts().resident).toBe(5);
+});
+
+test('hysteresis evicts unwanted, unprotected nodes once the window lapses', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const evicted: StreamingNode[] = [];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: (n) => evicted.push(n) },
+    streamingBudgets('balanced', false),
+    { now: () => clock, evictDeferMs: 1_000, memoryPressureRatio: 1_000 },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // Advance past the defer window — unprotected unwanted nodes evict now.
+  clock = 1_500;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(evicted.length).toBeGreaterThan(0);
+});
+
+test('a node re-entering the wanted set cancels its pending eviction', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const evicted: StreamingNode[] = [];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: (n) => evicted.push(n) },
+    streamingBudgets('balanced', false),
+    { now: () => clock, evictDeferMs: 1_000, memoryPressureRatio: 1_000 },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // Shrink (defer) → restore budget → advance past the window: every node
+  // is back in the wanted set, so the deferred markers were cleared and
+  // nothing evicts.
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  scheduler.setBudgets({ pointBudget: 1_000_000, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  clock = 2_000;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(evicted).toHaveLength(0);
+  expect(cloud.counts().resident).toBe(5);
+});
+
+test('memory pressure evicts deferred nodes immediately, bypassing hysteresis', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const evicted: StreamingNode[] = [];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: (n) => evicted.push(n) },
+    streamingBudgets('balanced', false),
+    // Default 1.5× ratio is plenty — 5 nodes × ~600 pts = 3100 points,
+    // 1000-point budget × 1.5 = 1500 < 3100 → memory pressure triggers.
+    { now: () => clock, evictDeferMs: 10_000 },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(cloud.counts().resident).toBe(5);
+
+  // Shrink to a tiny budget. The hysteresis window is 10 s but the override
+  // fires this tick — clock hasn't advanced.
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(evicted.length).toBe(4);
+  expect(cloud.counts().resident).toBe(1);
+});
+
+test('a parent of a resident node is never evicted before the child', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const evicted: StreamingNode[] = [];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: (n) => evicted.push(n) },
+    streamingBudgets('balanced', false),
+    { now: () => clock, evictDeferMs: 500, memoryPressureRatio: 1_000 },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // Shrink to one node, advance past the window. Children at depth 2 evict
+  // first; their depth-1 parents follow only on the NEXT tick, when the
+  // protection set no longer includes them.
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  clock = 800;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // After one post-deadline tick the unprotected leaves drop, but the
+  // depth-1 parent (1,0,0,0) — whose children (2,0,0,0) and (2,1,0,0) were
+  // resident when the protection snapshot was taken — must survive this
+  // tick regardless of its expired deadline.
+  const evictedKeys = evicted.map((n) => n.record.key);
+  // Both depth-2 leaves got dropped (they had no protection).
+  expect(evictedKeys.some((k) => k.depth === 2 && k.x === 0)).toBe(true);
+  expect(evictedKeys.some((k) => k.depth === 2 && k.x === 1)).toBe(true);
+  // The parent of the resident leaves stayed put — protection held.
+  expect(
+    evictedKeys.find((k) => k.depth === 1 && k.x === 0 && k.y === 0 && k.z === 0),
+  ).toBeUndefined();
+});
+
+// --- Phase 3 Task 9 — camera-motion awareness -------------------------------
+
+test('smoothed camera velocity tracks linear motion across multiple ticks', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  // The first tick seeds `_lastCameraPos` — no velocity sample yet.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().cameraVelocity).toBe(0);
+
+  // Step the camera 10 world units every 100 ms — a steady 100 u/s signal.
+  // The EWMA (τ = 200 ms ⇒ α = 0.5 at dt = 100 ms) chases the true value:
+  // 0 → 50 → 75 → 87.5 → 93.75 → 96.875 → 98.4375.
+  for (let i = 1; i <= 6; i++) {
+    clock = i * 100;
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [i * 10, 0, 0] });
+  }
+  const v = scheduler.stats().cameraVelocity;
+  expect(v).toBeGreaterThan(95);
+  expect(v).toBeLessThanOrEqual(100);
+});
+
+test('fast camera motion classifies isStable=false and halves concurrency', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const budgets = streamingBudgets('balanced', false); // maxConcurrentDecodes = 4
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    budgets,
+    { now: () => clock },
+  );
+  // Establish a settled stationary baseline so the next tick's classification
+  // can only be explained by camera motion, not first-tick startup.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  clock = 1_000;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  const stable = scheduler.stats();
+  expect(stable.isStable).toBe(true);
+  expect(stable.effectiveMaxConcurrent).toBe(budgets.maxConcurrentDecodes);
+
+  // Now move fast — 50 units over 100 ms ⇒ 500 u/s, well above 10 u/s.
+  clock = 1_100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [50, 0, 0] });
+  const moving = scheduler.stats();
+  expect(moving.cameraVelocity).toBeGreaterThan(10);
+  expect(moving.isStable).toBe(false);
+  expect(moving.effectiveMaxConcurrent).toBe(
+    Math.max(1, Math.floor(budgets.maxConcurrentDecodes * 0.5)),
+  );
+});
+
+test('concurrency returns to full after the settle window elapses', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const budgets = streamingBudgets('balanced', false);
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    budgets,
+    { now: () => clock },
+  );
+  // Move fast first so the scheduler is in the throttled regime.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  clock = 100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [50, 0, 0] });
+  expect(scheduler.stats().isStable).toBe(false);
+  expect(scheduler.stats().effectiveMaxConcurrent).toBeLessThan(
+    budgets.maxConcurrentDecodes,
+  );
+
+  // Stop. A big dt (1.4 s) makes EWMA α = 1, so the smoothed velocity snaps
+  // to 0 and `_stableSinceTs` is armed *this* tick. The settle window has not
+  // elapsed yet — concurrency is still throttled.
+  clock = 1_500;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [50, 0, 0] });
+  expect(scheduler.stats().isStable).toBe(false);
+  expect(scheduler.stats().effectiveMaxConcurrent).toBeLessThan(
+    budgets.maxConcurrentDecodes,
+  );
+
+  // One more still tick, > 250 ms later — the camera is now classified
+  // stable and the full concurrent-decode budget is restored.
+  clock = 2_000;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [50, 0, 0] });
+  const settled = scheduler.stats();
+  expect(settled.cameraVelocity).toBe(0);
+  expect(settled.isStable).toBe(true);
+  expect(settled.effectiveMaxConcurrent).toBe(budgets.maxConcurrentDecodes);
+});
+
+// --- Phase 4 Task 12 — hierarchy-aware eviction -----------------------------
+
+test('sibling retention defers eviction when a sibling stays in the wanted set', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const evicted: StreamingNode[] = [];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: (n) => evicted.push(n) },
+    streamingBudgets('balanced', false),
+    { now: () => clock, evictDeferMs: 500, memoryPressureRatio: 1_000 },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(cloud.counts().resident).toBe(5);
+
+  // selectWithinBudget walks candidates in score order — within a depth,
+  // higher projected-size wins. At camera=[0,0,0] this puts (2,1,0,0)
+  // (closer, dist≈139) ahead of (2,0,0,0) (further, dist≈166), so a
+  // budget that includes one depth-2 child picks (2,1,0,0). Budget 2800
+  // gives wanted = {root, (1,0,0,0), (1,1,0,0), (2,1,0,0)} and leaves
+  // (2,0,0,0) as the sole unwanted node — and its sibling (2,1,0,0) is
+  // wanted under the same parent (1,0,0,0), so sibling-retention fires.
+  scheduler.setBudgets({ pointBudget: 2_800, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // Advance well past the deferral window. Without sibling-retention both
+  // unwanted nodes would evict here; with it, their deadlines re-arm.
+  clock = 800;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(evicted).toHaveLength(0);
+  expect(cloud.counts().resident).toBe(5);
+});
+
+test('deepest-and-furthest deferred nodes evict first when multiple lapse together', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const evicted: StreamingNode[] = [];
+  // Camera at +X — the negative-X octants are objectively further away,
+  // so (2,0,0,0) (centre ≈ [-96,-96,-96]) outranks (2,1,0,0)
+  // (centre ≈ [-32,-96,-96]) for furthest-first eviction.
+  const farCam: [number, number, number] = [200, 0, 0];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: (n) => evicted.push(n) },
+    streamingBudgets('balanced', false),
+    { now: () => clock, evictDeferMs: 500, memoryPressureRatio: 1_000 },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: farCam });
+  await drain(scheduler);
+
+  // Budget 1000 (= root's point count) leaves only root in the wanted set:
+  // adding any depth-1 node would overflow. wantedParentKeys is then empty
+  // (root has no parent), so no node gets sibling-retention. The memory-
+  // pressure threshold here is 1000 × 1000 = 1 M, well above the resident
+  // count, so the override path stays dormant and the lapsed loop alone
+  // does the evictions — letting us assert its ordering.
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
+  scheduler.update({ viewProjection: WIDE, cameraPosition: farCam });
+  await drain(scheduler);
+
+  // Advance past the window. (1,0,0,0) is parent-protected (its depth-2
+  // descendants are still resident). (1,1,0,0), (2,0,0,0), (2,1,0,0) are
+  // all evictable this tick. The ordering must be: depth-2 nodes first,
+  // then depth-1; within depth-2, furthest from camera first.
+  clock = 800;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: farCam });
+  await drain(scheduler);
+
+  expect(evicted.length).toBeGreaterThanOrEqual(3);
+  const depths = evicted.map((n) => n.record.key.depth);
+  // Every depth-2 eviction precedes every depth-1 eviction.
+  const lastDepth2 = depths.lastIndexOf(2);
+  const firstDepth1 = depths.indexOf(1);
+  expect(lastDepth2).toBeGreaterThanOrEqual(0);
+  expect(firstDepth1).toBeGreaterThanOrEqual(0);
+  expect(lastDepth2).toBeLessThan(firstDepth1);
+
+  // Within depth-2, the furthest-from-camera node evicts first.
+  const depth2Order = evicted
+    .filter((n) => n.record.key.depth === 2)
+    .map((n) => n.record.key);
+  expect(depth2Order).toHaveLength(2);
+  expect(depth2Order[0]).toEqual({ depth: 2, x: 0, y: 0, z: 0 });
+  expect(depth2Order[1]).toEqual({ depth: 2, x: 1, y: 0, z: 0 });
+});
+
+// --- Phase 4 Task 15 — pressure adaptation ----------------------------------
+
+test('sustained high pressure for ≥ 1 s lowers the target-depth cap by one', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const baseline = streamingBudgets('balanced', false);
+  // Budget set to the full source point count — resident/budget ratio sits
+  // at 1.0, well above the 0.9 high-pressure threshold.
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    { ...baseline, pointBudget: 3_100 },
+    { now: () => clock },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(cloud.residentPointCount).toBe(3_100);
+
+  // Tick 2 — first tick to sample the resident count at 100 % of budget.
+  // High-pressure timer arms here; reduction stays 0 (1 s not yet elapsed).
+  clock = 100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().pressureDepthReduction).toBe(0);
+
+  // Tick 3 — 0.5 s in, still under the 1 s hold threshold.
+  clock = 600;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().pressureDepthReduction).toBe(0);
+
+  // Tick 4 — 1.1 s after arming, the threshold trips.
+  clock = 1_200;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().pressureDepthReduction).toBe(1);
+});
+
+test('sustained low pressure for ≥ 2 s restores the depth cap', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const baseline = streamingBudgets('balanced', false);
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    { ...baseline, pointBudget: 3_100 },
+    { now: () => clock },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // Push into high pressure (reduction = 1).
+  clock = 100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  clock = 1_200;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().pressureDepthReduction).toBe(1);
+
+  // Enlarge the budget so resident/budget drops to 3100 / 5000 = 0.62,
+  // below the 0.7 low-pressure threshold.
+  scheduler.setBudgets({ pointBudget: 5_000, maxConcurrentDecodes: 4 });
+  clock = 1_300;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  // Low-pressure timer just armed — reduction still active.
+  expect(scheduler.stats().pressureDepthReduction).toBe(1);
+
+  // 2.1 s after arming → restore.
+  clock = 3_400;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().pressureDepthReduction).toBe(0);
+});
+
+test('the hysteresis band preserves an active depth reduction without oscillating', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const baseline = streamingBudgets('balanced', false);
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    { ...baseline, pointBudget: 3_100 },
+    { now: () => clock },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // Trigger reduction=1.
+  clock = 100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  clock = 1_200;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().pressureDepthReduction).toBe(1);
+
+  // Move the budget into the hysteresis band: 3100 / 3900 ≈ 0.795, which
+  // sits between the 0.7 and 0.9 thresholds. Neither timer should advance.
+  scheduler.setBudgets({ pointBudget: 3_900, maxConcurrentDecodes: 4 });
+  clock = 1_300;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  // Hold a long time — no transition either way.
+  clock = 10_000;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().pressureDepthReduction).toBe(1);
+});

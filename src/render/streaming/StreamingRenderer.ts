@@ -24,11 +24,54 @@ import type { ColorMode } from '../colorModes';
 import { streamingNodeColors, intensityRangeOf } from './streamingColors';
 import type { StreamingColorRanges } from './streamingColors';
 
+/**
+ * Phase 7 Task 25 — node fade-in tunables. A freshly resident node starts at
+ * `FADE_START_OPACITY` and lerps to 1.0 over `FADE_MS`, then drops the
+ * transparency flag so EDL and the post-pipeline never see a `transparent:
+ * true` material once the node has settled. Disabled on mobile and on the
+ * low-tier device profile — see `attachStreamingCloud`.
+ */
+export const FADE_MS = 120;
+export const FADE_START_OPACITY = 0.5;
+
+/**
+ * The pure fade math, factored out so it is unit-tested in Node. Maps an
+ * `elapsedMs / durationMs` ratio onto a linear `[startOpacity, 1]` interval.
+ */
+export function fadeOpacity(
+  elapsedMs: number,
+  durationMs: number,
+  startOpacity: number,
+): number {
+  if (durationMs <= 0) return 1;
+  const t = Math.min(1, Math.max(0, elapsedMs / durationMs));
+  return startOpacity + (1 - startOpacity) * t;
+}
+
+/** A Three.js material with the alpha-related fields we need to drive. */
+type FadeableMaterial = THREE.Material & {
+  opacity: number;
+  transparent: boolean;
+  depthWrite: boolean;
+};
+
 /** One resident node's GPU mesh plus the decoded chunk kept for recolouring. */
 interface NodeMesh {
   mesh: THREE.Mesh;
   colorAttr: THREE.InstancedBufferAttribute;
   decoded: DecodedChunk;
+}
+
+/** Construction options for {@link StreamingRenderer}. */
+export interface StreamingRendererOptions {
+  /**
+   * Task 25 — enable the cheap node fade-in on `onNodeReady`. Off on mobile
+   * and the low-tier device profile; otherwise on by default. The animation
+   * never affects EDL or the post-pipeline: `transparent: true` is set only
+   * during the fade, with `depthWrite: true` explicitly preserved, and the
+   * material is restored to fully opaque the moment the fade completes.
+   */
+  fadeIn?: boolean;
 }
 
 /** Manages the per-node meshes of a streaming COPC cloud. */
@@ -38,10 +81,21 @@ export class StreamingRenderer {
   private _mode: ColorMode;
   private _ranges: StreamingColorRanges;
   private _intensitySeeded = false;
+  private readonly _fadeIn: boolean;
+  /** Active fade animations keyed by mesh; the value is its start wall time. */
+  private readonly _fades = new Map<THREE.Mesh, { start: number; mat: FadeableMaterial }>();
+  /** Pending requestAnimationFrame handle for the next fade tick, if any. */
+  private _fadeRafHandle: number | null = null;
 
-  constructor(viewer: Viewer, cloud: StreamingPointCloud, mode: ColorMode) {
+  constructor(
+    viewer: Viewer,
+    cloud: StreamingPointCloud,
+    mode: ColorMode,
+    options: StreamingRendererOptions = {},
+  ) {
     this._viewer = viewer;
     this._mode = mode;
+    this._fadeIn = options.fadeIn ?? false;
     // Elevation range from the COPC cube; intensity range is seeded once the
     // coarse root node arrives.
     const local = cloud.localBounds();
@@ -79,18 +133,24 @@ export class StreamingRenderer {
     }
     const colors = streamingNodeColors(this._mode, decoded, this._ranges);
     const handle: PointMeshHandle = this._viewer.buildPointMesh(decoded.positions, colors);
-    this._viewer.addStreamingMesh(handle.mesh, decoded);
+    this._viewer.addStreamingMesh(handle.mesh, decoded, node.record.key.depth);
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,
       colorAttr: handle.colorAttr,
       decoded,
     });
+    // Task 25 — fade-in animation. The mesh is added at opacity 1.0 first
+    // so a synchronous skip-fade environment (no rAF) still renders fully.
+    if (this._fadeIn) this._startFade(handle.mesh);
   }
 
   /** A node was evicted — remove and dispose its mesh. */
   onNodeEvicted(node: StreamingNode): void {
     const entry = this._meshes.get(node.record.id);
     if (!entry) return;
+    // Cancel any in-flight fade before disposal — the animation must not
+    // reference a freed material on its next rAF tick.
+    this._fades.delete(entry.mesh);
     this._viewer.removeStreamingMesh(entry.mesh);
     this._meshes.delete(node.record.id);
   }
@@ -111,10 +171,63 @@ export class StreamingRenderer {
 
   /** Remove and dispose every resident mesh. */
   dispose(): void {
+    // Cancel any pending fade tick before disposing meshes so the rAF
+    // callback can't see freed materials.
+    if (this._fadeRafHandle !== null) {
+      if (typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(this._fadeRafHandle);
+      } else {
+        clearTimeout(this._fadeRafHandle);
+      }
+      this._fadeRafHandle = null;
+    }
+    this._fades.clear();
     for (const entry of this._meshes.values()) {
       this._viewer.removeStreamingMesh(entry.mesh);
     }
     this._meshes.clear();
+  }
+
+  /**
+   * Begin a fade-in for a newly-resident mesh. Sets `transparent: true` with
+   * `depthWrite: true` to keep EDL valid through the animation, then schedules
+   * the next tick.
+   */
+  private _startFade(mesh: THREE.Mesh): void {
+    const mat = mesh.material as FadeableMaterial;
+    mat.opacity = FADE_START_OPACITY;
+    mat.transparent = true;
+    mat.depthWrite = true; // keep EDL valid — transparent defaults to no depth write
+    this._fades.set(mesh, { start: nowMs(), mat });
+    this._scheduleFadeTick();
+  }
+
+  /** Coalesce all active fades into a single rAF (or setTimeout fallback). */
+  private _scheduleFadeTick(): void {
+    if (this._fadeRafHandle !== null) return;
+    const onTick = (): void => {
+      this._fadeRafHandle = null;
+      this._stepFades(nowMs());
+      if (this._fades.size > 0) this._scheduleFadeTick();
+    };
+    if (typeof requestAnimationFrame !== 'undefined') {
+      this._fadeRafHandle = requestAnimationFrame(onTick);
+    } else {
+      this._fadeRafHandle = setTimeout(onTick, 16) as unknown as number;
+    }
+  }
+
+  /** Advance every active fade to wall time `now` and finalise completed ones. */
+  private _stepFades(now: number): void {
+    for (const [mesh, state] of this._fades) {
+      const elapsed = now - state.start;
+      state.mat.opacity = fadeOpacity(elapsed, FADE_MS, FADE_START_OPACITY);
+      if (elapsed >= FADE_MS) {
+        state.mat.opacity = 1;
+        state.mat.transparent = false;
+        this._fades.delete(mesh);
+      }
+    }
   }
 
   /** Recolour every resident node for the current mode and ranges. */
@@ -126,4 +239,9 @@ export class StreamingRenderer {
       entry.colorAttr.needsUpdate = true;
     }
   }
+}
+
+/** A monotonic millisecond clock — `performance.now()` when available. */
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }

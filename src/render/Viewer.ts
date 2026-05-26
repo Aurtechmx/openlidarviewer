@@ -80,6 +80,7 @@ import type { StreamingRenderer } from './streaming/StreamingRenderer';
 import type { StreamingPointCloud } from './streaming/StreamingPointCloud';
 import { streamingBudgets } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
+import type { StreamingBenchmark } from './streaming/streamingBenchmark';
 // The streaming-engine `import()` split points live in `lazyChunks.ts` — a
 // module excluded from the live-build obfuscator so Vite can still emit the
 // chunks (see lazyChunks.ts).
@@ -184,6 +185,8 @@ interface StreamingSession {
   cloud: StreamingPointCloud;
   scheduler: StreamingScheduler;
   renderer: StreamingRenderer;
+  /** The streaming benchmark, when one is collecting — null in normal sessions. */
+  benchmark: StreamingBenchmark | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -356,8 +359,17 @@ export class Viewer {
   // ── Streaming COPC subsystem (set while a streaming cloud is open) ───────
   /** Streaming node meshes — tracked so material settings reach them too. */
   private readonly _streamingMeshes = new Set<THREE.Mesh>();
-  /** Per streaming mesh: its local positions, for point picking. */
-  private readonly _streamingPickData = new Map<THREE.Mesh, DecodedChunk>();
+  /**
+   * Per streaming mesh: its decoded chunk (for point picking) plus the
+   * COPC octree depth of the node it came from (for the Task 24
+   * "still refining" hint — comparing this depth against the deepest
+   * resident depth tells the inspector whether finer detail is still
+   * loading for the region under the picked point).
+   */
+  private readonly _streamingPickData = new Map<
+    THREE.Mesh,
+    { decoded: DecodedChunk; depth: number }
+  >();
   /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
   private _streaming: StreamingSession | null = null;
   /** Frames since the streaming scheduler last ran — for throttling. */
@@ -621,15 +633,38 @@ export class Viewer {
   /**
    * Add a streaming COPC node's mesh to the scene. The node's decoded chunk is
    * registered so the measurement tools, the inspector, and the live probe can
-   * pick points and read their per-point attributes on streaming nodes.
+   * pick points and read their per-point attributes on streaming nodes. The
+   * node's octree `depth` is recorded too so the inspector can show a
+   * "still refining" hint when a pick lands on a coarse node that still has
+   * deeper siblings loading.
    */
-  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk): void {
+  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk, depth: number): void {
     this._scene.add(mesh);
     this._streamingMeshes.add(mesh);
-    this._streamingPickData.set(mesh, decoded);
+    this._streamingPickData.set(mesh, { decoded, depth });
   }
 
-  /** Remove a streaming node's mesh from the scene and free its GPU buffers. */
+  /**
+   * Remove a streaming node's mesh from the scene and free its GPU buffers.
+   *
+   * Phase 11 Task 34 — buffer-lifecycle proof:
+   *   1. `_scene.remove` severs the parent chain so the mesh is no longer
+   *      reachable from the scene root.
+   *   2. The `_streamingMeshes` Set delete and the `_streamingPickData` Map
+   *      delete drop the Viewer's last two references to the mesh — the pick
+   *      map's reference is what previously kept the `DecodedChunk` (positions
+   *      + per-point attribute arrays) alive.
+   *   3. `geometry.dispose()` releases the WebGL buffer and fires Three's
+   *      `dispose` event. Three's docs note that `dispose()` does NOT null
+   *      the geometry's `attributes` map, but the geometry itself becomes
+   *      unreachable the moment this method returns (no one else holds it),
+   *      so its attribute → Float32Array chain is reclaimable by GC.
+   *   4. The caller (`StreamingRenderer.onNodeEvicted`) drops its own
+   *      `_meshes` entry around this call, and `Phase 7 Task 25` clears any
+   *      pending fade-animation reference before disposal — so there is no
+   *      surviving reference to the mesh in any subsystem after the function
+   *      returns.
+   */
   removeStreamingMesh(mesh: THREE.Mesh): void {
     this._scene.remove(mesh);
     this._streamingMeshes.delete(mesh);
@@ -655,6 +690,7 @@ export class Viewer {
     decoder: ChunkDecoder,
     quality: StreamingQuality,
     isMobile: boolean,
+    benchmark?: StreamingBenchmark | null,
   ): Promise<void> {
     const [{ StreamingRenderer }, { StreamingScheduler }, { defaultStreamingMode }] =
       await Promise.all([
@@ -663,21 +699,37 @@ export class Viewer {
         loadStreamingColors(),
       ]);
     this.detachStreamingCloud();
+    // Task 25 — fade-in is enabled on desktop/mid+ profiles only; mobile and
+    // low-tier sessions skip it to preserve frame-budget headroom.
+    const fadeIn = !isMobile && quality !== 'low';
     const renderer = new StreamingRenderer(
       this,
       cloud,
       defaultStreamingMode(cloud.metadata),
+      { fadeIn },
     );
     const scheduler = new StreamingScheduler(
       cloud,
       decoder,
       {
-        onNodeReady: (node, decoded) => renderer.onNodeReady(node, decoded),
-        onNodeEvicted: (node) => renderer.onNodeEvicted(node),
+        onNodeReady: (node, decoded) => {
+          renderer.onNodeReady(node, decoded);
+          if (benchmark) {
+            benchmark.recordFirstPaint();
+            benchmark.recordNodeReady(node.record.id);
+            // Position bytes are a stable proxy for "decoded points" volume.
+            benchmark.recordDecodedBytes(decoded.positions.byteLength);
+          }
+        },
+        onNodeEvicted: (node) => {
+          renderer.onNodeEvicted(node);
+          benchmark?.recordNodeEvicted(node.record.id);
+        },
+        onTick: benchmark ? (ms) => benchmark.recordSchedulerTick(ms) : undefined,
       },
       streamingBudgets(quality, isMobile),
     );
-    this._streaming = { cloud, scheduler, renderer };
+    this._streaming = { cloud, scheduler, renderer, benchmark: benchmark ?? null };
     this._streamingFrame = 0;
     this._configureForStreaming(cloud);
   }
@@ -1307,6 +1359,9 @@ export class Viewer {
     this._frameTimes[this._frameWrite] = ms;
     this._frameWrite = (this._frameWrite + 1) % this._frameTimes.length;
     if (this._frameCount < this._frameTimes.length) this._frameCount++;
+    // Per-frame streaming-session sampling for the benchmark — only when a
+    // benchmark is collecting on a streaming scan. The hot path stays cheap.
+    this._streaming?.benchmark?.recordFrameMs(ms);
   }
 
   /** A coarse mobile check — a small viewport, matching the app's phone heuristic. */
@@ -1405,21 +1460,46 @@ export class Viewer {
    * Pick the streaming node point under normalised device coords, returning
    * the decoded chunk it belongs to and the point's index — so the inspector
    * and live probe can read its per-point attributes.
+   *
+   * Task 22 — resident-only picking. The pick map and the streaming-mesh set
+   * are added and removed in lockstep (`addStreamingMesh` /
+   * `removeStreamingMesh`), so any divergence between them or any orphaned
+   * mesh (parent === null) means an upstream lifecycle bug. The pick path
+   * fails closed on either condition: it skips the entry, prunes the map so
+   * the bug can't compound, and in dev surfaces a console warning so the
+   * stale reference is visible immediately.
    */
   private _pickStreamingDetailed(
     ndcX: number,
     ndcY: number,
-  ): { decoded: DecodedChunk; index: number; point: THREE.Vector3 } | null {
+  ): {
+    decoded: DecodedChunk;
+    index: number;
+    point: THREE.Vector3;
+    streamingRefining: boolean;
+  } | null {
     if (this._streamingPickData.size === 0) return null;
     this._raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._camera);
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
-    let best: { decoded: DecodedChunk; index: number; point: THREE.Vector3 } | null = null;
+    let best:
+      | { decoded: DecodedChunk; index: number; point: THREE.Vector3; depth: number }
+      | null = null;
     let bestScore = Infinity;
-    for (const [mesh, decoded] of this._streamingPickData) {
+    // Task 24 — track the deepest currently-resident depth so the hint
+    // fires when the picked node is shallower than it.
+    let maxResidentDepth = -1;
+    for (const [mesh, entry] of this._streamingPickData) {
+      // Task 22 invariant — pick from resident meshes only.
+      if (!this._streamingMeshes.has(mesh) || mesh.parent === null) {
+        this._reportStalePickEntry(mesh);
+        this._streamingPickData.delete(mesh);
+        continue;
+      }
       if (!mesh.visible) continue;
+      if (entry.depth > maxResidentDepth) maxResidentDepth = entry.depth;
       const hit = nearestPointAlongRay(
-        decoded.positions,
+        entry.decoded.positions,
         [o.x, o.y, o.z],
         [d.x, d.y, d.z],
       );
@@ -1428,13 +1508,36 @@ export class Viewer {
       if (score < 0.07 && score < bestScore) {
         bestScore = score;
         best = {
-          decoded,
+          decoded: entry.decoded,
           index: hit.index,
           point: new THREE.Vector3(hit.point[0], hit.point[1], hit.point[2]),
+          depth: entry.depth,
         };
       }
     }
-    return best;
+    if (!best) return null;
+    return {
+      decoded: best.decoded,
+      index: best.index,
+      point: best.point,
+      streamingRefining: best.depth < maxResidentDepth,
+    };
+  }
+
+  /**
+   * Surface a stale pick-map entry. Production users see nothing; the
+   * `?debug=1` overlay session and any dev build get a console warning so
+   * the lifecycle bug is visible.
+   */
+  private _reportStalePickEntry(mesh: THREE.Mesh): void {
+    if (typeof import.meta === 'undefined') return;
+    const env = (import.meta as { env?: { DEV?: boolean } }).env;
+    if (!env?.DEV) return;
+    // eslint-disable-next-line no-console
+    console.warn(
+      'OpenLiDARViewer — streaming pick path saw an unpaired or orphaned mesh; pruning. mesh.uuid=',
+      mesh.uuid,
+    );
   }
 
   /**
@@ -1573,8 +1676,9 @@ export class Viewer {
     decoded: DecodedChunk;
     index: number;
     point: THREE.Vector3;
+    streamingRefining: boolean;
   }): PointInfo {
-    const { decoded, index, point } = hit;
+    const { decoded, index, point, streamingRefining } = hit;
     const cloud = this._streaming?.cloud;
     const origin: [number, number, number] = cloud ? cloud.renderOrigin : [0, 0, 0];
     const rgb: [number, number, number] | null = decoded.rgb
@@ -1595,6 +1699,7 @@ export class Viewer {
       gpsTime: decoded.gpsTime[index],
       // COPC PDRF 6/7/8 carry no surface normals.
       normal: undefined,
+      streamingRefining,
     });
   }
 

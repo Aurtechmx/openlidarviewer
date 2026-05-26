@@ -203,3 +203,21 @@ test('pointInfoJson adds the extras only when present', () => {
     ['classification', 'index', 'intensity', 'layer', 'rgb', 'x', 'y', 'z'].sort(),
   );
 });
+
+// --- Phase 6 Task 24 — "still refining" hint passthrough --------------------
+
+test('makePointInfo carries the streamingRefining flag through unchanged', () => {
+  // Static-cloud picks (no streaming context) carry no hint.
+  const off = makePointInfo(fullRaw());
+  expect(off.streamingRefining).toBeUndefined();
+
+  // A streaming pick on a coarse node sets the flag; the inspector card
+  // reads it to render the "still refining" row.
+  const on = makePointInfo({ ...fullRaw(), streamingRefining: true });
+  expect(on.streamingRefining).toBe(true);
+
+  // An explicit `false` normalises to absent — the flag is positive-only,
+  // matching the omit-when-absent shape of the other optional fields.
+  const explicitFalse = makePointInfo({ ...fullRaw(), streamingRefining: false });
+  expect(explicitFalse.streamingRefining).toBeUndefined();
+});

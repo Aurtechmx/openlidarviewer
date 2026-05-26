@@ -10,8 +10,135 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - 3D Tiles / PNTS streaming
 - Cross-section and profile measurement
 - Slicing and clipping tools
+- Incremental rescoring with a dirty queue and per-tick frame budget
+  (deferred from v0.3.1)
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.3.1] - 2026-05-26
+
+A streaming-hardening release. v0.3.0 shipped COPC streaming; v0.3.1
+re-grounds every part of that pipeline on measured invariants. Eviction is
+now hierarchy-aware, the scheduler reads camera motion and budget
+pressure, the remote path retries and times out gracefully, picking can
+no longer reach a stale buffer, and the whole subsystem is exercised by
+a stress harness. No new file formats, no breaking changes to sessions
+or share links; everything that worked in v0.3.0 still works.
+
+### Added
+
+- **Streaming benchmark mode.** `?benchmark=1` on a COPC scan now emits
+  per-session metrics — first-paint, time-to-coarse-stable, time-to-
+  refined-stable, network and decoded byte totals, scheduler/decode/
+  frame timing aggregates, peak resident points and bytes, cache hits/
+  misses/evictions, thrash events, and session duration. The
+  `?debug=1` overlay shows the live values plus a sliding scheduler-
+  tick window.
+- **Synthetic-COPC stress fixtures.** Deterministic generator for 1 M,
+  10 M, 100 M, 250 M, and 500 M-point hierarchies used by the stress
+  harness and the regression suite.
+- **Eviction hysteresis with parent protection.** A resident node that
+  leaves the wanted-set is held for a short window before its mesh is
+  dropped, so a quick camera flick no longer thrashes through
+  load → evict → reload. Parents of resident nodes are never evicted
+  before their children.
+- **Camera-motion awareness.** An EWMA-smoothed velocity signal halves
+  the concurrent-decode budget under sustained motion and lowers the
+  depth cap; settling back to full refinement takes 250 ms of stable
+  camera, so a brief pause inside a longer pan doesn't pop in detail
+  prematurely.
+- **Hierarchy-aware eviction.** When multiple deferred nodes lapse
+  together, the deepest-and-furthest evict first. A deferred node
+  whose sibling is still wanted gets one extra window of grace, on
+  the bet that the camera will pull the siblings together.
+- **Compressed-cache hysteresis.** Evicted chunks get bumped to most-
+  recently-used in the LRU at eviction time, so a quick return finds
+  them warm and the re-decode skips the file read.
+- **Three-tier memory metrics.** The overlay now distinguishes the
+  compressed cache (LRU bytes + hits / misses / evict), the decoded
+  layer (CPU-side bytes + cumulative uploads / evictions), and the
+  GPU estimate.
+- **Pressure adaptation.** When resident points exceed 90 % of the
+  budget for ≥ 1 s, the scheduler lowers refinement by one depth
+  level. When residency falls below 70 % for ≥ 2 s, refinement is
+  restored. A 70 – 90 % hysteresis band prevents oscillation.
+- **Resilient remote streaming.** Range reads now retry transient
+  transport failures (network drops, 5xx, 408, 429) with exponential
+  backoff and jitter, max three retries. Every request has a 20 s
+  default timeout. 206 responses are validated against the requested
+  `Content-Range`. When HEAD returns 4xx or omits `Content-Length`,
+  the source falls back to a `Range: bytes=0-0` GET to discover the
+  total size.
+- **Remote-URL hygiene.** The `?copc=` entry rejects non-http(s)
+  schemes, URLs over 2048 characters, and URLs with embedded
+  `user:pass@` credentials. Every error message and log line runs
+  through a sanitiser that strips userinfo.
+- **Specific remote error UX.** Distinct messages for CORS-blocked
+  hosts, hosts without range support, request timeouts, content
+  mismatches, server-side errors, and malformed COPC files.
+- **Resident-only picking.** The streaming pick path validates its
+  mesh / decoded-chunk pairing on every call; any stale entry is
+  pruned fail-closed before it can return a stale buffer.
+- **"Still refining" inspector hint.** When the user picks a point on
+  a node coarser than the deepest currently-resident one, the
+  inspector card shows a small "Detail · still refining" row.
+- **Node fade-in.** Each newly resident node fades from 50 % to 100 %
+  opacity over 120 ms; off on mobile and on the low-tier device
+  profile. EDL stays valid through the animation.
+- **Device-profile tiers and runtime FPS adaptation.** A device-
+  capability classifier resolves a low / medium / high tier from
+  `deviceMemory` + `hardwareConcurrency`; the resolved profile
+  carries the budget, the EDL default, and the fade-in flag. At
+  runtime, sustained FPS under 24 for ≥ 3 s steps the tier down;
+  sustained FPS over 50 for ≥ 10 s steps it up. A wide hysteresis
+  band prevents oscillation.
+- **Streaming stress harness.** A Node-runnable test drives the
+  scheduler through a six-position camera orbit on a 1 M synthetic
+  fixture, asserts the hardening invariants (bounded residency, zero
+  thrash on a stable path, scheduler tick bounds), and emits the
+  benchmark JSON. Larger tiers are opt-in via the
+  `OPENLIDARVIEWER_STRESS_TIERS` env list.
+- **Obfuscator chunk-emission guard.** The build fails loudly if any
+  of the 12 required code-split chunks is missing from the obfuscated
+  output, so a regression of the v0.3.0 lazy-import bug cannot recur.
+- **Lazy diagnostics and exporter chunks.** The `?debug=1` /
+  `?benchmark=1` overlay code and the PLY / OBJ / XYZ / CSV
+  exporters are loaded only when actually needed, shaving weight off
+  the initial bundle.
+- **Coordinate-precision regression pin.** A unit test pins sub-2 mm
+  f32 round-trip precision within ±10 km of the render origin;
+  degradation past 100 km / 1000 km is documented.
+
+### Changed
+
+- **Documented priority weights** in `nodeScore`. `DEPTH_WEIGHT`,
+  `SIZE_TERM_MAX`, `SIZE_TERM_SCALE` are now named, exported
+  constants; the `SIZE_TERM_MAX = DEPTH_WEIGHT - 1` relationship
+  enforces the coarse-first dominance invariant by definition.
+- **Annotation type docs.** `Annotation.localPosition` is explicitly
+  documented as a world-space anchor in the cloud's render frame;
+  streaming refinement does not move existing annotations.
+
+### Fixed
+
+- **AbortSignal listener leak in `HttpRangeSource`.** Successful range
+  reads now explicitly remove their `onAbort` listener from the
+  caller's signal so a long-lived signal across many reads cannot
+  accumulate listeners. In typical streaming use the caller's signal
+  is per-decode and short-lived, so this had no production impact;
+  the fix makes the API contract defensive against any future caller
+  pattern.
+
+### Deferred
+
+- Incremental rescoring with a dirty queue and a frame-budgeted
+  N-per-tick cap is moved to v0.3.2 — it needs a dedicated invariant-
+  analysis session.
+- The 50-scan open/close leak audit and the WebGL2-forced streaming
+  e2e require live-browser verification; the static-audit pieces
+  (lifecycle correctness in `removeStreamingMesh`, the abort-signal
+  discipline test, the post-stop "no late `onNodeReady`" invariant)
+  are in. The browser passes happen during release QA.
 
 ## [0.3.0] - 2026-05-25
 

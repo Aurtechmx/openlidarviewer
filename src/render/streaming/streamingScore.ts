@@ -98,16 +98,68 @@ export interface NodeScoreInput {
 }
 
 /**
- * A node's streaming priority — higher loads sooner. A shallower node always
- * outranks a deeper one (the depth term dwarfs the size term); within a depth,
- * the larger projected size wins. A node past the depth cap scores 0.
+ * Weight per level of depth in the priority score. The shallower a node, the
+ * larger `(depthCap - depth + 1) * DEPTH_WEIGHT` becomes — this is the
+ * dominant term. Treated as a positional-notation base: depth occupies the
+ * upper digit slot, the size sub-score fills the lower one.
+ */
+export const DEPTH_WEIGHT = 1000;
+
+/**
+ * Exclusive upper bound on the size sub-score. By construction equal to
+ * `DEPTH_WEIGHT - 1`, so two nodes a level apart can never tie: the strictly
+ * shallower node beats the strictly deeper one regardless of how much bigger
+ * the deeper one projects. This is what keeps the scheduler coarse-first.
+ */
+export const SIZE_TERM_MAX = DEPTH_WEIGHT - 1;
+
+/**
+ * Multiplier that turns a unitless projected-size ratio into an integer
+ * bucket in `[0, SIZE_TERM_MAX]`. A projected size near 1 (node fills the
+ * viewport) saturates; tiny far-away nodes get a small bucket. The scale is
+ * numerically equal to `DEPTH_WEIGHT` here but is conceptually independent —
+ * it sets how finely projected-size differences are resolved within a depth.
+ */
+export const SIZE_TERM_SCALE = 1000;
+
+/**
+ * A node's streaming priority — higher loads sooner.
+ *
+ * The score is `depthContribution + sizeTerm`, where:
+ *   • `depthContribution = (depthCap - depth + 1) * DEPTH_WEIGHT` and
+ *   • `sizeTerm        ∈ [0, SIZE_TERM_MAX]`.
+ *
+ * Because `SIZE_TERM_MAX < DEPTH_WEIGHT`, the depth contribution strictly
+ * dominates: a shallower node always outranks a deeper one (coarse-first).
+ * Within a depth, the larger projected size wins. A node past `depthCap`
+ * scores 0 — it is not a candidate this tick.
  */
 export function nodeScore(input: NodeScoreInput): number {
   if (input.depth > input.depthCap) return 0;
   const ps = projectedSize(input.bounds, input.cameraPos);
-  const sizeTerm = Math.min(Math.round(ps * 1000), 999);
-  return (input.depthCap - input.depth + 1) * 1000 + sizeTerm;
+  const sizeTerm = Math.min(Math.round(ps * SIZE_TERM_SCALE), SIZE_TERM_MAX);
+  const depthContribution =
+    (input.depthCap - input.depth + 1) * DEPTH_WEIGHT;
+  return depthContribution + sizeTerm;
 }
+
+/**
+ * Velocity (world units/second) above which the scheduler treats the camera
+ * as "moving" and lowers the depth cap by `MODERATE_DEPTH_REDUCTION` levels.
+ * Pairs with `VELOCITY_FAST_THRESHOLD` in the scheduler, which uses the same
+ * number to halve the concurrent-decode budget — separate constants so the
+ * size/concurrency dimensions can be re-tuned independently.
+ */
+const VELOCITY_MODERATE_THRESHOLD = 10;
+/** Velocity above which the scheduler treats the camera as "flying". */
+const VELOCITY_VERY_FAST_THRESHOLD = 50;
+/** Levels to subtract from `baseCap` at moderate motion. */
+const MODERATE_DEPTH_REDUCTION = 3;
+/** Levels to subtract from `baseCap` at very-fast motion. */
+const VERY_FAST_DEPTH_REDUCTION = 6;
+/** The floor for the reduced cap so the root-ish levels still load. */
+const MODERATE_MIN_CAP = 3;
+const VERY_FAST_MIN_CAP = 2;
 
 /**
  * The octree depth the scheduler descends to this tick. A fast-moving camera
@@ -115,7 +167,11 @@ export function nodeScore(input: NodeScoreInput): number {
  * detail that will be stale by the next frame.
  */
 export function depthCapForVelocity(baseCap: number, velocity: number): number {
-  if (velocity > 50) return Math.max(2, baseCap - 6);
-  if (velocity > 10) return Math.max(3, baseCap - 3);
+  if (velocity > VELOCITY_VERY_FAST_THRESHOLD) {
+    return Math.max(VERY_FAST_MIN_CAP, baseCap - VERY_FAST_DEPTH_REDUCTION);
+  }
+  if (velocity > VELOCITY_MODERATE_THRESHOLD) {
+    return Math.max(MODERATE_MIN_CAP, baseCap - MODERATE_DEPTH_REDUCTION);
+  }
   return baseCap;
 }

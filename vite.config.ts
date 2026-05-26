@@ -74,6 +74,61 @@ function obfuscatorPlugin() {
   });
 }
 
+/**
+ * Fails the build if any of the required code-split chunks went missing —
+ * a structural regression guard for the v0.3.0 lazyChunks bug, where the
+ * obfuscator's stringArray transform scrambled dynamic `import()` literals
+ * and Rolldown silently failed to emit the chunks. Runs on every build,
+ * not just `build:live`, so a refactor on the plain build can't introduce
+ * the same hazard either.
+ *
+ * The required list is the union of every module that is dynamically
+ * imported from a hot path — losing any of them would mean a runtime
+ * "Failed to fetch dynamically imported module" the v0.3.1 error classifier
+ * surfaces as a "resource-load" toast, but never silently.
+ */
+function chunkEmissionGuard() {
+  const required = [
+    // COPC streaming subsystem.
+    'StreamingPointCloud',
+    'StreamingScheduler',
+    'StreamingRenderer',
+    'streamingColors',
+    'copcWorker',
+    'copcWorkerClient',
+    'LocalFileRangeSource',
+    'HttpRangeSource',
+    // v0.3.1 — lazy on-demand chunks.
+    'exporters',
+    'DebugOverlay',
+    'streamingBenchmark',
+    'InstrumentedRangeSource',
+  ];
+  return {
+    name: 'olv-chunk-emission-guard',
+    apply: 'build' as const,
+    generateBundle(
+      this: { error: (m: string) => never },
+      _options: unknown,
+      bundle: Record<string, unknown>,
+    ): void {
+      const filenames = Object.keys(bundle);
+      const missing = required.filter(
+        (req) => !filenames.some((name) => name.includes(req)),
+      );
+      if (missing.length > 0) {
+        const detail = missing.join(', ');
+        // `this.error` is provided by Rollup's plugin context — it stops the
+        // build with the message.
+        this.error(
+          `OpenLiDARViewer chunk-emission guard: missing required code-split chunks: ${detail}.\n` +
+            `This typically means a dynamic import() literal was scrambled — see lazyChunks.ts.`,
+        );
+      }
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   base: './',
   // The worker build is left un-obfuscated: it is a separate Vite pass, and
@@ -82,9 +137,9 @@ export default defineConfig(({ mode }) => ({
   worker: { format: 'es' },
   build: { target: 'es2022' },
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  // Obfuscation is applied only to the live deployment build — Vite mode
-  // `live`, run via `npm run build:live`. The default `npm run build`, used
-  // for development and by anyone building the GitHub source, is a normal,
-  // readable build.
-  plugins: mode === 'live' ? [obfuscatorPlugin()] : [],
+  // The chunk-emission guard runs on every build; obfuscation only on `live`.
+  plugins:
+    mode === 'live'
+      ? [obfuscatorPlugin(), chunkEmissionGuard()]
+      : [chunkEmissionGuard()],
 }));

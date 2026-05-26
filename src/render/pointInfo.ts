@@ -68,6 +68,13 @@ export interface PointInfo {
   gpsTime?: number;
   /** Surface normal (xyz, rounded), when the cloud carries per-point normals. */
   normal?: [number, number, number];
+  /**
+   * Phase 6 Task 24 — "still refining" hint. Present only on streaming COPC
+   * picks where the picked node is shallower than the deepest currently-
+   * resident node, signalling that this region of the scan still has finer
+   * detail loading. Static-cloud picks omit this field entirely.
+   */
+  streamingRefining?: boolean;
 }
 
 /** Inputs for {@link makePointInfo} — local coordinates plus the load origin. */
@@ -96,6 +103,8 @@ export interface RawPointInfo {
   gpsTime?: number;
   /** Raw surface normal (xyz), when the cloud carries per-point normals. */
   normal?: [number, number, number];
+  /** Streaming-refinement-pending flag — see {@link PointInfo.streamingRefining}. */
+  streamingRefining?: boolean;
 }
 
 /** Round `n` to `places` decimals. */
@@ -134,6 +143,7 @@ export function makePointInfo(raw: RawPointInfo): PointInfo {
       round(raw.normal[2], 4),
     ];
   }
+  if (raw.streamingRefining) info.streamingRefining = true;
   return info;
 }
 

@@ -1,9 +1,11 @@
 # COPC Streaming
 
-OpenLiDARViewer v0.3.0 opens **COPC** (Cloud Optimized Point Cloud) files
+OpenLiDARViewer opens **COPC** (Cloud Optimized Point Cloud) files
 through a dedicated streaming pipeline. A `.copc.laz` file is never read or
 decoded whole: only the parts the current view needs are fetched, decoded, and
-uploaded to the GPU.
+uploaded to the GPU. The pipeline shipped in v0.3.0 and was hardened in v0.3.1
+with hierarchy-aware eviction, camera-motion awareness, pressure adaptation,
+and a resilient remote path (retry / timeout / Content-Range / HEAD fallback).
 
 ## What COPC is
 

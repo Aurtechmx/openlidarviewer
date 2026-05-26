@@ -24,11 +24,17 @@ import type { ShareState } from './io/shareState';
 import { formatProgress } from './io/loadProgress';
 import { formatTelemetry } from './io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from './io/benchmark';
-import { DebugOverlay } from './ui/DebugOverlay';
-import type { StreamingDebugStats } from './ui/DebugOverlay';
-import { estimateGpuBytes } from './render/streaming/streamingBudget';
+// The diagnostics runtime (DebugOverlay + streamingBenchmark + the
+// instrumented range source) loads only when `?debug=1` or `?benchmark=1`
+// is set — see `loadDiagnostics()` below. The types stay reachable for the
+// variable annotations.
+import type { StreamingBenchmark } from './render/streaming/streamingBenchmark';
+import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
+import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { isZUpFormat } from './io/sniffFormat';
-import { exportCloud } from './io/exporters';
+// `exportCloud` is dynamically imported via `loadExporters` in the onExport
+// callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
+// weigh on the initial payload of a session that never exports.
 import { serializeSession, parseSession } from './io/session';
 import { loadPrefs, savePrefs } from './prefs';
 import { ModuleRegistry } from './analysis/ModuleApi';
@@ -43,7 +49,11 @@ import type { PointCloud } from './model/PointCloud';
 // imported (in `openStreamingCopc` and `handleRemoteCopc`), so it lands in a
 // lazy chunk fetched only when a COPC scan is actually opened.
 import { detectCopc } from './io/copc/copcDetect';
-import { RangeReadError } from './io/range/RangeSource';
+import {
+  RangeReadError,
+  sanitizeUrlForDisplay,
+  validateRemoteCopcUrl,
+} from './io/range/RangeSource';
 import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
 import { StreamingPanel } from './ui/StreamingPanel';
@@ -57,6 +67,10 @@ import {
   loadStreamingColors,
   loadLocalFileRangeSource,
   loadHttpRangeSource,
+  loadExporters,
+  loadDebugOverlay,
+  loadStreamingBenchmark,
+  loadInstrumentedRangeSource,
 } from './lazyChunks';
 
 // A pointer to the open-source repository for anyone who opens the console on
@@ -146,6 +160,45 @@ let copcDecoder: CopcWorkerClient | null = null;
 let streamingQuality: StreamingQuality = 'balanced';
 /** Interval handle for the streaming-status poll, while a COPC is open. */
 let streamingStatusTimer: number | undefined;
+/** Active streaming benchmark collector — non-null only under `?benchmark=1`. */
+let streamingBenchmark: StreamingBenchmark | null = null;
+/** Latched once the coarse view first finishes loading, per streaming session. */
+let coarseStableFired = false;
+
+/**
+ * The lazily-loaded diagnostics runtime — the `?debug=1` overlay, the
+ * streaming benchmark collector, and the instrumented range source. Loaded
+ * once on first need (the URL flag setup or the first benchmarked scan
+ * open) and cached for the rest of the session.
+ */
+interface DiagnosticsRuntime {
+  DebugOverlay: typeof import('./ui/DebugOverlay').DebugOverlay;
+  StreamingBenchmark: typeof import('./render/streaming/streamingBenchmark').StreamingBenchmark;
+  formatStreamingBenchmark: typeof import('./render/streaming/streamingBenchmark').formatStreamingBenchmark;
+  InstrumentedRangeSource: typeof import('./io/range/InstrumentedRangeSource').InstrumentedRangeSource;
+}
+let diagnostics: DiagnosticsRuntime | null = null;
+let diagnosticsPending: Promise<DiagnosticsRuntime> | null = null;
+function loadDiagnostics(): Promise<DiagnosticsRuntime> {
+  if (diagnostics) return Promise.resolve(diagnostics);
+  if (diagnosticsPending) return diagnosticsPending;
+  diagnosticsPending = (async () => {
+    const [overlayMod, benchMod, instrMod] = await Promise.all([
+      loadDebugOverlay(),
+      loadStreamingBenchmark(),
+      loadInstrumentedRangeSource(),
+    ]);
+    diagnostics = {
+      DebugOverlay: overlayMod.DebugOverlay,
+      StreamingBenchmark: benchMod.StreamingBenchmark,
+      formatStreamingBenchmark: benchMod.formatStreamingBenchmark,
+      InstrumentedRangeSource: instrMod.InstrumentedRangeSource,
+    };
+    diagnosticsPending = null;
+    return diagnostics;
+  })();
+  return diagnosticsPending;
+}
 
 /**
  * A viewer state decoded from a `#s=` share link, applied once the next scan
@@ -171,7 +224,10 @@ const inspector = new Inspector({
   onExport: (format) => {
     const cloud = activeId ? viewer.getCloud(activeId) : undefined;
     if (!cloud) return;
-    downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
+    // The exporter is a lazy chunk; fetched on first export of the session.
+    void loadExporters().then(({ exportCloud }) => {
+      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
+    });
   },
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
@@ -427,13 +483,17 @@ if (copcUrlParam) void handleRemoteCopc(copcUrlParam);
 // `?benchmark=1`. It polls the viewer for live frame stats on a throttled
 // cadence; the load path feeds it telemetry and any benchmark result.
 if (debug || benchmark) {
-  debugOverlay = new DebugOverlay(() => ({
-    backend: viewerReady ? viewer.activeBackend() : null,
-    stats: viewerReady ? viewer.frameStats() : null,
-    streaming: streamingDebugSample(),
-  }));
-  stage.overlay.append(debugOverlay.element);
-  debugOverlay.start();
+  // The diagnostics chunk is fetched only when one of the flags is set —
+  // it never weighs on a normal-session bundle.
+  void loadDiagnostics().then((d) => {
+    debugOverlay = new d.DebugOverlay(() => ({
+      backend: viewerReady ? viewer.activeBackend() : null,
+      stats: viewerReady ? viewer.frameStats() : null,
+      streaming: streamingDebugSample(),
+    }));
+    stage.overlay.append(debugOverlay.element);
+    debugOverlay.start();
+  });
 }
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */
@@ -443,7 +503,8 @@ function streamingDebugSample(): StreamingDebugStats | null {
   if (!cloud || !scheduler) return null;
   const counts = cloud.counts();
   const stats = scheduler.stats();
-  return {
+  const cs = scheduler.cacheStats();
+  const sample: StreamingDebugStats = {
     knownNodes: counts.known,
     visibleNodes: stats.visible,
     queuedNodes: stats.queued,
@@ -451,10 +512,30 @@ function streamingDebugSample(): StreamingDebugStats | null {
     residentNodes: counts.resident,
     displayedPoints: cloud.residentPointCount,
     sourcePoints: cloud.sourcePointCount,
-    cacheBytes: scheduler.cacheStats().byteSize,
+    cacheBytes: cs.byteSize,
+    decodedBytes: estimateDecodedBytes(cloud.residentPointCount),
     gpuBytes: estimateGpuBytes(cloud.residentPointCount),
     schedulerMs: stats.lastTickMs,
+    cacheHits: cs.hits,
+    cacheMisses: cs.misses,
+    cacheEvictions: cs.evictions,
   };
+  if (streamingBenchmark) {
+    sample.thrashEvents = streamingBenchmark.thrashEvents;
+    const tier = streamingBenchmark.tierCounters();
+    sample.nodesReady = tier.nodesReady;
+    sample.nodesEvicted = tier.nodesEvicted;
+    const recent = streamingBenchmark.recentSchedulerTickStats(60);
+    if (recent.count > 0) {
+      sample.schedulerRecent = {
+        count: recent.count,
+        p50: recent.p50,
+        p95: recent.p95,
+        max: recent.max,
+      };
+    }
+  }
+  return sample;
 }
 
 /** Run every registered validation module and flatten the rows. */
@@ -820,6 +901,20 @@ async function openStreamingCopc(
   inspector.element.classList.add('olv-hidden');
   dropZone.setProgress('Reading COPC hierarchy…');
 
+  // The streaming benchmark collector is created when either `?benchmark=1`
+  // (which adds a session report on close) or `?debug=1` (which surfaces the
+  // live thrash / scheduler-histogram readout in the overlay) is set. Off by
+  // default — no overhead in normal sessions. The diagnostics chunk loads
+  // lazily on first need; cached afterwards.
+  if (benchmark || debug) {
+    const d = await loadDiagnostics();
+    streamingBenchmark = new d.StreamingBenchmark();
+    coarseStableFired = false;
+    range = new d.InstrumentedRangeSource(range, (n) => {
+      streamingBenchmark?.recordNetworkBytes(n);
+    });
+  }
+
   // The COPC + streaming subsystem is a lazy chunk — fetched only here, the
   // moment a COPC scan is opened, so it never weighs on the initial payload.
   // The `import()` split points live in `lazyChunks.ts` (see that file).
@@ -834,6 +929,11 @@ async function openStreamingCopc(
   if (signal.aborted) throw new LoadCancelledError();
 
   if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+  // Wire the per-chunk decode timing hook only when a benchmark is collecting;
+  // clearing it on close keeps a non-benchmark session free of any callback.
+  copcDecoder.onDecodeMs = streamingBenchmark
+    ? (ms) => streamingBenchmark?.recordDecodeMs(ms)
+    : undefined;
 
   // A streaming scan is exclusive — clear any open static layers first.
   for (const id of viewer.clouds()) {
@@ -841,7 +941,13 @@ async function openStreamingCopc(
     inspector.removeCloud(id);
   }
   stage.hideEmptyState();
-  await viewer.attachStreamingCloud(cloud, copcDecoder, streamingQuality, isPhone());
+  await viewer.attachStreamingCloud(
+    cloud,
+    copcDecoder,
+    streamingQuality,
+    isPhone(),
+    streamingBenchmark,
+  );
   viewer.setMode('orbit');
   viewer.frameAll();
 
@@ -894,8 +1000,9 @@ async function openStreamingCopc(
  */
 async function handleRemoteCopc(url: string): Promise<void> {
   if (loading) return;
-  if (!isHttpUrl(url)) {
-    dropZone.setError('Enter an http:// or https:// URL to a COPC (.copc.laz) file.');
+  const check = validateRemoteCopcUrl(url);
+  if (!check.ok) {
+    dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
     return;
   }
   loading = true;
@@ -929,16 +1036,6 @@ async function handleRemoteCopc(url: string): Promise<void> {
   }
 }
 
-/** Whether a string is a usable http(s) URL — guards the remote-COPC entry. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
 /** A short, readable form of a URL — its host — for progress and error text. */
 function shortUrl(url: string): string {
   try {
@@ -967,6 +1064,7 @@ function remoteCopcName(url: string): string {
  * behind it is not a valid COPC.
  */
 function describeRemoteCopcError(err: unknown, url: string): string {
+  const safeUrl = sanitizeUrlForDisplay(url);
   if (err instanceof RangeReadError) {
     if (err.code === 'range-unsupported') {
       return `${err.message} Host the file where the server serves HTTP range requests — most static hosts and object stores do.`;
@@ -974,14 +1072,44 @@ function describeRemoteCopcError(err: unknown, url: string): string {
     if (err.code === 'transport') {
       return `${err.message} The host must also allow cross-origin (CORS) requests.`;
     }
+    if (err.code === 'timeout') {
+      return `${err.message} The server may be slow or unreachable — try again, or pick a faster host.`;
+    }
+    if (err.code === 'content-mismatch') {
+      return `${err.message} This usually means a proxy or CDN ignored the byte-range request.`;
+    }
+    if (err.code === 'server-error') {
+      return `${err.message} The host returned a server-side error — wait a moment and try again.`;
+    }
     return err.message;
   }
   const detail = err instanceof Error ? err.message : 'unknown error';
-  return `${shortUrl(url)} was reached, but it could not be read as a COPC scan — ${detail}.`;
+  return `${shortUrl(safeUrl)} was reached, but it could not be read as a COPC scan — ${detail}.`;
 }
 
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
+  // Finalize the benchmark (if any) before tearing the session down — we
+  // want the final cache snapshot and peak resident counters to be observed.
+  // The post-session report is logged only under `?benchmark=1`; `?debug=1`
+  // alone uses the collector solely for the live overlay readout.
+  if (streamingBenchmark) {
+    const result = streamingBenchmark.finalize();
+    // The diagnostics runtime is already loaded at this point (the same
+    // session that created the benchmark above also loaded the formatter).
+    if (benchmark && diagnostics) {
+      const text = diagnostics.formatStreamingBenchmark(result);
+      console.log(
+        '%cOpenLiDARViewer — streaming benchmark',
+        'font-weight:600;color:#22dcff',
+        '\n' + text,
+      );
+      debugOverlay?.setBenchmark('streaming benchmark\n' + text);
+    }
+    streamingBenchmark = null;
+    coarseStableFired = false;
+  }
+  if (copcDecoder) copcDecoder.onDecodeMs = undefined;
   stopStreamingStatusPolling();
   viewer.detachStreamingCloud();
   streamingPanel.hide();
@@ -1009,6 +1137,34 @@ function startStreamingStatusPolling(): void {
       streamingPanel.setPhase('Refining visible detail…');
     } else {
       streamingPanel.setPhase('Streaming ready');
+    }
+
+    // Benchmark sampling — only when collecting. The 250 ms cadence catches
+    // scheduler-tick samples through the onTick hook, not here; this loop is
+    // for state-snapshot metrics (resident counts, cache outcomes, peaks).
+    if (streamingBenchmark) {
+      const cacheStats = scheduler.cacheStats();
+      streamingBenchmark.recordCacheSnapshot({
+        hits: cacheStats.hits,
+        misses: cacheStats.misses,
+        evictions: cacheStats.evictions,
+      });
+      streamingBenchmark.recordResident(
+        cloud.residentPointCount,
+        scheduler.pointBudget,
+      );
+      streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount));
+      // Coarse stable: the first poll at which the scheduler has settled with
+      // at least one resident node — nothing queued, nothing loading.
+      if (
+        !coarseStableFired &&
+        counts.resident > 0 &&
+        counts.loading === 0 &&
+        counts.queued === 0
+      ) {
+        streamingBenchmark.recordCoarseStable();
+        coarseStableFired = true;
+      }
     }
   }, 250);
 }

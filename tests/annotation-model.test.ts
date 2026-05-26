@@ -96,3 +96,38 @@ describe('isAnnotationType / ANNOTATION_TYPES', () => {
     expect([...ANNOTATION_TYPES].sort()).toEqual(['info', 'issue', 'note', 'warning']);
   });
 });
+
+// --- Phase 6 Task 23 — annotation position stability ------------------------
+
+describe('annotation position stability under streaming refinement', () => {
+  it('createAnnotation captures the local-space anchor exactly, free of any node reference', () => {
+    const pos = { x: 12.5, y: -7.25, z: 3.75 };
+    const a = createAnnotation({ title: 'P', type: 'note', localPosition: pos }, 1);
+    // The marker is anchored to the cloud's coordinate system, not to any
+    // specific COPC node. A later refinement (a deeper node replacing a
+    // coarser one over the same volume) does not change this position.
+    expect(a.localPosition).toEqual(pos);
+    // The anchor object must be a clone so a later mutation upstream cannot
+    // shift the annotation — the same invariant streaming refinement relies on.
+    expect(a.localPosition).not.toBe(pos);
+  });
+
+  it('editAnnotation never touches localPosition — refinement preserves the anchor', () => {
+    const a = createAnnotation(
+      { title: 'Origin', type: 'issue', localPosition: { x: 1.5, y: 2.5, z: 3.5 } },
+      1000,
+    );
+    const after = editAnnotation(
+      a,
+      { title: 'After refine', note: 'now we see more detail', type: 'note' },
+      2000,
+    );
+    // Every editable field changed, but the world-space anchor stayed put.
+    expect(after.title).toBe('After refine');
+    expect(after.note).toBe('now we see more detail');
+    expect(after.type).toBe('note');
+    expect(after.localPosition).toEqual({ x: 1.5, y: 2.5, z: 3.5 });
+    // And the original is untouched — the model is immutable.
+    expect(a.localPosition).toEqual({ x: 1.5, y: 2.5, z: 3.5 });
+  });
+});

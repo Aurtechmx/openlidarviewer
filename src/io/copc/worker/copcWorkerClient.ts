@@ -23,6 +23,8 @@ interface PendingRequest {
   reject: (error: Error) => void;
   signal?: AbortSignal;
   onAbort?: () => void;
+  /** ms at request post — wall-time decode timing for the streaming benchmark. */
+  startedAt: number;
 }
 
 interface DecodedReply {
@@ -43,6 +45,12 @@ export class CopcWorkerClient implements ChunkDecoder {
   private readonly _pending = new Map<number, PendingRequest>();
   private _nextRequestId = 0;
   private _disposed = false;
+
+  /**
+   * Optional hook called after each successful decode with the wall-time
+   * elapsed from postMessage to result. The streaming benchmark wires this.
+   */
+  onDecodeMs: ((ms: number) => void) | undefined;
 
   constructor() {
     this._worker = new Worker(new URL('./copcWorker.ts', import.meta.url), {
@@ -75,7 +83,7 @@ export class CopcWorkerClient implements ChunkDecoder {
         reject(new Error('Decode aborted'));
         return;
       }
-      const pending: PendingRequest = { resolve, reject, signal };
+      const pending: PendingRequest = { resolve, reject, signal, startedAt: nowMs() };
       if (signal) {
         pending.onAbort = (): void => {
           if (!this._pending.delete(requestId)) return;
@@ -103,12 +111,21 @@ export class CopcWorkerClient implements ChunkDecoder {
     if (pending.onAbort && pending.signal) {
       pending.signal.removeEventListener('abort', pending.onAbort);
     }
-    if (reply.type === 'decoded') pending.resolve(reply.decoded);
-    else pending.reject(new Error(reply.error));
+    if (reply.type === 'decoded') {
+      this.onDecodeMs?.(nowMs() - pending.startedAt);
+      pending.resolve(reply.decoded);
+    } else {
+      pending.reject(new Error(reply.error));
+    }
   }
 
   private _failAll(error: Error): void {
     for (const pending of this._pending.values()) pending.reject(error);
     this._pending.clear();
   }
+}
+
+/** A monotonic millisecond clock, available on both the main thread and workers. */
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
