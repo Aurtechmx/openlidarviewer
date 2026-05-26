@@ -1,13 +1,19 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
 
 /**
- * COPC streaming end-to-end coverage. Drives the real `autzen-classified.copc.laz`
- * (~80 MB) through the full streaming pipeline: detection, hierarchy, the decode
- * worker, the scheduler, and the renderer.
+ * COPC streaming end-to-end coverage. The chunks-load smoke test drives a tiny
+ * in-memory fake-COPC buffer through openStreamingCopc, so it runs on any
+ * machine — including CI. The full-pipeline tests below drive the real
+ * `autzen-classified.copc.laz` (~80 MB) and only run when that file is present;
+ * on CI runners (and any clone without the fixture) they skip cleanly.
  */
 
 const COPC_FILE =
   '/sessions/charming-vigilant-heisenberg/mnt/OPENLIDAR/autzen-classified.copc.laz';
+
+/** True when the 80 MB autzen COPC fixture is on disk at COPC_FILE. */
+const hasAutzenFixture = fs.existsSync(COPC_FILE);
 
 test('the COPC streaming chunks load when a COPC file is opened', async ({ page }) => {
   // Regression guard for the v0.3.0 obfuscation bug: the COPC subsystem is
@@ -57,6 +63,11 @@ test('the COPC streaming chunks load when a COPC file is opened', async ({ page 
     await expect(toast).not.toContainText('could not be loaded');
   }
 });
+
+test.describe('autzen COPC fixture (skipped when the file is not on disk)', () => {
+  // The CI runner has no point-cloud fixtures, so these end-to-end tests skip
+  // there. A developer with the autzen file at COPC_FILE runs them normally.
+  test.skip(!hasAutzenFixture, `requires the autzen COPC fixture at ${COPC_FILE}`);
 
 test('opens a real COPC file and streams it progressively', async ({ page }) => {
   test.setTimeout(120_000);
@@ -137,3 +148,5 @@ test('closes a streaming COPC scan back to the empty state', async ({ page }) =>
   await expect(page.locator('.olv-empty-title')).toBeVisible();
   await expect(page.locator('.olv-streaming-panel')).toBeHidden();
 });
+
+}); // describe('autzen COPC fixture')
