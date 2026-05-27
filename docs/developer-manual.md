@@ -6,7 +6,7 @@ the reference for building, testing, extending, and shipping the project.
 - **Project README:** [`../README.md`](../README.md)
 - **Architecture map:** [`architecture.md`](architecture.md)
 - **Contributing guide:** [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
-- **Roadmap:** [`roadmap.md`](roadmap.md)
+- **Release history:** [`../CHANGELOG.md`](../CHANGELOG.md)
 
 ---
 
@@ -68,7 +68,7 @@ Scan Intelligence report, and export the result.
 | Language | TypeScript (strict) | Type safety across the IO, model, render, and UI layers. |
 | Build / dev | Vite 8 | Fast dev server, first-class Web Worker and WASM handling. |
 | Rendering | three.js 0.184 (`three/webgpu`, `three/tsl`) | WebGPU renderer with a built-in WebGL 2 fallback; `three/tsl` node graphs drive the point material and the Eye Dome Lighting post-processing pass on both backends. |
-| Parsing | loaders.gl (`las`, `ply`, `obj`, `gltf`) + `laz-perf` + a from-scratch E57 parser | Battle-tested loaders; `laz-perf` WASM decodes LAZ; E57 is parsed by an in-repo TypeScript module set. |
+| Parsing | loaders.gl (`las`, `ply`, `obj`, `gltf`) + `laz-perf` + a from-scratch E57 parser | Well-established open-source loaders; `laz-perf` WASM decodes LAZ; E57 is parsed by an in-repo TypeScript module set. |
 | Unit tests | Vitest | Fast, ESM-native, Node environment for the algorithmic core. |
 | E2E tests | Playwright | Drives the built app in a real browser. |
 
@@ -308,15 +308,12 @@ component. For embedding, serve the same build and link with `?embed=1`.
 
 ---
 
-## 16. Roadmap
+## 16. Release history
 
-Deferred by design: the complete rendering overhaul that 0.3.0 will finish on
-top of the 0.2.5 pipeline — background themes, premium loading states, and
-mobile-adaptive rendering; octree LOD streaming for very large clouds;
-expanded format support (PCD, PTS/PTX, COPC LAZ, 3D Tiles / PNTS);
-cross-section and profile measurement; slicing and clipping tools; A/B cloud
-compare; and a deeper analysis suite. See [`roadmap.md`](roadmap.md) for the
-full list.
+The full per-release record — what shipped, where, and the supporting
+test counts and build metrics — lives in [`../CHANGELOG.md`](../CHANGELOG.md).
+The v0.3.3 release notes give a complete summary of every capability
+shipped through this release.
 
 ---
 

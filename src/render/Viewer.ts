@@ -70,6 +70,7 @@ import { downsampleToBudget } from '../process/voxelDownsample';
 import { makePointInfo } from './pointInfo';
 import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
+import { selectStreamingPick } from './streaming/streamingPickSelection';
 // The streaming render engine is type-only here and dynamically imported in
 // `attachStreamingCloud`, so `src/render/streaming/*` (scheduler, renderer,
 // octree, cache) stays out of the initial bundle and loads only when a COPC
@@ -77,7 +78,7 @@ import { speedForSize, nearestPointAlongRay } from './navMath';
 // synchronous `setStreamingQuality` path.
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
 import type { StreamingRenderer } from './streaming/StreamingRenderer';
-import type { StreamingPointCloud } from './streaming/StreamingPointCloud';
+import type { StreamingSource } from './streaming/StreamingSource';
 import { streamingBudgets } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
@@ -87,7 +88,6 @@ import type { StreamingBenchmark } from './streaming/streamingBenchmark';
 import {
   loadStreamingRenderer,
   loadStreamingScheduler,
-  loadStreamingColors,
   loadExportStudio,
 } from '../lazyChunks';
 import type { ChunkDecoder, DecodedChunk } from '../io/copc/copcChunkDecode';
@@ -112,6 +112,18 @@ interface CloudEntry {
   colorAttr: THREE.InstancedBufferAttribute;
   /** Current colour mode applied to the colour attribute. */
   mode: ColorMode;
+}
+
+/**
+ * Per-streaming-mesh data the pick path needs — kept in lockstep with the
+ * `_streamingMeshes` set so the picker can prove no entry references an
+ * evicted mesh (see `_pickStreamingDetailed`).
+ */
+interface StreamingPickEntry {
+  /** Decoded chunk (positions + per-point attributes) for this node. */
+  decoded: DecodedChunk;
+  /** Octree depth — feeds the "still refining" hint via `selectStreamingPick`. */
+  depth: number;
 }
 
 /** UI-facing navigation events the app can subscribe to. */
@@ -202,9 +214,15 @@ export interface PointMeshHandle {
   colorAttr: THREE.InstancedBufferAttribute;
 }
 
-/** The live COPC streaming subsystem — present only while a COPC is open. */
+/**
+ * The live streaming subsystem — present only while a COPC OR EPT cloud is
+ * open. v0.3.3 widens the `cloud` type from `StreamingPointCloud`
+ * to the format-agnostic `StreamingSource` interface (the same one the
+ * scheduler/renderer already consume), so both COPC and EPT route through
+ * the exact same session shape.
+ */
 interface StreamingSession {
-  cloud: StreamingPointCloud;
+  cloud: StreamingSource;
   scheduler: StreamingScheduler;
   renderer: StreamingRenderer;
   /** The streaming benchmark, when one is collecting — null in normal sessions. */
@@ -387,15 +405,12 @@ export class Viewer {
   private readonly _streamingMeshes = new Set<THREE.Mesh>();
   /**
    * Per streaming mesh: its decoded chunk (for point picking) plus the
-   * COPC octree depth of the node it came from (for the Task 24
+   * COPC octree depth of the node it came from (for the still-refining
    * "still refining" hint — comparing this depth against the deepest
    * resident depth tells the inspector whether finer detail is still
    * loading for the region under the picked point).
    */
-  private readonly _streamingPickData = new Map<
-    THREE.Mesh,
-    { decoded: DecodedChunk; depth: number }
-  >();
+  private readonly _streamingPickData = new Map<THREE.Mesh, StreamingPickEntry>();
   /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
   private _streaming: StreamingSession | null = null;
   /** Frames since the streaming scheduler last ran — for throttling. */
@@ -449,6 +464,19 @@ export class Viewer {
   private readonly _inspect: InspectTool;
   private readonly _annotate: AnnotationController;
   private readonly _probe: LiveProbe;
+
+  // ── v0.3.3 — bound listener references so `dispose()` can
+  //    remove them. The constructor assigns these once and registers them
+  //    on the canvas / window; `dispose()` removes them. Storing the
+  //    bound closures here (rather than the methods themselves) preserves
+  //    the canvas reference each listener captures.
+  private _onCanvasDblClick!: (e: MouseEvent) => void;
+  private _onCanvasClick!: (e: MouseEvent) => void;
+  private _onCanvasPointerMove!: (e: PointerEvent) => void;
+  private _onCanvasPointerLeave!: () => void;
+  private _onWindowKeyDown!: (e: KeyboardEvent) => void;
+  /** ResizeObserver subscribed to the host canvas — disconnected on dispose. */
+  private _resizeObserver: ResizeObserver | null = null;
   /** Which picking tool currently owns canvas clicks. */
   private _toolMode: ToolMode = 'none';
   private _measureListeners: MeasureListeners = {};
@@ -526,9 +554,6 @@ export class Viewer {
       onFocusCenter: () => this._focusCenter(),
     });
 
-    // Double-click a point to focus / fly to it.
-    canvas.addEventListener('dblclick', (e) => this._handleDoubleClick(e, canvas));
-
     // Picking tools — while one is active, a canvas click picks a point.
     this._canvas = canvas;
     this._measure = new MeasureController({
@@ -548,27 +573,37 @@ export class Viewer {
       this._measure.getMeasurements().map((m) => ({ id: m.id, name: m.name })),
     );
     this._probe = new LiveProbe();
-    canvas.addEventListener('click', (e) => {
+
+    // ── v0.3.3 — leak-free listener wiring. Every listener is
+    //    stored as a bound reference and removed in `dispose()`, so a
+    //    re-created Viewer on the same canvas does not pile up listeners
+    //    across the 50-scan open/close cycle.
+    this._onCanvasDblClick = (e) => this._handleDoubleClick(e, canvas);
+    this._onCanvasClick = (e) => {
       if (this._toolMode === 'measure') this._handleMeasureClick(e, canvas);
       else if (this._toolMode === 'inspect') this._handleInspectClick(e, canvas);
       else if (this._toolMode === 'annotate') this._handleAnnotateClick(e, canvas);
-    });
-    // Track the pointer so the measure tool can preview toward the cursor.
-    canvas.addEventListener('pointermove', (e) => {
+    };
+    this._onCanvasPointerMove = (e) => {
       this._pointerNdcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
       this._pointerNdcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
       this._pointerClientX = e.clientX;
       this._pointerClientY = e.clientY;
       this._pointerOnCanvas = true;
       this._pointerMoved = true;
-    });
-    canvas.addEventListener('pointerleave', () => {
+    };
+    this._onCanvasPointerLeave = () => {
       this._pointerOnCanvas = false;
       this._pointerMoved = true;
-    });
-    window.addEventListener('keydown', (e) => {
+    };
+    this._onWindowKeyDown = (e) => {
       if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
-    });
+    };
+    canvas.addEventListener('dblclick', this._onCanvasDblClick);
+    canvas.addEventListener('click', this._onCanvasClick);
+    canvas.addEventListener('pointermove', this._onCanvasPointerMove);
+    canvas.addEventListener('pointerleave', this._onCanvasPointerLeave);
+    window.addEventListener('keydown', this._onWindowKeyDown);
 
     // ── Async backend init + render loop ──────────────────────────────────
     this.ready = this._renderer.init().then(() => {
@@ -578,9 +613,9 @@ export class Viewer {
       this._startLoop();
     });
 
-    // ── Resize observer ───────────────────────────────────────────────────
-    const ro = new ResizeObserver(() => this._onResize(canvas));
-    ro.observe(canvas);
+    // ── Resize observer ── v0.3.3 — stored so `dispose()` can disconnect.
+    this._resizeObserver = new ResizeObserver(() => this._onResize(canvas));
+    this._resizeObserver.observe(canvas);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -679,7 +714,7 @@ export class Viewer {
   /**
    * Remove a streaming node's mesh from the scene and free its GPU buffers.
    *
-   * Phase 11 Task 34 — buffer-lifecycle proof:
+   * Buffer-lifecycle proof:
    *   1. `_scene.remove` severs the parent chain so the mesh is no longer
    *      reachable from the scene root.
    *   2. The `_streamingMeshes` Set delete and the `_streamingPickData` Map
@@ -692,7 +727,7 @@ export class Viewer {
    *      unreachable the moment this method returns (no one else holds it),
    *      so its attribute → Float32Array chain is reclaimable by GC.
    *   4. The caller (`StreamingRenderer.onNodeEvicted`) drops its own
-   *      `_meshes` entry around this call, and `Phase 7 Task 25` clears any
+   *      `_meshes` entry around this call, and the fade-in tunables clear any
    *      pending fade-animation reference before disposal — so there is no
    *      surviving reference to the mesh in any subsystem after the function
    *      returns.
@@ -718,26 +753,29 @@ export class Viewer {
    * here on the first COPC open so it never weighs on the initial bundle.
    */
   async attachStreamingCloud(
-    cloud: StreamingPointCloud,
+    cloud: StreamingSource,
     decoder: ChunkDecoder,
     quality: StreamingQuality,
     isMobile: boolean,
     benchmark?: StreamingBenchmark | null,
   ): Promise<void> {
-    const [{ StreamingRenderer }, { StreamingScheduler }, { defaultStreamingMode }] =
+    const [{ StreamingRenderer }, { StreamingScheduler }] =
       await Promise.all([
         loadStreamingRenderer(),
         loadStreamingScheduler(),
-        loadStreamingColors(),
       ]);
     this.detachStreamingCloud();
-    // Task 25 — fade-in is enabled on desktop/mid+ profiles only; mobile and
+    // Fade-in is enabled on desktop/mid+ profiles only; mobile and
     // low-tier sessions skip it to preserve frame-budget headroom.
     const fadeIn = !isMobile && quality !== 'low';
+    // v0.3.3 — the default colour mode comes from the source itself, not
+    // from a COPC-specific helper. Both `StreamingPointCloud` (COPC) and
+    // `EptStreamingPointCloud` implement `defaultColorMode()` so the
+    // Viewer never peeks at format-specific metadata shapes.
     const renderer = new StreamingRenderer(
       this,
       cloud,
-      defaultStreamingMode(cloud.metadata),
+      cloud.defaultColorMode(),
       { fadeIn },
     );
     const scheduler = new StreamingScheduler(
@@ -780,8 +818,15 @@ export class Viewer {
     return this._streaming !== null;
   }
 
-  /** The open streaming cloud, or null. */
-  get streamingCloud(): StreamingPointCloud | null {
+  /**
+   * The open streaming cloud, or null. v0.3.3 widens this from the
+   * COPC-specific `StreamingPointCloud` to the format-agnostic
+   * `StreamingSource` so callers can read off the common surface
+   * (`name`, `sourcePointCount`, `crs()`, `defaultColorMode()`, etc.)
+   * regardless of whether COPC or EPT is open. Callers that need
+   * COPC-specific shape can narrow with `cloud.kind === 'copc'`.
+   */
+  get streamingCloud(): StreamingSource | null {
     return this._streaming?.cloud ?? null;
   }
 
@@ -816,8 +861,9 @@ export class Viewer {
   }
 
   /** Configure navigation and clip planes for a streaming cloud's extent. */
-  private _configureForStreaming(cloud: StreamingPointCloud): void {
-    // COPC is LAS-derived — always Z-up.
+  private _configureForStreaming(cloud: StreamingSource): void {
+    // COPC + EPT are both LAS-derived (EPT writes binary tiles via LAS
+    // conventions) — always Z-up.
     this._worldUp.set(0, 0, 1);
     this._nav.setWorldUp(this._worldUp);
 
@@ -838,6 +884,19 @@ export class Viewer {
     this._applyOrbitBounds(radius);
 
     this._measure.setContext({ worldUp: [0, 0, 1], origin: cloud.renderOrigin });
+  }
+
+  /**
+   * v0.3.3 — the currently-active colour mode across the whole
+   * scene. Used by the .olvsession exporter to round-trip the user's last
+   * Color-by selection. Mirrors the export adapter's `currentColorMode()`
+   * dispatch: streaming cloud takes priority, then the first static cloud,
+   * then the runtime default.
+   */
+  activeColorMode(): ColorMode {
+    if (this._streaming) return this._streaming.renderer.colorMode;
+    const first = this._clouds.values().next().value;
+    return first ? first.mode : 'rgb';
   }
 
   /**
@@ -1451,7 +1510,11 @@ export class Viewer {
       },
       hasRgb(): boolean {
         if (viewer._streaming) {
-          return viewer._streaming.cloud.metadata.header.hasRgb;
+          // v0.3.3 — read off the abstract `availableColorModes` so this
+          // works uniformly for COPC + EPT. The cloud's own implementation
+          // knows whether it carries RGB (COPC: PDRF 7/8; EPT: schema has
+          // Red/Green/Blue attrs).
+          return viewer._streaming.cloud.availableColorModes().includes('rgb');
         }
         for (const { cloud } of viewer._clouds.values()) {
           if (cloud.colors) return true;
@@ -1467,10 +1530,25 @@ export class Viewer {
         return false;
       },
       hasClassification(): boolean {
-        // Streaming COPC clouds always carry classification (PDRF 6/7/8).
-        if (viewer._streaming) return true;
+        // v0.3.3 — dispatch on the abstract `availableColorModes()` so
+        // COPC and EPT route uniformly. Static clouds fall through to
+        // the explicit field check.
+        if (viewer._streaming) {
+          return viewer._streaming.cloud.availableColorModes().includes('classification');
+        }
         for (const { cloud } of viewer._clouds.values()) {
           if (cloud.classification) return true;
+        }
+        return false;
+      },
+      hasNormals(): boolean {
+        // v0.3.3 — COPC + EPT streaming sources never carry normals in
+        // production (LAS reserves no field for them; EPT writers rarely
+        // emit Normal X/Y/Z attrs). Static loaders (PCD, PTX, GLTF)
+        // sometimes do — check the field explicitly.
+        if (viewer._streaming) return false;
+        for (const { cloud } of viewer._clouds.values()) {
+          if (cloud.normals) return true;
         }
         return false;
       },
@@ -1511,11 +1589,11 @@ export class Viewer {
         return this.sourcePointCount();
       },
       crsLabel(): { name: string; unit: string; epsg?: number } | null {
-        // Streaming cloud's CRS comes from the COPC header; static clouds
-        // carry it through CloudMetadata. Take the first cloud that has a
-        // CRS (mixing differently-georeferenced clouds is an edge we don't
-        // currently surface explicitly — v0.3.3 will flag mismatches).
-        const fromStreaming = viewer._streaming?.cloud.metadata.header.crs;
+        // v0.3.3 — read off the abstract `cloud.crs()` so both COPC and
+        // EPT surface consistently. COPC pulls from the LAS VLRs the
+        // header parser walked; EPT pulls from `ept.json`'s `srs.wkt`.
+        // Static clouds carry CRS through `CloudMetadata.crs`.
+        const fromStreaming = viewer._streaming?.cloud.crs();
         if (fromStreaming) {
           return {
             name: fromStreaming.name,
@@ -1561,11 +1639,31 @@ export class Viewer {
 
   /**
    * Stop the render loop, dispose all clouds, and free renderer resources.
+   *
+   * v0.3.3 — WebGL fallback hardening. Listener removal and
+   * `ResizeObserver` disconnect are the leak-class fixes proved by
+   * `tests/viewerLifecycle.test.ts`'s 50-cycle harness: a re-created
+   * Viewer on the same canvas no longer accumulates listeners or
+   * ResizeObserver subscriptions across the cycle.
    */
   dispose(): void {
     if (this._rafId !== null) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
+    }
+    // Remove every listener the constructor registered. Each is a stored
+    // bound reference so the symmetric `removeEventListener` call actually
+    // matches — anonymous arrow functions would silently leak.
+    this._canvas.removeEventListener('dblclick', this._onCanvasDblClick);
+    this._canvas.removeEventListener('click', this._onCanvasClick);
+    this._canvas.removeEventListener('pointermove', this._onCanvasPointerMove);
+    this._canvas.removeEventListener('pointerleave', this._onCanvasPointerLeave);
+    window.removeEventListener('keydown', this._onWindowKeyDown);
+    // Disconnect the ResizeObserver so the canvas can be garbage-collected
+    // when the host eventually drops it.
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
     }
     for (const id of [...this._clouds.keys()]) {
       this.removeCloud(id);
@@ -1707,7 +1805,7 @@ export class Viewer {
    * the decoded chunk it belongs to and the point's index — so the inspector
    * and live probe can read its per-point attributes.
    *
-   * Task 22 — resident-only picking. The pick map and the streaming-mesh set
+   * Resident-only picking. The pick map and the streaming-mesh set
    * are added and removed in lockstep (`addStreamingMesh` /
    * `removeStreamingMesh`), so any divergence between them or any orphaned
    * mesh (parent === null) means an upstream lifecycle bug. The pick path
@@ -1728,45 +1826,37 @@ export class Viewer {
     this._raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._camera);
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
-    let best:
-      | { decoded: DecodedChunk; index: number; point: THREE.Vector3; depth: number }
-      | null = null;
-    let bestScore = Infinity;
-    // Task 24 — track the deepest currently-resident depth so the hint
-    // fires when the picked node is shallower than it.
-    let maxResidentDepth = -1;
+    // Resident-only pick invariant — pick from resident meshes only. Prune any orphan
+    // sighting so the bug can't compound (and surface it in dev). The
+    // resident, visible nodes are then handed to the pure selector below.
+    const eligibleMeshes: THREE.Mesh[] = [];
+    const eligibleEntries: StreamingPickEntry[] = [];
     for (const [mesh, entry] of this._streamingPickData) {
-      // Task 22 invariant — pick from resident meshes only.
       if (!this._streamingMeshes.has(mesh) || mesh.parent === null) {
         this._reportStalePickEntry(mesh);
         this._streamingPickData.delete(mesh);
         continue;
       }
       if (!mesh.visible) continue;
-      if (entry.depth > maxResidentDepth) maxResidentDepth = entry.depth;
-      const hit = nearestPointAlongRay(
-        entry.decoded.positions,
-        [o.x, o.y, o.z],
-        [d.x, d.y, d.z],
-      );
-      if (!hit) continue;
-      const score = hit.offset / hit.along;
-      if (score < 0.07 && score < bestScore) {
-        bestScore = score;
-        best = {
-          decoded: entry.decoded,
-          index: hit.index,
-          point: new THREE.Vector3(hit.point[0], hit.point[1], hit.point[2]),
-          depth: entry.depth,
-        };
-      }
+      eligibleMeshes.push(mesh);
+      eligibleEntries.push(entry);
     }
-    if (!best) return null;
+    if (eligibleEntries.length === 0) return null;
+    // Pure selection — angular-miss-fair, refinement-aware. Centralised in
+    // `streamingPickSelection.ts` so it's unit-tested separately from the
+    // Viewer's mesh-lifecycle plumbing.
+    const pick = selectStreamingPick(
+      eligibleEntries.map((e) => ({ positions: e.decoded.positions, depth: e.depth })),
+      [o.x, o.y, o.z],
+      [d.x, d.y, d.z],
+    );
+    if (!pick) return null;
+    const winning = eligibleEntries[pick.nodeIndex];
     return {
-      decoded: best.decoded,
-      index: best.index,
-      point: best.point,
-      streamingRefining: best.depth < maxResidentDepth,
+      decoded: winning.decoded,
+      index: pick.pointIndex,
+      point: new THREE.Vector3(pick.point[0], pick.point[1], pick.point[2]),
+      streamingRefining: pick.streamingRefining,
     };
   }
 

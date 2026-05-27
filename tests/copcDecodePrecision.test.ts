@@ -68,7 +68,7 @@ test('UTM 12N — millimetre precision preserved across the decode', () => {
 });
 
 test('UTM 12N — sub-mm precision held at 10 km from origin', () => {
-  // The acceptance bound from v0.3.1 Task 32 — sub-mm anywhere in ±10 km.
+  // The acceptance bound from v0.3.1 — sub-mm anywhere in ±10 km.
   const scale = 0.001;
   const offset = 487_000;
   const renderOrigin = 487_000;

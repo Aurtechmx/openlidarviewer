@@ -158,7 +158,7 @@ export class StreamingBenchmark {
   private readonly _evictAt = new Map<string, number>();
   private _thrashEvents = 0;
 
-  // Task 14 — decoded / GPU tier cumulative counters. The compressed-cache
+  // Memory accounting — decoded / GPU tier cumulative counters. The compressed-cache
   // tier already has hits/misses/evictions via cacheCounters(). The decoded
   // and GPU tiers don't have a true cache shape in this architecture
   // (decode → GPU upload is atomic), so the meaningful counters per session
@@ -273,7 +273,7 @@ export class StreamingBenchmark {
   }
 
   /**
-   * Task 14 — decoded / GPU tier cumulative event counts. The compressed
+   * Memory accounting — decoded / GPU tier cumulative event counts. The compressed
    * tier's hit/miss/evict counters live on {@link cacheCounters}. Decoded
    * and GPU tiers don't have a true cache shape in this architecture
    * (decode → GPU upload is atomic), so the meaningful counters are uploads

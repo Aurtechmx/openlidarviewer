@@ -3,24 +3,33 @@
 All notable changes to OpenLiDARViewer are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.3.3] - 2026-05-27
 
-### Planned (v0.3.3)
+OpenLiDARViewer becomes a professional workflow platform. EPT (Entwine Point Tile) streaming joins COPC as a first-class peer; the Export Studio gains depth, normal, and contour image modes plus a multi-page PDF technical report engine; the streaming subsystem is hardened against bounded-memory and zero-thrash invariants at synthetic stress up to 1B points; the `.olvsession` package round-trips full working state including camera, render settings, and active colour mode; the WebGL fallback is leak-class clean across 50 open/close cycles; and the remote-URL UX gates malformed URLs before any network call and classifies failures into precise human-readable messages, for both COPC and EPT.
 
-- Advanced image exports — heatmap, intensity, classification, depth.
-  v0.3.2 ships the framework seam and the orthographic mode; the four
-  remaining modes plug in here.
-- EPT (Entwine Point Tile) streaming alongside COPC. v0.3.2 ships the
-  `StreamingSource` interface; the EPT implementation plugs in here.
-- SDK / embed-API hardening.
+### Added
 
-### Planned (later)
+- **EPT (Entwine Point Tile) streaming.** `ept.json` URLs open progressively through the same scheduler / renderer / picking machinery as COPC. Both `binary` and `laszip` tile dataTypes; the laz-perf WASM module is shared with the COPC path. Local and remote, with fail-fast URL validation (`http`/`https` only, no embedded credentials, ≤ 2048 chars, must end in `/ept.json`) and classified error messages (CORS, manifest 404, manifest 5xx, malformed manifest, hierarchy/tile fetch failure, network down). Hierarchy walk is capped at 4096 files to bound hostile inputs. Float64-narrow precision contract preserved end-to-end.
+- **PDF technical report engine.** Export → Report PDF builds a multi-page report from the live working state — cover page, dataset summary, embedded image exports, annotations table, measurements table, technical notes, footer. Five built-in templates: Engineering Inspection, QA Validation, Terrain Review, Survey Summary, Technical Documentation. Branding (accent + logo) and metric/imperial unit system propagate through every table. The engine and its pdf-lib dependency (~150 KB) load only when the user clicks the button; the chunk-emission guard prevents accidental inclusion in the initial bundle.
+- **Visual Export Studio — depth, normal, and contour modes.** Camera-relative depth grayscale with invert toggle, RGB-encoded surface normals with smoothing options, and a contour mode with interval controls + topographic styling. Legend customisation (custom palettes, toggles, styling) and export-metadata overlays apply to every Studio mode.
+- **`.olvsession` session package.** Saves camera, render settings, active colour mode, annotations, measurements, named views, and scan-summary metadata to a `.olvsession` JSON file. Import restores everything, including camera pose. v3 schema with full v1/v2 back-compat so older session files keep opening.
 
-- 3D Tiles / PNTS streaming.
-- Cross-section and profile measurement.
-- Slicing and clipping tools.
+### Improved
 
-See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+- **Streaming scheduler — dispatch-pressure gate.** `_dispatch` now refuses to start a new decode when `resident + in-flight + nextNode.pointCount` would exceed the hysteresis cap (`1.5 × pointBudget`). Prevents peak-residency overshoot under high-throughput dispatch — the failure mode observed at 100M-point synthetic stress before the fix.
+- **Streaming scheduler — `stop()` state cleanup.** Now resets each in-flight and queued node back to `'unloaded'` before clearing the maps, so a re-attached cloud starts from a clean baseline rather than carrying stale `'queued'` / `'loading'` state visible via `stats()`.
+- **Picking selection extracted into a pure helper.** `selectStreamingPick` (in `src/render/streaming/streamingPickSelection.ts`) centralises the angular tolerance constant and locks the resident-only, angular-fair, refinement-aware contracts. The Viewer's `_pickStreamingDetailed` now does only the orphan-prune + visibility filter, then delegates selection.
+- **Viewer lifecycle — listener + ResizeObserver leak fixed.** The constructor's canvas/window listeners (dblclick, click, pointermove, pointerleave, keydown) and the host-canvas `ResizeObserver` are now held as stored bound references and symmetrically removed in `dispose()`. A re-created Viewer on the same canvas no longer accumulates listeners across cycles.
+- **Bundle audit + lazy splits.** `embedBridge` moved behind a lazy boundary; `loadReportEngine` and `loadEpt` (with the new URL validator) join the existing lazy chunks. Chunk-emission guard tracks every required lazy chunk so an accidental drag into the initial bundle fails the obfuscated build.
+
+### Documentation
+
+- **`docs/benchmarks.md` — synthetic stress section.** Records measured numbers at 1M / 10M / 100M / 250M / 500M / 1B tiers: bounded residency at the hysteresis cap, zero thrash, peak GPU estimate, scheduler tick mean/p95, wall time. Documents the synthetic-fake-decoder caveat (the harness measures scheduler / cache / eviction, not laz-perf decode throughput).
+- Streaming, supported-formats, architecture, usage, performance, limitations, README, and developer manual updated to reflect COPC + EPT parity, the Visual Export Studio + PDF reports, `.olvsession` round-trip, and the hardening invariants.
+
+### Tests + verification
+
+- 820 tests across 73 files. Typecheck clean. Default and live (obfuscated) builds clean. Live deploy bundle: main + every required lazy chunk emitted per the chunk-emission guard.
 
 ## [0.3.2] - 2026-05-26
 
@@ -60,7 +69,7 @@ Tests: 634 → 690 (+56).
   palette in `colorModes.ts` stays single-sourced for visual tuning while
   the spec-bound labels live with the Studio.
 - **Incremental rescoring (stable-camera fast path).** The deferred
-  Task 10 from v0.3.1. The scheduler caches its scheduling signature
+  v0.3.1 incremental-rescore work. The scheduler caches its scheduling signature
   (frustum, camera position, depth cap, point budget, pressure-
   reduction); a tick whose signature is bit-equal to the previous tick
   reuses the prior `wanted` set and skips the rescore loop entirely.

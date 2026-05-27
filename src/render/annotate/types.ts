@@ -53,7 +53,7 @@ export interface Annotation {
   /**
    * Position in LOCAL (render-space) coordinates — the marker anchor.
    *
-   * Phase 6 Task 23 guarantee: `localPosition` is a world-space anchor in the
+   * Anchor-persistence guarantee: `localPosition` is a world-space anchor in the
    * scan's render frame, NOT a node-relative offset or a buffer index. When a
    * streaming COPC node is refined (a coarser node is replaced by deeper
    * children covering the same volume), the annotation does not move; its

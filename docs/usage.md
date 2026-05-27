@@ -12,7 +12,7 @@ For LAS and LAZ files a short preload summary appears first — the format, the 
 
 A "Project ready" card then appears with a quick summary: format, point count, bounding box, detected attributes, a suggested navigation mode, and a performance estimate. It dismisses on its own.
 
-Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, and `CSV`. Nothing is uploaded. The file is read and rendered entirely in your browser.
+Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTS`, and `PTX`. Large hierarchical-streaming formats — `COPC` (`.copc.laz`) and `EPT` (Entwine Point Tile, via an `ept.json` URL) — open progressively through their octree hierarchies; see [`streaming.md`](streaming.md). Nothing is uploaded. The file is read and rendered entirely in your browser.
 
 Dropping a second file opens it as an additional layer alongside the first; the Layers section of the Scan Intelligence panel lists every open scan, each with a visibility toggle and a remove control.
 
@@ -89,7 +89,11 @@ In the Saved views section of the panel, click Save current view — or press `V
 
 ## Exporting
 
-Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates. The session Export saves measurements, annotations, and named views to a JSON file, and Import loads one back — older measurement-only session files still open.
+Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Visual Export Studio opens richer image modes — orthographic RGB, height map, intensity, classification, depth, normal, and contour — with legend customisation. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates.
+
+**Report PDF (v0.3.3).** Export → Report PDF builds a multi-page technical report from the live working state — a cover page, dataset summary (point count, bounds, density, CRS), embedded image exports, annotations and measurements tables, technical notes, and a footer. Five built-in templates (Engineering Inspection, QA Validation, Terrain Review, Survey Summary, Technical Documentation) set the default voice; branding (accent colour, logo) and the metric/imperial unit system propagate through every table. The PDF engine and its pdf-lib dependency load only when you click the button, so the initial app payload stays unchanged for users who never need a report.
+
+**Session round-trip (`.olvsession`, v0.3.3).** The session Export saves the full working state — camera, render settings, active colour mode, annotations, measurements, named views, and scan metadata — to a `.olvsession` JSON file. Import loads one back, restoring the camera and view exactly. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
 
 ## Mobile Usage
 

@@ -206,6 +206,133 @@ describe('parseSession — tolerance', () => {
     expect(back.annotations).toEqual([]);
   });
 
+  // v0.3.3 schema additions (the .olvsession package) ────────
+
+  it('v3 — round-trips the live camera, render settings, color mode, and scan summary', () => {
+    const back = parseSession(serializeSession({
+      ...sampleSession(),
+      camera: { position: [10, 20, 30], target: [0, 0, 0], mode: 'orbit', fov: 60 },
+      render: {
+        pointSize: 2.5,
+        edlEnabled: true,
+        edlStrength: 0.75,
+        pointSizeMode: 'adaptive',
+        antialiasing: false,
+      },
+      colorMode: 'classification',
+      scanSummary: {
+        fileName: '20210916_FLEXIGROB.copc.laz',
+        sourcePoints: 9_600_000,
+        width: 78.8,
+        depth: 124.4,
+        height: 18.9,
+        crs: 'WGS 84 / UTM zone 12N (EPSG:32612)',
+        crsUnit: 'metre',
+      },
+    }));
+    expect(back.version).toBe(3);
+    expect(back.camera).toEqual({
+      position: [10, 20, 30], target: [0, 0, 0], mode: 'orbit', fov: 60,
+    });
+    expect(back.render?.pointSize).toBe(2.5);
+    expect(back.render?.edlEnabled).toBe(true);
+    expect(back.render?.edlStrength).toBe(0.75);
+    expect(back.render?.pointSizeMode).toBe('adaptive');
+    expect(back.render?.antialiasing).toBe(false);
+    expect(back.colorMode).toBe('classification');
+    expect(back.scanSummary?.fileName).toBe('20210916_FLEXIGROB.copc.laz');
+    expect(back.scanSummary?.sourcePoints).toBe(9_600_000);
+    expect(back.scanSummary?.crs).toMatch(/UTM zone 12N/);
+    expect(back.scanSummary?.crsUnit).toBe('metre');
+  });
+
+  it('v3 — a session without v3 optional fields parses cleanly with them undefined', () => {
+    const back = parseSession(serializeSession(sampleSession()));
+    expect(back.version).toBe(3);
+    expect(back.camera).toBeUndefined();
+    expect(back.render).toBeUndefined();
+    expect(back.colorMode).toBeUndefined();
+    expect(back.scanSummary).toBeUndefined();
+  });
+
+  it('v3 — serialised output omits absent v3 fields (no JSON pollution)', () => {
+    const json = serializeSession(sampleSession());
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+    expect('camera' in parsed).toBe(false);
+    expect('render' in parsed).toBe(false);
+    expect('colorMode' in parsed).toBe(false);
+    expect('scanSummary' in parsed).toBe(false);
+  });
+
+  it('back-compat — a v1 file still imports (zero annotations, no v3 fields)', () => {
+    const v1 = JSON.stringify({
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: 1,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+    });
+    const back = parseSession(v1);
+    expect(back.annotations).toEqual([]);
+    expect(back.render).toBeUndefined();
+    expect(back.camera).toBeUndefined();
+  });
+
+  it('back-compat — a v2 file still imports', () => {
+    const v2 = JSON.stringify({
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: 2,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [{ name: 'Top', camera: { position: [0, 0, 100], target: [0, 0, 0] } }],
+      measurements: [],
+      annotations: [],
+    });
+    const back = parseSession(v2);
+    expect(back.views).toHaveLength(1);
+    expect(back.views[0].name).toBe('Top');
+  });
+
+  it('v3 — partial: drops malformed render block but keeps the rest', () => {
+    const session = {
+      ...sampleSession(),
+      camera: { position: [1, 2, 3] as Vec3, target: [0, 0, 0] as Vec3 },
+      colorMode: 'intensity' as const,
+    };
+    const json = serializeSession(session);
+    // Corrupt the render block in the serialised form — none of the
+    // expected fields, just a junk object.
+    const doc = JSON.parse(json) as Record<string, unknown>;
+    doc.render = { foo: 'bar' };
+    const back = parseSession(JSON.stringify(doc));
+    // Malformed render → dropped silently; camera + colorMode survive.
+    expect(back.render).toBeUndefined();
+    expect(back.camera).toEqual({ position: [1, 2, 3], target: [0, 0, 0] });
+    expect(back.colorMode).toBe('intensity');
+  });
+
+  it('v3 — an invalid colorMode value is dropped rather than passed through', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: 3,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      colorMode: 'octarine',  // not a valid ColorMode
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.colorMode).toBeUndefined();
+  });
+
   it('round-trips a 250-annotation session with no loss (performance safety)', () => {
     const annotations: Annotation[] = [];
     for (let i = 0; i < 250; i++) {

@@ -1,7 +1,7 @@
 /**
  * tierAdaptation.ts
  *
- * v0.3.1 Phase 9 Task 29 — runtime FPS-driven device-tier adaptation.
+ * Runtime FPS-driven device-tier adaptation.
  *
  * Watches a stream of FPS samples and decides when to step the device tier
  * up or down. Two hysteresis windows prevent oscillation:

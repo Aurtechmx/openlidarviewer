@@ -12,10 +12,9 @@
  *   ?autoload=sample:<id>   autoload a built-in sample on startup
  *   ?theme=dark        select a theme (only `dark` exists today)
  *
- * `?autoload` resolves only `sample:` ids in v0.2.9 — a remote-URL autoload is
- * the "remote loading" deferred to v0.3, where it slots into the
- * `PointCloudSource` abstraction. The parameter shape is final now so embed
- * URLs stay stable.
+ * `?autoload` resolves `sample:` ids; the remote-URL load path uses the
+ * separate `?copc=<url>` parameter, which routes to the `PointCloudSource`
+ * abstraction for both COPC and EPT entries.
  *
  * Pure — unit-tested in Node.
  */

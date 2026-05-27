@@ -137,9 +137,9 @@ test('HttpRangeSource.readRange accepts a 206 and rejects a 200 full-file respon
   });
 });
 
-// --- Phase 5 — retry, timeout, Content-Range, HEAD-fallback, URL hygiene ----
+// --- retry, timeout, Content-Range, HEAD-fallback, URL hygiene ----
 
-test('Task 16 — retry recovers from a transient 503 within the retry budget', async () => {
+test('retry recovers from a transient 503 within the retry budget', async () => {
   const headOk = (): Response =>
     new Response(null, {
       status: 200,
@@ -166,7 +166,7 @@ test('Task 16 — retry recovers from a transient 503 within the retry budget', 
   expect(calls).toBe(3); // two 503s + one success
 });
 
-test('Task 16 — 404 fails immediately without retry (non-retryable status)', async () => {
+test('404 fails immediately without retry (non-retryable status)', async () => {
   const headOk = (): Response =>
     new Response(null, {
       status: 200,
@@ -187,7 +187,7 @@ test('Task 16 — 404 fails immediately without retry (non-retryable status)', a
   expect(calls).toBe(1);
 });
 
-test('Task 16 — gives up after maxRetries on a persistent 502', async () => {
+test('gives up after maxRetries on a persistent 502', async () => {
   const headOk = (): Response =>
     new Response(null, {
       status: 200,
@@ -209,7 +209,7 @@ test('Task 16 — gives up after maxRetries on a persistent 502', async () => {
   expect(calls).toBe(3);
 });
 
-test('Task 17 — per-attempt timeout aborts the fetch and surfaces "timeout"', async () => {
+test('per-attempt timeout aborts the fetch and surfaces "timeout"', async () => {
   const headOk = (): Response =>
     new Response(null, {
       status: 200,
@@ -233,7 +233,7 @@ test('Task 17 — per-attempt timeout aborts the fetch and surfaces "timeout"', 
   await expect(src.readRange(0, 3)).rejects.toMatchObject({ code: 'timeout' });
 });
 
-test('Task 18 — a 206 with a mismatched Content-Range is rejected as content-mismatch', async () => {
+test('Content-Range validation — a 206 with a mismatched Content-Range is rejected as content-mismatch', async () => {
   const headOk = (): Response =>
     new Response(null, {
       status: 200,
@@ -257,7 +257,7 @@ test('Task 18 — a 206 with a mismatched Content-Range is rejected as content-m
   });
 });
 
-test('Task 19 — HEAD 405 falls back to a ranged-GET probe to discover size', async () => {
+test('HEAD 405 falls back to a ranged-GET probe to discover size', async () => {
   let probeGets = 0;
   const fetchImpl = (async (_url: string, init?: RequestInit) => {
     if (init?.method === 'HEAD') return new Response(null, { status: 405 });
@@ -276,7 +276,7 @@ test('Task 19 — HEAD 405 falls back to a ranged-GET probe to discover size', a
   expect(probeGets).toBe(1);
 });
 
-test('Task 19 — HEAD without Content-Length falls back to the ranged-GET probe', async () => {
+test('HEAD without Content-Length falls back to the ranged-GET probe', async () => {
   const fetchImpl = (async (_url: string, init?: RequestInit) =>
     init?.method === 'HEAD'
       ? new Response(null, {
@@ -295,7 +295,7 @@ test('Task 19 — HEAD without Content-Length falls back to the ranged-GET probe
   expect(await src.probe()).toBe(9999);
 });
 
-// --- Task 20 — URL hygiene ---------------------------------------------------
+// --- URL hygiene — URL hygiene ---------------------------------------------------
 
 test('validateRemoteCopcUrl accepts a plain http(s) URL', () => {
   expect(validateRemoteCopcUrl('https://example.com/scan.copc.laz')).toEqual({

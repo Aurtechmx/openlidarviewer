@@ -28,7 +28,7 @@ export interface StreamingDebugStats {
   /** Compressed-cache LRU current bytes. */
   cacheBytes: number;
   /**
-   * Task 14 — CPU-side decoded bytes currently held by resident nodes,
+   * Memory accounting — CPU-side decoded bytes currently held by resident nodes,
    * estimated from `residentPointCount × DECODED_BYTES_PER_POINT`. Optional.
    */
   decodedBytes?: number;
@@ -52,7 +52,7 @@ export interface StreamingDebugStats {
   cacheMisses?: number;
   cacheEvictions?: number;
   /**
-   * Task 14 — decoded / GPU tier cumulative event counts. Uploads = nodes
+   * Memory accounting — decoded / GPU tier cumulative event counts. Uploads = nodes
    * becoming resident; evictions = nodes leaving the resident set. Optional.
    */
   nodesReady?: number;
@@ -185,7 +185,7 @@ export class DebugOverlay {
         `queue         ${streaming.queuedNodes} queued / ${streaming.loadingNodes} decoding`,
         `points        ${formatInt(streaming.displayedPoints)} / ${formatInt(streaming.sourcePoints)}`,
       ];
-      // Task 14 — three-tier memory readout. Compressed (LRU bytes + cache
+      // Memory accounting — three-tier memory readout. Compressed (LRU bytes + cache
       // outcomes); decoded (CPU-side, sized from the decoded attribute set);
       // GPU (upload estimate). The decoded tier doesn't have its own cache
       // in this architecture, so it shares the upload / evict counts with

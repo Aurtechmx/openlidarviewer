@@ -204,7 +204,7 @@ test('pointInfoJson adds the extras only when present', () => {
   );
 });
 
-// --- Phase 6 Task 24 — "still refining" hint passthrough --------------------
+// --- refining-hint — "still refining" hint passthrough --------------------
 
 test('makePointInfo carries the streamingRefining flag through unchanged', () => {
   // Static-cloud picks (no streaming context) carry no hint.

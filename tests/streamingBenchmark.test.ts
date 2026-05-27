@@ -229,7 +229,7 @@ describe('formatStreamingBenchmark', () => {
   });
 });
 
-describe('tierCounters (Task 14)', () => {
+describe('tierCounters (decoded-tier accounting)', () => {
   test('tierCounters start at zero and count node-ready / node-evicted events', () => {
     const clock = fakeClock();
     const b = new StreamingBenchmark(clock.now);

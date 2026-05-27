@@ -24,7 +24,15 @@ export interface StreamingStatus {
   cacheBytes: number;
 }
 
-/** The one-time scan summary, derived from the COPC metadata. */
+/**
+ * The one-time scan summary, derived from the source's metadata.
+ *
+ * v0.3.3 — added `format` ('copc' | 'ept') so the panel renders the right
+ * format label. COPC fills the existing `pointFormat` (LAS PDRF 6/7/8);
+ * EPT passes a sentinel `pointFormat: -1` and an optional `schemaSummary`
+ * describing the EPT schema (e.g. "binary · 5 attrs"). The panel formats
+ * either case correctly.
+ */
 export interface StreamingScanSummary {
   fileName: string;
   pointFormat: number;
@@ -35,6 +43,10 @@ export interface StreamingScanSummary {
   spacing: number;
   octreeDepth: number;
   nodeCount: number;
+  /** v0.3.3 — which streaming format the source is. */
+  format?: 'copc' | 'ept';
+  /** v0.3.3 — EPT-only: schema summary string for the Format row. */
+  schemaSummary?: string;
 }
 
 /** Callbacks the panel raises. */
@@ -164,12 +176,17 @@ export class StreamingPanel {
     this._phase.textContent = phase;
   }
 
-  /** Populate the one-time scan summary from the COPC metadata. */
+  /** Populate the one-time scan summary from the streaming source's metadata. */
   setSummary(summary: StreamingScanSummary): void {
     const file = this._statRow('File', this._value(summary.fileName, summary.fileName));
+    // v0.3.3 — format-aware Format row. COPC shows the LAS PDRF; EPT shows
+    // the schema summary (when supplied) or just "EPT".
+    const formatText = summary.format === 'ept'
+      ? (summary.schemaSummary ? `EPT · ${summary.schemaSummary}` : 'EPT')
+      : `COPC LAZ · PDRF ${summary.pointFormat}`;
     this._summary.replaceChildren(
       file,
-      this._statRow('Format', this._value(`COPC LAZ · PDRF ${summary.pointFormat}`)),
+      this._statRow('Format', this._value(formatText)),
       this._statRow('Source', this._value(`${formatCount(summary.sourcePoints)} points`)),
       this._statRow(
         'Extent',

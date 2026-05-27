@@ -66,7 +66,7 @@ export class CompressedChunkCache {
   }
 
   /**
-   * Cache hysteresis (Task 13). Bump a cached entry to most-recently-used
+   * Cache hysteresis (hysteresis). Bump a cached entry to most-recently-used
    * without returning it or counting it as a hit — the scheduler calls this
    * the moment a resident node is evicted, so the compressed chunk outlives
    * everything decoded before the eviction. A camera flick that pulls the

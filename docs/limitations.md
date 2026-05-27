@@ -18,7 +18,9 @@ Coordinate reference systems are handled only loosely. The viewer recenters larg
 
 Classification visualization depends on classification attributes actually being present in the file, and many scans carry none.
 
-Very large datasets are handled in two ways. A COPC (Cloud Optimized Point Cloud) `.copc.laz` file — local or hosted at a CORS-enabled URL — opens through progressive, octree-based streaming: partial range reads, a view-dependent scheduler, bounded memory, and worker decoding, so a file far larger than memory renders without ever being read whole. Any other very large format still relies on the downsampling and stride-decode fallbacks above; full tiling for non-COPC datasets, on the order of billions of points, is not implemented yet.
+Very large datasets are handled through streaming. A COPC (Cloud Optimized Point Cloud) `.copc.laz` file or an EPT (Entwine Point Tile) dataset — local or hosted at a CORS-enabled URL — opens through progressive, octree-based streaming: partial range reads, a view-dependent scheduler with a memory-pressure dispatch gate, bounded residency, and worker decoding, so a file far larger than memory renders without ever being read whole. Any other very large format still relies on the downsampling and stride-decode fallbacks above; full tiling for non-streaming formats remains on the roadmap.
+
+EPT behaviour in practice depends on the dataset. EPT support reads both the `binary` and `laszip` tile dataTypes; in real-world use, time-to-first-render and refinement smoothness depend on the dataset's hierarchy organisation and tile density, the hosting configuration (CORS-enabled, range-capable, low-latency), the client's available browser memory, and network conditions. A well-built EPT served from a fast CDN streams comparably to COPC; a deeply unbalanced hierarchy, a slow host, or a tight-memory device can change that picture.
 
 WebGPU feature support varies by browser. Where it is unavailable, the viewer uses its WebGL 2 fallback.
 

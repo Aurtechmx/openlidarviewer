@@ -64,13 +64,13 @@ export interface SchedulerStats {
   /** Concurrent-decode budget applied this tick (≤ configured maxConcurrent). */
   effectiveMaxConcurrent: number;
   /**
-   * Task 15 — pressure-adaptation depth reduction applied this tick.
+   * Pressure-adaptation depth reduction applied this tick.
    * 0 = no pressure, refining at full depth cap;
    * positive = depth cap reduced by this many levels under sustained pressure.
    */
   pressureDepthReduction: number;
   /**
-   * Task 10 (v0.3.2) — number of full octree rescores since session start.
+   * v0.3.2 — number of full octree rescores since session start.
    * The stable-camera fast path reuses the last tick's wanted set when the
    * scheduling signature (frustum + camera position + depth cap + budget +
    * pressure reduction) is unchanged; this counter increments only when a
@@ -85,7 +85,7 @@ export interface SchedulerStats {
 const BASE_DEPTH_CAP = 18;
 
 /**
- * Phase 3 Task 9 — camera-motion awareness. The scheduler watches a
+ * Camera-motion awareness. The scheduler watches a
  * smoothed linear-velocity signal; while the camera is moving "fast" it
  * favours coarser nodes (via `depthCapForVelocity`) and halves its
  * concurrent-decode budget so a flick-and-stop never queues up megabytes
@@ -113,7 +113,7 @@ const DEFAULT_EVICT_DEFER_MS = 2_000;
 const DEFAULT_MEMORY_PRESSURE_RATIO = 1.5;
 
 /**
- * Task 15 — pressure adaptation. When the resident point count stays above
+ * Pressure adaptation. When the resident point count stays above
  * `PRESSURE_HIGH_RATIO × pointBudget` for at least `PRESSURE_HIGH_HOLD_MS`,
  * the scheduler lowers its target refinement by `PRESSURE_DEPTH_REDUCTION`
  * levels. When it falls below `PRESSURE_LOW_RATIO × pointBudget` for at
@@ -127,7 +127,7 @@ const PRESSURE_LOW_HOLD_MS = 2_000;
 const PRESSURE_DEPTH_REDUCTION = 1;
 
 /**
- * Task 10 (v0.3.2) — stable-camera fast path.
+ * v0.3.2 — stable-camera fast path.
  *
  * The scheduling signature is the tuple `(viewProjection, cameraPosition,
  * depthCap, pointBudget, pressureDepthReduction)`. When every component is
@@ -174,7 +174,7 @@ function parentKeyString(k: VoxelKey): string | null {
 /**
  * Build the set of *ancestor* keys of every resident node. A node whose own
  * key appears in this set is a parent of at least one resident node, and
- * Task 8 protects it from eviction until its descendants leave too.
+ * it protects it from eviction until its descendants leave too.
  */
 function buildAncestorProtection(nodes: readonly StreamingNode[]): Set<string> {
   const set = new Set<string>();
@@ -192,7 +192,7 @@ function buildAncestorProtection(nodes: readonly StreamingNode[]): Set<string> {
 }
 
 /**
- * Task 12 — sibling-retention bonus. Collect the parent-keys of every node in
+ * Sibling-retention bonus. Collect the parent-keys of every node in
  * the wanted-set: a deferred eviction whose node shares a parent with one of
  * these "still-wanted" siblings gets one extra window of grace, on the bet
  * that a flicker-orbit pulling one sibling will likely pull the others next.
@@ -254,7 +254,7 @@ export class StreamingScheduler {
   /** Concurrent-decode budget applied at the last `update`. */
   private _effectiveMaxConcurrent: number;
 
-  // Task 15 — pressure-adaptation state machine.
+  // Pressure adaptation — pressure-adaptation state machine.
   /** First wall time the resident/budget ratio crossed `PRESSURE_HIGH_RATIO`. */
   private _pressureHighSinceTs: number | null = null;
   /** First wall time the ratio dropped below `PRESSURE_LOW_RATIO`. */
@@ -262,7 +262,7 @@ export class StreamingScheduler {
   /** Active depth-cap reduction (0 when not under pressure). */
   private _pressureDepthReduction = 0;
 
-  // Task 10 (v0.3.2) — stable-camera fast-path cache.
+  // v0.3.2 — stable-camera fast-path cache.
   /**
    * Camera position captured at the previous full rescore. Distinct from
    * `_lastCameraPos`, which is overwritten by the velocity tracker earlier
@@ -414,7 +414,7 @@ export class StreamingScheduler {
     const startedAt = nowMs();
     this._tick++;
 
-    // Phase 3 Task 9 — smoothed camera-motion awareness. The raw position
+    // Smoothed camera-motion awareness. The raw position
     // delta over wall-clock dt gives a velocity in world units per second
     // (time-independent of tick cadence). An EWMA absorbs frame-to-frame
     // jitter, then drives both `depthCapForVelocity` (already coarse-first
@@ -445,7 +445,7 @@ export class StreamingScheduler {
       ? this._maxConcurrent
       : Math.max(1, Math.floor(this._maxConcurrent * FAST_CONCURRENCY_FACTOR));
 
-    // Task 15 — pressure adaptation. Sample the resident/budget ratio and
+    // Pressure adaptation — pressure adaptation. Sample the resident/budget ratio and
     // run the high → low → high hysteresis state machine. Holding past the
     // 90 % threshold for ≥ 1 s lowers target depth by one; falling below
     // 70 % for ≥ 2 s restores it. The band between the two ratios is the
@@ -492,7 +492,7 @@ export class StreamingScheduler {
       if (node.state === 'queued') store.setState(node, 'unloaded');
     }
 
-    // Task 10 (v0.3.2) — stable-camera fast path. If the scheduling
+    // v0.3.2 — stable-camera fast path. If the scheduling
     // signature is bit-identical to last tick's AND the periodic forced
     // rescore isn't due, reuse the cached `_lastScored` and `_lastWanted`.
     // The eviction, enqueue, and dispatch paths below still run because
@@ -570,7 +570,7 @@ export class StreamingScheduler {
       this._fullRescoreCount += 1;
     }
 
-    // Hysteresis-aware eviction (Phase 3 Task 8). A resident node that left
+    // Hysteresis-aware eviction. A resident node that left
     // the wanted-set is kept for `_evictDeferMs` before its mesh is dropped:
     // a quick camera flick or oscillating frustum no longer thrashes nodes
     // through the load → evict → reload cycle, and the compressed-chunk
@@ -580,7 +580,7 @@ export class StreamingScheduler {
     const nowTs = wallNow;
     const residents = store.resident();
     const protection = buildAncestorProtection(residents);
-    // Task 12 — sibling-retention bonus. Children of a wanted parent get a
+    // Sibling-retention bonus. Children of a wanted parent get a
     // retention bonus over orphan deferred nodes.
     const wantedParentKeys = buildWantedParentKeys(wanted, this._cloud);
 
@@ -595,7 +595,7 @@ export class StreamingScheduler {
       }
     }
 
-    // Task 12 — hierarchy-aware lapsed eviction. Walk every deferred entry:
+    // Hierarchy-aware lapsed eviction. Walk every deferred entry:
     //   1. drop dead / no-longer-resident entries from the map;
     //   2. parent-protection — children must evict before their parents;
     //   3. sibling-retention — a node whose sibling is still wanted gets
@@ -633,7 +633,7 @@ export class StreamingScheduler {
       b.depth - a.depth || b.distance - a.distance,
     );
     for (const { node } of lapsed) {
-      // Cache hysteresis (Task 13): bump the compressed chunk so a quick
+      // Cache hysteresis (hysteresis): bump the compressed chunk so a quick
       // camera return finds it warm.
       this._cache.touch(node.record.id);
       this._callbacks.onNodeEvicted(node);
@@ -661,7 +661,7 @@ export class StreamingScheduler {
           }
           const isProtected = protection.has(voxelKeyString(node.record.key));
           if (isProtected !== protectedOnly) continue;
-          // Task 13 cache hysteresis — keep the chunk warm post-eviction.
+          // cache hysteresis — keep the chunk warm post-eviction.
           this._cache.touch(id);
           this._callbacks.onNodeEvicted(node);
           store.setState(node, 'unloaded');
@@ -705,13 +705,32 @@ export class StreamingScheduler {
     return this._pointBudget;
   }
 
-  /** Cancel every queued and in-flight decode — used on close. */
+  /**
+   * Cancel every queued and in-flight decode — used on close.
+   *
+   * v0.3.3 — node-state cleanup. Aborting in-flight decodes and clearing
+   * the queue array on its own leaves leftover `queued` and `loading`
+   * state in the node store, which the diagnostics `stats()` walker
+   * continues to count. In practice the store is garbage-collected
+   * alongside the cloud on detach, so the leak is cosmetic — but reusing
+   * the same cloud across attach/detach cycles makes the stale state
+   * observable. The fix is to walk both sets and reset to `unloaded`
+   * before clearing the maps.
+   */
   stop(): void {
+    const store = this._cloud.octree.store;
+    for (const id of this._inFlight.keys()) {
+      const node = store.get(id);
+      if (node && node.state === 'loading') store.setState(node, 'unloaded');
+    }
     for (const controller of this._inFlight.values()) controller.abort();
     this._inFlight.clear();
+    for (const node of this._queue) {
+      if (node.state === 'queued') store.setState(node, 'unloaded');
+    }
     this._queue.length = 0;
     this._deferredEvictAt.clear();
-    // Task 10 (v0.3.2): a stopped scheduler must not resume into a cached
+    // v0.3.2: a stopped scheduler must not resume into a cached
     // fast path — the wanted set and scored array are no longer valid once
     // queues are cleared. Drop them so the next `update` does a fresh full
     // rescore.
@@ -721,17 +740,55 @@ export class StreamingScheduler {
 
   /**
    * Dispatch decodes until the concurrency limit is reached. Under fast
-   * camera motion the effective limit drops (Phase 3 Task 9), so streaming
-   * never queues up megabytes of decode work for nodes that are no longer
-   * wanted by the next frame.
+   * camera motion the effective limit drops (see camera-motion awareness
+   * above), so streaming never queues up megabytes of decode work for
+   * nodes that are no longer wanted by the next frame.
+   *
+   * v0.3.3 — extreme-scale dispatch gate. At 100M+ point datasets
+   * the previous behaviour was to dispatch up to `_effectiveMaxConcurrent`
+   * decodes per tick irrespective of memory pressure; freshly-resident
+   * nodes could therefore push peak residency past `1.5 × pointBudget`
+   * before the next tick's pressure pass had a chance to evict.
+   *
+   * The gate here is conservative — we estimate the in-flight cost as the
+   * source-point count of each loading node, and refuse to start a new
+   * decode while the sum of resident + in-flight already sits at the
+   * pressure cap. The estimate uses `record.pointCount` (the source-side
+   * point count from the COPC/EPT hierarchy), which is what the decoder
+   * will deliver; small over-estimates from voxel decimation only mean we
+   * dispatch slightly fewer decodes when at the boundary, never more.
    */
   private _dispatch(): void {
+    const store = this._cloud.octree.store;
+    const pressureCap = this._pointBudget * this._memoryPressureRatio;
+    let inFlightEstimate = 0;
+    for (const id of this._inFlight.keys()) {
+      const n = store.get(id);
+      if (n) inFlightEstimate += n.record.pointCount;
+    }
     while (
       this._inFlight.size < this._effectiveMaxConcurrent &&
       this._queue.length > 0
     ) {
       const node = this._queue.shift();
       if (!node || node.state !== 'queued') continue;
+      // Pressure gate — if accepting this decode would push the projected
+      // resident count past the hysteresis cap, defer it. The next scheduler
+      // `update()` tick (after eviction has had a chance to run) will
+      // re-enqueue and re-dispatch. No deadlock: `update()` runs on every
+      // animation frame and on every camera/visibility change, and the next
+      // tick's eviction pass evicts deferred nodes that the pressure pass
+      // and lapsed pass would normally drop. Bypass when nothing is resident
+      // yet — only then can a single oversized node truly block forward
+      // progress.
+      const projected =
+        store.residentPointCount + inFlightEstimate + node.record.pointCount;
+      if (projected > pressureCap && store.residentPointCount > 0) {
+        // Put it back at the head of the queue — same state, same priority.
+        this._queue.unshift(node);
+        break;
+      }
+      inFlightEstimate += node.record.pointCount;
       this._startDecode(node);
     }
   }
@@ -805,7 +862,7 @@ function nowMs(): number {
 }
 
 /**
- * Task 10 (v0.3.2) — bit-equality check on a 4×4 view-projection matrix.
+ * v0.3.2 — bit-equality check on a 4×4 view-projection matrix.
  * The caller's matrix may be a `Float32Array`, a `Float64Array`, or a plain
  * `ArrayLike<number>` (Three.js's `Matrix4.elements` is typed as the broad
  * shape). Iterates the 16 entries; returns true only on exact equality.
@@ -818,7 +875,7 @@ function vpMatches(cached: Float64Array, incoming: ArrayLike<number>): boolean {
   return true;
 }
 
-/** Task 10 (v0.3.2) — copy 16 numbers from the live VP into the cached array. */
+/** v0.3.2 — copy 16 numbers from the live VP into the cached array. */
 function copyVp(src: ArrayLike<number>, dst: Float64Array): void {
   for (let i = 0; i < 16; i++) dst[i] = src[i];
 }

@@ -3,7 +3,7 @@ import {
   streamingProfileForTier,
 } from '../src/render/streaming/streamingProfile';
 
-// --- Phase 9 Task 28 — device-profile tiers ---------------------------------
+// --- device-profile — device-profile tiers ---------------------------------
 
 test('qualityForTier maps low / medium / high to the matching quality preset', () => {
   expect(qualityForTier('low')).toBe('low');

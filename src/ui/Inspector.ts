@@ -29,6 +29,12 @@ export interface InspectorCallbacks {
    * mode; main.ts owns the lazy import and the download wiring.
    */
   onExportImage: (mode: ExportMode) => void;
+  /**
+   * v0.3.3 — generate a PDF report from the live scan + annotations
+   * + measurements using the named template. main.ts lazy-loads the
+   * report engine + pdf-lib on first click.
+   */
+  onExportReport: (templateId: string) => void;
   /** Save the current camera viewpoint. */
   onSaveView: () => void;
   /** Fly to a saved viewpoint by index. */
@@ -81,6 +87,10 @@ const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
   { mode: 'height-map',       label: 'Height Map', title: 'Top-down PNG, points coloured by elevation (Z).' },
   { mode: 'intensity',        label: 'Intensity',  title: 'Top-down PNG, points coloured by LiDAR intensity. Requires intensity in the cloud.' },
   { mode: 'classification',   label: 'Class Map',  title: 'Top-down PNG, points coloured by ASPRS classification. Requires classification in the cloud.' },
+  // v0.3.3 — completes the Studio mode catalogue.
+  { mode: 'depth',            label: 'Depth Map',  title: 'Camera-relative depth raster (v0.3.3 MVP: elevation-based proxy). Useful for ML / QA / geometry review.' },
+  { mode: 'normal',           label: 'Normal Map', title: 'RGB-encoded surface normals. Requires per-point normals (PCD / PTX / GLTF; LiDAR scans rarely include them).' },
+  { mode: 'contour',          label: 'Contour Map', title: 'Topographic contour lines at the configured interval over the elevation raster.' },
 ];
 
 function section(label: string, body: HTMLElement): HTMLElement {
@@ -135,6 +145,8 @@ export class Inspector {
   private readonly _imageExportButtons = new Map<ExportMode, HTMLButtonElement>();
   /** The original tooltip for each image-export button — restored on enable. */
   private readonly _imageExportTitles = new Map<ExportMode, string>();
+  /** v0.3.3 — the Report PDF button, gated like the image-export ones. */
+  private _reportButton: HTMLButtonElement | null = null;
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
   private readonly _edlChip: HTMLButtonElement;
@@ -270,6 +282,23 @@ export class Inspector {
     });
     const imageExporter = el('div', { className: 'olv-export' }, imageExportButtons);
 
+    // v0.3.3 — PDF Report button. Single button for the MVP;
+    // template selection is a single-button MVP.
+    // Currently dispatches the default template ('engineering-inspection').
+    const reportButton = el('button', {
+      className: 'olv-export-btn',
+      text: 'Report PDF',
+      title: 'Generate a multi-page PDF report (engineering inspection template).',
+    });
+    reportButton.disabled = true;
+    reportButton.title = `${reportButton.title} (load a scan first)`;
+    reportButton.addEventListener('click', () => {
+      reportButton.blur();
+      this._cb.onExportReport('engineering-inspection');
+    });
+    this._reportButton = reportButton;
+    const reportExporter = el('div', { className: 'olv-export' }, [reportButton]);
+
     // The header carries the panel title and — on phones, where the panel is
     // a bottom sheet — a close control.
     const sheetClose = el('button', {
@@ -294,6 +323,7 @@ export class Inspector {
       section('Saved views', views),
       section('Export', exporter),
       section('Image export', imageExporter),
+      section('Report PDF', reportExporter),
     ]);
     this._showReportPlaceholder();
     this._showViewsPlaceholder();
@@ -363,6 +393,13 @@ export class Inspector {
       button.disabled = !enabled;
       const baseTitle = this._imageExportTitles.get(mode) ?? '';
       button.title = enabled ? baseTitle : `${baseTitle} (load a scan first)`;
+    }
+    // v0.3.3 — the Report PDF button shares the same gate
+    // (a report against no cloud has nothing to summarise).
+    if (this._reportButton) {
+      this._reportButton.disabled = !enabled;
+      const base = 'Generate a multi-page PDF report (engineering inspection template).';
+      this._reportButton.title = enabled ? base : `${base} (load a scan first)`;
     }
   }
 

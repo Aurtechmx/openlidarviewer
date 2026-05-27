@@ -46,6 +46,7 @@ function stubAdapter(opts: {
   hasIntensity?: boolean;
   hasClassification?: boolean;
   hasRgb?: boolean;
+  hasNormals?: boolean;
   aabb?: readonly [number, number, number, number, number, number] | null;
   sourceName?: string;
   sourcePointCount?: number;
@@ -56,6 +57,7 @@ function stubAdapter(opts: {
     hasRgb: () => opts.hasRgb ?? true,
     hasIntensity: () => opts.hasIntensity ?? false,
     hasClassification: () => opts.hasClassification ?? false,
+    hasNormals: () => opts.hasNormals ?? false,
     localBoundsAabb: () => (opts.aabb === undefined ? [0, 0, 0, 10, 10, 5] : opts.aabb),
     // v0.3.2-Studio additions — exporters now delegate the actual render +
     // overlay work to `adapter.snapshot()`, and the scan-report card reads
@@ -122,14 +124,17 @@ test('the registry preserves insertion order in list()', () => {
   expect(r.list().map((f) => f.mode)).toEqual(['height-map', 'intensity', 'classification']);
 });
 
-test('the default registry pre-registers exactly the v0.3.2 modes', () => {
-  // v0.3.2 ships four modes; v0.3.3 will add depth here.
-  expect(defaultExportRegistry.size).toBe(4);
+test('the default registry pre-registers every v0.3.3 mode', () => {
+  // v0.3.3 completes the catalogue — seven modes total now:
+  // the four v0.3.2 modes plus depth, normal, and contour.
+  expect(defaultExportRegistry.size).toBe(7);
   expect(defaultExportRegistry.has('orthographic-rgb')).toBe(true);
   expect(defaultExportRegistry.has('height-map')).toBe(true);
   expect(defaultExportRegistry.has('intensity')).toBe(true);
   expect(defaultExportRegistry.has('classification')).toBe(true);
-  expect(defaultExportRegistry.has('depth')).toBe(false);
+  expect(defaultExportRegistry.has('depth')).toBe(true);
+  expect(defaultExportRegistry.has('normal')).toBe(true);
+  expect(defaultExportRegistry.has('contour')).toBe(true);
 });
 
 test('availableModes + unavailableModes — capability gating round-trip', () => {
@@ -340,4 +345,100 @@ test('formatTimestamp returns the YYYY-MM-DD HH:MM shape', () => {
   const d = new Date(2026, 4, 26, 22, 3);
   expect(formatTimestamp(d)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   expect(formatTimestamp(d)).toBe('2026-05-26 22:03');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.3.3 — Depth + Normal + Contour exporters
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  depthMapExporter,
+  normalMapExporter,
+  contourMapExporter,
+} from '../src/export';
+
+// — Depth Map ----------------------------------------------------------------
+
+test('depthMapExporter — identity + label', () => {
+  expect(depthMapExporter.mode).toBe('depth');
+  expect(depthMapExporter.label).toBe('Depth Map');
+});
+
+test('depthMapExporter requires a non-degenerate Z extent', () => {
+  const flat = stubContext(stubAdapter({ aabb: [0, 0, 5, 10, 10, 5] }));
+  expect(depthMapExporter.isAvailable(flat)).toBe(false);
+  expect(depthMapExporter.unavailableReason?.(flat)).toMatch(/depth/i);
+
+  const cube = stubContext(stubAdapter({ aabb: [0, 0, 0, 10, 10, 5] }));
+  expect(depthMapExporter.isAvailable(cube)).toBe(true);
+});
+
+test('depthMapExporter is unavailable when no cloud is loaded', () => {
+  const ctx = stubContext(stubAdapter({ aabb: null }));
+  expect(depthMapExporter.isAvailable(ctx)).toBe(false);
+  expect(depthMapExporter.unavailableReason?.(ctx)).toMatch(/no cloud/i);
+});
+
+// — Normal Map ---------------------------------------------------------------
+
+test('normalMapExporter — identity + label', () => {
+  expect(normalMapExporter.mode).toBe('normal');
+  expect(normalMapExporter.label).toBe('Normal Map');
+});
+
+test('normalMapExporter gates on hasNormals — typical LiDAR scans hit the message', () => {
+  // Default stub: hasNormals === false. LiDAR captures (COPC / EPT / LAS)
+  // never carry normals, so this is the common path.
+  const lidar = stubContext(stubAdapter({}));
+  expect(normalMapExporter.isAvailable(lidar)).toBe(false);
+  expect(normalMapExporter.unavailableReason?.(lidar)).toMatch(/per-point normals/i);
+
+  // Source that does carry normals (PCD / PTX / GLTF case).
+  const meshLike = stubContext(stubAdapter({ hasNormals: true }));
+  expect(normalMapExporter.isAvailable(meshLike)).toBe(true);
+});
+
+// — Contour Map --------------------------------------------------------------
+
+test('contourMapExporter — identity + label', () => {
+  expect(contourMapExporter.mode).toBe('contour');
+  expect(contourMapExporter.label).toBe('Contour Map');
+});
+
+test('contourMapExporter requires at least 10 cm of elevation range', () => {
+  const tooFlat = stubContext(stubAdapter({ aabb: [0, 0, 0, 10, 10, 0.05] }));
+  expect(contourMapExporter.isAvailable(tooFlat)).toBe(false);
+  expect(contourMapExporter.unavailableReason?.(tooFlat)).toMatch(/elevation range/i);
+
+  const lowRelief = stubContext(stubAdapter({ aabb: [0, 0, 0, 10, 10, 0.5] }));
+  expect(contourMapExporter.isAvailable(lowRelief)).toBe(true);
+});
+
+test('contourMapExporter is unavailable when no cloud is loaded', () => {
+  const ctx = stubContext(stubAdapter({ aabb: null }));
+  expect(contourMapExporter.isAvailable(ctx)).toBe(false);
+});
+
+// — Default registry now covers every v0.3.3 mode ---------------------------
+
+test('every v0.3.3 mode appears in the default registry list', () => {
+  const modes = defaultExportRegistry.list().map((f) => f.mode);
+  expect(modes).toContain('depth');
+  expect(modes).toContain('normal');
+  expect(modes).toContain('contour');
+});
+
+// — Presets cover the new exporters too ---------------------------------------
+
+test('EXPORT_PRESETS includes the three v0.3.3 presets', () => {
+  const ids = EXPORT_PRESETS.map((p) => p.id);
+  expect(ids).toContain('depth-ml');
+  expect(ids).toContain('normal-qa');
+  expect(ids).toContain('contour-review');
+});
+
+test('every v0.3.3 preset references a registered mode', () => {
+  for (const preset of EXPORT_PRESETS) {
+    expect(defaultExportRegistry.has(preset.mode)).toBe(true);
+  }
 });

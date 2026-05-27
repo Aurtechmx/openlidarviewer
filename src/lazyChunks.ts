@@ -87,3 +87,38 @@ export const loadStreamingBenchmark = () =>
 /** Load the instrumented RangeSource wrapper (network-bytes accounting). */
 export const loadInstrumentedRangeSource = () =>
   import('./io/range/InstrumentedRangeSource');
+
+/**
+ * v0.3.3 — Load the EPT (Entwine Point Tile) module: detector + types +
+ * `EptStreamingPointCloud` + binary tile decoder + `EptChunkDecoder`. Only
+ * loaded when the user opens an `ept.json` URL; never enters the initial
+ * bundle. Mirrors `loadStreamingPointCloud` (COPC) — same chunk-emission
+ * guard in `vite.config.ts` tracks it.
+ */
+export const loadEpt = () =>
+  Promise.all([
+    import('./io/ept/eptDetect'),
+    import('./render/streaming/EptStreamingPointCloud'),
+    import('./io/ept/EptChunkDecoder'),
+    import('./io/ept/eptUrlValidation'),
+  ]).then(([detect, cloud, decoder, urlValidation]) => ({
+    parseEptMetadata: detect.parseEptMetadata,
+    detectEptUrl: detect.detectEptUrl,
+    EptStreamingPointCloud: cloud.EptStreamingPointCloud,
+    EptChunkDecoder: decoder.EptChunkDecoder,
+    // v0.3.3 — remote-UX polish helpers; same chunk as the
+    // rest of the EPT runtime so the lazy boundary is preserved.
+    validateRemoteEptUrl: urlValidation.validateRemoteEptUrl,
+    describeRemoteEptError: urlValidation.describeRemoteEptError,
+  }));
+
+/**
+ * v0.3.3 — Load the PDF Report Engine. The whole `src/report/`
+ * module + the pdf-lib dependency (~150 KB) ride this single lazy
+ * boundary; non-report sessions never download either. Mirrors the
+ * Studio's `loadExportStudio()` shape — `generateReport(inputs)` is the
+ * sole public entry, with `composeReportInputs` exported for callers
+ * that want to assemble inputs separately (Studio panel → preview
+ * before render, e.g.).
+ */
+export const loadReportEngine = () => import('./report');

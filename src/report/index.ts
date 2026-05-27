@@ -1,0 +1,52 @@
+/**
+ * report/index.ts
+ *
+ * Barrel for the PDF Report Engine. The whole module lives behind the
+ * lazy `loadReportEngine()` import (see `src/lazyChunks.ts`) so neither
+ * the pure builders NOR pdf-lib (~150 KB) ever enter the initial bundle.
+ */
+
+export type {
+  ReportBranding,
+  ReportCoverInputs,
+  ReportDatasetRow,
+  ReportAnnotationRow,
+  ReportMeasurementRow,
+  ReportInputs,
+  ReportResult,
+  ReportSectionId,
+  ReportTemplate,
+  ReportTemplateId,
+  ReportVisualAsset,
+} from './types';
+
+export {
+  REPORT_TEMPLATES,
+  DEFAULT_TEMPLATE_ID,
+  getReportTemplate,
+} from './ReportTemplates';
+
+export {
+  composeReportInputs,
+  type ComposeReportInputs,
+} from './ReportAssetComposer';
+export type { MetadataInputs } from './ReportMetadataSection';
+
+export {
+  buildDatasetSummary,
+} from './ReportMetadataSection';
+export {
+  buildAnnotationRows,
+} from './ReportAnnotationSection';
+export {
+  buildMeasurementRows,
+} from './ReportMeasurementSection';
+
+export {
+  DEFAULT_ACCENT,
+  parseAccentColor,
+  effectiveBranding,
+} from './ReportBranding';
+
+export { generateReport } from './ReportEngine';
+export { renderReportPdf } from './ReportPdfRenderer';

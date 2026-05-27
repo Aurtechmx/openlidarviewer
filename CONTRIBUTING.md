@@ -27,7 +27,7 @@ instead, or describe the file's structure. See [SECURITY.md](SECURITY.md).
 ## Suggesting features
 
 Open an issue describing the use case and the problem it would solve. Check
-[`docs/roadmap.md`](docs/roadmap.md) first, since it may already be planned.
+the open issues first, since the same idea may already be under discussion.
 
 ## Pull requests
 
@@ -58,9 +58,9 @@ update the docs in the same pull request.
 ## A note on honesty
 
 Do not describe a format, feature, or accuracy level as supported unless the
-code actually supports it. Anything still in progress belongs in
-[`docs/roadmap.md`](docs/roadmap.md), not the feature list. Measurement is for
-visual inspection, so please do not describe it as survey-grade.
+code actually supports it. Anything still in progress should not be listed
+as a feature. Measurement is for visual inspection, so please do not
+describe it as survey-grade.
 
 Licensed under MIT. By contributing, you agree your contributions are licensed
 the same way.

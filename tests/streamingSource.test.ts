@@ -1,5 +1,5 @@
 /**
- * streamingSource.test.ts — v0.3.2 Phase 3 contract tests.
+ * streamingSource.test.ts — v0.3.2 streaming-source contract tests.
  *
  * Proves the `StreamingSource` interface is satisfiable by something other
  * than the existing COPC implementation, so v0.3.3 can drop in an EPT
@@ -84,6 +84,13 @@ test('the scheduler accepts any StreamingSource conforming object — EPT will p
     localBounds: () => realCloud.localBounds(),
     readNodeChunk: (record, signal) => realCloud.readNodeChunk(record, signal),
     decodeMeta: (record) => realCloud.decodeMeta(record),
+    // v0.3.3 — `defaultColorMode`, `availableColorModes`, and `crs` joined
+    // the StreamingSource interface. The stub delegates each to the real
+    // COPC cloud so the scheduler-integration test still type-checks
+    // against the wider contract.
+    defaultColorMode: () => realCloud.defaultColorMode(),
+    availableColorModes: () => realCloud.availableColorModes(),
+    crs: () => realCloud.crs(),
   };
 
   // The scheduler accepts the stub — no runtime error, no type error.

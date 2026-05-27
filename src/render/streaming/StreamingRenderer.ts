@@ -17,7 +17,7 @@
 
 import type * as THREE from 'three/webgpu';
 import type { Viewer, PointMeshHandle } from '../Viewer';
-import type { StreamingPointCloud } from './StreamingPointCloud';
+import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { ColorMode } from '../colorModes';
@@ -25,7 +25,7 @@ import { streamingNodeColors, intensityRangeOf } from './streamingColors';
 import type { StreamingColorRanges } from './streamingColors';
 
 /**
- * Phase 7 Task 25 — node fade-in tunables. A freshly resident node starts at
+ * Node fade-in tunables. A freshly resident node starts at
  * `FADE_START_OPACITY` and lerps to 1.0 over `FADE_MS`, then drops the
  * transparency flag so EDL and the post-pipeline never see a `transparent:
  * true` material once the node has settled. Disabled on mobile and on the
@@ -65,7 +65,7 @@ interface NodeMesh {
 /** Construction options for {@link StreamingRenderer}. */
 export interface StreamingRendererOptions {
   /**
-   * Task 25 — enable the cheap node fade-in on `onNodeReady`. Off on mobile
+   * Enable the cheap node fade-in on `onNodeReady`. Off on mobile
    * and the low-tier device profile; otherwise on by default. The animation
    * never affects EDL or the post-pipeline: `transparent: true` is set only
    * during the fade, with `depthWrite: true` explicitly preserved, and the
@@ -89,7 +89,7 @@ export class StreamingRenderer {
 
   constructor(
     viewer: Viewer,
-    cloud: StreamingPointCloud,
+    cloud: StreamingSource,
     mode: ColorMode,
     options: StreamingRendererOptions = {},
   ) {
@@ -139,7 +139,7 @@ export class StreamingRenderer {
       colorAttr: handle.colorAttr,
       decoded,
     });
-    // Task 25 — fade-in animation. The mesh is added at opacity 1.0 first
+    // Fade-in animation. The mesh is added at opacity 1.0 first
     // so a synchronous skip-fade environment (no rAF) still renders fully.
     if (this._fadeIn) this._startFade(handle.mesh);
   }

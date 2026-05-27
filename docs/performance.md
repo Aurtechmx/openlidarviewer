@@ -20,7 +20,7 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 
 ## Dataset size
 
-Small point clouds work on most modern laptops. Medium datasets benefit from 16 GB of RAM and a modern GPU. Very large LiDAR datasets may need downsampling, preprocessing, tiling, or future streaming formats such as COPC LAZ or 3D Tiles, and browser memory limits can affect extremely large scans.
+Small point clouds work on most modern laptops. Medium datasets benefit from 16 GB of RAM and a modern GPU. Very large LiDAR datasets are best handled through streaming formats such as COPC or EPT — opened progressively through their octree hierarchies so only what the current view needs is fetched, decoded, and uploaded to the GPU. Non-streaming formats above the point budget are downsampled on load to stay responsive; browser memory limits can still affect extremely large scans regardless of format.
 
 Clouds above a point budget of roughly 4M points are downsampled on load to stay responsive — see *Loading large files* below. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
 
@@ -48,17 +48,7 @@ For best performance, enable hardware acceleration, use a modern Chromium-based 
 
 ## Benchmarks
 
-Real benchmark numbers should be measured on representative hardware before being published. Use this table as a template.
-
-| Dataset | Points | Browser | GPU | Mode | FPS / Notes |
-|---|---:|---|---|---|---|
-| _replace_ | _replace_ | Chrome / Edge | _replace_ | Balanced | _replace_ |
-
-Replace this table with real measurements before making any performance claims.
-
-## Planned work
-
-Tiled datasets, COPC LAZ, 3D Tiles / PNTS streaming, level-of-detail controls, and performance presets for large datasets. See [roadmap.md](roadmap.md).
+Real-world figures — a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on an Apple MacBook Pro M3 Max — are recorded in [`benchmarks.md`](benchmarks.md), alongside the v0.3.3 synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
 
 ## Privacy
 

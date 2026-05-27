@@ -18,12 +18,57 @@ import type { Measurement, MeasurementKind, UnitSystem, Vec3 } from '../render/m
 import { MIN_POINTS } from '../render/measure/types';
 import type { Annotation, SavedCameraState, Vec3Object } from '../render/annotate/types';
 import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
+import type { ColorMode } from '../render/colorModes';
+import type { PointSizeMode } from '../render/pointStyle';
 
-/** Current session-file schema version. */
-export const SESSION_VERSION = 2;
+/**
+ * Current session-file schema version. v0.3.3 bumps to v3, adding:
+ *   • the live camera state (not just saved views) so a re-import lands
+ *     the viewer on the exact viewpoint the user saved;
+ *   • render settings (point size, EDL, antialiasing, size mode) so the
+ *     visual style is preserved across the round trip;
+ *   • the active colour mode (RGB / intensity / elevation / etc.);
+ *   • an optional cached scan-summary block (filename, point count, bounds,
+ *     density, CRS label) that makes the file self-describing — open the
+ *     .olvsession in a text editor and you can tell which scan it was
+ *     captured against without loading anything.
+ *
+ * Older v1 + v2 files parse with no loss — the new optional fields just
+ * read as undefined, and the Viewer falls back to its current state.
+ */
+export const SESSION_VERSION = 3;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2];
+const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3];
+
+/** v0.3.3 — the render-style snapshot the v3 schema captures. */
+export interface SessionRenderSettings {
+  pointSize: number;
+  edlEnabled: boolean;
+  edlStrength: number;
+  pointSizeMode: PointSizeMode;
+  antialiasing: boolean;
+}
+
+/**
+ * v0.3.3 — a cached scan-summary block, optional. Lets the file be self-
+ * describing (an analyst opening the .olvsession years later sees what
+ * scan it captured) without requiring the source scan to be available.
+ */
+export interface SessionScanSummary {
+  /** Source file display name. */
+  fileName: string;
+  /** Source point count. */
+  sourcePoints: number;
+  /** Source extents in metres: width × depth × height. */
+  width: number;
+  depth: number;
+  height: number;
+  /** CRS label, when known. */
+  crs?: string;
+  /** Linear unit label, when known. */
+  crsUnit?: string;
+}
 
 /** A named, saved camera viewpoint. */
 export interface SavedView {
@@ -49,6 +94,21 @@ export interface InspectionSession {
   measurements: Measurement[];
   /** Placed annotations (positions in local coordinates). */
   annotations: Annotation[];
+  /**
+   * v3 — the live camera at export time (separate from `views`, which holds
+   * the named bookmarks). On import the viewer flies to this pose, so the
+   * round-trip preserves "where I was looking when I saved".
+   */
+  camera?: SavedCameraState;
+  /** v3 — point-style + EDL + antialiasing snapshot. */
+  render?: SessionRenderSettings;
+  /** v3 — the colour mode that was active at export time. */
+  colorMode?: ColorMode;
+  /**
+   * v3 — cached source-scan metadata. Optional; useful for self-describing
+   * `.olvsession` files (`fileName`, `sourcePoints`, extents, CRS label).
+   */
+  scanSummary?: SessionScanSummary;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -60,7 +120,14 @@ const KINDS: readonly MeasurementKind[] = [
   'slope',
 ];
 
-/** Serialise a session to a pretty-printed JSON string (always schema v2). */
+/**
+ * Serialise a session to a pretty-printed JSON string (always the current
+ * `SESSION_VERSION` — v3 since v0.3.3). v3 optional fields
+ * (`camera`, `render`, `colorMode`, `scanSummary`) are included whenever
+ * the caller supplied them; absent fields are omitted from the JSON to
+ * keep the v1/v2 baseline byte-shape unchanged for files that don't use
+ * the new surface.
+ */
 export function serializeSession(
   session: Omit<InspectionSession, 'app' | 'kind' | 'version'>,
 ): string {
@@ -75,6 +142,10 @@ export function serializeSession(
     measurements: session.measurements,
     annotations: session.annotations,
   };
+  if (session.camera) doc.camera = session.camera;
+  if (session.render) doc.render = session.render;
+  if (session.colorMode) doc.colorMode = session.colorMode;
+  if (session.scanSummary) doc.scanSummary = session.scanSummary;
   return JSON.stringify(doc, null, 2);
 }
 
@@ -100,7 +171,7 @@ export function parseSession(text: string): InspectionSession {
   if (typeof raw.version !== 'number' || !SUPPORTED_VERSIONS.includes(raw.version)) {
     throw new Error(`Unsupported session version: ${String(raw.version)}.`);
   }
-  return {
+  const out: InspectionSession = {
     app: 'OpenLiDARViewer',
     kind: 'measurement-session',
     version: SESSION_VERSION,
@@ -111,6 +182,19 @@ export function parseSession(text: string): InspectionSession {
     measurements: parseMeasurements(raw.measurements),
     annotations: parseAnnotations(raw.annotations),
   };
+  // v3 optional fields — older files leave them as undefined, the Viewer
+  // falls back to its current state. Malformed fields are dropped (not
+  // throwing) so a partly-broken v3 file still imports the parts that
+  // ARE valid.
+  if (isRecord(raw.camera)) out.camera = parseCameraState(raw.camera);
+  const render = parseRenderSettings(raw.render);
+  if (render) out.render = render;
+  if (typeof raw.colorMode === 'string' && isColorMode(raw.colorMode)) {
+    out.colorMode = raw.colorMode;
+  }
+  const scanSummary = parseScanSummary(raw.scanSummary);
+  if (scanSummary) out.scanSummary = scanSummary;
+  return out;
 }
 
 // --- validation helpers ----------------------------------------------------
@@ -231,4 +315,64 @@ function parseAnnotations(v: unknown): Annotation[] {
 function freshMeasurementId(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   return c?.randomUUID ? c.randomUUID() : `m_${Math.random().toString(36).slice(2, 11)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v3 helpers — added in v0.3.3
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Type guard for the runtime's ColorMode union. */
+function isColorMode(v: string): v is ColorMode {
+  return v === 'rgb' || v === 'intensity' || v === 'elevation'
+      || v === 'classification' || v === 'normal';
+}
+
+/** Type guard for the runtime's PointSizeMode union. */
+function isPointSizeMode(v: unknown): v is PointSizeMode {
+  return v === 'fixed' || v === 'adaptive';
+}
+
+/**
+ * Parse a v3 render-settings block. Returns `null` if the block is missing,
+ * malformed, or carries no recognisable fields. Each individual field is
+ * defensively parsed so a partial block still yields what's valid (e.g.
+ * a missing `edlStrength` doesn't drop the rest).
+ */
+function parseRenderSettings(v: unknown): SessionRenderSettings | null {
+  if (!isRecord(v)) return null;
+  // Demand at least one valid field — otherwise the block is meaningless.
+  const hasAny =
+    isFiniteNumber(v.pointSize) ||
+    typeof v.edlEnabled === 'boolean' ||
+    isFiniteNumber(v.edlStrength) ||
+    isPointSizeMode(v.pointSizeMode) ||
+    typeof v.antialiasing === 'boolean';
+  if (!hasAny) return null;
+  return {
+    pointSize: isFiniteNumber(v.pointSize) ? v.pointSize : 1.5,
+    edlEnabled: typeof v.edlEnabled === 'boolean' ? v.edlEnabled : false,
+    edlStrength: isFiniteNumber(v.edlStrength) ? v.edlStrength : 0.4,
+    pointSizeMode: isPointSizeMode(v.pointSizeMode) ? v.pointSizeMode : 'adaptive',
+    antialiasing: typeof v.antialiasing === 'boolean' ? v.antialiasing : true,
+  };
+}
+
+/** Parse the optional self-describing scan-summary block. */
+function parseScanSummary(v: unknown): SessionScanSummary | null {
+  if (!isRecord(v)) return null;
+  if (typeof v.fileName !== 'string') return null;
+  if (!isFiniteNumber(v.sourcePoints)) return null;
+  if (!isFiniteNumber(v.width) || !isFiniteNumber(v.depth) || !isFiniteNumber(v.height)) {
+    return null;
+  }
+  const out: SessionScanSummary = {
+    fileName: v.fileName,
+    sourcePoints: v.sourcePoints,
+    width: v.width,
+    depth: v.depth,
+    height: v.height,
+  };
+  if (typeof v.crs === 'string' && v.crs.length > 0) out.crs = v.crs;
+  if (typeof v.crsUnit === 'string' && v.crsUnit.length > 0) out.crsUnit = v.crsUnit;
+  return out;
 }

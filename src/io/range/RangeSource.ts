@@ -38,7 +38,7 @@ export interface RangeSource {
 
 /**
  * Why a range read failed — drives clear, categorised messaging. The set is
- * deliberately small but precise; Phase 5 added the `timeout`,
+ * deliberately small but precise; v0.3.1 added the `timeout`,
  * `content-mismatch`, and `server-error` codes so the remote-COPC UX can show
  * a specific message instead of falling back to a generic transport label.
  */
@@ -94,7 +94,7 @@ export function clampRange(offset: number, length: number, size: number): number
 export const MAX_REMOTE_COPC_URL_LENGTH = 2048;
 
 /**
- * Task 20 — URL hygiene for the remote-COPC entry. The URL must parse, use
+ * URL hygiene — URL hygiene for the remote-COPC entry. The URL must parse, use
  * `http:` or `https:`, fit within {@link MAX_REMOTE_COPC_URL_LENGTH}, and
  * carry no userinfo (`user:pass@…` — never expose credentials through a
  * scan link). Returns the original URL on success and a precise reason on

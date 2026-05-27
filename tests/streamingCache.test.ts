@@ -108,7 +108,7 @@ test('resetCounters() zeros the outcome counters without dropping entries', () =
   expect(cache.has('a')).toBe(true);
 });
 
-// --- Phase 4 Task 13 — cache hysteresis -------------------------------------
+// --- hysteresis — cache hysteresis -------------------------------------
 
 test('touch() bumps an entry to most-recently-used so it outlives later inserts', () => {
   const cache = new CompressedChunkCache(250);

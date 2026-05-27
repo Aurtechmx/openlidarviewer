@@ -104,7 +104,7 @@ test('rapid camera movement keeps residency bounded and never crashes', async ()
     budgets,
   );
   // Jump the camera around — each update reprioritises and re-evicts.
-  // v0.3.1 introduces eviction hysteresis (Phase 3 Task 8): a node that
+  // v0.3.1 introduces eviction hysteresis: a node that
   // leaves the wanted set is held briefly so a quick camera flick doesn't
   // thrash. The bound becomes `budget × memoryPressureRatio` (1.5× by
   // default) — over that, the scheduler drops deferred nodes immediately.
@@ -147,11 +147,11 @@ test('scheduler.stop cancels in-flight decodes — nothing is left resident', as
   expect(cloud.counts().resident).toBe(0);
 });
 
-// --- Phase 10 Task 31 — abort signal discipline -----------------------------
+// --- Abort-signal discipline -----------------------------
 
-test('Task 31 — a decode that resolves AFTER stop never calls onNodeReady', async () => {
+test('a decode that resolves AFTER stop never calls onNodeReady', async () => {
   const cloud = await openBig();
-  // Worst case for Task 31's "post-close ghost chunks" invariant: a
+  // Worst case for the post-close "post-close ghost chunks" invariant: a
   // misbehaving decoder that ignores the AbortSignal and resolves anyway.
   // The scheduler's post-decode `if (controller.signal.aborted)` guard is
   // what saves us — onNodeReady must NOT fire for any of these resolutions.

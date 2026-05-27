@@ -106,6 +106,21 @@ function chunkEmissionGuard() {
     // v0.3.2 — Visual Export Studio (orthographic-rgb / height-map /
     // intensity / classification; depth lands in v0.3.3).
     'export',
+    // v0.3.3 — EPT (Entwine Point Tile) module: detection + streaming
+    // source + binary tile decoder + chunk decoder. All lazy — only
+    // loaded when the user opens an ept.json URL. Pinned here so a
+    // refactor that accidentally drags EPT into the initial bundle
+    // fails the obfuscated build loudly.
+    'eptDetect',
+    'EptStreamingPointCloud',
+    'EptChunkDecoder',
+    // v0.3.3 Phase 9 — EPT remote-UX polish (URL validator + error
+    // classifier). Pinned so a refactor that drags it into the initial
+    // bundle fails the obfuscated build loudly.
+    'eptUrlValidation',
+    // v0.3.3 Phase 2 — PDF Report Engine + pdf-lib (~150 KB dep).
+    // Lazy — only loaded when the user clicks Export → Report PDF.
+    'report',
   ];
   return {
     name: 'olv-chunk-emission-guard',

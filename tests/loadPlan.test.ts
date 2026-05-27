@@ -202,7 +202,7 @@ describe('planLoad — mode selection', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// planLoad — mobile awareness (Task 10)
+// planLoad — mobile awareness
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('planLoad — mobile awareness', () => {
@@ -226,7 +226,7 @@ describe('planLoad — mobile awareness', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// planLoad — the memory guard (Task 7)
+// planLoad — the memory guard
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('planLoad — memory guard', () => {

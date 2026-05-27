@@ -287,7 +287,13 @@ type LazPerfModule = Awaited<ReturnType<typeof createLazPerf>>;
  */
 let lazPerfModule: Promise<LazPerfModule> | undefined;
 
-function getLazPerf(): Promise<LazPerfModule> {
+/**
+ * v0.3.3 — exported so the EPT laszip tile decoder can reuse the same
+ * cached WASM module. The single-instantiation contract (one WASM
+ * compile + initialise per session, ~30-50 ms) is the load-bearing
+ * performance guarantee — every EPT tile decode hits the cached path.
+ */
+export function getLazPerf(): Promise<LazPerfModule> {
   const existing = lazPerfModule;
   if (existing) return existing;
   const mod = createLazPerf({ wasmBinary: lazPerfWasmBinary() }).catch((err: unknown) => {

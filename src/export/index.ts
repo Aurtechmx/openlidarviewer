@@ -62,6 +62,9 @@ export { orthographicRgbExporter, orthoCameraForPerspective } from './Orthograph
 export { heightMapExporter, HEIGHT_MAP_RAMPS, HEIGHT_MAP_RESOLUTIONS } from './HeightMapExporter';
 export { intensityExporter } from './IntensityExporter';
 export { classificationExporter } from './ClassificationExporter';
+export { depthMapExporter } from './DepthMapExporter';
+export { normalMapExporter } from './NormalMapExporter';
+export { contourMapExporter } from './ContourMapExporter';
 export {
   asprsLabel,
   DEFAULT_LEGEND_CODES,
@@ -83,6 +86,9 @@ import { orthographicRgbExporter } from './OrthographicRgbExporter';
 import { heightMapExporter } from './HeightMapExporter';
 import { intensityExporter } from './IntensityExporter';
 import { classificationExporter } from './ClassificationExporter';
+import { depthMapExporter } from './DepthMapExporter';
+import { normalMapExporter } from './NormalMapExporter';
+import { contourMapExporter } from './ContourMapExporter';
 
 /**
  * The default registry, pre-populated with every mode v0.3.2 ships.
@@ -93,6 +99,10 @@ defaultExportRegistry.register(orthographicRgbExporter);
 defaultExportRegistry.register(heightMapExporter);
 defaultExportRegistry.register(intensityExporter);
 defaultExportRegistry.register(classificationExporter);
+// v0.3.3 — completes the Studio mode catalogue.
+defaultExportRegistry.register(depthMapExporter);
+defaultExportRegistry.register(normalMapExporter);
+defaultExportRegistry.register(contourMapExporter);
 
 /** @deprecated Use {@link defaultExportRegistry}. */
 export const defaultImageExportRegistry = defaultExportRegistry;

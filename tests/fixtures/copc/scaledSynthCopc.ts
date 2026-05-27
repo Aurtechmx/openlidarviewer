@@ -144,7 +144,30 @@ export const STRESS_TIERS = {
   '100M': 100_000_000,
   '250M': 250_000_000,
   '500M': 500_000_000,
+  /**
+   * Extreme-scale tier — 1 billion synthetic points. Generated with
+   * a larger `pointsPerNode` (50K) so the hierarchy stays at ~20K nodes
+   * instead of generating 200K nodes the synthetic builder would balloon to
+   * at default density. The hierarchy density is irrelevant to what the
+   * stress harness measures (scheduler residency bounds + thrash-free
+   * eviction); larger per-node payloads better match real-world COPC files
+   * at this scale, where AVERAGE node density rises with depth anyway.
+   */
+  '1B': 1_000_000_000,
 } as const;
 
-/** Stress-tier names — `'1M' | '10M' | '100M' | '250M' | '500M'`. */
+/** Stress-tier names — `'1M' | '10M' | '100M' | '250M' | '500M' | '1B'`. */
 export type StressTier = keyof typeof STRESS_TIERS;
+
+/**
+ * Per-tier `pointsPerNode` override. Keep total node count
+ * tractable at the largest tiers (the synthetic generator scales linearly
+ * with node count; 1B points at the default 5K/node would be 200K nodes
+ * which is fine for the data structure but inflates the time the test
+ * spends walking it). Real-world COPC files at this scale have similar
+ * average density (50K-200K points per leaf node).
+ */
+export const STRESS_TIER_POINTS_PER_NODE: Partial<Record<StressTier, number>> = {
+  '500M': 25_000,
+  '1B': 50_000,
+};

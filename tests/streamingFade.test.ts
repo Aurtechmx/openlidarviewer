@@ -4,7 +4,7 @@ import {
   FADE_START_OPACITY,
 } from '../src/render/streaming/StreamingRenderer';
 
-// --- Phase 7 Task 25 — node fade-in math ------------------------------------
+// --- fade-in — node fade-in math ------------------------------------
 
 test('fadeOpacity returns the start opacity at elapsed=0', () => {
   expect(fadeOpacity(0, FADE_MS, FADE_START_OPACITY)).toBeCloseTo(FADE_START_OPACITY, 6);

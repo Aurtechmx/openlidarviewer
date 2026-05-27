@@ -163,6 +163,16 @@ Measurement is meant for visual inspection and research, not survey-grade use. T
 
 Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Full detail is in [`docs/supported-formats.md`](docs/supported-formats.md).
 
+**Recommended formats for large datasets:**
+
+- COPC (`.copc.laz`)
+- EPT (`ept.json`)
+
+**Recommended formats for lightweight sharing:**
+
+- PLY
+- GLB
+
 ## System Requirements
 
 OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device.
@@ -176,7 +186,17 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 | GPU | Integrated GPU with WebGL 2.0 | Dedicated GPU, or modern Apple Silicon / integrated GPU |
 | Browser | WebGL 2.0 compatible | WebGL 2.0 and WebGPU-capable |
 
-Very large LiDAR datasets are best handled as COPC, which streams progressively with bounded memory; other very large formats may need downsampling or preprocessing. Full detail is in [`docs/performance.md`](docs/performance.md).
+**Recommended browsers:**
+
+- Chrome
+- Edge
+
+**Supported browsers:**
+
+- Firefox
+- Safari (WebGL fallback may apply)
+
+Very large LiDAR datasets are best handled as COPC or EPT, which stream progressively with bounded memory; other very large formats may need downsampling or preprocessing. Full detail is in [`docs/performance.md`](docs/performance.md).
 
 ## Mobile Browser Support
 
@@ -265,10 +285,20 @@ npm run preview
 7. Measure distance, polyline, area, height, angle, or slope inside the point cloud.
 8. Annotate points of interest with categorised notes, and inspect or probe individual points.
 9. Save viewpoints for repeated inspection.
-10. Export a PNG snapshot, re-export the cloud as PLY, OBJ, XYZ, or CSV, or save a JSON inspection session.
-10. Close the scan from the tool dock to return to the start and open another.
+10. Export a PNG snapshot, re-export the cloud as PLY, OBJ, XYZ, or CSV, or save the full working state as a `.olvsession` package.
+11. Close the scan from the tool dock to return to the start and open another.
 
 A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
+
+## Recommended Workflows
+
+A short list of practical workflows the v0.3.3 toolkit is well-suited for. Each one assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
+
+- **Large streaming dataset review.** Open COPC (`.copc.laz`) or EPT (`ept.json`) datasets directly — local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
+- **Inspection reporting.** Annotate findings → measure distances, areas, slopes, or angles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Five built-in templates and brand-aware accent + logo support.
+- **Terrain analysis.** Export height maps or contour maps from drone LiDAR datasets, with legend customisation and unit-system control. Useful for slope review, elevation comparison, and quick topographic figures.
+- **Classification QA.** Export classification maps for validation workflows; toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession` for follow-up review.
+- **Mobile scan review.** Open lightweight datasets — `.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar iPhone/Android scanners — on tablets or phones. The viewer adapts rendering detail and Eye Dome Lighting defaults for weaker GPUs so a phone scan is readable from the first frame.
 
 ## Architecture Overview
 
@@ -280,23 +310,20 @@ Performance depends on point count, browser memory, GPU capability, point size, 
 
 For real-world figures — a 9.6M-point drone LAZ survey and a 55K-point iPhone scan, both opened from one drag-and-drop — see [`docs/benchmarks.md`](docs/benchmarks.md).
 
-COPC streaming — local and remote — ships in v0.3.0. Planned performance work includes tiled datasets for non-COPC formats, 3D Tiles / PNTS, and level-of-detail controls. See [`docs/performance.md`](docs/performance.md).
+COPC streaming — local and remote — ships in v0.3.0 and is hardened across v0.3.1 / v0.3.3 with a view-dependent scheduler, hierarchy-aware eviction, a dispatch-pressure gate that bounds residency under 1B-synthetic-point stress, and trustworthy picking against actively-refining clouds. EPT (Entwine Point Tile) joins COPC as a first-class peer in v0.3.3. See [`docs/performance.md`](docs/performance.md) and [`docs/streaming.md`](docs/streaming.md).
 
-## Roadmap
+## What's in this release
 
-- [ ] Broaden LAS / LAZ point-format coverage
-- [ ] Add PCD and PTS/PTX support
-- [x] Add COPC LAZ support for large cloud-optimised datasets — local and remote streaming (0.3.0)
-- [ ] Add 3D Tiles / PNTS streaming
-- [ ] Cross-section and profile measurement
-- [ ] Slicing and clipping tools
-- [ ] Camera path recording
-- [ ] Exportable scan reports
-- [ ] Performance presets and level-of-detail for large datasets
-- [ ] Better iPhone LiDAR and drone LiDAR workflow compatibility
-- [ ] Sample datasets and demo scenes
-
-The full, grouped roadmap is in [`docs/roadmap.md`](docs/roadmap.md).
+- COPC LAZ streaming — local and remote (0.3.0); hardened across 0.3.1–0.3.3
+- EPT (Entwine Point Tile) streaming — local and remote, `binary` and `laszip` tiles (0.3.3)
+- PCD, PTS, PTX static imports
+- Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, contour (0.3.2–0.3.3)
+- Multi-page PDF technical reports — five built-in templates with branding and unit-system awareness (0.3.3)
+- `.olvsession` session round-trip — camera, render settings, colour mode, annotations, measurements, scan metadata (0.3.3)
+- Measurement toolkit — distance, polyline, area, height, angle, slope
+- Annotation system with categorised markers and notes
+- Point inspector and live probe
+- WebGPU primary path with a WebGL 2 fallback
 
 ## Current Limitations
 

@@ -18,10 +18,11 @@ Format support is still evolving. This page separates what works today from what
 | `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded |
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
 | `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming — see [streaming.md](streaming.md) |
+| `EPT` | Entwine Point Tile | `ept.json` manifest + hierarchy + tiles; binary and laszip tile decode; local and remote — see [streaming.md](streaming.md) |
 
 ## Current export targets
 
-`PLY`, `OBJ`, `XYZ`, and `CSV`, re-exported in real-world (global) coordinates, plus `PNG` snapshots of the current view.
+`PLY`, `OBJ`, `XYZ`, and `CSV`, re-exported in real-world (global) coordinates, plus `PNG` snapshots of the current view (orthographic RGB, height map, intensity, classification, depth, normal, contour with legend customisation). Multi-page **PDF technical reports** (cover page + dataset summary + embedded image exports + annotations + measurements + technical notes; five built-in templates) ship as of v0.3.3. Working state — camera, render settings, colour mode, annotations, measurements, scan metadata — round-trips through the `.olvsession` JSON package.
 
 ## iPhone and mobile scan exports
 
@@ -45,7 +46,11 @@ Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large
 
 ## Large-scale and web formats
 
-`COPC` (Cloud Optimized Point Cloud) `.copc.laz` files stream today — opened progressively through their octree hierarchy with partial range reads, worker-based decoding, and bounded memory. See [streaming.md](streaming.md). Remote COPC over HTTP range requests is planned for v0.3.1. `3D Tiles` / `PNTS` (tiled, streamable point clouds) remain on the roadmap.
+`COPC` (Cloud Optimized Point Cloud) `.copc.laz` files stream today — opened progressively through their octree hierarchy with partial range reads, worker-based decoding, and bounded memory. Remote COPC over HTTP range requests ships in v0.3.1 with fail-fast URL validation and classified error messages.
+
+`EPT` (Entwine Point Tile) joins COPC as a first-class streaming source in v0.3.3 — a `ept.json` URL opens an EPT dataset progressively. Both `binary` and `laszip` tile dataTypes are supported; the laz-perf WASM module is shared with the COPC path so a session that touches both formats pays the WASM cost only once. Remote EPT carries the same URL-validation + error-classification polish as remote COPC. See [streaming.md](streaming.md).
+
+`3D Tiles` / `PNTS` (tiled, streamable point clouds) are not currently supported.
 
 ## Mobile Scan Exports
 
@@ -65,4 +70,4 @@ Trademark note: OpenLiDARViewer is not affiliated with, endorsed by, or sponsore
 
 ## Notes
 
-Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Very large files may need downsampling, tiling, or conversion before they load smoothly. Anything listed as planned is not implemented yet. See [roadmap.md](roadmap.md).
+Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Very large files may need downsampling, tiling, or conversion before they load smoothly.

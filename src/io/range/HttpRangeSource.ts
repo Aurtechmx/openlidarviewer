@@ -9,11 +9,11 @@
  * link — so a Cloud Optimized Point Cloud hosted on a CORS-enabled server
  * streams exactly like a local file.
  *
- * v0.3.1 Phase 5 hardens the remote path with: (a) bounded exponential-
- * backoff retries on transient transport failures (Task 16), (b) hard
- * per-attempt request timeouts (Task 17), (c) `Content-Range` validation on
- * 206 responses (Task 18), (d) a `Range: bytes=0-0` GET fallback when HEAD
- * is unusable (Task 19). The new behaviour is fully dependency-injected for
+ * v0.3.1 hardens the remote path with: (a) bounded exponential-
+ * backoff retries on transient transport failures (retry-with-backoff), (b) hard
+ * per-attempt request timeouts (per-attempt timeout), (c) `Content-Range` validation on
+ * 206 responses (Content-Range validation), (d) a `Range: bytes=0-0` GET fallback when HEAD
+ * is unusable (ranged-GET fallback). The new behaviour is fully dependency-injected for
  * deterministic tests — pass a fake `fetchImpl`, `now`, and `random` and
  * exercise the retry / timeout / mismatch paths exactly.
  *
@@ -86,7 +86,7 @@ export class HttpRangeSource implements RangeSource {
    * Discover the server's size and confirm range support. Tries HEAD first;
    * if that returns a hard 4xx (most often a CDN that refuses HEAD) or
    * arrives without a usable `Content-Length`, falls back to a single
-   * `Range: bytes=0-0` GET — Phase 5 Task 19 — which proves range support
+   * `Range: bytes=0-0` GET which proves range support
    * and discovers the total size via the response's `Content-Range`.
    *
    * Throws a categorised {@link RangeReadError} on failure: `transport` for
@@ -170,7 +170,7 @@ export class HttpRangeSource implements RangeSource {
         `Range read returned an unexpected status ${response.status}`,
       );
     }
-    // Task 18 — Content-Range validation. A 206 must carry a Content-Range
+    // Content-Range validation — Content-Range validation. A 206 must carry a Content-Range
     // header identifying the served bytes; any mismatch with what we asked
     // for makes the response untrustworthy.
     const contentRange = response.headers.get('content-range');
@@ -186,7 +186,7 @@ export class HttpRangeSource implements RangeSource {
   /**
    * Discover size via a `Range: bytes=0-0` GET when HEAD is unusable.
    * Reads the one byte and parses the response's `Content-Range:` to
-   * extract the total size. Phase 5 Task 19.
+   * extract the total size.
    */
   private async _probeViaRangedGet(signal?: AbortSignal): Promise<number> {
     const response = await this._fetchWithRetryAndTimeout(
@@ -217,8 +217,8 @@ export class HttpRangeSource implements RangeSource {
   }
 
   /**
-   * Wrap a single `fetch` call with: a per-attempt hard timeout (Task 17),
-   * exponential-backoff retries on transient transport failures (Task 16),
+   * Wrap a single `fetch` call with: a per-attempt hard timeout (per-attempt timeout),
+   * exponential-backoff retries on transient transport failures (retry-with-backoff),
    * and proper signal composition so the caller's cancel still wins. Every
    * non-retryable response is returned unchanged for the caller to inspect.
    */

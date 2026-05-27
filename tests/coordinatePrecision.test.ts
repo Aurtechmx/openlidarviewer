@@ -1,11 +1,11 @@
 /**
- * coordinatePrecision.test.ts — v0.3.1 Phase 10 Task 32.
+ * coordinatePrecision.test.ts — v0.3.1.
  *
  * Verifies that points within ±10 km of the cloud's render origin retain
  * sub-millimetre precision when stored in the `Float32Array` buffers used
  * by every streaming and static cloud, so an octree node 10 km out still
  * renders without f32 jitter. The bound is the published acceptance
- * criterion for Task 32; the test pins it so a regression (e.g. a switch
+ * criterion for the v0.3.1 precision contract; the test pins it so a regression (e.g. a switch
  * to `Float16` or a wider local-space) fails CI loudly.
  *
  * Pure — no DOM, no three.js — exercises only `Math` and typed arrays.
@@ -26,7 +26,7 @@ function maxResidualMetres(coords: readonly number[]): number {
   return max;
 }
 
-// --- Task 32 acceptance — sub-mm precision inside ±10 km of the origin ------
+// --- sub-mm precision inside ±10 km of the origin ------
 
 test('a single point 10 km from the render origin stays within 2 mm after f32 round-trip', () => {
   // 10 km, plus a sub-metre offset that's hostile to f32 precision (a

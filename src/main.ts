@@ -18,7 +18,9 @@ import { describeLoadError } from './io/loadErrors';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
 import { parseEmbedConfig } from './ui/embedConfig';
-import { startEmbedBridge } from './ui/embedBridge';
+// v0.3.3 — `startEmbedBridge` is only wired in `?embed=1` mode.
+// Lazy-loaded so the bridge code never enters the bundle for the typical
+// non-iframe page load (the dominant traffic pattern).
 import { encodeShareState, decodeShareState } from './io/shareState';
 import type { ShareState } from './io/shareState';
 import { formatProgress } from './io/loadProgress';
@@ -67,8 +69,10 @@ import {
   loadStreamingColors,
   loadLocalFileRangeSource,
   loadHttpRangeSource,
+  loadEpt,
   loadExporters,
   loadExportStudio,
+  loadReportEngine,
   loadDebugOverlay,
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
@@ -109,7 +113,7 @@ const stage = new Stage(app, {
   samples: SAMPLES,
   onSample: loadFromUrl,
   onOpenFile: (file) => void handleFile(file),
-  onOpenUrl: (url) => void handleRemoteCopc(url),
+  onOpenUrl: (url) => void handleRemoteUrl(url),
 });
 const viewer = new Viewer(stage.canvas);
 
@@ -258,6 +262,18 @@ const inspector = new Inspector({
         // browsers when the alert is fired synchronously during a render).
         setTimeout(() => window.alert(`Image export failed: ${msg}`), 0);
       });
+  },
+  onExportReport: (templateId) => {
+    // v0.3.3 — generate a PDF report from the live scan state +
+    // annotations + measurements. The whole `src/report/` module + pdf-lib
+    // (~150 KB) lives behind `loadReportEngine()`; first click downloads
+    // both. The report covers what the scan-report card already does on
+    // PNG exports, but as a multi-page PDF with the full Inspector context.
+    void generateReportPdf(templateId).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[report]', err);
+      setTimeout(() => window.alert(`Report generation failed: ${msg}`), 0);
+    });
   },
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
@@ -494,14 +510,21 @@ if (!bareMode) {
   }
 }
 
-// The cross-frame control bridge — active only in embed mode.
+// v0.3.3 — the cross-frame control bridge is now lazy-loaded.
+// `?embed=1` is a minority of traffic; non-embed loads should not pay
+// the ~5 KB embed-bridge cost.
+async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge').startEmbedBridge> {
+  const m = await import('./ui/embedBridge');
+  return m.startEmbedBridge;
+}
+
 if (embed) {
-  startEmbedBridge({
+  void startEmbedBridgeLazy().then((startEmbedBridge) => startEmbedBridge({
     onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
     onJumpCamera: (camera) => viewer.applyCameraState(camera),
     onToggleLayer: (id, visible) => viewer.setCloudVisible(id, visible),
     onFocusAnnotation: (id) => viewer.jumpToAnnotation(id),
-  });
+  }));
 }
 
 // `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).
@@ -514,7 +537,7 @@ if (embedConfig.autoloadSample) {
 // thus a shareable, bookmarkable deep link — the format's core use case. The
 // streaming pipeline reads it progressively over HTTP range requests.
 const copcUrlParam = urlParams.get('copc');
-if (copcUrlParam) void handleRemoteCopc(copcUrlParam);
+if (copcUrlParam) void handleRemoteUrl(copcUrlParam);
 
 // The developer performance overlay — surfaced only by `?debug=1` or
 // `?benchmark=1`. It polls the viewer for live frame stats on a throttled
@@ -641,6 +664,83 @@ function schedulePrewarm(): void {
   } else {
     setTimeout(fire, 1500);
   }
+}
+
+/**
+ * v0.3.3 — assemble + render a PDF report from the live state.
+ * Lazy-loads the report engine (which pulls pdf-lib) on first call.
+ * Returns a Promise so the caller can surface errors via toast/alert.
+ *
+ * MVP shape: pulls the active streaming OR static cloud's metadata,
+ * the current annotations + measurements + unit system, and assembles
+ * a `ReportInputs`. Visuals + technical notes are queued for a UI-
+ * coupled follow-up (the user will pre-render image exports + type
+ * notes via a follow-on Studio-panel dialog). The engineering-
+ * inspection template renders cleanly without visuals.
+ */
+async function generateReportPdf(templateId: string): Promise<void> {
+  const report = await loadReportEngine();
+  const streamingCloud = viewer.streamingCloud;
+  const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
+  if (!streamingCloud && !staticCloud) {
+    throw new Error('Load a scan first.');
+  }
+
+  // Build the MetadataInputs the composer + dataset-summary section need.
+  let metadata: import('./report').MetadataInputs;
+  let exportFileStem: string;
+  if (streamingCloud) {
+    const b = streamingCloud.localBounds();
+    const w = b[3] - b[0], d = b[4] - b[1], h = b[5] - b[2];
+    const density = w > 0 && d > 0
+      ? streamingCloud.sourcePointCount / (w * d)
+      : NaN;
+    const crs = streamingCloud.crs();
+    const modes = streamingCloud.availableColorModes();
+    metadata = {
+      fileName: streamingCloud.name,
+      format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
+      sourcePointCount: streamingCloud.sourcePointCount,
+      width: w, depth: d, height: h, density,
+      hasRgb: modes.includes('rgb'),
+      hasIntensity: modes.includes('intensity'),
+      hasClassification: modes.includes('classification'),
+      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+    };
+    exportFileStem = baseName(streamingCloud.name);
+  } else if (staticCloud) {
+    const b = staticCloud.bounds();
+    const w = b.max[0] - b.min[0], d = b.max[1] - b.min[1], h = b.max[2] - b.min[2];
+    const density = w > 0 && d > 0 ? staticCloud.pointCount / (w * d) : NaN;
+    const crs = staticCloud.metadata?.crs;
+    metadata = {
+      fileName: staticCloud.name,
+      format: staticCloud.sourceFormat.toUpperCase(),
+      sourcePointCount: staticCloud.pointCount,
+      width: w, depth: d, height: h, density,
+      hasRgb: !!staticCloud.colors,
+      hasIntensity: !!staticCloud.intensity,
+      hasClassification: !!staticCloud.classification,
+      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+    };
+    exportFileStem = baseName(staticCloud.name);
+  } else {
+    throw new Error('Load a scan first.');
+  }
+
+  const inputs = report.composeReportInputs({
+    templateId: templateId as import('./report').ReportTemplateId,
+    title: 'Scan Report',
+    subtitle: undefined,
+    metadata,
+    visuals: [],          // user-pre-rendered Studio exports
+    annotations: viewer.annotate.getAnnotations(),
+    measurements: viewer.measure.getMeasurements(),
+    unitSystem: viewer.measure.unitSystem,
+  });
+
+  const result = await report.generateReport(inputs);
+  downloadBlob(`${exportFileStem}-report.pdf`, result.blob);
 }
 
 /** Trigger a client-side download of text content. */
@@ -799,6 +899,42 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
 function exportSession(): void {
   const cloud = activeId ? viewer.getCloud(activeId) : undefined;
   const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
+
+  // v0.3.3 — populate the v3 fields so the .olvsession captures
+  // the full working state, not just the inspection annotations. The
+  // optional fields are only emitted when there's something meaningful
+  // to write — a session exported with no scan loaded won't pollute
+  // the file with bogus render defaults.
+  const streamingCloud = viewer.streamingCloud;
+  const exportFileName = streamingCloud?.name
+    ?? (cloud ? cloud.name : null);
+
+  let scanSummary: import('./io/session').SessionScanSummary | undefined;
+  if (streamingCloud) {
+    const b = streamingCloud.localBounds();
+    const crs = streamingCloud.crs();
+    scanSummary = {
+      fileName: streamingCloud.name,
+      sourcePoints: streamingCloud.sourcePointCount,
+      width: b[3] - b[0],
+      depth: b[4] - b[1],
+      height: b[5] - b[2],
+      ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit } : {}),
+    };
+  } else if (cloud) {
+    const b = cloud.bounds();
+    scanSummary = {
+      fileName: cloud.name,
+      sourcePoints: cloud.pointCount,
+      width: b.max[0] - b.min[0],
+      depth: b.max[1] - b.min[1],
+      height: b.max[2] - b.min[2],
+      ...(cloud.metadata?.crs
+        ? { crs: cloud.metadata.crs.name, crsUnit: cloud.metadata.crs.linearUnit }
+        : {}),
+    };
+  }
+
   const json = serializeSession({
     upAxis,
     origin: cloud ? cloud.origin : [0, 0, 0],
@@ -806,8 +942,24 @@ function exportSession(): void {
     views: savedViews.map((v) => ({ name: v.name, camera: v.pose })),
     measurements: viewer.measure.getMeasurements(),
     annotations: viewer.annotate.getAnnotations(),
+    // v3 additions — present only when there's a cloud loaded.
+    camera: cloud || streamingCloud ? viewer.getCameraState() : undefined,
+    render: {
+      pointSize: viewer.pointSize,
+      edlEnabled: viewer.edlEnabled,
+      edlStrength: viewer.edlStrength,
+      pointSizeMode: viewer.pointSizeMode,
+      antialiasing: viewer.antialiasing,
+    },
+    colorMode: viewer.activeColorMode(),
+    scanSummary,
   });
-  downloadText('openlidarviewer-session.json', json);
+  // v0.3.3 — `.olvsession` is the new canonical extension; the file is
+  // still JSON internally (Mac/Linux's Open With dialog associates the
+  // double-click flow). Filename derived from the active scan name when
+  // possible so a folder of exports doesn't collide.
+  const stem = exportFileName ? baseName(exportFileName) : 'openlidarviewer';
+  downloadText(`${stem}.olvsession`, json);
 }
 
 /** Import an inspection session: restore measurements, annotations and views. */
@@ -821,6 +973,36 @@ async function importSession(file: File): Promise<void> {
     inspector.setViews(savedViews.map((v) => v.name));
     refreshMeasurePanel();
     refreshAnnotationPanel();
+
+    // v0.3.3 — apply the v3 optional fields when present. Each
+    // one is independently guarded so a partial v3 file (e.g. one with
+    // a camera but no render settings) restores what's there without
+    // assuming the rest. A v1 / v2 file has none of these — fall through
+    // to the existing behaviour.
+    if (session.render) {
+      viewer.setPointSize(session.render.pointSize);
+      viewer.setPointSizeMode(session.render.pointSizeMode);
+      viewer.setEdlEnabled(session.render.edlEnabled);
+      viewer.setEdlStrength(session.render.edlStrength);
+      viewer.setAntialiasing(session.render.antialiasing);
+      inspector.syncRendering({
+        pointSize: viewer.pointSize,
+        edlEnabled: viewer.edlEnabled,
+        edlStrength: viewer.edlStrength,
+        pointSizeMode: viewer.pointSizeMode,
+        antialiasing: viewer.antialiasing,
+      });
+    }
+    if (session.colorMode) {
+      // Apply to every static cloud; the streaming subsystem too.
+      for (const id of viewer.clouds()) viewer.setColorMode(id, session.colorMode);
+      viewer.setStreamingColorMode(session.colorMode);
+    }
+    if (session.camera) {
+      // Fly the live camera to the saved viewpoint — the session capture's
+      // "where I was looking when I saved" guarantee.
+      viewer.applyCameraState(session.camera);
+    }
   } catch (err) {
     dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
   }
@@ -1083,6 +1265,9 @@ async function openStreamingCopc(
     spacing: cloud.metadata.info.spacing,
     octreeDepth: cloud.maxDepth(),
     nodeCount: cloud.octree.nodes().length,
+    // v0.3.3 — explicit format tag so the Scan Intelligence panel renders
+    // "COPC LAZ · PDRF N" for COPC and "EPT · binary · N attrs" for EPT.
+    format: 'copc',
   });
   savedViews = [];
   viewCounter = 0;
@@ -1103,6 +1288,187 @@ async function openStreamingCopc(
 
   startStreamingStatusPolling();
   dropZone.setProgress(null);
+}
+
+/**
+ * v0.3.3 — the remote-URL router. Dispatches to the EPT handler when the
+ * URL is an `ept.json` entry-point, otherwise routes to COPC. This is the
+ * single seam every URL-loading code path goes through (the dropzone's
+ * onOpenUrl callback, the `?copc=` query-param bootstrap, the embed-bridge
+ * url-open message). Keeps format dispatch in one place so adding 3D
+ * Tiles support in a future format here is a one-line addition.
+ */
+async function handleRemoteUrl(url: string): Promise<void> {
+  // EPT detection is URL-pattern only — fast, no network, no schema fetch.
+  // If the URL ends in /ept.json we route to the EPT loader; everything
+  // else assumes COPC (the previous v0.3.2 default).
+  const eptModule = await loadEpt();
+  if (eptModule.detectEptUrl(url)) {
+    return handleRemoteEpt(url);
+  }
+  return handleRemoteCopc(url);
+}
+
+/**
+ * v0.3.3 — open a remote EPT dataset by its `ept.json` URL. Mirrors the
+ * `handleRemoteCopc` flow:
+ *   1. Validate the URL.
+ *   2. Fetch + parse + validate `ept.json` (typed failure paths surface
+ *      as user-readable error messages, same as COPC's malformed-file
+ *      path).
+ *   3. Open an `EptStreamingPointCloud` against an HTTP-backed transport.
+ *   4. Hand it to the same `viewer.attachStreamingCloud` the COPC flow
+ *      uses — the scheduler / renderer / picking path don't see the
+ *      format difference.
+ */
+async function handleRemoteEpt(url: string): Promise<void> {
+  if (loading) return;
+  // v0.3.3 — fail-fast URL hygiene. Same posture as the COPC
+  // entry: a malformed URL never reaches the network.
+  const eptUrlMod = await loadEpt();
+  const check = eptUrlMod.validateRemoteEptUrl(url);
+  if (!check.ok) {
+    dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
+    return;
+  }
+  loading = true;
+  const controller = new AbortController();
+  dropZone.setProgress(`Reading EPT manifest from ${shortUrl(url)}…`);
+  dropZone.setCancelHandler(() => controller.abort());
+  try {
+    const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
+
+    // Fetch the manifest. We use plain `fetch` rather than the
+    // HttpRangeSource: ept.json is a small JSON document, not a range-
+    // served binary. The same retry / cancellation discipline still
+    // applies via the abort controller.
+    const manifestResponse = await fetch(url, { signal: controller.signal });
+    if (!manifestResponse.ok) {
+      throw new Error(
+        `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
+      );
+    }
+    const manifestText = await manifestResponse.text();
+    const detection = parseEptMetadata(manifestText);
+    if (!detection.isEpt) {
+      throw new Error(`Not a valid EPT manifest — ${detection.reason}`);
+    }
+
+    if (viewer.hasStreamingCloud) closeStreaming();
+    await viewer.ready;
+    streamingPanel.setPhase('Reading EPT hierarchy…');
+    streamingPanel.show();
+    inspector.element.classList.add('olv-hidden');
+
+    // Compute the dataset base URL by stripping the ept.json filename;
+    // the source uses it to build hierarchy + tile URLs.
+    const baseUrl = url.replace(/ept\.json(?:\?.*)?(?:#.*)?$/i, '');
+
+    // The injected transport is plain fetch — same retry/abort plumbing
+    // as the rest of the remote pipeline. v0.3.3 keeps it minimal; the
+    // network-byte instrumentation hook used by the COPC InstrumentedRangeSource
+    // is queued for the EPT path in a later session.
+    const transport = {
+      fetchText: async (u: string, s?: AbortSignal): Promise<string> => {
+        const r = await fetch(u, { signal: s });
+        if (!r.ok) throw new Error(`EPT hierarchy fetch failed (${r.status}) for ${u}`);
+        return r.text();
+      },
+      fetchBytes: async (u: string, s?: AbortSignal): Promise<ArrayBuffer> => {
+        const r = await fetch(u, { signal: s });
+        if (!r.ok) throw new Error(`EPT tile fetch failed (${r.status}) for ${u}`);
+        return r.arrayBuffer();
+      },
+    };
+
+    const cloud = await EptStreamingPointCloud.open(
+      detection.metadata,
+      baseUrl,
+      remoteEptName(url),
+      transport,
+      controller.signal,
+    );
+    if (controller.signal.aborted) throw new LoadCancelledError();
+
+    // A streaming scan is exclusive — clear any open static layers first.
+    for (const id of viewer.clouds()) {
+      viewer.removeCloud(id);
+      inspector.removeCloud(id);
+    }
+    stage.hideEmptyState();
+
+    const decoder = new EptChunkDecoder(cloud);
+    await viewer.attachStreamingCloud(
+      cloud,
+      decoder,
+      streamingQuality,
+      isPhone(),
+      null,
+    );
+    viewer.setMode('orbit');
+    viewer.frameAll();
+
+    streamingPanel.setColorModes(
+      // The interface returns a readonly array; the panel accepts a mutable
+      // ColorMode[], so we materialise a copy.
+      [...cloud.availableColorModes()],
+      cloud.defaultColorMode(),
+    );
+    streamingPanel.setQuality(streamingQuality);
+    streamingPanel.setPhase('Loading coarse view…');
+    inspector.setImageExportEnabled(true);
+    void prewarmExportStudio();
+
+    // The metadata-driven scan summary — same shape the COPC path fills,
+    // adapted for EPT's metadata layout.
+    const b = detection.metadata.bounds.conforming;
+    const schemaSummary = `${detection.metadata.dataType} · ${detection.metadata.schema.length} attrs`;
+    streamingPanel.setSummary({
+      fileName: cloud.name,
+      pointFormat: -1,                 // EPT has no LAS PDRF; sentinel
+      sourcePoints: cloud.sourcePointCount,
+      width: b[3] - b[0],
+      depth: b[4] - b[1],
+      height: b[5] - b[2],
+      spacing: detection.metadata.span,
+      octreeDepth: cloud.maxDepth(),
+      nodeCount: cloud.octree.nodes().length,
+      format: 'ept',
+      schemaSummary,
+    });
+
+    document.body.classList.add('olv-has-scan');
+    navBar.element.classList.remove('olv-hidden');
+    navBar.setMode('orbit');
+    startStreamingStatusPolling();
+    dropZone.setCancelHandler(null);
+    dropZone.setProgress(null);
+  } catch (err) {
+    dropZone.setCancelHandler(null);
+    if (err instanceof LoadCancelledError) {
+      dropZone.setProgress(null);
+    } else {
+      if (debug) console.error('OpenLiDARViewer — remote EPT error', err);
+      // v0.3.3 — classified error messages, matching the COPC
+      // remote-UX polish. `describeRemoteEptError` distinguishes CORS,
+      // 404, 5xx, hierarchy vs. tile fetch, and transport failures.
+      dropZone.setError(eptUrlMod.describeRemoteEptError(err, url));
+      closeStreaming();
+    }
+  } finally {
+    loading = false;
+  }
+}
+
+/** Display name for a remote EPT scan — the parent directory of ept.json. */
+function remoteEptName(url: string): string {
+  try {
+    const path = new URL(url).pathname.replace(/\/ept\.json$/i, '');
+    const last = path.slice(path.lastIndexOf('/') + 1);
+    return last ? `${decodeURIComponent(last)} (EPT)` : 'remote.ept';
+  } catch {
+    return 'remote.ept';
+  }
 }
 
 /**

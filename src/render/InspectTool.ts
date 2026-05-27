@@ -293,7 +293,7 @@ export class InspectTool {
     if (normal) rows.push(infoRow('Normal', normal, normal));
     rows.push(infoRow('Layer', info.layer, info.layer));
     rows.push(infoRow('Index', info.index.toLocaleString('en-US')));
-    // Task 24 — "still refining" hint. Only present on streaming picks that
+    // Refining-hint — "still refining" hint. Only present on streaming picks that
     // landed on a node coarser than the deepest currently-resident one.
     if (info.streamingRefining) {
       rows.push(

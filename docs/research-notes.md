@@ -18,4 +18,4 @@ The goal is not to replace full GIS, photogrammetry, or survey-grade processing 
 
 ## Honest positioning
 
-OpenLiDARViewer is an R&D-stage open-source tool. A capability is described as implemented only when the code supports it. Everything else lives in the [roadmap](roadmap.md). Measurement is for visual inspection, not survey-grade use, unless it has been validated against survey-grade data and procedures.
+OpenLiDARViewer is an R&D-stage open-source tool. A capability is described as implemented only when the code supports it. Measurement is for visual inspection, not survey-grade use, unless it has been validated against survey-grade data and procedures.

@@ -180,7 +180,7 @@ test('a paused scheduler schedules no work', async () => {
   expect(cloud.counts().resident).toBe(0);
 });
 
-// --- Phase 3 Task 8 — eviction hysteresis -----------------------------------
+// --- eviction — eviction hysteresis -----------------------------------
 
 test('hysteresis defers eviction within the configured window', async () => {
   let clock = 0;
@@ -325,7 +325,7 @@ test('a parent of a resident node is never evicted before the child', async () =
   ).toBeUndefined();
 });
 
-// --- Phase 3 Task 9 — camera-motion awareness -------------------------------
+// --- scoring — camera-motion awareness -------------------------------
 
 test('smoothed camera velocity tracks linear motion across multiple ticks', async () => {
   let clock = 0;
@@ -424,7 +424,7 @@ test('concurrency returns to full after the settle window elapses', async () => 
   expect(settled.effectiveMaxConcurrent).toBe(budgets.maxConcurrentDecodes);
 });
 
-// --- Phase 4 Task 12 — hierarchy-aware eviction -----------------------------
+// --- retention — hierarchy-aware eviction -----------------------------
 
 test('sibling retention defers eviction when a sibling stays in the wanted set', async () => {
   let clock = 0;
@@ -515,7 +515,7 @@ test('deepest-and-furthest deferred nodes evict first when multiple lapse togeth
   expect(depth2Order[1]).toEqual({ depth: 2, x: 1, y: 0, z: 0 });
 });
 
-// --- Phase 4 Task 15 — pressure adaptation ----------------------------------
+// --- pressure — pressure adaptation ----------------------------------
 
 test('sustained high pressure for ≥ 1 s lowers the target-depth cap by one', async () => {
   let clock = 0;
@@ -618,7 +618,7 @@ test('the hysteresis band preserves an active depth reduction without oscillatin
   expect(scheduler.stats().pressureDepthReduction).toBe(1);
 });
 
-// --- Phase 2 (v0.3.2) Task 10 — stable-camera fast path --------------------
+// --- v0.3.2 — stable-camera fast path --------------------
 
 test('a stable camera triggers a full rescore once, then reuses the cached wanted set', async () => {
   let clock = 0;

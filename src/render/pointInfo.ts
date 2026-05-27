@@ -69,7 +69,7 @@ export interface PointInfo {
   /** Surface normal (xyz, rounded), when the cloud carries per-point normals. */
   normal?: [number, number, number];
   /**
-   * Phase 6 Task 24 — "still refining" hint. Present only on streaming COPC
+   * "Still refining" hint. Present only on streaming COPC
    * picks where the picked node is shallower than the deepest currently-
    * resident node, signalling that this region of the scan still has finer
    * detail loading. Static-cloud picks omit this field entirely.

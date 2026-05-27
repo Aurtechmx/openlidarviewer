@@ -101,7 +101,7 @@ z: round(raw.local[2] + raw.origin[2], 3),
 
 Rounded to 3 decimals = millimetres. The addition happens in Float64;
 the Float32 precision of `raw.local` is the limiting factor (sub-mm
-within 10 km of the render origin per Task 32).
+within 10 km of the render origin per the v0.3.1 precision contract).
 
 ## Measurements
 
@@ -121,7 +121,7 @@ measurements are converted to true metres before display. See
 ## Annotation persistence
 
 `Annotation.localPosition` is the render-space anchor; `worldPosition`
-(optional) is the absolute coord. v0.2.8 + v0.3.1 Phase 6 Task 23
+(optional) is the absolute coord. v0.2.8 + v0.3.1
 guarantees the local position is a world-stable scan-space anchor (not
 node-relative), so streaming-node refinement does not move annotations.
 

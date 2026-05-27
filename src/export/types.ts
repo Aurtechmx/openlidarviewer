@@ -29,8 +29,12 @@ export type ExportMode =
   | 'height-map'
   | 'intensity'
   | 'classification'
-  /** Reserved for v0.3.3 — declared so the registry slot is type-stable. */
-  | 'depth';
+  /** v0.3.3 — camera-relative depth raster (near=white, far=black, invertible). */
+  | 'depth'
+  /** v0.3.3 — top-down RGB-encoded surface normals. */
+  | 'normal'
+  /** v0.3.3 — topographic-style contour lines over the elevation raster. */
+  | 'contour';
 
 // Legacy alias retained for one release so any downstream import that still
 // reaches for `ImageExportMode` keeps compiling. Removed in v0.3.3.
@@ -58,6 +62,14 @@ export interface ExportSceneAdapter {
   hasIntensity(): boolean;
   /** Does any loaded cloud carry per-point classification? */
   hasClassification(): boolean;
+  /**
+   * v0.3.3 — does any loaded cloud carry per-point normals? Drives the
+   * Normal Map exporter's `isAvailable` gate. Streaming COPC + EPT
+   * sources today never carry normals (LAS/LAZ doesn't reserve a field
+   * for them and EPT writers rarely emit them); static loaders (PCD
+   * with `_normal_` fields, PTX, GLTF) sometimes do.
+   */
+  hasNormals(): boolean;
   /**
    * Combined local-space AABB of every loaded cloud as
    * `[minX, minY, minZ, maxX, maxY, maxZ]` in render coordinates, or `null`
@@ -174,12 +186,59 @@ export interface ClassificationOptions extends CommonExportOptions {
   legend?: boolean;
 }
 
+/** v0.3.3 — options for the depth-map exporter. */
+export interface DepthMapOptions extends CommonExportOptions {
+  /**
+   * When true (default), near = white / far = black. When false, the
+   * polarity flips. Off-by-one bit so the same flag works as a literal
+   * "invert the grayscale" toggle in the UI.
+   */
+  invert?: boolean;
+  /**
+   * Override the depth range to map into the grayscale. When omitted, the
+   * exporter uses the active camera's near/far. Useful for QA tasks that
+   * compare depth maps across captures.
+   */
+  nearOverride?: number;
+  farOverride?: number;
+}
+
+/** v0.3.3 — options for the normal-map exporter. */
+export interface NormalMapOptions extends CommonExportOptions {
+  /**
+   * When true (default), normals are approximated from a small Gaussian-
+   * smoothed depth gradient. When false, raw per-point normals are used
+   * (requires the cloud to carry a `normal` attribute — most LiDAR
+   * captures don't, so the exporter falls back to the depth-gradient
+   * approximation regardless if `cloud.hasNormals === false`).
+   */
+  smooth?: boolean;
+}
+
+/** v0.3.3 — colour palette presets the height-map + contour exporters share. */
+export type LegendPalette = 'terrain' | 'heatmap' | 'topographic' | 'grayscale';
+
+/** v0.3.3 — options for the contour exporter. */
+export interface ContourOptions extends CommonExportOptions {
+  /** Vertical interval between major contour lines, in metres. Default: 5. */
+  interval?: number;
+  /** Show elevation labels along contour lines. Default: true. */
+  labels?: boolean;
+  /** Overlay the contours over the height-map raster (or transparent). Default: 'transparent'. */
+  overlay?: 'transparent' | 'height-map' | 'rgb';
+  /** Colour palette for the underlying raster when overlay !== 'transparent'. */
+  palette?: LegendPalette;
+}
+
 /** Union of all mode-specific options. */
 export type ExportOptions =
   | OrthographicRgbOptions
   | HeightMapOptions
   | IntensityOptions
   | ClassificationOptions
+  | DepthMapOptions
+  | NormalMapOptions
+  | ContourOptions
   | CommonExportOptions;
 
 /**
