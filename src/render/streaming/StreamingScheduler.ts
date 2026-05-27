@@ -13,12 +13,8 @@
  */
 
 import type { Box6, VoxelKey } from '../../io/copc/copcTypes';
-import type {
-  ChunkDecoder,
-  ChunkDecodeMetadata,
-  DecodedChunk,
-} from '../../io/copc/copcChunkDecode';
-import type { StreamingPointCloud } from './StreamingPointCloud';
+import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
+import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import {
   frustumPlanesFromViewProjection,
@@ -73,6 +69,16 @@ export interface SchedulerStats {
    * positive = depth cap reduced by this many levels under sustained pressure.
    */
   pressureDepthReduction: number;
+  /**
+   * Task 10 (v0.3.2) — number of full octree rescores since session start.
+   * The stable-camera fast path reuses the last tick's wanted set when the
+   * scheduling signature (frustum + camera position + depth cap + budget +
+   * pressure reduction) is unchanged; this counter increments only when a
+   * full rescore actually runs. A stable camera should see this counter
+   * stay flat across many ticks, with at most one bump every
+   * `FORCED_RESCORE_INTERVAL_TICKS` to flush any cached-state drift.
+   */
+  fullRescoreCount: number;
 }
 
 /** The deepest octree level the scheduler will descend to when still. */
@@ -119,6 +125,26 @@ const PRESSURE_HIGH_HOLD_MS = 1_000;
 const PRESSURE_LOW_RATIO = 0.7;
 const PRESSURE_LOW_HOLD_MS = 2_000;
 const PRESSURE_DEPTH_REDUCTION = 1;
+
+/**
+ * Task 10 (v0.3.2) — stable-camera fast path.
+ *
+ * The scheduling signature is the tuple `(viewProjection, cameraPosition,
+ * depthCap, pointBudget, pressureDepthReduction)`. When every component is
+ * bit-equal to the prior tick's, the rescore loop and the sort are skipped
+ * and the cached `_lastWanted` set is reused — the heaviest per-tick work
+ * vanishes the moment the camera settles, which is most of the time in a
+ * working inspection session. The eviction state machine still runs each
+ * tick because it depends on wall-clock time, not on the signature.
+ *
+ * A periodic forced rescore (`FORCED_RESCORE_INTERVAL_TICKS`) re-walks the
+ * octree even when the signature is stable, so any drift from external
+ * mutation (a newly discovered child page, a newly resident node coming
+ * online from a prior decode) is reflected. The interval is generous —
+ * once a second at 60 fps — because the eviction machinery already covers
+ * the per-tick reactive paths.
+ */
+const FORCED_RESCORE_INTERVAL_TICKS = 60;
 
 /** Per-scheduler tunables — defaulted, injected for unit tests. */
 export interface SchedulerOptions {
@@ -173,7 +199,7 @@ function buildAncestorProtection(nodes: readonly StreamingNode[]): Set<string> {
  */
 function buildWantedParentKeys(
   wanted: ReadonlySet<string>,
-  cloud: StreamingPointCloud,
+  cloud: StreamingSource,
 ): Set<string> {
   const set = new Set<string>();
   for (const id of wanted) {
@@ -190,9 +216,14 @@ function boxCentre(b: Box6): [number, number, number] {
   return [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2];
 }
 
-/** The view-dependent COPC streaming scheduler. */
+/**
+ * The view-dependent streaming scheduler. Operates against the format-agnostic
+ * {@link StreamingSource} interface — today's COPC implementation
+ * ({@link StreamingPointCloud}) and tomorrow's EPT implementation both plug in
+ * without any change to this class.
+ */
 export class StreamingScheduler {
-  private readonly _cloud: StreamingPointCloud;
+  private readonly _cloud: StreamingSource;
   private readonly _decoder: ChunkDecoder;
   private readonly _callbacks: SchedulerCallbacks;
   private readonly _localBounds = new Map<string, Box6>();
@@ -231,8 +262,31 @@ export class StreamingScheduler {
   /** Active depth-cap reduction (0 when not under pressure). */
   private _pressureDepthReduction = 0;
 
+  // Task 10 (v0.3.2) — stable-camera fast-path cache.
+  /**
+   * Camera position captured at the previous full rescore. Distinct from
+   * `_lastCameraPos`, which is overwritten by the velocity tracker earlier
+   * in `update()` and so cannot serve as a signature input by the time the
+   * fast-path branch runs.
+   */
+  private _lastSigCameraPos: [number, number, number] | null = null;
+  /** ViewProjection captured at the previous full rescore (16 numbers). */
+  private _lastVP: Float64Array | null = null;
+  /** Signature components captured at the previous full rescore. */
+  private _lastSigDepthCap = -1;
+  private _lastSigBudget = -1;
+  private _lastSigPressureReduction = -1;
+  /** Last full rescore's wanted set (reused while the signature stays equal). */
+  private _lastWanted: ReadonlySet<string> | null = null;
+  /** Last full rescore's scored list (same lifecycle as `_lastWanted`). */
+  private _lastScored: { node: StreamingNode; candidate: ScoredCandidate }[] | null = null;
+  /** Tick index of the last full rescore — drives the periodic forced rescore. */
+  private _lastFullRescoreTick = -FORCED_RESCORE_INTERVAL_TICKS;
+  /** Cumulative full-rescore count exposed via {@link SchedulerStats}. */
+  private _fullRescoreCount = 0;
+
   constructor(
-    cloud: StreamingPointCloud,
+    cloud: StreamingSource,
     decoder: ChunkDecoder,
     callbacks: SchedulerCallbacks,
     budgets: StreamingBudgets,
@@ -270,6 +324,13 @@ export class StreamingScheduler {
   ): void {
     this._pointBudget = budgets.pointBudget;
     this._maxConcurrent = budgets.maxConcurrentDecodes;
+    // A budget change invalidates `_lastWanted` even if every other input
+    // is bit-equal — the signature check picks this up via `_lastSigBudget`
+    // anyway, but invalidating here makes the intent explicit and protects
+    // against future signature-component additions that might skip the
+    // budget field.
+    this._lastWanted = null;
+    this._lastScored = null;
   }
 
   /** Drop every cached compressed chunk. */
@@ -326,6 +387,7 @@ export class StreamingScheduler {
       isStable: this._isStable(this._now()),
       effectiveMaxConcurrent: this._effectiveMaxConcurrent,
       pressureDepthReduction: this._pressureDepthReduction,
+      fullRescoreCount: this._fullRescoreCount,
     };
   }
 
@@ -422,42 +484,91 @@ export class StreamingScheduler {
       BASE_DEPTH_CAP - this._pressureDepthReduction,
       this._velocitySmoothed,
     );
-    const planes = frustumPlanesFromViewProjection(view.viewProjection);
     const store = this._cloud.octree.store;
 
     // A node queued last tick is reconsidered fresh — reset it to unloaded.
+    // (Cheap pass; runs every tick regardless of fast-path.)
     for (const node of this._cloud.octree.nodes()) {
       if (node.state === 'queued') store.setState(node, 'unloaded');
     }
 
-    // Score every visible node.
-    const scored: { node: StreamingNode; candidate: ScoredCandidate }[] = [];
-    for (const node of this._cloud.octree.nodes()) {
-      const box = this._localBounds.get(node.record.id);
-      let score = 0;
-      if (box && boxInFrustum(box, planes)) {
-        score = nodeScore({
-          bounds: box,
-          depth: node.record.key.depth,
-          cameraPos: view.cameraPosition,
-          depthCap,
-        });
+    // Task 10 (v0.3.2) — stable-camera fast path. If the scheduling
+    // signature is bit-identical to last tick's AND the periodic forced
+    // rescore isn't due, reuse the cached `_lastScored` and `_lastWanted`.
+    // The eviction, enqueue, and dispatch paths below still run because
+    // they depend on wall time and node-state mutations that are
+    // independent of the signature.
+    const sigMatches =
+      this._lastVP !== null &&
+      this._lastSigCameraPos !== null &&
+      this._lastWanted !== null &&
+      this._lastScored !== null &&
+      vpMatches(this._lastVP, view.viewProjection) &&
+      view.cameraPosition[0] === this._lastSigCameraPos[0] &&
+      view.cameraPosition[1] === this._lastSigCameraPos[1] &&
+      view.cameraPosition[2] === this._lastSigCameraPos[2] &&
+      depthCap === this._lastSigDepthCap &&
+      this._pointBudget === this._lastSigBudget &&
+      this._pressureDepthReduction === this._lastSigPressureReduction;
+    const forceRescore =
+      this._tick - this._lastFullRescoreTick >= FORCED_RESCORE_INTERVAL_TICKS;
+
+    let scored: { node: StreamingNode; candidate: ScoredCandidate }[];
+    let wanted: ReadonlySet<string>;
+
+    if (sigMatches && !forceRescore) {
+      // Fast path — every input to scoring is bit-equal to last tick.
+      scored = this._lastScored as { node: StreamingNode; candidate: ScoredCandidate }[];
+      wanted = this._lastWanted as ReadonlySet<string>;
+    } else {
+      const planes = frustumPlanesFromViewProjection(view.viewProjection);
+      // Score every visible node.
+      const freshScored: { node: StreamingNode; candidate: ScoredCandidate }[] = [];
+      for (const node of this._cloud.octree.nodes()) {
+        const box = this._localBounds.get(node.record.id);
+        let score = 0;
+        if (box && boxInFrustum(box, planes)) {
+          score = nodeScore({
+            bounds: box,
+            depth: node.record.key.depth,
+            cameraPos: view.cameraPosition,
+            depthCap,
+          });
+        }
+        node.score = score;
+        if (score > 0) {
+          node.lastUsedTick = this._tick;
+          freshScored.push({
+            node,
+            candidate: { id: node.record.id, pointCount: node.record.pointCount, score },
+          });
+        }
       }
-      node.score = score;
-      if (score > 0) {
-        node.lastUsedTick = this._tick;
-        scored.push({
-          node,
-          candidate: { id: node.record.id, pointCount: node.record.pointCount, score },
-        });
-      }
+      this._lastVisible = freshScored.length;
+      freshScored.sort((a, b) => b.candidate.score - a.candidate.score);
+      const freshWanted = selectWithinBudget(
+        freshScored.map((s) => s.candidate),
+        this._pointBudget,
+      );
+      scored = freshScored;
+      wanted = freshWanted;
+
+      // Cache the inputs and outputs for the next tick's fast-path check.
+      if (this._lastVP === null) this._lastVP = new Float64Array(16);
+      copyVp(view.viewProjection, this._lastVP);
+      this._lastSigCameraPos = [
+        view.cameraPosition[0],
+        view.cameraPosition[1],
+        view.cameraPosition[2],
+      ];
+      this._lastSigDepthCap = depthCap;
+      this._lastSigBudget = this._pointBudget;
+      this._lastSigPressureReduction = this._pressureDepthReduction;
+      this._lastScored = freshScored;
+      this._lastWanted = freshWanted;
+      this._lastFullRescoreTick = this._tick;
+      this._fullRescoreCount += 1;
     }
-    this._lastVisible = scored.length;
-    scored.sort((a, b) => b.candidate.score - a.candidate.score);
-    const wanted = selectWithinBudget(
-      scored.map((s) => s.candidate),
-      this._pointBudget,
-    );
 
     // Hysteresis-aware eviction (Phase 3 Task 8). A resident node that left
     // the wanted-set is kept for `_evictDeferMs` before its mesh is dropped:
@@ -600,6 +711,12 @@ export class StreamingScheduler {
     this._inFlight.clear();
     this._queue.length = 0;
     this._deferredEvictAt.clear();
+    // Task 10 (v0.3.2): a stopped scheduler must not resume into a cached
+    // fast path — the wanted set and scored array are no longer valid once
+    // queues are cleared. Drop them so the next `update` does a fresh full
+    // rescore.
+    this._lastWanted = null;
+    this._lastScored = null;
   }
 
   /**
@@ -627,7 +744,7 @@ export class StreamingScheduler {
     const store = this._cloud.octree.store;
     store.setState(node, 'loading');
 
-    const meta = this._decodeMeta(node);
+    const meta = this._cloud.decodeMeta(node.record);
     this._readChunk(node, controller.signal)
       .then((chunk) => this._decoder.decode(chunk, meta, controller.signal))
       .then((decoded) => {
@@ -665,22 +782,9 @@ export class StreamingScheduler {
     const id = node.record.id;
     const cached = this._cache.get(id);
     if (cached) return cached.slice(0);
-    const fresh = await this._cloud.source.readNodeChunk(node.record, signal);
+    const fresh = await this._cloud.readNodeChunk(node.record, signal);
     this._cache.put(id, fresh);
     return fresh.slice(0);
-  }
-
-  /** Build the per-node decode metadata. */
-  private _decodeMeta(node: StreamingNode): ChunkDecodeMetadata {
-    const header = this._cloud.metadata.header;
-    return {
-      pointDataRecordFormat: header.pointDataRecordFormat,
-      pointRecordLength: header.pointRecordLength,
-      pointCount: node.record.pointCount,
-      scale: header.scale,
-      offset: header.offset,
-      renderOrigin: this._cloud.renderOrigin,
-    };
   }
 }
 
@@ -698,4 +802,23 @@ function distance(
 /** A monotonic millisecond clock, available on both the main thread and Node. */
 function nowMs(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+/**
+ * Task 10 (v0.3.2) — bit-equality check on a 4×4 view-projection matrix.
+ * The caller's matrix may be a `Float32Array`, a `Float64Array`, or a plain
+ * `ArrayLike<number>` (Three.js's `Matrix4.elements` is typed as the broad
+ * shape). Iterates the 16 entries; returns true only on exact equality.
+ */
+function vpMatches(cached: Float64Array, incoming: ArrayLike<number>): boolean {
+  if (incoming.length !== 16) return false;
+  for (let i = 0; i < 16; i++) {
+    if (cached[i] !== incoming[i]) return false;
+  }
+  return true;
+}
+
+/** Task 10 (v0.3.2) — copy 16 numbers from the live VP into the cached array. */
+function copyVp(src: ArrayLike<number>, dst: Float64Array): void {
+  for (let i = 0; i < 16; i++) dst[i] = src[i];
 }

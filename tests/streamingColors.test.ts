@@ -19,6 +19,7 @@ function metadata(hasRgb: boolean): CopcMetadata {
       max: [1, 1, 1],
       hasRgb,
       hasGpsTime: true,
+      crs: null,
     },
     info: {
       center: [0, 0, 0],

@@ -1,4 +1,5 @@
 import type { SourceFormat } from '../io/sniffFormat';
+import type { CrsInfo } from '../io/crs';
 
 /**
  * Provenance metadata recovered from a file header, when the format carries
@@ -17,6 +18,14 @@ export interface CloudMetadata {
    * origin shift.
    */
   scannerOrigin?: [number, number, number];
+  /**
+   * Coordinate Reference System recovered from the source file's headers
+   * (LAS VLRs for LAS / LAZ / COPC; other formats are CRS-blind today).
+   * `null` / undefined means CRS unknown — the viewer treats coordinates as
+   * a generic local space and skips unit conversion. Research-grade users
+   * rely on this for distance-in-true-metres and CRS provenance display.
+   */
+  crs?: CrsInfo | null;
 }
 
 /** Options accepted by the `PointCloud` constructor. */

@@ -8,6 +8,8 @@
  */
 
 import type { PointAttributes } from './loadPlan';
+import { parseCrsFromVlrs } from './crs';
+import type { CrsInfo } from './crs';
 
 /** Parsed subset of the LAS public header block. */
 export interface LasHeader {
@@ -31,6 +33,17 @@ export interface LasHeader {
   creationDay: number;
   /** File creation year, or 0 when the header leaves it unset. */
   creationYear: number;
+  /**
+   * Coordinate Reference System parsed from the LAS variable-length records
+   * (LASF_Projection user ID). `null` when:
+   *   • the buffer didn't include the VLRs (header-only head-slice path), or
+   *   • no LASF_Projection VLR is present (common for raw / unreferenced
+   *     drone exports).
+   * Research-grade users rely on this for unit detection (metres vs feet)
+   * and CRS identification. Surfaced in the Scan Intelligence panel + the
+   * scan-report card; the parser is in `src/io/crs.ts`.
+   */
+  crs: CrsInfo | null;
 }
 
 // --- ASPRS LAS public-header byte offsets (little-endian) ------------------
@@ -67,6 +80,10 @@ const OFFSET_GENERATING_SOFTWARE = 58;
 const OFFSET_CREATION_DAY = 90;
 /** File creation year — uint16. */
 const OFFSET_CREATION_YEAR = 92;
+/** Header size in bytes — uint16. VLRs begin at this offset. */
+const OFFSET_HEADER_SIZE = 94;
+/** Number of variable-length records — uint32. */
+const OFFSET_NUM_VLR = 100;
 /** Length of the System Identifier and Generating Software char fields. */
 const CHAR_FIELD_LENGTH = 32;
 
@@ -161,12 +178,23 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
   const offsetToPointData = view.getUint32(OFFSET_TO_POINT_DATA, true);
   const pointDataRecordLength = view.getUint16(OFFSET_POINT_RECORD_LENGTH, true);
 
+  // CRS / linear-unit detection — walk the LASF_Projection VLRs starting at
+  // the recorded header size. The buffer may be a head-slice that stopped
+  // before the VLRs (header-only fast path); `parseCrsFromVlrs` handles
+  // that by returning null, and we proceed with `crs = null`.
+  const headerSize = view.getUint16(OFFSET_HEADER_SIZE, true);
+  const numVlr = view.getUint32(OFFSET_NUM_VLR, true);
+  const crs = (headerSize > 0 && numVlr > 0)
+    ? parseCrsFromVlrs(buffer, headerSize, numVlr)
+    : null;
+
   return {
     pointCount,
     scale,
     offset,
     min,
     max,
+    crs,
     versionMinor,
     pointFormat,
     offsetToPointData,

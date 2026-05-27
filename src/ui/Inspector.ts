@@ -4,6 +4,7 @@ import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { ExportFormat } from '../io/exporters';
+import type { ExportMode } from '../export/types';
 
 /** The render-quality state the Inspector's Rendering controls reflect. */
 export interface RenderingState {
@@ -21,6 +22,13 @@ export interface InspectorCallbacks {
   onRemove: (id: string) => void;
   /** Export the active cloud to a file format. */
   onExport: (format: ExportFormat) => void;
+  /**
+   * v0.3.2 Visual Export Studio — render the live scan in one of the four
+   * Studio modes (orthographic-rgb / height-map / intensity / classification)
+   * and download the result as a PNG. The Inspector surfaces a button per
+   * mode; main.ts owns the lazy import and the download wiring.
+   */
+  onExportImage: (mode: ExportMode) => void;
   /** Save the current camera viewpoint. */
   onSaveView: () => void;
   /** Fly to a saved viewpoint by index. */
@@ -57,6 +65,23 @@ const MODE_TITLES: Record<ColorMode, string> = {
 };
 
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
+
+/**
+ * v0.3.2 Visual Export Studio — the four PNG export modes the Inspector
+ * exposes in the new "Image export" section. Each entry is `[mode, label,
+ * title]` — the title doubles as the hover-hint for the disabled button when
+ * the mode is unavailable on the loaded cloud.
+ */
+const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
+  readonly mode: ExportMode;
+  readonly label: string;
+  readonly title: string;
+}> = [
+  { mode: 'orthographic-rgb', label: 'Ortho RGB',  title: 'Parallel-projected PNG of the current view, preserving the active colour mode.' },
+  { mode: 'height-map',       label: 'Height Map', title: 'Top-down PNG, points coloured by elevation (Z).' },
+  { mode: 'intensity',        label: 'Intensity',  title: 'Top-down PNG, points coloured by LiDAR intensity. Requires intensity in the cloud.' },
+  { mode: 'classification',   label: 'Class Map',  title: 'Top-down PNG, points coloured by ASPRS classification. Requires classification in the cloud.' },
+];
 
 function section(label: string, body: HTMLElement): HTMLElement {
   return el('div', { className: 'olv-section' }, [
@@ -101,6 +126,15 @@ export class Inspector {
   private readonly _report = el('div', { className: 'olv-report' });
   private readonly _viewList = el('div', { className: 'olv-views' });
   private readonly _layerRows = new Map<string, HTMLElement>();
+  /**
+   * v0.3.2 Visual Export Studio — the per-mode image-export buttons, kept
+   * by mode so {@link setImageExportEnabled} can disable them as a group
+   * when no cloud is loaded (preventing the "click → console error" gap)
+   * and per-mode when a specific channel is missing.
+   */
+  private readonly _imageExportButtons = new Map<ExportMode, HTMLButtonElement>();
+  /** The original tooltip for each image-export button — restored on enable. */
+  private readonly _imageExportTitles = new Map<ExportMode, string>();
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
   private readonly _edlChip: HTMLButtonElement;
@@ -214,6 +248,28 @@ export class Inspector {
     });
     const exporter = el('div', { className: 'olv-export' }, exportButtons);
 
+    // v0.3.2 Visual Export Studio — one button per export mode. The class
+    // matches the existing exporter row above so the CSS layout is shared.
+    // Buttons start disabled — `setImageExportEnabled()` flips them on once
+    // a scan is loaded so users can't fire an export with nothing to draw.
+    const imageExportButtons = IMAGE_EXPORT_BUTTONS.map(({ mode, label, title }) => {
+      const button = el('button', {
+        className: 'olv-export-btn',
+        text: label,
+        title,
+      });
+      button.disabled = true;
+      button.title = `${title} (load a scan first)`;
+      button.addEventListener('click', () => {
+        button.blur();
+        this._cb.onExportImage(mode);
+      });
+      this._imageExportButtons.set(mode, button);
+      this._imageExportTitles.set(mode, title);
+      return button;
+    });
+    const imageExporter = el('div', { className: 'olv-export' }, imageExportButtons);
+
     // The header carries the panel title and — on phones, where the panel is
     // a bottom sheet — a close control.
     const sheetClose = el('button', {
@@ -237,6 +293,7 @@ export class Inspector {
       section('Scan report', this._report),
       section('Saved views', views),
       section('Export', exporter),
+      section('Image export', imageExporter),
     ]);
     this._showReportPlaceholder();
     this._showViewsPlaceholder();
@@ -289,6 +346,24 @@ export class Inspector {
     ]);
     this._layerRows.set(id, row);
     this._layers.append(row);
+  }
+
+  /**
+   * v0.3.2 Visual Export Studio — toggle the image-export buttons as a
+   * group. The Studio modes all require a loaded cloud (the height-map,
+   * intensity, and classification exporters' `isAvailable` gates on the
+   * cloud AABB), so we hide that failure mode at the UI layer by disabling
+   * the buttons until `enabled === true`. Per-mode capability gating
+   * (intensity disabled on a PLY, classification disabled on PCD without
+   * a label channel) lands in v0.3.3 once the Studio panel grows a control
+   * surface to surface the reason.
+   */
+  setImageExportEnabled(enabled: boolean): void {
+    for (const [mode, button] of this._imageExportButtons) {
+      button.disabled = !enabled;
+      const baseTitle = this._imageExportTitles.get(mode) ?? '';
+      button.title = enabled ? baseTitle : `${baseTitle} (load a scan first)`;
+    }
   }
 
   /** Remove a cloud's layer row. */

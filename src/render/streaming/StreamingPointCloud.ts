@@ -12,8 +12,17 @@
 import type { RangeSource } from '../../io/range/RangeSource';
 import { CopcSource } from '../../io/copc/CopcSource';
 import { StreamingOctree } from './StreamingOctree';
-import type { CopcMetadata, Box6 } from '../../io/copc/copcTypes';
+import type {
+  CopcMetadata,
+  Box6,
+  StreamingNodeRecord,
+} from '../../io/copc/copcTypes';
+import type { ChunkDecodeMetadata } from '../../io/copc/copcChunkDecode';
 import type { NodeCounts } from './StreamingNodeStore';
+import type {
+  StreamingSource,
+  StreamingSourceKind,
+} from './StreamingSource';
 
 /** The render origin — the floored octree-cube centre, shared by every node. */
 function pickRenderOrigin(
@@ -22,8 +31,17 @@ function pickRenderOrigin(
   return [Math.floor(center[0]), Math.floor(center[1]), Math.floor(center[2])];
 }
 
-/** An opened, hierarchy-loaded COPC cloud, ready for the scheduler to stream. */
-export class StreamingPointCloud {
+/**
+ * An opened, hierarchy-loaded COPC cloud, ready for the scheduler to stream.
+ *
+ * Phase 3 (v0.3.2): this class is the COPC implementation of the format-
+ * agnostic {@link StreamingSource} interface. v0.3.3 will add a parallel
+ * `EptStreamingSource` class; the scheduler / renderer / Viewer depend only
+ * on the interface and don't need to change.
+ */
+export class StreamingPointCloud implements StreamingSource {
+  /** Identifies this source as COPC-backed for the {@link StreamingSource} contract. */
+  readonly kind: StreamingSourceKind = 'copc';
   readonly source: CopcSource;
   readonly octree: StreamingOctree;
   /** The render origin every node is recentred against (float64-stable). */
@@ -103,5 +121,36 @@ export class StreamingPointCloud {
       center[1] + halfsize - ry,
       center[2] + halfsize - rz,
     ];
+  }
+
+  /**
+   * Read a node's compressed chunk from the COPC source. Implements
+   * {@link StreamingSource.readNodeChunk}; the scheduler calls this through
+   * the interface and never touches `CopcSource` directly.
+   */
+  readNodeChunk(
+    record: StreamingNodeRecord,
+    signal?: AbortSignal,
+  ): Promise<ArrayBuffer> {
+    return this.source.readNodeChunk(record, signal);
+  }
+
+  /**
+   * Build the decode metadata for one node. The scheduler hands this to the
+   * decoder along with the compressed bytes. Implements
+   * {@link StreamingSource.decodeMeta}; the COPC implementation pulls every
+   * field from the parsed LAS header. An EPT implementation will produce
+   * the same shape from its own metadata layout.
+   */
+  decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata {
+    const header = this.metadata.header;
+    return {
+      pointDataRecordFormat: header.pointDataRecordFormat,
+      pointRecordLength: header.pointRecordLength,
+      pointCount: record.pointCount,
+      scale: header.scale,
+      offset: header.offset,
+      renderOrigin: this.renderOrigin,
+    };
   }
 }

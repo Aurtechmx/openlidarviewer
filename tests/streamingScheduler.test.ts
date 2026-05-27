@@ -617,3 +617,117 @@ test('the hysteresis band preserves an active depth reduction without oscillatin
   scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
   expect(scheduler.stats().pressureDepthReduction).toBe(1);
 });
+
+// --- Phase 2 (v0.3.2) Task 10 — stable-camera fast path --------------------
+
+test('a stable camera triggers a full rescore once, then reuses the cached wanted set', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  // First tick: signature is fresh (no cached value), so a full rescore runs.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(scheduler.stats().fullRescoreCount).toBe(1);
+
+  // Hold the camera perfectly still through several ticks — every signature
+  // input is bit-equal, so the fast path engages and the counter doesn't
+  // climb. (The periodic forced rescore is 60 ticks away.)
+  for (let i = 0; i < 10; i++) {
+    clock += 16;
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  }
+  expect(scheduler.stats().fullRescoreCount).toBe(1);
+});
+
+test('a camera-position change forces a fresh rescore on the next tick', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  const baseline = scheduler.stats().fullRescoreCount;
+
+  // A camera move (any axis, any delta) breaks the signature.
+  clock += 100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [1, 0, 0] });
+  expect(scheduler.stats().fullRescoreCount).toBe(baseline + 1);
+
+  // Holding still after the move re-engages the fast path.
+  clock += 100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [1, 0, 0] });
+  clock += 100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [1, 0, 0] });
+  expect(scheduler.stats().fullRescoreCount).toBe(baseline + 1);
+});
+
+test('the periodic forced rescore re-runs after FORCED_RESCORE_INTERVAL_TICKS', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(scheduler.stats().fullRescoreCount).toBe(1);
+
+  // 59 more stable ticks — fast path active throughout.
+  for (let i = 0; i < 59; i++) {
+    clock += 16;
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  }
+  expect(scheduler.stats().fullRescoreCount).toBe(1);
+
+  // The 60th stable tick crosses the forced-rescore interval — the
+  // backstop fires once and the counter increments. Subsequent ticks
+  // are fast-path again until the next interval.
+  clock += 16;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().fullRescoreCount).toBe(2);
+
+  for (let i = 0; i < 5; i++) {
+    clock += 16;
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  }
+  expect(scheduler.stats().fullRescoreCount).toBe(2);
+});
+
+test('setBudgets invalidates the cache so the next tick rescores', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  // Settle into the fast path.
+  clock += 16;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  const baseline = scheduler.stats().fullRescoreCount;
+  expect(baseline).toBe(1);
+
+  // A budget change breaks the signature even when the camera is identical.
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
+  clock += 16;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  expect(scheduler.stats().fullRescoreCount).toBe(baseline + 1);
+});

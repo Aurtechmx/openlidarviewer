@@ -88,8 +88,15 @@ import {
   loadStreamingRenderer,
   loadStreamingScheduler,
   loadStreamingColors,
+  loadExportStudio,
 } from '../lazyChunks';
 import type { ChunkDecoder, DecodedChunk } from '../io/copc/copcChunkDecode';
+import type {
+  ExportMode,
+  ExportOptions,
+  ExportResult,
+  ExportSceneAdapter,
+} from '../export/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data per loaded cloud
@@ -151,6 +158,21 @@ export interface SnapshotOptions {
   annotations?: boolean;
   /** Include the measurement geometry and value labels. */
   measurements?: boolean;
+  /**
+   * v0.3.2 Visual Export Studio — bake the active Inspect tool state:
+   * the selected-point marker (halo + dot) and a canvas-drawn point-info
+   * card (X/Y/Z, intensity, classification, RGB, etc.). When false (the
+   * default) the export is clean of inspector overlays even while the
+   * inspect tool is active in the UI.
+   */
+  inspector?: boolean;
+  /**
+   * v0.3.2 Visual Export Studio — bake the most recent LiveProbe readout
+   * when probe mode is active. Uses the probe's last-known cursor position
+   * so the bake survives the "cursor moves to click Export" gap that would
+   * otherwise dismiss the live element before capture.
+   */
+  probe?: boolean;
 }
 
 /**
@@ -341,7 +363,11 @@ export class Viewer {
   private readonly _camera: THREE.PerspectiveCamera;
   private readonly _controls: OrbitControls;
   private readonly _nav: NavController;
-  private readonly _clock = new THREE.Clock();
+  // Three.js `Clock` was deprecated in r170 in favour of `Timer`, which has
+  // an explicit `update()` step so multiple `getDelta()` reads within one
+  // tick stay consistent. We use the same single-delta-per-frame pattern, so
+  // the behaviour is unchanged — only the warning goes away.
+  private readonly _timer = new THREE.Timer();
   private _rafId: number | null = null;
 
   // ── Frame timing (debug overlay) ─────────────────────────────────────────
@@ -380,8 +406,14 @@ export class Viewer {
   private _pointSize = 1;
 
   // ── Render-quality pipeline (Eye Dome Lighting post-processing) ──────────
-  /** Post-processing pipeline — driven only while EDL is enabled. */
-  private readonly _post: THREE.PostProcessing;
+  /**
+   * Post-processing pipeline — driven only while EDL is enabled.
+   *
+   * Three.js renamed `PostProcessing` to `RenderPipeline` in r170; the API
+   * surface (`outputNode`, `render()`, `dispose()`) is identical, so this
+   * is a pure rename with no behaviour change.
+   */
+  private readonly _post: THREE.RenderPipeline;
   /** The scene render pass that feeds the post-processing pipeline. */
   private readonly _scenePass: ReturnType<typeof pass>;
   /** Whether EDL is on; defaulted by the capability gate once the backend is known. */
@@ -469,7 +501,7 @@ export class Viewer {
     // colour and depth. The pipeline is driven only while EDL is enabled (see
     // the render loop); its node graph compiles lazily on first use.
     this._scenePass = pass(this._scene, this._camera);
-    this._post = new THREE.PostProcessing(this._renderer);
+    this._post = new THREE.RenderPipeline(this._renderer);
     this._post.outputNode = buildEdlOutputNode(
       this._scenePass,
       this._edlStrength,
@@ -1272,9 +1304,13 @@ export class Viewer {
     const gl = this._renderer.domElement as HTMLCanvasElement;
     const wantAnnotations = options?.annotations === true;
     const wantMeasurements = options?.measurements === true;
+    const wantInspector = options?.inspector === true;
+    const wantProbe = options?.probe === true;
 
     // Fast path: no overlays requested — return the GL canvas untouched.
-    if (!wantAnnotations && !wantMeasurements) return this._canvasToBlob(gl);
+    if (!wantAnnotations && !wantMeasurements && !wantInspector && !wantProbe) {
+      return this._canvasToBlob(gl);
+    }
 
     // Composite path: draw the GL frame into a 2-D canvas at full resolution.
     const out = document.createElement('canvas');
@@ -1286,7 +1322,8 @@ export class Viewer {
 
     // Re-project each overlay with the export camera, then serialise it, so
     // alignment with the rendered frame is exact. Measurements sit beneath the
-    // annotation markers, matching the live stacking order.
+    // annotation markers, matching the live stacking order; the inspector
+    // marker sits on top so the picked point is always identifiable.
     const layers: string[] = [];
     if (wantMeasurements) {
       this._measure.render(this._camera, this._canvas);
@@ -1296,9 +1333,36 @@ export class Viewer {
       this._annotate.render(this._camera, this._canvas);
       layers.push(this._annotate.markerSVG());
     }
+    if (wantInspector) {
+      // The marker overlay is re-rendered against the live canvas so the
+      // halo + dot coords match the current camera frame.
+      this._inspect.render();
+      layers.push(this._inspect.overlaySVG());
+    }
     for (const svg of layers) {
       const img = await loadSvgImage(svg);
       if (img) ctx.drawImage(img, 0, 0, out.width, out.height);
+    }
+    // The point-info card the live UI shows is an HTML element, not SVG, so
+    // we redraw an equivalent on the 2-D canvas next to the marker. Only the
+    // selected-point fields the user actually sees are baked, so the card
+    // matches the live UI line for line.
+    if (wantInspector) {
+      const sel = this._inspect.selectionForExport();
+      if (sel) drawInspectorInfoCard(ctx, sel.info, sel.screen);
+    }
+    // LiveProbe — same compositing pattern. The probe stores its last known
+    // cursor position in CLIENT coordinates; translate to canvas-local pixels
+    // via the canvas's bounding rect so the bake lands where the user saw
+    // the readout.
+    if (wantProbe) {
+      const probe = this._probe.activeProbeForExport();
+      if (probe) {
+        const rect = this._canvas.getBoundingClientRect();
+        const sx = (probe.client.x - rect.left) * (out.width / rect.width);
+        const sy = (probe.client.y - rect.top) * (out.height / rect.height);
+        drawProbeReadoutCard(ctx, probe.info, { x: sx, y: sy });
+      }
     }
     return this._canvasToBlob(out);
   }
@@ -1311,6 +1375,188 @@ export class Viewer {
         else reject(new Error('Viewer.snapshot(): canvas.toBlob returned null'));
       }, 'image/png');
     });
+  }
+
+  /**
+   * v0.3.2 Visual Export Studio — render the live scene through a registered
+   * export mode and return the result as a `Blob` ready for download.
+   *
+   * v0.3.2 ships four modes: `orthographic-rgb`, `height-map`, `intensity`,
+   * `classification`. The mode factories live in their own code-split chunk
+   * (`loadExportStudio`) so they only ship when the user opens the Studio
+   * panel or invokes an Export action.
+   *
+   * The {@link ExportSceneAdapter} below is the narrow Viewer slice each
+   * exporter consumes — colour-mode swap (and restore) and cloud capability
+   * queries. Defining it inline here keeps the export module free of any
+   * circular dependency on the Viewer class.
+   */
+  async exportImage(
+    mode: ExportMode,
+    options: ExportOptions = {},
+  ): Promise<ExportResult> {
+    const studio = await loadExportStudio();
+    return studio.renderExport(
+      mode,
+      {
+        renderer: this._renderer,
+        scene: this._scene,
+        camera: this._camera,
+        canvas: this._canvas,
+        adapter: this._buildExportAdapter(),
+      },
+      options,
+    );
+  }
+
+  /**
+   * Construct the {@link ExportSceneAdapter} that each Studio exporter uses
+   * to drive the live Viewer. Held inline (not as a stored field) so the
+   * adapter always reflects the current loaded clouds without bookkeeping.
+   */
+  private _buildExportAdapter(): ExportSceneAdapter {
+    const viewer = this;
+    return {
+      setExportColorMode(mode: ColorMode): void {
+        // Apply to every loaded cloud + the streaming subsystem so every
+        // resident mesh recolours in lockstep. Wrap each cloud's setColorMode
+        // individually: if one cloud lacks the channel for `mode` (e.g.
+        // classification on a PLY), `colorForMode` throws — we catch + skip
+        // so the other clouds (and the streaming cloud, if any) still
+        // recolour, and the export proceeds against whatever data IS valid.
+        // Without this guard, a single channel-missing cloud poisoned the
+        // whole export and left the UI half-recoloured.
+        for (const id of viewer._clouds.keys()) {
+          try {
+            viewer.setColorMode(id, mode);
+          } catch (err) {
+            // Swallow per-cloud capability mismatches — the orchestrator's
+            // `isAvailable` gate is the source of truth for whether the
+            // export *should* run. This catch only protects mid-loop state.
+            console.warn(`[export] setColorMode(${mode}) on cloud "${id}" skipped:`, err);
+          }
+        }
+        try {
+          viewer.setStreamingColorMode(mode);
+        } catch (err) {
+          console.warn(`[export] setStreamingColorMode(${mode}) skipped:`, err);
+        }
+      },
+      currentColorMode(): ColorMode {
+        // Prefer the streaming cloud's mode when present — otherwise the
+        // first static cloud's mode, otherwise the runtime default.
+        if (viewer._streaming) return viewer._streaming.renderer.colorMode;
+        const first = viewer._clouds.values().next().value;
+        return first ? first.mode : 'rgb';
+      },
+      hasRgb(): boolean {
+        if (viewer._streaming) {
+          return viewer._streaming.cloud.metadata.header.hasRgb;
+        }
+        for (const { cloud } of viewer._clouds.values()) {
+          if (cloud.colors) return true;
+        }
+        return false;
+      },
+      hasIntensity(): boolean {
+        // Streaming COPC clouds always carry intensity (PDRF 6/7/8).
+        if (viewer._streaming) return true;
+        for (const { cloud } of viewer._clouds.values()) {
+          if (cloud.intensity) return true;
+        }
+        return false;
+      },
+      hasClassification(): boolean {
+        // Streaming COPC clouds always carry classification (PDRF 6/7/8).
+        if (viewer._streaming) return true;
+        for (const { cloud } of viewer._clouds.values()) {
+          if (cloud.classification) return true;
+        }
+        return false;
+      },
+      snapshot(options: {
+        measurements: boolean;
+        annotations: boolean;
+        inspector: boolean;
+        probe: boolean;
+      }): Promise<Blob> {
+        // Delegate to the live snapshot pipeline so the export matches the
+        // on-screen view EXACTLY — EDL, perspective camera, overlays, all
+        // baked through the same code path the v0.2.8 Save-view feature
+        // uses. The inspector + probe flags add the v0.3.2-Studio bakes:
+        // active Inspect tool's marker + info card, and LiveProbe's last-
+        // known readout. Together they capture every on-canvas data overlay
+        // the user might have been working with when they clicked Export.
+        return viewer.snapshot({
+          measurements: options.measurements,
+          annotations: options.annotations,
+          inspector: options.inspector,
+          probe: options.probe,
+        });
+      },
+      sourceName(): string {
+        if (viewer._streaming) return viewer._streaming.cloud.name;
+        const first = viewer._clouds.values().next().value;
+        return first?.cloud.name ?? 'scan';
+      },
+      sourcePointCount(): number {
+        if (viewer._streaming) return viewer._streaming.cloud.sourcePointCount;
+        let total = 0;
+        for (const { cloud } of viewer._clouds.values()) total += cloud.pointCount;
+        return total;
+      },
+      residentPointCount(): number {
+        if (viewer._streaming) return viewer._streaming.cloud.residentPointCount;
+        // Static clouds: every loaded point is resident.
+        return this.sourcePointCount();
+      },
+      crsLabel(): { name: string; unit: string; epsg?: number } | null {
+        // Streaming cloud's CRS comes from the COPC header; static clouds
+        // carry it through CloudMetadata. Take the first cloud that has a
+        // CRS (mixing differently-georeferenced clouds is an edge we don't
+        // currently surface explicitly — v0.3.3 will flag mismatches).
+        const fromStreaming = viewer._streaming?.cloud.metadata.header.crs;
+        if (fromStreaming) {
+          return {
+            name: fromStreaming.name,
+            unit: linearUnitLabel(fromStreaming.linearUnit),
+            epsg: fromStreaming.epsg,
+          };
+        }
+        for (const { cloud } of viewer._clouds.values()) {
+          const crs = cloud.metadata?.crs;
+          if (crs) {
+            return {
+              name: crs.name,
+              unit: linearUnitLabel(crs.linearUnit),
+              epsg: crs.epsg,
+            };
+          }
+        }
+        return null;
+      },
+      localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
+        // Streaming first — it has authoritative bounds from the COPC header.
+        if (viewer._streaming) {
+          return viewer._streaming.cloud.localBounds();
+        }
+        // Fold every static cloud's bounds into a combined AABB.
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        let any = false;
+        for (const { cloud } of viewer._clouds.values()) {
+          const bb = cloud.bounds();
+          any = true;
+          if (bb.min[0] < minX) minX = bb.min[0];
+          if (bb.min[1] < minY) minY = bb.min[1];
+          if (bb.min[2] < minZ) minZ = bb.min[2];
+          if (bb.max[0] > maxX) maxX = bb.max[0];
+          if (bb.max[1] > maxY) maxY = bb.max[1];
+          if (bb.max[2] > maxZ) maxZ = bb.max[2];
+        }
+        return any ? [minX, minY, minZ, maxX, maxY, maxZ] : null;
+      },
+    };
   }
 
   /**
@@ -1731,7 +1977,8 @@ export class Viewer {
   private _startLoop(): void {
     const loop = () => {
       this._rafId = requestAnimationFrame(loop);
-      const delta = this._clock.getDelta();
+      this._timer.update();
+      const delta = this._timer.getDelta();
       this._recordFrame(delta);
       this._nav.update(delta);
       // EDL on → render through the post-processing pipeline; off → render
@@ -1787,4 +2034,189 @@ export class Viewer {
     this._camera.updateProjectionMatrix();
     this._renderer.setSize(w, h);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.3.2 Visual Export Studio — inspector point-info card compositing
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { classificationText, intensityText, rgbText } from './pointInfo';
+import { linearUnitLabel } from '../io/crs';
+
+/**
+ * Draw the InspectTool's "Point Info" card directly onto a 2-D canvas next
+ * to the selected-point marker. Mirrors the live HTML card so the export
+ * carries the same data the user saw on-screen — X/Y/Z, distance, intensity,
+ * classification, RGB, optional LAS extras.
+ *
+ * Layout: small translucent dark card positioned to the right of the marker
+ * (or left if there isn't room on the right). Auto-sizes to its content.
+ */
+function drawInspectorInfoCard(
+  ctx: CanvasRenderingContext2D,
+  info: PointInfo,
+  screen: { x: number; y: number },
+): void {
+  // Build the rows the live card builds (see InspectTool._fillCard).
+  const rows: Array<[string, string]> = [
+    ['X', `${info.x} m`],
+    ['Y', `${info.y} m`],
+    ['Z', `${info.z} m`],
+    ['Distance', `${info.distance} m`],
+    ['Intensity', intensityText(info)],
+    ['Classification', classificationText(info)],
+    ['RGB', rgbText(info)],
+  ];
+  if (info.returnNumber !== undefined && info.returnCount !== undefined) {
+    rows.push(['Return', `${info.returnNumber} of ${info.returnCount}`]);
+  }
+  if (info.pointSourceId !== undefined) {
+    rows.push(['Point source', String(info.pointSourceId)]);
+  }
+  rows.push(['Layer', info.layer]);
+  rows.push(['Index', info.index.toLocaleString('en-US')]);
+
+  // Measure layout — the card width is driven by the widest row.
+  const PAD = 14;
+  const TITLE_SIZE = 14;
+  const ROW_SIZE = 12;
+  const ROW_GAP = 6;
+  ctx.save();
+  ctx.font = `600 ${TITLE_SIZE}px system-ui, -apple-system, sans-serif`;
+  const titleW = ctx.measureText('Point Info').width;
+  ctx.font = `${ROW_SIZE}px system-ui, -apple-system, sans-serif`;
+  let labelMax = 0;
+  let valueMax = 0;
+  for (const [l, v] of rows) {
+    labelMax = Math.max(labelMax, ctx.measureText(l).width);
+    valueMax = Math.max(valueMax, ctx.measureText(v).width);
+  }
+  const rowWidth = labelMax + 18 + valueMax;
+  const cardW = Math.max(titleW, rowWidth) + PAD * 2;
+  const cardH = PAD + TITLE_SIZE + 8 + rows.length * (ROW_SIZE + ROW_GAP) - ROW_GAP + PAD;
+
+  // Decide placement: prefer to the right of the marker, fall back to left
+  // if there isn't room on the right side of the canvas.
+  const MARKER_GAP = 18;
+  let x = screen.x + MARKER_GAP;
+  if (x + cardW > ctx.canvas.width - 8) x = screen.x - MARKER_GAP - cardW;
+  let y = screen.y - cardH / 2;
+  if (y < 8) y = 8;
+  if (y + cardH > ctx.canvas.height - 8) y = ctx.canvas.height - 8 - cardH;
+
+  // Card background with hairline border and accent stripe — visual style
+  // matches the scan-report card so the export reads as one consistent layer.
+  ctx.fillStyle = 'rgba(10, 14, 22, 0.92)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.lineWidth = 1;
+  const r = 6;
+  const rr = Math.min(r, cardW / 2, cardH / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + cardW, y, x + cardW, y + cardH, rr);
+  ctx.arcTo(x + cardW, y + cardH, x, y + cardH, rr);
+  ctx.arcTo(x, y + cardH, x, y, rr);
+  ctx.arcTo(x, y, x + cardW, y, rr);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#4f9dff';
+  ctx.fillRect(x, y, 3, cardH);
+
+  // Title.
+  let cy = y + PAD + TITLE_SIZE;
+  ctx.fillStyle = '#f4f6fa';
+  ctx.font = `600 ${TITLE_SIZE}px system-ui, -apple-system, sans-serif`;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.fillText('Point Info', x + PAD, cy);
+
+  // Rows — label left, value right.
+  cy += 8;
+  ctx.font = `${ROW_SIZE}px system-ui, -apple-system, sans-serif`;
+  for (const [label, value] of rows) {
+    cy += ROW_SIZE;
+    ctx.fillStyle = '#a8b0bc';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x + PAD, cy);
+    ctx.fillStyle = '#f4f6fa';
+    ctx.textAlign = 'right';
+    ctx.fillText(value, x + cardW - PAD, cy);
+    cy += ROW_GAP;
+  }
+  ctx.restore();
+}
+
+/**
+ * Draw the LiveProbe's compact readout (coordinates + key attributes) at
+ * the cursor's last-known canvas position. Visually smaller than the
+ * inspector card — the live probe is a glance-readout, not a study tool.
+ */
+function drawProbeReadoutCard(
+  ctx: CanvasRenderingContext2D,
+  info: PointInfo,
+  screen: { x: number; y: number },
+): void {
+  const coords = `${info.x}, ${info.y}, ${info.z} m`;
+  const attrParts: string[] = [];
+  if (info.classification !== null) attrParts.push(classificationText(info));
+  if (info.intensity !== null) attrParts.push(`Intensity ${info.intensity}`);
+  const attrs = attrParts.join('  ·  ');
+
+  const PAD = 10;
+  const COORD_SIZE = 12;
+  const ATTR_SIZE = 11;
+  const ROW_GAP = 4;
+
+  ctx.save();
+  ctx.font = `600 ${COORD_SIZE}px system-ui, -apple-system, sans-serif`;
+  const coordW = ctx.measureText(coords).width;
+  ctx.font = `${ATTR_SIZE}px system-ui, -apple-system, sans-serif`;
+  const attrW = attrs ? ctx.measureText(attrs).width : 0;
+  const cardW = Math.max(coordW, attrW) + PAD * 2;
+  const cardH = PAD + COORD_SIZE + (attrs ? ROW_GAP + ATTR_SIZE : 0) + PAD;
+
+  // Cursor-aware placement — to the right and below, flipping when the
+  // card would clip the canvas edges.
+  const OFFSET = 16;
+  let x = screen.x + OFFSET;
+  if (x + cardW > ctx.canvas.width - 8) x = screen.x - OFFSET - cardW;
+  let y = screen.y + OFFSET;
+  if (y + cardH > ctx.canvas.height - 8) y = screen.y - OFFSET - cardH;
+  if (x < 8) x = 8;
+  if (y < 8) y = 8;
+
+  // Background — visually consistent with the inspector card but smaller
+  // and slightly less opaque so the cursor remains the dominant element.
+  ctx.fillStyle = 'rgba(10, 14, 22, 0.88)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.lineWidth = 1;
+  const r = 5;
+  const rr = Math.min(r, cardW / 2, cardH / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + cardW, y, x + cardW, y + cardH, rr);
+  ctx.arcTo(x + cardW, y + cardH, x, y + cardH, rr);
+  ctx.arcTo(x, y + cardH, x, y, rr);
+  ctx.arcTo(x, y, x + cardW, y, rr);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Coordinates row.
+  let cy = y + PAD + COORD_SIZE;
+  ctx.fillStyle = '#f4f6fa';
+  ctx.font = `600 ${COORD_SIZE}px system-ui, -apple-system, sans-serif`;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.fillText(coords, x + PAD, cy);
+
+  // Attributes row (optional).
+  if (attrs) {
+    cy += ROW_GAP + ATTR_SIZE;
+    ctx.fillStyle = '#a8b0bc';
+    ctx.font = `${ATTR_SIZE}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(attrs, x + PAD, cy);
+  }
+  ctx.restore();
 }

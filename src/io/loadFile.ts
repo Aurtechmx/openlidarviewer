@@ -20,10 +20,15 @@ export type { LoadStage, ProgressUpdate } from './loadProgress';
 
 /**
  * Bytes read from the head of a file to detect its format and, for LAS/LAZ,
- * to read the public header. The LAS public header is at most 375 bytes, so
- * 4 KB covers it with margin while staying a trivially small read.
+ * to read the public header AND the LASF_Projection VLR(s) that follow it.
+ * The LAS public header is at most 375 bytes; a typical CRS VLR adds 54 +
+ * 1–3 KB of WKT (the OGC string), and the GeoTIFF tag VLR triple adds
+ * another ~1 KB. 16 KB covers every real-world LAS/LAZ header + VLR set
+ * with comfortable margin while staying a microsecond-scale read on local
+ * files and an inconsequential ~12 KB extra over HTTP for remote files —
+ * which spares us a second range request for VLR re-parsing.
  */
-const HEAD_SLICE_BYTES = 4096;
+const HEAD_SLICE_BYTES = 16384;
 
 /** Thrown when a load is cancelled through its `AbortSignal`. */
 export class LoadCancelledError extends Error {

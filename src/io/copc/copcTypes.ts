@@ -56,6 +56,14 @@ export interface CopcHeaderInfo {
   hasRgb: boolean;
   /** True when the point format carries GPS time (all of 6, 7, 8 do). */
   hasGpsTime: boolean;
+  /**
+   * v0.3.2-Georef — CRS parsed from the LASF_Projection VLR(s) at the head
+   * of the COPC file. `null` when the file carries no projection metadata
+   * (rare for COPC — they're typically georeferenced surveys). Drives the
+   * Scan Intelligence CRS row, the scan-report card, and the measurement
+   * tool's metres-vs-feet unit conversion.
+   */
+  crs: import('../crs').CrsInfo | null;
 }
 
 /** The combined COPC metadata produced by the cheap preflight. */

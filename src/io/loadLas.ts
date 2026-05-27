@@ -400,6 +400,11 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
   if (header.generatingSoftware) metadata.sourceSoftware = header.generatingSoftware;
   const captureDate = formatCreationDate(header.creationYear, header.creationDay);
   if (captureDate) metadata.captureDate = captureDate;
+  // v0.3.2-Georef — surface the CRS parsed from LASF_Projection VLRs so the
+  // Scan Intelligence panel + scan-report card + measurement tool can show
+  // the source datum and convert measurements from feet to metres when the
+  // CRS declares a non-metric linear unit.
+  if (header.crs) metadata.crs = header.crs;
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 

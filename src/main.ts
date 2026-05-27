@@ -68,6 +68,7 @@ import {
   loadLocalFileRangeSource,
   loadHttpRangeSource,
   loadExporters,
+  loadExportStudio,
   loadDebugOverlay,
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
@@ -229,6 +230,35 @@ const inspector = new Inspector({
       downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
     });
   },
+  onExportImage: (mode) => {
+    // The Visual Export Studio ships in its own lazy chunk (`loadExportStudio`),
+    // pulled in by viewer.exportImage on the first invocation. The download
+    // triggers off the returned Blob; an unsupported-on-this-cloud rejection
+    // surfaces as a visible alert (a toast UI lands in v0.3.3).
+    const sourceName = activeId
+      ? viewer.getCloud(activeId)?.name
+      : viewer.streamingCloud?.name;
+    const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
+    viewer
+      .exportImage(mode, {})
+      .then((result) => {
+        downloadBlob(`${base}-${mode}.png`, result.blob);
+      })
+      .catch((err: unknown) => {
+        // The orchestrator's explicit reason ("Classification export is
+        // unavailable — this cloud has no classification channel.") is the
+        // most actionable thing we can show, so it goes both to the console
+        // (for debugging) and to a non-blocking alert (so the user knows
+        // something happened and why). v0.3.3 replaces the alert with a
+        // toast surfaced inside the Studio panel.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[image-export]', err);
+        // Defer the alert one tick so it doesn't block the failing render's
+        // own stack unwinding (which could otherwise lock the page in some
+        // browsers when the alert is fired synchronously during a render).
+        setTimeout(() => window.alert(`Image export failed: ${msg}`), 0);
+      });
+  },
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
@@ -365,6 +395,13 @@ void viewer.ready.then(() => {
   // applied immediately after, still wins.
   applyDeviceDefaults();
   applyPrefs();
+  // v0.3.2 — pre-warm the lazy load chunks once the GPU backend is ready.
+  // First-file-drop is the most painful "did the app freeze?" moment; this
+  // moves the ~200–500 ms chunk fetch + parse off the critical path so a
+  // user who opens the app and immediately drops a file sees the parser
+  // run instantly. Idle-callback so we don't compete with the renderer's
+  // first frames; falls back to setTimeout on browsers without rIC.
+  schedulePrewarm();
 });
 
 const dropZone = new DropZone(document.body, (file) => void handleFile(file));
@@ -551,9 +588,72 @@ function baseName(name: string): string {
   return dot > 0 ? name.slice(0, dot) : name;
 }
 
+/**
+ * v0.3.2 — pre-warm the Studio chunk after a cloud finishes loading. The
+ * fetch + parse happens in the background while the user is exploring the
+ * scene, so the first Image-export click immediately runs the export
+ * instead of waiting on the chunk. Idempotent — the dynamic import is
+ * cached after the first call, so re-firing is free.
+ */
+let _studioPrewarmed = false;
+async function prewarmExportStudio(): Promise<void> {
+  if (_studioPrewarmed) return;
+  _studioPrewarmed = true;
+  try {
+    await loadExportStudio();
+  } catch {
+    // Pre-warm is best-effort; an actual export click will retry the import
+    // and surface the error there if it persists.
+    _studioPrewarmed = false;
+  }
+}
+
+/**
+ * v0.3.2 — pre-warm the heaviest LOAD chunks on app idle so the first
+ * file-drop runs the parser without waiting ~200-500 ms for the lazy
+ * `loadLas` + `loadStreamingPointCloud` + `loadCopcWorkerClient` chunks
+ * to download and parse. The chunks ARE the COPC streaming pipeline plus
+ * the static LAS/LAZ reader — together they cover ~85% of the formats
+ * users open. Other format loaders (PCD, PTX, PTS, GLTF) stay strictly
+ * lazy because their on-disk frequency is low.
+ *
+ * Scheduling: `requestIdleCallback` so the warm doesn't compete with the
+ * renderer's first frames; falls back to a 1.5 s `setTimeout` on browsers
+ * that don't support rIC (Safari < 17). Idempotent — each load chunk's
+ * dynamic import is cached, so re-firing is free.
+ */
+let _loadersPrewarmed = false;
+function schedulePrewarm(): void {
+  if (_loadersPrewarmed) return;
+  const fire = (): void => {
+    if (_loadersPrewarmed) return;
+    _loadersPrewarmed = true;
+    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
+    void loadCopcWorkerClient().catch(() => { /* swallow — actual COPC open retries */ });
+    // Static LAS/LAZ loader sits in its own chunk too — pre-warm it for
+    // the "drop a non-COPC LAZ file" path which is the other common case.
+    void import('./io/loadLas').catch(() => { /* swallow */ });
+  };
+  type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
+  const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
+  if (typeof rIC === 'function') {
+    rIC(fire, { timeout: 2000 });
+  } else {
+    setTimeout(fire, 1500);
+  }
+}
+
 /** Trigger a client-side download of text content. */
 function downloadText(filename: string, text: string): void {
   const blob = new Blob([text], { type: 'text/plain' });
+  downloadBlob(filename, blob);
+}
+
+/**
+ * Trigger a client-side download of a `Blob`. Used by the Visual Export
+ * Studio for PNG downloads where the exporter has already produced a Blob.
+ */
+function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -801,6 +901,13 @@ async function handleFile(file: File): Promise<void> {
     inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
     inspector.setReport(runModules(result.cloud));
     inspector.setViews([]);
+    // v0.3.2 Visual Export Studio — a scan is now loaded; turn on the image-
+    // export buttons so the user can capture it. Pre-warm the lazy Studio
+    // chunk in the background so the first export click feels instant
+    // instead of waiting on the ~7 KB gzip fetch + parse. Pure fire-and-
+    // forget; we don't await the result.
+    inspector.setImageExportEnabled(true);
+    void prewarmExportStudio();
 
     // A share link, if one opened this page, restores its view onto this scan.
     if (pendingShareState) {
@@ -957,6 +1064,12 @@ async function openStreamingCopc(
   );
   streamingPanel.setQuality(streamingQuality);
   streamingPanel.setPhase('Loading coarse view…');
+  // v0.3.2 Visual Export Studio — a streaming COPC cloud is now attached;
+  // the image-export buttons in the Inspector can light up. The streaming
+  // path doesn't go through `inspector.addCloud`, so the gate has to flip
+  // here too. Pre-warm the Studio chunk for the same reason as above.
+  inspector.setImageExportEnabled(true);
+  void prewarmExportStudio();
 
   // The metadata-driven scan summary, and a fresh saved-views list.
   const header = cloud.metadata.header;
@@ -1222,6 +1335,10 @@ function resetToEmptyState(): void {
   dock.setAnnotateEnabled(false);
   dock.setCloseEnabled(false);
   inspector.clear();
+  // v0.3.2 Visual Export Studio — no scan loaded, no source to render. The
+  // buttons go back to disabled with their "load a scan first" hint so the
+  // user can't fire an export against nothing.
+  inspector.setImageExportEnabled(false);
   stage.showEmptyState();
   navBar.element.classList.add('olv-hidden');
   navBar.hideTouchHint();

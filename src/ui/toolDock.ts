@@ -113,16 +113,20 @@ export class ToolDock {
       callbacks.onClose();
     });
 
+    // v0.3.2 polish — dock order. The work-tools (Measure → Annotate) cluster
+    // first; meta-tools (Share + Help) sit to their right so the eye lands on
+    // them as a group; Close anchors the far right with its own colour so
+    // destructive separation is visually obvious.
     this.dock = el('div', { className: 'olv-dock' }, [
       frame,
       snapshot,
-      this._share,
-      help,
       this._measure,
       this._inspect,
       this._probe,
       this._annotate,
       slice,
+      this._share,
+      help,
       this._close,
     ]);
 

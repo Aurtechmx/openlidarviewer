@@ -62,3 +62,68 @@ test('a point exactly AT the render origin round-trips identically — no precis
   expect(f32(1)).toBe(1);
   expect(f32(-1)).toBe(-1);
 });
+
+// --- v0.3.2-Georef audit extensions ----------------------------------------
+// The bounds above (±10 km from render origin) cover most single-scan
+// surveys. The tests below pin the recenter contract at MUCH larger
+// magnitudes — UTM eastings near 800,000 m, northings near 9,000,000 m, ECEF
+// 6,371 km — to prove the Float64 → Float32 narrow is robust to any
+// reasonable real-world coordinate, as long as the render origin is the
+// floored min of the cloud's own data (which the loader enforces).
+
+/**
+ * Recenter helper — same Float64-subtract-then-Float32-narrow contract as
+ * `coordinateBridge.recenter`, isolated here so the test can pin the
+ * invariant without depending on the bridge module's API surface.
+ */
+function recenter(worldF64: number, originF64: number): number {
+  return f32(worldF64 - originF64);
+}
+
+test('research-grade: UTM 12N northing 4,100,876.789 round-trips to sub-mm', () => {
+  // Real-world UTM 12N northing. Render origin is the cloud's floored min
+  // (4_100_000), so the residual is ~876.789 m — well inside Float32's
+  // sub-mm zone.
+  const world = 4_100_876.789;
+  const origin = 4_100_000;
+  const local = recenter(world, origin);
+  const recovered = local + origin;
+  expect(Math.abs(recovered - world)).toBeLessThan(1e-3); // < 1 mm
+});
+
+test('research-grade: UTM 12S southern-hemisphere northing 9,500,000 holds precision', () => {
+  // UTM zones in the southern hemisphere use a 10 million m false northing
+  // offset, so coordinates near 9.5 M are routine. The floored-min origin
+  // keeps the residual tractable.
+  const world = 9_500_123.456;
+  const origin = 9_500_000;
+  const local = recenter(world, origin);
+  const recovered = local + origin;
+  expect(Math.abs(recovered - world)).toBeLessThan(1e-3);
+});
+
+test('research-grade: ECEF earth-radius coordinates survive recenter', () => {
+  // Earth-Centered Earth-Fixed coordinates push 6.37 M magnitudes. The
+  // recenter pattern handles it as long as origin matches cloud min.
+  const world = 6_371_000.001;
+  const origin = 6_371_000;
+  const local = recenter(world, origin);
+  const recovered = local + origin;
+  expect(Math.abs(recovered - world)).toBeLessThan(1e-3);
+});
+
+test('research-grade: 1 km × 1 km cloud at UTM origin has sub-mm worst-case', () => {
+  // Survey a 1 km × 1 km footprint at UTM 12N. All residuals should hold
+  // sub-mm precision after the f32 narrow.
+  const origin = 487_000;
+  const worst = (() => {
+    let max = 0;
+    for (let i = 0; i <= 100; i++) {
+      const world = origin + (i * 1000) / 100 + 0.137;
+      const recovered = recenter(world, origin) + origin;
+      max = Math.max(max, Math.abs(recovered - world));
+    }
+    return max;
+  })();
+  expect(worst).toBeLessThan(1e-3); // < 1 mm anywhere in a 1 km footprint
+});

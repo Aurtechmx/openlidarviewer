@@ -5,15 +5,198 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Planned
+### Planned (v0.3.3)
 
-- 3D Tiles / PNTS streaming
-- Cross-section and profile measurement
-- Slicing and clipping tools
-- Incremental rescoring with a dirty queue and per-tick frame budget
-  (deferred from v0.3.1)
+- Advanced image exports — heatmap, intensity, classification, depth.
+  v0.3.2 ships the framework seam and the orthographic mode; the four
+  remaining modes plug in here.
+- EPT (Entwine Point Tile) streaming alongside COPC. v0.3.2 ships the
+  `StreamingSource` interface; the EPT implementation plugs in here.
+- SDK / embed-API hardening.
+
+### Planned (later)
+
+- 3D Tiles / PNTS streaming.
+- Cross-section and profile measurement.
+- Slicing and clipping tools.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full roadmap.
+
+## [0.3.2] - 2026-05-26
+
+The Visual Export Studio + research-grade georeference release. v0.3.2 ships
+the platform-consolidation work originally scoped (incremental rescoring, the
+StreamingSource interface, zero Three.js deprecation warnings), a four-mode
+user-facing export studio (orthographic RGB, height map, intensity,
+classification), CRS detection from LAS VLRs with bit-exact unit conversion,
+and a documented coordinate-precision audit with extreme-magnitude tests.
+Tests: 634 → 690 (+56).
+
+### Added
+
+- **Visual Export Studio (4 modes).** The Inspector now carries an "Image
+  export" section with four buttons:
+  - **Ortho RGB** — parallel-projected snapshot of the current view in the
+    active colour mode.
+  - **Height Map** — top-down ortho coloured by elevation (terrain /
+    grayscale / heatmap / topo ramps; default terrain).
+  - **Intensity** — top-down ortho coloured by LiDAR intensity. Gated on
+    `adapter.hasIntensity()`; disabled with an explicit reason on clouds
+    that lack the channel (no silent blank PNG).
+  - **Class Map** — top-down ortho coloured by ASPRS classification.
+    Gated on `adapter.hasClassification()`; same disabled-with-reason
+    behaviour. Uses the runtime palette so the export and live view never
+    drift.
+  Each mode is a single PNG via `canvas.toBlob`. Resolutions are framed off
+  the cloud's local AABB; transparent / background / annotation / measurement
+  overlay options are plumbed through the new `CommonExportOptions` type
+  surface (full UI controls land in v0.3.3 alongside depth + contour
+  modes).
+- **ExportRegistry + ExportPresets + ASPRS legend renderer.** A pure-data
+  registry in `src/export/` with five curated presets (Terrain Review,
+  QA Inspection, Classification Review, Technical Report, Intensity Scan)
+  and a stand-alone `ExportLegendRenderer` for swatch + label rendering.
+  The legend module ships the canonical ASPRS class labels so the runtime
+  palette in `colorModes.ts` stays single-sourced for visual tuning while
+  the spec-bound labels live with the Studio.
+- **Incremental rescoring (stable-camera fast path).** The deferred
+  Task 10 from v0.3.1. The scheduler caches its scheduling signature
+  (frustum, camera position, depth cap, point budget, pressure-
+  reduction); a tick whose signature is bit-equal to the previous tick
+  reuses the prior `wanted` set and skips the rescore loop entirely.
+  A periodic forced rescore every 60 ticks flushes any cached-state
+  drift. `SchedulerStats` gains `fullRescoreCount` so the debug
+  overlay and benchmark can see how often the full path runs.
+- **StreamingSource interface.** A format-agnostic contract that
+  `StreamingPointCloud` (COPC) now implements explicitly. The
+  scheduler, renderer, picking path, and Viewer depend only on the
+  interface; v0.3.3's EPT implementation will plug in without touching
+  any of them. Adds `kind`, `readNodeChunk(record, signal)`, and
+  `decodeMeta(record)` to the COPC class — the latter two replace the
+  scheduler's previous direct reach into `cloud.source.readNodeChunk`
+  and its hand-rolled decode-metadata construction.
+- **Research-grade CRS detection** — new `src/io/crs.ts` parses both LAS
+  CRS encodings: OGC WKT VLRs (LAS 1.4 default, record IDs 2111 / 2112)
+  and GeoTIFF tag VLRs (LAS 1.0–1.3 fallback, record IDs 34735 / 36 / 37).
+  Extracts CRS name, EPSG code, linear-unit code (metres / international
+  foot / US survey foot), and the geographic-vs-projected flag.
+  US-survey-foot scale is bit-exact (1200/3937 ≈ 0.30480060960121922).
+  Threaded through `LasHeader`, `CopcHeaderInfo`, `CloudMetadata`, and the
+  export adapter; surfaced in the scan-report card on every exported PNG
+  as **CRS** + **Units** rows so an analyst reading the file later knows
+  the datum the dimensions live in.
+- **`toMetres(value, crs)`** — pure helper that converts a measurement
+  from the source CRS's linear unit to true metres, so a "15.25 m"
+  display reads as true 15.25 m regardless of whether the underlying
+  scan was in metres, international feet, or US survey feet.
+- **WYSIWYG export pipeline** — all four Studio modes now route through
+  the existing `viewer.snapshot()` path so the export captures the exact
+  on-screen view (perspective camera, EDL, framing). Measurement
+  geometry, annotation markers, the active Inspect tool's selected-point
+  marker + info card, and the LiveProbe's last-known readout all bake
+  into the export by default. The probe uses last-known retention so the
+  bake survives the "cursor leaves canvas to click Export" gap.
+- **Scan-report card** drawn into the bottom-right of every exported PNG
+  via the new `src/export/ScanReportRenderer.ts`. Rows: scan name, mode,
+  total points, width × depth × height (km / m / cm formatted), density
+  pts/m², capability summary (RGB / Intensity / Classification yes/no),
+  CRS + units when known, footer with version + timestamp. Card sized to
+  fit content, capped at 48% of canvas width; bumped 20% larger after
+  live UX feedback to read clearly at full export resolution.
+- **`docs/coordinate-precision.md`** — research-grade precision audit
+  documenting the three coordinate spaces (file CRS / local render space
+  / camera space), the load-bearing Float64-subtract-narrow-to-Float32
+  contract, the inspection round-trip math, annotation persistence, and
+  the limits where research-grade does NOT extend (no reprojection, no
+  spherical geographic distance, no vertical-datum handling). Lists every
+  invariant + the test that pins it.
+- **`tests/copcDecodePrecision.test.ts`** + extended
+  `tests/coordinatePrecision.test.ts` — 10 new tests pinning sub-mm
+  precision at extreme magnitudes: real UTM 12N (4.1 M m), UTM 12S
+  southern-hemisphere (9.5 M m), ECEF Earth-radius (6.37 M m), state-plane
+  US survey feet, plus a regression test that fails if a refactor moves
+  the Float32 narrow before the subtraction.
+- **Inspect tool + LiveProbe baked into exports** — new
+  `InspectTool.overlaySVG()` + `selectionForExport()` and
+  `LiveProbe.activeProbeForExport()` (with last-known retention) feed the
+  snapshot pipeline. Inspector's HTML "Point Info" card is redrawn onto
+  the export canvas via `drawInspectorInfoCard` with the same X/Y/Z,
+  distance, intensity, classification, RGB, and LAS-extras rows the live
+  UI shows. LiveProbe gets the same treatment via `drawProbeReadoutCard`.
+- **Pre-warm of heavy load chunks on app idle** — once the GPU backend
+  is ready, `requestIdleCallback` (with `setTimeout(1500)` fallback) fires
+  background fetches for `loadStreamingPointCloud`, `loadCopcWorkerClient`,
+  and the static LAS/LAZ loader, so the first file-drop runs the parser
+  without waiting for the ~200–500 ms of lazy-chunk download + parse.
+- **Inspector "Image export" button group** — Studio modes available
+  through the Scan Intelligence panel. Buttons start disabled with a
+  "(load a scan first)" tooltip; enable when a static cloud is added OR a
+  streaming COPC cloud attaches; disable again on full close.
+
+### Changed
+
+- **`Viewer.exportImage(mode, options)`** is now the entry point for all
+  four Studio modes. The runtime forces the relevant colour mode for the
+  duration of the render and restores it in `finally`, so a thrown export
+  never leaves the UI mid-recoloured. Backed by a narrow
+  `ExportSceneAdapter` interface so each exporter is unit-testable with a
+  stub — no circular dependency on `Viewer.ts`.
+- **Lazy chunk renamed** `loadImageExports` → `loadExportStudio`. A
+  deprecated alias preserves the old name for one release.
+- **Chunk-emission guard tracks `export`** (was `imageExports`). The
+  required-chunks list still grows to 13 entries; the obfuscator-driven
+  build still fails loudly if the Studio chunk disappears.
+- **Three.js Clock → Timer.** Migrated `Viewer._clock` to
+  `THREE.Timer` per Three's r170 deprecation. The render loop now
+  calls `_timer.update()` before `_timer.getDelta()`; behaviour is
+  identical, the deprecation warning is gone.
+- **Three.js PostProcessing → RenderPipeline.** Same migration on the
+  EDL post-processing surface — same API, renamed class. The second
+  deprecation warning the v0.3.1 live console showed is also gone.
+- **Head slice 4 KB → 16 KB** in both `loadFile.ts` and
+  `copc/CopcSource.ts` so the first read captures more of the LAS VLR
+  list (CRS detection needs the LASF_Projection VLR that sits after the
+  public header). Local cost: microseconds. Remote cost: ~12 KB extra on
+  first request — spares a likely second range request for VLR
+  re-fetching, net saves ~100–200 ms on remote loads.
+- **Measure line stroke widths bumped ~10%** in both the live CSS and
+  the snapshot CSS so measurements read clearly against detailed scans
+  without crowding the handle hit-zones (line 1.6 → 1.75; dot 1.5 →
+  1.65; pending ring 2 → 2.2; area-fill 1.3 → 1.45; leader 1 → 1.1).
+- **Dock reordered.** Frame · Snapshot · Measure · Inspect · Probe ·
+  Annotate · Slice · Share · Help · Close — the work tools cluster
+  first, meta tools (Share + Help) sit to their right, and Close anchors
+  the far right with its own rose-tinted resting colour to set the
+  destructive action apart from neutral tools.
+
+### Fixed
+
+- **Classification export silent-crash hardening.** A loaded cloud whose
+  static-cloud entries lacked classification could crash the Studio's
+  `setExportColorMode('classification')` mid-loop because the runtime's
+  `colorForMode` throws when the channel is missing. The export adapter
+  now wraps each per-cloud `setColorMode` in `try/catch`, and
+  `withColorMode` puts the initial swap inside the `try` block so the
+  `finally` always runs. Export errors are surfaced via a `window.alert`
+  (toast replacement lands in v0.3.3) instead of failing silently to
+  `console.error` only.
+
+### Deferred
+
+- The four Studio modes that v0.3.3 still owns: **depth**, **contour
+  overlays**, **normal map**, **report snapshots**. The `ExportMode` type
+  already has a `'depth'` slot reserved; the other three land via new
+  factory registrations against the same registry.
+- Compositing the classification legend **into** the exported PNG (rather
+  than as a sidecar artifact). v0.3.2 renders the legend alongside the
+  Studio panel; v0.3.3 composes it directly into the raster.
+- Incremental rescoring's frame-budgeted N-per-tick partial rescore
+  (the v0.3.1 plan's literal goal beyond the stable-camera win) is
+  evaluated when the v0.3.2 benchmark on a 100 M+ fixture surfaces a
+  case the stable-camera path misses. Today's bound shows the stable
+  path captures the practical win on real-world camera usage.
+- The 50-scan open/close leak audit and the WebGL2-forced streaming
+  e2e (still from the v0.3.1 deferred list).
 
 ## [0.3.1] - 2026-05-26
 

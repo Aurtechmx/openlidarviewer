@@ -26,13 +26,16 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * sync with the `.olv-measure-*` / `.olv-m-*` blocks in `style.css`, with the
  * accent colour resolved to its literal value.
  */
+// v0.3.2 polish — stroke widths match the live CSS (≈10% bump over the
+// original v0.2 measure values) so a baked-into-export measurement reads
+// at the same weight the user sees on-screen.
 const SNAPSHOT_CSS = [
-  '.olv-measure-line{stroke:#00b2ff;stroke-width:1.6;stroke-dasharray:6 4}',
+  '.olv-measure-line{stroke:#00b2ff;stroke-width:1.75;stroke-dasharray:6 4}',
   '.olv-m-preview{opacity:0.5}',
-  '.olv-measure-dot{fill:#00b2ff;stroke:#0a0e1a;stroke-width:1.5}',
-  '.olv-measure-dot-pending{fill:none;stroke:#00b2ff;stroke-width:2}',
-  '.olv-m-fill{fill:rgba(0,178,255,0.14);stroke:#00b2ff;stroke-width:1.3;stroke-dasharray:5 4}',
-  '.olv-m-leader{stroke:rgba(0,178,255,0.5);stroke-width:1}',
+  '.olv-measure-dot{fill:#00b2ff;stroke:#0a0e1a;stroke-width:1.65}',
+  '.olv-measure-dot-pending{fill:none;stroke:#00b2ff;stroke-width:2.2}',
+  '.olv-m-fill{fill:rgba(0,178,255,0.14);stroke:#00b2ff;stroke-width:1.45;stroke-dasharray:5 4}',
+  '.olv-m-leader{stroke:rgba(0,178,255,0.5);stroke-width:1.1}',
   '.olv-m-handle{fill:transparent}',
   '.olv-measure-label{fill:#00b2ff;font:600 12px ui-monospace,"SF Mono",Menlo,Consolas,monospace;',
   'paint-order:stroke;stroke:#0a0e1a;stroke-width:4px;stroke-linejoin:round}',

@@ -24,8 +24,18 @@ import type {
   ChildPageRef,
 } from './copcTypes';
 
-/** Bytes read from the file head for detection + metadata (589 needed). */
-const HEAD_BYTES = 4096;
+/**
+ * Bytes read from the file head for detection + metadata.
+ *
+ *   • Minimum needed: 589 bytes (LAS header 375 + COPC info VLR 54 + 160).
+ *   • v0.3.2 bump 4 KB → 16 KB so the same read also captures the
+ *     LASF_Projection CRS VLR(s) that immediately follow the COPC info
+ *     VLR. CRS detection (`parseCrsFromVlrs`) needs that whole VLR list;
+ *     without the bump CRS would silently fail to detect on most files.
+ *     Cost: ~12 KB extra over HTTP — negligible vs the latency saved on a
+ *     would-be second range request.
+ */
+const HEAD_BYTES = 16384;
 
 /** An opened COPC file, ready to stream. */
 export class CopcSource {

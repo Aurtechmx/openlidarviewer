@@ -103,6 +103,9 @@ function chunkEmissionGuard() {
     'DebugOverlay',
     'streamingBenchmark',
     'InstrumentedRangeSource',
+    // v0.3.2 — Visual Export Studio (orthographic-rgb / height-map /
+    // intensity / classification; depth lands in v0.3.3).
+    'export',
   ];
   return {
     name: 'olv-chunk-emission-guard',

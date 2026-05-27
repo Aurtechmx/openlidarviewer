@@ -13,6 +13,7 @@
  */
 
 import { LoadError } from '../loadErrors';
+import { parseCrsFromVlrs } from '../crs';
 import type { CopcMetadata, CopcHeaderInfo, CopcInfo } from './copcTypes';
 
 /** Offset of the COPC `info` VLR payload: 375 header + 54 VLR header. */
@@ -78,6 +79,16 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
     throw new LoadError('malformed-file', 'LAS point count is invalid.');
   }
 
+  // v0.3.2-Georef — walk the LAS VLR list for a LASF_Projection CRS VLR.
+  // COPC files always start with the COPC info VLR at offset 375; any
+  // LASF_Projection VLRs follow it. The head-slice the preflight reads is
+  // typically large enough to include them; `parseCrsFromVlrs` handles a
+  // truncated slice by returning `null` so we can proceed without CRS.
+  const numVlr = view.getUint32(100, true);
+  const crs = (numVlr > 0)
+    ? parseCrsFromVlrs(headSlice, headerSize, numVlr)
+    : null;
+
   const header: CopcHeaderInfo = {
     pointDataRecordFormat: pdrf,
     pointRecordLength,
@@ -88,6 +99,7 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
     max,
     hasRgb: pdrf === 7 || pdrf === 8,
     hasGpsTime: true,
+    crs,
   };
 
   // --- COPC info VLR payload -------------------------------------------------

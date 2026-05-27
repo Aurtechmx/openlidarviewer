@@ -195,9 +195,20 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-tool:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-tool:disabled { opacity: 0.4; }
-/* Close is a destructive action — a warm hover sets it apart from the tools. */
+/* v0.3.2 polish — Close is destructive, so it carries a rose-tinted resting
+   state to set it apart from neutral tools and a brighter rose on hover.
+   Subtle at rest (still readable at 11px on dark background), unmissable on
+   interaction. The :not(:disabled) gate keeps the disabled state grey via
+   the base .olv-tool selector. */
+.olv-tool-close:not(:disabled) {
+  color: #ffb3b3;
+  border-color: rgba(255, 120, 120, 0.32);
+  background: rgba(255, 100, 100, 0.06);
+}
 .olv-tool-close:hover:not(:disabled) {
-  color: #ff9a9a; border-color: rgba(255, 120, 120, 0.55);
+  color: #ff7a7a;
+  border-color: rgba(255, 120, 120, 0.7);
+  background: rgba(255, 100, 100, 0.12);
 }
 .olv-backend {
   position: absolute; bottom: 16px; right: 18px;
@@ -557,14 +568,16 @@ button:disabled { cursor: not-allowed; }
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; overflow: visible;
 }
+/* v0.3.2 polish — line + dot stroke widths bumped ~10% so measurements
+   read clearly against detailed scans without crowding handle hit-zones. */
 .olv-measure-line {
-  stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 6 4;
+  stroke: var(--accent); stroke-width: 1.75; stroke-dasharray: 6 4;
 }
 .olv-measure-dot {
-  fill: var(--accent); stroke: #0a0e1a; stroke-width: 1.5;
+  fill: var(--accent); stroke: #0a0e1a; stroke-width: 1.65;
 }
 .olv-measure-dot-pending {
-  fill: none; stroke: var(--accent); stroke-width: 2;
+  fill: none; stroke: var(--accent); stroke-width: 2.2;
   animation: olv-measure-pulse 1.5s ease-in-out infinite;
 }
 @keyframes olv-measure-pulse {
@@ -899,11 +912,12 @@ button:disabled { cursor: not-allowed; }
 .olv-m-fill {
   fill: rgba(0, 178, 255, 0.14);
   stroke: var(--accent);
-  stroke-width: 1.3;
+  /* v0.3.2 polish — fill outline + leader strokes bumped ~10%. */
+  stroke-width: 1.45;
   stroke-dasharray: 5 4;
 }
 .olv-m-preview { opacity: 0.5; }
-.olv-m-leader { stroke: rgba(0, 178, 255, 0.5); stroke-width: 1; }
+.olv-m-leader { stroke: rgba(0, 178, 255, 0.5); stroke-width: 1.1; }
 .olv-m-label-primary { font-size: 13px; }
 .olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
 .olv-m-handle:active { cursor: grabbing; }

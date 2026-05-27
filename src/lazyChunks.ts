@@ -60,6 +60,20 @@ export const loadHttpRangeSource = () => import('./io/range/HttpRangeSource');
  */
 export const loadExporters = () => import('./io/exporters');
 
+/**
+ * Load the Visual Export Studio (v0.3.2). Four modes ship inside this chunk —
+ * orthographic-rgb, height-map, intensity, classification — all behind this
+ * lazy boundary so they only download when the user opens the Studio panel
+ * or clicks an Export button. v0.3.3 adds `depth` to the same chunk.
+ */
+export const loadExportStudio = () => import('./export');
+
+/**
+ * @deprecated Alias retained for one release while consumers migrate from the
+ * v0.3.2-Phase-4 name `loadImageExports` to {@link loadExportStudio}.
+ */
+export const loadImageExports = loadExportStudio;
+
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 
