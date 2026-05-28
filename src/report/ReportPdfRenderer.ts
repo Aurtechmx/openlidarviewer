@@ -94,11 +94,31 @@ export async function renderReportPdf(
   // The renderer state — the page cursor advances through the document.
   let cursor: PageCursor = startNewPage(doc, accent, theme, branding.organisation);
 
+  // Per-section error isolation. A single bad section — a corrupt visual
+  // blob, an annotation row with malformed coordinates, a font-embedding
+  // hiccup — would historically abort the whole render, leaving the user
+  // with no PDF at all. With the isolation pass, the failed section is
+  // skipped, the failure is logged with the section id for diagnosis, and
+  // the rest of the report continues to render. The user gets a partial
+  // PDF (clearly marked in the cover metadata if the failure was the cover
+  // itself) rather than nothing.
+  const failedSections: string[] = [];
   for (const section of template.sections) {
-    cursor = await renderSection(
-      section, inputs, cursor, doc, accent, theme,
-      helvetica, helveticaBold, logoImage, branding.organisation,
-    );
+    try {
+      cursor = await renderSection(
+        section, inputs, cursor, doc, accent, theme,
+        helvetica, helveticaBold, logoImage, branding.organisation,
+      );
+    } catch (err) {
+      failedSections.push(section);
+      // Surface the per-section failure to the caller's console so it can
+      // be investigated, but don't surface to the user — the partial PDF
+      // they get is more useful than a hard error in nearly every case.
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[report] section "${section}" failed to render and was skipped: ${reason}`,
+      );
+    }
   }
 
   // Stamp page numbers in the footer of every page that was added. The

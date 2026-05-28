@@ -161,6 +161,54 @@ export function slopeBetween(a: Vec3, b: Vec3, up: Vec3): Slope {
   return { rise, run, gradePercent, angleDeg };
 }
 
+// ── profile (cross-section line metrics) ────────────────────────────────────
+
+/** The full geometric description of a profile line between two points. */
+export interface ProfileMetrics {
+  /** Straight-line 3D length from `a` to `b`. */
+  length3d: number;
+  /** Horizontal (map-plane) distance, perpendicular to `up`. */
+  lengthHorizontal: number;
+  /** Signed vertical change from `a` to `b`, measured along `up`. */
+  verticalDrop: number;
+  /** Grade as a percentage (100 · rise / run); `Infinity` for a vertical pair. */
+  gradePercent: number;
+  /** Inclination from horizontal, in degrees (−90 … +90). */
+  gradeAngleDeg: number;
+}
+
+/**
+ * Profile metrics for a 2-point line — the scalar half of a cross-section
+ * measurement. The chart half (sampled heights along the line) lives in a
+ * follow-up that wires a cloud-sampling adapter into the controller; this
+ * function is pure and unit-testable in Node.
+ *
+ * The metrics derived here are exactly what an engineer reads off a paper
+ * cross-section card: how far the line runs in 3D, how far it covers on
+ * the map, how much it climbs or drops, and at what grade.
+ */
+export function profileMetrics(a: Vec3, b: Vec3, up: Vec3): ProfileMetrics {
+  const u = normalize(up);
+  const d = sub(b, a);
+  const verticalDrop = dot(d, u);
+  const lengthHorizontal = length(
+    sub(d, [u[0] * verticalDrop, u[1] * verticalDrop, u[2] * verticalDrop]),
+  );
+  const length3d = length(d);
+  const gradePercent =
+    lengthHorizontal < EPSILON
+      ? verticalDrop === 0 ? 0 : Infinity
+      : (100 * verticalDrop) / lengthHorizontal;
+  const gradeAngleDeg = (Math.atan2(verticalDrop, lengthHorizontal) * 180) / Math.PI;
+  return {
+    length3d,
+    lengthHorizontal,
+    verticalDrop,
+    gradePercent,
+    gradeAngleDeg,
+  };
+}
+
 // ── vertical delta (height tool) ────────────────────────────────────────────
 
 /**

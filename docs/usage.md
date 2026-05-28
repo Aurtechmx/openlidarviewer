@@ -56,6 +56,7 @@ Click Measure in the tool dock to open the measurement toolbar. Pick a tool from
 - **Height** — two points; the vertical difference between them.
 - **Angle** — three points; the angle at the middle vertex.
 - **Slope** — two points; the rise, run, slope angle, and grade percentage.
+- **Profile** — two points; the full cross-section geometry of the line: 3D length, horizontal distance, vertical drop, and grade percentage. Reads in a single compact card ("12.5 m · Δh +2.3 m · 18.4%"); the overlay draws the 3D segment plus an L-bent ghost so the run and drop are visible separately.
 
 While placing, undo removes the last point. Once placed, drag any point to move it, and a measurement can be renamed or deleted from the Measurements panel. Clear all empties the list. The units toggle switches every readout between metric and imperial. Export saves all measurements to a JSON session file, and Import loads one back. Measurements persist for the browser session.
 
@@ -89,11 +90,11 @@ In the Saved views section of the panel, click Save current view — or press `V
 
 ## Exporting
 
-Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Visual Export Studio opens richer image modes — orthographic RGB, height map, intensity, classification, depth, normal, and contour — with legend customisation. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates.
+Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Visual Export Studio opens richer image modes — orthographic RGB, height map, intensity, classification, and normal — with legend customisation. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates.
 
-**Report PDF (v0.3.3).** Export → Report PDF builds a multi-page technical report from the live working state — a cover page, dataset summary (point count, bounds, density, CRS), embedded image exports, annotations and measurements tables, technical notes, and a footer. Five built-in templates (Engineering Inspection, QA Validation, Terrain Review, Survey Summary, Technical Documentation) set the default voice; branding (accent colour, logo) and the metric/imperial unit system propagate through every table. The PDF engine and its pdf-lib dependency load only when you click the button, so the initial app payload stays unchanged for users who never need a report.
+**Report PDF.** Export → Report PDF builds a multi-page technical report from the live working state — a cover page, dataset summary (point count, bounds, density, CRS), embedded image exports, annotations and measurements tables, technical notes, and a footer. Five built-in templates (Engineering Inspection, QA Validation, Terrain Review, Survey Summary, Technical Documentation) set the default voice; three themes (`light-technical`, `dark-inspection`, `minimal-engineering`) and white-label project metadata (Client / Project / Phase / Reference / Date) plus an optional confidentiality footer note propagate through every page. Branding (accent colour, logo, organisation, author) and the metric/imperial unit system propagate through every table. The PDF engine and its pdf-lib dependency load only when you click the button, so the initial app payload stays unchanged for users who never need a report.
 
-**Session round-trip (`.olvsession`, v0.3.3).** The session Export saves the full working state — camera, render settings, active colour mode, annotations, measurements, named views, and scan metadata — to a `.olvsession` JSON file. Import loads one back, restoring the camera and view exactly. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
+**Session round-trip (`.olvsession`).** The session Export saves the full working state — camera, render settings, active colour mode, annotations, measurements, named views, and scan metadata — to a `.olvsession` JSON file. Import loads one back, restoring the camera and view exactly. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
 
 ## Mobile Usage
 

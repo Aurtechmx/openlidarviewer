@@ -25,8 +25,15 @@ import {
   verticalDelta,
   slopeBetween,
   angleAtVertex,
+  profileMetrics,
 } from './geometry';
-import { formatLength, formatArea, formatAngle, formatGrade } from './format';
+import {
+  formatLength,
+  formatArea,
+  formatAngle,
+  formatGrade,
+  formatProfileHeadline,
+} from './format';
 import { MeasureOverlay } from './MeasureOverlay';
 import type {
   OverlayModel,
@@ -52,6 +59,7 @@ const KIND_LABEL: Record<MeasurementKind, string> = {
   height: 'Height',
   angle: 'Angle',
   slope: 'Slope',
+  profile: 'Profile',
 };
 
 /** Hover hints for the kind picker — what each tool measures and how. */
@@ -62,6 +70,8 @@ const KIND_TITLE: Record<MeasurementKind, string> = {
   height: 'Height — vertical difference between two points',
   angle: 'Angle — the angle at a vertex between two arms',
   slope: 'Slope — rise, run, grade and inclination between two points',
+  profile:
+    'Profile — cross-section line: 3D length, horizontal distance, vertical drop, and grade',
 };
 
 /** Kind order for the picker buttons. */
@@ -72,6 +82,7 @@ const KIND_ORDER: MeasurementKind[] = [
   'height',
   'angle',
   'slope',
+  'profile',
 ];
 
 /** Hooks the controller calls back into. */
@@ -132,6 +143,7 @@ export class MeasureController {
     height: 0,
     angle: 0,
     slope: 0,
+    profile: 0,
   };
 
   constructor(callbacks: MeasureCallbacks) {
@@ -494,6 +506,16 @@ export class MeasureController {
         const s = slopeBetween(p[0], p[1], this._worldUp);
         return `${formatGrade(s.gradePercent)} · ${formatAngle(s.angleDeg)}`;
       }
+      case 'profile': {
+        if (p.length < 2) return '—';
+        const pm = profileMetrics(p[0], p[1], this._worldUp);
+        return formatProfileHeadline(
+          pm.length3d,
+          pm.verticalDrop,
+          pm.gradePercent,
+          this._units,
+        );
+      }
     }
   }
 
@@ -521,6 +543,7 @@ export class MeasureController {
       }
       case 'height':
       case 'slope':
+      case 'profile':
         return n === 1 ? `${VERB} the second point` : `${VERB} the first point`;
       case 'angle':
         if (n === 1) return `${VERB} the angle vertex`;
@@ -646,6 +669,39 @@ export class MeasureController {
         primary: true,
       });
     }
+    if (m.kind === 'profile' && pts.length >= 2) {
+      // Profile draws the 3D segment as the solid headline and an L-bent
+      // preview that shows the horizontal run and vertical drop separately
+      // — the same idiom the slope tool uses, so users transferring between
+      // the two see consistent geometry. The headline label carries the
+      // combined readout (length · Δh · grade).
+      const [a, b] = pts;
+      const elbow = elbowPoint(a, b, this._worldUp);
+      const pm = profileMetrics(a, b, this._worldUp);
+      E.push({ a, b, style: 'solid' });
+      E.push({ a, b: elbow, style: 'preview' });
+      E.push({ a: elbow, b, style: 'preview' });
+      L.push({
+        anchor: midpoint(a, b),
+        text: formatProfileHeadline(
+          pm.length3d,
+          pm.verticalDrop,
+          pm.gradePercent,
+          this._units,
+        ),
+        primary: true,
+      });
+      L.push({
+        anchor: midpoint(elbow, b),
+        text: formatLength(Math.abs(pm.verticalDrop), this._units),
+        primary: false,
+      });
+      L.push({
+        anchor: midpoint(a, elbow),
+        text: formatLength(pm.lengthHorizontal, this._units),
+        primary: false,
+      });
+    }
   }
 
   /** Add the in-progress draft, including its live preview toward the cursor. */
@@ -736,6 +792,26 @@ export class MeasureController {
           primary: true,
         });
       }
+    }
+    if (d.kind === 'profile') {
+      // Same preview idiom as `slope` — solid 3D segment with the L-bent
+      // run/drop ghost — but the live label carries the combined profile
+      // readout (length · Δh · grade).
+      const elbow = elbowPoint(pts[0], cur, this._worldUp);
+      const pm = profileMetrics(pts[0], cur, this._worldUp);
+      E.push({ a: pts[0], b: cur, style: 'preview' });
+      E.push({ a: pts[0], b: elbow, style: 'preview' });
+      E.push({ a: elbow, b: cur, style: 'preview' });
+      L.push({
+        anchor: midpoint(pts[0], cur),
+        text: formatProfileHeadline(
+          pm.length3d,
+          pm.verticalDrop,
+          pm.gradePercent,
+          this._units,
+        ),
+        primary: true,
+      });
     }
   }
 }

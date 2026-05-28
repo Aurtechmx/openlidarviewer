@@ -86,21 +86,27 @@ import { orthographicRgbExporter } from './OrthographicRgbExporter';
 import { heightMapExporter } from './HeightMapExporter';
 import { intensityExporter } from './IntensityExporter';
 import { classificationExporter } from './ClassificationExporter';
-import { depthMapExporter } from './DepthMapExporter';
 import { normalMapExporter } from './NormalMapExporter';
-import { contourMapExporter } from './ContourMapExporter';
 
 /**
- * The default registry, pre-populated with every Studio mode.
+ * The default registry, pre-populated with every Studio mode that produces
+ * an output matching its name.
+ *
+ * `depthMapExporter` and `contourMapExporter` are intentionally NOT
+ * registered here. Their current implementations produce an elevation
+ * raster — the same output as Height Map — without true camera-relative
+ * depth-buffer extraction or marching-squares contour-line drawing. Rather
+ * than ship buttons whose labels don't match their behaviour, the modes
+ * are held back until they can be implemented correctly. The source files
+ * remain in this directory so the proper implementation can land
+ * incrementally without re-establishing the type and registry plumbing.
  */
 export const defaultExportRegistry = new ExportRegistry();
 defaultExportRegistry.register(orthographicRgbExporter);
 defaultExportRegistry.register(heightMapExporter);
 defaultExportRegistry.register(intensityExporter);
 defaultExportRegistry.register(classificationExporter);
-defaultExportRegistry.register(depthMapExporter);
 defaultExportRegistry.register(normalMapExporter);
-defaultExportRegistry.register(contourMapExporter);
 
 /** @deprecated Use {@link defaultExportRegistry}. */
 export const defaultImageExportRegistry = defaultExportRegistry;

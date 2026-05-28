@@ -10,18 +10,21 @@ not touched between releases keeps its original measurement; the version pin
 is when the figures were captured, not a claim that they have been re-run on
 every release.
 
-## Bundle shell — v0.3.4
+## Bundle shell — v0.3.5
 
 The first-paint payload — what the browser must fetch before the empty viewer
 shell appears — and the on-demand chunks that load only when their feature is
-exercised. Captured from a fresh `npm run build` against the v0.3.4 source.
+exercised. Captured from a fresh `npm run build` against the v0.3.5 source.
+The shell trimmed in v0.3.4 (via the Viewer-deferral refactor) holds in
+v0.3.5; the small Viewer-chunk delta carries the new Profile measurement
+geometry + the updated listener-deferral wiring.
 
 | Chunk | Loaded | Pre-gzip | Gzipped |
 |---|---|---|---|
-| `index-*.js` (app shell) | Always, on first paint | 100.76 KB | 32.26 KB |
-| `index-*.css` | Always, on first paint | 40.07 KB | 7.37 KB |
+| `index-*.js` (app shell) | Always, on first paint | 100.72 KB | 32.22 KB |
+| `index-*.css` | Always, on first paint | 40.32 KB | 7.45 KB |
 | Inter font subset (latin) | Always, on first paint | 48.25 KB | (woff2) |
-| `Viewer-*.js` | When a scan is opened or a remote URL is followed | 102.14 KB | 29.09 KB |
+| `Viewer-*.js` | When a scan is opened or a remote URL is followed | 103.50 KB | 29.36 KB |
 | `three.webgpu-*.js` | When the GPU backend initialises | 800.50 KB | 219.22 KB |
 | `three.core-*.js` | With `three.webgpu` | 126.39 KB | (split) |
 | `loadLas-*.js` | When a `.las` / `.laz` file is opened | 342.71 KB | 124.45 KB |
@@ -135,13 +138,15 @@ Two very different scans — a 9.6M-point georeferenced drone survey and a
 55K-point iPhone capture — both open from a single drag-and-drop, in a browser
 tab, with no install and no conversion. That is the whole point of the project.
 
-## Extreme-scale synthetic stress — pinned to v0.3.3, valid for v0.3.4
+## Extreme-scale synthetic stress — pinned to v0.3.3, valid through v0.3.5
 
-The scheduler / cache / eviction logic was untouched between v0.3.3 and v0.3.4
-— v0.3.4 added Viewer-deferral, ease-out fade, and EPT transport polish on
-top, none of which touch the per-tick rescore loop or the eviction-pressure
-machinery. The figures below were captured against v0.3.3 and remain the
-canonical credibility numbers for the streaming subsystem in v0.3.4.
+The scheduler / cache / eviction logic has been untouched since v0.3.3.
+v0.3.4 added Viewer-deferral, ease-out fade, and EPT transport polish;
+v0.3.5 added the smoke gate, the main-deferral lint, the Profile
+measurement kind, the broken-stub removal, and the v0.3.4 hotfix — none of
+which touch the per-tick rescore loop or the eviction-pressure machinery.
+The figures below were captured against v0.3.3 and remain the canonical
+credibility numbers for the streaming subsystem in v0.3.5.
 
 v0.3.3 asks the platform to prove its scale claims with
 hard numbers — bounded memory at 500M points and a 1B-point synthetic that

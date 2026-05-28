@@ -44,7 +44,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
 - Game-like navigation: Orbit, Walk, and Fly modes with WASD and mouse-look.
 - A small, focused interface that stays out of the way and keeps you on the scan.
-- A full measurement toolkit — distance, polyline, area, height, angle, and slope — with editable points, in-session persistence, and JSON export/import.
+- A full measurement toolkit — distance, polyline, area, height, angle, slope, and cross-section profile — with editable points, in-session persistence, and JSON export/import.
 - Annotations: mark points of interest with categorised, titled notes, revisit them, and save the whole inspection to a file.
 - Inspect any point: click it to read its exact coordinates, intensity, classification, and colour, then copy them in one click.
 - A Scan Intelligence panel that reports point count, dimensions, density, spacing, and detected attributes.
@@ -70,7 +70,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Height, intensity, classification, RGB, and surface-normal color modes, picked automatically per file
 - Adaptive or fixed point sizing, round antialiased points, and a Detail control that shows an honest `shown / total` count
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
-- A measurement toolkit with six tools — distance, polyline, area, height, angle, and slope — with draggable points, undo, rename, a units toggle, and JSON session export/import
+- A measurement toolkit with seven tools — distance, polyline, area, height, angle, slope, and cross-section profile — with draggable points, undo, rename, a units toggle, and JSON session export/import
 - Annotations — drop categorised, titled markers with notes, browse and search them in a panel, capture the camera viewpoint with each, and undo/redo changes
 - Open multiple scans as layers, or close the current scan from the tool dock to start fresh with another
 - Point inspection — click a point to read its coordinates and attributes (including LAS return number, point source ID, and GPS time), with one-click copy; or hover with the live probe for a click-free readout
@@ -91,7 +91,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 | | |
 |---|---|
 | ![Main viewer](docs/screenshots/openlidarviewer-main.jpg) | ![Measuring inside the cloud](docs/screenshots/measurement-tool.jpg) |
-| A 9.6M-point drone survey, height-colored, with the Scan Intelligence panel and the Orbit / Walk / Fly navigation. | The measurement toolkit — here a distance between two picked points; it also measures polyline, area, height, angle, and slope. |
+| A 9.6M-point drone survey, height-colored, with the Scan Intelligence panel and the Orbit / Walk / Fly navigation. | The measurement toolkit — here a distance between two picked points; it also measures polyline, area, height, angle, slope, and cross-section profile. |
 | ![Inspecting a point](docs/screenshots/inspect-tool.jpg) | ![Scan Intelligence panel](docs/screenshots/scan-intelligence-panel.jpg) |
 | Inspecting a point: a glowing marker and a card with its real-world coordinates and attributes. | The Scan Intelligence panel — point count, dimensions, density, spacing, attributes, and the Advanced report. |
 
@@ -132,7 +132,7 @@ All of this is tunable from the Rendering section of the Scan Intelligence panel
 
 ## Measurement
 
-OpenLiDARViewer includes a measurement toolkit for visual inspection and documentation. Open the Measure tool, pick a kind from the toolbar, and place points directly on the scan. Six tools are available:
+OpenLiDARViewer includes a measurement toolkit for visual inspection and documentation. Open the Measure tool, pick a kind from the toolbar, and place points directly on the scan. Seven tools are available:
 
 | Tool | What it measures |
 |---|---|
@@ -142,6 +142,7 @@ OpenLiDARViewer includes a measurement toolkit for visual inspection and documen
 | Height | Vertical difference between two points |
 | Angle | The angle at a vertex between two arms |
 | Slope | Rise, run, slope angle, and grade percentage between two points |
+| Profile | Cross-section line between two points: 3D length, horizontal distance, vertical drop, and grade |
 
 Every measurement is editable: drag a point to move it, undo the last point while placing, rename a measurement, or clear them all. Placed measurements are listed in a compact Measurements panel and persist for the session. A single toggle switches all readouts between metric and imperial units. The whole set can be exported to a JSON session file and re-imported later.
 
@@ -243,7 +244,7 @@ The aim is not to replace full GIS or survey-grade processing. It is to give peo
 6. The cloud renders through a WebGPU or WebGL 2 pipeline built on three.js; Eye Dome Lighting adds screen-space depth shading as a post-processing pass.
 7. Color modes map height, intensity, classification, RGB, or surface-normal direction onto the points, which are sized adaptively with distance.
 8. You explore with Orbit, Walk, or Fly navigation.
-9. Scan Intelligence summarizes the dataset, and the measurement toolkit takes distance, area, height, angle, and slope measurements.
+9. Scan Intelligence summarizes the dataset, and the measurement toolkit takes distance, area, height, angle, slope, and cross-section profile measurements.
 10. You save viewpoints and export snapshots, re-exported point data, or a JSON measurement session.
 
 ## Technology Stack
@@ -282,7 +283,7 @@ npm run preview
 4. Adjust point size and rendering detail.
 5. Navigate with Orbit, Walk, or Fly mode.
 6. Read the Scan Intelligence panel for dataset metadata and quality.
-7. Measure distance, polyline, area, height, angle, or slope inside the point cloud.
+7. Measure distance, polyline, area, height, angle, slope, or cross-section profile inside the point cloud.
 8. Annotate points of interest with categorised notes, and inspect or probe individual points.
 9. Save viewpoints for repeated inspection.
 10. Export a PNG snapshot, re-export the cloud as PLY, OBJ, XYZ, or CSV, or save the full working state as a `.olvsession` package.
@@ -295,8 +296,8 @@ A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 A short list of practical workflows the current toolkit is well-suited for. Each one assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
 
 - **Large streaming dataset review.** Open COPC (`.copc.laz`) or EPT (`ept.json`) datasets directly — local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
-- **Inspection reporting.** Annotate findings → measure distances, areas, slopes, or angles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Five built-in templates and brand-aware accent + logo support.
-- **Terrain analysis.** Export height maps or contour maps from drone LiDAR datasets, with legend customisation and unit-system control. Useful for slope review, elevation comparison, and quick topographic figures.
+- **Inspection reporting.** Annotate findings → measure distances, areas, slopes, angles, or cross-section profiles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Five built-in templates and brand-aware accent + logo support.
+- **Terrain analysis.** Export height maps from drone LiDAR datasets with legend customisation and unit-system control. Useful for slope review, elevation comparison, and quick topographic figures. Cross-section profile measurements report 3D length, horizontal distance, vertical drop, and grade across any two picked points.
 - **Classification QA.** Export classification maps for validation workflows; toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession` for follow-up review.
 - **Mobile scan review.** Open lightweight datasets — `.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar iPhone/Android scanners — on tablets or phones. The viewer adapts rendering detail and Eye Dome Lighting defaults for weaker GPUs so a phone scan is readable from the first frame.
 
@@ -320,7 +321,7 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 - Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, contour (0.3.2–0.3.3)
 - Multi-page PDF technical reports — five built-in templates with branding and unit-system awareness (0.3.3)
 - `.olvsession` session round-trip — camera, render settings, colour mode, annotations, measurements, scan metadata (0.3.3)
-- Measurement toolkit — distance, polyline, area, height, angle, slope
+- Measurement toolkit — distance, polyline, area, height, angle, slope, cross-section profile
 - Annotation system with categorised markers and notes
 - Point inspector and live probe
 - WebGPU primary path with a WebGL 2 fallback

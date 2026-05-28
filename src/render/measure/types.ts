@@ -15,14 +15,24 @@ import type { Vec3 } from '../navMath';
 
 export type { Vec3 };
 
-/** The six measurement kinds the toolkit supports. */
+/** The measurement kinds the toolkit supports. */
 export type MeasurementKind =
   | 'distance'
   | 'polyline'
   | 'area'
   | 'height'
   | 'angle'
-  | 'slope';
+  | 'slope'
+  /**
+   * Cross-section / profile — a 2-point measurement that exposes the
+   * full geometry of a line through space: 3D length, horizontal length,
+   * vertical drop, and grade. The two endpoints define a profile line; a
+   * future iteration will sample point-cloud heights along the line and
+   * render a height-distance chart, persisted with the measurement. The
+   * scalar fields land here first so the kind, its picker entry, and the
+   * session schema are stable.
+   */
+  | 'profile';
 
 /** Unit system for displayed values; toggled live from the Measurements panel. */
 export type UnitSystem = 'metric' | 'imperial';
@@ -49,6 +59,7 @@ export const MIN_POINTS: Record<MeasurementKind, number> = {
   height: 2,
   angle: 3,
   slope: 2,
+  profile: 2,
 };
 
 /**
@@ -60,6 +71,7 @@ export const FIXED_POINTS: Partial<Record<MeasurementKind, number>> = {
   height: 2,
   angle: 3,
   slope: 2,
+  profile: 2,
 };
 
 /** True once a measurement has enough vertices to display a result. */

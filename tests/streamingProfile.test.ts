@@ -3,7 +3,8 @@ import {
   streamingProfileForTier,
 } from '../src/render/streaming/streamingProfile';
 
-// --- device-profile tiers ---------------------------------
+// Each device tier maps to a streaming quality preset; the tier-to-quality
+// mapping is the entry point the renderer reads at scan-open time.
 
 test('qualityForTier maps low / medium / high to the matching quality preset', () => {
   expect(qualityForTier('low')).toBe('low');

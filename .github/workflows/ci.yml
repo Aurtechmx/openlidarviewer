@@ -17,17 +17,40 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Main-deferral lint (no top-level viewer.* deref outside viewerLoaded)
+        run: npm run lint:main-deferral
       - name: Unit tests
         run: npm test
       - name: Production build
         run: npm run build
 
+  smoke:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    # Blocking gate: the smoke spec catches the class of bug where the bundle
+    # builds and the unit tests pass but the page throws on load in a real
+    # browser. Two specs, ~10 s; failure here means the artifact should not
+    # ship.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Smoke tests
+        run: npm run test:smoke
+
   e2e:
     runs-on: ubuntu-latest
     needs: build-and-test
-    # Advisory: the end-to-end tests drive a headless browser, and GPU-backed
-    # rendering varies across CI runners. A failure here is reported but does
-    # not block the build — build-and-test is the hard gate.
+    # Advisory: the broader end-to-end suite drives a headless browser
+    # through real rendering flows, and GPU-backed paths vary across CI
+    # runners. A failure here is reported but does not block the build —
+    # the smoke gate above is the structural hard gate for browser
+    # correctness.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5

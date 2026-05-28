@@ -10,6 +10,7 @@ import {
   angleAtVertex,
   slopeBetween,
   verticalDelta,
+  profileMetrics,
 } from '../src/render/measure/geometry';
 import type { Vec3 } from '../src/render/navMath';
 
@@ -148,5 +149,57 @@ describe('verticalDelta', () => {
     const d = verticalDelta(v(0, 0, 0), v(2, 5, 0), UP_Y);
     expect(d.vertical).toBeCloseTo(5, 9);
     expect(d.horizontal).toBeCloseTo(2, 9);
+  });
+});
+
+describe('profileMetrics', () => {
+  it('captures every dimension of a 3-4-5 sloped profile', () => {
+    // (0,0,0) → (3,0,4): horizontal=3, vertical=4, 3D=5, 80% grade-ish
+    const p = profileMetrics(v(0, 0, 0), v(3, 0, 4), UP_Z);
+    expect(p.length3d).toBeCloseTo(5, 9);
+    expect(p.lengthHorizontal).toBeCloseTo(3, 9);
+    expect(p.verticalDrop).toBeCloseTo(4, 9);
+    expect(p.gradePercent).toBeCloseTo(133.333, 3);
+    expect(p.gradeAngleDeg).toBeCloseTo(53.13, 2);
+  });
+
+  it('reads a flat horizontal profile as zero-grade', () => {
+    const p = profileMetrics(v(0, 0, 0), v(10, 0, 0), UP_Z);
+    expect(p.length3d).toBeCloseTo(10, 9);
+    expect(p.lengthHorizontal).toBeCloseTo(10, 9);
+    expect(p.verticalDrop).toBeCloseTo(0, 9);
+    expect(p.gradePercent).toBe(0);
+    expect(p.gradeAngleDeg).toBeCloseTo(0, 9);
+  });
+
+  it('reports infinite grade for a vertical profile', () => {
+    const p = profileMetrics(v(0, 0, 0), v(0, 0, 7), UP_Z);
+    expect(p.length3d).toBeCloseTo(7, 9);
+    expect(p.lengthHorizontal).toBeCloseTo(0, 9);
+    expect(p.verticalDrop).toBeCloseTo(7, 9);
+    expect(p.gradePercent).toBe(Infinity);
+    expect(p.gradeAngleDeg).toBeCloseTo(90, 6);
+  });
+
+  it('signs the vertical drop — descending profile is negative', () => {
+    const p = profileMetrics(v(0, 0, 10), v(5, 0, 0), UP_Z);
+    expect(p.verticalDrop).toBeCloseTo(-10, 9);
+    expect(p.gradePercent).toBeCloseTo(-200, 6);
+    expect(p.gradeAngleDeg).toBeCloseTo(-63.435, 2);
+  });
+
+  it('handles a coincident pair without throwing', () => {
+    const p = profileMetrics(v(2, 2, 2), v(2, 2, 2), UP_Z);
+    expect(p.length3d).toBeCloseTo(0, 9);
+    expect(p.lengthHorizontal).toBeCloseTo(0, 9);
+    expect(p.verticalDrop).toBeCloseTo(0, 9);
+    expect(p.gradePercent).toBe(0);
+  });
+
+  it('works with a Y-up axis (legacy GLTF coordinate convention)', () => {
+    const p = profileMetrics(v(0, 0, 0), v(3, 4, 0), UP_Y);
+    expect(p.length3d).toBeCloseTo(5, 9);
+    expect(p.lengthHorizontal).toBeCloseTo(3, 9);
+    expect(p.verticalDrop).toBeCloseTo(4, 9);
   });
 });

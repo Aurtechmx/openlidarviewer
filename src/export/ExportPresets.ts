@@ -15,8 +15,6 @@
 
 import type {
   ClassificationOptions,
-  ContourOptions,
-  DepthMapOptions,
   ExportMode,
   ExportOptions,
   HeightMapOptions,
@@ -106,21 +104,6 @@ const intensityScan: ExportPreset = {
   } satisfies IntensityOptions,
 };
 
-// three new presets covering the new exporters.
-
-const depthMl: ExportPreset = {
-  id: 'depth-ml',
-  label: 'Depth (ML)',
-  description: 'Top-down depth raster at 2048 px, near = white. ML / QA / geometry review.',
-  mode: 'depth',
-  options: {
-    width: 2048,
-    transparent: false,
-    background: '#000000',
-    invert: false,
-  } satisfies DepthMapOptions,
-};
-
 const normalQa: ExportPreset = {
   id: 'normal-qa',
   label: 'Normal Map (QA)',
@@ -134,21 +117,10 @@ const normalQa: ExportPreset = {
   } satisfies NormalMapOptions,
 };
 
-const contourReview: ExportPreset = {
-  id: 'contour-review',
-  label: 'Contour Review',
-  description: 'Topographic contours at 5 m intervals over the elevation raster, 2048 px.',
-  mode: 'contour',
-  options: {
-    width: 2048,
-    transparent: false,
-    background: '#ffffff',
-    interval: 5,
-    labels: true,
-    overlay: 'height-map',
-    palette: 'topographic',
-  } satisfies ContourOptions,
-};
+// Depth and contour presets intentionally absent. Their underlying modes
+// are not registered in the default export registry yet (see
+// `export/index.ts`); restoring the presets is part of the proper depth-
+// buffer + marching-squares contour implementation in a future release.
 
 /** The full preset catalogue, in default display order. */
 export const EXPORT_PRESETS: readonly ExportPreset[] = [
@@ -157,9 +129,7 @@ export const EXPORT_PRESETS: readonly ExportPreset[] = [
   classificationReview,
   technicalReport,
   intensityScan,
-  depthMl,
   normalQa,
-  contourReview,
 ];
 
 /** Look up a preset by id, or `undefined` if unknown. */

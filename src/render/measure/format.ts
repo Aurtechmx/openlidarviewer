@@ -62,3 +62,21 @@ export function formatAngle(degrees: number): string {
 export function formatGrade(percent: number): string {
   return Number.isFinite(percent) ? `${percent.toFixed(1)}%` : 'vertical';
 }
+
+/**
+ * Format a profile measurement's headline readout — a single compact line
+ * that captures the 3D length and the vertical drop with grade, matching the
+ * tags an engineer reads off a paper cross-section card.
+ */
+export function formatProfileHeadline(
+  length3d: number,
+  verticalDrop: number,
+  gradePercent: number,
+  system: UnitSystem,
+): string {
+  const len = formatLength(length3d, system);
+  const drop = formatLength(Math.abs(verticalDrop), system);
+  const grade = formatGrade(gradePercent);
+  const sign = verticalDrop < 0 ? '−' : verticalDrop > 0 ? '+' : '';
+  return `${len}  · Δh ${sign}${drop}  · ${grade}`;
+}

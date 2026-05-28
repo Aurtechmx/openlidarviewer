@@ -292,31 +292,30 @@ const inspector = new Inspector({
         // most actionable thing we can show, so it goes both to the console
         // (for debugging) and to a non-blocking alert (so the user knows
         // something happened and why). Replaces the alert with a
-        // toast surfaced inside the Studio panel.
+        // Surface the failure through the shared toast UI rather than a
+        // modal alert — blocking the page on a generation failure is a UX
+        // regression we no longer accept.
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[image-export]', err);
-        // Defer the alert one tick so it doesn't block the failing render's
-        // own stack unwinding (which could otherwise lock the page in some
-        // browsers when the alert is fired synchronously during a render).
-        setTimeout(() => window.alert(`Image export failed: ${msg}`), 0);
+        dropZone.setError(`Image export failed: ${msg}`);
       });
   },
   onExportReport: (templateId) => {
-    // generate a PDF report from the live scan state +
-    // annotations + measurements. The whole `src/report/` module + pdf-lib
-    // (~150 KB) lives behind `loadReportEngine()`; first click downloads
-    // both. The report covers what the scan-report card already does on
-    // PNG exports, but as a multi-page PDF with the full Inspector context.
-    // surface a precise progress string while the lazy module
-    // loads and the PDF renders.
+    // Generate a PDF report from the live scan state + annotations +
+    // measurements. The whole `src/report/` module + pdf-lib (~150 KB)
+    // lives behind `loadReportEngine()`; first click downloads both. The
+    // report covers what the scan-report card already does on PNG
+    // exports, but as a multi-page PDF with the full Inspector context.
+    // The progress toast surfaces while the lazy module loads and the PDF
+    // renders; failures route through the same toast UI as every other
+    // export.
     dropZone.setProgress('Generating report…');
     generateReportPdf(templateId)
       .then(() => dropZone.setProgress(null))
       .catch((err: unknown) => {
-        dropZone.setProgress(null);
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[report]', err);
-        setTimeout(() => window.alert(`Report generation failed: ${msg}`), 0);
+        dropZone.setError(`Report generation failed: ${msg}`);
       });
   },
   onSaveView: () => saveCurrentView(),

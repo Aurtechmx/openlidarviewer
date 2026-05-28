@@ -462,19 +462,57 @@ button:disabled { cursor: not-allowed; }
   pointer-events: auto; user-select: none;
 }
 
-/* Export buttons (Inspector) */
+/* Export buttons (Inspector)
+ *
+ * Two layouts share the same `.olv-export-btn` styling:
+ *   - `.olv-export`      — flex row, used for the 4 file-format buttons
+ *                          (PLY / OBJ / XYZ / CSV) and the single Report PDF
+ *                          button. Each button stretches to fill its share
+ *                          of the row.
+ *   - `.olv-export-grid` — 2-column grid, used for the 7 image-export
+ *                          buttons (Ortho RGB / Height Map / Intensity /
+ *                          Class Map / Depth Map / Normal Map / Contour
+ *                          Map). Seven buttons in a single flex row would
+ *                          shrink below their label width and overflow the
+ *                          232 px Inspector panel; the grid wraps them into
+ *                          4 rows of 2 (last row holds the seventh).
+ */
 .olv-export { display: flex; gap: 5px; }
+.olv-export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
 .olv-export-btn {
   flex: 1; font-size: 10.5px; color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 5px 4px;
+  border-radius: 6px; padding: 5px 6px;
+  /* Centre the label even when the button is wider than its text — the
+   * 2-column grid gives each image-export button ~100 px, well over the
+   * label width. `text-align: center` keeps the visual rhythm.
+   */
+  text-align: center;
+  /* Defensive overflow handling: if a custom theme or zoomed font ever
+   * pushes a label past its cell, ellipsise rather than overflow.
+   */
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: color 130ms ease, border-color 130ms ease,
     background 130ms ease, transform 90ms ease;
 }
 .olv-export-btn:hover { color: var(--text); border-color: var(--accent); }
 .olv-export-btn:active { transform: scale(0.95); }
 .olv-export-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The disabled state needs to look unmistakably inactive so a user doesn't
+ * try to click an export that can't run yet. */
+.olv-export-btn[disabled] {
+  opacity: 0.42;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 
 /* Saved views (Inspector) */
 .olv-view-save {

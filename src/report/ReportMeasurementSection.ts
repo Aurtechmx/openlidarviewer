@@ -120,6 +120,15 @@ function computeValue(m: Measurement, system: UnitSystem): string {
       return m.points.length >= 2
         ? `${slopePercent(m.points[0], m.points[1]).toFixed(2)}%`
         : '—';
+    case 'profile': {
+      // Profile reports the 3D length as its headline value; the rest of
+      // the metrics (Δh, grade) live in the live overlay and will be
+      // expanded into a per-measurement card when the report engine grows
+      // measurement-detail blocks.
+      if (m.points.length < 2) return '—';
+      const length3d = dist(m.points[0], m.points[1]);
+      return formatLinear(length3d, system);
+    }
   }
   return '—';
 }

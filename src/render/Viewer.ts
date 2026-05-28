@@ -1355,10 +1355,33 @@ export class Viewer {
    */
   async snapshot(options?: SnapshotOptions): Promise<Blob> {
     await this.ready;
-    // Render through the same path the loop uses, so the snapshot matches the
-    // on-screen image — EDL included when it is enabled.
-    if (this._edlEnabled) this._post.render();
-    else this._renderer.render(this._scene, this._camera);
+
+    // Render-and-present helper. The export pipeline mutates `colorAttr`
+    // immediately before calling snapshot — for WebGPU specifically, the
+    // first `render()` queues the new color buffer upload but the canvas
+    // won't carry the new frame until the browser ticks an animation
+    // frame. Calling `toBlob` immediately after a single un-awaited
+    // `render()` reads the *previous* frame, which is why every export
+    // mode came out looking identical (whatever was on screen before the
+    // swap). The fix is to render, wait for a present cycle, then render
+    // and wait once more — two frames is enough to flush the buffer
+    // upload, the post-processing pipeline if EDL is on, and the
+    // composited presentation.
+    const renderAndPresent = (): Promise<void> => {
+      if (this._edlEnabled) this._post.render();
+      else this._renderer.render(this._scene, this._camera);
+      return new Promise((resolve) => {
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => resolve());
+        } else {
+          // Test / Node fallback — snapshot is browser-only in practice,
+          // but the type-check path goes through here without rAF.
+          setTimeout(resolve, 0);
+        }
+      });
+    };
+    await renderAndPresent();
+    await renderAndPresent();
 
     const gl = this._renderer.domElement as HTMLCanvasElement;
     const wantAnnotations = options?.annotations === true;

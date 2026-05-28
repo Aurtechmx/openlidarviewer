@@ -87,9 +87,11 @@ const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
   { mode: 'height-map',       label: 'Height Map', title: 'Top-down PNG, points coloured by elevation (Z).' },
   { mode: 'intensity',        label: 'Intensity',  title: 'Top-down PNG, points coloured by LiDAR intensity. Requires intensity in the cloud.' },
   { mode: 'classification',   label: 'Class Map',  title: 'Top-down PNG, points coloured by ASPRS classification. Requires classification in the cloud.' },
-  { mode: 'depth',            label: 'Depth Map',  title: 'Camera-relative depth raster from an elevation projection. Useful for ML, QA, and geometry review.' },
   { mode: 'normal',           label: 'Normal Map', title: 'RGB-encoded surface normals. Requires per-point normals (PCD / PTX / GLTF; LiDAR scans rarely include them).' },
-  { mode: 'contour',          label: 'Contour Map', title: 'Topographic contour lines at the configured interval over the elevation raster.' },
+  // Depth Map + Contour Map intentionally absent — their previous
+  // implementations produced an elevation raster (same as Height Map)
+  // rather than true camera-relative depth or marching-squares contour
+  // lines. They will return once the proper implementations land.
 ];
 
 function section(label: string, body: HTMLElement): HTMLElement {
@@ -279,7 +281,10 @@ export class Inspector {
       this._imageExportTitles.set(mode, title);
       return button;
     });
-    const imageExporter = el('div', { className: 'olv-export' }, imageExportButtons);
+    // The image-export row carries 7 buttons — too many to fit in a single
+    // flex row inside the 232 px Inspector panel. The 2-column grid layout
+    // wraps cleanly into 4 rows (last row holds the seventh button).
+    const imageExporter = el('div', { className: 'olv-export-grid' }, imageExportButtons);
 
     // PDF Report button. Single button; template selection is reserved
     // for a future UI surface. Currently dispatches the default template

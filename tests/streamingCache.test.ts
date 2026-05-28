@@ -108,7 +108,9 @@ test('resetCounters() zeros the outcome counters without dropping entries', () =
   expect(cache.has('a')).toBe(true);
 });
 
-// --- cache hysteresis -------------------------------------
+// The cache's LRU bookkeeping must keep a recently-touched entry alive in
+// the face of churn — the tests below exercise the touch-bump and the
+// eviction order under memory pressure.
 
 test('touch() bumps an entry to most-recently-used so it outlives later inserts', () => {
   const cache = new CompressedChunkCache(250);

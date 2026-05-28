@@ -18,10 +18,18 @@ async function loadSampleAndMeasure(page: Page): Promise<void> {
   await expect(page.locator('.olv-measure-bar')).toBeVisible();
 }
 
-test('the measurement toolbar shows a six-tool kind picker', async ({ page }) => {
+test('the measurement toolbar shows the full kind picker', async ({ page }) => {
   await loadSampleAndMeasure(page);
-  await expect(page.locator('.olv-mkind')).toHaveCount(6);
+  // Seven kinds: distance, polyline, area, height, angle, slope, profile.
+  await expect(page.locator('.olv-mkind')).toHaveCount(7);
   await expect(page.locator('.olv-mkind-active')).toHaveText('Distance');
+});
+
+test('the kind picker includes the new Profile kind', async ({ page }) => {
+  await loadSampleAndMeasure(page);
+  await expect(page.locator('.olv-mkind', { hasText: 'Profile' })).toBeVisible();
+  await page.locator('.olv-mkind', { hasText: 'Profile' }).click();
+  await expect(page.locator('.olv-mkind-active')).toHaveText('Profile');
 });
 
 test('selecting a kind highlights it', async ({ page }) => {

@@ -124,17 +124,21 @@ test('the registry preserves insertion order in list()', () => {
   expect(r.list().map((f) => f.mode)).toEqual(['height-map', 'intensity', 'classification']);
 });
 
-test('the default registry pre-registers every v0.3.3 mode', () => {
-  // v0.3.3 completes the catalogue — seven modes total now:
-  // the four v0.3.2 modes plus depth, normal, and contour.
-  expect(defaultExportRegistry.size).toBe(7);
+test('the default registry pre-registers every visible exporter mode', () => {
+  // Five modes whose output matches their name: orthographic-rgb,
+  // height-map, intensity, classification, normal. Depth and contour are
+  // intentionally unregistered until their true implementations land.
+  expect(defaultExportRegistry.size).toBe(5);
   expect(defaultExportRegistry.has('orthographic-rgb')).toBe(true);
   expect(defaultExportRegistry.has('height-map')).toBe(true);
   expect(defaultExportRegistry.has('intensity')).toBe(true);
   expect(defaultExportRegistry.has('classification')).toBe(true);
-  expect(defaultExportRegistry.has('depth')).toBe(true);
   expect(defaultExportRegistry.has('normal')).toBe(true);
-  expect(defaultExportRegistry.has('contour')).toBe(true);
+  // Held back: their stub implementations produced an elevation raster
+  // (same as Height Map), not the camera-relative depth raster or
+  // marching-squares contour lines their names imply.
+  expect(defaultExportRegistry.has('depth')).toBe(false);
+  expect(defaultExportRegistry.has('contour')).toBe(false);
 });
 
 test('availableModes + unavailableModes — capability gating round-trip', () => {
@@ -419,25 +423,37 @@ test('contourMapExporter is unavailable when no cloud is loaded', () => {
   expect(contourMapExporter.isAvailable(ctx)).toBe(false);
 });
 
-// — Default registry now covers every v0.3.3 mode ---------------------------
+// — Default registry list reflects the visible Studio surface ----------------
 
-test('every v0.3.3 mode appears in the default registry list', () => {
+test('every visible exporter mode appears in the default registry list', () => {
   const modes = defaultExportRegistry.list().map((f) => f.mode);
-  expect(modes).toContain('depth');
+  expect(modes).toContain('orthographic-rgb');
+  expect(modes).toContain('height-map');
+  expect(modes).toContain('intensity');
+  expect(modes).toContain('classification');
   expect(modes).toContain('normal');
-  expect(modes).toContain('contour');
+  // Depth + contour are intentionally absent from the visible surface.
+  expect(modes).not.toContain('depth');
+  expect(modes).not.toContain('contour');
 });
 
-// — Presets cover the new exporters too ---------------------------------------
+// — Presets cover only modes whose output matches their name -----------------
 
-test('EXPORT_PRESETS includes the three v0.3.3 presets', () => {
+test('EXPORT_PRESETS only includes presets for the visible Studio modes', () => {
   const ids = EXPORT_PRESETS.map((p) => p.id);
-  expect(ids).toContain('depth-ml');
+  // The presets the Studio ships today.
+  expect(ids).toContain('terrain-review');
+  expect(ids).toContain('qa-inspection');
+  expect(ids).toContain('classification-review');
+  expect(ids).toContain('technical-report');
+  expect(ids).toContain('intensity-scan');
   expect(ids).toContain('normal-qa');
-  expect(ids).toContain('contour-review');
+  // The depth + contour presets are held back alongside their modes.
+  expect(ids).not.toContain('depth-ml');
+  expect(ids).not.toContain('contour-review');
 });
 
-test('every v0.3.3 preset references a registered mode', () => {
+test('every preset references a mode that is actually registered', () => {
   for (const preset of EXPORT_PRESETS) {
     expect(defaultExportRegistry.has(preset.mode)).toBe(true);
   }

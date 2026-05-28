@@ -180,7 +180,9 @@ test('a paused scheduler schedules no work', async () => {
   expect(cloud.counts().resident).toBe(0);
 });
 
-// --- eviction hysteresis -----------------------------------
+// The hysteresis window keeps a node resident for a configurable duration
+// after it leaves the wanted set, so a camera flicker doesn't trigger an
+// immediate re-decode. These tests assert the window is honoured.
 
 test('hysteresis defers eviction within the configured window', async () => {
   let clock = 0;
@@ -424,7 +426,10 @@ test('concurrency returns to full after the settle window elapses', async () => 
   expect(settled.effectiveMaxConcurrent).toBe(budgets.maxConcurrentDecodes);
 });
 
-// --- hierarchy-aware eviction -----------------------------
+// The scheduler's eviction policy is hierarchy-aware: a node whose sibling
+// is still in the wanted set is held longer than an isolated leaf, and a
+// node that protects its children's parent slot is never the first to go.
+// These tests cover both rules.
 
 test('sibling retention defers eviction when a sibling stays in the wanted set', async () => {
   let clock = 0;
