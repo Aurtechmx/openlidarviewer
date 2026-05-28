@@ -16,7 +16,7 @@
  * Pure — accepts three.js types but contains no DOM access, so the math is
  * unit-testable in Node.
  *
- * Memory-safety contract (audited v0.3.2):
+ * Memory-safety contract (audited):
  *   • Every exporter renders to the live on-screen canvas; no offscreen
  *     RenderTarget is allocated, so no per-export GPU buffer leak is possible.
  *   • The renderer.setSize round-trip every Studio mode performs is wrapped
@@ -155,8 +155,12 @@ export function topDownOrthoCameraForAabb(
 // Shared Studio export pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Build-time-injected version string for the scan-report footer. */
-const STUDIO_VERSION = '0.3.2';
+/**
+ * Build-time-injected version string for the scan-report footer. Reads from
+ * the `__APP_VERSION__` global Vite stamps with the package.json version, so
+ * the footer is automatically current without a manual edit per release.
+ */
+const STUDIO_VERSION = __APP_VERSION__;
 
 /**
  * The standard set of scan-report rows every Studio export carries. Mode
@@ -188,7 +192,7 @@ export function baseReportRows(
   rows.push({ label: 'RGB',           value: adapter.hasRgb() ? 'Yes' : 'No' });
   rows.push({ label: 'Intensity',     value: adapter.hasIntensity() ? 'Yes' : 'No' });
   rows.push({ label: 'Classification', value: adapter.hasClassification() ? 'Yes' : 'No' });
-  // v0.3.2-Georef — CRS provenance, when the source file declares one. This
+  // CRS provenance, when the source file declares one. This
   // is the row that makes the export research-grade: an analyst reading the
   // PNG later knows the datum and the linear unit the dimensions are in.
   const crs = adapter.crsLabel();
@@ -251,8 +255,8 @@ export async function runStudioExport(
       annotations: includeAnnotations,
       // Inspect tool + LiveProbe both bake by default — if the user is
       // looking at point data when they click Export, that data ships in
-      // the PNG. The brief asked for "whatever's on screen ships in the
-      // export"; this is the implementation of that promise.
+      // the PNG. The contract is "whatever's on screen ships in the
+      // export"; this is the implementation.
       inspector: true,
       probe: true,
     });

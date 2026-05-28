@@ -26,7 +26,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * sync with the `.olv-measure-*` / `.olv-m-*` blocks in `style.css`, with the
  * accent colour resolved to its literal value.
  */
-// v0.3.2 polish — stroke widths match the live CSS (≈10% bump over the
+// stroke widths match the live CSS (≈10% bump over the
 // original v0.2 measure values) so a baked-into-export measurement reads
 // at the same weight the user sees on-screen.
 const SNAPSHOT_CSS = [

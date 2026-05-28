@@ -1,8 +1,8 @@
 /**
- * eptUrlValidation.ts — v0.3.3 remote-UX polish for EPT.
+ * eptUrlValidation.ts — Remote-UX polish for EPT.
  *
  * The COPC remote entry has had `validateRemoteCopcUrl` +
- * `describeRemoteCopcError` since v0.3.1; v0.3.3 ships EPT streaming as a
+ * `describeRemoteCopcError` Ships EPT streaming as a
  * peer of COPC and this module gives the EPT entry the same fail-fast
  * URL hygiene + classified-error polish so a misconfigured host fails
  * with a precise reason rather than a stalled load.

@@ -1,8 +1,8 @@
 /**
  * streamingBenchmark.ts
  *
- * Per-session metrics collector for a streaming COPC scan. v0.3.1 hardens
- * the streaming architecture by measuring it — every scheduler / cache /
+ * Per-session metrics collector for a streaming COPC scan. The streaming
+ * architecture is hardened by measuring it — every scheduler / cache /
  * remote optimisation must show a before-and-after through these numbers.
  *
  * The collector is a passive accumulator. It owns no scheduler, no cache,
@@ -273,7 +273,7 @@ export class StreamingBenchmark {
   }
 
   /**
-   * Memory accounting — decoded / GPU tier cumulative event counts. The compressed
+   * Decoded / GPU tier cumulative event counts. The compressed
    * tier's hit/miss/evict counters live on {@link cacheCounters}. Decoded
    * and GPU tiers don't have a true cache shape in this architecture
    * (decode → GPU upload is atomic), so the meaningful counters are uploads

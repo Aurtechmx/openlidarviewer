@@ -130,6 +130,82 @@ describe('branding', () => {
     const merged = effectiveBranding({ organisation: 'Acme' });
     expect(merged.accentColor).toBe(DEFAULT_ACCENT);
   });
+
+  it('v0.3.4 — effectiveBranding carries the new white-label fields through', () => {
+    const merged = effectiveBranding({
+      organisation: 'Acme',
+      author: 'J. Smith',
+      footerNote: 'Confidential — for internal use only',
+      projectMetadata: {
+        client: 'Hudson Bridge Authority',
+        project: 'Pier-7 Re-inspection',
+        phase: 'As-built',
+        reference: 'HBA-2026-014',
+        date: '2026-05-27',
+      },
+      theme: 'minimal-engineering',
+    });
+    expect(merged.organisation).toBe('Acme');
+    expect(merged.author).toBe('J. Smith');
+    expect(merged.footerNote).toMatch(/Confidential/);
+    expect(merged.projectMetadata?.client).toBe('Hudson Bridge Authority');
+    expect(merged.projectMetadata?.reference).toBe('HBA-2026-014');
+    expect(merged.theme).toBe('minimal-engineering');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Themes (v0.3.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('themes (v0.3.4)', () => {
+  it('resolveTheme returns the light-technical palette by default', async () => {
+    const { resolveTheme } = await import('../src/report');
+    const t = resolveTheme();
+    // light-technical: white page, dark body text, accent stripe on.
+    expect(t.pageBackground.r).toBeCloseTo(1, 3);
+    expect(t.bodyText.r).toBeLessThan(0.2);
+    expect(t.drawAccentStripe).toBe(true);
+  });
+
+  it('resolveTheme("dark-inspection") returns a dark palette', async () => {
+    const { resolveTheme } = await import('../src/report');
+    const t = resolveTheme('dark-inspection');
+    expect(t.pageBackground.r).toBeLessThan(0.2);
+    // body text on dark must be light.
+    expect(t.bodyText.r).toBeGreaterThan(0.8);
+    expect(t.drawAccentStripe).toBe(true);
+  });
+
+  it('resolveTheme("minimal-engineering") strips the accent stripe', async () => {
+    const { resolveTheme } = await import('../src/report');
+    const t = resolveTheme('minimal-engineering');
+    expect(t.drawAccentStripe).toBe(false);
+    // page background still white.
+    expect(t.pageBackground.r).toBeCloseTo(1, 3);
+  });
+
+  it('resolveTheme falls back to light-technical for an unknown theme name', async () => {
+    const { resolveTheme } = await import('../src/report');
+    // @ts-expect-error — runtime guard against an unknown name
+    const t = resolveTheme('not-a-theme');
+    const light = resolveTheme('light-technical');
+    expect(t).toEqual(light);
+  });
+
+  it('every palette has body/muted text contrast against its page background', async () => {
+    const { resolveTheme } = await import('../src/report');
+    for (const name of ['light-technical', 'dark-inspection', 'minimal-engineering'] as const) {
+      const t = resolveTheme(name);
+      // Contrast invariant: body text differs from page background by more
+      // than 0.3 in each channel (a coarse-but-useful WCAG-adjacent check).
+      const delta =
+        Math.abs(t.bodyText.r - t.pageBackground.r) +
+        Math.abs(t.bodyText.g - t.pageBackground.g) +
+        Math.abs(t.bodyText.b - t.pageBackground.b);
+      expect(delta, `theme ${name}: body/page delta`).toBeGreaterThan(0.9);
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

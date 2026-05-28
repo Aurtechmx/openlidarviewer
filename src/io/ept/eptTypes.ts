@@ -53,11 +53,11 @@ export interface EptBounds {
 
 /** The full ept.json shape — what `parseEptMetadata` returns on success. */
 export interface EptMetadata {
-  /** EPT spec version. v0.3.3 supports versions `1.x` only. */
+  /** EPT spec version. only supports versions `1.x` only. */
   readonly version: string;
   /** Tile encoding. */
   readonly dataType: EptDataType;
-  /** Hierarchy file format. v0.3.3 supports `json` only. */
+  /** Hierarchy file format. only supports `json` only. */
   readonly hierarchyType: EptHierarchyType;
   /** Total point count across the whole dataset. */
   readonly points: number;

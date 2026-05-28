@@ -37,7 +37,7 @@ const MOBILE_POINT_BUDGET: Record<StreamingQuality, number> = {
 /**
  * Rough GPU bytes per resident streaming point: an instanced position
  * (vec3 f32, 12 B) and an instanced colour (vec3 f32, 12 B) — the same figure
- * the v0.2.9 debug overlay uses for static clouds.
+ * the debug overlay uses for static clouds.
  */
 export const BYTES_PER_STREAMING_POINT = 24;
 

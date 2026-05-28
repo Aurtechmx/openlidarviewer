@@ -2,10 +2,10 @@
  * streamingPickSelection.ts
  *
  * Pure, three.js-free selection helper for picking against a set of resident
- * streaming nodes. Streaming pick-selection — the algorithm that decides which
- * streaming-node point a click lands on, and whether deeper refinement is
- * still pending for the picked node, is testable here in isolation from the
- * Viewer's mesh-lifecycle plumbing.
+ * streaming nodes. The algorithm that decides which streaming-node point a
+ * click lands on, and whether deeper refinement is still pending for the
+ * picked node, is testable here in isolation from the Viewer's mesh-
+ * lifecycle plumbing.
  *
  * Invariants enforced by this module (the hardening contract):
  *

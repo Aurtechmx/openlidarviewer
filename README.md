@@ -33,7 +33,7 @@ Most LiDAR tools are powerful, but a lot of them are heavy, desktop-first, and G
 
 OpenLiDARViewer takes a lighter path. It runs in the browser with nothing to install. Files are read and rendered locally, so there is no server to upload to. It keeps the interface small and the navigation game-like instead of GIS-like. And it is built to be a testbed for browser-native spatial computing rather than a full GIS replacement.
 
-It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-scanner data in E57, PTX, and PTS — including exports from Trimble and other survey scanners — compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF), and Point Cloud Library (PCD) files. Large `COPC` (Cloud Optimized Point Cloud) files stream progressively, octree node by octree node, with bounded memory and no full-file load.
+It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-scanner data in E57, PTX, and PTS — including exports from Trimble and other survey scanners — compatible iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF), and Point Cloud Library (PCD) files. Large `COPC` (Cloud Optimized Point Cloud) and `EPT` (Entwine Point Tile) datasets stream progressively, octree node by octree node, with bounded memory and no full-file load.
 
 ## Key Advantages
 
@@ -292,7 +292,7 @@ A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 
 ## Recommended Workflows
 
-A short list of practical workflows the v0.3.3 toolkit is well-suited for. Each one assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
+A short list of practical workflows the current toolkit is well-suited for. Each one assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
 
 - **Large streaming dataset review.** Open COPC (`.copc.laz`) or EPT (`ept.json`) datasets directly — local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
 - **Inspection reporting.** Annotate findings → measure distances, areas, slopes, or angles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Five built-in templates and brand-aware accent + logo support.

@@ -12,10 +12,8 @@
  *
  * Honest caveat — a cloud that has the classification *channel* but where
  * every point is class 0 ("never classified") or class 1 ("unclassified")
- * will render as uniform grey. v0.3.3 will pre-check the histogram and
- * surface "this cloud has nothing meaningfully classified" before clicking;
- * for v0.3.2 the scan-report card simply reports `Classification: Yes` and
- * the user can read the visual outcome.
+ * will render as uniform grey. The scan-report card reports
+ * `Classification: Yes` and the user can read the visual outcome.
  */
 
 import type {

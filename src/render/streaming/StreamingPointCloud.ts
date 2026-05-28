@@ -34,8 +34,8 @@ function pickRenderOrigin(
 /**
  * An opened, hierarchy-loaded COPC cloud, ready for the scheduler to stream.
  *
- * v0.3.2: this class is the COPC implementation of the format-
- * agnostic {@link StreamingSource} interface. v0.3.3 will add a parallel
+ * this class is the COPC implementation of the format-
+ * agnostic {@link StreamingSource} interface. Adds a parallel
  * `EptStreamingSource` class; the scheduler / renderer / Viewer depend only
  * on the interface and don't need to change.
  */
@@ -107,7 +107,7 @@ export class StreamingPointCloud implements StreamingSource {
   }
 
   /**
-   * v0.3.3 — format-agnostic default colour mode. COPC clouds use RGB when
+   * format-agnostic default colour mode. COPC clouds use RGB when
    * the point format carries it (PDRF 7 / 8), elevation otherwise.
    */
   defaultColorMode(): 'rgb' | 'intensity' | 'elevation' | 'classification' | 'normal' {
@@ -115,7 +115,7 @@ export class StreamingPointCloud implements StreamingSource {
   }
 
   /**
-   * v0.3.3 — the colour modes a COPC cloud can drive. RGB only when
+   * the colour modes a COPC cloud can drive. RGB only when
    * present; intensity / elevation / classification are always available
    * on COPC PDRF 6/7/8.
    */
@@ -127,7 +127,7 @@ export class StreamingPointCloud implements StreamingSource {
   }
 
   /**
-   * v0.3.3 — the CRS the COPC public-header parser pulled out of the
+   * the CRS the COPC public-header parser pulled out of the
    * LASF_Projection VLRs (see `src/io/crs.ts`). Already cached on the
    * header; we re-expose it through the abstract `StreamingSource`
    * contract so the Viewer's export adapter doesn't need to peek at

@@ -31,7 +31,7 @@ import type { StreamingColorRanges } from './streamingColors';
  * true` material once the node has settled. Disabled on mobile and on the
  * low-tier device profile — see `attachStreamingCloud`.
  */
-export const FADE_MS = 120;
+export const FADE_MS = 180;
 export const FADE_START_OPACITY = 0.5;
 
 /**
@@ -45,7 +45,12 @@ export function fadeOpacity(
 ): number {
   if (durationMs <= 0) return 1;
   const t = Math.min(1, Math.max(0, elapsedMs / durationMs));
-  return startOpacity + (1 - startOpacity) * t;
+  // ease-out cubic so the fade lands softly. Linear interpolation
+  // makes the final 20 % of the fade feel abrupt; ease-out spends more of
+  // the duration near the final opacity, which reads as "settling in"
+  // rather than "snapping to opaque".
+  const eased = 1 - Math.pow(1 - t, 3);
+  return startOpacity + (1 - startOpacity) * eased;
 }
 
 /** A Three.js material with the alpha-related fields we need to drive. */

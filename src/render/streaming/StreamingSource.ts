@@ -1,10 +1,10 @@
 /**
  * StreamingSource.ts
  *
- * v0.3.2 — the format-agnostic streaming source interface.
+ * the format-agnostic streaming source interface.
  *
  * Today, the viewer streams from COPC files via {@link StreamingPointCloud};
- * tomorrow (v0.3.3), it will also stream from EPT (Entwine Point Tile)
+ * It will also stream from EPT (Entwine Point Tile)
  * pyramids. Both formats are octree-organised LAZ tile sets — they differ in
  * how the index is stored (a COPC VLR plus per-chunk records vs. an EPT
  * `ept.json` plus a separate hierarchy index), but the *runtime* shape the
@@ -13,9 +13,10 @@
  * a render origin, and a handful of counts and bounds.
  *
  * This file declares that runtime shape as an interface so the scheduler
- * never has to know which format it is streaming, and so v0.3.3 can add an
- * `EptStreamingSource` class without touching {@link StreamingScheduler},
- * {@link StreamingRenderer}, or the picking path.
+ * never has to know which format it is streaming, and so an EPT-flavoured
+ * source can sit alongside the COPC one without touching
+ * {@link StreamingScheduler}, {@link StreamingRenderer}, or the picking
+ * path.
  *
  * Pure — no DOM, no three.js — entirely a type/contract module.
  */
@@ -32,7 +33,7 @@ import type { NodeCounts, StreamingNodeStore } from './StreamingNodeStore';
 /**
  * The minimal public surface the scheduler / renderer / picking path read off
  * a streaming source's octree. Extracted as a structural interface so the
- * v0.3.3 `EptOctree` satisfies it without inheriting from the COPC-specific
+ * `EptOctree` satisfies it without inheriting from the COPC-specific
  * `StreamingOctree` class (which carries private fields that would force
  * nominal typing).
  *
@@ -53,8 +54,8 @@ export type StreamingSourceKind = 'copc' | 'ept';
  * The format-agnostic streaming source.
  *
  * Implementations:
- *   • {@link StreamingPointCloud} — COPC (v0.3.0). Already conforms.
- *   • `EptStreamingSource` — EPT (v0.3.3). To be added.
+ *   • {@link StreamingPointCloud} — COPC.
+ *   • `EptStreamingSource` — EPT.
  *
  * The interface is intentionally narrow: anything format-specific (the COPC
  * VLR, the EPT `ept.json`) is held by the concrete implementation and not
@@ -100,7 +101,7 @@ export interface StreamingSource {
    */
   availableColorModes(): readonly ('rgb' | 'intensity' | 'elevation' | 'classification' | 'normal')[];
   /**
-   * v0.3.3 — the source CRS, when the cloud carries projection metadata.
+   * the source CRS, when the cloud carries projection metadata.
    * COPC clouds get this from the LAS VLRs the public-header parser walks
    * (see `src/io/crs.ts`); EPT clouds get it from `ept.json`'s `srs.wkt`
    * field. Returns `null` for clouds without a recoverable CRS — common

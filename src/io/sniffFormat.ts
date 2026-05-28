@@ -84,8 +84,8 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
   if (magic.startsWith('ply')) return 'ply';
   if (magic.startsWith('LASF')) {
     // LAZ is LAS with the records compressed; the high bit of the point-format
-    // byte is authoritative. The v0.2.7 head slice always reaches it; a short
-    // buffer (older callers, tests) falls back to the file extension.
+    // byte is authoritative. The standard head slice always reaches it; a
+    // short buffer (older callers, tests) falls back to the file extension.
     if (buffer.byteLength > LAS_POINT_FORMAT_OFFSET) {
       const compressed = (new Uint8Array(buffer)[LAS_POINT_FORMAT_OFFSET] & 0x80) !== 0;
       return compressed ? 'laz' : 'las';

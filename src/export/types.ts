@@ -1,7 +1,7 @@
 /**
  * export/types.ts
  *
- * v0.3.2 Visual Export Studio — pure types and contracts.
+ * Visual Export Studio — pure types and contracts.
  *
  * The Studio is the user-facing image-export surface: take the live scan and
  * produce a publication-ready PNG of one of four "modes" — orthographic RGB,
@@ -11,9 +11,6 @@
  * The Studio is lazy-loaded — these types are the type-only edge the rest of
  * the codebase imports without pulling in any rendering code. They contain no
  * DOM, no three.js, and no Viewer reference (only a narrow adapter interface).
- *
- * v0.3.2 → ships orthographic-rgb, height-map, intensity, classification.
- * v0.3.3 → adds depth, contours, normals to this same surface.
  */
 
 import type * as THREE from 'three/webgpu';
@@ -29,15 +26,15 @@ export type ExportMode =
   | 'height-map'
   | 'intensity'
   | 'classification'
-  /** v0.3.3 — camera-relative depth raster (near=white, far=black, invertible). */
+  /** Camera-relative depth raster (near=white, far=black, invertible). */
   | 'depth'
-  /** v0.3.3 — top-down RGB-encoded surface normals. */
+  /** Top-down RGB-encoded surface normals. */
   | 'normal'
-  /** v0.3.3 — topographic-style contour lines over the elevation raster. */
+  /** Topographic-style contour lines over the elevation raster. */
   | 'contour';
 
-// Legacy alias retained for one release so any downstream import that still
-// reaches for `ImageExportMode` keeps compiling. Removed in v0.3.3.
+// Legacy alias retained so any downstream import that still reaches for
+// `ImageExportMode` keeps compiling.
 /** @deprecated Use {@link ExportMode}. */
 export type ImageExportMode = ExportMode;
 
@@ -63,11 +60,11 @@ export interface ExportSceneAdapter {
   /** Does any loaded cloud carry per-point classification? */
   hasClassification(): boolean;
   /**
-   * v0.3.3 — does any loaded cloud carry per-point normals? Drives the
-   * Normal Map exporter's `isAvailable` gate. Streaming COPC + EPT
-   * sources today never carry normals (LAS/LAZ doesn't reserve a field
-   * for them and EPT writers rarely emit them); static loaders (PCD
-   * with `_normal_` fields, PTX, GLTF) sometimes do.
+   * Does any loaded cloud carry per-point normals? Drives the Normal Map
+   * exporter's `isAvailable` gate. Streaming COPC + EPT sources never carry
+   * normals (LAS/LAZ doesn't reserve a field for them and EPT writers rarely
+   * emit them); static loaders (PCD with `_normal_` fields, PTX, GLTF)
+   * sometimes do.
    */
   hasNormals(): boolean;
   /**
@@ -101,7 +98,7 @@ export interface ExportSceneAdapter {
   /** Currently displayed point count (resident on GPU). */
   residentPointCount(): number;
   /**
-   * v0.3.2-Georef — the source CRS name + linear-unit label, when the loaded
+   * the source CRS name + linear-unit label, when the loaded
    * cloud carries a parseable LASF_Projection VLR. Returns `null` for clouds
    * without recoverable georeference (raw drone exports, PLY, PCD, PTX,
    * GLTF). Surfaced in the scan-report card so the exported PNG records
@@ -129,9 +126,8 @@ export interface ExportContext {
 }
 
 /**
- * @deprecated Use {@link ExportContext}. The legacy alias remains for a single
- * release so the v0.3.2 image-export consumers continue to type-check while
- * the rename to Studio rolls out.
+ * @deprecated Use {@link ExportContext}. The legacy alias remains so existing
+ * downstream image-export consumers continue to type-check.
  */
 export type ImageExportContext = ExportContext;
 
@@ -186,7 +182,7 @@ export interface ClassificationOptions extends CommonExportOptions {
   legend?: boolean;
 }
 
-/** v0.3.3 — options for the depth-map exporter. */
+/** options for the depth-map exporter. */
 export interface DepthMapOptions extends CommonExportOptions {
   /**
    * When true (default), near = white / far = black. When false, the
@@ -203,7 +199,7 @@ export interface DepthMapOptions extends CommonExportOptions {
   farOverride?: number;
 }
 
-/** v0.3.3 — options for the normal-map exporter. */
+/** options for the normal-map exporter. */
 export interface NormalMapOptions extends CommonExportOptions {
   /**
    * When true (default), normals are approximated from a small Gaussian-
@@ -215,10 +211,10 @@ export interface NormalMapOptions extends CommonExportOptions {
   smooth?: boolean;
 }
 
-/** v0.3.3 — colour palette presets the height-map + contour exporters share. */
+/** colour palette presets the height-map + contour exporters share. */
 export type LegendPalette = 'terrain' | 'heatmap' | 'topographic' | 'grayscale';
 
-/** v0.3.3 — options for the contour exporter. */
+/** options for the contour exporter. */
 export interface ContourOptions extends CommonExportOptions {
   /** Vertical interval between major contour lines, in metres. Default: 5. */
   interval?: number;

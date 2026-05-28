@@ -20,7 +20,7 @@
  * no recognisable CRS VLR is present (a common case for older field exports
  * and raw drone captures).
  *
- * Research-grade scope (v0.3.2): extract a HUMAN-READABLE name, an EPSG
+ * Research-grade scope (lazy chunk): extract a HUMAN-READABLE name, an EPSG
  * code when one can be regex-matched from the WKT, and the LINEAR UNIT
  * (metre / international foot / US survey foot) so measurements honour the
  * source datum. Reprojection between CRSs is explicitly out of scope —
@@ -70,8 +70,8 @@ export interface CrsInfo {
  *   u8[32] description
  *
  * EVLRs (LAS 1.4 extended VLRs) share the layout but with a u64 record
- * length — we ignore EVLRs in v0.3.2 since COPC pins the CRS into a
- * regular VLR.
+ * length — EVLRs are ignored here since COPC pins the CRS into a regular
+ * VLR.
  */
 const VLR_HEADER_BYTES = 54;
 const VLR_USER_ID_OFFSET = 2;
@@ -168,7 +168,7 @@ export function parseCrsFromVlrs(
 /**
  * Best-effort WKT parser — extracts the top-level CRS name and any AUTHORITY
  * EPSG code, plus the linear unit from the first UNIT[...] clause. A full
- * WKT parser is well beyond v0.3.2 scope; the regex-based path covers every
+ * WKT parser is intentionally out of scope; the regex-based path covers every
  * common LAS WKT (UTM zones, state plane, web mercator, WGS 84) which is
  * what research users actually ship.
  */

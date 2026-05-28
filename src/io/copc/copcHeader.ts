@@ -79,7 +79,7 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
     throw new LoadError('malformed-file', 'LAS point count is invalid.');
   }
 
-  // v0.3.2-Georef — walk the LAS VLR list for a LASF_Projection CRS VLR.
+  // walk the LAS VLR list for a LASF_Projection CRS VLR.
   // COPC files always start with the COPC info VLR at offset 375; any
   // LASF_Projection VLRs follow it. The head-slice the preflight reads is
   // typically large enough to include them; `parseCrsFromVlrs` handles a

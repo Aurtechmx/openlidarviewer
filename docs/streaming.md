@@ -111,3 +111,44 @@ Opening an EPT scan works the same two ways COPC does:
 The remote-EPT entry has the same fail-fast posture as remote COPC: the URL is validated (http/https only, no embedded credentials, ≤ 2048 chars, must end in `/ept.json`) before any network call, and failures are classified into precise messages (CORS, manifest 404, manifest 5xx, malformed manifest, hierarchy/tile fetch failure, network down) rather than a generic "could not load" stall.
 
 Reference EPT datasets to try: Entwine's public samples (https://entwine.io/data/), or any dataset built locally with `entwine build`.
+
+### Hosting an EPT dataset
+
+For an EPT to stream cleanly into the viewer, the host must serve:
+
+- `ept.json` — the manifest
+- `ept-hierarchy/*.json` — the octree hierarchy
+- `ept-data/*` — the tiles (`.bin` for `binary`, `.laz` for `laszip`)
+
+All three categories need the same CORS posture: a permissive `Access-Control-Allow-Origin` header (or an origin that matches yours) on every sub-resource. A CDN that strips CORS from static sub-paths surfaces a precise classified error rather than a stall.
+
+Pragmatic guidance:
+
+- **Object stores** — Amazon S3, Google Cloud Storage, Cloudflare R2, Backblaze B2 all serve EPT cleanly once CORS is configured on the bucket / origin.
+- **Static hosts** — any static host that passes the headers through (Netlify, Cloudflare Pages, GitHub Pages with CORS) works.
+- **CDN caching** — long-cache friendly. `ept.json` changes only when the dataset is rebuilt; hierarchy and tiles are immutable for a given dataset.
+
+### Producing an EPT dataset
+
+The canonical writer is [Entwine](https://entwine.io). A typical build from a directory of LAS/LAZ files:
+
+```bash
+entwine build -i ./input/*.laz -o ./out/my-dataset
+```
+
+The output directory is exactly the layout the viewer reads. Upload it to a CORS-enabled host and open the resulting `ept.json` URL in OpenLiDARViewer.
+
+### Browser recommendation for EPT
+
+For best EPT streaming, use a Chromium-based browser (Chrome or Edge) with WebGPU enabled and hardware acceleration on. WebGL 2.0 is the supported fallback (Safari, Firefox) and works for most datasets; performance varies with the dataset's hierarchy density and the device's GPU. See [`docs/performance.md`](performance.md) for general performance guidance.
+
+### What the v0.3.4 EPT transport guarantees
+
+The remote-EPT transport applies the same retry + timeout discipline the COPC remote path has had since v0.3.1:
+
+- Per-attempt request timeout — defaults to 20 seconds; an attempt that hangs is cancelled and retried.
+- Bounded retries — up to three retries on transient transport faults (408, 429, 5xx, network errors). Exponential backoff with jitter prevents thundering-herd retries on a flaky host.
+- Permanent client errors (404 in particular) never retry — the user sees a precise message immediately.
+- Outer-signal cancellation composes cleanly — clicking Cancel during a load aborts every in-flight EPT fetch without leaving stranded requests.
+
+A flaky CDN or a brief network blip no longer collapses an EPT load; a genuinely unreachable host fails fast with a precise reason.

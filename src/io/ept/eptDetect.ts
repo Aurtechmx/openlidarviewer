@@ -75,7 +75,7 @@ export function parseEptMetadata(text: string): EptDetection {
   if (!/^1\./.test(version)) {
     return {
       isEpt: false,
-      reason: `Unsupported EPT version ${version} — v0.3.3 supports 1.x only.`,
+      reason: `Unsupported EPT version ${version} — only EPT 1.x is supported.`,
     };
   }
 

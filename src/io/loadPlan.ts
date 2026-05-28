@@ -1,7 +1,7 @@
 /**
  * loadPlan.ts
  *
- * The pure decision logic behind v0.2.7 budget-aware fast loading: given what
+ * The pure decision logic behind budget-aware fast loading: given what
  * a file header reveals — its point count, its byte size, the attributes it
  * carries — decide *how* to load it before a single point is decoded.
  *
@@ -76,7 +76,7 @@ export interface MemoryEstimateInput {
 /**
  * Desktop: a cloud up to 3x the budget is decoded in full and then
  * voxel-reduced; beyond that it is stride-decoded. These multipliers are first
- * estimates — see the v0.2.7 design doc, §9 — and are expected to be tuned
+ * estimates — see the design doc, §9 — and are expected to be tuned
  * from real telemetry.
  */
 export const DESKTOP_MEDIUM_MULTIPLIER = 3;

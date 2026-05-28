@@ -23,14 +23,14 @@ export interface InspectorCallbacks {
   /** Export the active cloud to a file format. */
   onExport: (format: ExportFormat) => void;
   /**
-   * v0.3.2 Visual Export Studio — render the live scan in one of the four
+   * Visual Export Studio — render the live scan in one of the four
    * Studio modes (orthographic-rgb / height-map / intensity / classification)
    * and download the result as a PNG. The Inspector surfaces a button per
    * mode; main.ts owns the lazy import and the download wiring.
    */
   onExportImage: (mode: ExportMode) => void;
   /**
-   * v0.3.3 — generate a PDF report from the live scan + annotations
+   * generate a PDF report from the live scan + annotations
    * + measurements using the named template. main.ts lazy-loads the
    * report engine + pdf-lib on first click.
    */
@@ -73,7 +73,7 @@ const MODE_TITLES: Record<ColorMode, string> = {
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
 
 /**
- * v0.3.2 Visual Export Studio — the four PNG export modes the Inspector
+ * Visual Export Studio — the four PNG export modes the Inspector
  * exposes in the new "Image export" section. Each entry is `[mode, label,
  * title]` — the title doubles as the hover-hint for the disabled button when
  * the mode is unavailable on the loaded cloud.
@@ -87,8 +87,7 @@ const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
   { mode: 'height-map',       label: 'Height Map', title: 'Top-down PNG, points coloured by elevation (Z).' },
   { mode: 'intensity',        label: 'Intensity',  title: 'Top-down PNG, points coloured by LiDAR intensity. Requires intensity in the cloud.' },
   { mode: 'classification',   label: 'Class Map',  title: 'Top-down PNG, points coloured by ASPRS classification. Requires classification in the cloud.' },
-  // v0.3.3 — completes the Studio mode catalogue.
-  { mode: 'depth',            label: 'Depth Map',  title: 'Camera-relative depth raster (v0.3.3 MVP: elevation-based proxy). Useful for ML / QA / geometry review.' },
+  { mode: 'depth',            label: 'Depth Map',  title: 'Camera-relative depth raster from an elevation projection. Useful for ML, QA, and geometry review.' },
   { mode: 'normal',           label: 'Normal Map', title: 'RGB-encoded surface normals. Requires per-point normals (PCD / PTX / GLTF; LiDAR scans rarely include them).' },
   { mode: 'contour',          label: 'Contour Map', title: 'Topographic contour lines at the configured interval over the elevation raster.' },
 ];
@@ -137,7 +136,7 @@ export class Inspector {
   private readonly _viewList = el('div', { className: 'olv-views' });
   private readonly _layerRows = new Map<string, HTMLElement>();
   /**
-   * v0.3.2 Visual Export Studio — the per-mode image-export buttons, kept
+   * Visual Export Studio — the per-mode image-export buttons, kept
    * by mode so {@link setImageExportEnabled} can disable them as a group
    * when no cloud is loaded (preventing the "click → console error" gap)
    * and per-mode when a specific channel is missing.
@@ -145,7 +144,7 @@ export class Inspector {
   private readonly _imageExportButtons = new Map<ExportMode, HTMLButtonElement>();
   /** The original tooltip for each image-export button — restored on enable. */
   private readonly _imageExportTitles = new Map<ExportMode, string>();
-  /** v0.3.3 — the Report PDF button, gated like the image-export ones. */
+  /** the Report PDF button, gated like the image-export ones. */
   private _reportButton: HTMLButtonElement | null = null;
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
@@ -260,7 +259,7 @@ export class Inspector {
     });
     const exporter = el('div', { className: 'olv-export' }, exportButtons);
 
-    // v0.3.2 Visual Export Studio — one button per export mode. The class
+    // Visual Export Studio — one button per export mode. The class
     // matches the existing exporter row above so the CSS layout is shared.
     // Buttons start disabled — `setImageExportEnabled()` flips them on once
     // a scan is loaded so users can't fire an export with nothing to draw.
@@ -282,9 +281,9 @@ export class Inspector {
     });
     const imageExporter = el('div', { className: 'olv-export' }, imageExportButtons);
 
-    // v0.3.3 — PDF Report button. Single button for the MVP;
-    // template selection is a single-button MVP.
-    // Currently dispatches the default template ('engineering-inspection').
+    // PDF Report button. Single button; template selection is reserved
+    // for a future UI surface. Currently dispatches the default template
+    // (`engineering-inspection`).
     const reportButton = el('button', {
       className: 'olv-export-btn',
       text: 'Report PDF',
@@ -379,14 +378,13 @@ export class Inspector {
   }
 
   /**
-   * v0.3.2 Visual Export Studio — toggle the image-export buttons as a
+   * Visual Export Studio — toggle the image-export buttons as a
    * group. The Studio modes all require a loaded cloud (the height-map,
    * intensity, and classification exporters' `isAvailable` gates on the
-   * cloud AABB), so we hide that failure mode at the UI layer by disabling
+   * cloud AABB), so the failure mode is hidden at the UI layer by disabling
    * the buttons until `enabled === true`. Per-mode capability gating
    * (intensity disabled on a PLY, classification disabled on PCD without
-   * a label channel) lands in v0.3.3 once the Studio panel grows a control
-   * surface to surface the reason.
+   * a label channel) is handled inside each exporter's `isAvailable`.
    */
   setImageExportEnabled(enabled: boolean): void {
     for (const [mode, button] of this._imageExportButtons) {
@@ -394,7 +392,7 @@ export class Inspector {
       const baseTitle = this._imageExportTitles.get(mode) ?? '';
       button.title = enabled ? baseTitle : `${baseTitle} (load a scan first)`;
     }
-    // v0.3.3 — the Report PDF button shares the same gate
+    // The Report PDF button shares the same gate
     // (a report against no cloud has nothing to summarise).
     if (this._reportButton) {
       this._reportButton.disabled = !enabled;

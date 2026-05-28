@@ -3,7 +3,7 @@
  *
  * Camera-relative depth raster.
  *
- * **v0.3.3 MVP scope:** the runtime is forced into the `elevation` colour
+ * **scope:** the runtime is forced into the `elevation` colour
  * mode (which already exists in the colour-mode pipeline) and the export
  * is captured WYSIWYG. For a top-down camera this gives an
  * elevation-based depth approximation that's directly useful for ML
@@ -24,7 +24,7 @@
  *
  * **Near/far overrides** let QA tools normalise depth across captures
  * by pinning the range explicitly — recorded in metadata even when the
- * v0.3.3 MVP doesn't honour them at the render layer.
+ * doesn't honour them at the render layer.
  */
 
 import type {
@@ -70,7 +70,7 @@ export const depthMapExporter: ExportFactory = {
       context,
       'depth',
       'Depth Map',
-      // v0.3.3: elevation acts as the depth proxy. Top-down framing gives a
+      // elevation acts as the depth proxy. Top-down framing gives a
       // directly useful depth approximation; per-pixel depth-buffer readback
       // is intentionally not used in this release.
       'elevation',
@@ -79,7 +79,7 @@ export const depthMapExporter: ExportFactory = {
         { label: 'Encoding', value: invert ? 'far → white' : 'near → white' },
         { label: 'Near Z',   value: formatMetres(aabb[2]) },
         { label: 'Far Z',    value: formatMetres(aabb[5]) },
-        { label: 'Mode',     value: 'elevation proxy (v0.3.3 MVP)' },
+        { label: 'Mode',     value: 'elevation proxy' },
       ],
       {
         invert: invert ? 'on' : 'off',

@@ -1,7 +1,7 @@
 /**
  * loadProgress.ts
  *
- * The shared vocabulary for the v0.2.7 staged load pipeline. A load advances
+ * The shared vocabulary for the staged load pipeline. A load advances
  * through a fixed sequence of named stages; each stage emits a `ProgressUpdate`
  * that the UI turns into a status line and a progress bar.
  *

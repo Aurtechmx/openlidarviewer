@@ -1,7 +1,7 @@
 /**
  * types.ts
  *
- * The annotation data model — the core of the v0.2.8 inspection layer.
+ * The annotation data model — the core of the inspection layer.
  *
  * Pure data: no three.js, no DOM, so it is unit-tested in Node alongside the
  * session serializer. `Annotation.localPosition` is in LOCAL (render-space)

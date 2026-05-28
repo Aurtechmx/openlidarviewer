@@ -5,6 +5,67 @@ field observations, not a formal benchmark suite — hardware, browser, dataset,
 and the rendering detail you pick all change the numbers. They are recorded so
 the project has a concrete sense of what "it works" means in practice.
 
+Every table below is version-pinned in its heading. A row whose code path was
+not touched between releases keeps its original measurement; the version pin
+is when the figures were captured, not a claim that they have been re-run on
+every release.
+
+## Bundle shell — v0.3.4
+
+The first-paint payload — what the browser must fetch before the empty viewer
+shell appears — and the on-demand chunks that load only when their feature is
+exercised. Captured from a fresh `npm run build` against the v0.3.4 source.
+
+| Chunk | Loaded | Pre-gzip | Gzipped |
+|---|---|---|---|
+| `index-*.js` (app shell) | Always, on first paint | 100.76 KB | 32.26 KB |
+| `index-*.css` | Always, on first paint | 40.07 KB | 7.37 KB |
+| Inter font subset (latin) | Always, on first paint | 48.25 KB | (woff2) |
+| `Viewer-*.js` | When a scan is opened or a remote URL is followed | 102.14 KB | 29.09 KB |
+| `three.webgpu-*.js` | When the GPU backend initialises | 800.50 KB | 219.22 KB |
+| `three.core-*.js` | With `three.webgpu` | 126.39 KB | (split) |
+| `loadLas-*.js` | When a `.las` / `.laz` file is opened | 342.71 KB | 124.45 KB |
+| `copcWorker-*.js` | When a `.copc.laz` scan is opened | 341.42 KB | (worker) |
+| `StreamingPointCloud-*.js` | With COPC | 7.23 KB | 2.71 KB |
+| `StreamingScheduler-*.js` | With COPC / EPT | 11.09 KB | 3.55 KB |
+| `EptStreamingPointCloud-*.js` | When an EPT manifest is opened | 6.96 KB | 2.94 KB |
+| `eptTransport-*.js` | With EPT | 1.32 KB | 0.65 KB |
+| `export-*.js` (Visual Export Studio) | When the Studio is opened | 14.70 KB | 5.27 KB |
+| `report-*.js` (PDF report engine + pdf-lib) | When the user clicks Export → Report PDF | 432.51 KB | 179.70 KB |
+
+### What this proves
+
+The interactive shell is **~100 KB pre-gzip / ~32 KB gzipped**. The Viewer, the
+GPU backend, the format parsers, the Studio, and the PDF report engine are
+**all deferred** behind lazy boundaries — a user who never opens a scan never
+pays for any of it, and a user who never generates a PDF never pays for
+pdf-lib's ~150 KB of pure rendering machinery.
+
+The `Viewer` chunk size (~100 KB) is the heaviest first-class lazy chunk
+because it carries the render pipeline, post-processing, navigation, picking,
+and measurement geometry — every interactive surface of the app. It loads in
+the background while the user is still looking at the empty-state, so the
+perceived first-interaction latency is dominated by network RTT and the GPU
+backend init, not by the chunk download.
+
+The `three.webgpu` chunk is the largest single payload (~800 KB pre-gzip,
+~220 KB gzipped); it is fetched only once the WebGPU backend is being
+initialised, not on first paint. On a WebGL-2-only browser the same physics
+applies via `three.core` + the WebGL-2 fallback module.
+
+### How to reproduce
+
+```sh
+rm -rf dist && npm run build
+```
+
+The transform-driven build (`npm run build:live`) produces functionally
+identical chunk sizes; the per-byte numbers shift slightly because the live
+source-transform pass changes symbol names but not chunk topology. The
+chunk-emission guard in `vite.config.ts` asserts that every required lazy
+chunk is present in the transformed output, so an accidental drop of a chunk
+into the initial bundle fails the live build.
+
 ## Test machine
 
 Apple MacBook Pro, M3 Max, 16-inch, built-in Retina XDR display, macOS 26.5.
@@ -74,7 +135,13 @@ Two very different scans — a 9.6M-point georeferenced drone survey and a
 55K-point iPhone capture — both open from a single drag-and-drop, in a browser
 tab, with no install and no conversion. That is the whole point of the project.
 
-## Extreme-scale synthetic stress (v0.3.3)
+## Extreme-scale synthetic stress — pinned to v0.3.3, valid for v0.3.4
+
+The scheduler / cache / eviction logic was untouched between v0.3.3 and v0.3.4
+— v0.3.4 added Viewer-deferral, ease-out fade, and EPT transport polish on
+top, none of which touch the per-tick rescore loop or the eviction-pressure
+machinery. The figures below were captured against v0.3.3 and remain the
+canonical credibility numbers for the streaming subsystem in v0.3.4.
 
 v0.3.3 asks the platform to prove its scale claims with
 hard numbers — bounded memory at 500M points and a 1B-point synthetic that

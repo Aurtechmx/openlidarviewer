@@ -15,7 +15,7 @@
  *     has hundreds of linked files reached on demand as the scheduler
  *     refines into deeper octree levels.
  *
- * v0.3.3 ships with a pre-loaded hierarchy walker (parallel to the COPC
+ * Ships with a pre-loaded hierarchy walker (parallel to the COPC
  * loader): the root file plus every linked file are fetched up-front so
  * the node store is fully populated before streaming begins. This is
  * cheap (hierarchy bytes scale with node count, ~20 bytes per node) and

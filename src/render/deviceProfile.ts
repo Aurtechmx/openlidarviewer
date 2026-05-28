@@ -5,10 +5,10 @@
  * safely render, from signals available before any GPU work — reported memory,
  * logical-core count, and whether this is a phone.
  *
- * The budget is the v0.2.9 GPU-memory safeguard: a weak device loads fewer
+ * The budget is the GPU-memory safeguard: a weak device loads fewer
  * points, so a large survey degrades gracefully instead of crashing the GPU.
  * Capable devices are unaffected — the `high`/`medium` budgets match the
- * pre-v0.2.9 desktop and mobile budgets exactly.
+ * canonical desktop and mobile budgets.
  *
  * Pure — no DOM, no three.js — so the tier logic is unit-tested in Node.
  */
@@ -33,7 +33,7 @@ export interface DeviceCaps {
   renderBudget: number;
 }
 
-/** Per-tier point budgets — desktop. `high` and `medium` match pre-v0.2.9. */
+/** Per-tier point budgets — desktop. `high` and `medium` use the canonical cap. */
 const DESKTOP_BUDGET: Record<DeviceTier, number> = {
   high: 4_000_000,
   medium: 4_000_000,

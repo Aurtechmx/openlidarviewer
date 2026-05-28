@@ -1,7 +1,7 @@
 /**
  * strideSample.ts
  *
- * Stratified, jittered subsampling for the v0.2.7 fast-load path.
+ * Stratified, jittered subsampling for the fast-load path.
  *
  * Plain decimation — keep record 0, N, 2N, … — aliases badly with the way
  * LiDAR files store points: records are written in scan order, so a fixed

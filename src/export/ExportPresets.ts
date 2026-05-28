@@ -106,7 +106,7 @@ const intensityScan: ExportPreset = {
   } satisfies IntensityOptions,
 };
 
-// v0.3.3 — three new presets covering the new exporters.
+// three new presets covering the new exporters.
 
 const depthMl: ExportPreset = {
   id: 'depth-ml',

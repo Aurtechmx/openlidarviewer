@@ -4,12 +4,12 @@
  * A {@link RangeSource} backed by HTTP Range requests against a remote URL.
  *
  * `probe()` performs the HEAD request and verifies the server can serve byte
- * ranges; `readRange()` issues real `Range:` requests. This drives the v0.3.0
+ * ranges; `readRange()` issues real `Range:` requests. This drives the
  * remote-COPC flow — the "open from URL" field and the `?copc=<url>` deep
  * link — so a Cloud Optimized Point Cloud hosted on a CORS-enabled server
  * streams exactly like a local file.
  *
- * v0.3.1 hardens the remote path with: (a) bounded exponential-
+ * Hardens the remote path with: (a) bounded exponential-
  * backoff retries on transient transport failures (retry-with-backoff), (b) hard
  * per-attempt request timeouts (per-attempt timeout), (c) `Content-Range` validation on
  * 206 responses (Content-Range validation), (d) a `Range: bytes=0-0` GET fallback when HEAD

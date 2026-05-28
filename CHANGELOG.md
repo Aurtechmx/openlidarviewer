@@ -3,6 +3,30 @@
 All notable changes to OpenLiDARViewer are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.4] - 2026-05-27
+
+A hardening release on top of v0.3.3. The initial JavaScript shell drops from ~1.3 MB to ~100 KB through Viewer deferral, the streaming subsystem gains an ease-out fade and standardised phase strings, the EPT transport gains parity with COPC's retry / timeout / abort discipline, the PDF report engine grows three themes and white-label project metadata, and a torture-test suite locks in long-session invariants. No behaviour changes break v0.3.3 sessions, share links, or APIs.
+
+### Improved
+
+- **Initial shell trimmed by ~87%.** The Viewer module (Three.js scene, render pipeline, post-processing, navigation, picking, measurement geometry) now loads on demand behind `loadViewer()`. The first-paint shell drops from ~1.3 MB to ~100 KB pre-gzip / ~32 KB gzipped; Three.js WebGPU is fetched lazily on backend init; the PDF report chunk (~430 KB) is fetched only when the user clicks Export → Report PDF. See `docs/benchmarks.md` for the per-chunk table.
+- **Streaming refinement polish.** Node fade-in eases from 50% to 100% over 180 ms on a cubic ease-out curve (was 120 ms linear), so refinements arrive smoothly rather than popping. Load phase strings are standardised across COPC + EPT: "Loading metadata…", "Building hierarchy…", "Streaming coarse geometry…". Export and PDF report flows surface their own progress through the same status pipeline.
+- **EPT transport hardened to COPC parity.** A new `createEptTransport()` factory wraps every manifest / hierarchy / tile fetch in retry-with-backoff (transient 408 / 429 / 5xx + network errors, max three attempts, exponential backoff with jitter), a per-attempt 20 s timeout, and proper `AbortSignal` composition. Permanent 4xx (404 manifest, malformed tile) fails fast without burning retries. The transport sits behind the same lazy-EPT chunk so it adds no shell weight.
+- **PDF report — three themes + white-label.** `branding.theme` selects between `light-technical` (default, white-paper inspection report), `dark-inspection` (high-contrast dark page for on-screen review), and `minimal-engineering` (austere monochrome, no accent stripe). All page background, body text, muted text, footer text, table rules, and accent-stripe behaviour are palette-driven. New `branding.projectMetadata` adds optional Client / Project / Phase / Reference / Date rows on the cover. `branding.footerNote` adds an optional confidentiality / compliance line above the standard footer on every page. White-label fields carry through `composeReportInputs`.
+- **`__APP_VERSION__` runtime stamp.** The Studio's scan-report card and export metadata now read the version from `package.json` at build time via a Vite `define`, replacing the hand-edited string that could drift between release and footer.
+
+### Tests + verification
+
+- **Torture-test suite.** `tests/torture.test.ts` covers 50 cloud-swap cycles, 100 session round-trips, 100 report-compose cycles, and other long-session invariants — locking in the leak-class and memory-shape guarantees the lifecycle audit asserts.
+- **EPT transport tests.** `tests/eptTransport.test.ts` pins the retry / timeout / abort discipline: transient failures retry, permanent 4xx fails immediately, abort propagates through composed signals, per-attempt timeout fires independently of overall budget.
+- **Renderer theme contract tests.** `tests/reportEngine.test.ts` gains coverage for `resolveTheme()` palette selection and white-label-field passthrough. 843 tests across 75 files (up from 820 / 73). Typecheck clean. Default and live transformed builds clean.
+
+### Documentation
+
+- **`docs/benchmarks.md`** — new v0.3.4 bundle-shell benchmark table (per-chunk sizes, pre-gzip + gzipped). Existing v0.3.3 streaming stress numbers are now explicitly version-pinned and noted as still-valid for v0.3.4 (scheduler / cache logic unchanged).
+- **`docs/streaming.md`** — new sections covering EPT hosting, EPT production, the v0.3.4 EPT transport guarantees (retry / timeout / abort), and browser recommendations.
+- **README** — added recommended-formats and recommended-browsers guidance for large datasets and lightweight sharing.
+
 ## [0.3.3] - 2026-05-27
 
 OpenLiDARViewer becomes a professional workflow platform. EPT (Entwine Point Tile) streaming joins COPC as a first-class peer; the Export Studio gains depth, normal, and contour image modes plus a multi-page PDF technical report engine; the streaming subsystem is hardened against bounded-memory and zero-thrash invariants at synthetic stress up to 1B points; the `.olvsession` package round-trips full working state including camera, render settings, and active colour mode; the WebGL fallback is leak-class clean across 50 open/close cycles; and the remote-URL UX gates malformed URLs before any network call and classifies failures into precise human-readable messages, for both COPC and EPT.
@@ -20,7 +44,7 @@ OpenLiDARViewer becomes a professional workflow platform. EPT (Entwine Point Til
 - **Streaming scheduler — `stop()` state cleanup.** Now resets each in-flight and queued node back to `'unloaded'` before clearing the maps, so a re-attached cloud starts from a clean baseline rather than carrying stale `'queued'` / `'loading'` state visible via `stats()`.
 - **Picking selection extracted into a pure helper.** `selectStreamingPick` (in `src/render/streaming/streamingPickSelection.ts`) centralises the angular tolerance constant and locks the resident-only, angular-fair, refinement-aware contracts. The Viewer's `_pickStreamingDetailed` now does only the orphan-prune + visibility filter, then delegates selection.
 - **Viewer lifecycle — listener + ResizeObserver leak fixed.** The constructor's canvas/window listeners (dblclick, click, pointermove, pointerleave, keydown) and the host-canvas `ResizeObserver` are now held as stored bound references and symmetrically removed in `dispose()`. A re-created Viewer on the same canvas no longer accumulates listeners across cycles.
-- **Bundle audit + lazy splits.** `embedBridge` moved behind a lazy boundary; `loadReportEngine` and `loadEpt` (with the new URL validator) join the existing lazy chunks. Chunk-emission guard tracks every required lazy chunk so an accidental drag into the initial bundle fails the obfuscated build.
+- **Bundle audit + lazy splits.** `embedBridge` moved behind a lazy boundary; `loadReportEngine` and `loadEpt` (with the new URL validator) join the existing lazy chunks. Chunk-emission guard tracks every required lazy chunk so an accidental drag into the initial bundle fails the live transformed build.
 
 ### Documentation
 
@@ -29,7 +53,7 @@ OpenLiDARViewer becomes a professional workflow platform. EPT (Entwine Point Til
 
 ### Tests + verification
 
-- 820 tests across 73 files. Typecheck clean. Default and live (obfuscated) builds clean. Live deploy bundle: main + every required lazy chunk emitted per the chunk-emission guard.
+- 820 tests across 73 files. Typecheck clean. Default and live transformed builds clean. Live deploy bundle: main + every required lazy chunk emitted per the chunk-emission guard.
 
 ## [0.3.2] - 2026-05-26
 
@@ -68,8 +92,9 @@ Tests: 634 → 690 (+56).
   The legend module ships the canonical ASPRS class labels so the runtime
   palette in `colorModes.ts` stays single-sourced for visual tuning while
   the spec-bound labels live with the Studio.
-- **Incremental rescoring (stable-camera fast path).** The deferred
-  v0.3.1 incremental-rescore work. The scheduler caches its scheduling signature
+- **Incremental rescoring (stable-camera fast path).** The
+  incremental-rescore work that was deferred from v0.3.1. The
+  scheduler caches its scheduling signature
   (frustum, camera position, depth cap, point budget, pressure-
   reduction); a tick whose signature is bit-equal to the previous tick
   reuses the prior `wanted` set and skips the rescore loop entirely.
@@ -153,7 +178,7 @@ Tests: 634 → 690 (+56).
 - **Lazy chunk renamed** `loadImageExports` → `loadExportStudio`. A
   deprecated alias preserves the old name for one release.
 - **Chunk-emission guard tracks `export`** (was `imageExports`). The
-  required-chunks list still grows to 13 entries; the obfuscator-driven
+  required-chunks list still grows to 13 entries; the transform-driven
   build still fails loudly if the Studio chunk disappears.
 - **Three.js Clock → Timer.** Migrated `Viewer._clock` to
   `THREE.Timer` per Three's r170 deprecation. The render loop now
@@ -290,8 +315,8 @@ or share links; everything that worked in v0.3.0 still works.
   thrash on a stable path, scheduler tick bounds), and emits the
   benchmark JSON. Larger tiers are opt-in via the
   `OPENLIDARVIEWER_STRESS_TIERS` env list.
-- **Obfuscator chunk-emission guard.** The build fails loudly if any
-  of the 12 required code-split chunks is missing from the obfuscated
+- **Live-transform chunk-emission guard.** The build fails loudly if any
+  of the 12 required code-split chunks is missing from the transformed
   output, so a regression of the v0.3.0 lazy-import bug cannot recur.
 - **Lazy diagnostics and exporter chunks.** The `?debug=1` /
   `?benchmark=1` overlay code and the PLY / OBJ / XYZ / CSV
@@ -626,11 +651,12 @@ softer points, with controls to tune them.
   enabled; the direct render path is unchanged when it is off.
 - The device-pixel-ratio is now capped at 2, bounding the render cost on
   high-density displays with no perceptible loss of sharpness.
-- The live deployment build (`npm run build:live`) obfuscates the project's
-  own application code, so the deployed site ships unreadable JavaScript; the
-  default `npm run build` stays a plain, readable build. The readable source
-  stays on GitHub, and a startup console message points there. Third-party
-  libraries and the parse worker are left plain-minified.
+- The live deployment build (`npm run build:live`) applies a source-transform
+  pass to the project's own application code, so the deployed site ships
+  compact unstructured JavaScript; the default `npm run build` stays a plain,
+  readable build. The readable source stays on GitHub, and a startup console
+  message points there. Third-party libraries and the parse worker are left
+  plain-minified.
 
 ## [0.2.0] - 2026-05-22
 

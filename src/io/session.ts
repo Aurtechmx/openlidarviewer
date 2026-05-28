@@ -5,10 +5,10 @@
  * carrying saved camera views, placed measurements, and annotations, so a
  * working inspection can be exported to a file and imported again later.
  *
- * Schema v2 supersedes the v0.2.0 measurement-session format (v1): it adds
- * annotations and gives saved views names. `parseSession` reads BOTH versions,
- * so every v0.2.0+ session still imports with no loss — a v1 file simply
- * yields zero annotations and views with generated names.
+ * Schema v2 supersedes the original measurement-session format (v1): it
+ * adds annotations and gives saved views names. `parseSession` reads BOTH
+ * versions, so every legacy session still imports with no loss — a v1 file
+ * simply yields zero annotations and views with generated names.
  *
  * Pure — no three.js, no DOM — unit-tested in Node. (The render-layer types it
  * imports, `Measurement` / `Annotation` and friends, are themselves pure.)
@@ -22,7 +22,7 @@ import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
 
 /**
- * Current session-file schema version. v0.3.3 bumps to v3, adding:
+ * Current session-file schema version. Bumps to v3, adding:
  *   • the live camera state (not just saved views) so a re-import lands
  *     the viewer on the exact viewpoint the user saved;
  *   • render settings (point size, EDL, antialiasing, size mode) so the
@@ -41,7 +41,7 @@ export const SESSION_VERSION = 3;
 /** Schema versions `parseSession` can read. */
 const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3];
 
-/** v0.3.3 — the render-style snapshot the v3 schema captures. */
+/** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
   pointSize: number;
   edlEnabled: boolean;
@@ -51,7 +51,7 @@ export interface SessionRenderSettings {
 }
 
 /**
- * v0.3.3 — a cached scan-summary block, optional. Lets the file be self-
+ * a cached scan-summary block, optional. Lets the file be self-
  * describing (an analyst opening the .olvsession years later sees what
  * scan it captured) without requiring the source scan to be available.
  */
@@ -122,7 +122,7 @@ const KINDS: readonly MeasurementKind[] = [
 
 /**
  * Serialise a session to a pretty-printed JSON string (always the current
- * `SESSION_VERSION` — v3 since v0.3.3). v3 optional fields
+ * `SESSION_VERSION` — currently v3). v3 optional fields
  * (`camera`, `render`, `colorMode`, `scanSummary`) are included whenever
  * the caller supplied them; absent fields are omitted from the JSON to
  * keep the v1/v2 baseline byte-shape unchanged for files that don't use
@@ -318,7 +318,7 @@ function freshMeasurementId(): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// v3 helpers — added in v0.3.3
+// v3 helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Type guard for the runtime's ColorMode union. */

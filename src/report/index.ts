@@ -46,7 +46,9 @@ export {
   DEFAULT_ACCENT,
   parseAccentColor,
   effectiveBranding,
+  resolveTheme,
 } from './ReportBranding';
+export type { ReportThemePalette } from './ReportBranding';
 
 export { generateReport } from './ReportEngine';
 export { renderReportPdf } from './ReportPdfRenderer';

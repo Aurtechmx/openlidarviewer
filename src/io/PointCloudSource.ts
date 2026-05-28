@@ -9,7 +9,7 @@
  * Splitting the two is what lets the UI show a confident "PTX scan detected,
  * large-file optimization enabled" summary before committing to the load.
  *
- * v0.2.9 ships exactly one implementation — `LocalFileSource`. The interface is
+ * ships exactly one implementation — `LocalFileSource`. The interface is
  * the seam for v0.3 streaming; no remote loading is implemented here.
  *
  * Pure types — no DOM, no three.js.

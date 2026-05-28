@@ -1,8 +1,8 @@
 /**
  * ReportTemplates.ts
  *
- * The five report templates from the v0.3.3 brief. Each is a
- * pure-data record: id, label, description, ordered list of sections.
+ * The five built-in report templates. Each is a pure-data record:
+ * id, label, description, ordered list of sections.
  *
  * Templates are EXTENSIBLE — adding a sixth template (or letting users
  * author custom ones) is a one-entry addition to `REPORT_TEMPLATES`.

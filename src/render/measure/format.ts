@@ -5,8 +5,9 @@
  * Measurements panel. Pure — unit-tested in Node.
  *
  * The metric length format delegates to `navMath.formatDistance`, so the
- * distance tool's labels stay byte-identical to v0.1.0 (no regression). The
- * imperial branch and the area / angle / grade formatters live here.
+ * distance tool's labels stay byte-identical to the original implementation
+ * (no regression). The imperial branch and the area / angle / grade
+ * formatters live here.
  */
 
 import { formatDistance } from '../navMath';

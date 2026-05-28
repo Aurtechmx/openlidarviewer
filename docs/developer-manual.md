@@ -27,7 +27,7 @@ Scan Intelligence report, and export the result.
 | ID | Requirement |
 |------|-------------|
 | FR-1 | Open a scan by dropping a single file anywhere on the window. |
-| FR-2 | Import nine formats: `.las`, `.laz`, `.e57`, `.ply`, `.obj`, `.glb`, `.gltf`, `.xyz`, `.csv`. |
+| FR-2 | Import twelve static formats: `.las`, `.laz`, `.e57`, `.ply`, `.obj`, `.glb`, `.gltf`, `.xyz`, `.csv`, `.pcd`, `.ptx`, `.pts`. |
 | FR-3 | Detect format from magic bytes first, file extension second. |
 | FR-4 | Parse and downsample off the main thread, in a Web Worker. |
 | FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within a small bounded error. |
@@ -45,6 +45,10 @@ Scan Intelligence report, and export the result.
 | FR-17 | Close the current scan — clear every loaded cloud and return to the empty state, ready for another file. |
 | FR-18 | Render with Eye Dome Lighting depth shading, adaptive or fixed point sizing, and antialiased round points — all tunable from the Rendering panel. |
 | FR-19 | Plan a LAS/LAZ load from its header — fast-load huge clouds by stride decoding, guard against out-of-memory, report staged progress, and allow the load to be cancelled mid-flight. |
+| FR-20 | Stream hierarchical point-cloud datasets (`COPC` `.copc.laz` and `EPT` `ept.json`) — local or remote — through a view-dependent scheduler with bounded residency. |
+| FR-21 | Generate multi-page PDF technical reports — five built-in templates, cover + dataset summary + image exports + annotations + measurements + technical notes, with branding (accent + logo) and metric/imperial unit awareness. |
+| FR-22 | Round-trip the full working state (camera, render settings, colour mode, annotations, measurements, named views, scan metadata) through a `.olvsession` JSON package. |
+| FR-23 | Export the Visual Export Studio image modes — orthographic RGB, height map, intensity, classification, depth, normal, and contour — with legend customisation. |
 
 ### 2.2 Non-functional requirements
 
@@ -106,14 +110,20 @@ src/
     strideSample.ts        Stratified jittered stride sampling (pure, unit-tested).
     loadProgress.ts        Staged-progress vocabulary (pure, unit-tested).
     loadTelemetry.ts       Per-stage load timing (pure, unit-tested).
-    loadLas/E57/Ply/Obj/Gltf/Xyz.ts   Format -> PointCloud loaders.
+    loadLas/E57/Ply/Obj/Gltf/Xyz/Pcd/Ptx/Pts.ts   Format -> PointCloud loaders.
     e57/                   From-scratch E57 parser — header de-paging,
                            a minimal XML reader, and a CompressedVector decoder.
+    copc/                  COPC source + worker decoder + chunk decode.
+    ept/                   EPT detection, types, hierarchy walk, binary +
+                           laszip tile decoders, chunk decoder, URL validation.
+    range/                 RangeSource interface + Local/HTTP/Instrumented
+                           range sources for streaming reads.
     parseBuffer.ts         Loader dispatch + budget-aware routing (DOM-free).
     loadFile.ts            File -> PointCloud: preflight + the parse worker.
     parseWorker.ts         The persistent Web Worker entry.
     lazPerfWasm.ts         laz-perf WASM glue for LAZ decoding.
     exporters.ts           PointCloud -> PLY / OBJ / XYZ / CSV text.
+    session.ts             `.olvsession` v3 schema + serialise/parse helpers.
   model/
     PointCloud.ts          Normalized in-memory cloud model.
   process/
@@ -128,14 +138,28 @@ src/
     measure/               Measurement toolkit — pure geometry, formatting,
                            serialisation, label layout, plus the controller
                            and SVG overlay.
+    annotate/              Annotation model + store + controller + overlay.
+    streaming/             Scheduler, octree, cache, node store, renderer,
+                           streaming source contract, pure pick selection,
+                           and the device-profile / tier-adaptation helpers.
     InspectTool.ts         Click a point to read its attributes.
+    LiveProbe.ts           Live coord/attribute readout under the cursor.
     pointInfo.ts           Pure picked-point data + serialisation (unit-tested).
+  export/                  Visual Export Studio — orthographic-RGB, height,
+                           intensity, classification, depth, normal, contour
+                           exporters + legend renderer + scan-report card.
+  report/                  PDF Report Engine — types, branding, five
+                           templates, section builders, asset composer,
+                           pdf-lib renderer. All lazy-chunked.
   analysis/
     ModuleApi.ts           Analysis-module interface + registry.
     modules/               healthCheck.ts, scanReport.ts.
   ui/
     Stage / DropZone / Inspector / NavBar / ProjectCard / MeasurePanel /
-    toolDock / dom.ts
+    StreamingPanel / ToolDock / HelpOverlay / DebugOverlay / embedBridge / dom.ts
+  lazyChunks.ts            Dynamic-import seam (kept outside the live
+                           source-transform so Vite can statically analyse
+                           every code-split boundary).
   main.ts                  Wires the viewer, navigation, UI, and modules.
 tests/                     Vitest unit tests; tests/e2e/ holds Playwright specs.
 ```
@@ -185,7 +209,7 @@ See [`architecture.md`](architecture.md) for the full map.
 |---------|---------|
 | `npm run dev` | Vite dev server with hot reload. |
 | `npm run build` | Typecheck then produce the static production build in `dist/`. |
-| `npm run build:live` | The deployment build — same as `build`, plus obfuscation of the project's own code (Vite mode `live`). Used only for the public live site. |
+| `npm run build:live` | The deployment build — same as `build`, plus a source-transform pass on the project's own code (Vite mode `live`). Used only for the public live site. |
 | `npm run preview` | Serve the production build locally. |
 | `npm run typecheck` | `tsc --noEmit` — strict type checking. |
 | `npm test` | Run the Vitest unit suite once. |

@@ -13,8 +13,8 @@
  * a stored reference, register, store the reference for dispose to
  * use, symmetrically remove on dispose). If the pattern in Viewer's
  * constructor ever drifts back to inline arrow functions (the bug
- * that landed in Session 11), this harness's failure surfaces the
- * regression mechanically.
+ * the v0.3.3 hardening pass fixed), this harness's failure surfaces
+ * the regression mechanically.
  *
  * What this DOESN'T prove: that the runtime Viewer wires the same
  * pattern. That requires either a browser-side test or a constructor

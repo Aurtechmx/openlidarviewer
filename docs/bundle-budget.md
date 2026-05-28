@@ -74,7 +74,7 @@ work. The honest options:
 
 1. **three.js webgpu split (~500 KB potential).** Configure rolldown
    `manualChunks` to put `three/webgpu` + `three/tsl` in their own
-   chunk loaded in parallel with main. Risk: the obfuscator-plus-
+   chunk loaded in parallel with main. Risk: the transform-plus-
    chunk-emission-guard build pipeline is fragile against new manual
    chunks; needs careful testing.
 

@@ -97,7 +97,7 @@ describe('isAnnotationType / ANNOTATION_TYPES', () => {
   });
 });
 
-// --- anchor-stability — annotation position stability ------------------------
+// --- annotation position stability ------------------------
 
 describe('annotation position stability under streaming refinement', () => {
   it('createAnnotation captures the local-space anchor exactly, free of any node reference', () => {

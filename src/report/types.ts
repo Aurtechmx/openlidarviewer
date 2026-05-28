@@ -14,7 +14,7 @@
  * renderer surface.
  */
 
-/** The five v0.3.3 report templates. */
+/** The five built-in report templates. */
 export type ReportTemplateId =
   | 'engineering-inspection'
   | 'qa-validation'
@@ -45,6 +45,31 @@ export interface ReportBranding {
    * accent (`#00b2ff`). Drives the cover stripe, section headers, footer rule.
    */
   readonly accentColor?: string;
+  /**
+   * visual theme. `light-technical` (default) is a clean white-paper
+   * inspection report; `dark-inspection` is a high-contrast dark-page variant
+   * for on-screen review; `minimal-engineering` strips chrome (no accent
+   * stripe, monochrome rules) for an austere engineering record.
+   */
+  readonly theme?: 'light-technical' | 'dark-inspection' | 'minimal-engineering';
+  /**
+   * optional custom footer line. Appended after the standard
+   * "OpenLiDARViewer · timestamp" line; useful for confidentiality notices,
+   * project codes, or compliance references.
+   */
+  readonly footerNote?: string;
+  /**
+   * extra project-metadata rows on the cover page. Each row that's
+   * present is drawn below the author / dataset block, providing structured
+   * context for archival and audit reports.
+   */
+  readonly projectMetadata?: {
+    readonly client?: string;
+    readonly project?: string;
+    readonly phase?: string;
+    readonly reference?: string;
+    readonly date?: string;
+  };
 }
 
 /** Cover-page inputs supplied at generation time. */
@@ -122,8 +147,8 @@ export interface ReportResult {
 /**
  * The pure section contract — each section knows what it needs from the
  * inputs and produces zero-or-more "render commands" the renderer
- * consumes. v0.3.3 wires the renderer to the inputs directly; a
- * command-object indirection is intentionally deferred.
+ * consumes. The renderer reads the inputs directly; a command-object
+ * indirection is intentionally deferred.
  */
 export interface ReportTemplate {
   readonly id: ReportTemplateId;

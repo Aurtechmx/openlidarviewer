@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { readFileSync } from 'node:fs';
-import obfuscator from 'vite-plugin-javascript-obfuscator';
+import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 
 // Single source of truth for the app version — read from package.json at
 // build time and exposed to the app as the `__APP_VERSION__` global.
@@ -9,21 +9,21 @@ const pkg = JSON.parse(
 ) as { version: string };
 
 /**
- * The live-deployment code obfuscator.
+ * The live-deployment source-transform plugin.
  *
  * Applied ONLY to the live deployment build — `npm run build:live` (Vite mode
  * `live`). A normal `npm run build`, which is what a GitHub checkout produces,
- * is a plain, readable build with no obfuscation; obfuscation is a property of
- * the deployed site, not of the repository.
+ * is a plain, readable build with no extra transform; the extra transform is
+ * a property of the deployed site, not of the repository.
  *
- * It obfuscates the project's own source so the live site ships unreadable
- * code while the readable source lives on GitHub. Third-party libraries under
- * `node_modules` (three.js, loaders.gl) are excluded by the plugin's defaults
- * — they stay plain-minified.
+ * It rewrites the project's own source so the live site ships compact,
+ * unstructured JS while the readable source lives on GitHub. Third-party
+ * libraries under `node_modules` (three.js, loaders.gl) are excluded by the
+ * plugin's defaults — they stay plain-minified.
  *
  * Scope: this runs on the main bundle only. The Web Worker (the file parsers)
  * and `loadFile.ts` are left plain — see the `exclude` note and the `worker`
- * field below. Obfuscating the worker-loading path breaks worker startup, so
+ * field below. Transforming the worker-loading path breaks worker startup, so
  * it is deliberately not attempted.
  *
  * Conservative settings only: the aggressive transforms — control-flow
@@ -32,18 +32,17 @@ const pkg = JSON.parse(
  * breakage, and (debug-protection) are anti-DevTools theatre that does not
  * actually protect anything.
  */
-function obfuscatorPlugin() {
-  return obfuscator({
+function liveSourceTransformPlugin() {
+  return liveSourceTransform({
     apply: 'build',
-    // Three modules are left un-obfuscated because each carries an import
-    // specifier Vite must read *statically* to split a chunk or bundle a
-    // worker:
+    // Three modules are excluded because each carries an import specifier
+    // Vite must read *statically* to split a chunk or bundle a worker:
     //   - `loadFile.ts`        — `new Worker(new URL('./parseWorker.ts', …))`
     //   - `copcWorkerClient.ts`— `new Worker(new URL('./copcWorker.ts', …))`
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
-    // The obfuscator's stringArray transform rewrites those literals, which
+    // The plugin's stringArray transform rewrites those literals, which
     // breaks Vite's static analysis and the chunk/worker never gets emitted.
-    // Everything else in the project's own source is obfuscated.
+    // Everything else in the project's own source is transformed.
     exclude: [
       /node_modules/,
       /loadFile\.ts/,
@@ -51,10 +50,10 @@ function obfuscatorPlugin() {
       /lazyChunks\.ts/,
     ],
     options: {
-      // A fixed RNG seed makes obfuscation deterministic — every `build:live`
-      // produces an identical bundle, rather than varying run to run. This
-      // particular value also happens to yield the leaner of the obfuscator's
-      // output sizes.
+      // A fixed RNG seed makes the transform deterministic — every
+      // `build:live` produces an identical bundle, rather than varying run to
+      // run. This particular value also happens to yield the leaner of the
+      // plugin's output sizes.
       seed: 7,
       compact: true,
       controlFlowFlattening: false,
@@ -77,7 +76,7 @@ function obfuscatorPlugin() {
 /**
  * Fails the build if any of the required code-split chunks went missing —
  * a structural regression guard for the v0.3.0 lazyChunks bug, where the
- * obfuscator's stringArray transform scrambled dynamic `import()` literals
+ * live transform's stringArray pass scrambled dynamic `import()` literals
  * and Rolldown silently failed to emit the chunks. Runs on every build,
  * not just `build:live`, so a refactor on the plain build can't introduce
  * the same hazard either.
@@ -110,14 +109,21 @@ function chunkEmissionGuard() {
     // source + binary tile decoder + chunk decoder. All lazy — only
     // loaded when the user opens an ept.json URL. Pinned here so a
     // refactor that accidentally drags EPT into the initial bundle
-    // fails the obfuscated build loudly.
+    // fails the live transformed build loudly.
     'eptDetect',
     'EptStreamingPointCloud',
     'EptChunkDecoder',
+    // v0.3.4 — Viewer (three.js + render controllers) deferred so it
+    // stays out of the initial shell. The empty-state UI loads without
+    // three.js; the first scan-open lazy-imports the Viewer module.
+    'Viewer',
     // v0.3.3 Phase 9 — EPT remote-UX polish (URL validator + error
     // classifier). Pinned so a refactor that drags it into the initial
-    // bundle fails the obfuscated build loudly.
+    // bundle fails the live transformed build loudly.
     'eptUrlValidation',
+    // v0.3.4 — hardened remote-EPT transport (retry + timeout + abort
+    // discipline). Same lazy boundary as the rest of EPT.
+    'eptTransport',
     // v0.3.3 Phase 2 — PDF Report Engine + pdf-lib (~150 KB dep).
     // Lazy — only loaded when the user clicks Export → Report PDF.
     'report',
@@ -149,15 +155,15 @@ function chunkEmissionGuard() {
 
 export default defineConfig(({ mode }) => ({
   base: './',
-  // The worker build is left un-obfuscated: it is a separate Vite pass, and
-  // obfuscating the worker-loading path breaks worker startup. The worker
+  // The worker build is left un-transformed: it is a separate Vite pass, and
+  // transforming the worker-loading path breaks worker startup. The worker
   // carries the file-format parsers (open standards — E57/ASTM, LAS/ASPRS).
   worker: { format: 'es' },
   build: { target: 'es2022' },
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  // The chunk-emission guard runs on every build; obfuscation only on `live`.
+  // The chunk-emission guard runs on every build; the live source transform only on `live`.
   plugins:
     mode === 'live'
-      ? [obfuscatorPlugin(), chunkEmissionGuard()]
+      ? [liveSourceTransformPlugin(), chunkEmissionGuard()]
       : [chunkEmissionGuard()],
 }));

@@ -195,7 +195,7 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-tool:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-tool:disabled { opacity: 0.4; }
-/* v0.3.2 polish — Close is destructive, so it carries a rose-tinted resting
+/* Close is destructive, so it carries a rose-tinted resting
    state to set it apart from neutral tools and a brighter rose on hover.
    Subtle at rest (still readable at 11px on dark background), unmissable on
    interaction. The :not(:disabled) gate keeps the disabled state grey via
@@ -568,7 +568,7 @@ button:disabled { cursor: not-allowed; }
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none; overflow: visible;
 }
-/* v0.3.2 polish — line + dot stroke widths bumped ~10% so measurements
+/* line + dot stroke widths bumped ~10% so measurements
    read clearly against detailed scans without crowding handle hit-zones. */
 .olv-measure-line {
   stroke: var(--accent); stroke-width: 1.75; stroke-dasharray: 6 4;
@@ -907,12 +907,12 @@ button:disabled { cursor: not-allowed; }
 /* ───────────────────────────────────────────────────────────────────────────
    Measurement toolkit — polygon fills, preview rubber-bands, leader lines,
    and headline value labels. The dot / line / label base styles are shared
-   with the v0.1.0 measure tool above.
+   with the legacy distance measure tool above.
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-m-fill {
   fill: rgba(0, 178, 255, 0.14);
   stroke: var(--accent);
-  /* v0.3.2 polish — fill outline + leader strokes bumped ~10%. */
+  /* fill outline + leader strokes bumped ~10%. */
   stroke-width: 1.45;
   stroke-dasharray: 5 4;
 }
@@ -1240,7 +1240,7 @@ button:disabled { cursor: not-allowed; }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Help overlay — a static, modal reference card (v0.2.8 #15)
+   Help overlay — a static, modal reference card
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-help-backdrop {
   position: absolute; inset: 0; z-index: 50;
@@ -1287,7 +1287,7 @@ button:disabled { cursor: not-allowed; }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Live-probe readout — a cursor-following hover panel (v0.2.8 #17)
+   Live-probe readout — a cursor-following hover panel
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-probe-readout {
   position: absolute; z-index: 35;

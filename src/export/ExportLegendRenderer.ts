@@ -2,10 +2,9 @@
  * ExportLegendRenderer.ts
  *
  * Renders legend swatches into a 2D canvas — used by the Studio panel to
- * preview the palette, and reserved as the seam v0.3.3 will use to composite
- * legends *into* the exported PNG. For v0.3.2 the legend is a side artifact
- * surfaced in the panel; the PNG itself remains untouched so binary
- * round-trips stay stable.
+ * preview the palette. The legend is a side artifact surfaced in the panel;
+ * the exported PNG itself remains untouched so binary round-trips stay
+ * stable.
  *
  * Pure of three.js. Accepts an offscreen `OffscreenCanvas` (or any
  * `HTMLCanvasElement` for jsdom-friendly tests) and writes swatches +
@@ -58,8 +57,9 @@ export function asprsLabel(code: number): string {
 
 /**
  * The recommended subset of ASPRS classes to include in a quick-read legend.
- * Order matches the runtime palette in `colorModes.ts`. v0.3.3 will let the
- * caller drive the list from the actual classification distribution.
+ * Order matches the runtime palette in `colorModes.ts`. Callers can build
+ * their own list from the actual classification distribution when a
+ * cloud-specific legend is preferred.
  */
 export const DEFAULT_LEGEND_CODES: readonly number[] = [
   2, 3, 4, 5, 6, 9, 11, 17, 1, 7, 18,

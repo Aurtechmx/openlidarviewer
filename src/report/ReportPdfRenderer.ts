@@ -6,9 +6,8 @@
  * produces the final PDF Blob.
  *
  * The renderer is **layout-bounded** — each section knows its rough
- * height needs and can request a new page when it overflows. v0.3.3
- * ships a hand-tuned layout (no full paragraph-reflow). Paragraph
- * reflow is intentionally not implemented; the technical-notes section
+ * height needs and can request a new page when it overflows. The layout
+ * is hand-tuned (no full paragraph reflow); the technical-notes section
  * currently takes a single line of body copy.
  *
  * Pure of DOM; pdf-lib gives us PDF bytes that we wrap in a Blob.
@@ -24,7 +23,13 @@ import type {
   ReportTemplate,
   ReportVisualAsset,
 } from './types';
-import { effectiveBranding, parseAccentColor, type ParsedColor } from './ReportBranding';
+import {
+  effectiveBranding,
+  parseAccentColor,
+  resolveTheme,
+  type ParsedColor,
+  type ReportThemePalette,
+} from './ReportBranding';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants — letter portrait, 0.6 inch margins.
@@ -60,7 +65,7 @@ export async function renderReportPdf(
   const doc = await PDFDocument.create();
   doc.setTitle(inputs.cover.title);
   doc.setAuthor(inputs.branding.author ?? 'OpenLiDARViewer');
-  doc.setCreator('OpenLiDARViewer Report Engine v0.3.3');
+  doc.setCreator(`OpenLiDARViewer Report Engine v${__APP_VERSION__}`);
   doc.setProducer('pdf-lib (lazy chunk)');
   doc.setCreationDate(new Date());
 
@@ -68,6 +73,10 @@ export async function renderReportPdf(
   const helveticaBold = await doc.embedFont(StandardFonts.HelveticaBold);
   const branding = effectiveBranding(inputs.branding);
   const accent = parseAccentColor(branding.accentColor);
+  // Resolved theme palette: page background, body/muted text, rule colour,
+  // row tint, accent-stripe toggle. The renderer reads these instead of
+  // hard-coded RGB values.
+  const theme = resolveTheme(branding.theme);
 
   // Logo (optional) is embedded once and reused across pages.
   let logoImage: PDFImage | undefined;
@@ -83,17 +92,19 @@ export async function renderReportPdf(
   }
 
   // The renderer state — the page cursor advances through the document.
-  let cursor: PageCursor = startNewPage(doc, accent, branding.organisation);
+  let cursor: PageCursor = startNewPage(doc, accent, theme, branding.organisation);
 
   for (const section of template.sections) {
     cursor = await renderSection(
-      section, inputs, cursor, doc, accent,
+      section, inputs, cursor, doc, accent, theme,
       helvetica, helveticaBold, logoImage, branding.organisation,
     );
   }
 
-  // Stamp page numbers in the footer of every page that was added.
-  stampFooterPageNumbers(doc, helvetica);
+  // Stamp page numbers in the footer of every page that was added. The
+  // optional footer note (confidentiality, project code, etc.) is appended
+  // above the standard line on each page.
+  stampFooterPageNumbers(doc, helvetica, theme, branding.footerNote);
 
   const bytes = await doc.save();
   // pdf-lib returns Uint8Array<ArrayBufferLike> which TS conservatively
@@ -121,6 +132,7 @@ async function renderSection(
   cursor: PageCursor,
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   logo: PDFImage | undefined,
@@ -128,17 +140,17 @@ async function renderSection(
 ): Promise<PageCursor> {
   switch (section) {
     case 'cover':
-      return renderCover(cursor, inputs, accent, body, bold, logo);
+      return renderCover(cursor, inputs, accent, theme, body, bold, logo);
     case 'dataset-summary':
-      return renderDatasetSummary(cursor, inputs, doc, accent, body, bold, organisation);
+      return renderDatasetSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'visuals':
-      return renderVisuals(cursor, inputs, doc, accent, body, bold, organisation);
+      return renderVisuals(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'annotations':
-      return renderAnnotations(cursor, inputs, doc, accent, body, bold, organisation);
+      return renderAnnotations(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'measurements':
-      return renderMeasurements(cursor, inputs, doc, accent, body, bold, organisation);
+      return renderMeasurements(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'technical-notes':
-      return renderTechnicalNotes(cursor, inputs, doc, accent, body, bold, organisation);
+      return renderTechnicalNotes(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'footer':
       // Footer is stamped per-page in stampFooterPageNumbers; nothing
       // section-specific to do here, but we keep the slot in the
@@ -154,19 +166,30 @@ async function renderSection(
 function startNewPage(
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   organisation: string | undefined,
 ): PageCursor {
   const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  // Accent stripe down the left edge — uniform branding across pages.
+  // Paint the theme's page background first so dark themes render legibly.
+  // Light themes have a near-white page background, so this is effectively
+  // a no-op visually.
   page.drawRectangle({
-    x: 0, y: 0, width: 3, height: PAGE_HEIGHT,
-    color: rgb(accent.r, accent.g, accent.b),
+    x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT,
+    color: rgb(theme.pageBackground.r, theme.pageBackground.g, theme.pageBackground.b),
   });
+  // Accent stripe down the left edge — uniform branding across pages.
+  // The minimal-engineering theme omits the stripe for an austere look.
+  if (theme.drawAccentStripe) {
+    page.drawRectangle({
+      x: 0, y: 0, width: 3, height: PAGE_HEIGHT,
+      color: rgb(accent.r, accent.g, accent.b),
+    });
+  }
   // Footer hairline.
   page.drawRectangle({
     x: MARGIN, y: FOOTER_HEIGHT,
     width: CONTENT_WIDTH, height: 0.5,
-    color: rgb(0.85, 0.85, 0.88),
+    color: rgb(theme.rule.r, theme.rule.g, theme.rule.b),
   });
   // Footer text — organisation (left) + "OpenLiDARViewer" (right).
   // Stamped here so newly-added pages get the footer even before the
@@ -180,10 +203,11 @@ function ensureSpace(
   needed: number,
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   organisation: string | undefined,
 ): PageCursor {
   if (cursor.y - needed < FOOTER_HEIGHT + 16) {
-    return startNewPage(doc, accent, organisation);
+    return startNewPage(doc, accent, theme, organisation);
   }
   return cursor;
 }
@@ -207,11 +231,16 @@ function drawSectionHeader(
   return { page: cursor.page, y: cursor.y - HEADER_FONT_SIZE - 14 };
 }
 
-function drawBodyLine(cursor: PageCursor, text: string, body: PDFFont): PageCursor {
+function drawBodyLine(
+  cursor: PageCursor,
+  text: string,
+  body: PDFFont,
+  theme: ReportThemePalette,
+): PageCursor {
   cursor.page.drawText(text, {
     x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
     size: BODY_FONT_SIZE, font: body,
-    color: rgb(0.13, 0.15, 0.18),
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
   });
   return { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
 }
@@ -222,16 +251,17 @@ function drawLabelValueRow(
   value: string,
   body: PDFFont,
   bold: PDFFont,
+  theme: ReportThemePalette,
 ): PageCursor {
   cursor.page.drawText(label, {
     x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
     size: BODY_FONT_SIZE, font: bold,
-    color: rgb(0.42, 0.45, 0.5),
+    color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
   });
   cursor.page.drawText(value, {
     x: MARGIN + 120, y: cursor.y - BODY_FONT_SIZE,
     size: BODY_FONT_SIZE, font: body,
-    color: rgb(0.13, 0.15, 0.18),
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
   });
   return { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
 }
@@ -244,6 +274,7 @@ async function renderCover(
   cursor: PageCursor,
   inputs: ReportInputs,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   logo: PDFImage | undefined,
@@ -261,7 +292,7 @@ async function renderCover(
   cursor.page.drawText(inputs.cover.title, {
     x: MARGIN, y: cursor.y - TITLE_FONT_SIZE,
     size: TITLE_FONT_SIZE, font: bold,
-    color: rgb(0.06, 0.09, 0.13),
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
   });
   cursor = { page: cursor.page, y: cursor.y - TITLE_FONT_SIZE - 4 };
   // Subtitle.
@@ -269,7 +300,7 @@ async function renderCover(
     cursor.page.drawText(inputs.cover.subtitle, {
       x: MARGIN, y: cursor.y - 14,
       size: 14, font: body,
-      color: rgb(0.42, 0.45, 0.5),
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
     });
     cursor = { page: cursor.page, y: cursor.y - 20 };
   }
@@ -282,16 +313,27 @@ async function renderCover(
   cursor = { page: cursor.page, y: cursor.y - 30 };
 
   // Cover metadata block — dataset / organisation / author / exported.
-  cursor = drawLabelValueRow(cursor, 'Dataset',     inputs.cover.datasetName, body, bold);
+  cursor = drawLabelValueRow(cursor, 'Dataset',     inputs.cover.datasetName, body, bold, theme);
   if (inputs.branding.organisation) {
-    cursor = drawLabelValueRow(cursor, 'Organisation', inputs.branding.organisation, body, bold);
+    cursor = drawLabelValueRow(cursor, 'Organisation', inputs.branding.organisation, body, bold, theme);
   }
   if (inputs.branding.author) {
-    cursor = drawLabelValueRow(cursor, 'Author',     inputs.branding.author, body, bold);
+    cursor = drawLabelValueRow(cursor, 'Author',     inputs.branding.author, body, bold, theme);
   }
   cursor = drawLabelValueRow(
-    cursor, 'Exported', formatTimestamp(inputs.cover.exportedAt), body, bold,
+    cursor, 'Exported', formatTimestamp(inputs.cover.exportedAt), body, bold, theme,
   );
+  // optional project-metadata rows, one per provided field.
+  // Rendered after the standard block so the cover stays clean when no
+  // project metadata was supplied.
+  const pm = inputs.branding.projectMetadata;
+  if (pm) {
+    if (pm.client)    cursor = drawLabelValueRow(cursor, 'Client',    pm.client,    body, bold, theme);
+    if (pm.project)   cursor = drawLabelValueRow(cursor, 'Project',   pm.project,   body, bold, theme);
+    if (pm.phase)     cursor = drawLabelValueRow(cursor, 'Phase',     pm.phase,     body, bold, theme);
+    if (pm.reference) cursor = drawLabelValueRow(cursor, 'Reference', pm.reference, body, bold, theme);
+    if (pm.date)      cursor = drawLabelValueRow(cursor, 'Date',      pm.date,      body, bold, theme);
+  }
   return cursor;
 }
 
@@ -300,15 +342,16 @@ async function renderDatasetSummary(
   inputs: ReportInputs,
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  cursor = ensureSpace(cursor, 60 + inputs.datasetRows.length * 14, doc, accent, organisation);
+  cursor = ensureSpace(cursor, 60 + inputs.datasetRows.length * 14, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Dataset summary', accent, bold);
   for (const row of inputs.datasetRows) {
-    cursor = ensureSpace(cursor, 16, doc, accent, organisation);
-    cursor = drawLabelValueRow(cursor, row.label, row.value, body, bold);
+    cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+    cursor = drawLabelValueRow(cursor, row.label, row.value, body, bold, theme);
   }
   return { page: cursor.page, y: cursor.y - 14 };
 }
@@ -318,12 +361,13 @@ async function renderVisuals(
   inputs: ReportInputs,
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
   if (inputs.visuals.length === 0) return cursor;
-  cursor = ensureSpace(cursor, 60, doc, accent, organisation);
+  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Visuals', accent, bold);
   for (const v of inputs.visuals) {
     const embedded = await embedVisual(doc, v);
@@ -333,7 +377,7 @@ async function renderVisuals(
     const aspect = embedded.height / embedded.width;
     const w = Math.min(CONTENT_WIDTH, embedded.width);
     const h = Math.min(w * aspect, PAGE_HEIGHT - FOOTER_HEIGHT - MARGIN - 60);
-    cursor = ensureSpace(cursor, h + 30, doc, accent, organisation);
+    cursor = ensureSpace(cursor, h + 30, doc, accent, theme, organisation);
     cursor.page.drawImage(embedded, {
       x: MARGIN, y: cursor.y - h,
       width: w, height: h,
@@ -342,7 +386,7 @@ async function renderVisuals(
     cursor.page.drawText(v.caption, {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
       size: BODY_FONT_SIZE, font: body,
-      color: rgb(0.42, 0.45, 0.5),
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
     });
     cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 12 };
   }
@@ -354,29 +398,31 @@ async function renderAnnotations(
   inputs: ReportInputs,
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
   if (inputs.annotations.length === 0) return cursor;
-  cursor = ensureSpace(cursor, 60, doc, accent, organisation);
+  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, `Annotations (${inputs.annotations.length})`, accent, bold);
   for (const a of inputs.annotations) {
-    cursor = ensureSpace(cursor, 36, doc, accent, organisation);
+    cursor = ensureSpace(cursor, 36, doc, accent, theme, organisation);
     // Title + type badge.
     cursor.page.drawText(`${a.title}  [${a.type}]`, {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
       size: BODY_FONT_SIZE, font: bold,
-      color: rgb(0.13, 0.15, 0.18),
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
     });
     cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 2 };
     if (a.note) {
-      cursor = drawBodyLine(cursor, a.note, body);
+      cursor = drawBodyLine(cursor, a.note, body, theme);
     }
     cursor = drawBodyLine(
       cursor,
       `Position: ${a.position.x.toFixed(3)}, ${a.position.y.toFixed(3)}, ${a.position.z.toFixed(3)}`,
       body,
+      theme,
     );
     cursor = { page: cursor.page, y: cursor.y - 6 };
   }
@@ -388,16 +434,17 @@ async function renderMeasurements(
   inputs: ReportInputs,
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
   if (inputs.measurements.length === 0) return cursor;
-  cursor = ensureSpace(cursor, 60, doc, accent, organisation);
+  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, `Measurements (${inputs.measurements.length})`, accent, bold);
   for (const m of inputs.measurements) {
-    cursor = ensureSpace(cursor, 16, doc, accent, organisation);
-    cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold);
+    cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+    cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, theme);
   }
   return { page: cursor.page, y: cursor.y - 10 };
 }
@@ -407,19 +454,20 @@ async function renderTechnicalNotes(
   inputs: ReportInputs,
   doc: PDFDocument,
   accent: ParsedColor,
+  theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
   if (!inputs.technicalNotes) return cursor;
-  cursor = ensureSpace(cursor, 60, doc, accent, organisation);
+  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Technical notes', accent, bold);
-  // v0.3.3 MVP — no full paragraph reflow; we split on newlines and
+  // no full paragraph reflow; we split on newlines and
   // render each line. A real text-wrapping pass lands in a follow-up
   // when the notes section grows enough to warrant it.
   for (const line of inputs.technicalNotes.split('\n')) {
-    cursor = ensureSpace(cursor, 14, doc, accent, organisation);
-    cursor = drawBodyLine(cursor, line, body);
+    cursor = ensureSpace(cursor, 14, doc, accent, theme, organisation);
+    cursor = drawBodyLine(cursor, line, body, theme);
   }
   return cursor;
 }
@@ -431,8 +479,8 @@ async function renderTechnicalNotes(
 async function embedVisual(doc: PDFDocument, asset: ReportVisualAsset): Promise<PDFImage | null> {
   try {
     const bytes = new Uint8Array(await asset.blob.arrayBuffer());
-    // PNG is the Studio's exclusive output format (v0.3.3); pdf-lib's
-    // embedPng is the right call. JPEG support is a future addition.
+    // PNG is the Studio's exclusive output format; pdf-lib's
+    // embedPng is the right call.
     return await doc.embedPng(bytes);
   } catch {
     return null;
@@ -466,16 +514,33 @@ function formatTimestamp(iso: string): string {
  * Pass over every page after the document is built, stamping the page
  * number + total count in the footer. Done in a second pass so the total
  * is known.
+ *
+ * accepts a theme so the footer text colour matches the page
+ * palette (dark themes need light footer text), and an optional
+ * `footerNote` that's rendered above the standard line for compliance /
+ * confidentiality / project-code annotations.
  */
-function stampFooterPageNumbers(doc: PDFDocument, body: PDFFont): void {
+function stampFooterPageNumbers(
+  doc: PDFDocument,
+  body: PDFFont,
+  theme: ReportThemePalette,
+  footerNote: string | undefined,
+): void {
   const pages = doc.getPages();
   const total = pages.length;
   for (let i = 0; i < total; i++) {
-    const text = `OpenLiDARViewer · ${i + 1} of ${total}`;
-    pages[i].drawText(text, {
+    const standardLine = `OpenLiDARViewer · ${i + 1} of ${total}`;
+    pages[i].drawText(standardLine, {
       x: MARGIN, y: 12,
       size: 9, font: body,
-      color: rgb(0.55, 0.58, 0.62),
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
     });
+    if (footerNote) {
+      pages[i].drawText(footerNote, {
+        x: MARGIN, y: 22,
+        size: 8, font: body,
+        color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+      });
+    }
   }
 }

@@ -116,7 +116,7 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
 
   // A buffer too short to hold the header would otherwise throw an opaque
   // "Offset is outside the bounds of the DataView"; fail with a clear message
-  // instead. This also protects the v0.2.7 head-slice path, where a whole file
+  // instead. This also protects the head-slice path, where a whole file
   // smaller than the header can legitimately reach this parser.
   if (buffer.byteLength < MIN_PUBLIC_HEADER_BYTES) {
     throw new Error('Not a valid LAS file: the file is too small to contain a header');
@@ -210,11 +210,11 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
  * The per-point attributes a decoded LAS/LAZ cloud carries in this viewer.
  *
  * The loader decodes position, intensity, classification, and — since
- * v0.2.8 — the inspection extras (return number/count, point source ID, GPS
+ * the inspection extras (return number/count, point source ID, GPS
  * time); not RGB or surface normals. The set is fixed regardless of the LAS
- * point format. It sizes the v0.2.7 load-memory estimate
+ * point format. It sizes the load-memory estimate
  * (`estimateMemoryBytes`); `hasLasExtras` keeps that estimate honest about the
- * ~12 extra bytes per point the v0.2.8 attributes add.
+ * ~12 extra bytes per point the attributes add.
  */
 export const LAS_DECODED_ATTRIBUTES: PointAttributes = {
   hasColor: false,

@@ -21,7 +21,7 @@
  *    `@loaders.gl/las`, used here directly) decompresses each record. The
  *    decompressed record has the same int32 X/Y/Z prefix.
  *
- * ## Direct local-coordinate decode (v0.2.7)
+ * ## Direct local-coordinate decode
  *
  * The render origin is computed from the header bounds *before* decoding, so
  * each record is converted straight into the local `Float32Array` the renderer
@@ -288,7 +288,7 @@ type LazPerfModule = Awaited<ReturnType<typeof createLazPerf>>;
 let lazPerfModule: Promise<LazPerfModule> | undefined;
 
 /**
- * v0.3.3 — exported so the EPT laszip tile decoder can reuse the same
+ * exported so the EPT laszip tile decoder can reuse the same
  * cached WASM module. The single-instantiation contract (one WASM
  * compile + initialise per session, ~30-50 ms) is the load-bearing
  * performance guarantee — every EPT tile decode hits the cached path.
@@ -406,7 +406,7 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
   if (header.generatingSoftware) metadata.sourceSoftware = header.generatingSoftware;
   const captureDate = formatCreationDate(header.creationYear, header.creationDay);
   if (captureDate) metadata.captureDate = captureDate;
-  // v0.3.2-Georef — surface the CRS parsed from LASF_Projection VLRs so the
+  // surface the CRS parsed from LASF_Projection VLRs so the
   // Scan Intelligence panel + scan-report card + measurement tool can show
   // the source datum and convert measurements from feet to metres when the
   // CRS declares a non-metric linear unit.
@@ -426,7 +426,7 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
  * @param sourceFormat Either `'las'` or `'laz'`.
  * @param name         Display name (defaults to `"cloud.<format>"`).
  * @param stride       Decode every `stride`-th record (1 = every record).
- *                     Used by the v0.2.7 fast-load path for huge clouds.
+ *                     Used by the fast-load path for huge clouds.
  * @param onProgress   Optional staged-progress callback for the decode loop.
  */
 export async function loadLas(

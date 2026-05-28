@@ -1,6 +1,6 @@
 import '@fontsource-variable/inter';
 import './style.css';
-import { Viewer } from './render/Viewer';
+import type { Viewer } from './render/Viewer';
 import type { CameraPose } from './render/NavController';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
@@ -18,7 +18,7 @@ import { describeLoadError } from './io/loadErrors';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
 import { parseEmbedConfig } from './ui/embedConfig';
-// v0.3.3 — `startEmbedBridge` is only wired in `?embed=1` mode.
+// `startEmbedBridge` is only wired in `?embed=1` mode.
 // Lazy-loaded so the bridge code never enters the bundle for the typical
 // non-iframe page load (the dominant traffic pattern).
 import { encodeShareState, decodeShareState } from './io/shareState';
@@ -61,7 +61,7 @@ import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
 import { StreamingPanel } from './ui/StreamingPanel';
 import type { StreamingQuality } from './render/streaming/streamingBudget';
 // The COPC/streaming `import()` split points live in `lazyChunks.ts` — a
-// module excluded from the live-build obfuscator so Vite can still see the
+// module excluded from the live-build source-transform so Vite can still see the
 // dynamic-import specifiers and emit the chunks (see lazyChunks.ts).
 import {
   loadStreamingPointCloud,
@@ -76,10 +76,11 @@ import {
   loadDebugOverlay,
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
+  loadViewer,
 } from './lazyChunks';
 
 // A pointer to the open-source repository for anyone who opens the console on
-// the live site. The deployed bundle is obfuscated; the readable source — and
+// the live site. The deployed bundle is compact-transformed; the readable source — and
 // the full documentation — live on GitHub.
 console.log(
   `%cOpenLiDARViewer%c v${__APP_VERSION__} — open source under the MIT license.\n` +
@@ -115,7 +116,23 @@ const stage = new Stage(app, {
   onOpenFile: (file) => void handleFile(file),
   onOpenUrl: (url) => void handleRemoteUrl(url),
 });
-const viewer = new Viewer(stage.canvas);
+/**
+ * The Viewer is lazy-imported so three.js stays out of the initial shell.
+ * `viewer` is treated as non-null throughout the rest of main.ts; every
+ * scan-open path awaits `viewerLoaded` before touching it, and UI handlers
+ * that *could* fire pre-init are operating against an empty state where the
+ * calls are no-ops anyway.
+ *
+ * The cast through `unknown` is the documented escape hatch — TypeScript
+ * cannot see the runtime guarantee that `viewerLoaded` resolves before
+ * any user-driven scan-open, but it does.
+ */
+let viewer: Viewer = null as unknown as Viewer;
+const viewerLoaded: Promise<Viewer> = (async () => {
+  const { Viewer: ViewerCtor } = await loadViewer();
+  viewer = new ViewerCtor(stage.canvas);
+  return viewer;
+})();
 
 /** True on phone-width viewports — drives the touch hint and point budget. */
 function isPhone(): boolean {
@@ -238,22 +255,37 @@ const inspector = new Inspector({
     // The Visual Export Studio ships in its own lazy chunk (`loadExportStudio`),
     // pulled in by viewer.exportImage on the first invocation. The download
     // triggers off the returned Blob; an unsupported-on-this-cloud rejection
-    // surfaces as a visible alert (a toast UI lands in v0.3.3).
+    // surfaces as a visible alert.
     const sourceName = activeId
       ? viewer.getCloud(activeId)?.name
       : viewer.streamingCloud?.name;
     const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
+    // surface a precise per-mode progress string while the lazy
+    // Studio chunk loads and the export renders.
+    const modeLabel: Record<string, string> = {
+      'orthographic-rgb': 'orthographic RGB',
+      'height-map': 'height map',
+      intensity: 'intensity map',
+      classification: 'classification map',
+      depth: 'depth map',
+      normal: 'normal map',
+      contour: 'contour map',
+    };
+    const label = modeLabel[mode] ?? mode;
+    dropZone.setProgress(`Exporting ${label}…`);
     viewer
       .exportImage(mode, {})
       .then((result) => {
         downloadBlob(`${base}-${mode}.png`, result.blob);
+        dropZone.setProgress(null);
       })
       .catch((err: unknown) => {
+        dropZone.setProgress(null);
         // The orchestrator's explicit reason ("Classification export is
         // unavailable — this cloud has no classification channel.") is the
         // most actionable thing we can show, so it goes both to the console
         // (for debugging) and to a non-blocking alert (so the user knows
-        // something happened and why). v0.3.3 replaces the alert with a
+        // something happened and why). Replaces the alert with a
         // toast surfaced inside the Studio panel.
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[image-export]', err);
@@ -264,16 +296,22 @@ const inspector = new Inspector({
       });
   },
   onExportReport: (templateId) => {
-    // v0.3.3 — generate a PDF report from the live scan state +
+    // generate a PDF report from the live scan state +
     // annotations + measurements. The whole `src/report/` module + pdf-lib
     // (~150 KB) lives behind `loadReportEngine()`; first click downloads
     // both. The report covers what the scan-report card already does on
     // PNG exports, but as a multi-page PDF with the full Inspector context.
-    void generateReportPdf(templateId).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[report]', err);
-      setTimeout(() => window.alert(`Report generation failed: ${msg}`), 0);
-    });
+    // surface a precise progress string while the lazy module
+    // loads and the PDF renders.
+    dropZone.setProgress('Generating report…');
+    generateReportPdf(templateId)
+      .then(() => dropZone.setProgress(null))
+      .catch((err: unknown) => {
+        dropZone.setProgress(null);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[report]', err);
+        setTimeout(() => window.alert(`Report generation failed: ${msg}`), 0);
+      });
   },
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
@@ -411,7 +449,7 @@ void viewer.ready.then(() => {
   // applied immediately after, still wins.
   applyDeviceDefaults();
   applyPrefs();
-  // v0.3.2 — pre-warm the lazy load chunks once the GPU backend is ready.
+  // pre-warm the lazy load chunks once the GPU backend is ready.
   // First-file-drop is the most painful "did the app freeze?" moment; this
   // moves the ~200–500 ms chunk fetch + parse off the critical path so a
   // user who opens the app and immediately drops a file sees the parser
@@ -510,7 +548,7 @@ if (!bareMode) {
   }
 }
 
-// v0.3.3 — the cross-frame control bridge is now lazy-loaded.
+// the cross-frame control bridge is now lazy-loaded.
 // `?embed=1` is a minority of traffic; non-embed loads should not pay
 // the ~5 KB embed-bridge cost.
 async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge').startEmbedBridge> {
@@ -612,7 +650,7 @@ function baseName(name: string): string {
 }
 
 /**
- * v0.3.2 — pre-warm the Studio chunk after a cloud finishes loading. The
+ * pre-warm the Studio chunk after a cloud finishes loading. The
  * fetch + parse happens in the background while the user is exploring the
  * scene, so the first Image-export click immediately runs the export
  * instead of waiting on the chunk. Idempotent — the dynamic import is
@@ -632,7 +670,7 @@ async function prewarmExportStudio(): Promise<void> {
 }
 
 /**
- * v0.3.2 — pre-warm the heaviest LOAD chunks on app idle so the first
+ * pre-warm the heaviest LOAD chunks on app idle so the first
  * file-drop runs the parser without waiting ~200-500 ms for the lazy
  * `loadLas` + `loadStreamingPointCloud` + `loadCopcWorkerClient` chunks
  * to download and parse. The chunks ARE the COPC streaming pipeline plus
@@ -667,18 +705,20 @@ function schedulePrewarm(): void {
 }
 
 /**
- * v0.3.3 — assemble + render a PDF report from the live state.
+ * Assemble + render a PDF report from the live state.
  * Lazy-loads the report engine (which pulls pdf-lib) on first call.
  * Returns a Promise so the caller can surface errors via toast/alert.
  *
- * MVP shape: pulls the active streaming OR static cloud's metadata,
- * the current annotations + measurements + unit system, and assembles
- * a `ReportInputs`. Visuals + technical notes are queued for a UI-
- * coupled follow-up (the user will pre-render image exports + type
- * notes via a follow-on Studio-panel dialog). The engineering-
+ * Pulls the active streaming OR static cloud's metadata, the current
+ * annotations + measurements + unit system, and assembles a
+ * `ReportInputs`. Visuals + technical notes are queued for a UI-coupled
+ * follow-up (the user will pre-render image exports + type notes via a
+ * follow-on Studio-panel dialog). The engineering-
  * inspection template renders cleanly without visuals.
  */
 async function generateReportPdf(templateId: string): Promise<void> {
+  // the report flow needs the Viewer state; ensure it's loaded.
+  await viewerLoaded;
   const report = await loadReportEngine();
   const streamingCloud = viewer.streamingCloud;
   const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
@@ -900,7 +940,7 @@ function exportSession(): void {
   const cloud = activeId ? viewer.getCloud(activeId) : undefined;
   const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
 
-  // v0.3.3 — populate the v3 fields so the .olvsession captures
+  // populate the v3 fields so the .olvsession captures
   // the full working state, not just the inspection annotations. The
   // optional fields are only emitted when there's something meaningful
   // to write — a session exported with no scan loaded won't pollute
@@ -954,7 +994,7 @@ function exportSession(): void {
     colorMode: viewer.activeColorMode(),
     scanSummary,
   });
-  // v0.3.3 — `.olvsession` is the new canonical extension; the file is
+  // `.olvsession` is the new canonical extension; the file is
   // still JSON internally (Mac/Linux's Open With dialog associates the
   // double-click flow). Filename derived from the active scan name when
   // possible so a folder of exports doesn't collide.
@@ -974,7 +1014,7 @@ async function importSession(file: File): Promise<void> {
     refreshMeasurePanel();
     refreshAnnotationPanel();
 
-    // v0.3.3 — apply the v3 optional fields when present. Each
+    // apply the v3 optional fields when present. Each
     // one is independently guarded so a partial v3 file (e.g. one with
     // a camera but no render settings) restores what's there without
     // assuming the rest. A v1 / v2 file has none of these — fall through
@@ -1014,6 +1054,8 @@ async function handleFile(file: File): Promise<void> {
   // second load started mid-flight would hijack the first one's worker. The
   // in-progress load carries a Cancel control if the user wants to switch.
   if (loading) return;
+  // ensure the lazy-loaded Viewer is ready before touching it.
+  await viewerLoaded;
   loading = true;
   const controller = new AbortController();
   dropZone.setProgress(`Reading ${file.name}…`);
@@ -1035,7 +1077,7 @@ async function handleFile(file: File): Promise<void> {
     if (viewer.hasStreamingCloud) closeStreaming();
 
     // Phones get a tighter point budget — limited GPU memory and fill-rate.
-    // The dropped file is wrapped in a LocalFileSource — the v0.2.9 source
+    // The dropped file is wrapped in a LocalFileSource — the source
     // abstraction; v0.3 streaming sources slot in beside it.
     const source = new LocalFileSource(file);
     const result = await source.load(
@@ -1083,7 +1125,7 @@ async function handleFile(file: File): Promise<void> {
     inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
     inspector.setReport(runModules(result.cloud));
     inspector.setViews([]);
-    // v0.3.2 Visual Export Studio — a scan is now loaded; turn on the image-
+    // Visual Export Studio — a scan is now loaded; turn on the image-
     // export buttons so the user can capture it. Pre-warm the lazy Studio
     // chunk in the background so the first export click feels instant
     // instead of waiting on the ~7 KB gzip fetch + parse. Pure fire-and-
@@ -1185,7 +1227,7 @@ async function openStreamingCopc(
   signal: AbortSignal,
 ): Promise<void> {
   await viewer.ready;
-  streamingPanel.setPhase('Reading metadata…');
+  streamingPanel.setPhase('Loading metadata…');
   streamingPanel.show();
   inspector.element.classList.add('olv-hidden');
   dropZone.setProgress('Reading COPC hierarchy…');
@@ -1245,8 +1287,8 @@ async function openStreamingCopc(
     streamingColors.defaultStreamingMode(cloud.metadata),
   );
   streamingPanel.setQuality(streamingQuality);
-  streamingPanel.setPhase('Loading coarse view…');
-  // v0.3.2 Visual Export Studio — a streaming COPC cloud is now attached;
+  streamingPanel.setPhase('Streaming coarse geometry…');
+  // Visual Export Studio — a streaming COPC cloud is now attached;
   // the image-export buttons in the Inspector can light up. The streaming
   // path doesn't go through `inspector.addCloud`, so the gate has to flip
   // here too. Pre-warm the Studio chunk for the same reason as above.
@@ -1265,7 +1307,7 @@ async function openStreamingCopc(
     spacing: cloud.metadata.info.spacing,
     octreeDepth: cloud.maxDepth(),
     nodeCount: cloud.octree.nodes().length,
-    // v0.3.3 — explicit format tag so the Scan Intelligence panel renders
+    // explicit format tag so the Scan Intelligence panel renders
     // "COPC LAZ · PDRF N" for COPC and "EPT · binary · N attrs" for EPT.
     format: 'copc',
   });
@@ -1291,7 +1333,7 @@ async function openStreamingCopc(
 }
 
 /**
- * v0.3.3 — the remote-URL router. Dispatches to the EPT handler when the
+ * the remote-URL router. Dispatches to the EPT handler when the
  * URL is an `ept.json` entry-point, otherwise routes to COPC. This is the
  * single seam every URL-loading code path goes through (the dropzone's
  * onOpenUrl callback, the `?copc=` query-param bootstrap, the embed-bridge
@@ -1301,7 +1343,7 @@ async function openStreamingCopc(
 async function handleRemoteUrl(url: string): Promise<void> {
   // EPT detection is URL-pattern only — fast, no network, no schema fetch.
   // If the URL ends in /ept.json we route to the EPT loader; everything
-  // else assumes COPC (the previous v0.3.2 default).
+  // else assumes COPC (the previous previous default).
   const eptModule = await loadEpt();
   if (eptModule.detectEptUrl(url)) {
     return handleRemoteEpt(url);
@@ -1310,7 +1352,7 @@ async function handleRemoteUrl(url: string): Promise<void> {
 }
 
 /**
- * v0.3.3 — open a remote EPT dataset by its `ept.json` URL. Mirrors the
+ * open a remote EPT dataset by its `ept.json` URL. Mirrors the
  * `handleRemoteCopc` flow:
  *   1. Validate the URL.
  *   2. Fetch + parse + validate `ept.json` (typed failure paths surface
@@ -1323,7 +1365,9 @@ async function handleRemoteUrl(url: string): Promise<void> {
  */
 async function handleRemoteEpt(url: string): Promise<void> {
   if (loading) return;
-  // v0.3.3 — fail-fast URL hygiene. Same posture as the COPC
+  // ensure the lazy-loaded Viewer is ready before touching it.
+  await viewerLoaded;
+  // fail-fast URL hygiene. Same posture as the COPC
   // entry: a malformed URL never reaches the network.
   const eptUrlMod = await loadEpt();
   const check = eptUrlMod.validateRemoteEptUrl(url);
@@ -1356,7 +1400,7 @@ async function handleRemoteEpt(url: string): Promise<void> {
 
     if (viewer.hasStreamingCloud) closeStreaming();
     await viewer.ready;
-    streamingPanel.setPhase('Reading EPT hierarchy…');
+    streamingPanel.setPhase('Building hierarchy…');
     streamingPanel.show();
     inspector.element.classList.add('olv-hidden');
 
@@ -1364,22 +1408,12 @@ async function handleRemoteEpt(url: string): Promise<void> {
     // the source uses it to build hierarchy + tile URLs.
     const baseUrl = url.replace(/ept\.json(?:\?.*)?(?:#.*)?$/i, '');
 
-    // The injected transport is plain fetch — same retry/abort plumbing
-    // as the rest of the remote pipeline. v0.3.3 keeps it minimal; the
-    // network-byte instrumentation hook used by the COPC InstrumentedRangeSource
-    // is queued for the EPT path in a later session.
-    const transport = {
-      fetchText: async (u: string, s?: AbortSignal): Promise<string> => {
-        const r = await fetch(u, { signal: s });
-        if (!r.ok) throw new Error(`EPT hierarchy fetch failed (${r.status}) for ${u}`);
-        return r.text();
-      },
-      fetchBytes: async (u: string, s?: AbortSignal): Promise<ArrayBuffer> => {
-        const r = await fetch(u, { signal: s });
-        if (!r.ok) throw new Error(`EPT tile fetch failed (${r.status}) for ${u}`);
-        return r.arrayBuffer();
-      },
-    };
+    // hardened EPT transport: retry-with-backoff (3 retries),
+    // per-attempt timeout (20 s), abort discipline composed with the outer
+    // load-cancel signal. Mirrors the discipline `HttpRangeSource` brings
+    // to the COPC path. Typed error messages flow through to
+    // `describeRemoteEptError` for the user-facing classifier.
+    const transport = eptUrlMod.createEptTransport();
 
     const cloud = await EptStreamingPointCloud.open(
       detection.metadata,
@@ -1415,7 +1449,7 @@ async function handleRemoteEpt(url: string): Promise<void> {
       cloud.defaultColorMode(),
     );
     streamingPanel.setQuality(streamingQuality);
-    streamingPanel.setPhase('Loading coarse view…');
+    streamingPanel.setPhase('Streaming coarse geometry…');
     inspector.setImageExportEnabled(true);
     void prewarmExportStudio();
 
@@ -1449,7 +1483,7 @@ async function handleRemoteEpt(url: string): Promise<void> {
       dropZone.setProgress(null);
     } else {
       if (debug) console.error('OpenLiDARViewer — remote EPT error', err);
-      // v0.3.3 — classified error messages, matching the COPC
+      // classified error messages, matching the COPC
       // remote-UX polish. `describeRemoteEptError` distinguishes CORS,
       // 404, 5xx, hierarchy vs. tile fetch, and transport failures.
       dropZone.setError(eptUrlMod.describeRemoteEptError(err, url));
@@ -1479,6 +1513,8 @@ function remoteEptName(url: string): string {
  */
 async function handleRemoteCopc(url: string): Promise<void> {
   if (loading) return;
+  // ensure the lazy-loaded Viewer is ready before touching it.
+  await viewerLoaded;
   const check = validateRemoteCopcUrl(url);
   if (!check.ok) {
     dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
@@ -1611,7 +1647,7 @@ function startStreamingStatusPolling(): void {
       cacheBytes: scheduler.cacheStats().byteSize,
     });
     if (counts.resident === 0) {
-      streamingPanel.setPhase('Loading coarse view…');
+      streamingPanel.setPhase('Streaming coarse geometry…');
     } else if (counts.loading > 0 || counts.queued > 0) {
       streamingPanel.setPhase('Refining visible detail…');
     } else {
@@ -1675,6 +1711,8 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
 
 /** Fetch a built-in sample (a local static file — no upload) and load it. */
 async function loadFromUrl(url: string, name: string): Promise<void> {
+  // ensure the lazy-loaded Viewer is ready before touching it.
+  await viewerLoaded;
   dropZone.setProgress(`Loading ${name}…`);
   try {
     const response = await fetch(url);
@@ -1701,7 +1739,7 @@ function resetToEmptyState(): void {
   dock.setAnnotateEnabled(false);
   dock.setCloseEnabled(false);
   inspector.clear();
-  // v0.3.2 Visual Export Studio — no scan loaded, no source to render. The
+  // Visual Export Studio — no scan loaded, no source to render. The
   // buttons go back to disabled with their "load a scan first" hint so the
   // user can't fire an export against nothing.
   inspector.setImageExportEnabled(false);

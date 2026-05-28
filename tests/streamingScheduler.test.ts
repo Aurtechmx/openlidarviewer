@@ -180,7 +180,7 @@ test('a paused scheduler schedules no work', async () => {
   expect(cloud.counts().resident).toBe(0);
 });
 
-// --- eviction — eviction hysteresis -----------------------------------
+// --- eviction hysteresis -----------------------------------
 
 test('hysteresis defers eviction within the configured window', async () => {
   let clock = 0;
@@ -325,7 +325,7 @@ test('a parent of a resident node is never evicted before the child', async () =
   ).toBeUndefined();
 });
 
-// --- scoring — camera-motion awareness -------------------------------
+// --- camera-motion awareness -------------------------------
 
 test('smoothed camera velocity tracks linear motion across multiple ticks', async () => {
   let clock = 0;
@@ -424,7 +424,7 @@ test('concurrency returns to full after the settle window elapses', async () => 
   expect(settled.effectiveMaxConcurrent).toBe(budgets.maxConcurrentDecodes);
 });
 
-// --- retention — hierarchy-aware eviction -----------------------------
+// --- hierarchy-aware eviction -----------------------------
 
 test('sibling retention defers eviction when a sibling stays in the wanted set', async () => {
   let clock = 0;
@@ -515,7 +515,7 @@ test('deepest-and-furthest deferred nodes evict first when multiple lapse togeth
   expect(depth2Order[1]).toEqual({ depth: 2, x: 1, y: 0, z: 0 });
 });
 
-// --- pressure — pressure adaptation ----------------------------------
+// --- pressure adaptation ----------------------------------
 
 test('sustained high pressure for ≥ 1 s lowers the target-depth cap by one', async () => {
   let clock = 0;

@@ -5,8 +5,8 @@
  * pdf-lib import) so tests can validate the colour-parsing math without
  * pulling the heavy renderer module in.
  *
- * Future sessions extend this with custom font registration; v0.3.3 ships
- * the colour + organisation + author + logo surface.
+ * Ships the colour + organisation + author + logo surface; custom font
+ * registration is the natural next extension point.
  */
 
 import type { ReportBranding } from './types';
@@ -59,4 +59,64 @@ export function effectiveBranding(b?: ReportBranding): Required<Pick<ReportBrand
     accentColor: b?.accentColor ?? DEFAULT_ACCENT,
     ...(b ?? {}),
   };
+}
+
+/**
+ * Resolved theme palette. The renderer reads these colours instead of
+ * hard-coded values so the three named themes (`light-technical`,
+ * `dark-inspection`, `minimal-engineering`) drop in without renderer
+ * changes.
+ */
+export interface ReportThemePalette {
+  /** Page background fill. */
+  readonly pageBackground: ParsedColor;
+  /** Primary body text. */
+  readonly bodyText: ParsedColor;
+  /** Muted text (labels, footer, dataset-row labels). */
+  readonly mutedText: ParsedColor;
+  /** Subtle rule colour (table separators, section dividers). */
+  readonly rule: ParsedColor;
+  /** Alternating row tint for table-style sections. */
+  readonly rowTint: ParsedColor;
+  /** Whether to draw the cover accent stripe. Minimal theme omits it. */
+  readonly drawAccentStripe: boolean;
+}
+
+const PALETTES: Record<NonNullable<ReportBranding['theme']>, ReportThemePalette> = {
+  'light-technical': {
+    pageBackground: { r: 1, g: 1, b: 1 },
+    bodyText: { r: 0.08, g: 0.10, b: 0.13 },
+    mutedText: { r: 0.40, g: 0.43, b: 0.48 },
+    rule: { r: 0.84, g: 0.86, b: 0.89 },
+    rowTint: { r: 0.96, g: 0.97, b: 0.98 },
+    drawAccentStripe: true,
+  },
+  'dark-inspection': {
+    pageBackground: { r: 0.10, g: 0.12, b: 0.16 },
+    bodyText: { r: 0.94, g: 0.95, b: 0.97 },
+    mutedText: { r: 0.66, g: 0.70, b: 0.75 },
+    rule: { r: 0.22, g: 0.26, b: 0.31 },
+    rowTint: { r: 0.14, g: 0.17, b: 0.21 },
+    drawAccentStripe: true,
+  },
+  'minimal-engineering': {
+    pageBackground: { r: 1, g: 1, b: 1 },
+    bodyText: { r: 0.08, g: 0.10, b: 0.13 },
+    mutedText: { r: 0.45, g: 0.48, b: 0.53 },
+    rule: { r: 0.78, g: 0.80, b: 0.83 },
+    rowTint: { r: 0.98, g: 0.98, b: 0.99 },
+    // Minimal engineering strips the accent stripe for an austere look —
+    // section headers still use the accent colour as text, but no
+    // chrome on the cover.
+    drawAccentStripe: false,
+  },
+};
+
+/**
+ * Resolve a theme name to the colour palette the renderer reads. Defaults
+ * to `light-technical` when no theme is set or the name is unknown.
+ */
+export function resolveTheme(name?: ReportBranding['theme']): ReportThemePalette {
+  if (!name) return PALETTES['light-technical'];
+  return PALETTES[name] ?? PALETTES['light-technical'];
 }

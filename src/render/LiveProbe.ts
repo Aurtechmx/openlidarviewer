@@ -28,7 +28,7 @@ export class LiveProbe {
   private readonly _attr: HTMLElement;
   private _active = false;
   /**
-   * v0.3.2 Visual Export Studio — last `update(info, x, y)` snapshot the
+   * Visual Export Studio — last `update(info, x, y)` snapshot the
    * probe received. Lets `activeProbeForExport()` bake the probe state into
    * exports even when the cursor has moved off the canvas to click the
    * Export button (between hover-show and click-fire the cursor card is
@@ -65,7 +65,7 @@ export class LiveProbe {
   }
 
   /**
-   * v0.3.2 Visual Export Studio — the most recent probed point info and
+   * Visual Export Studio — the most recent probed point info and
    * its CLIENT-space cursor position, or `null` when probe mode is off /
    * has never seen a valid point. Lets `Viewer.snapshot()` bake the probe
    * card onto an export even when the cursor has moved away to click the

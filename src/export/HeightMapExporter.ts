@@ -7,7 +7,7 @@
  * overlays are all baked through `viewer.snapshot()`, so the export is
  * truly WYSIWYG with the on-screen image.
  *
- * The v0.3.2-Phase-4 cut forced a top-down ortho framing; the Studio cut
+ * The cut forced a top-down ortho framing; the Studio cut
  * trades that for "match the user's view" — users who want the survey-grade
  * top-down can simply orbit to top-down before clicking the button.
  *

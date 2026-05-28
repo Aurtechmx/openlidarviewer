@@ -83,7 +83,7 @@ import { streamingBudgets } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
 // The streaming-engine `import()` split points live in `lazyChunks.ts` — a
-// module excluded from the live-build obfuscator so Vite can still emit the
+// module excluded from the live-build source-transform so Vite can still emit the
 // chunks (see lazyChunks.ts).
 import {
   loadStreamingRenderer,
@@ -171,7 +171,7 @@ export interface SnapshotOptions {
   /** Include the measurement geometry and value labels. */
   measurements?: boolean;
   /**
-   * v0.3.2 Visual Export Studio — bake the active Inspect tool state:
+   * Visual Export Studio — bake the active Inspect tool state:
    * the selected-point marker (halo + dot) and a canvas-drawn point-info
    * card (X/Y/Z, intensity, classification, RGB, etc.). When false (the
    * default) the export is clean of inspector overlays even while the
@@ -179,7 +179,7 @@ export interface SnapshotOptions {
    */
   inspector?: boolean;
   /**
-   * v0.3.2 Visual Export Studio — bake the most recent LiveProbe readout
+   * Visual Export Studio — bake the most recent LiveProbe readout
    * when probe mode is active. Uses the probe's last-known cursor position
    * so the bake survives the "cursor moves to click Export" gap that would
    * otherwise dismiss the live element before capture.
@@ -216,7 +216,7 @@ export interface PointMeshHandle {
 
 /**
  * The live streaming subsystem — present only while a COPC OR EPT cloud is
- * open. v0.3.3 widens the `cloud` type from `StreamingPointCloud`
+ * open. Widens the `cloud` type from `StreamingPointCloud`
  * to the format-agnostic `StreamingSource` interface (the same one the
  * scheduler/renderer already consume), so both COPC and EPT route through
  * the exact same session shape.
@@ -465,7 +465,7 @@ export class Viewer {
   private readonly _annotate: AnnotationController;
   private readonly _probe: LiveProbe;
 
-  // ── v0.3.3 — bound listener references so `dispose()` can
+  // ── bound listener references so `dispose()` can
   //    remove them. The constructor assigns these once and registers them
   //    on the canvas / window; `dispose()` removes them. Storing the
   //    bound closures here (rather than the methods themselves) preserves
@@ -574,7 +574,7 @@ export class Viewer {
     );
     this._probe = new LiveProbe();
 
-    // ── v0.3.3 — leak-free listener wiring. Every listener is
+    // ── leak-free listener wiring. Every listener is
     //    stored as a bound reference and removed in `dispose()`, so a
     //    re-created Viewer on the same canvas does not pile up listeners
     //    across the 50-scan open/close cycle.
@@ -613,7 +613,7 @@ export class Viewer {
       this._startLoop();
     });
 
-    // ── Resize observer ── v0.3.3 — stored so `dispose()` can disconnect.
+    // ── Resize observer ── stored so `dispose()` can disconnect.
     this._resizeObserver = new ResizeObserver(() => this._onResize(canvas));
     this._resizeObserver.observe(canvas);
   }
@@ -768,7 +768,7 @@ export class Viewer {
     // Fade-in is enabled on desktop/mid+ profiles only; mobile and
     // low-tier sessions skip it to preserve frame-budget headroom.
     const fadeIn = !isMobile && quality !== 'low';
-    // v0.3.3 — the default colour mode comes from the source itself, not
+    // the default colour mode comes from the source itself, not
     // from a COPC-specific helper. Both `StreamingPointCloud` (COPC) and
     // `EptStreamingPointCloud` implement `defaultColorMode()` so the
     // Viewer never peeks at format-specific metadata shapes.
@@ -819,7 +819,7 @@ export class Viewer {
   }
 
   /**
-   * The open streaming cloud, or null. v0.3.3 widens this from the
+   * The open streaming cloud, or null. Widens this from the
    * COPC-specific `StreamingPointCloud` to the format-agnostic
    * `StreamingSource` so callers can read off the common surface
    * (`name`, `sourcePointCount`, `crs()`, `defaultColorMode()`, etc.)
@@ -887,7 +887,7 @@ export class Viewer {
   }
 
   /**
-   * v0.3.3 — the currently-active colour mode across the whole
+   * the currently-active colour mode across the whole
    * scene. Used by the .olvsession exporter to round-trip the user's last
    * Color-by selection. Mirrors the export adapter's `currentColorMode()`
    * dispatch: streaming cloud takes priority, then the first static cloud,
@@ -1437,13 +1437,14 @@ export class Viewer {
   }
 
   /**
-   * v0.3.2 Visual Export Studio — render the live scene through a registered
+   * Visual Export Studio — render the live scene through a registered
    * export mode and return the result as a `Blob` ready for download.
    *
-   * v0.3.2 ships four modes: `orthographic-rgb`, `height-map`, `intensity`,
-   * `classification`. The mode factories live in their own code-split chunk
-   * (`loadExportStudio`) so they only ship when the user opens the Studio
-   * panel or invokes an Export action.
+   * The Studio ships seven modes: `orthographic-rgb`, `height-map`,
+   * `intensity`, `classification`, `depth`, `normal`, `contour`. The mode
+   * factories live in their own code-split chunk (`loadExportStudio`) so they
+   * only ship when the user opens the Studio panel or invokes an Export
+   * action.
    *
    * The {@link ExportSceneAdapter} below is the narrow Viewer slice each
    * exporter consumes — colour-mode swap (and restore) and cloud capability
@@ -1510,7 +1511,7 @@ export class Viewer {
       },
       hasRgb(): boolean {
         if (viewer._streaming) {
-          // v0.3.3 — read off the abstract `availableColorModes` so this
+          // read off the abstract `availableColorModes` so this
           // works uniformly for COPC + EPT. The cloud's own implementation
           // knows whether it carries RGB (COPC: PDRF 7/8; EPT: schema has
           // Red/Green/Blue attrs).
@@ -1530,7 +1531,7 @@ export class Viewer {
         return false;
       },
       hasClassification(): boolean {
-        // v0.3.3 — dispatch on the abstract `availableColorModes()` so
+        // dispatch on the abstract `availableColorModes()` so
         // COPC and EPT route uniformly. Static clouds fall through to
         // the explicit field check.
         if (viewer._streaming) {
@@ -1542,7 +1543,7 @@ export class Viewer {
         return false;
       },
       hasNormals(): boolean {
-        // v0.3.3 — COPC + EPT streaming sources never carry normals in
+        // COPC + EPT streaming sources never carry normals in
         // production (LAS reserves no field for them; EPT writers rarely
         // emit Normal X/Y/Z attrs). Static loaders (PCD, PTX, GLTF)
         // sometimes do — check the field explicitly.
@@ -1560,8 +1561,8 @@ export class Viewer {
       }): Promise<Blob> {
         // Delegate to the live snapshot pipeline so the export matches the
         // on-screen view EXACTLY — EDL, perspective camera, overlays, all
-        // baked through the same code path the v0.2.8 Save-view feature
-        // uses. The inspector + probe flags add the v0.3.2-Studio bakes:
+        // baked through the same code path the Save-view feature
+        // uses. The inspector + probe flags add the Studio bakes:
         // active Inspect tool's marker + info card, and LiveProbe's last-
         // known readout. Together they capture every on-canvas data overlay
         // the user might have been working with when they clicked Export.
@@ -1589,7 +1590,7 @@ export class Viewer {
         return this.sourcePointCount();
       },
       crsLabel(): { name: string; unit: string; epsg?: number } | null {
-        // v0.3.3 — read off the abstract `cloud.crs()` so both COPC and
+        // read off the abstract `cloud.crs()` so both COPC and
         // EPT surface consistently. COPC pulls from the LAS VLRs the
         // header parser walked; EPT pulls from `ept.json`'s `srs.wkt`.
         // Static clouds carry CRS through `CloudMetadata.crs`.
@@ -1640,7 +1641,7 @@ export class Viewer {
   /**
    * Stop the render loop, dispose all clouds, and free renderer resources.
    *
-   * v0.3.3 — WebGL fallback hardening. Listener removal and
+   * WebGL fallback hardening. Listener removal and
    * `ResizeObserver` disconnect are the leak-class fixes proved by
    * `tests/viewerLifecycle.test.ts`'s 50-cycle harness: a re-created
    * Viewer on the same canvas no longer accumulates listeners or
@@ -1992,7 +1993,7 @@ export class Viewer {
       intensity: cloud.intensity ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null,
       rgb,
-      // v0.2.8 inspection extras — passed only when the cloud carries them.
+      // inspection extras — passed only when the cloud carries them.
       returnNumber: cloud.returnNumber ? cloud.returnNumber[index] : undefined,
       returnCount: cloud.returnCount ? cloud.returnCount[index] : undefined,
       pointSourceId: cloud.pointSourceId ? cloud.pointSourceId[index] : undefined,
@@ -2127,7 +2128,7 @@ export class Viewer {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// v0.3.2 Visual Export Studio — inspector point-info card compositing
+// Visual Export Studio — inspector point-info card compositing
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { classificationText, intensityText, rgbText } from './pointInfo';

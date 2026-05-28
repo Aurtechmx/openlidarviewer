@@ -28,7 +28,7 @@ export interface StreamingDebugStats {
   /** Compressed-cache LRU current bytes. */
   cacheBytes: number;
   /**
-   * Memory accounting — CPU-side decoded bytes currently held by resident nodes,
+   * CPU-side decoded bytes currently held by resident nodes,
    * estimated from `residentPointCount × DECODED_BYTES_PER_POINT`. Optional.
    */
   decodedBytes?: number;
@@ -52,7 +52,7 @@ export interface StreamingDebugStats {
   cacheMisses?: number;
   cacheEvictions?: number;
   /**
-   * Memory accounting — decoded / GPU tier cumulative event counts. Uploads = nodes
+   * Decoded / GPU tier cumulative event counts. Uploads = nodes
    * becoming resident; evictions = nodes leaving the resident set. Optional.
    */
   nodesReady?: number;

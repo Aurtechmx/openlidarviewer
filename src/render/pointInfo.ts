@@ -130,7 +130,7 @@ export function makePointInfo(raw: RawPointInfo): PointInfo {
     classification: raw.classification,
     rgb: raw.rgb,
   };
-  // The v0.2.8 inspection extras — carried only when the cloud supplies them,
+  // The inspection extras — carried only when the cloud supplies them,
   // so the inspector card can omit a row entirely rather than show a blank.
   if (raw.returnNumber !== undefined) info.returnNumber = raw.returnNumber;
   if (raw.returnCount !== undefined) info.returnCount = raw.returnCount;
@@ -202,7 +202,7 @@ export function pointInfoCopyText(info: PointInfo): string {
     `Classification: ${classificationText(info)}`,
     `RGB: ${rgbText(info)}`,
   ];
-  // The v0.2.8 extras are listed only when the cloud actually carries them.
+  // The extras are listed only when the cloud actually carries them.
   const ret = returnText(info);
   if (ret) lines.push(`Return: ${ret}`);
   const source = pointSourceIdText(info);
@@ -246,7 +246,7 @@ export function pointInfoJson(info: PointInfo): PointInfoJson {
     rgb: info.rgb,
   };
   // Optional LAS extras are added only when present, so a non-LAS cloud's
-  // JSON stays exactly the v0.2.7 shape.
+  // JSON stays exactly the shape.
   if (info.returnNumber !== undefined) json.returnNumber = info.returnNumber;
   if (info.returnCount !== undefined) json.returnCount = info.returnCount;
   if (info.pointSourceId !== undefined) json.pointSourceId = info.pointSourceId;

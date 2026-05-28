@@ -52,7 +52,7 @@ function flag(params: URLSearchParams, key: string): boolean {
 export function parseEmbedConfig(search: string): EmbedConfig {
   const params = new URLSearchParams(search);
 
-  // `?autoload=sample:<id>` — only built-in samples in v0.2.9.
+  // `?autoload=sample:<id>` — only built-in samples are accepted.
   const autoload = params.get('autoload');
   const autoloadSample =
     autoload && autoload.startsWith('sample:') ? autoload.slice('sample:'.length) : null;

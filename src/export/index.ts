@@ -4,10 +4,10 @@
  * Visual Export Studio — barrel module + default registry + orchestrator.
  *
  * The Viewer imports this through `loadExportStudio()` so the Studio's
- * implementations (~6 KB pre-compression) land in their own code-split chunk,
- * never the initial bundle. The registry below pre-registers exactly the
- * four modes v0.3.2 ships: orthographic-rgb, height-map, intensity,
- * classification. v0.3.3 will add depth here.
+ * implementations land in their own code-split chunk, never the initial
+ * bundle. The registry below pre-registers every mode the Studio ships:
+ * orthographic-rgb, height-map, intensity, classification, depth, normal,
+ * contour.
  *
  * Consumers call `renderExport(mode, context, options)` — the orchestrator
  * looks up the factory, gates on `isAvailable`, and forwards to `render`.
@@ -91,15 +91,13 @@ import { normalMapExporter } from './NormalMapExporter';
 import { contourMapExporter } from './ContourMapExporter';
 
 /**
- * The default registry, pre-populated with every mode v0.3.2 ships.
- * v0.3.3 will add `depth` here.
+ * The default registry, pre-populated with every Studio mode.
  */
 export const defaultExportRegistry = new ExportRegistry();
 defaultExportRegistry.register(orthographicRgbExporter);
 defaultExportRegistry.register(heightMapExporter);
 defaultExportRegistry.register(intensityExporter);
 defaultExportRegistry.register(classificationExporter);
-// v0.3.3 — completes the Studio mode catalogue.
 defaultExportRegistry.register(depthMapExporter);
 defaultExportRegistry.register(normalMapExporter);
 defaultExportRegistry.register(contourMapExporter);

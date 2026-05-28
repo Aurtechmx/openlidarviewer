@@ -8,7 +8,7 @@ import {
   tierStepDown,
 } from '../src/render/streaming/tierAdaptation';
 
-// --- tier-adaptation — runtime FPS adaptation -------------------------------
+// --- runtime FPS adaptation -------------------------------
 
 test('tierStepDown and tierStepUp respect the floor and the cap', () => {
   expect(tierStepDown('high')).toBe('medium');

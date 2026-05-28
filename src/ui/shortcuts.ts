@@ -1,7 +1,7 @@
 /**
  * shortcuts.ts
  *
- * The v0.2.8 global keyboard shortcuts (design §6.10): single-key access to the
+ * The global keyboard shortcuts (design §6.10): single-key access to the
  * inspection tools and a few common actions.
  *
  * Every shortcut is suppressed while a text input, textarea, or contenteditable

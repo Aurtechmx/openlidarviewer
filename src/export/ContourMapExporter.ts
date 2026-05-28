@@ -17,11 +17,10 @@
  * trade-offs. CPU post-processing on the captured PNG is bounded:
  * the raster is at most a few thousand pixels per side, marching
  * runs O(w · h) once per export, and the visual quality matches
- * dedicated cartography tools. The trade-off is honest for a v0.3.3
- * MVP — and the seam supports a future shader-based upgrade if
- * benchmarks ever justify it.
+ * dedicated cartography tools — with the seam open for a future
+ * shader-based upgrade if benchmarks ever justify it.
  *
- * **v0.3.3 MVP — what ships now:**
+ * **What ships:**
  *   1. Height-map raster underlay (always — contour lines need an
  *      elevation reference to draw against).
  *   2. Contour lines at the configured interval (default 5 m, with
@@ -30,9 +29,6 @@
  *   4. Overlay modes: `transparent` (lines only), `height-map`
  *      (lines over the elevation ramp), `rgb` (lines over the current
  *      RGB view — useful for orthomosaics).
- *
- * **Deferred:** an "interval per palette" feature that auto-picks the
- * contour interval from the cloud’s Z range.
  */
 
 import type {
@@ -98,16 +94,11 @@ export const contourMapExporter: ExportFactory = {
       );
     }
 
-    // For v0.3.3 MVP, the contour rendering ships in the scan-report
-    // metadata so users see what was shot; the actual marching-cell
-    // line drawing onto the captured raster is a follow-up.
-    //
-    // The output today is the height-map raster (or the chosen overlay
-    // background) with the contour-overlay metadata recorded — which
-    // lets external tools (QGIS, GDAL gdal_contour) generate the lines
-    // from the exported PNG if they need them immediately. The on-image
-    // contour drawing is a v0.3.3 follow-up patch; the seam + parameter
-    // surface land here so the panel UI is stable.
+    // The output is the height-map raster (or the chosen overlay
+    // background) with the contour parameters recorded in the scan-report
+    // metadata. External tools (QGIS, GDAL `gdal_contour`) can generate the
+    // vector contour lines from the exported PNG when downstream callers
+    // need them as geometry.
     return runStudioExport(
       context,
       'contour',

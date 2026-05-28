@@ -70,7 +70,7 @@ export interface SchedulerStats {
    */
   pressureDepthReduction: number;
   /**
-   * v0.3.2 — number of full octree rescores since session start.
+   * number of full octree rescores since session start.
    * The stable-camera fast path reuses the last tick's wanted set when the
    * scheduling signature (frustum + camera position + depth cap + budget +
    * pressure reduction) is unchanged; this counter increments only when a
@@ -127,7 +127,7 @@ const PRESSURE_LOW_HOLD_MS = 2_000;
 const PRESSURE_DEPTH_REDUCTION = 1;
 
 /**
- * v0.3.2 — stable-camera fast path.
+ * stable-camera fast path.
  *
  * The scheduling signature is the tuple `(viewProjection, cameraPosition,
  * depthCap, pointBudget, pressureDepthReduction)`. When every component is
@@ -262,7 +262,7 @@ export class StreamingScheduler {
   /** Active depth-cap reduction (0 when not under pressure). */
   private _pressureDepthReduction = 0;
 
-  // v0.3.2 — stable-camera fast-path cache.
+  // stable-camera fast-path cache.
   /**
    * Camera position captured at the previous full rescore. Distinct from
    * `_lastCameraPos`, which is overwritten by the velocity tracker earlier
@@ -492,7 +492,7 @@ export class StreamingScheduler {
       if (node.state === 'queued') store.setState(node, 'unloaded');
     }
 
-    // v0.3.2 — stable-camera fast path. If the scheduling
+    // stable-camera fast path. If the scheduling
     // signature is bit-identical to last tick's AND the periodic forced
     // rescore isn't due, reuse the cached `_lastScored` and `_lastWanted`.
     // The eviction, enqueue, and dispatch paths below still run because
@@ -708,7 +708,7 @@ export class StreamingScheduler {
   /**
    * Cancel every queued and in-flight decode — used on close.
    *
-   * v0.3.3 — node-state cleanup. Aborting in-flight decodes and clearing
+   * node-state cleanup. Aborting in-flight decodes and clearing
    * the queue array on its own leaves leftover `queued` and `loading`
    * state in the node store, which the diagnostics `stats()` walker
    * continues to count. In practice the store is garbage-collected
@@ -730,7 +730,7 @@ export class StreamingScheduler {
     }
     this._queue.length = 0;
     this._deferredEvictAt.clear();
-    // v0.3.2: a stopped scheduler must not resume into a cached
+    // a stopped scheduler must not resume into a cached
     // fast path — the wanted set and scored array are no longer valid once
     // queues are cleared. Drop them so the next `update` does a fresh full
     // rescore.
@@ -744,7 +744,7 @@ export class StreamingScheduler {
    * above), so streaming never queues up megabytes of decode work for
    * nodes that are no longer wanted by the next frame.
    *
-   * v0.3.3 — extreme-scale dispatch gate. At 100M+ point datasets
+   * extreme-scale dispatch gate. At 100M+ point datasets
    * the previous behaviour was to dispatch up to `_effectiveMaxConcurrent`
    * decodes per tick irrespective of memory pressure; freshly-resident
    * nodes could therefore push peak residency past `1.5 × pointBudget`
@@ -862,7 +862,7 @@ function nowMs(): number {
 }
 
 /**
- * v0.3.2 — bit-equality check on a 4×4 view-projection matrix.
+ * bit-equality check on a 4×4 view-projection matrix.
  * The caller's matrix may be a `Float32Array`, a `Float64Array`, or a plain
  * `ArrayLike<number>` (Three.js's `Matrix4.elements` is typed as the broad
  * shape). Iterates the 16 entries; returns true only on exact equality.
@@ -875,7 +875,7 @@ function vpMatches(cached: Float64Array, incoming: ArrayLike<number>): boolean {
   return true;
 }
 
-/** v0.3.2 — copy 16 numbers from the live VP into the cached array. */
+/** copy 16 numbers from the live VP into the cached array. */
 function copyVp(src: ArrayLike<number>, dst: Float64Array): void {
   for (let i = 0; i < 16; i++) dst[i] = src[i];
 }

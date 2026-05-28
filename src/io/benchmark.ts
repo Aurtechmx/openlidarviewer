@@ -24,7 +24,7 @@ export interface BenchmarkResult {
   pointCount: number;
   /**
    * Milliseconds from the file arriving to its first rendered frame — the
-   * headline benchmark number. In the v0.2.9 single-shot load path this is
+   * headline benchmark number. In the single-shot load path this is
    * also the time to a fully ready scene; a v0.3 streaming source would let
    * first-render land earlier than full-ready.
    */

@@ -16,8 +16,8 @@ const COPC_FILE =
 const hasAutzenFixture = fs.existsSync(COPC_FILE);
 
 test('the COPC streaming chunks load when a COPC file is opened', async ({ page }) => {
-  // Regression guard for the v0.3.0 obfuscation bug: the COPC subsystem is
-  // code-split behind dynamic import()s. If the live-build obfuscator mangles
+  // Regression guard for the v0.3.0 source-transform bug: the COPC subsystem is
+  // code-split behind dynamic import()s. If the live-build source-transform mangles
   // those import specifiers, the chunks never emit and openStreamingCopc dies
   // with "Failed to fetch dynamically imported module" — surfaced to the user
   // (with the v0.3.0 error-classifier fix) as a "could not be loaded" toast.

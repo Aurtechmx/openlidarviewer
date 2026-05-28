@@ -3,7 +3,7 @@
  *
  * RGB-encoded surface normals.
  *
- * **v0.3.3 MVP scope:** the runtime is forced into the `normal` colour
+ * **scope:** the runtime is forced into the `normal` colour
  * mode (which exists in the colour-mode pipeline for the static-cloud
  * path) and the export is captured WYSIWYG. The mode is gated on
  * `adapter.hasNormals()` because:
@@ -21,7 +21,7 @@
  * **What's planned for a later session:** a depth-gradient
  * approximation that synthesises pseudo-normals from a top-down depth
  * raster, removing the cloud-must-carry-normals requirement. The export-
- * seam architecture supports it; the v0.3.3 MVP just gates on the
+ * seam architecture supports it; the just gates on the
  * explicit-normals path so the seam is honest about what's currently
  * implemented.
  */

@@ -141,7 +141,7 @@ export class EptStreamingPointCloud implements StreamingSource {
   }
 
   /**
-   * v0.3.3 — format-aware default colour mode. RGB if the schema carries
+   * format-aware default colour mode. RGB if the schema carries
    * Red / Green / Blue attributes; elevation otherwise. Mirrors the
    * COPC implementation's contract.
    */
@@ -150,7 +150,7 @@ export class EptStreamingPointCloud implements StreamingSource {
   }
 
   /**
-   * v0.3.3 — colour modes the EPT cloud can drive. Inspects the schema:
+   * colour modes the EPT cloud can drive. Inspects the schema:
    * RGB requires Red/Green/Blue, Intensity needs Intensity, Classification
    * needs Classification. Elevation is always available (always have X/Y/Z).
    */
@@ -164,7 +164,7 @@ export class EptStreamingPointCloud implements StreamingSource {
   }
 
   /**
-   * v0.3.3 — the CRS extracted from `ept.json`'s `srs.wkt` field, when
+   * the CRS extracted from `ept.json`'s `srs.wkt` field, when
    * present. Parsed lazily on first access and cached. Returns `null`
    * for EPTs without a recoverable SRS (raw drone exports often skip it).
    */

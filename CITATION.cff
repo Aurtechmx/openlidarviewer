@@ -12,7 +12,7 @@ authors:
   - name: "Aurtech"
 license: MIT
 repository-code: "https://github.com/aurtechmx/openlidarviewer"
-version: 0.3.3
+version: 0.3.4
 date-released: "2026-05-27"
 keywords:
   - lidar

@@ -1,15 +1,15 @@
 /**
  * MeasureController.ts
  *
- * The measurement toolkit's orchestrator — the evolution of the v0.1.0
- * `MeasureTool`. It owns the placed measurements, the in-progress draft, the
- * active measurement kind, the live-preview cursor, the kind-picker toolbar,
- * and the instruction hint; it delegates all SVG drawing to `MeasureOverlay`.
+ * The measurement toolkit's orchestrator. It owns the placed measurements,
+ * the in-progress draft, the active measurement kind, the live-preview
+ * cursor, the kind-picker toolbar, and the instruction hint; it delegates
+ * all SVG drawing to `MeasureOverlay`.
  *
- * The straight-line distance tool is preserved exactly as the `distance` kind,
- * so v0.1.0 behaviour does not regress. Browser-bound (DOM): not imported in
- * Node tests. The measurement maths it relies on is the pure, unit-tested
- * `geometry.ts` / `format.ts`.
+ * The straight-line distance tool is preserved exactly as the `distance`
+ * kind so its long-standing behaviour does not regress. Browser-bound
+ * (DOM): not imported in Node tests. The measurement maths it relies on is
+ * the pure, unit-tested `geometry.ts` / `format.ts`.
  */
 
 import type * as THREE from 'three/webgpu';

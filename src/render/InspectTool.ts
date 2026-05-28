@@ -228,7 +228,7 @@ export class InspectTool {
   }
 
   /**
-   * v0.3.2 Visual Export Studio — serialise the marker SVG so the snapshot
+   * Visual Export Studio — serialise the marker SVG so the snapshot
    * pipeline can composite it onto the exported PNG, mirroring how
    * `MeasureController.overlaySVG()` and `AnnotateController.markerSVG()`
    * already feed into the same path. Returns an empty SVG with the correct
@@ -240,7 +240,7 @@ export class InspectTool {
   }
 
   /**
-   * v0.3.2 Visual Export Studio — the selected point + its projected
+   * Visual Export Studio — the selected point + its projected
    * screen position, or `null` when no point is picked. The Studio export
    * pipeline uses this to draw the point-info card onto the export canvas
    * (the live `card` is HTML, not directly compositable into a 2-D canvas,

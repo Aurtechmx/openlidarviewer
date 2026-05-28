@@ -28,7 +28,7 @@ import type {
  * Bytes read from the file head for detection + metadata.
  *
  *   • Minimum needed: 589 bytes (LAS header 375 + COPC info VLR 54 + 160).
- *   • v0.3.2 bump 4 KB → 16 KB so the same read also captures the
+ *   • bumped 4 KB → 16 KB so the same read also captures the
  *     LASF_Projection CRS VLR(s) that immediately follow the COPC info
  *     VLR. CRS detection (`parseCrsFromVlrs`) needs that whole VLR list;
  *     without the bump CRS would silently fail to detect on most files.

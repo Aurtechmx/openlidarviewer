@@ -30,14 +30,14 @@ export interface ScanReportData {
   readonly scanName: string;
   /** Key-value detail rows. Order is preserved. */
   readonly rows: readonly ScanReportRow[];
-  /** Footer line — typically "OpenLiDARViewer v0.3.2 · YYYY-MM-DD HH:MM". */
+  /** Footer line — typically "OpenLiDARViewer · YYYY-MM-DD HH:MM". */
   readonly footer: string;
 }
 
 /** Card placement on the canvas. */
 export type ScanReportCorner = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 
-// Card sizing — all values are nudged 20% above the baseline v0.3.2 cut so
+// Card sizing — all values are nudged 20% above the baseline baseline so
 // the report reads clearly on a full-resolution export. Bumping these
 // constants is the single knob; the rest of the layout is computed.
 const PADDING = 19;       // 16 × 1.2
@@ -141,7 +141,7 @@ export function drawScanReport(
   corner: ScanReportCorner = 'bottom-right',
   margin = 24,
 ): void {
-  // Cap the card at 48% of the canvas width (was 40%) — the v0.3.2-Studio
+  // Cap the card at 48% of the canvas width (was 40%) — the Studio
   // 20%-larger card needs the extra headroom on narrower viewports.
   const maxCardWidth = Math.floor(ctx.canvas.width * 0.48);
   const { width, height } = measureScanReport(ctx, data, { maxWidth: maxCardWidth });

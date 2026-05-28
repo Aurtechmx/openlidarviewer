@@ -21,7 +21,7 @@
  *      cloud's render origin in Float64 BEFORE narrowing to Float32.
  *      Preserves the precision contract from `docs/coordinate-precision.md`.
  *
- * **Threading note:** the v0.3.3 MVP runs on the main thread (laz-perf
+ * **Threading note:** the runs on the main thread (laz-perf
  * is fast on small EPT tiles — typical tile sizes are 10k–50k points,
  * decode <30 ms). For high-tile-rate streaming a worker dispatcher
  * lands in a follow-up session; the EPT chunk-decoder's seam already
