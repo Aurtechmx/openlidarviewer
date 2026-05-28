@@ -114,7 +114,13 @@ const stage = new Stage(app, {
   samples: SAMPLES,
   onSample: loadFromUrl,
   onOpenFile: (file) => void handleFile(file),
-  onOpenUrl: (url) => void handleRemoteUrl(url),
+  // Surface any swallowed rejection in the toast so a chunk-load failure
+  // (or any other unexpected throw) doesn't fail silently.
+  onOpenUrl: (url) => {
+    handleRemoteUrl(url).catch((err) => {
+      dropZone.setError(err instanceof Error ? err.message : 'Failed to open the URL.');
+    });
+  },
 });
 /**
  * The Viewer is lazy-imported so three.js stays out of the initial shell.
@@ -363,43 +369,6 @@ const navBar = new NavBar({
   onMode: (mode) => viewer.setMode(mode),
   onSpeed: (multiplier) => viewer.setNavSpeed(multiplier),
 });
-viewer.setNavListeners({
-  onModeChange: (mode) => navBar.setMode(mode),
-  onPointerLockChange: (locked) => navBar.setLocked(locked),
-  onToggleHelp: () => navBar.toggleHelp(),
-});
-viewer.setMeasureListeners({
-  onModeChange: (active) => {
-    dock.setMeasureActive(active);
-    // Hide the "click to look around" prompt — a picking tool owns the clicks.
-    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
-    // The summary card and the tool hint share the top-centre slot.
-    if (active) projectCard.hide();
-    refreshMeasurePanel();
-  },
-});
-viewer.setInspectListeners({
-  onModeChange: (active) => {
-    dock.setInspectActive(active);
-    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
-    if (active) projectCard.hide();
-  },
-});
-viewer.setProbeListeners({
-  onModeChange: (active) => {
-    dock.setProbeActive(active);
-    // The probe keeps navigation live, so the "look around" prompt stays.
-    if (active) projectCard.hide();
-  },
-});
-viewer.setAnnotateListeners({
-  onModeChange: (active) => {
-    dock.setAnnotateActive(active);
-    navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
-    if (active) projectCard.hide();
-    refreshAnnotationPanel();
-  },
-});
 
 const projectCard = new ProjectCard();
 
@@ -427,10 +396,6 @@ const measurePanel = new MeasurePanel({
   onExport: () => exportSession(),
   onImport: (file) => void importSession(file),
 });
-viewer.measure.setOnChange(refreshMeasurePanel);
-// Persist the unit choice whenever it changes.
-viewer.measure.setOnUnitChange(persistPrefs);
-
 // The Annotations panel lists placed annotations; the controller drives it.
 const annotationPanel = new AnnotationPanel({
   onActivate: (id) => viewer.jumpToAnnotation(id),
@@ -439,23 +404,73 @@ const annotationPanel = new AnnotationPanel({
   onClearAll: () => viewer.annotate.clear(),
   onHover: (id) => viewer.annotate.hover(id),
 });
-viewer.annotate.setOnChange(refreshAnnotationPanel);
 
-// Apply any preferences saved in a previous session, once the GPU backend has
-// initialised (so a saved EDL choice overrides the backend's default gate).
-void viewer.ready.then(() => {
-  viewerReady = true;
-  // Degraded defaults for a weak device come first; a saved user preference,
-  // applied immediately after, still wins.
-  applyDeviceDefaults();
-  applyPrefs();
-  // pre-warm the lazy load chunks once the GPU backend is ready.
-  // First-file-drop is the most painful "did the app freeze?" moment; this
-  // moves the ~200–500 ms chunk fetch + parse off the critical path so a
-  // user who opens the app and immediately drops a file sees the parser
-  // run instantly. Idle-callback so we don't compete with the renderer's
-  // first frames; falls back to setTimeout on browsers without rIC.
-  schedulePrewarm();
+// Every listener-binding that synchronously dereferences `viewer.*` must
+// wait until the lazy-loaded Viewer chunk has resolved. The handlers
+// themselves are fine to define eagerly (they only fire on user input,
+// which comes long after the Viewer is up); only the binding calls need
+// to be deferred.
+void viewerLoaded.then(() => {
+  viewer.setNavListeners({
+    onModeChange: (mode) => navBar.setMode(mode),
+    onPointerLockChange: (locked) => navBar.setLocked(locked),
+    onToggleHelp: () => navBar.toggleHelp(),
+  });
+  viewer.setMeasureListeners({
+    onModeChange: (active) => {
+      dock.setMeasureActive(active);
+      // Hide the "click to look around" prompt — a picking tool owns the clicks.
+      navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
+      // The summary card and the tool hint share the top-centre slot.
+      if (active) projectCard.hide();
+      refreshMeasurePanel();
+    },
+  });
+  viewer.setInspectListeners({
+    onModeChange: (active) => {
+      dock.setInspectActive(active);
+      navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
+      if (active) projectCard.hide();
+    },
+  });
+  viewer.setProbeListeners({
+    onModeChange: (active) => {
+      dock.setProbeActive(active);
+      // The probe keeps navigation live, so the "look around" prompt stays.
+      if (active) projectCard.hide();
+    },
+  });
+  viewer.setAnnotateListeners({
+    onModeChange: (active) => {
+      dock.setAnnotateActive(active);
+      navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
+      if (active) projectCard.hide();
+      refreshAnnotationPanel();
+    },
+  });
+  viewer.measure.setOnChange(refreshMeasurePanel);
+  // Persist the unit choice whenever it changes.
+  viewer.measure.setOnUnitChange(persistPrefs);
+  viewer.annotate.setOnChange(refreshAnnotationPanel);
+
+  // Apply any preferences saved in a previous session, once the GPU backend
+  // has initialised (so a saved EDL choice overrides the backend's default
+  // gate).
+  void viewer.ready.then(() => {
+    viewerReady = true;
+    // Degraded defaults for a weak device come first; a saved user
+    // preference, applied immediately after, still wins.
+    applyDeviceDefaults();
+    applyPrefs();
+    // Pre-warm the lazy load chunks once the GPU backend is ready.
+    // First-file-drop is the most painful "did the app freeze?" moment;
+    // this moves the ~200–500 ms chunk fetch + parse off the critical path
+    // so a user who opens the app and immediately drops a file sees the
+    // parser run instantly. Idle-callback so the prewarm doesn't compete
+    // with the renderer's first frames; falls back to setTimeout on
+    // browsers without rIC.
+    schedulePrewarm();
+  });
 });
 
 const dropZone = new DropZone(document.body, (file) => void handleFile(file));
@@ -466,87 +481,95 @@ stage.overlay.append(dropZone.toast);
 navBar.element.classList.add('olv-hidden');
 stage.overlay.append(navBar.element, navBar.prompt, navBar.touchHint);
 
-if (!bareMode) {
-  // The tool overlays go in first so the panels paint above them.
-  stage.overlay.append(viewer.measureElements.overlay);
-  stage.overlay.append(viewer.measureElements.hint);
-  stage.overlay.append(viewer.inspectElements.overlay);
-  stage.overlay.append(viewer.inspectElements.hint);
-  stage.overlay.append(viewer.annotateElements.overlay);
-  stage.overlay.append(viewer.annotateElements.hint);
-  stage.overlay.append(inspector.element);
-  stage.overlay.append(streamingPanel.element);
-  // The measurement and annotation panels share a stacked left-side column.
-  const leftPanels = document.createElement('div');
-  leftPanels.className = 'olv-left-panels';
-  leftPanels.append(measurePanel.element, annotationPanel.element);
-  stage.overlay.append(leftPanels);
-  stage.overlay.append(dock.dock);
-  stage.overlay.append(dock.backend);
-  stage.overlay.append(projectCard.element);
-  // The point-info card sits above the panels so its Copy button is reachable.
-  stage.overlay.append(viewer.inspectElements.card);
-  // The annotation editor card floats above everything while it is open.
-  stage.overlay.append(viewer.annotateElements.editor);
-  // The live-probe readout follows the cursor above the panels.
-  stage.overlay.append(viewer.probeElements.readout);
-  // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
-  stage.overlay.append(inspector.sheetToggle);
-  // The help overlay is a modal — appended last so it sits above everything.
-  stage.overlay.append(helpOverlay.element);
-
-  // Global keyboard shortcuts — single-key tool access, suppressed while
-  // typing. Only wired for the full app, never the minimal embed view.
-  // A tool shortcut needs a loaded scan and is inert behind the help modal.
-  const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen;
-  bindShortcuts({
-    onAnnotate: () => {
-      if (toolsReady()) viewer.setAnnotateMode(!viewer.annotateMode);
-    },
-    onMeasure: () => {
-      if (toolsReady()) viewer.setMeasureMode(!viewer.measureMode);
-    },
-    onInspect: () => {
-      if (toolsReady()) viewer.setInspectMode(!viewer.inspectMode);
-    },
-    onSaveView: () => {
-      if (toolsReady()) saveCurrentView();
-    },
-    onDeleteSelection: () => {
-      const id = viewer.annotate.selectedId;
-      if (id && !helpOverlay.isOpen) viewer.annotate.remove(id);
-    },
-    onToggleHelp: () => helpOverlay.toggle(),
-    onUndo: () => {
-      if (!helpOverlay.isOpen) viewer.annotate.undo();
-    },
-    onRedo: () => {
-      if (!helpOverlay.isOpen) viewer.annotate.redo();
-    },
-  });
-} else {
-  // Bare mode (embed / ?ui=minimal): the dock and panels are hidden, but
-  // ?measurements=1 / ?annotations=1 can each surface one tool's layer.
-  const panels: HTMLElement[] = [];
-  if (embedConfig.forceMeasurements) {
-    stage.overlay.append(viewer.measureElements.overlay, viewer.measureElements.hint);
-    panels.push(measurePanel.element);
-  }
-  if (embedConfig.forceAnnotations) {
-    stage.overlay.append(
-      viewer.annotateElements.overlay,
-      viewer.annotateElements.hint,
-      viewer.annotateElements.editor,
-    );
-    panels.push(annotationPanel.element);
-  }
-  if (panels.length > 0) {
+// Overlay wiring synchronously reads `viewer.measureElements`,
+// `viewer.inspectElements`, etc. — defer the whole block until the lazy
+// Viewer chunk has resolved. The DOM elements the user can interact with
+// before this resolves (start screen empty state, sample buttons, URL
+// field, drop zone) are all owned by Stage / DropZone and don't depend on
+// the Viewer.
+void viewerLoaded.then(() => {
+  if (!bareMode) {
+    // The tool overlays go in first so the panels paint above them.
+    stage.overlay.append(viewer.measureElements.overlay);
+    stage.overlay.append(viewer.measureElements.hint);
+    stage.overlay.append(viewer.inspectElements.overlay);
+    stage.overlay.append(viewer.inspectElements.hint);
+    stage.overlay.append(viewer.annotateElements.overlay);
+    stage.overlay.append(viewer.annotateElements.hint);
+    stage.overlay.append(inspector.element);
+    stage.overlay.append(streamingPanel.element);
+    // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
-    leftPanels.append(...panels);
+    leftPanels.append(measurePanel.element, annotationPanel.element);
     stage.overlay.append(leftPanels);
+    stage.overlay.append(dock.dock);
+    stage.overlay.append(dock.backend);
+    stage.overlay.append(projectCard.element);
+    // The point-info card sits above the panels so its Copy button is reachable.
+    stage.overlay.append(viewer.inspectElements.card);
+    // The annotation editor card floats above everything while it is open.
+    stage.overlay.append(viewer.annotateElements.editor);
+    // The live-probe readout follows the cursor above the panels.
+    stage.overlay.append(viewer.probeElements.readout);
+    // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
+    stage.overlay.append(inspector.sheetToggle);
+    // The help overlay is a modal — appended last so it sits above everything.
+    stage.overlay.append(helpOverlay.element);
+
+    // Global keyboard shortcuts — single-key tool access, suppressed while
+    // typing. Only wired for the full app, never the minimal embed view.
+    // A tool shortcut needs a loaded scan and is inert behind the help modal.
+    const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen;
+    bindShortcuts({
+      onAnnotate: () => {
+        if (toolsReady()) viewer.setAnnotateMode(!viewer.annotateMode);
+      },
+      onMeasure: () => {
+        if (toolsReady()) viewer.setMeasureMode(!viewer.measureMode);
+      },
+      onInspect: () => {
+        if (toolsReady()) viewer.setInspectMode(!viewer.inspectMode);
+      },
+      onSaveView: () => {
+        if (toolsReady()) saveCurrentView();
+      },
+      onDeleteSelection: () => {
+        const id = viewer.annotate.selectedId;
+        if (id && !helpOverlay.isOpen) viewer.annotate.remove(id);
+      },
+      onToggleHelp: () => helpOverlay.toggle(),
+      onUndo: () => {
+        if (!helpOverlay.isOpen) viewer.annotate.undo();
+      },
+      onRedo: () => {
+        if (!helpOverlay.isOpen) viewer.annotate.redo();
+      },
+    });
+  } else {
+    // Bare mode (embed / ?ui=minimal): the dock and panels are hidden, but
+    // ?measurements=1 / ?annotations=1 can each surface one tool's layer.
+    const panels: HTMLElement[] = [];
+    if (embedConfig.forceMeasurements) {
+      stage.overlay.append(viewer.measureElements.overlay, viewer.measureElements.hint);
+      panels.push(measurePanel.element);
+    }
+    if (embedConfig.forceAnnotations) {
+      stage.overlay.append(
+        viewer.annotateElements.overlay,
+        viewer.annotateElements.hint,
+        viewer.annotateElements.editor,
+      );
+      panels.push(annotationPanel.element);
+    }
+    if (panels.length > 0) {
+      const leftPanels = document.createElement('div');
+      leftPanels.className = 'olv-left-panels';
+      leftPanels.append(...panels);
+      stage.overlay.append(leftPanels);
+    }
   }
-}
+});
 
 // the cross-frame control bridge is now lazy-loaded.
 // `?embed=1` is a minority of traffic; non-embed loads should not pay
@@ -596,6 +619,10 @@ if (debug || benchmark) {
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */
 function streamingDebugSample(): StreamingDebugStats | null {
+  // Returns null before the lazy Viewer chunk has resolved — the debug
+  // overlay polls on a timer from the moment it starts, which can fire
+  // before `viewer` is non-null.
+  if (!viewerReady) return null;
   const cloud = viewer.streamingCloud;
   const scheduler = viewer.streamingScheduler;
   if (!cloud || !scheduler) return null;
@@ -1342,12 +1369,18 @@ async function openStreamingCopc(
  */
 async function handleRemoteUrl(url: string): Promise<void> {
   // EPT detection is URL-pattern only — fast, no network, no schema fetch.
-  // If the URL ends in /ept.json we route to the EPT loader; everything
-  // else assumes COPC (the previous previous default).
-  const eptModule = await loadEpt();
-  if (eptModule.detectEptUrl(url)) {
-    return handleRemoteEpt(url);
+  // The check is inlined here (mirroring `detectEptUrl` in `eptDetect.ts`)
+  // so the routing decision is synchronous and doesn't depend on the EPT
+  // lazy chunk loading — a malformed URL still surfaces an error toast even
+  // when the EPT or Viewer chunks aren't reachable.
+  let isEpt = false;
+  try {
+    const u = new URL(url);
+    isEpt = /(?:^|\/)ept\.json$/i.test(u.pathname);
+  } catch {
+    isEpt = /(?:^|\/)ept\.json(?:\?|#|$)/i.test(url);
   }
+  if (isEpt) return handleRemoteEpt(url);
   return handleRemoteCopc(url);
 }
 
@@ -1365,16 +1398,18 @@ async function handleRemoteUrl(url: string): Promise<void> {
  */
 async function handleRemoteEpt(url: string): Promise<void> {
   if (loading) return;
-  // ensure the lazy-loaded Viewer is ready before touching it.
-  await viewerLoaded;
-  // fail-fast URL hygiene. Same posture as the COPC
-  // entry: a malformed URL never reaches the network.
+  // URL validation is pure — run it before awaiting the lazy Viewer so a
+  // malformed URL always surfaces an error toast, even if the Viewer chunk
+  // hasn't loaded yet or the GPU backend can't initialise.
   const eptUrlMod = await loadEpt();
   const check = eptUrlMod.validateRemoteEptUrl(url);
   if (!check.ok) {
     dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
     return;
   }
+  // The actual streaming open touches viewer state — defer until the lazy
+  // Viewer chunk is up.
+  await viewerLoaded;
   loading = true;
   const controller = new AbortController();
   dropZone.setProgress(`Reading EPT manifest from ${shortUrl(url)}…`);
@@ -1513,13 +1548,17 @@ function remoteEptName(url: string): string {
  */
 async function handleRemoteCopc(url: string): Promise<void> {
   if (loading) return;
-  // ensure the lazy-loaded Viewer is ready before touching it.
-  await viewerLoaded;
+  // URL validation is pure — run it before awaiting the lazy Viewer so a
+  // malformed URL always surfaces an error toast, even if the Viewer chunk
+  // hasn't loaded yet or the GPU backend can't initialise.
   const check = validateRemoteCopcUrl(url);
   if (!check.ok) {
     dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
     return;
   }
+  // The actual streaming open touches viewer state — defer until the lazy
+  // Viewer chunk is up.
+  await viewerLoaded;
   loading = true;
   const controller = new AbortController();
   dropZone.setProgress(`Connecting to ${shortUrl(url)}…`);

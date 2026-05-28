@@ -60,11 +60,13 @@ test('placing a distance measurement lists it, and Clear all removes it', async 
   await expect(page.locator('.olv-mp-row')).toHaveCount(0);
 });
 
-test('exporting produces a session JSON download', async ({ page }) => {
+test('exporting produces a session download', async ({ page }) => {
   await loadSampleAndMeasure(page);
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.locator('.olv-mp-action', { hasText: 'Export' }).click(),
   ]);
-  expect(download.suggestedFilename()).toBe('openlidarviewer-session.json');
+  // The export uses the current scan's name with an `.olvsession` suffix —
+  // the canonical v3 session-file extension.
+  expect(download.suggestedFilename()).toMatch(/\.olvsession$/);
 });
