@@ -1778,6 +1778,31 @@ export class Viewer {
         }
         return null;
       },
+      captureLabel(): { label: string; confidence: 'low' | 'medium' | 'high' } | null {
+        // Compute the same provenance fingerprint the Inspector + PDF
+        // Provenance section surface. Auto-computed, varies per scan;
+        // exporters get it via `baseReportRows` without any per-mode
+        // code. Wrapped because a malformed cloud shape shouldn't sink
+        // the export — null is a clean no-op in the renderer.
+        try {
+          if (viewer._streaming) {
+            const f = classifyProvenance(
+              signalsForStreamingCloud(viewer._streaming.cloud as never),
+            );
+            return { label: f.label, confidence: f.confidence };
+          }
+          const first = viewer._clouds.values().next().value;
+          if (first) {
+            const f = classifyProvenance(
+              signalsForStaticCloud(first.cloud as never),
+            );
+            return { label: f.label, confidence: f.confidence };
+          }
+        } catch {
+          /* defensive — null falls back to "no Capture row" */
+        }
+        return null;
+      },
       localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
         // Streaming first — it has authoritative bounds from the COPC header.
         if (viewer._streaming) {
@@ -2339,6 +2364,14 @@ export class Viewer {
 
 import { classificationText, intensityText, rgbText } from './pointInfo';
 import { linearUnitLabel } from '../io/crs';
+// Provenance classifier for the export adapter's `captureLabel` —
+// surfaces capture-type + confidence into every exported image's
+// scan-report card. Same path the Inspector + PDF report use.
+import { classify as classifyProvenance } from '../diagnostics/provenance';
+import {
+  signalsForStaticCloud,
+  signalsForStreamingCloud,
+} from '../diagnostics/provenanceSignals';
 
 /**
  * Draw the InspectTool's "Point Info" card directly onto a 2-D canvas next

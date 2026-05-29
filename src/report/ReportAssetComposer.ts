@@ -20,6 +20,7 @@ import type {
   ReportBranding,
   ReportCoverInputs,
   ReportInputs,
+  ReportProvenanceFingerprint,
   ReportTemplateId,
   ReportVisualAsset,
 } from './types';
@@ -58,6 +59,15 @@ export interface ComposeReportInputs {
    */
   readonly acceptanceChecks?: readonly ReportAcceptanceRow[];
   readonly technicalNotes?: string;
+  /**
+   * Provenance fingerprint from the classifier. When supplied AND the
+   * selected template includes the `provenance` section, the PDF
+   * renders a capture-type label + confidence badge + signals list +
+   * literature-cited accuracy bounds. Auto-computed by main.ts via
+   * `classifyProvenance(signalsFor…(cloud))` — the report module never
+   * sees the diagnostics types.
+   */
+  readonly provenance?: ReportProvenanceFingerprint;
   /**
    * QA reports default to sorting annotations by type so issues group
    * together at the top. Engineering / survey reports default to
@@ -100,6 +110,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     measurements: buildMeasurementRows(input.measurements, input.unitSystem),
     technicalNotes: input.technicalNotes,
     acceptanceChecks,
+    provenance: input.provenance,
   };
 }
 

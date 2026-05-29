@@ -18,12 +18,13 @@ const engineeringInspection: ReportTemplate = {
   id: 'engineering-inspection',
   label: 'Engineering Inspection',
   description:
-    'Full inspection record: cover + dataset metadata + measurements + ' +
-    'annotations + visuals + technical notes. Use for as-built reviews ' +
-    'and structural-defect documentation.',
+    'Full inspection record: cover + dataset metadata + capture-type ' +
+    'provenance + measurements + annotations + visuals + technical notes. ' +
+    'Use for as-built reviews and structural-defect documentation.',
   sections: [
     'cover',
     'dataset-summary',
+    'provenance',
     'measurements',
     'annotations',
     'visuals',
@@ -36,10 +37,10 @@ const qaValidation: ReportTemplate = {
   id: 'qa-validation',
   label: 'QA Validation',
   description:
-    'QA-focused: cover, dataset summary, classification/intensity visuals, ' +
-    'annotations (flagged issues). Skips measurements + notes. Compact, ' +
-    'ships in 2–3 pages typically.',
-  sections: ['cover', 'dataset-summary', 'visuals', 'annotations', 'footer'],
+    'QA-focused: cover, dataset summary, capture-type provenance, ' +
+    'classification/intensity visuals, annotations (flagged issues). ' +
+    'Skips measurements + notes. Compact, ships in 2–3 pages typically.',
+  sections: ['cover', 'dataset-summary', 'provenance', 'visuals', 'annotations', 'footer'],
 };
 
 const terrainReview: ReportTemplate = {
@@ -55,21 +56,23 @@ const surveySummary: ReportTemplate = {
   id: 'survey-summary',
   label: 'Survey Summary',
   description:
-    'Cover, dataset metadata, all measurements, technical notes. Skips ' +
-    'visuals + annotations — for handover documents where the source scan ' +
-    'travels alongside.',
-  sections: ['cover', 'dataset-summary', 'measurements', 'technical-notes', 'footer'],
+    'Cover, dataset metadata, capture-type provenance, all measurements, ' +
+    'technical notes. Skips visuals + annotations — for handover documents ' +
+    'where the source scan travels alongside.',
+  sections: ['cover', 'dataset-summary', 'provenance', 'measurements', 'technical-notes', 'footer'],
 };
 
 const technicalDocumentation: ReportTemplate = {
   id: 'technical-documentation',
   label: 'Technical Documentation',
   description:
-    'Everything: cover, dataset summary, all visuals, all measurements + ' +
-    'annotations, free-form notes. Use for the canonical archived record.',
+    'Everything: cover, dataset summary, capture-type provenance, all ' +
+    'visuals, all measurements + annotations, free-form notes. Use for ' +
+    'the canonical archived record.',
   sections: [
     'cover',
     'dataset-summary',
+    'provenance',
     'visuals',
     'measurements',
     'annotations',
@@ -94,7 +97,7 @@ const scanAcceptance: ReportTemplate = {
     'reports what was measured; the thresholds are yours. Use it to sign ' +
     'off (or reject) an incoming scan delivery — every check carries a ' +
     'literature citation in the Methods appendix.',
-  sections: ['cover', 'dataset-summary', 'acceptance-checklist', 'footer'],
+  sections: ['cover', 'dataset-summary', 'provenance', 'acceptance-checklist', 'footer'],
 };
 
 /** The full template catalogue, in display order. */

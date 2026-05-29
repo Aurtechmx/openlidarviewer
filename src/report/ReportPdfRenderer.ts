@@ -262,6 +262,8 @@ async function renderSection(
       return renderCover(cursor, inputs, accent, theme, body, bold, logo);
     case 'dataset-summary':
       return renderDatasetSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
+    case 'provenance':
+      return renderProvenance(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'visuals':
       return renderVisuals(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'annotations':
@@ -503,6 +505,95 @@ async function renderDatasetSummary(
   return { page: cursor.page, y: cursor.y - 14 };
 }
 
+/**
+ * Provenance fingerprint — capture-type classifier output. Auto-
+ * computed (zero user action) and varies per scan, so this section
+ * gives a fresh export per-template differentiation even when no
+ * measurements / annotations / visuals have been captured yet.
+ *
+ * Renders:
+ *  - Capture-type label + confidence badge (e.g. "Aerial / airborne
+ *    LiDAR (ALS) — medium confidence")
+ *  - "Signals" list — why the classifier picked this type
+ *  - Literature-derived accuracy bounds, each with its source paper
+ *  - The honest-hedge disclaimer the classifier always emits
+ *
+ * Skipped silently when `inputs.provenance` is omitted — templates
+ * that don't include the `provenance` section don't pay for it.
+ */
+async function renderProvenance(
+  cursor: PageCursor,
+  inputs: ReportInputs,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): Promise<PageCursor> {
+  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
+  cursor = drawSectionHeader(cursor, 'Provenance', accent, bold);
+  if (!inputs.provenance) {
+    cursor = drawBodyLine(
+      cursor,
+      'No provenance fingerprint available for this scan.',
+      body,
+      theme,
+    );
+    return { page: cursor.page, y: cursor.y - 10 };
+  }
+  const p = inputs.provenance;
+  // Headline: capture type + confidence chip.
+  cursor = drawLabelValueRow(
+    cursor,
+    'Capture type',
+    `${p.label} — ${p.confidence} confidence`,
+    body,
+    bold,
+    theme,
+  );
+  cursor = { page: cursor.page, y: cursor.y - 6 };
+  // Signals — bullet list of the cues that drove the classification.
+  if (p.signals.length > 0) {
+    cursor = ensureSpace(cursor, 16 + p.signals.length * 14, doc, accent, theme, organisation);
+    cursor.page.drawText('Signals', {
+      x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: bold,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+    for (const sig of p.signals) {
+      cursor = ensureSpace(cursor, 14, doc, accent, theme, organisation);
+      cursor = drawBodyLine(cursor, `• ${sig}`, body, theme);
+    }
+    cursor = { page: cursor.page, y: cursor.y - 4 };
+  }
+  // Literature-cited accuracy bounds — the Research-Derived ribbon.
+  if (p.bounds.length > 0) {
+    cursor = ensureSpace(cursor, 16 + p.bounds.length * 28, doc, accent, theme, organisation);
+    cursor.page.drawText('Expected accuracy (cited literature)', {
+      x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: bold,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+    for (const b of p.bounds) {
+      cursor = ensureSpace(cursor, 30, doc, accent, theme, organisation);
+      cursor = drawLabelValueRow(cursor, b.label, b.value, body, bold, theme);
+      cursor.page.drawText(`source: ${b.source}`, {
+        x: MARGIN + 12, y: cursor.y - BODY_FONT_SIZE,
+        size: BODY_FONT_SIZE - 1, font: body,
+        color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+      });
+      cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 6 };
+    }
+  }
+  // Honest-hedge disclaimer — the classifier always emits one.
+  cursor = ensureSpace(cursor, 26, doc, accent, theme, organisation);
+  cursor = drawBodyLine(cursor, p.disclaimer, body, theme);
+  return { page: cursor.page, y: cursor.y - 10 };
+}
+
 async function renderVisuals(
   cursor: PageCursor,
   inputs: ReportInputs,
@@ -513,9 +604,22 @@ async function renderVisuals(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  if (inputs.visuals.length === 0) return cursor;
   cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Visuals', accent, bold);
+  if (inputs.visuals.length === 0) {
+    // Section appears even when empty so the template's intended
+    // structure is visible — a 7-section Engineering Inspection no
+    // longer collapses to the same single-page output as a 5-section
+    // QA Validation when both lack captured visuals. The placeholder
+    // tells the user what to do to fill it.
+    cursor = drawBodyLine(
+      cursor,
+      'No visuals captured. Use Image export in the Inspector to add height / intensity / classification rasters.',
+      body,
+      theme,
+    );
+    return { page: cursor.page, y: cursor.y - 10 };
+  }
   for (const v of inputs.visuals) {
     const embedded = await embedVisual(doc, v);
     if (!embedded) continue;
@@ -550,9 +654,17 @@ async function renderAnnotations(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  if (inputs.annotations.length === 0) return cursor;
   cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, `Annotations (${inputs.annotations.length})`, accent, bold);
+  if (inputs.annotations.length === 0) {
+    cursor = drawBodyLine(
+      cursor,
+      'No annotations on this scan. Use the Annotate tool on the tool dock to flag issues, name features, or attach notes.',
+      body,
+      theme,
+    );
+    return { page: cursor.page, y: cursor.y - 10 };
+  }
   for (const a of inputs.annotations) {
     cursor = ensureSpace(cursor, 36, doc, accent, theme, organisation);
     // Title + type badge.
@@ -586,9 +698,17 @@ async function renderMeasurements(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  if (inputs.measurements.length === 0) return cursor;
   cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, `Measurements (${inputs.measurements.length})`, accent, bold);
+  if (inputs.measurements.length === 0) {
+    cursor = drawBodyLine(
+      cursor,
+      'No measurements taken. Use the Measure tool on the tool dock to record distances, areas, or volumes before exporting.',
+      body,
+      theme,
+    );
+    return { page: cursor.page, y: cursor.y - 10 };
+  }
   for (const m of inputs.measurements) {
     cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
     cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, theme);
@@ -811,9 +931,17 @@ async function renderTechnicalNotes(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  if (!inputs.technicalNotes) return cursor;
   cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Technical notes', accent, bold);
+  if (!inputs.technicalNotes) {
+    cursor = drawBodyLine(
+      cursor,
+      'No technical notes provided. Pass a notes string when generating the report to fill this section.',
+      body,
+      theme,
+    );
+    return { page: cursor.page, y: cursor.y - 10 };
+  }
   // no full paragraph reflow; we split on newlines and
   // render each line. A real text-wrapping pass lands in a follow-up
   // when the notes section grows enough to warrant it.

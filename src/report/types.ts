@@ -31,6 +31,7 @@ export type ReportTemplateId =
 export type ReportSectionId =
   | 'cover'
   | 'dataset-summary'
+  | 'provenance'             // v0.3.6 — auto-computed capture-type + literature bounds
   | 'visuals'
   | 'annotations'
   | 'measurements'
@@ -167,6 +168,37 @@ export interface ReportInputs {
    * the `acceptance-checklist` section.
    */
   readonly acceptanceChecks?: readonly ReportAcceptanceRow[];
+  /**
+   * v0.3.6 — capture-type provenance fingerprint. Lifted directly from
+   * the classifier output the Inspector's "Provenance" section also
+   * uses. Templates that include the `provenance` section render a
+   * label + confidence + signals + literature-cited accuracy bounds.
+   * Auto-computed (no user action required) and varies by scan, so
+   * even an out-of-the-box export carries content that distinguishes
+   * one scan from another.
+   *
+   * Shape mirrors `ProvenanceFingerprint` in `diagnostics/provenance.ts`,
+   * inlined here so the report module stays diagnostics-blind.
+   */
+  readonly provenance?: ReportProvenanceFingerprint;
+}
+
+/**
+ * Capture-type fingerprint for the `provenance` section. Field shapes
+ * mirror `ProvenanceFingerprint` in `diagnostics/provenance.ts` exactly
+ * — the caller copies the classifier output across the boundary so the
+ * report module doesn't need to import diagnostics.
+ */
+export interface ReportProvenanceFingerprint {
+  readonly label: string;
+  readonly confidence: 'low' | 'medium' | 'high';
+  readonly signals: readonly string[];
+  readonly bounds: readonly {
+    readonly label: string;
+    readonly value: string;
+    readonly source: string;
+  }[];
+  readonly disclaimer: string;
 }
 
 /** Output — what the engine returns. */

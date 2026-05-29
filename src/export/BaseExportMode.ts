@@ -200,6 +200,18 @@ export function baseReportRows(
     rows.push({ label: 'CRS',   value: crs.name });
     rows.push({ label: 'Units', value: crs.unit });
   }
+  // Capture-type row — auto-computed from the provenance classifier so
+  // every exported image carries the same Research-Derived capture
+  // fingerprint the Inspector and PDF reports surface. Optional adapter
+  // method: older callers / tests that don't implement it produce an
+  // export without the row (no degraded behaviour).
+  const capture = adapter.captureLabel?.() ?? null;
+  if (capture) {
+    rows.push({
+      label: 'Capture',
+      value: `${capture.label} (${capture.confidence})`,
+    });
+  }
   return rows;
 }
 

@@ -14,6 +14,7 @@ export type {
   ReportMeasurementRow,
   ReportAcceptanceRow,
   ReportInputs,
+  ReportProvenanceFingerprint,
   ReportResult,
   ReportSectionId,
   ReportTemplate,

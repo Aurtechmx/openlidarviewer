@@ -1072,6 +1072,42 @@ async function generateReportPdf(templateId: string): Promise<void> {
   const validatedTemplateId = templateId as import('./report').ReportTemplateId;
   const template = report.getReportTemplate(validatedTemplateId);
   const coverTitle = template?.label ?? 'Scan Report';
+  // Compute the same provenance fingerprint the Inspector's Provenance
+  // section already shows, and feed it to the report. Templates that
+  // include the `provenance` section get a real capture-type +
+  // confidence + cited accuracy bounds — auto-computed, varies per
+  // scan, gives every export per-template differentiation without
+  // requiring the user to take measurements or annotate first.
+  //
+  // Wrapped because a malformed cloud shape shouldn't sink the whole
+  // PDF — the section gracefully renders "No provenance fingerprint
+  // available" when the fingerprint is undefined.
+  let provenanceFp: import('./report').ReportProvenanceFingerprint | undefined;
+  try {
+    const activeCloud = activeId ? viewer.getCloud(activeId) : null;
+    const streamingCloud = viewer.streamingCloud;
+    if (activeCloud) {
+      const f = classifyProvenance(signalsForStaticCloud(activeCloud as never));
+      provenanceFp = {
+        label: f.label,
+        confidence: f.confidence,
+        signals: f.signals,
+        bounds: f.bounds.map((b) => ({ label: b.label, value: b.value, source: b.source })),
+        disclaimer: f.disclaimer,
+      };
+    } else if (streamingCloud) {
+      const f = classifyProvenance(signalsForStreamingCloud(streamingCloud as never));
+      provenanceFp = {
+        label: f.label,
+        confidence: f.confidence,
+        signals: f.signals,
+        bounds: f.bounds.map((b) => ({ label: b.label, value: b.value, source: b.source })),
+        disclaimer: f.disclaimer,
+      };
+    }
+  } catch (err) {
+    if (debug) console.warn('[report] classifyProvenance threw', err);
+  }
   const inputs = report.composeReportInputs({
     templateId: validatedTemplateId,
     title: coverTitle,
@@ -1081,6 +1117,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
     annotations: viewer.annotate.getAnnotations(),
     measurements: viewer.measure.getMeasurements(),
     unitSystem: viewer.measure.unitSystem,
+    provenance: provenanceFp,
   });
 
   const result = await report.generateReport(inputs);

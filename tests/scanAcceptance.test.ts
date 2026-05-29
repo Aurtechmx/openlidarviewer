@@ -47,12 +47,13 @@ describe('Scan Acceptance — template registration', () => {
     expect(getReportTemplate('scan-acceptance')).toBeDefined();
   });
 
-  it('carries cover + dataset-summary + acceptance-checklist + footer sections', () => {
+  it('carries cover + dataset-summary + provenance + acceptance-checklist + footer sections', () => {
     const t = getReportTemplate('scan-acceptance');
     expect(t).toBeDefined();
     expect(t?.sections).toEqual([
       'cover',
       'dataset-summary',
+      'provenance',
       'acceptance-checklist',
       'footer',
     ]);
