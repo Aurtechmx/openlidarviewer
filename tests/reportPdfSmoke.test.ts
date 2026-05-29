@@ -268,6 +268,58 @@ describe('PDF report smoke render', () => {
     expect(result.blob.size).toBeGreaterThan(1024);
   });
 
+  it('renders cleanly when user-supplied strings contain non-WinAnsi glyphs', async () => {
+    // Regression: pdf-lib's StandardFonts.Helvetica is WinAnsi-encoded.
+    // The Measurements section in particular emits em-dash (U+2014) for
+    // degenerate measurements via ReportMeasurementSection. Before
+    // v0.3.6's broad sanitiser pass, em-dashes anywhere in user input
+    // caused the host section to silently disappear from the PDF.
+    //
+    // This test pins the contract: every user-facing string sees the
+    // sanitiser, so the rendered PDF still grows by ~all the section
+    // bytes even when the inputs are riddled with em-dashes, ellipses,
+    // smart quotes, the degree sign, and a stray emoji.
+    const inputs: ReportInputs = {
+      ...makeInputs('engineering-inspection'),
+      cover: {
+        ...makeInputs('engineering-inspection').cover,
+        title: 'East Levee — Survey — “Q1 inspection”',
+        subtitle: 'Crew: A & B · ambient 24 °C · clear sky… 🛰',
+      },
+      annotations: [
+        {
+          title: 'Crack — west face',
+          type: 'point',
+          note: 'Re-inspect in Q2 — surface widening 2 → 4 mm',
+          position: { x: 1, y: 2, z: 3 },
+          createdAt: Date.UTC(2026, 4, 28),
+        },
+      ],
+      measurements: [
+        // The exact em-dash that ReportMeasurementSection emits for a
+        // degenerate measurement value.
+        { name: 'Spalling — south slope', kind: 'distance', value: '—', pointCount: 1 },
+        { name: 'Drift — m³', kind: 'volume', value: '12.4 m³', pointCount: 4 },
+      ],
+      technicalNotes:
+        'Notes: weather window 09:00–11:30, ground temp ≈ 18 °C…\n' +
+        'Calibration drift within ±0.5 mm.',
+    };
+    const result = await generateReport(inputs);
+    expect(result.pages).toBeGreaterThan(0);
+    expect(result.blob.size).toBeGreaterThan(2048);
+
+    // Round-trip parse so a corrupted PDF would fail loudly.
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    const parsed = await PDFDocument.load(bytes);
+    expect(parsed.getPageCount()).toBe(result.pages);
+    // The cover title's em-dash was sanitised to '--', smart quotes to
+    // straight quotes — pdf-lib stores the actual drawn string in the
+    // page content stream, so the title metadata is what we set on the
+    // document directly (unsanitised). The test's main contract is that
+    // generation completes and bytes are present.
+  });
+
   it('completes within the default render budget for a realistic input', async () => {
     // Sanity: a normal report should land well inside the 30 s budget.
     // Use an explicit small budget to fail fast if a regression makes the

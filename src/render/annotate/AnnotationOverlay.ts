@@ -118,6 +118,12 @@ export class AnnotationOverlay {
 
   /** Per-frame: project each marker and update its transform and visibility. */
   render(camera: THREE.PerspectiveCamera, canvas: HTMLCanvasElement): void {
+    // Per-frame DOM thrash bail. Most sessions never use annotations; without
+    // this guard we wrote `viewBox` and walked an empty Map every frame at
+    // 60 Hz. No markers → nothing to project.
+    if (this._markers.size === 0) {
+      return;
+    }
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     this.element.setAttribute('viewBox', `0 0 ${w} ${h}`);

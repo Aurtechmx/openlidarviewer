@@ -88,6 +88,7 @@ function formatDim(n: number): string {
 export class StreamingPanel {
   readonly element: HTMLElement;
   private readonly _callbacks: StreamingPanelCallbacks;
+  private readonly _title: HTMLElement;
   private readonly _phase: HTMLElement;
   private readonly _summary: HTMLElement;
   private readonly _nodes: HTMLElement;
@@ -136,8 +137,12 @@ export class StreamingPanel {
     const clearCache = el('button', { className: 'olv-streaming-btn', text: 'Clear cache' });
     clearCache.addEventListener('click', () => this._callbacks.onClearCache());
 
+    // The title's text is rebuilt from setSummary's `format` field so it
+    // tracks the actual streaming source (COPC vs. EPT) rather than the
+    // initial hardcoded label.
+    this._title = el('div', { className: 'olv-streaming-title', text: 'Streaming scan' });
     this.element = el('div', { className: 'olv-streaming-panel olv-hidden' }, [
-      el('div', { className: 'olv-streaming-title', text: 'Streaming COPC' }),
+      this._title,
       this._phase,
       el('div', { className: 'olv-streaming-label', text: 'Scan' }),
       this._summary,
@@ -178,6 +183,9 @@ export class StreamingPanel {
 
   /** Populate the one-time scan summary from the streaming source's metadata. */
   setSummary(summary: StreamingScanSummary): void {
+    // Title tracks the actual streaming source. Was hardcoded "Streaming
+    // COPC", which lied during an EPT load.
+    this._title.textContent = summary.format === 'ept' ? 'Streaming EPT' : 'Streaming COPC';
     const file = this._statRow('File', this._value(summary.fileName, summary.fileName));
     // format-aware Format row. COPC shows the LAS PDRF; EPT shows
     // the schema summary (when supplied) or just "EPT".

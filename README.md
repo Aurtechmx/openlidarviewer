@@ -9,6 +9,8 @@
 
 **A lightweight, browser-based LiDAR and point-cloud viewer for fast local inspection, 3D navigation, measurement, and scan intelligence.**
 
+A browser-side LiDAR viewer built on a Research-Derived approach to scan quality, capture provenance, and accuracy assessment. Local-first. Cited. Honest about what it can't tell you.
+
 **Live version: [https://lidar.aurtech.mx/](https://lidar.aurtech.mx/)**
 
 ---
@@ -315,11 +317,15 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
+- Verified public LiDAR dataset picker — 18 hand-vetted COPC / EPT URLs, every one probed at release time, no API key (0.3.6)
+- Provenance fingerprint — classifies capture type (iPhone / drone / terrestrial / aerial / spaceborne) with literature-cited accuracy bounds (0.3.6)
+- Scan Acceptance report template — pass/fail checklist over user-supplied thresholds, with a literature-cited Methods appendix (0.3.6)
+- Local-first usage counters — categorical session stats in `localStorage` only, `?notelemetry=1` opt-out (0.3.6)
 - COPC LAZ streaming — local and remote (0.3.0); hardened across 0.3.1–0.3.3
 - EPT (Entwine Point Tile) streaming — local and remote, `binary` and `laszip` tiles (0.3.3)
 - PCD, PTS, PTX static imports
 - Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, contour (0.3.2–0.3.3)
-- Multi-page PDF technical reports — five built-in templates with branding and unit-system awareness (0.3.3)
+- Multi-page PDF technical reports — six built-in templates with branding and unit-system awareness (0.3.3–0.3.6)
 - `.olvsession` session round-trip — camera, render settings, colour mode, annotations, measurements, scan metadata (0.3.3)
 - Measurement toolkit — distance, polyline, area, height, angle, slope, cross-section profile
 - Annotation system with categorised markers and notes

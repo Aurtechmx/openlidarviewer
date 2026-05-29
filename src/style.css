@@ -70,7 +70,21 @@ button:disabled { cursor: not-allowed; }
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .olv-empty-sub { font-size: 13px; color: var(--text-dim); max-width: 440px; line-height: 1.6; }
-.olv-samples { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+/* Format-support note — secondary, demoted below the primary CTA so
+ * format jargon doesn't compete with the action label. */
+.olv-empty-formats {
+  font-size: 11px; color: var(--text-faint); max-width: 440px;
+  line-height: 1.5; margin-top: 4px;
+}
+/* Section label above each secondary group ("Quick demos" / "Public
+ * LiDAR"). Sets a clear visual break between the three input modes so
+ * the user reads three distinct intents, not five competing inputs. */
+.olv-empty-section-label {
+  font-size: 11px; color: var(--text-faint);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  margin-top: 22px; margin-bottom: 2px;
+}
+.olv-samples { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .olv-sample {
   display: flex; flex-direction: column; gap: 2px; text-align: left;
   background: var(--panel); border: 0.5px solid var(--hairline);
@@ -106,6 +120,78 @@ button:disabled { cursor: not-allowed; }
 .olv-url-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-url-hint { font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5; }
 
+/* Catalog panel — "find public LiDAR by address" entry point on the empty
+ * state. Mirrors the URL row visually (input + button + hint) but adds a
+ * status line and a scrollable result list below. */
+.olv-catalog {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; margin-top: 4px;
+  width: min(100%, 460px);
+}
+.olv-catalog-title { font-size: 12px; color: var(--text-dim); }
+.olv-catalog-form { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+.olv-catalog-controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; }
+.olv-catalog-input {
+  flex: 1; min-width: 200px; max-width: 320px;
+  font-size: 12px; color: var(--text);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: 8px 11px;
+}
+.olv-catalog-input::placeholder { color: var(--text-faint); }
+.olv-catalog-input:focus-visible { outline: none; border-color: var(--accent); }
+.olv-catalog-input:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Curated-locations dropdown — mirrors the input styling so the form
+ * still reads as a single rounded surface. The native select arrow is
+ * kept; theming the chevron requires JS, and the visual cost is small. */
+.olv-catalog-select {
+  flex: 1; min-width: 200px; max-width: 320px;
+  font-size: 12px; color: var(--text);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: 8px 11px;
+  cursor: pointer;
+}
+.olv-catalog-select:focus-visible { outline: none; border-color: var(--accent); }
+.olv-catalog-select:disabled { opacity: 0.5; cursor: not-allowed; }
+.olv-catalog-btn {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: 8px 16px;
+  transition: border-color 140ms ease, transform 90ms ease;
+}
+.olv-catalog-btn:hover:not(:disabled) { border-color: var(--accent); }
+.olv-catalog-btn:active:not(:disabled) { transform: scale(0.97); }
+.olv-catalog-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-catalog-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.olv-catalog-hint { font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5; }
+.olv-catalog-suppressed {
+  font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5;
+  padding: 8px 12px; border: 0.5px dashed var(--hairline); border-radius: 8px;
+}
+.olv-catalog-status {
+  font-size: 11.5px; color: var(--text-dim); min-height: 16px;
+  max-width: 420px; line-height: 1.5; text-align: center;
+}
+.olv-catalog-results {
+  display: flex; flex-direction: column; gap: 5px; width: 100%;
+  max-height: 200px; overflow-y: auto;
+}
+.olv-catalog-result {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  text-align: left;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: 8px 12px; color: var(--text);
+  cursor: pointer;
+  transition: border-color 140ms ease;
+}
+.olv-catalog-result:hover { border-color: var(--accent); }
+.olv-catalog-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-catalog-result-main { display: flex; gap: 8px; align-items: baseline; width: 100%; }
+.olv-catalog-result-name {
+  font-size: 12px; font-family: var(--mono); color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+.olv-catalog-result-detail { font-size: 11px; color: var(--text-faint); }
+
 /* Inspector */
 .olv-inspector {
   position: absolute; top: 56px; right: 14px; width: 232px;
@@ -113,12 +199,60 @@ button:disabled { cursor: not-allowed; }
   border-radius: 10px; padding: 12px;
   max-height: calc(100% - 80px); overflow-y: auto;
 }
+/* Streaming-mode layout — the StreamingPanel anchors top-right at the
+ * same 232 px width. Re-pin the Inspector to the bottom of the viewport
+ * so both panels coexist without overlap; the Inspector retains the
+ * sections it can populate from streaming metadata (Detail, Provenance,
+ * CRS, Scan report, Image export, Report PDF) and the StreamingPanel
+ * keeps the streaming-specific bits. Bottom inset clears the tool dock
+ * and the version chip on desktop. */
+.olv-inspector.olv-inspector-streaming {
+  top: auto;
+  bottom: 64px;
+  max-height: calc(100% - 320px);
+}
 .olv-panel-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
 .olv-section { margin-top: 11px; padding-top: 11px; border-top: 0.5px solid var(--hairline); }
 .olv-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
 .olv-section-label {
   font-size: 11px; color: var(--text-faint);
   letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 7px;
+}
+
+/* Collapsible section (<details>) — matches the static section
+ * styling exactly so the panel reads as a uniform list. The only
+ * visual signal is a small caret on the summary that rotates on
+ * open. List-style markers are suppressed so the native browser
+ * triangle doesn't compete with the custom one. */
+.olv-section-collapsible[open] > summary { margin-bottom: 7px; }
+.olv-section-collapsible:not([open]) > .olv-section-label { margin-bottom: 0; }
+.olv-section-summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 130ms ease;
+}
+.olv-section-summary::-webkit-details-marker { display: none; }
+.olv-section-summary::before {
+  content: '';
+  display: inline-block;
+  width: 0; height: 0;
+  border-left: 4px solid var(--text-faint);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  transition: transform 140ms ease;
+  flex-shrink: 0;
+}
+.olv-section-collapsible[open] > .olv-section-summary::before {
+  transform: rotate(90deg);
+}
+.olv-section-summary:hover { color: var(--text-dim); }
+.olv-section-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .olv-layers { display: flex; flex-direction: column; gap: 6px; }
 .olv-layer { display: flex; align-items: center; gap: 7px; }
@@ -514,6 +648,23 @@ button:disabled { cursor: not-allowed; }
   pointer-events: none;
 }
 
+/* Report PDF row — template picker + generate button, mirrored on the
+ * existing `.olv-export` flex idiom. Picker takes the elastic share so
+ * a long template label doesn't push the button off the row. */
+.olv-report-row { display: flex; gap: 5px; align-items: stretch; }
+.olv-report-row .olv-export-btn { flex: 0 0 auto; }
+.olv-report-select {
+  flex: 1; min-width: 0;
+  font-size: 10.5px; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 6px;
+  transition: border-color 130ms ease;
+}
+.olv-report-select:hover:not(:disabled) { border-color: var(--accent); }
+.olv-report-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-report-select:disabled { opacity: 0.42; cursor: not-allowed; }
+
 /* Saved views (Inspector) */
 .olv-view-save {
   width: 100%; font-size: 11px; color: var(--accent);
@@ -524,6 +675,158 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-view-save:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-view-save:active { transform: scale(0.98); }
+/* Provenance — capture-type fingerprint surfaced near the dataset metadata. */
+/* Coordinate reference system (CRS) section in the Inspector. The
+ * picker uses the same restrained styling as the Report PDF picker
+ * so two `<select>`s in the panel don't visually compete. Safety
+ * warnings get a coloured left rail so they read as advice, not as
+ * decoration. */
+.olv-crs { display: flex; flex-direction: column; gap: 8px; }
+.olv-crs-summary { display: flex; flex-direction: column; gap: 2px; }
+.olv-crs-name { font-size: 12px; color: var(--text); font-weight: 500; }
+.olv-crs-epsg {
+  font-size: 10.5px; color: var(--text-faint);
+  font-family: var(--mono);
+}
+.olv-crs-meta { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.olv-crs-meta-row { font-size: 11px; color: var(--text-dim); }
+.olv-crs-warning {
+  font-size: 11px; color: var(--text-dim);
+  border-left: 2px solid #e24b4a;
+  padding: 5px 8px;
+  background: rgba(226, 75, 74, 0.06);
+  border-radius: 0 4px 4px 0;
+  line-height: 1.45;
+}
+.olv-crs-warning-soft {
+  font-size: 11px; color: var(--text-dim);
+  border-left: 2px solid var(--accent);
+  padding: 5px 8px;
+  background: var(--accent-soft);
+  border-radius: 0 4px 4px 0;
+  line-height: 1.45;
+}
+.olv-crs-picker-label {
+  font-size: 10.5px; color: var(--text-faint);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  margin-top: 4px;
+}
+.olv-crs-select {
+  width: 100%;
+  font-size: 11.5px; color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 7px;
+}
+.olv-crs-select:hover { border-color: var(--accent); }
+.olv-crs-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.olv-provenance { display: flex; flex-direction: column; gap: 8px; }
+.olv-prov-headline { display: flex; justify-content: space-between; align-items: center; }
+.olv-prov-label { font-size: 12px; color: var(--text); font-weight: 500; }
+.olv-prov-confidence {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.olv-prov-confidence-high   { color: var(--accent); border: 0.5px solid var(--accent); }
+.olv-prov-confidence-medium { color: var(--text-dim); border: 0.5px solid var(--hairline); }
+.olv-prov-confidence-low    { color: var(--text-faint); border: 0.5px solid var(--hairline); }
+.olv-prov-signals { display: flex; flex-direction: column; gap: 2px; }
+.olv-prov-signal { font-size: 11px; color: var(--text-dim); }
+.olv-prov-ribbon { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
+.olv-prov-ribbon-title {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-prov-bound { display: flex; flex-direction: column; gap: 1px; }
+.olv-prov-bound-label  { font-size: 10.5px; color: var(--text-faint); }
+.olv-prov-bound-value  { font-size: 11px;   color: var(--text); }
+.olv-prov-bound-source { font-size: 10px;   color: var(--text-faint); font-style: italic; }
+.olv-prov-disclaimer {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.45;
+  border-top: 0.5px solid var(--hairline);
+  padding-top: 7px;
+}
+.olv-prov-override-row {
+  display: flex; align-items: center; gap: 7px; margin-top: 4px;
+}
+.olv-prov-override-label { font-size: 10.5px; color: var(--text-faint); }
+.olv-prov-override-select {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 5px;
+  padding: 3px 6px;
+  flex: 1;
+}
+
+/* Session stats — collapsible details/summary section. The native disclosure
+ * triangle is hidden in favour of a uniform label that matches the other
+ * section headers in the Inspector. */
+.olv-stats-section {
+  cursor: default;
+}
+.olv-stats-section > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+  padding: 0;
+  margin-bottom: 7px;
+}
+.olv-stats-section > summary::-webkit-details-marker { display: none; }
+.olv-stats-section > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 12px;
+  font-size: 10px;
+  color: var(--text-faint);
+  transition: transform 120ms ease;
+}
+.olv-stats-section[open] > summary::before { transform: rotate(90deg); }
+.olv-session-stats { display: flex; flex-direction: column; gap: 4px; }
+.olv-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 3px 0;
+}
+.olv-stats-label { color: var(--text-dim); }
+.olv-stats-count { color: var(--text); font-variant-numeric: tabular-nums; }
+.olv-stats-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-stats-note { font-size: 10.5px; color: var(--text-faint); }
+.olv-stats-reset {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid var(--hairline);
+  border-radius: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.olv-stats-reset:hover { color: var(--text); border-color: var(--accent); }
+
 .olv-views { display: flex; flex-direction: column; gap: 5px; margin-top: 7px; }
 .olv-view-row { display: flex; align-items: center; gap: 6px; }
 .olv-view-name {
@@ -692,6 +995,22 @@ button:disabled { cursor: not-allowed; }
   font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 9px;
 }
 .olv-inspect-rows { display: flex; flex-direction: column; gap: 5px; }
+/* Coordinate-group header — small uppercase divider between Local /
+ * World / Geographic / Attributes sections so the dense card scans as
+ * four distinct intents instead of one long list. First-of-type has
+ * no top margin so it stays tight against the card title. */
+.olv-inspect-group {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-inspect-group:first-of-type {
+  margin-top: 0; padding-top: 0; border-top: none;
+}
 .olv-inspect-row {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
 }

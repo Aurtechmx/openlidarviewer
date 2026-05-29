@@ -116,6 +116,19 @@ export class MeasureOverlay {
 
   /** Project all measurement geometry and redraw. Call once per frame. */
   render(model: OverlayModel, camera: THREE.PerspectiveCamera, canvas: HTMLCanvasElement): void {
+    // Per-frame DOM thrash bail. The renderer calls this every frame even when
+    // the measure tool isn't active; without this guard we did SVG attribute
+    // writes + per-vertex projection + `replaceChildren([])` on every frame at
+    // 60 Hz against an empty model. Empty model + already-empty SVG → no-op.
+    const isEmpty =
+      model.polygons.length === 0 &&
+      model.edges.length === 0 &&
+      model.vertices.length === 0 &&
+      model.labels.length === 0;
+    if (isEmpty && this.element.childNodes.length === 0) {
+      return;
+    }
+
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     this.element.setAttribute('viewBox', `0 0 ${w} ${h}`);

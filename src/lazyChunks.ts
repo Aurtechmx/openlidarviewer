@@ -7,22 +7,23 @@
  * streaming engine, and the range sources load only when a COPC scan is
  * opened, never as part of the initial app payload.
  *
- * WHY THIS MODULE EXISTS — and why it MUST stay in the live transform's
- * exclude list (see `vite.config.ts`):
+ * WHY THIS MODULE EXISTS — and why it MUST stay in the live source-
+ * transform's exclude list (see `vite.config.ts`):
  *
- * The live build runs `vite-plugin-javascript-obfuscator` in Vite's
- * `transform` hook with `stringArray` enabled. That transform rewrites string
- * literals — including the specifier of a dynamic `import('./literal')` — into
- * string-array lookups. Once the specifier is no longer a literal, Vite/Rolldown
- * can no longer statically analyse the import, the split chunk is never
- * emitted, and the call fails at runtime ("Failed to fetch dynamically
- * imported module").
+ * The live build runs a source-transform plugin in Vite's `transform`
+ * hook with `stringArray` enabled. That transform rewrites string
+ * literals — including the specifier of a dynamic `import('./literal')` —
+ * into string-array lookups. Once the specifier is no longer a literal,
+ * Vite/Rolldown can no longer statically analyse the import, the split
+ * chunk is never emitted, and the call fails at runtime ("Failed to
+ * fetch dynamically imported module").
  *
  * It is the same hazard that keeps `loadFile.ts` and `copcWorkerClient.ts`
- * (each carrying a `new Worker(new URL(...))`) out of the live transform. Holding
- * all of the COPC dynamic imports in this one excluded module lets the
- * the transformed callers (`main.ts`, `Viewer.ts`) reach the chunks through plain
- * static imports of these helpers — which the live transform does not touch.
+ * (each carrying a `new Worker(new URL(...))`) out of the live transform.
+ * Holding all of the COPC dynamic imports in this one excluded module
+ * lets the transformed callers (`main.ts`, `Viewer.ts`) reach the chunks
+ * through plain static imports of these helpers — which the live
+ * transform does not touch.
  *
  * Do not inline these `import()` calls back into their callers.
  */

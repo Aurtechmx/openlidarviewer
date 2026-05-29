@@ -426,6 +426,120 @@ test('concurrency returns to full after the settle window elapses', async () => 
   expect(settled.effectiveMaxConcurrent).toBe(budgets.maxConcurrentDecodes);
 });
 
+// ── FPS-pressure adaptation ─────────────────────────────────────────────────
+//
+// The viewer supplies a smoothed frame time on every scheduler tick.
+// Sustained < 45 fps (frameTimeMs > 22.2) for 2 s ratchets the FPS budget
+// factor down 15 % per window; sustained > 55 fps (frameTimeMs < 18.2) for
+// 5 s ratchets it back up 7.5 % per window. The factor is clamped to
+// [0.5, 1.0] and surfaced in `stats().fpsBudgetFactor` for the debug overlay.
+
+test('FPS pressure: factor stays 1.0 when no frame time supplied', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  for (let i = 0; i < 10; i++) {
+    clock += 1_000;
+    // No frameTimeMs — older callers / tests stay at full budget.
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  }
+  expect(scheduler.stats().fpsBudgetFactor).toBe(1.0);
+});
+
+test('FPS pressure: sustained < 45 fps ratchets factor down', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  // First tick arms the timer at clock=0.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 30 });
+  expect(scheduler.stats().fpsBudgetFactor).toBe(1.0);
+  // Hold past the 2 s window — one step down.
+  clock = 2_100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 30 });
+  expect(scheduler.stats().fpsBudgetFactor).toBeCloseTo(0.85, 5);
+  // Another 2 s window — second step.
+  clock = 4_300;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 30 });
+  expect(scheduler.stats().fpsBudgetFactor).toBeCloseTo(0.70, 5);
+});
+
+test('FPS pressure: factor is clamped to FPS_BUDGET_FLOOR', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  // Force many low-fps windows — far more than enough to hit the floor.
+  for (let i = 0; i < 20; i++) {
+    clock += 2_100;
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 40 });
+  }
+  expect(scheduler.stats().fpsBudgetFactor).toBeGreaterThanOrEqual(0.5);
+  expect(scheduler.stats().fpsBudgetFactor).toBeCloseTo(0.5, 5);
+});
+
+test('FPS pressure: sustained > 55 fps after back-off ratchets factor up', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  // Drive the factor down twice (= 0.70).
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 30 });
+  clock = 2_100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 30 });
+  clock = 4_300;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 30 });
+  expect(scheduler.stats().fpsBudgetFactor).toBeCloseTo(0.70, 5);
+  // Now sustained smooth frames — first tick arms the high-fps timer.
+  clock = 5_000;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 16 });
+  expect(scheduler.stats().fpsBudgetFactor).toBeCloseTo(0.70, 5);
+  // Hold past the 5 s recovery window — one step up.
+  clock = 10_100;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 16 });
+  expect(scheduler.stats().fpsBudgetFactor).toBeCloseTo(0.775, 5);
+});
+
+test('FPS pressure: in-band frame time (45–55 fps) holds the factor', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+    { now: () => clock },
+  );
+  // In-band frame time (20 ms ≈ 50 fps) for a long stretch — neither up
+  // nor down. Factor must remain at its starting 1.0.
+  for (let i = 0; i < 20; i++) {
+    clock += 1_000;
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0], frameTimeMs: 20 });
+  }
+  expect(scheduler.stats().fpsBudgetFactor).toBe(1.0);
+});
+
 // The scheduler's eviction policy is hierarchy-aware: a node whose sibling
 // is still in the wanted set is held longer than an isolated leaf, and a
 // node that protects its children's parent slot is never the first to go.

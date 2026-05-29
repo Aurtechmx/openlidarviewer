@@ -3,6 +3,146 @@
 All notable changes to OpenLiDARViewer are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.6] - 2026-05-28
+
+The "public data + quality intelligence" release. Five user-visible
+additions land alongside the most important architectural change of
+the v0.3.x cycle: a contract'd analysis seam that the next release's
+in-browser sampling features build on. Every addition keeps the
+local-first guarantee — nothing is uploaded, nothing leaves the
+device, no API key required. No breaking changes — v0.3.5 sessions,
+share links, and APIs continue to work.
+
+### Added
+
+- **Verified public LiDAR dataset picker.** A new empty-state panel
+  surfaces a curated dropdown of public LiDAR datasets — every URL was
+  probed at release time and routes through the existing EPT / COPC
+  streaming pipeline on click. v0.3.6 ships 18 entries: visually
+  distinctive COPC files (Autzen Stadium, Sofia, Cahokia Mounds,
+  Francis Scott Key Bridge, Puerto Rico FEMA recovery) and large EPT
+  datasets from the USGS public LiDAR bucket (San Francisco, Los
+  Angeles, Denver Metro DRCOG, Grand Canyon National Park). Each
+  option shows file size or point count inline so users can pick by
+  network budget. No API key, no proxy, no geocoder request, no
+  upload. The `?notelemetry=1` flag suppresses the panel. For
+  arbitrary datasets, users paste their own COPC / EPT URL into the
+  dedicated URL field above the picker.
+  See [`docs/public-lidar-catalog.md`](docs/public-lidar-catalog.md).
+- **Scan Acceptance report template.** A sixth report template, sitting
+  alongside the existing five, renders a pass/fail checklist over
+  caller-supplied thresholds (point count, CRS declared, classification
+  present, NPS, density, etc.) plus a Methods appendix that cites the
+  literature behind each metric. The thresholds are user-supplied —
+  v0.3.6 deliberately does NOT bake QL1/QL2 limits into the template,
+  since those are airborne-survey acceptance values that don't
+  generalise to mobile or terrestrial scans.
+- **Provenance fingerprint.** The Inspector gains a "Provenance" section
+  that classifies an open scan into one of seven capture types
+  (iPhone LiDAR, drone LiDAR, terrestrial, mobile SLAM, aerial ALS,
+  spaceborne, unknown) using a layered decision order — software
+  string > sensor string > format-derived > numeric heuristics — and
+  pairs each verdict with an expected-accuracy envelope drawn from
+  the published literature (Luetzenburg 2021, Krausková 2025, Tondo
+  2023, Jiang 2025, Bolcek 2025, Lohani & Ghosh 2017, Ruzgienė 2025,
+  Fareed 2026). The accuracy figures are documented as "expected
+  ranges from the cited literature, not guarantees", and a manual
+  override is available for the user to correct the classifier.
+- **Local-first usage counters.** A new in-browser session-stats
+  panel surfaces categorical event counts (scans opened, measurements
+  taken, exports, reports, errors) collected entirely in
+  `localStorage`. No telemetry leaves the device. The `?notelemetry=1`
+  URL flag suppresses every increment structurally; the counter
+  storage has an LRU cap of 200 entries with a sanitised subcategory
+  key.
+- **Analysis architecture seam.** A pure-data `PointSampler` interface
+  (`src/analysis/PointSampler.ts`) becomes the contract every future
+  analysis module reads through. `docs/analysis-architecture.md`
+  defines the five contracts (Determinism, Abortable, Non-mutating,
+  Coverage semantics, Budget honesty) and 18 skipped contract tests
+  in `tests/analysisSeamContract.test.ts` pin the shape so v0.3.7's
+  sampler implementations have something concrete to satisfy.
+
+### Improved
+
+- **PDF report sanitisation.** Every user-supplied string passed to
+  pdf-lib is now sanitised against the WinAnsi-only repertoire of
+  Helvetica before drawing — including a per-section em-dash, ellipsis,
+  smart-quote, degree-sign, and `²`/`³` mapping plus a fallback `?`
+  substitution for anything outside Basic Latin / Latin-1 Supplement
+  printable. The fix closes a silent failure where a single em-dash
+  in a measurement value (which `ReportMeasurementSection` itself
+  emits for degenerate measurements) caused the host section to
+  disappear from the rendered PDF. `ReportResult.failedSections`
+  now surfaces the affected section ids so the caller can show a
+  toast when the PDF shipped without one of its sections.
+- **EPT zstandard rejected at detect time.** A zstandard-encoded EPT
+  dataset previously passed `parseEptMetadata`, paid the full
+  manifest + hierarchy round-trip (often hundreds of HTTP
+  requests), then failed once per tile at decode time. The detect
+  step now rejects with an actionable message pointing the user to
+  re-encode with Entwine's laszip output.
+- **Streaming benchmark long-session discipline.** The per-sample
+  buffers switch from `Array.shift()` (O(n)) to a constant-time
+  ring buffer (`RingSamples`), and the eviction-history map now
+  sweeps stale entries (older than the thrash window) once it
+  passes 512 entries — closing a long-session memory leak where a
+  pan across a large dataset accumulated map entries that could
+  never produce a thrash event.
+- **EPT depth cap.** A hard cap of depth 24 protects the octree from
+  pathological or malicious manifests where the `x >> 1` parent-key
+  arithmetic would wrap into negative space at depth 31. Practical
+  Entwine output rarely exceeds depth ~20.
+- **EPT truncated tile is retryable.** A short binary tile now throws
+  a typed `EptTruncatedTileError` (rather than a plain `Error`) so
+  the scheduler can distinguish "transport problem — retry" from
+  "schema problem — permanent fail" and re-queue the node.
+- **Benchmark output discloses budget-capped loads.** The
+  `?benchmark=1` console block now prints `"4,000,000 of 100,000,000
+  (4.0%)"` when the device-aware budget downsampled the source. A
+  budget-capped load no longer reads identically to a full one.
+- **Coarse-stable benchmark gate.** The streaming benchmark's
+  "coarse stable" marker now requires at least one resident node at
+  depth ≥ 2 in addition to the scheduler-idle condition, so a slow
+  link reaching idle at depth 0 (root only) doesn't fire the marker
+  as if the coarse view were ready.
+- **GPU init failure surfaces.** `Viewer.ready` now has an explicit
+  `.catch` that logs the GPU init failure to the console — previously
+  a rejection on both WebGPU and WebGL 2 left the canvas blank with
+  no signal as to why.
+- **WebGPU → WebGL 2 fallback is named.** When the browser advertises
+  WebGPU but the renderer settled on the WebGL 2 fallback, a one-shot
+  `console.info` message states what happened so a user who expected
+  WebGPU performance can see why their FPS is lower. The activated
+  fallback is also recorded as `error:webgpu-fallback` in the local
+  usage counters.
+
+### Fixed
+
+- **USGS catalog robustness.** Two latent failure modes in the new
+  catalog provider, fixed before release: (1) TNM Products API
+  sometimes returns `boundingBox.minX` as a quoted string rather
+  than a JSON number; the parser now coerces both forms instead of
+  silently dropping the tile and surfacing "no coverage" for real
+  coverage. (2) The `bboxIntersects` check is now edge-inclusive so
+  a tile whose `maxX` equals the query's `minX` is no longer
+  silently rejected at a tile seam.
+
+### Tests + verification
+
+- 971 tests across 84 files (up from 869 / 77 in v0.3.5), plus 18
+  skipped contract tests in `tests/analysisSeamContract.test.ts` that
+  pin the v0.3.7 sampler shape. Typecheck clean. Main-deferral lint
+  clean. Smoke gate green.
+
+### Documentation
+
+- **`docs/public-lidar-catalog.md`** — new doc covering the v0.3.6
+  catalog seam, the USGS 3DEP provider, the privacy contract, and how
+  to add a v0.4.x provider.
+- **`docs/analysis-architecture.md`** — new doc defining the five
+  analysis-seam contracts and the planned v0.3.7+ sampler sequence.
+
 ## [0.3.5] - 2026-05-28
 
 A reliability + visibility patch on top of v0.3.4. New blocking CI gates close the gap that allowed the v0.3.4 startup regression through, the measurement toolkit gains a Profile / cross-section kind, and the Studio's broken Depth / Contour buttons are pulled back until they can be implemented correctly. No breaking changes — v0.3.4 sessions, share links, and APIs continue to work.

@@ -78,6 +78,46 @@ import {
   loadInstrumentedRangeSource,
   loadViewer,
 } from './lazyChunks';
+// Local-first usage counter. Categorical event counts only; stays in
+// localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
+// every `increment()` call structurally.
+import {
+  increment as recordUsage,
+  isSuppressed as usageIsSuppressed,
+} from './diagnostics/usageCounters';
+import {
+  classify as classifyProvenance,
+  fingerprintFor as provenanceFor,
+  type CaptureType,
+} from './diagnostics/provenance';
+import {
+  signalsForStaticCloud,
+  signalsForStreamingCloud,
+} from './diagnostics/provenanceSignals';
+// CatalogPanel renders the empty-state "verified public LiDAR" picker.
+// The picker carries a curated dropdown of direct EPT URLs (each probed
+// at build time) and routes the selected URL into the existing streaming
+// pipeline via handleRemoteUrl(). No catalog query, no geocoder, no
+// bbox-vs-COPC mismatch — the previous TNM Products API path was
+// removed in v0.3.6 because TNM doesn't surface COPC URLs anywhere.
+import { CatalogPanel } from './ui/CatalogPanel';
+// CRS detection + override — feeds the Inspector's Coordinate System
+// section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
+// streaming clouds expose `.crs()` returning the same shape.
+import type { CrsInfo } from './io/crs';
+import {
+  resolvedFromCrsInfo,
+  unknownCrs,
+  type CrsSource,
+  type ResolvedCrs,
+} from './geo/CoordinateTypes';
+import {
+  getOverride as getCrsOverrideForDataset,
+  keyForDataset as crsKeyForDataset,
+  setOverride as setCrsOverrideForDataset,
+  clearOverride as clearCrsOverrideForDataset,
+} from './geo/CrsOverrideStore';
+import { getCrsEntry } from './geo/CrsRegistry';
 
 // A pointer to the open-source repository for anyone who opens the console on
 // the live site. The deployed bundle is compact-transformed; the readable source — and
@@ -104,10 +144,54 @@ const debug = urlParams.has('debug');
 /** `?benchmark=1` emits a structured benchmark result for each file load. */
 const benchmark = urlParams.has('benchmark');
 
+// The Quick demos surface only the public streaming demo — a real
+// ~1.8 GB COPC from Entwine's public data bucket (range-served +
+// CORS-open). The viewer only fetches the resident set the camera needs,
+// typically tens of MB before first frame, so this is the lowest-friction
+// way for a new visitor to see streaming in action without uploading or
+// hosting anything.
+//
+// The previous "Tiny demo LAS" and "Tiny demo PLY" entries were removed —
+// at ~18 and ~10 points respectively they opened as nearly-empty
+// black-canvas projects that first-time users mistook for a broken viewer
+// rather than a deliberate "single-pixel fixture" surface. They survive
+// in `samples/tiny.{las,ply}` for automated tests but are no longer
+// surfaced as user-facing entry points.
 const SAMPLES: Sample[] = [
-  { id: 'survey', label: 'Drone survey', detail: '.las — georeferenced', url: 'samples/tiny.las', name: 'sample-survey.las' },
-  { id: 'scan', label: 'Phone scan', detail: '.ply — local coordinates', url: 'samples/tiny.ply', name: 'sample-scan.ply' },
+  {
+    id: 'stream',
+    label: 'Public streaming demo',
+    detail: '1.8 GB COPC · streamed',
+    url: 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz',
+    name: 'millsite.copc.laz',
+  },
 ];
+
+/**
+ * Public-LiDAR picker for the empty-state. The picker is a curated
+ * dropdown of direct EPT URLs — every entry is probed at build time and
+ * the URL handed back to handleRemoteUrl() on click. The previous
+ * bbox-query path against USGS TNM Products was removed because TNM
+ * does not surface COPC URLs in its public inventory.
+ */
+const catalogPanel = new CatalogPanel({
+  suppressed: usageIsSuppressed(),
+  onPickUrl: (url: string) => {
+    // The picker maps to a single categorical event suffix in the
+    // local-first usage counter. The URL itself never leaves the device.
+    recordUsage('scan-open', 'curated:usgs-ept');
+    handleRemoteUrl(url).catch((err) => {
+      dropZone.setError(
+        err instanceof Error ? err.message : 'Failed to open the dataset.',
+      );
+    });
+  },
+  // Pre-warm the streaming chunks when the user changes the dropdown
+  // selection. By the time they click Open the EPT / COPC chunks are
+  // usually already cached — cuts ~200–800 ms off perceived first-paint
+  // because the chunk download hides behind think-time.
+  onPickIntent: (url: string) => prewarmForUrl(url),
+});
 
 const stage = new Stage(app, {
   embed,
@@ -121,6 +205,7 @@ const stage = new Stage(app, {
       dropZone.setError(err instanceof Error ? err.message : 'Failed to open the URL.');
     });
   },
+  catalogPanel: catalogPanel.root,
 });
 /**
  * The Viewer is lazy-imported so three.js stays out of the initial shell.
@@ -283,9 +368,11 @@ const inspector = new Inspector({
       .exportImage(mode, {})
       .then((result) => {
         downloadBlob(`${base}-${mode}.png`, result.blob);
+        recordUsage('export', mode);
         dropZone.setProgress(null);
       })
       .catch((err: unknown) => {
+        recordUsage('error', 'export');
         dropZone.setProgress(null);
         // The orchestrator's explicit reason ("Classification export is
         // unavailable — this cloud has no classification channel.") is the
@@ -311,8 +398,12 @@ const inspector = new Inspector({
     // export.
     dropZone.setProgress('Generating report…');
     generateReportPdf(templateId)
-      .then(() => dropZone.setProgress(null))
+      .then(() => {
+        recordUsage('report', templateId);
+        dropZone.setProgress(null);
+      })
       .catch((err: unknown) => {
+        recordUsage('error', 'report');
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[report]', err);
         dropZone.setError(`Report generation failed: ${msg}`);
@@ -452,15 +543,56 @@ void viewerLoaded.then(() => {
   viewer.measure.setOnUnitChange(persistPrefs);
   viewer.annotate.setOnChange(refreshAnnotationPanel);
 
+  // Provenance override — when the user picks a capture type from the
+  // dropdown in the Inspector's Provenance section, rebuild the
+  // fingerprint for that explicit type. The signals row records that
+  // it's a user override so the surfacing stays honest.
+  inspector.setOnProvenanceOverride((type: CaptureType) => {
+    inspector.setProvenance(provenanceFor(type));
+  });
+  // CRS override picker — persists to localStorage via CrsOverrideStore,
+  // re-resolves against the active scan, and refreshes the Inspector
+  // so the new label + warning state appear immediately.
+  inspector.setOnCrsOverride(handleCrsOverride);
+
   // Apply any preferences saved in a previous session, once the GPU backend
   // has initialised (so a saved EDL choice overrides the backend's default
-  // gate).
+  // gate). A `.catch` is paired with `.then` so a GPU-init rejection — the
+  // Viewer's `.ready` now propagates one instead of silently leaving the
+  // canvas blank — doesn't surface as an unhandled-promise warning. The
+  // Viewer itself has already logged the failure via `console.error`.
   void viewer.ready.then(() => {
     viewerReady = true;
+    // Backend chip is created with placeholder text "initialising…" — replace
+    // it the moment the renderer settles so the empty-state UI doesn't show
+    // the placeholder forever. Per-load callers still re-set this to handle
+    // the (extremely rare) backend swap mid-session.
+    try { dock.setBackend(viewer.activeBackend()); }
+    catch (err) { if (debug) console.warn('[dock] setBackend post-ready threw', err); }
     // Degraded defaults for a weak device come first; a saved user
     // preference, applied immediately after, still wins.
     applyDeviceDefaults();
     applyPrefs();
+    // If the browser advertised WebGPU but the renderer settled on the
+    // WebGL 2 fallback, surface a one-shot console note so a user who
+    // expected WebGPU performance can see why their FPS is lower. The
+    // dock backend label already shows the active backend, but a quiet
+    // diagnostic helps when someone reports a perf surprise. Logged
+    // once per session, never sent anywhere.
+    if (
+      viewer.activeBackend() === 'webgl2' &&
+      typeof navigator !== 'undefined' &&
+      'gpu' in navigator &&
+      navigator.gpu !== undefined &&
+      navigator.gpu !== null
+    ) {
+      recordUsage('error', 'webgpu-fallback');
+      console.info(
+        'OpenLiDARViewer: WebGPU was available but the renderer is using the WebGL 2 ' +
+          'fallback (typically a driver/feature-gap or a one-off adapter failure). ' +
+          'Try reloading the tab if you expected WebGPU performance.',
+      );
+    }
     // Pre-warm the lazy load chunks once the GPU backend is ready.
     // First-file-drop is the most painful "did the app freeze?" moment;
     // this moves the ~200–500 ms chunk fetch + parse off the critical path
@@ -469,6 +601,11 @@ void viewerLoaded.then(() => {
     // with the renderer's first frames; falls back to setTimeout on
     // browsers without rIC.
     schedulePrewarm();
+  }).catch(() => {
+    // The GPU init failure has already been logged by the Viewer's own
+    // `.catch`. Swallow here so the browser's unhandled-rejection
+    // listener doesn't fire — the canvas is already blank, and a
+    // duplicate error in the console doesn't add information.
   });
 });
 
@@ -669,6 +806,92 @@ function runModules(cloud: PointCloud): AnalysisRow[] {
   return rows;
 }
 
+/**
+ * Synthesize a scan-report row set for a streaming cloud.
+ *
+ * The static `runModules()` path expects a fully-resident `PointCloud`
+ * (Float32Array positions, classification arrays, etc.). For a streaming
+ * COPC or EPT we only ever hold a thin resident shell, so the static
+ * modules can't run as-is. We instead pull the equivalent facts directly
+ * from the streaming source's header + COPC info / EPT schema, which
+ * carry everything the report needs: total point count, source-declared
+ * bounds, spacing, octree depth, and the LAS VLR sensor / software
+ * strings the provenance classifier already feeds from.
+ *
+ * The output is intentionally the same `AnalysisRow` shape the static
+ * report uses, so the Inspector's Scan-report section renders uniformly
+ * and the PDF Report Engine can consume it without a separate code path.
+ */
+function runStreamingModules(cloud: {
+  readonly kind: 'copc' | 'ept';
+  readonly name: string;
+  readonly sourcePointCount: number;
+  readonly localBounds?: () => readonly [number, number, number, number, number, number];
+  readonly metadata?: {
+    readonly header?: {
+      min: readonly [number, number, number];
+      max: readonly [number, number, number];
+      pointDataRecordFormat?: number;
+    };
+    readonly info?: { spacing?: number };
+    readonly captureSensor?: string;
+    readonly sourceSoftware?: string;
+  };
+  readonly maxDepth?: () => number;
+  readonly octree?: { nodes: () => readonly unknown[] };
+}): AnalysisRow[] {
+  const rows: AnalysisRow[] = [];
+  const info = (label: string, value: string): AnalysisRow =>
+    ({ label, value, status: 'info' });
+
+  rows.push(info('Source', cloud.kind === 'ept' ? 'EPT (Entwine Point Tile)' : 'COPC (Cloud Optimized Point Cloud)'));
+  if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
+    rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
+  }
+  rows.push(info('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
+
+  // Bounds — prefer the header's source-coordinate min/max for accuracy.
+  const header = cloud.metadata?.header;
+  if (header) {
+    const w = header.max[0] - header.min[0];
+    const d = header.max[1] - header.min[1];
+    const h = header.max[2] - header.min[2];
+    rows.push(info('Width', `${w.toFixed(1)} m`));
+    rows.push(info('Depth', `${d.toFixed(1)} m`));
+    rows.push(info('Height', `${h.toFixed(1)} m`));
+    const footprintArea = w * d;
+    if (footprintArea > 0 && cloud.sourcePointCount > 0) {
+      const density = cloud.sourcePointCount / footprintArea;
+      rows.push(info('Density', `${density.toFixed(1)} pts/m²`));
+      rows.push(info('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
+    }
+  }
+
+  // Streaming-specific: octree structure.
+  if (cloud.metadata?.info?.spacing !== undefined) {
+    rows.push(info('Octree root spacing', `${cloud.metadata.info.spacing.toFixed(2)} m`));
+  }
+  if (cloud.maxDepth) {
+    try { rows.push(info('Octree depth', String(cloud.maxDepth()))); }
+    catch { /* defensive — depth not always computable mid-load */ }
+  }
+  if (cloud.octree) {
+    try { rows.push(info('Octree nodes', cloud.octree.nodes().length.toLocaleString('en-US'))); }
+    catch { /* defensive */ }
+  }
+
+  // Provenance metadata mirrored from the LAS VLRs the COPC header
+  // carries — same fields the static report shows.
+  if (cloud.metadata?.captureSensor) {
+    rows.push(info('Capture Sensor', cloud.metadata.captureSensor));
+  }
+  if (cloud.metadata?.sourceSoftware) {
+    rows.push(info('Source Software', cloud.metadata.sourceSoftware));
+  }
+
+  return rows;
+}
+
 /** The file name without its extension. */
 function baseName(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -709,6 +932,36 @@ async function prewarmExportStudio(): Promise<void> {
  * that don't support rIC (Safari < 17). Idempotent — each load chunk's
  * dynamic import is cached, so re-firing is free.
  */
+/**
+ * Immediate pre-warm for a known-imminent open. Triggered when the
+ * curated-dataset dropdown changes — the user has signalled intent,
+ * we have think-time before the explicit Open click, so fire every
+ * chunk that the streaming path will need behind the user's
+ * decision-making instead of waiting for the click. URL-pattern
+ * dispatch keeps the EPT-only and COPC-only chunks separated;
+ * the chunks are idempotent, so re-firing on click is free.
+ */
+function prewarmForUrl(url: string): void {
+  // Force the idle-time pre-warm to fire immediately rather than
+  // waiting on requestIdleCallback. Cold-start tabs may not yet
+  // have produced an idle window when the picker is opened.
+  if (!_loadersPrewarmed) {
+    _loadersPrewarmed = true;
+    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
+    void loadCopcWorkerClient()
+      .then(({ CopcWorkerClient }) => {
+        if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+      })
+      .catch(() => { /* swallow — actual COPC open retries */ });
+  }
+  // EPT path lazy-imports a separate chunk; pull it in too if the
+  // URL looks like an `ept.json` manifest.
+  const isEpt = /(?:^|\/)ept\.json(?:\?|#|$)/i.test(url);
+  if (isEpt) {
+    void loadEpt().catch(() => { /* swallow — open() retries */ });
+  }
+}
+
 let _loadersPrewarmed = false;
 function schedulePrewarm(): void {
   if (_loadersPrewarmed) return;
@@ -716,7 +969,20 @@ function schedulePrewarm(): void {
     if (_loadersPrewarmed) return;
     _loadersPrewarmed = true;
     void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
-    void loadCopcWorkerClient().catch(() => { /* swallow — actual COPC open retries */ });
+    // Instantiate the COPC decode worker singleton during idle time.
+    // The constructor spawns a Web Worker and waits for its WASM
+    // (`laz-perf`) module to initialise — about 150-250 ms on a warm
+    // network and ~400 ms on a cold one. Doing it here moves the cost
+    // off the first scan-open's critical path so the toast-to-first-
+    // node time is dominated by the actual range fetch, not by worker
+    // boot. Subsequent opens already hit the cached singleton; this
+    // change benefits only the cold-start path, which is the most
+    // painful one to debug or demo against.
+    void loadCopcWorkerClient()
+      .then(({ CopcWorkerClient }) => {
+        if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+      })
+      .catch(() => { /* swallow — actual COPC open retries */ });
     // Static LAS/LAZ loader sits in its own chunk too — pre-warm it for
     // the "drop a non-COPC LAZ file" path which is the other common case.
     void import('./io/loadLas').catch(() => { /* swallow */ });
@@ -794,10 +1060,22 @@ async function generateReportPdf(templateId: string): Promise<void> {
     throw new Error('Load a scan first.');
   }
 
+  // Derive the cover title from the actual template so each of the six
+  // templates produces a distinct, recognisable PDF. The user-reported
+  // bug — "all reports show the same export" — was driven by a hardcoded
+  // `title: 'Scan Report'` that made the cover identical across every
+  // template choice. Pulling `label` off `getReportTemplate(templateId)`
+  // gives "Engineering Inspection", "QA Validation", "Survey Summary",
+  // "Terrain Review", "Technical Documentation", or "Scan Acceptance"
+  // as appropriate. The dataset name moves into the subtitle so both
+  // axes (template type, source scan) are surfaced on the cover.
+  const validatedTemplateId = templateId as import('./report').ReportTemplateId;
+  const template = report.getReportTemplate(validatedTemplateId);
+  const coverTitle = template?.label ?? 'Scan Report';
   const inputs = report.composeReportInputs({
-    templateId: templateId as import('./report').ReportTemplateId,
-    title: 'Scan Report',
-    subtitle: undefined,
+    templateId: validatedTemplateId,
+    title: coverTitle,
+    subtitle: metadata.fileName,
     metadata,
     visuals: [],          // user-pre-rendered Studio exports
     annotations: viewer.annotate.getAnnotations(),
@@ -806,7 +1084,23 @@ async function generateReportPdf(templateId: string): Promise<void> {
   });
 
   const result = await report.generateReport(inputs);
-  downloadBlob(`${exportFileStem}-report.pdf`, result.blob);
+  // The download filename now mirrors the template choice so the
+  // user's Downloads folder distinguishes a Survey Summary from an
+  // Engineering Inspection at a glance.
+  downloadBlob(`${exportFileStem}-${validatedTemplateId}.pdf`, result.blob);
+  // Per-section render failures are caught by the engine's isolation pass
+  // and surfaced as a `failedSections` list — the PDF still ships but
+  // misses those sections. Tell the user so they're not surprised by a
+  // partial deliverable, and record it for local diagnostics so the
+  // partial-PDF mode is visible in the session-stats panel.
+  if (result.failedSections.length > 0) {
+    recordUsage('error', 'report:partial');
+    const list = result.failedSections.join(', ');
+    dropZone.setError(
+      `Report rendered without these sections: ${list}. ` +
+        'Check for unusual characters in the affected inputs and try again.',
+    );
+  }
 }
 
 /** Trigger a client-side download of text content. */
@@ -867,11 +1161,183 @@ function applyPrefs(): void {
   if (p.unitSystem !== undefined) viewer.measure.setUnitSystem(p.unitSystem);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Provenance fingerprint plumbing
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Refresh the Inspector's provenance panel from a freshly loaded static cloud. */
+function refreshProvenance(cloud: {
+  readonly sourceFormat: string;
+  readonly pointCount: number;
+}): void {
+  const signals = signalsForStaticCloud(cloud as never);
+  const f = classifyProvenance(signals);
+  inspector.setProvenance(f);
+}
+
+/** Refresh the Inspector's provenance panel from a freshly attached streaming cloud. */
+function refreshProvenanceFromStreaming(cloud: {
+  readonly kind: 'copc' | 'ept';
+  readonly sourcePointCount?: number;
+}): void {
+  const signals = signalsForStreamingCloud(cloud as never);
+  const f = classifyProvenance(signals);
+  inspector.setProvenance(f);
+}
+
+/** The dataset key (per-scan key for the CRS override store) currently in scope. */
+let _currentCrsDatasetKey: string | undefined;
+
+/**
+ * Resolve a `CrsInfo` (from LAS/LAZ VLR, COPC, or EPT) + an optional
+ * persisted user override into a single `ResolvedCrs` for the Inspector.
+ *
+ * Rule of precedence:
+ *  1. User override (when present and non-default) wins.
+ *  2. Otherwise the detected `CrsInfo` is used.
+ *  3. Otherwise we surface "unknown".
+ */
+function resolveCloudCrs(
+  cloudName: string,
+  detected: CrsInfo | undefined,
+  detectionSource: CrsSource,
+): ResolvedCrs {
+  const datasetKey = crsKeyForDataset(cloudName);
+  _currentCrsDatasetKey = datasetKey;
+  const override = getCrsOverrideForDataset(datasetKey);
+  if (override) {
+    if (override.kind === 'local') {
+      return {
+        kind: 'local',
+        name: 'Local coordinates (no CRS)',
+        linearUnit: 'unknown',
+        linearUnitToMetres: 1,
+        source: 'user-override',
+        confidence: 'high',
+        userConfirmed: true,
+      };
+    }
+    if (typeof override.epsg === 'number') {
+      const entry = getCrsEntry(override.epsg);
+      return {
+        kind: override.kind,
+        name: entry?.label ?? `EPSG:${override.epsg}`,
+        epsg: override.epsg,
+        linearUnit: override.kind === 'geographic' ? 'unknown' : 'metre',
+        linearUnitToMetres: 1,
+        source: 'user-override',
+        confidence: 'high',
+        userConfirmed: true,
+      };
+    }
+  }
+  const fromDetected = resolvedFromCrsInfo(detected, detectionSource);
+  return fromDetected ?? unknownCrs();
+}
+
+/** Refresh the Inspector's CRS section after a static-cloud load. */
+function refreshCrsForStaticCloud(cloud: {
+  readonly name: string;
+  readonly origin?: readonly [number, number, number];
+  readonly metadata?: { readonly crs?: CrsInfo | null };
+}): void {
+  const resolved = resolveCloudCrs(
+    cloud.name,
+    cloud.metadata?.crs ?? undefined,
+    'las-vlr',
+  );
+  inspector.setCrs(resolved);
+  // Push the origin + CRS into the point inspector so World + Lat/Lon
+  // rows render against the loaded scan. Wrapped in a viewer-loaded
+  // guard because the viewer chunk may still be loading the very first
+  // time this fires.
+  if (viewerReady) {
+    try { viewer.setInspectCoordinateContext({ origin: cloud.origin, crs: resolved }); }
+    catch (err) { if (debug) console.warn('[crs] setInspectCoordinateContext (static) threw', err); }
+  }
+}
+
+/** Refresh the Inspector's CRS section after a streaming-cloud open. */
+function refreshCrsForStreamingCloud(cloud: {
+  readonly name: string;
+  readonly kind: 'copc' | 'ept';
+  readonly renderOrigin?: readonly [number, number, number];
+  crs(): CrsInfo | undefined;
+}): void {
+  const source: CrsSource = cloud.kind === 'ept' ? 'ept-srs' : 'copc-meta';
+  const resolved = resolveCloudCrs(cloud.name, cloud.crs(), source);
+  inspector.setCrs(resolved);
+  if (viewerReady) {
+    try {
+      viewer.setInspectCoordinateContext({
+        origin: cloud.renderOrigin,
+        crs: resolved,
+      });
+    } catch (err) {
+      if (debug) console.warn('[crs] setInspectCoordinateContext (streaming) threw', err);
+    }
+  }
+}
+
+/**
+ * Handle a user CRS override picked from the Inspector. Persists into
+ * the local-first override store, re-resolves against the active scan,
+ * and refreshes the Inspector so the new label + warning state show.
+ */
+function handleCrsOverride(override: {
+  epsg: number | null;
+  kind: 'projected' | 'geographic' | 'local';
+}): void {
+  if (!_currentCrsDatasetKey) return;
+  // epsg === null with kind === 'local' (tag for "use detected") is the
+  // sentinel the Inspector sends when the user picks "Use detected" or
+  // "Reset to detected". Clear the persisted override and re-derive.
+  if (override.epsg === null && override.kind === 'local') {
+    // Distinguish the two "epsg === null" cases. The Inspector emits the
+    // SAME shape for both — "local coordinates" and "reset to detected".
+    // Treat the no-EPSG override as "clear and re-derive"; the user gets
+    // the detected CRS back, which is the safer fallback. An explicit
+    // local-coordinates choice is rare in practice and can be added as
+    // a follow-up button.
+    clearCrsOverrideForDataset(_currentCrsDatasetKey);
+  } else {
+    setCrsOverrideForDataset(_currentCrsDatasetKey, {
+      epsg: override.epsg,
+      kind: override.kind,
+    });
+    recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);
+  }
+  // Re-run resolution and refresh — uses whichever cloud is currently active.
+  const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
+  const streamingCloud = viewer.streamingCloud;
+  if (streamingCloud) {
+    refreshCrsForStreamingCloud(
+      streamingCloud as {
+        readonly name: string;
+        readonly kind: 'copc' | 'ept';
+        crs(): CrsInfo | undefined;
+      },
+    );
+  } else if (staticCloud) {
+    refreshCrsForStaticCloud(staticCloud);
+  }
+}
+
+/** High-water mark for measurement count — used to detect new placements. */
+let _lastMeasurementCount = 0;
 /** Refresh the Measurements panel's contents and visibility. */
 function refreshMeasurePanel(): void {
   measurePanel.update(viewer.measure.getSummaries());
-  const hasMeasurements = viewer.measure.getMeasurements().length > 0;
+  const measurements = viewer.measure.getMeasurements();
+  const hasMeasurements = measurements.length > 0;
   measurePanel.setVisible(viewer.measureMode || hasMeasurements);
+  // Local-first counter — fires only when a new measurement is placed.
+  // Categorical (the kind) only; never the coordinates, never the name.
+  if (measurements.length > _lastMeasurementCount) {
+    const newest = measurements[measurements.length - 1];
+    if (newest) recordUsage('measurement', newest.kind);
+  }
+  _lastMeasurementCount = measurements.length;
 }
 
 /** Refresh the Annotations panel's contents and visibility. */
@@ -1128,6 +1594,20 @@ async function handleFile(file: File): Promise<void> {
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
     activeId = id;
+    // Local-first counter — categorical source format only; never the file name.
+    try { recordUsage('scan-open', result.cloud.sourceFormat); }
+    catch (err) { if (debug) console.warn('[usage] recordUsage threw', err); }
+    // Provenance fingerprint — pure metadata classification, surfaced in
+    // the Inspector's "Provenance" section. Wrapped because a malformed
+    // input shape would have aborted the rest of the post-load setup
+    // (including the navBar reveal further down).
+    try { refreshProvenance(result.cloud); }
+    catch (err) { if (debug) console.warn('[provenance] refreshProvenance threw', err); }
+    // CRS — detected from the loaded cloud's metadata, merged with any
+    // persisted user override. Wrapped because a malformed cloud
+    // shape shouldn't break the rest of the load.
+    try { refreshCrsForStaticCloud(result.cloud); }
+    catch (err) { if (debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
 
     dropZone.setProgress(formatProgress({ stage: 'rendering' }));
     const renderStartedAt = performance.now();
@@ -1140,55 +1620,91 @@ async function handleFile(file: File): Promise<void> {
     currentColorMode = mode;
     viewer.setColorMode(id, mode);
 
-    // A new scan resets the saved viewpoints and annotations.
-    savedViews = [];
-    viewCounter = 0;
-    viewer.annotate.clear();
-    refreshAnnotationPanel();
-
-    inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
-    inspector.setColorModes(availableModes(result.cloud), mode);
-    inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
-    inspector.setReport(runModules(result.cloud));
-    inspector.setViews([]);
-    // Visual Export Studio — a scan is now loaded; turn on the image-
-    // export buttons so the user can capture it. Pre-warm the lazy Studio
-    // chunk in the background so the first export click feels instant
-    // instead of waiting on the ~7 KB gzip fetch + parse. Pure fire-and-
-    // forget; we don't await the result.
-    inspector.setImageExportEnabled(true);
-    void prewarmExportStudio();
-
-    // A share link, if one opened this page, restores its view onto this scan.
-    if (pendingShareState) {
-      applyShareState(pendingShareState, result.cloud);
-      pendingShareState = null;
-    }
-
-    // The render-quality controls reflect the viewer's state — EDL defaults
-    // depend on the GPU backend, known only once `viewer.ready` resolved.
-    inspector.syncRendering({
-      pointSize: viewer.pointSize,
-      edlEnabled: viewer.edlEnabled,
-      edlStrength: viewer.edlStrength,
-      pointSizeMode: viewer.pointSizeMode,
-      antialiasing: viewer.antialiasing,
-    });
+    // ── CRITICAL UI REVEAL — runs BEFORE any inspector / module setup ────
+    // The dock backend indicator + NavBar (Orbit/Walk/Fly mode switcher
+    // + speed slider) must reveal even if a downstream inspector call
+    // throws. Without this ordering, a failure in `runModules` or
+    // `inspector.setReport` left the user with a rendered scan they
+    // couldn't navigate around, and the backend indicator stuck at
+    // "initialising…". Critical reveal first, decorations second.
     dock.setBackend(viewer.activeBackend());
     dock.setMeasureEnabled(true);
     dock.setInspectEnabled(true);
     dock.setProbeEnabled(true);
     dock.setAnnotateEnabled(true);
     dock.setCloseEnabled(true);
-
     navBar.element.classList.remove('olv-hidden');
     navBar.setMode('orbit');
     navBar.flashHelp();
-
-    // Reveals the phone-only Scan Info launcher (CSS keyed off this class).
     document.body.classList.add('olv-has-scan');
-    // Phones get a touch-gesture hint in place of the keyboard HUD.
     if (isPhone()) navBar.flashTouchHint();
+
+    // A new scan resets the saved viewpoints and annotations.
+    savedViews = [];
+    viewCounter = 0;
+    viewer.annotate.clear();
+    refreshAnnotationPanel();
+
+    // ── Inspector setup — wrapped in defensive try/catches so a single
+    //    failing analysis module or inspector call can't abort the rest.
+    //    Each isolated block restores its own slice; the navigation
+    //    above remains usable even if every block below fails.
+    try {
+      inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
+      inspector.setColorModes(availableModes(result.cloud), mode);
+      inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
+    } catch (err) {
+      if (debug) console.warn('[inspector] cloud + details setup threw', err);
+    }
+    try {
+      inspector.setReport(runModules(result.cloud));
+    } catch (err) {
+      if (debug) console.warn('[inspector] runModules + setReport threw', err);
+    }
+    try {
+      inspector.setViews([]);
+    } catch (err) {
+      if (debug) console.warn('[inspector] setViews threw', err);
+    }
+    // Visual Export Studio — a scan is now loaded; turn on the image-
+    // export buttons so the user can capture it. Pre-warm the lazy Studio
+    // chunk in the background so the first export click feels instant
+    // instead of waiting on the ~7 KB gzip fetch + parse. Pure fire-and-
+    // forget; we don't await the result.
+    try {
+      inspector.setImageExportEnabled(true);
+      // Per-mode gating — disable buttons whose mode the loaded cloud can't
+      // satisfy (Normal map on a LAZ, etc.) so the user sees the constraint
+      // before clicking rather than as a post-click error toast.
+      inspector.setImageExportAvailability(viewer.availableImageExportModes());
+    } catch (err) {
+      if (debug) console.warn('[inspector] setImageExportEnabled threw', err);
+    }
+    void prewarmExportStudio();
+
+    // A share link, if one opened this page, restores its view onto this scan.
+    if (pendingShareState) {
+      try {
+        applyShareState(pendingShareState, result.cloud);
+      } catch (err) {
+        if (debug) console.warn('[share] applyShareState threw', err);
+      }
+      pendingShareState = null;
+    }
+
+    // The render-quality controls reflect the viewer's state — EDL defaults
+    // depend on the GPU backend, known only once `viewer.ready` resolved.
+    try {
+      inspector.syncRendering({
+        pointSize: viewer.pointSize,
+        edlEnabled: viewer.edlEnabled,
+        edlStrength: viewer.edlStrength,
+        pointSizeMode: viewer.pointSizeMode,
+        antialiasing: viewer.antialiasing,
+      });
+    } catch (err) {
+      if (debug) console.warn('[inspector] syncRendering threw', err);
+    }
 
     if (!bareMode) showProjectCard(result.cloud, result.originalPointCount);
 
@@ -1211,6 +1727,11 @@ async function handleFile(file: File): Promise<void> {
             result.cloud.sourceFormat,
             result.cloud.pointCount,
             telemetry,
+            // Surface the header-declared point count when the source had
+            // one, so the benchmark output disambiguates "4M of 100M (4 %)"
+            // from "4M of 4M (100 %)" — a budget-capped load shouldn't
+            // read identically to a full one.
+            result.cloud.declaredPointCount,
           ),
         );
         console.log(
@@ -1252,10 +1773,29 @@ async function openStreamingCopc(
   displayName: string,
   signal: AbortSignal,
 ): Promise<void> {
+  // Race the lazy COPC + streaming chunks against `viewer.ready` so a
+  // user who opens a scan during the first ~half-second of page load
+  // (a common demo path) doesn't see chunk-fetch and GPU init run
+  // serially. By the time `viewer.ready` resolves the chunks are
+  // usually cached too — `await chunksPromise` below typically
+  // resolves immediately. On a cold start, the parallelism saves
+  // roughly the smaller of the two latencies (often 100-300 ms).
+  const chunksPromise = Promise.all([
+    loadStreamingPointCloud(),
+    loadCopcWorkerClient(),
+    loadStreamingColors(),
+  ]);
+
   await viewer.ready;
   streamingPanel.setPhase('Loading metadata…');
   streamingPanel.show();
-  inspector.element.classList.add('olv-hidden');
+  // Inspector stays visible during streaming — it carries the sections
+  // that work uniformly against either source type (Scan report,
+  // Provenance, Coordinate system, Image export, Report PDF). The
+  // static-only sections are hidden via `setStreamingMode(true)` when
+  // the streaming cloud finishes attaching; until then the Inspector
+  // shows its empty placeholders, which is fine.
+  inspector.element.classList.remove('olv-hidden');
   dropZone.setProgress('Reading COPC hierarchy…');
 
   // The streaming benchmark collector is created when either `?benchmark=1`
@@ -1272,15 +1812,10 @@ async function openStreamingCopc(
     });
   }
 
-  // The COPC + streaming subsystem is a lazy chunk — fetched only here, the
-  // moment a COPC scan is opened, so it never weighs on the initial payload.
-  // The `import()` split points live in `lazyChunks.ts` (see that file).
+  // Await the hoisted chunk fetches; if `viewer.ready` was the slow
+  // path (cold WebGPU init) this is a no-op.
   const [{ StreamingPointCloud }, { CopcWorkerClient }, streamingColors] =
-    await Promise.all([
-      loadStreamingPointCloud(),
-      loadCopcWorkerClient(),
-      loadStreamingColors(),
-    ]);
+    await chunksPromise;
 
   const cloud = await StreamingPointCloud.open(range, displayName, signal);
   if (signal.aborted) throw new LoadCancelledError();
@@ -1298,6 +1833,25 @@ async function openStreamingCopc(
     inspector.removeCloud(id);
   }
   stage.hideEmptyState();
+  // Local-first counter — categorical only ('copc' or 'ept'); never the URL.
+  recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
+  // Provenance fingerprint for streaming clouds — fed with the cloud's
+  // declared point count + extent so the classifier has signal even though
+  // the resident set is small. Wrapped because a malformed cloud shape
+  // shouldn't break the rest of the streaming load (CRS, attach, color
+  // modes, navBar reveal).
+  try { refreshProvenanceFromStreaming(cloud); }
+  catch (err) { if (debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err); }
+  // CRS for streaming clouds — same merge rule as the static path.
+  try {
+    refreshCrsForStreamingCloud(cloud as unknown as {
+      readonly name: string;
+      readonly kind: 'copc' | 'ept';
+      crs(): CrsInfo | undefined;
+    });
+  } catch (err) {
+    if (debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
+  }
   await viewer.attachStreamingCloud(
     cloud,
     copcDecoder,
@@ -1319,6 +1873,18 @@ async function openStreamingCopc(
   // path doesn't go through `inspector.addCloud`, so the gate has to flip
   // here too. Pre-warm the Studio chunk for the same reason as above.
   inspector.setImageExportEnabled(true);
+  // Per-mode gating — streaming COPC / EPT rarely carry normals or
+  // classification; disable the corresponding buttons at the source.
+  inspector.setImageExportAvailability(viewer.availableImageExportModes());
+  // Switch the Inspector into streaming layout — hides Layers / Color by
+  // / Point size / Rendering / Export (their streaming-equivalents are
+  // in the StreamingPanel) and pins the panel to the lower-right so
+  // both panels coexist on desktop.
+  inspector.setStreamingMode(true);
+  try { inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
+  catch (err) { if (debug) console.warn('[inspector] setDetail (streaming) threw', err); }
+  try { inspector.setReport(runStreamingModules(cloud)); }
+  catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
   void prewarmExportStudio();
 
   // The metadata-driven scan summary, and a fresh saved-views list.
@@ -1397,6 +1963,10 @@ async function handleRemoteUrl(url: string): Promise<void> {
  */
 async function handleRemoteEpt(url: string): Promise<void> {
   if (loading) return;
+  // Fire the streaming + EPT chunk pre-warm immediately. Each dynamic
+  // import is one HTTP fetch + parse; running them in parallel with
+  // the manifest GET below cuts cold-start by 200–700 ms.
+  prewarmForUrl(url);
   // URL validation is pure — run it before awaiting the lazy Viewer so a
   // malformed URL always surfaces an error toast, even if the Viewer chunk
   // hasn't loaded yet or the GPU backend can't initialise.
@@ -1436,7 +2006,10 @@ async function handleRemoteEpt(url: string): Promise<void> {
     await viewer.ready;
     streamingPanel.setPhase('Building hierarchy…');
     streamingPanel.show();
-    inspector.element.classList.add('olv-hidden');
+    // Inspector stays visible during streaming — same rationale as the
+    // COPC path. Streaming-only sections drop out via setStreamingMode
+    // once the cloud finishes attaching.
+    inspector.element.classList.remove('olv-hidden');
 
     // Compute the dataset base URL by stripping the ept.json filename;
     // the source uses it to build hierarchy + tile URLs.
@@ -1485,6 +2058,29 @@ async function handleRemoteEpt(url: string): Promise<void> {
     streamingPanel.setQuality(streamingQuality);
     streamingPanel.setPhase('Streaming coarse geometry…');
     inspector.setImageExportEnabled(true);
+    // Per-mode gating — EPT streams almost never carry normals.
+    inspector.setImageExportAvailability(viewer.availableImageExportModes());
+    // Same streaming-mode layout the COPC path uses — hide Inspector's
+    // static-cloud sections and populate the streaming Scan Report.
+    inspector.setStreamingMode(true);
+    try { inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
+    catch (err) { if (debug) console.warn('[inspector] setDetail (streaming) threw', err); }
+    try {
+      // Shape-adapt the EPT cloud's metadata for the streaming-report
+      // synthesizer. EPT's bounds live on `detection.metadata.bounds`;
+      // EPT has no first-class spacing/maxDepth fields (the writer's
+      // `span` is the points-per-tile analogue), so those rows are
+      // omitted on EPT streams.
+      const b = detection.metadata.bounds.conforming;
+      inspector.setReport(runStreamingModules({
+        kind: 'ept',
+        name: cloud.name,
+        sourcePointCount: cloud.sourcePointCount,
+        metadata: {
+          header: { min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] },
+        },
+      }));
+    } catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
     void prewarmExportStudio();
 
     // The metadata-driven scan summary — same shape the COPC path fills,
@@ -1517,6 +2113,7 @@ async function handleRemoteEpt(url: string): Promise<void> {
       dropZone.setProgress(null);
     } else {
       if (debug) console.error('OpenLiDARViewer — remote EPT error', err);
+      recordUsage('error', 'load');
       // classified error messages, matching the COPC
       // remote-UX polish. `describeRemoteEptError` distinguishes CORS,
       // 404, 5xx, hierarchy vs. tile fetch, and transport failures.
@@ -1555,6 +2152,16 @@ async function handleRemoteCopc(url: string): Promise<void> {
     dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
     return;
   }
+  // Fire the streaming-chunk pre-warm immediately — these dynamic
+  // imports are independent of `viewerLoaded` and the HEAD probe, and
+  // each one is a separate HTTP fetch. Parallelising them with the
+  // probe shaves the smaller of the two latencies off cold-start
+  // (often 100–300 ms). The chunks are idempotent / cached, so the
+  // real `await Promise.all([loadStreamingPointCloud(), …])` inside
+  // `openStreamingCopc` typically resolves instantly by the time
+  // we reach it.
+  prewarmForUrl(url);
+
   // The actual streaming open touches viewer state — defer until the lazy
   // Viewer chunk is up.
   await viewerLoaded;
@@ -1580,6 +2187,7 @@ async function handleRemoteCopc(url: string): Promise<void> {
       dropZone.setProgress(null);
     } else {
       if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
+      recordUsage('error', 'load');
       dropZone.setError(describeRemoteCopcError(err, url));
       // A remote open that failed mid-flight leaves no scan — tidy up.
       closeStreaming();
@@ -1620,13 +2228,15 @@ function describeRemoteCopcError(err: unknown, url: string): string {
   const safeUrl = sanitizeUrlForDisplay(url);
   if (err instanceof RangeReadError) {
     if (err.code === 'range-unsupported') {
-      return `${err.message} Host the file where the server serves HTTP range requests — most static hosts and object stores do.`;
+      return (
+        `${err.message} Try hosting the file on S3 or a static CDN — most support range requests by default.`
+      );
     }
     if (err.code === 'transport') {
-      return `${err.message} The host must also allow cross-origin (CORS) requests.`;
+      return `${err.message} The host also needs to allow cross-origin (CORS) requests from this site.`;
     }
     if (err.code === 'timeout') {
-      return `${err.message} The server may be slow or unreachable — try again, or pick a faster host.`;
+      return `${err.message} Try again in a moment, or pick a faster host.`;
     }
     if (err.code === 'content-mismatch') {
       return `${err.message} This usually means a proxy or CDN ignored the byte-range request.`;
@@ -1666,7 +2276,39 @@ function closeStreaming(): void {
   stopStreamingStatusPolling();
   viewer.detachStreamingCloud();
   streamingPanel.hide();
+  // Return the Inspector to its static layout — un-hide every section
+  // and clear the streaming-mode positioning class.
+  try { inspector.setStreamingMode(false); }
+  catch (err) { if (debug) console.warn('[inspector] setStreamingMode(false) threw', err); }
   inspector.element.classList.remove('olv-hidden');
+}
+
+/**
+ * True when at least one resident node sits at or below `minDepth` in
+ * the streaming octree. Used by the benchmark to gate the
+ * coarse-stable marker so a "first scheduler idle" event at depth 0
+ * doesn't masquerade as "first usable view".
+ *
+ * Iterates the octree's node list; the inner loop short-circuits on
+ * the first hit, so worst case is `nodes.length` per poll (~250 ms
+ * cadence) for the brief window between idle and refinement.
+ *
+ * The cloud's structural type is inlined here so this helper stays
+ * decoupled from the concrete `StreamingSource` import — the actual
+ * runtime shape is the COPC + EPT octree's shared `nodes()` surface.
+ */
+function hasResidentAtDepth(
+  cloud: {
+    readonly octree: {
+      nodes: () => readonly { state: string; record: { key: { depth: number } } }[];
+    };
+  },
+  minDepth: number,
+): boolean {
+  for (const node of cloud.octree.nodes()) {
+    if (node.state === 'resident' && node.record.key.depth >= minDepth) return true;
+  }
+  return false;
 }
 
 /** Poll the streaming state ~4 Hz so the panel reflects progress. */
@@ -1707,13 +2349,29 @@ function startStreamingStatusPolling(): void {
         scheduler.pointBudget,
       );
       streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount));
-      // Coarse stable: the first poll at which the scheduler has settled with
-      // at least one resident node — nothing queued, nothing loading.
+      // Coarse stable: the first poll at which the scheduler has settled
+      // AND the resident set has meaningful coverage — i.e. spans at
+      // least one refinement level beyond the root. On a slow link the
+      // scheduler often reaches steady state at depth 0 (root only)
+      // before the user moves; firing then would report "coarse stable
+      // = first scheduler idle" instead of "first usable view", and
+      // every benchmark across machines would look identical because
+      // the depth-0 root takes roughly the same time everywhere.
+      //
+      // The guard caps at the deepest depth the hierarchy actually
+      // exposes: large datasets must reach depth 2 before the marker
+      // fires; tiny datasets whose entire hierarchy is depth 0–1 still
+      // fire the marker once they reach their own max depth. Otherwise
+      // small COPCs (test fixtures, small drone surveys) would never
+      // mark coarse-stable, leaving the benchmark output with a
+      // permanent em-dash placeholder.
+      const targetDepth = Math.min(2, cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0);
       if (
         !coarseStableFired &&
         counts.resident > 0 &&
         counts.loading === 0 &&
-        counts.queued === 0
+        counts.queued === 0 &&
+        hasResidentAtDepth(cloud, targetDepth)
       ) {
         streamingBenchmark.recordCoarseStable();
         coarseStableFired = true;
@@ -1751,6 +2409,22 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
 async function loadFromUrl(url: string, name: string): Promise<void> {
   // ensure the lazy-loaded Viewer is ready before touching it.
   await viewerLoaded;
+  // Remote COPC / EPT URLs route through the streaming pipeline — a
+  // `fetch().blob()` against a 1+ GB COPC would defeat the whole point
+  // of streaming and try to pull the entire file before showing a
+  // single point. The dispatch matches `handleRemoteUrl`'s contract so
+  // the sample-button affordance can carry a real public COPC URL the
+  // same way the "stream from URL" field does.
+  const looksLikeRemoteStream =
+    /^https?:\/\//i.test(url) &&
+    (/\.copc\.laz$/i.test(url) || /\/ept\.json(?:\?|#|$)/i.test(url));
+  if (looksLikeRemoteStream) {
+    return handleRemoteUrl(url).catch((err) => {
+      dropZone.setError(
+        err instanceof Error ? err.message : `Failed to stream ${name}.`,
+      );
+    });
+  }
   dropZone.setProgress(`Loading ${name}…`);
   try {
     const response = await fetch(url);
@@ -1777,12 +2451,28 @@ function resetToEmptyState(): void {
   dock.setAnnotateEnabled(false);
   dock.setCloseEnabled(false);
   inspector.clear();
+  inspector.clearProvenance();
+  inspector.clearCrs();
+  _currentCrsDatasetKey = undefined;
+  // Clear the point inspector's coordinate context so a future Inspect
+  // click on a different scan doesn't compute against the previous
+  // scan's origin / CRS.
+  if (viewerReady) {
+    try { viewer.setInspectCoordinateContext({}); }
+    catch { /* defensive */ }
+  }
   // Visual Export Studio — no scan loaded, no source to render. The
   // buttons go back to disabled with their "load a scan first" hint so the
   // user can't fire an export against nothing.
   inspector.setImageExportEnabled(false);
   stage.showEmptyState();
   navBar.element.classList.add('olv-hidden');
+  // Reset the NavBar mode to 'orbit'. The "Click the scan to look around"
+  // prompt is gated on the mode being walk/fly + cursor-not-locked; if a
+  // user closes a project while in walk/fly mode, the prompt sticks around
+  // and floats over the empty-state Open-a-scan UI (visibly covering the
+  // QUICK DEMOS section). Resetting to orbit hides it via `_render`.
+  navBar.setMode('orbit');
   navBar.hideTouchHint();
   projectCard.hide();
   // Hides the phone-only Scan Info launcher; the sheet is closed by clear().

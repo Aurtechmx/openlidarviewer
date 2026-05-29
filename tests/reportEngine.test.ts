@@ -29,14 +29,15 @@ import type { Measurement } from '../src/render/measure/types';
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('templates', () => {
-  it('ships five report templates', () => {
-    expect(REPORT_TEMPLATES.length).toBe(5);
+  it('ships six report templates (v0.3.6 added Scan Acceptance)', () => {
+    expect(REPORT_TEMPLATES.length).toBe(6);
     const ids = REPORT_TEMPLATES.map((t) => t.id);
     expect(ids).toContain('engineering-inspection');
     expect(ids).toContain('qa-validation');
     expect(ids).toContain('terrain-review');
     expect(ids).toContain('survey-summary');
     expect(ids).toContain('technical-documentation');
+    expect(ids).toContain('scan-acceptance');
   });
 
   it('default template id resolves to a valid template', () => {
@@ -477,5 +478,90 @@ describe('composeReportInputs', () => {
     });
     expect(() => new Date(inputs.cover.exportedAt)).not.toThrow();
     expect(new Date(inputs.cover.exportedAt).toString()).not.toBe('Invalid Date');
+  });
+
+  it('scan-acceptance template auto-derives metadata-only acceptance rows when none supplied', () => {
+    // Regression for v0.3.6.x: before this change, picking the
+    // scan-acceptance template from the Inspector dropdown produced a
+    // PDF with an empty acceptance-checklist section because the
+    // composer never wired any acceptanceChecks. The composer now
+    // derives five presence-check rows from the loaded scan's
+    // metadata so the template is meaningful straight from the UI.
+    const inputs = composeReportInputs({
+      templateId: 'scan-acceptance',
+      title: 'Acceptance',
+      metadata: {
+        fileName: 'east-levee.copc.laz',
+        format: 'COPC',
+        sourcePointCount: 12_400_000,
+        width: 100,
+        depth: 100,
+        height: 12,
+        density: 1240,
+        hasRgb: true,
+        hasIntensity: true,
+        hasClassification: false,
+        crsName: 'EPSG:32612',
+        crsUnit: 'metre',
+      },
+      visuals: [],
+      annotations: [],
+      measurements: [],
+      unitSystem: 'metric',
+    });
+    expect(inputs.acceptanceChecks).toBeDefined();
+    expect(inputs.acceptanceChecks?.length).toBe(5);
+    const labels = inputs.acceptanceChecks?.map((r) => r.label) ?? [];
+    expect(labels).toEqual([
+      'Point count',
+      'CRS declared',
+      'RGB channel',
+      'Classification channel',
+      'Intensity channel',
+    ]);
+    // Point count row passes when sourcePointCount > 0.
+    expect(inputs.acceptanceChecks?.[0]?.pass).toBe(true);
+    // CRS row passes when crsName is set.
+    expect(inputs.acceptanceChecks?.[1]?.pass).toBe(true);
+    expect(inputs.acceptanceChecks?.[1]?.actual).toBe('EPSG:32612');
+  });
+
+  it('scan-acceptance template prefers caller-supplied acceptance rows over the defaults', () => {
+    const explicit = [
+      { label: 'Custom check', threshold: 'required', actual: 'present', pass: true },
+    ];
+    const inputs = composeReportInputs({
+      templateId: 'scan-acceptance',
+      title: 'Acceptance',
+      metadata: {
+        fileName: 's', format: 'COPC',
+        sourcePointCount: 1, width: 1, depth: 1, height: 1,
+        density: NaN, hasRgb: false, hasIntensity: false, hasClassification: false,
+      },
+      visuals: [],
+      annotations: [],
+      measurements: [],
+      unitSystem: 'metric',
+      acceptanceChecks: explicit,
+    });
+    expect(inputs.acceptanceChecks?.length).toBe(1);
+    expect(inputs.acceptanceChecks?.[0]?.label).toBe('Custom check');
+  });
+
+  it('non-acceptance templates do NOT auto-derive acceptance rows', () => {
+    const inputs = composeReportInputs({
+      templateId: 'engineering-inspection',
+      title: 'Eng',
+      metadata: {
+        fileName: 's', format: 'COPC',
+        sourcePointCount: 1, width: 1, depth: 1, height: 1,
+        density: NaN, hasRgb: false, hasIntensity: false, hasClassification: false,
+      },
+      visuals: [],
+      annotations: [],
+      measurements: [],
+      unitSystem: 'metric',
+    });
+    expect(inputs.acceptanceChecks).toBeUndefined();
   });
 });

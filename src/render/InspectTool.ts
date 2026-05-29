@@ -26,6 +26,24 @@ import {
   normalText,
   pointInfoCopyText,
 } from './pointInfo';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { utmConverter } from '../geo/UtmConverter';
+
+/**
+ * The pieces of cloud / CRS context the inspector needs to compute
+ * world and geographic coordinates from the local point position.
+ *
+ *   - `origin` is the world-space shift the loader applied to recentre
+ *     positions (Float32 precision savings). World coord = local + origin.
+ *   - `crs` is the resolved CRS for the active scan. Drives whether
+ *     lat / lon rows appear and which converter handles them.
+ *
+ * Both are `undefined` until a scan loads.
+ */
+export interface CoordinateContext {
+  readonly origin?: readonly [number, number, number];
+  readonly crs?: ResolvedCrs;
+}
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -62,6 +80,57 @@ function infoRow(label: string, value: string, title?: string): HTMLElement {
     el('span', { className: 'olv-inspect-row-label', text: label }),
     el('span', { className: 'olv-inspect-row-value', text: value, title }),
   ]);
+}
+
+/**
+ * A small uppercase header that visually groups the rows beneath it.
+ * Used by the inspector card to separate Local / World / Geographic /
+ * Attributes sections so the user reads four distinct intents instead
+ * of a single long list.
+ */
+function coordGroupHeader(text: string): HTMLElement {
+  return el('div', { className: 'olv-inspect-group', text });
+}
+
+/**
+ * WGS84 lat/lon — the target CRS for the geographic conversion the
+ * inspector card surfaces. EPSG:4326. Kept as a local constant so the
+ * card doesn't have to import the registry helpers.
+ */
+const WGS84_GEOGRAPHIC: ResolvedCrs = {
+  kind: 'geographic',
+  name: 'WGS 84',
+  epsg: 4326,
+  linearUnit: 'unknown',
+  linearUnitToMetres: 1,
+  source: 'default-assumption',
+  confidence: 'high',
+  userConfirmed: false,
+};
+
+/**
+ * Labels for the World coordinate group — Eastings/Northings when the
+ * dataset is projected (UTM, state plane), Lat/Lon when it's geographic.
+ * Drives only the row labels; the values come from `worldX/Y/Z` either way.
+ */
+function labelsForCrs(crs: ResolvedCrs | undefined): {
+  readonly heading: string;
+  readonly x: string;
+  readonly y: string;
+  readonly z: string;
+} {
+  if (!crs || crs.kind === 'local' || crs.kind === 'unknown') {
+    return { heading: 'World', x: 'X', y: 'Y', z: 'Z' };
+  }
+  if (crs.kind === 'geographic') {
+    return { heading: 'World (geographic)', x: 'Longitude', y: 'Latitude', z: 'Elevation' };
+  }
+  return {
+    heading: `World (${crs.name})`,
+    x: 'Easting',
+    y: 'Northing',
+    z: 'Elevation',
+  };
 }
 
 /**
@@ -112,6 +181,8 @@ export class InspectTool {
   /** The currently selected point, or null when nothing is picked. */
   private _selected: { info: PointInfo; world: THREE.Vector3 } | null = null;
   private _copyTimer: number | null = null;
+  /** Cloud origin + CRS — drives World and Lat/Lon rows. */
+  private _coordContext: CoordinateContext = {};
 
   private readonly _ndc = new THREE.Vector3();
   private readonly _cameraSpace = new THREE.Vector3();
@@ -166,6 +237,19 @@ export class InspectTool {
     return this._active;
   }
 
+  /**
+   * Set the active scan's origin + CRS. Used by the inspector's card to
+   * compute World (origin-relative) and Lat / Lon (CRS-projected) rows
+   * in addition to the always-shown Local X/Y/Z. Called by main.ts
+   * after every scan-load and every CRS override.
+   */
+  setCoordinateContext(ctx: CoordinateContext): void {
+    this._coordContext = ctx;
+    // If a point is already selected, repaint the card so the new
+    // World / Lat-Lon rows appear immediately.
+    if (this._selected) this._fillCard(this._selected.info);
+  }
+
   /** Enter or leave inspection mode. */
   setActive(on: boolean): void {
     this._active = on;
@@ -203,14 +287,20 @@ export class InspectTool {
 
   /** Re-project the marker and reposition the card. Call once per frame. */
   render(): void {
+    // Per-frame DOM thrash bail. Inspect mode is opt-in; until a point is
+    // selected we used to write `viewBox`, call `replaceChildren()`, and
+    // read `card.offsetWidth/offsetHeight` (which forces layout) every frame
+    // at 60 Hz with nothing to draw. No selection → early-out; only clear
+    // the overlay once on the transition.
+    if (!this._selected) {
+      if (this.overlay.childNodes.length > 0) {
+        this.overlay.replaceChildren();
+      }
+      return;
+    }
     const w = this._canvas.clientWidth;
     const h = this._canvas.clientHeight;
     this.overlay.setAttribute('viewBox', `0 0 ${w} ${h}`);
-
-    if (!this._selected) {
-      this.overlay.replaceChildren();
-      return;
-    }
     const p = this._project(this._selected.world);
     if (!p.visible) {
       // The point is behind the camera — hide the marker and card.
@@ -272,15 +362,63 @@ export class InspectTool {
 
   /** Populate the card rows from a point's data. */
   private _fillCard(info: PointInfo): void {
-    const rows: HTMLElement[] = [
-      infoRow('X', `${info.x} m`),
-      infoRow('Y', `${info.y} m`),
-      infoRow('Z', `${info.z} m`),
-      infoRow('Distance', `${info.distance} m`),
-      infoRow('Intensity', intensityText(info)),
-      infoRow('Classification', classificationText(info)),
-      infoRow('RGB', rgbText(info)),
-    ];
+    const rows: HTMLElement[] = [];
+
+    // ── Local coordinates — always shown (the renderer's frame) ─────────────
+    rows.push(coordGroupHeader('Local'));
+    rows.push(infoRow('X', `${info.x} m`));
+    rows.push(infoRow('Y', `${info.y} m`));
+    rows.push(infoRow('Z', `${info.z} m`));
+
+    // ── World coordinates — when an origin offset exists ───────────────────
+    const origin = this._coordContext.origin;
+    const localX = Number.parseFloat(String(info.x));
+    const localY = Number.parseFloat(String(info.y));
+    const localZ = Number.parseFloat(String(info.z));
+    const worldX = origin && Number.isFinite(localX) ? localX + origin[0] : undefined;
+    const worldY = origin && Number.isFinite(localY) ? localY + origin[1] : undefined;
+    const worldZ = origin && Number.isFinite(localZ) ? localZ + origin[2] : undefined;
+    const worldLabels = labelsForCrs(this._coordContext.crs);
+    if (
+      typeof worldX === 'number' &&
+      typeof worldY === 'number' &&
+      typeof worldZ === 'number'
+    ) {
+      rows.push(coordGroupHeader(worldLabels.heading));
+      rows.push(infoRow(worldLabels.x, `${worldX.toFixed(3)} m`));
+      rows.push(infoRow(worldLabels.y, `${worldY.toFixed(3)} m`));
+      rows.push(infoRow(worldLabels.z, `${worldZ.toFixed(3)} m`));
+    }
+
+    // ── Geographic coordinates — when CRS supports projection to WGS84 ────
+    const crs = this._coordContext.crs;
+    if (
+      crs &&
+      typeof worldX === 'number' &&
+      typeof worldY === 'number' &&
+      typeof worldZ === 'number' &&
+      utmConverter.canConvert(crs, WGS84_GEOGRAPHIC) === true
+    ) {
+      const geo = utmConverter.toGeographic(
+        { x: worldX, y: worldY, z: worldZ },
+        crs,
+      );
+      if (geo.ok) {
+        rows.push(coordGroupHeader('Geographic (WGS 84)'));
+        rows.push(infoRow('Latitude', `${geo.value.lat.toFixed(7)}°`));
+        rows.push(infoRow('Longitude', `${geo.value.lon.toFixed(7)}°`));
+        if (typeof geo.value.elevation === 'number') {
+          rows.push(infoRow('Elevation', `${geo.value.elevation.toFixed(3)} m`));
+        }
+      }
+    }
+
+    // ── Existing attribute rows ────────────────────────────────────────────
+    rows.push(coordGroupHeader('Attributes'));
+    rows.push(infoRow('Distance', `${info.distance} m`));
+    rows.push(infoRow('Intensity', intensityText(info)));
+    rows.push(infoRow('Classification', classificationText(info)));
+    rows.push(infoRow('RGB', rgbText(info)));
     // The LAS inspection extras get a row only when the cloud carries them —
     // a non-LAS scan shows no empty "Not available" clutter.
     const ret = returnText(info);

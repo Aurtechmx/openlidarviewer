@@ -29,6 +29,24 @@ import type { EptSchemaField } from './eptTypes';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 
 /**
+ * Thrown when an EPT binary tile arrives shorter than the schema
+ * requires. The scheduler matches on this class to decide a node is
+ * eligible for re-fetch — a truncation is almost always a transport
+ * problem (partial body from the CDN, network cut mid-flight), not a
+ * permanent parse failure.
+ */
+export class EptTruncatedTileError extends Error {
+  readonly expectedBytes: number;
+  readonly actualBytes: number;
+  constructor(message: string, expectedBytes: number, actualBytes: number) {
+    super(message);
+    this.name = 'EptTruncatedTileError';
+    this.expectedBytes = expectedBytes;
+    this.actualBytes = actualBytes;
+  }
+}
+
+/**
  * Pre-computed per-attribute layout: byte offset within a point record,
  * the size, the signedness, and the scale/offset for coordinate reconstr.
  */
@@ -103,9 +121,15 @@ export function decodeEptBinaryTile(
   const { attrs, stride } = computeSchemaLayout(schema);
   const expectedBytes = pointCount * stride;
   if (buffer.byteLength < expectedBytes) {
-    throw new Error(
+    // A short tile is almost always a transport problem — partial body
+    // returned by the CDN, mid-flight network cut, etc. Throw a tagged
+    // error so the scheduler can distinguish "retry me" from a
+    // permanent schema/parse failure and re-queue the node.
+    throw new EptTruncatedTileError(
       `EPT binary tile is short: expected ${expectedBytes} bytes for ${pointCount} ` +
-      `points × ${stride} stride, got ${buffer.byteLength}.`,
+        `points × ${stride} stride, got ${buffer.byteLength}.`,
+      expectedBytes,
+      buffer.byteLength,
     );
   }
 

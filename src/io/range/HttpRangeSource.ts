@@ -112,20 +112,48 @@ export class HttpRangeSource implements RangeSource {
           `Server returned ${head.status} for ${this._url}`,
         );
       }
-      if (head.headers.get('accept-ranges') !== 'bytes') {
+      const acceptRanges = head.headers.get('accept-ranges');
+      if (acceptRanges === 'none') {
+        // Server explicitly declares it doesn't support ranges.
+        // Tightened per the error-handling-ux principle "what happened
+        // + what to do" — concise and actionable, no jargon stack.
         throw new RangeReadError(
           'range-unsupported',
-          'This server does not support HTTP range requests, so it cannot stream COPC.',
+          'The host can\'t stream this file. It served the request but doesn\'t support partial reads.',
         );
       }
-      const length = Number(head.headers.get('content-length'));
-      if (!Number.isFinite(length) || length <= 0) {
+      // `Content-Length` is a CORS-safelisted response header — browsers
+      // expose it cross-origin by default even when the bucket's CORS
+      // configuration doesn't list it under `ExposeHeader`. Capture it now,
+      // before any fallback path that depends on a less-friendly header
+      // (`Accept-Ranges`, `Content-Range`), and pass it through as a size
+      // hint to the ranged-GET probe.
+      const headLength = Number(head.headers.get('content-length'));
+      const sizeHint =
+        Number.isFinite(headLength) && headLength > 0 ? headLength : undefined;
+
+      if (acceptRanges !== 'bytes') {
+        // Header is missing or unreadable. The likeliest cause is a
+        // CORS-restricted bucket — S3 (data.entwine.io, hobu-lidar,
+        // many other LiDAR hosts) supports range requests but does not
+        // expose the `Accept-Ranges` header to cross-origin responses
+        // unless the bucket's CORS configuration adds it to
+        // `ExposeHeader`. Trust nothing — try a real ranged GET and
+        // accept range support only if the server returns 206. A 200
+        // means the server ignored the range header (true "no
+        // support") and the inner probe will throw the proper error.
+        // The `sizeHint` lets the inner probe reuse HEAD's Content-Length
+        // when `Content-Range` is also CORS-stripped (the same buckets
+        // hide both headers by default).
+        return await this._probeViaRangedGet(signal, sizeHint);
+      }
+      if (sizeHint === undefined) {
         // Some hosts (notably proxied CDNs) strip Content-Length. The
         // ranged-GET probe recovers the size from Content-Range.
         return await this._probeViaRangedGet(signal);
       }
-      this._size = length;
-      return length;
+      this._size = sizeHint;
+      return sizeHint;
     } catch (err) {
       if (err instanceof RangeReadError) throw err;
       throw new RangeReadError(
@@ -170,14 +198,30 @@ export class HttpRangeSource implements RangeSource {
         `Range read returned an unexpected status ${response.status}`,
       );
     }
-    // Content-Range validation — Content-Range validation. A 206 must carry a Content-Range
-    // header identifying the served bytes; any mismatch with what we asked
-    // for makes the response untrustworthy.
+    // Content-Range validation. A 206 normally carries a Content-Range
+    // header identifying the served bytes. S3-style buckets with default
+    // CORS hide this header from cross-origin responses — when it's
+    // entirely missing, fall back to validating the body byte length
+    // against the requested span (the 206 status already guarantees the
+    // server honored the Range header). When it IS present, mismatches
+    // remain a hard error — we don't accept a server that admits to
+    // returning the wrong bytes.
     const contentRange = response.headers.get('content-range');
+    const expected = end - offset + 1;
+    if (contentRange === null) {
+      const body = await response.arrayBuffer();
+      if (body.byteLength !== expected) {
+        throw new RangeReadError(
+          'content-mismatch',
+          `Server returned a 206 without Content-Range and a body length ${body.byteLength} that didn't match the requested ${expected} bytes.`,
+        );
+      }
+      return body;
+    }
     if (!isContentRangeMatch(contentRange, offset, end)) {
       throw new RangeReadError(
         'content-mismatch',
-        `Server returned a 206 with mismatched Content-Range "${contentRange ?? '(missing)'}" for ${offset}-${end}.`,
+        `Server returned a 206 with mismatched Content-Range "${contentRange}" for ${offset}-${end}.`,
       );
     }
     return response.arrayBuffer();
@@ -186,9 +230,16 @@ export class HttpRangeSource implements RangeSource {
   /**
    * Discover size via a `Range: bytes=0-0` GET when HEAD is unusable.
    * Reads the one byte and parses the response's `Content-Range:` to
-   * extract the total size.
+   * extract the total size. When the server's CORS configuration hides
+   * `Content-Range` (the common S3-default case), an optional
+   * `sizeHint` captured from a successful HEAD's `Content-Length` is
+   * accepted as a fallback — the 206 status alone proves range support,
+   * so trusting HEAD's size is safe.
    */
-  private async _probeViaRangedGet(signal?: AbortSignal): Promise<number> {
+  private async _probeViaRangedGet(
+    signal?: AbortSignal,
+    sizeHint?: number,
+  ): Promise<number> {
     const response = await this._fetchWithRetryAndTimeout(
       { headers: { Range: 'bytes=0-0' } },
       signal,
@@ -205,15 +256,27 @@ export class HttpRangeSource implements RangeSource {
         `Probe returned an unexpected status ${response.status}`,
       );
     }
+    // Drain the one-byte body so the connection can be reused. Skipping
+    // this can leave the response in a half-read state on some runtimes.
+    void response.arrayBuffer().catch(() => undefined);
     const total = parseContentRangeTotal(response.headers.get('content-range'));
-    if (total === null || total <= 0) {
-      throw new RangeReadError(
-        'range-unsupported',
-        'Server returned a 206 but did not report a usable total size in Content-Range.',
-      );
+    if (total !== null && total > 0) {
+      this._size = total;
+      return total;
     }
-    this._size = total;
-    return total;
+    // Content-Range was missing or unparseable. S3-style buckets hide it
+    // from cross-origin responses by default; fall back to the HEAD-derived
+    // Content-Length when the caller captured one. Range support is already
+    // confirmed by the 206 status above.
+    if (sizeHint !== undefined && sizeHint > 0) {
+      this._size = sizeHint;
+      return sizeHint;
+    }
+    throw new RangeReadError(
+      'range-unsupported',
+      'The server confirmed range support but didn\'t expose the file size. ' +
+        'If you control the bucket, add Content-Length and Content-Range to its CORS ExposeHeaders.',
+    );
   }
 
   /**

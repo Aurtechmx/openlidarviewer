@@ -251,3 +251,83 @@ describe('tierCounters (decoded-tier accounting)', () => {
     expect(b.tierCounters()).toEqual({ nodesReady: 1, nodesEvicted: 1 });
   });
 });
+
+describe('long-session memory discipline', () => {
+  test('sample buffers cap at SAMPLE_BUFFER_MAX even after vastly more pushes', () => {
+    // Regression: the previous `pushBounded` used Array.shift() which is
+    // O(n). The ring-buffer replacement keeps the same retention shape
+    // but pushes in O(1). This test pins both: cap stays honoured AND
+    // we never grow beyond it.
+    const b = new StreamingBenchmark(fakeClock().now);
+    const COUNT = SAMPLE_BUFFER_MAX * 5;
+    for (let i = 0; i < COUNT; i++) {
+      b.recordSchedulerTick(i);
+      b.recordDecodeMs(i);
+      b.recordFrameMs(i);
+    }
+    const result = b.finalize();
+    expect(result.schedulerTickMs.count).toBe(SAMPLE_BUFFER_MAX);
+    expect(result.decodeMsPerChunk.count).toBe(SAMPLE_BUFFER_MAX);
+    expect(result.frameMs.count).toBe(SAMPLE_BUFFER_MAX);
+  });
+
+  test('recentSchedulerTickStats returns the most recent N after overflow', () => {
+    const b = new StreamingBenchmark(fakeClock().now);
+    // Push enough to wrap, then enough more that the most-recent-N
+    // window is clearly past the wrap point.
+    for (let i = 0; i < SAMPLE_BUFFER_MAX + 100; i++) b.recordSchedulerTick(i);
+    const stats = b.recentSchedulerTickStats(5);
+    expect(stats.count).toBe(5);
+    // The most recent 5 ticks were values SAMPLE_BUFFER_MAX+95 …
+    // SAMPLE_BUFFER_MAX+99 — their mean is the integer midpoint.
+    expect(stats.mean).toBeCloseTo(SAMPLE_BUFFER_MAX + 97, 6);
+    expect(stats.max).toBe(SAMPLE_BUFFER_MAX + 99);
+  });
+
+  test('eviction-history map prunes old entries instead of growing unbounded', () => {
+    // Regression: `_evictAt.set(id, t)` was called on every eviction and
+    // only deleted by `recordNodeReady(id)`. In a long pan across a
+    // large dataset, nodes evict and never re-load, so the map grew
+    // forever. The opportunistic sweep keeps it bounded by the thrash
+    // window.
+    const clock = fakeClock();
+    const b = new StreamingBenchmark(clock.now);
+
+    // Burn through many evictions over an interval much wider than
+    // THRASH_WINDOW_MS so almost all of them are sweep-eligible.
+    const TOTAL = 2000;
+    for (let i = 0; i < TOTAL; i++) {
+      clock.set(i * 100); // 100 ms cadence, far above the window
+      b.recordNodeEvicted(`node-${i}`);
+    }
+
+    // After the sweep triggers, the map should hold only entries within
+    // THRASH_WINDOW_MS of the latest eviction. We can prove this
+    // indirectly: a node evicted *before* the window has its
+    // `_evictAt` entry pruned, so re-readying it should NOT count as a
+    // thrash event.
+    clock.set(TOTAL * 100);
+    b.recordNodeReady('node-0'); // evicted at t=0, far past the window
+    const result = b.finalize();
+    expect(result.thrashEvents).toBe(0);
+  });
+
+  test('a sweep does NOT prune entries still inside the thrash window', () => {
+    const clock = fakeClock();
+    const b = new StreamingBenchmark(clock.now);
+
+    // First, trip the sweep trigger with stale entries.
+    for (let i = 0; i < 1000; i++) {
+      clock.set(i * 100);
+      b.recordNodeEvicted(`stale-${i}`);
+    }
+    // Then add one fresh eviction inside the window relative to the
+    // newest time, and re-ready it inside the window.
+    const t = 1000 * 100;
+    clock.set(t);
+    b.recordNodeEvicted('fresh');
+    clock.set(t + THRASH_WINDOW_MS / 2);
+    b.recordNodeReady('fresh');
+    expect(b.finalize().thrashEvents).toBe(1);
+  });
+});

@@ -78,6 +78,25 @@ const technicalDocumentation: ReportTemplate = {
   ],
 };
 
+/**
+ * Scan Acceptance template. A user-supplied-threshold pass/fail sheet
+ * for incoming-scan validation. Metadata-only rows in the current
+ * release; the cloud-sampled rows (density, void map, NPS, RMSE) land
+ * once the analysis seam is online. The Methods appendix cites Lohani
+ * & Ghosh 2017 (peer-reviewed Springer survey) as the source for the
+ * USGS-style metrics this template will encode over time.
+ */
+const scanAcceptance: ReportTemplate = {
+  id: 'scan-acceptance',
+  label: 'Scan Acceptance',
+  description:
+    'A pass/fail QA sheet against thresholds you supply. The viewer ' +
+    'reports what was measured; the thresholds are yours. Use it to sign ' +
+    'off (or reject) an incoming scan delivery — every check carries a ' +
+    'literature citation in the Methods appendix.',
+  sections: ['cover', 'dataset-summary', 'acceptance-checklist', 'footer'],
+};
+
 /** The full template catalogue, in display order. */
 export const REPORT_TEMPLATES: readonly ReportTemplate[] = [
   engineeringInspection,
@@ -85,6 +104,7 @@ export const REPORT_TEMPLATES: readonly ReportTemplate[] = [
   terrainReview,
   surveySummary,
   technicalDocumentation,
+  scanAcceptance,
 ];
 
 /** Look up a template by id, or `undefined` if unknown. */

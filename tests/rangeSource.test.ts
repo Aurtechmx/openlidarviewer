@@ -81,10 +81,115 @@ test('HttpRangeSource.probe validates Accept-Ranges and Content-Length', async (
 });
 
 test('HttpRangeSource.probe rejects a server without range support', async () => {
+  // Missing Accept-Ranges now triggers a ranged-GET fall-through (the
+  // S3-CORS quirk). When that ranged GET also returns 200 (no range
+  // response), the probe correctly bails with 'range-unsupported'.
   globalThis.fetch = (async () =>
     new Response(null, {
       status: 200,
       headers: { 'content-length': '5000' },
+    })) as typeof fetch;
+  const src = new HttpRangeSource('https://example.com/a.copc.laz', testOpts);
+  await expect(src.probe()).rejects.toMatchObject({ code: 'range-unsupported' });
+});
+
+test('HttpRangeSource.probe accepts a server that supports ranges but does not expose Accept-Ranges to CORS', async () => {
+  // Regression: S3 buckets like data.entwine.io and hobu-lidar support
+  // range requests but only expose Accept-Ranges to CORS if the bucket
+  // CORS config adds it to ExposeHeader. Browsers see `null` from
+  // `headers.get('accept-ranges')`. Before the probe fix, that null
+  // bailed with "server does not support HTTP range requests" even
+  // though a real ranged GET would succeed. The probe now falls
+  // through to a ranged-GET probe in that case.
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'HEAD') {
+      // S3-style HEAD: no Accept-Ranges header exposed to CORS.
+      return new Response(null, {
+        status: 200,
+        headers: { 'content-length': '1024' },
+      });
+    }
+    // Ranged GET succeeds with a real 206 + Content-Range.
+    return new Response(new Uint8Array([0]).buffer, {
+      status: 206,
+      headers: { 'content-range': 'bytes 0-0/1024' },
+    });
+  }) as typeof fetch;
+  const src = new HttpRangeSource('https://example.com/a.copc.laz', testOpts);
+  expect(await src.probe()).toBe(1024);
+});
+
+test('HttpRangeSource.probe accepts a server that hides Content-Range from CORS', async () => {
+  // Regression: S3-style buckets (hobu-lidar/sofi.copc.laz reported in
+  // the wild) hide BOTH Accept-Ranges AND Content-Range from cross-origin
+  // responses by default. The previous probe bailed with "did not report
+  // a usable total size in Content-Range" even though the file IS on S3
+  // and the HEAD's Content-Length was perfectly readable. The fix
+  // captures HEAD's Content-Length as a size hint and threads it through
+  // the ranged-GET probe; the 206 status alone proves range support.
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'HEAD') {
+      // HEAD exposes Content-Length (CORS-safelisted by default) but
+      // NOT Accept-Ranges (must be in CORS ExposeHeader to read).
+      return new Response(null, {
+        status: 200,
+        headers: { 'content-length': '2048' },
+      });
+    }
+    // Ranged GET returns 206 with NO Content-Range header at all
+    // (also CORS-stripped by default).
+    return new Response(new Uint8Array([0]).buffer, {
+      status: 206,
+      // intentionally no content-range header here
+    });
+  }) as typeof fetch;
+  const src = new HttpRangeSource('https://s3.amazonaws.com/bucket/file.copc.laz', testOpts);
+  expect(await src.probe()).toBe(2048);
+});
+
+test('HttpRangeSource.readRange accepts a 206 with no Content-Range when body length matches', async () => {
+  // Same CORS scenario as the probe regression — a real ranged read
+  // against an S3-default bucket gets a 206 + body but no Content-Range.
+  // Trust the body length when the header is entirely absent; mismatches
+  // remain a hard error so we never accept a server that lies.
+  const head = new Response(null, {
+    status: 200,
+    headers: { 'content-length': '100' },
+  });
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'HEAD') return head.clone();
+    // 206 with no content-range; body length matches the requested span.
+    return new Response(new Uint8Array([1, 2, 3]).buffer, { status: 206 });
+  }) as typeof fetch;
+  const src = new HttpRangeSource('https://s3.amazonaws.com/bucket/file.copc.laz', testOpts);
+  const got = new Uint8Array(await src.readRange(0, 3));
+  expect([...got]).toEqual([1, 2, 3]);
+});
+
+test('HttpRangeSource.readRange rejects a 206 with no Content-Range when body length disagrees', async () => {
+  // The corollary: if the server's body length disagrees with what we
+  // asked for, even a missing Content-Range can't make that trustworthy.
+  const head = new Response(null, {
+    status: 200,
+    headers: { 'content-length': '100' },
+  });
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'HEAD') return head.clone();
+    // Asked for 3 bytes, server returned 5 — reject.
+    return new Response(new Uint8Array([1, 2, 3, 4, 5]).buffer, { status: 206 });
+  }) as typeof fetch;
+  const src = new HttpRangeSource('https://example.com/file.copc.laz', testOpts);
+  await expect(src.readRange(0, 3)).rejects.toMatchObject({ code: 'content-mismatch' });
+});
+
+test('HttpRangeSource.probe rejects when Accept-Ranges explicitly says "none"', async () => {
+  // The "none" value is the explicit "I do not support ranges" answer
+  // from RFC 7233. Fail fast — no point in trying a ranged GET that
+  // we know will be rejected.
+  globalThis.fetch = (async () =>
+    new Response(null, {
+      status: 200,
+      headers: { 'accept-ranges': 'none', 'content-length': '5000' },
     })) as typeof fetch;
   const src = new HttpRangeSource('https://example.com/a.copc.laz', testOpts);
   await expect(src.probe()).rejects.toMatchObject({ code: 'range-unsupported' });

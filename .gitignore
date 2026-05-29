@@ -59,3 +59,4 @@ _rmtest*
 .idea
 .DS_Store
 Thumbs.db
+bundle-stats.html

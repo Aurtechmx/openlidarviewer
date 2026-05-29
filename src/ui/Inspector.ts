@@ -5,6 +5,27 @@ import type { PointSizeMode } from '../render/pointStyle';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
+import {
+  snapshot as snapshotUsage,
+  reset as resetUsage,
+  describeCounter,
+  isSuppressed as usageIsSuppressed,
+} from '../diagnostics/usageCounters';
+import type { ProvenanceFingerprint, CaptureType } from '../diagnostics/provenance';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { listCrsEntriesByRegion, getCrsEntry } from '../geo/CrsRegistry';
+// Direct subpath imports — NOT the `'../report'` barrel. The barrel
+// re-exports `generateReport` / `renderReportPdf`, which transitively
+// pull pdf-lib (~150 KB) into the static import graph and break the
+// lazy-chunk split for the entire report engine. `ReportTemplates.ts`
+// is a pure-data module with no pdf-lib dependency, so it's safe to
+// hold a static reference to.
+import {
+  REPORT_TEMPLATES,
+  DEFAULT_TEMPLATE_ID,
+  getReportTemplate,
+} from '../report/ReportTemplates';
+import type { ReportTemplateId } from '../report/types';
 
 /** The render-quality state the Inspector's Rendering controls reflect. */
 export interface RenderingState {
@@ -78,16 +99,58 @@ const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
  * title]` — the title doubles as the hover-hint for the disabled button when
  * the mode is unavailable on the loaded cloud.
  */
+// Honest button labels — user-reported confusion: "all reports show the
+// same export". Root cause was the misnamed "Ortho RGB" which captures
+// the CURRENT colour mode (not specifically RGB), so on a survey LAZ
+// being viewed in elevation mode it produced the same image as "Height
+// Map". Renamed to "View capture" so users know what they're getting:
+// a PNG of whatever they currently see. Tooltip is honest that it
+// preserves the active colour mode and isn't redundant with Height Map
+// only when the user is actively choosing RGB / intensity / class
+// before clicking.
+// Order matters — the specific colour-mode buttons come FIRST because
+// they reliably produce distinct images, then the generic "View capture"
+// comes LAST. The reordering is the design-audit "reduction filter"
+// applied: a user who clicks View capture without changing Color by
+// first will get the same image as Height map (current default for
+// survey LAZ). Placing the specific buttons first signals "to
+// differentiate, pick one of these" before falling through to the
+// generic capture.
 const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
   readonly mode: ExportMode;
   readonly label: string;
   readonly title: string;
 }> = [
-  { mode: 'orthographic-rgb', label: 'Ortho RGB',  title: 'Parallel-projected PNG of the current view, preserving the active colour mode.' },
-  { mode: 'height-map',       label: 'Height Map', title: 'Top-down PNG, points coloured by elevation (Z).' },
-  { mode: 'intensity',        label: 'Intensity',  title: 'Top-down PNG, points coloured by LiDAR intensity. Requires intensity in the cloud.' },
-  { mode: 'classification',   label: 'Class Map',  title: 'Top-down PNG, points coloured by ASPRS classification. Requires classification in the cloud.' },
-  { mode: 'normal',           label: 'Normal Map', title: 'RGB-encoded surface normals. Requires per-point normals (PCD / PTX / GLTF; LiDAR scans rarely include them).' },
+  {
+    mode: 'height-map',
+    label: 'Height map',
+    title: 'Forces elevation colouring. Always distinct from view-capture-in-other-modes.',
+  },
+  {
+    mode: 'intensity',
+    label: 'Intensity',
+    title: 'Forces LiDAR-intensity colouring. Disabled on clouds without an intensity channel.',
+  },
+  {
+    mode: 'classification',
+    label: 'Class map',
+    title: 'Forces ASPRS-classification colouring. Disabled on clouds without a classification channel.',
+  },
+  {
+    mode: 'normal',
+    label: 'Normal map',
+    title:
+      'RGB-encodes per-point surface normals. Disabled on clouds without normals ' +
+      '(PCD / PTX / GLTF carry them; raw LiDAR rarely does).',
+  },
+  {
+    mode: 'orthographic-rgb',
+    label: 'View capture',
+    title:
+      'Captures the current on-screen view in whatever colour mode is active. ' +
+      'To get a distinct image, switch the Color by chip before clicking — ' +
+      'otherwise this matches Height Map when you are viewing in elevation.',
+  },
   // Depth Map + Contour Map intentionally absent — their previous
   // implementations produced an elevation raster (same as Height Map)
   // rather than true camera-relative depth or marching-squares contour
@@ -99,6 +162,32 @@ function section(label: string, body: HTMLElement): HTMLElement {
     el('div', { className: 'olv-section-label', text: label }),
     body,
   ]);
+}
+
+/**
+ * A collapsible section using native `<details>` / `<summary>`. The
+ * summary is styled to match the static `olv-section-label` so the
+ * panel reads as a uniform list of sections — the only visual
+ * difference is the disclosure caret. Default-closed for sections
+ * the user opens occasionally (Detail, Provenance, Coordinate
+ * system, Scan report, Saved views, every export group), which
+ * reduces first-paint density by ~60% on the 232 px panel.
+ */
+function collapsibleSection(
+  label: string,
+  body: HTMLElement,
+  opts: { readonly open?: boolean } = {},
+): HTMLDetailsElement {
+  const details = el('details', {
+    className: 'olv-section olv-section-collapsible',
+  }) as HTMLDetailsElement;
+  if (opts.open) details.open = true;
+  const summary = el('summary', {
+    className: 'olv-section-label olv-section-summary',
+    text: label,
+  });
+  details.append(summary, body);
+  return details;
 }
 
 /** A small on/off chip button; the active class reflects the on state. */
@@ -135,7 +224,27 @@ export class Inspector {
   private readonly _chips = el('div', { className: 'olv-chips' });
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
+  // Captured section refs — `setStreamingMode` toggles their visibility so
+  // the static-cloud-only sections drop out when a streaming COPC / EPT is
+  // active and their streaming-equivalents in StreamingPanel take over.
+  private _layersSection!: HTMLElement;
+  private _colorBySection!: HTMLElement;
+  private _pointSizeSection!: HTMLElement;
+  private _renderingSection!: HTMLElement;
+  private _exportSection!: HTMLElement;
   private readonly _viewList = el('div', { className: 'olv-views' });
+  /** Session-stats body — rebuilt lazily when the details section opens. */
+  private readonly _sessionStatsBody: HTMLElement;
+  /** Provenance fingerprint body — populated by setProvenance(). */
+  private readonly _provenanceBody: HTMLElement;
+  /** Last fingerprint surfaced; lets the user override drop in cleanly. */
+  private _currentProvenance: ProvenanceFingerprint | null = null;
+  /** Caller registers this to be told when the user overrides the type. */
+  private _onProvenanceOverride: ((type: CaptureType) => void) | null = null;
+  /** CRS section body — populated by setCrs(). */
+  private readonly _crsBody: HTMLElement;
+  /** Caller registers this to react to user CRS overrides. */
+  private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void) | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
   /**
    * Visual Export Studio — the per-mode image-export buttons, kept
@@ -148,6 +257,7 @@ export class Inspector {
   private readonly _imageExportTitles = new Map<ExportMode, string>();
   /** the Report PDF button, gated like the image-export ones. */
   private _reportButton: HTMLButtonElement | null = null;
+  private _reportSelect: HTMLSelectElement | null = null;
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
   private readonly _edlChip: HTMLButtonElement;
@@ -286,22 +396,56 @@ export class Inspector {
     // wraps cleanly into 4 rows (last row holds the seventh button).
     const imageExporter = el('div', { className: 'olv-export-grid' }, imageExportButtons);
 
-    // PDF Report button. Single button; template selection is reserved
-    // for a future UI surface. Currently dispatches the default template
-    // (`engineering-inspection`).
+    // PDF Report controls. A native <select> lets the user pick from the
+    // full template catalogue (`REPORT_TEMPLATES`) — the picker reads the
+    // current id off the select on click. The button stays single so the
+    // 232 px panel doesn't acquire a per-template button row.
+    const reportSelect = el('select', {
+      className: 'olv-report-select',
+      ariaLabel: 'PDF report template',
+    }) as HTMLSelectElement;
+    for (const t of REPORT_TEMPLATES) {
+      const option = el('option', { text: t.label, title: t.description });
+      option.value = t.id;
+      if (t.id === DEFAULT_TEMPLATE_ID) option.selected = true;
+      reportSelect.append(option);
+    }
+    // Mirror the button's empty-state disabled gate so the select and the
+    // button enable together once a scan loads.
+    reportSelect.disabled = true;
     const reportButton = el('button', {
       className: 'olv-export-btn',
       text: 'Report PDF',
-      title: 'Generate a multi-page PDF report (engineering inspection template).',
+      title: 'Generate a multi-page PDF report from the selected template.',
     });
     reportButton.disabled = true;
     reportButton.title = `${reportButton.title} (load a scan first)`;
     reportButton.addEventListener('click', () => {
       reportButton.blur();
-      this._cb.onExportReport('engineering-inspection');
+      const templateId = reportSelect.value as ReportTemplateId;
+      // Defence-in-depth: the select is populated from REPORT_TEMPLATES, but
+      // a devtools-injected <option value="…"> or a future template rename
+      // could surface an unknown id. Surface a visible button-state flash
+      // so the click is observably acknowledged — silently bailing left the
+      // user wondering whether the click registered.
+      if (!getReportTemplate(templateId)) {
+        const original = reportButton.textContent;
+        reportButton.textContent = 'Unknown template';
+        reportButton.disabled = true;
+        window.setTimeout(() => {
+          reportButton.textContent = original;
+          reportButton.disabled = false;
+        }, 1500);
+        return;
+      }
+      this._cb.onExportReport(templateId);
     });
     this._reportButton = reportButton;
-    const reportExporter = el('div', { className: 'olv-export' }, [reportButton]);
+    this._reportSelect = reportSelect;
+    const reportExporter = el('div', { className: 'olv-report-row' }, [
+      reportSelect,
+      reportButton,
+    ]);
 
     // The header carries the panel title and — on phones, where the panel is
     // a bottom sheet — a close control.
@@ -316,18 +460,63 @@ export class Inspector {
       sheetClose,
     ]);
 
+    // Session stats — collapsed by default; built lazily on first open so
+    // the localStorage read never happens during the empty-state render.
+    this._sessionStatsBody = el('div', { className: 'olv-session-stats' });
+    const sessionStats = el('details', { className: 'olv-section olv-stats-section' }, [
+      el('summary', { className: 'olv-stats-summary', text: 'Session stats' }),
+      this._sessionStatsBody,
+    ]);
+    sessionStats.addEventListener('toggle', () => {
+      if ((sessionStats as HTMLDetailsElement).open) this._refreshSessionStats();
+    });
+
+    // Provenance fingerprint — populated when a scan opens via setProvenance.
+    this._provenanceBody = el('div', { className: 'olv-provenance' });
+    this._showProvenancePlaceholder();
+
+    // Coordinate reference system — detected on load, user can override
+    // via the picker. Sits next to Provenance because both are
+    // "what kind of scan is this?" diagnostics.
+    this._crsBody = el('div', { className: 'olv-crs' });
+    this._showCrsPlaceholder();
+
+    // Panel composition — design-audit reduction filter applied.
+    // The top four sections (Layers / Color by / Point size / Rendering)
+    // stay statically expanded because they're the user's per-frame
+    // touch points. Everything below is collapsed by default — Detail
+    // is informational, Provenance / Coordinate system / Scan report
+    // are loaded once and re-read on demand, Saved views starts empty,
+    // and the three export groups are each one-click destinations
+    // users go looking for. First-paint cognitive load drops by ~60%
+    // without removing any feature.
+    // Per-section refs — captured so `setStreamingMode` can hide the
+    // static-cloud-only sections during streaming (the StreamingPanel
+    // owns the streaming-equivalents: streaming color modes, quality
+    // control, saved views are mirrored there). The kept sections —
+    // Detail, Provenance, Coordinate system, Scan report, Image export,
+    // Report PDF — work uniformly against either source type.
+    this._layersSection = section('Layers', this._layers);
+    this._colorBySection = section('Color by', this._chips);
+    this._pointSizeSection = section('Point size', pointSizeBody);
+    this._renderingSection = section('Rendering', renderingBody);
+    this._exportSection = collapsibleSection('Export', exporter);
+
     this.element = el('aside', { className: 'olv-inspector' }, [
       head,
-      section('Layers', this._layers),
-      section('Color by', this._chips),
-      section('Point size', pointSizeBody),
-      section('Rendering', renderingBody),
-      section('Detail', this._detail),
-      section('Scan report', this._report),
-      section('Saved views', views),
-      section('Export', exporter),
-      section('Image export', imageExporter),
-      section('Report PDF', reportExporter),
+      this._layersSection,
+      this._colorBySection,
+      this._pointSizeSection,
+      this._renderingSection,
+      collapsibleSection('Detail', this._detail),
+      collapsibleSection('Provenance', this._provenanceBody),
+      collapsibleSection('Coordinate system', this._crsBody),
+      collapsibleSection('Scan report', this._report),
+      collapsibleSection('Saved views', views),
+      this._exportSection,
+      collapsibleSection('Image export', imageExporter),
+      collapsibleSection('Report PDF', reportExporter),
+      sessionStats,
     ]);
     this._showReportPlaceholder();
     this._showViewsPlaceholder();
@@ -391,18 +580,84 @@ export class Inspector {
    * (intensity disabled on a PLY, classification disabled on PCD without
    * a label channel) is handled inside each exporter's `isAvailable`.
    */
+  /**
+   * Streaming-mode toggle.
+   *
+   * When `true`, hides the four static-cloud-only sections (Layers, Color by,
+   * Point size, Rendering) and the "Export" download section. Their
+   * streaming-equivalents — color modes, quality control, resident-points
+   * stats — live in the StreamingPanel; the Inspector retains Detail,
+   * Provenance, Coordinate system, Scan report, Saved views, Image export
+   * and Report PDF, which all work uniformly against a streaming source.
+   *
+   * When `false` (default), all sections are visible — the static load path
+   * uses the full Inspector.
+   *
+   * Also flags the panel with `olv-inspector-streaming` so styles can
+   * react (the desktop layout repositions the panel below the
+   * StreamingPanel in this mode to avoid overlap).
+   */
+  setStreamingMode(streaming: boolean): void {
+    const hidden = streaming ? 'none' : '';
+    this._layersSection.style.display = hidden;
+    this._colorBySection.style.display = hidden;
+    this._pointSizeSection.style.display = hidden;
+    this._renderingSection.style.display = hidden;
+    this._exportSection.style.display = hidden;
+    this.element.classList.toggle('olv-inspector-streaming', streaming);
+  }
+
   setImageExportEnabled(enabled: boolean): void {
     for (const [mode, button] of this._imageExportButtons) {
       button.disabled = !enabled;
       const baseTitle = this._imageExportTitles.get(mode) ?? '';
       button.title = enabled ? baseTitle : `${baseTitle} (load a scan first)`;
     }
-    // The Report PDF button shares the same gate
+    // The Report PDF button + template picker share the same gate
     // (a report against no cloud has nothing to summarise).
     if (this._reportButton) {
       this._reportButton.disabled = !enabled;
-      const base = 'Generate a multi-page PDF report (engineering inspection template).';
+      const base = 'Generate a multi-page PDF report from the selected template.';
       this._reportButton.title = enabled ? base : `${base} (load a scan first)`;
+    }
+    if (this._reportSelect) {
+      this._reportSelect.disabled = !enabled;
+    }
+  }
+
+  /**
+   * Per-mode availability override for the Visual Export Studio buttons.
+   *
+   * Called by main after each load to disable buttons whose mode is not
+   * supported by the loaded cloud — Normal map on a LAZ, Intensity on a
+   * raw PLY, Class map on a PCD without a label channel. The button stays
+   * visible (so the user knows the feature exists) but is disabled with
+   * the unavailability reason in its tooltip. Without this, clicking
+   * Normal map on a LAZ produced an error toast at render time — a poor
+   * substitute for visibly-disabled affordance.
+   *
+   * Pre-conditions: a scan must already be loaded. Callers gate on
+   * {@link setImageExportEnabled}(true) first; this method then narrows
+   * the set of enabled buttons. A mode missing from the map is treated as
+   * enabled (forward-compatible: a new exporter without per-mode flags
+   * still works through `setImageExportEnabled(true)`).
+   */
+  setImageExportAvailability(
+    availability: ReadonlyMap<ExportMode, { readonly available: boolean; readonly reason?: string }>,
+  ): void {
+    for (const [mode, button] of this._imageExportButtons) {
+      const entry = availability.get(mode);
+      if (!entry) continue; // unknown mode → leave as-is
+      const baseTitle = this._imageExportTitles.get(mode) ?? '';
+      if (entry.available) {
+        button.disabled = false;
+        button.title = baseTitle;
+      } else {
+        button.disabled = true;
+        button.title = entry.reason
+          ? `${baseTitle} — ${entry.reason}`
+          : `${baseTitle} (unavailable on this cloud)`;
+      }
     }
   }
 
@@ -484,7 +739,19 @@ export class Inspector {
   /** Build a single status / label / value report row. */
   private _reportRow(row: AnalysisRow): HTMLElement {
     return el('div', { className: 'olv-report-row' }, [
-      el('span', { className: `olv-status olv-status-${row.status}` }),
+      el('span', {
+        className: `olv-status olv-status-${row.status}`,
+        // Accessibility: status is encoded by colour only — add a
+        // textual label so screen readers and assistive tech announce
+        // pass / info / warn / fail. Visual redundancy (a glyph inside
+        // the dot) is a follow-up.
+        ariaLabel: ({
+          pass: 'Pass',
+          info: 'Info',
+          warn: 'Warning',
+          fail: 'Fail',
+        } as const)[row.status],
+      }),
       el('span', { className: 'olv-report-label', text: row.label }),
       el('span', { className: 'olv-report-value', text: row.value }),
     ]);
@@ -561,6 +828,346 @@ export class Inspector {
   private _showViewsPlaceholder(): void {
     this._viewList.replaceChildren(
       el('div', { className: 'olv-report-empty', text: 'No saved views yet.' }),
+    );
+  }
+
+  // ── Provenance fingerprint ────────────────────────────────────────────────
+
+  /** Surface the classifier's verdict for the loaded scan. */
+  setProvenance(fingerprint: ProvenanceFingerprint): void {
+    this._currentProvenance = fingerprint;
+    this._renderProvenance(fingerprint);
+  }
+
+  /** Restore the placeholder when the active scan closes. */
+  clearProvenance(): void {
+    this._currentProvenance = null;
+    this._showProvenancePlaceholder();
+  }
+
+  /**
+   * Register a callback the panel invokes when the user picks a different
+   * capture type from the override dropdown. Caller is responsible for
+   * re-classifying with the override and feeding the fresh fingerprint
+   * back through `setProvenance`.
+   */
+  setOnProvenanceOverride(cb: (type: CaptureType) => void): void {
+    this._onProvenanceOverride = cb;
+  }
+
+  /** Surface the detected (or overridden) CRS for the loaded scan. */
+  setCrs(resolved: ResolvedCrs): void {
+    this._renderCrs(resolved);
+  }
+
+  /** Restore the CRS placeholder when the active scan closes. */
+  clearCrs(): void {
+    this._showCrsPlaceholder();
+  }
+
+  /**
+   * Register a callback the panel invokes when the user picks a CRS in
+   * the override dropdown. Caller is responsible for persisting the
+   * override (via `CrsOverrideStore.setOverride`) and re-resolving the
+   * effective CRS, then feeding the result back through `setCrs`.
+   */
+  setOnCrsOverride(
+    cb: (override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void,
+  ): void {
+    this._onCrsOverride = cb;
+  }
+
+  private _showProvenancePlaceholder(): void {
+    this._provenanceBody.replaceChildren(
+      el('div', {
+        className: 'olv-report-empty',
+        text: 'Load a scan to see its capture provenance.',
+      }),
+    );
+  }
+
+  private _showCrsPlaceholder(): void {
+    this._crsBody.replaceChildren(
+      el('div', {
+        className: 'olv-report-empty',
+        text: 'Load a scan to see its coordinate reference system.',
+      }),
+    );
+  }
+
+  private _renderCrs(c: ResolvedCrs): void {
+    this._crsBody.replaceChildren();
+
+    // ── Detected / active CRS summary ──────────────────────────────────────
+    const headerRow = el('div', { className: 'olv-crs-summary' }, [
+      el('span', { className: 'olv-crs-name', text: c.name }),
+    ]);
+    if (typeof c.epsg === 'number') {
+      headerRow.append(el('span', { className: 'olv-crs-epsg', text: `EPSG:${c.epsg}` }));
+    }
+    this._crsBody.append(headerRow);
+
+    // Confidence + source row.
+    const confidenceLabel: Record<typeof c.confidence, string> = {
+      high: 'High',
+      medium: 'Medium',
+      low: 'Low',
+      none: 'None',
+    };
+    const sourceLabel: Record<typeof c.source, string> = {
+      'las-vlr': 'LAS / LAZ georeference VLR',
+      'copc-meta': 'COPC metadata',
+      'ept-srs': 'EPT srs.wkt',
+      'catalog-tile': 'Public-catalog tile',
+      'user-override': 'User override',
+      'default-assumption': 'No metadata',
+    };
+    this._crsBody.append(
+      el('div', { className: 'olv-crs-meta' }, [
+        el('span', { className: 'olv-crs-meta-row', text: `Confidence: ${confidenceLabel[c.confidence]}` }),
+        el('span', { className: 'olv-crs-meta-row', text: `Source: ${sourceLabel[c.source]}` }),
+      ]),
+    );
+
+    // ── Safety warnings (kind-specific) ────────────────────────────────────
+    if (c.kind === 'unknown') {
+      this._crsBody.append(
+        el('div', {
+          className: 'olv-crs-warning',
+          text: 'CRS unknown. Coordinates are shown in source units only.',
+        }),
+      );
+    } else if (c.kind === 'geographic') {
+      this._crsBody.append(
+        el('div', {
+          className: 'olv-crs-warning',
+          text: 'Dataset coordinates are geographic degrees. Metric distances may require projection.',
+        }),
+      );
+    } else if (c.confidence === 'low') {
+      this._crsBody.append(
+        el('div', {
+          className: 'olv-crs-warning',
+          text: 'Low-confidence detection. Confirm before using converted coordinates.',
+        }),
+      );
+    }
+    if (c.userConfirmed && c.source === 'user-override') {
+      this._crsBody.append(
+        el('div', {
+          className: 'olv-crs-warning-soft',
+          text: 'CRS override active. Coordinate conversion uses your selection.',
+        }),
+      );
+    }
+
+    // ── Override picker ────────────────────────────────────────────────────
+    const select = el('select', {
+      className: 'olv-crs-select',
+      ariaLabel: 'Coordinate reference system',
+    }) as HTMLSelectElement;
+    const optDetected = document.createElement('option');
+    optDetected.value = '__detected__';
+    optDetected.textContent =
+      c.source === 'user-override' ? 'Reset to detected' : 'Use detected';
+    select.append(optDetected);
+    const optLocal = document.createElement('option');
+    optLocal.value = '__local__';
+    optLocal.textContent = 'Local coordinates (no CRS)';
+    select.append(optLocal);
+    for (const group of listCrsEntriesByRegion()) {
+      const og = document.createElement('optgroup');
+      og.label = ({
+        global: 'Global',
+        'united-states': 'United States',
+        mexico: 'Mexico',
+        europe: 'Europe',
+        other: 'Other',
+      } as const)[group.region];
+      for (const entry of group.entries) {
+        const opt = document.createElement('option');
+        opt.value = String(entry.epsg);
+        opt.textContent = `${entry.label} (EPSG:${entry.epsg})`;
+        opt.title = entry.note;
+        // Preselect the currently active EPSG when it matches.
+        if (typeof c.epsg === 'number' && entry.epsg === c.epsg) {
+          opt.selected = true;
+        }
+        og.append(opt);
+      }
+      select.append(og);
+    }
+    select.addEventListener('change', () => {
+      if (!this._onCrsOverride) return;
+      const v = select.value;
+      if (v === '__detected__') {
+        // Caller restores the detected CRS by re-running detection.
+        this._onCrsOverride({ epsg: null, kind: 'local' /* tag value, caller ignores */ });
+        return;
+      }
+      if (v === '__local__') {
+        this._onCrsOverride({ epsg: null, kind: 'local' });
+        return;
+      }
+      const epsg = Number.parseInt(v, 10);
+      if (!Number.isFinite(epsg)) return;
+      const entry = getCrsEntry(epsg);
+      if (!entry) return;
+      this._onCrsOverride({ epsg, kind: entry.kind });
+    });
+    this._crsBody.append(
+      el('label', { className: 'olv-crs-picker-label', text: 'Override' }),
+      select,
+    );
+  }
+
+  private _renderProvenance(f: ProvenanceFingerprint): void {
+    this._provenanceBody.replaceChildren();
+
+    // Headline — capture type + confidence badge.
+    const headline = el('div', { className: 'olv-prov-headline' }, [
+      el('span', { className: 'olv-prov-label', text: f.label }),
+      el('span', {
+        className: `olv-prov-confidence olv-prov-confidence-${f.confidence}`,
+        text: `${f.confidence} confidence`,
+      }),
+    ]);
+    this._provenanceBody.append(headline);
+
+    // Signals — what made the classifier pick this.
+    if (f.signals.length > 0) {
+      const signals = el('div', { className: 'olv-prov-signals' });
+      for (const s of f.signals) {
+        signals.append(el('div', { className: 'olv-prov-signal', text: `· ${s}` }));
+      }
+      this._provenanceBody.append(signals);
+    }
+
+    // Literature ribbon — every bound carries its source.
+    if (f.bounds.length > 0) {
+      const ribbon = el('div', { className: 'olv-prov-ribbon' });
+      ribbon.append(
+        el('div', {
+          className: 'olv-prov-ribbon-title',
+          text: 'Expected accuracy ranges',
+        }),
+      );
+      for (const b of f.bounds) {
+        ribbon.append(
+          el('div', { className: 'olv-prov-bound' }, [
+            el('div', { className: 'olv-prov-bound-label', text: b.label }),
+            el('div', { className: 'olv-prov-bound-value', text: b.value }),
+            el('div', { className: 'olv-prov-bound-source', text: b.source }),
+          ]),
+        );
+      }
+      this._provenanceBody.append(ribbon);
+    }
+
+    // Disclaimer — always present, deliberately verbose.
+    this._provenanceBody.append(
+      el('div', { className: 'olv-prov-disclaimer', text: f.disclaimer }),
+    );
+
+    // User override — a small dropdown the user can use when the classifier
+    // got it wrong. Caller is wired via setOnProvenanceOverride.
+    const overrideRow = el('div', { className: 'olv-prov-override-row' });
+    overrideRow.append(
+      el('span', { className: 'olv-prov-override-label', text: 'Override:' }),
+    );
+
+    const select = el('select', { className: 'olv-prov-override-select' });
+    const options: Array<[CaptureType, string]> = [
+      ['iphone-lidar', 'iPhone / handheld'],
+      ['drone-lidar', 'Drone / UAV ALS'],
+      ['terrestrial', 'Terrestrial laser scan'],
+      ['mobile-slam', 'Mobile SLAM'],
+      ['aerial-als', 'Aerial / airborne ALS'],
+      ['spaceborne', 'Spaceborne'],
+      ['unknown', 'Unknown'],
+    ];
+    for (const [type, label] of options) {
+      const option = el('option', { text: label }) as HTMLOptionElement;
+      option.value = type;
+      if (type === f.captureType) option.selected = true;
+      select.append(option);
+    }
+    select.addEventListener('change', () => {
+      const next = (select.value as CaptureType);
+      if (this._onProvenanceOverride && next !== this._currentProvenance?.captureType) {
+        this._onProvenanceOverride(next);
+      }
+    });
+    overrideRow.append(select);
+    this._provenanceBody.append(overrideRow);
+  }
+
+  // ── Session stats ─────────────────────────────────────────────────────────
+
+  /**
+   * Rebuild the Session Stats body — called when the user opens the details
+   * section. Reads the counter snapshot, renders the top 12 rows, and adds
+   * a small "Reset" link at the bottom. Stays cheap: a localStorage read
+   * + DOM rebuild, no observers.
+   */
+  private _refreshSessionStats(): void {
+    this._sessionStatsBody.replaceChildren();
+
+    if (usageIsSuppressed()) {
+      this._sessionStatsBody.append(
+        el('div', {
+          className: 'olv-report-empty',
+          text: 'Session stats are disabled (?notelemetry=1).',
+        }),
+      );
+      return;
+    }
+
+    const rows = snapshotUsage();
+    if (rows.length === 0) {
+      this._sessionStatsBody.append(
+        el('div', {
+          className: 'olv-report-empty',
+          text: 'No activity counted yet. Counts stay on this device.',
+        }),
+      );
+      return;
+    }
+
+    // Top 12 most-recent counters. Rendering more than that would crowd the
+    // panel without adding signal — the long tail is one click away in the
+    // localStorage inspector.
+    for (const r of rows.slice(0, 12)) {
+      this._sessionStatsBody.append(
+        el('div', { className: 'olv-stats-row' }, [
+          el('span', { className: 'olv-stats-label', text: describeCounter(r) }),
+          el('span', { className: 'olv-stats-count', text: formatCount(r.count) }),
+        ]),
+      );
+    }
+
+    // Privacy footer + Reset link. Confirms with a native dialog so a
+    // misclick never wipes history.
+    const reset = el('button', {
+      className: 'olv-stats-reset',
+      type: 'button',
+      text: 'Reset',
+      title: 'Clear every counter on this device. This cannot be undone.',
+    });
+    reset.addEventListener('click', () => {
+      if (window.confirm('Reset every session stat? This cannot be undone.')) {
+        resetUsage();
+        this._refreshSessionStats();
+      }
+    });
+    this._sessionStatsBody.append(
+      el('div', { className: 'olv-stats-footer' }, [
+        el('span', {
+          className: 'olv-stats-note',
+          text: 'Counts stay on this device.',
+        }),
+        reset,
+      ]),
     );
   }
 }

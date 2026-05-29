@@ -23,6 +23,13 @@ export interface BenchmarkResult {
   /** Points rendered after the device-aware load budget was applied. */
   pointCount: number;
   /**
+   * Total points the source file declared in its header — independent of
+   * what the load budget retained. The denominator the reader needs to
+   * tell "5M @ 200 ms is great" from "5M of 500M @ 200 ms is incomplete".
+   * Undefined for formats whose header doesn't declare a count up front.
+   */
+  sourcePointCount?: number;
+  /**
    * Milliseconds from the file arriving to its first rendered frame — the
    * headline benchmark number. In the single-shot load path this is
    * also the time to a fully ready scene; a v0.3 streaming source would let
@@ -46,6 +53,7 @@ export function buildBenchmarkResult(
   format: string,
   pointCount: number,
   telemetry: LoadTelemetry,
+  sourcePointCount?: number,
 ): BenchmarkResult {
   const timeToFirstRenderMs =
     (telemetry.totalLoadMs ?? 0) +
@@ -55,6 +63,7 @@ export function buildBenchmarkResult(
     file,
     format,
     pointCount,
+    sourcePointCount,
     timeToFirstRenderMs,
     stages: { ...telemetry },
   };
@@ -62,12 +71,30 @@ export function buildBenchmarkResult(
 
 /** Format a benchmark result as an aligned, multi-line console/overlay block. */
 export function formatBenchmarkResult(result: BenchmarkResult): string {
+  const pointsLine = formatPointsLine(result);
   return [
-    `file            ${result.file}`,
-    `format          ${result.format}`,
-    `points          ${result.pointCount.toLocaleString('en-US')}`,
-    `time to render  ${result.timeToFirstRenderMs.toFixed(1)} ms`,
+    `file                  ${result.file}`,
+    `format                ${result.format}`,
+    pointsLine,
+    `time to first render  ${result.timeToFirstRenderMs.toFixed(1)} ms`,
     'stages',
     formatTelemetry(result.stages),
   ].join('\n');
+}
+
+/**
+ * Compose the points line so the reader can tell a budget-capped load
+ * apart from a full one. When the source declared a point count and the
+ * rendered count is smaller, we surface "X of Y (Z%)" so the benchmark
+ * never reads as faster than it actually was on the underlying file.
+ */
+function formatPointsLine(result: BenchmarkResult): string {
+  const rendered = result.pointCount.toLocaleString('en-US');
+  const source = result.sourcePointCount;
+  if (source === undefined || source <= result.pointCount) {
+    return `points rendered       ${rendered}`;
+  }
+  const pct = (result.pointCount / source) * 100;
+  const sourceFmt = source.toLocaleString('en-US');
+  return `points rendered       ${rendered} of ${sourceFmt} (${pct.toFixed(1)}%)`;
 }

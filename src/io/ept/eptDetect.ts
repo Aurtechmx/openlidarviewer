@@ -87,6 +87,19 @@ export function parseEptMetadata(text: string): EptDetection {
       reason: `Unsupported EPT dataType "${String(dataType)}" — expected laszip / binary / zstandard.`,
     };
   }
+  // The metadata schema admits 'zstandard', but the runtime tile decoder
+  // (`src/io/ept/EptChunkDecoder.ts`) only handles 'laszip' and 'binary'.
+  // Reject at detect time so we don't pay the hierarchy round-trip (often
+  // hundreds of HTTP requests) before the user discovers the dataset can't
+  // be streamed. The message points the user at the standard workaround.
+  if (dataType === 'zstandard') {
+    return {
+      isEpt: false,
+      reason:
+        'zstandard-encoded EPT is not supported — re-encode the dataset to ' +
+        'laszip with Entwine before streaming.',
+    };
+  }
 
   // ── hierarchyType ────────────────────────────────────────────────────────
   const hierarchyType = json['hierarchyType'];
@@ -134,13 +147,10 @@ export function parseEptMetadata(text: string): EptDetection {
   }
 
   // ── bounds ───────────────────────────────────────────────────────────────
-  const bounds = json['bounds'];
-  const boundsCubic = json['boundsConforming']
-    ? json['bounds']
-    : json['bounds'];
   // EPT v1.0 carries `bounds` (the cube) and `boundsConforming` (the tight
-  // data bounds). v1.1 added `bounds.cubic` and `bounds.conforming` as
-  // nested. Support both layouts.
+  // data bounds) as two top-level arrays. v1.1 nests both under
+  // `bounds.cubic` / `bounds.conforming`. Support both layouts.
+  const bounds = json['bounds'];
   let conforming: readonly [number, number, number, number, number, number] | null = null;
   let cubic: readonly [number, number, number, number, number, number] | null = null;
 
@@ -163,10 +173,6 @@ export function parseEptMetadata(text: string): EptDetection {
       conforming = k as [number, number, number, number, number, number];
     }
   }
-  // Silence the unused-variable warning while we keep `boundsCubic` to
-  // document the v1.0/v1.1 source-of-truth indirection. The values come
-  // from the explicit branches above.
-  void boundsCubic;
 
   if (!cubic || !conforming) {
     return { isEpt: false, reason: 'EPT manifest is missing a valid bounds array.' };

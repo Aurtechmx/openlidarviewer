@@ -20,7 +20,12 @@ export type ReportTemplateId =
   | 'qa-validation'
   | 'terrain-review'
   | 'survey-summary'
-  | 'technical-documentation';
+  | 'technical-documentation'
+  // A user-supplied-threshold acceptance pass/fail sheet for
+  // incoming-scan validation. Metadata-only rows in the current release;
+  // the cloud-sampled rows (density, void map, NPS, RMSE) wait for the
+  // analysis seam.
+  | 'scan-acceptance';
 
 /** Which sections a template wants, in render order. */
 export type ReportSectionId =
@@ -30,6 +35,7 @@ export type ReportSectionId =
   | 'annotations'
   | 'measurements'
   | 'technical-notes'
+  | 'acceptance-checklist'   // v0.3.6 — pass/fail rows + methods appendix
   | 'footer';
 
 /** Branding inputs — organisation name, optional logo, author/contact. */
@@ -120,6 +126,26 @@ export interface ReportMeasurementRow {
 }
 
 /**
+ * v0.3.6 — one row in the Scan Acceptance Checklist.
+ *
+ * The caller computes pass/fail against user-supplied thresholds before
+ * handing the row to the report engine. The viewer reports what was
+ * measured; the threshold-vs-pass-fail decision is the user's.
+ *
+ * No USGS QL1 / QL2 thresholds are baked in — those airborne-specific
+ * values would be misapplied to TLS / iPhone / cropped subsets. Each row
+ * names its own threshold so a surveyor handing the PDF to a contract
+ * dispute has the citations on hand.
+ */
+export interface ReportAcceptanceRow {
+  readonly label: string;        // 'Point count'
+  readonly threshold: string;    // '≥ 5,000,000'
+  readonly actual: string;       // '12,400,000'
+  readonly pass: boolean;
+  readonly note?: string;        // 'CRS missing — cannot georeference exports'
+}
+
+/**
  * The full inputs the engine takes — everything needed to render a report,
  * cleanly separated from the live Viewer / DOM. Each field is optional so
  * a partial report still works; the renderer renders what's there.
@@ -134,6 +160,13 @@ export interface ReportInputs {
   readonly measurements: readonly ReportMeasurementRow[];
   /** Free-form Markdown-ish notes appended to the report. Optional. */
   readonly technicalNotes?: string;
+  /**
+   * v0.3.6 — pass/fail rows for the Scan Acceptance template. The caller
+   * computes pass/fail against user-supplied thresholds before handing
+   * the rows to the report engine. Omit when the template doesn't include
+   * the `acceptance-checklist` section.
+   */
+  readonly acceptanceChecks?: readonly ReportAcceptanceRow[];
 }
 
 /** Output — what the engine returns. */
@@ -142,6 +175,16 @@ export interface ReportResult {
   readonly mimeType: 'application/pdf';
   readonly pages: number;
   readonly templateId: ReportTemplateId;
+  /**
+   * Sections the renderer attempted but caught an error during draw —
+   * pdf-lib's per-section try/catch swallows the failure so the rest of
+   * the PDF still ships. Empty in the common case. The caller surfaces
+   * the names in a toast so the user knows the PDF is partial.
+   *
+   * Returned values are the section ids the renderer iterated over,
+   * matching `ReportTemplate.sections`.
+   */
+  readonly failedSections: readonly ReportSectionId[];
 }
 
 /**

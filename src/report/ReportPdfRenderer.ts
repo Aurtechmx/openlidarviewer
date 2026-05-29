@@ -21,6 +21,7 @@ import type {
   ReportResult,
   ReportSectionId,
   ReportTemplate,
+  ReportTemplateId,
   ReportVisualAsset,
 } from './types';
 import {
@@ -43,6 +44,41 @@ const FOOTER_HEIGHT = 32;
 const BODY_FONT_SIZE = 10;
 const HEADER_FONT_SIZE = 14;
 const TITLE_FONT_SIZE = 28;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Layout grid
+//
+// The renderer aligns label / value / status content to a 12-column print
+// grid over the 524-point content width. Earlier versions used a single
+// magic offset (`MARGIN + 120`) for the value column, which read as
+// arbitrary against the surrounding rhythm. A column-based layout keeps
+// the value column consistent across themes and lets new section
+// renderers (acceptance, technical notes, future cloud-sampled rows)
+// share one alignment rule.
+//
+// The grid is a column grid only — body leading is BODY_FONT_SIZE
+// plus a fixed 4-pt gap, no baseline grid — with 11-point gutters
+// scaled so the dataset-summary value column begins one third across
+// the content width. That width matches the prior magic offset to
+// within a point while making the rule explicit.
+// ─────────────────────────────────────────────────────────────────────────────
+const GRID_COLUMNS = 12;
+const GRID_GUTTER = 8;
+const GRID_TRACK_WIDTH = (CONTENT_WIDTH - GRID_GUTTER * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+
+/** x-coordinate for the left edge of column `n` (1-based). */
+function gridX(column: number): number {
+  return MARGIN + (column - 1) * (GRID_TRACK_WIDTH + GRID_GUTTER);
+}
+
+/**
+ * The dataset-summary value column's x-coordinate. Held at the pre-grid
+ * offset (MARGIN + 120 ≈ 164 pt) so the existing reports render
+ * identically across versions; new sections that want grid-aligned
+ * columns use `gridX(n)` directly. Calling this out as a constant
+ * makes the choice auditable instead of hidden as a magic addition.
+ */
+const LABEL_VALUE_GUTTER_X = MARGIN + 120;
 
 /** A page-cursor — tracks where the next bit of content goes. */
 interface PageCursor {
@@ -102,7 +138,7 @@ export async function renderReportPdf(
   // the rest of the report continues to render. The user gets a partial
   // PDF (clearly marked in the cover metadata if the failure was the cover
   // itself) rather than nothing.
-  const failedSections: string[] = [];
+  const failedSections: ReportSectionId[] = [];
   for (const section of template.sections) {
     try {
       cursor = await renderSection(
@@ -139,12 +175,75 @@ export async function renderReportPdf(
     mimeType: 'application/pdf',
     pages: doc.getPageCount(),
     templateId: inputs.templateId,
+    failedSections,
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Section dispatcher
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-template design DNA
+//
+// Six templates, six distinct covers. The user-reported "all reports look
+// the same" bug was driven partly by a shared hardcoded title; the deeper
+// design-excellence issue was that even with different titles, each
+// template surfaced an identical layout + accent. This map gives every
+// template a short tag (rendered as a small chip on the cover) and a
+// default accent that the cover renderer uses when the user has not
+// overridden via `branding.accentColor`. The eye reads a Survey Summary
+// and a QA Validation as different documents even before reading the
+// title.
+//
+// Colour choices are intentionally drawn from a single hue family with
+// good print contrast against both light and dark themes. Each is
+// readable as a 6-pt-wide rail on white and as a tinted block on
+// near-black.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface TemplateDesignKey {
+  /** Short, uppercase tag rendered as a chip on the cover (≤ 16 chars). */
+  readonly tag: string;
+  /** Default accent — used when the user hasn't supplied `branding.accentColor`. */
+  readonly defaultAccent: ParsedColor;
+}
+
+const TEMPLATE_DESIGN_KEYS: Record<ReportTemplateId, TemplateDesignKey> = {
+  'engineering-inspection': {
+    tag: 'INSPECTION',
+    defaultAccent: { r: 0.13, g: 0.45, b: 0.78 }, // engineer blue
+  },
+  'qa-validation': {
+    tag: 'QA',
+    defaultAccent: { r: 0.85, g: 0.46, b: 0.10 }, // amber
+  },
+  'survey-summary': {
+    tag: 'SURVEY',
+    defaultAccent: { r: 0.20, g: 0.55, b: 0.32 }, // surveyor green
+  },
+  'terrain-review': {
+    tag: 'TERRAIN',
+    defaultAccent: { r: 0.58, g: 0.40, b: 0.20 }, // sienna
+  },
+  'technical-documentation': {
+    tag: 'DOCS',
+    defaultAccent: { r: 0.36, g: 0.40, b: 0.45 }, // slate
+  },
+  'scan-acceptance': {
+    tag: 'ACCEPTANCE',
+    defaultAccent: { r: 0.14, g: 0.55, b: 0.55 }, // teal
+  },
+};
+
+function designKeyFor(templateId: ReportTemplateId): TemplateDesignKey {
+  return (
+    TEMPLATE_DESIGN_KEYS[templateId] ?? {
+      tag: 'REPORT',
+      defaultAccent: { r: 0.0, g: 0.7, b: 1.0 },
+    }
+  );
+}
 
 async function renderSection(
   section: ReportSectionId,
@@ -171,6 +270,8 @@ async function renderSection(
       return renderMeasurements(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'technical-notes':
       return renderTechnicalNotes(cursor, inputs, doc, accent, theme, body, bold, organisation);
+    case 'acceptance-checklist':
+      return renderAcceptanceChecklist(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'footer':
       // Footer is stamped per-page in stampFooterPageNumbers; nothing
       // section-specific to do here, but we keep the slot in the
@@ -238,7 +339,7 @@ function drawSectionHeader(
   accent: ParsedColor,
   bold: PDFFont,
 ): PageCursor {
-  cursor.page.drawText(text, {
+  cursor.page.drawText(sanitiseForPdf(text), {
     x: MARGIN, y: cursor.y - HEADER_FONT_SIZE,
     size: HEADER_FONT_SIZE, font: bold,
     color: rgb(accent.r, accent.g, accent.b),
@@ -257,7 +358,7 @@ function drawBodyLine(
   body: PDFFont,
   theme: ReportThemePalette,
 ): PageCursor {
-  cursor.page.drawText(text, {
+  cursor.page.drawText(sanitiseForPdf(text), {
     x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
     size: BODY_FONT_SIZE, font: body,
     color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
@@ -273,13 +374,13 @@ function drawLabelValueRow(
   bold: PDFFont,
   theme: ReportThemePalette,
 ): PageCursor {
-  cursor.page.drawText(label, {
-    x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
+  cursor.page.drawText(sanitiseForPdf(label), {
+    x: gridX(1), y: cursor.y - BODY_FONT_SIZE,
     size: BODY_FONT_SIZE, font: bold,
     color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
   });
-  cursor.page.drawText(value, {
-    x: MARGIN + 120, y: cursor.y - BODY_FONT_SIZE,
+  cursor.page.drawText(sanitiseForPdf(value), {
+    x: LABEL_VALUE_GUTTER_X, y: cursor.y - BODY_FONT_SIZE,
     size: BODY_FONT_SIZE, font: body,
     color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
   });
@@ -299,6 +400,23 @@ async function renderCover(
   bold: PDFFont,
   logo: PDFImage | undefined,
 ): Promise<PageCursor> {
+  // Template design DNA — drives the small uppercase tag chip rendered
+  // above the title so each of the six templates produces a visually
+  // distinct cover even before the reader gets to the title.
+  const dk = designKeyFor(inputs.templateId);
+
+  // ── Cover left-rail — the "one bold move" the cover earns ────────────
+  // A 4-pt-wide accent stripe runs from the top of the page down 220 pt,
+  // anchored at the inner edge of the left margin. The rail is the visual
+  // signature of the document — eyes read it before any text. Combined
+  // with the per-template accent colour, two reports side by side are
+  // instantly distinguishable even at a glance.
+  cursor.page.drawRectangle({
+    x: MARGIN - 16, y: cursor.y - 220,
+    width: 4, height: 220,
+    color: rgb(accent.r, accent.g, accent.b),
+  });
+
   // Logo (optional) at the top-left, scaled to a 48-pt height.
   if (logo) {
     const scale = 48 / logo.height;
@@ -308,8 +426,17 @@ async function renderCover(
     });
     cursor = { page: cursor.page, y: cursor.y - 64 };
   }
+  // Template tag chip — small, uppercase, accent-coloured. Asymmetric
+  // pre-title placement reinforces the left-rail and primes the eye for
+  // the title beneath.
+  cursor.page.drawText(sanitiseForPdf(dk.tag), {
+    x: MARGIN, y: cursor.y - 9,
+    size: 9, font: bold,
+    color: rgb(accent.r, accent.g, accent.b),
+  });
+  cursor = { page: cursor.page, y: cursor.y - 18 };
   // Big title.
-  cursor.page.drawText(inputs.cover.title, {
+  cursor.page.drawText(sanitiseForPdf(inputs.cover.title), {
     x: MARGIN, y: cursor.y - TITLE_FONT_SIZE,
     size: TITLE_FONT_SIZE, font: bold,
     color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
@@ -317,7 +444,7 @@ async function renderCover(
   cursor = { page: cursor.page, y: cursor.y - TITLE_FONT_SIZE - 4 };
   // Subtitle.
   if (inputs.cover.subtitle) {
-    cursor.page.drawText(inputs.cover.subtitle, {
+    cursor.page.drawText(sanitiseForPdf(inputs.cover.subtitle), {
       x: MARGIN, y: cursor.y - 14,
       size: 14, font: body,
       color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
@@ -403,7 +530,7 @@ async function renderVisuals(
       width: w, height: h,
     });
     cursor = { page: cursor.page, y: cursor.y - h - 6 };
-    cursor.page.drawText(v.caption, {
+    cursor.page.drawText(sanitiseForPdf(v.caption), {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
       size: BODY_FONT_SIZE, font: body,
       color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
@@ -429,7 +556,7 @@ async function renderAnnotations(
   for (const a of inputs.annotations) {
     cursor = ensureSpace(cursor, 36, doc, accent, theme, organisation);
     // Title + type badge.
-    cursor.page.drawText(`${a.title}  [${a.type}]`, {
+    cursor.page.drawText(sanitiseForPdf(`${a.title}  [${a.type}]`), {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
       size: BODY_FONT_SIZE, font: bold,
       color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
@@ -467,6 +594,211 @@ async function renderMeasurements(
     cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, theme);
   }
   return { page: cursor.page, y: cursor.y - 10 };
+}
+
+/**
+ * Map Unicode glyphs the user might paste into a threshold input to
+ * WinAnsi-safe equivalents. pdf-lib's StandardFonts.Helvetica is
+ * WinAnsi-encoded; characters outside its repertoire (e.g. >=, <=)
+ * throw "WinAnsi cannot encode" at draw time. Replacing them up-front
+ * keeps the per-section error path for genuine bugs.
+ */
+function sanitiseForPdf(input: string): string {
+  return (
+    input
+      // Mathematical operators that show up in thresholds + measurement values.
+      .replaceAll('≥', '>=')
+      .replaceAll('≤', '<=')
+      .replaceAll('≠', '!=')
+      .replaceAll('×', 'x')
+      .replaceAll('÷', '/')
+      .replaceAll('√', 'sqrt')
+      .replaceAll('Δ', 'd')
+      .replaceAll('σ', 'sigma')
+      .replaceAll('±', '+/-')
+      .replaceAll('²', '^2')
+      .replaceAll('³', '^3')
+      // Em / en dashes and ellipsis — these are the highest-frequency offenders.
+      // ReportMeasurementSection emits U+2014 (em-dash) for degenerate
+      // measurements; without this mapping the entire Measurements section
+      // would silently disappear from the PDF.
+      .replaceAll('—', '--')
+      .replaceAll('–', '-')
+      .replaceAll('…', '...')
+      // Curly quotes — Helvetica's WinAnsi range covers most but not all
+      // variants depending on pdf-lib version, and consistency reads cleaner
+      // against the ASCII Methods appendix anyway.
+      .replaceAll(/[‘’‚‛]/g, "'")
+      .replaceAll(/[“”„‟]/g, '"')
+      // Common degree / ordinal markers that survive in most fonts but are
+      // explicit here so the mapping is documented.
+      .replaceAll('°', ' deg ')
+      .replaceAll('·', '.')
+      .replaceAll('•', '*')
+      // Fallback: any remaining codepoint outside the WinAnsi range
+      // (U+0020-U+007E plus a handful of Latin-1 supplements pdf-lib's
+      // Helvetica safely renders) is replaced with '?'. This keeps the
+      // section rendering instead of silently disappearing — the user sees
+      // the substitution and can clean up their source text.
+      .replace(/[^\x20-\x7E -ÿ]/g, '?')
+  );
+}
+
+/**
+ * v0.3.6 — Acceptance Checklist section. Renders a pass/fail table over
+ * user-supplied thresholds, then a Methods appendix that cites the
+ * literature behind every metric.
+ *
+ * The colour signalling is deliberately restrained: the headline reads
+ * green when every row passes and red when any row fails, but the
+ * per-row indicator is a small dot in the theme's accent (pass) or a
+ * muted red (fail) — the report stays scannable on the
+ * `dark-inspection` and `minimal-engineering` themes.
+ */
+async function renderAcceptanceChecklist(
+  cursor: PageCursor,
+  inputs: ReportInputs,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): Promise<PageCursor> {
+  const checks = inputs.acceptanceChecks ?? [];
+  if (checks.length === 0) return cursor;
+
+  cursor = ensureSpace(cursor, 80, doc, accent, theme, organisation);
+  cursor = drawSectionHeader(cursor, 'Acceptance', accent, bold);
+
+  // Headline summary — "5 of 6 checks passed" or "All 6 checks passed".
+  const failed = checks.filter((c) => !c.pass).length;
+  const passed = checks.length - failed;
+  const headline = failed === 0
+    ? `All ${checks.length} ${checks.length === 1 ? 'check' : 'checks'} passed`
+    : `${passed} of ${checks.length} checks passed — ${failed} ${failed === 1 ? 'failure' : 'failures'}`;
+  cursor.page.drawText(headline, {
+    x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
+    size: BODY_FONT_SIZE, font: bold,
+    color: failed === 0
+      ? rgb(accent.r, accent.g, accent.b)
+      : rgb(0.78, 0.22, 0.22),
+  });
+  cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 10 };
+
+  // The check rows themselves. Layout uses the 12-column print grid:
+  //   - col 1        — status marker (dot + redundant P/F letter for
+  //                    grayscale + colorblind disambiguation)
+  //   - cols 2-5     — label
+  //   - cols 6-8     — threshold
+  //   - cols 9-12    — actual value (bold + red on fail)
+  // The redundant P/F letter is the scientific-visualization principle of
+  // "never rely on colour alone" applied to the QA semantic.
+  const COL_LABEL_X = gridX(2);
+  const COL_THRESHOLD_X = gridX(6);
+  const COL_ACTUAL_X = gridX(9);
+  for (const row of checks) {
+    cursor = ensureSpace(cursor, 18, doc, accent, theme, organisation);
+    const dotColor = row.pass
+      ? rgb(accent.r, accent.g, accent.b)
+      : rgb(0.78, 0.22, 0.22);
+    // Status dot.
+    cursor.page.drawCircle({
+      x: gridX(1) + 3, y: cursor.y - BODY_FONT_SIZE + 3,
+      size: 3,
+      color: dotColor,
+    });
+    // Redundant letter — small "P" / "F" centred over the dot. The
+    // letter encodes pass/fail independently of the dot's colour, so
+    // colorblind readers and grayscale printouts retain the meaning.
+    cursor.page.drawText(row.pass ? 'P' : 'F', {
+      x: gridX(1) + 1.4, y: cursor.y - BODY_FONT_SIZE + 0.5,
+      size: 5, font: bold,
+      color: rgb(
+        theme.pageBackground.r,
+        theme.pageBackground.g,
+        theme.pageBackground.b,
+      ),
+    });
+    // Label.
+    cursor.page.drawText(sanitiseForPdf(row.label), {
+      x: COL_LABEL_X, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: body,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    // Threshold.
+    cursor.page.drawText(sanitiseForPdf(row.threshold), {
+      x: COL_THRESHOLD_X, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE - 0.5, font: body,
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+    });
+    // Actual.
+    cursor.page.drawText(sanitiseForPdf(row.actual), {
+      x: COL_ACTUAL_X, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: row.pass ? body : bold,
+      color: row.pass
+        ? rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b)
+        : rgb(0.78, 0.22, 0.22),
+    });
+    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+
+    // Optional explanation line for failed rows.
+    if (row.note) {
+      cursor = ensureSpace(cursor, 12, doc, accent, theme, organisation);
+      cursor.page.drawText(`- ${sanitiseForPdf(row.note)}`, {
+        x: COL_LABEL_X, y: cursor.y - BODY_FONT_SIZE + 2,
+        size: BODY_FONT_SIZE - 1.5, font: body,
+        color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+      });
+      cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 1 };
+    }
+  }
+
+  // Methods appendix — every Scan Acceptance template carries it. The
+  // citations are the actual source the user can hand to a reviewer.
+  cursor = ensureSpace(cursor, 80, doc, accent, theme, organisation);
+  cursor = { page: cursor.page, y: cursor.y - 10 };
+  cursor = drawSectionHeader(cursor, 'Methods', accent, bold);
+  const methodsLines = [
+    'Thresholds shown above were supplied by the report author. The viewer',
+    'reports measured values; the pass/fail decision is the author\'s.',
+    '',
+    'Metadata-row methodology:',
+    '  - Point count, classification / intensity / RGB presence: read directly',
+    '    from the LAS / LAZ / COPC / EPT header without sampling.',
+    '  - CRS: parsed from the LASF_Projection VLR (LAS / LAZ) or the',
+    '    ept.json srs.wkt field (EPT).',
+    '  - File hash: SHA-256 over the source bytes for chain-of-custody.',
+    '  - Capture date: read from the LAS public header GPS time field',
+    '    when present.',
+    '',
+    'Cloud-sampled methodology (out of scope for this report):',
+    '  - Density / NPS heatmap / void test: Lohani & Ghosh 2017 section 6',
+    '    (Springer NASI A, peer-reviewed). Void area threshold = (4 x NPS)^2;',
+    '    spatial distribution test = >= 90 % of (2 x NPS)^2 cells contain',
+    '    >= 1 first return.',
+    '  - NVA / VVA from GCPs: NVA = 1.96 x RMSEz (open ground, normal',
+    '    distribution); VVA = 95th percentile of |dZ| (vegetated).',
+    '    Lohani & Ghosh 2017 section 6.',
+    '  - Civil tolerance bands: planimetric <= 1.0 / 1.6 x GSD,',
+    '    elevation <= 1.6 / 2.5 x GSD. Ruzgiene 2025 section 4.',
+    '  - iPhone-LiDAR empirical envelope: 0.115 m H-RMSE with re-anchoring,',
+    '    0.16 m V-RMSE at 20 m GCP spacing. Krauskova 2025 (Sensors).',
+    '',
+    'None of the above implies survey-grade accuracy without independent',
+    'GCP validation. See OpenLiDARViewer\'s positioning notes in the docs.',
+  ];
+  for (const line of methodsLines) {
+    cursor = ensureSpace(cursor, 13, doc, accent, theme, organisation);
+    cursor.page.drawText(line, {
+      x: MARGIN, y: cursor.y - BODY_FONT_SIZE + 1,
+      size: BODY_FONT_SIZE - 1.5, font: body,
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+    });
+    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 1 };
+  }
+
+  return cursor;
 }
 
 async function renderTechnicalNotes(
@@ -550,13 +882,13 @@ function stampFooterPageNumbers(
   const total = pages.length;
   for (let i = 0; i < total; i++) {
     const standardLine = `OpenLiDARViewer · ${i + 1} of ${total}`;
-    pages[i].drawText(standardLine, {
+    pages[i].drawText(sanitiseForPdf(standardLine), {
       x: MARGIN, y: 12,
       size: 9, font: body,
       color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
     });
     if (footerNote) {
-      pages[i].drawText(footerNote, {
+      pages[i].drawText(sanitiseForPdf(footerNote), {
         x: MARGIN, y: 22,
         size: 8, font: body,
         color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),

@@ -47,6 +47,14 @@ export interface SchedulerView {
   viewProjection: ArrayLike<number>;
   /** Camera position. */
   cameraPosition: [number, number, number];
+  /**
+   * Smoothed frame time in milliseconds — fed from the viewer's RAF
+   * frame-time ring buffer. Used by the FPS-pressure adapter to back
+   * off the point budget when sustained frame time pushes the cloud
+   * out of the smooth-rendering window. Optional so older callers
+   * keep working; when omitted, FPS pressure stays neutral.
+   */
+  frameTimeMs?: number;
 }
 
 /** Live scheduler counters for diagnostics. */
@@ -69,6 +77,14 @@ export interface SchedulerStats {
    * positive = depth cap reduced by this many levels under sustained pressure.
    */
   pressureDepthReduction: number;
+  /**
+   * FPS-pressure budget multiplier applied to point budget + concurrent
+   * decodes. 1.0 = full quality, smoothly ratcheting down to FPS_BUDGET_FLOOR
+   * (0.5) under sustained < 45 fps, recovering toward 1.0 under sustained
+   * > 55 fps. Surfaced for the `?debug=1` overlay so a perf-detective can
+   * see when adaptation is active.
+   */
+  fpsBudgetFactor: number;
   /**
    * number of full octree rescores since session start.
    * The stable-camera fast path reuses the last tick's wanted set when the
@@ -125,6 +141,35 @@ const PRESSURE_HIGH_HOLD_MS = 1_000;
 const PRESSURE_LOW_RATIO = 0.7;
 const PRESSURE_LOW_HOLD_MS = 2_000;
 const PRESSURE_DEPTH_REDUCTION = 1;
+
+/**
+ * FPS-pressure adaptation. When the smoothed frame time stays above
+ * `FPS_PRESSURE_HIGH_MS` (=22.2 ms ≈ 45 fps) for `FPS_PRESSURE_HIGH_HOLD_MS`,
+ * the scheduler ratchets the FPS budget factor down by
+ * `FPS_PRESSURE_STEP_DOWN`. When frame time drops below
+ * `FPS_PRESSURE_LOW_MS` (=18.2 ms ≈ 55 fps) for `FPS_PRESSURE_LOW_HOLD_MS`,
+ * the factor ratchets back up by `FPS_PRESSURE_STEP_UP`. Floor + ceiling
+ * are clamped to `[FPS_BUDGET_FLOOR, 1.0]` so a sustained slow device
+ * settles at half budget rather than zero.
+ *
+ * The factor multiplies both `pointBudget` and `effectiveMaxConcurrent`
+ * — lower budget means fewer resident points (less GPU upload + render
+ * cost), lower concurrent decodes means fewer in-flight WASM jobs (less
+ * decode contention with the render thread). Both move together because
+ * the bottleneck on most devices is either GPU throughput or main-thread
+ * decode time, and either way the cure is "ask for less."
+ *
+ * Asymmetric step sizes (15% down, ~7.5% up) make recovery slower than
+ * back-off — a stutter immediately backs off; smooth frames take longer
+ * to fully restore — so the system doesn't oscillate around the threshold.
+ */
+const FPS_PRESSURE_HIGH_MS = 22.2;       // ≈ 45 fps
+const FPS_PRESSURE_LOW_MS = 18.2;        // ≈ 55 fps
+const FPS_PRESSURE_HIGH_HOLD_MS = 2_000; // 2 s of < 45 fps before back-off
+const FPS_PRESSURE_LOW_HOLD_MS = 5_000;  // 5 s of > 55 fps before recovery
+const FPS_PRESSURE_STEP_DOWN = 0.15;     // -15 % budget per back-off step
+const FPS_PRESSURE_STEP_UP = 0.075;      // +7.5 % budget per recovery step
+const FPS_BUDGET_FLOOR = 0.5;            // never below half-budget
 
 /**
  * stable-camera fast path.
@@ -233,6 +278,11 @@ export class StreamingScheduler {
 
   private _pointBudget: number;
   private _maxConcurrent: number;
+  /**
+   * Reused per-tick to avoid the spread-clone of `view.cameraPosition`
+   * on every scheduler tick. Null sentinel for "no previous frame yet";
+   * once initialised, indices are mutated in place.
+   */
   private _lastCameraPos: [number, number, number] | null = null;
   private _tick = 0;
   private _paused = false;
@@ -249,7 +299,15 @@ export class StreamingScheduler {
   private _velocitySmoothed = 0;
   /** Wall time of the previous `update` — for dt during smoothing. */
   private _lastUpdateTs: number | null = null;
-  /** First wall time the velocity dropped below the fast threshold, or null. */
+  /**
+   * First wall time the velocity dropped below the fast threshold, or
+   * null. Seeded in the constructor using the injected clock so a
+   * fresh scheduler enters its first update already considered stable
+   * — first-paint runs with the full concurrent-decode quota instead
+   * of the halved fast-path budget. `frameAll()`'s camera snap would
+   * otherwise register as a huge velocity sample and force a 250 ms
+   * STABLE_SETTLE_MS wait before the full budget unlocks.
+   */
   private _stableSinceTs: number | null = null;
   /** Concurrent-decode budget applied at the last `update`. */
   private _effectiveMaxConcurrent: number;
@@ -261,6 +319,18 @@ export class StreamingScheduler {
   private _pressureLowSinceTs: number | null = null;
   /** Active depth-cap reduction (0 when not under pressure). */
   private _pressureDepthReduction = 0;
+
+  // FPS-pressure adaptation state machine. The factor multiplies the
+  // configured point budget + concurrent-decode quota; it ratchets DOWN
+  // 15% per step after 2 s of sustained < 45 fps and UP 7.5% per step
+  // after 5 s of sustained > 55 fps. Clamped to [0.5, 1.0] so a sustained
+  // slow device settles at half budget rather than zero.
+  /** First wall time the smoothed frame time crossed FPS_PRESSURE_HIGH_MS. */
+  private _fpsLowSinceTs: number | null = null;
+  /** First wall time the smoothed frame time dropped below FPS_PRESSURE_LOW_MS. */
+  private _fpsHighSinceTs: number | null = null;
+  /** Current point-budget / concurrent-decode multiplier from FPS pressure. */
+  private _fpsBudgetFactor = 1.0;
 
   // stable-camera fast-path cache.
   /**
@@ -303,6 +373,11 @@ export class StreamingScheduler {
     this._memoryPressureRatio =
       options.memoryPressureRatio ?? DEFAULT_MEMORY_PRESSURE_RATIO;
     this._now = options.now ?? nowMs;
+    // Seed the stable-since timestamp with the injected clock so a
+    // fresh scheduler's first tick already meets the STABLE_SETTLE_MS
+    // requirement and first-paint gets the full concurrent-decode
+    // quota. Tests that inject a custom clock get the same treatment.
+    this._stableSinceTs = this._now();
     // Precompute each node's bounds in local render space (world − origin).
     const [rx, ry, rz] = cloud.renderOrigin;
     for (const node of cloud.octree.nodes()) {
@@ -387,6 +462,7 @@ export class StreamingScheduler {
       isStable: this._isStable(this._now()),
       effectiveMaxConcurrent: this._effectiveMaxConcurrent,
       pressureDepthReduction: this._pressureDepthReduction,
+      fpsBudgetFactor: this._fpsBudgetFactor,
       fullRescoreCount: this._fullRescoreCount,
     };
   }
@@ -431,7 +507,14 @@ export class StreamingScheduler {
     const alpha = Math.min(1, dtSec / VELOCITY_EWMA_TAU_S);
     this._velocitySmoothed =
       this._velocitySmoothed * (1 - alpha) + rawVelocity * alpha;
-    this._lastCameraPos = [...view.cameraPosition];
+    // Reuse the array instead of spread-cloning every tick.
+    if (this._lastCameraPos === null) {
+      this._lastCameraPos = [view.cameraPosition[0], view.cameraPosition[1], view.cameraPosition[2]];
+    } else {
+      this._lastCameraPos[0] = view.cameraPosition[0];
+      this._lastCameraPos[1] = view.cameraPosition[1];
+      this._lastCameraPos[2] = view.cameraPosition[2];
+    }
 
     // Hysteresis on the "stable" transition — we only resume full-detail
     // refinement after staying below the threshold for the settle window.
@@ -479,6 +562,70 @@ export class StreamingScheduler {
       this._pressureHighSinceTs = null;
       this._pressureLowSinceTs = null;
     }
+
+    // FPS-pressure adaptation. Same shape as memory pressure above —
+    // hysteresis timers + per-step ratchet — but driven by the smoothed
+    // frame time the viewer supplies. Sustained < 45 fps ratchets the
+    // FPS budget factor DOWN 15 %; sustained > 55 fps ratchets it UP 7.5 %.
+    // Steps stack: a slow device can ratchet down across multiple 2 s
+    // windows, so its steady-state factor drifts toward the floor. The
+    // factor multiplies the configured point budget + concurrent-decode
+    // quota uniformly — fewer resident points, fewer in-flight decodes,
+    // both moving together because the bottleneck is either GPU or
+    // main-thread decode contention and either way the cure is the same:
+    // ask the streamer for less.
+    //
+    // Without a viewer-supplied frame time (older callers, tests that
+    // don't feed it), the factor stays at its current value — no random
+    // drift in either direction.
+    const frameMs = view.frameTimeMs;
+    if (typeof frameMs === 'number' && frameMs > 0) {
+      if (frameMs > FPS_PRESSURE_HIGH_MS) {
+        // Sustained slow — start the low-fps timer.
+        if (this._fpsLowSinceTs === null) this._fpsLowSinceTs = wallNow;
+        this._fpsHighSinceTs = null;
+        if (
+          wallNow - this._fpsLowSinceTs >= FPS_PRESSURE_HIGH_HOLD_MS &&
+          this._fpsBudgetFactor > FPS_BUDGET_FLOOR
+        ) {
+          this._fpsBudgetFactor = Math.max(
+            FPS_BUDGET_FLOOR,
+            this._fpsBudgetFactor - FPS_PRESSURE_STEP_DOWN,
+          );
+          // Re-arm the timer — next 2 s window earns the next step.
+          this._fpsLowSinceTs = wallNow;
+        }
+      } else if (frameMs < FPS_PRESSURE_LOW_MS) {
+        // Sustained smooth — start the high-fps recovery timer.
+        if (this._fpsHighSinceTs === null) this._fpsHighSinceTs = wallNow;
+        this._fpsLowSinceTs = null;
+        if (
+          wallNow - this._fpsHighSinceTs >= FPS_PRESSURE_LOW_HOLD_MS &&
+          this._fpsBudgetFactor < 1.0
+        ) {
+          this._fpsBudgetFactor = Math.min(
+            1.0,
+            this._fpsBudgetFactor + FPS_PRESSURE_STEP_UP,
+          );
+          this._fpsHighSinceTs = wallNow;
+        }
+      } else {
+        // In the smooth-band (45–55 fps). Hold current factor + pause
+        // both timers so a brief in-band visit doesn't disturb either
+        // direction of adaptation.
+        this._fpsLowSinceTs = null;
+        this._fpsHighSinceTs = null;
+      }
+    }
+
+    // Apply the FPS budget factor to the live decode-concurrency budget.
+    // It composes with the camera-motion fast-path halving — if the user
+    // is moving fast AND the device is FPS-pressed, both reductions
+    // multiply.
+    this._effectiveMaxConcurrent = Math.max(
+      1,
+      Math.floor(this._effectiveMaxConcurrent * this._fpsBudgetFactor),
+    );
 
     const depthCap = depthCapForVelocity(
       BASE_DEPTH_CAP - this._pressureDepthReduction,
@@ -546,9 +693,18 @@ export class StreamingScheduler {
       }
       this._lastVisible = freshScored.length;
       freshScored.sort((a, b) => b.candidate.score - a.candidate.score);
+      // Apply the FPS budget factor here — the candidate selection sees
+      // the reduced budget directly, so a slow device naturally keeps
+      // fewer nodes resident. The factor multiplies in [0.5, 1.0] and
+      // composes with the memory pressure adapter (depth cap reduction)
+      // that runs independently on the resident-set side.
+      const fpsAdjustedBudget = Math.max(
+        1,
+        Math.floor(this._pointBudget * this._fpsBudgetFactor),
+      );
       const freshWanted = selectWithinBudget(
         freshScored.map((s) => s.candidate),
-        this._pointBudget,
+        fpsAdjustedBudget,
       );
       scored = freshScored;
       wanted = freshWanted;
@@ -556,11 +712,18 @@ export class StreamingScheduler {
       // Cache the inputs and outputs for the next tick's fast-path check.
       if (this._lastVP === null) this._lastVP = new Float64Array(16);
       copyVp(view.viewProjection, this._lastVP);
-      this._lastSigCameraPos = [
-        view.cameraPosition[0],
-        view.cameraPosition[1],
-        view.cameraPosition[2],
-      ];
+      // Reuse the cached tuple instead of allocating a fresh one each rescore.
+      if (this._lastSigCameraPos === null) {
+        this._lastSigCameraPos = [
+          view.cameraPosition[0],
+          view.cameraPosition[1],
+          view.cameraPosition[2],
+        ];
+      } else {
+        this._lastSigCameraPos[0] = view.cameraPosition[0];
+        this._lastSigCameraPos[1] = view.cameraPosition[1];
+        this._lastSigCameraPos[2] = view.cameraPosition[2];
+      }
       this._lastSigDepthCap = depthCap;
       this._lastSigBudget = this._pointBudget;
       this._lastSigPressureReduction = this._pressureDepthReduction;
@@ -603,9 +766,11 @@ export class StreamingScheduler {
     //   4. collect the remaining lapsed nodes, sort by (depth desc, distance
     //      desc) so deepest-and-furthest evicts first, then drop in order.
     const lapsed: { node: StreamingNode; depth: number; distance: number }[] = [];
-    for (const id of [...this._deferredEvictAt.keys()]) {
-      const deadline = this._deferredEvictAt.get(id);
-      if (deadline === undefined || nowTs < deadline) continue;
+    // Iterate the Map directly — JS spec guarantees that deletes during
+    // `for...of` on a Map are safe. The previous `[...map.keys()]` snapshot
+    // allocated a throwaway array every tick.
+    for (const [id, deadline] of this._deferredEvictAt) {
+      if (nowTs < deadline) continue;
       const node = store.get(id);
       if (!node || node.state !== 'resident') {
         this._deferredEvictAt.delete(id);

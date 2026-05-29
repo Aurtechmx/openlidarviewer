@@ -81,6 +81,14 @@ export const REFINED_STABLE_FRACTION = 0.9;
 export const SAMPLE_BUFFER_MAX = 600;
 
 /**
+ * Trigger an opportunistic sweep of the eviction-history map once it
+ * exceeds this size. Entries older than {@link THRASH_WINDOW_MS} can
+ * never produce a thrash event, so they're safe to drop. Set high
+ * enough that the sweep cost is amortised across many evictions.
+ */
+export const EVICT_MAP_SWEEP_TRIGGER = 512;
+
+/**
  * Compute aggregate stats over an array of samples. Empty input yields a
  * zeroed result. `count` reflects samples actually retained (which may be
  * smaller than the lifetime total — see {@link SAMPLE_BUFFER_MAX}); the
@@ -143,9 +151,9 @@ export class StreamingBenchmark {
   private _networkBytes = 0;
   private _decodedBytes = 0;
 
-  private readonly _tickSamples: number[] = [];
-  private readonly _decodeSamples: number[] = [];
-  private readonly _frameSamples: number[] = [];
+  private readonly _tickSamples = new RingSamples(SAMPLE_BUFFER_MAX);
+  private readonly _decodeSamples = new RingSamples(SAMPLE_BUFFER_MAX);
+  private readonly _frameSamples = new RingSamples(SAMPLE_BUFFER_MAX);
 
   private _peakResidentPoints = 0;
   private _peakResidentBytes = 0;
@@ -210,17 +218,17 @@ export class StreamingBenchmark {
 
   /** Push one scheduler-tick wall time (ms). */
   recordSchedulerTick(ms: number): void {
-    pushBounded(this._tickSamples, ms);
+    this._tickSamples.push(ms);
   }
 
   /** Push one chunk-decode wall time (ms). */
   recordDecodeMs(ms: number): void {
-    pushBounded(this._decodeSamples, ms);
+    this._decodeSamples.push(ms);
   }
 
   /** Push one frame render wall time (ms), sampled while streaming. */
   recordFrameMs(ms: number): void {
-    pushBounded(this._frameSamples, ms);
+    this._frameSamples.push(ms);
   }
 
   /** Add `bytes` to the cumulative network-bytes total. */
@@ -269,7 +277,20 @@ export class StreamingBenchmark {
   /** Record a node being evicted — start of a potential thrash window. */
   recordNodeEvicted(nodeId: string): void {
     this._nodesEvicted += 1;
-    this._evictAt.set(nodeId, this._elapsed());
+    const now = this._elapsed();
+    this._evictAt.set(nodeId, now);
+    // Long-session hygiene: the eviction map's only purpose is the
+    // narrow thrash-detection window. Entries that aged past the window
+    // can never produce a thrash event, so prune them opportunistically.
+    // Without this sweep, panning across a large dataset accumulated
+    // map entries unboundedly because the user rarely re-enters areas
+    // they've already evicted.
+    if (this._evictAt.size > EVICT_MAP_SWEEP_TRIGGER) {
+      const horizon = now - THRASH_WINDOW_MS;
+      for (const [id, t] of this._evictAt) {
+        if (t < horizon) this._evictAt.delete(id);
+      }
+    }
   }
 
   /**
@@ -311,7 +332,7 @@ export class StreamingBenchmark {
   recentSchedulerTickStats(n: number = SAMPLE_BUFFER_MAX): AggregateStats {
     const take = Math.min(Math.max(0, n), this._tickSamples.length);
     if (take === 0) return { count: 0, mean: 0, p50: 0, p95: 0, max: 0 };
-    return aggregate(this._tickSamples.slice(-take));
+    return aggregate(this._tickSamples.recent(take));
   }
 
   /** Build the final structured result. The collector remains usable afterwards. */
@@ -322,9 +343,9 @@ export class StreamingBenchmark {
       timeToRefinedStableMs: this._refinedStableMs,
       networkBytes: this._networkBytes,
       decodedBytes: this._decodedBytes,
-      schedulerTickMs: aggregate(this._tickSamples),
-      decodeMsPerChunk: aggregate(this._decodeSamples),
-      frameMs: aggregate(this._frameSamples),
+      schedulerTickMs: aggregate(this._tickSamples.toArray()),
+      decodeMsPerChunk: aggregate(this._decodeSamples.toArray()),
+      frameMs: aggregate(this._frameSamples.toArray()),
       peakResidentPoints: this._peakResidentPoints,
       peakResidentBytes: this._peakResidentBytes,
       cacheHits: this._cacheHits,
@@ -389,8 +410,66 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
   return lines.join('\n');
 }
 
-/** Push a sample, dropping the oldest if the buffer is at capacity. */
-function pushBounded(buf: number[], sample: number): void {
-  if (buf.length >= SAMPLE_BUFFER_MAX) buf.shift();
-  buf.push(sample);
+/**
+ * Fixed-capacity ring buffer of numeric samples. `push` is O(1); `recent(n)`
+ * returns the most-recent N samples in chronological order; `toArray()`
+ * materialises the full buffer in chronological order for aggregate stats.
+ *
+ * The previous implementation used `[].shift()`, which is O(n). At the
+ * combined frame + scheduler + decode rate (≥ 60 Hz once streaming
+ * stabilises) the shift churn was a measurable CPU tax on long sessions.
+ */
+class RingSamples {
+  private readonly _capacity: number;
+  private readonly _buf: number[];
+  private _write = 0;
+  private _size = 0;
+
+  constructor(capacity: number) {
+    this._capacity = capacity;
+    this._buf = [];
+  }
+
+  /** Total samples currently retained (capped at `capacity`). */
+  get length(): number {
+    return this._size;
+  }
+
+  push(sample: number): void {
+    if (this._size < this._capacity) {
+      this._buf.push(sample);
+      this._size += 1;
+      this._write = (this._write + 1) % this._capacity;
+      return;
+    }
+    this._buf[this._write] = sample;
+    this._write = (this._write + 1) % this._capacity;
+  }
+
+  /** All retained samples in chronological order (oldest first). */
+  toArray(): number[] {
+    if (this._size < this._capacity) return this._buf.slice();
+    // Once full, write head points at the oldest slot.
+    const out = new Array<number>(this._size);
+    for (let i = 0; i < this._size; i++) {
+      const value = this._buf[(this._write + i) % this._capacity];
+      out[i] = value ?? 0;
+    }
+    return out;
+  }
+
+  /** Most recent `n` samples in chronological order. */
+  recent(n: number): number[] {
+    if (n <= 0) return [];
+    const take = Math.min(n, this._size);
+    if (take === this._size) return this.toArray();
+    const out = new Array<number>(take);
+    // Start `take` slots back from the write head; wrap as needed.
+    const start = (this._write - take + this._capacity) % this._capacity;
+    for (let i = 0; i < take; i++) {
+      const value = this._buf[(start + i) % this._capacity];
+      out[i] = value ?? 0;
+    }
+    return out;
+  }
 }

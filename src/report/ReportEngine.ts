@@ -23,6 +23,7 @@ const MAX_MEASUREMENTS = 2000;
 const MAX_TECHNICAL_NOTES_BYTES = 200_000;     // ~200 KB of UTF-8 = ~150 pages
 const MAX_DATASET_ROWS = 200;
 const MAX_VISUALS = 32;
+const MAX_ACCEPTANCE_CHECKS = 100;             // 100 user-defined gates is more than any realistic audit needs
 const DEFAULT_RENDER_TIMEOUT_MS = 30_000;
 
 /** Optional knobs the caller can override per render. */
@@ -101,6 +102,13 @@ export async function generateReport(
       `Report would embed ${inputs.visuals.length} visuals ` +
       `(cap: ${MAX_VISUALS}). Pre-rendered Studio exports above this count ` +
       `produce a PDF too large for most viewers.`,
+    );
+  }
+  if ((inputs.acceptanceChecks?.length ?? 0) > MAX_ACCEPTANCE_CHECKS) {
+    throw new Error(
+      `Acceptance checklist has ${inputs.acceptanceChecks!.length} rows ` +
+      `(cap: ${MAX_ACCEPTANCE_CHECKS}). A user-defined audit at this scale ` +
+      `belongs in a structured checklist tool, not a one-page PDF report.`,
     );
   }
   if (typeof inputs.technicalNotes === 'string') {

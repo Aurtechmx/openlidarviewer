@@ -1,6 +1,7 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type PluginOption } from 'vite';
 import { readFileSync } from 'node:fs';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 // Single source of truth for the app version — read from package.json at
 // build time and exposed to the app as the `__APP_VERSION__` global.
@@ -127,7 +128,47 @@ function chunkEmissionGuard() {
     // v0.3.3 Phase 2 — PDF Report Engine + pdf-lib (~150 KB dep).
     // Lazy — only loaded when the user clicks Export → Report PDF.
     'report',
+    // v0.3.6 chunk-architecture refactor.
+    // `lazDecode` carries laz-perf JS + embedded WASM; lazy-imported
+    // by loadLas.ts when a `.laz` file is opened (and by EPT laszip
+    // tile decode). Uncompressed `.las` files never download it.
+    'lazDecode',
+    // Vendor chunks pinned via manualChunks. The presence of these
+    // chunks proves the manualChunks rule is still active — losing them
+    // would re-inflate the loadLas / report chunks.
+    'vendor-pdf',
+    'vendor-laz',
+    'vendor-three-webgpu',
   ];
+
+  // Application-owned source modules that must NEVER end up in the
+  // initial shell chunk (`index-*.js`). The shell is whatever first paints
+  // the empty-state UI; the listed modules are heavy or feature-gated and
+  // must arrive through a dynamic import().
+  const forbiddenInShell = [
+    // pdf-lib + standard fonts must only arrive via the report chunk.
+    '/pdf-lib/',
+    '/@pdf-lib/',
+    '/pako/',
+    // laz-perf decompressor must only arrive via lazDecode.
+    '/laz-perf/',
+    'src/io/lazPerfWasm.ts',
+    'src/io/lazDecode.ts',
+    // Visual Export Studio orchestration must only arrive via export chunk.
+    'src/export/index.ts',
+    'src/export/ExportRegistry.ts',
+    'src/export/BaseExportMode.ts',
+    // The Viewer + three.js renderer ride a separate chunk.
+    'src/render/Viewer.ts',
+    'node_modules/three/build/',
+    // EPT subsystem.
+    'src/io/ept/EptStreamingPointCloud.ts',
+    'src/io/ept/EptChunkDecoder.ts',
+    // Debug overlay + streaming benchmark are dev/diagnostic-only chunks.
+    'src/diagnostics/DebugOverlay.ts',
+    'src/render/streaming/streamingBenchmark.ts',
+  ];
+
   return {
     name: 'olv-chunk-emission-guard',
     apply: 'build' as const,
@@ -149,8 +190,47 @@ function chunkEmissionGuard() {
             `This typically means a dynamic import() literal was scrambled — see lazyChunks.ts.`,
         );
       }
+
+      // Shell-isolation guard. The shell is the chunk that whoever opens
+      // index.html downloads first; finding any of `forbiddenInShell`
+      // inside it means the lazy boundary leaked.
+      const shellName = filenames.find(
+        (n) => n.includes('index-') && n.endsWith('.js'),
+      );
+      if (shellName) {
+        const shellChunk = bundle[shellName] as { modules?: Record<string, unknown> };
+        const shellModules = Object.keys(shellChunk.modules ?? {});
+        const leaked = forbiddenInShell.filter((forbidden) =>
+          shellModules.some((m) => m.includes(forbidden)),
+        );
+        if (leaked.length > 0) {
+          this.error(
+            `OpenLiDARViewer chunk-emission guard: forbidden modules leaked into the shell chunk (${shellName}): ${leaked.join(', ')}.\n` +
+              `Each entry must arrive through a dynamic import() — check the static import graph from src/main.ts.`,
+          );
+        }
+      }
     },
   };
+}
+
+/**
+ * Optional bundle visualizer, gated on `ANALYZE=1`. Produces a treemap at
+ * `bundle-stats.html` so we can see what's pulling which chunk. The file is
+ * .gitignored — it is a build diagnostic, not a shipped artifact.
+ *
+ *   ANALYZE=1 npm run build && open bundle-stats.html
+ */
+function bundleAnalyzer(): PluginOption {
+  if (process.env.ANALYZE !== '1') return null;
+  return visualizer({
+    filename: 'bundle-stats.html',
+    template: 'treemap',
+    gzipSize: true,
+    brotliSize: false,
+    sourcemap: false,
+    open: false,
+  });
 }
 
 export default defineConfig(({ mode }) => ({
@@ -159,11 +239,67 @@ export default defineConfig(({ mode }) => ({
   // transforming the worker-loading path breaks worker startup. The worker
   // carries the file-format parsers (open standards — E57/ASTM, LAS/ASPRS).
   worker: { format: 'es' },
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    // Default warning threshold is 500 KB. We keep the default — `three.webgpu`
+    // is the one vendor chunk that legitimately breaches it (it's the WebGPU
+    // backend, ~1.1 MB pre-min), and we'd rather see the warning than hide
+    // it. Application-owned chunks (report, LAS, exporters, EPT) must stay
+    // under the threshold or the chunk graph below is wrong, not the threshold.
+    rollupOptions: {
+      output: {
+        // Manual chunk strategy — pin heavy vendor libraries to dedicated
+        // chunks so the application-owned chunks that import them stay small.
+        //
+        //   vendor-pdf       — pdf-lib + @pdf-lib/* + pako. Only reached
+        //                       through `report/ReportPdfRenderer.ts`, so it
+        //                       only downloads when the user clicks
+        //                       Generate PDF. Splitting it off keeps the
+        //                       `report-*` chunk small enough to stay under
+        //                       the Vite warning threshold.
+        //
+        //   vendor-laz       — laz-perf JS bindings. Reached through
+        //                       `io/lazDecode.ts` (LAZ open + EPT laszip
+        //                       tile decode). The 286 KB WASM blob itself
+        //                       lives in `lazPerfWasm.ts` and is grouped
+        //                       into the same chunk by its module path so
+        //                       both pieces ship together.
+        //
+        //   vendor-three-*   — `three.webgpu.js` is the unavoidable warning
+        //                       (~1.1 MB). Pinning it lets the smaller
+        //                       `three.core.js` ride along in the same
+        //                       chunk it already shares.
+        //
+        // Modules outside these prefixes fall through to Rollup's default
+        // splitting, which respects every dynamic import() boundary the
+        // application already declares (Viewer, exporters, EPT, debug, etc.).
+        manualChunks(id: string): string | undefined {
+          // pdf-lib runtime + vendored fonts/PNG/zlib it pulls in.
+          if (id.includes('node_modules/pdf-lib/')) return 'vendor-pdf';
+          if (id.includes('node_modules/@pdf-lib/')) return 'vendor-pdf';
+          if (id.includes('node_modules/pako/')) return 'vendor-pdf';
+          // LAZ decompressor (JS glue) — the WASM blob lives at
+          // src/io/lazPerfWasm.ts and is naturally co-resident in the
+          // `lazDecode` chunk that imports it.
+          if (id.includes('node_modules/laz-perf/')) return 'vendor-laz';
+          // Three.js webgpu backend — vendor-only, unavoidable size.
+          if (id.includes('node_modules/three/build/three.webgpu')) {
+            return 'vendor-three-webgpu';
+          }
+          // Three core lives alongside webgpu — they're never used separately.
+          if (id.includes('node_modules/three/build/three.core')) {
+            return 'vendor-three-webgpu';
+          }
+          return undefined;
+        },
+      },
+    },
+  },
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // The chunk-emission guard runs on every build; the live source transform only on `live`.
-  plugins:
-    mode === 'live'
-      ? [liveSourceTransformPlugin(), chunkEmissionGuard()]
-      : [chunkEmissionGuard()],
+  plugins: [
+    chunkEmissionGuard() as PluginOption,
+    ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
+    bundleAnalyzer(),
+  ].filter(Boolean) as PluginOption[],
 }));

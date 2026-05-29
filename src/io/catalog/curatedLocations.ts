@@ -1,0 +1,225 @@
+/**
+ * curatedLocations.ts
+ *
+ * Verified-working public point-cloud datasets — every URL was probed
+ * against its live host on 2026-05-29 and returned an HTTP 200 with
+ * either a parseable `ept.json` manifest or a streamable `.copc.laz`
+ * COPC file. The reported sizes / point counts are taken from those
+ * probes; the streaming pipeline only fetches the resident set the
+ * camera needs, never the full file.
+ *
+ * Why direct URLs instead of a bbox-query catalog
+ * ───────────────────────────────────────────────
+ * The USGS TNM Products API (the "find LiDAR by address" path) only
+ * surfaces legacy non-streamable LAZ — zero `.copc.laz` URLs across
+ * every bbox we tested. Rather than ship a feature that always returns
+ * "0 COPC tiles," the picker carries a curated list of direct URLs that
+ * actually work. Power users can paste their own COPC URL into the
+ * dedicated URL field above this picker.
+ *
+ * Ordering
+ * ────────
+ * The list is sorted **smallest first** so a first-time visitor with a
+ * slow connection can pick the 77 MB Autzen demo and see streaming
+ * work in seconds, then graduate to multi-billion-point datasets. The
+ * `streamUrl` is either a COPC file (single `.copc.laz`) or an EPT
+ * manifest (`.../ept.json`); the streaming pipeline detects the format
+ * by URL pattern.
+ */
+
+import type { LatLonBbox } from './types';
+
+export interface CuratedLocation {
+  readonly id: string;
+  /** Clean place / dataset name shown in the dropdown. */
+  readonly label: string;
+  /**
+   * Short network-budget tag shown inline in the dropdown — file size
+   * for COPC datasets, point count for EPT datasets. Lets the user
+   * pick by network commitment without opening the hint.
+   */
+  readonly sizeLabel: string;
+  /** A short hint shown below the dropdown when this option is active. */
+  readonly hint: string;
+  /** Approximate bbox — retained for future use (map preview thumbnail). */
+  readonly bbox: LatLonBbox;
+  /** Display string for status text — what the user "picked". */
+  readonly displayName: string;
+  /** Direct streaming URL — handed to handleRemoteUrl() on click. */
+  readonly streamUrl: string;
+}
+
+/**
+ * Shipped list, sorted smallest-first. Each entry's size and point
+ * count are noted in the hint so users can pick by network budget.
+ */
+export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
+  // ── Smallest / fastest first ────────────────────────────────────
+  {
+    id: 'autzen-or',
+    label: 'Autzen Stadium, Oregon',
+    sizeLabel: '77 MB',
+    hint: 'Classic LiDAR demo · loads in seconds even on slow networks.',
+    bbox: [-123.07, 44.05, -123.06, 44.06],
+    displayName: 'Autzen Stadium, OR',
+    streamUrl: 'https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz',
+  },
+  {
+    id: '360-for-you-sm',
+    label: '"360 for you" demo',
+    sizeLabel: '674 MB',
+    hint: 'Mid-size COPC demo from Hobu · a good "load something quickly" pick.',
+    bbox: [-0.05, -0.05, 0.05, 0.05],
+    displayName: '360 for you (small)',
+    streamUrl: 'https://s3.amazonaws.com/hobu-lidar/360-for-you.small.copc.laz',
+  },
+  {
+    id: 'key-bridge-md',
+    label: 'Francis Scott Key Bridge, Baltimore (2024)',
+    sizeLabel: '846 MB',
+    hint: 'Pre-collapse capture · March 2024 metashape scan.',
+    bbox: [-76.55, 39.21, -76.50, 39.24],
+    displayName: 'Francis Scott Key Bridge, Baltimore (2024)',
+    streamUrl: 'https://s3.amazonaws.com/hobu-lidar/2024-0328-Key-Bridge-unfiltered-wwright-metashape.copc.laz',
+  },
+  {
+    id: 'puerto-rico-pr',
+    label: 'Puerto Rico — post-Maria FEMA',
+    sizeLabel: '935 MB',
+    hint: '2018 FEMA-funded post-Hurricane Maria recovery survey.',
+    bbox: [-67.30, 17.90, -65.20, 18.55],
+    displayName: 'Puerto Rico, FEMA 2018',
+    streamUrl: 'https://s3.amazonaws.com/hobu-lidar/2018_FEMA_PR_new_untwine.copc.laz',
+  },
+  {
+    id: 'mill-site',
+    label: 'Mill site, USA',
+    sizeLabel: '1.8 GB',
+    hint: 'Public Entwine demo · classic test dataset.',
+    bbox: [-118.92, 36.91, -118.85, 36.95],
+    displayName: 'Mill site, Entwine demo',
+    streamUrl: 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz',
+  },
+  {
+    id: 'sofia-bg',
+    label: 'Sofia, Bulgaria — international',
+    sizeLabel: '1.9 GB',
+    hint: 'Downtown Sofia mobile scan · only non-US entry that streams.',
+    bbox: [23.30, 42.68, 23.34, 42.71],
+    displayName: 'Sofia, Bulgaria',
+    streamUrl: 'https://s3.amazonaws.com/hobu-lidar/sofi.copc.laz',
+  },
+  {
+    id: 'sf-coast-ca',
+    label: 'San Francisco Coast (2010)',
+    sizeLabel: '2.2B pts',
+    hint: 'ARRA-funded 2010 coastal strip · EPT streamed.',
+    bbox: [-122.80, 37.50, -122.30, 37.90],
+    displayName: 'San Francisco Coast, CA (2010)',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/ARRA-CA_SanFranCoast_2010/ept.json',
+  },
+  {
+    id: 'los-angeles-2-ca',
+    label: 'Los Angeles block 2',
+    sizeLabel: '3.6B pts',
+    hint: 'Recent B23 LA campaign · EPT streamed.',
+    bbox: [-118.50, 33.70, -118.10, 34.10],
+    displayName: 'Los Angeles block 2, CA',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CA_LosAngeles_2_B23/ept.json',
+  },
+  {
+    id: 'denver-2008-co',
+    label: 'Denver, Colorado (2008)',
+    sizeLabel: '4.2B pts',
+    hint: 'Legacy 2008 Denver campaign · EPT streamed.',
+    bbox: [-105.10, 39.65, -104.80, 39.85],
+    displayName: 'Denver, CO (2008)',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CO_Denver_2008/ept.json',
+  },
+  {
+    id: 'cahokia-il',
+    label: 'Cahokia Mounds, Illinois — UNESCO',
+    sizeLabel: '8.3 GB',
+    hint: 'Ancient earthwork mounds · UNESCO World Heritage.',
+    bbox: [-90.07, 38.65, -90.04, 38.67],
+    displayName: 'Cahokia Mounds State Historic Site, IL',
+    streamUrl: 'https://s3.amazonaws.com/hobu-lidar/Cahokia-20231016-MLS-NGA.copc.laz',
+  },
+  {
+    id: 'golden-gate-ca',
+    label: 'Golden Gate / SF Bay (2010)',
+    sizeLabel: '8.8B pts',
+    hint: 'ARRA 2010 SF Bay · EPT streamed.',
+    bbox: [-122.80, 37.55, -122.35, 37.95],
+    displayName: 'Golden Gate / SF Bay, CA (2010)',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/ARRA-CA_GoldenGate_2010/ept.json',
+  },
+  {
+    id: 'grand-canyon-2-az',
+    label: 'Grand Canyon NP block 2',
+    sizeLabel: '8.9B pts',
+    hint: 'USGS 2019 block 2 · EPT streamed.',
+    bbox: [-112.80, 36.00, -112.30, 36.40],
+    displayName: 'Grand Canyon NP block 2, AZ',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/AZ_GrandCanyonNP_2_2019/ept.json',
+  },
+  {
+    id: 'san-francisco-ca',
+    label: 'San Francisco',
+    sizeLabel: '13.1B pts',
+    hint: 'Recent B23 SF campaign · EPT streamed.',
+    bbox: [-122.55, 37.70, -122.35, 37.85],
+    displayName: 'San Francisco, CA',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CA_SanFrancisco_1_B23/ept.json',
+  },
+  {
+    id: 'denver-drcog-co',
+    label: 'Denver Metro DRCOG',
+    sizeLabel: '19.9B pts',
+    hint: 'Front-Range metro 2020 campaign · EPT streamed.',
+    bbox: [-105.10, 39.65, -104.80, 39.85],
+    displayName: 'Denver Metro (DRCOG block 1), CO',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CO_DRCOG_1_2020/ept.json',
+  },
+  {
+    id: 'grand-canyon-az',
+    label: 'Grand Canyon National Park ★',
+    sizeLabel: '22.4B pts',
+    hint: 'USGS 2019 survey · ~800 m vertical relief.',
+    bbox: [-112.30, 35.95, -111.80, 36.30],
+    displayName: 'Grand Canyon National Park, AZ',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/AZ_GrandCanyonNP_1_2019/ept.json',
+  },
+  {
+    id: 'denver-drcog-2-co',
+    label: 'Denver Metro DRCOG block 2',
+    sizeLabel: '39.4B pts',
+    hint: 'DRCOG block 2 · EPT streamed.',
+    bbox: [-105.10, 39.40, -104.50, 39.85],
+    displayName: 'Denver Metro DRCOG block 2, CO',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CO_DRCOG_2_2020/ept.json',
+  },
+  {
+    id: 'denver-drcog-3-co',
+    label: 'Denver Metro DRCOG block 3',
+    sizeLabel: '58.4B pts',
+    hint: 'DRCOG block 3 · largest Front-Range tile.',
+    bbox: [-105.30, 39.50, -104.60, 39.95],
+    displayName: 'Denver Metro DRCOG block 3, CO',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CO_DRCOG_3_2020/ept.json',
+  },
+  {
+    id: 'los-angeles-ca',
+    label: 'Los Angeles, California (2016) ★',
+    sizeLabel: '75.2B pts',
+    hint: '2016 LA campaign · widest metro EPT.',
+    bbox: [-118.70, 33.70, -117.95, 34.30],
+    displayName: 'Los Angeles, CA (2016)',
+    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/USGS_LPC_CA_LosAngeles_2016_LAS_2018/ept.json',
+  },
+];
+
+/** Look up a curated location by its id. */
+export function getCuratedLocation(id: string): CuratedLocation | undefined {
+  return CURATED_LOCATIONS.find((c) => c.id === id);
+}

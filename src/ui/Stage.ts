@@ -28,6 +28,13 @@ export interface StageOptions {
    * entry point for streaming a remote COPC scan.
    */
   onOpenUrl?: (url: string) => void;
+  /**
+   * Optional ready-made DOM node that the empty state mounts as the
+   * verified-public-LiDAR-dataset picker. Built by main.ts so the
+   * catalog module — including its dataset list — never enters this
+   * UI file. When omitted the empty state simply skips the section.
+   */
+  catalogPanel?: HTMLElement;
 }
 
 /**
@@ -116,10 +123,16 @@ export class Stage {
   }
 
   private _buildEmptyState(options: StageOptions): HTMLElement {
-    const title = el('h1', { className: 'olv-empty-title', text: 'Drop a scan to open it' });
+    // Visual-hierarchy principle: one primary action per view. The
+    // gradient "Open scan from device" button is the primary; samples,
+    // URL streaming, and the verified-public-LiDAR picker are secondary.
+    // Section labels ("Quick demos", "Public LiDAR") group the secondary
+    // paths so the eye reads three distinct intents instead of five
+    // competing inputs.
+    const title = el('h1', { className: 'olv-empty-title', text: 'Open a scan' });
     const sub = el('p', {
       className: 'olv-empty-sub',
-      text: 'Drone LiDAR (.las / .laz) or a phone scan (.ply / .obj / .glb / .gltf). Nothing leaves your device.',
+      text: 'Drag a point-cloud file onto the page or pick one below. Nothing leaves your device.',
     });
 
     // "Open scan from device" — a native file picker so a phone, which has no
@@ -140,12 +153,28 @@ export class Stage {
     });
     openButton.addEventListener('click', () => fileInput.click());
 
+    // Supported-formats note moves below the primary button — UX-writing
+    // principle: don't front-load format jargon when the primary action
+    // already says what to do.
+    const formats = el('p', {
+      className: 'olv-empty-formats',
+      text: 'Supports .las · .laz · .ply · .obj · .glb · .gltf · .pcd · .pts · .ptx · .e57',
+    });
+
+    // ── Secondary section: Quick demos ────────────────────────────────────
+    const demosLabel = el('p', {
+      className: 'olv-empty-section-label',
+      text: 'Quick demos',
+    });
     const samples = el('div', { className: 'olv-samples' });
     for (const s of options.samples ?? []) {
       const btn = el('button', {
         className: 'olv-sample',
         type: 'button',
-        title: `Load the bundled ${s.label.toLowerCase()} sample — no file needed`,
+        title:
+          s.url.startsWith('http')
+            ? `Stream ${s.label.toLowerCase()} — no upload, only the visible tiles are fetched`
+            : `Load ${s.label.toLowerCase()} — a tiny bundled fixture, expect a sparse render`,
       }, [
         el('span', { className: 'olv-sample-label', text: s.label }),
         el('span', { className: 'olv-sample-detail', text: s.detail }),
@@ -154,16 +183,27 @@ export class Stage {
       samples.append(btn);
     }
 
+    // ── Secondary section: Public LiDAR ───────────────────────────────────
+    const publicLabel = el('p', {
+      className: 'olv-empty-section-label',
+      text: 'Public LiDAR',
+    });
     const urlRow = this._buildUrlRow(options);
 
-    return el('div', { className: 'olv-empty' }, [
+    const children: (Node | string)[] = [
       title,
       sub,
       openButton,
       fileInput,
+      formats,
+      demosLabel,
       samples,
+      publicLabel,
       urlRow,
-    ]);
+    ];
+    if (options.catalogPanel) children.push(options.catalogPanel);
+
+    return el('div', { className: 'olv-empty' }, children);
   }
 
   /**

@@ -457,6 +457,28 @@ export class Viewer {
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
   private _navListeners: NavListeners = {};
   private readonly _raycaster = new THREE.Raycaster();
+  /**
+   * Reusable view-projection matrix for the streaming scheduler. Allocating
+   * a fresh `THREE.Matrix4` every tick (the scheduler ticks at ~10 Hz, but
+   * also re-ticks on each camera change) churns the GC for no reason — the
+   * matrix is consumed immediately as a `.elements` snapshot.
+   */
+  private readonly _streamingViewProj = new THREE.Matrix4();
+  /**
+   * Reusable 3-tuple for the streaming scheduler's camera-position input.
+   * Same reasoning as `_streamingViewProj` — the scheduler clones it
+   * internally before retaining anything.
+   */
+  private readonly _streamingCamPos: [number, number, number] = [0, 0, 0];
+  /** Reusable NDC vector for pointer-picking, replaces per-event allocs. */
+  private readonly _pickNdc = new THREE.Vector2();
+  /**
+   * RAF token for the debounced resize. The ResizeObserver callback fires
+   * synchronously with every observed size change; during a window drag
+   * that means many calls per frame, each calling `renderer.setSize` +
+   * camera reprojection. RAF-debounce collapses them to one per frame.
+   */
+  private _resizeRafId: number | null = null;
 
   // ── Picking tools (measure / inspect) ────────────────────────────────────
   private readonly _canvas: HTMLCanvasElement;
@@ -606,15 +628,33 @@ export class Viewer {
     window.addEventListener('keydown', this._onWindowKeyDown);
 
     // ── Async backend init + render loop ──────────────────────────────────
-    this.ready = this._renderer.init().then(() => {
-      // EDL defaults on for desktop WebGPU; off on the WebGL 2 fallback and on
-      // mobile, so a weak device is never dropped below interactive on load.
-      this._edlEnabled = edlDefaultEnabled(this.activeBackend(), this._isMobile());
-      this._startLoop();
-    });
+    // Both the WebGPU init AND the WebGL 2 fallback can fail on very old
+    // browsers or in headless contexts where neither backend can produce a
+    // working context. Without an explicit `.catch`, the rejection is
+    // unhandled: `_startLoop` is never called, the canvas stays blank, and
+    // the user has no console signal as to why. Surface the failure to
+    // the console (no telemetry leaves the device) and re-throw so any
+    // caller that awaits `viewer.ready` can surface a fatal toast.
+    this.ready = this._renderer.init().then(
+      () => {
+        // EDL defaults on for desktop WebGPU; off on the WebGL 2 fallback and on
+        // mobile, so a weak device is never dropped below interactive on load.
+        this._edlEnabled = edlDefaultEnabled(this.activeBackend(), this._isMobile());
+        this._startLoop();
+      },
+      (err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          'OpenLiDARViewer: GPU backend initialisation failed. ' +
+            'Neither WebGPU nor WebGL 2 produced a usable context. ' +
+            `(${message})`,
+        );
+        throw err;
+      },
+    );
 
     // ── Resize observer ── stored so `dispose()` can disconnect.
-    this._resizeObserver = new ResizeObserver(() => this._onResize(canvas));
+    this._resizeObserver = new ResizeObserver(() => this._scheduleResize(canvas));
     this._resizeObserver.observe(canvas);
   }
 
@@ -1159,6 +1199,19 @@ export class Viewer {
     };
   }
 
+  /**
+   * Push the active scan's origin + CRS into the point-inspector so it
+   * can compute World (origin-relative) and Lat/Lon (CRS-projected)
+   * coordinate rows in addition to Local X/Y/Z. Delegates to the
+   * InspectTool via a thin pass-through so main.ts doesn't have to
+   * reach into Viewer internals.
+   */
+  setInspectCoordinateContext(
+    ctx: import('./InspectTool').CoordinateContext,
+  ): void {
+    this._inspect.setCoordinateContext(ctx);
+  }
+
   /** Enter or leave annotation mode (freezes navigation). */
   setAnnotateMode(on: boolean): void {
     this._setToolMode(on ? 'annotate' : 'none');
@@ -1493,6 +1546,94 @@ export class Viewer {
   }
 
   /**
+   * Per-mode availability for the Visual Export Studio buttons, computed
+   * inline from the same {@link ExportSceneAdapter} the Studio orchestrator
+   * uses at render time. The Inspector calls this after each load so the
+   * Normal map / Intensity / Class map buttons can be disabled at the
+   * source on clouds that don't carry the required channel (LAZ has no
+   * normals; PLY has no intensity; PCD without label channel has no
+   * classification). Without this, the user could click those buttons and
+   * get the orchestrator's "mode 'X' is not available" toast — a real UX
+   * regression vs. a visibly-disabled button with a tooltip explaining why.
+   *
+   * Returns a plain map of mode → availability so this stays
+   * shell-bundle-safe (no import of the lazy-loaded `defaultExportRegistry`
+   * — which would pull every exporter into the initial chunk). The gates
+   * here MUST stay in lockstep with each exporter's `isAvailable` /
+   * `unavailableReason`. The contract is one-way: a mode missing from this
+   * map renders as disabled.
+   */
+  availableImageExportModes(): ReadonlyMap<
+    ExportMode,
+    { readonly available: boolean; readonly reason?: string }
+  > {
+    const adapter = this._buildExportAdapter();
+    const aabb = adapter.localBoundsAabb();
+    const hasAabb = aabb !== null;
+    const zRange = aabb ? aabb[5] - aabb[2] : 0;
+    const hasIntensity = adapter.hasIntensity();
+    const hasClassification = adapter.hasClassification();
+    const hasNormals = adapter.hasNormals();
+
+    const out = new Map<
+      ExportMode,
+      { readonly available: boolean; readonly reason?: string }
+    >();
+
+    // orthographic-rgb — always available (current-mode passthrough).
+    out.set('orthographic-rgb', { available: true });
+
+    // height-map — needs an AABB with a non-degenerate Z extent.
+    if (!hasAabb) {
+      out.set('height-map', { available: false, reason: 'No cloud is loaded.' });
+    } else if (zRange <= 1e-4) {
+      out.set('height-map', {
+        available: false,
+        reason: 'Cloud has no measurable height range.',
+      });
+    } else {
+      out.set('height-map', { available: true });
+    }
+
+    // intensity — needs an AABB + the channel.
+    if (!hasAabb) {
+      out.set('intensity', { available: false, reason: 'No cloud is loaded.' });
+    } else if (!hasIntensity) {
+      out.set('intensity', {
+        available: false,
+        reason: 'This cloud has no per-point intensity channel.',
+      });
+    } else {
+      out.set('intensity', { available: true });
+    }
+
+    // classification — needs an AABB + the channel.
+    if (!hasAabb) {
+      out.set('classification', { available: false, reason: 'No cloud is loaded.' });
+    } else if (!hasClassification) {
+      out.set('classification', {
+        available: false,
+        reason: 'This cloud has no per-point classification channel.',
+      });
+    } else {
+      out.set('classification', { available: true });
+    }
+
+    // normal — needs the channel. LiDAR captures rarely include normals.
+    if (!hasNormals) {
+      out.set('normal', {
+        available: false,
+        reason:
+          'This cloud has no per-point normals. LiDAR captures rarely include them; PCD / PTX / GLTF scans with normals are supported.',
+      });
+    } else {
+      out.set('normal', { available: true });
+    }
+
+    return out;
+  }
+
+  /**
    * Construct the {@link ExportSceneAdapter} that each Studio exporter uses
    * to drive the live Viewer. Held inline (not as a stored field) so the
    * adapter always reflects the current loaded clouds without bookkeeping.
@@ -1689,6 +1830,12 @@ export class Viewer {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
     }
+    // Cancel any RAF scheduled by the resize debouncer so a disposed Viewer
+    // doesn't run a final resize on a torn-down renderer.
+    if (this._resizeRafId !== null) {
+      cancelAnimationFrame(this._resizeRafId);
+      this._resizeRafId = null;
+    }
     for (const id of [...this._clouds.keys()]) {
       this.removeCloud(id);
     }
@@ -1847,7 +1994,8 @@ export class Viewer {
     streamingRefining: boolean;
   } | null {
     if (this._streamingPickData.size === 0) return null;
-    this._raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._camera);
+    this._pickNdc.set(ndcX, ndcY);
+    this._raycaster.setFromCamera(this._pickNdc, this._camera);
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
     // Resident-only pick invariant — pick from resident meshes only. Prune any orphan
@@ -1910,7 +2058,8 @@ export class Viewer {
     ndcX: number,
     ndcY: number,
   ): { cloud: PointCloud; index: number; point: THREE.Vector3 } | null {
-    this._raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this._camera);
+    this._pickNdc.set(ndcX, ndcY);
+    this._raycaster.setFromCamera(this._pickNdc, this._camera);
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
 
@@ -2074,18 +2223,37 @@ export class Viewer {
   private _tickStreaming(): void {
     if (!this._streaming) return;
     this._camera.updateMatrixWorld();
-    const viewProjection = new THREE.Matrix4().multiplyMatrices(
+    this._streamingViewProj.multiplyMatrices(
       this._camera.projectionMatrix,
       this._camera.matrixWorldInverse,
     );
+    this._streamingCamPos[0] = this._camera.position.x;
+    this._streamingCamPos[1] = this._camera.position.y;
+    this._streamingCamPos[2] = this._camera.position.z;
+    // Feed the smoothed frame time from the ring buffer so the scheduler's
+    // FPS-pressure adapter can back off the point budget on slow frames
+    // and restore it when the device catches up. `_smoothedFrameMs()`
+    // returns 0 until the buffer has at least one sample — passing 0
+    // tells the scheduler to skip FPS adaptation until real measurements
+    // arrive (i.e., during the first few RAF ticks).
+    const frameMs = this._smoothedFrameMs();
     this._streaming.scheduler.update({
-      viewProjection: viewProjection.elements,
-      cameraPosition: [
-        this._camera.position.x,
-        this._camera.position.y,
-        this._camera.position.z,
-      ],
+      viewProjection: this._streamingViewProj.elements,
+      cameraPosition: this._streamingCamPos,
+      frameTimeMs: frameMs > 0 ? frameMs : undefined,
     });
+  }
+
+  /**
+   * Average of the live frame-time ring buffer, in milliseconds.
+   * Returns 0 before the first frame has been recorded; the
+   * `_tickStreaming` consumer treats that as "no sample, don't adapt."
+   */
+  private _smoothedFrameMs(): number {
+    if (this._frameCount === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < this._frameCount; i++) sum += this._frameTimes[i];
+    return sum / this._frameCount;
   }
 
   private _startLoop(): void {
@@ -2138,6 +2306,21 @@ export class Viewer {
       this._annotate.render(this._camera, this._canvas);
     };
     loop();
+  }
+
+  /**
+   * RAF-coalesce the resize. ResizeObserver fires synchronously for every
+   * observed size change — during a window drag that's many calls per frame,
+   * each invoking `renderer.setSize` + camera reprojection (the WebGPU
+   * renderer's `setSize` is not free). Coalesce to one applied resize per
+   * animation frame.
+   */
+  private _scheduleResize(canvas: HTMLCanvasElement): void {
+    if (this._resizeRafId !== null) return;
+    this._resizeRafId = requestAnimationFrame(() => {
+      this._resizeRafId = null;
+      this._onResize(canvas);
+    });
   }
 
   private _onResize(canvas: HTMLCanvasElement): void {

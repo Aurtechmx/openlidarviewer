@@ -12,6 +12,7 @@ export type {
   ReportDatasetRow,
   ReportAnnotationRow,
   ReportMeasurementRow,
+  ReportAcceptanceRow,
   ReportInputs,
   ReportResult,
   ReportSectionId,

@@ -132,6 +132,33 @@ test('parseEptMetadata rejects an unsupported dataType', () => {
   expect(result.reason).toMatch(/dataType/);
 });
 
+test('parseEptMetadata rejects zstandard at detect time, not at first tile decode', () => {
+  // Regression for v0.3.6 Phase 6 hardening: the EPT metadata schema
+  // admits 'zstandard', but the runtime chunk decoder only handles
+  // 'laszip' and 'binary'. Before this guard, a zstandard dataset
+  // passed parseEptMetadata, paid the full manifest + hierarchy fetch
+  // (potentially hundreds of HTTP requests), then failed once per tile
+  // at decode time. Reject early with an actionable message.
+  const minimal = JSON.stringify({
+    version: '1.1.0',
+    dataType: 'zstandard',
+    hierarchyType: 'json',
+    points: 1024,
+    span: 128,
+    schema: [
+      { name: 'X', size: 4, type: 'signed' },
+      { name: 'Y', size: 4, type: 'signed' },
+      { name: 'Z', size: 4, type: 'signed' },
+    ],
+    bounds: [0, 0, 0, 1, 1, 1],
+  });
+  const result = parseEptMetadata(minimal);
+  expect(result.isEpt).toBe(false);
+  if (result.isEpt) return;
+  expect(result.reason).toMatch(/zstandard/i);
+  expect(result.reason).toMatch(/re-encode/i);
+});
+
 test('parseEptMetadata rejects a schema missing X/Y/Z', () => {
   const minimal = JSON.stringify({
     version: '1.1.0',

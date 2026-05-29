@@ -43,3 +43,37 @@ test('the formatted report carries the headline figures and a stage block', () =
   expect(text).toContain('88.0 ms'); // 70 + 12 + 6
   expect(text).toContain('decode'); // a stage row from formatTelemetry
 });
+
+test('sourcePointCount is preserved when supplied', () => {
+  const r = buildBenchmarkResult('huge.copc.laz', 'copc', 4_000_000, TELEMETRY, 100_000_000);
+  expect(r.sourcePointCount).toBe(100_000_000);
+});
+
+test('the formatter discloses budget-capped loads as "X of Y (Z%)"', () => {
+  // Regression: previously the formatter printed only the rendered
+  // count, making a 4M-rendered-of-100M-source benchmark read as fast
+  // as a 4M-rendered-of-4M-source benchmark. The audit flagged this
+  // as misleading-by-omission.
+  const text = formatBenchmarkResult(
+    buildBenchmarkResult('huge.copc.laz', 'copc', 4_000_000, TELEMETRY, 100_000_000),
+  );
+  expect(text).toContain('4,000,000');
+  expect(text).toContain('100,000,000');
+  expect(text).toMatch(/4\.0%/);
+});
+
+test('the formatter omits the "of" suffix when the full file fits the budget', () => {
+  const text = formatBenchmarkResult(
+    buildBenchmarkResult('small.las', 'las', 1_000_000, TELEMETRY, 1_000_000),
+  );
+  expect(text).toContain('1,000,000');
+  expect(text).not.toContain(' of ');
+});
+
+test('the formatter omits the "of" suffix when sourcePointCount is unknown', () => {
+  const text = formatBenchmarkResult(
+    buildBenchmarkResult('unknown.ply', 'ply', 1_000, TELEMETRY),
+  );
+  expect(text).toContain('1,000');
+  expect(text).not.toContain(' of ');
+});

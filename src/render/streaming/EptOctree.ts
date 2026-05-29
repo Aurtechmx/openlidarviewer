@@ -51,6 +51,15 @@ export type HierarchyFetcher = (
 /** A hard cap on hierarchy files, mirroring COPC's MAX_HIERARCHY_PAGES guard. */
 const MAX_HIERARCHY_FILES = 4096;
 
+/**
+ * Hard cap on EPT key depth. EPT keys are 32-bit signed; `x >> 1`
+ * parent-key arithmetic wraps into negative space once `x` reaches
+ * 2^31. The cap is set well below the wrap edge — practical Entwine
+ * output rarely exceeds depth ~20, so this limit only kicks in for
+ * pathological or malicious manifests.
+ */
+const MAX_EPT_DEPTH = 24;
+
 export class EptOctree implements StreamingOctreeView {
   readonly store = new StreamingNodeStore();
   private readonly _meta: EptMetadata;
@@ -97,30 +106,71 @@ export class EptOctree implements StreamingOctreeView {
     let frontier: EptKey[] = [rootKey];
     let filesLoaded = 0;
 
+    // Per-wave concurrency for hierarchy file fetches. The original
+    // implementation walked the frontier with `await` in a `for` loop —
+    // serialising every file in the wave. For deep public EPT datasets
+    // (Grand Canyon 22B pts, LA 75B pts) a single wave can carry 8–32
+    // files and a wave at depth 4–6 dominates first-paint by several
+    // seconds at typical home-broadband RTTs. Parallelising the wave
+    // brings each one down to roughly one RTT.
+    //
+    // The cap (8) was bumped from 6 in v0.3.6 — the public USGS S3
+    // endpoints all speak HTTP/2, which multiplexes far more than the
+    // legacy HTTP/1.1 per-origin limit. 8 concurrent gives good
+    // first-paint throughput without saturating slow connections.
+    const PER_WAVE_CONCURRENCY = 8;
+
     while (frontier.length > 0) {
       const next: EptKey[] = [];
+
+      // Filter the wave to new files only, respecting the global cap.
+      const toFetch: EptKey[] = [];
       for (const fileKey of frontier) {
         if (signal?.aborted) throw new Error('EPT hierarchy load aborted');
         const fileId = eptKeyToString(fileKey);
         if (this._loadedFiles.has(fileId)) continue;
-        if (filesLoaded >= MAX_HIERARCHY_FILES) {
+        if (filesLoaded + toFetch.length >= MAX_HIERARCHY_FILES) {
           this._errors.push(
             `EPT hierarchy exceeded ${MAX_HIERARCHY_FILES} files — stopped`,
           );
-          frontier = [];
           break;
         }
-        let text: string;
-        try {
-          text = await this._fetcher(fileKey, signal);
-        } catch (err) {
-          this._errors.push(
-            `EPT hierarchy fetch failed at ${fileId}: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-          continue;
+        toFetch.push(fileKey);
+      }
+
+      // Fetch the wave in fixed-concurrency batches. Each batch resolves
+      // in ~1 RTT instead of N. Failures within a batch don't abort the
+      // rest of the wave — they accumulate in `_errors` exactly as
+      // before.
+      const fetched: { fileKey: EptKey; fileId: string; text: string }[] = [];
+      for (let i = 0; i < toFetch.length; i += PER_WAVE_CONCURRENCY) {
+        const batch = toFetch.slice(i, i + PER_WAVE_CONCURRENCY);
+        const results = await Promise.all(
+          batch.map(async (fileKey): Promise<{ fileKey: EptKey; fileId: string; text: string } | null> => {
+            if (signal?.aborted) return null;
+            const fileId = eptKeyToString(fileKey);
+            try {
+              const text = await this._fetcher(fileKey, signal);
+              return { fileKey, fileId, text };
+            } catch (err) {
+              this._errors.push(
+                `EPT hierarchy fetch failed at ${fileId}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+              return null;
+            }
+          }),
+        );
+        for (const r of results) {
+          if (r) fetched.push(r);
         }
+        if (signal?.aborted) throw new Error('EPT hierarchy load aborted');
+      }
+
+      // Parse + ingest in deterministic key order so the resulting node
+      // store is identical to what the serial walk would have produced.
+      for (const { fileId, text } of fetched) {
         let parsed;
         try {
           parsed = parseHierarchyFile(text);
@@ -148,6 +198,18 @@ export class EptOctree implements StreamingOctreeView {
 
   /** Add one EPT hierarchy node to the store as a {@link StreamingNodeRecord}. */
   private _ingestNode(entry: EptHierarchyEntry): void {
+    // Practical-depth guard. EPT keys are 32-bit signed; at d >= 31 the
+    // `x >> 1` parent-key arithmetic wraps into negative space and parent
+    // links misroute silently. Real-world Entwine output rarely exceeds
+    // d ~= 20, so a hard cap below the wrap edge protects the octree
+    // structure without rejecting any legitimate dataset.
+    if (entry.key.d > MAX_EPT_DEPTH) {
+      console.warn(
+        `[ept] skipping node at depth ${entry.key.d} (cap ${MAX_EPT_DEPTH}) — ` +
+          'the EPT hierarchy is deeper than the supported maximum.',
+      );
+      return;
+    }
     const record: StreamingNodeRecord = {
       id: eptKeyToString(entry.key),
       key: this._toVoxelKey(entry.key),
