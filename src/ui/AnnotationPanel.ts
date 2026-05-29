@@ -109,11 +109,35 @@ export class AnnotationPanel {
     });
     this._clearBtn.addEventListener('click', () => this._handleClear());
 
+    // v0.3.6 mobile collapse — chevron toggle inside the existing head.
+    // Sort select still lives in the head row so it stays reachable when
+    // the panel is expanded; collapse toggle is rightmost.
+    const collapseBtn = el('button', {
+      className: 'olv-collapse-toggle',
+      type: 'button',
+      ariaLabel: 'Collapse panel',
+      title: 'Collapse this panel',
+    });
+    collapseBtn.append(el('span', { className: 'olv-chevron', text: '▾' }));
+    const title = el('span', { className: 'olv-ap-title', text: 'Annotations' });
+    const head = el('div', { className: 'olv-ap-head olv-panel-head' }, [
+      title,
+      sortSelect,
+      collapseBtn,
+    ]);
+    const toggleCollapsed = () => {
+      this.element.classList.toggle('olv-collapsed');
+    };
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCollapsed();
+    });
+    head.addEventListener('click', (e) => {
+      // Tap the title to toggle; sort select keeps its own click semantics.
+      if (e.target === title) toggleCollapsed();
+    });
     this.element = el('aside', { className: 'olv-anno-panel olv-hidden' }, [
-      el('div', { className: 'olv-ap-head' }, [
-        el('span', { className: 'olv-ap-title', text: 'Annotations' }),
-        sortSelect,
-      ]),
+      head,
       this._search,
       this._list,
       el('div', { className: 'olv-ap-footer' }, [this._clearBtn]),

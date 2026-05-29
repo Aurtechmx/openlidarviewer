@@ -119,6 +119,120 @@ share links, and APIs continue to work.
 
 ### Fixed
 
+- **Mobile-collapsible side panels.** StreamingPanel, MeasurePanel,
+  and AnnotationPanel now each carry a chevron toggle in their head
+  row that's hidden on desktop and shown on phones. Tap the chevron
+  (or the title strip) to roll the panel up to its head — the rest of
+  the body disappears so the user can reclaim canvas with one tap.
+  The Inspector keeps its existing bottom-sheet dismiss; the new
+  pattern complements it for the three lighter side panels. CSS-only
+  collapse mechanism (~50 lines of media query), zero JS in the
+  collapse path beyond the toggle handler. `prefers-reduced-motion`
+  honoured implicitly — the rotate is a 220 ms transform.
+- **Axis-feel root-cause fix.** Earlier passes dialed damping +
+  rotate-speed but the real cause of "weird axis" was that the orbit-
+  centre maintenance loop moved `controls.target` without translating
+  the camera position by the same vector. OrbitControls reinterprets
+  its spherical state around the new target every frame, so a sliding
+  target manifests as the camera "rotating around a weird axis." Fix:
+  every programmatic `controls.target` update now applies the same Δ
+  to `camera.position` (new `_translateOrbit` helper). What the user
+  sees is the scene sliding back into view smoothly — no axis spin.
+- **Planetary Computer STAC search (borrowed from
+  `opengeos/maplibre-gl-usgs-lidar`).** New lazy-loaded
+  `src/io/catalog/planetaryComputer.ts` queries Microsoft Planetary
+  Computer's public `3dep-lidar-copc` STAC endpoint by lat/lon. Surfaces
+  as a "Search by location" disclosure below the curated dropdown so
+  the curated-only path stays free of network cost. Each result renders
+  with source format, EPSG, capture date, and bbox. No basemap
+  dependency, no MapLibre — borrows only the search pattern. Public,
+  unauthenticated endpoint; `?notelemetry=1` suppresses the surface.
+- **EPSG short-circuit on PC items.** When a result carries a
+  `proj:epsg` STAC property, the EPSG is written into the CRS override
+  store *before* dispatch — the streaming pipeline reads the override
+  first and skips the LAS VLR probe, cutting ~500-700 ms off CRS
+  resolution for PC-sourced streams. Builds toward task #19 (CRS Phase
+  C — catalog-metadata aggregation).
+- **Source format already surfaced.** The Streaming Intelligence panel
+  already shipped a "COPC LAZ · PDRF N" vs. "EPT · binary · N attrs"
+  format line per the audit; this release verifies the contract is
+  intact across the PC dispatch path (PC items are always COPC; the
+  `source: 'copc' | 'ept'` field on the STAC client output is the
+  forward-looking shape).
+- **Mobile empty-state design audit + error-UX overhaul.** Tool dock
+  now hides entirely while no scan is loaded (was showing eight dimmed
+  tools on mobile, which competed with the primary CTA and pushed the
+  catalog dropdown off-screen). The empty state collapses to two
+  sections — *Quick demos* (samples + curated catalog) and *Open from
+  URL* — with a quiet caption clarifying that catalog entries were
+  probed at release time. Format list is now a one-line tap-to-expand
+  ("Supports 10 formats including .las, .laz, .ply") instead of a wall
+  of 10 extensions. Hero clamps to 40 px on viewports < 480 px so the
+  CTA fits in-fold without scroll. Mobile copy variant drops the
+  "drag onto the page" instruction (iOS Safari has no DnD) and leads
+  with "Pick a point-cloud file from your device." The GitHub link
+  demotes from a filled pill to a ghost link so the "Private · on
+  your device" trust pill stays the dominant header element. URL
+  field gains constraint bullets above the input ("File must be in
+  COPC format" / "Server must allow CORS range requests") and an
+  idle pulse on the primary CTA fires twice at 4 s of inactivity,
+  then never again. Honours `prefers-reduced-motion`. Error-UX hierarchy:
+  the URL field inline-validates on blur (warning when the URL
+  doesn't look like COPC, soft so the user can still try), preserves
+  input on error, swaps the Open button into a Cancel + spinner
+  during in-flight loads, surfaces a Retry banner with the failed
+  URL after failure, hides the URL row when offline (driven by
+  `window.online`/`offline` events), and maps raw CORS / fetch / 404
+  / 403 errors to plain-English guidance ("This file's host blocks
+  browser access — try downloading and using Open scan from device").
+  A cellular-data confirmation gates large samples ≥ 250 MB when
+  `navigator.connection.type === 'cellular'`, and a mobile-memory
+  warning gates files ≥ 1.2 GB on phones so a 2 GB LAZ doesn't
+  silently OOM the tab.
+- **Camera smoothness — model-viewer feel.** OrbitControls damping
+  factor lowered 0.08 → 0.05 and rotate speed bumped 0.85 → 1.0 so
+  the active drag stays responsive while the release glide coasts a
+  few extra frames — the cadence Google's `<model-viewer>` ships by
+  default. Per-frame orbit-pivot maintenance now suspends itself
+  while the user is actively driving OrbitControls (subscribed via
+  the controls' 'start'/'end' events) so no lerp or soft-clamp
+  competes with live mouse input. The soft-clamp gentles a drifted
+  target back into the envelope via a 12-%-per-frame lerp instead of
+  snapping — produces a smooth pull-back rather than a one-frame
+  correction artefact. Programmatic tween defaults bumped 0.6 →
+  0.8 s (`tweenTo`) and 0.7 → 0.9 s (`frameAll`) so the cubic ease
+  has room to feel as acceleration rather than a jump.
+- **New camera APIs — `viewer.zoom(delta)` and `viewer.getOrbit()`.**
+  Mirrors `<model-viewer>`'s identically named methods. `zoom(delta)`
+  advances the dolly by wheel-tick units (positive = closer, negative
+  = farther), respecting `minDistance` / `maxDistance` bounds.
+  `getOrbit()` returns the camera's spherical pose around the orbit
+  target as `{ theta, phi, radius, target }` with theta/phi in
+  radians — the same compact 4-number encoding `<model-viewer>` uses
+  in its `camera-orbit` attribute.
+- **Orbit pose round-trips through share links at UTM scale.** Existing
+  share-link encoding already carries `camera.target` (the new orbit
+  pivot) alongside position, mode, and FOV; v0.3.6 adds a regression
+  test that pins the precision contract — a target at
+  `(637 600 m, 852 000 m, 160 m)` (Autzen public COPC, UTM 10N)
+  round-trips byte-for-byte through encode → decode, so a research
+  screenshot's share link drops into a paper without quiet
+  coordinate drift.
+- **Camera orbit centered on the cloud's volumetric centre.**
+  Previously the orbit pivot was the dataset's coordinate origin, so
+  large translated LAS / LAZ surveys (UTM eastings in the millions)
+  felt visibly off-axis until the user pressed `R`. The Viewer now
+  snaps `controls.target` to the visible cloud's AABB centre the
+  instant a cloud attaches — both static and streaming — so the very
+  first drag orbits around the scan rather than the origin. A soft
+  clamp keeps the target inside the cloud's AABB inflated by 25 % of
+  its diagonal, so a user-driven pan can drift slightly past the
+  edge for inspection without ever orbiting around empty space.
+  Streaming refinement glides the pivot toward the latest bounds
+  centre at 5 % per frame, never snapping when a new octree node
+  finishes decoding. Original world coordinates are preserved end-
+  to-end for measurements, exports, and CRS workflows. New API:
+  `viewer.orbitTarget()` and `viewer.cloudCenter()` for diagnostics.
 - **USGS catalog robustness.** Two latent failure modes in the new
   catalog provider, fixed before release: (1) TNM Products API
   sometimes returns `boundingBox.minX` as a quoted string rather

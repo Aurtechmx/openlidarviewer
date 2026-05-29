@@ -170,6 +170,16 @@ export class NavController {
   }
 
   /**
+   * Whether a camera tween (Frame All, Focus, applyPose) is currently
+   * advancing. The Viewer's orbit-centre refinement reads this to suspend
+   * itself mid-tween — otherwise the refinement lerp would compete with the
+   * tween's own target interpolation and produce a perceptible wobble.
+   */
+  get isTweening(): boolean {
+    return this._tween !== null;
+  }
+
+  /**
    * Set the world "up" axis. LAS/LAZ surveys are Z-up; phone scans are Y-up —
    * passing the right axis makes walk/fly and the horizon behave correctly.
    */
@@ -254,10 +264,16 @@ export class NavController {
 
   /**
    * Smoothly move the camera to `toPos`, looking at `toTarget`, over
-   * `duration` seconds with an eased curve. Used for the Frame button and
-   * double-click focus.
+   * `duration` seconds with an eased curve. Used for the Frame button,
+   * double-click focus, and share-link pose restoration.
+   *
+   * Default duration bumped 0.6 → 0.8 s in v0.3.6's smoothness pass —
+   * matches Google's <model-viewer> default camera transition (~0.8 s),
+   * pairs naturally with the lower OrbitControls damping, and gives the
+   * cubic-eased curve enough headroom that the start/stop are felt as
+   * acceleration, not snaps.
    */
-  tweenTo(toPos: THREE.Vector3, toTarget: THREE.Vector3, duration = 0.6): void {
+  tweenTo(toPos: THREE.Vector3, toTarget: THREE.Vector3, duration = 0.8): void {
     this._tween = {
       fromPos: this._camera.position.clone(),
       fromTarget: this._currentLookTarget(),
@@ -281,7 +297,7 @@ export class NavController {
       this._computeForward(this._vForward);
       const backoff = Math.max(this._baseSpeed * 6, 1);
       const pos = point.clone().addScaledVector(this._vForward, -backoff);
-      this.tweenTo(pos, point, 0.7);
+      this.tweenTo(pos, point, 0.8);
     }
   }
 

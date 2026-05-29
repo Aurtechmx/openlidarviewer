@@ -141,8 +141,35 @@ export class StreamingPanel {
     // tracks the actual streaming source (COPC vs. EPT) rather than the
     // initial hardcoded label.
     this._title = el('div', { className: 'olv-streaming-title', text: 'Streaming scan' });
-    this.element = el('div', { className: 'olv-streaming-panel olv-hidden' }, [
+    // v0.3.6 mobile collapse — chevron toggle in the head row. Hidden on
+    // desktop (CSS handles the gate); on mobile, tapping it collapses the
+    // panel body so the user can reclaim canvas with one tap. Tapping
+    // the head row anywhere outside the chevron also toggles, so the
+    // affordance is forgiving to thumb taps.
+    const collapseBtn = el('button', {
+      className: 'olv-collapse-toggle',
+      type: 'button',
+      ariaLabel: 'Collapse panel',
+      title: 'Collapse this panel',
+    });
+    collapseBtn.append(el('span', { className: 'olv-chevron', text: '▾' }));
+    const head = el('div', { className: 'olv-panel-head' }, [
       this._title,
+      collapseBtn,
+    ]);
+    const toggleCollapsed = () => {
+      this.element.classList.toggle('olv-collapsed');
+    };
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCollapsed();
+    });
+    head.addEventListener('click', (e) => {
+      // Forgive thumb taps anywhere on the head row.
+      if (e.target === head || e.target === this._title) toggleCollapsed();
+    });
+    this.element = el('div', { className: 'olv-streaming-panel olv-hidden' }, [
+      head,
       this._phase,
       el('div', { className: 'olv-streaming-label', text: 'Scan' }),
       this._summary,

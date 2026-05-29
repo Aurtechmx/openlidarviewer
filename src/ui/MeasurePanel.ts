@@ -58,8 +58,29 @@ export class MeasurePanel {
       fileInput.click();
     });
 
+    // v0.3.6 mobile collapse — chevron toggle in the head row, hidden
+    // on desktop, lets thumb users reclaim canvas with one tap.
+    const collapseBtn = el('button', {
+      className: 'olv-collapse-toggle',
+      type: 'button',
+      ariaLabel: 'Collapse panel',
+      title: 'Collapse this panel',
+    });
+    collapseBtn.append(el('span', { className: 'olv-chevron', text: '▾' }));
+    const title = el('div', { className: 'olv-mp-title', text: 'Measurements' });
+    const head = el('div', { className: 'olv-panel-head' }, [title, collapseBtn]);
+    const toggleCollapsed = () => {
+      this.element.classList.toggle('olv-collapsed');
+    };
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCollapsed();
+    });
+    head.addEventListener('click', (e) => {
+      if (e.target === head || e.target === title) toggleCollapsed();
+    });
     this.element = el('aside', { className: 'olv-measure-panel olv-hidden' }, [
-      el('div', { className: 'olv-mp-title', text: 'Measurements' }),
+      head,
       this._list,
       el('div', { className: 'olv-mp-footer' }, [exportBtn, importBtn, fileInput]),
     ]);

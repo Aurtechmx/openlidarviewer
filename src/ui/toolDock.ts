@@ -142,6 +142,19 @@ export class ToolDock {
     this._backendText.textContent = backend === 'webgpu' ? 'WebGPU' : 'WebGL2';
   }
 
+  /**
+   * Hide the entire dock while the user is on the empty state, reveal once a
+   * scan attaches. v0.3.6 design-audit fix: showing eight dimmed tools on the
+   * mobile empty state was a wall of visual noise that competed with the
+   * primary CTA and pushed the catalog dropdown off-screen behind the dock.
+   * Solved by collapsing the whole dock — the dimmed-tools UX still exists,
+   * it just doesn't ship on a screen where no tool can ever be activated.
+   */
+  setEmpty(empty: boolean): void {
+    this.dock.classList.toggle('olv-hidden', empty);
+    this.backend.classList.toggle('olv-hidden', empty);
+  }
+
   /** Enable or disable the Measure tool — enabled once a scan is loaded. */
   setMeasureEnabled(enabled: boolean): void {
     this._measure.disabled = !enabled;

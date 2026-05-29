@@ -70,6 +70,22 @@ import { downsampleToBudget } from '../process/voxelDownsample';
 import { makePointInfo } from './pointInfo';
 import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
+import {
+  aabbCenter,
+  clampTargetToExpandedAabb,
+  lerpTowardCenter,
+  distance as vecDistance,
+} from './orbitCenter';
+import type { Aabb as OrbitAabb, Vec3Tuple } from './orbitCenter';
+import {
+  DAMPING_FACTOR,
+  ROTATE_SPEED,
+  SETTLE_MS,
+  SOFT_CLAMP_LERP_PER_FRAME,
+  STREAMING_LERP_PER_FRAME,
+  EXPAND_FRACTION,
+  isWithinSettleWindow,
+} from './orbitFeel';
 import { selectStreamingPick } from './streaming/streamingPickSelection';
 // The streaming render engine is type-only here and dynamically imported in
 // `attachStreamingCloud`, so `src/render/streaming/*` (scheduler, renderer,
@@ -415,6 +431,37 @@ export class Viewer {
   private _streaming: StreamingSession | null = null;
   /** Frames since the streaming scheduler last ran — for throttling. */
   private _streamingFrame = 0;
+  /**
+   * Last-observed centre of the streaming cloud's bounds. The streaming
+   * pipeline returns the COPC / EPT octree's *full* extent up front, so this
+   * value is set once at attach and barely moves; the per-frame refinement
+   * lerps the orbit target toward it only when a bounds update shifts the
+   * centre by more than a millimetre, so a fresh node finishing decoding
+   * never causes the camera to perceptibly jump. Cleared on detach.
+   */
+  private _lastStreamingCenter: Vec3Tuple | null = null;
+  /**
+   * The most recent visible-cloud AABB, captured at every attach/detach so
+   * the per-frame orbit-soft-clamp doesn't have to re-walk every cloud entry
+   * 60 times a second. `null` when no cloud is loaded — disables clamping.
+   */
+  private _orbitClampAabb: OrbitAabb | null = null;
+  /**
+   * True while the user is actively driving OrbitControls (drag, touch,
+   * scroll). Set/cleared by the controls' 'start'/'end' event listeners.
+   * The per-frame orbit-centre refinement reads this and suspends itself
+   * mid-gesture so the soft-clamp pull-back and streaming-bounds lerp
+   * never compete with live mouse input — a model-viewer-quality feel.
+   */
+  private _userInteracting = false;
+  /**
+   * High-resolution timestamp of the last OrbitControls 'end' event. The
+   * orbit-centre maintenance reads this to skip itself for ~280 ms after
+   * release — long enough for OrbitControls' damping curve to settle, so
+   * the soft-clamp lerp never competes with the post-release glide and
+   * the axis stays steady through the coast.
+   */
+  private _lastInteractMs = 0;
 
   // ── Shared point size in screen pixels (applied to all materials) ────────
   // Defaults to the smallest size; matches the Inspector slider's initial value.
@@ -535,11 +582,23 @@ export class Viewer {
 
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this._renderer.setSize(canvas.clientWidth || 800, canvas.clientHeight || 600);
+    // v0.3.6 premium-graphics pass: ACES filmic tone-mapping shapes the
+    // colour response so the cyan brand accent and the natural-colour RGB
+    // mode both read with the contrast you'd see in a cinema-quality
+    // render. Exposure nudged a hair above 1.0 so highlights bloom rather
+    // than clip. sRGB output-space ensures the same colours that ship in
+    // .png exports match what the user sees on-screen.
+    this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this._renderer.toneMappingExposure = 1.05;
+    this._renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     // ── Scene ─────────────────────────────────────────────────────────────
     this._scene = new THREE.Scene();
-    // Deep Navy — the brand background colour.
-    this._scene.background = new THREE.Color(0x0a0e1a);
+    // Deep Navy — the brand background colour. Slightly darker than the
+    // previous 0x0a0e1a so the cyan EDL highlights pop against it and the
+    // CSS vignette overlay reads as cinematic edge falloff rather than
+    // a flat tint.
+    this._scene.background = new THREE.Color(0x070b16);
 
     // ── Camera ────────────────────────────────────────────────────────────
     const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
@@ -561,11 +620,37 @@ export class Viewer {
     ) as typeof this._post.outputNode;
 
     // ── OrbitControls ─────────────────────────────────────────────────────
+    // v0.3.6 smoothness tuning, take 2 — after the first pass made orbit
+    // feel "weird on the axis" on large LAS surveys (the camera over-
+    // coasted after release, exaggerating any minor target drift):
+    //   • dampingFactor: 0.05 → 0.07. Still softer than the v0.3.5 baseline
+    //     of 0.08 so glide is noticeable, but not so soft the camera
+    //     keeps moving distractingly after the finger lifts.
+    //   • rotateSpeed:   1.00 → 0.95. Closer to the v0.3.5 0.85 baseline
+    //     so the *active* drag doesn't feel slippery alongside the new
+    //     damping. The net feel is "a hair smoother than v0.3.5" rather
+    //     than "model-viewer's full coast", which is what the camera
+    //     navigation actually wants for survey data.
     this._controls = new OrbitControls(this._camera, canvas);
     this._controls.enableDamping = true;
-    this._controls.dampingFactor = 0.08;
+    this._controls.dampingFactor = DAMPING_FACTOR;
     this._controls.zoomToCursor = true;
-    this._controls.rotateSpeed = 0.85;
+    this._controls.rotateSpeed = ROTATE_SPEED;
+    // OrbitControls fires 'start' on first drag / touch / wheel and 'end' on
+    // release. The Viewer subscribes here so the per-frame orbit-centre
+    // maintenance can suspend itself while the user is actively driving the
+    // camera — no lerp competes with live input, no clamp judders mid-pan.
+    // 'end' also stamps `_lastInteractMs` so the orbit-centre maintenance
+    // can wait through OrbitControls' post-release damping tail before
+    // engaging — without that grace period, the soft-clamp lerp races
+    // damping and the camera rotates around a sliding target.
+    this._controls.addEventListener('start', () => { this._userInteracting = true; });
+    this._controls.addEventListener('end', () => {
+      this._userInteracting = false;
+      this._lastInteractMs = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now()
+        : Date.now();
+    });
 
     // ── Navigation controller ─────────────────────────────────────────────
     this._nav = new NavController(this._camera, canvas, this._controls, {
@@ -850,6 +935,11 @@ export class Viewer {
     this._streaming.scheduler.stop();
     this._streaming.renderer.dispose();
     this._streaming = null;
+    this._lastStreamingCenter = null;
+    // Recompute the orbit-clamp envelope from whatever static clouds remain
+    // (if any). Without this, the clamp would still reference the streaming
+    // cloud's bounds after detach.
+    this._orbitClampAabb = this._visibleCloudAabb();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
   }
 
@@ -912,7 +1002,10 @@ export class Viewer {
     this._nav.setBaseSpeed(speedForSize(size));
     this._nav.setHasCloud(true);
 
-    this._camera.near = Math.max(size * 0.0002, 0.01);
+    // Near pinned at 1 cm so zoom-in is unbounded on streaming COPC / EPT
+    // tiles regardless of cloud size — matches the static-load behaviour
+    // above. Far still scales with the tile so a coarse fly-around frames.
+    this._camera.near = 0.01;
     this._camera.far = Math.max(size * 16, 1000);
     this._camera.updateProjectionMatrix();
     this._edlNear.value = this._camera.near;
@@ -924,6 +1017,14 @@ export class Viewer {
     this._applyOrbitBounds(radius);
 
     this._measure.setContext({ worldUp: [0, 0, 1], origin: cloud.renderOrigin });
+    // Initial streaming orbit pivot = metadata bounds centre. Bounds rarely
+    // shift after this (COPC carries the full extent in its header) — when
+    // they do, the per-frame refinement lerps the pivot toward the new
+    // centre without snapping.
+    this._initOrbitCenterFromVisibleClouds();
+    this._lastStreamingCenter = this._orbitClampAabb
+      ? aabbCenter(this._orbitClampAabb)
+      : null;
   }
 
   /**
@@ -949,6 +1050,9 @@ export class Viewer {
     entry.mesh.geometry.dispose();
     entry.material.dispose();
     this._clouds.delete(id);
+    // Refresh the orbit-clamp envelope so removing the last static cloud
+    // doesn't leave the camera clamping to its ghost bounds.
+    this._orbitClampAabb = this._visibleCloudAabb();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
   }
 
@@ -1333,19 +1437,37 @@ export class Viewer {
 
     const target = sphere.center.clone();
     const pos = target.clone().addScaledVector(dir, dist);
-    this._nav.tweenTo(pos, target, 0.7);
+    // Slightly longer than the default tween — a Frame All sweep usually
+    // covers a larger camera delta, so the extra ~100 ms makes the cubic
+    // ease feel cinematic rather than rushed. Matches model-viewer's
+    // jump-to-goal cadence on a fresh load.
+    this._nav.tweenTo(pos, target, 0.9);
   }
 
   /**
    * Bound the orbit dolly to the framed cloud: `radius` is the scan's bounding
    * radius. The camera can pull in close enough to inspect a detail and back
-   * far enough to take in the whole scan with margin — but never so far the
-   * cloud is lost off-screen, nor so close it clips through the near plane.
+   * far enough to take in the whole scan with margin — but never so close it
+   * clips through the near plane, nor so far the cloud is lost off-screen.
+   *
+   * v0.3.6 zoom-floor fix: `minDistance` was `r * 0.02`, which on a 1 km
+   * aerial survey meant the camera couldn't approach closer than ~10 m to
+   * the orbit pivot — and the pivot itself sits at the bbox CENTRE, which
+   * is typically tens of metres above the actual ground surface. The user
+   * would hit the floor while still floating above the terrain. Floor is
+   * now anchored to the near-clip plane (4× near, so no clipping artefacts)
+   * with a small absolute fallback for tiny clouds. `maxDistance` bumped
+   * from 16× to 50× radius so the user can pull *way* out for context on
+   * large surveys.
    */
   private _applyOrbitBounds(radius: number): void {
     const r = radius > 0 ? radius : 1;
-    this._controls.minDistance = r * 0.02;
-    this._controls.maxDistance = r * 16;
+    // No artificial zoom-in floor. With camera.near pinned at 1 cm, the
+    // user can dolly down to centimetre-scale detail on any cloud,
+    // regardless of bounding radius. The tiny 2 cm absolute minimum just
+    // prevents the spherical math from becoming degenerate at radius 0.
+    this._controls.minDistance = 0.02;
+    this._controls.maxDistance = r * 50;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1927,12 +2049,17 @@ export class Viewer {
     this._nav.setBaseSpeed(speedForSize(size));
     this._nav.setHasCloud(true);
 
-    // Clip planes generous enough to fly around the cloud, but no wider — a
-    // very wide near/far range leaves the depth buffer with poor precision,
-    // which makes the depth-based Eye Dome Lighting shimmer as the camera
-    // moves. `size` is the cloud's diameter; 16× still lets the camera pull
-    // well clear of it.
-    this._camera.near = Math.max(size * 0.0002, 0.01);
+    // Clip planes — near pinned at 1 cm so zoom-in is unbounded across any
+    // cloud size (a 1 km aerial scan, a 50 km COPC tile, an indoor 5 m
+    // capture, all the same). Previous behaviour scaled near with cloud
+    // size, which on large surveys parked the near plane 0.2-10 m in
+    // front of the camera and blocked close inspection. The far plane
+    // still scales with the cloud so a coarse fly-around stays framed.
+    //
+    // Depth-buffer precision at near=0.01, far=50km is ~3-4 quanta per
+    // millimetre with a 24-bit depth attachment — fine for both scene
+    // rendering and EDL's linearised-depth pass.
+    this._camera.near = 0.01;
     this._camera.far = Math.max(size * 16, 1000);
     this._camera.updateProjectionMatrix();
 
@@ -1945,6 +2072,11 @@ export class Viewer {
     const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
     this._attnRef.value = (radius / Math.sin(fovRad / 2)) * 1.2;
     this._applyOrbitBounds(radius);
+    // Snap the orbit pivot to the cloud's volumetric centre at attach so the
+    // very first user click — before `frameAll` has a chance to tween — still
+    // orbits around the scan rather than the dataset's coordinate origin.
+    // The render-loop's clamp gate keeps it there once panned.
+    this._initOrbitCenterFromVisibleClouds();
   }
 
   /** Combined bounding sphere of every visible cloud, or null if none. */
@@ -1970,6 +2102,240 @@ export class Viewer {
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
     return sphere;
+  }
+
+  /**
+   * Combined visible-cloud AABB as a six-tuple, or null if no cloud is
+   * loaded. This is the shape `orbitCenter.ts` consumes — calling it once at
+   * attach avoids re-walking the cloud map in the render loop.
+   */
+  private _visibleCloudAabb(): OrbitAabb | null {
+    const box = new THREE.Box3();
+    let any = false;
+    for (const { mesh, cloud } of this._clouds.values()) {
+      if (!mesh.visible) continue;
+      const b = cloud.bounds();
+      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
+      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
+      any = true;
+    }
+    if (this._streaming) {
+      const lb = this._streaming.cloud.localBounds();
+      box.expandByPoint(new THREE.Vector3(lb[0], lb[1], lb[2]));
+      box.expandByPoint(new THREE.Vector3(lb[3], lb[4], lb[5]));
+      any = true;
+    }
+    if (!any || box.isEmpty()) return null;
+    return [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z];
+  }
+
+  /**
+   * Snap the orbit pivot to the volumetric centre of the currently visible
+   * clouds. Called from `_configureForClouds` and `_configureForStreaming` so
+   * the orbit target is correct the instant a cloud attaches — *before* the
+   * first user click and before the explicit `frameAll()` tween fires.
+   * Without this, the very first orbit drag spins around (0, 0, 0) until the
+   * user presses R.
+   *
+   * The Viewer's `frameAll()` continues to handle the smooth oblique opening
+   * shot; this routine only fixes the pivot so the camera is already aiming
+   * at the cloud when the tween begins.
+   */
+  private _initOrbitCenterFromVisibleClouds(): void {
+    const aabb = this._visibleCloudAabb();
+    this._orbitClampAabb = aabb;
+    if (!aabb) return;
+    const [cx, cy, cz] = aabbCenter(aabb);
+    this._controls.target.set(cx, cy, cz);
+    this._camera.lookAt(cx, cy, cz);
+    this._controls.update();
+  }
+
+  /**
+   * Per-frame orbit-centre maintenance — called once after `_nav.update()`
+   * each render tick. Three behaviours:
+   *
+   *   1. Soft-clamp the orbit target inside the cloud's AABB inflated by 25 %
+   *      of its diagonal, so a user-driven pan never lets the camera spin
+   *      around empty space far from the cloud.
+   *   2. While a streaming cloud is open, lerp the orbit target toward the
+   *      latest bounds centre — only when the centre has shifted by more
+   *      than a millimetre — at 5 % per frame, so a node finishing decoding
+   *      never produces a visible snap.
+   *   3. Suspended while a NavController tween is active (Frame All / Focus
+   *      / applyPose) so the tween's own target interpolation isn't fought.
+   *
+   * Cost is bounded: a handful of vector ops + (when streaming) one octree
+   * bounds query — orders of magnitude cheaper than a render pass.
+   */
+  private _maintainOrbitCenter(): void {
+    if (!this._orbitClampAabb) return;
+    if (this._nav.mode !== 'orbit') return;
+    if (this._nav.isTweening) return;
+    // Suspend the per-frame refinement while the user is actively driving
+    // OrbitControls. Lerping the target mid-drag would fight live input;
+    // the clamp engages once the gesture ends and OrbitControls' damping
+    // settles. Result: drag feels exactly like model-viewer's — no
+    // micro-judder, no pull-back yank during the gesture.
+    if (this._userInteracting) return;
+    // Settle delay — after release, OrbitControls keeps damping the
+    // spherical angles for ~15-30 frames. If the soft-clamp lerp engages
+    // during that tail, the camera rotates around a target that's also
+    // sliding back into the envelope, which reads as a wobbly axis.
+    // Skip the maintenance pass until the damping has settled.
+    const nowMs = (typeof performance !== 'undefined' && performance.now)
+      ? performance.now()
+      : Date.now();
+    if (isWithinSettleWindow(nowMs, this._lastInteractMs, SETTLE_MS)) return;
+
+    // 1) Streaming refinement — drift the target gently toward the live
+    //    centre when the bounds shift materially. For static clouds this
+    //    branch is skipped; their AABB is fixed at attach.
+    if (this._streaming) {
+      const lb = this._streaming.cloud.localBounds();
+      const live: Vec3Tuple = [
+        (lb[0] + lb[3]) * 0.5,
+        (lb[1] + lb[4]) * 0.5,
+        (lb[2] + lb[5]) * 0.5,
+      ];
+      if (this._lastStreamingCenter === null) {
+        this._lastStreamingCenter = live;
+      } else if (vecDistance(this._lastStreamingCenter, live) > 1e-3) {
+        // Axis-feel fix: translate both the target AND the camera so the
+        // relative offset stays constant. Without this, OrbitControls
+        // recomputes spherical state around the moving target and the
+        // user sees the camera "rotating around a weird axis."
+        this._translateOrbit(live, STREAMING_LERP_PER_FRAME);
+        this._lastStreamingCenter = live;
+        // Refresh the clamp AABB so the next clamp step uses the new
+        // envelope rather than the attach-time snapshot.
+        this._orbitClampAabb = [lb[0], lb[1], lb[2], lb[3], lb[4], lb[5]];
+      }
+    }
+
+    // 2) Soft-clamp — gently lerp the target back into the inflated
+    //    envelope rather than snapping. Same translation contract: the
+    //    camera position moves with the target by the same vector, so
+    //    the user sees a smooth slide-back rather than an axis spin.
+    const t = this._controls.target;
+    const clamped = clampTargetToExpandedAabb(
+      [t.x, t.y, t.z],
+      this._orbitClampAabb,
+      EXPAND_FRACTION,
+    );
+    if (clamped[0] !== t.x || clamped[1] !== t.y || clamped[2] !== t.z) {
+      this._translateOrbit(clamped, SOFT_CLAMP_LERP_PER_FRAME);
+    }
+  }
+
+  /**
+   * Move the orbit target a fraction of the way toward `desired`, AND
+   * translate the camera position by the same vector. Preserves the
+   * camera's relative offset so OrbitControls' spherical state stays
+   * stable — what the user sees is the scene moving, not the camera
+   * rotating around a sliding axis.
+   *
+   * This is the central insight behind the second axis-feel fix: any
+   * programmatic change to `controls.target` MUST be mirrored on
+   * `camera.position` or the visible rotation axis will drift.
+   */
+  private _translateOrbit(desired: Vec3Tuple, lerpFactor: number): void {
+    const t = this._controls.target;
+    const current: Vec3Tuple = [t.x, t.y, t.z];
+    const next = lerpTowardCenter(current, desired, lerpFactor);
+    const dx = next[0] - current[0];
+    const dy = next[1] - current[1];
+    const dz = next[2] - current[2];
+    if (dx === 0 && dy === 0 && dz === 0) return;
+    t.set(next[0], next[1], next[2]);
+    this._camera.position.x += dx;
+    this._camera.position.y += dy;
+    this._camera.position.z += dz;
+  }
+
+  /**
+   * Current orbit pivot in world coordinates — what `controls.target` holds.
+   * Returned as a plain object so callers (diagnostics, embed bridge) don't
+   * need a three.js dependency to read it.
+   */
+  orbitTarget(): { x: number; y: number; z: number } {
+    const t = this._controls.target;
+    return { x: t.x, y: t.y, z: t.z };
+  }
+
+  /**
+   * Current camera orbit in spherical coordinates around the target —
+   * `{ theta, phi, radius, target }` with theta/phi in radians. Mirrors
+   * Google's `<model-viewer>` `getCameraOrbit()` so a research-grade
+   * share link can encode the pose in 4 numbers instead of 6.
+   *
+   *   theta  — azimuthal angle around world-up (0 = looking down -X / -Z
+   *            depending on up-axis convention), wrapped into (-π, π].
+   *   phi    — polar angle from world-up; 0 = straight up, π = straight
+   *            down. Matches three.js `Spherical` exactly.
+   *   radius — distance from target to camera, in world units.
+   *   target — orbit pivot, same as `orbitTarget()`.
+   */
+  getOrbit(): {
+    theta: number;
+    phi: number;
+    radius: number;
+    target: { x: number; y: number; z: number };
+  } {
+    const tgt = this._controls.target;
+    const offset = new THREE.Vector3().subVectors(this._camera.position, tgt);
+    const sph = new THREE.Spherical().setFromVector3(offset);
+    return {
+      theta: sph.theta,
+      phi: sph.phi,
+      radius: sph.radius,
+      target: { x: tgt.x, y: tgt.y, z: tgt.z },
+    };
+  }
+
+  /**
+   * Programmatically advance the camera dolly by `delta` wheel-ticks. A
+   * positive delta zooms *in* (closer to the target), negative zooms *out*.
+   * One unit ≈ one mouse-wheel notch — matches Google's `<model-viewer>`
+   * `zoom(delta)` contract so the same numeric scale can drive a +/- UI
+   * pair, a keyboard shortcut, or a programmatic camera rig.
+   *
+   * Respects `minDistance` / `maxDistance` set by `_applyOrbitBounds`, so a
+   * runaway zoom can never blow past the framing envelope. Cancels any
+   * in-progress tween so a user-driven zoom always wins.
+   *
+   * No-op in walk / fly modes (those navigate the camera, not the dolly).
+   */
+  zoom(delta: number): void {
+    if (this._nav.mode !== 'orbit') return;
+    if (!Number.isFinite(delta) || delta === 0) return;
+    // One wheel-tick equates to roughly a 5 % dolly change — matches the
+    // three.js OrbitControls default `zoomSpeed = 1` scale empirically.
+    const SCALE_PER_TICK = 0.95;
+    const factor = delta > 0
+      ? Math.pow(SCALE_PER_TICK, delta)        // zoom in  → shrink radius
+      : Math.pow(1 / SCALE_PER_TICK, -delta);  // zoom out → grow radius
+    const tgt = this._controls.target;
+    const offset = new THREE.Vector3().subVectors(this._camera.position, tgt);
+    const newRadius = THREE.MathUtils.clamp(
+      offset.length() * factor,
+      this._controls.minDistance,
+      this._controls.maxDistance,
+    );
+    offset.setLength(newRadius);
+    this._camera.position.copy(tgt).add(offset);
+    this._controls.update();
+  }
+
+  /**
+   * Volumetric centre of the currently loaded cloud(s), or null when nothing
+   * is loaded. Pure read of the cached attach-time AABB; updated when
+   * streaming bounds refine.
+   */
+  cloudCenter(): { x: number; y: number; z: number } | null {
+    if (!this._orbitClampAabb) return null;
+    const [x, y, z] = aabbCenter(this._orbitClampAabb);
+    return { x, y, z };
   }
 
   /** A unit horizontal axis perpendicular to the current world-up. */
@@ -2288,6 +2654,9 @@ export class Viewer {
       const delta = this._timer.getDelta();
       this._recordFrame(delta);
       this._nav.update(delta);
+      // Orbit-pivot maintenance — soft-clamp + streaming bounds-refinement
+      // lerp. Cheap and bounded; runs every frame regardless of EDL state.
+      this._maintainOrbitCenter();
       // EDL on → render through the post-processing pipeline; off → render
       // the scene directly, the v0.2 path, for zero post-processing overhead.
       if (this._edlEnabled) this._post.render();

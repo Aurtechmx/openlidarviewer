@@ -164,6 +164,12 @@ const SAMPLES: Sample[] = [
     detail: '1.8 GB COPC · streamed',
     url: 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz',
     name: 'millsite.copc.laz',
+    // Approximate on-disk size — feeds Stage's cellular-data + mobile-
+    // memory confirmation gates. The streaming pipeline only fetches
+    // visible tiles in practice, but the gate uses the worst-case full-
+    // file size because the user can't know how many tiles they'll
+    // ultimately request.
+    sizeBytes: 1_800_000_000,
   },
 ];
 
@@ -191,6 +197,49 @@ const catalogPanel = new CatalogPanel({
   // usually already cached — cuts ~200–800 ms off perceived first-paint
   // because the chunk download hides behind think-time.
   onPickIntent: (url: string) => prewarmForUrl(url),
+  // v0.3.6 PC STAC integration. When the user picks a result from the
+  // Planetary Computer "Search by location" panel, store the item's
+  // EPSG in the CRS override store before dispatching the URL. This
+  // short-circuits the LAS VLR probe — the streaming pipeline asks the
+  // override store first and never spends ~500-700 ms decoding the
+  // header for CRS metadata it already has.
+  onPickPcItem: (item) => {
+    recordUsage('scan-open', 'pc-stac');
+    if (item.epsg) {
+      try {
+        // The dataset key is derived from the URL/name the streaming
+        // pipeline will use. We mirror the same `keyForDataset` so the
+        // override resolves on the first lookup.
+        const datasetKey = crsKeyForDataset(item.id);
+        setCrsOverrideForDataset(datasetKey, {
+          epsg: item.epsg,
+          kind: 'projected',
+        });
+      } catch (err) {
+        if (debug) console.warn('[crs] PC EPSG short-circuit failed', err);
+      }
+    }
+    // SAS-sign the raw blob URL before handing it to the streaming pipeline.
+    // Without this step the Azure Blob host returns HTTP 409 on the first
+    // range request — Planetary Computer assets require a short-lived
+    // SAS token appended to the URL. The signing API is public, CORS-
+    // enabled, and the resulting URL is valid for ~1 hour.
+    void (async () => {
+      try {
+        const mod = await import('./io/catalog/planetaryComputer');
+        const signed = await mod.signAssetUrl(item.assetUrl);
+        await handleRemoteUrl(signed);
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : 'Failed to open the PC tile.';
+        // Distinguish signing failure from streaming failure so the user
+        // sees the right message ("PC unavailable" vs "this file is bad").
+        const message = raw.includes('SAS')
+          ? `Couldn't authorise the Planetary Computer asset (${raw}). The host may be temporarily unavailable.`
+          : raw;
+        dropZone.setError(message);
+      }
+    })();
+  },
 });
 
 const stage = new Stage(app, {
@@ -198,13 +247,16 @@ const stage = new Stage(app, {
   samples: SAMPLES,
   onSample: loadFromUrl,
   onOpenFile: (file) => void handleFile(file),
-  // Surface any swallowed rejection in the toast so a chunk-load failure
-  // (or any other unexpected throw) doesn't fail silently.
-  onOpenUrl: (url) => {
-    handleRemoteUrl(url).catch((err) => {
-      dropZone.setError(err instanceof Error ? err.message : 'Failed to open the URL.');
-    });
-  },
+  // Return the promise so Stage's inline error handler can show a
+  // contextual, plain-English message under the URL input + offer a Retry
+  // banner. The dropZone error toast still fires as a backup channel
+  // because it remains visible after the empty state hides.
+  onOpenUrl: (url) => handleRemoteUrl(url).catch((err) => {
+    const message = err instanceof Error ? err.message : 'Failed to open the URL.';
+    dropZone.setError(message);
+    // Re-throw so Stage's inline branch sees the error too.
+    throw err instanceof Error ? err : new Error(message);
+  }),
   catalogPanel: catalogPanel.root,
 });
 /**
@@ -453,11 +505,18 @@ const dock = new ToolDock({
   onHelp: () => helpOverlay.open(),
   onClose: () => closeScan(),
 });
+// Start the dock hidden — the empty state shows no scan-dependent tools.
+// `setEmpty(false)` is called from every successful attach path.
+dock.setEmpty(true);
+// Same contract for the Inspector — hide its 13 collapsed sections + the
+// always-visible Point Size / EDL controls until a scan actually attaches.
+inspector.setEmpty(true);
 
 // Game-style navigation: mode switcher, speed slider, controls HUD.
 const navBar = new NavBar({
   onMode: (mode) => viewer.setMode(mode),
   onSpeed: (multiplier) => viewer.setNavSpeed(multiplier),
+  onReset: () => viewer.frameAll(),
 });
 
 const projectCard = new ProjectCard();
@@ -1665,6 +1724,11 @@ async function handleFile(file: File): Promise<void> {
     // couldn't navigate around, and the backend indicator stuck at
     // "initialising…". Critical reveal first, decorations second.
     dock.setBackend(viewer.activeBackend());
+    // v0.3.6 design-audit fix: reveal the dock at attach. It stays hidden
+    // through the empty state so eight dimmed tools don't clutter the
+    // primary CTA on mobile.
+    dock.setEmpty(false);
+    inspector.setEmpty(false);
     dock.setMeasureEnabled(true);
     dock.setInspectEnabled(true);
     dock.setProbeEnabled(true);
@@ -1946,6 +2010,9 @@ async function openStreamingCopc(
 
   // Measure, annotate, inspect, probe and close all work on a streaming scan:
   // each resident COPC node keeps its full decoded per-point attributes.
+  // Reveal the dock the same way the static-load path does.
+  dock.setEmpty(false);
+  inspector.setEmpty(false);
   dock.setMeasureEnabled(true);
   dock.setAnnotateEnabled(true);
   dock.setInspectEnabled(true);
@@ -2487,6 +2554,10 @@ function resetToEmptyState(): void {
   dock.setProbeEnabled(false);
   dock.setAnnotateEnabled(false);
   dock.setCloseEnabled(false);
+  // Hide the dock entirely while back in the empty state — the audit fix
+  // that pairs with `setEmpty(false)` on every attach path.
+  dock.setEmpty(true);
+  inspector.setEmpty(true);
   inspector.clear();
   inspector.clearProvenance();
   inspector.clearCrs();

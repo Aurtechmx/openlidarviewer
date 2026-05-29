@@ -8,6 +8,12 @@ export interface Sample {
   detail: string;
   url: string;
   name: string;
+  /**
+   * Approximate size on disk, bytes. Used by the cellular-data confirmation
+   * gate — a sample without a `sizeBytes` field is treated as "small enough
+   * to download anywhere" and no confirmation is shown.
+   */
+  sizeBytes?: number;
 }
 
 export interface StageOptions {
@@ -25,9 +31,11 @@ export interface StageOptions {
   onOpenFile?: (file: File) => void;
   /**
    * Called with a URL when the user submits the "open from URL" field — the
-   * entry point for streaming a remote COPC scan.
+   * entry point for streaming a remote COPC scan. Returning a Promise lets
+   * the field manage its own loading + error UI; resolve = clear, reject
+   * with an Error = inline error message, AbortError = user cancelled.
    */
-  onOpenUrl?: (url: string) => void;
+  onOpenUrl?: (url: string) => void | Promise<void>;
   /**
    * Optional ready-made DOM node that the empty state mounts as the
    * verified-public-LiDAR-dataset picker. Built by main.ts so the
@@ -55,6 +63,133 @@ const MARK = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
 <circle cx="12" cy="12" r="3.2" fill="url(#olvLogoCore)"/></svg>`;
 
 /**
+ * The hero version of the brand mark — same DNA as `MARK` (orbital rings,
+ * glowing core, vertical axis dots) at a larger canvas with extra detail:
+ *   • Three concentric dotted orbital ellipses with subtle inner/outer
+ *     opacity falloff so the rings read as 3D depth rather than flat.
+ *   • A horizontal lens-flare ridge across the core for a "ping" feel.
+ *   • Soft outer halo around the core so the cyan reads as emissive even
+ *     against the dark-navy stage background.
+ *   • A six-dot vertical axis above + below the core (two large near
+ *     the equator, mid + pole on each side) — the same axis as MARK
+ *     extended into the larger canvas.
+ *
+ * Pure inline SVG — ~1.4 KB, no raster. The square + wordmark variant
+ * (public/olv-hero.{webp,png}) is the asset for marketing surfaces; the
+ * icon-only SVG below is what reads cleanly above the "Open a scan"
+ * title without doubling the wordmark already in the top bar.
+ */
+const HERO_MARK = `<svg viewBox="0 0 200 200" aria-hidden="true" class="olv-hero-mark-svg" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Core: bright white-cyan inner → cyan mid → brand blue at edge. -->
+    <radialGradient id="olvHeroCore" cx="42%" cy="36%" r="64%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="32%" stop-color="#a8f1ff"/>
+      <stop offset="68%" stop-color="#22dcff"/>
+      <stop offset="100%" stop-color="#0083dc"/>
+    </radialGradient>
+    <!-- Subtle emissive halo around the core, restrained so it doesn't
+         flood the orbital rings. -->
+    <radialGradient id="olvHeroHalo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(60,225,255,0.35)"/>
+      <stop offset="55%" stop-color="rgba(0,178,255,0.10)"/>
+      <stop offset="100%" stop-color="rgba(0,178,255,0)"/>
+    </radialGradient>
+    <!-- Horizontal lens-flare ridge — centred, fades out before the
+         canvas edge so it reads as a "ping" not a full crossbar. -->
+    <linearGradient id="olvHeroFlare" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="rgba(34,220,255,0)"/>
+      <stop offset="35%" stop-color="rgba(168,241,255,0.85)"/>
+      <stop offset="50%" stop-color="#ffffff"/>
+      <stop offset="65%" stop-color="rgba(168,241,255,0.85)"/>
+      <stop offset="100%" stop-color="rgba(34,220,255,0)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Back orbital ring — slightly above centre, wider + fainter so the
+       cluster reads as 3D depth. Round-cap stroke-dasharray draws the
+       ring as a sequence of round dots at the cap radius. -->
+  <ellipse cx="100" cy="86" rx="66" ry="17" fill="none" stroke="#22d4ff" stroke-width="2"
+    stroke-linecap="round" stroke-dasharray="0 4" opacity="0.75"/>
+
+  <!-- Front orbital ring — slightly below centre, narrower + brighter. -->
+  <ellipse cx="100" cy="114" rx="66" ry="17" fill="none" stroke="#3cdfff" stroke-width="2.2"
+    stroke-linecap="round" stroke-dasharray="0 3.8" opacity="0.98"/>
+
+  <!-- Vertical axis dots — four above, four below. Sized small → large
+       as they approach the equator; the dot adjacent to each ring is
+       the most prominent (they read as the "poles" of the torus).
+       Spacing kept tight so the axis doesn't outreach the rings. -->
+  <circle cx="100" cy="34" r="1.8" fill="#2bb6ef"/>
+  <circle cx="100" cy="48" r="3" fill="#36d9ff"/>
+  <circle cx="100" cy="62" r="4.2" fill="#3ce0ff"/>
+  <circle cx="100" cy="76" r="5.4" fill="#3ce0ff"/>
+  <circle cx="100" cy="124" r="5.4" fill="#3ce0ff"/>
+  <circle cx="100" cy="138" r="4.2" fill="#3ce0ff"/>
+  <circle cx="100" cy="152" r="3" fill="#36d9ff"/>
+  <circle cx="100" cy="166" r="1.8" fill="#2bb6ef"/>
+
+  <!-- Soft outer halo so the core reads as emissive. -->
+  <circle cx="100" cy="100" r="28" fill="url(#olvHeroHalo)"/>
+
+  <!-- Horizontal lens-flare ridge crossing the equator. -->
+  <rect x="18" y="98.2" width="164" height="3.2" fill="url(#olvHeroFlare)"/>
+
+  <!-- The glowing core. -->
+  <circle cx="100" cy="100" r="11" fill="url(#olvHeroCore)"/>
+</svg>`;
+
+/**
+ * iPhone-Safari single-tab memory cap is empirically around 350-500 MB; LAS
+ * captures above ~1.2 GB on disk routinely crash. Threshold deliberately
+ * generous — we'd rather a borderline file pass than a real one block.
+ */
+const MOBILE_MEMORY_WARN_BYTES = 1_200_000_000;
+/**
+ * iPhone-Safari cellular streaming threshold. Above ~250 MB the user is
+ * almost certainly going to want the warning; below it, the request is
+ * cheaper than a typical app update.
+ */
+const CELLULAR_WARN_BYTES = 250_000_000;
+
+/** Coarse mobile detection — matches Stage's mobile copy + size breakpoints. */
+function isMobileViewport(): boolean {
+  return typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 767px)').matches;
+}
+
+/**
+ * Best-effort cellular detection. The Network Information API ships on
+ * Chrome / Edge / Samsung — Safari and Firefox don't expose it, so this
+ * returns null when the API is missing (caller should treat null as "can't
+ * tell — fall open"). Wraps the check in try/catch because some embedded
+ * webviews throw on access.
+ */
+function isCellularConnection(): boolean | null {
+  try {
+    const nav = navigator as Navigator & {
+      connection?: { type?: string; effectiveType?: string };
+    };
+    const conn = nav.connection;
+    if (!conn) return null;
+    if (conn.type === 'cellular') return true;
+    // Some browsers don't fill `type`; treat any `effectiveType` that maps
+    // to 2G/3G as cellular for the purposes of the data-charge gate.
+    if (conn.effectiveType === '2g' || conn.effectiveType === '3g') return true;
+    return false;
+  } catch {
+    return null;
+  }
+}
+
+/** Format a byte count as the largest sensible unit (MB / GB), one decimal. */
+function formatBytes(bytes: number): string {
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(0)} MB`;
+  return `${(bytes / 1000).toFixed(0)} KB`;
+}
+
+/**
  * The app shell — the full-bleed canvas (the "stage"), the transparent top
  * bar, the empty state, and a small version badge. Floating panels mount
  * into `overlay`.
@@ -65,6 +200,19 @@ export class Stage {
   readonly overlay: HTMLElement;
   private readonly _empty: HTMLElement;
   private readonly _version: HTMLElement;
+  /** Inline status banner above the URL field. */
+  private _urlError: HTMLElement | null = null;
+  /** Inline status banner at the top of the empty state for global warnings. */
+  private _statusBanner: HTMLElement | null = null;
+  /** The Open button — flips into a spinner/cancel state during URL loading. */
+  private _urlSubmit: HTMLButtonElement | null = null;
+  /** The URL input itself — preserved on error so the user can edit + retry. */
+  private _urlInput: HTMLInputElement | null = null;
+  /** The currently-streaming URL request's abort controller, if any. */
+  private _urlAbortController: AbortController | null = null;
+  /** Bound handlers kept so dispose can detach them. */
+  private readonly _onOnline: () => void;
+  private readonly _onOffline: () => void;
 
   constructor(mount: HTMLElement, options: StageOptions = {}) {
     this.canvas = el('canvas', { className: 'olv-canvas' });
@@ -85,6 +233,22 @@ export class Stage {
     this._version.style.display = 'none';
     this.overlay.append(this._version);
 
+    // Online/offline awareness — set initial state and react to changes.
+    // Error-handling-UX item E4: warn the user they can't stream when offline
+    // so they don't sit waiting for a request that will never resolve.
+    this._onOnline = () => this._setOfflineState(false);
+    this._onOffline = () => this._setOfflineState(true);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this._onOnline);
+      window.addEventListener('offline', this._onOffline);
+      // Initial state — `navigator.onLine` is true on every browser at
+      // start of session even when offline; the offline event will
+      // correct it.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        this._setOfflineState(true);
+      }
+    }
+
     mount.append(this.root);
   }
 
@@ -92,12 +256,21 @@ export class Stage {
   hideEmptyState(): void {
     this._empty.style.display = 'none';
     this._version.style.display = 'block';
+    this._cancelUrlLoad();
   }
 
   /** Show the empty state again (e.g. after the last cloud is removed). */
   showEmptyState(): void {
     this._empty.style.display = 'flex';
     this._version.style.display = 'none';
+  }
+
+  /** Remove window-level listeners. Pair with viewer.dispose(). */
+  dispose(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this._onOnline);
+      window.removeEventListener('offline', this._onOffline);
+    }
   }
 
   private _buildTopBar(): HTMLElement {
@@ -109,6 +282,9 @@ export class Stage {
       text: 'Private · on your device',
       title: 'Your scan is read and rendered locally. Nothing is uploaded.',
     });
+    // GitHub link demoted to a ghost link (item 9) — text + arrow, no pill
+    // background — so the "Private · on your device" trust signal stays the
+    // dominant header element on mobile.
     const github = el('a', {
       className: 'olv-github',
       text: 'GitHub',
@@ -123,17 +299,34 @@ export class Stage {
   }
 
   private _buildEmptyState(options: StageOptions): HTMLElement {
-    // Visual-hierarchy principle: one primary action per view. The
-    // gradient "Open scan from device" button is the primary; samples,
-    // URL streaming, and the verified-public-LiDAR picker are secondary.
-    // Section labels ("Quick demos", "Public LiDAR") group the secondary
-    // paths so the eye reads three distinct intents instead of five
-    // competing inputs.
+    // Item 7: copy is mobile-aware. On phones the "drag onto the page"
+    // instruction is meaningless (iOS Safari has no drag-and-drop), so the
+    // mobile variant leads with the pick-from-device action.
+    const mobile = isMobileViewport();
+    // Hero brand mark sits above the title — same design DNA as the
+    // top-bar wordmark, scaled up. Pure inline SVG (no raster, no
+    // request) so it appears in the same paint as the title.
+    const heroMark = el('div', {
+      className: 'olv-empty-hero',
+      html: HERO_MARK,
+      ariaLabel: 'OpenLiDARViewer',
+    });
     const title = el('h1', { className: 'olv-empty-title', text: 'Open a scan' });
+    // v0.3.6 desktop-audit fix: one consolidated trust line. Replaces three
+    // separate "verified at release time" / "verified at build time" / CORS
+    // helper paragraphs that previously stacked across the empty state. The
+    // privacy posture is the single most important first-paint signal — give
+    // it one home, then let the actions speak for themselves.
     const sub = el('p', {
       className: 'olv-empty-sub',
-      text: 'Drag a point-cloud file onto the page or pick one below. Nothing leaves your device.',
+      text: mobile
+        ? 'Pick a file. Nothing leaves your device.'
+        : 'Drag a file onto the page, or pick one below. Nothing leaves your device.',
     });
+
+    // Top-of-empty-state status banner — used for offline (E4) and for the
+    // retry-last-URL affordance (E9). Renders nothing by default.
+    this._statusBanner = el('div', { className: 'olv-empty-status olv-hidden' });
 
     // "Open scan from device" — a native file picker so a phone, which has no
     // drag-and-drop, can open a scan too. The picker accepts any file; the
@@ -142,81 +335,170 @@ export class Stage {
     const fileInput = el('input', { className: 'olv-file-input', type: 'file' });
     fileInput.addEventListener('change', () => {
       const file = fileInput.files?.[0];
-      if (file) options.onOpenFile?.(file);
+      if (file && this._approveFile(file)) options.onOpenFile?.(file);
       fileInput.value = ''; // let the same file be re-picked
     });
+    // Item 12: idle CTA pulse — a CSS-only animation class kicks in 4 s
+    // after the empty state mounts and fades out as soon as the user hovers
+    // / focuses / scrolls the page. The class is only ever added once.
     const openButton = el('button', {
-      className: 'olv-open-btn',
+      className: 'olv-open-btn olv-cta-pulse',
       type: 'button',
       text: 'Open scan from device',
       title: 'Choose a point-cloud file from your device — or drag one onto the page',
     });
     openButton.addEventListener('click', () => fileInput.click());
+    // Suppress the pulse on first interaction anywhere — the affordance
+    // has done its job once the user touches the page.
+    const stopPulse = () => openButton.classList.remove('olv-cta-pulse');
+    openButton.addEventListener('pointerdown', stopPulse, { once: true });
+    if (typeof window !== 'undefined') {
+      window.addEventListener('scroll', stopPulse, { once: true, passive: true });
+    }
 
-    // Supported-formats note moves below the primary button — UX-writing
-    // principle: don't front-load format jargon when the primary action
-    // already says what to do.
-    const formats = el('p', {
-      className: 'olv-empty-formats',
-      text: 'Supports .las · .laz · .ply · .obj · .glb · .gltf · .pcd · .pts · .ptx · .e57',
+    // Item 5: format list collapses to a one-line summary with a tap-to-
+    // expand. Reads cleanly on mobile instead of a wall of 10 extensions.
+    const formats = el('details', { className: 'olv-empty-formats' });
+    const formatsSummary = el('summary', {
+      className: 'olv-empty-formats-summary',
+      text: 'Supports 10 formats including .las, .laz, .ply',
     });
+    const formatsFull = el('p', {
+      className: 'olv-empty-formats-full',
+      text: '.las · .laz · .ply · .obj · .glb · .gltf · .pcd · .pts · .ptx · .e57',
+    });
+    formats.append(formatsSummary, formatsFull);
+    // Three capture-type chips with monoline icons. Visual-hierarchy
+    // upgrade: the previous version was a 11 px faint period-separated
+    // sentence that read as quaternary fine-print despite carrying
+    // tertiary-level semantic information (what kinds of scans this
+    // viewer accepts). Icon chips make the meaning instant — a user
+    // looking for "does this work with my iPhone scan?" sees the answer
+    // without parsing prose.
+    const captureKinds = el('div', { className: 'olv-empty-capture-kinds' });
+    const KINDS: ReadonlyArray<{ icon: string; label: string }> = [
+      {
+        // Drone (top-down): four rotor circles, X cross-arms, central body.
+        icon: `<svg viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+<circle cx="3" cy="3" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<circle cx="13" cy="3" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<circle cx="3" cy="13" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<circle cx="13" cy="13" r="2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<line x1="4.5" y1="4.5" x2="11.5" y2="11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="11.5" y1="4.5" x2="4.5" y2="11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+<circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>`,
+        label: 'Drone LiDAR',
+      },
+      {
+        // iPhone: rounded body, screen rim, speaker slit + home indicator.
+        icon: `<svg viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+<rect x="4" y="1" width="8" height="14" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<rect x="6.6" y="2.4" width="2.8" height="0.7" rx="0.35" fill="currentColor"/>
+<rect x="6" y="12.6" width="4" height="0.6" rx="0.3" fill="currentColor" opacity="0.55"/></svg>`,
+        label: 'iPhone scans',
+      },
+      {
+        // Terrestrial laser scanner on tripod: scanner body + 3-leg tripod.
+        icon: `<svg viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+<rect x="5" y="2" width="6" height="4" rx="0.7" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<circle cx="8" cy="4" r="0.9" fill="currentColor"/>
+<line x1="8" y1="6" x2="8" y2="8.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="8" y1="8.6" x2="4" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="8" y1="8.6" x2="12" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="8" y1="8.6" x2="8" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+        label: 'Terrestrial laser',
+      },
+    ];
+    for (const k of KINDS) {
+      const chip = el('span', {
+        className: 'olv-capture-chip',
+        title: `Open a scan from a ${k.label.toLowerCase()} capture`,
+      });
+      // Wrap the inline SVG in its own span so we can target it
+      // independently in CSS without parsing the SVG namespace.
+      const iconWrap = el('span', { className: 'olv-capture-chip-icon', html: k.icon });
+      chip.append(iconWrap, el('span', { text: k.label }));
+      captureKinds.append(chip);
+    }
 
-    // ── Secondary section: Quick demos ────────────────────────────────────
+    // ── Section: Quick demos (samples + curated catalog together) ─────────
+    // v0.3.6 desktop-audit fix: the curated dropdown was a separate section
+    // with its own heading and helper text. The user explicitly requested
+    // the two be merged — they're both paths to "open a known public
+    // dataset", so the dropdown lives directly under the samples card.
     const demosLabel = el('p', {
       className: 'olv-empty-section-label',
       text: 'Quick demos',
     });
     const samples = el('div', { className: 'olv-samples' });
     for (const s of options.samples ?? []) {
+      // De-jargoned detail line — readable to first-time users without
+      // requiring knowledge of "COPC" or "streamed".
+      const detail = s.detail;
       const btn = el('button', {
         className: 'olv-sample',
         type: 'button',
         title:
           s.url.startsWith('http')
-            ? `Stream ${s.label.toLowerCase()} — no upload, only the visible tiles are fetched`
-            : `Load ${s.label.toLowerCase()} — a tiny bundled fixture, expect a sparse render`,
+            ? `Open ${s.label.toLowerCase()} — streams over your network, nothing uploaded`
+            : `Open ${s.label.toLowerCase()} — bundled fixture`,
       }, [
         el('span', { className: 'olv-sample-label', text: s.label }),
-        el('span', { className: 'olv-sample-detail', text: s.detail }),
+        el('span', { className: 'olv-sample-detail', text: detail }),
       ]);
-      btn.addEventListener('click', () => options.onSample?.(s.url, s.name));
+      btn.addEventListener('click', () => {
+        if (this._approveSample(s)) options.onSample?.(s.url, s.name);
+      });
       samples.append(btn);
     }
 
-    // ── Secondary section: Public LiDAR ───────────────────────────────────
-    const publicLabel = el('p', {
-      className: 'olv-empty-section-label',
-      text: 'Public LiDAR',
-    });
+    // ── Section: Open from URL (visible, the second real entry path) ─────
+    // After merging the catalog into Quick demos, URL is the only
+    // remaining secondary path — no need to hide it behind a disclosure.
+    // The PC STAC "Search by location" lives inside the catalog panel
+    // so it clusters with the curated dropdown.
     const urlRow = this._buildUrlRow(options);
 
     const children: (Node | string)[] = [
+      this._statusBanner,
+      heroMark,
       title,
       sub,
       openButton,
       fileInput,
       formats,
+      captureKinds,
       demosLabel,
       samples,
-      publicLabel,
-      urlRow,
     ];
-    if (options.catalogPanel) children.push(options.catalogPanel);
+    // Catalog dropdown sits directly below the sample card — both are
+    // "quick demos" surfaces, both load a known public dataset on click.
+    // The catalog also carries the PC STAC "Search by location" disclosure
+    // inside its own DOM, so all public-dataset paths cluster together.
+    if (options.catalogPanel) {
+      children.push(options.catalogPanel);
+    }
+    children.push(urlRow);
 
     return el('div', { className: 'olv-empty' }, children);
   }
 
   /**
    * The "open from URL" field — the entry point for streaming a remote COPC
-   * (`.copc.laz`) scan. It is a quiet, secondary affordance below the samples;
-   * the host must allow cross-origin range requests, which the hint states
-   * plainly so expectations stay honest.
+   * (`.copc.laz`) scan. Item 10 replaces the quiet helper text with two
+   * brighter constraint bullets above the input so the COPC + CORS
+   * requirements aren't missed. The form orchestrates its own loading,
+   * validation, error, and cancel UI; the parent only supplies `onOpenUrl`.
    */
   private _buildUrlRow(options: StageOptions): HTMLElement {
     const label = el('label', {
-      className: 'olv-url-label',
-      text: 'or stream a COPC file from a URL',
+      className: 'olv-url-label olv-empty-section-label',
+      text: 'Open from URL',
     });
+    const bullets = el('ul', { className: 'olv-url-rules' }, [
+      el('li', { text: 'File must be in COPC format (.copc.laz)' }),
+      el('li', { text: 'Server must allow CORS range requests' }),
+    ]);
 
     const input = el('input', {
       className: 'olv-url-input',
@@ -224,6 +506,28 @@ export class Stage {
       ariaLabel: 'COPC file URL',
     });
     input.placeholder = 'https://host/scan.copc.laz';
+    this._urlInput = input;
+
+    // Inline validation on blur (E3) — soft warning, not a blocker.
+    input.addEventListener('blur', () => {
+      const url = input.value.trim();
+      if (!url) {
+        this._clearUrlError();
+        return;
+      }
+      if (!this._looksLikeCopc(url)) {
+        this._showUrlError(
+          'This URL doesn\'t look like a COPC file. You can still try to open it.',
+          'warning',
+        );
+      } else {
+        this._clearUrlError();
+      }
+    });
+    input.addEventListener('input', () => {
+      // Typing clears any prior error so the field doesn't feel "stuck".
+      this._clearUrlError();
+    });
 
     const submit = el('button', {
       className: 'olv-url-btn',
@@ -231,22 +535,282 @@ export class Stage {
       title: 'Stream a Cloud Optimized Point Cloud from this URL',
     });
     submit.type = 'submit';
+    this._urlSubmit = submit;
 
-    const hint = el('span', {
-      className: 'olv-url-hint',
-      text: 'COPC only. The host must allow cross-origin range requests.',
-    });
+    // Inline error/warning slot — sits between the input and the bullets so
+    // any message lives close to its cause.
+    this._urlError = el('div', { className: 'olv-url-message olv-hidden' });
 
     const form = el('form', { className: 'olv-empty-url' }, [
       label,
+      bullets,
       el('div', { className: 'olv-url-controls' }, [input, submit]),
-      hint,
+      this._urlError,
     ]);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      const url = input.value.trim();
-      if (url) options.onOpenUrl?.(url);
+      void this._handleUrlSubmit(input.value.trim(), options);
     });
     return form;
+  }
+
+  /**
+   * Empty-state file pick gate. On mobile, files above the soft memory
+   * threshold show a confirmation so the user isn't surprised by a tab
+   * crash mid-load. Returns true if the load should proceed.
+   * Error-handling-UX item E2.
+   */
+  private _approveFile(file: File): boolean {
+    if (!isMobileViewport()) return true;
+    if (file.size < MOBILE_MEMORY_WARN_BYTES) return true;
+    const message =
+      `This file is ${formatBytes(file.size)}. On phones it may exceed the ` +
+      `tab's memory and crash. Open anyway?`;
+    return window.confirm(message);
+  }
+
+  /**
+   * Sample-button gate. Items E1 (cellular warning) and E2 (mobile memory
+   * warning) layer onto the same confirmation prompt so the user sees a
+   * single, focused decision before a large download begins.
+   */
+  private _approveSample(sample: Sample): boolean {
+    const size = sample.sizeBytes ?? 0;
+    if (size === 0) return true;
+
+    const reasons: string[] = [];
+    const cellular = isCellularConnection();
+    if (cellular && size >= CELLULAR_WARN_BYTES) {
+      reasons.push(
+        `You're on a cellular connection — ${formatBytes(size)} of data ` +
+        `may use your mobile-data quota.`,
+      );
+    }
+    if (isMobileViewport() && size >= MOBILE_MEMORY_WARN_BYTES) {
+      reasons.push(
+        `This sample is ${formatBytes(size)} — on phones it may exceed the ` +
+        `tab's memory.`,
+      );
+    }
+    if (reasons.length === 0) return true;
+    return window.confirm(`${reasons.join('\n\n')}\n\nContinue?`);
+  }
+
+  /**
+   * Submit handler for the URL field. Walks the prevent → detect →
+   * communicate → recover error hierarchy:
+   *   • Empty input: do nothing (no nag).
+   *   • Offline: refuse with a message; preserve input.
+   *   • Otherwise: call `onOpenUrl`, flip the button to a Cancel control
+   *     while the promise is pending, surface any error inline, and on
+   *     failure preserve the URL + show a Retry banner so recovery is one
+   *     tap away.
+   */
+  private async _handleUrlSubmit(url: string, options: StageOptions): Promise<void> {
+    if (!url) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this._showUrlError(
+        'You\'re offline. Connect to the internet to stream a remote scan, ' +
+        'or open a file from your device.',
+        'error',
+      );
+      return;
+    }
+    if (!this._urlSubmit) return;
+
+    this._clearUrlError();
+    this._hideStatusBanner();
+    this._setUrlLoading(true);
+
+    const controller = new AbortController();
+    this._urlAbortController = controller;
+
+    try {
+      const result = options.onOpenUrl?.(url);
+      if (result instanceof Promise) {
+        await result;
+      }
+      // Success — the host page typically calls hideEmptyState which already
+      // resets this state, but clear just in case.
+      this._setUrlLoading(false);
+      this._urlAbortController = null;
+    } catch (err) {
+      this._urlAbortController = null;
+      this._setUrlLoading(false);
+      if ((err as { name?: string })?.name === 'AbortError') {
+        // User-initiated cancel — no error noise, just restore.
+        return;
+      }
+      const friendly = this._friendlyUrlError(err);
+      this._showUrlError(friendly, 'error');
+      // E8: input is preserved (we never cleared it), so the user can
+      // tweak and resubmit. Plus a retry banner up top (E9).
+      this._showRetryBanner(url, options);
+    }
+  }
+
+  /** Map raw fetch / range-source errors to plain-English guidance (E6). */
+  private _friendlyUrlError(err: unknown): string {
+    const raw = err instanceof Error ? err.message : String(err ?? '');
+    const lower = raw.toLowerCase();
+    if (lower.includes('cors') || lower.includes('cross-origin')) {
+      return (
+        'This file\'s host blocks browser access. Try downloading the file ' +
+        'and using Open scan from device, or ask the host to allow CORS.'
+      );
+    }
+    if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
+      return (
+        'Couldn\'t reach this URL. Check the link, your connection, and ' +
+        'whether the host is online.'
+      );
+    }
+    if (lower.includes('range') || lower.includes('416')) {
+      return (
+        'The host returned an unexpected range response. The file may be ' +
+        'corrupted or not a valid COPC.'
+      );
+    }
+    if (lower.includes('404') || lower.includes('not found')) {
+      return 'No file found at this URL. Check the path and try again.';
+    }
+    if (lower.includes('403') || lower.includes('forbidden')) {
+      return 'The host refused access. Check the link or use Open scan from device.';
+    }
+    if (lower.includes('aborted')) {
+      return 'Cancelled.';
+    }
+    return raw || 'Couldn\'t open this URL. Try downloading the file and opening it from your device.';
+  }
+
+  /** Cosmetic heuristic — true for things that look like a COPC URL. */
+  private _looksLikeCopc(url: string): boolean {
+    const lower = url.toLowerCase();
+    return (
+      lower.includes('.copc.laz') ||
+      lower.includes('.copc.las') ||
+      lower.endsWith('/ept.json') ||
+      lower.includes('/ept.json?')
+    );
+  }
+
+  /**
+   * Toggle the Open button into / out of its loading state. While loading,
+   * the button shows a spinner and the label flips to "Cancel" so item E10
+   * gives the user an explicit escape from an in-flight stream.
+   */
+  private _setUrlLoading(loading: boolean): void {
+    const button = this._urlSubmit;
+    if (!button) return;
+    if (loading) {
+      button.classList.add('olv-url-btn-loading');
+      button.type = 'button'; // suppress the form's default submit
+      button.textContent = 'Cancel';
+      button.title = 'Cancel the in-flight load';
+      button.onclick = () => this._cancelUrlLoad();
+    } else {
+      button.classList.remove('olv-url-btn-loading');
+      button.type = 'submit';
+      button.textContent = 'Open';
+      button.title = 'Stream a Cloud Optimized Point Cloud from this URL';
+      button.onclick = null;
+    }
+  }
+
+  /** Abort the in-flight URL load if one is running. Item E10. */
+  private _cancelUrlLoad(): void {
+    if (!this._urlAbortController) {
+      this._setUrlLoading(false);
+      return;
+    }
+    try {
+      this._urlAbortController.abort();
+    } catch {
+      // ignore — abort can throw in old engines on a re-abort
+    }
+    this._urlAbortController = null;
+    this._setUrlLoading(false);
+  }
+
+  /** Show an inline message under the URL input, severity-coloured. */
+  private _showUrlError(message: string, severity: 'warning' | 'error'): void {
+    if (!this._urlError) return;
+    this._urlError.textContent = message;
+    this._urlError.classList.remove('olv-hidden', 'olv-url-message-warning', 'olv-url-message-error');
+    this._urlError.classList.add(
+      severity === 'error' ? 'olv-url-message-error' : 'olv-url-message-warning',
+    );
+  }
+
+  /** Hide the inline URL message. */
+  private _clearUrlError(): void {
+    if (!this._urlError) return;
+    this._urlError.classList.add('olv-hidden');
+    this._urlError.textContent = '';
+  }
+
+  /**
+   * Top-of-page Retry banner. Surfaces the failed URL with a one-tap retry
+   * affordance — the recover step of E9. The Retry button reuses the same
+   * submit pipeline as a manual press.
+   */
+  private _showRetryBanner(url: string, options: StageOptions): void {
+    if (!this._statusBanner) return;
+    this._statusBanner.replaceChildren();
+    this._statusBanner.classList.remove('olv-hidden', 'olv-empty-status-offline');
+    this._statusBanner.classList.add('olv-empty-status-error');
+    const label = el('span', { text: 'Last URL failed to open.' });
+    const retry = el('button', {
+      className: 'olv-empty-status-action',
+      type: 'button',
+      text: 'Retry',
+    });
+    retry.addEventListener('click', () => {
+      this._hideStatusBanner();
+      void this._handleUrlSubmit(url, options);
+    });
+    const dismiss = el('button', {
+      className: 'olv-empty-status-dismiss',
+      type: 'button',
+      text: '×',
+      ariaLabel: 'Dismiss',
+    });
+    dismiss.addEventListener('click', () => this._hideStatusBanner());
+    this._statusBanner.append(label, retry, dismiss);
+  }
+
+  /** Tear down whichever status banner is currently up. */
+  private _hideStatusBanner(): void {
+    if (!this._statusBanner) return;
+    this._statusBanner.classList.add('olv-hidden');
+    this._statusBanner.replaceChildren();
+  }
+
+  /**
+   * Reflect online / offline state. When offline, surface a banner and
+   * disable the URL submit button — items E4. The file-pick path stays
+   * available since it doesn't need the network.
+   */
+  private _setOfflineState(offline: boolean): void {
+    if (this._urlSubmit) this._urlSubmit.disabled = offline;
+    if (this._urlInput) this._urlInput.disabled = offline;
+    if (!this._statusBanner) return;
+    if (offline) {
+      this._statusBanner.replaceChildren();
+      this._statusBanner.classList.remove('olv-hidden', 'olv-empty-status-error');
+      this._statusBanner.classList.add('olv-empty-status-offline');
+      this._statusBanner.append(
+        el('span', {
+          text:
+            'You\'re offline. Open a file from your device to keep working — ' +
+            'streaming will resume when you reconnect.',
+        }),
+      );
+    } else {
+      // Only auto-dismiss if the offline banner is the one currently shown.
+      if (this._statusBanner.classList.contains('olv-empty-status-offline')) {
+        this._hideStatusBanner();
+      }
+    }
   }
 }

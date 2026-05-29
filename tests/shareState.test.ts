@@ -53,3 +53,20 @@ test('decode tolerates a payload that is valid base64 but not an object', () => 
   const encoded = btoa('42').replace(/=+$/, '');
   expect(decodeShareState(encoded)).toBeNull();
 });
+
+test('orbit target round-trips at UTM-scale (large translated LiDAR coords)', () => {
+  // The Autzen public COPC sits at UTM 10N around (637 600 m, 852 000 m,
+  // 160 m). Real-world share links must preserve those magnitudes without
+  // float-precision loss, since shareState.ts encodes via JSON.stringify
+  // (round-trip to base-10 strings). Verifies the share link is safe to
+  // drop into a research paper without quietly drifting the orbit pivot.
+  const utm: ShareState = {
+    camera: {
+      position: [637_650.12, 852_100.34, 350.5],
+      target:   [637_600.0,  852_000.0,  160.0],
+      mode: 'orbit',
+    },
+  };
+  const back = decodeShareState(encodeShareState(utm));
+  expect(back).toEqual(utm);
+});

@@ -191,9 +191,24 @@ describe('usageCounters — reset', () => {
 
 describe('usageCounters — defensive loading', () => {
   it('treats malformed JSON in localStorage as empty', () => {
-    const store = (globalThis as { localStorage: Storage }).localStorage;
-    store.setItem('olv.usage.v1', '{not valid json');
-    expect(snapshot()).toEqual([]);
+    // The defensive path correctly logs a console.warn in production —
+    // here we silence it so the test log stays readable. The behaviour
+    // under test (return [] on malformed JSON) is asserted below.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const store = (globalThis as { localStorage: Storage }).localStorage;
+      store.setItem('olv.usage.v1', '{not valid json');
+      expect(snapshot()).toEqual([]);
+      // Verify the production warn path WAS reached — otherwise this
+      // silencing would mask a regression that removed the defensive
+      // log entirely.
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[usageCounters]'),
+        expect.any(Error),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('treats non-array JSON in localStorage as empty', () => {

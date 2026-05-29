@@ -15,10 +15,20 @@ export type RenderBackend = 'webgpu' | 'webgl2';
 
 /** Default EDL tuning, chosen for the bundled survey samples. */
 export const EDL_DEFAULTS = {
-  /** Higher = more pronounced depth cueing. */
-  strength: 0.5,
-  /** Neighbour sampling distance, in device pixels. */
-  radiusPx: 1.4,
+  /**
+   * Higher = more pronounced depth cueing. v0.3.6 premium-graphics pass:
+   * 0.5 → 0.7 so the screen-space depth cueing actually carves visible
+   * geometry into the cloud (buildings, terrain folds, vegetation
+   * volumes) rather than just whispering at it. Still well clear of the
+   * over-cooked "burned-edge" range above 1.0.
+   */
+  strength: 0.7,
+  /**
+   * Neighbour sampling distance, in device pixels. Bumped 1.4 → 1.6 to
+   * widen the edge halo a hair — reads as a richer rim light at the
+   * device pixel ratios the renderer now targets.
+   */
+  radiusPx: 1.6,
 } as const;
 
 /** A reasonable strength range for a user-facing control. */

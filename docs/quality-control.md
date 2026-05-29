@@ -64,10 +64,42 @@ before shipping.
 
 ## Gate 2 — Unit + integration tests
 
-`npm test` runs the full Vitest suite — 84 test files, 974 passing
+`npm test` runs the full Vitest suite — 92 test files, 1,177 passing
 tests, 18 deliberately skipped contract tests. The skipped tests
 pin the shape of the in-progress analysis seam; they are NOT
 failures.
+
+### Slow-sandbox workaround
+
+The whole suite completes in ~15 seconds on a warm checkout. If you
+are running in a constrained sandbox (Cowork, CodeSandbox idle, a
+container with hard CPU caps) and hit a per-command timeout before
+the run completes, the heaviest single test is `parseBuffer.test.ts`
+(~820 ms — dominated by the first-time dynamic import of the LAZ
+decoder chunk). To shed the heaviest LAS / LAZ decode tests without
+losing coverage of the modules touched by this release, run:
+
+```bash
+npx vitest run --exclude tests/parseBuffer.test.ts \
+               --exclude tests/streamingStress*.test.ts \
+               --exclude tests/torture.test.ts
+```
+
+This trims roughly 1.2 s off the run while still exercising the v0.3.6
+deltas (orbit feel, soft-clamp math, production-build smoke, PC STAC
+client, share-state UTM round-trip, mobile UI). The excluded files
+remain part of the full battery — re-run them in a non-constrained
+environment before shipping.
+
+A single-shot release-blocker check that runs only the v0.3.6 deltas:
+
+```bash
+npx vitest run tests/orbitFeel.test.ts tests/orbitCenter.test.ts \
+               tests/orbitSmoke.test.ts tests/planetaryComputer.test.ts \
+               tests/shareState.test.ts
+```
+
+Completes in under 1 second locally.
 
 | Suite | Files | Tests | Typical time |
 |---|---|---|---|

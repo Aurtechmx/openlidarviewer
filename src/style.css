@@ -24,9 +24,39 @@ button { font-family: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
 /* Stage */
-.olv-stage { position: relative; height: 100%; width: 100%; }
-.olv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.olv-overlay { position: absolute; inset: 0; pointer-events: none; }
+/* Stage container — base radial gradient gives a subtle "lit centre"
+ * cinematic feel before WebGPU paints, and also shows in any sliver
+ * around the canvas during resize. Vignette overlay applied via a
+ * non-interactive pseudo-element. */
+.olv-stage {
+  position: relative; height: 100%; width: 100%;
+  background:
+    radial-gradient(ellipse at 50% 45%, #0c1224 0%, #070a14 70%, #050810 100%);
+}
+.olv-stage::after {
+  /* Cinematic vignette — darkens the corners ~22%, fades to neutral by
+   * 60% of the radius. pointer-events:none so clicks pass through to
+   * the canvas; z-index just under the overlay so panels still sit on
+   * top. The vignette also helps the bright cyan EDL highlights pop
+   * because the eye reads more contrast against a darker frame. */
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 50%,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0) 55%,
+      rgba(0, 0, 0, 0.28) 100%);
+  z-index: 1;
+}
+.olv-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  z-index: 0;
+}
+/* Overlay sits above the vignette so panels read crisp against the
+ * darkened corners — the vignette is decorative scene framing, not a
+ * dimming layer for the UI. */
+.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .olv-overlay > * { pointer-events: auto; }
 .olv-dragging::after {
   content: "";
@@ -50,19 +80,49 @@ button:disabled { cursor: not-allowed; }
   border: 0.5px solid rgba(0, 178, 255, 0.24);
   border-radius: 7px; padding: 5px 9px;
 }
+/* v0.3.6 design audit (item 9): demoted from a pill to a ghost link so the
+ * "Private · on your device" trust-signal pill stays the dominant element
+ * in the header. Padding kept so the tap target meets 44 pt on mobile via
+ * the touch-target media query. */
 .olv-github {
   font-size: 11px; color: var(--text-dim); text-decoration: none;
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: 7px; padding: 5px 9px;
+  background: transparent;
+  border: none;
+  border-radius: 6px; padding: 5px 7px;
 }
-.olv-github:hover { color: var(--text); }
+.olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 
 /* Empty state */
 .olv-empty {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 14px; text-align: center; padding: 24px;
+  /* v0.3.6 desktop-audit fix: tighter vertical rhythm so the title reads
+   * as a direct caption to the hero, and the CTA sits as the obvious
+   * answer to the question the title poses. */
+  gap: 10px; text-align: center; padding: 24px;
+}
+/* Hero brand mark — inline SVG icon (orbital rings + glowing core +
+ * vertical axis dots) sits above the title in the empty state. v0.3.6
+ * desktop-audit fix: bumped from 140 px to 200 px on desktop so the
+ * brand moment carries the first paint instead of being dwarfed by
+ * the 56 px title. Mobile clamp below keeps it readable on phones. */
+.olv-empty-hero {
+  width: 200px; height: 200px;
+  margin-bottom: -10px;
+  display: flex; align-items: center; justify-content: center;
+  animation: olv-hero-breathe 6s ease-in-out infinite;
+  filter: drop-shadow(0 6px 28px rgba(0, 178, 255, 0.32));
+}
+.olv-empty-hero .olv-hero-mark-svg {
+  display: block;
+  width: 100%; height: 100%;
+}
+@keyframes olv-hero-breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.025); opacity: 0.96; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-empty-hero { animation: none; }
 }
 .olv-empty-title {
   font-size: 28px; font-weight: 600; letter-spacing: -0.01em;
@@ -120,9 +180,11 @@ button:disabled { cursor: not-allowed; }
 .olv-url-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-url-hint { font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5; }
 
-/* Catalog panel — "find public LiDAR by address" entry point on the empty
- * state. Mirrors the URL row visually (input + button + hint) but adds a
- * status line and a scrollable result list below. */
+/* Catalog panel — verified public LiDAR dataset picker on the empty
+ * state. Surfaces the curated dropdown (every URL probed at release time)
+ * and the optional Planetary Computer "Search by location" disclosure.
+ * Mirrors the URL row visually (input + button + hint) and adds a status
+ * line plus a scrollable result list for the STAC search results. */
 .olv-catalog {
   display: flex; flex-direction: column; align-items: center;
   gap: 8px; margin-top: 4px;
@@ -459,7 +521,103 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-nav-row { display: flex; align-items: center; gap: 8px; }
 
-/* Segmented mode switcher */
+/* v0.3.6 triangle mode switcher — three vertex buttons connected by a
+ * dashed cyan outline, with a centre Reset action at the centroid. Users
+ * previously missed the navigation modes entirely because they sat as a
+ * flat segmented row; the triangle composition reads as a single
+ * dedicated control surface. */
+.olv-modes.olv-modes-triangle {
+  position: relative;
+  width: 140px;
+  height: 108px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 0;
+  display: block;
+}
+.olv-modes-tri-bg {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  display: block;
+}
+.olv-modes-tri-bg svg { width: 100%; height: 100%; display: block; }
+
+/* Triangle vertex buttons — circular pads with stacked icon + label. */
+.olv-modes-triangle .olv-mode {
+  position: absolute;
+  width: 50px; height: 50px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1px;
+  background: rgba(8, 14, 28, 0.72);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 0.5px solid var(--hairline);
+  border-radius: 50%;
+  color: var(--text-dim);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  padding: 0;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease,
+              box-shadow 180ms ease, transform 90ms ease;
+}
+.olv-modes-triangle .olv-mode:hover:not(.olv-mode-active) {
+  color: var(--text);
+  border-color: rgba(0, 178, 255, 0.5);
+}
+.olv-modes-triangle .olv-mode:active { transform: scale(0.94); }
+.olv-modes-triangle .olv-mode.olv-mode-active {
+  color: var(--accent);
+  background: rgba(0, 178, 255, 0.16);
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px rgba(0, 178, 255, 0.25),
+    0 4px 16px rgba(0, 178, 255, 0.28);
+}
+.olv-mode-icon {
+  display: inline-flex;
+  width: 22px; height: 22px;
+  color: inherit;
+}
+.olv-mode-icon svg { width: 100%; height: 100%; display: block; }
+.olv-mode-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+/* Vertex positions — Orbit at the apex, Walk + Fly at the base. */
+.olv-modes-triangle .olv-mode-orbit { top: -8px; left: 50%; transform: translateX(-50%); }
+.olv-modes-triangle .olv-mode-orbit:active { transform: translateX(-50%) scale(0.94); }
+.olv-modes-triangle .olv-mode-walk  { bottom: -8px; left: -3px; }
+.olv-modes-triangle .olv-mode-fly   { bottom: -8px; right: -3px; }
+
+/* Centre Reset button — sits at the triangle's centroid. */
+.olv-mode-reset {
+  position: absolute;
+  top: 47%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(8, 14, 28, 0.85);
+  border: 0.5px solid rgba(0, 178, 255, 0.4);
+  border-radius: 50%;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 180ms ease, transform 90ms ease, box-shadow 180ms ease;
+}
+.olv-mode-reset:hover {
+  background: rgba(0, 178, 255, 0.12);
+  box-shadow: 0 0 0 2px rgba(0, 178, 255, 0.2);
+}
+.olv-mode-reset:active { transform: translate(-50%, -50%) scale(0.92); }
+.olv-mode-reset svg { width: 16px; height: 16px; display: block; }
+
+/* Legacy non-triangle mode switcher fallback (kept in case any non-
+ * NavBar caller instantiates `.olv-modes` without the triangle class). */
 .olv-modes {
   display: flex; gap: 2px;
   background: var(--panel); border: 0.5px solid var(--hairline);
@@ -1659,3 +1817,309 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-probe-coords { font-size: 11px; font-family: var(--mono); color: var(--text); }
 .olv-probe-attr { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   v0.3.6 mobile collapsible side panels (StreamingPanel / MeasurePanel /
+   AnnotationPanel). The chevron toggle lives in each panel's head row but
+   is invisible on desktop — desktops have screen real estate, so showing
+   a collapse control would be visual noise. On phones the toggle reveals
+   itself and a tap rolls the panel up to its title row, freeing canvas.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.olv-collapse-toggle { display: none; }
+.olv-chevron {
+  display: inline-block;
+  font-size: 14px; line-height: 1;
+  color: var(--text-dim);
+  transition: transform 220ms ease;
+}
+
+@media (max-width: 767px) {
+  .olv-collapse-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: none;
+    min-width: 44px; min-height: 44px;
+    margin: -8px -10px -8px 0;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .olv-collapse-toggle:hover { color: var(--text); }
+  .olv-collapse-toggle:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+    border-radius: 8px;
+  }
+  /* The panel head row gets a tap-area cursor so the affordance reads. */
+  .olv-streaming-panel > .olv-panel-head,
+  .olv-measure-panel > .olv-panel-head,
+  .olv-anno-panel > .olv-ap-head {
+    cursor: pointer;
+    user-select: none;
+  }
+  /* Collapsed state — hide every direct child of the panel except the
+     head row. Each panel scopes the rule to its own head class so the
+     Annotations panel's existing `.olv-ap-head` selector still fits. */
+  .olv-streaming-panel.olv-collapsed > :not(.olv-panel-head),
+  .olv-measure-panel.olv-collapsed > :not(.olv-panel-head),
+  .olv-anno-panel.olv-collapsed > :not(.olv-ap-head) {
+    display: none;
+  }
+  /* Chevron rotates 180° when collapsed so it points down → up to read
+     as "expand" affordance. */
+  .olv-collapsed .olv-chevron { transform: rotate(180deg); }
+  /* When collapsed, the panel shrinks to just the head — tighter padding
+     so it reads as a pill-sized chip rather than a half-rendered panel. */
+  .olv-streaming-panel.olv-collapsed,
+  .olv-measure-panel.olv-collapsed,
+  .olv-anno-panel.olv-collapsed {
+    padding: 6px 12px;
+    max-height: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   v0.3.6 desktop-audit additions
+   --------------------------------------------------------------------------
+   1.  "More ways to open" disclosure that hides the URL field by default
+       so the empty state stays focused on the gradient CTA + Quick demos.
+   2.  Always-visible version chip — was previously hidden until a scan
+       loaded; now grounds the experience even on first paint.
+   3.  Inspector hide-when-empty (mirrors the dock-hide pattern).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* NavBar prompt + touch hint are populated in the DOM at boot with
+ * opacity 0, ready to fade in when the user enters walk/fly mode.
+ * On empty state they're visually invisible but still read by
+ * screen readers + selectable in text dumps. Hide them outright
+ * until a scan loads so they can't surface in any context. */
+body:not(.olv-has-scan) .olv-nav-prompt,
+body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
+
+/* Capture-kinds chip row — drone / iPhone / terrestrial laser. Each chip
+ * pairs a monoline brand-cyan icon with a label, so a first-time visitor
+ * scanning the empty state recognises "my capture type works here"
+ * instantly. Sits as tertiary visual weight: bigger and more confident
+ * than the format <details> summary above it, but quieter than the
+ * primary gradient CTA above and the section eyebrows below. */
+.olv-empty-capture-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+  max-width: 460px;
+}
+.olv-capture-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: rgba(0, 178, 255, 0.04);
+  border: 0.5px solid rgba(0, 178, 255, 0.20);
+  border-radius: 999px;
+  padding: 5px 12px 5px 9px;
+  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+  cursor: default;
+  user-select: none;
+}
+.olv-capture-chip:hover {
+  color: var(--text);
+  background: rgba(0, 178, 255, 0.08);
+  border-color: rgba(0, 178, 255, 0.5);
+}
+.olv-capture-chip-icon {
+  display: inline-flex;
+  width: 16px; height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.olv-capture-chip-icon svg {
+  width: 100%; height: 100%;
+  display: block;
+}
+/* Mobile: tighten chip padding so the three fit comfortably on a phone. */
+@media (max-width: 480px) {
+  .olv-empty-capture-kinds { gap: 6px; }
+  .olv-capture-chip { padding: 4px 10px 4px 7px; font-size: 11.5px; }
+  .olv-capture-chip-icon { width: 14px; height: 14px; }
+}
+
+/* PC STAC quick-pick city chips under the lat/lon inputs. A chip-style
+ * row that auto-fills the inputs on click so first-time users don't
+ * have to know coordinates by heart. */
+.olv-catalog-quickpicks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 2px 0 4px;
+}
+.olv-catalog-quickpick {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+.olv-catalog-quickpick:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.olv-catalog-quickpick:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* Version chip — was display:none on empty state, switched on at scan
+ * load. Show always, but keep low-key on the empty state so it grounds
+ * the page as a real product without competing with the CTA. */
+.olv-version {
+  display: block !important;
+  opacity: 0.55;
+  transition: opacity 220ms ease;
+}
+.olv-version:hover { opacity: 0.9; }
+body.olv-has-scan .olv-version { opacity: 0.7; }
+
+/* Inspector and its sheet toggle disappear entirely while no scan is
+ * loaded. Same mechanism the dock uses. */
+.olv-inspector.olv-hidden { display: none; }
+.olv-scaninfo-btn.olv-hidden { display: none; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   v0.3.6 mobile design-audit + error-handling-UX additions
+   --------------------------------------------------------------------------
+   Lands the audit batch as the last layer in style.css so every rule beats
+   its earlier-defined predecessor. Grouped by concern:
+     1.  Empty-state status banner (offline + retry).
+     2.  URL row — bullets, inline message, loading spinner.
+     3.  Format <details> collapsible.
+     4.  Section caption under "Quick demos".
+     5.  Idle CTA pulse animation.
+     6.  Mobile hero clamp + larger touch targets.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* 1. Empty-state status banner — drives offline + retry messaging. */
+.olv-empty-status {
+  display: flex; align-items: center; gap: 10px;
+  width: min(100%, 460px);
+  background: rgba(255, 200, 80, 0.06);
+  border: 0.5px solid rgba(255, 200, 80, 0.45);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px; color: var(--text); line-height: 1.45;
+  text-align: left;
+}
+.olv-empty-status.olv-empty-status-error {
+  background: rgba(255, 90, 90, 0.06);
+  border-color: rgba(255, 90, 90, 0.45);
+}
+.olv-empty-status.olv-empty-status-offline {
+  background: rgba(160, 180, 210, 0.06);
+  border-color: rgba(160, 180, 210, 0.45);
+}
+.olv-empty-status-action {
+  margin-left: auto;
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  background: transparent; border: 0.5px solid var(--accent);
+  border-radius: 6px; padding: 4px 12px;
+  transition: background 140ms ease;
+}
+.olv-empty-status-action:hover { background: var(--accent-soft); }
+.olv-empty-status-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-empty-status-dismiss {
+  font-size: 16px; line-height: 1; color: var(--text-faint);
+  background: transparent; border: none; padding: 4px 6px;
+}
+.olv-empty-status-dismiss:hover { color: var(--text); }
+
+/* 2. URL row — constraint bullets, inline message, loading spinner. */
+.olv-url-rules {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 11.5px; color: var(--text-dim); line-height: 1.5;
+  max-width: 360px; text-align: left;
+}
+.olv-url-rules li::before {
+  content: '·'; color: var(--accent);
+  display: inline-block; width: 10px; text-align: center;
+}
+.olv-url-message {
+  font-size: 11.5px; line-height: 1.5;
+  max-width: 360px; text-align: left;
+  padding: 6px 10px; border-radius: 6px;
+}
+.olv-url-message-warning {
+  color: #ffcc66;
+  background: rgba(255, 204, 102, 0.08);
+  border: 0.5px solid rgba(255, 204, 102, 0.4);
+}
+.olv-url-message-error {
+  color: #ff9a9a;
+  background: rgba(255, 90, 90, 0.08);
+  border: 0.5px solid rgba(255, 90, 90, 0.45);
+}
+.olv-url-btn-loading {
+  position: relative; padding-left: 32px;
+  color: var(--accent); border-color: var(--accent);
+}
+.olv-url-btn-loading::before {
+  content: ''; position: absolute;
+  left: 12px; top: 50%; width: 12px; height: 12px;
+  margin-top: -6px;
+  border: 1.5px solid currentColor; border-top-color: transparent;
+  border-radius: 50%;
+  animation: olv-spin 800ms linear infinite;
+}
+@keyframes olv-spin { to { transform: rotate(360deg); } }
+
+/* 3. Format <details> collapsible. */
+.olv-empty-formats[open] .olv-empty-formats-summary::after { content: ' ▴'; opacity: 0.6; }
+.olv-empty-formats-summary {
+  font-size: 11px; color: var(--text-faint);
+  cursor: pointer; list-style: none;
+  padding: 4px 8px; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.olv-empty-formats-summary::after { content: ' ▾'; opacity: 0.6; }
+.olv-empty-formats-summary::-webkit-details-marker { display: none; }
+.olv-empty-formats-summary:hover { color: var(--text-dim); background: rgba(255,255,255,0.03); }
+.olv-empty-formats-full {
+  font-size: 11px; color: var(--text-faint); font-family: var(--mono);
+  max-width: 440px; line-height: 1.6; margin-top: 6px;
+}
+
+/* 4. Section caption — quiet helper text under a section label. */
+.olv-empty-section-caption {
+  font-size: 11px; color: var(--text-faint);
+  max-width: 440px; line-height: 1.5;
+  margin: -16px 0 6px;
+}
+
+/* 5. Idle CTA pulse — fires at 4 s, suppressed on first interaction. */
+@keyframes olv-cta-pulse {
+  0%, 60%, 100% { box-shadow: 0 4px 18px rgba(0, 178, 255, 0.28); }
+  75% { box-shadow: 0 4px 18px rgba(0, 178, 255, 0.28), 0 0 0 6px rgba(0, 178, 255, 0.18); }
+  85% { box-shadow: 0 4px 18px rgba(0, 178, 255, 0.28), 0 0 0 10px rgba(0, 178, 255, 0); }
+}
+.olv-cta-pulse { animation: olv-cta-pulse 3200ms ease-in-out 4000ms 2 both; }
+@media (prefers-reduced-motion: reduce) {
+  .olv-cta-pulse { animation: none; }
+}
+
+/* 6. Mobile clamps — readable hero + tap-sized URL Open. */
+@media (max-width: 480px) {
+  .olv-empty-title { font-size: 40px; }
+  .olv-empty-sub { font-size: 13.5px; max-width: 320px; }
+  .olv-empty-hero { width: 130px; height: 130px; margin-bottom: -4px; }
+  .olv-url-input { width: 100%; max-width: none; flex: 1 1 100%; }
+  .olv-url-btn { width: 100%; }
+  .olv-url-controls { flex-direction: column; gap: 8px; }
+  .olv-url-rules { width: min(100%, 320px); }
+}
+/* Existing @media (max-width: 767px) block already enforces 44 pt touch
+   targets on .olv-url-input + .olv-url-btn; the dimension fix above
+   widens the input on the narrowest viewport so a thumb-typed URL has
+   the whole row. */

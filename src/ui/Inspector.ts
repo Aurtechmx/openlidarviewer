@@ -607,6 +607,20 @@ export class Inspector {
     this.element.classList.toggle('olv-inspector-streaming', streaming);
   }
 
+  /**
+   * Hide the Inspector entirely while the user is on the empty state, reveal
+   * once a scan attaches. v0.3.6 desktop-audit fix: the panel was painting on
+   * the empty state with placeholder controls (Point Size, EDL, Antialiasing,
+   * 13 collapsed sections) that operated on a scan that didn't exist. Showing
+   * a fully-rendered control panel before there's anything to control is the
+   * empty-state anti-pattern that mirrored the toolbar dock issue we already
+   * fixed; the resolution is identical — hide it.
+   */
+  setEmpty(empty: boolean): void {
+    this.element.classList.toggle('olv-hidden', empty);
+    this.sheetToggle.classList.toggle('olv-hidden', empty);
+  }
+
   setImageExportEnabled(enabled: boolean): void {
     for (const [mode, button] of this._imageExportButtons) {
       button.disabled = !enabled;
