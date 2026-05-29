@@ -3,13 +3,13 @@
  *
  * The five testable contracts every PointSampler implementation and every
  * analysis function MUST satisfy. The tests are intentionally SKIPPED in
- * v0.3.6 — they document the contract a v0.3.7 implementation must un-skip
+ * v0.3.6 — they document the contract a the next release implementation must un-skip
  * by passing.
  *
  * The full architectural narrative lives in `docs/analysis-architecture.md`.
  * Contracts C1-C5 are defined there in §8 with the same names used here.
  *
- * When a sampler implementation lands (v0.3.7: StaticPointSampler,
+ * When a sampler implementation lands (the next release: StaticPointSampler,
  * StreamingPointSampler), removing the `.skip` markers and writing the
  * concrete `expect` assertions is the structural gate: an implementation
  * that cannot un-skip its contract test does not ship.
@@ -17,7 +17,7 @@
  * Why this file exists in v0.3.6 at all:
  *   1. Visible pre-commitment in the test suite — the rules are
  *      machine-readable from day one, not just markdown.
- *   2. New v0.3.7 contributors discover the rules through a failing test
+ *   2. New the next release contributors discover the rules through a failing test
  *      run, not by reading the docs.
  *   3. CI runs this file every release; if a future refactor removes a
  *      contract without removing its test, the `.skip` markers surface
@@ -328,7 +328,7 @@ describe('Contract C5 — Budget honesty', () => {
 
 describe('Coverage transparency surfacing', () => {
   test.skip(
-    'CT.1: a v0.3.7 UI consumer of a resident-only analysis result ' +
+    'CT.1: a the next release UI consumer of a resident-only analysis result ' +
     'displays the coverage indicator',
     () => {
       // GIVEN AnalysisResult.coverage === 'resident-only'

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dropTinyPly } from './helpers';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -12,7 +13,7 @@ test('loads a drone survey sample and shows the scan report', async ({ page }) =
   await page.goto('/');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
 
-  await page.getByText('Drone survey').click();
+  await dropTinyPly(page);
 
   // The empty state gives way to the rendered cloud.
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
@@ -23,7 +24,7 @@ test('loads a drone survey sample and shows the scan report', async ({ page }) =
 
 test('loads a second scan as a separate layer', async ({ page }) => {
   await page.goto('/');
-  await page.getByText('Drone survey').click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(1);
 
@@ -69,7 +70,7 @@ test('embed mode strips the top bar', async ({ page }) => {
 
 test('switches navigation modes and reveals the speed control', async ({ page }) => {
   await page.goto('/');
-  await page.getByText('Drone survey').click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
   // The nav bar appears with Orbit selected by default.
@@ -87,7 +88,7 @@ test('switches navigation modes and reveals the speed control', async ({ page })
 
 test('interface controls carry hover tooltips', async ({ page }) => {
   await page.goto('/');
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
   // Tool-dock buttons explain themselves on hover.
@@ -108,7 +109,7 @@ test('interface controls carry hover tooltips', async ({ page }) => {
 
 test('remembers a settings change across a page reload', async ({ page }) => {
   await page.goto('/');
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
   // Switch point sizing to Fixed — a persisted preference.
@@ -119,7 +120,7 @@ test('remembers a settings change across a page reload', async ({ page }) => {
 
   // Reload the page and open a scan again — the choice should have survived.
   await page.reload();
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-chip', { hasText: 'Fixed' })).toHaveClass(
     /olv-chip-active/,
@@ -128,7 +129,7 @@ test('remembers a settings change across a page reload', async ({ page }) => {
 
 test('closes a scan and returns to the empty state, ready for another', async ({ page }) => {
   await page.goto('/');
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(1);
 
@@ -138,7 +139,7 @@ test('closes a scan and returns to the empty state, ready for another', async ({
   await expect(page.locator('.olv-layer')).toHaveCount(0);
 
   // A second scan can be loaded straight away from the empty state.
-  await page.getByText('Phone scan', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(1);
 });
@@ -150,7 +151,7 @@ test('?debug=1 shows the performance overlay and fills in load telemetry', async
   await expect(overlay).toBeVisible();
   await expect(overlay).toContainText('no scan loaded yet');
 
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
   // The live block reports a backend, and the telemetry block fills in.
@@ -160,7 +161,7 @@ test('?debug=1 shows the performance overlay and fills in load telemetry', async
 
 test('?benchmark=1 emits a benchmark result into the overlay', async ({ page }) => {
   await page.goto('/?benchmark=1');
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
   await expect(page.locator('.olv-debug')).toContainText('benchmark', {
@@ -200,7 +201,7 @@ test('arrow keys orbit the camera in orbit mode', async ({ page, context }) => {
   // keyboard orbit proves the arrow keys actually moved the camera.
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/');
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   // Let the load-framing tween settle so the camera starts at rest.
   await page.waitForTimeout(1500);

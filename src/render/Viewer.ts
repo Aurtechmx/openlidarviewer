@@ -484,6 +484,21 @@ export class Viewer {
   private readonly _edlStrength = uniform(EDL_DEFAULTS.strength);
   private readonly _edlNear = uniform(0.1);
   private readonly _edlFar = uniform(5_000_000);
+  /**
+   * The user-facing base EDL strength — what the slider directly controls.
+   * The live `_edlStrength` uniform is `base × adaptive_factor` each frame
+   * (see `_updateAdaptiveEdl`), so a user who sets a strong base still
+   * gets a stronger close-inspection effect than a user with a weak base.
+   */
+  private _edlBaseStrength: number = EDL_DEFAULTS.strength;
+  /**
+   * Approximate cloud density in points per square metre on the XY
+   * footprint, captured at attach time. Feeds the density-aware EDL
+   * adaptation — sparse clouds benefit from stronger depth cueing,
+   * dense clouds need it gentler. `null` when no cloud is loaded;
+   * `_updateAdaptiveEdl` falls back to the identity density factor.
+   */
+  private _currentDensityPtsPerM2: number | null = null;
 
   // ── Point styling ────────────────────────────────────────────────────────
   /** Adaptive (distance-scaled) or fixed point size. */
@@ -578,6 +593,13 @@ export class Viewer {
       canvas,
       antialias: true,
       alpha: false,
+      // logarithmic depth buffer distributes
+      // precision across many orders of magnitude of distance, so a
+      // 50 km COPC tile and a 5 m indoor scan both render without
+      // z-fighting and the zoom envelope is effectively unbounded.
+      // Eliminates the residual "stops zooming at a point" artifact
+      // on huge surveys that even near=0.01 couldn't fully clear.
+      logarithmicDepthBuffer: true,
     } as ConstructorParameters<typeof THREE.WebGPURenderer>[0]);
 
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -1025,6 +1047,14 @@ export class Viewer {
     this._lastStreamingCenter = this._orbitClampAabb
       ? aabbCenter(this._orbitClampAabb)
       : null;
+
+    // density estimate for streaming clouds. Total source point
+    // count over the XY footprint — for COPC/EPT this is the full tile's
+    // density, not the per-frame resident point count. Feeds adaptive EDL.
+    const w = b[3] - b[0];
+    const d = b[4] - b[1];
+    const footprint = Math.max(1, w * d);
+    this._currentDensityPtsPerM2 = cloud.sourcePointCount / footprint;
   }
 
   /**
@@ -1129,14 +1159,20 @@ export class Viewer {
     return this._edlEnabled;
   }
 
-  /** Set the EDL strength (0 = no shading). Negative values are clamped to 0. */
+  /**
+   * Set the base EDL strength (0 = no shading). Negative values clamp to 0.
+   * The live per-frame strength is `base × adaptive_factor` — see
+   * `_updateAdaptiveEdl`. The slider drives the base.
+   */
   setEdlStrength(strength: number): void {
-    this._edlStrength.value = Math.max(0, strength);
+    this._edlBaseStrength = Math.max(0, strength);
+    // Immediate apply for the frame — adaptive update will refine next tick.
+    this._edlStrength.value = this._edlBaseStrength;
   }
 
-  /** The current EDL strength. */
+  /** The current base EDL strength (what the user set). */
   get edlStrength(): number {
-    return Number(this._edlStrength.value);
+    return this._edlBaseStrength;
   }
 
   /** Switch between adaptive (distance-scaled) and fixed point sizing. */
@@ -2049,6 +2085,23 @@ export class Viewer {
     this._nav.setBaseSpeed(speedForSize(size));
     this._nav.setHasCloud(true);
 
+    // capture point density for density-aware EDL.
+    // Density = total source points / XY footprint area. For an aerial
+    // survey this is genuinely "points per square metre on the ground".
+    {
+      const aabb = this._visibleCloudAabb();
+      if (aabb) {
+        const w = aabb[3] - aabb[0];
+        const d = aabb[4] - aabb[1];
+        const footprint = Math.max(1, w * d);
+        let totalPts = 0;
+        for (const { cloud } of this._clouds.values()) totalPts += cloud.pointCount;
+        this._currentDensityPtsPerM2 = totalPts / footprint;
+      } else {
+        this._currentDensityPtsPerM2 = null;
+      }
+    }
+
     // Clip planes — near pinned at 1 cm so zoom-in is unbounded across any
     // cloud size (a 1 km aerial scan, a 50 km COPC tile, an indoor 5 m
     // capture, all the same). Previous behaviour scaled near with cloud
@@ -2168,6 +2221,64 @@ export class Viewer {
    * Cost is bounded: a handful of vector ops + (when streaming) one octree
    * bounds query — orders of magnitude cheaper than a render pass.
    */
+  /**
+   * adaptive EDL — modulate the EDL strength uniform from two
+   * orthogonal signals so the depth cueing scales with how the cloud is
+   * being read, not just what's in it.
+   *
+   * **Distance factor** — camera-to-target distance normalised against
+   * the cloud's bounding radius. Curve:
+   *   • distance > 2 × radius (overview): factor = 0.45 (lighter)
+   *   • distance < 0.1 × radius (close): factor = 0.95 (stronger)
+   *   • smoothstep between
+   *
+   * **Density factor** — points per square metre on the XY footprint,
+   * captured at attach time. Curve (log-scaled because density varies
+   * across ~4 orders of magnitude across capture types):
+   *   • ~1 pt/m² (very sparse aerial): factor = 1.40 (max strength)
+   *   • ~100 pt/m² (dense aerial): factor = 1.05 (near neutral)
+   *   • ~10 000 pt/m² (TLS / phone scan): factor = 0.70 (gentler)
+   *
+   * Final strength = `base × distance_factor × density_factor`. With base
+   * defaulting to 0.7, a sparse 1km aerial at close range gets a punchy
+   * ~0.93 effective strength, while a dense indoor TLS at overview gets
+   * a calm ~0.22 — the right contrast for each context, automatically.
+   *
+   * No-op when EDL is disabled or no cloud is loaded.
+   */
+  private _updateAdaptiveEdl(): void {
+    if (!this._edlEnabled || !this._orbitClampAabb) return;
+    const r = (this._orbitClampAabb[3] - this._orbitClampAabb[0]
+             + this._orbitClampAabb[4] - this._orbitClampAabb[1]
+             + this._orbitClampAabb[5] - this._orbitClampAabb[2]) / 6;
+    if (!Number.isFinite(r) || r <= 0) return;
+
+    // Distance factor — closer = stronger.
+    const t = this._controls.target;
+    const dx = this._camera.position.x - t.x;
+    const dy = this._camera.position.y - t.y;
+    const dz = this._camera.position.z - t.z;
+    const dist = Math.hypot(dx, dy, dz);
+    const nd = dist / r;
+    const ramp = Math.max(0, Math.min(1, (2.0 - nd) / (2.0 - 0.1)));
+    const smooth = ramp * ramp * (3 - 2 * ramp);
+    const distanceFactor = 0.45 + (0.95 - 0.45) * smooth;
+
+    // Density factor — sparse = stronger, dense = gentler.
+    // Map log10(density) ∈ [0, 4] → factor ∈ [1.4, 0.7] linearly.
+    let densityFactor = 1.0;
+    if (this._currentDensityPtsPerM2 != null && this._currentDensityPtsPerM2 > 0) {
+      const logD = Math.log10(this._currentDensityPtsPerM2);
+      const clamped = Math.max(0, Math.min(4, logD));
+      densityFactor = 1.4 - clamped * 0.175;  // 1.4 at 1 pt/m², 0.7 at 10⁴
+    }
+
+    // Final strength — base × distance × density. Normalise the distance
+    // factor by 0.7 so the slider's "1.0" base lands at neutral close-up.
+    this._edlStrength.value =
+      this._edlBaseStrength * (distanceFactor / 0.7) * densityFactor;
+  }
+
   private _maintainOrbitCenter(): void {
     if (!this._orbitClampAabb) return;
     if (this._nav.mode !== 'orbit') return;
@@ -2657,6 +2768,11 @@ export class Viewer {
       // Orbit-pivot maintenance — soft-clamp + streaming bounds-refinement
       // lerp. Cheap and bounded; runs every frame regardless of EDL state.
       this._maintainOrbitCenter();
+      // adaptive EDL. Modulate strength based on
+      // camera-to-target distance — close inspection gets stronger depth
+      // cueing (carves out structure), overview gets lighter (avoids
+      // muddy contrast). Cheap, runs every frame.
+      this._updateAdaptiveEdl();
       // EDL on → render through the post-processing pipeline; off → render
       // the scene directly, the v0.2 path, for zero post-processing overhead.
       if (this._edlEnabled) this._post.render();

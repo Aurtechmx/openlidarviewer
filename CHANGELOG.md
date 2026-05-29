@@ -60,7 +60,7 @@ share links, and APIs continue to work.
   analysis module reads through. `docs/analysis-architecture.md`
   defines the five contracts (Determinism, Abortable, Non-mutating,
   Coverage semantics, Budget honesty) and 18 skipped contract tests
-  in `tests/analysisSeamContract.test.ts` pin the shape so v0.3.7's
+  in `tests/analysisSeamContract.test.ts` pin the shape so future
   sampler implementations have something concrete to satisfy.
 
 ### Improved
@@ -151,8 +151,7 @@ share links, and APIs continue to work.
   `proj:epsg` STAC property, the EPSG is written into the CRS override
   store *before* dispatch — the streaming pipeline reads the override
   first and skips the LAS VLR probe, cutting ~500-700 ms off CRS
-  resolution for PC-sourced streams. Builds toward task #19 (CRS Phase
-  C — catalog-metadata aggregation).
+  resolution for PC-sourced streams.
 - **Source format already surfaced.** The Streaming Intelligence panel
   already shipped a "COPC LAZ · PDRF N" vs. "EPT · binary · N attrs"
   format line per the audit; this release verifies the contract is
@@ -246,16 +245,16 @@ share links, and APIs continue to work.
 
 - 971 tests across 84 files (up from 869 / 77 in v0.3.5), plus 18
   skipped contract tests in `tests/analysisSeamContract.test.ts` that
-  pin the v0.3.7 sampler shape. Typecheck clean. Main-deferral lint
-  clean. Smoke gate green.
+  pin the future sampler shape. Typecheck clean, lint clean, smoke
+  gate green.
 
 ### Documentation
 
 - **`docs/public-lidar-catalog.md`** — new doc covering the v0.3.6
   catalog seam, the USGS 3DEP provider, the privacy contract, and how
-  to add a v0.4.x provider.
+  to add a new provider.
 - **`docs/analysis-architecture.md`** — new doc defining the five
-  analysis-seam contracts and the planned v0.3.7+ sampler sequence.
+  analysis-seam contracts and the planned sampler sequence.
 
 ## [0.3.5] - 2026-05-28
 

@@ -249,9 +249,9 @@ dimension scan — security, performance, correctness, maintainability,
 test coverage, style. Returns a verdict (Approve / Request changes /
 Needs discussion).
 
-The skill caught the v0.3.6 release-blocker where every Scan
-Acceptance PDF embedded the literal string "deferred to v0.3.7 /
-v0.4.0" — a roadmap leak into customer-facing output.
+The skill caught a v0.3.6 release-blocker where every Scan
+Acceptance PDF embedded a literal placeholder string — a roadmap
+leak into customer-facing output.
 
 ### `/engineering:debug`
 
@@ -287,7 +287,7 @@ relying on red/green colour alone. The fix: add a redundant
 **P** / **F** letter inside the status dot so the encoding survives
 grayscale printing and colorblind viewing.
 
-### `/anthropic-skills:verification-before-completion`
+### `/verification-before-completion`
 
 **Apply before ANY claim of success.** Evidence before assertions
 always. Run the verification commands; confirm the output.

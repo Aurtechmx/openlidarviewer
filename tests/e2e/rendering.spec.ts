@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { dropTinyPly } from './helpers';
 
 /**
  * Render-quality controls coverage. Toggling Eye Dome Lighting switches the
@@ -10,7 +11,7 @@ import { test, expect, type Page } from '@playwright/test';
 /** Load the drone-survey sample and wait for it to render. */
 async function loadSample(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   // Let the framing tween settle so a few frames have rendered.
   await page.waitForTimeout(800);

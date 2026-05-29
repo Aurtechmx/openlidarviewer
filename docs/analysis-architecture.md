@@ -4,7 +4,7 @@ This document is the architectural contract for every future analysis feature in
 
 The contract was written ahead of the implementation so that the first analysis features (cross-section profile chart, edge-bleed detector, noise broom, surface-defect heatmap, forest mode, cloud-sampled scan-quality rows) land cleanly onto a shared seam, instead of each one shipping its own ad-hoc cloud iteration.
 
-This document is also the source the contract tests in `tests/analysis-seam-contract.test.ts` are derived from. Those tests are intentionally skipped until v0.3.7 implementations remove the `.skip` markers — they exist as a visible pre-commitment to the rules below.
+This document is also the source the contract tests in `tests/analysis-seam-contract.test.ts` are derived from. Those tests are intentionally skipped until the next release implementations remove the `.skip` markers — they exist as a visible pre-commitment to the rules below.
 
 ## Why a single seam matters
 
@@ -141,7 +141,7 @@ Every UI surface that consumes an analysis output MUST display a coverage indica
 
 A `'full'` coverage analysis MAY surface its coverage but is not required to.
 
-The indicator copy is uniform across the project — see `src/analysis/coverageMessages.ts` (added in v0.3.7 with the first analysis implementation) for the canonical strings.
+The indicator copy is uniform across the project — see `src/analysis/coverageMessages.ts` (added in the next release with the first analysis implementation) for the canonical strings.
 
 ## §4 — Memory limits
 
@@ -228,11 +228,11 @@ Analyses with estimated wall time > 200 ms MUST run in a Web Worker. The `Analys
 
 Worker analyses transfer their `PointSampler` snapshot at call time (the resident point buffer for streaming, the full buffer for static). Results return via `postMessage`. No DOM access from worker code.
 
-The worker implementation lives in `src/analysis/runtime/analysisWorker.ts` and is added in v0.3.7 with the first cpu-heavy analysis.
+The worker implementation lives in `src/analysis/runtime/analysisWorker.ts` and is added in the next release with the first cpu-heavy analysis.
 
 ## §8 — Analysis contracts (testable, machine-checkable)
 
-The following contracts are encoded as skipped test cases in `tests/analysis-seam-contract.test.ts`. They become the gate for every v0.3.7 analysis implementation: until an analysis can un-skip the relevant tests by passing them, it does not ship.
+The following contracts are encoded as skipped test cases in `tests/analysis-seam-contract.test.ts`. They become the gate for every the next release analysis implementation: until an analysis can un-skip the relevant tests by passing them, it does not ship.
 
 ### Contract C1 — Determinism
 
@@ -278,25 +278,25 @@ Analyses with estimated output size > `analysisBudget` MUST either:
 
 The test fakes an over-budget input and verifies one of these two paths.
 
-## §9 — Sampler implementations to be added in v0.3.7
+## §9 — Sampler implementations to be added in the next release
 
-The v0.3.6 release ships the interface, the documentation, and the skipped contract tests. It does NOT ship sampler implementations or analysis functions — that work belongs to v0.3.7. The implementations queued are:
+The v0.3.6 release ships the interface, the documentation, and the skipped contract tests. It does NOT ship sampler implementations or analysis functions — that work belongs to the next release. The implementations queued are:
 
 ```
 src/analysis/
 ├── PointSampler.ts               ← interface + base types (this file, v0.3.6)
-├── StaticPointSampler.ts         ← wraps a static PointCloud (v0.3.7)
-├── StreamingPointSampler.ts      ← wraps a StreamingPointCloud + EptStreamingPointCloud (v0.3.7)
+├── StaticPointSampler.ts         ← wraps a static PointCloud (the next release)
+├── StreamingPointSampler.ts      ← wraps a StreamingPointCloud + EptStreamingPointCloud (the next release)
 ├── runtime/
-│   ├── AnalysisRunner.ts         ← cache, cancellation, worker dispatch (v0.3.7)
-│   ├── analysisWorker.ts         ← cpu-heavy worker (v0.3.7)
-│   └── coverageMessages.ts       ← canonical UI strings for coverage (v0.3.7)
-├── density.ts                    ← density grid + NPS heatmap (v0.3.7 / v0.4.0)
-├── profile.ts                    ← cross-section slab (v0.3.7)
-├── edgeBleed.ts                  ← phone-LiDAR silhouette overlay (v0.3.7)
+│   ├── AnalysisRunner.ts         ← cache, cancellation, worker dispatch (the next release)
+│   ├── analysisWorker.ts         ← cpu-heavy worker (the next release)
+│   └── coverageMessages.ts       ← canonical UI strings for coverage (the next release)
+├── density.ts                    ← density grid + NPS heatmap (the next release)
+├── profile.ts                    ← cross-section slab (the next release)
+├── edgeBleed.ts                  ← phone-LiDAR silhouette overlay (the next release)
 ├── outliers/
-│   ├── isolated.ts               ← Nazeri k-NN cluster filter (v0.3.7)
-│   └── clusterIDW.ts             ← Matkan iterative IDW filter (v0.3.7)
+│   ├── isolated.ts               ← Nazeri k-NN cluster filter (the next release)
+│   └── clusterIDW.ts             ← Matkan iterative IDW filter (the next release)
 └── forest/                       ← Fareed metric catalogue (v0.4.0)
     ├── chm.ts
     ├── fhd.ts
@@ -304,7 +304,7 @@ src/analysis/
     └── lad.ts
 ```
 
-Adding any of these earlier than v0.3.7 means shipping unverified analysis code against a still-unwritten test contract. The strategic rule for v0.3.6 is explicit: *the analysis seam is more important than prematurely adding advanced analysis features.* This document, the interface, and the contract tests are the seam. Everything else waits.
+Adding any of these earlier than the next release means shipping unverified analysis code against a still-unwritten test contract. The strategic rule for v0.3.6 is explicit: *the analysis seam is more important than prematurely adding advanced analysis features.* This document, the interface, and the contract tests are the seam. Everything else waits.
 
 ## §10 — Non-goals (v0.3.6)
 
@@ -316,10 +316,10 @@ The following are explicitly NOT in v0.3.6:
 - Multi-scan analysis (M3C2, change detection, CAD/BIM overlay) — these require multi-cloud loading infrastructure not yet present.
 - Worker pool management beyond the single-analysis worker described in §7.
 
-These are queued for v0.3.7, v0.4.0, and v0.5.x respectively. The v0.3.6 release ships only the contract.
+These are queued for future releases respectively. The v0.3.6 release ships only the contract.
 
 ## §11 — Why this is the v0.3.6 keystone
 
 The LLM Council that deliberated the v0.3.6 scope identified this design document as the single most important item in the release. Three independent reviewers caught the same failure mode in earlier drafts: analyses that pretend to work on streaming clouds but silently return a fraction of the data. The "looks correct, missing half the data" failure is the same class as v0.3.4's `viewer.*` regression — a missing structural rule, not a missing feature.
 
-Writing this document before any analysis ships is the cheapest move that prevents the entire v0.3.7 / v0.4.0 analysis layer from inheriting that failure mode by accident. Every analysis that lands after v0.3.6 can be verified against the contracts in §8; an analysis that cannot un-skip its contract test does not ship.
+Writing this document before any analysis ships is the cheapest move that prevents the entire the next release analysis layer from inheriting that failure mode by accident. Every analysis that lands after v0.3.6 can be verified against the contracts in §8; an analysis that cannot un-skip its contract test does not ship.

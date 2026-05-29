@@ -17,37 +17,144 @@ import type { PointCloud } from '../model/PointCloud';
 export type ColorMode = 'rgb' | 'intensity' | 'elevation' | 'classification' | 'normal';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Elevation colour ramp  (blue → teal → green → amber → red)
+// Elevation colour ramps — perceptual palettes
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// The rainbow palette that most LiDAR viewers ship (blue→green→red) is one of
+// the most-criticised choices in scientific visualization: it creates false
+// boundaries at the hue transitions, hides detail in low-luminance regions,
+// and is unreadable to ~8 % of the population. The matplotlib-style perceptual
+// palettes below are:
+//
+//   • monotonic in luminance (so the eye reads them as ordered)
+//   • smooth in CIELAB ∆E (no false bands)
+//   • mostly colour-blind safe (Cividis is the only one fully CVD-safe; the
+//     other three are dramatic improvements over rainbow but not perfectly
+//     CVD-safe)
+//
+// Defaults to **Cividis** so the out-of-the-box experience works for everyone.
+
+/** Type of an elevation ramp identifier. */
+export type ElevationPalette = 'cividis' | 'viridis' | 'inferno' | 'turbo' | 'classic';
+
+/** The default palette — Cividis is the only fully CVD-safe option. */
+export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'cividis';
+
+/** A set of control points for a linear colour ramp. [t, r, g, b], rgb 0-255. */
+type RampControlPoints = ReadonlyArray<readonly [number, number, number, number]>;
 
 /**
- * A set of control points for a linear colour ramp.
- * Each entry is [t, r, g, b] with t in [0, 1] and rgb in [0, 255].
+ * Cividis — colour-blind safe, monotonic luminance, deep blue → yellow.
+ * The only ramp in this list that's fully readable to deuteranopes /
+ * protanopes / tritanopes. Recommended default for any scientific viewer.
+ * Control points from Nuñez, Anderton & Renslow (2018).
  */
-const ELEVATION_RAMP: ReadonlyArray<readonly [number, number, number, number]> = [
-  [0.00,   0,   0, 255],  // pure blue
-  [0.25,   0, 200, 200],  // teal
-  [0.50,   0, 220,   0],  // green
-  [0.75, 255, 180,   0],  // amber
-  [1.00, 255,   0,   0],  // pure red
+const PALETTE_CIVIDIS: RampControlPoints = [
+  [0.00,   0,  32,  76],
+  [0.20,  44,  60, 100],
+  [0.40,  88,  94, 113],
+  [0.60, 135, 132, 119],
+  [0.80, 192, 175, 110],
+  [1.00, 253, 231,  37],
 ];
 
 /**
- * Interpolate the elevation ramp at normalised value `t` ∈ [0, 1].
+ * Viridis — perceptually uniform, dark purple → blue → green → yellow.
+ * Matplotlib default. Reads very well; partial CVD-safety.
+ */
+const PALETTE_VIRIDIS: RampControlPoints = [
+  [0.00,  68,   1,  84],
+  [0.20,  64,  76, 131],
+  [0.40,  43, 117, 142],
+  [0.60,  32, 159, 117],
+  [0.80, 138, 200,  74],
+  [1.00, 253, 231,  37],
+];
+
+/**
+ * Inferno — black → purple → orange → yellow. Highest dynamic range of the
+ * four; ideal for terrain elevation where the eye benefits from a black
+ * "floor" anchor.
+ */
+const PALETTE_INFERNO: RampControlPoints = [
+  [0.00,   0,   0,   4],
+  [0.20,  50,  10,  94],
+  [0.40, 120,  28, 109],
+  [0.60, 190,  55,  82],
+  [0.80, 245, 125,  21],
+  [1.00, 252, 255, 164],
+];
+
+/**
+ * Turbo — Google's perceptually-corrected rainbow (Mikhailov 2019).
+ * Looks like the classic rainbow but with the dark-low-luminance bug fixed.
+ * Use when you specifically want the "rainbow" feel for traditional
+ * audiences without the perceptual problems.
+ */
+const PALETTE_TURBO: RampControlPoints = [
+  [0.00,  48,  18,  59],
+  [0.15,  64,  74, 218],
+  [0.30,  29, 169, 218],
+  [0.50,  37, 246, 130],
+  [0.70, 197, 247,  35],
+  [0.85, 248, 168,  44],
+  [1.00, 122,  4,    2],
+];
+
+/**
+ * Classic blue → green → red rainbow. Kept for backward compatibility with
+ * v0.3.6 share-links and saved sessions that hard-coded the old behaviour.
+ * NOT recommended for new use — see Cividis or Viridis.
+ */
+const PALETTE_CLASSIC: RampControlPoints = [
+  [0.00,   0,   0, 255],
+  [0.25,   0, 200, 200],
+  [0.50,   0, 220,   0],
+  [0.75, 255, 180,   0],
+  [1.00, 255,   0,   0],
+];
+
+const PALETTES: Readonly<Record<ElevationPalette, RampControlPoints>> = {
+  cividis: PALETTE_CIVIDIS,
+  viridis: PALETTE_VIRIDIS,
+  inferno: PALETTE_INFERNO,
+  turbo:   PALETTE_TURBO,
+  classic: PALETTE_CLASSIC,
+};
+
+/** Catalog of palettes — keys for UI dropdowns, ordered by recommendation. */
+export const ELEVATION_PALETTES: ReadonlyArray<{
+  readonly id: ElevationPalette;
+  readonly label: string;
+  readonly description: string;
+}> = [
+  { id: 'cividis', label: 'Cividis', description: 'Colour-blind safe, recommended default' },
+  { id: 'viridis', label: 'Viridis', description: 'Perceptually uniform, matplotlib default' },
+  { id: 'inferno', label: 'Inferno', description: 'Highest dynamic range, dark floor' },
+  { id: 'turbo',   label: 'Turbo',   description: 'Perceptually-corrected rainbow' },
+  { id: 'classic', label: 'Classic', description: 'Legacy blue → red (not recommended)' },
+];
+
+/**
+ * Interpolate a named perceptual ramp at normalised value `t` ∈ [0, 1].
  * Returns [r, g, b] in 0-255.
  */
-function sampleRamp(t: number): [number, number, number] {
+function sampleRamp(
+  t: number,
+  palette: ElevationPalette = DEFAULT_ELEVATION_PALETTE,
+): [number, number, number] {
   // Clamp to [0,1] to handle the degenerate single-point cloud case.
   const tc = Math.max(0, Math.min(1, t));
+  const ramp = PALETTES[palette];
 
   // Find the two bracketing control points.
-  let lo = ELEVATION_RAMP[0];
-  let hi = ELEVATION_RAMP[ELEVATION_RAMP.length - 1];
+  let lo = ramp[0];
+  let hi = ramp[ramp.length - 1];
 
-  for (let i = 0; i < ELEVATION_RAMP.length - 1; i++) {
-    if (tc >= ELEVATION_RAMP[i][0] && tc <= ELEVATION_RAMP[i + 1][0]) {
-      lo = ELEVATION_RAMP[i];
-      hi = ELEVATION_RAMP[i + 1];
+  for (let i = 0; i < ramp.length - 1; i++) {
+    if (tc >= ramp[i][0] && tc <= ramp[i + 1][0]) {
+      lo = ramp[i];
+      hi = ramp[i + 1];
       break;
     }
   }
@@ -131,12 +238,13 @@ export function colorByElevation(
   count: number,
   minZ: number,
   maxZ: number,
+  palette: ElevationPalette = DEFAULT_ELEVATION_PALETTE,
 ): Uint8Array {
   const out = new Uint8Array(count * 3);
   const range = maxZ - minZ;
   for (let i = 0; i < count; i++) {
     const t = range === 0 ? 0 : (positions[i * 3 + 2] - minZ) / range;
-    const [r, g, b] = sampleRamp(t);
+    const [r, g, b] = sampleRamp(t, palette);
     out[i * 3] = r;
     out[i * 3 + 1] = g;
     out[i * 3 + 2] = b;

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { dropTinyPly } from './helpers';
 
 /**
  * Measurement toolkit coverage — the toolbar, kind picker, and units toggle
@@ -10,7 +11,7 @@ import { test, expect, type Page } from '@playwright/test';
 /** Load the drone-survey sample and enter measurement mode. */
 async function loadSampleAndMeasure(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByText('Drone survey', { exact: true }).click();
+  await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   // Let the framing tween settle so canvas clicks land on the cloud.
   await page.waitForTimeout(1500);
