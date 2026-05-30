@@ -51,3 +51,47 @@ export async function dropTinyLas(page: Page): Promise<void> {
   }, [...bytes]);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
+
+/**
+ * Drop a denser synthesised PLY — a 60×60 grid of 3 600 points across a small
+ * 3D surface (sinusoidal Z) so the framing puts the cloud in an orbit-friendly
+ * pose and the picker has a dense canopy to hit. Built inline so the bundled
+ * fixtures stay small; the 10-point `tiny.ply` is too sparse for a centre-of-
+ * canvas click to land on a point.
+ */
+export async function dropDenseGridPly(page: Page): Promise<void> {
+  const N = 60;
+  const points: string[] = [];
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const u = i / (N - 1);
+      const v = j / (N - 1);
+      const x = u * 10 - 5;
+      const y = v * 10 - 5;
+      // Gentle 3D surface — gives the cloud volume so framing produces a
+      // reasonable orbit pose instead of a degenerate flat plane.
+      const z = Math.sin(u * 3.14159) * Math.cos(v * 3.14159) * 1.5;
+      points.push(`${x.toFixed(4)} ${y.toFixed(4)} ${z.toFixed(4)} 200 200 200 255`);
+    }
+  }
+  const header =
+    `ply\n` +
+    `format ascii 1.0\n` +
+    `element vertex ${N * N}\n` +
+    `property float x\n` +
+    `property float y\n` +
+    `property float z\n` +
+    `property uchar red\n` +
+    `property uchar green\n` +
+    `property uchar blue\n` +
+    `property uchar alpha\n` +
+    `end_header\n`;
+  const text = header + points.join('\n') + '\n';
+  const bytes = new TextEncoder().encode(text);
+  const dataTransfer = await page.evaluateHandle((b) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(b)], 'dense-grid.ply'));
+    return dt;
+  }, [...bytes]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}

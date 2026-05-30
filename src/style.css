@@ -2091,11 +2091,16 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   max-width: 440px; line-height: 1.6; margin-top: 6px;
 }
 
-/* 4. Section caption — quiet helper text under a section label. */
+/* 4. Section caption — quiet helper text under a section label or a
+ * <details> <summary>. The previous `-16px` top margin assumed a
+ * parent with extra bottom padding; inside the PC "Search by location"
+ * disclosure that put the caption directly on top of the summary. A
+ * small positive top margin gives the caption breathing room without
+ * a heavy visual break. */
 .olv-empty-section-caption {
   font-size: 11px; color: var(--text-faint);
   max-width: 440px; line-height: 1.5;
-  margin: -16px 0 6px;
+  margin: 6px 0;
 }
 
 /* 5. Idle CTA pulse — fires at 4 s, suppressed on first interaction. */

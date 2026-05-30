@@ -18,8 +18,12 @@ test('loads a drone survey sample and shows the scan report', async ({ page }) =
   // The empty state gives way to the rendered cloud.
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(1);
-  // The Scan Report (Health Check + Scan Report rows) is populated.
-  await expect(page.locator('.olv-report-row').first()).toBeVisible();
+  // The Scan Report is populated. The rows are inside a collapsed `<details>`
+  // by default (Inspector first-view density), so this asserts on count
+  // rather than visibility — the contract is that the rows exist.
+  await expect
+    .poll(() => page.locator('.olv-report-row').count(), { timeout: 5_000 })
+    .toBeGreaterThan(0);
 });
 
 test('loads a second scan as a separate layer', async ({ page }) => {
@@ -59,7 +63,9 @@ test('opens a dropped E57 scan', async ({ page }) => {
 
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(1);
-  await expect(page.locator('.olv-report-row').first()).toBeVisible();
+  await expect
+    .poll(() => page.locator('.olv-report-row').count(), { timeout: 5_000 })
+    .toBeGreaterThan(0);
 });
 
 test('embed mode strips the top bar', async ({ page }) => {
@@ -167,7 +173,9 @@ test('?benchmark=1 emits a benchmark result into the overlay', async ({ page }) 
   await expect(page.locator('.olv-debug')).toContainText('benchmark', {
     timeout: 10_000,
   });
-  await expect(page.locator('.olv-debug')).toContainText('time to render');
+  // The overlay prints "time to first render" once the benchmark runs;
+  // the partial substring "first render" matches that line.
+  await expect(page.locator('.olv-debug')).toContainText('first render');
 });
 
 test('a normal session shows no debug overlay', async ({ page }) => {

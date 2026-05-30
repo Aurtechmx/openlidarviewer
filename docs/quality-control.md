@@ -30,13 +30,20 @@ npm run build                # ~7 s   — Vite build + chunk-emission guard
 # 4. Smoke gate (when Playwright is configured)
 npm run test:smoke           # ~10 s  — startup smoke spec, zero console errors
 
-# 5. Live-deploy build (only when shipping a deploy)
+# 5. End-to-end full suite (MANDATORY before exporting a deployable)
+npm run test:e2e             # ~90 s  — Playwright chromium, every .spec.ts
+                             #          under tests/e2e/ — full user flows
+                             #          (drop → render → measure → export →
+                             #          stream → benchmark). MUST be green
+                             #          before zipping a release.
+
+# 6. Live-deploy build (only when shipping a deploy)
 npm run build:live           # ~10 s  — runs the live source-transform plugin
 ```
 
-Total wall-clock budget: **under one minute** for the full pre-deploy
-gate. If any single step exceeds 2× its expected time, investigate
-before shipping.
+Total wall-clock budget: **under three minutes** for the full
+pre-deploy gate. The e2e suite is the long pole. If any single step
+exceeds 2× its expected time, investigate before shipping.
 
 ---
 
@@ -237,6 +244,82 @@ inspiration for this gate.
 
 ---
 
+## Gate 6 — End-to-end full suite
+
+`tests/e2e/*.spec.ts` covers the actual user flows: drop a file, see
+the cloud render, open the Scan Report, switch nav modes, run a
+benchmark, stream a COPC, place a measurement, export a session.
+These are the tests a user would notice failing.
+
+```bash
+npm run test:e2e
+```
+
+Run this **before exporting a deployable version, packaging zips, or
+presenting a release candidate** — not just before merging. The full
+suite covers the load → render → validate path no unit test can
+exercise on its own. Each spec drops a real fixture file through a
+synthesised `DataTransfer`, so the empty-state DOM, the drop handler,
+the worker pipeline, and the renderer all run end-to-end.
+
+Five spec files participate:
+
+- `viewer.spec.ts` — empty state, drop-to-render, embed mode, nav
+  modes, share-link round-trip, debug + benchmark overlays
+- `measure.spec.ts` — measurement toolbar, kind picker, units toggle,
+  session export
+- `rendering.spec.ts` — Eye Dome Lighting, point-size mode,
+  antialiasing chip
+- `streaming.spec.ts` — COPC streaming chunk emission + (when the
+  Autzen fixture is on disk) per-point inspection on a streaming node
+- `smoke.spec.ts` — startup zero-error gate (also Gate 5)
+
+The v0.3.6 release uncovered four regressions only this gate could
+catch:
+
+1. The `.olv-report-row` rows still exist after the load completes,
+   but the `<details>` wrapping them is collapsed by default since the
+   Inspector first-view-density pass — a test that asserts
+   `.toBeVisible()` will fail under the new UX.
+2. The benchmark overlay prints **`time to first render`**; a stale
+   `time to render` assertion never matches.
+3. The empty-state sample buttons (`Drone survey`, `Phone scan`)
+   were removed in favour of a streaming-only demo card; text-based
+   Playwright selectors timed out silently. The fix is to use
+   `tests/e2e/helpers.ts::dropTinyPly(page)` instead.
+4. Canvas-click paths under the WebGL 2 fallback (no WebGPU on
+   headless Linux CI runners) need a denser-than-`tiny.ply` fixture or
+   a programmatic measure-placement seam — otherwise the picker's 4°
+   angular tolerance misses every centre-of-canvas click.
+
+**Skills to apply when adding or fixing e2e tests:**
+
+- `/generating-end-to-end-tests` — generate new specs for new user
+  flows. **Apply whenever a release adds a user-visible feature**
+  (a new tool, a new format, a new dialog, a new keyboard shortcut)
+  so the regression is pinned before it ships.
+- `/engineering:debug` — when a previously-green spec turns red,
+  reproduce against the production build (`npm run preview` + the
+  failing test in isolation) before changing the test or the code.
+
+**Stability rules for new e2e specs:**
+
+- Drop fixtures, do not click sample buttons. Empty-state copy
+  changes every release; fixtures don't. Use `dropTinyPly(page)` /
+  `dropTinyLas(page)` / `dropDenseGridPly(page)` from `helpers.ts`.
+- Assert on count, not visibility, when the target lives inside a
+  collapsible `<details>`. The Inspector collapses 8 sections by
+  default; `expect.poll(() => page.locator(sel).count()).toBeGreaterThan(0)`
+  is the durable contract.
+- Match overlay text by stable substrings (`'first render'`, not
+  `'time to first render'`) so a one-word copy change doesn't break
+  the assertion.
+- Mark UNTESTABLE-IN-CI flows with `test.fixme(...)` and a comment
+  pointing at the unit-test coverage that takes its place. **Never
+  delete a regression test silently.**
+
+---
+
 ## Agentic skills — when to apply each
 
 The session's debugging discipline relies on the following skills.
@@ -292,6 +375,27 @@ grayscale printing and colorblind viewing.
 **Apply before ANY claim of success.** Evidence before assertions
 always. Run the verification commands; confirm the output.
 
+### `/generating-end-to-end-tests`
+
+**Apply before presenting a deployable version or exporting an app
+zip.** Generates Playwright specs for new or changed user flows so
+the regression is pinned before the release leaves the workstation.
+Use it whenever:
+
+- A new user-visible feature lands (a tool, a format, a dialog, a
+  shortcut) and no e2e spec covers it yet.
+- An empty-state, drop-handler, or inspector contract changes shape
+  and the existing specs reference the old DOM.
+- A v0.X.Y CI run goes red on a spec written months ago and the
+  spec's contract no longer matches the app.
+
+The skill caught the four v0.3.6 e2e regressions described in
+**Gate 6**: collapsed Scan-Report rows breaking visibility
+assertions, the renamed benchmark `time to first render` line, the
+removal of the empty-state sample buttons, and the
+sparse-tiny-fixture canvas-click misses under the WebGL 2 fallback.
+Each was a real user-facing regression masked by green unit tests.
+
 ---
 
 ## Validation skills — when to apply each
@@ -325,7 +429,9 @@ outlier detection for the density / void-map / NPS / RMSE metrics.
 
 Before zipping a deploy or pushing to GitHub:
 
-- [ ] All five gates above are green
+- [ ] All six gates above are green (incl. **Gate 6 — full e2e
+      suite**; apply `/generating-end-to-end-tests` to pin any
+      uncovered new flow before the export goes out)
 - [ ] `CHANGELOG.md` has a v$VERSION entry with `### Added`,
       `### Improved`, `### Fixed`, `### Tests + verification`, and
       `### Documentation` sections
@@ -359,15 +465,19 @@ Before zipping a deploy or pushing to GitHub:
 
 A release reaches **approved deployable state** when:
 
-1. Every gate passes on a clean checkout
+1. Every gate passes on a clean checkout — **including the full e2e
+   suite (Gate 6)**, not just unit tests + smoke
 2. Every documented chunk emits
 3. Shell stays under 200 KB pre-gzip
 4. Every customer-facing artifact (PDFs, exports, UI strings) has
    been scanned for roadmap leaks
 5. Both archive types build cleanly with correct permissions
-6. The session's task list is fully closed
+6. Any new user-visible feature in the release has at least one
+   pinned e2e spec (apply `/generating-end-to-end-tests` if it
+   doesn't)
+7. The session's task list is fully closed
 
-When all six conditions hold, the release is shippable. The signoff
+When all seven conditions hold, the release is shippable. The signoff
 happens by tagging the commit and pushing both zips through the
 release-publishing workflow.
 
