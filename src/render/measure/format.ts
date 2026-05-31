@@ -80,3 +80,36 @@ export function formatProfileHeadline(
   const sign = verticalDrop < 0 ? '−' : verticalDrop > 0 ? '+' : '';
   return `${len}  · Δh ${sign}${drop}  · ${grade}`;
 }
+
+/** Format a volume in cubic metres for the active unit system. */
+export function formatVolume(cubicMetres: number, system: UnitSystem): string {
+  if (!Number.isFinite(cubicMetres) || cubicMetres < 0) return '—';
+  if (system === 'metric') {
+    if (cubicMetres < 1) return `${grouped(cubicMetres * 1000, 0)} dm³`;
+    if (cubicMetres < 1e6) return `${grouped(cubicMetres, 2)} m³`;
+    return `${grouped(cubicMetres / 1e9, 3)} km³`;
+  }
+  // Imperial: cubic feet, switching to cubic yards above a yard.
+  const cubicFeet = cubicMetres * FEET_PER_METRE * FEET_PER_METRE * FEET_PER_METRE;
+  if (cubicFeet < 27) return `${grouped(cubicFeet, 1)} ft³`;
+  return `${grouped(cubicFeet / 27, 2)} yd³`;
+}
+
+/**
+ * Format a Box measurement's headline — `W × D × H · volume`. The three
+ * axis lengths read left to right, matching the per-axis order a surveyor
+ * writes when sketching a slice.
+ */
+export function formatBoxHeadline(
+  width: number,
+  depth: number,
+  height: number,
+  volume: number,
+  system: UnitSystem,
+): string {
+  const w = formatLength(width, system);
+  const d = formatLength(depth, system);
+  const h = formatLength(height, system);
+  const v = formatVolume(volume, system);
+  return `${w} × ${d} × ${h}  · ${v}`;
+}

@@ -380,6 +380,9 @@ const inspector = new Inspector({
     currentColorMode = mode;
     if (activeId) viewer.setColorMode(activeId, mode);
   },
+  onHeightPercentileTrim: (trim) => {
+    viewer.setHeightPercentileTrim(trim);
+  },
   onPointSize: (size) => {
     viewer.setPointSize(size);
     persistPrefs();
@@ -488,6 +491,11 @@ const inspector = new Inspector({
   },
   onAntialiasing: (on) => {
     viewer.setAntialiasing(on);
+    persistPrefs();
+  },
+  onTwoFingerTwist: (on) => {
+    viewer.setTwoFingerTwistEnabled(on);
+    syncInspectorRendering();
     persistPrefs();
   },
 });
@@ -1218,6 +1226,22 @@ function downloadBlob(filename: string, blob: Blob): void {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Push the Viewer's current render-quality state into the Inspector chips.
+ * Used by callbacks that change a single chip's state but want every chip
+ * — including the touch-model chip's active class — to re-sync.
+ */
+function syncInspectorRendering(): void {
+  inspector.syncRendering({
+    pointSize: viewer.pointSize,
+    edlEnabled: viewer.edlEnabled,
+    edlStrength: viewer.edlStrength,
+    pointSizeMode: viewer.pointSizeMode,
+    antialiasing: viewer.antialiasing,
+    twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
+  });
+}
+
 /** Read the current viewer settings and persist them for the next session. */
 function persistPrefs(): void {
   savePrefs({
@@ -1227,6 +1251,7 @@ function persistPrefs(): void {
     pointSizeMode: viewer.pointSizeMode,
     antialiasing: viewer.antialiasing,
     unitSystem: viewer.measure.unitSystem,
+    touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
   });
 }
 
@@ -1255,6 +1280,9 @@ function applyPrefs(): void {
   if (p.pointSizeMode !== undefined) viewer.setPointSizeMode(p.pointSizeMode);
   if (p.antialiasing !== undefined) viewer.setAntialiasing(p.antialiasing);
   if (p.unitSystem !== undefined) viewer.measure.setUnitSystem(p.unitSystem);
+  if (p.touchModel !== undefined) {
+    viewer.setTwoFingerTwistEnabled(p.touchModel === 'standard');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1619,6 +1647,7 @@ async function importSession(file: File): Promise<void> {
         edlStrength: viewer.edlStrength,
         pointSizeMode: viewer.pointSizeMode,
         antialiasing: viewer.antialiasing,
+        twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
       });
     }
     if (session.colorMode) {
@@ -1802,6 +1831,7 @@ async function handleFile(file: File): Promise<void> {
         edlStrength: viewer.edlStrength,
         pointSizeMode: viewer.pointSizeMode,
         antialiasing: viewer.antialiasing,
+        twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
       });
     } catch (err) {
       if (debug) console.warn('[inspector] syncRendering threw', err);

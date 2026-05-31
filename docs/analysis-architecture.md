@@ -297,7 +297,7 @@ src/analysis/
 ├── outliers/
 │   ├── isolated.ts               ← Nazeri k-NN cluster filter (the next release)
 │   └── clusterIDW.ts             ← Matkan iterative IDW filter (the next release)
-└── forest/                       ← Fareed metric catalogue (v0.4.0)
+└── forest/                       ← Fareed metric catalogue (future release)
     ├── chm.ts
     ├── fhd.ts
     ├── cgf.ts

@@ -22,6 +22,7 @@ import type { StreamingNode } from './StreamingNode';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { ColorMode } from '../colorModes';
 import { streamingNodeColors, intensityRangeOf } from './streamingColors';
+import { computeElevationRange } from '../elevationRange';
 import type { StreamingColorRanges } from './streamingColors';
 
 /**
@@ -104,6 +105,15 @@ export class StreamingRenderer {
   private _mode: ColorMode;
   private _ranges: StreamingColorRanges;
   private _intensitySeeded = false;
+  /**
+   * v0.3.7 final-polish — when false, the elevation colour ramp uses
+   * the COPC bounding-box min/max (which includes tall-tree outliers
+   * that compress the field elevation into a single colour stop).
+   * The first non-empty decoded node reseeds the range from a 2nd /
+   * 98th percentile of its own Z values, then flips this true so all
+   * subsequent nodes inherit the same stable percentile-clipped range.
+   */
+  private _elevationSeeded = false;
   private readonly _fadeIn: boolean;
   /** Active fade animations keyed by mesh; the value is its start wall time. */
   /**
@@ -168,6 +178,26 @@ export class StreamingRenderer {
       };
       this._intensitySeeded = true;
       if (this._mode === 'intensity') this._recolorAll();
+    }
+    // v0.3.7 final-polish — reseed the elevation range from the first
+    // node's 2nd / 98th percentile band. The COPC header-derived
+    // bounding-box min/max we started with would otherwise let a single
+    // tree (or a flag-mast, or a power line) compress the entire
+    // field of points into one colour stop. The coarse root node
+    // covers the whole cloud's spatial extent, so its sample is a
+    // statistically reasonable global percentile estimator.
+    if (!this._elevationSeeded && decoded.pointCount > 0) {
+      const range = computeElevationRange({
+        positions: decoded.positions,
+        pointCount: decoded.pointCount,
+      });
+      this._ranges = {
+        ...this._ranges,
+        minZ: range.minZ,
+        maxZ: range.maxZ,
+      };
+      this._elevationSeeded = true;
+      if (this._mode === 'elevation') this._recolorAll();
     }
     const colors = streamingNodeColors(this._mode, decoded, this._ranges);
     const handle: PointMeshHandle = this._viewer.buildPointMesh(decoded.positions, colors);

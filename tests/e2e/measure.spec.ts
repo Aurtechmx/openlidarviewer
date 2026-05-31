@@ -36,8 +36,9 @@ async function loadDenseSampleAndMeasure(page: Page): Promise<void> {
 
 test('the measurement toolbar shows the full kind picker', async ({ page }) => {
   await loadSampleAndMeasure(page);
-  // Seven kinds: distance, polyline, area, height, angle, slope, profile.
-  await expect(page.locator('.olv-mkind')).toHaveCount(7);
+  // Nine kinds: distance, polyline, area, height, angle, slope, profile,
+  // volume (cut/fill), box. Volume + box landed in v0.3.7 Stream B.
+  await expect(page.locator('.olv-mkind')).toHaveCount(9);
   await expect(page.locator('.olv-mkind-active')).toHaveText('Distance');
 });
 

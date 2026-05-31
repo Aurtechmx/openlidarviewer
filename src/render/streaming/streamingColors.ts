@@ -13,6 +13,7 @@
 
 import type { ColorMode } from '../colorModes';
 import { colorByElevation, colorByIntensity, colorByClassification } from '../colorModes';
+import { densityForChunk, defaultCellSizeForSpacing } from '../densityColors';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { CopcMetadata } from '../../io/copc/copcTypes';
 
@@ -34,7 +35,7 @@ export interface StreamingColorRanges {
 export function availableStreamingModes(metadata: CopcMetadata): ColorMode[] {
   const modes: ColorMode[] = [];
   if (metadata.header.hasRgb) modes.push('rgb');
-  modes.push('intensity', 'elevation', 'classification');
+  modes.push('intensity', 'elevation', 'classification', 'density');
   return modes;
 }
 
@@ -79,6 +80,23 @@ export function streamingNodeColors(
       );
     case 'classification':
       return colorByClassification(decoded.classification, n);
+    case 'density':
+      // Per-node density heatmap. Cell size derives from the streaming
+      // ranges' spacing hint if present; otherwise the helper clamps to a
+      // safe metre-scale default. Each node colours independently — this
+      // is a deliberate design choice: contrast adapts to the LOCAL node's
+      // coverage variability, which is what an analyst inspecting a
+      // specific region wants (the alternative is a cloud-global anchor
+      // that washes out per-region variation). Side-effect: subtle banding
+      // can appear at node boundaries on heterogeneous datasets. The PDF
+      // report card carries the per-node mean / max so the global picture
+      // can still be reconstructed.
+      return densityForChunk({
+        positions: decoded.positions,
+        cellSize: defaultCellSizeForSpacing(
+          (ranges as { spacing?: number }).spacing ?? 0,
+        ),
+      }).colors;
     case 'elevation':
     case 'normal':
     default:

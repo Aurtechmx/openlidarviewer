@@ -32,10 +32,76 @@ export type MeasurementKind =
    * scalar fields land here first so the kind, its picker entry, and the
    * session schema are stable.
    */
-  | 'profile';
+  | 'profile'
+  /**
+   * Box — a 2-point axis-aligned bounding-box measurement. The two
+   * picked points are opposite corners of a diagonal; the box is
+   * normalised per-axis (so any pick direction yields the same box).
+   * Headline shows width × depth × height + volume. Powers the
+   * Box-clipping inspector toggle and provides the polygon for the
+   * upcoming volume cut/fill measurement.
+   */
+  | 'box'
+  /**
+   * Volume — polygon footprint + horizontal reference plane → cubic
+   * metres of fill (above plane) and cut (below plane). Open-ended
+   * vertex count like `area`; the reference Z and the per-point
+   * cut/fill bucket are computed by `volumeCutFill` against the loaded
+   * cloud's positions. The flagship v0.3.7 surveyor capability.
+   */
+  | 'volume';
 
 /** Unit system for displayed values; toggled live from the Measurements panel. */
 export type UnitSystem = 'metric' | 'imperial';
+
+/**
+ * A single height-vs-distance sample along a profile transect. NaN
+ * `height` means "no points were near this bin" — the chart renders the
+ * gap as a discontinuity rather than interpolating a phantom value.
+ * See `profileSampler.ts`.
+ */
+export interface ProfileChartSample {
+  /** Distance from the profile's start, measured in the horizontal plane. */
+  distance: number;
+  /** Elevation at this distance, measured along the world up vector. */
+  height: number;
+}
+
+/**
+ * Volume measurement result — populated by the controller from
+ * `volumeCutFill` against the loaded cloud when the polygon commits.
+ * Persisted so the headline can read its cut / fill / net without
+ * re-sampling and so the PDF report has a stable record to include.
+ */
+export interface VolumeRecord {
+  /** Cubic metres above the reference plane. */
+  fill: number;
+  /** Cubic metres below the reference plane. */
+  cut: number;
+  /** Net = fill − cut, m³. */
+  net: number;
+  /** Reference Z used (local render-space), m. */
+  referenceZ: number;
+  /** Polygon footprint area on the horizontal plane, m². */
+  footprintArea: number;
+  /** Cloud points whose XY projection lay inside the polygon. */
+  pointsInPolygon: number;
+  /** Sample density inside the polygon (points / m²). */
+  density: number;
+  /**
+   * Confidence band, derived from `pointsInPolygon`:
+   *   - `'high'`   — ≥ 1 000 points
+   *   - `'medium'` — 100..999 points
+   *   - `'low'`    — < 100 points
+   *
+   * The PDF report card surfaces this so a low-coverage result reads
+   * as an estimate rather than a survey-grade volume. The methodology
+   * caveat ("Point-sample integration assumes uniform coverage") is the
+   * same on every confidence level — the badge is what the analyst sees
+   * first when scanning the report.
+   */
+  confidence: 'high' | 'medium' | 'low';
+}
 
 /** A single placed measurement. */
 export interface Measurement {
@@ -49,6 +115,35 @@ export interface Measurement {
   points: Vec3[];
   /** Area only — true once the polygon ring has been closed. */
   closed?: boolean;
+  /**
+   * Profile only — a sampled height-vs-distance series, populated by the
+   * controller after the second vertex lands. Optional so a measurement
+   * loaded from a pre-chart session file still validates; the panel falls
+   * back to the scalar metrics row in that case.
+   */
+  profileChart?: ProfileChartSample[];
+  /**
+   * Profile only — true when the chart was sampled against a streaming
+   * cloud's resident node set rather than a fully-loaded static cloud.
+   * The Measurements panel surfaces this as a "Resident-node analysis
+   * only — may refine as streaming loads" caption so the analyst knows
+   * the profile can change as more nodes stream in.
+   */
+  profileChartResidentOnly?: boolean;
+  /**
+   * Volume only — the cut/fill record from `volumeCutFill`. Optional so
+   * a volume measurement loaded from a session file that pre-dates the
+   * sampler (or one with no cloud loaded) still validates; the panel
+   * shows a "—" placeholder in that case.
+   */
+  volume?: VolumeRecord;
+  /**
+   * Volume only — true when the cut/fill record was sampled from
+   * streaming resident points only. The Measurements panel surfaces a
+   * coverage caption beneath the volume headline so the analyst knows
+   * the cubic-metres figure can refine as more nodes stream in.
+   */
+  volumeResidentOnly?: boolean;
 }
 
 /** Minimum vertex count for a measurement of each kind to be meaningful. */
@@ -60,6 +155,8 @@ export const MIN_POINTS: Record<MeasurementKind, number> = {
   angle: 3,
   slope: 2,
   profile: 2,
+  box: 2,
+  volume: 3,
 };
 
 /**
@@ -72,6 +169,7 @@ export const FIXED_POINTS: Partial<Record<MeasurementKind, number>> = {
   angle: 3,
   slope: 2,
   profile: 2,
+  box: 2,
 };
 
 /** True once a measurement has enough vertices to display a result. */

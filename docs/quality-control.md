@@ -320,6 +320,73 @@ catch:
 
 ---
 
+## Gate 7 — Release hygiene (mandatory before every shipped build)
+
+This gate runs after Gate 6 passes and before the publish + deploy
+zips are staged. It is the cleanup pass the team has been treating
+as a standing rule: every shipped build runs through it, no
+exceptions.
+
+### Leak + dead-code scan
+
+Run from `openlidarviewer-publish/`:
+
+```bash
+# Future-version refs in src/ — none allowed.
+grep -rEn "v0\.3\.[8-9]|v0\.[4-9]\.|obfuscat" src/
+
+# Internal vocabulary (stream/phase tracking) in src/ + docs/ + README.
+grep -rEn "ROADMAP-INTERNAL|TOP-10-IMPROVEMENTS|Stream [A-D][\.0-9]" \
+  src/ docs/ README.md CHANGELOG.md
+
+# Stray debug logs in src/ that aren't gated behind `debug` / `benchmark`.
+grep -B2 -n "console\.log" src/
+
+# Personal data + dev URLs.
+grep -rEn "alexurias|@gmail|localhost|127\.0\.0\.1" \
+  src/ docs/ README.md CHANGELOG.md
+
+# TODO / FIXME / HACK comments hinting at unfinished work.
+grep -rEn "// (TODO|FIXME|HACK|XXX):" src/
+```
+
+Every grep above must return either no hits or a list the reviewer
+can defend line by line. **`v0.3.x+1` references in `src/` are an
+auto-fail.** Move forward-looking comments to phrasing like "a future
+release can add a field here" — never name the version.
+
+### Writing cleanup (avoid-ai-writing + stop-slop)
+
+Scan the CHANGELOG entries added since the previous release:
+
+```bash
+grep -nE "leverag|robust|seamless|comprehensive|delve|moreover|\
+furthermore|holistic|paradigm|empower|gracefully|cutting-edge|\
+state-of-the-art|industry-standard|best-in-class|world-class|\
+elite[- ]readiness|flagship|cinematic" CHANGELOG.md
+```
+
+Also check for these patterns by eye:
+
+- "not just X, but Y" → strike, write the direct claim.
+- Three-clause parallel run-ons in feature intros → split into separate
+  sentences.
+- Promotional flourishes ("elite-readiness release", "the flagship X",
+  "cinematic backgrounds") → strike. Bullet content is enough.
+- Redundant section-label suffixes like `(release polish)` nested
+  under the `[0.3.x]` heading → strike.
+
+The point isn't to make the changelog terse — it's to make it sound
+like the engineer who shipped the change wrote it.
+
+### Final repackage
+
+Only after both checks above pass cleanly do the zips get staged in
+`/tmp`, perm-checked at `644` / `755`, copied to the user's folder,
+and presented for GitHub Desktop.
+
+---
+
 ## Agentic skills — when to apply each
 
 The session's debugging discipline relies on the following skills.

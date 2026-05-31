@@ -15,7 +15,13 @@
 import type * as THREE from 'three/webgpu';
 import { el } from '../../ui/dom';
 import type { Vec3 } from '../navMath';
-import type { Measurement, MeasurementKind, UnitSystem } from './types';
+import type {
+  Measurement,
+  MeasurementKind,
+  ProfileChartSample,
+  UnitSystem,
+  VolumeRecord,
+} from './types';
 import { MIN_POINTS, isFull } from './types';
 import {
   distance,
@@ -26,6 +32,10 @@ import {
   slopeBetween,
   angleAtVertex,
   profileMetrics,
+  boxFromCorners,
+  boxMetrics,
+  boxCorners,
+  BOX_EDGES,
 } from './geometry';
 import {
   formatLength,
@@ -33,7 +43,10 @@ import {
   formatAngle,
   formatGrade,
   formatProfileHeadline,
+  formatBoxHeadline,
+  formatVolume,
 } from './format';
+import { autoReferenceZ } from './volume';
 import { MeasureOverlay } from './MeasureOverlay';
 import type {
   OverlayModel,
@@ -60,6 +73,8 @@ const KIND_LABEL: Record<MeasurementKind, string> = {
   angle: 'Angle',
   slope: 'Slope',
   profile: 'Profile',
+  box: 'Box',
+  volume: 'Volume',
 };
 
 /** Hover hints for the kind picker — what each tool measures and how. */
@@ -72,6 +87,9 @@ const KIND_TITLE: Record<MeasurementKind, string> = {
   slope: 'Slope — rise, run, grade and inclination between two points',
   profile:
     'Profile — cross-section line: 3D length, horizontal distance, vertical drop, and grade',
+  box: 'Box — axis-aligned slice: width × depth × height with volume, ready for clipping',
+  volume:
+    'Volume — polygon footprint + reference height: cut, fill and net in cubic metres',
 };
 
 /** Kind order for the picker buttons. */
@@ -83,6 +101,8 @@ const KIND_ORDER: MeasurementKind[] = [
   'angle',
   'slope',
   'profile',
+  'box',
+  'volume',
 ];
 
 /** Hooks the controller calls back into. */
@@ -97,6 +117,26 @@ export interface MeasurementSummary {
   kind: MeasurementKind;
   name: string;
   value: string;
+  /**
+   * Profile only — height-vs-distance samples, used by the Measurements
+   * panel to render a chart strip beneath the headline row. Optional; a
+   * profile measurement loaded from a pre-chart session file omits this
+   * field and the panel simply skips the chart.
+   */
+  profileChart?: ProfileChartSample[];
+  /**
+   * Profile only — when true, the chart was sampled from streaming
+   * resident nodes only. The panel surfaces a coverage caption so the
+   * analyst understands the line may refine as more nodes stream in.
+   */
+  profileChartResidentOnly?: boolean;
+  /**
+   * Volume only — when true, the cut/fill record was sampled from
+   * streaming resident nodes only. The panel surfaces a coverage caption
+   * beneath the volume headline so the analyst understands the cubic
+   * metres figure may refine as more nodes stream in.
+   */
+  volumeResidentOnly?: boolean;
 }
 
 export class MeasureController {
@@ -117,6 +157,48 @@ export class MeasureController {
 
   /** Re-picks a cloud point at the given NDC — injected by the Viewer. */
   private _picker: ((ndcX: number, ndcY: number) => Vec3 | null) | null = null;
+  /**
+   * Profile sampler — injected by the Viewer once a cloud is attached.
+   * The controller calls this when a Profile measurement commits, and
+   * the returned series is stamped onto the measurement record as
+   * `profileChart`. `null` means "no cloud loaded" or "sampling failed";
+   * the panel falls back to the scalar metrics row in that case.
+   */
+  /**
+   * Profile sampler return shape. `samples` is the height-vs-distance
+   * polyline; `residentOnly` is true when the cloud is streaming and the
+   * walk only touched resident-node positions. The Measurements panel
+   * surfaces the resident-only flag as a coverage caption so the analyst
+   * knows the profile may refine as more nodes stream in.
+   *
+   * For backwards compatibility the sampler may also return a plain
+   * sample array; the controller wraps it as `{samples, residentOnly: false}`.
+   */
+  private _profileSampler:
+    | ((
+        a: Vec3,
+        b: Vec3,
+      ) => ProfileChartSample[] | { samples: ProfileChartSample[]; residentOnly: boolean } | null)
+    | null = null;
+  /**
+   * Volume sampler — injected by the Viewer once a cloud is attached.
+   * Called when a Volume measurement commits.
+   *
+   * Returns either:
+   *   - a plain `VolumeRecord` (back-compat), or
+   *   - `{ record, residentOnly }` so the panel can surface a
+   *     "Resident-node analysis only — value may refine as streaming loads"
+   *     caption when the cloud is still streaming.
+   *
+   * `null` means "no cloud loaded" or "sampling failed"; the panel shows
+   * a "—" cut/fill.
+   */
+  private _volumeSampler:
+    | ((
+        polygon: ReadonlyArray<Vec3>,
+        referenceZ: number,
+      ) => VolumeRecord | { record: VolumeRecord; residentOnly: boolean } | null)
+    | null = null;
   /** The handle being dragged: a measurement id and vertex index. */
   private _drag: { id: string; vi: number } | null = null;
   private _dragNdcX = 0;
@@ -144,6 +226,8 @@ export class MeasureController {
     angle: 0,
     slope: 0,
     profile: 0,
+    box: 0,
+    volume: 0,
   };
 
   constructor(callbacks: MeasureCallbacks) {
@@ -264,6 +348,9 @@ export class MeasureController {
       kind: m.kind,
       name: m.name,
       value: this._headlineText(m),
+      profileChart: m.profileChart,
+      profileChartResidentOnly: m.profileChartResidentOnly,
+      volumeResidentOnly: m.volumeResidentOnly,
     }));
   }
 
@@ -280,6 +367,45 @@ export class MeasureController {
   /** Inject the cloud-point picker used while dragging a vertex handle. */
   setPicker(pick: (ndcX: number, ndcY: number) => Vec3 | null): void {
     this._picker = pick;
+  }
+
+  /**
+   * Inject the profile-sampler used when a Profile measurement commits.
+   * The Viewer wires this once a cloud is attached and clears it on close.
+   * Passing `null` disables the chart layer; the scalar metrics still render.
+   */
+  setProfileSampler(
+    sampler:
+      | ((
+          a: Vec3,
+          b: Vec3,
+        ) =>
+          | ProfileChartSample[]
+          | { samples: ProfileChartSample[]; residentOnly: boolean }
+          | null)
+      | null,
+  ): void {
+    this._profileSampler = sampler;
+  }
+
+  /**
+   * Inject the volume-sampler used when a Volume measurement commits.
+   * The Viewer wires this once a cloud is attached and clears it on
+   * close. Passing `null` leaves the volume record unpopulated and the
+   * panel shows "—" for cut/fill.
+   */
+  setVolumeSampler(
+    sampler:
+      | ((
+          polygon: ReadonlyArray<Vec3>,
+          referenceZ: number,
+        ) =>
+          | VolumeRecord
+          | { record: VolumeRecord; residentOnly: boolean }
+          | null)
+      | null,
+  ): void {
+    this._volumeSampler = sampler;
   }
 
   /** Whether a vertex handle is currently being dragged. */
@@ -415,7 +541,60 @@ export class MeasureController {
 
   private _commitDraft(): void {
     if (!this._draft) return;
-    this._measurements.push(this._draft);
+    const m = this._draft;
+    // Profile-only: stamp a sampled height-vs-distance chart onto the
+    // measurement record. The sampler is allowed to fail (no cloud, empty
+    // resident set on a streaming scan still warming up); a null return
+    // leaves `profileChart` undefined and the panel falls back to the
+    // scalar metrics row.
+    if (m.kind === 'profile' && this._profileSampler && m.points.length >= 2) {
+      try {
+        const result = this._profileSampler(m.points[0], m.points[1]);
+        if (result) {
+          // Normalise both legacy (raw array) and current ({samples,
+          // residentOnly}) sampler return shapes.
+          const samples = Array.isArray(result) ? result : result.samples;
+          const residentOnly = Array.isArray(result) ? false : result.residentOnly;
+          if (samples && samples.length > 0) {
+            m.profileChart = samples;
+            if (residentOnly) m.profileChartResidentOnly = true;
+          }
+        }
+      } catch {
+        // Sampler errors must not poison the measurement; the scalar
+        // metrics still display correctly without the chart.
+      }
+    }
+    // Volume-only: sample cut/fill against the loaded cloud, using the
+    // polygon's auto-reference Z (median of vertex heights). The sampler
+    // is allowed to fail; a null result leaves `m.volume` unset and the
+    // panel shows the polygon area + "—" cut/fill.
+    if (
+      m.kind === 'volume' &&
+      this._volumeSampler &&
+      m.points.length >= MIN_POINTS.volume
+    ) {
+      try {
+        const refZ = autoReferenceZ(m.points, this._worldUp);
+        const result = this._volumeSampler(m.points, refZ);
+        if (result) {
+          // Normalise legacy (raw VolumeRecord) and current
+          // ({record, residentOnly}) sampler return shapes. The detection
+          // looks for the `record` field on the result, which exists only
+          // on the wrapped shape — VolumeRecord has `fill` / `cut` / etc.
+          if ('record' in result) {
+            m.volume = result.record;
+            if (result.residentOnly) m.volumeResidentOnly = true;
+          } else {
+            m.volume = result;
+          }
+        }
+      } catch {
+        // Same rationale as the profile branch — sampler errors must not
+        // poison the commit; the polygon still appears as a measurement.
+      }
+    }
+    this._measurements.push(m);
     this._draft = null;
     this._emitChange();
   }
@@ -516,6 +695,25 @@ export class MeasureController {
           this._units,
         );
       }
+      case 'box': {
+        if (p.length < 2) return '—';
+        const m = boxMetrics(boxFromCorners(p[0], p[1]));
+        return formatBoxHeadline(m.width, m.depth, m.height, m.volume, this._units);
+      }
+      case 'volume': {
+        if (p.length < MIN_POINTS.volume) return '—';
+        // Polygon area always available; cut / fill / net come from the
+        // sampler-stamped record. When the record is missing (no cloud,
+        // pre-sampler session file) the headline still shows the area.
+        const area = formatArea(polygonAreaHorizontal(p, this._worldUp), this._units);
+        const v = m.volume;
+        if (!v) return `${area} footprint · cut/fill —`;
+        const fill = formatVolume(Math.max(0, v.fill), this._units);
+        const cut = formatVolume(Math.max(0, v.cut), this._units);
+        const net = formatVolume(Math.abs(v.net), this._units);
+        const netSign = v.net < 0 ? 'cut' : 'fill';
+        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
+      }
     }
   }
 
@@ -541,10 +739,20 @@ export class MeasureController {
         const area = formatArea(polygonAreaPlanar(d.points), this._units);
         return `${area} · ${VERB} more, or Done to close`;
       }
+      case 'volume': {
+        if (!d || d.points.length < 3)
+          return `${VERB} the volume polygon — three or more vertices on the surface`;
+        const area = formatArea(polygonAreaHorizontal(d.points, this._worldUp), this._units);
+        return `${area} footprint · ${VERB} more, or Done to compute cut/fill`;
+      }
       case 'height':
       case 'slope':
       case 'profile':
         return n === 1 ? `${VERB} the second point` : `${VERB} the first point`;
+      case 'box':
+        return n === 1
+          ? `${VERB} the opposite corner of the box`
+          : `${VERB} one corner of the box`;
       case 'angle':
         if (n === 1) return `${VERB} the angle vertex`;
         if (n === 2) return `${VERB} the third point`;
@@ -702,6 +910,47 @@ export class MeasureController {
         primary: false,
       });
     }
+    if (m.kind === 'volume' && pts.length >= MIN_POINTS.volume) {
+      // Volume renders as the same closed polygon idiom as `area` — the
+      // ring edges + a translucent fill — with the headline label
+      // anchored at the centroid carrying the cut/fill record.
+      for (let i = 0; i < pts.length; i++) {
+        E.push({ a: pts[i], b: pts[(i + 1) % pts.length], style: 'solid' });
+      }
+      P.push({ points: pts });
+      L.push({ anchor: centroid(pts), text: this._headlineText(m), primary: true });
+      return;
+    }
+    if (m.kind === 'box' && pts.length >= 2) {
+      // Box renders as a 12-edge wireframe cube. The two pick points are
+      // opposite diagonal corners; `boxFromCorners` normalises any axis
+      // ordering so the same box reads identically regardless of pick
+      // direction. The corner / edge tables in `geometry.ts` define a
+      // stable index order so this overlay (and the future renderer
+      // clipping uniform) read from one source of truth.
+      const box = boxFromCorners(pts[0], pts[1]);
+      const corners = boxCorners(box);
+      for (const [aI, bI] of BOX_EDGES) {
+        E.push({ a: corners[aI], b: corners[bI], style: 'solid' });
+      }
+      const metrics = boxMetrics(box);
+      const centre: Vec3 = [
+        (box.min[0] + box.max[0]) * 0.5,
+        (box.min[1] + box.max[1]) * 0.5,
+        (box.min[2] + box.max[2]) * 0.5,
+      ];
+      L.push({
+        anchor: centre,
+        text: formatBoxHeadline(
+          metrics.width,
+          metrics.depth,
+          metrics.height,
+          metrics.volume,
+          this._units,
+        ),
+        primary: true,
+      });
+    }
   }
 
   /** Add the in-progress draft, including its live preview toward the cursor. */
@@ -751,6 +1000,25 @@ export class MeasureController {
         L.push({
           anchor: centroid(ring),
           text: formatArea(polygonAreaPlanar(ring), this._units),
+          primary: true,
+        });
+      }
+      return;
+    }
+    if (d.kind === 'volume') {
+      // Same live-polygon preview idiom as `area`: each new vertex
+      // closes back to the first point so the in-progress footprint
+      // reads as a ring. The live label shows the horizontal-plane area
+      // — the headline cut/fill numbers only land after commit, when
+      // the sampler walks the cloud.
+      E.push({ a: last, b: cur, style: 'preview' });
+      const ring = [...pts, cur];
+      if (ring.length >= 3) {
+        E.push({ a: cur, b: pts[0], style: 'preview' });
+        P.push({ points: ring });
+        L.push({
+          anchor: centroid(ring),
+          text: formatArea(polygonAreaHorizontal(ring, this._worldUp), this._units),
           primary: true,
         });
       }
@@ -808,6 +1076,33 @@ export class MeasureController {
           pm.length3d,
           pm.verticalDrop,
           pm.gradePercent,
+          this._units,
+        ),
+        primary: true,
+      });
+    }
+    if (d.kind === 'box') {
+      // Live wireframe preview from the first corner to the cursor. Edges
+      // are drawn in the same `preview` style as other in-progress tools
+      // so the user sees the box take shape as they sweep the diagonal.
+      const box = boxFromCorners(pts[0], cur);
+      const corners = boxCorners(box);
+      for (const [aI, bI] of BOX_EDGES) {
+        E.push({ a: corners[aI], b: corners[bI], style: 'preview' });
+      }
+      const metrics = boxMetrics(box);
+      const centre: Vec3 = [
+        (box.min[0] + box.max[0]) * 0.5,
+        (box.min[1] + box.max[1]) * 0.5,
+        (box.min[2] + box.max[2]) * 0.5,
+      ];
+      L.push({
+        anchor: centre,
+        text: formatBoxHeadline(
+          metrics.width,
+          metrics.depth,
+          metrics.height,
+          metrics.volume,
           this._units,
         ),
         primary: true,

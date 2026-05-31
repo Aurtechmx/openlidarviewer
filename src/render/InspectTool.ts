@@ -28,6 +28,8 @@ import {
 } from './pointInfo';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { utmConverter } from '../geo/UtmConverter';
+import { buildPatchView } from './patchView';
+import { colorProvenance, formatColorProvenance } from './colorProvenance';
 
 /**
  * The pieces of cloud / CRS context the inspector needs to compute
@@ -90,6 +92,18 @@ function infoRow(label: string, value: string, title?: string): HTMLElement {
  */
 function coordGroupHeader(text: string): HTMLElement {
   return el('div', { className: 'olv-inspect-group', text });
+}
+
+/**
+ * A single label / value row inside the photometric-witness section.
+ * Slightly tighter than `infoRow` so the patch + values block stays
+ * compact within the inspector card's width budget.
+ */
+function witnessRow(label: string, value: string): HTMLElement {
+  return el('div', { className: 'olv-witness-row' }, [
+    el('span', { className: 'olv-witness-row-label', text: label }),
+    el('span', { className: 'olv-witness-row-value', text: value }),
+  ]);
 }
 
 /**
@@ -183,6 +197,19 @@ export class InspectTool {
   private _copyTimer: number | null = null;
   /** Cloud origin + CRS — drives World and Lat/Lon rows. */
   private _coordContext: CoordinateContext = {};
+  /**
+   * Patch-view provider — injected by the Viewer once a scan is attached.
+   * Given a cloud layer + a point index inside that layer, returns the
+   * raw positions + sRGB Uint8 colours so the inspector can build a
+   * photometric witness for the picked point. `null` when the layer
+   * does not carry per-point RGB (intensity-only, classification-only).
+   *
+   * Returning `null` from the function is safe — the inspector then
+   * skips the witness section and renders the classic numeric card.
+   */
+  private _patchProvider:
+    | ((layer: string, index: number) => { positions: Float32Array; colorsU8: Uint8Array } | null)
+    | null = null;
 
   private readonly _ndc = new THREE.Vector3();
   private readonly _cameraSpace = new THREE.Vector3();
@@ -248,6 +275,22 @@ export class InspectTool {
     // If a point is already selected, repaint the card so the new
     // World / Lat-Lon rows appear immediately.
     if (this._selected) this._fillCard(this._selected.info);
+  }
+
+  /**
+   * Wire the patch-view provider — the Viewer calls this once a scan
+   * attaches. Pass `null` on scan close so the inspector falls back to
+   * the classic numeric card.
+   */
+  setPatchProvider(
+    provider:
+      | ((
+          layer: string,
+          index: number,
+        ) => { positions: Float32Array; colorsU8: Uint8Array } | null)
+      | null,
+  ): void {
+    this._patchProvider = provider;
   }
 
   /** Enter or leave inspection mode. */
@@ -442,9 +485,80 @@ export class InspectTool {
         ),
       );
     }
+    // ── Photometric witness — patch view + colour provenance ──────────────
+    // The witness only renders when the cloud actually carries per-point
+    // RGB (which the patch provider returns null for otherwise) and the
+    // point's colour was reported on the PointInfo record. Section is
+    // collapsible by <details> so it doesn't dominate the inspector
+    // card; closed by default until the analyst opens it the first time.
+    const witnessSection = this._buildWitnessSection(info);
+    if (witnessSection) rows.push(witnessSection);
+
     this._cardBody.replaceChildren(...rows);
     this._copyNote.classList.add('olv-hidden');
     this._copyBtn.textContent = 'Copy';
+  }
+
+  /**
+   * Build the photometric-witness section — a patch-view thumbnail and
+   * the colour-provenance rows (scanner sRGB / linear / display sRGB).
+   * Returns null when the cloud carries no RGB or the patch provider is
+   * unset; the inspector then ships the classic numeric card unchanged.
+   */
+  private _buildWitnessSection(info: PointInfo): HTMLElement | null {
+    if (!this._patchProvider) return null;
+    if (!info.rgb) return null;
+    const data = this._patchProvider(info.layer, info.index);
+    if (!data) return null;
+    // Build the patch — the data layer enforces bounds, so we just hand
+    // it the index and let it return null on degenerate inputs.
+    const patch = buildPatchView({
+      pointIndex: info.index,
+      positions: data.positions,
+      colorsU8: data.colorsU8,
+      size: 64,
+      k: 64,
+      splatRadius: 1.75,
+    });
+    if (!patch) return null;
+    const cp = colorProvenance(info.rgb[0], info.rgb[1], info.rgb[2]);
+    const fmt = formatColorProvenance(cp);
+
+    // Render the patch into a small <canvas> for inline display.
+    const canvas = document.createElement('canvas');
+    canvas.width = patch.size;
+    canvas.height = patch.size;
+    canvas.className = 'olv-witness-canvas';
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const imageData = new ImageData(
+        new Uint8ClampedArray(patch.rgba),
+        patch.size,
+        patch.size,
+      );
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    // Build the section — collapsible <details> so first-paint stays compact.
+    const summary = document.createElement('summary');
+    summary.className = 'olv-witness-summary';
+    summary.textContent = 'Photometric witness';
+    const grid = el('div', { className: 'olv-witness-grid' }, [
+      canvas,
+      el('div', { className: 'olv-witness-values' }, [
+        witnessRow('Scanner', fmt.scanner),
+        witnessRow('Linear', fmt.linear),
+        witnessRow('Display', fmt.display),
+        witnessRow(
+          'Coverage',
+          `${(patch.coverage * 100).toFixed(0)} %  ·  ${patch.hits} points`,
+        ),
+      ]),
+    ]);
+    const details = document.createElement('details');
+    details.className = 'olv-witness-details';
+    details.append(summary, grid);
+    return details;
   }
 
   /** Copy the selected point's data to the clipboard, then confirm briefly. */

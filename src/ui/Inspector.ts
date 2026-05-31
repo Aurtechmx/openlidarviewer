@@ -34,10 +34,25 @@ export interface RenderingState {
   edlStrength: number;
   pointSizeMode: PointSizeMode;
   antialiasing: boolean;
+  /**
+   * Mobile touch model. `true` = standard (twist + pinch + pan
+   * decomposition, default); `false` = advanced (3-finger zoom). The
+   * chip is shown to every user — it's harmless on desktop where touch
+   * isn't in play and matters on tablet / phone where it ships v0.3.7's
+   * new gesture surface.
+   */
+  twoFingerTwistEnabled: boolean;
 }
 
 export interface InspectorCallbacks {
   onColorMode: (mode: ColorMode) => void;
+  /**
+   * v0.3.7 final-polish — symmetric height percentile trim.
+   * `trim = 5` clips to the 5 / 95 band (default), `trim = 0` uses
+   * true min/max, `trim = 25` uses the 25 / 75 band for a very
+   * dramatic gradient on field-only scans.
+   */
+  onHeightPercentileTrim: (trim: number) => void;
   onPointSize: (size: number) => void;
   onToggleVisible: (id: string, visible: boolean) => void;
   onRemove: (id: string) => void;
@@ -72,6 +87,12 @@ export interface InspectorCallbacks {
   onPointSizeMode: (mode: PointSizeMode) => void;
   /** Toggle point-edge antialiasing. */
   onAntialiasing: (on: boolean) => void;
+  /**
+   * Toggle the two-finger twist + pinch + pan recogniser. `on = true` →
+   * standard (decomposition). `on = false` → advanced (3-finger zoom).
+   * Persisted by main.ts through `prefs.touchModel`.
+   */
+  onTwoFingerTwist: (on: boolean) => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -80,6 +101,7 @@ const MODE_LABELS: Record<ColorMode, string> = {
   elevation: 'Height',
   classification: 'Class',
   normal: 'Normal',
+  density: 'Density',
 };
 
 /** Hover hints for each colour mode — what the chip does, for first-time users. */
@@ -89,6 +111,7 @@ const MODE_TITLES: Record<ColorMode, string> = {
   elevation: 'Colour points by height — low to high',
   classification: 'Colour points by their ASPRS classification code',
   normal: 'Colour points by surface-normal direction',
+  density: 'Colour points by local coverage — dark = sparse, bright = dense',
 };
 
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
@@ -222,6 +245,29 @@ export class Inspector {
   private readonly _cb: InspectorCallbacks;
   private readonly _layers = el('div', { className: 'olv-layers' });
   private readonly _chips = el('div', { className: 'olv-chips' });
+  /**
+   * v0.3.7 final-polish — symmetric height percentile-trim slider.
+   * Visible only when the active colour mode is 'elevation'. Default
+   * trim is 5 (the 5 / 95 percentile band).
+   */
+  private readonly _heightTrimRow = el('div', {
+    className: 'olv-height-trim-row olv-hidden',
+  });
+  private readonly _heightTrimSlider = (() => {
+    const slider = el('input', {
+      type: 'range',
+      className: 'olv-height-trim-slider',
+    }) as HTMLInputElement;
+    slider.min = '0';
+    slider.max = '25';
+    slider.step = '1';
+    slider.value = '5';
+    return slider;
+  })();
+  private readonly _heightTrimLabel = el('span', {
+    className: 'olv-height-trim-label',
+    text: '5%',
+  });
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
   // Captured section refs — `setStreamingMode` toggles their visibility so
@@ -264,6 +310,7 @@ export class Inspector {
   private readonly _edlStrengthSlider: HTMLInputElement;
   private readonly _edlStrengthRow: HTMLElement;
   private readonly _aaChip: HTMLButtonElement;
+  private readonly _touchChip: HTMLButtonElement;
   private readonly _sizeModeChips: { mode: PointSizeMode; chip: HTMLButtonElement }[];
 
   constructor(callbacks: InspectorCallbacks) {
@@ -321,6 +368,16 @@ export class Inspector {
       'Toggle antialiasing — smooths the edge of every point',
       (on) => this._cb.onAntialiasing(on),
     );
+    // Touch model chip — active state means "Twist" gesture is enabled
+    // (the default v0.3.7 standard model). Tapping it off switches to
+    // the advanced model where 3 fingers dolly and 2 fingers twist+pan.
+    // The label and title shift between modes so a returning user knows
+    // which model is currently armed without opening the help sheet.
+    this._touchChip = toggleChip(
+      'Touch twist',
+      'On — two-finger twist rotates the view. Off — two fingers pinch-zoom (classic) and three fingers zoom in/out',
+      (on) => this._cb.onTwoFingerTwist(on),
+    );
 
     this._edlStrengthSlider = el('input', {
       className: 'olv-slider',
@@ -340,7 +397,7 @@ export class Inspector {
       this._edlStrengthSlider,
     ]);
     const renderingBody = el('div', { className: 'olv-render-group' }, [
-      el('div', { className: 'olv-chips' }, [this._edlChip, this._aaChip]),
+      el('div', { className: 'olv-chips' }, [this._edlChip, this._aaChip, this._touchChip]),
       this._edlStrengthRow,
     ]);
 
@@ -497,7 +554,25 @@ export class Inspector {
     // Detail, Provenance, Coordinate system, Scan report, Image export,
     // Report PDF — work uniformly against either source type.
     this._layersSection = section('Layers', this._layers);
-    this._colorBySection = section('Color by', this._chips);
+    // v0.3.7 final-polish — build the height percentile-trim row and
+    // mount it inside the "Color by" section beneath the chip rail.
+    // The row hides itself when the active mode isn't 'elevation'.
+    this._heightTrimRow.replaceChildren(
+      el('span', { className: 'olv-height-trim-name', text: 'Trim outliers' }),
+      this._heightTrimSlider,
+      this._heightTrimLabel,
+    );
+    this._heightTrimSlider.addEventListener('input', () => {
+      const trim = Number.parseInt(this._heightTrimSlider.value, 10);
+      const safe = Number.isFinite(trim) ? trim : 5;
+      this._heightTrimLabel.textContent = `${safe}%`;
+      this._cb.onHeightPercentileTrim(safe);
+    });
+    const colorByBody = el('div', { className: 'olv-color-by-body' }, [
+      this._chips,
+      this._heightTrimRow,
+    ]);
+    this._colorBySection = section('Color by', colorByBody);
     this._pointSizeSection = section('Point size', pointSizeBody);
     this._renderingSection = section('Rendering', renderingBody);
     this._exportSection = collapsibleSection('Export', exporter);
@@ -695,9 +770,15 @@ export class Inspector {
         for (const other of this._chips.children) other.classList.remove('olv-chip-active');
         chip.classList.add('olv-chip-active');
         this._cb.onColorMode(mode);
+        // v0.3.7 final-polish — show the trim slider when the analyst
+        // picks Height. Other modes don't honour the slider so hiding
+        // it removes the cognitive overhead.
+        this._heightTrimRow.classList.toggle('olv-hidden', mode !== 'elevation');
       });
       this._chips.append(chip);
     }
+    // Initial visibility for the trim row — track the active mode.
+    this._heightTrimRow.classList.toggle('olv-hidden', active !== 'elevation');
   }
 
   /** Reflect the viewer's current render-quality state in the controls. */
@@ -707,6 +788,7 @@ export class Inspector {
     this._edlStrengthRow.classList.toggle('olv-hidden', !state.edlEnabled);
     this._edlStrengthSlider.value = String(state.edlStrength);
     this._aaChip.classList.toggle('olv-chip-active', state.antialiasing);
+    this._touchChip.classList.toggle('olv-chip-active', state.twoFingerTwistEnabled);
     for (const c of this._sizeModeChips) {
       c.chip.classList.toggle('olv-chip-active', c.mode === state.pointSizeMode);
     }

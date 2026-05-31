@@ -122,6 +122,113 @@ export class MeasurePanel {
     });
     del.addEventListener('click', () => this._cb.onDelete(s.id));
 
-    return el('div', { className: 'olv-mp-row' }, [dot, name, value, del]);
+    const headRow = el('div', { className: 'olv-mp-row' }, [dot, name, value, del]);
+
+    // Profile-only: render a compact height-vs-distance chart strip
+    // beneath the headline row. The chart is a single inline SVG, no
+    // external libraries — keeps the Measurements panel a leaf module.
+    if (s.kind === 'profile' && s.profileChart && s.profileChart.length >= 2) {
+      const chart = renderProfileChart(s.profileChart);
+      const children: HTMLElement[] = [headRow, chart];
+      // Streaming-resident caveat: surface a coverage caption beneath the
+      // chart so the analyst understands the profile only reflects the
+      // points currently resident in memory, and may refine as more
+      // nodes stream in.
+      if (s.profileChartResidentOnly) {
+        children.push(
+          el('div', {
+            className: 'olv-mp-chart-caveat',
+            text: 'Resident-node analysis only — profile may refine as streaming loads.',
+          }),
+        );
+      }
+      return el('div', { className: 'olv-mp-row-stack' }, children);
+    }
+
+    // Volume-only: surface the streaming-resident caveat beneath the
+    // headline row when the cut/fill record was sampled against
+    // resident nodes only. Same caption style as the profile branch so
+    // the analyst's eye reads them as the same "may refine" signal.
+    if (s.kind === 'volume' && s.volumeResidentOnly) {
+      const caveat = el('div', {
+        className: 'olv-mp-chart-caveat',
+        text: 'Resident-node analysis only — cut / fill may refine as streaming loads.',
+      });
+      return el('div', { className: 'olv-mp-row-stack' }, [headRow, caveat]);
+    }
+
+    return headRow;
   }
+}
+
+/**
+ * Render a compact profile chart as an inline SVG. Chart bounds are
+ * normalised to the sample's distance / height extents; NaN samples
+ * (no-coverage bins) split the line into separate paths so a gap
+ * reads as a discontinuity rather than a straight interpolation.
+ *
+ * Width is the panel's available column; height is fixed at 36 px to
+ * sit comfortably under the headline row without dominating the list.
+ */
+function renderProfileChart(
+  samples: readonly { distance: number; height: number }[],
+): HTMLElement {
+  const W = 220;
+  const H = 36;
+  const PAD = 2;
+
+  // Find data bounds across hit samples only.
+  let xMin = Infinity;
+  let xMax = -Infinity;
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (const s of samples) {
+    if (!Number.isFinite(s.height)) continue;
+    if (s.distance < xMin) xMin = s.distance;
+    if (s.distance > xMax) xMax = s.distance;
+    if (s.height < yMin) yMin = s.height;
+    if (s.height > yMax) yMax = s.height;
+  }
+
+  // If no hits at all, render a "no coverage" hint instead of a chart.
+  if (!Number.isFinite(xMin)) {
+    return el('div', {
+      className: 'olv-mp-chart-empty',
+      text: 'No points near the profile line — try a denser scan area.',
+    });
+  }
+
+  const xSpan = Math.max(xMax - xMin, 1e-9);
+  const ySpan = Math.max(yMax - yMin, 1e-9);
+
+  // Walk samples and emit one path per contiguous hit run.
+  const paths: string[] = [];
+  let cur = '';
+  for (const s of samples) {
+    if (!Number.isFinite(s.height)) {
+      if (cur) {
+        paths.push(cur);
+        cur = '';
+      }
+      continue;
+    }
+    const x = PAD + ((s.distance - xMin) / xSpan) * (W - PAD * 2);
+    // Invert Y: SVG y grows downward, but elevation grows upward.
+    const y = H - PAD - ((s.height - yMin) / ySpan) * (H - PAD * 2);
+    cur += cur === '' ? `M${x.toFixed(2)} ${y.toFixed(2)}` : ` L${x.toFixed(2)} ${y.toFixed(2)}`;
+  }
+  if (cur) paths.push(cur);
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    ${paths
+      .map(
+        (d) =>
+          `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>`,
+      )
+      .join('')}
+  </svg>`;
+
+  const span = ySpan;
+  const title = `${samples.length} samples · Δh ${span.toFixed(2)} m`;
+  return el('div', { className: 'olv-mp-chart', html: svg, title });
 }

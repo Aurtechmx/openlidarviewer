@@ -20,6 +20,18 @@
 import type { PointSizeMode } from './render/pointStyle';
 import type { UnitSystem } from './render/measure/types';
 
+/**
+ * The user's choice of mobile multi-touch model.
+ *
+ *  - **standard** — the v0.3.7 simultaneous-decomposition recogniser
+ *    (Maps / Procreate model). Two fingers do twist + pinch + pan at
+ *    once, each above its own dead-zone. The default.
+ *  - **advanced** — the CAD-style "3-finger zoom" reassignment. Two
+ *    fingers do twist + pan only (no pinch-zoom); three-finger vertical
+ *    drag dollies. Opt-in for users who want unambiguous gestures.
+ */
+export type TouchModel = 'standard' | 'advanced';
+
 /** The persisted viewer preferences. */
 export interface ViewerPrefs {
   /** Base point size, in screen pixels (1–8). */
@@ -34,6 +46,8 @@ export interface ViewerPrefs {
   antialiasing: boolean;
   /** Measurement unit system. */
   unitSystem: UnitSystem;
+  /** Mobile multi-touch model — twist + pinch + pan, or 3-finger zoom. */
+  touchModel: TouchModel;
 }
 
 /** The `localStorage` key; the `.v1` suffix lets the schema evolve later. */
@@ -74,6 +88,9 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   if (typeof o.antialiasing === 'boolean') out.antialiasing = o.antialiasing;
   if (o.unitSystem === 'metric' || o.unitSystem === 'imperial') {
     out.unitSystem = o.unitSystem;
+  }
+  if (o.touchModel === 'standard' || o.touchModel === 'advanced') {
+    out.touchModel = o.touchModel;
   }
   return out;
 }

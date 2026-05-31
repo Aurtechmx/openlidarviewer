@@ -50,7 +50,7 @@ Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large
 
 `EPT` (Entwine Point Tile) joins COPC as a first-class streaming source in v0.3.3 — a `ept.json` URL opens an EPT dataset progressively. Both `binary` and `laszip` tile dataTypes are supported; the laz-perf WASM module is shared with the COPC path so a session that touches both formats pays the WASM cost only once. Remote EPT carries the same URL-validation + error-classification polish as remote COPC. See [streaming.md](streaming.md).
 
-`3D Tiles` / `PNTS` (tiled, streamable point clouds) are not currently supported.
+`3D Tiles` / `PNTS` (tiled, streamable point clouds): an experimental data-layer foundation exists and lays groundwork for future support, but full user-facing streaming support is not yet enabled. Drop a `.pnts` file or a `tileset.json` URL today and the viewer will not open it; treat the format as planned, not shipped, until the user-facing path is announced in the release notes.
 
 ## Mobile Scan Exports
 

@@ -167,6 +167,11 @@ function chunkEmissionGuard() {
     // Debug overlay + streaming benchmark are dev/diagnostic-only chunks.
     'src/diagnostics/DebugOverlay.ts',
     'src/render/streaming/streamingBenchmark.ts',
+    // v0.3.7 chunk-isolation hardening — report subsystem (PDF renderer
+    // + templates + composer) must arrive through the report chunk.
+    'src/report/ReportPdfRenderer.ts',
+    'src/report/ReportComposer.ts',
+    'src/report/templates/',
   ];
 
   return {
@@ -241,11 +246,17 @@ export default defineConfig(({ mode }) => ({
   worker: { format: 'es' },
   build: {
     target: 'es2022',
-    // Default warning threshold is 500 KB. We keep the default — `three.webgpu`
-    // is the one vendor chunk that legitimately breaches it (it's the WebGPU
-    // backend, ~1.1 MB pre-min), and we'd rather see the warning than hide
-    // it. Application-owned chunks (report, LAS, exporters, EPT) must stay
-    // under the threshold or the chunk graph below is wrong, not the threshold.
+    // three.webgpu is intentionally isolated as a vendor chunk.
+    // It is large because Three.js WebGPU/TSL runtime is heavy
+    // (~1.1 MB pre-min, ~800 KB post-min). The Vite warning that fires
+    // is acceptable as long as `vendor-three-webgpu` is the ONLY chunk
+    // breaching the 500 KB threshold and no app-owned workflows
+    // (report, export, EPT, LAZ, COPC, debug, benchmark) leak into the
+    // startup shell.
+    //
+    // We deliberately do NOT raise `chunkSizeWarningLimit` — the warning
+    // is the canary. If a refactor adds the warning back on a different
+    // chunk, that chunk is mis-architected, not the threshold.
     rollupOptions: {
       output: {
         // Manual chunk strategy — pin heavy vendor libraries to dedicated

@@ -3,6 +3,358 @@
 All notable changes to OpenLiDARViewer are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.7] - 2026-05-30
+
+Four work streams land in this release: new measurement and capture
+features (cross-section, volume, classification editor, density
+heatmap, box clipping), a mobile multi-touch recognizer, CRS detection
+and persistence, and a graphics pass focused on depth readability over
+photorealism. No breaking changes. v0.3.6 sessions, share links and
+APIs keep working; the session schema bumps additively to v4.
+
+### Added
+
+- **Cross-section + height profile chart.** A new sampler walks the
+  resident cloud along a profile line and stamps a height-vs-distance
+  series onto the Profile measurement record. The Measurements panel
+  renders the chart strip beneath the headline; NaN bins (no-coverage
+  regions of the cloud) read as discontinuities rather than smooth
+  interpolations.
+- **Volume (cut / fill) measurement.** A new polygon-footprint
+  measurement reports cubic metres above and below a reference plane,
+  with a `density` field and a `confidence: 'high' | 'medium' | 'low'`
+  badge driven by point-count thresholds.
+- **Classification editor data layer.** Pure mutators for global class
+  swaps and polygon-bounded reclassifications, with snapshot-based
+  undo. New `viewer.swapClassification()`,
+  `viewer.reclassifyInPolygon()`, and `viewer.undoClassification()`
+  public APIs.
+- **Density heatmap colour mode.** Voxel-grid points-per-m² hashed
+  through a perceptual hot-cold ramp. Surfaces coverage gaps a global
+  density figure on the Scan Report would otherwise hide.
+- **3D Tiles / PNTS streaming foundation.** Pure-data tileset.json
+  parser (region / box / sphere bounding volumes, refine, transform,
+  content) and PNTS binary decoder (POSITION, POSITION_QUANTIZED,
+  RGB, RGBA, NORMAL, RTC_CENTER) — the data layer the third streaming
+  format will plug into alongside COPC and EPT.
+- **Box measurement + clipping.** A 2-point axis-aligned box
+  measurement with wireframe overlay and headline `W × D × H · volume`.
+  Answers "what's the bounding extent of this feature?" directly.
+- **Inspection presets.** Five one-tap modes — Survey · Terrain ·
+  Foliage · Classification · QA — each bundling EDL strength, AO
+  strength, elevation palette, point size, sky background, hillshade
+  flag and the default colour mode. New `viewer.applyPreset(id)`
+  public API.
+- **Hillshade colour mode (data layer).** Cartographer's sun-direction
+  Lambertian shading from a voxel-grid gradient. Composable with any
+  elevation palette via the `bakeHillshadeIntoRgb` in-place modulator.
+- **Local-density adaptive point sizing (data layer).** Per-point
+  scale derived from a `√(refDensity / cellDensity)` curve, capped at
+  configurable `[minScale, maxScale]`. Removes the "thin in periphery,
+  blocky in centre" failure mode of fixed-size renders.
+- **Palette editor catalogue.** Five built-in perceptual presets
+  (Cividis, Viridis, Inferno, Turbo, Classic) with colourblind-safety
+  flags and an in-memory registry for user-defined custom palettes
+  (2..8 stops, monotonic-t validation, RGB clamps).
+- **HDR sky / atmospheric backgrounds.** Five tone-mapped radial-
+  gradient presets keyed by inspection mode. No GPU work, no extra
+  draw call.
+- **SSAO approximation (data layer).** A pure-data screen-space
+  ambient-occlusion approximation from 8-neighbourhood depth
+  differences. Stacks under the existing EDL pass — EDL shades edges,
+  AO shades cavities.
+- **CRS Phase C — high-level detection.** A new `detectCrs()`
+  aggregator combines LAS / COPC / EPT VLR signals, STAC catalog
+  EPSG hints, user overrides and default-format hints into a single
+  resolved CRS with documented provenance, confidence ladder, and a
+  `conflict` flag the Inspector surfaces when signals disagree.
+- **CRS Phase E — session persistence.** Session schema bumps to v4
+  (additive — v3 still imports). A `crs?: ResolvedCrs` field
+  round-trips the resolved CRS through `serializeSession` /
+  `parseSession`. Malformed records are dropped tolerantly so a
+  partly-broken file still imports the rest.
+- **Mobile touch model — twist + pinch + pan decomposition.** A new
+  2-pointer gesture recogniser decomposes every frame into three
+  orthogonal channels — `Δdistance / midDistance` (pinch), `Δangle`
+  (twist), `Δcentroid` (pan) — each above its own dead-zone (3 % /
+  4° / 6 px). Twist maps to yaw around world-up, matching the Maps /
+  Procreate convention every mobile user already knows. The
+  Inspector ships a `Touch twist` chip that opts out, persisted via
+  the v0.3.7 prefs schema. End-to-end Playwright coverage included.
+
+### Release e2e — final pass
+
+- **`tests/e2e/heightTrim.spec.ts`** (3 tests) — the v0.3.7 height
+  percentile-trim slider is wired into the Inspector. Verifies the
+  slider hides on every mode except Height, defaults to 5 %, and the
+  percentage label tracks the slider value across the input event
+  range. Catches the regression where the chip click listener stops
+  toggling `.olv-hidden` after a refactor.
+- **`tests/e2e/photometricWitness.spec.ts`** (2 tests) — picking a
+  cloud point with the Inspect tool surfaces the collapsible
+  "Photometric witness" section. First test verifies the summary
+  with the documented label is present; second test opens the
+  `<details>`, confirms the patch canvas + the documented row labels
+  (Scanner / Linear / Display / Coverage). The reconstruction maths
+  is unit-tested in `tests/patchView.test.ts`; this spec is the
+  live-DOM contract.
+
+### Height colour mode — dramatic gradient pass
+
+- **Default percentile tightened to 5 / 95.** The first percentile fix
+  used the 2 / 98 band; field-only scans need more aggressive clipping
+  to actually fill the colour ramp. New default trims 10 % of the
+  range — outliers still clamp, but the 90 % of points an analyst
+  cares about now spread across the full palette.
+- **Default elevation palette switched from Cividis to Turbo.**
+  Cividis is fully CVD-safe but its muted blue → grey → gold tones
+  read as one "tan" colour on small elevation variations. Turbo
+  (Google's perceptually-corrected spectral rainbow) gives an analyst
+  the red → orange → yellow → green → blue gradient they actually
+  expect from a topographic ramp. Cividis stays in the catalogue for
+  colour-blind users.
+- **Inspector slider for percentile trim.** A new "Trim outliers"
+  row appears beneath the Color By chips when Height is the active
+  mode. Slider 0 % → 25 %, default 5 %. 0 % uses true min / max (the
+  old buggy behaviour); 25 % gives a very dramatic field gradient with
+  trees / outliers clamping hard at the top colour. Recolours every
+  static cloud in elevation mode in place — no re-decode, no re-upload.
+- **`ColorForModeOptions` API.** `colorForMode(mode, cloud, opts?)`
+  now takes an optional `heightPercentileTrim` so the renderer,
+  exporter and report engine all read the same setting through one
+  seam.
+
+### Height colour mode — percentile clipping
+
+- **Fixed the "everything looks pale blue" Height mode bug.** The
+  previous min/max scan let a single tall outlier — a tree, a power
+  line, a flag-mast — stretch the colour ramp so wide that 99 % of
+  the field points squeezed into one colour stop. New
+  `src/render/elevationRange.ts` computes a 2nd / 98th percentile-
+  clipped Z range from a strided sample (cap 50 000), exposes both
+  the clipped range and the true min / max for downstream UI. Matches
+  what CloudCompare, Potree and Entwine viewers do.
+- **Wired into both the static and streaming colour paths.**
+  `colorModes.ts` calls the helper directly for static clouds.
+  `StreamingRenderer.ts` reseeds its `minZ` / `maxZ` from the coarsest
+  decoded node's percentile band — same pattern intensity already
+  uses — and the range stays stable as subsequent nodes stream in,
+  preventing colour-stop drift at node boundaries.
+
+### Final visual polish
+
+- **Photoreal RGB preset + one-click look.** New
+  `src/render/photorealLook.ts` bundles the documented v0.3.7 default
+  look — Photoreal RGB appearance (exposure 1.15, gamma 1.10,
+  contrast 1.12, saturation 1.08) + Subtle EDL + Studio Dark sky.
+  The bundle is a single readonly object the Inspector can apply with
+  one call. New 8th preset added to `rgbAppearance.ts`.
+- **Softer point edges.** Widened the existing TSL smoothstep from
+  (0.42 → 0.50) to (0.30 → 0.50), and lowered `alphaTest` from 0.5 to
+  0.18. The point centre brightness is unchanged so a pixel-accurate
+  measurement still hits the same point, but the rim is visibly
+  softer and sparkle on sparse regions is reduced. This is NOT
+  splatting — it's a wider antialiased rim on the existing sprite.
+  Works on both WebGPU and WebGL 2 because the TSL node compiles
+  for both backends through the existing renderer.
+- **Terrain auto-suggestion.** New
+  `src/render/terrainSuggestion.ts` walks a strided sample of a
+  cloud's classification histogram. When ASPRS class 2 (Ground)
+  covers ≥ 35 %, or vegetation (classes 3-5) covers ≥ 25 %, the
+  module returns `shouldSuggest: true` plus a reason. Buildings
+  (class 6) ≥ 40 % vetoes the suggestion in favour of Infrastructure.
+- **Snapshot supersampling 2× / 4×.** `Viewer.snapshot()` now accepts
+  `supersample: 1 | 2 | 4`. At 2× and 4× the output canvas is sized
+  `gl.width × factor` so the SVG overlays + scale bar + inspector
+  cards all composite at higher resolution. The GL framebuffer
+  itself isn't multisampled — this is a sharp print-ready upscale
+  for hero PNGs.
+- **Scale-bar overlay.** New `src/render/scaleBar.ts` —
+  `computeScaleBar(pixelsPerMetre, maxPixels)` returns a 1-2-5
+  "nice" step that fits the budget, with the matching label
+  (`5 m`, `20 m`, `1 km`, `10 cm`). `pixelsPerMetreAt(fovY,
+  canvasHeight, distanceToTarget)` derives the ratio from the camera
+  state. `Viewer.snapshot({ scaleBar: true })` composites a
+  black-bar + white-tip + outlined label in the bottom-left.
+
+### Visual fidelity additions
+
+- **White balance — temperature + tint.** `rgbAppearance.ts` extends
+  with two optional fields: `temperature` (±25 % per-channel gain on
+  the blue ↔ orange axis) and `tint` (±15 % per-channel gain on the
+  green ↔ magenta axis). Both clamped to [-1, +1], pivot-axis sliders
+  in the colour-grading idiom, defaults to 0 / 0 for back-compat.
+- **RGB auto-normalise.** New `src/render/rgbAutoNormalize.ts` walks a
+  histogram of the cloud's sRGB Uint8 colours, classifies it as
+  healthy / underexposed / overexposed / low-contrast / washed-out,
+  and returns a recommended `RgbAppearance` bundle the analyst can
+  apply with one click. Non-destructive, transparent (returns the
+  diagnostic that drove the suggestion), gentle (clamps the
+  corrections so a healthy scan barely moves).
+- **Three new scan-context RGB presets:**
+  - **Drone RGB** — aerial mapping defaults. Gentle warmth corrects
+    high-altitude blue cast, mild contrast lift, clarified shadows.
+  - **Mobile LiDAR** — iPhone / SLAM indoor scans. Stronger exposure
+    compensates for low-light capture; gentler gamma rescues
+    underexposed midtones.
+  - **Infrastructure** — buildings, towers, utilities. Strong contrast
+    surfaces edges; neutral white balance keeps brick / concrete tones
+    accurate.
+- **EDL preset bundles.** New `src/render/edlPresets.ts` — Subtle /
+  Balanced / Inspection. Bundles strength + radius + an opt-in for
+  adaptive scaling. Inspection opts out so the analyst gets full depth
+  response regardless of zoom.
+
+### Photometric witness
+
+- **Per-point patch view in the inspector.** Picking a point inside
+  Inspect mode now surfaces a 64 × 64 px photometric witness — a
+  tangent-plane reconstruction of the cloud's captured colour at and
+  around the picked point. The reconstruction:
+  - Finds the K nearest neighbours via a max-heap KNN (no spatial
+    index dependency; pure leaf module).
+  - Computes the tangent plane via PCA power-iteration on the
+    neighbour offsets, deflating the largest eigenvector to find the
+    second.
+  - Splats every neighbour through a soft quadratic-falloff disc into
+    a Float32 accumulator, then resolves through the sRGB EOTF for
+    the final RGBA8 pixels.
+  - Auto-sizes the (u, v) extent from the 90th-percentile neighbour
+    distance so the patch fills itself without wasting pixels on
+    distant outliers.
+- **Colour provenance values block.** Below the patch, the inspector
+  shows three rows — Scanner (the bytes the publisher committed to
+  disk), Linear (the renderer's working values via the piecewise sRGB
+  EOTF), and Display (the round-trip back to sRGB). Lets the analyst
+  defend a map export by reading exactly what colour the scanner
+  captured at any clicked point.
+- **Pure-data architecture.** `src/render/patchView.ts` and
+  `src/render/colorProvenance.ts` ship as leaf modules with no DOM
+  and no three.js dependency. The inspector wires them through a
+  patch-provider callback (same pattern as the profile + volume
+  samplers) so both static clouds and streaming resident sets feed
+  the same reconstruction path.
+- **Map-export integration deferred to v0.3.8.** The data layer is
+  ready and the inspector card already renders the patch + values to
+  a `<canvas>` element. Threading the patch into the PDF report
+  templates + PNG export pipeline is queued as the v0.3.8 work item.
+
+### Colour fidelity
+
+- **Removed ACES Filmic tone-mapping from the renderer.** ACES was
+  designed for HDR cinema content — it deliberately rolls off
+  highlights and desaturates near-white values. Applied to LDR
+  point-cloud RGB, which the scanner captured in display-referred
+  space, that roll-off read as pale, washed-out colour. Switched to
+  `THREE.NoToneMapping` with exposure 1.0 so the renderer passes
+  scanner-captured RGB straight through. A brown roof reads brown,
+  grass reads green — what the analyst expects from RGB mode.
+- **Linearised vertex-colour upload in `toFloatColors`.** Our TSL
+  pipeline plumbs the colour attribute straight to the colour node,
+  which bypasses three.js's automatic sRGB → linear conversion that
+  `vertexColors: true` would normally apply. With
+  `outputColorSpace = SRGBColorSpace` the renderer encodes
+  linear → sRGB at output, so passing already-sRGB values through
+  the linear path means three.js re-encoded a second time — washed
+  saturation, brightened midtones. The loader now applies the
+  piecewise sRGB EOTF (IEC 61966-2-1, matches `Color.SRGBToLinear`)
+  so the renderer receives true linear light and sRGB-encodes once.
+  Net round-trip: scanner sRGB in → display sRGB out, faithful.
+
+### Release polish
+
+- **Four additional sky presets** — Studio Dark (flat #0B0F14 for
+  hero-shot backdrops), Blueprint (deep navy with a drafting-table
+  highlight), Survey Light (warm off-white for daylight inspection),
+  and Terrain (subtle atmospheric gradient for elevation work). All
+  four extend `src/render/skyPresets.ts` alongside the original five
+  inspection-mode skies and follow the same `getSkyDefinition()` seam.
+- **RGB appearance controls (data layer).** A new pure-data RGB
+  modulator — `applyRgbAppearance(rgb, settings)` — applies exposure,
+  contrast, saturation, and gamma to a normalised RGB Float32Array in
+  the pipeline order each transform mathematically expects (exposure →
+  contrast → saturation → gamma → final clamp). NaN-safe, identity
+  fast-path, every channel clamped to [0, 1] at every step. Ships
+  with four named presets — Natural (identity), Survey (gentle
+  daylight lift), RGB Inspection (punchy contrast + saturation for
+  material differentiation), High Contrast (wide tonal spread for
+  low-light scans). Composable with hillshade and SSAO under the same
+  per-chunk decode seam.
+- **Streaming coverage transparency on profile + volume measurements.**
+  When the cloud is still streaming, the Measurements panel surfaces
+  a "Resident-node analysis only — may refine as streaming loads"
+  caption beneath profile charts and volume readouts, so the analyst
+  understands the displayed value is computed against the points
+  currently resident in memory and can refine as additional nodes
+  stream in. The caption fades in over 200 ms ease-out (opacity-only,
+  no layout shift) and honours `prefers-reduced-motion`.
+- **Chunk-isolation hardening.** Sharpened `vite.config.ts`
+  documentation on why `vendor-three-webgpu` (~800 KB post-min) is
+  the one chunk that legitimately breaches the Vite warning threshold
+  — Three.js's WebGPU/TSL runtime is unavoidably heavy — and added
+  the report subsystem to the in-build shell-leak guard
+  (`ReportPdfRenderer`, `ReportComposer`, `report/templates/`).
+  Added a post-build `tests/chunkIsolation.test.ts` that asserts the
+  contract from the outside: every required code-split chunk is
+  emitted, `vendor-three-webgpu` is the only chunk over the 500 KB
+  threshold, and the startup shell carries no inlined pdf-lib /
+  laz-perf / WebGPU renderer / TSL runtime. Two guards, one contract.
+- **e2e coverage for the v0.3.7 measurement picker + streaming
+  caveat.** `tests/e2e/measurePicker.spec.ts` iterates every kind
+  (Distance, Polyline, Area, Height, Angle, Slope, Profile, Volume,
+  Box) and asserts each becomes active when clicked — catches the
+  regression where a kind is rendered but its click handler is wired
+  to a stale enum. `tests/e2e/streamingCaveat.spec.ts` opens the
+  autzen COPC fixture, places a Profile measurement, and verifies
+  `.olv-mp-chart-caveat` appears with the documented
+  "Resident-node analysis only" copy. The caveat spec auto-skips
+  when the autzen fixture is absent (same pattern as the existing
+  streaming e2e); locks the behaviour the previous polish pass added.
+
+### Tests + verification
+
+- 1482 unit tests passing across 119 files (18 skipped, up from 1216 /
+  95 in v0.3.6), including new analytical-fixture coverage for the
+  volume estimator (10 × 10 × 1 m cube → 100 m³, 20 × 20 × 2 m plateau
+  → 800 m³, symmetric half-fill / half-cut → net 0, pure cut basin →
+  50 m³), the cross-section sampler (flat plane, linear ramp at
+  slope 1.0, sharp step, diagonal axis orientation, gap detection),
+  the release-polish sky catalogue (Studio Dark, Blueprint, Survey
+  Light, Terrain), the new RGB appearance modulator (identity
+  fast-path, exposure, contrast, saturation, gamma, NaN guard, [0, 1]
+  clamp, preset registry), and a post-build chunk-isolation contract
+  (vendor-three-webgpu is the only chunk over the 500 KB warning;
+  the startup shell carries no inlined pdf-lib / laz-perf / WebGPU
+  renderer / TSL runtime; every required code-split chunk is emitted).
+  Full Playwright e2e suite runs locally before each release.
+  Typecheck clean. Lint clean. Smoke + build gates green.
+
+### Documentation
+
+- **`docs/quality-control.md`** Gate 6 — the full Playwright e2e suite
+  is mandatory before exporting a deployable version. New stability
+  rules for e2e specs (drop fixtures, assert on count not visibility,
+  match overlay text by stable substrings).
+- **`docs/supported-formats.md`** 3D Tiles / PNTS clarified as an
+  experimental data-layer foundation — groundwork for future support,
+  not yet user-facing.
+
+### Known limitations (v0.3.7)
+
+- **3D Tiles / PNTS.** The data-layer foundation ships — tileset.json
+  parser, PNTS binary decoder — but the user-facing streaming path is
+  not enabled. Drop a `.pnts` file or a `tileset.json` URL today and
+  the viewer will not open it. Treat the format as planned, not shipped.
+- **Streaming analysis (cross-section, volume).** When the cloud is
+  still streaming, measurements operate over the resident-node subset.
+  The Measurements panel surfaces a "Resident-node analysis only —
+  may refine as streaming loads" caption beneath the profile chart so
+  the analyst understands the value can refine as more nodes arrive.
+- **WebGPU.** Best-effort: WebGPU runs when the browser + hardware
+  combination supports it. Otherwise the viewer falls back to the
+  WebGL 2 renderer with no feature loss — every Stream A graphics
+  capability works under both backends.
+
 ## [0.3.6] - 2026-05-28
 
 The "public data + quality intelligence" release. Five user-visible

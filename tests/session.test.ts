@@ -230,7 +230,9 @@ describe('parseSession — tolerance', () => {
         crsUnit: 'metre',
       },
     }));
-    expect(back.version).toBe(3);
+    // Session always normalises the version to the current SESSION_VERSION
+    // on re-serialize (the schema is additive). Older fields are preserved.
+    expect(back.version).toBe(SESSION_VERSION);
     expect(back.camera).toEqual({
       position: [10, 20, 30], target: [0, 0, 0], mode: 'orbit', fov: 60,
     });
@@ -246,9 +248,9 @@ describe('parseSession — tolerance', () => {
     expect(back.scanSummary?.crsUnit).toBe('metre');
   });
 
-  it('v3 — a session without v3 optional fields parses cleanly with them undefined', () => {
+  it('v3+ — a session without optional fields parses cleanly with them undefined', () => {
     const back = parseSession(serializeSession(sampleSession()));
-    expect(back.version).toBe(3);
+    expect(back.version).toBe(SESSION_VERSION);
     expect(back.camera).toBeUndefined();
     expect(back.render).toBeUndefined();
     expect(back.colorMode).toBeUndefined();
@@ -350,5 +352,197 @@ describe('parseSession — tolerance', () => {
     expect(back.annotations).toHaveLength(250);
     expect(back.annotations[0].title).toBe('Finding 0');
     expect(back.annotations[249].cameraState?.position).toEqual([249, 0, 0]);
+  });
+});
+
+describe('parseSession / serializeSession — v4 CRS persistence (Phase E)', () => {
+  it('round-trips a resolved CRS through serialize → parse', () => {
+    const session = sampleSession();
+    const back = parseSession(
+      serializeSession({
+        ...session,
+        crs: {
+          kind: 'projected',
+          name: 'WGS 84 / UTM zone 12N',
+          epsg: 32612,
+          linearUnit: 'metre',
+          linearUnitToMetres: 1,
+          source: 'las-vlr',
+          confidence: 'high',
+          userConfirmed: false,
+          wkt: 'PROJCS["WGS 84 / UTM zone 12N",...]',
+        },
+      }),
+    );
+    expect(back.crs).toBeDefined();
+    expect(back.crs?.epsg).toBe(32612);
+    expect(back.crs?.confidence).toBe('high');
+    expect(back.crs?.source).toBe('las-vlr');
+    expect(back.crs?.wkt).toContain('UTM');
+  });
+
+  it('round-trips a user-confirmed override flag', () => {
+    const session = sampleSession();
+    const back = parseSession(
+      serializeSession({
+        ...session,
+        crs: {
+          kind: 'geographic',
+          name: 'WGS 84',
+          epsg: 4326,
+          linearUnit: 'metre',
+          linearUnitToMetres: 1,
+          source: 'user-override',
+          confidence: 'high',
+          userConfirmed: true,
+        },
+      }),
+    );
+    expect(back.crs?.userConfirmed).toBe(true);
+    expect(back.crs?.source).toBe('user-override');
+  });
+
+  it('round-trips a local-coordinates resolved (no EPSG)', () => {
+    const session = sampleSession();
+    const back = parseSession(
+      serializeSession({
+        ...session,
+        crs: {
+          kind: 'local',
+          name: 'Local coordinates (no CRS)',
+          linearUnit: 'metre',
+          linearUnitToMetres: 1,
+          source: 'user-override',
+          confidence: 'high',
+          userConfirmed: true,
+        },
+      }),
+    );
+    expect(back.crs?.kind).toBe('local');
+    expect(back.crs?.epsg).toBeUndefined();
+  });
+
+  it('a v3 file (no crs field) still imports cleanly', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: 3,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.crs).toBeUndefined();
+  });
+
+  it('a v4 file with a malformed crs is parsed tolerantly (crs dropped, rest kept)', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      crs: {
+        kind: 'projected',
+        name: '', // empty name → reject
+        linearUnit: 'metre',
+        linearUnitToMetres: 1,
+        source: 'las-vlr',
+        confidence: 'high',
+        userConfirmed: false,
+      },
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.crs).toBeUndefined();
+    expect(back.upAxis).toBe('z');
+  });
+
+  it('rejects a crs with an out-of-vocabulary `kind`', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      crs: {
+        kind: 'lunar',
+        name: 'X',
+        linearUnit: 'metre',
+        linearUnitToMetres: 1,
+        source: 'las-vlr',
+        confidence: 'high',
+        userConfirmed: false,
+      },
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.crs).toBeUndefined();
+  });
+
+  it('rejects a crs with an out-of-vocabulary `source`', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      crs: {
+        kind: 'projected',
+        name: 'X',
+        linearUnit: 'metre',
+        linearUnitToMetres: 1,
+        source: 'magic-eight-ball',
+        confidence: 'high',
+        userConfirmed: false,
+      },
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.crs).toBeUndefined();
+  });
+
+  it('serializes to v4 by default', () => {
+    const json = serializeSession(sampleSession());
+    const parsed = JSON.parse(json);
+    expect(parsed.version).toBe(SESSION_VERSION);
+    expect(SESSION_VERSION).toBe(4);
+  });
+
+  it('a v4 file with a non-finite linearUnitToMetres rejects the crs', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      crs: {
+        kind: 'projected',
+        name: 'X',
+        linearUnit: 'metre',
+        linearUnitToMetres: 'one',
+        source: 'las-vlr',
+        confidence: 'high',
+        userConfirmed: false,
+      },
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.crs).toBeUndefined();
   });
 });

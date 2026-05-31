@@ -228,3 +228,129 @@ export function verticalDelta(a: Vec3, b: Vec3, up: Vec3): {
   );
   return { vertical, horizontal };
 }
+
+// ── box (clipping / slicing) ────────────────────────────────────────────────
+
+/** An axis-aligned bounding box defined by two opposite corners. */
+export interface BoxBounds {
+  /** Per-axis minimum corner (x, y, z). */
+  min: Vec3;
+  /** Per-axis maximum corner (x, y, z). */
+  max: Vec3;
+}
+
+/** The scalar metrics displayed in a Box measurement card. */
+export interface BoxMetrics {
+  /** Per-axis lengths in metres. */
+  width: number;
+  depth: number;
+  height: number;
+  /** Volume in cubic metres (width × depth × height). */
+  volume: number;
+  /** Surface area in square metres — handy for QA / inspection scopes. */
+  surfaceArea: number;
+}
+
+/**
+ * Build an axis-aligned bounding box from two corners that may be supplied
+ * in any order — the corners are normalised per-axis so a drag from any
+ * direction yields the same box. This is the "2-point diagonal" placement
+ * model the box tool uses.
+ */
+export function boxFromCorners(a: Vec3, b: Vec3): BoxBounds {
+  return {
+    min: [
+      Math.min(a[0], b[0]),
+      Math.min(a[1], b[1]),
+      Math.min(a[2], b[2]),
+    ],
+    max: [
+      Math.max(a[0], b[0]),
+      Math.max(a[1], b[1]),
+      Math.max(a[2], b[2]),
+    ],
+  };
+}
+
+/**
+ * Volume + dimensions + surface area for a box. Degenerate axes (max == min)
+ * collapse the corresponding scalar to zero; the calling measurement card
+ * shows that explicitly rather than silently treating it as a thin slab.
+ */
+export function boxMetrics(box: BoxBounds): BoxMetrics {
+  const width = Math.max(0, box.max[0] - box.min[0]);
+  const depth = Math.max(0, box.max[1] - box.min[1]);
+  const height = Math.max(0, box.max[2] - box.min[2]);
+  const volume = width * depth * height;
+  const surfaceArea = 2 * (width * depth + depth * height + width * height);
+  return { width, depth, height, volume, surfaceArea };
+}
+
+/**
+ * The 8 corners of a box in a stable order suitable for wireframe overlay
+ * rendering. Order is (low-Z then high-Z, each square traversed CCW from
+ * (min-X, min-Y)):
+ *
+ *     bottom: 0  (-,-,-)  1  (+,-,-)  2  (+,+,-)  3  (-,+,-)
+ *     top:    4  (-,-,+)  5  (+,-,+)  6  (+,+,+)  7  (-,+,+)
+ */
+export function boxCorners(box: BoxBounds): Vec3[] {
+  const [xa, ya, za] = box.min;
+  const [xb, yb, zb] = box.max;
+  return [
+    [xa, ya, za],
+    [xb, ya, za],
+    [xb, yb, za],
+    [xa, yb, za],
+    [xa, ya, zb],
+    [xb, ya, zb],
+    [xb, yb, zb],
+    [xa, yb, zb],
+  ];
+}
+
+/**
+ * The 12 edges of a box as pairs of corner indices. Pair with `boxCorners`
+ * to render a wireframe overlay.
+ */
+export const BOX_EDGES: ReadonlyArray<readonly [number, number]> = [
+  // bottom rim
+  [0, 1], [1, 2], [2, 3], [3, 0],
+  // top rim
+  [4, 5], [5, 6], [6, 7], [7, 4],
+  // vertical pillars
+  [0, 4], [1, 5], [2, 6], [3, 7],
+];
+
+/**
+ * Test whether a point lies inside the box (inclusive of all six faces).
+ * Used both by the inspector ("how many points are in this slice?") and as
+ * the fast-path for the renderer clipping toggle.
+ */
+export function pointInBox(p: Vec3, box: BoxBounds): boolean {
+  return (
+    p[0] >= box.min[0] && p[0] <= box.max[0] &&
+    p[1] >= box.min[1] && p[1] <= box.max[1] &&
+    p[2] >= box.min[2] && p[2] <= box.max[2]
+  );
+}
+
+/**
+ * Count how many points of an interleaved x/y/z buffer fall inside the box.
+ * Linear pass, branch-friendly; intended for sub-million-point inspection
+ * (the Inspector's "Box contains N points" row), not per-frame culling.
+ */
+export function countPointsInBox(positions: Float32Array, box: BoxBounds): number {
+  let n = 0;
+  const N = positions.length / 3;
+  for (let i = 0; i < N; i++) {
+    const x = positions[i * 3];
+    if (x < box.min[0] || x > box.max[0]) continue;
+    const y = positions[i * 3 + 1];
+    if (y < box.min[1] || y > box.max[1]) continue;
+    const z = positions[i * 3 + 2];
+    if (z < box.min[2] || z > box.max[2]) continue;
+    n++;
+  }
+  return n;
+}

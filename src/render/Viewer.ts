@@ -60,7 +60,29 @@ import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
 import { NavController } from './NavController';
 import type { NavMode, CameraPose } from './NavController';
+import { computeScaleBar, pixelsPerMetreAt } from './scaleBar';
 import { MeasureController } from './measure/MeasureController';
+import { sampleProfile } from './measure/profileSampler';
+import { volumeCutFill } from './measure/volume';
+import {
+  applyClassSwap,
+  applyPolygonReclassify,
+  snapshotClassification,
+  restoreClassification,
+  type ClassEditResult,
+} from './measure/classificationEditor';
+import {
+  getPreset,
+  type PresetId,
+  type SkyPreset,
+} from './inspectionPresets';
+import { getSkyDefinition } from './skyPresets';
+import type { ProfileChartSample, VolumeRecord } from './measure/types';
+import {
+  decompose2Pointer,
+  isZero as gestureIsZero,
+  type Pointer as TouchPointer,
+} from './touchGesture';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
 import type { SavedCameraState } from './annotate/types';
@@ -201,6 +223,26 @@ export interface SnapshotOptions {
    * otherwise dismiss the live element before capture.
    */
   probe?: boolean;
+  /**
+   * v0.3.7 final-polish — supersample factor. 1 = native (default), 2 = 2×
+   * supersampled, 4 = 4× supersampled. The snapshot renders the GL canvas
+   * once at the requested resolution by upscaling the output canvas and
+   * compositing through the 2-D pipeline. Output dimensions become
+   * `canvas.width × factor` by `canvas.height × factor`.
+   *
+   * NOT a true MSAA — the GL framebuffer doesn't change. This is a
+   * post-render upscale that lets overlay SVGs and scale bars composite
+   * at higher resolution while the cloud itself reads at native quality.
+   * Use 2× for a sharp print-ready PNG; 4× for a hero shot.
+   */
+  supersample?: 1 | 2 | 4;
+  /**
+   * v0.3.7 final-polish — composite a scale-bar overlay at the bottom-left
+   * of the snapshot. The renderer feeds the bar a sane pixel-per-metre
+   * derived from the current camera, the bar picks a 1-2-5 nice step,
+   * and draws a contrasting bar + label.
+   */
+  scaleBar?: boolean;
 }
 
 /**
@@ -288,10 +330,36 @@ const FRAME_SAMPLE_COUNT = 60;
  */
 const BYTES_PER_GPU_POINT = 24;
 
-/** Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute. */
+/**
+ * Convert interleaved Uint8 [0-255] RGB to Float32 [0-1] for a GPU attribute.
+ *
+ * Performs sRGB → linear conversion in the process. Why: scanner RGB
+ * is stored display-referred (sRGB-encoded) — that's what a camera
+ * captures and a viewer expects to see. Our TSL pipeline plumbs the
+ * attribute straight through `instancedBufferAttribute(colorAttr)` as
+ * the colour node, which bypasses three.js's automatic sRGB → linear
+ * conversion that `vertexColors: true` would normally apply. With
+ * `outputColorSpace = SRGBColorSpace` the renderer then encodes
+ * linear → sRGB at output. Passing already-sRGB values through the
+ * linear path means three.js re-encodes a second time, which washes
+ * out saturation and brightens midtones — exactly the "pale colours"
+ * symptom v0.3.6 carried.
+ *
+ * Linearising the source here means the renderer receives true linear
+ * light values, tone-maps (NoToneMapping = identity), then sRGB-encodes
+ * once. Net round-trip: scanner sRGB in → display sRGB out, faithful.
+ *
+ * The piecewise sRGB EOTF (IEC 61966-2-1) is exact, not the 2.2-power
+ * approximation — matches three.js's `Color.SRGBToLinear` and PNG
+ * exports stay in lock-step with the on-screen image.
+ */
 function toFloatColors(u8: Uint8Array): Float32Array {
   const f = new Float32Array(u8.length);
-  for (let i = 0; i < u8.length; i++) f[i] = u8[i] / 255;
+  for (let i = 0; i < u8.length; i++) {
+    const v = u8[i] / 255;
+    // Piecewise sRGB → linear (matches three.js's Color.SRGBToLinear).
+    f[i] = v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  }
   return f;
 }
 
@@ -365,10 +433,22 @@ function buildAdaptiveSizeNode(base: TslNode, attnRef: TslNode): TslNode {
  * Build the circular point-mask opacity node: `positionGeometry.xy` is the
  * sprite-quad coordinate in [-0.5, 0.5]², so the point renders as a round dot
  * with a soft, antialiased rim instead of a hard square.
+ *
+ * v0.3.7 final-polish: widened the soft falloff from (0.42 → 0.50) to
+ * (0.30 → 0.50). The wider gradient softens the rim noticeably without
+ * touching the rest of the pipeline, and the matching `alphaTest`
+ * lowered to 0.18 (was 0.5) keeps more of the soft pixels around the
+ * disc. Net effect: cleaner rim, reduced sparkle on sparse regions, no
+ * change to point centre brightness so a brown roof still reads brown
+ * and a pixel-accurate measurement still hits the same point.
+ *
+ * The alpha is still gated against `alphaTest` so points stay correctly
+ * depth-sorted — this is NOT full splatting, just a wider antialiased
+ * rim on the existing sprite.
  */
 function buildPointMaskNode(): TslNode {
   const r: TslNode = length((positionGeometry as TslNode).xy);
-  return smoothstep(float(0.42), float(0.5), r).oneMinus();
+  return smoothstep(float(0.30), float(0.50), r).oneMinus();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -559,6 +639,19 @@ export class Viewer {
   private _onCanvasPointerMove!: (e: PointerEvent) => void;
   private _onCanvasPointerLeave!: () => void;
   private _onWindowKeyDown!: (e: KeyboardEvent) => void;
+  /** Touch-gesture pointer trackers. See `_initTouchGesture`. */
+  private _onCanvasPointerDown!: (e: PointerEvent) => void;
+  private _onCanvasPointerUp!: (e: PointerEvent) => void;
+  private _onCanvasPointerCancel!: (e: PointerEvent) => void;
+  /** Active touch pointers, keyed by pointerId. */
+  private readonly _activeTouches = new Map<number, TouchPointer>();
+  /**
+   * If true, the multi-touch recogniser will route 2-pointer gestures to
+   * twist + pinch + pan decomposition (Maps / Procreate model). Defaults
+   * to true; an Inspector toggle (D.7.3) can flip it for the advanced
+   * "3-finger zoom" model.
+   */
+  private _twoFingerTwistEnabled = true;
   /** ResizeObserver subscribed to the host canvas — disconnected on dispose. */
   private _resizeObserver: ResizeObserver | null = null;
   /** Which picking tool currently owns canvas clicks. */
@@ -604,14 +697,20 @@ export class Viewer {
 
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this._renderer.setSize(canvas.clientWidth || 800, canvas.clientHeight || 600);
-    // v0.3.6 premium-graphics pass: ACES filmic tone-mapping shapes the
-    // colour response so the cyan brand accent and the natural-colour RGB
-    // mode both read with the contrast you'd see in a cinema-quality
-    // render. Exposure nudged a hair above 1.0 so highlights bloom rather
-    // than clip. sRGB output-space ensures the same colours that ship in
-    // .png exports match what the user sees on-screen.
-    this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._renderer.toneMappingExposure = 1.05;
+    // v0.3.7 colour-fidelity pass: ACES Filmic tone-mapping (the v0.3.6
+    // default) was designed for HDR cinema content — it deliberately
+    // rolls off highlights and desaturates near-white values. Applied
+    // to LDR point-cloud RGB, which the scanner already captured in
+    // display-referred space, that roll-off reads as pale, washed-out
+    // colour. NoToneMapping passes scanner-captured RGB straight through
+    // so a brown roof reads brown and grass reads green — what the
+    // analyst expects from "RGB Natural" mode. Exposure stays at 1.0 to
+    // preserve scanner-captured brightness; the v0.3.7 RGB appearance
+    // controls (gamma / contrast / saturation / exposure) layer on top
+    // per the user's preset choice. sRGB output-space ensures
+    // PNG exports match the on-screen colour.
+    this._renderer.toneMapping = THREE.NoToneMapping;
+    this._renderer.toneMappingExposure = 1.0;
     this._renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     // ── Scene ─────────────────────────────────────────────────────────────
@@ -658,6 +757,16 @@ export class Viewer {
     this._controls.dampingFactor = DAMPING_FACTOR;
     this._controls.zoomToCursor = true;
     this._controls.rotateSpeed = ROTATE_SPEED;
+    // ── Mobile touch model — twist + pinch + pan decomposition (D.7) ──────
+    // Strip OrbitControls' 2-finger handler so our custom recogniser owns
+    // the 2-pointer surface. 1-finger ROTATE stays untouched. The pointer-
+    // tracking listeners are wired in the listener block below.
+    this._controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      // Setting TWO to undefined disables OrbitControls' built-in dolly /
+      // pan / dolly-pan path for two pointers. Our handler takes over.
+      TWO: undefined as unknown as THREE.TOUCH,
+    };
     // OrbitControls fires 'start' on first drag / touch / wheel and 'end' on
     // release. The Viewer subscribes here so the per-frame orbit-centre
     // maintenance can suspend itself while the user is actively driving the
@@ -692,8 +801,163 @@ export class Viewer {
       const hit = this._pickPoint(ndcX, ndcY);
       return hit ? [hit.x, hit.y, hit.z] : null;
     });
+    // Profile sampler — feeds the chart half of a Profile measurement.
+    // Walks every cloud the Viewer currently holds (static + streaming
+    // resident), concatenates their local positions, and runs the
+    // pure-data `sampleProfile`. Returns null when no positions are
+    // available so the controller leaves the chart unset.
+    this._measure.setProfileSampler(
+      (a, b): { samples: ProfileChartSample[]; residentOnly: boolean } | null => {
+        const buffers: Float32Array[] = [];
+        let total = 0;
+        let staticPoints = 0;
+        let streamingPoints = 0;
+        for (const { cloud } of this._clouds.values()) {
+          if (cloud.positions && cloud.positions.length > 0) {
+            buffers.push(cloud.positions);
+            total += cloud.positions.length;
+            staticPoints += cloud.positions.length;
+          }
+        }
+        for (const { decoded } of this._streamingPickData.values()) {
+          if (decoded.positions && decoded.positions.length > 0) {
+            buffers.push(decoded.positions);
+            total += decoded.positions.length;
+            streamingPoints += decoded.positions.length;
+          }
+        }
+        if (total === 0) return null;
+        // Flatten — cheap because we only walk the resident set.
+        const positions = new Float32Array(total);
+        let off = 0;
+        for (const b of buffers) {
+          positions.set(b, off);
+          off += b.length;
+        }
+        // Default 64-sample resolution gives a smooth chart at <50 ms even on
+        // a 1 M-point cloud; the panel can re-request a denser sample later.
+        const samples = sampleProfile({ a, b, up: [0, 0, 1], positions, samples: 64 });
+        // The chart is "resident-only" whenever any streaming bytes are
+        // in the walk and there is no fully-loaded static cloud beside
+        // it — that's exactly the case where additional nodes may
+        // refine the profile as they stream in.
+        const residentOnly = streamingPoints > 0 && staticPoints === 0;
+        return { samples, residentOnly };
+      },
+    );
+    // Volume sampler — feeds the cut/fill record half of a Volume
+    // measurement. Same residency-only contract as the profile sampler:
+    // walks every static cloud + every resident streaming node, runs
+    // `volumeCutFill` against the concatenated positions buffer, and
+    // returns the record. Null when no positions are loaded.
+    this._measure.setVolumeSampler(
+      (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
+        const buffers: Float32Array[] = [];
+        let total = 0;
+        let staticPoints = 0;
+        let streamingPoints = 0;
+        for (const { cloud } of this._clouds.values()) {
+          if (cloud.positions && cloud.positions.length > 0) {
+            buffers.push(cloud.positions);
+            total += cloud.positions.length;
+            staticPoints += cloud.positions.length;
+          }
+        }
+        for (const { decoded } of this._streamingPickData.values()) {
+          if (decoded.positions && decoded.positions.length > 0) {
+            buffers.push(decoded.positions);
+            total += decoded.positions.length;
+            streamingPoints += decoded.positions.length;
+          }
+        }
+        if (total === 0) return null;
+        const positions = new Float32Array(total);
+        let off = 0;
+        for (const b of buffers) {
+          positions.set(b, off);
+          off += b.length;
+        }
+        const result = volumeCutFill({
+          polygon,
+          referenceZ,
+          up: [0, 0, 1],
+          positions,
+        });
+        const confidence: 'high' | 'medium' | 'low' =
+          result.pointsInPolygon >= 1000
+            ? 'high'
+            : result.pointsInPolygon >= 100
+              ? 'medium'
+              : 'low';
+        // Volume readout is "resident-only" whenever any streaming bytes
+        // were in the walk and no fully-loaded static cloud sat beside
+        // them — same rationale as the profile sampler.
+        const residentOnly = streamingPoints > 0 && staticPoints === 0;
+        return {
+          record: {
+            fill: result.fill,
+            cut: result.cut,
+            net: result.net,
+            referenceZ,
+            footprintArea: result.footprintArea,
+            pointsInPolygon: result.pointsInPolygon,
+            density: result.density,
+            confidence,
+          },
+          residentOnly,
+        };
+      },
+    );
     this._inspect = new InspectTool(this._camera, canvas, {
       onExit: () => this.setInspectMode(false),
+    });
+    // v0.3.7 photometric witness — feed the inspector the raw positions
+    // + sRGB Uint8 colours for any picked point so it can build a
+    // patch-view thumbnail and the colour-provenance values block.
+    // Walks both static clouds and streaming resident nodes, returning
+    // null when the requested layer carries no RGB (the inspector then
+    // falls back to the classic numeric card).
+    this._inspect.setPatchProvider((layer, _index) => {
+      // Static cloud — fast path, returns the cloud's own buffers.
+      // PointInfo.layer is populated from `cloud.name` in `_infoForHit`,
+      // so we match by name here.
+      for (const [, entry] of this._clouds) {
+        if (entry.cloud.name === layer) {
+          if (!entry.cloud.colors || entry.cloud.colors.length === 0) return null;
+          return {
+            positions: entry.cloud.positions,
+            colorsU8: entry.cloud.colors,
+          };
+        }
+      }
+      // Streaming resident set — concatenate every node's positions and
+      // colours so the patch-view walks the full resident neighbourhood
+      // around the picked point.
+      const posBuffers: Float32Array[] = [];
+      const colorBuffers: Uint8Array[] = [];
+      let total = 0;
+      for (const { decoded } of this._streamingPickData.values()) {
+        if (
+          decoded.positions &&
+          decoded.positions.length > 0 &&
+          decoded.rgb &&
+          decoded.rgb.length > 0
+        ) {
+          posBuffers.push(decoded.positions);
+          colorBuffers.push(decoded.rgb);
+          total += decoded.positions.length;
+        }
+      }
+      if (total === 0) return null;
+      const positions = new Float32Array(total);
+      const colorsU8 = new Uint8Array(total);
+      let off = 0;
+      for (let i = 0; i < posBuffers.length; i++) {
+        positions.set(posBuffers[i], off);
+        colorsU8.set(colorBuffers[i], off);
+        off += posBuffers[i].length;
+      }
+      return { positions, colorsU8 };
     });
     this._annotate = new AnnotationController();
     // The annotation editor can link a finding to a measurement — feed it the
@@ -720,11 +984,76 @@ export class Viewer {
       this._pointerClientY = e.clientY;
       this._pointerOnCanvas = true;
       this._pointerMoved = true;
+      // Touch-gesture path (D.7.2). Only fires when we have exactly two
+      // active touch pointers AND no picking tool owns the canvas, so a
+      // measurement drag is never hijacked. The 1-pointer path stays with
+      // OrbitControls' inherited rotate-by-touch behaviour.
+      if (
+        e.pointerType !== 'touch' ||
+        !this._twoFingerTwistEnabled ||
+        this._toolMode !== 'none'
+      ) {
+        return;
+      }
+      const prev = this._activeTouches.get(e.pointerId);
+      if (!prev) return;
+      const cur: TouchPointer = { x: e.offsetX, y: e.offsetY };
+      // Need exactly 2 pointers for the 2-finger gesture model.
+      if (this._activeTouches.size === 2) {
+        // Pull the OTHER pointer out of the map — it stays put for this
+        // frame (its own pointermove will run later in the same tick).
+        let otherId = -1;
+        let other: TouchPointer | null = null;
+        for (const [id, p] of this._activeTouches) {
+          if (id !== e.pointerId) {
+            otherId = id;
+            other = p;
+            break;
+          }
+        }
+        if (other) {
+          const delta = decompose2Pointer(prev, other, cur, other);
+          if (!gestureIsZero(delta)) {
+            this._applyTouchGesture(delta);
+          }
+        }
+        void otherId;
+      }
+      this._activeTouches.set(e.pointerId, cur);
     };
     this._onCanvasPointerLeave = () => {
       this._pointerOnCanvas = false;
       this._pointerMoved = true;
     };
+    // ── Touch gesture wiring (D.7.2) ──────────────────────────────────────
+    // Track active touch pointers so the recogniser can run on every
+    // 2-pointer move. Mouse pointers are ignored — OrbitControls still
+    // owns the desktop wheel-zoom + click-drag path. The recogniser is
+    // also suspended while a picking tool (measure / inspect / annotate)
+    // owns the canvas, so a 2-finger measurement drag isn't hijacked.
+    this._onCanvasPointerDown = (e) => {
+      if (e.pointerType !== 'touch') return;
+      if (this._toolMode !== 'none') return;
+      this._activeTouches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      // Capture so we keep getting moves even if the finger slides off
+      // the canvas before lift.
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // Pointer-capture can throw on devices that already lost the
+        // pointer; safe to ignore — we'll receive pointerup naturally.
+      }
+    };
+    this._onCanvasPointerUp = (e) => {
+      if (e.pointerType !== 'touch') return;
+      this._activeTouches.delete(e.pointerId);
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        // Already released — ignore.
+      }
+    };
+    this._onCanvasPointerCancel = this._onCanvasPointerUp;
     this._onWindowKeyDown = (e) => {
       if (e.code === 'Escape' && this._toolMode !== 'none') this._setToolMode('none');
     };
@@ -732,6 +1061,9 @@ export class Viewer {
     canvas.addEventListener('click', this._onCanvasClick);
     canvas.addEventListener('pointermove', this._onCanvasPointerMove);
     canvas.addEventListener('pointerleave', this._onCanvasPointerLeave);
+    canvas.addEventListener('pointerdown', this._onCanvasPointerDown);
+    canvas.addEventListener('pointerup', this._onCanvasPointerUp);
+    canvas.addEventListener('pointercancel', this._onCanvasPointerCancel);
     window.addEventListener('keydown', this._onWindowKeyDown);
 
     // ── Async backend init + render loop ──────────────────────────────────
@@ -835,7 +1167,12 @@ export class Viewer {
     // Round, soft-edged points — a circular alpha mask kept depth-correct via
     // alpha-to-coverage (no transparency sort, no draw-order artefacts).
     material.opacityNode = buildPointMaskNode() as typeof material.opacityNode;
-    material.alphaTest = 0.5;
+    // v0.3.7 final-polish: 0.18 was 0.5. Combined with the widened
+    // smoothstep range in `buildPointMaskNode`, this keeps more of the
+    // soft-edge gradient around the disc while still depth-sorting
+    // correctly (the centre alpha stays at 1.0). Net effect: softer
+    // rims, less sparkle on sparse regions.
+    material.alphaTest = 0.18;
     material.alphaToCoverage = this._antialiasing;
     this._applySizeMode(material);
 
@@ -1102,6 +1439,40 @@ export class Viewer {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * v0.3.7 final-polish — symmetric percentile trim for the elevation
+   * colour mode. 5 = 5th / 95th percentile (default). 0 = true min/max.
+   * 25 = 25 / 75 percentile (very tight, dramatic gradient).
+   */
+  private _heightPercentileTrim = 5;
+
+  /**
+   * Set the symmetric percentile trim used by the elevation colour
+   * mode and reseed every cloud currently rendering in elevation
+   * mode. The streaming renderer reads the trim through the same
+   * `colorForMode` seam, so subsequent streaming nodes pick it up.
+   */
+  setHeightPercentileTrim(trim: number): void {
+    const next = Math.max(0, Math.min(25, Math.round(trim)));
+    if (next === this._heightPercentileTrim) return;
+    this._heightPercentileTrim = next;
+    for (const [id, entry] of this._clouds) {
+      if (entry.mode !== 'elevation') continue;
+      const raw = colorForMode('elevation', entry.cloud, {
+        heightPercentileTrim: next,
+      });
+      const arr = entry.colorAttr.array as Float32Array;
+      for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+      entry.colorAttr.needsUpdate = true;
+      void id; // silence the unused-binding lint
+    }
+  }
+
+  /** Read the current percentile-trim setting. */
+  get heightPercentileTrim(): number {
+    return this._heightPercentileTrim;
+  }
+
+  /**
    * Swap a cloud's colour mode by rewriting its instanced colour attribute
    * in place — the geometry, material, and draw call are all reused.
    */
@@ -1110,11 +1481,109 @@ export class Viewer {
     if (!entry) return;
     if (entry.mode === mode) return;
 
-    const raw = colorForMode(mode, entry.cloud);
+    const raw = colorForMode(mode, entry.cloud, {
+      heightPercentileTrim: this._heightPercentileTrim,
+    });
     const arr = entry.colorAttr.array as Float32Array;
     for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
     entry.colorAttr.needsUpdate = true;
     entry.mode = mode;
+  }
+
+  // ── B.3 — classification editor ─────────────────────────────────────────
+  /**
+   * Per-cloud snapshot of the classification buffer taken before the last
+   * mutation. Indexed by cloud id. `undoClassification()` reads from here.
+   * One snapshot per cloud — repeated edits coalesce: undo always returns
+   * to the state before the FIRST unconfirmed edit, which matches the
+   * undo semantics for the measurement tools.
+   */
+  private readonly _classSnapshots = new Map<string, Uint8Array>();
+
+  /**
+   * Globally rewrite every point whose classification is `fromClass` to
+   * `toClass`, then refresh the rendered colours if the cloud is showing
+   * its classification mode. Returns the change summary (count, etc.).
+   * No-op when the cloud doesn't carry classification data.
+   */
+  swapClassification(id: string, fromClass: number, toClass: number): ClassEditResult {
+    const entry = this._clouds.get(id);
+    if (!entry || !entry.cloud.classification) {
+      return { changedCount: 0, pointCount: 0 };
+    }
+    // Snapshot once before the FIRST mutation; subsequent edits coalesce.
+    if (!this._classSnapshots.has(id)) {
+      this._classSnapshots.set(id, snapshotClassification(entry.cloud.classification));
+    }
+    const result = applyClassSwap(entry.cloud.classification, fromClass, toClass);
+    if (result.changedCount > 0) this._refreshClassificationColours(id);
+    return result;
+  }
+
+  /**
+   * Re-classify every point whose horizontal projection falls inside the
+   * given polygon to `newClass`. Polygon vertices are in local render
+   * space. Returns the change summary. No-op when the cloud doesn't
+   * carry classification data or the polygon is under-defined.
+   */
+  reclassifyInPolygon(
+    id: string,
+    polygon: ReadonlyArray<[number, number, number]>,
+    newClass: number,
+    includeIf?: (currentClass: number) => boolean,
+  ): ClassEditResult {
+    const entry = this._clouds.get(id);
+    if (!entry || !entry.cloud.classification) {
+      return { changedCount: 0, pointCount: 0 };
+    }
+    if (!this._classSnapshots.has(id)) {
+      this._classSnapshots.set(id, snapshotClassification(entry.cloud.classification));
+    }
+    const result = applyPolygonReclassify({
+      classification: entry.cloud.classification,
+      positions: entry.cloud.positions,
+      polygon,
+      newClass,
+      includeIf,
+    });
+    if (result.changedCount > 0) this._refreshClassificationColours(id);
+    return result;
+  }
+
+  /**
+   * Revert the cloud's classification buffer to the pre-edit snapshot, if
+   * one exists. Returns true on success, false when there's nothing to
+   * undo. Clears the snapshot so a subsequent edit takes a new one.
+   */
+  undoClassification(id: string): boolean {
+    const entry = this._clouds.get(id);
+    const snap = this._classSnapshots.get(id);
+    if (!entry || !entry.cloud.classification || !snap) return false;
+    restoreClassification(entry.cloud.classification, snap);
+    this._classSnapshots.delete(id);
+    this._refreshClassificationColours(id);
+    return true;
+  }
+
+  /**
+   * Recompute and re-upload the colour attribute for a cloud whose
+   * classification just changed. Cheap when the cloud isn't currently
+   * showing classification colours — `setColorMode` short-circuits when
+   * the mode is unchanged, so we force a recompute by toggling to the
+   * current mode after a no-op detour.
+   */
+  private _refreshClassificationColours(id: string): void {
+    const entry = this._clouds.get(id);
+    if (!entry) return;
+    // Only the classification mode reads from the mutated buffer; other
+    // modes don't need a refresh. The chassification mode itself does — so
+    // re-derive its colours and re-upload.
+    if (entry.mode === 'classification') {
+      const raw = colorForMode('classification', entry.cloud);
+      const arr = entry.colorAttr.array as Float32Array;
+      for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+      entry.colorAttr.needsUpdate = true;
+    }
   }
 
   /**
@@ -1186,6 +1655,51 @@ export class Viewer {
       this._applySizeMode(material);
       material.needsUpdate = true;
     }
+  }
+
+  // ── A.6 Inspection presets ──────────────────────────────────────────────
+  /** Currently-applied preset id. Persisted via prefs. */
+  private _presetId: PresetId = 'survey';
+
+  /**
+   * AO strength last applied via a preset — used by the SSAO pass (A.1)
+   * once the pass is plumbed; for now the field is preserved so prefs
+   * round-trip an analyst's choice through the preset.
+   */
+  public lastPresetAoStrength = 0.35;
+
+  /**
+   * Apply a v0.3.7 inspection preset — Survey / Terrain / Foliage /
+   * Classification / QA. Bundles EDL + point size / mode + sky
+   * background into one call. Unknown preset ids fall back to the
+   * default preset, so this method is safe to call from prefs / session
+   * imports that may carry an older or third-party id.
+   */
+  applyPreset(id: PresetId | string): void {
+    const preset = getPreset(id);
+    this._presetId = preset.id;
+    this.setEdlEnabled(preset.edlEnabled);
+    this.setEdlStrength(preset.edlStrength);
+    this.setPointSize(preset.pointSize);
+    this.setPointSizeMode(preset.pointSizeMode);
+    this._applySkyPreset(preset.sky);
+    this.lastPresetAoStrength = preset.aoStrength;
+  }
+
+  /** The currently-applied preset id. */
+  get presetId(): PresetId {
+    return this._presetId;
+  }
+
+  /** Apply a sky preset by editing the canvas container's CSS background. */
+  private _applySkyPreset(sky: SkyPreset): void {
+    const def = getSkyDefinition(sky);
+    const canvas = this._canvas;
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    if (!parent) return;
+    parent.style.background = def.background;
+    parent.style.backgroundColor = def.fallbackColor;
   }
 
   /** The current point-size mode. */
@@ -1288,6 +1802,37 @@ export class Viewer {
   /** Enter or leave distance-measurement mode (freezes navigation). */
   setMeasureMode(on: boolean): void {
     this._setToolMode(on ? 'measure' : 'none');
+  }
+
+  /**
+   * Enable or disable the v0.3.7 two-finger twist + pinch + pan
+   * decomposition recogniser. The default is `true`. Setting to `false`
+   * leaves the inherited Three.js OrbitControls touch model in place —
+   * 1-finger orbit, 2-finger pinch-zoom, no twist gesture. The advanced
+   * "3-finger zoom" model (D.7.3) flips this off and routes 3-finger
+   * vertical drag to dolly via a different code path.
+   */
+  setTwoFingerTwistEnabled(enabled: boolean): void {
+    this._twoFingerTwistEnabled = enabled;
+    if (!enabled) {
+      // Restore OrbitControls' default 2-finger handler so existing
+      // pinch-zoom muscle memory keeps working in the off state.
+      this._controls.touches = {
+        ONE: THREE.TOUCH.ROTATE,
+        TWO: THREE.TOUCH.DOLLY_PAN,
+      };
+      this._activeTouches.clear();
+    } else {
+      this._controls.touches = {
+        ONE: THREE.TOUCH.ROTATE,
+        TWO: undefined as unknown as THREE.TOUCH,
+      };
+    }
+  }
+
+  /** Whether the two-finger twist + pinch + pan recogniser is active. */
+  get twoFingerTwistEnabled(): boolean {
+    return this._twoFingerTwistEnabled;
   }
 
   /** Enter or leave point-inspection mode (freezes navigation). */
@@ -1599,16 +2144,31 @@ export class Viewer {
     const wantMeasurements = options?.measurements === true;
     const wantInspector = options?.inspector === true;
     const wantProbe = options?.probe === true;
+    // v0.3.7 final-polish: supersample + scale bar both promote the
+    // export to the composite path so the upscaled output canvas can
+    // host overlays at the requested resolution.
+    const supersample =
+      options?.supersample === 2 || options?.supersample === 4 ? options.supersample : 1;
+    const wantScaleBar = options?.scaleBar === true;
 
-    // Fast path: no overlays requested — return the GL canvas untouched.
-    if (!wantAnnotations && !wantMeasurements && !wantInspector && !wantProbe) {
+    // Fast path: no overlays + no upscale + no scale bar — return the
+    // GL canvas untouched at native resolution.
+    if (
+      !wantAnnotations &&
+      !wantMeasurements &&
+      !wantInspector &&
+      !wantProbe &&
+      !wantScaleBar &&
+      supersample === 1
+    ) {
       return this._canvasToBlob(gl);
     }
 
-    // Composite path: draw the GL frame into a 2-D canvas at full resolution.
+    // Composite path: draw the GL frame into a 2-D canvas at full
+    // (optionally upscaled) resolution.
     const out = document.createElement('canvas');
-    out.width = gl.width;
-    out.height = gl.height;
+    out.width = gl.width * supersample;
+    out.height = gl.height * supersample;
     const ctx = out.getContext('2d');
     if (!ctx) return this._canvasToBlob(gl);
     ctx.drawImage(gl, 0, 0, out.width, out.height);
@@ -1644,6 +2204,24 @@ export class Viewer {
       const sel = this._inspect.selectionForExport();
       if (sel) drawInspectorInfoCard(ctx, sel.info, sel.screen);
     }
+    // v0.3.7 final-polish — scale bar overlay. Drawn last so it sits on
+    // top of everything else but underneath the inspector / probe cards.
+    if (wantScaleBar) {
+      // Estimate pixels-per-metre from the current camera. The reference
+      // distance is the orbit-target distance — what the analyst is
+      // actually looking at.
+      const dist = this._camera.position.distanceTo(this._controls.target);
+      const fovY = (this._camera.fov * Math.PI) / 180;
+      const ppm = pixelsPerMetreAt(fovY, out.height, dist);
+      // Use 22 % of the canvas width as the bar's budget — leaves room
+      // for the label and looks balanced in the bottom-left corner.
+      const budgetPx = Math.max(80, Math.min(out.width * 0.22, 400));
+      const bar = computeScaleBar(ppm, budgetPx);
+      if (bar.stepPixels > 0) {
+        drawScaleBar(ctx, out, bar);
+      }
+    }
+
     // LiveProbe — same compositing pattern. The probe stores its last known
     // cursor position in CLIENT coordinates; translate to canvas-local pixels
     // via the canvas's bounding rect so the bake lands where the user saw
@@ -2006,6 +2584,10 @@ export class Viewer {
     this._canvas.removeEventListener('click', this._onCanvasClick);
     this._canvas.removeEventListener('pointermove', this._onCanvasPointerMove);
     this._canvas.removeEventListener('pointerleave', this._onCanvasPointerLeave);
+    this._canvas.removeEventListener('pointerdown', this._onCanvasPointerDown);
+    this._canvas.removeEventListener('pointerup', this._onCanvasPointerUp);
+    this._canvas.removeEventListener('pointercancel', this._onCanvasPointerCancel);
+    this._activeTouches.clear();
     window.removeEventListener('keydown', this._onWindowKeyDown);
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
@@ -2362,6 +2944,106 @@ export class Viewer {
     this._camera.position.x += dx;
     this._camera.position.y += dy;
     this._camera.position.z += dz;
+  }
+
+  /**
+   * Apply a decomposed 2-pointer touch-gesture delta to the camera. Each
+   * channel touches a different bit of the OrbitControls state:
+   *
+   *   - **dPinch** scales the (camera → target) vector by `1 + dPinch`,
+   *     dollying the camera in (negative dPinch) or out (positive). Bounded
+   *     by `controls.minDistance` / `maxDistance`.
+   *   - **dTwist** rotates the (camera → target) vector around the world
+   *     up axis by Δangle radians, which OrbitControls reads back as a
+   *     yaw change next `update()`. This is the Maps "rotate bearing"
+   *     convention — it matches a top-down LiDAR inspection.
+   *   - **dPan** translates the orbit target in the camera's screen-X /
+   *     screen-Y basis, scaled by a per-screen-pixel factor that keeps the
+   *     pan rate roughly constant at any zoom (further out → pan moves
+   *     more world units per pixel).
+   *
+   * After applying, `controls.update()` repopulates the spherical state so
+   * inertia damping resumes from the new pose.
+   */
+  private _applyTouchGesture(delta: {
+    dPinch: number;
+    dTwist: number;
+    dPan: { x: number; y: number };
+  }): void {
+    const cam = this._camera;
+    const tgt = this._controls.target;
+
+    // ── pinch / dolly ───────────────────────────────────────────────────
+    if (delta.dPinch !== 0) {
+      // dPinch is the ratio (cur − prev) / mid. A positive dPinch means
+      // fingers spread → dolly OUT → multiply the offset vector by
+      // (1 + dPinch). Negative dPinch → dolly IN.
+      const ox = cam.position.x - tgt.x;
+      const oy = cam.position.y - tgt.y;
+      const oz = cam.position.z - tgt.z;
+      const scale = 1 + delta.dPinch;
+      const distNow = Math.hypot(ox, oy, oz);
+      let distNext = distNow * scale;
+      // Honour the OrbitControls bounds so the gesture can't drag the
+      // camera past min / max distance.
+      const minD = this._controls.minDistance;
+      const maxD = this._controls.maxDistance;
+      if (distNext < minD) distNext = minD;
+      if (distNext > maxD) distNext = maxD;
+      const f = distNow > 1e-9 ? distNext / distNow : 1;
+      cam.position.set(tgt.x + ox * f, tgt.y + oy * f, tgt.z + oz * f);
+    }
+
+    // ── twist / yaw around world up ────────────────────────────────────
+    if (delta.dTwist !== 0) {
+      // Yaw rotates the (camera − target) vector around the world up
+      // axis. World up is +Z in the OpenLiDARViewer convention.
+      const ox = cam.position.x - tgt.x;
+      const oy = cam.position.y - tgt.y;
+      const oz = cam.position.z - tgt.z;
+      // 2D rotation in the XY plane keeps Z (height) constant.
+      const c = Math.cos(delta.dTwist);
+      const s = Math.sin(delta.dTwist);
+      const nx = ox * c - oy * s;
+      const ny = ox * s + oy * c;
+      cam.position.set(tgt.x + nx, tgt.y + ny, tgt.z + oz);
+    }
+
+    // ── pan / centroid drift ───────────────────────────────────────────
+    if (delta.dPan.x !== 0 || delta.dPan.y !== 0) {
+      // Translate the target in screen-X / screen-Y. The world-units-per-
+      // pixel scale derives from the visible vertical extent at the orbit
+      // distance — same idiom OrbitControls' own `pan` uses.
+      const cw = this._canvas?.clientHeight ?? 1;
+      const fov = (cam.fov ?? 60) * (Math.PI / 180);
+      const dist = cam.position.distanceTo(tgt);
+      const worldPerPx = (2 * Math.tan(fov / 2) * dist) / Math.max(1, cw);
+      // Right vector = +X of the camera basis. Up vector = +Y of the
+      // camera basis. We build them from the camera's matrix without
+      // touching its private internals.
+      const m = cam.matrix.elements;
+      const rightX = m[0];
+      const rightY = m[1];
+      const rightZ = m[2];
+      const upX = m[4];
+      const upY = m[5];
+      const upZ = m[6];
+      // dPan.x positive → fingers moved right → world target moves LEFT,
+      // matching the OrbitControls drag-to-pan direction users expect.
+      const tx = -delta.dPan.x * worldPerPx;
+      // dPan.y positive → fingers moved DOWN (canvas Y grows downward) →
+      // world target moves UP.
+      const ty = delta.dPan.y * worldPerPx;
+      const wx = rightX * tx + upX * ty;
+      const wy = rightY * tx + upY * ty;
+      const wz = rightZ * tx + upZ * ty;
+      tgt.set(tgt.x + wx, tgt.y + wy, tgt.z + wz);
+      cam.position.set(cam.position.x + wx, cam.position.y + wy, cam.position.z + wz);
+    }
+
+    // Refresh the OrbitControls spherical state so the next damping tick
+    // resumes from the new pose instead of fighting the gesture.
+    this._controls.update();
   }
 
   /**
@@ -3033,5 +3715,49 @@ function drawProbeReadoutCard(
     ctx.font = `${ATTR_SIZE}px system-ui, -apple-system, sans-serif`;
     ctx.fillText(attrs, x + PAD, cy);
   }
+  ctx.restore();
+}
+
+/**
+ * v0.3.7 final-polish — paint a scale-bar overlay in the bottom-left
+ * of the output canvas. Black bar with white tips + a white outline so
+ * it stays legible against any cloud colour. Label sits above the bar.
+ */
+function drawScaleBar(
+  ctx: CanvasRenderingContext2D,
+  out: HTMLCanvasElement,
+  bar: { stepPixels: number; label: string },
+): void {
+  if (bar.stepPixels <= 0) return;
+  // Padding scales with output height so the bar reads the same on a
+  // 1× snapshot and a 4× supersampled hero shot.
+  const padding = Math.max(12, Math.round(out.height * 0.022));
+  const barHeight = Math.max(6, Math.round(out.height * 0.008));
+  const tickHeight = barHeight * 1.6;
+  const fontSize = Math.max(11, Math.round(out.height * 0.018));
+  const x0 = padding;
+  const y0 = out.height - padding - barHeight;
+  ctx.save();
+  // White stroke under the bar so it reads against dark clouds.
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x0 - 1, y0 - tickHeight + barHeight, bar.stepPixels + 2, tickHeight + 1);
+  // Black bar fill.
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(x0, y0, bar.stepPixels, barHeight);
+  // White tick marks at the bar's ends.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x0, y0 - tickHeight + barHeight, 2, tickHeight);
+  ctx.fillRect(x0 + bar.stepPixels - 2, y0 - tickHeight + barHeight, 2, tickHeight);
+  // Label above the bar — white with a black stroke so it reads on either tone.
+  ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
+  ctx.textBaseline = 'bottom';
+  ctx.textAlign = 'left';
+  const labelY = y0 - tickHeight + barHeight - 4;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(13, 17, 23, 0.85)';
+  ctx.strokeText(bar.label, x0, labelY);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(bar.label, x0, labelY);
   ctx.restore();
 }

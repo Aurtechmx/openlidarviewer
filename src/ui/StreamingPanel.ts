@@ -67,6 +67,7 @@ const MODE_LABEL: Record<ColorMode, string> = {
   elevation: 'Height',
   classification: 'Class',
   normal: 'Normal',
+  density: 'Density',
 };
 
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];

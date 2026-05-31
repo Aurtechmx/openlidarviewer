@@ -310,17 +310,21 @@ describe('availableModes', () => {
     expect(availableModes(makeFullCloud())).not.toContain('normal');
   });
 
-  test('positions-only cloud has exactly one mode', () => {
-    expect(availableModes(makePositionsOnlyCloud())).toEqual(['elevation']);
+  test('positions-only cloud has exactly two modes (elevation + density)', () => {
+    // Density is always available — it derives from positions alone.
+    expect(availableModes(makePositionsOnlyCloud())).toEqual(['elevation', 'density']);
   });
 
-  test('full cloud has all four modes', () => {
+  test('full cloud has all colour modes its data supports plus density', () => {
     const modes = availableModes(makeFullCloud());
-    expect(modes).toHaveLength(4);
+    // rgb + intensity + elevation + classification + density (no normals on
+    // the fixture). Five total.
+    expect(modes).toHaveLength(5);
     expect(modes).toContain('rgb');
     expect(modes).toContain('intensity');
     expect(modes).toContain('elevation');
     expect(modes).toContain('classification');
+    expect(modes).toContain('density');
   });
 });
 

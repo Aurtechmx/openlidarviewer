@@ -327,6 +327,25 @@ button:disabled { cursor: not-allowed; }
 .olv-layer-x { background: none; border: none; color: var(--text-faint); font-size: 14px; line-height: 1; }
 .olv-layer-x:hover { color: var(--text); }
 .olv-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.olv-color-by-body { display: flex; flex-direction: column; gap: 8px; }
+/* v0.3.7 final-polish — height percentile-trim slider.
+ * Sits beneath the Color By chips when "Height" is the active mode. */
+.olv-height-trim-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding-top: 2px;
+}
+.olv-height-trim-name { flex-shrink: 0; }
+.olv-height-trim-slider { flex: 1; min-width: 80px; accent-color: var(--accent); }
+.olv-height-trim-label {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  width: 32px;
+  text-align: right;
+}
 .olv-chip {
   font-size: 11px; color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
@@ -1597,6 +1616,117 @@ button:disabled { cursor: not-allowed; }
 .olv-mp-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
 .olv-mp-list { display: flex; flex-direction: column; gap: 6px; }
 .olv-mp-row { display: flex; align-items: center; gap: 6px; }
+/* Profile measurements stack the headline row over a compact chart strip. */
+.olv-mp-row-stack { display: flex; flex-direction: column; gap: 4px; }
+.olv-mp-chart {
+  display: block;
+  width: 100%;
+  height: 36px;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  padding: 2px 4px;
+  box-sizing: border-box;
+}
+.olv-mp-chart svg { display: block; width: 100%; height: 100%; }
+.olv-mp-chart-empty {
+  font-size: 10.5px; color: var(--text-faint); font-style: italic;
+  padding: 2px 4px;
+}
+/* ── Photometric witness (inspector card) ──────────────────────────────
+ * The patch view + colour-provenance values block. Shows as a
+ * collapsible <details> beneath the classic numeric inspector rows so
+ * the analyst can audit a point's captured colour without leaving
+ * the inspector. */
+.olv-witness-details {
+  margin-top: 8px;
+  padding: 6px 4px 4px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.olv-witness-summary {
+  cursor: pointer;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 2px 0;
+  list-style: none;
+  user-select: none;
+}
+.olv-witness-summary::-webkit-details-marker { display: none; }
+.olv-witness-summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 4px;
+  transition: transform 120ms ease-out;
+}
+.olv-witness-details[open] .olv-witness-summary::before {
+  transform: rotate(90deg);
+}
+.olv-witness-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  margin-top: 6px;
+}
+.olv-witness-canvas {
+  display: block;
+  width: 64px;
+  height: 64px;
+  /* Pixel-perfect zoom — the patch is a photometric witness, not a thumbnail. */
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  background:
+    repeating-conic-gradient(rgba(255, 255, 255, 0.04) 0% 25%, transparent 0% 50%)
+    50% / 8px 8px;
+}
+.olv-witness-values { display: flex; flex-direction: column; gap: 2px; }
+.olv-witness-row { display: flex; gap: 6px; font-size: 11px; line-height: 1.35; }
+.olv-witness-row-label {
+  width: 52px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.olv-witness-row-value {
+  color: var(--text);
+  font-family: var(--mono-font, monospace);
+  word-break: break-all;
+}
+
+/* Streaming-resident caveat shown beneath a profile chart or volume
+ * readout when the cloud is still streaming. The accent border-left
+ * makes it scannable without overwhelming the headline row.
+ *
+ * Animation principles applied here:
+ *   - Brief duration (200 ms) keeps the entrance feeling reactive, not
+ *     decorative.
+ *   - ease-out curve so the motion settles, matching the analyst's
+ *     reading rhythm.
+ *   - opacity-only transition, no transform — the caption appears in its
+ *     final position so the chart never reflows beneath it.
+ *   - prefers-reduced-motion honoured so the caption appears instantly
+ *     for users with motion sensitivity. */
+.olv-mp-chart-caveat {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  padding: 2px 4px;
+  border-left: 2px solid var(--accent);
+  margin: 2px 0 0 4px;
+  line-height: 1.35;
+  animation: olv-caveat-fade-in 200ms ease-out both;
+}
+@keyframes olv-caveat-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-mp-chart-caveat {
+    animation: none;
+  }
+}
 .olv-mp-kind {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--accent); flex-shrink: 0;

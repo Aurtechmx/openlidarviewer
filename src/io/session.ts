@@ -20,6 +20,7 @@ import type { Annotation, SavedCameraState, Vec3Object } from '../render/annotat
 import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
 import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /**
  * Current session-file schema version. Bumps to v3, adding:
@@ -36,10 +37,10 @@ import type { PointSizeMode } from '../render/pointStyle';
  * Older v1 + v2 files parse with no loss — the new optional fields just
  * read as undefined, and the Viewer falls back to its current state.
  */
-export const SESSION_VERSION = 3;
+export const SESSION_VERSION = 4;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3];
+const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4];
 
 /** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
@@ -109,6 +110,18 @@ export interface InspectionSession {
    * `.olvsession` files (`fileName`, `sourcePoints`, extents, CRS label).
    */
   scanSummary?: SessionScanSummary;
+  /**
+   * v4 — the resolved CRS at export time, including its provenance
+   * (source, confidence, userConfirmed flag, optional WKT). On import
+   * the Viewer can re-seed its detector with this resolved value so
+   * the user's earlier CRS choice round-trips without re-prompting.
+   *
+   * Strictly additive: a v3 file omits it; the Viewer falls back to its
+   * own detection. A v4 file with a malformed `crs` field is parsed
+   * tolerantly (dropped, not throwing) so a partly-broken file still
+   * imports the parts that ARE valid.
+   */
+  crs?: ResolvedCrs;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -146,6 +159,7 @@ export function serializeSession(
   if (session.render) doc.render = session.render;
   if (session.colorMode) doc.colorMode = session.colorMode;
   if (session.scanSummary) doc.scanSummary = session.scanSummary;
+  if (session.crs) doc.crs = session.crs;
   return JSON.stringify(doc, null, 2);
 }
 
@@ -194,6 +208,11 @@ export function parseSession(text: string): InspectionSession {
   }
   const scanSummary = parseScanSummary(raw.scanSummary);
   if (scanSummary) out.scanSummary = scanSummary;
+  // v4 — the resolved CRS at export time. Tolerantly parsed; a
+  // malformed object is dropped without throwing so the rest of the
+  // session still imports.
+  const crs = parseResolvedCrs(raw.crs);
+  if (crs) out.crs = crs;
   return out;
 }
 
@@ -374,5 +393,51 @@ function parseScanSummary(v: unknown): SessionScanSummary | null {
   };
   if (typeof v.crs === 'string' && v.crs.length > 0) out.crs = v.crs;
   if (typeof v.crsUnit === 'string' && v.crsUnit.length > 0) out.crsUnit = v.crsUnit;
+  return out;
+}
+
+const CRS_KINDS = ['local', 'projected', 'geographic', 'unknown'] as const;
+const CRS_SOURCES = [
+  'las-vlr',
+  'copc-meta',
+  'ept-srs',
+  'catalog-tile',
+  'user-override',
+  'default-assumption',
+] as const;
+const CRS_CONFIDENCES = ['high', 'medium', 'low', 'none'] as const;
+const CRS_LINEAR_UNITS = ['metre', 'foot', 'us-survey-foot', 'unknown'] as const;
+
+/**
+ * Tolerantly parse the v4 `crs` field. Returns null when the object is
+ * missing, not a record, or fails the required-field set. Optional fields
+ * (`epsg`, `wkt`) are dropped individually on bad shape; the rest of the
+ * resolved CRS still imports. This matches the "v3 optional fields"
+ * discipline — a partly-broken record never blocks the rest of the
+ * session.
+ */
+function parseResolvedCrs(v: unknown): ResolvedCrs | null {
+  if (!isRecord(v)) return null;
+  // Required fields.
+  if (typeof v.name !== 'string' || v.name.length === 0) return null;
+  if (typeof v.kind !== 'string' || !CRS_KINDS.includes(v.kind as never)) return null;
+  if (typeof v.source !== 'string' || !CRS_SOURCES.includes(v.source as never)) return null;
+  if (typeof v.confidence !== 'string' || !CRS_CONFIDENCES.includes(v.confidence as never)) return null;
+  if (typeof v.linearUnit !== 'string' || !CRS_LINEAR_UNITS.includes(v.linearUnit as never)) {
+    return null;
+  }
+  if (!isFiniteNumber(v.linearUnitToMetres)) return null;
+  if (typeof v.userConfirmed !== 'boolean') return null;
+  const out: ResolvedCrs = {
+    kind: v.kind as ResolvedCrs['kind'],
+    name: v.name,
+    linearUnit: v.linearUnit as ResolvedCrs['linearUnit'],
+    linearUnitToMetres: v.linearUnitToMetres,
+    source: v.source as ResolvedCrs['source'],
+    confidence: v.confidence as ResolvedCrs['confidence'],
+    userConfirmed: v.userConfirmed,
+    ...(isFiniteNumber(v.epsg) ? { epsg: v.epsg } : {}),
+    ...(typeof v.wkt === 'string' && v.wkt.length > 0 ? { wkt: v.wkt } : {}),
+  };
   return out;
 }

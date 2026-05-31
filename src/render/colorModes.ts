@@ -8,13 +8,27 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { densityForChunk, defaultCellSizeForSpacing } from './densityColors';
+import { computeElevationRange } from './elevationRange';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The ways a point cloud can be coloured in the viewer. */
-export type ColorMode = 'rgb' | 'intensity' | 'elevation' | 'classification' | 'normal';
+export type ColorMode =
+  | 'rgb'
+  | 'intensity'
+  | 'elevation'
+  | 'classification'
+  | 'normal'
+  /**
+   * Density heatmap — perceptual hot-cold colouring of points-per-m² in a
+   * horizontal voxel grid. Surfaces coverage gaps an analyst would otherwise
+   * miss in the single global density figure on the Scan Report. Always
+   * available because it derives from positions alone.
+   */
+  | 'density';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation colour ramps — perceptual palettes
@@ -37,8 +51,22 @@ export type ColorMode = 'rgb' | 'intensity' | 'elevation' | 'classification' | '
 /** Type of an elevation ramp identifier. */
 export type ElevationPalette = 'cividis' | 'viridis' | 'inferno' | 'turbo' | 'classic';
 
-/** The default palette — Cividis is the only fully CVD-safe option. */
-export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'cividis';
+/**
+ * The default palette.
+ *
+ * v0.3.7 final-polish: switched from Cividis to Turbo. Cividis is
+ * fully CVD-safe but its mid-tones are muted blue → grey → gold —
+ * not perceptually dramatic enough on field-only scans where the
+ * actual elevation variation is small. Turbo (Google's perceptually-
+ * corrected spectral rainbow) keeps the red → orange → yellow →
+ * green → blue gradient an analyst expects from a topographic ramp
+ * and lights up small elevation differences much more clearly.
+ *
+ * Cividis is still in the catalogue (and remains the recommended pick
+ * for colour-blind users) — every preset and the future per-cloud
+ * picker can swap to it.
+ */
+export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'turbo';
 
 /** A set of control points for a linear colour ramp. [t, r, g, b], rgb 0-255. */
 type RampControlPoints = ReadonlyArray<readonly [number, number, number, number]>;
@@ -298,7 +326,25 @@ export function colorByClassification(
  * Throws if the cloud lacks the attribute required by the requested mode
  * (e.g. `'rgb'` when `cloud.colors` is undefined).
  */
-export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
+/**
+ * Optional knobs `colorForMode` understands per-mode. v0.3.7 final-polish
+ * adds the height-percentile-trim slider that lets the Inspector tune
+ * how aggressively outlier Z values clamp to the palette endpoints.
+ */
+export interface ColorForModeOptions {
+  /**
+   * Symmetric percentile trim for the elevation mode. `trim = 5` →
+   * the 5th / 95th percentile band; `trim = 0` → the true min/max.
+   * Clamped to [0, 25] inside `computeElevationRange`.
+   */
+  heightPercentileTrim?: number;
+}
+
+export function colorForMode(
+  mode: ColorMode,
+  cloud: PointCloud,
+  opts?: ColorForModeOptions,
+): Uint8Array {
   const n = cloud.pointCount;
 
   switch (mode) {
@@ -327,15 +373,20 @@ export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
 
     // ── elevation ───────────────────────────────────────────────────────────
     case 'elevation': {
-      const pos = cloud.positions;
-      let minZ = pos[2];
-      let maxZ = pos[2];
-      for (let i = 0; i < n; i++) {
-        const z = pos[i * 3 + 2];
-        if (z < minZ) minZ = z;
-        if (z > maxZ) maxZ = z;
-      }
-      return colorByElevation(pos, n, minZ, maxZ);
+      // v0.3.7 final-polish — percentile-clipped Z range. The previous
+      // true min/max scan let a single tall outlier (a tree, a power
+      // line, a flag-mast) compress the entire field of points into
+      // one colour stop. The 2nd / 98th percentile band keeps the
+      // ramp meaningful on outlier-heavy clouds and matches what
+      // CloudCompare / Potree / Entwine viewers do.
+      const trim = Math.max(0, Math.min(25, opts?.heightPercentileTrim ?? 5));
+      const range = computeElevationRange({
+        positions: cloud.positions,
+        pointCount: n,
+        lowerPercentile: trim,
+        upperPercentile: 100 - trim,
+      });
+      return colorByElevation(cloud.positions, n, range.minZ, range.maxZ);
     }
 
     // ── normal ──────────────────────────────────────────────────────────────
@@ -375,6 +426,19 @@ export function colorForMode(mode: ColorMode, cloud: PointCloud): Uint8Array {
       }
       return colorByClassification(cloud.classification, n);
     }
+
+    // ── density (heatmap) ───────────────────────────────────────────────────
+    case 'density': {
+      // Cell size derived from the cloud's spacing when known; otherwise
+      // default to a metre. `densityForChunk` clamps internally to safe
+      // bounds, so a missing spacing value still produces a valid heatmap.
+      const spacing = (cloud as { spacing?: number }).spacing ?? 0;
+      const cellSize = defaultCellSizeForSpacing(spacing);
+      return densityForChunk({
+        positions: cloud.positions,
+        cellSize,
+      }).colors;
+    }
   }
 }
 
@@ -389,6 +453,9 @@ export function availableModes(cloud: PointCloud): ColorMode[] {
   modes.push('elevation');
   if (cloud.classification) modes.push('classification');
   if (cloud.normals)        modes.push('normal');
+  // Density is always available — it derives from positions alone, which
+  // every cloud carries by definition.
+  modes.push('density');
   return modes;
 }
 
