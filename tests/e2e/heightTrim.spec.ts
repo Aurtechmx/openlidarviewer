@@ -19,7 +19,7 @@ async function loadSample(page: Page): Promise<void> {
   await page.waitForTimeout(1500);
 }
 
-test('the trim slider hides on Intensity and shows on Height', async ({ page }) => {
+test('the trim slider hides on RGB and shows on Height', async ({ page }) => {
   await loadSample(page);
   const trimRow = page.locator('.olv-height-trim-row');
 
@@ -30,8 +30,12 @@ test('the trim slider hides on Intensity and shows on Height', async ({ page }) 
   await page.locator('.olv-chip', { hasText: 'Height' }).first().click();
   await expect(trimRow).not.toHaveClass(/olv-hidden/);
 
-  // Click Intensity → trim row hides again.
-  await page.locator('.olv-chip', { hasText: 'Intensity' }).first().click();
+  // Click RGB → trim row hides again. RGB is the only mode every
+  // colour-carrying cloud guarantees, so this stays portable across
+  // every fixture the suite uses (tiny.ply only carries RGB; LAS
+  // fixtures would also carry intensity / classification, but the
+  // spec must pass on tiny.ply alone).
+  await page.locator('.olv-chip', { hasText: 'RGB' }).first().click();
   await expect(trimRow).toHaveClass(/olv-hidden/);
 });
 
