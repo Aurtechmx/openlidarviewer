@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "bounds": [
+    -10.0,
+    -10.0,
+    -2.5,
+    10.0,
+    10.0,
+    2.5
+  ],
+  "boundsConforming": [
+    -9.4,
+    -9.1,
+    -2.3,
+    9.7,
+    9.8,
+    2.4
+  ],
+  "dataType": "laszip",
+  "hierarchyType": "json",
+  "points": 256,
+  "span": 128,
+  "srs": {
+    "authority": "EPSG",
+    "horizontal": "32612",
+    "wkt": "PROJCS[\"WGS 84 / UTM zone 12N\",GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",-111],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"32612\"]]"
+  },
+  "schema": [
+    {
+      "name": "X",
+      "type": "signed",
+      "size": 4,
+      "scale": 0.01,
+      "offset": 0.0
+    },
+    {
+      "name": "Y",
+      "type": "signed",
+      "size": 4,
+      "scale": 0.01,
+      "offset": 0.0
+    },
+    {
+      "name": "Z",
+      "type": "signed",
+      "size": 4,
+      "scale": 0.01,
+      "offset": 0.0
+    },
+    {
+      "name": "Intensity",
+      "type": "unsigned",
+      "size": 2
+    },
+    {
+      "name": "ReturnNumber",
+      "type": "unsigned",
+      "size": 1
+    },
+    {
+      "name": "NumberOfReturns",
+      "type": "unsigned",
+      "size": 1
+    },
+    {
+      "name": "Classification",
+      "type": "unsigned",
+      "size": 1
+    },
+    {
+      "name": "ScanAngleRank",
+      "type": "signed",
+      "size": 1
+    },
+    {
+      "name": "GpsTime",
+      "type": "float",
+      "size": 8
+    }
+  ]
+}

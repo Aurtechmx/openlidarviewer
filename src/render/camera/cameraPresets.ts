@@ -1,0 +1,246 @@
+/**
+ * cameraPresets.ts
+ *
+ * Pure data layer for v0.3.9 "Smart camera presets" — Top, Iso,
+ * Oblique, Planar. Given a description of the visible cloud's
+ * bounding sphere and the up axis, return the world-space
+ * (position, target) tuple the Viewer should tween to.
+ *
+ * Why pure: the Viewer owns three.js + the tween scheduler; this
+ * module owns the geometry. Keeping them apart means the preset
+ * math is unit-testable without booting a renderer, and the same
+ * math can serve session restore, share-link rebuild, and the
+ * upcoming command palette without any of those callers reaching
+ * into three.js types.
+ *
+ * The four presets are designed to feel like CAD-tool standards:
+ *
+ *   - Top     — camera directly above the centroid along worldUp,
+ *               looking straight down. A small forward bias on the
+ *               position keeps OrbitControls' "right" vector
+ *               well-defined (a pure top-down looking along worldUp
+ *               is a gimbal-lock case for spherical controls).
+ *
+ *   - Iso     — classic 45° azimuth, 35° elevation isometric pose
+ *               (the same angle convention Blender / Maya use). The
+ *               horizontal heading is rotated 45° clockwise from the
+ *               input horizontal axis so the analyst gets a clean
+ *               three-quarter view of the dominant extent.
+ *
+ *   - Oblique — matches the existing v0.3.5 `frameAll()` opening
+ *               pose: horizontal heading, lifted ~35° toward worldUp.
+ *               Re-exposed as a named preset for keyboard access
+ *               (`O` key) and command palette indexing.
+ *
+ *   - Planar  — look along the input horizontal axis (zero elevation),
+ *               i.e. a true side-on elevation view. Useful for
+ *               surveying built-environment scans where the analyst
+ *               wants the building elevation.
+ *
+ * The distance formula is the standard sphere-fit-to-FOV:
+ *   `dist = (radius / sin(fov / 2)) * pad`
+ * Default `pad` is 1.2, matching `Viewer.frameAll()`.
+ */
+
+/** Names a preset. Stable string — persisted in `.olvsession`. */
+export type CameraPresetName = 'top' | 'iso' | 'oblique' | 'planar';
+
+/** Every preset name in stable display order. */
+export const CAMERA_PRESET_ORDER: readonly CameraPresetName[] = [
+  'top',
+  'iso',
+  'oblique',
+  'planar',
+] as const;
+
+/** Short display label used by the UI chips and command palette. */
+export const CAMERA_PRESET_LABEL: Readonly<Record<CameraPresetName, string>> = {
+  top: 'Top',
+  iso: 'Iso',
+  oblique: 'Oblique',
+  planar: 'Planar',
+};
+
+/** Keyboard shortcut for each preset. Case-insensitive at the handler. */
+export const CAMERA_PRESET_KEY: Readonly<Record<CameraPresetName, string>> = {
+  top: 'T',
+  iso: 'I',
+  oblique: 'O',
+  planar: 'P',
+};
+
+/** A 3D point in world space (plain object — no three.js dependency). */
+export interface Vec3 {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+/**
+ * Everything the preset math needs from the live viewer. The Viewer
+ * shapes its `_visibleBoundingSphere()` + `_horizontalAxis()` outputs
+ * into this struct at call time.
+ */
+export interface PresetInput {
+  /** Centroid of the visible bounding sphere. */
+  readonly center: Vec3;
+  /** Bounding-sphere radius. Treated as 1 when 0. */
+  readonly radius: number;
+  /** Scene world-up axis. Must be a unit vector. */
+  readonly worldUp: Vec3;
+  /**
+   * A horizontal heading (perpendicular to `worldUp`). The Viewer's
+   * `_horizontalAxis()` returns a stable choice for the current
+   * scan; this seed is what the iso/oblique/planar presets rotate
+   * around. Must be a unit vector.
+   */
+  readonly horizontal: Vec3;
+  /** Perspective camera FOV in degrees. */
+  readonly fovDeg: number;
+  /**
+   * Optional radius multiplier on the fit distance. Larger = more
+   * padding around the cloud. Defaults to 1.2 (matches frameAll).
+   */
+  readonly pad?: number;
+}
+
+/** Result of a preset evaluation. */
+export interface PresetPose {
+  readonly position: Vec3;
+  readonly target: Vec3;
+}
+
+// ── internal vector helpers (no three.js) ──────────────────────────
+
+function add(a: Vec3, b: Vec3): Vec3 {
+  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+}
+
+function scale(a: Vec3, s: number): Vec3 {
+  return { x: a.x * s, y: a.y * s, z: a.z * s };
+}
+
+function dot(a: Vec3, b: Vec3): number {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
+}
+
+function length(a: Vec3): number {
+  return Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+}
+
+function normalize(a: Vec3): Vec3 {
+  const len = length(a);
+  if (len < 1e-9) return { x: 1, y: 0, z: 0 };
+  return scale(a, 1 / len);
+}
+
+/**
+ * Rotate vector `v` around unit axis `axis` by `angle` radians using
+ * Rodrigues' formula. Used to spin the horizontal heading for the
+ * iso/oblique tilts without pulling in three.js's Vector3.
+ */
+function rotateAroundAxis(v: Vec3, axis: Vec3, angle: number): Vec3 {
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const oneMinusCos = 1 - cosA;
+  const dotAV = dot(axis, v);
+  const crossAV = cross(axis, v);
+  return {
+    x: v.x * cosA + crossAV.x * sinA + axis.x * dotAV * oneMinusCos,
+    y: v.y * cosA + crossAV.y * sinA + axis.y * dotAV * oneMinusCos,
+    z: v.z * cosA + crossAV.z * sinA + axis.z * dotAV * oneMinusCos,
+  };
+}
+
+/**
+ * Sphere-fit camera distance for a given FOV and padding. The standard
+ * derivation: a sphere of radius r perfectly fills a perspective
+ * frustum of vertical half-angle θ at distance `r / sin(θ)`.
+ */
+function fitDistance(radius: number, fovDeg: number, pad: number): number {
+  const r = radius > 0 ? radius : 1;
+  const fovRad = (fovDeg * Math.PI) / 180;
+  return (r / Math.sin(fovRad / 2)) * pad;
+}
+
+// ── presets ───────────────────────────────────────────────────────
+
+/**
+ * Compute the (position, target) tuple for a named camera preset.
+ * Pure: deterministic for a given input, no side effects, no
+ * three.js types. Throws on an unknown preset name.
+ */
+export function cameraPresetPose(
+  name: CameraPresetName,
+  input: PresetInput,
+): PresetPose {
+  const pad = input.pad ?? 1.2;
+  const dist = fitDistance(input.radius, input.fovDeg, pad);
+  const up = normalize(input.worldUp);
+  const horiz = normalize(input.horizontal);
+  const target = input.center;
+
+  switch (name) {
+    case 'top': {
+      // Look straight down. A tiny horizontal bias on the position
+      // (1° tilt) keeps OrbitControls' "right" vector well-defined
+      // — a pure top-down stare along worldUp is a gimbal-lock
+      // case for spherical controls.
+      const tilt = Math.PI / 180; // 1°
+      const dir = normalize(
+        add(scale(up, Math.cos(tilt)), scale(horiz, Math.sin(tilt))),
+      );
+      const position = add(target, scale(dir, dist));
+      return { position, target };
+    }
+    case 'iso': {
+      // Classic 45° azimuth, 35.264° (= atan(1/√2)) elevation iso —
+      // the angle Blender's numpad-1+5 reaches and Maya's
+      // viewport-iso uses. Heading is rotated 45° CW from the input
+      // horizontal so the dominant extent reads at a three-quarter
+      // angle.
+      const elevation = Math.atan(1 / Math.sqrt(2));
+      const azim = -Math.PI / 4; // 45° CW
+      const headed = rotateAroundAxis(horiz, up, azim);
+      const dir = normalize(
+        add(
+          scale(headed, Math.cos(elevation)),
+          scale(up, Math.sin(elevation)),
+        ),
+      );
+      const position = add(target, scale(dir, dist));
+      return { position, target };
+    }
+    case 'oblique': {
+      // The v0.3.5 frameAll() opening pose: horizontal heading
+      // lifted ~35° (0.61 rad) toward worldUp. Re-named for
+      // keyboard + command-palette access.
+      const elevation = 0.61;
+      const dir = normalize(
+        add(scale(horiz, Math.cos(elevation)), scale(up, Math.sin(elevation))),
+      );
+      const position = add(target, scale(dir, dist));
+      return { position, target };
+    }
+    case 'planar': {
+      // Look horizontally along the dominant axis — true side
+      // elevation view. Useful for built-environment scans where
+      // the analyst wants the building elevation. No vertical
+      // component on the direction.
+      const dir = horiz;
+      const position = add(target, scale(dir, dist));
+      return { position, target };
+    }
+  }
+  // Exhaustive switch above — this is unreachable, but TypeScript's
+  // narrowing can't always prove it through a Record-typed name.
+  throw new Error(`Unknown camera preset: ${String(name)}`);
+}

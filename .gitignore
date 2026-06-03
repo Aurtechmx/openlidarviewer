@@ -1,0 +1,69 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules
+.pnp
+.pnp.*
+
+# ── Build output ─────────────────────────────────────────────────────────────
+dist
+dist-ssr
+build
+vbuild
+distcheck
+coverage
+*.tsbuildinfo
+
+# ── Test / tooling output ────────────────────────────────────────────────────
+test-results
+playwright-report
+playwright/.cache
+# Vite / Vitest transient config transpiles (e.g. vitest.config.ts.timestamp-*.mjs)
+*.timestamp-*.mjs
+
+# ── Secrets & local environment — never publish these ───────────────────────
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+*.p12
+*.keystore
+secrets.*
+*.local
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ── Generated archives & packaged deliverables ───────────────────────────────
+# Keeps local deploy / package artifacts from drifting into a GitHub upload.
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.bundle
+
+# ── Local scratch & verification scripts (not for publishing) ────────────────
+_*.mjs
+verify-*.mjs
+trycheck*.mjs
+*.tmp
+_rmtest*
+
+# ── Editor / OS ──────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+bundle-stats.html
+
+# sandbox / editor artifacts — never commit
+.fuse_hidden*
+pw.sandbox.config.mjs
+
+# private thinking tier lives OUTSIDE the repo; belt-and-suspenders
+_PRIVATE/

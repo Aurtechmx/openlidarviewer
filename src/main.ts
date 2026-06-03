@@ -1,0 +1,3750 @@
+import '@fontsource-variable/inter';
+import './style.css';
+import type { Viewer } from './render/Viewer';
+import type { CameraPose } from './render/NavController';
+import { Stage } from './ui/Stage';
+import type { Sample } from './ui/Stage';
+import { DropZone } from './ui/DropZone';
+import { Inspector } from './ui/Inspector';
+import { ToolDock } from './ui/toolDock';
+import { NavBar } from './ui/NavBar';
+import { ProjectCard } from './ui/ProjectCard';
+import { el } from './ui/dom';
+import {
+  applyTheme,
+  readPersistedTheme,
+  writePersistedTheme,
+  THEME_LABEL,
+  THEME_ORDER,
+  type ThemeName,
+} from './ui/themes';
+import { CommandPalette } from './ui/CommandPalette';
+import { ShortcutSheet } from './ui/ShortcutSheet';
+import { TourOverlay } from './ui/onboarding/TourOverlay';
+import { TourSession } from './ui/onboarding/tourSteps';
+import { findDuplicateIds, type Action } from './ui/actionRegistry';
+import { WorkflowController } from './ui/WorkflowController';
+import type { WorkflowEvent } from './render/workflow/workflowRecorder';
+import {
+  CAMERA_PRESET_KEY,
+  CAMERA_PRESET_LABEL,
+  CAMERA_PRESET_ORDER,
+} from './render/camera/cameraPresets';
+import { LassoVolumeTool } from './ui/LassoVolumeTool';
+import { MeasurePanel } from './ui/MeasurePanel';
+import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
+import { AnnotationPanel } from './ui/AnnotationPanel';
+import { HelpOverlay } from './ui/HelpOverlay';
+import { bindShortcuts } from './ui/shortcuts';
+import { LoadCancelledError } from './io/loadFile';
+import { describeLoadError } from './io/loadErrors';
+import { LocalFileSource } from './io/LocalFileSource';
+import { deviceCaps } from './render/deviceProfile';
+import { parseEmbedConfig } from './ui/embedConfig';
+// `startEmbedBridge` is only wired in `?embed=1` mode.
+// Lazy-loaded so the bridge code never enters the bundle for the typical
+// non-iframe page load (the dominant traffic pattern).
+import { encodeShareState, decodeShareState } from './io/shareState';
+import type { ShareState } from './io/shareState';
+import { formatProgress } from './io/loadProgress';
+import { formatTelemetry } from './io/loadTelemetry';
+import { buildBenchmarkResult, formatBenchmarkResult } from './io/benchmark';
+// The diagnostics runtime (DebugOverlay + streamingBenchmark + the
+// instrumented range source) loads only when `?debug=1` or `?benchmark=1`
+// is set — see `loadDiagnostics()` below. The types stay reachable for the
+// variable annotations.
+import type { StreamingBenchmark } from './render/streaming/streamingBenchmark';
+import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
+import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
+import { isZUpFormat } from './io/sniffFormat';
+// `exportCloud` is dynamically imported via `loadExporters` in the onExport
+// callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
+// weigh on the initial payload of a session that never exports.
+import { serializeSession, parseSession } from './io/session';
+import { loadPrefs, savePrefs } from './prefs';
+import { ModuleRegistry } from './analysis/ModuleApi';
+import type { AnalysisRow } from './analysis/ModuleApi';
+import { healthCheck } from './analysis/modules/healthCheck';
+import { scanReport } from './analysis/modules/scanReport';
+import { availableModes, defaultMode } from './render/colorModes';
+import type { ColorMode } from './render/colorModes';
+import type { PointCloud } from './model/PointCloud';
+// `detectCopc` is a tiny leaf — kept static so `handleFile` can branch on it
+// synchronously. The rest of the COPC + streaming subsystem is dynamically
+// imported (in `openStreamingCopc` and `handleRemoteCopc`), so it lands in a
+// lazy chunk fetched only when a COPC scan is actually opened.
+import { detectCopc } from './io/copc/copcDetect';
+import {
+  RangeReadError,
+  sanitizeUrlForDisplay,
+  validateRemoteCopcUrl,
+} from './io/range/RangeSource';
+import type { RangeSource } from './io/range/RangeSource';
+import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
+import { StreamingPanel } from './ui/StreamingPanel';
+import type { StreamingQuality } from './render/streaming/streamingBudget';
+// The COPC/streaming `import()` split points live in `lazyChunks.ts` — a
+// module excluded from the live-build source-transform so Vite can still see the
+// dynamic-import specifiers and emit the chunks (see lazyChunks.ts).
+import {
+  loadStreamingPointCloud,
+  loadCopcWorkerClient,
+  loadStreamingColors,
+  loadLocalFileRangeSource,
+  loadHttpRangeSource,
+  loadEpt,
+  loadExporters,
+  loadExportStudio,
+  loadReportEngine,
+  loadDebugOverlay,
+  loadStreamingBenchmark,
+  loadInstrumentedRangeSource,
+  loadViewer,
+} from './lazyChunks';
+// Local-first usage counter. Categorical event counts only; stays in
+// localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
+// every `increment()` call structurally.
+import {
+  increment as recordUsage,
+  isSuppressed as usageIsSuppressed,
+} from './diagnostics/usageCounters';
+import {
+  classify as classifyProvenance,
+  fingerprintFor as provenanceFor,
+  type CaptureType,
+} from './diagnostics/provenance';
+import {
+  signalsForStaticCloud,
+  signalsForStreamingCloud,
+} from './diagnostics/provenanceSignals';
+// CatalogPanel renders the empty-state "verified public LiDAR" picker.
+// The picker carries a curated dropdown of direct EPT URLs (each probed
+// at build time) and routes the selected URL into the existing streaming
+// pipeline via handleRemoteUrl(). No catalog query, no geocoder, no
+// bbox-vs-COPC mismatch — the previous TNM Products API path was
+// removed in v0.3.6 because TNM doesn't surface COPC URLs anywhere.
+import { CatalogPanel } from './ui/CatalogPanel';
+// CRS detection + override — feeds the Inspector's Coordinate System
+// section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
+// streaming clouds expose `.crs()` returning the same shape.
+import type { CrsInfo } from './io/crs';
+import {
+  resolvedFromCrsInfo,
+  unknownCrs,
+  type CrsSource,
+  type ResolvedCrs,
+} from './geo/CoordinateTypes';
+import { CrsService } from './geo/CrsService';
+
+/**
+ * The centralised CRS service. Owns the active scan's resolved CRS
+ * plus pub/sub for consumers. Direct subscribers today: the lasso
+ * volume gate (`crsService.validation()`) and the inspector
+ * (`crsService.subscribe(...)`, wired right after the Inspector is
+ * constructed). The InspectTool's coordinate context still goes
+ * through a separate push because it needs the cloud `origin`
+ * alongside the CRS — that pair has no other natural home.
+ */
+const crsService = new CrsService();
+import {
+  getOverride as getCrsOverrideForDataset,
+  keyForDataset as crsKeyForDataset,
+  setOverride as setCrsOverrideForDataset,
+  clearOverride as clearCrsOverrideForDataset,
+} from './geo/CrsOverrideStore';
+import { getCrsEntry } from './geo/CrsRegistry';
+
+// A pointer to the open-source repository for anyone who opens the console on
+// the live site. The deployed bundle is compact-transformed; the readable source — and
+// the full documentation — live on GitHub.
+console.log(
+  `%cOpenLiDARViewer%c v${__APP_VERSION__} — open source under the MIT license.\n` +
+    `View the source and docs on GitHub: https://github.com/aurtechmx/openlidarviewer`,
+  'font-weight:600;color:#22dcff',
+  'color:#9aa3ad',
+);
+
+const app = document.querySelector<HTMLDivElement>('#app');
+if (!app) throw new Error('OpenLiDARViewer: #app mount point not found');
+
+// v0.3.9 theme system — apply the user's persisted choice as early as
+// possible so first paint matches their preference. Done BEFORE any
+// component mounts so the empty-state hero, dropzone, and toolDock
+// all render under the right palette.
+let currentTheme: ThemeName = readPersistedTheme();
+applyTheme(document.body, currentTheme);
+
+function setTheme(name: ThemeName): void {
+  if (name === currentTheme) return;
+  currentTheme = name;
+  applyTheme(document.body, name);
+  writePersistedTheme(name);
+}
+
+/** The embed configuration parsed from the URL — the documented embed API. */
+const embedConfig = parseEmbedConfig(window.location.search);
+/** True in embed mode (`?embed=1`) — strips the top bar, enables the bridge. */
+const embed = embedConfig.embed;
+/** True when the dock and panels are hidden — embed mode or `?ui=minimal`. */
+const bareMode = embed || embedConfig.uiMinimal;
+const urlParams = new URLSearchParams(window.location.search);
+/** `?debug=1` (or just `?debug`) shows the performance overlay and telemetry. */
+const debug = urlParams.has('debug');
+/** `?benchmark=1` emits a structured benchmark result for each file load. */
+const benchmark = urlParams.has('benchmark');
+/**
+ * `?test=1` opens `window.__OLV_TEST_API__` — a programmatic seam for
+ * Playwright. v0.3.10 trust-pass — the canvas → raycast → measurement
+ * commit path is flaky in headless CI (WebGL 2 fallback, no real
+ * picking precision), which is why `measure.spec.ts` has had a
+ * `test.fixme` annotation for several releases. The seam exposes a
+ * minimal API that bypasses the raycast and pushes a world-space
+ * point directly into `MeasureController.addPoint`. Gated on a URL
+ * flag so production traffic never sees the API surface; the e2e
+ * runner sets the flag in its baseURL.
+ */
+const testApi = urlParams.has('test');
+
+// The Quick demos surface only the public streaming demo — a real
+// ~1.8 GB COPC from Entwine's public data bucket (range-served +
+// CORS-open). The viewer only fetches the resident set the camera needs,
+// typically tens of MB before first frame, so this is the lowest-friction
+// way for a new visitor to see streaming in action without uploading or
+// hosting anything.
+//
+// The previous "Tiny demo LAS" and "Tiny demo PLY" entries were removed —
+// at ~18 and ~10 points respectively they opened as nearly-empty
+// black-canvas projects that first-time users mistook for a broken viewer
+// rather than a deliberate "single-pixel fixture" surface. They survive
+// in `samples/tiny.{las,ply}` for automated tests but are no longer
+// surfaced as user-facing entry points.
+const SAMPLES: Sample[] = [
+  {
+    id: 'stream',
+    label: 'Public streaming demo',
+    detail: '1.8 GB COPC · streamed',
+    url: 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz',
+    name: 'millsite.copc.laz',
+    // Approximate on-disk size — feeds Stage's cellular-data + mobile-
+    // memory confirmation gates. The streaming pipeline only fetches
+    // visible tiles in practice, but the gate uses the worst-case full-
+    // file size because the user can't know how many tiles they'll
+    // ultimately request.
+    sizeBytes: 1_800_000_000,
+  },
+];
+
+/**
+ * Public-LiDAR picker for the empty-state. The picker is a curated
+ * dropdown of direct EPT URLs — every entry is probed at build time and
+ * the URL handed back to handleRemoteUrl() on click. The previous
+ * bbox-query path against USGS TNM Products was removed because TNM
+ * does not surface COPC URLs in its public inventory.
+ */
+const catalogPanel = new CatalogPanel({
+  suppressed: usageIsSuppressed(),
+  onPickUrl: (url: string) => {
+    // The picker maps to a single categorical event suffix in the
+    // local-first usage counter. The URL itself never leaves the device.
+    recordUsage('scan-open', 'curated:usgs-ept');
+    handleRemoteUrl(url).catch((err) => {
+      dropZone.setError(
+        err instanceof Error ? err.message : 'Failed to open the dataset.',
+      );
+    });
+  },
+  // Pre-warm the streaming chunks when the user changes the dropdown
+  // selection. By the time they click Open the EPT / COPC chunks are
+  // usually already cached — cuts ~200–800 ms off perceived first-paint
+  // because the chunk download hides behind think-time.
+  onPickIntent: (url: string) => prewarmForUrl(url),
+  // v0.3.6 PC STAC integration. When the user picks a result from the
+  // Planetary Computer "Search by location" panel, store the item's
+  // EPSG in the CRS override store before dispatching the URL. This
+  // short-circuits the LAS VLR probe — the streaming pipeline asks the
+  // override store first and never spends ~500-700 ms decoding the
+  // header for CRS metadata it already has.
+  onPickPcItem: (item) => {
+    recordUsage('scan-open', 'pc-stac');
+    if (item.epsg) {
+      try {
+        // The dataset key is derived from the URL/name the streaming
+        // pipeline will use. We mirror the same `keyForDataset` so the
+        // override resolves on the first lookup.
+        const datasetKey = crsKeyForDataset(item.id);
+        setCrsOverrideForDataset(datasetKey, {
+          epsg: item.epsg,
+          kind: 'projected',
+        });
+      } catch (err) {
+        if (debug) console.warn('[crs] PC EPSG short-circuit failed', err);
+      }
+    }
+    // SAS-sign the raw blob URL before handing it to the streaming pipeline.
+    // Without this step the Azure Blob host returns HTTP 409 on the first
+    // range request — Planetary Computer assets require a short-lived
+    // SAS token appended to the URL. The signing API is public, CORS-
+    // enabled, and the resulting URL is valid for ~1 hour.
+    void (async () => {
+      try {
+        const mod = await import('./io/catalog/planetaryComputer');
+        const signed = await mod.signAssetUrl(item.assetUrl);
+        await handleRemoteUrl(signed);
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : 'Failed to open the PC tile.';
+        // Distinguish signing failure from streaming failure so the user
+        // sees the right message ("PC unavailable" vs "this file is bad").
+        const message = raw.includes('SAS')
+          ? `Couldn't authorise the Planetary Computer asset (${raw}). The host may be temporarily unavailable.`
+          : raw;
+        dropZone.setError(message);
+      }
+    })();
+  },
+});
+
+const stage = new Stage(app, {
+  embed,
+  samples: SAMPLES,
+  onSample: loadFromUrl,
+  onOpenFile: (file) => void handleFile(file),
+  // Return the promise so Stage's inline error handler can show a
+  // contextual, plain-English message under the URL input + offer a Retry
+  // banner. The dropZone error toast still fires as a backup channel
+  // because it remains visible after the empty state hides.
+  onOpenUrl: (url) => handleRemoteUrl(url).catch((err) => {
+    const message = err instanceof Error ? err.message : 'Failed to open the URL.';
+    dropZone.setError(message);
+    // Re-throw so Stage's inline branch sees the error too.
+    throw err instanceof Error ? err : new Error(message);
+  }),
+  catalogPanel: catalogPanel.root,
+});
+/**
+ * The Viewer is lazy-imported so three.js stays out of the initial shell.
+ * `viewer` is treated as non-null throughout the rest of main.ts; every
+ * scan-open path awaits `viewerLoaded` before touching it, and UI handlers
+ * that *could* fire pre-init are operating against an empty state where the
+ * calls are no-ops anyway.
+ *
+ * The cast through `unknown` is the documented escape hatch — TypeScript
+ * cannot see the runtime guarantee that `viewerLoaded` resolves before
+ * any user-driven scan-open, but it does.
+ */
+let viewer: Viewer = null as unknown as Viewer;
+const viewerLoaded: Promise<Viewer> = (async () => {
+  const { Viewer: ViewerCtor } = await loadViewer();
+  viewer = new ViewerCtor(stage.canvas);
+  return viewer;
+})();
+
+// ── Lasso volume tool — 3D volumetric pick via freehand draw ────────────
+//
+// Press `L` to arm the tool. Draw a freehand shape over the canvas;
+// every 3D point inside the projected shape is selected (volumetric —
+// all depths along the camera ray are captured). On pointer-up, the
+// pipeline computes cut / fill / footprint and surfaces it in a quick
+// toast. Press `L` again or `Escape` to disarm.
+/**
+ * The most recent lasso volume result, retained so the toast's "Save"
+ * button can promote it into the Measurements list. Cleared when the
+ * user dismisses the highlight (Esc / Clear) or starts a fresh lasso.
+ */
+let pendingLassoSave: {
+  polygon: ReadonlyArray<[number, number, number]>;
+  volume: import('./render/measure/types').VolumeRecord;
+  selectedCount: number;
+} | null = null;
+
+const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
+  onCommit: (lasso) => {
+    if (!viewer) return;
+    const out = viewer.computeLassoVolume(lasso, 0.05);
+    if (out === null) {
+      pendingLassoSave = null;
+      showLassoToast('Lasso volume — no points selected. Draw around a denser region.');
+      return;
+    }
+    // Highlight the selected points so the user has visible proof of
+    // life. Auto-disarm the tool — single-shot pattern returns the
+    // user to navigation/orbit immediately, which is what non-
+    // technical users expect after seeing a result. They can re-arm
+    // by clicking the Lasso button or pressing L again.
+    viewer.setSelectionHighlight(out.selectionByCloudId);
+    lassoVolumeTool.disable();
+    viewer.setLassoMode(false);
+    syncLassoButton();
+    const fillM3 = out.result.fill.toFixed(2);
+    const cutM3 = out.result.cut.toFixed(2);
+    const netM3 = out.result.net.toFixed(2);
+    const areaM2 = out.result.footprintArea.toFixed(1);
+    // Stage the result for the toast's Save button. The polygon3D
+    // is the convex-hull footprint at the integration reference
+    // plane — saving promotes it to a regular Volume measurement.
+    pendingLassoSave =
+      out.polygon3D.length >= 3
+        ? {
+            polygon: out.polygon3D,
+            volume: deriveVolumeRecord(out.result, out.referenceZ),
+            selectedCount: out.selectedCount,
+          }
+        : null;
+    const budgetCaption = out.budget.downsample
+      ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%`
+      : '';
+    // CRS gate — when the scan is geographic or unknown, displaying a
+    // cubic-metre headline would be misleading. Replace the metrics
+    // line with the caveat, and refuse to surface a Save button (the
+    // user has to project / confirm a CRS first). When the CRS is
+    // safe-explicit-local, the metrics are still meaningful in source
+    // units; surface a softer "units assumed metres" line below them.
+    const crsVerdict = crsService.validation();
+    if (!crsVerdict.canDisplayMetric) {
+      showLassoToast(
+        `Volume can't be claimed in this CRS — ${crsVerdict.reason} ${crsVerdict.suggestion}`,
+      );
+      pendingLassoSave = null;
+      return;
+    }
+    const crsCaveat =
+      crsVerdict.validity === 'safe-explicit-local'
+        ? ' · units assumed metres'
+        : '';
+    showLassoToast(
+      `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat}.`,
+      pendingLassoSave && crsVerdict.canSaveMeasurement
+        ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
+        : undefined,
+    );
+  },
+  onCancel: () => {
+    viewer?.clearSelectionHighlight();
+    lassoVolumeTool.disable();
+    viewer?.setLassoMode(false);
+    syncLassoButton();
+    pendingLassoSave = null;
+    showLassoToast('Lasso cancelled — back to navigation.');
+  },
+});
+
+/**
+ * Promote the most recent lasso volume into the Measurements list as
+ * a regular Volume measurement. No-op when nothing is pending.
+ *
+ * The id of the created measurement is captured so the toast can
+ * confirm the save and the workflow recorder (if armed) can log it
+ * with the measurement id.
+ */
+function saveLassoVolumeIfPending(): void {
+  if (!viewer || !pendingLassoSave) return;
+  // Re-check CRS at save time. If the user opened the CRS override
+  // panel between the lasso commit and clicking Save and switched to
+  // geographic / unknown, the original toast's gate would no longer
+  // hold — block the save and tell them why.
+  const crsVerdict = crsService.validation();
+  if (!crsVerdict.canSaveMeasurement) {
+    pendingLassoSave = null;
+    showLassoToast(
+      `Can't save volume — ${crsVerdict.reason} ${crsVerdict.suggestion}`,
+    );
+    return;
+  }
+  const payload = pendingLassoSave;
+  const id = viewer.measure.addLassoVolumeMeasurement({
+    polygon: payload.polygon.map((p) => [p[0], p[1], p[2]] as [number, number, number]),
+    volume: payload.volume,
+  });
+  pendingLassoSave = null;
+  if (id) {
+    showLassoToast('Saved to Measurements list.');
+  } else {
+    showLassoToast('Lasso volume could not be saved — try drawing the shape again.');
+  }
+}
+
+/**
+ * Translate a `VolumeResult` (from the lasso math) into the persisted
+ * `VolumeRecord` shape used by Volume measurements. The two carry
+ * almost identical fields; the record drops the sample-walk telemetry
+ * and adds the confidence band derived from `pointsInPolygon`.
+ */
+function deriveVolumeRecord(
+  result: import('./render/measure/volume').VolumeResult,
+  referenceZ: number,
+): import('./render/measure/types').VolumeRecord {
+  const inPoly = result.pointsInPolygon;
+  const confidence: 'high' | 'medium' | 'low' =
+    inPoly >= 1000 ? 'high' : inPoly >= 100 ? 'medium' : 'low';
+  return {
+    fill: result.fill,
+    cut: result.cut,
+    net: result.net,
+    referenceZ,
+    footprintArea: result.footprintArea,
+    pointsInPolygon: result.pointsInPolygon,
+    density: result.density,
+    confidence,
+  };
+}
+
+// ── Lasso volume button in the measure dock ──────────────────────────────
+// Placed at the end of the measure-kind row, paired with Volume. The
+// button is a second input method for Volume — not a separate
+// measurement kind. The tooltip explicitly tells users how to exit
+// (Esc) and the auto-disarm-on-commit returns them to navigation
+// immediately so re-orbiting after a measurement requires zero extra
+// clicks. Persistence into the Measurements list + PDF reports is the
+// next focused cut.
+let lassoButton: HTMLButtonElement | null = null;
+function syncLassoButton(): void {
+  if (!lassoButton) return;
+  lassoButton.classList.toggle('olv-mkind-active', lassoVolumeTool.enabled);
+}
+viewerLoaded.then((v) => {
+  lassoButton = v.measure.addAuxKindButton(
+    'Lasso volume',
+    'Lasso Volume — draw a freeform shape on the canvas to measure volume of every 3D point inside.\n' +
+      '• Click again or press Esc to exit and return to navigation.\n' +
+      '• Click "Save to session" on the result toast to keep it.',
+    () => {
+      if (lassoVolumeTool.enabled) {
+        lassoVolumeTool.disable();
+        v.setLassoMode(false);
+        v.clearSelectionHighlight();
+        showLassoToast('Lasso off — back to navigation.');
+      } else {
+        lassoVolumeTool.enable();
+        v.setLassoMode(true);
+        showLassoToast(
+          'Lasso armed — draw a shape on the canvas. Press Esc to cancel and return to navigation.',
+        );
+      }
+      syncLassoButton();
+    },
+    // Gestalt proximity: Lasso renders directly AFTER the Volume
+    // button in the kind row, so the eye reads it as a sibling
+    // input method for the Volume kind rather than a 10th
+    // measurement kind.
+    'volume',
+  );
+});
+
+// ── Universal Esc → return to free navigation ─────────────────────────────
+// Catches any tool the user has left armed and returns the canvas to
+// pure orbit/pan/zoom. Picks up after the Stage / NavController have
+// had their chance — those are scoped to specific element handlers,
+// this fallback ensures Esc always reads as "exit the active tool"
+// regardless of where focus is.
+window.addEventListener('keydown', (e) => {
+  const target = e.target as HTMLElement | null;
+  const tag = target?.tagName;
+  // Never hijack key events from form inputs.
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+
+  // Polygon-completion keyboard shortcuts — Enter commits the
+  // in-progress polygon (area/volume/polyline/profile), Backspace
+  // pops the most recent vertex. Both only fire while measure mode
+  // is armed, so they don't conflict with anything else.
+  if (viewer?.measureMode) {
+    if (e.key === 'Enter') {
+      viewer.measure.finishCurrent();
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Backspace') {
+      viewer.measure.undoLastPoint();
+      e.preventDefault();
+      return;
+    }
+  }
+
+  if (e.key !== 'Escape') return;
+  let handled = false;
+  if (lassoVolumeTool.enabled) {
+    lassoVolumeTool.disable();
+    viewer?.setLassoMode(false);
+    viewer?.clearSelectionHighlight();
+    syncLassoButton();
+    handled = true;
+  }
+  if (viewer?.measureMode) {
+    viewer.setMeasureMode(false);
+    handled = true;
+  }
+  if (handled) {
+    showLassoToast('Back to navigation.');
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'l' || e.key === 'L') {
+    // Don't hijack key events from form inputs.
+    const target = e.target as HTMLElement | null;
+    const tag = target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+    if (lassoVolumeTool.enabled) {
+      lassoVolumeTool.disable();
+      viewer?.setLassoMode(false);
+      showLassoToast('Lasso volume off.');
+    } else {
+      lassoVolumeTool.enable();
+      viewer?.setLassoMode(true);
+      showLassoToast('Lasso volume armed — draw a shape on the canvas.');
+    }
+  }
+
+  // v0.3.9 Smart camera presets: T / I / O / P each fire a tuned
+  // pose via Viewer.setCameraPreset(). Modifier-key combos are
+  // skipped so we don't fight Cmd-T (new tab) etc.
+  if (
+    !e.ctrlKey &&
+    !e.metaKey &&
+    !e.altKey &&
+    !e.shiftKey &&
+    (e.key === 't' || e.key === 'T' ||
+      e.key === 'i' || e.key === 'I' ||
+      e.key === 'o' || e.key === 'O' ||
+      e.key === 'p' || e.key === 'P')
+  ) {
+    const target = e.target as HTMLElement | null;
+    const tag = target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+    const k = e.key.toLowerCase();
+    const preset = k === 't' ? 'top' : k === 'i' ? 'iso' : k === 'o' ? 'oblique' : 'planar';
+    const fired = viewer?.setCameraPreset(preset);
+    if (fired) {
+      showLassoToast(
+        `Camera · ${preset[0].toUpperCase() + preset.slice(1)} view.`,
+      );
+    }
+  }
+});
+
+let _lassoToastEl: HTMLElement | null = null;
+let _lassoToastTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Render the lasso toast. When `action` is provided, the toast shows
+ * a button that fires the callback (and hides the toast). The toast
+ * auto-dismisses after 8 s for an action toast, 6 s for an info
+ * toast — actions need a little longer to read and click.
+ */
+function showLassoToast(
+  message: string,
+  action?: { readonly label: string; readonly onClick: () => void },
+): void {
+  if (_lassoToastTimer !== null) clearTimeout(_lassoToastTimer);
+  if (_lassoToastEl === null) {
+    _lassoToastEl = document.createElement('div');
+    _lassoToastEl.className = 'olv-lasso-toast';
+    document.body.append(_lassoToastEl);
+  }
+  // Rebuild contents from scratch each call so an info toast cleanly
+  // replaces a previous action toast (no stale Save button stuck
+  // around).
+  _lassoToastEl.replaceChildren();
+  const messageEl = document.createElement('span');
+  messageEl.className = 'olv-lasso-toast-msg';
+  messageEl.textContent = message;
+  _lassoToastEl.append(messageEl);
+  if (action) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'olv-lasso-toast-action';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      btn.blur();
+      action.onClick();
+    });
+    _lassoToastEl.append(btn);
+  }
+  _lassoToastEl.classList.add('olv-visible');
+  _lassoToastTimer = setTimeout(
+    () => {
+      _lassoToastEl?.classList.remove('olv-visible');
+    },
+    action ? 8000 : 6000,
+  );
+}
+
+/** True on phone-width viewports — drives the touch hint and point budget. */
+function isPhone(): boolean {
+  return window.matchMedia('(max-width: 767px)').matches;
+}
+
+/** `navigator.deviceMemory` in GB, when the browser reports it. */
+function deviceMemoryGB(): number | undefined {
+  const m = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return typeof m === 'number' && m > 0 ? m : undefined;
+}
+
+/**
+ * The device's capability tier and safe render budget — computed once at
+ * startup. A weak device loads fewer points and gets degraded rendering
+ * defaults, so a large survey never crashes the GPU.
+ */
+const deviceCapsValue = deviceCaps({
+  deviceMemoryGB: deviceMemoryGB(),
+  hardwareConcurrency: navigator.hardwareConcurrency,
+  isMobile: isPhone(),
+});
+
+const registry = new ModuleRegistry();
+registry.register(healthCheck);
+registry.register(scanReport);
+
+/** Viewer id of the cloud the Inspector currently controls (the most recent). */
+let activeId: string | null = null;
+/** Saved camera viewpoints for the current scan. */
+let savedViews: { name: string; pose: CameraPose }[] = [];
+let viewCounter = 0;
+/** True while a file load is in flight — one load at a time (see `handleFile`). */
+let loading = false;
+
+/** The active colour mode — tracked so a share link can record it. */
+let currentColorMode: ColorMode | undefined;
+
+/** True once the renderer backend has finished initialising. */
+let viewerReady = false;
+/** The `?debug=1` / `?benchmark=1` performance overlay, when one is shown. */
+let debugOverlay: DebugOverlay | null = null;
+
+/** The COPC decode worker client — created lazily on the first COPC open. */
+let copcDecoder: CopcWorkerClient | null = null;
+/** The active streaming quality preset. */
+let streamingQuality: StreamingQuality = 'balanced';
+/** Interval handle for the streaming-status poll, while a COPC is open. */
+let streamingStatusTimer: number | undefined;
+/** Active streaming benchmark collector — non-null only under `?benchmark=1`. */
+let streamingBenchmark: StreamingBenchmark | null = null;
+/** Latched once the coarse view first finishes loading, per streaming session. */
+let coarseStableFired = false;
+
+/**
+ * The lazily-loaded diagnostics runtime — the `?debug=1` overlay, the
+ * streaming benchmark collector, and the instrumented range source. Loaded
+ * once on first need (the URL flag setup or the first benchmarked scan
+ * open) and cached for the rest of the session.
+ */
+interface DiagnosticsRuntime {
+  DebugOverlay: typeof import('./ui/DebugOverlay').DebugOverlay;
+  StreamingBenchmark: typeof import('./render/streaming/streamingBenchmark').StreamingBenchmark;
+  formatStreamingBenchmark: typeof import('./render/streaming/streamingBenchmark').formatStreamingBenchmark;
+  InstrumentedRangeSource: typeof import('./io/range/InstrumentedRangeSource').InstrumentedRangeSource;
+}
+let diagnostics: DiagnosticsRuntime | null = null;
+let diagnosticsPending: Promise<DiagnosticsRuntime> | null = null;
+function loadDiagnostics(): Promise<DiagnosticsRuntime> {
+  if (diagnostics) return Promise.resolve(diagnostics);
+  if (diagnosticsPending) return diagnosticsPending;
+  diagnosticsPending = (async () => {
+    const [overlayMod, benchMod, instrMod] = await Promise.all([
+      loadDebugOverlay(),
+      loadStreamingBenchmark(),
+      loadInstrumentedRangeSource(),
+    ]);
+    diagnostics = {
+      DebugOverlay: overlayMod.DebugOverlay,
+      StreamingBenchmark: benchMod.StreamingBenchmark,
+      formatStreamingBenchmark: benchMod.formatStreamingBenchmark,
+      InstrumentedRangeSource: instrMod.InstrumentedRangeSource,
+    };
+    diagnosticsPending = null;
+    return diagnostics;
+  })();
+  return diagnosticsPending;
+}
+
+/**
+ * A viewer state decoded from a `#s=` share link, applied once the next scan
+ * loads. A share link carries no scan data — the recipient opens the scan and
+ * the saved view is restored on top.
+ */
+let pendingShareState: ShareState | null = (() => {
+  const hash = window.location.hash;
+  return hash.startsWith('#s=') ? decodeShareState(hash.slice(3)) : null;
+})();
+
+const inspector = new Inspector({
+  onColorMode: (mode) => {
+    currentColorMode = mode;
+    if (activeId) viewer.setColorMode(activeId, mode);
+  },
+  onHeightPercentileTrim: (trim) => {
+    viewer.setHeightPercentileTrim(trim);
+  },
+  onPointSize: (size) => {
+    viewer.setPointSize(size);
+    persistPrefs();
+  },
+  onToggleVisible: (id, visible) => viewer.setCloudVisible(id, visible),
+  onRemove: (id) => removeCloud(id),
+  onExport: (format) => {
+    const cloud = activeId ? viewer.getCloud(activeId) : undefined;
+    if (!cloud) return;
+    // The exporter is a lazy chunk; fetched on first export of the session.
+    void loadExporters().then(({ exportCloud }) => {
+      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
+    });
+  },
+  onExportImage: (mode) => {
+    // The Visual Export Studio ships in its own lazy chunk (`loadExportStudio`),
+    // pulled in by viewer.exportImage on the first invocation. The download
+    // triggers off the returned Blob; an unsupported-on-this-cloud rejection
+    // surfaces as a visible alert.
+    const sourceName = activeId
+      ? viewer.getCloud(activeId)?.name
+      : viewer.streamingCloud?.name;
+    const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
+    // surface a precise per-mode progress string while the lazy
+    // Studio chunk loads and the export renders.
+    const modeLabel: Record<string, string> = {
+      'orthographic-rgb': 'orthographic RGB',
+      'height-map': 'height map',
+      intensity: 'intensity map',
+      classification: 'classification map',
+      depth: 'depth map',
+      normal: 'normal map',
+      contour: 'contour map',
+    };
+    const label = modeLabel[mode] ?? mode;
+    dropZone.setProgress(`Exporting ${label}…`);
+    viewer
+      .exportImage(mode, {})
+      .then((result) => {
+        downloadBlob(`${base}-${mode}.png`, result.blob);
+        recordUsage('export', mode);
+        dropZone.setProgress(null);
+      })
+      .catch((err: unknown) => {
+        recordUsage('error', 'export');
+        dropZone.setProgress(null);
+        // The orchestrator's explicit reason ("Classification export is
+        // unavailable — this cloud has no classification channel.") is the
+        // most actionable thing we can show, so it goes both to the console
+        // (for debugging) and to a non-blocking alert (so the user knows
+        // something happened and why). Replaces the alert with a
+        // Surface the failure through the shared toast UI rather than a
+        // modal alert — blocking the page on a generation failure is a UX
+        // regression we no longer accept.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[image-export]', err);
+        dropZone.setError(`Image export failed: ${msg}`);
+      });
+  },
+  onExportReport: (templateId) => {
+    // Generate a PDF report from the live scan state + annotations +
+    // measurements. The whole `src/report/` module + pdf-lib (~150 KB)
+    // lives behind `loadReportEngine()`; first click downloads both. The
+    // report covers what the scan-report card already does on PNG
+    // exports, but as a multi-page PDF with the full Inspector context.
+    // The progress toast surfaces while the lazy module loads and the PDF
+    // renders; failures route through the same toast UI as every other
+    // export.
+    dropZone.setProgress('Generating report…');
+    generateReportPdf(templateId)
+      .then(() => {
+        recordUsage('report', templateId);
+        dropZone.setProgress(null);
+      })
+      .catch((err: unknown) => {
+        recordUsage('error', 'report');
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[report]', err);
+        dropZone.setError(`Report generation failed: ${msg}`);
+      });
+  },
+  onSaveView: () => saveCurrentView(),
+  onApplyView: (index) => applyView(index),
+  onRenameView: (index, name) => {
+    const view = savedViews[index];
+    if (view) {
+      view.name = name;
+      inspector.setViews(savedViews.map((v) => v.name));
+    }
+  },
+  onDeleteView: (index) => {
+    savedViews.splice(index, 1);
+    inspector.setViews(savedViews.map((v) => v.name));
+  },
+  onEdlToggle: (on) => {
+    viewer.setEdlEnabled(on);
+    persistPrefs();
+  },
+  onEdlStrength: (strength) => {
+    viewer.setEdlStrength(strength);
+    persistPrefs();
+  },
+  onPointSizeMode: (mode) => {
+    viewer.setPointSizeMode(mode);
+    persistPrefs();
+  },
+  onAntialiasing: (on) => {
+    viewer.setAntialiasing(on);
+    persistPrefs();
+  },
+  onTwoFingerTwist: (on) => {
+    viewer.setTwoFingerTwistEnabled(on);
+    syncInspectorRendering();
+    persistPrefs();
+  },
+  // Visuals Studio — Visuals Studio.
+  onRgbAppearancePreset: (id) => {
+    if (isRgbAppearancePresetId(id)) {
+      viewer.applyRgbAppearancePreset(id);
+      // Auto-switch may have flipped the active cloud into RGB mode;
+      // re-sync the colour-mode chip so it reflects reality.
+      syncColorModeForActive();
+      syncInspectorVisuals();
+      persistPrefs();
+    }
+  },
+  onEdlPreset: (id) => {
+    viewer.setEdlPreset(id);
+    syncInspectorVisuals();
+    syncInspectorRendering();
+    persistPrefs();
+  },
+  onSkyPreset: (id) => {
+    if (isSkyPresetId(id)) {
+      viewer.setSky(id);
+      syncInspectorVisuals();
+      persistPrefs();
+    }
+  },
+  onWhiteBalance: (temperature, tint) => {
+    const current = viewer.rgbAppearance;
+    viewer.setRgbAppearance({ ...current, temperature, tint });
+    syncColorModeForActive();
+    syncInspectorVisuals();
+    persistPrefs();
+  },
+  onAutoBalance: () => {
+    // Auto-normalize against the active cloud's RGB. No-op when the
+    // active cloud has no RGB. Lazy-import keeps the analyser out of
+    // the startup chunk.
+    const id = activeId;
+    if (!id) return;
+    const cloud = viewer.getCloud(id);
+    if (!cloud || !cloud.colors) return;
+    void import('./render/rgbAutoNormalize').then(({ rgbAutoNormalize }) => {
+      const suggestion = rgbAutoNormalize({ colorsU8: cloud.colors! });
+      if (!suggestion) return;
+      viewer.setRgbAppearance(suggestion.settings);
+      syncInspectorVisuals();
+      persistPrefs();
+    });
+  },
+  onTheme: (name) => setTheme(name),
+  onSplatMode: (id) => {
+    viewer.setSplatMode(id);
+    syncInspectorRendering();
+    persistPrefs();
+  },
+});
+
+// v0.3.9 — paint the theme chip rail's active state to match whatever
+// was persisted (or 'dark' by default) so the user sees the correct
+// chip lit on first paint.
+inspector.syncTheme(currentTheme);
+
+// v0.3.9 — the inspector's CRS section now subscribes to the central
+// CrsService. When a scan loads, the service broadcasts the resolved
+// CRS and the inspector renders the override panel + label; when the
+// scan closes, the service broadcasts `null` and the inspector
+// restores its placeholder. This retires the duplicated push from
+// `refreshCrsForStaticCloud` / `closeScan` — there's now exactly one
+// write path for the CRS section, and `CrsService.current()` is the
+// single source of truth.
+crsService.subscribe((resolved) => {
+  if (resolved) inspector.setCrs(resolved);
+  else inspector.clearCrs();
+});
+
+// v0.3.9 — workflow recorder. The host owns the controller so it can
+// capture from every action handler in one place and dispatch back
+// through the same handlers on replay.
+const workflowController = new WorkflowController();
+stage.overlay.append(workflowController.badge);
+
+// v0.3.9 — command palette (Cmd-K / Ctrl-K). The host owns the
+// registry so every action stays close to the handler that powers
+// the corresponding tool dock / Inspector / keyboard surface — no
+// duplicate truth.
+const commandPalette = new CommandPalette();
+stage.overlay.append(commandPalette.element);
+
+// v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
+// action registry as the palette so adding a new action makes it
+// discoverable in both surfaces without a second touch.
+const shortcutSheet = new ShortcutSheet();
+stage.overlay.append(shortcutSheet.element);
+
+// v0.3.9 — onboarding tour. Mounts the overlay immediately so the
+// SVG / card DOM exists; auto-starts on the first session per
+// browser. "Replay tour" is added to the command palette below.
+const tourSession = new TourSession();
+const tourOverlay = new TourOverlay(tourSession);
+tourOverlay.mount();
+// Kick off the tour after the next animation frame so the layout has
+// settled — otherwise the spotlight bounding boxes can be measured
+// against a still-positioning page and land off-target.
+if (!tourSession.hasSeen()) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => tourSession.start());
+  });
+}
+
+/**
+ * Replay-time dispatcher — routes a recorded event back through the
+ * same handlers the user originally hit. Defined as a top-level
+ * helper so the workflow controller and the command palette
+ * "Replay workflow" action can share it.
+ */
+function dispatchWorkflowEvent(event: WorkflowEvent): void {
+  switch (event.type) {
+    case 'camera-preset':
+      viewer.setCameraPreset(event.name as 'top' | 'iso' | 'oblique' | 'planar');
+      break;
+    case 'frame-all':
+      viewer.frameAll();
+      break;
+    case 'theme':
+      if (event.name === 'dark' || event.name === 'light' || event.name === 'high-contrast') {
+        setTheme(event.name);
+        inspector.syncTheme(event.name);
+      }
+      break;
+    case 'tool': {
+      const desired = event.on;
+      if (event.tool === 'measure' && viewer.measureMode !== desired) {
+        viewer.setMeasureMode(desired);
+      } else if (event.tool === 'inspect' && viewer.inspectMode !== desired) {
+        viewer.setInspectMode(desired);
+      } else if (event.tool === 'annotate' && viewer.annotateMode !== desired) {
+        viewer.setAnnotateMode(desired);
+      }
+      break;
+    }
+  }
+}
+
+function buildActionRegistry(): Action[] {
+  const actions: Action[] = [];
+
+  // Camera presets — same handlers as T / I / O / P.
+  for (const name of CAMERA_PRESET_ORDER) {
+    const label = CAMERA_PRESET_LABEL[name];
+    actions.push({
+      id: `camera.${name}`,
+      title: `${label} view`,
+      section: 'Camera',
+      keys: CAMERA_PRESET_KEY[name],
+      hint: `Frame the scan with the ${label.toLowerCase()} preset.`,
+      keywords: ['view', 'pose', 'orbit'],
+      run: () => {
+        const fired = viewer.setCameraPreset(name);
+        if (fired) {
+          workflowController.capture({ type: 'camera-preset', name });
+          showLassoToast(`Camera · ${label} view.`);
+        }
+      },
+    });
+  }
+  // Reset / Frame All — exposed alongside the named presets.
+  actions.push({
+    id: 'camera.frame-all',
+    title: 'Frame all',
+    section: 'Camera',
+    hint: 'Fit the camera to every visible cloud.',
+    keywords: ['fit', 'reset', 'center', 'centre'],
+    run: () => {
+      viewer.frameAll();
+      workflowController.capture({ type: 'frame-all' });
+    },
+  });
+
+  // Theme — same handler as the Inspector chip rail.
+  for (const name of THEME_ORDER) {
+    actions.push({
+      id: `theme.${name}`,
+      title: `${THEME_LABEL[name]} theme`,
+      section: 'Theme',
+      hint: 'Switch the palette of the whole interface.',
+      keywords: ['appearance', 'colours', 'colors', 'accessibility'],
+      run: () => {
+        setTheme(name);
+        inspector.syncTheme(name);
+        workflowController.capture({ type: 'theme', name });
+      },
+    });
+  }
+
+  // Tool dock — Measure, Inspect, Annotate, Lasso volume.
+  actions.push(
+    {
+      id: 'tool.measure',
+      title: 'Measure',
+      section: 'Tools',
+      hint: 'Activate the measurement toolbar.',
+      keywords: ['distance', 'area', 'volume'],
+      run: () => {
+        const next = !viewer.measureMode;
+        viewer.setMeasureMode(next);
+        workflowController.capture({ type: 'tool', tool: 'measure', on: next });
+      },
+    },
+    {
+      id: 'tool.inspect',
+      title: 'Inspect point',
+      section: 'Tools',
+      hint: 'Read attributes of any point under the cursor.',
+      keywords: ['point info', 'attributes'],
+      run: () => {
+        const next = !viewer.inspectMode;
+        viewer.setInspectMode(next);
+        workflowController.capture({ type: 'tool', tool: 'inspect', on: next });
+      },
+    },
+    {
+      id: 'tool.annotate',
+      title: 'Annotate',
+      section: 'Tools',
+      hint: 'Drop notes, info, warnings, or issues on points.',
+      keywords: ['note', 'comment', 'mark'],
+      run: () => {
+        const next = !viewer.annotateMode;
+        viewer.setAnnotateMode(next);
+        workflowController.capture({ type: 'tool', tool: 'annotate', on: next });
+      },
+    },
+    {
+      id: 'tool.lasso-volume',
+      title: 'Lasso volume',
+      section: 'Tools',
+      keys: 'L',
+      hint: 'Draw a freeform shape to measure a 3D volume.',
+      keywords: ['select', 'shape', 'cut', 'fill'],
+      run: () => {
+        if (lassoVolumeTool.enabled) {
+          lassoVolumeTool.disable();
+          viewer.clearSelectionHighlight();
+          showLassoToast('Lasso off — back to navigation.');
+        } else {
+          lassoVolumeTool.enable();
+          showLassoToast('Lasso armed — draw a shape on the canvas.');
+        }
+        syncLassoButton();
+      },
+    },
+  );
+
+  // Workflow recorder — Start / Stop+Save / Open a file.
+  actions.push(
+    {
+      id: 'workflow.start',
+      title: 'Start recording workflow',
+      section: 'Workflow',
+      keys: 'Cmd-Shift-R',
+      // v0.3.10 — `.olvworkflow` files capture camera
+      // moves and tool actions ONLY (no scan data, no measurements). To
+      // replay one the recipient needs the same scan file already open
+      // locally. Without that disclosure users will share a workflow,
+      // the recipient opens it, nothing happens, and trust is lost the
+      // way it was with the pre-v0.3.10 "Share" button. The hint below
+      // sets that expectation at recording start, the stop-save title
+      // makes the file format explicit, and the save toast confirms
+      // both what was saved and what the recipient needs to use it.
+      hint:
+        'Records camera moves and tool actions only — to replay later you ' +
+        '(or the recipient) need the same scan open.',
+      keywords: ['record', 'macro', 'demo'],
+      run: () => {
+        if (workflowController.state === 'idle') {
+          workflowController.startRecording();
+          showLassoToast('Workflow · recording started. Use the badge to stop.');
+        }
+      },
+    },
+    {
+      id: 'workflow.stop-save',
+      title: 'Stop and save workflow (.olvworkflow)',
+      section: 'Workflow',
+      hint:
+        'Saves a replay of camera moves and tool actions — replay needs ' +
+        'the same scan loaded on the other end.',
+      keywords: ['export', 'finish', 'save'],
+      run: () => {
+        const workflow = workflowController.stopRecording();
+        if (workflow) {
+          workflowController.download(workflow);
+          showLassoToast(
+            'Workflow saved. Replay needs the same scan open on the other end.',
+          );
+        } else {
+          showLassoToast('Workflow · nothing recorded yet.');
+        }
+      },
+    },
+    {
+      id: 'workflow.load-replay',
+      title: 'Replay a workflow file…',
+      section: 'Workflow',
+      hint: 'Pick a .olvworkflow file and play it back.',
+      keywords: ['load', 'import', 'open', 'macro'],
+      run: () => {
+        const input = el('input', { className: 'olv-hidden' });
+        input.type = 'file';
+        input.accept = '.olvworkflow,application/json';
+        input.addEventListener('change', () => {
+          const file = input.files?.[0];
+          input.remove();
+          if (!file) return;
+          void (async () => {
+            try {
+              const workflow = await workflowController.loadFromFile(file);
+              workflowController.replay(workflow, dispatchWorkflowEvent);
+              showLassoToast(
+                `Workflow · playing ${workflow.events.length} event${workflow.events.length === 1 ? '' : 's'}.`,
+              );
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'unknown error';
+              showLassoToast(`Workflow · couldn't load file: ${msg}`);
+            }
+          })();
+        });
+        document.body.append(input);
+        input.click();
+      },
+    },
+  );
+
+  // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
+  // command palette so users who skipped or dismissed can re-trigger
+  // it from one keystroke (Cmd-K → "tour").
+  actions.push({
+    id: 'tour.replay',
+    title: 'Replay onboarding tour',
+    section: 'Help',
+    hint: 'Walks through the main tools — about 30 seconds.',
+    keywords: ['onboarding', 'tour', 'help', 'tutorial', 'guide', 'walkthrough'],
+    run: () => {
+      tourSession.reset();
+      tourSession.start();
+    },
+  });
+
+  // v0.3.9 — Keyboard shortcut sheet. Surfaces the sheet from the
+  // palette and lists its own binding (`?`) so users who discovered
+  // the palette via Cmd-K can find the sheet from the same surface.
+  actions.push({
+    id: 'help.shortcuts',
+    title: 'Show keyboard shortcuts',
+    section: 'Help',
+    keys: '?',
+    hint: 'Every action and key, grouped by section.',
+    keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
+    run: () => shortcutSheet.open(),
+  });
+
+  return actions;
+}
+
+const ACTION_REGISTRY = buildActionRegistry();
+const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
+if (duplicateActionIds.length > 0) {
+  // Throw at boot rather than silently surfacing two rows with the
+  // same id — duplicates almost always mean a copy-paste bug.
+  throw new Error(
+    `Command palette: duplicate action ids: ${duplicateActionIds.join(', ')}`,
+  );
+}
+commandPalette.setActions(ACTION_REGISTRY);
+shortcutSheet.setActions(ACTION_REGISTRY);
+
+// Cmd-K / Ctrl-K toggles the palette. Esc inside the palette closes
+// it (handled internally), so the universal Esc handler below
+// doesn't need to know about the palette.
+window.addEventListener('keydown', (e) => {
+  const isToggle = (e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey);
+  if (!isToggle) return;
+  e.preventDefault();
+  commandPalette.toggle();
+});
+
+// `?` toggles the keyboard shortcut sheet. Skipped when the user is
+// typing in any input / textarea / contenteditable so a `?` in a
+// rename field doesn't open the sheet. Esc inside the sheet closes
+// it (handled internally).
+window.addEventListener('keydown', (e) => {
+  if (e.key !== '?') return;
+  const target = e.target as HTMLElement | null;
+  const tag = target?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+  // Don't fight a chord — only the bare `?` (Shift+/ on most layouts).
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  e.preventDefault();
+  shortcutSheet.toggle();
+});
+
+// Cmd-Shift-R / Ctrl-Shift-R toggles workflow recording. When idle,
+// start a recording; when recording, stop and immediately download
+// the workflow file. Replay is reachable via the command palette.
+window.addEventListener('keydown', (e) => {
+  const isRecorder =
+    (e.key === 'r' || e.key === 'R') &&
+    e.shiftKey &&
+    (e.metaKey || e.ctrlKey);
+  if (!isRecorder) return;
+  e.preventDefault();
+  if (workflowController.state === 'recording') {
+    const workflow = workflowController.stopRecording();
+    if (workflow) {
+      workflowController.download(workflow);
+      // v0.3.10 — match the toast wording from the
+      // command-palette path so users see the same expectation either way.
+      showLassoToast(
+        'Workflow saved. Replay needs the same scan open on the other end.',
+      );
+    } else {
+      showLassoToast('Workflow · nothing recorded yet.');
+    }
+  } else if (workflowController.state === 'idle') {
+    workflowController.startRecording();
+    showLassoToast('Workflow · recording started. Use the badge to stop.');
+  }
+});
+
+/** Helper: type-guard a string before passing to the typed Viewer setter. */
+function isRgbAppearancePresetId(
+  id: string,
+): id is import('./render/rgbAppearance').RgbAppearancePresetId {
+  return (
+    id === 'natural' ||
+    id === 'survey' ||
+    id === 'rgb-inspection' ||
+    id === 'high-contrast' ||
+    id === 'drone-rgb' ||
+    id === 'mobile-lidar' ||
+    id === 'infrastructure' ||
+    id === 'photoreal-rgb'
+  );
+}
+function isSkyPresetId(
+  id: string,
+): id is import('./render/inspectionPresets').SkyPreset {
+  return (
+    id === 'deep' ||
+    id === 'survey-blue' ||
+    id === 'terrain-sand' ||
+    id === 'foliage-teal' ||
+    id === 'qa-cool' ||
+    id === 'studio-dark' ||
+    id === 'blueprint' ||
+    id === 'survey-light' ||
+    id === 'terrain' ||
+    id === 'black'
+  );
+}
+
+/**
+ * Visuals Studio — push the Viewer's Visuals Studio state into the
+ * Inspector chip rails + advanced sliders. Called whenever a callback
+ * fires, on session restore, and on initial paint after a scan loads.
+ */
+function syncInspectorVisuals(): void {
+  inspector.syncVisuals({
+    rgbAppearancePresetId: viewer.rgbAppearancePresetId,
+    edlPresetId: viewer.edlPresetId,
+    skyPresetId: viewer.skyPresetId,
+    temperature: viewer.rgbAppearance.temperature ?? 0,
+    tint: viewer.rgbAppearance.tint ?? 0,
+  });
+  // Advanced disclosure (Temperature, Tint, Auto-balance) only makes
+  // sense on streaming COPC tiles — for local LAZ the RGB preset
+  // chips already cover the use case and the sliders would mislead
+  // users into expecting an effect that does not land.
+  inspector.setAdvancedWbVisible(viewer.isStreamingActive());
+}
+
+const helpOverlay = new HelpOverlay();
+
+const dock = new ToolDock({
+  onFrameAll: () => viewer.frameAll(),
+  onSnapshot: () => void saveSnapshot(),
+  onShare: () => void copyShareLink(),
+  onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
+  onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
+  onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
+  onAnnotateToggle: () => viewer.setAnnotateMode(!viewer.annotateMode),
+  onHelp: () => helpOverlay.open(),
+  onClose: () => closeScan(),
+});
+// Start the dock hidden — the empty state shows no scan-dependent tools.
+// `setEmpty(false)` is called from every successful attach path.
+dock.setEmpty(true);
+// Same contract for the Inspector — hide its 13 collapsed sections + the
+// always-visible Point Size / EDL controls until a scan actually attaches.
+inspector.setEmpty(true);
+
+// Game-style navigation: mode switcher, speed slider, controls HUD.
+const navBar = new NavBar({
+  onMode: (mode) => viewer.setMode(mode),
+  onSpeed: (multiplier) => viewer.setNavSpeed(multiplier),
+  onReset: () => viewer.frameAll(),
+  onCameraPreset: (name) => {
+    const fired = viewer.setCameraPreset(name);
+    if (fired) {
+      showLassoToast(
+        `Camera · ${name[0].toUpperCase() + name.slice(1)} view.`,
+      );
+    }
+  },
+});
+
+const projectCard = new ProjectCard();
+
+// The streaming-COPC panel — phase, live status, and streaming controls.
+const streamingPanel = new StreamingPanel({
+  onColorMode: (mode) => viewer.setStreamingColorMode(mode),
+  onQuality: (quality) => {
+    streamingQuality = quality;
+    viewer.setStreamingQuality(quality, isPhone());
+  },
+  onPauseToggle: (paused) => {
+    if (paused) viewer.pauseStreaming();
+    else viewer.resumeStreaming();
+  },
+  onClearCache: () => viewer.clearStreamingCache(),
+  onSaveView: () => saveCurrentView(),
+  onApplyView: (index) => applyView(index),
+  onDeleteView: (index) => deleteView(index),
+});
+
+// The Measurements panel lists placed measurements; the controller drives it.
+const measurePanel = new MeasurePanel({
+  onDelete: (id) => viewer.measure.removeMeasurement(id),
+  onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
+  onExport: () => exportSession(),
+  onImport: (file) => void importSession(file),
+  onChainAggregate: (ids, dimension, operation) => {
+    // Filter the controller's measurements to the panel-selected set
+    // and aggregate via the pure-data module. The panel owns the
+    // selection state; the controller owns the data + unit context.
+    const all = viewer.measure.getMeasurements();
+    const wanted = new Set(ids);
+    const selected = all.filter((m) => wanted.has(m.id));
+    return aggregateMeasurements(selected, operation, dimension);
+  },
+  // v0.3.10 Profile-as-Deliverable — expose the controller's unit
+  // system to the panel so the profile chart's axis labels (chainage,
+  // elevation) read in the user's preferred units.
+  getUnitSystem: () => viewer.measure.unitSystem,
+});
+// The Annotations panel lists placed annotations; the controller drives it.
+const annotationPanel = new AnnotationPanel({
+  onActivate: (id) => viewer.jumpToAnnotation(id),
+  onEdit: (id, x, y) => viewer.annotate.beginEdit(id, x, y),
+  onDelete: (id) => viewer.annotate.remove(id),
+  onClearAll: () => viewer.annotate.clear(),
+  onHover: (id) => viewer.annotate.hover(id),
+});
+
+// Every listener-binding that synchronously dereferences `viewer.*` must
+// wait until the lazy-loaded Viewer chunk has resolved. The handlers
+// themselves are fine to define eagerly (they only fire on user input,
+// which comes long after the Viewer is up); only the binding calls need
+// to be deferred.
+void viewerLoaded.then(() => {
+  viewer.setNavListeners({
+    onModeChange: (mode) => navBar.setMode(mode),
+    onPointerLockChange: (locked) => navBar.setLocked(locked),
+    onToggleHelp: () => navBar.toggleHelp(),
+  });
+  viewer.setMeasureListeners({
+    onModeChange: (active) => {
+      dock.setMeasureActive(active);
+      // Hide the "click to look around" prompt — a picking tool owns the clicks.
+      navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
+      // The summary card and the tool hint share the top-centre slot.
+      if (active) projectCard.hide();
+      refreshMeasurePanel();
+    },
+  });
+  viewer.setInspectListeners({
+    onModeChange: (active) => {
+      dock.setInspectActive(active);
+      navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
+      if (active) projectCard.hide();
+    },
+  });
+  viewer.setProbeListeners({
+    onModeChange: (active) => {
+      dock.setProbeActive(active);
+      // The probe keeps navigation live, so the "look around" prompt stays.
+      if (active) projectCard.hide();
+    },
+  });
+  viewer.setAnnotateListeners({
+    onModeChange: (active) => {
+      dock.setAnnotateActive(active);
+      navBar.setMeasuring(viewer.measureMode || viewer.inspectMode || viewer.annotateMode);
+      if (active) projectCard.hide();
+      refreshAnnotationPanel();
+    },
+  });
+  viewer.measure.setOnChange(refreshMeasurePanel);
+  // Persist the unit choice whenever it changes.
+  viewer.measure.setOnUnitChange(persistPrefs);
+  viewer.annotate.setOnChange(refreshAnnotationPanel);
+
+  // Provenance override — when the user picks a capture type from the
+  // dropdown in the Inspector's Provenance section, rebuild the
+  // fingerprint for that explicit type. The signals row records that
+  // it's a user override so the surfacing stays honest.
+  inspector.setOnProvenanceOverride((type: CaptureType) => {
+    inspector.setProvenance(provenanceFor(type));
+  });
+  // CRS override picker — persists to localStorage via CrsOverrideStore,
+  // re-resolves against the active scan, and refreshes the Inspector
+  // so the new label + warning state appear immediately.
+  inspector.setOnCrsOverride(handleCrsOverride);
+
+  // Apply any preferences saved in a previous session, once the GPU backend
+  // has initialised (so a saved EDL choice overrides the backend's default
+  // gate). A `.catch` is paired with `.then` so a GPU-init rejection — the
+  // Viewer's `.ready` now propagates one instead of silently leaving the
+  // canvas blank — doesn't surface as an unhandled-promise warning. The
+  // Viewer itself has already logged the failure via `console.error`.
+  void viewer.ready.then(() => {
+    viewerReady = true;
+    // Backend chip is created with placeholder text "initialising…" — replace
+    // it the moment the renderer settles so the empty-state UI doesn't show
+    // the placeholder forever. Per-load callers still re-set this to handle
+    // the (extremely rare) backend swap mid-session.
+    try { dock.setBackend(viewer.activeBackend()); }
+    catch (err) { if (debug) console.warn('[dock] setBackend post-ready threw', err); }
+    // Degraded defaults for a weak device come first; a saved user
+    // preference, applied immediately after, still wins.
+    applyDeviceDefaults();
+    applyPrefs();
+    // If the browser advertised WebGPU but the renderer settled on the
+    // WebGL 2 fallback, surface a one-shot console note so a user who
+    // expected WebGPU performance can see why their FPS is lower. The
+    // dock backend label already shows the active backend, but a quiet
+    // diagnostic helps when someone reports a perf surprise. Logged
+    // once per session, never sent anywhere.
+    if (
+      viewer.activeBackend() === 'webgl2' &&
+      typeof navigator !== 'undefined' &&
+      'gpu' in navigator &&
+      navigator.gpu !== undefined &&
+      navigator.gpu !== null
+    ) {
+      recordUsage('error', 'webgpu-fallback');
+      console.info(
+        'OpenLiDARViewer: WebGPU was available but the renderer is using the WebGL 2 ' +
+          'fallback (typically a driver/feature-gap or a one-off adapter failure). ' +
+          'Try reloading the tab if you expected WebGPU performance.',
+      );
+    }
+    // Pre-warm the lazy load chunks once the GPU backend is ready.
+    // First-file-drop is the most painful "did the app freeze?" moment;
+    // this moves the ~200–500 ms chunk fetch + parse off the critical path
+    // so a user who opens the app and immediately drops a file sees the
+    // parser run instantly. Idle-callback so the prewarm doesn't compete
+    // with the renderer's first frames; falls back to setTimeout on
+    // browsers without rIC.
+    schedulePrewarm();
+  }).catch(() => {
+    // The GPU init failure has already been logged by the Viewer's own
+    // `.catch`. Swallow here so the browser's unhandled-rejection
+    // listener doesn't fire — the canvas is already blank, and a
+    // duplicate error in the console doesn't add information.
+  });
+});
+
+const dropZone = new DropZone(document.body, (file) => void handleFile(file));
+stage.overlay.append(dropZone.toast);
+
+// v0.3.10 trust-pass — install the Playwright seam under `?test=1`.
+// The flag is gated so production traffic NEVER sees the surface; the
+// e2e suite explicitly opens `/?test=1` to enable it. The API
+// exposes the minimum needed to drive a measurement programmatically
+// (set kind → arm → place points → finish / clear), bypassing the
+// canvas raycast that headless CI can't reliably pretend at. The
+// `measure.spec.ts` `test.fixme` documented exactly this need.
+if (testApi) {
+  void viewerLoaded.then((v) => {
+    const placePoint = (x: number, y: number, z: number): void => {
+      if (![x, y, z].every((c) => typeof c === 'number' && Number.isFinite(c))) {
+        throw new Error(
+          'placeMeasurementPoint: { x, y, z } must all be finite numbers',
+        );
+      }
+      v.measure.addPoint([x, y, z]);
+    };
+    (window as unknown as { __OLV_TEST_API__: unknown }).__OLV_TEST_API__ = {
+      version: '1',
+      setMeasureMode: (on: boolean) => v.setMeasureMode(on),
+      setMeasureKind: (kind: string) => {
+        // The MeasureController validates the kind itself; we just pass
+        // through. Invalid kinds throw a clear error at the controller
+        // level so the test sees a precise failure.
+        v.measure.setKind(kind as Parameters<typeof v.measure.setKind>[0]);
+      },
+      placeMeasurementPoint: (p: { x: number; y: number; z: number }) => {
+        placePoint(p.x, p.y, p.z);
+      },
+      finishMeasurement: () => v.measure.finishCurrent(),
+      clearMeasurements: () => v.clearMeasurements(),
+      getMeasurementCount: () => v.measure.getMeasurements().length,
+    };
+    // Diagnostic so a stray production page with the flag still shows
+    // up in the console — discourages anyone from depending on it
+    // outside the e2e suite.
+    console.warn(
+      'OpenLiDARViewer: ?test=1 enabled — window.__OLV_TEST_API__ ' +
+        'is mounted. This is for Playwright only; do not ship URLs ' +
+        'with this flag to end users.',
+    );
+  });
+}
+
+// The nav bar is core interaction — shown in embed mode too. Hidden until a
+// scan is loaded. The touch hint rides alongside it (phones only via CSS).
+navBar.element.classList.add('olv-hidden');
+stage.overlay.append(navBar.element, navBar.prompt, navBar.touchHint);
+
+// Overlay wiring synchronously reads `viewer.measureElements`,
+// `viewer.inspectElements`, etc. — defer the whole block until the lazy
+// Viewer chunk has resolved. The DOM elements the user can interact with
+// before this resolves (start screen empty state, sample buttons, URL
+// field, drop zone) are all owned by Stage / DropZone and don't depend on
+// the Viewer.
+void viewerLoaded.then(() => {
+  if (!bareMode) {
+    // The tool overlays go in first so the panels paint above them.
+    stage.overlay.append(viewer.measureElements.overlay);
+    stage.overlay.append(viewer.measureElements.hint);
+    stage.overlay.append(viewer.inspectElements.overlay);
+    stage.overlay.append(viewer.inspectElements.hint);
+    stage.overlay.append(viewer.annotateElements.overlay);
+    stage.overlay.append(viewer.annotateElements.hint);
+    stage.overlay.append(inspector.element);
+    stage.overlay.append(streamingPanel.element);
+    // The measurement and annotation panels share a stacked left-side column.
+    const leftPanels = document.createElement('div');
+    leftPanels.className = 'olv-left-panels';
+    leftPanels.append(measurePanel.element, annotationPanel.element);
+    stage.overlay.append(leftPanels);
+    stage.overlay.append(dock.dock);
+    stage.overlay.append(dock.backend);
+    stage.overlay.append(projectCard.element);
+    // The point-info card sits above the panels so its Copy button is reachable.
+    stage.overlay.append(viewer.inspectElements.card);
+    // The annotation editor card floats above everything while it is open.
+    stage.overlay.append(viewer.annotateElements.editor);
+    // The live-probe readout follows the cursor above the panels.
+    stage.overlay.append(viewer.probeElements.readout);
+    // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
+    stage.overlay.append(inspector.sheetToggle);
+    // The help overlay is a modal — appended last so it sits above everything.
+    stage.overlay.append(helpOverlay.element);
+
+    // Global keyboard shortcuts — single-key tool access, suppressed while
+    // typing. Only wired for the full app, never the minimal embed view.
+    // A tool shortcut needs a loaded scan and is inert behind the help modal.
+    const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen;
+    bindShortcuts({
+      onAnnotate: () => {
+        if (toolsReady()) viewer.setAnnotateMode(!viewer.annotateMode);
+      },
+      onMeasure: () => {
+        if (toolsReady()) viewer.setMeasureMode(!viewer.measureMode);
+      },
+      onInspect: () => {
+        if (toolsReady()) viewer.setInspectMode(!viewer.inspectMode);
+      },
+      onSaveView: () => {
+        if (toolsReady()) saveCurrentView();
+      },
+      onDeleteSelection: () => {
+        const id = viewer.annotate.selectedId;
+        if (id && !helpOverlay.isOpen) viewer.annotate.remove(id);
+      },
+      onToggleHelp: () => helpOverlay.toggle(),
+      onUndo: () => {
+        if (!helpOverlay.isOpen) viewer.annotate.undo();
+      },
+      onRedo: () => {
+        if (!helpOverlay.isOpen) viewer.annotate.redo();
+      },
+    });
+  } else {
+    // Bare mode (embed / ?ui=minimal): the dock and panels are hidden, but
+    // ?measurements=1 / ?annotations=1 can each surface one tool's layer.
+    const panels: HTMLElement[] = [];
+    if (embedConfig.forceMeasurements) {
+      stage.overlay.append(viewer.measureElements.overlay, viewer.measureElements.hint);
+      panels.push(measurePanel.element);
+    }
+    if (embedConfig.forceAnnotations) {
+      stage.overlay.append(
+        viewer.annotateElements.overlay,
+        viewer.annotateElements.hint,
+        viewer.annotateElements.editor,
+      );
+      panels.push(annotationPanel.element);
+    }
+    if (panels.length > 0) {
+      const leftPanels = document.createElement('div');
+      leftPanels.className = 'olv-left-panels';
+      leftPanels.append(...panels);
+      stage.overlay.append(leftPanels);
+    }
+  }
+});
+
+// the cross-frame control bridge is now lazy-loaded.
+// `?embed=1` is a minority of traffic; non-embed loads should not pay
+// the ~5 KB embed-bridge cost.
+async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge').startEmbedBridge> {
+  const m = await import('./ui/embedBridge');
+  return m.startEmbedBridge;
+}
+
+if (embed) {
+  void startEmbedBridgeLazy().then((startEmbedBridge) => startEmbedBridge({
+    onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
+    onJumpCamera: (camera) => viewer.applyCameraState(camera),
+    onToggleLayer: (id, visible) => viewer.setCloudVisible(id, visible),
+    onFocusAnnotation: (id) => viewer.jumpToAnnotation(id),
+  }));
+}
+
+// `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).
+if (embedConfig.autoloadSample) {
+  const sample = SAMPLES.find((s) => s.id === embedConfig.autoloadSample);
+  if (sample) void loadFromUrl(sample.url, sample.name);
+}
+
+// `?copc=<url>` — open a remote COPC scan on startup. A hosted COPC file is
+// thus a shareable, bookmarkable deep link — the format's core use case. The
+// streaming pipeline reads it progressively over HTTP range requests.
+const copcUrlParam = urlParams.get('copc');
+if (copcUrlParam) void handleRemoteUrl(copcUrlParam);
+
+// The developer performance overlay — surfaced only by `?debug=1` or
+// `?benchmark=1`. It polls the viewer for live frame stats on a throttled
+// cadence; the load path feeds it telemetry and any benchmark result.
+if (debug || benchmark) {
+  // The diagnostics chunk is fetched only when one of the flags is set —
+  // it never weighs on a normal-session bundle.
+  void loadDiagnostics().then((d) => {
+    debugOverlay = new d.DebugOverlay(() => ({
+      backend: viewerReady ? viewer.activeBackend() : null,
+      stats: viewerReady ? viewer.frameStats() : null,
+      streaming: streamingDebugSample(),
+    }));
+    stage.overlay.append(debugOverlay.element);
+    debugOverlay.start();
+  });
+}
+
+/** Sample live COPC streaming counters for the debug overlay, or null. */
+function streamingDebugSample(): StreamingDebugStats | null {
+  // Returns null before the lazy Viewer chunk has resolved — the debug
+  // overlay polls on a timer from the moment it starts, which can fire
+  // before `viewer` is non-null.
+  if (!viewerReady) return null;
+  const cloud = viewer.streamingCloud;
+  const scheduler = viewer.streamingScheduler;
+  if (!cloud || !scheduler) return null;
+  const counts = cloud.counts();
+  const stats = scheduler.stats();
+  const cs = scheduler.cacheStats();
+  const sample: StreamingDebugStats = {
+    knownNodes: counts.known,
+    visibleNodes: stats.visible,
+    queuedNodes: stats.queued,
+    loadingNodes: stats.loading,
+    residentNodes: counts.resident,
+    displayedPoints: cloud.residentPointCount,
+    sourcePoints: cloud.sourcePointCount,
+    cacheBytes: cs.byteSize,
+    decodedBytes: estimateDecodedBytes(cloud.residentPointCount),
+    gpuBytes: estimateGpuBytes(cloud.residentPointCount),
+    schedulerMs: stats.lastTickMs,
+    cacheHits: cs.hits,
+    cacheMisses: cs.misses,
+    cacheEvictions: cs.evictions,
+  };
+  if (streamingBenchmark) {
+    sample.thrashEvents = streamingBenchmark.thrashEvents;
+    const tier = streamingBenchmark.tierCounters();
+    sample.nodesReady = tier.nodesReady;
+    sample.nodesEvicted = tier.nodesEvicted;
+    const recent = streamingBenchmark.recentSchedulerTickStats(60);
+    if (recent.count > 0) {
+      sample.schedulerRecent = {
+        count: recent.count,
+        p50: recent.p50,
+        p95: recent.p95,
+        max: recent.max,
+      };
+    }
+  }
+  return sample;
+}
+
+/** Run every registered validation module and flatten the rows. */
+function runModules(cloud: PointCloud): AnalysisRow[] {
+  const rows: AnalysisRow[] = [];
+  for (const module of registry.list()) rows.push(...module.run(cloud).rows);
+  return rows;
+}
+
+/**
+ * Synthesize a scan-report row set for a streaming cloud.
+ *
+ * The static `runModules()` path expects a fully-resident `PointCloud`
+ * (Float32Array positions, classification arrays, etc.). For a streaming
+ * COPC or EPT we only ever hold a thin resident shell, so the static
+ * modules can't run as-is. We instead pull the equivalent facts directly
+ * from the streaming source's header + COPC info / EPT schema, which
+ * carry everything the report needs: total point count, source-declared
+ * bounds, spacing, octree depth, and the LAS VLR sensor / software
+ * strings the provenance classifier already feeds from.
+ *
+ * The output is intentionally the same `AnalysisRow` shape the static
+ * report uses, so the Inspector's Scan-report section renders uniformly
+ * and the PDF Report Engine can consume it without a separate code path.
+ */
+function runStreamingModules(cloud: {
+  readonly kind: 'copc' | 'ept';
+  readonly name: string;
+  readonly sourcePointCount: number;
+  readonly localBounds?: () => readonly [number, number, number, number, number, number];
+  readonly metadata?: {
+    readonly header?: {
+      min: readonly [number, number, number];
+      max: readonly [number, number, number];
+      pointDataRecordFormat?: number;
+    };
+    readonly info?: { spacing?: number };
+    readonly captureSensor?: string;
+    readonly sourceSoftware?: string;
+  };
+  readonly maxDepth?: () => number;
+  readonly octree?: { nodes: () => readonly unknown[] };
+}): AnalysisRow[] {
+  const rows: AnalysisRow[] = [];
+  const info = (label: string, value: string): AnalysisRow =>
+    ({ label, value, status: 'info' });
+
+  rows.push(info('Source', cloud.kind === 'ept' ? 'EPT (Entwine Point Tile)' : 'COPC (Cloud Optimized Point Cloud)'));
+  if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
+    rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
+  }
+  rows.push(info('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
+
+  // Bounds — prefer the header's source-coordinate min/max for accuracy.
+  const header = cloud.metadata?.header;
+  if (header) {
+    const w = header.max[0] - header.min[0];
+    const d = header.max[1] - header.min[1];
+    const h = header.max[2] - header.min[2];
+    rows.push(info('Width', `${w.toFixed(1)} m`));
+    rows.push(info('Depth', `${d.toFixed(1)} m`));
+    rows.push(info('Height', `${h.toFixed(1)} m`));
+    const footprintArea = w * d;
+    if (footprintArea > 0 && cloud.sourcePointCount > 0) {
+      const density = cloud.sourcePointCount / footprintArea;
+      rows.push(info('Density', `${density.toFixed(1)} pts/m²`));
+      rows.push(info('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
+    }
+  }
+
+  // Streaming-specific: octree structure.
+  if (cloud.metadata?.info?.spacing !== undefined) {
+    rows.push(info('Octree root spacing', `${cloud.metadata.info.spacing.toFixed(2)} m`));
+  }
+  if (cloud.maxDepth) {
+    try { rows.push(info('Octree depth', String(cloud.maxDepth()))); }
+    catch { /* defensive — depth not always computable mid-load */ }
+  }
+  if (cloud.octree) {
+    try { rows.push(info('Octree nodes', cloud.octree.nodes().length.toLocaleString('en-US'))); }
+    catch { /* defensive */ }
+  }
+
+  // Provenance metadata mirrored from the LAS VLRs the COPC header
+  // carries — same fields the static report shows.
+  if (cloud.metadata?.captureSensor) {
+    rows.push(info('Capture Sensor', cloud.metadata.captureSensor));
+  }
+  if (cloud.metadata?.sourceSoftware) {
+    rows.push(info('Source Software', cloud.metadata.sourceSoftware));
+  }
+
+  return rows;
+}
+
+/** The file name without its extension. */
+function baseName(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
+/**
+ * pre-warm the Studio chunk after a cloud finishes loading. The
+ * fetch + parse happens in the background while the user is exploring the
+ * scene, so the first Image-export click immediately runs the export
+ * instead of waiting on the chunk. Idempotent — the dynamic import is
+ * cached after the first call, so re-firing is free.
+ */
+let _studioPrewarmed = false;
+async function prewarmExportStudio(): Promise<void> {
+  if (_studioPrewarmed) return;
+  _studioPrewarmed = true;
+  try {
+    await loadExportStudio();
+  } catch {
+    // Pre-warm is best-effort; an actual export click will retry the import
+    // and surface the error there if it persists.
+    _studioPrewarmed = false;
+  }
+}
+
+/**
+ * pre-warm the heaviest LOAD chunks on app idle so the first
+ * file-drop runs the parser without waiting ~200-500 ms for the lazy
+ * `loadLas` + `loadStreamingPointCloud` + `loadCopcWorkerClient` chunks
+ * to download and parse. The chunks ARE the COPC streaming pipeline plus
+ * the static LAS/LAZ reader — together they cover ~85% of the formats
+ * users open. Other format loaders (PCD, PTX, PTS, GLTF) stay strictly
+ * lazy because their on-disk frequency is low.
+ *
+ * Scheduling: `requestIdleCallback` so the warm doesn't compete with the
+ * renderer's first frames; falls back to a 1.5 s `setTimeout` on browsers
+ * that don't support rIC (Safari < 17). Idempotent — each load chunk's
+ * dynamic import is cached, so re-firing is free.
+ */
+/**
+ * Immediate pre-warm for a known-imminent open. Triggered when the
+ * curated-dataset dropdown changes — the user has signalled intent,
+ * we have think-time before the explicit Open click, so fire every
+ * chunk that the streaming path will need behind the user's
+ * decision-making instead of waiting for the click. URL-pattern
+ * dispatch keeps the EPT-only and COPC-only chunks separated;
+ * the chunks are idempotent, so re-firing on click is free.
+ */
+function prewarmForUrl(url: string): void {
+  // Force the idle-time pre-warm to fire immediately rather than
+  // waiting on requestIdleCallback. Cold-start tabs may not yet
+  // have produced an idle window when the picker is opened.
+  if (!_loadersPrewarmed) {
+    _loadersPrewarmed = true;
+    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
+    void loadCopcWorkerClient()
+      .then(({ CopcWorkerClient }) => {
+        if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+      })
+      .catch(() => { /* swallow — actual COPC open retries */ });
+  }
+  // EPT path lazy-imports a separate chunk; pull it in too if the
+  // URL looks like an `ept.json` manifest.
+  const isEpt = /(?:^|\/)ept\.json(?:\?|#|$)/i.test(url);
+  if (isEpt) {
+    void loadEpt().catch(() => { /* swallow — open() retries */ });
+  }
+}
+
+let _loadersPrewarmed = false;
+function schedulePrewarm(): void {
+  if (_loadersPrewarmed) return;
+  const fire = (): void => {
+    if (_loadersPrewarmed) return;
+    _loadersPrewarmed = true;
+    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
+    // Instantiate the COPC decode worker singleton during idle time.
+    // The constructor spawns a Web Worker and waits for its WASM
+    // (`laz-perf`) module to initialise — about 150-250 ms on a warm
+    // network and ~400 ms on a cold one. Doing it here moves the cost
+    // off the first scan-open's critical path so the toast-to-first-
+    // node time is dominated by the actual range fetch, not by worker
+    // boot. Subsequent opens already hit the cached singleton; this
+    // change benefits only the cold-start path, which is the most
+    // painful one to debug or demo against.
+    void loadCopcWorkerClient()
+      .then(({ CopcWorkerClient }) => {
+        if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+      })
+      .catch(() => { /* swallow — actual COPC open retries */ });
+    // Static LAS/LAZ loader sits in its own chunk too — pre-warm it for
+    // the "drop a non-COPC LAZ file" path which is the other common case.
+    void import('./io/loadLas').catch(() => { /* swallow */ });
+  };
+  type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
+  const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
+  if (typeof rIC === 'function') {
+    rIC(fire, { timeout: 2000 });
+  } else {
+    setTimeout(fire, 1500);
+  }
+}
+
+/**
+ * Assemble + render a PDF report from the live state.
+ * Lazy-loads the report engine (which pulls pdf-lib) on first call.
+ * Returns a Promise so the caller can surface errors via toast/alert.
+ *
+ * Pulls the active streaming OR static cloud's metadata, the current
+ * annotations + measurements + unit system, and assembles a
+ * `ReportInputs`. Visuals + technical notes are queued for a UI-coupled
+ * follow-up (the user will pre-render image exports + type notes via a
+ * follow-on Studio-panel dialog). The engineering-
+ * inspection template renders cleanly without visuals.
+ */
+async function generateReportPdf(templateId: string): Promise<void> {
+  // the report flow needs the Viewer state; ensure it's loaded.
+  await viewerLoaded;
+  const report = await loadReportEngine();
+  const streamingCloud = viewer.streamingCloud;
+  const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
+  if (!streamingCloud && !staticCloud) {
+    throw new Error('Load a scan first.');
+  }
+
+  // Build the MetadataInputs the composer + dataset-summary section need.
+  let metadata: import('./report').MetadataInputs;
+  let exportFileStem: string;
+  if (streamingCloud) {
+    const b = streamingCloud.localBounds();
+    const w = b[3] - b[0], d = b[4] - b[1], h = b[5] - b[2];
+    const density = w > 0 && d > 0
+      ? streamingCloud.sourcePointCount / (w * d)
+      : NaN;
+    const crs = streamingCloud.crs();
+    const modes = streamingCloud.availableColorModes();
+    metadata = {
+      fileName: streamingCloud.name,
+      format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
+      sourcePointCount: streamingCloud.sourcePointCount,
+      width: w, depth: d, height: h, density,
+      hasRgb: modes.includes('rgb'),
+      hasIntensity: modes.includes('intensity'),
+      hasClassification: modes.includes('classification'),
+      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+    };
+    exportFileStem = baseName(streamingCloud.name);
+  } else if (staticCloud) {
+    const b = staticCloud.bounds();
+    const w = b.max[0] - b.min[0], d = b.max[1] - b.min[1], h = b.max[2] - b.min[2];
+    const density = w > 0 && d > 0 ? staticCloud.pointCount / (w * d) : NaN;
+    const crs = staticCloud.metadata?.crs;
+    metadata = {
+      fileName: staticCloud.name,
+      format: staticCloud.sourceFormat.toUpperCase(),
+      sourcePointCount: staticCloud.pointCount,
+      width: w, depth: d, height: h, density,
+      hasRgb: !!staticCloud.colors,
+      hasIntensity: !!staticCloud.intensity,
+      hasClassification: !!staticCloud.classification,
+      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+    };
+    exportFileStem = baseName(staticCloud.name);
+  } else {
+    throw new Error('Load a scan first.');
+  }
+
+  // Derive the cover title from the actual template so each of the six
+  // templates produces a distinct, recognisable PDF. The user-reported
+  // bug — "all reports show the same export" — was driven by a hardcoded
+  // `title: 'Scan Report'` that made the cover identical across every
+  // template choice. Pulling `label` off `getReportTemplate(templateId)`
+  // gives "Engineering Inspection", "QA Validation", "Survey Summary",
+  // "Terrain Review", "Technical Documentation", or "Scan Acceptance"
+  // as appropriate. The dataset name moves into the subtitle so both
+  // axes (template type, source scan) are surfaced on the cover.
+  const validatedTemplateId = templateId as import('./report').ReportTemplateId;
+  const template = report.getReportTemplate(validatedTemplateId);
+  const coverTitle = template?.label ?? 'Scan Report';
+  // Compute the same provenance fingerprint the Inspector's Provenance
+  // section already shows, and feed it to the report. Templates that
+  // include the `provenance` section get a real capture-type +
+  // confidence + cited accuracy bounds — auto-computed, varies per
+  // scan, gives every export per-template differentiation without
+  // requiring the user to take measurements or annotate first.
+  //
+  // Wrapped because a malformed cloud shape shouldn't sink the whole
+  // PDF — the section gracefully renders "No provenance fingerprint
+  // available" when the fingerprint is undefined.
+  let provenanceFp: import('./report').ReportProvenanceFingerprint | undefined;
+  try {
+    const activeCloud = activeId ? viewer.getCloud(activeId) : null;
+    const streamingCloud = viewer.streamingCloud;
+    if (activeCloud) {
+      const f = classifyProvenance(signalsForStaticCloud(activeCloud as never));
+      provenanceFp = {
+        label: f.label,
+        confidence: f.confidence,
+        signals: f.signals,
+        bounds: f.bounds.map((b) => ({ label: b.label, value: b.value, source: b.source })),
+        disclaimer: f.disclaimer,
+      };
+    } else if (streamingCloud) {
+      const f = classifyProvenance(signalsForStreamingCloud(streamingCloud as never));
+      provenanceFp = {
+        label: f.label,
+        confidence: f.confidence,
+        signals: f.signals,
+        bounds: f.bounds.map((b) => ({ label: b.label, value: b.value, source: b.source })),
+        disclaimer: f.disclaimer,
+      };
+    }
+  } catch (err) {
+    if (debug) console.warn('[report] classifyProvenance threw', err);
+  }
+  const inputs = report.composeReportInputs({
+    templateId: validatedTemplateId,
+    title: coverTitle,
+    subtitle: metadata.fileName,
+    metadata,
+    visuals: [],          // user-pre-rendered Studio exports
+    annotations: viewer.annotate.getAnnotations(),
+    measurements: viewer.measure.getMeasurements(),
+    unitSystem: viewer.measure.unitSystem,
+    provenance: provenanceFp,
+  });
+
+  const result = await report.generateReport(inputs);
+  // The download filename now mirrors the template choice so the
+  // user's Downloads folder distinguishes a Survey Summary from an
+  // Engineering Inspection at a glance.
+  downloadBlob(`${exportFileStem}-${validatedTemplateId}.pdf`, result.blob);
+  // Per-section render failures are caught by the engine's isolation pass
+  // and surfaced as a `failedSections` list — the PDF still ships but
+  // misses those sections. Tell the user so they're not surprised by a
+  // partial deliverable, and record it for local diagnostics so the
+  // partial-PDF mode is visible in the session-stats panel.
+  if (result.failedSections.length > 0) {
+    recordUsage('error', 'report:partial');
+    const list = result.failedSections.join(', ');
+    dropZone.setError(
+      `Report rendered without these sections: ${list}. ` +
+        'Check for unusual characters in the affected inputs and try again.',
+    );
+  }
+}
+
+/** Trigger a client-side download of text content. */
+function downloadText(filename: string, text: string): void {
+  const blob = new Blob([text], { type: 'text/plain' });
+  downloadBlob(filename, blob);
+}
+
+/**
+ * Trigger a client-side download of a `Blob`. Used by the Visual Export
+ * Studio for PNG downloads where the exporter has already produced a Blob.
+ */
+function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Push the Viewer's current render-quality state into the Inspector chips.
+ * Used by callbacks that change a single chip's state but want every chip
+ * — including the touch-model chip's active class — to re-sync.
+ */
+/**
+ * Re-sync the colour-mode chip rail to whatever the active cloud is
+ * actually rendering as. Called after Visuals Studio RGB ops because
+ * `Viewer._ensureRgbColorMode` may have flipped the cloud into RGB
+ * mode silently; without this re-sync the Inspector chip would lag
+ * behind the renderer.
+ */
+function syncColorModeForActive(): void {
+  if (!activeId) return;
+  const cloud = viewer.getCloud(activeId);
+  if (!cloud) return;
+  const mode = viewer.colorModeOf(activeId);
+  if (!mode) return;
+  if (mode !== currentColorMode) currentColorMode = mode;
+  inspector.setColorModes(availableModes(cloud), currentColorMode);
+}
+
+function syncInspectorRendering(): void {
+  inspector.syncRendering({
+    pointSize: viewer.pointSize,
+    edlEnabled: viewer.edlEnabled,
+    edlStrength: viewer.edlStrength,
+    pointSizeMode: viewer.pointSizeMode,
+    antialiasing: viewer.antialiasing,
+    twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
+    splatMode: viewer.splatMode,
+  });
+}
+
+/** Read the current viewer settings and persist them for the next session. */
+function persistPrefs(): void {
+  savePrefs({
+    pointSize: viewer.pointSize,
+    edlEnabled: viewer.edlEnabled,
+    edlStrength: viewer.edlStrength,
+    pointSizeMode: viewer.pointSizeMode,
+    antialiasing: viewer.antialiasing,
+    unitSystem: viewer.measure.unitSystem,
+    touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
+  });
+}
+
+/**
+ * Apply preferences saved in a previous session. Each key is applied only when
+ * it was stored, so anything absent keeps the viewer's own default — including
+ * the backend-dependent EDL default.
+ */
+/**
+ * Apply degraded rendering defaults on a low-capability device — Eye Dome
+ * Lighting and antialiasing off — so a weak GPU stays interactive. Runs before
+ * `applyPrefs`, so an explicit saved preference still takes precedence.
+ */
+function applyDeviceDefaults(): void {
+  if (deviceCapsValue.tier === 'low') {
+    viewer.setEdlEnabled(false);
+    viewer.setAntialiasing(false);
+  }
+}
+
+function applyPrefs(): void {
+  const p = loadPrefs();
+  if (p.pointSize !== undefined) viewer.setPointSize(p.pointSize);
+  if (p.edlEnabled !== undefined) viewer.setEdlEnabled(p.edlEnabled);
+  if (p.edlStrength !== undefined) viewer.setEdlStrength(p.edlStrength);
+  if (p.pointSizeMode !== undefined) viewer.setPointSizeMode(p.pointSizeMode);
+  if (p.antialiasing !== undefined) viewer.setAntialiasing(p.antialiasing);
+  if (p.unitSystem !== undefined) viewer.measure.setUnitSystem(p.unitSystem);
+  if (p.touchModel !== undefined) {
+    viewer.setTwoFingerTwistEnabled(p.touchModel === 'standard');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provenance fingerprint plumbing
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Refresh the Inspector's provenance panel from a freshly loaded static cloud. */
+function refreshProvenance(cloud: {
+  readonly sourceFormat: string;
+  readonly pointCount: number;
+}): void {
+  const signals = signalsForStaticCloud(cloud as never);
+  const f = classifyProvenance(signals);
+  inspector.setProvenance(f);
+}
+
+/** Refresh the Inspector's provenance panel from a freshly attached streaming cloud. */
+function refreshProvenanceFromStreaming(cloud: {
+  readonly kind: 'copc' | 'ept';
+  readonly sourcePointCount?: number;
+}): void {
+  const signals = signalsForStreamingCloud(cloud as never);
+  const f = classifyProvenance(signals);
+  inspector.setProvenance(f);
+}
+
+/**
+ * Push a cheap Dataset Intelligence summary into the Inspector's
+ * card from data already in hand at load time. This populates the
+ * Point Density row from declared `pointCount / bbox volume` and the
+ * Streaming Coverage row from the source kind. No point iteration,
+ * no engine analysis — just stable header-derived facts the user
+ * can see immediately. Heavier metric work would land later through
+ * the TerrainEngine, but is not part of v0.3.9.
+ */
+function refreshDatasetIntelligenceFromStaticCloud(cloud: {
+  readonly pointCount: number;
+  bounds(): { min: [number, number, number]; max: [number, number, number] };
+}): void {
+  try {
+    const b = cloud.bounds();
+    const dx = b.max[0] - b.min[0];
+    const dy = b.max[1] - b.min[1];
+    const dz = b.max[2] - b.min[2];
+    const bboxVolume = dx * dy * dz;
+    inspector.setDatasetIntelligence({
+      pointCount: cloud.pointCount,
+      bboxVolume: Number.isFinite(bboxVolume) && bboxVolume > 0 ? bboxVolume : undefined,
+      coverageMeta: {
+        coverage: 'full',
+        sourcePointCount: cloud.pointCount,
+        analyzedPointCount: cloud.pointCount,
+        // v0.3.10 honesty pass — this path runs at load time from
+        // header data ALONE. No terrain analysis has happened yet, so
+        // we have nothing meaningful to say about confidence. The
+        // prior code pushed a hardcoded `60` here, which rendered as
+        // a green/yellow chip and implied the engine had measured
+        // stability. Leaving the field unset lets the summariser
+        // emit `band: 'unknown'` + `label: '—'`, matching the
+        // "engine-only signals stay '—' until the engine runs"
+        // contract the README documents for the other rows.
+        warnings: [],
+      },
+      metricVersion: 'v0.3.9',
+    });
+  } catch {
+    // A cheap summary failure must never block load completion.
+    inspector.clearDatasetIntelligence();
+  }
+}
+
+function refreshDatasetIntelligenceFromStreamingCloud(cloud: {
+  readonly sourcePointCount?: number;
+  readonly metadata?: {
+    readonly header?: {
+      readonly min?: readonly [number, number, number] | number[];
+      readonly max?: readonly [number, number, number] | number[];
+    };
+  };
+}): void {
+  try {
+    const sourcePoints = cloud.sourcePointCount;
+    const hMin = cloud.metadata?.header?.min;
+    const hMax = cloud.metadata?.header?.max;
+    let bboxVolume: number | undefined;
+    if (hMin && hMax && hMin.length >= 3 && hMax.length >= 3) {
+      const dx = hMax[0] - hMin[0];
+      const dy = hMax[1] - hMin[1];
+      const dz = hMax[2] - hMin[2];
+      const v = dx * dy * dz;
+      if (Number.isFinite(v) && v > 0) bboxVolume = v;
+    }
+    inspector.setDatasetIntelligence({
+      pointCount: sourcePoints,
+      bboxVolume,
+      coverageMeta: {
+        coverage: 'resident-only',
+        sourcePointCount: sourcePoints ?? 0,
+        // No resident count yet at attach time; the streaming layer
+        // refines this as nodes land.
+        analyzedPointCount: 0,
+        // v0.3.10 honesty pass — see the static path for the full
+        // reasoning. No engine measurement → no confidence number.
+        // Leaving the field unset surfaces "—" instead of the prior
+        // hardcoded `50` which read as a yellow chip and implied a
+        // streaming-specific stability measurement.
+        warnings: [],
+      },
+      metricVersion: 'v0.3.9',
+    });
+  } catch {
+    inspector.clearDatasetIntelligence();
+  }
+}
+
+/** The dataset key (per-scan key for the CRS override store) currently in scope. */
+let _currentCrsDatasetKey: string | undefined;
+// CRS state is owned by `crsService` (declared near the imports).
+// The per-scan refresh paths below still push the resolved CRS into
+// the inspector / point inspector while ALSO publishing to the
+// service so both surfaces agree. Read sites that used to consult a
+// module-local cache now go through `crsService.current()` /
+// `crsService.validation()`.
+
+/**
+ * Resolve a `CrsInfo` (from LAS/LAZ VLR, COPC, or EPT) + an optional
+ * persisted user override into a single `ResolvedCrs` for the Inspector.
+ *
+ * Rule of precedence:
+ *  1. User override (when present and non-default) wins.
+ *  2. Otherwise the detected `CrsInfo` is used.
+ *  3. Otherwise we surface "unknown".
+ */
+function resolveCloudCrs(
+  cloudName: string,
+  detected: CrsInfo | undefined,
+  detectionSource: CrsSource,
+): ResolvedCrs {
+  const datasetKey = crsKeyForDataset(cloudName);
+  _currentCrsDatasetKey = datasetKey;
+  const override = getCrsOverrideForDataset(datasetKey);
+  if (override) {
+    if (override.kind === 'local') {
+      return {
+        kind: 'local',
+        name: 'Local coordinates (no CRS)',
+        linearUnit: 'unknown',
+        linearUnitToMetres: 1,
+        source: 'user-override',
+        confidence: 'high',
+        userConfirmed: true,
+      };
+    }
+    if (typeof override.epsg === 'number') {
+      const entry = getCrsEntry(override.epsg);
+      return {
+        kind: override.kind,
+        name: entry?.label ?? `EPSG:${override.epsg}`,
+        epsg: override.epsg,
+        linearUnit: override.kind === 'geographic' ? 'unknown' : 'metre',
+        linearUnitToMetres: 1,
+        source: 'user-override',
+        confidence: 'high',
+        userConfirmed: true,
+      };
+    }
+  }
+  const fromDetected = resolvedFromCrsInfo(detected, detectionSource);
+  return fromDetected ?? unknownCrs();
+}
+
+/** Refresh the Inspector's CRS section after a static-cloud load. */
+function refreshCrsForStaticCloud(cloud: {
+  readonly name: string;
+  readonly origin?: readonly [number, number, number];
+  readonly metadata?: { readonly crs?: CrsInfo | null };
+}): void {
+  const resolved = resolveCloudCrs(
+    cloud.name,
+    cloud.metadata?.crs ?? undefined,
+    'las-vlr',
+  );
+  // Publish to the central service so subscribers (today: the lasso
+  // volume gate via `crsService.validation()`; tomorrow: the inspector
+  // override panel via `crsService.subscribe`) see the same value
+  // `resolveCloudCrs` produced. The detection signal is the loader's
+  // VLR; any override has already been applied inside resolveCloudCrs.
+  // The inspector listens via `crsService.subscribe` (wired at boot);
+  // publishing here is the single notification path.
+  crsService.resolveForScan({
+    name: cloud.name,
+    detected: cloud.metadata?.crs ?? undefined,
+    source: 'las-vlr',
+  });
+  // Push the origin + CRS into the point inspector so World + Lat/Lon
+  // rows render against the loaded scan. Wrapped in a viewer-loaded
+  // guard because the viewer chunk may still be loading the very first
+  // time this fires.
+  if (viewerReady) {
+    try { viewer.setInspectCoordinateContext({ origin: cloud.origin, crs: resolved }); }
+    catch (err) { if (debug) console.warn('[crs] setInspectCoordinateContext (static) threw', err); }
+  }
+}
+
+/** Refresh the Inspector's CRS section after a streaming-cloud open. */
+function refreshCrsForStreamingCloud(cloud: {
+  readonly name: string;
+  readonly kind: 'copc' | 'ept';
+  readonly renderOrigin?: readonly [number, number, number];
+  crs(): CrsInfo | undefined;
+}): void {
+  const source: CrsSource = cloud.kind === 'ept' ? 'ept-srs' : 'copc-meta';
+  const resolved = resolveCloudCrs(cloud.name, cloud.crs(), source);
+  // Inspector listens via the boot-time `crsService.subscribe`; no
+  // direct push needed.
+  crsService.resolveForScan({
+    name: cloud.name,
+    detected: cloud.crs(),
+    source,
+  });
+  if (viewerReady) {
+    try {
+      viewer.setInspectCoordinateContext({
+        origin: cloud.renderOrigin,
+        crs: resolved,
+      });
+    } catch (err) {
+      if (debug) console.warn('[crs] setInspectCoordinateContext (streaming) threw', err);
+    }
+  }
+}
+
+/**
+ * Handle a user CRS override picked from the Inspector. Persists into
+ * the local-first override store, re-resolves against the active scan,
+ * and refreshes the Inspector so the new label + warning state show.
+ */
+function handleCrsOverride(override: {
+  epsg: number | null;
+  kind: 'projected' | 'geographic' | 'local';
+}): void {
+  if (!_currentCrsDatasetKey) return;
+  // epsg === null with kind === 'local' (tag for "use detected") is the
+  // sentinel the Inspector sends when the user picks "Use detected" or
+  // "Reset to detected". Clear the persisted override and re-derive.
+  if (override.epsg === null && override.kind === 'local') {
+    // Distinguish the two "epsg === null" cases. The Inspector emits the
+    // SAME shape for both — "local coordinates" and "reset to detected".
+    // Treat the no-EPSG override as "clear and re-derive"; the user gets
+    // the detected CRS back, which is the safer fallback. An explicit
+    // local-coordinates choice is rare in practice and can be added as
+    // a follow-up button.
+    clearCrsOverrideForDataset(_currentCrsDatasetKey);
+  } else {
+    setCrsOverrideForDataset(_currentCrsDatasetKey, {
+      epsg: override.epsg,
+      kind: override.kind,
+    });
+    recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);
+  }
+  // Re-run resolution and refresh — uses whichever cloud is currently active.
+  const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
+  const streamingCloud = viewer.streamingCloud;
+  if (streamingCloud) {
+    refreshCrsForStreamingCloud(
+      streamingCloud as {
+        readonly name: string;
+        readonly kind: 'copc' | 'ept';
+        crs(): CrsInfo | undefined;
+      },
+    );
+  } else if (staticCloud) {
+    refreshCrsForStaticCloud(staticCloud);
+  }
+}
+
+/** High-water mark for measurement count — used to detect new placements. */
+let _lastMeasurementCount = 0;
+/** Refresh the Measurements panel's contents and visibility. */
+function refreshMeasurePanel(): void {
+  measurePanel.update(viewer.measure.getSummaries());
+  const measurements = viewer.measure.getMeasurements();
+  const hasMeasurements = measurements.length > 0;
+  measurePanel.setVisible(viewer.measureMode || hasMeasurements);
+  // Local-first counter — fires only when a new measurement is placed.
+  // Categorical (the kind) only; never the coordinates, never the name.
+  if (measurements.length > _lastMeasurementCount) {
+    const newest = measurements[measurements.length - 1];
+    if (newest) recordUsage('measurement', newest.kind);
+  }
+  _lastMeasurementCount = measurements.length;
+}
+
+/** Refresh the Annotations panel's contents and visibility. */
+function refreshAnnotationPanel(): void {
+  annotationPanel.update(viewer.annotate.getSummaries());
+  const hasAnnotations = viewer.annotate.getAnnotations().length > 0;
+  annotationPanel.setVisible(viewer.annotateMode || hasAnnotations);
+}
+
+/** Whether a scan is currently loaded — gates the tool keyboard shortcuts. */
+function hasScan(): boolean {
+  return viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+}
+
+/** Capture the current camera viewpoint as a named saved view. */
+function saveCurrentView(): void {
+  savedViews.push({ name: `View ${++viewCounter}`, pose: viewer.getCameraPose() });
+  refreshViewsUI();
+}
+
+/** Push the saved-view names to whichever panel is currently shown. */
+function refreshViewsUI(): void {
+  const names = savedViews.map((v) => v.name);
+  if (viewer.hasStreamingCloud) streamingPanel.setViews(names);
+  else inspector.setViews(names);
+}
+
+/** Glide the camera to a saved view. */
+function applyView(index: number): void {
+  const view = savedViews[index];
+  if (view) viewer.applyCameraPose(view.pose);
+}
+
+/** Delete a saved view and refresh the list. */
+function deleteView(index: number): void {
+  savedViews.splice(index, 1);
+  refreshViewsUI();
+}
+
+/**
+ * Copy a link that reproduces the current view — camera, colour mode, point
+ * sizing, and the selected annotation — to the clipboard. No scan data is
+ * encoded; the recipient opens the same scan and the view is restored on top.
+ */
+async function copyShareLink(): Promise<void> {
+  const state: ShareState = {
+    camera: viewer.getCameraState(),
+    pointSize: viewer.pointSize,
+    pointSizeMode: viewer.pointSizeMode,
+  };
+  if (currentColorMode) state.colorMode = currentColorMode;
+  const selected = viewer.annotate.selectedId;
+  if (selected) state.selectedAnnotation = selected;
+
+  const encoded = encodeShareState(state);
+  const link = `${window.location.origin}${window.location.pathname}#s=${encoded}`;
+  try {
+    await navigator.clipboard.writeText(link);
+  } catch {
+    // Clipboard unavailable (e.g. an insecure context) — leave the state in
+    // the address bar so the user can still copy the link from there.
+    window.location.hash = `s=${encoded}`;
+  }
+}
+
+/** Restore a decoded share-link state onto the freshly loaded scan. */
+function applyShareState(state: ShareState, cloud: PointCloud): void {
+  if (state.pointSize !== undefined) viewer.setPointSize(state.pointSize);
+  if (state.pointSizeMode === 'adaptive' || state.pointSizeMode === 'fixed') {
+    viewer.setPointSizeMode(state.pointSizeMode);
+  }
+  if (state.colorMode && activeId) {
+    const modes = availableModes(cloud);
+    if (modes.includes(state.colorMode as ColorMode)) {
+      currentColorMode = state.colorMode as ColorMode;
+      viewer.setColorMode(activeId, currentColorMode);
+      inspector.setColorModes(modes, currentColorMode);
+    }
+  }
+  // The camera tween runs last, so it wins over the load-time framing.
+  if (state.camera) viewer.applyCameraState(state.camera);
+  // `select` is a safe no-op when the annotation is not in this scan.
+  if (state.selectedAnnotation) viewer.annotate.select(state.selectedAnnotation);
+}
+
+/**
+ * Export the inspection session — measurements, annotations and saved views —
+ * as JSON. The whole inspection state round-trips, so a review can be closed
+ * and reopened without loss.
+ */
+function exportSession(): void {
+  const cloud = activeId ? viewer.getCloud(activeId) : undefined;
+  const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
+
+  // populate the v3 fields so the .olvsession captures
+  // the full working state, not just the inspection annotations. The
+  // optional fields are only emitted when there's something meaningful
+  // to write — a session exported with no scan loaded won't pollute
+  // the file with bogus render defaults.
+  const streamingCloud = viewer.streamingCloud;
+  const exportFileName = streamingCloud?.name
+    ?? (cloud ? cloud.name : null);
+
+  let scanSummary: import('./io/session').SessionScanSummary | undefined;
+  if (streamingCloud) {
+    const b = streamingCloud.localBounds();
+    const crs = streamingCloud.crs();
+    scanSummary = {
+      fileName: streamingCloud.name,
+      sourcePoints: streamingCloud.sourcePointCount,
+      width: b[3] - b[0],
+      depth: b[4] - b[1],
+      height: b[5] - b[2],
+      ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit } : {}),
+    };
+  } else if (cloud) {
+    const b = cloud.bounds();
+    scanSummary = {
+      fileName: cloud.name,
+      sourcePoints: cloud.pointCount,
+      width: b.max[0] - b.min[0],
+      depth: b.max[1] - b.min[1],
+      height: b.max[2] - b.min[2],
+      ...(cloud.metadata?.crs
+        ? { crs: cloud.metadata.crs.name, crsUnit: cloud.metadata.crs.linearUnit }
+        : {}),
+    };
+  }
+
+  const json = serializeSession({
+    upAxis,
+    origin: cloud ? cloud.origin : [0, 0, 0],
+    unitSystem: viewer.measure.unitSystem,
+    views: savedViews.map((v) => ({ name: v.name, camera: v.pose })),
+    measurements: viewer.measure.getMeasurements(),
+    annotations: viewer.annotate.getAnnotations(),
+    // v3 additions — present only when there's a cloud loaded.
+    camera: cloud || streamingCloud ? viewer.getCameraState() : undefined,
+    render: {
+      pointSize: viewer.pointSize,
+      edlEnabled: viewer.edlEnabled,
+      edlStrength: viewer.edlStrength,
+      pointSizeMode: viewer.pointSizeMode,
+      antialiasing: viewer.antialiasing,
+    },
+    colorMode: viewer.activeColorMode(),
+    scanSummary,
+  });
+  // `.olvsession` is the new canonical extension; the file is
+  // still JSON internally (Mac/Linux's Open With dialog associates the
+  // double-click flow). Filename derived from the active scan name when
+  // possible so a folder of exports doesn't collide.
+  const stem = exportFileName ? baseName(exportFileName) : 'openlidarviewer';
+  downloadText(`${stem}.olvsession`, json);
+}
+
+/** Import an inspection session: restore measurements, annotations and views. */
+async function importSession(file: File): Promise<void> {
+  try {
+    const session = parseSession(await file.text());
+    viewer.measure.loadMeasurements(session.measurements);
+    viewer.annotate.loadAnnotations(session.annotations);
+    savedViews = session.views.map((v) => ({ name: v.name, pose: v.camera }));
+    viewCounter = savedViews.length;
+    inspector.setViews(savedViews.map((v) => v.name));
+    refreshMeasurePanel();
+    refreshAnnotationPanel();
+
+    // apply the v3 optional fields when present. Each
+    // one is independently guarded so a partial v3 file (e.g. one with
+    // a camera but no render settings) restores what's there without
+    // assuming the rest. A v1 / v2 file has none of these — fall through
+    // to the existing behaviour.
+    if (session.render) {
+      viewer.setPointSize(session.render.pointSize);
+      viewer.setPointSizeMode(session.render.pointSizeMode);
+      viewer.setEdlEnabled(session.render.edlEnabled);
+      viewer.setEdlStrength(session.render.edlStrength);
+      viewer.setAntialiasing(session.render.antialiasing);
+      inspector.syncRendering({
+        pointSize: viewer.pointSize,
+        edlEnabled: viewer.edlEnabled,
+        edlStrength: viewer.edlStrength,
+        pointSizeMode: viewer.pointSizeMode,
+        antialiasing: viewer.antialiasing,
+        twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
+    splatMode: viewer.splatMode,
+      });
+    }
+    if (session.colorMode) {
+      // Apply to every static cloud; the streaming subsystem too.
+      for (const id of viewer.clouds()) viewer.setColorMode(id, session.colorMode);
+      viewer.setStreamingColorMode(session.colorMode);
+    }
+    if (session.camera) {
+      // Fly the live camera to the saved viewpoint — the session capture's
+      // "where I was looking when I saved" guarantee.
+      viewer.applyCameraState(session.camera);
+    }
+  } catch (err) {
+    dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
+  }
+}
+
+/** Load a dropped or sampled File: parse, render, and populate the Inspector. */
+async function handleFile(file: File): Promise<void> {
+  // One load at a time. The shared parse worker decodes a single file; a
+  // second load started mid-flight would hijack the first one's worker. The
+  // in-progress load carries a Cancel control if the user wants to switch.
+  if (loading) return;
+  // ensure the lazy-loaded Viewer is ready before touching it.
+  await viewerLoaded;
+  loading = true;
+  const controller = new AbortController();
+  dropZone.setProgress(`Reading ${file.name}…`);
+  dropZone.setCancelHandler(() => controller.abort());
+  try {
+    // COPC files take the streaming pipeline, not the static loader. The
+    // range-source module is part of the lazy COPC chunk.
+    const headSlice = await file.slice(0, 4096).arrayBuffer();
+    if (detectCopc(headSlice).isCopc) {
+      const { LocalFileRangeSource } = await loadLocalFileRangeSource();
+      await openStreamingCopc(
+        new LocalFileRangeSource(file),
+        file.name,
+        controller.signal,
+      );
+      return;
+    }
+    // A static load replaces any open streaming scan.
+    if (viewer.hasStreamingCloud) closeStreaming();
+
+    // Phones get a tighter point budget — limited GPU memory and fill-rate.
+    // The dropped file is wrapped in a LocalFileSource — the source
+    // abstraction; v0.3 streaming sources slot in beside it.
+    const source = new LocalFileSource(file);
+    const result = await source.load(
+      {
+        onProgress: (u) => dropZone.setProgress(formatProgress(u), u.fraction),
+        onPreload: (lines) => dropZone.setPreload(lines),
+      },
+      {
+        // The point budget is the device's safe render budget — full on a
+        // capable machine, reduced on a weak one to keep the GPU stable.
+        budget: deviceCapsValue.renderBudget,
+        isMobile: isPhone(),
+        deviceMemoryGB: deviceMemoryGB(),
+        signal: controller.signal,
+      },
+    );
+    await viewer.ready;
+
+    dropZone.setProgress(formatProgress({ stage: 'uploading' }));
+    stage.hideEmptyState();
+    const uploadStartedAt = performance.now();
+    const id = viewer.addCloud(result.cloud);
+    const gpuUploadMs = performance.now() - uploadStartedAt;
+    activeId = id;
+    // Local-first counter — categorical source format only; never the file name.
+    try { recordUsage('scan-open', result.cloud.sourceFormat); }
+    catch (err) { if (debug) console.warn('[usage] recordUsage threw', err); }
+    // Provenance fingerprint — pure metadata classification, surfaced in
+    // the Inspector's "Provenance" section. Wrapped because a malformed
+    // input shape would have aborted the rest of the post-load setup
+    // (including the navBar reveal further down).
+    try { refreshProvenance(result.cloud); }
+    catch (err) { if (debug) console.warn('[provenance] refreshProvenance threw', err); }
+    // CRS — detected from the loaded cloud's metadata, merged with any
+    // persisted user override. Wrapped because a malformed cloud
+    // shape shouldn't break the rest of the load.
+    try { refreshCrsForStaticCloud(result.cloud); }
+    catch (err) { if (debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
+
+    dropZone.setProgress(formatProgress({ stage: 'rendering' }));
+    const renderStartedAt = performance.now();
+    // A freshly opened scan starts in the orbit overview, then glides in.
+    viewer.setMode('orbit');
+    viewer.frameAll();
+    const firstRenderMs = performance.now() - renderStartedAt;
+
+    const mode = defaultMode(result.cloud);
+    currentColorMode = mode;
+    viewer.setColorMode(id, mode);
+
+    // ── CRITICAL UI REVEAL — runs BEFORE any inspector / module setup ────
+    // The dock backend indicator + NavBar (Orbit/Walk/Fly mode switcher
+    // + speed slider) must reveal even if a downstream inspector call
+    // throws. Without this ordering, a failure in `runModules` or
+    // `inspector.setReport` left the user with a rendered scan they
+    // couldn't navigate around, and the backend indicator stuck at
+    // "initialising…". Critical reveal first, decorations second.
+    dock.setBackend(viewer.activeBackend());
+    // v0.3.6 design-audit fix: reveal the dock at attach. It stays hidden
+    // through the empty state so eight dimmed tools don't clutter the
+    // primary CTA on mobile.
+    dock.setEmpty(false);
+    inspector.setEmpty(false);
+    dock.setMeasureEnabled(true);
+    dock.setInspectEnabled(true);
+    dock.setProbeEnabled(true);
+    dock.setAnnotateEnabled(true);
+    dock.setCloseEnabled(true);
+    navBar.element.classList.remove('olv-hidden');
+    navBar.setMode('orbit');
+    navBar.flashHelp();
+    document.body.classList.add('olv-has-scan');
+    if (isPhone()) navBar.flashTouchHint();
+
+    // A new scan resets the saved viewpoints and annotations.
+    savedViews = [];
+    viewCounter = 0;
+    viewer.annotate.clear();
+    refreshAnnotationPanel();
+
+    // ── Inspector setup — wrapped in defensive try/catches so a single
+    //    failing analysis module or inspector call can't abort the rest.
+    //    Each isolated block restores its own slice; the navigation
+    //    above remains usable even if every block below fails.
+    try {
+      inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
+      inspector.setColorModes(availableModes(result.cloud), mode);
+      inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
+      refreshDatasetIntelligenceFromStaticCloud(
+        result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
+      );
+    } catch (err) {
+      if (debug) console.warn('[inspector] cloud + details setup threw', err);
+    }
+    try {
+      inspector.setReport(runModules(result.cloud));
+    } catch (err) {
+      if (debug) console.warn('[inspector] runModules + setReport threw', err);
+    }
+    try {
+      inspector.setViews([]);
+    } catch (err) {
+      if (debug) console.warn('[inspector] setViews threw', err);
+    }
+    // Visual Export Studio — a scan is now loaded; turn on the image-
+    // export buttons so the user can capture it. Pre-warm the lazy Studio
+    // chunk in the background so the first export click feels instant
+    // instead of waiting on the ~7 KB gzip fetch + parse. Pure fire-and-
+    // forget; we don't await the result.
+    try {
+      inspector.setImageExportEnabled(true);
+      // Per-mode gating — disable buttons whose mode the loaded cloud can't
+      // satisfy (Normal map on a LAZ, etc.) so the user sees the constraint
+      // before clicking rather than as a post-click error toast.
+      inspector.setImageExportAvailability(viewer.availableImageExportModes());
+    } catch (err) {
+      if (debug) console.warn('[inspector] setImageExportEnabled threw', err);
+    }
+    void prewarmExportStudio();
+
+    // A share link, if one opened this page, restores its view onto this scan.
+    if (pendingShareState) {
+      try {
+        applyShareState(pendingShareState, result.cloud);
+      } catch (err) {
+        if (debug) console.warn('[share] applyShareState threw', err);
+      }
+      pendingShareState = null;
+    }
+
+    // The render-quality controls reflect the viewer's state — EDL defaults
+    // depend on the GPU backend, known only once `viewer.ready` resolved.
+    try {
+      inspector.syncRendering({
+        pointSize: viewer.pointSize,
+        edlEnabled: viewer.edlEnabled,
+        edlStrength: viewer.edlStrength,
+        pointSizeMode: viewer.pointSizeMode,
+        antialiasing: viewer.antialiasing,
+        twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
+    splatMode: viewer.splatMode,
+      });
+    } catch (err) {
+      if (debug) console.warn('[inspector] syncRendering threw', err);
+    }
+
+    if (!bareMode) showProjectCard(result.cloud, result.originalPointCount);
+
+    // Developer diagnostics — the merged telemetry feeds the debug console
+    // block, the performance overlay, and (under ?benchmark=1) a benchmark.
+    if ((debug || benchmark) && result.telemetry) {
+      const telemetry = { ...result.telemetry, gpuUploadMs, firstRenderMs };
+      if (debug) {
+        console.log(
+          '%cOpenLiDARViewer — load telemetry',
+          'font-weight:600;color:#22dcff',
+          '\n' + formatTelemetry(telemetry),
+        );
+      }
+      debugOverlay?.setTelemetry(telemetry);
+      if (benchmark) {
+        const text = formatBenchmarkResult(
+          buildBenchmarkResult(
+            result.cloud.name,
+            result.cloud.sourceFormat,
+            result.cloud.pointCount,
+            telemetry,
+            // Surface the header-declared point count when the source had
+            // one, so the benchmark output disambiguates "4M of 100M (4 %)"
+            // from "4M of 4M (100 %)" — a budget-capped load shouldn't
+            // read identically to a full one.
+            result.cloud.declaredPointCount,
+          ),
+        );
+        console.log(
+          '%cOpenLiDARViewer — benchmark',
+          'font-weight:600;color:#22dcff',
+          '\n' + text,
+        );
+        debugOverlay?.setBenchmark('benchmark\n' + text);
+      }
+    }
+    dropZone.setCancelHandler(null);
+    dropZone.setProgress(null);
+  } catch (err) {
+    dropZone.setCancelHandler(null);
+    if (err instanceof LoadCancelledError) {
+      // A cancelled load is a quiet no-op — no error toast, nothing was added.
+      dropZone.setProgress(null);
+    } else {
+      // The toast shows a clear, categorised message; the raw error still
+      // reaches the console for developers under ?debug=1.
+      if (debug) console.error('OpenLiDARViewer — load error', err);
+      dropZone.setError(describeLoadError(err));
+      // A streaming open that failed mid-flight leaves no scan — tidy up.
+      closeStreaming();
+    }
+  } finally {
+    loading = false;
+  }
+}
+
+/**
+ * Open a COPC scan from any range-readable source — a local file or a remote
+ * HTTP URL — through the streaming pipeline: read the metadata and hierarchy,
+ * attach the streaming cloud to the viewer, and show the streaming panel.
+ * Point data then streams in progressively, driven by the camera.
+ */
+async function openStreamingCopc(
+  range: RangeSource,
+  displayName: string,
+  signal: AbortSignal,
+): Promise<void> {
+  // Race the lazy COPC + streaming chunks against `viewer.ready` so a
+  // user who opens a scan during the first ~half-second of page load
+  // (a common demo path) doesn't see chunk-fetch and GPU init run
+  // serially. By the time `viewer.ready` resolves the chunks are
+  // usually cached too — `await chunksPromise` below typically
+  // resolves immediately. On a cold start, the parallelism saves
+  // roughly the smaller of the two latencies (often 100-300 ms).
+  const chunksPromise = Promise.all([
+    loadStreamingPointCloud(),
+    loadCopcWorkerClient(),
+    loadStreamingColors(),
+  ]);
+
+  // Show the streaming panel as soon as we know we're on the COPC branch —
+  // before `await viewer.ready`, which on cold WebGPU runners can sit for
+  // 10–18 s compiling shaders. The panel reads "Loading metadata…" while
+  // the viewer warms up, so the user gets immediate confirmation that the
+  // file was recognised as COPC instead of staring at the empty state.
+  streamingPanel.setPhase('Loading metadata…');
+  streamingPanel.show();
+
+  await viewer.ready;
+  // Inspector stays visible during streaming — it carries the sections
+  // that work uniformly against either source type (Scan report,
+  // Provenance, Coordinate system, Image export, Report PDF). The
+  // static-only sections are hidden via `setStreamingMode(true)` when
+  // the streaming cloud finishes attaching; until then the Inspector
+  // shows its empty placeholders, which is fine.
+  inspector.element.classList.remove('olv-hidden');
+  dropZone.setProgress('Reading COPC hierarchy…');
+
+  // The streaming benchmark collector is created when either `?benchmark=1`
+  // (which adds a session report on close) or `?debug=1` (which surfaces the
+  // live thrash / scheduler-histogram readout in the overlay) is set. Off by
+  // default — no overhead in normal sessions. The diagnostics chunk loads
+  // lazily on first need; cached afterwards.
+  if (benchmark || debug) {
+    const d = await loadDiagnostics();
+    streamingBenchmark = new d.StreamingBenchmark();
+    coarseStableFired = false;
+    range = new d.InstrumentedRangeSource(range, (n) => {
+      streamingBenchmark?.recordNetworkBytes(n);
+    });
+  }
+
+  // Await the hoisted chunk fetches; if `viewer.ready` was the slow
+  // path (cold WebGPU init) this is a no-op.
+  const [{ StreamingPointCloud }, { CopcWorkerClient }, streamingColors] =
+    await chunksPromise;
+
+  const cloud = await StreamingPointCloud.open(range, displayName, signal);
+  if (signal.aborted) throw new LoadCancelledError();
+
+  if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+  // Wire the per-chunk decode timing hook only when a benchmark is collecting;
+  // clearing it on close keeps a non-benchmark session free of any callback.
+  copcDecoder.onDecodeMs = streamingBenchmark
+    ? (ms) => streamingBenchmark?.recordDecodeMs(ms)
+    : undefined;
+
+  // A streaming scan is exclusive — clear any open static layers first.
+  for (const id of viewer.clouds()) {
+    viewer.removeCloud(id);
+    inspector.removeCloud(id);
+  }
+  stage.hideEmptyState();
+  // Local-first counter — categorical only ('copc' or 'ept'); never the URL.
+  recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
+  // Provenance fingerprint for streaming clouds — fed with the cloud's
+  // declared point count + extent so the classifier has signal even though
+  // the resident set is small. Wrapped because a malformed cloud shape
+  // shouldn't break the rest of the streaming load (CRS, attach, color
+  // modes, navBar reveal).
+  try { refreshProvenanceFromStreaming(cloud); }
+  catch (err) { if (debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err); }
+  // CRS for streaming clouds — same merge rule as the static path.
+  try {
+    refreshCrsForStreamingCloud(cloud as unknown as {
+      readonly name: string;
+      readonly kind: 'copc' | 'ept';
+      crs(): CrsInfo | undefined;
+    });
+  } catch (err) {
+    if (debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
+  }
+  await viewer.attachStreamingCloud(
+    cloud,
+    copcDecoder,
+    streamingQuality,
+    isPhone(),
+    streamingBenchmark,
+  );
+  viewer.setMode('orbit');
+  viewer.frameAll();
+
+  streamingPanel.setColorModes(
+    streamingColors.availableStreamingModes(cloud.metadata),
+    streamingColors.defaultStreamingMode(cloud.metadata),
+  );
+  streamingPanel.setQuality(streamingQuality);
+  streamingPanel.setPhase('Streaming coarse geometry…');
+  // Visual Export Studio — a streaming COPC cloud is now attached;
+  // the image-export buttons in the Inspector can light up. The streaming
+  // path doesn't go through `inspector.addCloud`, so the gate has to flip
+  // here too. Pre-warm the Studio chunk for the same reason as above.
+  inspector.setImageExportEnabled(true);
+  // Per-mode gating — streaming COPC / EPT rarely carry normals or
+  // classification; disable the corresponding buttons at the source.
+  inspector.setImageExportAvailability(viewer.availableImageExportModes());
+  // Switch the Inspector into streaming layout — hides Layers / Color by
+  // / Point size / Rendering / Export (their streaming-equivalents are
+  // in the StreamingPanel) and pins the panel to the lower-right so
+  // both panels coexist on desktop.
+  inspector.setStreamingMode(true);
+  try { inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
+  catch (err) { if (debug) console.warn('[inspector] setDetail (streaming) threw', err); }
+  try { inspector.setReport(runStreamingModules(cloud)); }
+  catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
+  try {
+    refreshDatasetIntelligenceFromStreamingCloud(cloud);
+  } catch (err) {
+    if (debug) console.warn('[inspector] dataset intel (streaming) threw', err);
+  }
+  void prewarmExportStudio();
+
+  // The metadata-driven scan summary, and a fresh saved-views list.
+  const header = cloud.metadata.header;
+  streamingPanel.setSummary({
+    fileName: cloud.name,
+    pointFormat: header.pointDataRecordFormat,
+    sourcePoints: cloud.sourcePointCount,
+    width: header.max[0] - header.min[0],
+    depth: header.max[1] - header.min[1],
+    height: header.max[2] - header.min[2],
+    spacing: cloud.metadata.info.spacing,
+    octreeDepth: cloud.maxDepth(),
+    nodeCount: cloud.octree.nodes().length,
+    // explicit format tag so the Scan Intelligence panel renders
+    // "COPC LAZ · PDRF N" for COPC and "EPT · binary · N attrs" for EPT.
+    format: 'copc',
+  });
+  savedViews = [];
+  viewCounter = 0;
+  refreshViewsUI();
+
+  // Measure, annotate, inspect, probe and close all work on a streaming scan:
+  // each resident COPC node keeps its full decoded per-point attributes.
+  // Reveal the dock the same way the static-load path does.
+  dock.setEmpty(false);
+  inspector.setEmpty(false);
+  dock.setMeasureEnabled(true);
+  dock.setAnnotateEnabled(true);
+  dock.setInspectEnabled(true);
+  dock.setProbeEnabled(true);
+  dock.setCloseEnabled(true);
+  dock.setBackend(viewer.activeBackend());
+  navBar.element.classList.remove('olv-hidden');
+  navBar.setMode('orbit');
+  navBar.flashHelp();
+  document.body.classList.add('olv-has-scan');
+
+  startStreamingStatusPolling();
+  dropZone.setProgress(null);
+}
+
+/**
+ * the remote-URL router. Dispatches to the EPT handler when the
+ * URL is an `ept.json` entry-point, otherwise routes to COPC. This is the
+ * single seam every URL-loading code path goes through (the dropzone's
+ * onOpenUrl callback, the `?copc=` query-param bootstrap, the embed-bridge
+ * url-open message). Keeps format dispatch in one place so adding 3D
+ * Tiles support in a future format here is a one-line addition.
+ */
+async function handleRemoteUrl(url: string): Promise<void> {
+  // EPT detection is URL-pattern only — fast, no network, no schema fetch.
+  // The check is inlined here (mirroring `detectEptUrl` in `eptDetect.ts`)
+  // so the routing decision is synchronous and doesn't depend on the EPT
+  // lazy chunk loading — a malformed URL still surfaces an error toast even
+  // when the EPT or Viewer chunks aren't reachable.
+  let isEpt = false;
+  try {
+    const u = new URL(url);
+    isEpt = /(?:^|\/)ept\.json$/i.test(u.pathname);
+  } catch {
+    isEpt = /(?:^|\/)ept\.json(?:\?|#|$)/i.test(url);
+  }
+  if (isEpt) return handleRemoteEpt(url);
+  return handleRemoteCopc(url);
+}
+
+/**
+ * open a remote EPT dataset by its `ept.json` URL. Mirrors the
+ * `handleRemoteCopc` flow:
+ *   1. Validate the URL.
+ *   2. Fetch + parse + validate `ept.json` (typed failure paths surface
+ *      as user-readable error messages, same as COPC's malformed-file
+ *      path).
+ *   3. Open an `EptStreamingPointCloud` against an HTTP-backed transport.
+ *   4. Hand it to the same `viewer.attachStreamingCloud` the COPC flow
+ *      uses — the scheduler / renderer / picking path don't see the
+ *      format difference.
+ */
+async function handleRemoteEpt(url: string): Promise<void> {
+  if (loading) return;
+  // Fire the streaming + EPT chunk pre-warm immediately. Each dynamic
+  // import is one HTTP fetch + parse; running them in parallel with
+  // the manifest GET below cuts cold-start by 200–700 ms.
+  prewarmForUrl(url);
+  // URL validation is pure — run it before awaiting the lazy Viewer so a
+  // malformed URL always surfaces an error toast, even if the Viewer chunk
+  // hasn't loaded yet or the GPU backend can't initialise.
+  const eptUrlMod = await loadEpt();
+  const check = eptUrlMod.validateRemoteEptUrl(url);
+  if (!check.ok) {
+    dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
+    return;
+  }
+  // The actual streaming open touches viewer state — defer until the lazy
+  // Viewer chunk is up.
+  await viewerLoaded;
+  loading = true;
+  const controller = new AbortController();
+  dropZone.setProgress(`Reading EPT manifest from ${shortUrl(url)}…`);
+  dropZone.setCancelHandler(() => controller.abort());
+  try {
+    const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
+
+    // Fetch the manifest. We use plain `fetch` rather than the
+    // HttpRangeSource: ept.json is a small JSON document, not a range-
+    // served binary. The same retry / cancellation discipline still
+    // applies via the abort controller.
+    const manifestResponse = await fetch(url, { signal: controller.signal });
+    if (!manifestResponse.ok) {
+      throw new Error(
+        `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
+      );
+    }
+    const manifestText = await manifestResponse.text();
+    const detection = parseEptMetadata(manifestText);
+    if (!detection.isEpt) {
+      throw new Error(`Not a valid EPT manifest — ${detection.reason}`);
+    }
+
+    if (viewer.hasStreamingCloud) closeStreaming();
+    await viewer.ready;
+    streamingPanel.setPhase('Building hierarchy…');
+    streamingPanel.show();
+    // Inspector stays visible during streaming — same rationale as the
+    // COPC path. Streaming-only sections drop out via setStreamingMode
+    // once the cloud finishes attaching.
+    inspector.element.classList.remove('olv-hidden');
+
+    // Compute the dataset base URL by stripping the ept.json filename;
+    // the source uses it to build hierarchy + tile URLs.
+    const baseUrl = url.replace(/ept\.json(?:\?.*)?(?:#.*)?$/i, '');
+
+    // hardened EPT transport: retry-with-backoff (3 retries),
+    // per-attempt timeout (20 s), abort discipline composed with the outer
+    // load-cancel signal. Mirrors the discipline `HttpRangeSource` brings
+    // to the COPC path. Typed error messages flow through to
+    // `describeRemoteEptError` for the user-facing classifier.
+    const transport = eptUrlMod.createEptTransport();
+
+    const cloud = await EptStreamingPointCloud.open(
+      detection.metadata,
+      baseUrl,
+      remoteEptName(url),
+      transport,
+      controller.signal,
+    );
+    if (controller.signal.aborted) throw new LoadCancelledError();
+
+    // A streaming scan is exclusive — clear any open static layers first.
+    for (const id of viewer.clouds()) {
+      viewer.removeCloud(id);
+      inspector.removeCloud(id);
+    }
+    stage.hideEmptyState();
+
+    const decoder = new EptChunkDecoder(cloud);
+    await viewer.attachStreamingCloud(
+      cloud,
+      decoder,
+      streamingQuality,
+      isPhone(),
+      null,
+    );
+    viewer.setMode('orbit');
+    viewer.frameAll();
+
+    streamingPanel.setColorModes(
+      // The interface returns a readonly array; the panel accepts a mutable
+      // ColorMode[], so we materialise a copy.
+      [...cloud.availableColorModes()],
+      cloud.defaultColorMode(),
+    );
+    streamingPanel.setQuality(streamingQuality);
+    streamingPanel.setPhase('Streaming coarse geometry…');
+    inspector.setImageExportEnabled(true);
+    // Per-mode gating — EPT streams almost never carry normals.
+    inspector.setImageExportAvailability(viewer.availableImageExportModes());
+    // Same streaming-mode layout the COPC path uses — hide Inspector's
+    // static-cloud sections and populate the streaming Scan Report.
+    inspector.setStreamingMode(true);
+    try { inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
+    catch (err) { if (debug) console.warn('[inspector] setDetail (streaming) threw', err); }
+    try {
+      // Shape-adapt the EPT cloud's metadata for the streaming-report
+      // synthesizer. EPT's bounds live on `detection.metadata.bounds`;
+      // EPT has no first-class spacing/maxDepth fields (the writer's
+      // `span` is the points-per-tile analogue), so those rows are
+      // omitted on EPT streams.
+      const b = detection.metadata.bounds.conforming;
+      inspector.setReport(runStreamingModules({
+        kind: 'ept',
+        name: cloud.name,
+        sourcePointCount: cloud.sourcePointCount,
+        metadata: {
+          header: { min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] },
+        },
+      }));
+    } catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
+    void prewarmExportStudio();
+
+    // The metadata-driven scan summary — same shape the COPC path fills,
+    // adapted for EPT's metadata layout.
+    const b = detection.metadata.bounds.conforming;
+    const schemaSummary = `${detection.metadata.dataType} · ${detection.metadata.schema.length} attrs`;
+    streamingPanel.setSummary({
+      fileName: cloud.name,
+      pointFormat: -1,                 // EPT has no LAS PDRF; sentinel
+      sourcePoints: cloud.sourcePointCount,
+      width: b[3] - b[0],
+      depth: b[4] - b[1],
+      height: b[5] - b[2],
+      spacing: detection.metadata.span,
+      octreeDepth: cloud.maxDepth(),
+      nodeCount: cloud.octree.nodes().length,
+      format: 'ept',
+      schemaSummary,
+    });
+
+    document.body.classList.add('olv-has-scan');
+    navBar.element.classList.remove('olv-hidden');
+    navBar.setMode('orbit');
+    startStreamingStatusPolling();
+    dropZone.setCancelHandler(null);
+    dropZone.setProgress(null);
+  } catch (err) {
+    dropZone.setCancelHandler(null);
+    if (err instanceof LoadCancelledError) {
+      dropZone.setProgress(null);
+    } else {
+      if (debug) console.error('OpenLiDARViewer — remote EPT error', err);
+      recordUsage('error', 'load');
+      // classified error messages, matching the COPC
+      // remote-UX polish. `describeRemoteEptError` distinguishes CORS,
+      // 404, 5xx, hierarchy vs. tile fetch, and transport failures.
+      dropZone.setError(eptUrlMod.describeRemoteEptError(err, url));
+      closeStreaming();
+    }
+  } finally {
+    loading = false;
+  }
+}
+
+/** Display name for a remote EPT scan — the parent directory of ept.json. */
+function remoteEptName(url: string): string {
+  try {
+    const path = new URL(url).pathname.replace(/\/ept\.json$/i, '');
+    const last = path.slice(path.lastIndexOf('/') + 1);
+    return last ? `${decodeURIComponent(last)} (EPT)` : 'remote.ept';
+  } catch {
+    return 'remote.ept';
+  }
+}
+
+/**
+ * Open a remote COPC scan over HTTP range requests. The host must allow
+ * cross-origin requests and serve byte ranges — `HttpRangeSource.probe()`
+ * checks both up front, so a misconfigured host fails fast with a precise
+ * reason rather than a stalled load.
+ */
+async function handleRemoteCopc(url: string): Promise<void> {
+  if (loading) return;
+  // URL validation is pure — run it before awaiting the lazy Viewer so a
+  // malformed URL always surfaces an error toast, even if the Viewer chunk
+  // hasn't loaded yet or the GPU backend can't initialise.
+  const check = validateRemoteCopcUrl(url);
+  if (!check.ok) {
+    dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
+    return;
+  }
+  // Fire the streaming-chunk pre-warm immediately — these dynamic
+  // imports are independent of `viewerLoaded` and the HEAD probe, and
+  // each one is a separate HTTP fetch. Parallelising them with the
+  // probe shaves the smaller of the two latencies off cold-start
+  // (often 100–300 ms). The chunks are idempotent / cached, so the
+  // real `await Promise.all([loadStreamingPointCloud(), …])` inside
+  // `openStreamingCopc` typically resolves instantly by the time
+  // we reach it.
+  prewarmForUrl(url);
+
+  // The actual streaming open touches viewer state — defer until the lazy
+  // Viewer chunk is up.
+  await viewerLoaded;
+  loading = true;
+  const controller = new AbortController();
+  dropZone.setProgress(`Connecting to ${shortUrl(url)}…`);
+  dropZone.setCancelHandler(() => controller.abort());
+  try {
+    // The remote range source is part of the lazy COPC chunk.
+    const { HttpRangeSource } = await loadHttpRangeSource();
+    const range = new HttpRangeSource(url);
+    // A HEAD probe for range support runs before the streaming UI appears, so
+    // a host that cannot stream reports a precise reason instead of stalling.
+    await range.probe(controller.signal);
+    if (controller.signal.aborted) throw new LoadCancelledError();
+    if (viewer.hasStreamingCloud) closeStreaming();
+    await openStreamingCopc(range, remoteCopcName(url), controller.signal);
+    dropZone.setCancelHandler(null);
+    dropZone.setProgress(null);
+  } catch (err) {
+    dropZone.setCancelHandler(null);
+    if (err instanceof LoadCancelledError) {
+      dropZone.setProgress(null);
+    } else {
+      if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
+      recordUsage('error', 'load');
+      dropZone.setError(describeRemoteCopcError(err, url));
+      // A remote open that failed mid-flight leaves no scan — tidy up.
+      closeStreaming();
+    }
+  } finally {
+    loading = false;
+  }
+}
+
+/** A short, readable form of a URL — its host — for progress and error text. */
+function shortUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** The display name for a remote COPC scan — the file name from its URL path. */
+function remoteCopcName(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const last = path.slice(path.lastIndexOf('/') + 1);
+    return last ? decodeURIComponent(last) : 'remote.copc.laz';
+  } catch {
+    return 'remote.copc.laz';
+  }
+}
+
+/**
+ * Turn a remote-COPC failure into a clear, honest message. `HttpRangeSource`
+ * already classifies range-read failures (an unreachable or CORS-blocked host,
+ * a host with no range support, a host that ignored the range); a non-range
+ * error from the pipeline most often means the URL is reachable but the file
+ * behind it is not a valid COPC.
+ */
+function describeRemoteCopcError(err: unknown, url: string): string {
+  const safeUrl = sanitizeUrlForDisplay(url);
+  if (err instanceof RangeReadError) {
+    if (err.code === 'range-unsupported') {
+      return (
+        `${err.message} Try hosting the file on S3 or a static CDN — most support range requests by default.`
+      );
+    }
+    if (err.code === 'transport') {
+      return `${err.message} The host also needs to allow cross-origin (CORS) requests from this site.`;
+    }
+    if (err.code === 'timeout') {
+      return `${err.message} Try again in a moment, or pick a faster host.`;
+    }
+    if (err.code === 'content-mismatch') {
+      return `${err.message} This usually means a proxy or CDN ignored the byte-range request.`;
+    }
+    if (err.code === 'server-error') {
+      return `${err.message} The host returned a server-side error — wait a moment and try again.`;
+    }
+    return err.message;
+  }
+  const detail = err instanceof Error ? err.message : 'unknown error';
+  return `${shortUrl(safeUrl)} was reached, but it could not be read as a COPC scan — ${detail}.`;
+}
+
+/** Close a streaming scan: stop polling, detach, restore the static panel. */
+function closeStreaming(): void {
+  // Finalize the benchmark (if any) before tearing the session down — we
+  // want the final cache snapshot and peak resident counters to be observed.
+  // The post-session report is logged only under `?benchmark=1`; `?debug=1`
+  // alone uses the collector solely for the live overlay readout.
+  if (streamingBenchmark) {
+    const result = streamingBenchmark.finalize();
+    // The diagnostics runtime is already loaded at this point (the same
+    // session that created the benchmark above also loaded the formatter).
+    if (benchmark && diagnostics) {
+      const text = diagnostics.formatStreamingBenchmark(result);
+      console.log(
+        '%cOpenLiDARViewer — streaming benchmark',
+        'font-weight:600;color:#22dcff',
+        '\n' + text,
+      );
+      debugOverlay?.setBenchmark('streaming benchmark\n' + text);
+    }
+    streamingBenchmark = null;
+    coarseStableFired = false;
+  }
+  if (copcDecoder) copcDecoder.onDecodeMs = undefined;
+  stopStreamingStatusPolling();
+  viewer.detachStreamingCloud();
+  streamingPanel.hide();
+  // Return the Inspector to its static layout — un-hide every section
+  // and clear the streaming-mode positioning class.
+  try { inspector.setStreamingMode(false); }
+  catch (err) { if (debug) console.warn('[inspector] setStreamingMode(false) threw', err); }
+  try { inspector.clearDatasetIntelligence(); }
+  catch (err) { if (debug) console.warn('[inspector] clearDatasetIntelligence threw', err); }
+  inspector.element.classList.remove('olv-hidden');
+}
+
+/**
+ * True when at least one resident node sits at or below `minDepth` in
+ * the streaming octree. Used by the benchmark to gate the
+ * coarse-stable marker so a "first scheduler idle" event at depth 0
+ * doesn't masquerade as "first usable view".
+ *
+ * Iterates the octree's node list; the inner loop short-circuits on
+ * the first hit, so worst case is `nodes.length` per poll (~250 ms
+ * cadence) for the brief window between idle and refinement.
+ *
+ * The cloud's structural type is inlined here so this helper stays
+ * decoupled from the concrete `StreamingSource` import — the actual
+ * runtime shape is the COPC + EPT octree's shared `nodes()` surface.
+ */
+function hasResidentAtDepth(
+  cloud: {
+    readonly octree: {
+      nodes: () => readonly { state: string; record: { key: { depth: number } } }[];
+    };
+  },
+  minDepth: number,
+): boolean {
+  for (const node of cloud.octree.nodes()) {
+    if (node.state === 'resident' && node.record.key.depth >= minDepth) return true;
+  }
+  return false;
+}
+
+/** Poll the streaming state ~4 Hz so the panel reflects progress. */
+function startStreamingStatusPolling(): void {
+  stopStreamingStatusPolling();
+  streamingStatusTimer = window.setInterval(() => {
+    const cloud = viewer.streamingCloud;
+    const scheduler = viewer.streamingScheduler;
+    if (!cloud || !scheduler) return;
+    const counts = cloud.counts();
+    streamingPanel.setStatus({
+      loadedNodes: counts.resident,
+      knownNodes: counts.known,
+      displayedPoints: cloud.residentPointCount,
+      sourcePoints: cloud.sourcePointCount,
+      cacheBytes: scheduler.cacheStats().byteSize,
+    });
+    if (counts.resident === 0) {
+      streamingPanel.setPhase('Streaming coarse geometry…');
+    } else if (counts.loading > 0 || counts.queued > 0) {
+      streamingPanel.setPhase('Refining visible detail…');
+    } else {
+      streamingPanel.setPhase('Streaming ready');
+    }
+
+    // Benchmark sampling — only when collecting. The 250 ms cadence catches
+    // scheduler-tick samples through the onTick hook, not here; this loop is
+    // for state-snapshot metrics (resident counts, cache outcomes, peaks).
+    if (streamingBenchmark) {
+      const cacheStats = scheduler.cacheStats();
+      streamingBenchmark.recordCacheSnapshot({
+        hits: cacheStats.hits,
+        misses: cacheStats.misses,
+        evictions: cacheStats.evictions,
+      });
+      streamingBenchmark.recordResident(
+        cloud.residentPointCount,
+        scheduler.pointBudget,
+      );
+      streamingBenchmark.recordResidentBytes(estimateGpuBytes(cloud.residentPointCount));
+      // Coarse stable: the first poll at which the scheduler has settled
+      // AND the resident set has meaningful coverage — i.e. spans at
+      // least one refinement level beyond the root. On a slow link the
+      // scheduler often reaches steady state at depth 0 (root only)
+      // before the user moves; firing then would report "coarse stable
+      // = first scheduler idle" instead of "first usable view", and
+      // every benchmark across machines would look identical because
+      // the depth-0 root takes roughly the same time everywhere.
+      //
+      // The guard caps at the deepest depth the hierarchy actually
+      // exposes: large datasets must reach depth 2 before the marker
+      // fires; tiny datasets whose entire hierarchy is depth 0–1 still
+      // fire the marker once they reach their own max depth. Otherwise
+      // small COPCs (test fixtures, small drone surveys) would never
+      // mark coarse-stable, leaving the benchmark output with a
+      // permanent em-dash placeholder.
+      const targetDepth = Math.min(2, cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0);
+      if (
+        !coarseStableFired &&
+        counts.resident > 0 &&
+        counts.loading === 0 &&
+        counts.queued === 0 &&
+        hasResidentAtDepth(cloud, targetDepth)
+      ) {
+        streamingBenchmark.recordCoarseStable();
+        coarseStableFired = true;
+      }
+    }
+  }, 250);
+}
+
+/** Stop the streaming-status poll. */
+function stopStreamingStatusPolling(): void {
+  if (streamingStatusTimer !== undefined) {
+    window.clearInterval(streamingStatusTimer);
+    streamingStatusTimer = undefined;
+  }
+}
+
+/** Reveal the "Project ready" summary card for a freshly opened scan. */
+function showProjectCard(cloud: PointCloud, totalCount: number): void {
+  const b = cloud.bounds();
+  projectCard.show({
+    name: cloud.name,
+    format: cloud.sourceFormat,
+    shownCount: cloud.pointCount,
+    totalCount,
+    width: b.max[0] - b.min[0],
+    depth: b.max[1] - b.min[1],
+    height: b.max[2] - b.min[2],
+    hasRgb: cloud.colors !== undefined,
+    hasIntensity: cloud.intensity !== undefined,
+    hasClassification: cloud.classification !== undefined,
+  });
+}
+
+/** Fetch a built-in sample (a local static file — no upload) and load it. */
+async function loadFromUrl(url: string, name: string): Promise<void> {
+  // ensure the lazy-loaded Viewer is ready before touching it.
+  await viewerLoaded;
+  // Remote COPC / EPT URLs route through the streaming pipeline — a
+  // `fetch().blob()` against a 1+ GB COPC would defeat the whole point
+  // of streaming and try to pull the entire file before showing a
+  // single point. The dispatch matches `handleRemoteUrl`'s contract so
+  // the sample-button affordance can carry a real public COPC URL the
+  // same way the "stream from URL" field does.
+  const looksLikeRemoteStream =
+    /^https?:\/\//i.test(url) &&
+    (/\.copc\.laz$/i.test(url) || /\/ept\.json(?:\?|#|$)/i.test(url));
+  if (looksLikeRemoteStream) {
+    return handleRemoteUrl(url).catch((err) => {
+      dropZone.setError(
+        err instanceof Error ? err.message : `Failed to stream ${name}.`,
+      );
+    });
+  }
+  dropZone.setProgress(`Loading ${name}…`);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Could not load sample: ${name}`);
+    const blob = await response.blob();
+    await handleFile(new File([blob], name));
+  } catch (err) {
+    dropZone.setError(err instanceof Error ? err.message : 'Failed to load the sample');
+  }
+}
+
+/**
+ * Tear the session down to the empty state. Shared by removing the last cloud
+ * and by the Close action: clears tools, measurements, saved views, and the
+ * panels, then shows the empty state so another scan can be loaded.
+ */
+function resetToEmptyState(): void {
+  viewer.setMeasureMode(false);
+  viewer.setInspectMode(false);
+  viewer.clearMeasurements();
+  dock.setMeasureEnabled(false);
+  dock.setInspectEnabled(false);
+  dock.setProbeEnabled(false);
+  dock.setAnnotateEnabled(false);
+  dock.setCloseEnabled(false);
+  // Hide the dock entirely while back in the empty state — the audit fix
+  // that pairs with `setEmpty(false)` on every attach path.
+  dock.setEmpty(true);
+  inspector.setEmpty(true);
+  inspector.clear();
+  inspector.clearProvenance();
+  // `crsService.clear()` broadcasts `null` to the inspector via its
+  // subscription, which restores the CRS placeholder.
+  _currentCrsDatasetKey = undefined;
+  crsService.clear();
+  // Clear the point inspector's coordinate context so a future Inspect
+  // click on a different scan doesn't compute against the previous
+  // scan's origin / CRS.
+  if (viewerReady) {
+    try { viewer.setInspectCoordinateContext({}); }
+    catch { /* defensive */ }
+  }
+  // Visual Export Studio — no scan loaded, no source to render. The
+  // buttons go back to disabled with their "load a scan first" hint so the
+  // user can't fire an export against nothing.
+  inspector.setImageExportEnabled(false);
+  stage.showEmptyState();
+  navBar.element.classList.add('olv-hidden');
+  // Reset the NavBar mode to 'orbit'. The "Click the scan to look around"
+  // prompt is gated on the mode being walk/fly + cursor-not-locked; if a
+  // user closes a project while in walk/fly mode, the prompt sticks around
+  // and floats over the empty-state Open-a-scan UI (visibly covering the
+  // QUICK DEMOS section). Resetting to orbit hides it via `_render`.
+  navBar.setMode('orbit');
+  navBar.hideTouchHint();
+  projectCard.hide();
+  // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
+  document.body.classList.remove('olv-has-scan');
+  activeId = null;
+  savedViews = [];
+  viewCounter = 0;
+  viewer.annotate.clear();
+  refreshMeasurePanel();
+  refreshAnnotationPanel();
+}
+
+/** Remove a cloud from the scene and the Inspector. */
+function removeCloud(id: string): void {
+  viewer.removeCloud(id);
+  inspector.removeCloud(id);
+  if (activeId === id) activeId = null;
+  if (viewer.clouds().length === 0) resetToEmptyState();
+}
+
+/**
+ * Close the current scan: remove every loaded cloud and return to the empty
+ * state, ready for another scan to be dropped, opened, or sampled.
+ */
+function closeScan(): void {
+  if (viewer.hasStreamingCloud) closeStreaming();
+  for (const id of viewer.clouds()) {
+    viewer.removeCloud(id);
+    inspector.removeCloud(id);
+  }
+  resetToEmptyState();
+}
+
+/**
+ * Save the current view as a PNG — entirely client-side. Any placed
+ * measurements and annotations are burned into the image, so the snapshot is
+ * usable as inspection evidence; a clean scan with neither simply exports the
+ * bare render.
+ */
+async function saveSnapshot(): Promise<void> {
+  try {
+    const blob = await viewer.snapshot({
+      annotations: viewer.annotate.getAnnotations().length > 0,
+      measurements: viewer.measure.getMeasurements().length > 0,
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'openlidarviewer.png';
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    dropZone.setError('Could not save the view');
+  }
+}

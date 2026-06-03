@@ -1,0 +1,99 @@
+# Third-Party Notices
+
+OpenLiDARViewer ships with — and links against — a number of
+third-party open-source packages and fonts. This document lists each
+runtime dependency, its upstream project, and its license. The full
+text of every license referenced here is reproduced or linked at the
+end of the file.
+
+## Runtime dependencies (bundled into the shipped build)
+
+| Package | Version | License | Upstream |
+| --- | --- | --- | --- |
+| three | ^0.184.0 | MIT | https://github.com/mrdoob/three.js |
+| @loaders.gl/core | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/gltf | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/las | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/obj | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/ply | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
+| laz-perf | ^0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
+| pdf-lib | ^1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
+| @fontsource-variable/inter | ^5.2.8 | OFL-1.1 | https://github.com/rsms/inter |
+
+## Development-only dependencies (not bundled into the shipped build)
+
+The following are used during typecheck, test, lint, or build only.
+They are NOT distributed in `dist/` and do not need re-distribution
+of their license text alongside the shipped artifact. They are listed
+here for transparency.
+
+| Package | Version | License | Upstream |
+| --- | --- | --- | --- |
+| typescript | ~6.0.2 | Apache-2.0 | https://github.com/microsoft/TypeScript |
+| vite | ^8.0.12 | MIT | https://github.com/vitejs/vite |
+| vitest | ^4.1.7 | MIT | https://github.com/vitest-dev/vitest |
+| @playwright/test | ^1.60.0 | Apache-2.0 | https://github.com/microsoft/playwright |
+| @types/three | ^0.184.1 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
+| rollup-plugin-visualizer | ^7.0.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
+
+## License texts
+
+### MIT License (applies to: three, @loaders.gl/*, pdf-lib, vite, vitest, rollup-plugin-visualizer, @types/three)
+
+```
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+Each MIT-licensed package retains its own copyright notice in its
+upstream repository (see the "Upstream" column above).
+
+### Apache License 2.0 (applies to: laz-perf, typescript, @playwright/test)
+
+The Apache 2.0 license text is reproduced at:
+https://www.apache.org/licenses/LICENSE-2.0
+
+Copyright holders for the Apache-2.0-licensed packages:
+- laz-perf: Howard Butler / Hobu, Inc. and contributors
+- typescript: Microsoft Corporation
+- @playwright/test: Microsoft Corporation
+
+### SIL Open Font License 1.1 (applies to: Inter — @fontsource-variable/inter)
+
+The Inter font family is distributed under the SIL Open Font License,
+Version 1.1 (OFL-1.1). The full license text is reproduced at:
+https://openfontlicense.org/open-font-license-official-text/
+
+Copyright (c) 2016-2024 The Inter Project Authors
+(https://github.com/rsms/inter)
+
+## How to refresh this notice
+
+When a new runtime dependency is added to `package.json`:
+
+1. Identify the license from the package's upstream repository
+   (the `LICENSE` file, or `license` field in its `package.json`).
+2. Add a row to the appropriate table above.
+3. If the license is one not already listed, append its full text or
+   a stable URL to the "License texts" section.
+
+When a runtime dependency is removed: drop its row from the table.
+Leave the license-text section intact unless every package using
+that license has been removed.

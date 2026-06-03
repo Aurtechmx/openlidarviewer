@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/aurtechmx/openlidarviewer/discussions
+    about: Ask a question or share an idea before opening an issue.
+  - name: Security report
+    url: https://github.com/aurtechmx/openlidarviewer/blob/main/SECURITY.md
+    about: Please report security issues privately, not as a public issue.
