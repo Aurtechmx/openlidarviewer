@@ -23,6 +23,8 @@ export interface ToolDockCallbacks {
   onProbeToggle: () => void;
   /** Toggle annotation mode. */
   onAnnotateToggle: () => void;
+  /** Toggle the Terrain analysis panel (re-open it if it was closed). */
+  onAnalyseToggle: () => void;
   /** Open the help overlay. */
   onHelp: () => void;
   /** Close the current scan and return to the empty state. */
@@ -46,6 +48,7 @@ export class ToolDock {
   private readonly _inspect: HTMLButtonElement;
   private readonly _probe: HTMLButtonElement;
   private readonly _annotate: HTMLButtonElement;
+  private readonly _analyse: HTMLButtonElement;
   private readonly _close: HTMLButtonElement;
   private readonly _more: HTMLButtonElement;
 
@@ -124,6 +127,16 @@ export class ToolDock {
       callbacks.onAnnotateToggle();
     });
 
+    // Analyse re-opens the Terrain analysis panel. The panel can be closed
+    // (e.g. selecting the Profile measurement tucks it away to free the
+    // canvas), so a dock toggle guarantees a one-click way back to it.
+    this._analyse = this._tool('Analyse', 'Load a scan to enable terrain analysis', true);
+    this._analyse.classList.add('olv-tool-analyse');
+    this._analyse.addEventListener('click', () => {
+      this._analyse.blur();
+      callbacks.onAnalyseToggle();
+    });
+
     // (Slice/Section was previously rendered here as a permanently
     // disabled button. A disabled tool in an active cluster reads as
     // broken rather than as a roadmap signal — Gestalt similarity
@@ -159,7 +172,7 @@ export class ToolDock {
     this._more = el('button', {
       className: 'olv-tool olv-tool-more',
       text: '•••',
-      title: 'More tools — Snapshot, Help',
+      title: 'More tools — Snapshot, Analyse, Help',
       ariaLabel: 'Show more tools',
     });
     this._more.setAttribute('aria-expanded', 'false');
@@ -175,6 +188,7 @@ export class ToolDock {
       this._inspect,
       this._probe,
       this._annotate,
+      this._analyse,
       this._share,
       help,
       this._more,
@@ -264,6 +278,20 @@ export class ToolDock {
   setAnnotateActive(active: boolean): void {
     this._annotate.classList.toggle('olv-tool-active', active);
     this._annotate.textContent = active ? 'Annotating…' : 'Annotate';
+  }
+
+  /** Enable or disable the Analyse tool — enabled once a scan is loaded. */
+  setAnalyseEnabled(enabled: boolean): void {
+    this._analyse.disabled = !enabled;
+    this._analyse.title = enabled
+      ? 'Show or hide the terrain analysis panel'
+      : 'Load a scan to enable terrain analysis';
+    if (!enabled) this.setAnalyseActive(false);
+  }
+
+  /** Reflect whether the terrain analysis panel is currently open. */
+  setAnalyseActive(active: boolean): void {
+    this._analyse.classList.toggle('olv-tool-active', active);
   }
 
   /** Enable or disable the Close action — enabled once a scan is loaded. */

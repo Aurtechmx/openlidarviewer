@@ -29,7 +29,27 @@ import {
   type EvidenceGrade,
 } from '../ground/cellConfidence';
 import type { VerticalAxis } from '../ground/groundFilter';
-import type { BandError, ConfidenceSample, ValidationReport } from './ValidationReport';
+import { axisGetters } from '../ground/axisGetters';
+import { horizontalCellMetres } from '../ground/horizontalScale';
+import { hornSlope } from '../ground/terrainDerivatives';
+import type {
+  BandError,
+  ConfidenceSample,
+  SlopeBand,
+  SlopeBandError,
+  SurfaceZone,
+  ValidationReport,
+  ZoneError,
+} from './ValidationReport';
+
+// Slope-band thresholds as rise/run (tan): flat < 5°, moderate < 20°, else steep.
+const SLOPE_FLAT = Math.tan((5 * Math.PI) / 180);
+const SLOPE_MODERATE = Math.tan((20 * Math.PI) / 180);
+function slopeBandFor(slope: number): SlopeBand {
+  if (!Number.isFinite(slope) || slope < SLOPE_FLAT) return 'flat';
+  if (slope < SLOPE_MODERATE) return 'moderate';
+  return 'steep';
+}
 
 /** Options for {@link holdoutValidateDtm}. */
 export interface HoldoutParams {
@@ -51,6 +71,14 @@ export interface HoldoutParams {
    * the confidence calibration turns it on.
    */
   readonly collectSamples?: boolean;
+  /** True when the horizontal frame is geographic (degrees). Default false. */
+  readonly isGeographic?: boolean;
+  /**
+   * Metres per source vertical unit (1 for metre data, ~0.3048 for feet). The
+   * residuals are scaled by this so the reported RMSE/MAE/p95 are in metres
+   * regardless of the source Z unit. Default 1.
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 /** Small, fast, deterministic PRNG (mulberry32). */
@@ -80,9 +108,7 @@ export function holdoutValidateDtm(
 ): ValidationReport {
   const warnings: string[] = [];
   const vertical: VerticalAxis = params.verticalAxis ?? 'z';
-  const getH1 = (p: TerrainPoint) => p.x;
-  const getH2 = (p: TerrainPoint) => (vertical === 'y' ? p.z : p.y);
-  const getV = (p: TerrainPoint) => (vertical === 'y' ? p.y : p.z);
+  const { getH1, getH2, getV } = axisGetters(vertical);
 
   let holdoutFraction = params.holdoutFraction ?? 0.2;
   if (!Number.isFinite(holdoutFraction) || holdoutFraction <= 0 || holdoutFraction >= 1) {
@@ -143,7 +169,20 @@ export function holdoutValidateDtm(
     aggregation: params.aggregation ?? 'mean',
     verticalAxis: vertical,
   });
-  const dtm = buildDtmGrid(raster, { targetCount: params.targetCount });
+  const dtm = buildDtmGrid(raster, {
+    targetCount: params.targetCount,
+    isGeographic: params.isGeographic,
+    // Validate the SAME surface the production DTM builds.
+    interpolation: 'geodesic',
+  });
+  // Residuals are reported in metres regardless of the source vertical unit.
+  const vMetres =
+    Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0
+      ? (params.verticalUnitToMetres as number)
+      : 1;
+  // Local slope field for slope-band stratification of the residuals; convert
+  // the cell to metres for a geographic frame so the bands aren't all "steep".
+  const slopeField = hornSlope(dtm.z, cols, rows, horizontalCellMetres(cellSizeM, params.isGeographic));
 
   // Residuals at held-out points.
   const allAbs: number[] = [];
@@ -154,6 +193,13 @@ export function holdoutValidateDtm(
   const bandSumSq: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
   const bandSumAbs: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
   const bandCount: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
+  // Stratified accumulators: by slope band and by surface zone.
+  const slopeSq: Record<SlopeBand, number> = { flat: 0, moderate: 0, steep: 0 };
+  const slopeAbs: Record<SlopeBand, number> = { flat: 0, moderate: 0, steep: 0 };
+  const slopeCnt: Record<SlopeBand, number> = { flat: 0, moderate: 0, steep: 0 };
+  const zoneSq: Record<SurfaceZone, number> = { measured: 0, interpolated: 0 };
+  const zoneAbs: Record<SurfaceZone, number> = { measured: 0, interpolated: 0 };
+  const zoneCnt: Record<SurfaceZone, number> = { measured: 0, interpolated: 0 };
   const samples: ConfidenceSample[] | null = params.collectSamples ? [] : null;
 
   // Grid values sit at cell CENTRES, so predict with bilinear
@@ -192,7 +238,7 @@ export function holdoutValidateDtm(
     }
     const predZ = sumZ / sumW;
     const predConf = sumC / sumW;
-    const residual = getV(p) - predZ;
+    const residual = (getV(p) - predZ) * vMetres;
     const abs = Math.abs(residual);
     const sq = residual * residual;
     allAbs.push(abs);
@@ -203,6 +249,18 @@ export function holdoutValidateDtm(
     bandSumSq[grade] += sq;
     bandSumAbs[grade] += abs;
     bandCount[grade] += 1;
+    // Stratify by the nearest cell's slope band and surface zone.
+    const ncol = clampCol(Math.round((getH1(p) - minH1) / cellSizeM));
+    const nrow = clampRow(Math.round((getH2(p) - minH2) / cellSizeM));
+    const nci = nrow * cols + ncol;
+    const sb = slopeBandFor(slopeField[nci]);
+    slopeSq[sb] += sq;
+    slopeAbs[sb] += abs;
+    slopeCnt[sb] += 1;
+    const zone: SurfaceZone = dtm.coverage[nci] === 2 ? 'measured' : 'interpolated';
+    zoneSq[zone] += sq;
+    zoneAbs[zone] += abs;
+    zoneCnt[zone] += 1;
     if (samples) samples.push({ confidence: predConf, absError: abs });
   }
 
@@ -226,6 +284,26 @@ export function holdoutValidateDtm(
     };
   });
 
+  const perSlopeBand: SlopeBandError[] = (['flat', 'moderate', 'steep'] as const).map((band) => {
+    const n = slopeCnt[band];
+    return {
+      band,
+      count: n,
+      rmse: n > 0 ? Math.sqrt(slopeSq[band] / n) : Number.NaN,
+      mae: n > 0 ? slopeAbs[band] / n : Number.NaN,
+    };
+  });
+
+  const perZone: ZoneError[] = (['measured', 'interpolated'] as const).map((zone) => {
+    const n = zoneCnt[zone];
+    return {
+      zone,
+      count: n,
+      rmse: n > 0 ? Math.sqrt(zoneSq[zone] / n) : Number.NaN,
+      mae: n > 0 ? zoneAbs[zone] / n : Number.NaN,
+    };
+  });
+
   return {
     rmse,
     mae,
@@ -234,6 +312,8 @@ export function holdoutValidateDtm(
     uncoveredCount: uncovered,
     holdoutFraction,
     perBand,
+    perSlopeBand,
+    perZone,
     method: 'holdout-cross-validation',
     coverageMode: raster.coverage,
     ...(samples ? { samples } : {}),

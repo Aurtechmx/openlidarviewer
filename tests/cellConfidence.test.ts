@@ -56,6 +56,31 @@ describe('buildDtmGrid', () => {
     expect(g.confidence[1]).toBeGreaterThan(g.confidence[2]);
   });
 
+  it('geographic roughness: degree-scale cells are not over-penalised', () => {
+    // measured–gap–measured over degree-scale cells with ~2 m of relief.
+    // Without the geographic correction the local slope reads near-vertical
+    // and the interpolated cell's roughness penalty maxes out; the correction
+    // restores a sensible slope, so the cell keeps more confidence.
+    const mk = (): DemRaster => ({
+      z: Float32Array.from([0, NaN, 2]),
+      counts: Uint32Array.from([8, 0, 8]),
+      cols: 3,
+      rows: 1,
+      cellSizeM: 1e-5,
+      originH1: 0,
+      originH2: 0,
+      coverage: 'full',
+      sourcePointCount: 16,
+      analyzedPointCount: 16,
+      filledCellCount: 2,
+      warnings: [],
+    });
+    const projected = buildDtmGrid(mk(), { crs: 'EPSG:4326' });
+    const geographic = buildDtmGrid(mk(), { crs: 'EPSG:4326', isGeographic: true });
+    expect(projected.coverage[1]).toBe(1); // interpolated
+    expect(geographic.confidence[1]).toBeGreaterThan(projected.confidence[1]);
+  });
+
   it('absolute-density floor: a thinly-sampled measured cell is not fully trusted', () => {
     // Two measured cells, one with a single return and one densely
     // sampled, in a scene whose median is dragged down by the sparse

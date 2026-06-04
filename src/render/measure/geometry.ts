@@ -34,6 +34,44 @@ function normalize(v: Vec3): Vec3 {
   return len < EPSILON ? [0, 0, 0] : [v[0] / len, v[1] / len, v[2] / len];
 }
 
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+/**
+ * Compass azimuth (degrees, 0–360, clockwise from north) of the horizontal
+ * direction from `a` to `b`, measured in the map plane perpendicular to `up`.
+ *
+ * North is world +Y projected into that plane (the convention for a Z-up
+ * projected CRS); if `up` is itself nearly parallel to +Y — e.g. a Y-up phone
+ * scan — world +Z is used as the north reference instead so the basis stays
+ * well-defined. East is `north × up`, giving the expected 90° = due east.
+ * Returns NaN when the segment is purely vertical (no horizontal component).
+ */
+export function bearingDegrees(a: Vec3, b: Vec3, up: Vec3): number {
+  const dir = sub(b, a);
+  const u = normalize(up);
+  if (length(u) < EPSILON) return Number.NaN;
+  // Pick a world axis to derive north from; avoid the one parallel to up.
+  const worldNorth: Vec3 = Math.abs(dot(u, [0, 1, 0])) > 0.99 ? [0, 0, 1] : [0, 1, 0];
+  const north = normalize([
+    worldNorth[0] - dot(worldNorth, u) * u[0],
+    worldNorth[1] - dot(worldNorth, u) * u[1],
+    worldNorth[2] - dot(worldNorth, u) * u[2],
+  ]);
+  const east = normalize(cross(north, u));
+  const dNorth = dot(dir, north);
+  const dEast = dot(dir, east);
+  if (Math.abs(dNorth) < EPSILON && Math.abs(dEast) < EPSILON) return Number.NaN;
+  let deg = (Math.atan2(dEast, dNorth) * 180) / Math.PI;
+  if (deg < 0) deg += 360;
+  return deg;
+}
+
 /** Straight-line distance between two points. */
 export function distance(a: Vec3, b: Vec3): number {
   return length(sub(a, b));

@@ -66,6 +66,17 @@ describe('sniffFormat — extension fallback', () => {
   test('extension match is case-insensitive', () => {
     expect(sniffFormat(bufWithBytes([0, 0, 0, 0]), 'MESH.OBJ')).toBe('obj');
   });
+
+  test('detects xyz / csv by extension', () => {
+    expect(sniffFormat(bufWithBytes([0, 0, 0, 0]), 'cloud.xyz')).toBe('xyz');
+    expect(sniffFormat(bufWithBytes([0, 0, 0, 0]), 'cloud.csv')).toBe('xyz');
+  });
+
+  test('routes ASC and TXT ASCII point lists to the xyz loader', () => {
+    expect(sniffFormat(bufWithBytes([0, 0, 0, 0]), 'cloud.asc')).toBe('xyz');
+    expect(sniffFormat(bufWithBytes([0, 0, 0, 0]), 'cloud.txt')).toBe('xyz');
+    expect(sniffFormat(bufWithBytes([0, 0, 0, 0]), 'CLOUD.ASC')).toBe('xyz');
+  });
 });
 
 /** Build a LASF buffer with an explicit point-format byte at offset 104. */

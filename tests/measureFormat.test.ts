@@ -4,8 +4,22 @@ import {
   formatArea,
   formatAngle,
   formatGrade,
+  formatBearing,
 } from '../src/render/measure/format';
 import { formatDistance } from '../src/render/navMath';
+
+describe('formatBearing', () => {
+  it('zero-pads whole-degree azimuths to three digits', () => {
+    expect(formatBearing(0)).toBe('000°');
+    expect(formatBearing(42)).toBe('042°');
+    expect(formatBearing(359.6)).toBe('000°'); // rounds to 360 → wraps to 0
+    expect(formatBearing(180)).toBe('180°');
+  });
+
+  it('renders an em dash for a non-finite bearing', () => {
+    expect(formatBearing(Number.NaN)).toBe('—');
+  });
+});
 
 describe('formatLength', () => {
   it('metric matches the v0.1.0 distance formatter', () => {

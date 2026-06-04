@@ -10,12 +10,20 @@ It has two layers:
    validation with confidence calibration, and evidence-graded contour
    export.
 
-Scope note for v0.4.0: the Analyse panel (`src/ui/AnalysePanel.ts`) is
-**mounted as a preview surface** for terrain readiness and contour export.
-It exposes the validated data pipeline conservatively and does NOT yet
-represent a full interactive terrain suite; a minimal "Planned" tag row
-sets that expectation, and there are no dead buttons. A DTM quality gate
-decides whether a professional contour export is offered at all.
+Scope note (current, v0.4.1): the Analyse panel (`src/ui/AnalysePanel.ts`)
+is **mounted** and surfaces the validated pipeline end to end — a single
+top-level Terrain Assessment verdict (Good / Preview / Limited), a 0–100
+quality score, readiness indicators, coverage/confidence, surface models
+(DSM, canopy height, slope, multi-directional hillshade with adjustable
+sun, click-to-sample), and exports: evidence-graded contours (GeoJSON /
+SVG / DXF), a printable map sheet, and a georeferenced DEM package (ASCII
+Grid + GeoTIFF). It is reachable any time via the "Analyse" tool-dock
+button, and a DTM quality gate still governs whether a professional contour
+export is offered (the panel speaks to data quality and fitness-for-use, not
+survey certification). Note: these products are powered by the confidence-aware
+pipeline under `src/terrain/contour/`, `ground/`, and `surface/` — the
+older `src/terrain/` *foundation* (engine, metrics, partitioning, cache)
+remains an internal seam behind a feature flag.
 
 ## What v0.3.9 shipped (foundation)
 

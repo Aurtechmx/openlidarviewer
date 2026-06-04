@@ -80,7 +80,7 @@ function decodeLas(
 
   const step = Math.max(1, Math.floor(stride));
   const total = Math.ceil(count / step);
-  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null);
   const reportEvery = Math.max(1, Math.floor(total / 20));
   const rand = step > 1 ? makePrng(STRIDE_SAMPLE_SEED) : undefined;
   for (let b = 0; b < total; b++) {
@@ -182,6 +182,7 @@ export async function loadLas(
 
   return new PointCloud({
     positions: raw.positions,
+    colors: raw.colors ?? undefined,
     intensity: raw.intensity,
     classification: raw.classification,
     returnNumber: raw.returnNumber,

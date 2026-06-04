@@ -41,6 +41,12 @@ const PROFILE_CHART_HEIGHT_KEY = 'olv:measure:profile:chartHeightPx:v1';
  * (`.olv-mp-chart { min-height: 80px; }`); the
  * `profileChartHeightBounds.test.ts` spec pins the two against drift.
  */
+/** Panel-width resize bounds (drag the SE handle to widen the profile chart).
+ *  Mirror of the CSS min/max-width on `.olv-measure-panel`. */
+export const MEASURE_PANEL_MIN_WIDTH_PX = 218;
+export const MEASURE_PANEL_MAX_WIDTH_PX = 760;
+const MEASURE_PANEL_WIDTH_KEY = 'olv:measure:panel:widthPx:v1';
+
 export const PROFILE_CHART_MIN_HEIGHT_PX = 160;
 /** Upper bound on the resizable profile chart height. See
  * `PROFILE_CHART_MIN_HEIGHT_PX` for the source-of-truth rationale. */
@@ -163,6 +169,8 @@ export class MeasurePanel {
   private readonly _chainResult: HTMLElement;
   /** Most recently rendered summaries — used by the chain redraw path. */
   private _summaries: MeasurementSummary[] = [];
+  /** Observer that persists the user's dragged panel width. */
+  private _panelWidthObserver?: ResizeObserver;
   /**
    * Active `ResizeObserver` instances created for the profile-chart
    * persistence path. Each `_renderList()` call detaches and replaces
@@ -264,6 +272,45 @@ export class MeasurePanel {
         fileInput,
       ]),
     ]);
+    this._restorePanelWidth();
+  }
+
+  /**
+   * Restore the user's last dragged panel width and persist any new width
+   * (the panel is horizontally resizable so the profile chart can be widened
+   * to read). One key, panel-wide; clamped to the CSS resize bounds.
+   */
+  private _restorePanelWidth(): void {
+    const stored = Number(localStorage.getItem(MEASURE_PANEL_WIDTH_KEY));
+    if (
+      Number.isFinite(stored) &&
+      stored >= MEASURE_PANEL_MIN_WIDTH_PX &&
+      stored <= MEASURE_PANEL_MAX_WIDTH_PX
+    ) {
+      this.element.style.width = `${stored}px`;
+    }
+    if (typeof ResizeObserver === 'undefined') return;
+    try {
+      let primed = false;
+      this._panelWidthObserver = new ResizeObserver(() => {
+        // Skip the first (synchronous) callback so an untouched panel never
+        // writes the default width back to storage.
+        if (!primed) {
+          primed = true;
+          return;
+        }
+        const w = this.element.offsetWidth;
+        if (!Number.isFinite(w) || w <= 0) return;
+        const clamped = Math.min(
+          MEASURE_PANEL_MAX_WIDTH_PX,
+          Math.max(MEASURE_PANEL_MIN_WIDTH_PX, Math.round(w)),
+        );
+        localStorage.setItem(MEASURE_PANEL_WIDTH_KEY, String(clamped));
+      });
+      this._panelWidthObserver.observe(this.element);
+    } catch {
+      /* ResizeObserver unavailable — resizing still works, just isn't persisted. */
+    }
   }
 
   /** Build the chain bar that sits above the list when chain mode is on. */

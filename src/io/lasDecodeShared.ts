@@ -59,6 +59,25 @@ function gpsTimeOffsetFor(header: LasHeader): number | null {
   return header.pointDataRecordLength >= offset + 8 ? offset : null;
 }
 
+/**
+ * Byte offset of the RGB triple within a point record, or null for formats
+ * that carry no colour. RGB is three uint16s. Offsets:
+ *   format 2            → 20 (no GPS, colour right after the core)
+ *   formats 3, 5        → 28 (after the 8-byte GPS field)
+ *   formats 7, 8, 10    → 30 (after the 30-byte extended core)
+ * Honoured only when the record is actually long enough to hold the triple.
+ */
+function rgbOffsetFor(header: LasHeader): number | null {
+  let offset: number;
+  switch (header.pointFormat) {
+    case 2: offset = 20; break;
+    case 3: case 5: offset = 28; break;
+    case 7: case 8: case 10: offset = 30; break;
+    default: return null;
+  }
+  return header.pointDataRecordLength >= offset + 6 ? offset : null;
+}
+
 /** Decoded local-coordinate positions plus per-point attributes. */
 export interface RawPoints {
   positions: Float32Array;
@@ -68,6 +87,8 @@ export interface RawPoints {
   returnCount: Uint8Array;
   pointSourceId: Uint16Array;
   gpsTime: Float64Array | null;
+  /** Interleaved rgb (0–255), or null when the point format carries no colour. */
+  colors: Uint8Array | null;
 }
 
 /** Per-file constants reused across every record of one decode. */
@@ -80,6 +101,7 @@ export interface DecodeContext {
   extended: boolean;
   pointSourceIdOffset: number;
   gpsTimeOffset: number | null;
+  rgbOffset: number | null;
 }
 
 export function decodeContext(
@@ -98,6 +120,7 @@ export function decodeContext(
       ? RECORD_POINT_SOURCE_ID_EXT
       : RECORD_POINT_SOURCE_ID_LEGACY,
     gpsTimeOffset: gpsTimeOffsetFor(header),
+    rgbOffset: rgbOffsetFor(header),
   };
 }
 
@@ -137,9 +160,22 @@ export function decodeRecord(
   if (ctx.gpsTimeOffset !== null && out.gpsTime !== null) {
     out.gpsTime[i] = view.getFloat64(base + ctx.gpsTimeOffset, true);
   }
+  if (ctx.rgbOffset !== null && out.colors !== null) {
+    const o = base + ctx.rgbOffset;
+    // LAS RGB is 16-bit per channel; narrow to the renderer's 8-bit buffer by
+    // taking the high byte (the LAS-standard full-range encoding, which our
+    // own writer also uses — value × 257 → high byte recovers the original).
+    out.colors[i * 3 + 0] = view.getUint16(o, true) >> 8;
+    out.colors[i * 3 + 1] = view.getUint16(o + 2, true) >> 8;
+    out.colors[i * 3 + 2] = view.getUint16(o + 4, true) >> 8;
+  }
 }
 
-export function allocRawPoints(count: number, hasGpsTime: boolean): RawPoints {
+export function allocRawPoints(
+  count: number,
+  hasGpsTime: boolean,
+  hasColor = false,
+): RawPoints {
   return {
     positions: new Float32Array(count * 3),
     intensity: new Uint16Array(count),
@@ -148,6 +184,7 @@ export function allocRawPoints(count: number, hasGpsTime: boolean): RawPoints {
     returnCount: new Uint8Array(count),
     pointSourceId: new Uint16Array(count),
     gpsTime: hasGpsTime ? new Float64Array(count) : null,
+    colors: hasColor ? new Uint8Array(count * 3) : null,
   };
 }
 

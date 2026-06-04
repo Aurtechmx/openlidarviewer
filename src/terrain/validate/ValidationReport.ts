@@ -39,6 +39,28 @@ export interface ConfidenceSample {
   readonly absError: number;
 }
 
+/** Slope band a held-out point fell in (by local Horn slope). */
+export type SlopeBand = 'flat' | 'moderate' | 'steep';
+
+/** Error statistics for one slope band. */
+export interface SlopeBandError {
+  readonly band: SlopeBand;
+  readonly count: number;
+  readonly rmse: number;
+  readonly mae: number;
+}
+
+/** Whether a held-out point landed on measured or interpolated surface. */
+export type SurfaceZone = 'measured' | 'interpolated';
+
+/** Error statistics for one surface zone. */
+export interface ZoneError {
+  readonly zone: SurfaceZone;
+  readonly count: number;
+  readonly rmse: number;
+  readonly mae: number;
+}
+
 /** The result of a hold-out cross-validation pass. */
 export interface ValidationReport {
   /** Root-mean-square vertical residual across all covered held-out points. */
@@ -55,6 +77,10 @@ export interface ValidationReport {
   readonly holdoutFraction: number;
   /** Per-band breakdown, ordered solid → dashed → gap. */
   readonly perBand: ReadonlyArray<BandError>;
+  /** RMSE/MAE stratified by local slope (flat / moderate / steep). */
+  readonly perSlopeBand?: ReadonlyArray<SlopeBandError>;
+  /** RMSE/MAE stratified by surface zone (measured / interpolated). */
+  readonly perZone?: ReadonlyArray<ZoneError>;
   /** Method tag for the deliverable, e.g. "holdout-cross-validation". */
   readonly method: string;
   /** Coverage mode inherited from the underlying DTM build. */

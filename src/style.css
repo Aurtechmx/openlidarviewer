@@ -19,8 +19,8 @@
   --teal: #00d4c8;        /* Teal */
   --ice: #c9f6ff;         /* Ice Blue */
   --brand-gradient: linear-gradient(90deg, #00b2ff 0%, #00f0ff 52%, #00d4c8 100%);
-  --font: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   /*
    * Spacing scale — a 2px base stepping up to a 4px rhythm. Every padding,
    * margin, and gap in the UI resolves to one of these steps so spacing is
@@ -843,9 +843,11 @@ button:disabled { cursor: not-allowed; }
 /* Tool dock + backend indicator */
 .olv-dock {
   position: absolute; bottom: 14px; left: 16px;
-  /* Above the navbar (z-index 10) so a navbar mode chip never
-   * intercepts a click on a dock tool when the two have any pixel
-   * overlap. The canvas at z-index 0 is below both. */
+  /* Below the navbar (z 22) so that where the wide dock and the centred
+   * mode triangle overlap, the navigation control stays clickable. The
+   * navbar container is pointer-transparent, so the dock's own tools keep
+   * receiving clicks everywhere the two do NOT overlap. Canvas 0 is below
+   * both. */
   z-index: 20;
   display: flex; gap: 6px;
   background: var(--panel); border: 0.5px solid var(--hairline);
@@ -1033,10 +1035,15 @@ button:disabled { cursor: not-allowed; }
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   /* Explicit z-index keeps the NavWidget + camera-preset chips above
-   * the WebGPU canvas regardless of the stacking context the
-   * `transform: translateX(-50%)` above creates. Canvas: 0, navbar:
-   * 10, Inspector: 15, dock: 20. */
-  z-index: 10;
+   * the WebGPU canvas and — critically — above the tool dock (z 20).
+   * The bottom-centre mode triangle and the bottom-left dock share the
+   * same bottom band, and once the dock grows wide enough they overlap;
+   * a navigation control must always win that overlap so it stays
+   * clickable. Safe because the navbar CONTAINER is pointer-transparent
+   * (only the interactive widgets opt in below), so raising it never lets
+   * the navbar's empty area steal a dock-tool click. Canvas 0, Inspector
+   * 15, dock 20, navbar 22. */
+  z-index: 22;
   /* The navbar's visual area is mostly informational (HUD legend,
    * triangle frame, presets row label). Make the container itself
    * pointer-transparent — only the interactive widgets (mode buttons,
@@ -2063,8 +2070,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      class on the dock that un-hides them. */
   .olv-tool-snapshot { display: none; }
   .olv-tool-help { display: none; }
+  .olv-tool-analyse { display: none; }
   .olv-dock.olv-dock-more-open .olv-tool-snapshot,
-  .olv-dock.olv-dock-more-open .olv-tool-help {
+  .olv-dock.olv-dock-more-open .olv-tool-help,
+  .olv-dock.olv-dock-more-open .olv-tool-analyse {
     display: inline-flex;
   }
   /* Subtle accent on the More button so it reads as a disclosure, and a
@@ -2581,6 +2590,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-left-panels > * { pointer-events: auto; }
 .olv-measure-panel {
   width: 218px; box-sizing: border-box;
+  /* Drag the south-east handle to widen the panel (and the profile chart
+   * inside it) rightward into the canvas. `overflow: auto` is required for
+   * the native resize handle to engage; the chosen width is persisted. */
+  min-width: 218px; max-width: 760px;
+  resize: horizontal; overflow: auto;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: 10px; padding: 12px;
 }
@@ -2613,7 +2627,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   max-height: 640px;
   min-width: 180px;
   max-width: 100%;
-  resize: both;
+  resize: vertical;
   overflow: hidden;
   color: var(--accent);
   background: rgba(255, 255, 255, 0.03);
@@ -3266,6 +3280,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     right: calc(8px + env(safe-area-inset-right));
   }
   .olv-measure-panel, .olv-anno-panel { width: auto; }
+  /* Phones: the panel spans the row, so disable horizontal resize. */
+  .olv-measure-panel { resize: none; min-width: 0; max-width: none; }
 
   /* Annotation editor — 44 px touch targets for every control. */
   .olv-anno-editor-cancel, .olv-anno-editor-save, .olv-anno-chip {
@@ -3954,40 +3970,63 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 /* Readiness cards — the lead surface. */
 .olv-analyse-readiness { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .olv-analyse-ready {
+  display: flex; align-items: center; gap: 12px;
   border: 0.5px solid var(--hairline); border-left-width: 3px;
-  border-radius: 6px; padding: 6px 8px; background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px; padding: 8px 10px; background: rgba(255, 255, 255, 0.03);
   min-width: 0;
 }
+/* Left column — label over the supporting line; takes the slack. */
+.olv-analyse-ready-main { flex: 1 1 auto; min-width: 0; }
 .olv-analyse-ready-label {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--text-faint);
-}
-/* Value + rating share one baseline-aligned row. */
-.olv-analyse-ready-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.olv-analyse-ready-value {
-  font-size: 15px; font-weight: 600; color: var(--text);
-  font-family: var(--mono); line-height: 1.2;
-}
-.olv-analyse-ready-rating {
-  font-size: 10.5px; font-weight: 600; text-transform: capitalize;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim);
 }
 .olv-analyse-ready-detail {
-  font-size: 10.5px; color: var(--text-dim); margin-top: 2px;
+  font-size: 11px; color: var(--text-faint); margin-top: 3px;
   overflow-wrap: anywhere;
+}
+/* Right column — the headline figure and the rating pill. */
+.olv-analyse-ready-side { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.olv-analyse-ready-figure { display: flex; align-items: baseline; gap: 2px; }
+.olv-analyse-ready-value {
+  font-family: var(--mono); font-size: 22px; font-weight: 600; line-height: 1;
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.olv-analyse-ready-figure.is-text .olv-analyse-ready-value { font-size: 14px; }
+.olv-analyse-ready-unit {
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+}
+/* Rating pill — capitalised word on a tinted ground keyed to the rating. */
+.olv-analyse-ready-rating {
+  font-size: 10px; font-weight: 600; text-transform: capitalize;
+  letter-spacing: 0.02em; padding: 3px 9px; border-radius: 999px;
+  white-space: nowrap;
 }
 /* Rating accents — token-driven, colourblind-paired with the rating word. */
 .olv-analyse-ready.is-excellent { border-left-color: var(--rating-excellent); }
-.olv-analyse-ready.is-excellent .olv-analyse-ready-rating { color: var(--rating-excellent); }
+.olv-analyse-ready.is-excellent .olv-analyse-ready-rating {
+  color: var(--rating-excellent); background: color-mix(in srgb, var(--rating-excellent) 20%, transparent);
+}
 .olv-analyse-ready.is-strong { border-left-color: var(--rating-strong); }
-.olv-analyse-ready.is-strong .olv-analyse-ready-rating { color: var(--rating-strong); }
+.olv-analyse-ready.is-strong .olv-analyse-ready-rating {
+  color: var(--rating-strong); background: color-mix(in srgb, var(--rating-strong) 20%, transparent);
+}
 .olv-analyse-ready.is-good { border-left-color: var(--rating-good); }
-.olv-analyse-ready.is-good .olv-analyse-ready-rating { color: var(--rating-good); }
+.olv-analyse-ready.is-good .olv-analyse-ready-rating {
+  color: var(--rating-good); background: color-mix(in srgb, var(--rating-good) 20%, transparent);
+}
 .olv-analyse-ready.is-moderate { border-left-color: var(--rating-moderate); }
-.olv-analyse-ready.is-moderate .olv-analyse-ready-rating { color: var(--rating-moderate); }
+.olv-analyse-ready.is-moderate .olv-analyse-ready-rating {
+  color: var(--rating-moderate); background: color-mix(in srgb, var(--rating-moderate) 22%, transparent);
+}
 .olv-analyse-ready.is-weak { border-left-color: var(--rating-weak); }
-.olv-analyse-ready.is-weak .olv-analyse-ready-rating { color: var(--rating-weak); }
+.olv-analyse-ready.is-weak .olv-analyse-ready-rating {
+  color: var(--rating-weak); background: color-mix(in srgb, var(--rating-weak) 22%, transparent);
+}
 .olv-analyse-ready.is-unavailable { border-left-color: var(--text-faint); }
-.olv-analyse-ready.is-unavailable .olv-analyse-ready-rating { color: var(--text-faint); }
+.olv-analyse-ready.is-unavailable .olv-analyse-ready-rating {
+  color: var(--text-faint); background: color-mix(in srgb, var(--text-faint) 18%, transparent);
+}
 
 /* Entrance motion — cards fade/rise in when results arrive. */
 .olv-analyse-ready:not(.is-skeleton) { animation: olv-ready-in 220ms ease both; }
@@ -4047,6 +4086,12 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   transition: color 130ms ease, border-color 130ms ease;
 }
 .olv-analyse-dl:hover { color: var(--text); border-color: var(--accent); }
+/* Primary export (the DEM raster package) — the "take the data with you" action. */
+.olv-analyse-dl.is-primary {
+  flex-basis: 100%; color: var(--accent); background: var(--accent-soft);
+  border-color: var(--accent); font-weight: 600;
+}
+.olv-analyse-dl.is-primary:hover { color: var(--text); }
 
 /* Evidence legend. */
 .olv-analyse-legend { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
@@ -4104,3 +4149,387 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 @media (max-width: 767px) {
   .olv-analyse-panel { width: auto; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Batch format converter — splash entry link + modal overlay.
+   Gestalt: one grouped region per decision; a single gradient primary action;
+   secondary controls visually subordinate. Figure/ground via a dimmed,
+   blurred backdrop over the empty state.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Secondary "Batch convert files →" action under the primary CTA. */
+.olv-batch-convert-link {
+  margin-top: var(--space-lg);
+  background: none; border: none;
+  color: var(--accent); font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; padding: var(--space-xs) var(--space-sm); border-radius: 6px;
+}
+.olv-batch-convert-link:hover { text-decoration: underline; }
+.olv-batch-convert-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.olv-bc-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-2xl);
+  background: rgba(5, 8, 16, 0.66);
+  backdrop-filter: blur(3px);
+  overscroll-behavior: contain;
+}
+.olv-bc-hidden { display: none; }
+
+.olv-bc-dialog {
+  width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto;
+  box-sizing: border-box;
+  background: var(--panel); color: var(--text);
+  border: 0.5px solid var(--hairline); border-radius: 14px;
+  padding: var(--space-3xl);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.olv-bc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2xl); }
+.olv-bc-title { font-size: 16px; font-weight: 700; margin: 0; }
+.olv-bc-close {
+  background: none; border: none; color: var(--text-dim); font-size: 14px;
+  cursor: pointer; padding: var(--space-xs); border-radius: 6px; line-height: 1;
+}
+.olv-bc-close:hover { color: var(--text); }
+
+/* Each decision is its own region, separated by generous whitespace. */
+.olv-bc-section { margin-bottom: var(--space-2xl); }
+.olv-bc-section-label {
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-faint); margin-bottom: var(--space-md);
+}
+
+.olv-bc-drop {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
+  padding: var(--space-3xl) var(--space-2xl); text-align: center; cursor: pointer;
+  border: 1px dashed var(--hairline); border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.olv-bc-drop.is-drag { border-color: var(--accent); background: var(--accent-soft); }
+.olv-bc-drop-text { font-size: 12.5px; font-weight: 600; }
+.olv-bc-drop-sub { font-size: 10.5px; color: var(--text-faint); }
+
+.olv-bc-files { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: var(--space-md); }
+.olv-bc-file-row {
+  display: flex; align-items: center; gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md); border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.olv-bc-file-name { flex: 1; min-width: 0; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olv-bc-file-size { font-size: 10.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.olv-bc-file-del { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 11px; padding: var(--space-xs); border-radius: 4px; }
+.olv-bc-file-del:hover { color: var(--rating-weak); }
+
+/* Pill groups — similarity = same shape/size; active state contrasts. */
+.olv-bc-pills { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.olv-bc-pill {
+  font: inherit; font-size: 12px; cursor: pointer;
+  padding: var(--space-sm) var(--space-xl); border-radius: 999px;
+  border: 0.5px solid var(--hairline); background: transparent; color: var(--text-dim);
+}
+.olv-bc-pill:hover:not(.is-disabled):not(.is-active) { border-color: var(--accent); color: var(--text); }
+.olv-bc-pill.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 600; }
+.olv-bc-pill.is-disabled { opacity: 0.4; cursor: not-allowed; }
+
+.olv-bc-crs-extra { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
+.olv-bc-field { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-bc-field-label { font-size: 10.5px; color: var(--text-dim); }
+.olv-bc-input {
+  font: inherit; font-size: 13px; color: var(--text);
+  background: rgba(0, 0, 0, 0.25); border: 0.5px solid var(--hairline);
+  border-radius: 8px; padding: var(--space-md); box-sizing: border-box; width: 100%;
+}
+.olv-bc-input:focus { outline: none; border-color: var(--accent); }
+
+/* Single primary action; the hint sits beside it and turns muted-red when blocked. */
+.olv-bc-actions { display: flex; align-items: center; gap: var(--space-xl); margin-bottom: var(--space-2xl); flex-wrap: wrap; }
+.olv-bc-convert {
+  font: inherit; font-size: 13px; font-weight: 700; color: #04121f;
+  background: var(--brand-gradient); border: none; border-radius: 9px;
+  padding: var(--space-xl) var(--space-4xl); cursor: pointer;
+}
+.olv-bc-convert:disabled { opacity: 0.4; cursor: not-allowed; }
+.olv-bc-hint { font-size: 11px; color: var(--text-dim); margin: 0; }
+.olv-bc-hint.is-blocked { color: var(--rating-moderate); }
+
+.olv-bc-results { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-bc-results-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-xs); }
+.olv-bc-results-summary { font-size: 11.5px; color: var(--text-dim); }
+.olv-bc-dlall {
+  font: inherit; font-size: 11.5px; font-weight: 600; color: var(--text);
+  background: var(--accent-soft); border: 0.5px solid var(--accent);
+  border-radius: 8px; padding: var(--space-sm) var(--space-xl); cursor: pointer;
+}
+.olv-bc-row { border: 0.5px solid var(--hairline); border-radius: 8px; padding: var(--space-md); }
+.olv-bc-row.is-error { border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.06); }
+.olv-bc-row-top { display: flex; align-items: center; gap: var(--space-md); }
+.olv-bc-row-icon { font-size: 9px; }
+.olv-bc-row.is-ok .olv-bc-row-icon { color: var(--rating-excellent); }
+.olv-bc-row.is-error .olv-bc-row-icon { color: var(--rating-weak); }
+.olv-bc-row-name { flex: 1; min-width: 0; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olv-bc-row-meta { font-size: 10.5px; color: var(--text-faint); }
+.olv-bc-row-dl {
+  font: inherit; font-size: 10.5px; font-weight: 600; color: var(--accent);
+  background: none; border: 0.5px solid var(--hairline); border-radius: 6px;
+  padding: var(--space-xs) var(--space-md); cursor: pointer;
+}
+.olv-bc-row-dl:hover { border-color: var(--accent); }
+.olv-bc-row-log { margin: var(--space-sm) 0 0; padding-left: var(--space-xl); display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-bc-row-log li { font-size: 10.5px; }
+.olv-bc-log-warn { color: var(--rating-moderate); }
+.olv-bc-log-error { color: var(--rating-weak); }
+.olv-bc-row-error { font-size: 11.5px; color: var(--rating-weak); }
+
+@media (max-width: 767px) {
+  .olv-bc-overlay { padding: 0; align-items: stretch; }
+  .olv-bc-dialog { max-width: none; max-height: 100vh; border-radius: 0; padding: var(--space-2xl); }
+}
+
+/* In-project Export / Convert panel — converter controls in the left column. */
+.olv-export-panel {
+  width: 218px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: var(--space-xl);
+}
+.olv-export-panel.olv-collapsed > :not(.olv-panel-head) { display: none; }
+.olv-export-panel.olv-collapsed { padding-bottom: var(--space-xl); }
+.olv-export-panel.olv-collapsed .olv-chevron { transform: rotate(180deg); }
+.olv-export-body { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
+.olv-export-body .olv-bc-section-label { margin-bottom: var(--space-xs); margin-top: var(--space-sm); }
+.olv-export-btn { margin-top: var(--space-sm); padding: var(--space-md) var(--space-xl); width: 100%; }
+.olv-export-status { font-size: 10.5px; color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }
+.olv-export-status.is-warn { color: var(--rating-moderate); }
+.olv-export-status.is-error { color: var(--rating-weak); }
+@media (max-width: 767px) { .olv-export-panel { width: auto; } }
+
+/* Full-resolution toggle in the Export panel. */
+.olv-export-fullres { display: flex; flex-direction: column; gap: var(--space-2xs); margin-top: var(--space-sm); }
+.olv-export-fullres-label { display: flex; align-items: center; gap: var(--space-sm); font-size: 11.5px; color: var(--text); cursor: pointer; }
+.olv-export-fullres-box { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+.olv-export-fullres-box:disabled { cursor: not-allowed; }
+.olv-export-fullres-hint { font-size: 10px; color: var(--text-faint); line-height: 1.4; }
+
+/* Composite terrain quality score in the Analyse panel. */
+/* Terrain assessment — the single top-level verdict above all metrics. */
+.olv-analyse-assessment {
+  margin-bottom: var(--space-lg); padding: 10px 12px; border-radius: 8px;
+  border: 0.5px solid var(--hairline); border-left-width: 3px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.olv-analyse-assess-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.olv-analyse-assess-label {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+}
+.olv-analyse-assess-verdict { font-size: 19px; font-weight: 700; line-height: 1; }
+.olv-analyse-assess-reason { font-size: 11px; color: var(--text-dim); margin-top: 4px; overflow-wrap: anywhere; }
+.olv-analyse-assess-use { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; }
+.olv-analyse-assess-caution { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+.olv-analyse-assessment.is-good { border-left-color: var(--rating-excellent); }
+.olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: var(--rating-excellent); }
+.olv-analyse-assessment.is-preview { border-left-color: var(--rating-moderate); }
+.olv-analyse-assessment.is-preview .olv-analyse-assess-verdict { color: var(--rating-moderate); }
+.olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: var(--rating-moderate); }
+.olv-analyse-assessment.is-limited { border-left-color: var(--rating-weak); }
+.olv-analyse-assessment.is-limited .olv-analyse-assess-verdict { color: var(--rating-weak); }
+.olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: var(--rating-weak); }
+
+/* Collapsible "Details" expander — holds the drill-down metrics under the hero. */
+.olv-analyse-details { margin-bottom: var(--space-lg); }
+.olv-analyse-details-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
+  padding: 6px 0; display: flex; align-items: center; gap: 6px;
+  border-bottom: 0.5px solid var(--hairline);
+}
+.olv-analyse-details-summary::-webkit-details-marker { display: none; }
+.olv-analyse-details-summary::before {
+  content: '▸'; font-size: 9px; color: var(--text-faint);
+  transition: transform 140ms ease;
+}
+.olv-analyse-details[open] > .olv-analyse-details-summary::before { transform: rotate(90deg); }
+.olv-analyse-details-summary:hover { color: var(--text); }
+.olv-analyse-details[open] > .olv-analyse-details-summary { margin-bottom: var(--space-md); }
+
+.olv-analyse-score { margin-bottom: var(--space-xl); }
+.olv-analyse-score-head { display: flex; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.olv-analyse-score-num { font-size: 28px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.olv-analyse-score-num.is-excellent { color: var(--rating-excellent); }
+.olv-analyse-score-num.is-good { color: var(--rating-good); }
+.olv-analyse-score-num.is-fair { color: var(--rating-moderate); }
+.olv-analyse-score-num.is-poor { color: var(--rating-weak); }
+.olv-analyse-score-of { font-size: 11px; color: var(--text-faint); }
+.olv-analyse-score-band { margin-left: auto; font-size: 10.5px; font-weight: 600; text-transform: capitalize; color: var(--text-dim); }
+.olv-analyse-score-band.is-excellent { color: var(--rating-excellent); }
+.olv-analyse-score-band.is-good { color: var(--rating-good); }
+.olv-analyse-score-band.is-fair { color: var(--rating-moderate); }
+.olv-analyse-score-band.is-poor { color: var(--rating-weak); }
+.olv-analyse-score-bars { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-analyse-score-comp { display: flex; align-items: center; gap: var(--space-sm); }
+.olv-analyse-score-label { flex: 0 0 84px; font-size: 10px; color: var(--text-dim); }
+.olv-analyse-score-track { flex: 1; height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.olv-analyse-score-fill { height: 100%; border-radius: 999px; background: var(--brand-gradient); }
+.olv-analyse-score-pct { flex: 0 0 34px; text-align: right; font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.olv-analyse-score-pct.is-neutral { color: var(--text-faint); font-style: italic; }
+
+/* Surface models section in the Analyse panel (DSM / slope / hillshade). */
+.olv-analyse-surface { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-analyse-surface-stats { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-surface-stat { font-size: 11px; color: var(--text-dim); }
+.olv-analyse-surface-stat.is-dim { font-size: 10px; color: var(--text-faint); }
+.olv-analyse-hillshade,
+.olv-analyse-raster {
+  width: 100%; height: auto; display: block; border-radius: 8px;
+  border: 0.5px solid var(--hairline); background: #05080f;
+  image-rendering: auto;
+}
+/* A labelled preview tile — heading, raster, optional legend, caption, export. */
+.olv-analyse-raster-tile { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-sublabel {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+}
+.olv-analyse-caption { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* Colour-ramp legend under a raster tile. */
+.olv-analyse-legend { display: flex; flex-direction: column; gap: 2px; }
+.olv-analyse-legend-bar { height: 6px; border-radius: 3px; border: 0.5px solid var(--hairline); }
+.olv-analyse-legend-ticks {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+}
+/* Bare-earth elevation histogram. */
+.olv-analyse-hist { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-hist-svg {
+  width: 100%; height: 56px; display: block;
+  border-bottom: 1px solid var(--hairline);
+}
+.olv-analyse-hist-bar { fill: var(--accent); opacity: 0.78; }
+/* Relief tile — adjustable-sun controls. */
+.olv-analyse-relief-controls { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-relief-toggle {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 11px; color: var(--text-dim); user-select: none;
+}
+.olv-analyse-relief-toggle input { accent-color: var(--accent); cursor: pointer; }
+.olv-analyse-relief-slider { display: flex; align-items: center; gap: 8px; }
+.olv-analyse-relief-tag {
+  font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint); width: 26px; flex: 0 0 auto;
+}
+.olv-analyse-relief-slider input[type='range'] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
+.olv-analyse-relief-slider input[type='range']:disabled { opacity: 0.4; }
+.olv-analyse-relief-val {
+  font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  width: 34px; text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums;
+}
+/* Click-to-sample readout under a raster tile. */
+.olv-analyse-raster.is-samplable { cursor: crosshair; }
+.olv-analyse-sample {
+  font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; padding: 2px 0;
+  border-top: 0.5px dashed var(--hairline);
+}
+.olv-analyse-sample.is-empty { color: var(--text-faint); }
+/* Sampled-cell crosshair — rides above the raster, survives re-light/resize. */
+.olv-analyse-raster-wrap { position: relative; line-height: 0; }
+.olv-analyse-xhair {
+  position: absolute; width: 12px; height: 12px; pointer-events: none;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  animation: olv-xhair-in 140ms ease both;
+}
+.olv-analyse-xhair::after {
+  content: ''; position: absolute; inset: 3.5px; border-radius: 50%;
+  background: var(--accent);
+}
+@keyframes olv-xhair-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+/* Hover affordance: a faint ring signals the raster is interactive. */
+.olv-analyse-raster.is-samplable:hover { outline: 1px solid var(--accent-soft); outline-offset: -1px; }
+/* Disabled (multi-directional) sun row reads as intentionally off. */
+.olv-analyse-relief-slider.is-off { opacity: 0.55; }
+.olv-analyse-relief-slider.is-off .olv-analyse-relief-val { font-style: italic; }
+/* Caption colour transitions gently when the relief mode changes. */
+.olv-analyse-caption { transition: color 120ms ease; }
+/* Histogram bars grow in on first render (motion-safe). */
+@media (prefers-reduced-motion: no-preference) {
+  .olv-analyse-hist-bar {
+    transform-box: fill-box; transform-origin: bottom;
+    animation: olv-bar-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+@keyframes olv-bar-in { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+.olv-analyse-surface-dl {
+  align-self: flex-start; font: inherit; font-size: 10.5px; font-weight: 600;
+  color: var(--accent); background: var(--accent-soft);
+  border: 0.5px solid var(--accent); border-radius: 8px;
+  padding: var(--space-xs) var(--space-md); cursor: pointer;
+}
+.olv-analyse-surface-dl:hover { border-color: var(--accent); }
+
+/* Stratified RMSE breakdown (by slope band / surface zone). */
+.olv-analyse-strata { font-size: 10px; color: var(--text-faint); margin-top: var(--space-2xs); }
+
+/* USGS 3DEP Quality Level badge in the Analyse panel validation section. */
+.olv-analyse-ql {
+  align-self: flex-start; margin-top: var(--space-2xs);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--accent); background: var(--accent-soft);
+  border: 0.5px solid var(--accent); border-radius: 6px;
+  padding: 1px var(--space-xs);
+}
+
+/* Splash reorg: primary action row (Open hero + small Convert chip). */
+.olv-empty-actions {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; flex-wrap: wrap; margin: 4px 0 2px;
+}
+.olv-convert-chip {
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--accent); background: var(--accent-soft, rgba(0,178,255,0.10));
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 999px; padding: 9px 16px; cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+.olv-convert-chip:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.olv-convert-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Splash reorg: one bounded "Explore public LiDAR" card (Gestalt common region). */
+.olv-explore-card {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  /* Stay in the centred content column — without a cap the card stretches to
+   * the full viewport width on desktop (it lives in a full-width flex column). */
+  width: 100%; max-width: 460px; box-sizing: border-box;
+  margin: 8px auto; padding: 16px 14px;
+  border: 0.5px solid var(--hairline); border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+}
+.olv-explore-card > .olv-empty-section-label { margin: 0; }
+
+/* Object-scan panel (shown instead of terrain analysis for compact 3-D scans). */
+.olv-object-panel {
+  width: 232px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+}
+.olv-object-body { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.olv-object-row { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+.olv-object-label { color: var(--text-dim); }
+.olv-object-value { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.olv-object-note { font-size: 10px; color: var(--text-faint); line-height: 1.4; margin-top: 2px; }
+.olv-object-note.is-warn { color: var(--warn, #d8a657); }
+.olv-object-run-anyway {
+  align-self: flex-start; margin-top: 6px; font: inherit; font-size: 10.5px; font-weight: 600;
+  color: var(--text-dim); background: transparent;
+  border: 0.5px solid var(--hairline); border-radius: 8px;
+  padding: 6px 12px; cursor: pointer;
+}
+.olv-object-run-anyway:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ui-typography: tabular figures so numbers align in the data-heavy panels. */
+.olv-analyse-panel, .olv-object-panel, .olv-measure-panel { font-variant-numeric: tabular-nums; }

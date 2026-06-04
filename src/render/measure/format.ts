@@ -64,6 +64,16 @@ export function formatGrade(percent: number): string {
 }
 
 /**
+ * Format a compass azimuth as a zero-padded whole-degree bearing, e.g. 42° →
+ * "042°". A non-finite azimuth (a purely vertical segment) has no bearing.
+ */
+export function formatBearing(azimuthDeg: number): string {
+  if (!Number.isFinite(azimuthDeg)) return '—';
+  const deg = Math.round(((azimuthDeg % 360) + 360) % 360) % 360;
+  return `${String(deg).padStart(3, '0')}°`;
+}
+
+/**
  * Format a profile measurement's headline readout — a single compact line
  * that captures the 3D length and the vertical drop with grade, matching the
  * tags an engineer reads off a paper cross-section card.

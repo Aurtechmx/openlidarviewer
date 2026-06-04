@@ -1,0 +1,272 @@
+/**
+ * ExportPanel.ts — in-project "Export to other formats".
+ *
+ * A collapsible left panel (same shell as the Analyse/Measure panels) that
+ * converts the currently-open cloud to LAS / XYZ / ASC with the same CRS
+ * choices as the batch converter (keep / assign / reproject). It mounts on
+ * every scan load, so the heavy engine (proj4) is imported lazily on Export
+ * rather than at module load.
+ *
+ * Reuses the converter's pill/field classes (`olv-bc-*`) for visual
+ * consistency with the splash batch converter.
+ */
+
+import { el } from './dom';
+import { loadConvertEngine } from '../lazyChunks';
+import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
+import type { PointCloud } from '../model/PointCloud';
+
+export interface ExportPanelCallbacks {
+  /** Return the loaded (display-resolution) cloud, or null when none is active. */
+  getCloud: () => PointCloud | null;
+  /** Whether a full-resolution re-decode of the source is possible (local file). */
+  hasFullSource: () => boolean;
+  /** Whether the loaded cloud is a reduced subset of the source. */
+  isReduced: () => boolean;
+  /** Re-decode the original file at full resolution. Only call when `hasFullSource()`. */
+  getFullCloud: () => Promise<PointCloud | null>;
+}
+
+export class ExportPanel {
+  readonly element: HTMLElement;
+  private readonly _formatRow: HTMLElement;
+  private readonly _crsRow: HTMLElement;
+  private readonly _crsExtra: HTMLElement;
+  private readonly _exportBtn: HTMLButtonElement;
+  private readonly _status: HTMLElement;
+  private readonly _fullResRow: HTMLElement;
+  private readonly _cb: ExportPanelCallbacks;
+
+  private _format: ConvertFormat = 'las';
+  private _crsMode: CrsMode = 'keep';
+  private _targetEpsg = '';
+  private _sourceEpsg = '';
+  private _fullRes = false;
+  private _busy = false;
+
+  constructor(callbacks: ExportPanelCallbacks) {
+    this._cb = callbacks;
+    this.element = el('section', { className: 'olv-export-panel' });
+
+    const title = el('div', { className: 'olv-panel-title', text: 'Export / Convert' });
+    const chevron = el('span', { className: 'olv-chevron', text: '▾' });
+    const collapseBtn = el('button', { className: 'olv-collapse-toggle', title: 'Collapse this panel' });
+    collapseBtn.setAttribute('type', 'button');
+    collapseBtn.setAttribute('aria-label', 'Collapse Export panel');
+    collapseBtn.append(chevron);
+    const head = el('div', { className: 'olv-panel-head' });
+    head.append(title, collapseBtn);
+    const toggle = () => this.element.classList.toggle('olv-collapsed');
+    collapseBtn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+    head.addEventListener('click', (e) => { if (e.target === head || e.target === title) toggle(); });
+
+    this._formatRow = el('div', { className: 'olv-bc-pills' });
+    this._crsRow = el('div', { className: 'olv-bc-pills' });
+    this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
+    this._fullResRow = el('div', { className: 'olv-export-fullres' });
+    this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
+    this._exportBtn.addEventListener('click', () => void this._export());
+    this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
+
+    const body = el('div', { className: 'olv-export-body' });
+    body.append(
+      this._label('Output format'),
+      this._formatRow,
+      this._label('Coordinate system'),
+      this._crsRow,
+      this._crsExtra,
+      this._fullResRow,
+      this._exportBtn,
+      this._status,
+    );
+
+    this.element.append(head, body);
+    this.element.classList.add('olv-collapsed');
+    this.setVisible(false);
+
+    this._renderFormatPills();
+    this._renderCrsPills();
+    this._renderCrsExtra();
+    this._renderFullResRow();
+  }
+
+  setVisible(on: boolean): void {
+    this.element.style.display = on ? '' : 'none';
+  }
+
+  /** Re-evaluate the full-resolution availability for the active cloud. */
+  refresh(): void {
+    this._renderFullResRow();
+  }
+
+  /**
+   * Full-resolution checkbox. The viewer reduces large scans for display, so
+   * this re-decodes the original file to convert every point. It's only
+   * available for local files (a streamed/remote scan has no full source to
+   * re-read) and only useful when the loaded view is actually reduced.
+   */
+  private _renderFullResRow(): void {
+    this._fullResRow.replaceChildren();
+    const available = this._cb.hasFullSource();
+    const reduced = this._cb.isReduced();
+    // The toggle is only meaningful when there's a local source AND the loaded
+    // view was actually reduced. Otherwise force it off so it can't carry a
+    // stale `checked` across cloud switches (which would re-decode pointlessly).
+    const usable = available && reduced;
+    if (!usable) this._fullRes = false;
+
+    const label = el('label', { className: 'olv-export-fullres-label' });
+    const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
+    box.checked = this._fullRes;
+    box.disabled = !usable;
+    box.addEventListener('change', () => { this._fullRes = box.checked; });
+    label.append(box, el('span', { text: 'Convert at full resolution' }));
+
+    let hint: string;
+    if (!available) hint = 'Full-resolution re-read isn’t available for streamed or remote scans.';
+    else if (reduced) hint = 'The loaded view is reduced for display — tick this to convert every point (slower).';
+    else hint = 'The loaded scan is already full resolution.';
+
+    this._fullResRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  }
+
+  private _label(text: string): HTMLElement {
+    return el('div', { className: 'olv-bc-section-label', text });
+  }
+
+  private _renderFormatPills(): void {
+    this._formatRow.replaceChildren();
+    (Object.keys(CONVERT_FORMATS) as ConvertFormat[]).forEach((fmt) => {
+      const spec = CONVERT_FORMATS[fmt];
+      const pill = el('button', {
+        className: `olv-bc-pill${this._format === fmt ? ' is-active' : ''}${spec.available ? '' : ' is-disabled'}`,
+        text: spec.label,
+        type: 'button',
+      }) as HTMLButtonElement;
+      if (!spec.available) {
+        pill.disabled = true;
+        pill.title = 'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
+      } else {
+        pill.addEventListener('click', () => { this._format = fmt; this._renderFormatPills(); });
+      }
+      this._formatRow.append(pill);
+    });
+  }
+
+  private _renderCrsPills(): void {
+    this._crsRow.replaceChildren();
+    const modes: { mode: CrsMode; label: string }[] = [
+      { mode: 'keep', label: 'Keep' },
+      { mode: 'assign', label: 'Assign EPSG' },
+      { mode: 'reproject', label: 'Reproject' },
+    ];
+    modes.forEach(({ mode, label }) => {
+      const pill = el('button', {
+        className: `olv-bc-pill${this._crsMode === mode ? ' is-active' : ''}`,
+        text: label,
+        type: 'button',
+      });
+      pill.addEventListener('click', () => { this._crsMode = mode; this._renderCrsPills(); this._renderCrsExtra(); });
+      this._crsRow.append(pill);
+    });
+  }
+
+  private _renderCrsExtra(): void {
+    this._crsExtra.replaceChildren();
+    if (this._crsMode === 'keep') return;
+    if (this._crsMode === 'reproject') {
+      this._crsExtra.append(this._field('Source EPSG (optional)', this._sourceEpsg, (v) => { this._sourceEpsg = v; }));
+    }
+    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; }));
+  }
+
+  private _field(label: string, value: string, onInput: (v: string) => void): HTMLElement {
+    const wrap = el('label', { className: 'olv-bc-field' });
+    const input = el('input', { className: 'olv-bc-input', type: 'text' }) as HTMLInputElement;
+    input.inputMode = 'numeric';
+    input.placeholder = 'EPSG code';
+    input.value = value;
+    input.addEventListener('input', () => onInput(input.value.trim()));
+    wrap.append(el('span', { className: 'olv-bc-field-label', text: label }), input);
+    return wrap;
+  }
+
+  private _setStatus(text: string, level: 'info' | 'warn' | 'error' = 'info'): void {
+    this._status.textContent = text;
+    this._status.className = `olv-export-status is-${level}`;
+  }
+
+  private async _export(): Promise<void> {
+    if (this._busy) return;
+    if (!this._cb.getCloud()) {
+      this._setStatus('Open a scan first, then export.', 'warn');
+      return;
+    }
+    const target = parseEpsg(this._targetEpsg);
+    if (this._crsMode !== 'keep' && target == null) {
+      this._setStatus('Enter the target EPSG code first.', 'warn');
+      return;
+    }
+
+    this._busy = true;
+    this._exportBtn.disabled = true;
+    const useFull = this._fullRes && this._cb.hasFullSource();
+    this._exportBtn.textContent = useFull ? 'Re-decoding…' : 'Exporting…';
+    try {
+      // Full resolution re-decodes the original file; otherwise convert the
+      // loaded (display-resolution) cloud.
+      const cloud = useFull ? await this._cb.getFullCloud() : this._cb.getCloud();
+      if (!cloud) {
+        this._setStatus('Could not read the source at full resolution.', 'error');
+        return;
+      }
+      this._exportBtn.textContent = 'Exporting…';
+      const { convertCloud } = await loadConvertEngine();
+      const options: ConvertOptions = {
+        format: this._format,
+        crsMode: this._crsMode,
+        targetEpsg: target,
+        sourceEpsg: parseEpsg(this._sourceEpsg),
+      };
+      const { file, report } = convertCloud(cloud, options);
+      if (file) {
+        downloadBytes(file.filename, file.bytes, file.mime);
+        // ASCII keep-mode: also emit a `.prj` sidecar with the source WKT.
+        const wkt = cloud.metadata?.crs?.wkt;
+        if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && wkt) {
+          downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(wkt), 'text/plain');
+        }
+        const warn = report.log.find((l) => l.level === 'warn');
+        const reducedNote = !useFull && this._cb.isReduced() ? ' · reduced view' : '';
+        this._setStatus(
+          warn ? warn.message : `Exported ${report.pointCount.toLocaleString()} points${reducedNote} · ${report.crsNote}`,
+          warn || reducedNote ? 'warn' : 'info',
+        );
+      } else {
+        const err = report.log.find((l) => l.level === 'error');
+        this._setStatus(err ? err.message : 'Export failed.', 'error');
+      }
+    } catch (err) {
+      this._setStatus(`Export failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    } finally {
+      this._busy = false;
+      this._exportBtn.disabled = false;
+      this._exportBtn.textContent = 'Export';
+    }
+  }
+}
+
+function parseEpsg(v: string): number | null {
+  const n = parseInt(v, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function downloadBytes(filename: string, bytes: Uint8Array, mime: string): void {
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

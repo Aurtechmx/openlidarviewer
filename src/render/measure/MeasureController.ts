@@ -25,6 +25,7 @@ import type {
 import { MIN_POINTS, isFull } from './types';
 import {
   distance,
+  bearingDegrees,
   polylineLength,
   polygonAreaPlanar,
   polygonAreaHorizontal,
@@ -41,6 +42,7 @@ import {
   formatLength,
   formatArea,
   formatAngle,
+  formatBearing,
   formatGrade,
   formatProfileHeadline,
   formatBoxHeadline,
@@ -195,6 +197,8 @@ export class MeasureController {
   private _onChange: (() => void) | null = null;
   /** Called when the unit system changes — used to persist the preference. */
   private _onUnitChange: (() => void) | null = null;
+  /** Called when the active measurement kind changes (e.g. user picks Profile). */
+  private _onKindChange: ((kind: MeasurementKind) => void) | null = null;
 
   /** Re-picks a cloud point at the given NDC — injected by the Viewer. */
   private _picker: ((ndcX: number, ndcY: number) => Vec3 | null) | null = null;
@@ -430,6 +434,11 @@ export class MeasureController {
     this._onChange = cb;
   }
 
+  /** Register a callback fired whenever the active measurement kind changes. */
+  setOnKindChange(cb: (kind: MeasurementKind) => void): void {
+    this._onKindChange = cb;
+  }
+
   /**
    * Append a complementary tool button to the kind picker row.
    * Used by the host to mount sibling tools (e.g. Lasso volume) so
@@ -601,6 +610,7 @@ export class MeasureController {
     this._draft = null; // switching kinds abandons an in-progress measurement
     this._renderKindButtons();
     this._updateHint();
+    this._onKindChange?.(kind);
   }
 
   /** Provide the scan's up-axis and origin (origin reserved for later phases). */
@@ -845,8 +855,15 @@ export class MeasureController {
   private _headlineText(m: Measurement): string {
     const p = m.points;
     switch (m.kind) {
-      case 'distance':
-        return p.length >= 2 ? formatLength(distance(p[0], p[1]), this._units) : '—';
+      case 'distance': {
+        if (p.length < 2) return '—';
+        const len = formatLength(distance(p[0], p[1]), this._units);
+        const az = bearingDegrees(p[0], p[1], this._worldUp);
+        // Append the compass bearing when the segment has a horizontal run —
+        // a survey staple. Purely vertical pairs have no bearing, so just the
+        // length shows.
+        return Number.isFinite(az) ? `${len} · ${formatBearing(az)}` : len;
+      }
       case 'polyline':
         return formatLength(polylineLength(p).total, this._units);
       case 'area':

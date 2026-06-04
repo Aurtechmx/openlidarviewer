@@ -21,7 +21,7 @@ OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. Yo
 
 The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that real LiDAR work needs.
 
-It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is a fast, focused viewer.
+It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is a browser-native LiDAR inspection and terrain-analysis platform focused on transparency, validation, and local-first processing.
 
 ## Live Demo
 
@@ -137,9 +137,9 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 
 ## Terrain Intelligence Foundation
 
-OpenLiDARViewer v0.3.9 ships an internal terrain analysis foundation
-under `src/terrain/`. The foundation is a small set of pure-data
-contracts and deterministic primitives (per-neighborhood metrics,
+OpenLiDARViewer ships an internal terrain analysis foundation under
+`src/terrain/` (introduced in v0.3.9). The foundation is a small set of
+pure-data contracts and deterministic primitives (per-neighborhood metrics,
 ground-confidence scoring, grid and tile partitioning, LRU cache,
 worker job lifecycle, feature flags) that establish one common
 envelope for every terrain analysis. Every result carries an honesty
@@ -155,11 +155,16 @@ Visibility, Streaming Coverage, and Terrain Confidence. Rows for which
 no signal is available render as `—` rather than fabricating a
 confident bucket. The card does not perform ground classification.
 
-The architecture in `src/terrain/` is designed so that higher-level
-analyses — ground classification, DTM, DSM, contour extraction,
-hillshade rendering, slope maps, and height-above-ground — can be
-built on top of one deterministic engine instead of bolted onto the
-viewer. Those analyses are not part of v0.3.9.
+Building on that foundation, v0.4.x adds a confidence-aware DTM and
+contour pipeline (`src/terrain/contour/`, `ground/`, `surface/`) surfaced
+through the **Analyse panel**: ground classification, a gridded DTM with
+per-cell confidence and hold-out RMSE validation, a 0–100 terrain quality
+score, surface models (DSM, canopy height, slope, multi-directional
+hillshade), a single top-level Terrain Assessment verdict, evidence-graded
+contour export (GeoJSON / SVG / DXF), a printable map sheet, and a
+georeferenced DEM package (ASCII Grid + GeoTIFF). A DTM quality gate
+governs whether a professional contour export is offered, and the panel is
+explicit that its products are for analysis — not survey certification.
 
 See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md)
 for the contract definitions and the honesty fields every result

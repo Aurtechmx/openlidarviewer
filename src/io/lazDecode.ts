@@ -111,7 +111,7 @@ export async function decodeLaz(
     const recordLength = reader.getPointLength();
     pointPtr = lazPerf._malloc(recordLength);
 
-    const out = allocRawPoints(total, ctx.gpsTimeOffset !== null);
+    const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null);
     const reportEvery = Math.max(1, Math.floor(pointCount / 20));
 
     const rand = step > 1 ? makePrng(STRIDE_SAMPLE_SEED) : undefined;

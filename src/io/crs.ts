@@ -57,6 +57,36 @@ export interface CrsInfo {
   readonly linearUnitToMetres: number;
   /** Whether the CRS is geographic (lat/lon in degrees) vs projected (metres on a plane). */
   readonly isGeographic: boolean;
+  /**
+   * Vertical (height) datum EPSG code when the file declares one — e.g. 5703
+   * (NAVD88), 5701 (ODN), 3855 (EGM2008). Absent when the source carries only
+   * a horizontal CRS, which is the common case for raw captures.
+   */
+  readonly verticalEpsg?: number;
+  /**
+   * Human label for the vertical datum (a known name, or `EPSG:<code>`).
+   * `undefined` means the elevation datum is unknown — the terrain tools
+   * surface that honestly rather than assuming one.
+   */
+  readonly verticalDatum?: string;
+}
+
+/** Common vertical-datum EPSG codes → readable names. */
+const VERTICAL_DATUM_NAMES: Readonly<Record<number, string>> = {
+  5703: 'NAVD88',
+  5701: 'ODN (Newlyn)',
+  5714: 'MSL height',
+  5715: 'MSL depth',
+  3855: 'EGM2008 height',
+  5773: 'EGM96 height',
+  6647: 'CGVD2013',
+  5705: 'Baltic 1977',
+  5612: 'EGM84 height',
+};
+
+/** Label a vertical-datum EPSG code (known name, or `EPSG:<code>`). */
+function verticalDatumLabel(epsg: number): string {
+  return VERTICAL_DATUM_NAMES[epsg] ?? `EPSG:${epsg}`;
 }
 
 /**
@@ -97,6 +127,8 @@ const GEOKEY_GEOGRAPHIC_LINEAR_UNITS = 2052;  // linear units of a geographic CR
 const GEOKEY_PROJECTED_CRS = 3072;       // EPSG of a projected CRS
 const GEOKEY_PROJECTED_CITATION = 3073;  // ASCII citation
 const GEOKEY_PROJ_LINEAR_UNITS = 3076;   // linear units of a projected CRS
+const GEOKEY_VERTICAL_CRS = 4096;        // EPSG of the vertical (height) CRS
+const GEOKEY_VERTICAL_CITATION = 4097;   // ASCII citation for the vertical CRS
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parser entry point
@@ -176,25 +208,30 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // Trim wrapper whitespace + null terminators.
   const text = wkt.replace(/\0+$/, '').trim();
 
-  // The CRS name is the first quoted string after the top-level keyword
-  // (PROJCS / PROJCRS / GEOGCS / GEOGCRS / COMPOUNDCRS).
-  const nameMatch = /^(?:PROJCS|PROJCRS|GEOGCS|GEOGCRS|COMPOUNDCRS)\s*\[\s*"([^"]+)"/i.exec(text);
+  // For a compound CRS (COMPD_CS / COMPOUNDCRS) the horizontal CRS and its
+  // EPSG / unit live BEFORE the vertical block, so we analyse only the
+  // horizontal slice for name / EPSG / unit. This stops the vertical CRS's
+  // EPSG and metre UNIT from being mistaken for the horizontal ones.
+  const vertKeyword = /\b(?:VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
+  const horizText = vertKeyword ? text.slice(0, vertKeyword.index) : text;
+
+  // The CRS name is the first quoted string after a PROJCS / GEOGCS keyword
+  // (skipping the outer COMPD_CS name, which describes the whole compound).
+  const nameMatch = /(?:PROJCS|PROJCRS|GEOGCS|GEOGCRS)\s*\[\s*"([^"]+)"/i.exec(horizText)
+    ?? /^(?:COMPD_CS|COMPOUNDCRS)\s*\[\s*"([^"]+)"/i.exec(text);
   const rawName = nameMatch ? nameMatch[1] : 'Unknown CRS';
 
   // EPSG via the standard AUTHORITY clause. LAS WKT is permissive — we look
   // for both AUTHORITY["EPSG","32612"] (WKT1) and ID["EPSG",32612] (WKT2).
-  // The LAST authority in the document is usually the top-level CRS's, so
-  // we capture every match and take the first one with a 4–6 digit numeric
-  // value (EPSG codes never exceed 99999 in practice).
-  const epsg = extractEpsgFromWkt(text);
+  // Restricted to the horizontal slice so a compound's vertical code can't win.
+  const epsg = extractEpsgFromWkt(horizText);
 
   // Linear units. A projected WKT typically contains TWO UNIT clauses:
   // an angular one inside the nested GEOGCS (e.g. degrees), then the
   // projected linear one at the top level (metres / feet / etc.). We need
-  // the LAST one for projected CRSs because that's the linear unit driving
-  // the coordinate values. For geographic CRSs the unit is degrees and
-  // the "linear" field is meaningless — we fall back to 'unknown'.
-  const isGeographic = /^GEOGCS|^GEOGCRS/i.test(text);
+  // the LAST one in the horizontal slice for projected CRSs. For geographic
+  // CRSs the unit is degrees and the "linear" field falls back to 'unknown'.
+  const isGeographic = !/\b(?:PROJCS|PROJCRS)/i.test(horizText) && /\b(?:GEOGCS|GEOGCRS)/i.test(horizText);
   let linearUnit: CrsLinearUnit = 'unknown';
   let linearUnitToMetres = 1;
   if (!isGeographic) {
@@ -217,6 +254,11 @@ export function crsFromWkt(wkt: string): CrsInfo {
     }
   }
 
+  // Vertical CRS — present in a COMPD_CS / COMPOUNDCRS or a standalone
+  // VERT_CS. The name (e.g. "NAVD88") is the reliable signal; the EPSG is a
+  // best-effort reverse lookup for the writer.
+  const vert = extractVerticalFromWkt(text);
+
   return {
     source: 'wkt',
     wkt: text,
@@ -225,7 +267,52 @@ export function crsFromWkt(wkt: string): CrsInfo {
     linearUnit,
     linearUnitToMetres,
     isGeographic,
+    verticalDatum: vert.name,
+    verticalEpsg: vert.epsg,
   };
+}
+
+/** Extract the vertical-CRS name + a best-effort EPSG from a WKT string. */
+function extractVerticalFromWkt(text: string): { epsg?: number; name?: string } {
+  const m = /\b(?:VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
+  if (!m) return {};
+  // Isolate the bracketed vertical block so a compound CRS's other authorities
+  // (the horizontal CRS, or the compound itself) can't be read as the vertical
+  // EPSG. The '[' is the last char of the match.
+  const block = bracketBlock(text, m.index + m[0].length - 1);
+  const nameMatch = /\[\s*"([^"]+)"/.exec(block);
+  const name = nameMatch ? nameMatch[1] : undefined;
+  // A known datum name resolves to the vertical CRS code directly; otherwise
+  // fall back to an explicit EPSG authority inside the block (the LAST one is
+  // the vertical CRS's own, after any VERT_DATUM authority).
+  const epsg = (name ? verticalEpsgFromName(name) : undefined) ?? extractEpsgFromWkt(block);
+  return { name, epsg };
+}
+
+/** Return the bracketed group that opens at/after `from` (matched depth-aware). */
+function bracketBlock(text: string, from: number): string {
+  let open = text[from] === '[' ? from : text.indexOf('[', from);
+  if (open < 0) return text.slice(from);
+  let depth = 0;
+  for (let j = open; j < text.length; j++) {
+    if (text[j] === '[') depth++;
+    else if (text[j] === ']' && --depth === 0) return text.slice(open, j + 1);
+  }
+  return text.slice(open);
+}
+
+/** Map a vertical-datum name to its EPSG code (the common geoids/datums). */
+function verticalEpsgFromName(name: string): number | undefined {
+  const n = name.toLowerCase();
+  if (n.includes('navd88') || n.includes('navd 88')) return 5703;
+  if (n.includes('egm2008')) return 3855;
+  if (n.includes('egm96')) return 5773;
+  if (n.includes('egm84')) return 5612;
+  if (n.includes('odn') || n.includes('newlyn')) return 5701;
+  if (n.includes('cgvd2013')) return 6647;
+  if (n.includes('baltic')) return 5705;
+  if (n.includes('mean sea level') || /\bmsl\b/.test(n)) return 5714;
+  return undefined;
 }
 
 /**
@@ -328,6 +415,9 @@ export function crsFromGeoTiff(
   let geodeticCitationOffset: number | undefined;
   let geodeticCitationCount: number | undefined;
   let linearUnitCode: number | undefined;
+  let verticalCrs: number | undefined;
+  let verticalCitationOffset: number | undefined;
+  let verticalCitationCount: number | undefined;
 
   for (let i = 0; i < numKeys; i++) {
     const o = 8 + i * 8;
@@ -356,6 +446,15 @@ export function crsFromGeoTiff(
       case GEOKEY_GEOGRAPHIC_LINEAR_UNITS:
         linearUnitCode = value;
         break;
+      case GEOKEY_VERTICAL_CRS:
+        verticalCrs = value;
+        break;
+      case GEOKEY_VERTICAL_CITATION:
+        if (tiffTag === RECORD_ID_GEO_ASCII_PARAMS) {
+          verticalCitationOffset = value;
+          verticalCitationCount = count;
+        }
+        break;
     }
   }
 
@@ -376,6 +475,18 @@ export function crsFromGeoTiff(
     || 'Unknown CRS';
   const name = epsg && !citation ? `EPSG:${epsg}` : (epsg ? `${baseName} (EPSG:${epsg})` : baseName);
 
+  // Vertical datum: a real EPSG (not 0 / user-defined 32767), else fall back
+  // to the citation text when present.
+  let verticalEpsg: number | undefined;
+  let verticalDatum: string | undefined;
+  if (verticalCrs && verticalCrs > 0 && verticalCrs !== 32767) {
+    verticalEpsg = verticalCrs;
+    verticalDatum = verticalDatumLabel(verticalCrs);
+  } else {
+    const vCite = readGeoTiffCitation(geoAsciiBytes, verticalCitationOffset, verticalCitationCount);
+    if (vCite) verticalDatum = vCite;
+  }
+
   return {
     source: 'geotiff',
     name,
@@ -383,6 +494,8 @@ export function crsFromGeoTiff(
     linearUnit,
     linearUnitToMetres,
     isGeographic,
+    verticalEpsg,
+    verticalDatum,
   };
 }
 

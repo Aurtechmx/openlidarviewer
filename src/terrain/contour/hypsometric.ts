@@ -38,6 +38,19 @@ export const DEFAULT_TERRAIN_PALETTE: ReadonlyArray<ColorStop> = [
   { t: 1.0, color: { r: 240, g: 240, b: 240 } }, // grey-white peaks
 ];
 
+/**
+ * Canopy / above-ground-height ramp, low → high. A perceptual ColorBrewer
+ * "Greens" sequence: near-ground height reads pale, tall canopy reads deep
+ * green — the conventional cartographic reading for a canopy height model.
+ */
+export const DEFAULT_CANOPY_PALETTE: ReadonlyArray<ColorStop> = [
+  { t: 0.0, color: { r: 237, g: 248, b: 233 } }, // ground / very low
+  { t: 0.25, color: { r: 161, g: 217, b: 155 } }, // low growth
+  { t: 0.5, color: { r: 65, g: 171, b: 93 } }, // shrub / mid canopy
+  { t: 0.75, color: { r: 35, g: 132, b: 67 } }, // canopy
+  { t: 1.0, color: { r: 0, g: 88, b: 50 } }, // tall canopy
+];
+
 function clamp01(t: number): number {
   if (!Number.isFinite(t)) return 0;
   return t < 0 ? 0 : t > 1 ? 1 : t;

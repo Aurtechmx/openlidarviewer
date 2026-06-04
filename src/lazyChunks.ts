@@ -103,8 +103,37 @@ export const loadAnalyseContours = () => import('./terrain/contour/analyseContou
  */
 export const loadProfilePdf = () => import('./render/measure/profilePdf');
 
+/**
+ * Load the contour map-sheet PDF builder (also pulls in pdf-lib). Only reached
+ * when the user clicks "Export map (PDF)" on the Analyse panel — routed here so
+ * the live transform never sees the literal and pdf-lib stays in its lazy chunk.
+ */
+export const loadMapSheetPdf = () => import('./render/measure/mapSheetPdf');
+
+/**
+ * Load the DEM package builder (ASCII Grid + GeoTIFF writers + ZIP store).
+ * Only reached when the user clicks "Export DEM" on the Analyse panel — routed
+ * here so the raster writers ride a lazy chunk and the live transform never
+ * sees the import literal.
+ */
+export const loadDemPackage = () => import('./terrain/export/demPackage');
+
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
+
+/**
+ * Load the batch format converter (its modal UI plus the conversion engine and
+ * proj4). Only reached when the user opens the converter, so proj4 and the LAS
+ * writer never enter the initial app payload.
+ */
+export const loadBatchConverter = () => import('./ui/BatchConverter');
+
+/**
+ * Load just the conversion engine (`convertCloud` + proj4). Used by the
+ * in-project Export panel, which mounts on every scan load but must not drag
+ * proj4 into the initial bundle — so it imports the engine lazily on Export.
+ */
+export const loadConvertEngine = () => import('./convert/convertCloud');
 
 /**
  * Load the streaming benchmark collector — used by both the overlay's live

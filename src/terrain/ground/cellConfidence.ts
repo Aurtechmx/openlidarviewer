@@ -39,7 +39,9 @@ import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { DemRaster } from './rasterizeDtm';
 import { inpaintNearest } from './groundFilter';
 import { idwFill } from './idwFill';
+import { geodesicFill } from './geodesicFill';
 import { hornSlope } from './terrainDerivatives';
+import { horizontalCellMetres } from './horizontalScale';
 
 /** Per-cell provenance: how the elevation in this cell came to be. */
 export type CellCoverage =
@@ -127,6 +129,30 @@ export interface CellConfidenceParams {
    * only — the pre-0.4 behaviour).
    */
   readonly absoluteHalfCount?: number;
+  /**
+   * DTM hardening — withhold (don't interpolate) cells whose interpolation
+   * distance exceeds this many cells: far-reach fill is unreliable, so the
+   * cell becomes a genuine gap (coverage 0) instead of an invented surface.
+   * Undefined = no limit (interpolate every reachable cell, the default).
+   */
+  readonly maxInterpDistanceCells?: number;
+  /**
+   * DTM hardening — withhold interpolated cells whose local surface slope
+   * (rise/run, Horn) exceeds this: interpolating across steep ground invents
+   * the least trustworthy surface. Undefined = no limit (the default).
+   */
+  readonly maxInterpSlope?: number;
+  /**
+   * True when the horizontal frame is geographic (degrees), so the roughness
+   * slope converts the cell size to metres. Default false (projected).
+   */
+  readonly isGeographic?: boolean;
+  /**
+   * Void interpolation method. `'geodesic'` measures distance along the
+   * surface (won't fill a valley void from across a ridge); `'idw'` is the
+   * plain Euclidean inverse-distance blend. Default `'idw'`.
+   */
+  readonly interpolation?: 'idw' | 'geodesic';
 }
 
 /**
@@ -170,7 +196,10 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   // coverage semantics below are unchanged. Measured cells keep their
   // own value verbatim. (v0.4.0 — was nearest-neighbour everywhere.)
   const nearest = inpaintNearest(raster.z, hadData, cols, rows);
-  const idw = idwFill(raster.z, hadData, cols, rows, {});
+  const idw =
+    params.interpolation === 'geodesic'
+      ? geodesicFill(raster.z, hadData, cols, rows, { cellSizeM })
+      : idwFill(raster.z, hadData, cols, rows, {});
   const z = new Float32Array(nCells);
   for (let i = 0; i < nCells; i++) {
     if (hadData[i] === 1) z[i] = raster.z[i];
@@ -185,11 +214,14 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   const safeTarget = target > 0 ? target : 1;
   const roughFull = params.roughnessFullPenaltySlope ?? 1.0;
   const absoluteHalfCount = Math.max(0, params.absoluteHalfCount ?? 3);
+  const maxInterpDist = params.maxInterpDistanceCells;
+  const maxInterpSlope = params.maxInterpSlope;
 
   // Horn 3x3 slope — isotropic, the same estimator GDAL/ArcGIS use —
   // drives the interpolation roughness penalty. (v0.4.0 — was a crude
-  // max-neighbour difference.)
-  const slope = hornSlope(z, cols, rows, cellSizeM);
+  // max-neighbour difference.) For a geographic frame the cell is in degrees,
+  // so convert it to metres or every cell reads as near-vertical.
+  const slope = hornSlope(z, cols, rows, horizontalCellMetres(cellSizeM, params.isGeographic));
 
   const confidence = new Float32Array(nCells);
   const coverage = new Uint8Array(nCells);
@@ -215,11 +247,20 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       const absolute = absoluteHalfCount > 0 ? count / (count + absoluteHalfCount) : 1;
       confidence[i] = Math.round(100 * relative * absolute);
     } else if (Number.isFinite(interpDistanceCells[i])) {
-      // interpolated from reachable data
-      coverage[i] = 1;
-      const interpScore = 1 / (1 + interpDistanceCells[i]);
-      const roughPenalty = clamp01(slope[i] / (roughFull > 0 ? roughFull : 1)) * 0.8;
-      confidence[i] = Math.round(100 * interpScore * (1 - roughPenalty));
+      // interpolated from reachable data — unless DTM hardening withholds it.
+      const tooFar = maxInterpDist != null && interpDistanceCells[i] > maxInterpDist;
+      const tooSteep = maxInterpSlope != null && slope[i] > maxInterpSlope;
+      if (tooFar || tooSteep) {
+        // Far-reach or steep interpolation is the least trustworthy surface —
+        // leave it a genuine gap rather than invent it.
+        coverage[i] = 0;
+        confidence[i] = 0;
+      } else {
+        coverage[i] = 1;
+        const interpScore = 1 / (1 + interpDistanceCells[i]);
+        const roughPenalty = clamp01(slope[i] / (roughFull > 0 ? roughFull : 1)) * 0.8;
+        confidence[i] = Math.round(100 * interpScore * (1 - roughPenalty));
+      }
     } else {
       // unreachable — genuine gap
       coverage[i] = 0;

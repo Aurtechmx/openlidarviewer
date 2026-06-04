@@ -36,11 +36,16 @@ const pkg = JSON.parse(
 function liveSourceTransformPlugin() {
   return liveSourceTransform({
     apply: 'build',
-    // Three modules are excluded because each carries an import specifier
+    // These modules are excluded because each carries an import specifier
     // Vite must read *statically* to split a chunk or bundle a worker:
     //   - `loadFile.ts`        — `new Worker(new URL('./parseWorker.ts', …))`
     //   - `copcWorkerClient.ts`— `new Worker(new URL('./copcWorker.ts', …))`
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
+    //   - `parseBuffer.ts` / `loaderRegistry.ts` / `loadLas.ts` — the loader
+    //     chain now reached from the main thread (the format converter's
+    //     full-resolution decode), so their `import('./loadLas' | './loadXyz'
+    //     | './lazDecode')` split points must stay literal here too, not just
+    //     in the un-transformed worker pass.
     // The plugin's stringArray transform rewrites those literals, which
     // breaks Vite's static analysis and the chunk/worker never gets emitted.
     // Everything else in the project's own source is transformed.
@@ -49,6 +54,9 @@ function liveSourceTransformPlugin() {
       /loadFile\.ts/,
       /copcWorkerClient\.ts/,
       /lazyChunks\.ts/,
+      /parseBuffer\.ts/,
+      /loaderRegistry\.ts/,
+      /loadLas\.ts/,
     ],
     options: {
       // A fixed RNG seed makes the transform deterministic — every

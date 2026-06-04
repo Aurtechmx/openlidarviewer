@@ -34,6 +34,18 @@ import {
   triggerBrowserDownload,
   type ContourFormat,
 } from '../terrain/contour/contourDownload';
+import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
+import {
+  hypsometricColor,
+  DEFAULT_CANOPY_PALETTE,
+} from '../terrain/contour/hypsometric';
+import { histogramBins, type Histogram } from '../terrain/contour/histogram';
+import {
+  shadeFromSlopeAspect,
+  computeMultiHillshade,
+} from '../terrain/surface/hillshade';
+import { sampleTerrain } from '../terrain/contour/sampleTerrain';
+import { terrainAssessment } from '../terrain/contour/terrainAssessment';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -43,6 +55,17 @@ export interface AnalysePanelCallbacks {
   onSelectInterval?: (intervalM: number) => void;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
+  /** Context for the printable map sheet (world origin, title block fields). */
+  getMapContext?: () => {
+    worldOrigin?: { x: number; y: number } | null;
+    title?: string;
+    preparedBy?: string;
+    sheet?: 'letter' | 'a4' | 'a3';
+    /** True when the horizontal CRS is geographic (degree cells). */
+    isGeographic?: boolean;
+    /** CRS WKT for the DEM export's .prj sidecar, when known. */
+    wkt?: string | null;
+  };
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -61,6 +84,23 @@ function section(text: string): HTMLElement {
   return el('div', { className: 'olv-analyse-section', text });
 }
 
+/** Prompt shown in a raster tile's sample readout before the user clicks. */
+const SAMPLE_HINT = 'Click the map to sample a point.';
+
+/**
+ * Split a formatted readiness value into a leading figure and a unit so the
+ * UI can set the number large and the unit as a small subscript. Examples:
+ *   "68%"          → { num: "68", unit: "%" }
+ *   "31% measured" → { num: "31", unit: "% measured" }
+ *   "1 m"          → { num: "1",  unit: "m" }
+ *   "Not ready"    → { num: "Not ready", unit: "" }  (no leading digit)
+ */
+function splitReadinessValue(value: string): { num: string; unit: string } {
+  const m = value.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!m) return { num: value, unit: '' };
+  return { num: m[1], unit: m[2].trim() };
+}
+
 export class AnalysePanel {
   /** The panel element — append to the stage overlay (see main.ts). */
   readonly element: HTMLElement;
@@ -69,6 +109,9 @@ export class AnalysePanel {
   private readonly _readinessRow: HTMLElement;
   private readonly _recommendRow: HTMLElement;
   private readonly _qualityRow: HTMLElement;
+  private readonly _assessmentRow: HTMLElement;
+  private readonly _scoreRow: HTMLElement;
+  private readonly _surfaceRow: HTMLElement;
   private readonly _intervalRow: HTMLElement;
   private readonly _coverageRow: HTMLElement;
   private readonly _validationRow: HTMLElement;
@@ -84,6 +127,8 @@ export class AnalysePanel {
   private readonly _exportRow: HTMLElement;
   private readonly _exportNote: HTMLElement;
   private readonly _exportButtons: HTMLButtonElement[] = [];
+  /** DEM raster export — gated only on a result existing, not the contour gate. */
+  private _demButton!: HTMLButtonElement;
   private readonly _legend: HTMLElement;
   /** The always-visible minimal "Planned" section. */
   private readonly _roadmap: HTMLElement;
@@ -126,6 +171,9 @@ export class AnalysePanel {
       className: 'olv-analyse-status',
       text: 'Load a LAS, LAZ, COPC, or EPT dataset to analyze terrain readiness.',
     });
+    this._assessmentRow = el('div', { className: 'olv-analyse-assessment' });
+    this._scoreRow = el('div', { className: 'olv-analyse-score' });
+    this._surfaceRow = el('div', { className: 'olv-analyse-surface' });
     this._chipsRow = el('div', { className: 'olv-analyse-chips' });
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
@@ -141,7 +189,15 @@ export class AnalysePanel {
 
     // Everything that needs a result lives in one region we show/hide.
     this._resultsRegion = el('div', { className: 'olv-analyse-results' });
-    this._resultsRegion.append(
+    // The detailed metrics live behind a collapsed "Details" expander so the
+    // Terrain Assessment hero leads and the panel reads top-down: verdict →
+    // (details on demand) → surface models → exports. Native <details> keeps it
+    // keyboard-accessible with no JS.
+    const details = el('details', { className: 'olv-analyse-details' });
+    const summary = el('summary', { className: 'olv-analyse-details-summary', text: 'Details' });
+    details.append(
+      summary,
+      this._scoreRow,
       this._chipsRow,
       section('DTM & contour readiness'),
       this._readinessRow,
@@ -151,6 +207,13 @@ export class AnalysePanel {
       section('Coverage & confidence'),
       this._coverageRow,
       this._validationRow,
+    );
+
+    this._resultsRegion.append(
+      this._assessmentRow,
+      details,
+      section('Surface models'),
+      this._surfaceRow,
       section('Contour export'),
       this._exportRow,
       this._exportNote,
@@ -213,6 +276,8 @@ export class AnalysePanel {
     this._runBtn.textContent = this._runLabel();
     this._runBtn.classList.toggle('is-rerun', has);
     if (!has) return;
+    this._renderAssessment();
+    this._renderScore();
     this._renderChips();
     this._renderReadiness();
     this._renderRecommend();
@@ -220,8 +285,487 @@ export class AnalysePanel {
     this._renderIntervals();
     this._renderCoverage();
     this._renderValidation();
+    this._renderSurface();
     this._renderBody();
     this._renderExportGate();
+  }
+
+  /**
+   * Composite terrain quality score — a single 0–100 number with its band and
+   * a quiet weighted breakdown of the six signals it draws on. Sits above the
+   * verdict chips: a glance-level summary, with the gate deciding export.
+   */
+  /**
+   * The single top-level verdict the reviewer asked for — Good / Preview /
+   * Limited — sitting above every detailed metric so a non-specialist reads
+   * the bottom line first, with the reason and what the surface is good for.
+   */
+  private _renderAssessment(): void {
+    this._assessmentRow.replaceChildren();
+    if (!this._result) return;
+    const a = terrainAssessment(this._result);
+    const tier = a.verdict.toLowerCase(); // good | preview | limited
+    this._assessmentRow.className = `olv-analyse-assessment is-${tier}`;
+
+    const top = el('div', { className: 'olv-analyse-assess-top' });
+    // Fold the 0–100 terrain quality score into the verdict so the hero is the
+    // single headline (e.g. "Preview · 64/100") — no competing score block.
+    const qs = this._result.qualityScore;
+    const verdictText = qs && Number.isFinite(qs.score) ? `${a.verdict} · ${qs.score}/100` : a.verdict;
+    top.append(
+      el('span', { className: 'olv-analyse-assess-label', text: 'Terrain assessment' }),
+      el('span', { className: 'olv-analyse-assess-verdict', text: verdictText }),
+    );
+    this._assessmentRow.append(top);
+    this._assessmentRow.append(el('div', { className: 'olv-analyse-assess-reason', text: a.reason }));
+    this._assessmentRow.append(
+      el('div', { className: 'olv-analyse-assess-use', text: `Best for: ${a.bestFor}` }),
+    );
+    if (a.caution) {
+      this._assessmentRow.append(
+        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.caution}` }),
+      );
+    }
+  }
+
+  private _renderScore(): void {
+    this._scoreRow.replaceChildren();
+    const qs = this._result?.qualityScore;
+    if (!qs) return;
+    const head = el('div', { className: 'olv-analyse-score-head' });
+    head.append(
+      el('span', { className: `olv-analyse-score-num is-${qs.band}`, text: String(qs.score) }),
+      el('span', { className: 'olv-analyse-score-of', text: '/ 100' }),
+      el('span', { className: `olv-analyse-score-band is-${qs.band}`, text: `Terrain quality · ${qs.band}` }),
+    );
+    this._scoreRow.append(head);
+    const bars = el('div', { className: 'olv-analyse-score-bars' });
+    for (const c of qs.components) {
+      const row = el('div', { className: 'olv-analyse-score-comp' });
+      const track = el('div', { className: 'olv-analyse-score-track' });
+      const fill = el('div', { className: 'olv-analyse-score-fill' });
+      fill.style.width = `${Math.round(c.score * 100)}%`;
+      track.append(fill);
+      row.append(
+        el('span', { className: 'olv-analyse-score-label', text: c.label }),
+        track,
+        el('span', {
+          className: `olv-analyse-score-pct${c.neutral ? ' is-neutral' : ''}`,
+          text: c.neutral ? 'n/a' : `${Math.round(c.score * 100)}%`,
+        }),
+      );
+      bars.append(row);
+    }
+    this._scoreRow.append(bars);
+  }
+
+  /**
+   * Surface models — above-ground height (DSM − DTM), slope distribution, and
+   * a north-up hillshade preview the user can export as a PNG.
+   */
+  private _renderSurface(): void {
+    this._surfaceRow.replaceChildren();
+    const r = this._result;
+    const s = r?.surface;
+    if (!r || !s) return;
+    const fmt = (v: number, d = 1): string => (Number.isFinite(v) ? v.toFixed(d) : '—');
+
+    const stats = el('div', { className: 'olv-analyse-surface-stats' });
+    stats.append(
+      el('div', { className: 'olv-analyse-surface-stat', text: `Above-ground height: p95 ${fmt(s.canopy.p95HeightM)} m · max ${fmt(s.canopy.maxHeightM)} m` }),
+      el('div', { className: 'olv-analyse-surface-stat', text: `Slope: mean ${fmt(s.slope.meanDeg)}° · max ${fmt(s.slope.maxDeg)}°` }),
+    );
+    const total = s.slope.bands.flat + s.slope.bands.moderate + s.slope.bands.steep;
+    if (total > 0) {
+      const pct = (n: number): number => Math.round((100 * n) / total);
+      stats.append(el('div', {
+        className: 'olv-analyse-surface-stat is-dim',
+        text: `Flat ${pct(s.slope.bands.flat)}% · Moderate ${pct(s.slope.bands.moderate)}% · Steep ${pct(s.slope.bands.steep)}%`,
+      }));
+    }
+    this._surfaceRow.append(stats);
+
+    // Bare-earth elevation distribution — a hypsometric read of the DTM.
+    const hist = this._elevationHistogram(r.dtm);
+    if (hist) this._surfaceRow.append(hist);
+
+    // Canopy height model — above-ground height (DSM − DTM) on a green ramp.
+    // Ground (≈0 m) is left transparent so the eye reads structure, not a
+    // flat green field.
+    const canopyMax = Number.isFinite(s.canopy.maxHeightM) && s.canopy.maxHeightM > 0
+      ? s.canopy.maxHeightM
+      : 1;
+    const chm = this._rasterPreview({
+      label: 'Canopy height (CHM)',
+      caption: `Above ground · p95 ${fmt(s.canopy.p95HeightM)} m · max ${fmt(s.canopy.maxHeightM)} m`,
+      values: s.canopy.heightM,
+      cols: r.dtm.cols,
+      rows: r.dtm.rows,
+      color: (v) => {
+        const c = hypsometricColor(v, 0, canopyMax, DEFAULT_CANOPY_PALETTE);
+        return [c.r, c.g, c.b];
+      },
+      visible: (v) => Number.isFinite(v) && v > 0.05,
+      legend: { min: 0, max: s.canopy.maxHeightM, palette: DEFAULT_CANOPY_PALETTE, unit: 'm' },
+      filename: 'canopy-height',
+    });
+    if (chm) this._surfaceRow.append(chm);
+
+    // Relief — multi-directional / single-sun hillshade with adjustable sun.
+    const relief = this._reliefTile(r, s);
+    if (relief) this._surfaceRow.append(relief);
+  }
+
+  /**
+   * Render a grid raster as a north-up preview tile with a heading, caption,
+   * optional colour-ramp legend, click-to-sample, and a print-resolution PNG
+   * export. Shared raster-preview system used by the canopy-height tile.
+   */
+  private _rasterPreview(opts: {
+    label: string;
+    caption: string;
+    values: ArrayLike<number>;
+    cols: number;
+    rows: number;
+    /** src grid index → RGB (0–255). */
+    color: (value: number, srcIndex: number) => [number, number, number];
+    /** src grid index → whether the cell is drawn (else transparent). */
+    visible: (value: number, srcIndex: number) => boolean;
+    filename: string;
+    legend?: { min: number; max: number; palette: typeof DEFAULT_CANOPY_PALETTE; unit: string };
+  }): HTMLElement | null {
+    const { cols, rows, values } = opts;
+    if (!(cols > 0 && rows > 0) || values.length !== cols * rows) return null;
+
+    const canvas = this._makeCanvas(cols, rows);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const img = ctx.createImageData(cols, rows);
+      for (let row = 0; row < rows; row++) {
+        const src = (rows - 1 - row) * cols; // flip so north reads up
+        const dst = row * cols;
+        for (let c = 0; c < cols; c++) {
+          const si = src + c;
+          const o = (dst + c) * 4;
+          if (opts.visible(values[si], si)) {
+            const [rr, gg, bb] = opts.color(values[si], si);
+            img.data[o] = rr; img.data[o + 1] = gg; img.data[o + 2] = bb; img.data[o + 3] = 255;
+          } else {
+            img.data[o + 3] = 0;
+          }
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+
+    const tile = el('div', { className: 'olv-analyse-raster-tile' });
+    tile.append(el('div', { className: 'olv-analyse-sublabel', text: opts.label }));
+    const wrap = this._rasterWrap(canvas);
+    tile.append(wrap.wrap);
+
+    if (opts.legend && Number.isFinite(opts.legend.max) && opts.legend.max > 0) {
+      tile.append(this._legendBar(opts.legend));
+    }
+    tile.append(el('div', { className: 'olv-analyse-caption', text: opts.caption }));
+
+    const readout = this._sampleReadout();
+    tile.append(readout);
+    this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
+
+    const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
+    dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, opts.filename));
+    tile.append(dl);
+    return tile;
+  }
+
+  /**
+   * The relief tile — a hillshade the user can re-light interactively. Defaults
+   * to a soft multi-directional shade; a toggle drops to a single sun with an
+   * azimuth slider, and altitude applies to both. Re-lighting reuses the cached
+   * slope/aspect grids, so it's a cheap per-cell pass with no Horn recompute.
+   */
+  private _reliefTile(
+    r: AnalyseContoursResult,
+    s: AnalyseContoursResult['surface'],
+  ): HTMLElement | null {
+    const cols = r.dtm.cols;
+    const rows = r.dtm.rows;
+    const { slope, aspect } = s.relief;
+    const coverage = r.dtm.coverage;
+    if (!(cols > 0 && rows > 0) || slope.length !== cols * rows) return null;
+
+    const tile = el('div', { className: 'olv-analyse-raster-tile' });
+    tile.append(el('div', { className: 'olv-analyse-sublabel', text: 'Relief (hillshade)' }));
+    const canvas = this._makeCanvas(cols, rows);
+    const wrap = this._rasterWrap(canvas);
+    tile.append(wrap.wrap);
+    tile.append(this._grayLegend());
+
+    const caption = el('div', { className: 'olv-analyse-caption' });
+    let multi = true;
+    let azimuth = 315;
+    let altitude = 45;
+
+    const repaint = (): void => {
+      const res = multi
+        ? computeMultiHillshade(slope, aspect, coverage, cols, rows, { altitudeDeg: altitude })
+        : shadeFromSlopeAspect(slope, aspect, coverage, cols, rows, {
+            azimuthDeg: azimuth,
+            altitudeDeg: altitude,
+          });
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const img = ctx.createImageData(cols, rows);
+        for (let row = 0; row < rows; row++) {
+          const src = (rows - 1 - row) * cols;
+          const dst = row * cols;
+          for (let c = 0; c < cols; c++) {
+            const si = src + c;
+            const o = (dst + c) * 4;
+            if (res.coverage[si] !== 0) {
+              const v = res.shade[si];
+              img.data[o] = v; img.data[o + 1] = v; img.data[o + 2] = v; img.data[o + 3] = 255;
+            } else {
+              img.data[o + 3] = 0;
+            }
+          }
+        }
+        ctx.putImageData(img, 0, 0);
+      }
+      caption.textContent = multi
+        ? `Multi-directional · alt ${altitude}°`
+        : `Sun ${String(azimuth).padStart(3, '0')}° · alt ${altitude}°`;
+    };
+
+    // Controls: multi-directional toggle + azimuth + altitude.
+    const controls = el('div', { className: 'olv-analyse-relief-controls' });
+    const multiLabel = el('label', { className: 'olv-analyse-relief-toggle' });
+    const multiCb = document.createElement('input');
+    multiCb.type = 'checkbox';
+    multiCb.checked = true;
+    multiLabel.append(multiCb, el('span', { text: 'Multi-directional' }));
+
+    const azRow = el('label', { className: 'olv-analyse-relief-slider is-off' });
+    const azVal = el('span', { className: 'olv-analyse-relief-val', text: 'off' });
+    const azInput = document.createElement('input');
+    azInput.type = 'range'; azInput.min = '0'; azInput.max = '360'; azInput.step = '5';
+    azInput.value = '315'; azInput.disabled = true;
+    azInput.setAttribute('aria-label', 'Sun azimuth');
+    azRow.append(el('span', { className: 'olv-analyse-relief-tag', text: 'Sun' }), azInput, azVal);
+
+    const altRow = el('label', { className: 'olv-analyse-relief-slider' });
+    const altVal = el('span', { className: 'olv-analyse-relief-val', text: '45°' });
+    const altInput = document.createElement('input');
+    altInput.type = 'range'; altInput.min = '5'; altInput.max = '85'; altInput.step = '5';
+    altInput.value = '45';
+    altInput.setAttribute('aria-label', 'Sun altitude');
+    altRow.append(el('span', { className: 'olv-analyse-relief-tag', text: 'Alt' }), altInput, altVal);
+
+    multiCb.addEventListener('change', () => {
+      multi = multiCb.checked;
+      azInput.disabled = multi;
+      azRow.classList.toggle('is-off', multi);
+      azVal.textContent = multi ? 'off' : `${String(azimuth).padStart(3, '0')}°`;
+      repaint();
+    });
+    azInput.addEventListener('input', () => {
+      azimuth = Number(azInput.value);
+      azVal.textContent = `${String(azimuth).padStart(3, '0')}°`;
+      repaint();
+    });
+    altInput.addEventListener('input', () => {
+      altitude = Number(altInput.value);
+      altVal.textContent = `${altitude}°`;
+      repaint();
+    });
+    controls.append(multiLabel, azRow, altRow);
+    tile.append(controls);
+    tile.append(caption);
+
+    const readout = this._sampleReadout();
+    tile.append(readout);
+    this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
+
+    const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
+    dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'relief'));
+    tile.append(dl);
+
+    repaint();
+    return tile;
+  }
+
+  /** A grid-sized canvas styled as a preview raster. */
+  private _makeCanvas(cols: number, rows: number): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = cols;
+    canvas.height = rows;
+    canvas.className = 'olv-analyse-raster';
+    return canvas;
+  }
+
+  /** A colour-ramp legend bar with min/max ticks. */
+  private _legendBar(legend: {
+    min: number; max: number; palette: typeof DEFAULT_CANOPY_PALETTE; unit: string;
+  }): HTMLElement {
+    const stops = legend.palette
+      .map((s) => `rgb(${s.color.r},${s.color.g},${s.color.b}) ${Math.round(s.t * 100)}%`)
+      .join(', ');
+    const wrap = el('div', { className: 'olv-analyse-legend' });
+    const bar = el('div', { className: 'olv-analyse-legend-bar' });
+    bar.style.background = `linear-gradient(90deg, ${stops})`;
+    const ticks = el('div', { className: 'olv-analyse-legend-ticks' });
+    ticks.append(
+      el('span', { text: `${legend.min}` }),
+      el('span', { text: `${legend.max.toFixed(1)} ${legend.unit}` }),
+    );
+    wrap.append(bar, ticks);
+    return wrap;
+  }
+
+  /** Wrap a raster canvas so a positioned crosshair can ride on top of it. */
+  private _rasterWrap(canvas: HTMLCanvasElement): { wrap: HTMLElement; crosshair: HTMLElement } {
+    const wrap = el('div', { className: 'olv-analyse-raster-wrap' });
+    const crosshair = el('span', { className: 'olv-analyse-xhair' });
+    crosshair.style.display = 'none';
+    wrap.append(canvas, crosshair);
+    return { wrap, crosshair };
+  }
+
+  /** A polite live region for sample readouts (screen readers announce updates). */
+  private _sampleReadout(): HTMLElement {
+    const readout = el('div', { className: 'olv-analyse-sample', text: SAMPLE_HINT });
+    readout.setAttribute('role', 'status');
+    readout.setAttribute('aria-live', 'polite');
+    return readout;
+  }
+
+  /** A static dark→light legend strip for the grayscale relief tile. */
+  private _grayLegend(): HTMLElement {
+    const wrap = el('div', { className: 'olv-analyse-legend' });
+    const bar = el('div', { className: 'olv-analyse-legend-bar' });
+    bar.style.background = 'linear-gradient(90deg, #1a1d24 0%, #f4f6fb 100%)';
+    const ticks = el('div', { className: 'olv-analyse-legend-ticks' });
+    ticks.append(el('span', { text: 'shadow' }), el('span', { text: 'light' }));
+    wrap.append(bar, ticks);
+    return wrap;
+  }
+
+  /** Click-to-sample: map a click on a north-up raster to a DTM cell + readout. */
+  private _attachSampler(
+    canvas: HTMLCanvasElement,
+    crosshair: HTMLElement,
+    cols: number,
+    rows: number,
+    readout: HTMLElement,
+  ): void {
+    canvas.classList.add('is-samplable');
+    canvas.addEventListener('click', (e) => {
+      const r = this._result;
+      if (!r) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const fx = (e.clientX - rect.left) / rect.width;
+      const fy = (e.clientY - rect.top) / rect.height;
+      const col = Math.max(0, Math.min(cols - 1, Math.floor(fx * cols)));
+      const displayRow = Math.max(0, Math.min(rows - 1, Math.floor(fy * rows)));
+      const row = rows - 1 - displayRow; // undo the north-up flip
+      const sample = sampleTerrain(r, col, row);
+      readout.textContent = this._sampleReadoutText(sample);
+      readout.classList.toggle('is-empty', !sample || !sample.covered);
+      // Drop the crosshair at the click point — percentages survive resize.
+      crosshair.style.left = `${(fx * 100).toFixed(2)}%`;
+      crosshair.style.top = `${(fy * 100).toFixed(2)}%`;
+      crosshair.style.display = 'block';
+    });
+  }
+
+  /** Format a terrain sample for the readout line. */
+  private _sampleReadoutText(sample: ReturnType<typeof sampleTerrain>): string {
+    if (!sample) return SAMPLE_HINT;
+    if (!sample.covered) return 'Sample · outside coverage';
+    const f = (v: number, d = 1): string => (Number.isFinite(v) ? v.toFixed(d) : '—');
+    return `Sample · ${f(sample.elevationM, 2)} m · slope ${f(sample.slopeDeg)}° · canopy ${f(sample.canopyM)} m`;
+  }
+
+  /** Upscale a preview canvas to ~2048 px long edge and download as PNG. */
+  private _downloadRasterPng(
+    source: HTMLCanvasElement,
+    cols: number,
+    rows: number,
+    filename: string,
+  ): void {
+    const TARGET_LONG_EDGE = 2048;
+    const longEdge = Math.max(cols, rows);
+    const scale = longEdge > 0 ? Math.max(1, TARGET_LONG_EDGE / longEdge) : 1;
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(cols * scale));
+    out.height = Math.max(1, Math.round(rows * scale));
+    const octx = out.getContext('2d');
+    if (octx) {
+      octx.imageSmoothingEnabled = true;
+      octx.imageSmoothingQuality = 'high';
+      octx.drawImage(source, 0, 0, out.width, out.height);
+    }
+    (octx ? out : source).toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${this._cb.getExportBasename?.() ?? 'terrain'}-${filename}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  /**
+   * Compact SVG histogram of the bare-earth DTM elevations (covered cells
+   * only). A quick read of the terrain's hypsometry — where the ground sits.
+   * Returns null when there are too few cells to be meaningful.
+   */
+  private _elevationHistogram(dtm: { z: Float32Array; coverage: Uint8Array }): HTMLElement | null {
+    const covered: number[] = [];
+    for (let i = 0; i < dtm.z.length; i++) {
+      if (dtm.coverage[i] !== 0 && Number.isFinite(dtm.z[i])) covered.push(dtm.z[i]);
+    }
+    if (covered.length < 16) return null;
+    const hist = histogramBins(covered, 24);
+    if (hist.peak <= 0 || !(hist.max > hist.min)) return null;
+
+    const wrap = el('div', { className: 'olv-analyse-hist' });
+    wrap.append(el('div', { className: 'olv-analyse-sublabel', text: 'Bare-earth elevation' }));
+    wrap.append(this._histogramSvg(hist));
+    const fmt = (v: number): string => (Number.isFinite(v) ? v.toFixed(1) : '—');
+    wrap.append(el('div', {
+      className: 'olv-analyse-caption',
+      text: `${fmt(hist.min)} – ${fmt(hist.max)} m · ${hist.total.toLocaleString()} cells`,
+    }));
+    return wrap;
+  }
+
+  /** Build the bar SVG for a histogram. Pure layout — no labels (caption carries them). */
+  private _histogramSvg(hist: Histogram): SVGSVGElement {
+    const W = 240;
+    const H = 56;
+    const n = hist.counts.length;
+    const gap = 1;
+    const bw = (W - gap * (n - 1)) / n;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('class', 'olv-analyse-hist-svg');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Bare-earth elevation distribution');
+    for (let i = 0; i < n; i++) {
+      const h = hist.peak > 0 ? (hist.counts[i] / hist.peak) * (H - 2) : 0;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', `${(bw + gap) * i}`);
+      rect.setAttribute('y', `${H - h}`);
+      rect.setAttribute('width', `${Math.max(0.5, bw)}`);
+      rect.setAttribute('height', `${h}`);
+      rect.setAttribute('class', 'olv-analyse-hist-bar');
+      svg.append(rect);
+    }
+    return svg;
   }
 
   private _renderReadiness(): void {
@@ -239,23 +783,46 @@ export class AnalysePanel {
 
   private _readinessCard(ind: ReadinessIndicator): HTMLElement {
     const card = el('div', { className: `olv-analyse-ready is-${ind.rating}` });
-    // Value and rating share one line — the rating word stays (colourblind
-    // safety) but no longer earns its own row.
-    const top = el('div', { className: 'olv-analyse-ready-top' });
-    top.append(
-      el('span', { className: 'olv-analyse-ready-value', text: ind.value }),
-      el('span', { className: 'olv-analyse-ready-rating', text: ind.rating }),
-    );
-    card.append(
+
+    // Left column: label over the supporting line.
+    const main = el('div', { className: 'olv-analyse-ready-main' });
+    main.append(
       el('div', { className: 'olv-analyse-ready-label', text: ind.label }),
-      top,
       el('div', { className: 'olv-analyse-ready-detail', text: ind.detail }),
     );
+
+    // Right column: a big tabular figure with the unit set as a subscript,
+    // and a colour-coded rating pill (the rating word stays for colourblind
+    // safety, no longer relying on hue alone).
+    const { num, unit } = splitReadinessValue(ind.value);
+    // Keep the unit compact so the figure can't crowd the supporting line.
+    const unitText = unit.replace(/\bmeasured\b/, 'meas.');
+    const figure = el('div', {
+      className: `olv-analyse-ready-figure${num.match(/\d/) ? '' : ' is-text'}`,
+    });
+    figure.append(el('span', { className: 'olv-analyse-ready-value', text: num }));
+    if (unitText) figure.append(el('span', { className: 'olv-analyse-ready-unit', text: unitText }));
+
+    const side = el('div', { className: 'olv-analyse-ready-side' });
+    side.append(
+      figure,
+      el('span', {
+        className: 'olv-analyse-ready-rating',
+        text: ind.rating === 'unavailable' ? 'N/A' : ind.rating,
+      }),
+    );
+
+    card.append(main, side);
     return card;
   }
 
   setVisible(on: boolean): void {
     this.element.style.display = on ? '' : 'none';
+  }
+
+  /** Whether the panel is currently shown (not display:none). */
+  isVisible(): boolean {
+    return this.element.style.display !== 'none';
   }
 
   private _renderIntervals(): void {
@@ -299,6 +866,51 @@ export class AnalysePanel {
       el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
       el('div', { className: 'olv-analyse-cal', text: calText }),
     );
+
+    // Standards expression — NVA (95% conf), VVA (95th pct), and the USGS
+    // 3DEP Quality Level the surface meets on density + RMSEz together.
+    const std = this._result?.accuracyStandards;
+    if (std) {
+      const fmtM = (n: number | null): string =>
+        n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
+      if (std.nvaM != null || std.vvaM != null) {
+        this._validationRow.append(el('div', {
+          className: 'olv-analyse-strata',
+          text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
+        }));
+      }
+      if (std.qualityLevel !== 'unknown') {
+        this._validationRow.append(el('div', {
+          className: 'olv-analyse-ql',
+          text: `USGS 3DEP ${std.qualityLevel}`,
+          title: std.qualityLevelReason,
+        }));
+      }
+    }
+
+    // Stratified RMSE — only shown when more than one stratum clears a minimum
+    // sample count (a 1–2 point stratum gives a noisy RMSE with no confidence
+    // cue), since a lone stratum just restates the overall figure above.
+    const MIN_STRATUM_SAMPLES = 5;
+    const fmtR = (n: number): string => (Number.isFinite(n) ? n.toFixed(2) : '—');
+    const slopeParts = (v.perSlopeBand ?? [])
+      .filter((b) => b.count >= MIN_STRATUM_SAMPLES)
+      .map((b) => `${b.band} ${fmtR(b.rmse)}`);
+    if (slopeParts.length > 1) {
+      this._validationRow.append(el('div', {
+        className: 'olv-analyse-strata',
+        text: `RMSE by slope: ${slopeParts.join(' · ')} m`,
+      }));
+    }
+    const zoneParts = (v.perZone ?? [])
+      .filter((z) => z.count >= MIN_STRATUM_SAMPLES)
+      .map((z) => `${z.zone} ${fmtR(z.rmse)}`);
+    if (zoneParts.length > 1) {
+      this._validationRow.append(el('div', {
+        className: 'olv-analyse-strata',
+        text: `RMSE by zone: ${zoneParts.join(' · ')} m`,
+      }));
+    }
   }
 
   private _renderBody(): void {
@@ -310,6 +922,14 @@ export class AnalysePanel {
         text: interpolatedCaption(this._result.tally),
       }),
     );
+    if (this._result.excludedByClassification > 0) {
+      this._body.append(
+        el('div', {
+          className: 'olv-analyse-caption is-dim',
+          text: `Excluded ${this._result.excludedByClassification.toLocaleString()} classified vegetation/building/noise return(s) before ground filtering.`,
+        }),
+      );
+    }
   }
 
   private _buildExportRow(): HTMLElement {
@@ -335,7 +955,94 @@ export class AnalysePanel {
       this._exportButtons.push(btn);
       row.append(btn);
     }
+    // Printable map sheet — the field deliverable (contours + collar + accuracy).
+    const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'MAP PDF' });
+    mapBtn.addEventListener('click', () => void this._exportMapSheet(mapBtn));
+    this._exportButtons.push(mapBtn);
+    row.append(mapBtn);
+
+    // DEM package — the georeferenced raster deliverable (DTM + DSM + CHM as
+    // ASCII Grid + GeoTIFF + metadata). Deliberately NOT pushed onto
+    // `_exportButtons`: the raster is valid bare-earth data regardless of
+    // whether the *contour* quality gate is satisfied, so it stays enabled
+    // whenever an analysis exists. It carries an accent style to read as the
+    // primary "take the data with you" action.
+    this._demButton = el('button', { className: 'olv-analyse-dl is-primary', text: 'DEM (ZIP)' });
+    this._demButton.title = 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet';
+    this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
+    row.append(this._demButton);
     return row;
+  }
+
+  /** Build and download the georeferenced DEM package (lazy raster writers). */
+  private async _exportDemPackage(btn: HTMLButtonElement): Promise<void> {
+    const r = this._result;
+    if (!r) return;
+    const label = btn.textContent ?? 'DEM (ZIP)';
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const { buildDemPackage } = await loadDemPackage();
+      const ctx = this._cb.getMapContext?.() ?? {};
+      const basename = this._cb.getExportBasename?.() ?? 'terrain';
+      const bytes = buildDemPackage(r, {
+        worldOrigin: ctx.worldOrigin ?? null,
+        basename,
+        wkt: ctx.wkt ?? null,
+        isGeographic: ctx.isGeographic ?? false,
+      });
+      const blob = new Blob([bytes as BlobPart], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${basename}-dem.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: DEM export failed.', err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  /** Build and download the printable contour map sheet (lazy pdf-lib). */
+  private async _exportMapSheet(btn: HTMLButtonElement): Promise<void> {
+    const r = this._result;
+    if (!r || r.model.features.length === 0 || r.quality.exportReadiness === 'blocked') return;
+    const label = btn.textContent ?? 'MAP PDF';
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const { buildMapSheetPdf } = await loadMapSheetPdf();
+      const ctx = this._cb.getMapContext?.() ?? {};
+      const bytes = await buildMapSheetPdf({
+        model: r.model,
+        labels: r.labels,
+        worldOrigin: ctx.worldOrigin ?? null,
+        crs: r.model.crs,
+        verticalDatum: r.model.verticalDatum,
+        accuracy: r.accuracyStandards,
+        readiness: r.quality.readiness,
+        title: ctx.title,
+        preparedBy: ctx.preparedBy,
+        sheet: ctx.sheet,
+      });
+      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${this._cb.getExportBasename?.() ?? 'contours'}-map.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: map sheet export failed.', err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
   }
 
   /**
@@ -426,6 +1133,13 @@ export class AnalysePanel {
     const hasFeatures = r.model.features.length > 0;
     const blocked = e === 'blocked' || !hasFeatures;
     for (const b of this._exportButtons) b.disabled = blocked;
+    // The DEM raster export is independent of the contour gate — it only needs
+    // a bare-earth surface to exist (covered DTM cells).
+    const hasDtm = r.dtm.coverage.some((c) => c !== 0);
+    this._demButton.disabled = !hasDtm;
+    this._demButton.title = hasDtm
+      ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
+      : 'No covered DTM cells to export';
     this._legend.style.display = hasFeatures ? '' : 'none';
     if (e === 'blocked') {
       this._exportNote.textContent = `Export disabled — ${r.quality.reasons[0] ?? 'DTM quality gate not met.'}`;

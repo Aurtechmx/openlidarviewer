@@ -78,6 +78,33 @@ describe('classifyGroundSmrf', () => {
     expect(rejected / roofIdx.length).toBeGreaterThanOrEqual(0.9);
   });
 
+  it('the elevation-threshold cap stops a loose tolerance admitting low objects on slopes', () => {
+    // Tilted ground (slope 0.3) plus a flat object ~3 m above the surface.
+    const pts: TerrainPoint[] = [];
+    const obj: number[] = [];
+    for (let x = 0; x <= 20; x++) for (let y = 0; y <= 20; y++) pts.push({ x, y, z: 0.3 * x });
+    for (let x = 9; x <= 11; x++)
+      for (let y = 9; y <= 11; y++) {
+        obj.push(pts.length);
+        pts.push({ x, y, z: 0.3 * x + 3 });
+      }
+    // A high slope-scaling factor would, uncapped, inflate the tolerance to
+    // ~15 m on this slope and swallow the object as "ground".
+    const base = {
+      cellSizeM: 1,
+      maxWindowCells: 5,
+      slope: 0.3,
+      elevationThresholdM: 0.5,
+      scalingFactorM: 50,
+    } as const;
+    const objGround = (r: { isGround: Uint8Array }): number =>
+      obj.filter((i) => r.isGround[i] === 1).length;
+    const uncapped = classifyGroundSmrf(pts, { ...base, maxElevationThresholdM: Infinity });
+    const capped = classifyGroundSmrf(pts, { ...base, maxElevationThresholdM: 0.5 });
+    expect(objGround(uncapped)).toBeGreaterThan(objGround(capped));
+    expect(objGround(capped)).toBe(0); // the cap excludes the object entirely
+  });
+
   it('rejects isolated tree returns', () => {
     const { points, treeIdx } = buildScene();
     const res = classifyGroundSmrf(points, PARAMS);

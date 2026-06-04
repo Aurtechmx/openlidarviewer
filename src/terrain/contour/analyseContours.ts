@@ -23,6 +23,27 @@ import {
 } from '../ground/groundFilter';
 import { rasterizeDtm } from '../ground/rasterizeDtm';
 import { buildDtmGrid, type DtmGrid } from '../ground/cellConfidence';
+import { removeSpikes } from '../ground/despike';
+import { computeCellMetrics, type CellMetricsSummary } from '../quality/cellMetrics';
+import { terrainQualityScore, type TerrainQualityScore } from '../quality/terrainQualityScore';
+import { demAccuracyStandards, type DemAccuracyStandards } from '../quality/demAccuracyStandards';
+import {
+  buildDsm,
+  emptySurfaceGrid,
+  surfaceStats,
+  heightAboveGround,
+  type SurfaceStats,
+  type CanopyHeight,
+} from '../surface/buildDsm';
+import {
+  shadeFromSlopeAspect,
+  slopeStats,
+  type SlopeStats,
+  type HillshadeResult,
+} from '../surface/hillshade';
+import { hornSlopeAspect } from '../ground/terrainDerivatives';
+import { horizontalCellMetres } from '../ground/horizontalScale';
+import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
 import { checkCalibration } from '../validate/calibrationCheck';
 import {
@@ -55,6 +76,17 @@ export interface AnalyseContoursParams {
   readonly ground?: Partial<Omit<GroundFilterParams, 'cellSizeM' | 'verticalAxis'>>;
   /** Horizontal CRS (required for usable exports; warns when null). */
   readonly crs?: string | null;
+  /**
+   * True when the horizontal frame is geographic (degrees), so slope and
+   * hillshade can convert the cell size to metres. Default false (projected).
+   */
+  readonly isGeographic?: boolean;
+  /**
+   * Metres per source vertical unit (1 for metre data, ~0.3048 for feet). The
+   * hold-out RMSE is reported in metres using this, so the quality score and
+   * the "Vertical RMSE … m" readout are correct for feet-based CRSs. Default 1.
+   */
+  readonly verticalUnitToMetres?: number;
   /** Vertical datum. */
   readonly verticalDatum?: string | null;
   /** Explicit contour interval; when omitted, the gate's recommendation is used. */
@@ -63,6 +95,15 @@ export interface AnalyseContoursParams {
   readonly indexEvery?: number;
   /** Vertical axis of the source frame. Default 'z'. */
   readonly verticalAxis?: VerticalAxis;
+  /**
+   * Per-point ASPRS classification, index-aligned with `points`. When present,
+   * vegetation / building / noise returns are dropped before ground filtering
+   * so the bare-earth surface never anchors to canopy or rooftops. The DSM
+   * (top surface, for above-ground height) still uses the full cloud.
+   */
+  readonly classification?: ReadonlyArray<number> | Uint8Array;
+  /** ASPRS classes to exclude before ground filtering. Default veg/building/noise. */
+  readonly excludeClasses?: ReadonlyArray<number>;
   /** Hold-out PRNG seed for reproducible validation. Default 1. */
   readonly holdoutSeed?: number;
   /** Smooth high-confidence contour runs (honesty-preserving). Default true. */
@@ -82,6 +123,24 @@ export interface AnalyseContoursResult {
   readonly confidenceToleranceM: number | null;
   /** DTM quality gate verdict (ready / previewOnly / blocked) + metrics + reasons. */
   readonly quality: DtmQualityReport;
+  /** Composite 0–100 terrain quality score + weighted component breakdown. */
+  readonly qualityScore: TerrainQualityScore;
+  /** Per-cell metric rollup: density, completeness, edge risk. */
+  readonly cellMetrics: CellMetricsSummary;
+  /** Classified vegetation/building/noise returns dropped before ground filtering. */
+  readonly excludedByClassification: number;
+  /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
+  readonly accuracyStandards: DemAccuracyStandards;
+  /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
+  readonly surface: {
+    readonly dsm: SurfaceStats;
+    readonly canopy: CanopyHeight;
+    readonly slope: SlopeStats;
+    readonly hillshade: HillshadeResult;
+    /** Cached Horn gradient grids (slope tangent + aspect in radians) on the
+     *  DTM grid, for interactive re-lighting and point sampling. */
+    readonly relief: { readonly slope: Float32Array; readonly aspect: Float32Array };
+  };
   /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
   readonly cellStatusTally: CellStatusTally;
   /** Recommended DTM grid + contour interval for this dataset. */
@@ -114,8 +173,20 @@ export function analyseContours(
   const crs = params.crs ?? null;
   const verticalDatum = params.verticalDatum ?? null;
 
+  // 0) Honour existing classification — drop vegetation / buildings / noise
+  // before ground filtering so the bare-earth surface can't anchor to canopy
+  // or rooftops. The full cloud is still used for the DSM further down, so
+  // above-ground height keeps measuring those very returns.
+  const classFilter = excludeNonGroundClasses(points, params.classification, params.excludeClasses);
+  const groundPts = classFilter.points;
+  if (classFilter.excludedCount > 0) {
+    warnings.push(
+      `Excluded ${classFilter.excludedCount} classified vegetation/building/noise return(s) before ground filtering.`,
+    );
+  }
+
   // 1) Ground classification.
-  const gf = classifyGroundSmrf(points, {
+  const gf = classifyGroundSmrf(groundPts, {
     cellSizeM: params.cellSizeM,
     maxWindowCells: params.ground?.maxWindowCells ?? 8,
     slope: params.ground?.slope ?? 0.2,
@@ -128,7 +199,7 @@ export function analyseContours(
   warnings.push(...gf.warnings);
 
   // 2) DTM raster aligned to the filter grid + 3) per-cell confidence.
-  const raster = rasterizeDtm(points, gf.isGround, {
+  const raster = rasterizeDtm(groundPts, gf.isGround, {
     grid: {
       originH1: gf.originH1,
       originH2: gf.originH2,
@@ -138,7 +209,44 @@ export function analyseContours(
     },
     verticalAxis,
   });
-  let dtm = buildDtmGrid(raster, { crs, verticalDatum });
+  // 2b) DTM hardening — drop blunder cells (a lone ground return far from its
+  //     neighbours) so they don't warp the surface; the builder re-fills them
+  //     by interpolation. Real outliers only — smooth terrain loses nothing.
+  let workingRaster = raster;
+  const hadData0 = new Uint8Array(raster.counts.length);
+  let measuredCellCount = 0;
+  for (let i = 0; i < hadData0.length; i++) {
+    if (raster.counts[i] > 0) { hadData0[i] = 1; measuredCellCount++; }
+  }
+  // Conservative, blunder-only thresholds (6σ, ≥30 cm absolute) so legitimate
+  // small features in flat terrain are kept; only gross outliers are removed.
+  const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, {
+    madThreshold: 6,
+    minDeviationM: 0.3,
+  });
+  // Safety cap: if "outliers" exceed 2% of measured cells the data is noisy,
+  // not spiky — removing that much would distort the surface, so leave it.
+  const removalCap = Math.max(4, Math.ceil(measuredCellCount * 0.02));
+  if (despiked.removed > 0 && despiked.removed <= removalCap) {
+    const counts2 = raster.counts.slice();
+    let filled = 0;
+    for (let i = 0; i < counts2.length; i++) {
+      if (despiked.hadData[i] === 0) counts2[i] = 0;
+      if (counts2[i] > 0) filled++;
+    }
+    workingRaster = { ...raster, z: despiked.z, counts: counts2, filledCellCount: filled };
+    warnings.push(`Removed ${despiked.removed} outlier ground cell(s) before building the surface.`);
+  } else if (despiked.removed > removalCap) {
+    warnings.push(
+      `Outlier detection flagged ${despiked.removed} cells (> 2% of data) — left unchanged; the surface looks noisy rather than spiky.`,
+    );
+  }
+  let dtm = buildDtmGrid(workingRaster, {
+    crs,
+    verticalDatum,
+    isGeographic: params.isGeographic,
+    interpolation: 'geodesic',
+  });
   warnings.push(...dtm.warnings);
 
   // Elevation range over covered cells (drives gating + styling).
@@ -152,10 +260,12 @@ export function analyseContours(
   const elevationRangeM = Number.isFinite(minZ) ? maxZ - minZ : 0;
 
   // 4) Validation + calibration.
-  const validation = holdoutValidateDtm(points, gf.isGround, {
+  const validation = holdoutValidateDtm(groundPts, gf.isGround, {
     cellSizeM: params.cellSizeM,
     seed: params.holdoutSeed ?? 1,
     verticalAxis,
+    isGeographic: params.isGeographic,
+    verticalUnitToMetres: params.verticalUnitToMetres,
     collectSamples: true,
   });
   const calibration = checkCalibration(validation);
@@ -216,6 +326,65 @@ export function analyseContours(
     recommendedIntervalM: gate.recommendedM,
   });
 
+  // Composite 0–100 terrain quality score + the per-cell metric rollup it
+  // draws on (density, completeness, edge risk). Complements the verdict.
+  const cellMetrics = computeCellMetrics(dtm).summary;
+  // Express the validated accuracy in ASPRS/USGS 3DEP terms (NVA, VVA, QL) so
+  // the surface can be judged against recognised accuracy standards.
+  const accuracyStandards = demAccuracyStandards(
+    Number.isFinite(validation.rmse) ? validation.rmse : null,
+    Number.isFinite(validation.p95) ? validation.p95 : null,
+    cellMetrics.meanDensity,
+  );
+  const coveredCells =
+    cellStatusTally.measured + cellStatusTally.interpolated +
+    cellStatusTally.lowConfidence + cellStatusTally.edgeRisk;
+  const qualityScore = terrainQualityScore({
+    measuredOfCovered: coveredCells > 0 ? cellStatusTally.measured / coveredCells : 0,
+    meanCellConfidence: Number.isFinite(dtm.meanConfidence) ? dtm.meanConfidence : 0,
+    holdoutRmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+    groundPointRatio: Number.isFinite(groundPointRatio) ? groundPointRatio : null,
+    edgeRiskRatio: cellMetrics.edgeRiskRatio,
+    meanDensity: cellMetrics.meanDensity,
+    cellSizeM: params.cellSizeM,
+  });
+
+  // Surface models — a top-surface DSM (all returns) on the DTM grid, the
+  // height of everything above bare earth (canopy / buildings), and slope +
+  // hillshade derived from the bare-earth DTM.
+  // Skip the full-points DSM pass when the DTM has no covered cells — there is
+  // nothing to model, and downstream stats handle the empty grid fine.
+  const dsmGridSpec = {
+    originH1: dtm.originH1, originH2: dtm.originH2,
+    cols: dtm.cols, rows: dtm.rows, cellSizeM: dtm.cellSizeM,
+  };
+  const dtmHasCoverage = dtm.coverage.some((c) => c !== 0);
+  const dsm = dtmHasCoverage
+    ? buildDsm(points, { grid: dsmGridSpec, verticalAxis })
+    : emptySurfaceGrid(dsmGridSpec);
+  // Slope/hillshade divide ΔZ (metres) by the horizontal cell size; when the
+  // frame is geographic that cell size is in degrees, so convert to metres to
+  // keep the gradient dimensionless. Z-only products (DSM, height-above-ground)
+  // need no such correction.
+  const horizCellM = horizontalCellMetres(dtm.cellSizeM, params.isGeographic);
+  // Compute the Horn slope/aspect ONCE and reuse it for the slope stats, the
+  // hillshade, and the exposed relief grids — re-lighting the surface at a new
+  // sun angle in the UI is then a cheap per-cell pass with no Horn recompute.
+  const sa = hornSlopeAspect(dtm.z, dtm.cols, dtm.rows, horizCellM);
+  const slopeDegField = new Float32Array(sa.slope.length);
+  for (let i = 0; i < sa.slope.length; i++) {
+    slopeDegField[i] = (Math.atan(sa.slope[i]) * 180) / Math.PI;
+  }
+  const surface = {
+    dsm: surfaceStats(dsm),
+    canopy: heightAboveGround(dsm, dtm.z, dtm.coverage),
+    slope: slopeStats(slopeDegField, dtm.coverage),
+    hillshade: shadeFromSlopeAspect(sa.slope, sa.aspect, dtm.coverage, dtm.cols, dtm.rows),
+    // Cached gradient grids (slope tangent + aspect, radians) so the panel can
+    // re-light a multi-directional or single-direction relief interactively.
+    relief: { slope: sa.slope, aspect: sa.aspect },
+  };
+
   // 6-10) Contours → stitch → style → model → tally.
   if (intervalM == null) {
     const emptyContours: ContourSet = {
@@ -234,6 +403,11 @@ export function analyseContours(
       confidenceCalibrationApplied,
       confidenceToleranceM,
       quality,
+      qualityScore,
+      cellMetrics,
+      surface,
+      excludedByClassification: classFilter.excludedCount,
+      accuracyStandards,
       cellStatusTally,
       gridRecommendation,
       gate,
@@ -297,6 +471,11 @@ export function analyseContours(
     confidenceCalibrationApplied,
     confidenceToleranceM,
     quality,
+    qualityScore,
+    cellMetrics,
+    surface,
+    excludedByClassification: classFilter.excludedCount,
+    accuracyStandards,
     cellStatusTally,
     gridRecommendation,
     gate,

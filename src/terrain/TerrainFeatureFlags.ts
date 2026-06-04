@@ -1,10 +1,11 @@
 /**
  * TerrainFeatureFlags.ts
  *
- * Internal feature flags for the terrain subsystem. v0.3.9 defaults
- * the engine ON internally for the foundation work but keeps every
- * UI surface OFF so no unfinished terrain controls appear in
- * production.
+ * Internal feature flags for the terrain *foundation* subsystem. The engine
+ * runs internally for foundation work, but its own experimental UI surfaces
+ * stay OFF in production. Note: the shipped terrain products (the Analyse
+ * panel, contours, surface models, DEM export) are a separate pipeline under
+ * `src/terrain/contour|ground|surface` and are NOT gated by this flag.
  */
 
 /** The flag set. */
@@ -16,9 +17,10 @@ export interface TerrainFeatureFlags {
   /** Verbose console logging from the engine. */
   readonly terrainDebugEnabled: boolean;
   /**
-   * Whether ANY public terrain UI may render. MUST be `false` in
-   * v0.3.9 — terrain tools are not user-ready. Future releases will
-   * flip specific surfaces on once they're polished.
+   * Whether the foundation's EXPERIMENTAL terrain UI may render. Stays
+   * `false` in production — these are the engine's own unfinished controls,
+   * distinct from the shipped Analyse panel (which is always mounted and
+   * does not consult this flag).
    */
   readonly terrainExperimentalUiEnabled: boolean;
 }
@@ -28,7 +30,7 @@ export const DEFAULT_TERRAIN_FEATURE_FLAGS: TerrainFeatureFlags = {
   terrainEngineEnabled: true,
   terrainWorkerEnabled: true,
   terrainDebugEnabled: false,
-  /** v0.3.9: terrain UI must NOT appear in production. */
+  /** The foundation's experimental UI stays off in production. */
   terrainExperimentalUiEnabled: false,
 };
 

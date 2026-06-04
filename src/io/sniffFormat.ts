@@ -119,6 +119,12 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
       return 'gltf';
     case 'xyz':
     case 'csv':
+    // `.asc` and `.txt` are plain ASCII point lists (x y z [+ extra columns]),
+    // the same shape `loadXyz` reads — it skips comment/header lines and takes
+    // the first three columns as coordinates. Routing them here lets the
+    // converter accept ASC/TXT inputs alongside XYZ/CSV.
+    case 'asc':
+    case 'txt':
       return 'xyz';
     case 'e57':
       return 'e57';

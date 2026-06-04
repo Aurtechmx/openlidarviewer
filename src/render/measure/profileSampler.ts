@@ -51,6 +51,7 @@
  */
 
 import type { Vec3 } from '../navMath';
+import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
 
 // Inline vector helpers — duplicated from `geometry.ts` where they are
 // also module-local. Cheap, branch-free, no allocations beyond return
@@ -103,6 +104,16 @@ export interface SampleProfileInput {
    * 0 = strict floor, 100 = canopy top. `null` falls back to the default.
    */
   groundPercentile?: number | null;
+  /**
+   * Per-point ASPRS classification, index-aligned with `positions`. When
+   * present, vegetation / building / noise returns are dropped from each
+   * corridor BEFORE the percentile, so trees can't pull the bare-earth line
+   * up — the profile is computed over classified ground returns. Omit when
+   * the cloud carries no classification (the percentile alone is used).
+   */
+  classification?: Uint8Array | ReadonlyArray<number> | null;
+  /** ASPRS classes to drop when classification is supplied. Default veg/building/noise. */
+  excludeClasses?: ReadonlyArray<number>;
 }
 
 const MIN_SAMPLES = 2;
@@ -185,7 +196,13 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
 
   const positions = input.positions;
   const n = positions.length / 3;
+  // Classification gate — drop vegetation / building / noise so they never
+  // enter a corridor's elevation statistics. Only active when an aligned
+  // classification channel was supplied.
+  const cls = input.classification && input.classification.length === n ? input.classification : null;
+  const drop = cls ? new Set(input.excludeClasses ?? NON_GROUND_CLASSES) : null;
   for (let i = 0; i < n; i++) {
+    if (drop && drop.has(cls![i])) continue;
     const px = positions[i * 3];
     const py = positions[i * 3 + 1];
     const pz = positions[i * 3 + 2];

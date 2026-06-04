@@ -1,8 +1,11 @@
 /**
  * TerrainEngine.ts
  *
- * The top-level orchestrator the rest of the app talks to. v0.3.9
- * exposes the engine as an internal seam — no public UI consumes it.
+ * The top-level orchestrator for the terrain *foundation*. It is an internal
+ * seam: the shipped terrain products (Analyse panel, contours, surface models,
+ * DEM export) run through the separate `src/terrain/contour|ground|surface`
+ * pipeline, not this engine. The Dataset Intelligence card reads foundation
+ * metrics directly.
  *
  * Responsibilities:
  *   - Hold the per-scan grid + tile partition.
@@ -69,7 +72,8 @@ export class TerrainEngine {
     return this._flags;
   }
 
-  /** Whether any public terrain UI is allowed. v0.3.9: always false. */
+  /** Whether the foundation's experimental UI is allowed (off in production;
+   *  the shipped Analyse panel is separate and not gated by this). */
   get isExperimentalUiAllowed(): boolean {
     return this._flags.terrainExperimentalUiEnabled;
   }

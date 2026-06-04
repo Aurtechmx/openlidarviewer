@@ -28,6 +28,14 @@
  * or a future test harness without dragging the renderer along.
  */
 
+/**
+ * Single source of truth for the terrain metric schema version surfaced in
+ * the Dataset Intelligence card. Bump this when the deterministic metric set
+ * changes; callers reference the constant rather than hard-coding a string so
+ * the version can never drift between call sites again.
+ */
+export const TERRAIN_METRIC_VERSION = 'v0.4.1';
+
 import type {
   TerrainCoverageMeta,
   TerrainCoverageMode,
@@ -417,7 +425,7 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
         typeof input.coverageMeta?.analyzedPointCount === 'number'
           ? input.coverageMeta.analyzedPointCount
           : null,
-      metricVersion: input.metricVersion ?? 'v0.3.9',
+      metricVersion: input.metricVersion ?? TERRAIN_METRIC_VERSION,
       engineStatus: input.coverageMeta ? 'active' : 'idle',
     },
   };

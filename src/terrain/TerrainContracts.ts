@@ -6,11 +6,11 @@
  * I/O — so the same shape names mean the same thing in the worker,
  * the cache, the engine, and any future UI surface.
  *
- * v0.3.9 ships these contracts WITHOUT any public UI. A future
- * release will surface ground classification, DTM / DSM, contours,
- * hillshade, slope maps, and height-above-ground on top of this
- * foundation — everything implements `TerrainAnalysisResult` so the
- * UI never has to special-case which producer it's reading.
+ * These are the *foundation* contracts; the engine that uses them stays an
+ * internal seam. The user-facing terrain products shipped in v0.4.x — ground
+ * classification, DTM / DSM, canopy height, contours, hillshade, slope — are
+ * produced by the separate `src/terrain/contour|ground|surface` pipeline and
+ * surfaced through the Analyse panel.
  *
  * Honesty contract — EVERY result MUST carry:
  *   - `coverage`: did we analyse the full cloud, only resident

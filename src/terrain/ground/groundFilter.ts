@@ -96,6 +96,13 @@ export interface GroundFilterParams {
    */
   readonly scalingFactorM?: number;
   /**
+   * Hard cap on the slope-scaled elevation threshold, source linear units.
+   * Classic SMRF caps the threshold so a large window on steep ground cannot
+   * grow the tolerance high enough to swallow low buildings, vehicles or
+   * walls as "ground". Default 2.5 m. Set Infinity to disable the cap.
+   */
+  readonly maxElevationThresholdM?: number;
+  /**
    * Despike floor: instead of the strict per-cell minimum, take the
    * elevation at this low percentile (0..50) of the cell's returns. This
    * rejects gross below-ground blunders (multipath, water, sensor noise)
@@ -183,6 +190,15 @@ export function classifyGroundSmrf(
     warnings,
   );
   const scalingFactorM = finiteNonNeg(params.scalingFactorM ?? 0, 0, 'scalingFactorM', warnings);
+  // Cap the slope-scaled tolerance growth, but never below the base tolerance
+  // — the cap limits how far slope can *inflate* the threshold, it must not
+  // shrink a base tolerance the caller set deliberately.
+  const maxElevationThresholdM = Math.max(
+    elevationThresholdM,
+    params.maxElevationThresholdM != null && params.maxElevationThresholdM > 0
+      ? params.maxElevationThresholdM
+      : 2.5,
+  );
   let floorPercentile = params.floorPercentile ?? 0;
   if (!Number.isFinite(floorPercentile) || floorPercentile < 0) floorPercentile = 0;
   if (floorPercentile > 50) floorPercentile = 50;
@@ -272,7 +288,9 @@ export function classifyGroundSmrf(
   let work = surface.slice();
   for (let b = 1; b <= maxWindowCells; b++) {
     const opened = morphOpen(work, cols, rows, b);
-    const dh = elevationThresholdM + slope * b * cellSizeM;
+    // Cap the slope-scaled threshold so a large window on steep ground can't
+    // grow the tolerance high enough to admit low objects (SMRF hard cap).
+    const dh = Math.min(maxElevationThresholdM, elevationThresholdM + slope * b * cellSizeM);
     for (let i = 0; i < nCells; i++) {
       if (work[i] - opened[i] > dh) work[i] = opened[i];
     }
@@ -287,7 +305,10 @@ export function classifyGroundSmrf(
     const [h1, h2, v] = axes(points[pi], vertical);
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
     const c = cellOf(h1, h2);
-    const tol = elevationThresholdM + scalingFactorM * slopeGrid[c];
+    const tol = Math.min(
+      maxElevationThresholdM,
+      elevationThresholdM + scalingFactorM * slopeGrid[c],
+    );
     // Ground when the return is at or below the opened surface within
     // tolerance. Returns well ABOVE the surface (buildings, canopy) are
     // not ground; returns slightly below (the surface itself) are.

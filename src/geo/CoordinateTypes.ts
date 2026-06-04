@@ -115,6 +115,10 @@ export interface ResolvedCrs {
    * audit the detection.
    */
   readonly wkt?: string;
+  /** Vertical (height) datum EPSG, when the source declares one. */
+  readonly verticalEpsg?: number;
+  /** Human label for the vertical datum (name or `EPSG:<code>`); undefined = unknown. */
+  readonly verticalDatum?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -180,6 +184,8 @@ export function resolvedFromCrsInfo(
     confidence,
     userConfirmed: false,
     wkt: info.wkt,
+    verticalEpsg: info.verticalEpsg,
+    verticalDatum: info.verticalDatum,
   };
 }
 

@@ -37,6 +37,11 @@ export interface StageOptions {
    */
   onOpenUrl?: (url: string) => void | Promise<void>;
   /**
+   * Called when the user chooses "Batch convert files" on the empty state —
+   * opens the format converter without loading a scan into the 3D view.
+   */
+  onBatchConvert?: () => void;
+  /**
    * Optional ready-made DOM node that the empty state mounts as the
    * verified-public-LiDAR-dataset picker. Built by main.ts so the
    * catalog module — including its dataset list — never enters this
@@ -435,15 +440,10 @@ export class Stage {
       captureKinds.append(chip);
     }
 
-    // ── Section: Quick demos (samples + curated catalog together) ─────────
-    // v0.3.6 desktop-audit fix: the curated dropdown was a separate section
-    // with its own heading and helper text. The user explicitly requested
-    // the two be merged — they're both paths to "open a known public
-    // dataset", so the dropdown lives directly under the samples card.
-    const demosLabel = el('p', {
-      className: 'olv-empty-section-label',
-      text: 'Quick demos',
-    });
+    // ── "Explore public LiDAR" — one bounded card grouping the location
+    // dropdown, the location search (inside the catalog panel), and the
+    // streaming demo: all paths to "open a known public dataset". Gestalt
+    // common region — one card, one heading — so the three read as siblings.
     const samples = el('div', { className: 'olv-samples' });
     for (const s of options.samples ?? []) {
       // De-jargoned detail line — readable to first-time users without
@@ -555,6 +555,27 @@ export class Stage {
       ariaLabel: 'Get started — workflow steps',
     }, [stepsEyebrow, stepsList]);
 
+    // Convert: a small peer chip beside the primary "Open scan from device"
+    // button (promoted from a buried text link). Clicking it opens the batch
+    // converter directly — it is inherently batch, no scan needs to load.
+    const convertChip = el('button', {
+      className: 'olv-convert-chip',
+      type: 'button',
+      text: 'Convert file formats',
+      title: 'Convert LAS / LAZ / XYZ / ASC files between formats — batch, no scan needs to load',
+    });
+    convertChip.addEventListener('click', () => options.onBatchConvert?.());
+
+    // The consolidated "Explore public LiDAR" card (one common region).
+    const exploreCard = el('section', {
+      className: 'olv-explore-card',
+      ariaLabel: 'Explore public LiDAR',
+    }, [
+      el('div', { className: 'olv-empty-section-label', text: 'Explore public LiDAR' }),
+    ]);
+    if (options.catalogPanel) exploreCard.append(options.catalogPanel);
+    exploreCard.append(samples);
+
     const children: (Node | string)[] = [
       this._statusBanner,
       heroMark,
@@ -566,24 +587,14 @@ export class Stage {
       formats,
       captureKinds,
     ];
-    // Catalog dropdown gets its own section label so the user reads
-    // "public LiDAR by location" as a discrete intent — without an
-    // eyebrow it visually bleeds into the URL row below (Gestalt
-    // common region was carrying no weight). The label uses the same
-    // typographic eyebrow as "Quick demos" so the three intents read
-    // as siblings. The catalog is placed BEFORE Quick demos because
-    // location-based discovery is the primary intent for most users;
-    // Quick demos sits below as the "or just try this one" fallback.
-    if (options.catalogPanel) {
-      children.push(
-        el('div', {
-          className: 'olv-empty-section-label',
-          text: 'Public LiDAR by location',
-        }),
-        options.catalogPanel,
-      );
-    }
-    children.push(demosLabel, samples, urlRow);
+    // Convert sits with the capture-type chips — it's the "or work with files"
+    // companion to "what kinds of scans this opens".
+    if (options.onBatchConvert) children.push(convertChip);
+    children.push(
+      exploreCard,
+      // Open-from-URL stays at the bottom as its own distinct entry path.
+      urlRow,
+    );
 
     return el('div', { className: 'olv-empty' }, children);
   }

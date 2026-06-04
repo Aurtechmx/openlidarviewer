@@ -126,7 +126,7 @@ export function computeTerrainReadiness(result: AnalyseContoursResult): TerrainR
     detail: !Number.isFinite(meanConf)
       ? 'No ground surface could be built for this scan.'
       : calibrated && tol != null
-        ? `Calibrated against held-out error (within ${tol.toFixed(2)} m).`
+        ? `Calibrated to held-out error · ±${tol.toFixed(2)} m`
         : 'Heuristic estimate — not enough held-out points to calibrate.',
   };
 
@@ -143,7 +143,7 @@ export function computeTerrainReadiness(result: AnalyseContoursResult): TerrainR
     detail:
       cov.covered === 0
         ? 'No covered cells — nothing to model.'
-        : `${pct(measuredFrac)} measured, ${pct(1 - measuredFrac)} interpolated · vertical RMSE ${rmseText}.`,
+        : `${pct(1 - measuredFrac)} interpolated · vertical RMSE ${rmseText}`,
   };
 
   // ── Contour readiness ────────────────────────────────────────────────
@@ -163,7 +163,7 @@ export function computeTerrainReadiness(result: AnalyseContoursResult): TerrainR
     rating: contourRating,
     value: contoursRecommended ? `${recommended} m` : 'Not ready',
     detail: contoursRecommended
-      ? `Recommended interval ${recommended} m · coverage ${pct(coverageFrac)} · relief ${result.elevationRangeM.toFixed(1)} m.`
+      ? `Coverage ${pct(coverageFrac)} · relief ${result.elevationRangeM.toFixed(1)} m`
       : 'No reliable contour interval — the scan is too sparse or the vertical error is too high for honest contours.',
   };
 

@@ -961,20 +961,31 @@ export class Viewer {
     // available so the controller leaves the chart unset.
     this._measure.setProfileSampler(
       (a, b): { samples: ProfileChartSample[]; residentOnly: boolean } | null => {
-        const buffers: Float32Array[] = [];
+        // Track each buffer's classification alongside it so the profile can
+        // be computed over classified ground (vegetation / buildings dropped).
+        const buffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
         let total = 0;
         let staticPoints = 0;
         let streamingPoints = 0;
+        let anyClass = false;
+        const aligned = (
+          c: ArrayLike<number> | null | undefined,
+          pos: Float32Array,
+        ): ArrayLike<number> | undefined => (c && c.length === pos.length / 3 ? c : undefined);
         for (const { cloud } of this._clouds.values()) {
           if (cloud.positions && cloud.positions.length > 0) {
-            buffers.push(cloud.positions);
+            const cls = aligned(cloud.classification, cloud.positions);
+            if (cls) anyClass = true;
+            buffers.push({ pos: cloud.positions, cls });
             total += cloud.positions.length;
             staticPoints += cloud.positions.length;
           }
         }
         for (const { decoded } of this._streamingPickData.values()) {
           if (decoded.positions && decoded.positions.length > 0) {
-            buffers.push(decoded.positions);
+            const cls = aligned(decoded.classification, decoded.positions);
+            if (cls) anyClass = true;
+            buffers.push({ pos: decoded.positions, cls });
             total += decoded.positions.length;
             streamingPoints += decoded.positions.length;
           }
@@ -982,14 +993,20 @@ export class Viewer {
         if (total === 0) return null;
         // Flatten — cheap because we only walk the resident set.
         const positions = new Float32Array(total);
+        // 255 = "no class channel" sentinel; the sampler treats it as "keep".
+        const classification = anyClass ? new Uint8Array(total / 3).fill(255) : undefined;
         let off = 0;
-        for (const b of buffers) {
-          positions.set(b, off);
-          off += b.length;
+        let coff = 0;
+        for (const { pos, cls } of buffers) {
+          positions.set(pos, off);
+          off += pos.length;
+          const m = pos.length / 3;
+          if (classification && cls) for (let i = 0; i < m; i++) classification[coff + i] = cls[i];
+          coff += m;
         }
         // Default 64-sample resolution gives a smooth chart at <50 ms even on
         // a 1 M-point cloud; the panel can re-request a denser sample later.
-        const samples = sampleProfile({ a, b, up: [0, 0, 1], positions, samples: 64 });
+        const samples = sampleProfile({ a, b, up: [0, 0, 1], positions, samples: 64, classification });
         // The chart is "resident-only" whenever any streaming bytes are
         // in the walk and there is no fully-loaded static cloud beside
         // it — that's exactly the case where additional nodes may
@@ -1641,19 +1658,38 @@ export class Viewer {
    */
   gatherTerrainPositions(
     maxPoints = 300_000,
-  ): { positions: Float32Array; residentOnly: boolean; sampled: boolean; totalPoints: number } | null {
-    const buffers: Float32Array[] = [];
+  ): {
+    positions: Float32Array;
+    classification?: Uint8Array;
+    residentOnly: boolean;
+    sampled: boolean;
+    totalPoints: number;
+  } | null {
+    // Track each buffer's classification alongside it (when the cloud carries
+    // an index-aligned class channel) so terrain analysis can drop vegetation
+    // and buildings before contouring.
+    const buffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
     let staticPoints = 0;
     let streamingPoints = 0;
+    let anyClass = false;
+    const alignedClass = (
+      cls: ArrayLike<number> | null | undefined,
+      pos: Float32Array,
+    ): ArrayLike<number> | undefined =>
+      cls && cls.length === pos.length / 3 ? cls : undefined;
     for (const { cloud } of this._clouds.values()) {
       if (cloud.positions && cloud.positions.length > 0) {
-        buffers.push(cloud.positions);
+        const cls = alignedClass(cloud.classification, cloud.positions);
+        if (cls) anyClass = true;
+        buffers.push({ pos: cloud.positions, cls });
         staticPoints += cloud.positions.length / 3;
       }
     }
     for (const { decoded } of this._streamingPickData.values()) {
       if (decoded.positions && decoded.positions.length > 0) {
-        buffers.push(decoded.positions);
+        const cls = alignedClass(decoded.classification, decoded.positions);
+        if (cls) anyClass = true;
+        buffers.push({ pos: decoded.positions, cls });
         streamingPoints += decoded.positions.length / 3;
       }
     }
@@ -1667,20 +1703,23 @@ export class Viewer {
     const stride = Math.max(1, Math.ceil(totalPoints / maxPoints));
     const cap = Math.ceil(totalPoints / stride);
     const positions = new Float32Array(cap * 3);
+    // 255 = "no class channel" sentinel; terrain treats it as "keep".
+    const classification = anyClass ? new Uint8Array(cap).fill(255) : undefined;
     let gi = 0;
     let oi = 0;
-    for (const b of buffers) {
-      const pts = (b.length / 3) | 0;
+    for (const { pos, cls } of buffers) {
+      const pts = (pos.length / 3) | 0;
       for (let i = 0; i < pts; i++, gi++) {
         if (gi % stride !== 0 || oi >= cap) continue;
         const s = i * 3;
-        const x = b[s];
-        const y = b[s + 1];
-        const z = b[s + 2];
+        const x = pos[s];
+        const y = pos[s + 1];
+        const z = pos[s + 2];
         if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
           positions[oi * 3] = x;
           positions[oi * 3 + 1] = y;
           positions[oi * 3 + 2] = z;
+          if (classification && cls) classification[oi] = cls[i];
           oi++;
         }
       }
@@ -1688,6 +1727,7 @@ export class Viewer {
     if (oi === 0) return null;
     return {
       positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
+      classification: classification ? (oi === cap ? classification : classification.subarray(0, oi)) : undefined,
       residentOnly: streamingPoints > 0 && staticPoints === 0,
       sampled: stride > 1,
       totalPoints,
@@ -4459,7 +4499,8 @@ export class Viewer {
       // iteration so OrbitControls damping integrates correctly and
       // streaming keeps its cadence; only the GPU `render()` call is
       // gated. See `_shouldRenderFrame` for the full predicate.
-      if (this._shouldRenderFrame()) {
+      const rendered = this._shouldRenderFrame();
+      if (rendered) {
         this._idleRenderHeartbeat = 0;
         // EDL on → render through the post-processing pipeline; off → render
         // the scene directly, the v0.2 path, for zero post-processing overhead.
@@ -4502,9 +4543,17 @@ export class Viewer {
         }
         this._probe.update(info, this._pointerClientX, this._pointerClientY);
       }
-      this._measure.render(this._camera, this._canvas);
-      this._inspect.render();
-      this._annotate.render(this._camera, this._canvas);
+      // Re-project the 2D tool overlays only on frames we actually rendered
+      // (camera/scene changed). Pointer, keyboard and orbit input all bump
+      // render-activity → `rendered` is true during any interaction, so the
+      // live measure cursor stays responsive; quiet idle frames skip this DOM
+      // work instead of re-laying-out overlays 60×/s for a static scene. The
+      // idle heartbeat still renders periodically, keeping overlays fresh.
+      if (rendered) {
+        this._measure.render(this._camera, this._canvas);
+        this._inspect.render();
+        this._annotate.render(this._camera, this._canvas);
+      }
     };
     loop();
   }

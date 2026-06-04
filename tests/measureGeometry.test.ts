@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   distance,
+  bearingDegrees,
   segmentLengths,
   polylineLength,
   newellNormal,
@@ -201,5 +202,33 @@ describe('profileMetrics', () => {
     expect(p.length3d).toBeCloseTo(5, 9);
     expect(p.lengthHorizontal).toBeCloseTo(3, 9);
     expect(p.verticalDrop).toBeCloseTo(4, 9);
+  });
+});
+
+describe('bearingDegrees (compass azimuth, Z-up)', () => {
+  it('reads cardinal directions as 0 / 90 / 180 / 270', () => {
+    expect(bearingDegrees(v(0, 0, 0), v(0, 1, 0), UP_Z)).toBeCloseTo(0, 6); // north (+Y)
+    expect(bearingDegrees(v(0, 0, 0), v(1, 0, 0), UP_Z)).toBeCloseTo(90, 6); // east (+X)
+    expect(bearingDegrees(v(0, 0, 0), v(0, -1, 0), UP_Z)).toBeCloseTo(180, 6); // south
+    expect(bearingDegrees(v(0, 0, 0), v(-1, 0, 0), UP_Z)).toBeCloseTo(270, 6); // west
+  });
+
+  it('reads a NE diagonal as 45°', () => {
+    expect(bearingDegrees(v(0, 0, 0), v(1, 1, 0), UP_Z)).toBeCloseTo(45, 6);
+  });
+
+  it('ignores the vertical component (bearing is map-plane only)', () => {
+    expect(bearingDegrees(v(0, 0, 0), v(1, 0, 99), UP_Z)).toBeCloseTo(90, 6);
+  });
+
+  it('returns NaN for a purely vertical segment', () => {
+    expect(Number.isNaN(bearingDegrees(v(0, 0, 0), v(0, 0, 5), UP_Z))).toBe(true);
+  });
+
+  it('uses a well-defined north reference for a Y-up scan', () => {
+    // With up = +Y the basis falls back to north = +Z, so a +Z step reads as
+    // due north (0°) and a horizontal step stays finite (bearing is defined).
+    expect(bearingDegrees(v(0, 0, 0), v(0, 0, 1), UP_Y)).toBeCloseTo(0, 6);
+    expect(Number.isFinite(bearingDegrees(v(0, 0, 0), v(1, 0, 0), UP_Y))).toBe(true);
   });
 });

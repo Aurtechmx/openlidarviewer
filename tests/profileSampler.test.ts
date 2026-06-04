@@ -23,6 +23,29 @@ function pack(points: ReadonlyArray<readonly [number, number, number]>): Float32
   return out;
 }
 
+describe('sampleProfile — classified ground filtering', () => {
+  it('drops vegetation returns so trees do not pull the floor up', () => {
+    // One bin at distance 5: 1 ground return (z=0, class 2) and 9 tree
+    // returns (z=10, class 5). Without classification a low percentile is
+    // still dominated by the trees; with classification only the ground
+    // remains, so the profile sits on bare earth.
+    const tuples: Array<[number, number, number]> = [[5, 0, 0]];
+    const cls: number[] = [2];
+    for (let i = 0; i < 9; i++) { tuples.push([5, 0, 10]); cls.push(5); }
+    const positions = pack(tuples);
+
+    const noClass = sampleProfile({ a: [0, 0, 0], b: [10, 0, 0], up: Z_UP, positions, samples: 11, bandWidth: 1 });
+    const withClass = sampleProfile({
+      a: [0, 0, 0], b: [10, 0, 0], up: Z_UP, positions, samples: 11, bandWidth: 1,
+      classification: Uint8Array.from(cls),
+    });
+    const midNo = noClass.find((s) => Math.abs(s.distance - 5) < 0.6);
+    const midYes = withClass.find((s) => Math.abs(s.distance - 5) < 0.6);
+    expect(midNo && midNo.height).toBeGreaterThan(5); // trees dominate
+    expect(midYes && midYes.height).toBeCloseTo(0, 5); // bare earth
+  });
+});
+
 describe('sampleProfile — height-vs-distance along a transect', () => {
   it('returns exactly `samples` records ordered by distance', () => {
     const positions = pack([

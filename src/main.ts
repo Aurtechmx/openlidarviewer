@@ -1,4 +1,10 @@
-import '@fontsource-variable/inter';
+// Self-hosted type pairing — Manrope (grotesk labels) + JetBrains Mono (tabular
+// figures). Latin subsets only, served same-origin so nothing leaves the device.
+import '@fontsource/manrope/latin-400.css';
+import '@fontsource/manrope/latin-500.css';
+import '@fontsource/manrope/latin-600.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/jetbrains-mono/latin-500.css';
 import './style.css';
 import type { Viewer } from './render/Viewer';
 import type { CameraPose } from './render/NavController';
@@ -35,6 +41,12 @@ import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
+import { ObjectPanel } from './ui/ObjectPanel';
+import { classifyScanShape } from './terrain/scanShape';
+import { objectMetrics } from './terrain/objectMetrics';
+import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
+import { ExportPanel } from './ui/ExportPanel';
+import { decodeFull } from './convert/decodeFull';
 import type { TerrainPoint } from './terrain/TerrainContracts';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
@@ -103,6 +115,7 @@ import {
   loadInstrumentedRangeSource,
   loadViewer,
   loadAnalyseContours,
+  loadBatchConverter,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -322,7 +335,22 @@ const stage = new Stage(app, {
     throw err instanceof Error ? err : new Error(message);
   }),
   catalogPanel: catalogPanel.root,
+  onBatchConvert: () => void openBatchConverter(),
 });
+
+/**
+ * Lazily build (once) and open the batch format converter. Its chunk carries
+ * the conversion engine + proj4, so it only downloads when the user asks for
+ * it — never on initial load.
+ */
+let batchConverter: { open: () => void } | null = null;
+async function openBatchConverter(): Promise<void> {
+  if (!batchConverter) {
+    const { BatchConverter } = await loadBatchConverter();
+    batchConverter = new BatchConverter(document.body);
+  }
+  batchConverter.open();
+}
 /**
  * The Viewer is lazy-imported so three.js stays out of the initial shell.
  * `viewer` is treated as non-null throughout the rest of main.ts; every
@@ -1380,6 +1408,15 @@ const dock = new ToolDock({
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
   onAnnotateToggle: () => viewer.setAnnotateMode(!viewer.annotateMode),
+  onAnalyseToggle: () => {
+    // Re-open (or hide) the terrain analysis panel. If an object scan had
+    // demoted it behind the Object panel, opening Analyse takes over —
+    // the "run terrain anyway" path, reachable from one obvious place.
+    const show = !analysePanel.isVisible();
+    analysePanel.setVisible(show);
+    if (show) objectPanel.setVisible(false);
+    dock.setAnalyseActive(show);
+  },
   onHelp: () => helpOverlay.open(),
   onClose: () => closeScan(),
 });
@@ -1462,16 +1499,81 @@ const analysePanel = new AnalysePanel({
   onRun: () => void runTerrainAnalysis(),
   onSelectInterval: (m) => void runTerrainAnalysis(m),
   getExportBasename: () => lastCloudName,
+  getMapContext: () => {
+    const cloud = activeId ? viewer.getCloud(activeId) : null;
+    const origin = cloud?.origin;
+    const cur = crsService.current();
+    return {
+      worldOrigin: origin ? { x: origin[0], y: origin[1] } : null,
+      title: `${lastCloudName} — Contours`,
+      sheet: 'letter',
+      isGeographic: cur?.kind === 'geographic',
+      wkt: cloud?.metadata?.crs?.wkt ?? null,
+    };
+  },
+});
+
+// Object-scan panel — shown instead of terrain analysis for compact 3-D scans
+// (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
+// pipeline if the shape detector misjudged the scan.
+const objectPanel = new ObjectPanel({
+  onRunTerrainAnyway: () => {
+    objectPanel.setVisible(false);
+    analysePanel.setVisible(true);
+    dock.setAnalyseActive(true);
+    void runTerrainAnalysis();
+  },
+});
+
+// Per-cloud source files + reduced flags, so the Export panel can re-decode a
+// local file at full resolution (the viewer keeps only the display-reduced
+// cloud for large scans). Streamed/remote scans have no entry here.
+const sourceFileById = new Map<string, File>();
+const reducedById = new Map<string, boolean>();
+
+// In-project "Export / Convert" panel — converts the open cloud to LAS / XYZ
+// / ASC with the same CRS options as the splash batch converter. The engine
+// (proj4) is imported lazily on Export, so this panel adds nothing heavy.
+const exportPanel = new ExportPanel({
+  getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : null),
+  hasFullSource: () => activeId != null && sourceFileById.has(activeId),
+  isReduced: () => activeId != null && reducedById.get(activeId) === true,
+  getFullCloud: async () => {
+    const f = activeId ? sourceFileById.get(activeId) : null;
+    if (!f) return null;
+    return decodeFull(await f.arrayBuffer(), f.name);
+  },
 });
 
 /**
- * Reveal the Analyse panel and seed its export basename. Called from
- * every load path — static files AND streaming COPC/EPT — so the terrain
- * tools surface regardless of how the scan was opened. v0.4.0.
+ * Reveal the Analyse + Export panels and seed the export basename. Called
+ * from every load path — static files AND streaming COPC/EPT — so the terrain
+ * and format tools surface regardless of how the scan was opened. v0.4.0.
  */
 function revealAnalysePanel(name: string): void {
   lastCloudName = baseName(name);
-  analysePanel.setVisible(true);
+  exportPanel.setVisible(true);
+  exportPanel.refresh();
+  // Classify the scan shape: a compact 3-D object gets the Object panel (with
+  // object-appropriate measurements) and terrain analysis is demoted behind a
+  // "run anyway" affordance; terrain / ambiguous scans get the Analyse panel.
+  let isObject = false;
+  try {
+    const gathered = viewer.gatherTerrainPositions(60_000);
+    if (gathered) {
+      const shape = classifyScanShape(gathered.positions);
+      if (shape.kind === 'object') {
+        isObject = true;
+        objectPanel.update(objectMetrics(gathered.positions), shape);
+      }
+    }
+  } catch {
+    /* classification is best-effort — fall back to showing terrain analysis */
+  }
+  objectPanel.setVisible(isObject);
+  analysePanel.setVisible(!isObject);
+  dock.setAnalyseEnabled(true);
+  dock.setAnalyseActive(!isObject);
 }
 
 /**
@@ -1512,7 +1614,21 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
     for (let i = 0; i < n; i++) {
       points[i] = { x: pos[i * 3], y: pos[i * 3 + 1], z: pos[i * 3 + 2] };
     }
-    const result = analyseContours(points, { cellSizeM, crs: null, intervalM });
+    // Feed the active scan's resolved CRS + vertical datum into the analysis
+    // so the readiness gate and export honesty reflect a georeferenced file
+    // (a real horizontal CRS lifts the "CRS unknown" downgrade; a known
+    // vertical datum clears the "datum unknown" warning).
+    const cur = crsService.current();
+    const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
+    const result = analyseContours(points, {
+      cellSizeM,
+      crs: crsName,
+      isGeographic: cur?.kind === 'geographic',
+      verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
+      verticalDatum: cur?.verticalDatum ?? null,
+      classification: gathered.classification,
+      intervalM,
+    });
     analysePanel.setBusy(false);
     analysePanel.update(result);
   } catch (err) {
@@ -1567,6 +1683,16 @@ void viewerLoaded.then(() => {
     },
   });
   viewer.measure.setOnChange(refreshMeasurePanel);
+  // Selecting the Profile kind is a terrain cross-section workflow — get the
+  // Analyse panel out of the way and bring the Measurements panel forward so
+  // the profile chart has room and the focus is unambiguous.
+  viewer.measure.setOnKindChange((kind) => {
+    if (kind === 'profile') {
+      analysePanel.setVisible(false);
+      dock.setAnalyseActive(false);
+      measurePanel.setVisible(true);
+    }
+  });
   // Persist the unit choice whenever it changes.
   viewer.measure.setOnUnitChange(persistPrefs);
   viewer.annotate.setOnChange(refreshAnnotationPanel);
@@ -1709,7 +1835,7 @@ void viewerLoaded.then(() => {
     // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
-    leftPanels.append(measurePanel.element, annotationPanel.element, analysePanel.element);
+    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, analysePanel.element, exportPanel.element);
     stage.overlay.append(leftPanels);
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
@@ -2367,7 +2493,8 @@ function refreshProvenanceFromStreaming(cloud: {
  * Streaming Coverage row from the source kind. No point iteration,
  * no engine analysis — just stable header-derived facts the user
  * can see immediately. Heavier metric work would land later through
- * the TerrainEngine, but is not part of v0.3.9.
+ * the TerrainEngine foundation; the Dataset Intelligence card stays
+ * header-derived for now.
  */
 function refreshDatasetIntelligenceFromStaticCloud(cloud: {
   readonly pointCount: number;
@@ -2397,7 +2524,7 @@ function refreshDatasetIntelligenceFromStaticCloud(cloud: {
         // contract the README documents for the other rows.
         warnings: [],
       },
-      metricVersion: 'v0.3.9',
+      metricVersion: TERRAIN_METRIC_VERSION,
     });
   } catch {
     // A cheap summary failure must never block load completion.
@@ -2442,7 +2569,7 @@ function refreshDatasetIntelligenceFromStreamingCloud(cloud: {
         // streaming-specific stability measurement.
         warnings: [],
       },
-      metricVersion: 'v0.3.9',
+      metricVersion: TERRAIN_METRIC_VERSION,
     });
   } catch {
     inspector.clearDatasetIntelligence();
@@ -2883,6 +3010,10 @@ async function handleFile(file: File): Promise<void> {
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
     activeId = id;
+    // Retain the source file + whether the display cloud was reduced, so the
+    // Export panel can offer a full-resolution re-decode.
+    sourceFileById.set(id, file);
+    reducedById.set(id, result.downsampled);
     // Local-first counter — categorical source format only; never the file name.
     try { recordUsage('scan-open', result.cloud.sourceFormat); }
     catch (err) { if (debug) console.warn('[usage] recordUsage threw', err); }
@@ -3769,10 +3900,14 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  exportPanel.setVisible(false);
+  sourceFileById.clear();
+  reducedById.clear();
   dock.setMeasureEnabled(false);
   dock.setInspectEnabled(false);
   dock.setProbeEnabled(false);
   dock.setAnnotateEnabled(false);
+  dock.setAnalyseEnabled(false);
   dock.setCloseEnabled(false);
   // Hide the dock entirely while back in the empty state — the audit fix
   // that pairs with `setEmpty(false)` on every attach path.
@@ -3819,6 +3954,8 @@ function resetToEmptyState(): void {
 function removeCloud(id: string): void {
   viewer.removeCloud(id);
   inspector.removeCloud(id);
+  sourceFileById.delete(id);
+  reducedById.delete(id);
   if (activeId === id) activeId = null;
   if (viewer.clouds().length === 0) resetToEmptyState();
 }

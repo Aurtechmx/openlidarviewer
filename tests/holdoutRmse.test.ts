@@ -43,6 +43,23 @@ describe('holdoutValidateDtm', () => {
     expect(r.rmse).toBeLessThan(0.6);
   });
 
+  it('reports RMSE in metres via verticalUnitToMetres (feet source data)', () => {
+    // A curved surface leaves a non-zero residual; with the same seed the
+    // split is identical, so the feet run must be exactly 0.3048× the metre
+    // run — proving the residuals are scaled into metres at one point.
+    const { points, mask } = surface((x) => 0.1 * x * x);
+    const metre = holdoutValidateDtm(points, mask, { cellSizeM: 1, seed: 3 });
+    const feet = holdoutValidateDtm(points, mask, {
+      cellSizeM: 1,
+      seed: 3,
+      verticalUnitToMetres: 0.3048,
+    });
+    expect(metre.rmse).toBeGreaterThan(0);
+    expect(feet.rmse).toBeCloseTo(metre.rmse * 0.3048, 6);
+    expect(feet.mae).toBeCloseTo(metre.mae * 0.3048, 6);
+    expect(feet.p95).toBeCloseTo(metre.p95 * 0.3048, 6);
+  });
+
   it('is deterministic for a fixed seed', () => {
     const { points, mask } = surface((x, y) => 0.3 * x + 0.2 * y);
     const a = holdoutValidateDtm(points, mask, { cellSizeM: 1, seed: 7 });
