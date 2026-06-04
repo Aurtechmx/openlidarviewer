@@ -434,6 +434,29 @@ test('validateRemoteCopcUrl rejects URLs longer than the configured cap', () => 
   expect(validateRemoteCopcUrl(long).ok).toBe(false);
 });
 
+test('validateRemoteCopcUrl blocks localhost and private/link-local hosts (SSRF)', () => {
+  const blocked = [
+    'http://localhost/scan.copc.laz',
+    'http://127.0.0.1/scan.copc.laz',
+    'http://0.0.0.0/scan.copc.laz',
+    'http://10.0.0.5/scan.copc.laz',
+    'http://192.168.1.10/scan.copc.laz',
+    'http://172.16.0.1/scan.copc.laz',
+    'http://169.254.169.254/latest/meta-data', // cloud metadata endpoint
+    'http://100.64.0.1/scan.copc.laz', // CGNAT
+    'http://printer.local/scan.copc.laz',
+    'http://[::1]/scan.copc.laz',
+    'http://[fe80::1]/scan.copc.laz',
+  ];
+  for (const url of blocked) {
+    const res = validateRemoteCopcUrl(url);
+    expect(res.ok, `${url} should be blocked`).toBe(false);
+    if (!res.ok) expect(res.reason).toMatch(/localhost|private/i);
+  }
+  // A public host with the same shape still passes.
+  expect(validateRemoteCopcUrl('https://203.0.113.10/scan.copc.laz').ok).toBe(true);
+});
+
 test('sanitizeUrlForDisplay strips userinfo from a parseable URL', () => {
   expect(sanitizeUrlForDisplay('https://user:pass@example.com/scan.copc.laz')).toBe(
     'https://example.com/scan.copc.laz',

@@ -132,7 +132,48 @@ export function validateRemoteCopcUrl(
       reason: 'URLs with embedded credentials are not accepted.',
     };
   }
+  // SSRF hardening: refuse loopback, private, link-local, and other
+  // internal hosts so a pasted URL can't be used to probe the user's own
+  // network (router admin pages, metadata endpoints, intranet services).
+  if (isBlockedHost(u.hostname)) {
+    return {
+      ok: false,
+      reason: 'URLs pointing at localhost or a private network address are not accepted.',
+    };
+  }
   return { ok: true, url: raw };
+}
+
+/**
+ * True for hostnames that resolve to the local machine or a private /
+ * internal network range, which a remote-data URL must never target.
+ * Covers IPv4 (loopback, RFC 1918, link-local, CGNAT, unspecified),
+ * IPv6 (loopback, unspecified, link-local fe80::/10, unique-local
+ * fc00::/7), and the conventional internal name suffixes. This is a
+ * best-effort literal check — it does not resolve DNS — which is the
+ * correct guard for a browser-side app where the fetch happens from the
+ * user's own machine.
+ */
+export function isBlockedHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (h === '' || h === 'localhost') return true;
+  if (h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
+  // IPv6 loopback / unspecified / link-local / unique-local.
+  if (h === '::1' || h === '::') return true;
+  if (/^fe[89ab][0-9a-f]:/i.test(h)) return true; // fe80::/10
+  if (/^f[cd][0-9a-f]{2}:/i.test(h)) return true; // fc00::/7
+  // IPv4 literals.
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local
+    if (a === 172 && b >= 16 && b <= 31) return true; // RFC 1918
+    if (a === 192 && b === 168) return true; // RFC 1918
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
+  }
+  return false;
 }
 
 /**

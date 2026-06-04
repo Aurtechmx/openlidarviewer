@@ -355,7 +355,7 @@ describe('parseSession — tolerance', () => {
   });
 });
 
-describe('parseSession / serializeSession — v4 CRS persistence (Phase E)', () => {
+describe('parseSession / serializeSession — v4 CRS persistence', () => {
   it('round-trips a resolved CRS through serialize → parse', () => {
     const session = sampleSession();
     const back = parseSession(

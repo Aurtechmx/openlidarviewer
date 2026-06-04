@@ -90,4 +90,40 @@ describe('buildFeatureModel', () => {
     });
     expect(model.bbox).toEqual({ minX: -1, minY: 2, maxX: 3, maxY: 5 });
   });
+
+  it('warns when CRS is unknown', () => {
+    const poly: ContourPolyline = { value: 1, vertices: [v(0, 0, 90), v(1, 0, 90)], closed: false };
+    const model = buildFeatureModel([{ value: 1, polylines: [poly] }], [styled(1, false)], {
+      crs: null,
+      verticalDatum: 'EPSG:5703',
+      intervalM: 1,
+    });
+    expect(model.crs).toBeNull();
+    expect(model.warnings.join(' ')).toMatch(/CRS unknown/i);
+  });
+
+  it('warns when the vertical datum is unknown', () => {
+    const poly: ContourPolyline = { value: 1, vertices: [v(0, 0, 90), v(1, 0, 90)], closed: false };
+    const model = buildFeatureModel([{ value: 1, polylines: [poly] }], [styled(1, false)], {
+      crs: 'EPSG:32610',
+      verticalDatum: null,
+      intervalM: 1,
+    });
+    expect(model.warnings.join(' ')).toMatch(/datum unknown/i);
+  });
+
+  it('defaults coverageMode to full and carries an explicit one through', () => {
+    const poly: ContourPolyline = { value: 1, vertices: [v(0, 0, 90), v(1, 0, 90)], closed: false };
+    const full = buildFeatureModel([{ value: 1, polylines: [poly] }], [styled(1, false)], {
+      crs: 'EPSG:32610',
+      intervalM: 1,
+    });
+    expect(full.coverageMode).toBe('full');
+    const resident = buildFeatureModel([{ value: 1, polylines: [poly] }], [styled(1, false)], {
+      crs: 'EPSG:32610',
+      intervalM: 1,
+      coverageMode: 'resident-only',
+    });
+    expect(resident.coverageMode).toBe('resident-only');
+  });
 });

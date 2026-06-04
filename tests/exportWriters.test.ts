@@ -40,7 +40,8 @@ function model(features: ContourFeature[], crs: string | null = 'EPSG:32610'): C
     intervalM: 1,
     bbox: features.length ? { minX, minY, maxX, maxY } : null,
     interpolatedFraction: 0.2,
-    warnings: [],
+    coverageMode: 'full',
+    warnings: ['CRS unknown — test'],
   };
 }
 
@@ -58,6 +59,13 @@ describe('toGeoJSON', () => {
     expect(gj.features[0].properties.elevation).toBe(10);
     expect(gj.features[0].properties.index).toBe(true);
     expect(gj.features[1].properties.grade).toBe('dashed');
+    // v0.4.0 evidence metadata
+    expect(gj.features[0].properties.evidenceGrade).toBe('measuredBacked');
+    expect(gj.features[1].properties.evidenceGrade).toBe('interpolatedBacked');
+    expect(gj.features[0].properties.interval).toBe(1);
+    expect(gj.features[0].properties.coverageMode).toBe('full');
+    expect(gj.metadata.coverageMode).toBe('full');
+    expect(Array.isArray(gj.metadata.warnings)).toBe(true);
   });
 
   it('emits the legacy CRS member as an OGC URN', () => {

@@ -11,23 +11,40 @@
  *   - Given two endpoints `a` and `b` in local render-space and a flat
  *     point cloud (positions Float32Array, x/y/z interleaved), return a
  *     polyline of `(distanceAlongLine, height)` samples whose count is
- *     `samples` (≥ 2). Each sample's height is the nearest cloud point's
- *     elevation, measured along the world's up vector.
+ *     `samples` (≥ 2). Each sample's height is a robust statistic of the
+ *     cloud points inside that bin's corridor, measured along `up`.
  *
  *   - The sampler walks the line in screen-perpendicular world-XY bins;
- *     each bin picks the closest cloud point and takes its elevation. If
- *     a bin sees no points within `bandWidth` of the line, the height
- *     is `NaN` — the consumer renders that gap as a discontinuity.
+ *     each bin collects EVERY cloud point within `bandWidth` of the line
+ *     and reduces them to one elevation with a percentile estimator (see
+ *     below). If a bin sees no points, the height is `NaN` — the consumer
+ *     renders that gap as a discontinuity, never an interpolation.
  *
- *   - "Closest" is measured in the horizontal (map) plane, perpendicular
- *     to `up`. This is the cartographer's definition: a cross-section is
- *     the surface seen edge-on along a transect, not the nearest 3D point.
+ *   - "Within the corridor" is measured in the horizontal (map) plane,
+ *     perpendicular to `up`. This is the cartographer's definition: a
+ *     cross-section is the surface seen edge-on along a transect.
  *
- * The cost model is deliberately simple — a single linear pass over the
- * cloud, O(N · samples). For a 1 M-point static cloud and 64 samples,
- * that's 64 M comparisons, ~300 ms on a modest laptop. The Measurements
- * panel renders the chart asynchronously and shows a "Sampling…" hint
- * while the worker runs; the full chart appears once the sampler returns.
+ * Why a percentile, not the nearest point (the scientific core):
+ *
+ *   A LiDAR corridor over real ground contains bare-earth returns AND
+ *   higher returns from vegetation, wires, vehicles, and noise. Picking
+ *   the single nearest point per bin makes the chosen surface jump
+ *   between canopy and ground from one bin to the next — a spiky line
+ *   that is a SAMPLING ARTEFACT, not real micro-topography, and that
+ *   corrupts any slope read off it. Instead each bin takes a low
+ *   percentile of its corridor elevations (`groundPercentile`, default
+ *   25). Because non-ground returns sit ABOVE the ground, a low
+ *   percentile rejects them and recovers the bare-earth transect using
+ *   MORE data, not less — de-noising by aggregation, never by inventing
+ *   values between samples. The percentile is the standard type-7
+ *   quantile (linear interpolation between order statistics), so the
+ *   estimate is continuous and reproducible. A `groundPercentile` of 50
+ *   gives the median (robust to symmetric noise but keeps real bumps);
+ *   0 gives the strict floor, 100 the canopy top.
+ *
+ * The cost model is a single linear pass to bin the points, O(N), then a
+ * per-bin sort, O(Σ b log b). For a 1 M-point cloud and 64 bins that is
+ * tens of ms. The Measurements panel samples asynchronously.
  *
  * Streaming clouds sample only the resident points. This matches the live
  * inspector contract — what the user sees on screen is what gets sampled.
@@ -79,10 +96,35 @@ export interface SampleProfileInput {
    * `null` means "auto" — use 5 % of the horizontal line length.
    */
   bandWidth?: number | null;
+  /**
+   * Per-bin elevation percentile (0..100) used to reduce the corridor
+   * points to one height. Default 25 — a bare-earth estimate that
+   * rejects vegetation/noise (which sit above the ground). 50 = median,
+   * 0 = strict floor, 100 = canopy top. `null` falls back to the default.
+   */
+  groundPercentile?: number | null;
 }
 
 const MIN_SAMPLES = 2;
 const MAX_SAMPLES = 512;
+const DEFAULT_GROUND_PERCENTILE = 25;
+
+/**
+ * Type-7 quantile (linear interpolation between order statistics) over a
+ * pre-sorted ascending array. `p` is in [0, 100]. Matches the default of
+ * NumPy / R / Excel PERCENTILE.INC so results are reproducible against
+ * standard tools. Caller guarantees `sorted.length >= 1`.
+ */
+function percentileSorted(sorted: Float64Array, count: number, p: number): number {
+  if (count === 1) return sorted[0];
+  const frac = Math.max(0, Math.min(100, p)) / 100;
+  const rank = frac * (count - 1);
+  const lo = Math.floor(rank);
+  const hi = Math.ceil(rank);
+  if (lo === hi) return sorted[lo];
+  const w = rank - lo;
+  return sorted[lo] * (1 - w) + sorted[hi] * w;
+}
 
 /**
  * Sample a height-vs-distance profile along the segment a → b.
@@ -121,16 +163,16 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
 
   const hDir: Vec3 = [hAB[0] / horizontalLen, hAB[1] / horizontalLen, hAB[2] / horizontalLen];
 
-  // Per-sample nearest-point bookkeeping. We track the minimum perpendicular
-  // distance seen in each bin so a denser sampling near the line wins over a
-  // far-but-coincidentally-aligned point.
-  const bestPerpSq = new Float32Array(samples);
-  const bestHeight = new Float32Array(samples);
-  const bestHit = new Uint8Array(samples);
-  bestPerpSq.fill(Number.POSITIVE_INFINITY);
+  // Per-bin corridor collection. Every point within the band contributes
+  // its elevation to its bin; the bin is later reduced to one height via
+  // the percentile estimator. One growable array per bin.
+  const binElevations: number[][] = new Array(samples);
+  for (let i = 0; i < samples; i++) binElevations[i] = [];
 
   const band = input.bandWidth == null ? horizontalLen * 0.05 : Math.max(0, input.bandWidth);
   const bandSq = band * band;
+  const percentile =
+    input.groundPercentile == null ? DEFAULT_GROUND_PERCENTILE : input.groundPercentile;
 
   const binStep = horizontalLen / (samples - 1);
 
@@ -170,19 +212,19 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
     if (binIndex < 0) binIndex = 0;
     if (binIndex > samples - 1) binIndex = samples - 1;
 
-    if (perpSq < bestPerpSq[binIndex]) {
-      bestPerpSq[binIndex] = perpSq;
-      bestHeight[binIndex] = pHeight;
-      bestHit[binIndex] = 1;
-    }
+    binElevations[binIndex].push(pHeight);
   }
 
+  // Reduce each bin's corridor elevations to one robust height.
   const out: ProfileSample[] = new Array(samples);
   for (let i = 0; i < samples; i++) {
-    out[i] = {
-      distance: i * binStep,
-      height: bestHit[i] === 1 ? bestHeight[i] : Number.NaN,
-    };
+    const els = binElevations[i];
+    let height = Number.NaN;
+    if (els.length > 0) {
+      const sorted = Float64Array.from(els).sort();
+      height = percentileSorted(sorted, sorted.length, percentile);
+    }
+    out[i] = { distance: i * binStep, height };
   }
   return out;
 }

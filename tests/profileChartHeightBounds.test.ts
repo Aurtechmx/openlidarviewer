@@ -11,8 +11,7 @@ import {
  * tests/profileChartHeightBounds.test.ts
  *
  * Pin the resizable profile chart's height bounds together across
- * TypeScript and CSS. v0.3.10 honesty-patch code-review #4 — the
- * 80 / 360 range is enforced in two places:
+ * TypeScript and CSS. The range is enforced in two places:
  *
  *   - `src/style.css` → `.olv-mp-chart { min-height: 80px;
  *     max-height: 360px; height: 140px; }` — the native

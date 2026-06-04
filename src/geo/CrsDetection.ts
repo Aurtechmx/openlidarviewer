@@ -1,7 +1,7 @@
 /**
  * CrsDetection.ts
  *
- * CRS Phase C — aggregate every CRS signal the platform has for a loaded
+ * Aggregate every CRS signal the platform has for a loaded
  * dataset (LAS/LAZ VLR, COPC info VLR, EPT manifest, STAC catalog tile
  * metadata, user override) into a single `ResolvedCrs` with documented
  * provenance and confidence. Pure, unit-testable in Node — no three.js,
@@ -51,8 +51,7 @@ export interface CrsSignals {
   readonly vlrSource?: 'las-vlr' | 'copc-meta' | 'ept-srs';
   /**
    * STAC catalog tile EPSG, when the dataset was opened from a catalog
-   * search. v0.3.6 already short-circuited this into the override store;
-   * Phase C makes it a first-class detector signal.
+   * search — a first-class detector signal.
    */
   readonly catalogEpsg?: number;
   /** Human-friendly catalog source label (e.g. "Planetary Computer"). */

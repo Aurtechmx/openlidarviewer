@@ -1630,6 +1630,70 @@ export class Viewer {
     return [...this._clouds.keys()];
   }
 
+  /**
+   * Gather a flattened (x,y,z interleaved) positions buffer from all
+   * loaded static clouds plus resident streaming nodes, for terrain
+   * analysis. Optionally strided down to at most `maxPoints` so a
+   * multi-million-point cloud can be analysed synchronously without
+   * freezing the UI; the stride is honest because the resulting coverage
+   * and confidence reflect exactly the points passed in. Returns null
+   * when nothing is loaded. v0.4.0.
+   */
+  gatherTerrainPositions(
+    maxPoints = 300_000,
+  ): { positions: Float32Array; residentOnly: boolean; sampled: boolean; totalPoints: number } | null {
+    const buffers: Float32Array[] = [];
+    let staticPoints = 0;
+    let streamingPoints = 0;
+    for (const { cloud } of this._clouds.values()) {
+      if (cloud.positions && cloud.positions.length > 0) {
+        buffers.push(cloud.positions);
+        staticPoints += cloud.positions.length / 3;
+      }
+    }
+    for (const { decoded } of this._streamingPickData.values()) {
+      if (decoded.positions && decoded.positions.length > 0) {
+        buffers.push(decoded.positions);
+        streamingPoints += decoded.positions.length / 3;
+      }
+    }
+    const totalPoints = staticPoints + streamingPoints;
+    if (totalPoints === 0) return null;
+
+    // Stride DURING the walk so a multi-million-point cloud is never fully
+    // copied into one giant intermediate buffer (that allocation could
+    // OOM). Non-finite points are skipped. The global counter `gi` keeps
+    // the stride consistent across buffer boundaries.
+    const stride = Math.max(1, Math.ceil(totalPoints / maxPoints));
+    const cap = Math.ceil(totalPoints / stride);
+    const positions = new Float32Array(cap * 3);
+    let gi = 0;
+    let oi = 0;
+    for (const b of buffers) {
+      const pts = (b.length / 3) | 0;
+      for (let i = 0; i < pts; i++, gi++) {
+        if (gi % stride !== 0 || oi >= cap) continue;
+        const s = i * 3;
+        const x = b[s];
+        const y = b[s + 1];
+        const z = b[s + 2];
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+          positions[oi * 3] = x;
+          positions[oi * 3 + 1] = y;
+          positions[oi * 3 + 2] = z;
+          oi++;
+        }
+      }
+    }
+    if (oi === 0) return null;
+    return {
+      positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
+      residentOnly: streamingPoints > 0 && staticPoints === 0,
+      sampled: stride > 1,
+      totalPoints,
+    };
+  }
+
   /** Show or hide a cloud. */
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);

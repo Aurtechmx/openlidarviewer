@@ -159,12 +159,14 @@ describe('sampleProfile — height-vs-distance along a transect', () => {
     expect(out[2].height).toBeCloseTo(2, 5);
   });
 
-  it('selects the closest point (not just the first seen) per bin', () => {
-    // Two candidates for the middle bin: one slightly off-line at z=10,
-    // one directly on the line at z=20. The on-line point should win.
+  it('rejects the high (vegetation) return in favour of bare earth', () => {
+    // Two candidates for the middle bin: a ground return at z=10 and a
+    // higher (canopy) return at z=20, both inside the corridor. The
+    // default bare-earth percentile leans toward the LOWER ground value,
+    // not the proximity winner — this is the de-noising contract.
     const positions = pack([
-      [5, 0.4, 10], // slightly off the transect
-      [5, 0.0, 20], // exactly on the transect (closer in plan)
+      [5, 0.4, 10], // ground
+      [5, 0.0, 20], // canopy / non-ground (higher)
     ]);
     const out = sampleProfile({
       a: [0, 0, 0],
@@ -174,7 +176,47 @@ describe('sampleProfile — height-vs-distance along a transect', () => {
       samples: 3,
       bandWidth: 1,
     });
-    expect(out[1].height).toBeCloseTo(20, 5);
+    // type-7 quantile of [10,20] at p=25 → 12.5; clearly nearer ground.
+    expect(out[1].height).toBeLessThan(15);
+    expect(Math.abs(out[1].height - 10)).toBeLessThan(Math.abs(out[1].height - 20));
+  });
+
+  it('honours an explicit percentile: 0 = floor, 100 = canopy top', () => {
+    const positions = pack([
+      [5, 0.0, 10],
+      [5, 0.1, 14],
+      [5, 0.2, 30], // a vegetation spike
+    ]);
+    const base = { a: [0, 0, 0] as [number, number, number], b: [10, 0, 0] as [number, number, number], up: Z_UP, positions, samples: 3, bandWidth: 1 };
+    const floor = sampleProfile({ ...base, groundPercentile: 0 });
+    const canopy = sampleProfile({ ...base, groundPercentile: 100 });
+    const median = sampleProfile({ ...base, groundPercentile: 50 });
+    expect(floor[1].height).toBeCloseTo(10, 5); // strict floor
+    expect(canopy[1].height).toBeCloseTo(30, 5); // canopy top
+    expect(median[1].height).toBeCloseTo(14, 5); // robust middle, spike rejected
+  });
+
+  it('de-noises a spiky corridor: ground dominates over scattered high returns', () => {
+    // One bin's corridor: mostly ground near z=5 with a few tall spikes.
+    // The default bare-earth percentile should land near the ground, not
+    // get dragged up by the spikes (the whole point of the estimator).
+    const positions = pack([
+      [5, 0.0, 5.0],
+      [5, 0.1, 5.1],
+      [5, 0.2, 4.9],
+      [5, 0.3, 5.05],
+      [5, 0.4, 22.0], // spike (tree)
+      [5, 0.5, 18.0], // spike (tree)
+    ]);
+    const out = sampleProfile({
+      a: [0, 0, 0],
+      b: [10, 0, 0],
+      up: Z_UP,
+      positions,
+      samples: 3,
+      bandWidth: 1,
+    });
+    expect(out[1].height).toBeLessThan(6); // sits on the ground, not the canopy
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * crsFoundation.test.ts
  *
- * Phase A of the CRS work — types, registry, and override store. Pure
+ * The CRS foundation — types, registry, and override store. Pure
  * Node tests; no DOM env required for any of these because
  * CrsOverrideStore guards every storage access with the suppressed-by-
  * environment check.

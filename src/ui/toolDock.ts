@@ -5,9 +5,8 @@ import { el } from './dom';
  * current camera view" control. Single source of truth — the
  * constructor sets it on the button at creation time, and
  * `_flashShare()` restores it after the temporary "Link copied"
- * confirmation. v0.3.10 honesty-patch code-review #3: the literal
- * appeared twice and was a drift risk if the label is ever retuned
- * again.
+ * confirmation. The label is defined once here rather than inline at
+ * each call site, so it cannot drift if it is ever retuned.
  */
 const COPY_VIEW_LINK_LABEL = 'Copy view link';
 

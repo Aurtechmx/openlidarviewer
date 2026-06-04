@@ -51,7 +51,10 @@ export function tallySegments(segments: ReadonlyArray<ContourSegment>): GradeTal
     acc[s.grade].length += len;
     total += len;
   }
-  const interp = total > 0 ? (acc.dashed.length + acc.gap.length) / total : Number.NaN;
+  // Clamp to [0,1]: when every segment is interpolated the ratio can
+  // exceed 1 by a floating-point epsilon (sum of parts > recomputed total).
+  const interp =
+    total > 0 ? Math.min(1, (acc.dashed.length + acc.gap.length) / total) : Number.NaN;
   return {
     solid: acc.solid,
     dashed: acc.dashed,

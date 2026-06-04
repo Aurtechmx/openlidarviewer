@@ -29,7 +29,7 @@ import {
   type EvidenceGrade,
 } from '../ground/cellConfidence';
 import type { VerticalAxis } from '../ground/groundFilter';
-import type { BandError, ValidationReport } from './ValidationReport';
+import type { BandError, ConfidenceSample, ValidationReport } from './ValidationReport';
 
 /** Options for {@link holdoutValidateDtm}. */
 export interface HoldoutParams {
@@ -45,6 +45,12 @@ export interface HoldoutParams {
   readonly verticalAxis?: VerticalAxis;
   /** Density (returns/cell) earning full confidence; default = scene median. */
   readonly targetCount?: number;
+  /**
+   * Collect the raw (predicted confidence, abs error) pair for every
+   * covered held-out point, returned as `report.samples`. Off by default;
+   * the confidence calibration turns it on.
+   */
+  readonly collectSamples?: boolean;
 }
 
 /** Small, fast, deterministic PRNG (mulberry32). */
@@ -148,6 +154,7 @@ export function holdoutValidateDtm(
   const bandSumSq: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
   const bandSumAbs: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
   const bandCount: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
+  const samples: ConfidenceSample[] | null = params.collectSamples ? [] : null;
 
   // Grid values sit at cell CENTRES, so predict with bilinear
   // interpolation over the four surrounding centres. Weights are
@@ -196,6 +203,7 @@ export function holdoutValidateDtm(
     bandSumSq[grade] += sq;
     bandSumAbs[grade] += abs;
     bandCount[grade] += 1;
+    if (samples) samples.push({ confidence: predConf, absError: abs });
   }
 
   if (covered === 0) {
@@ -228,6 +236,7 @@ export function holdoutValidateDtm(
     perBand,
     method: 'holdout-cross-validation',
     coverageMode: raster.coverage,
+    ...(samples ? { samples } : {}),
     warnings: [...warnings, ...dtm.warnings],
   };
 }

@@ -23,6 +23,7 @@ function model(features: ContourFeature[]): ContourFeatureModel {
     intervalM: 1,
     bbox: null,
     interpolatedFraction: 0,
+    coverageMode: 'full',
     warnings: [],
   };
 }

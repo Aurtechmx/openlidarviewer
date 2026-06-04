@@ -25,6 +25,17 @@ import { rasterizeDtm } from '../ground/rasterizeDtm';
 import { buildDtmGrid, type DtmGrid } from '../ground/cellConfidence';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
 import { checkCalibration } from '../validate/calibrationCheck';
+import {
+  fitConfidenceCalibration,
+  applyConfidenceCalibration,
+} from '../validate/calibrateConfidence';
+import {
+  classifyCellStatus,
+  tallyCellStatus,
+  type CellStatusTally,
+} from '../quality/dtmCellStatus';
+import { evaluateDtmQuality, type DtmQualityReport } from '../quality/dtmQualityGate';
+import { recommendGrid, type GridRecommendation } from '../quality/recommendGrid';
 import type { CalibrationResult, ValidationReport } from '../validate/ValidationReport';
 import { gateIntervals, type IntervalGateResult } from './intervalGate';
 import { contoursAt, type ContourSet } from './contoursAt';
@@ -65,6 +76,16 @@ export interface AnalyseContoursResult {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
   readonly calibration: CalibrationResult;
+  /** True when the reported confidence was recalibrated against measured error. */
+  readonly confidenceCalibrationApplied: boolean;
+  /** Vertical tolerance τ the calibrated confidence is defined against, or null. */
+  readonly confidenceToleranceM: number | null;
+  /** DTM quality gate verdict (ready / previewOnly / blocked) + metrics + reasons. */
+  readonly quality: DtmQualityReport;
+  /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
+  readonly cellStatusTally: CellStatusTally;
+  /** Recommended DTM grid + contour interval for this dataset. */
+  readonly gridRecommendation: GridRecommendation;
   readonly gate: IntervalGateResult;
   /** The interval actually used for the contours. */
   readonly intervalM: number | null;
@@ -117,7 +138,7 @@ export function analyseContours(
     },
     verticalAxis,
   });
-  const dtm = buildDtmGrid(raster, { crs, verticalDatum });
+  let dtm = buildDtmGrid(raster, { crs, verticalDatum });
   warnings.push(...dtm.warnings);
 
   // Elevation range over covered cells (drives gating + styling).
@@ -135,9 +156,26 @@ export function analyseContours(
     cellSizeM: params.cellSizeM,
     seed: params.holdoutSeed ?? 1,
     verticalAxis,
+    collectSamples: true,
   });
   const calibration = checkCalibration(validation);
   const accuracy = computeVerticalAccuracy(validation);
+
+  // 4b) Recalibrate the reported confidence against measured error, so a
+  // cell's % means "probability the height is within τ of truth" rather
+  // than a bare heuristic. τ is the measured RMSE. When there isn't
+  // enough held-out evidence the fit is not assessable and the grid is
+  // left untouched — we never synthesise a calibration from noise.
+  const confidenceCalibration = fitConfidenceCalibration(validation.samples ?? [], {
+    toleranceM: Number.isFinite(validation.rmse) && validation.rmse > 0 ? validation.rmse : null,
+  });
+  if (confidenceCalibration.assessable) {
+    dtm = applyConfidenceCalibration(dtm, confidenceCalibration);
+  }
+  const confidenceCalibrationApplied = confidenceCalibration.assessable;
+  const confidenceToleranceM = confidenceCalibration.assessable
+    ? confidenceCalibration.toleranceM
+    : null;
 
   // 5) Gate intervals against the measured RMSE.
   const gate = elevationRangeM > 0
@@ -154,6 +192,30 @@ export function analyseContours(
     warnings.push('no reliable contour interval for this scan');
   }
 
+  // 5b) DTM cell status, the quality gate (ready / previewOnly / blocked),
+  // and a grid + interval recommendation. The gate decides whether the UI
+  // may offer a professional export at all.
+  const cellStatusTally = tallyCellStatus(classifyCellStatus(dtm));
+  const groundPointRatio =
+    gf.sourcePointCount > 0 ? gf.groundPointCount / gf.sourcePointCount : Number.NaN;
+  const gridRecommendation = recommendGrid({
+    pointCount: gf.analyzedPointCount,
+    widthM: dtm.cols * dtm.cellSizeM,
+    depthM: dtm.rows * dtm.cellSizeM,
+    reliefM: elevationRangeM,
+    requestedIntervalM: params.intervalM ?? null,
+  });
+  const quality = evaluateDtmQuality({
+    tally: cellStatusTally,
+    meanCellConfidence: dtm.meanConfidence,
+    holdoutRmseM: validation.rmse,
+    groundPointRatio,
+    coverageMode: dtm.coverageMode,
+    crs,
+    verticalDatum,
+    recommendedIntervalM: gate.recommendedM,
+  });
+
   // 6-10) Contours → stitch → style → model → tally.
   if (intervalM == null) {
     const emptyContours: ContourSet = {
@@ -169,12 +231,22 @@ export function analyseContours(
       dtm,
       validation,
       calibration,
+      confidenceCalibrationApplied,
+      confidenceToleranceM,
+      quality,
+      cellStatusTally,
+      gridRecommendation,
       gate,
       intervalM: null,
       contours: emptyContours,
       stitched: [],
       style: { levels: [], warnings: [] },
-      model: buildFeatureModel([], [], { crs, verticalDatum, intervalM: 0 }),
+      model: buildFeatureModel([], [], {
+        crs,
+        verticalDatum,
+        intervalM: 0,
+        coverageMode: dtm.coverageMode,
+      }),
       tally: tallyContourSet(emptyContours),
       labels: [],
       accuracy,
@@ -201,7 +273,12 @@ export function analyseContours(
     }));
   }
 
-  const model = buildFeatureModel(stitched, style.levels, { crs, verticalDatum, intervalM });
+  const model = buildFeatureModel(stitched, style.levels, {
+    crs,
+    verticalDatum,
+    intervalM,
+    coverageMode: dtm.coverageMode,
+  });
   const tally = tallyContourSet(contours);
 
   // Labels along index contours only.
@@ -217,6 +294,11 @@ export function analyseContours(
     dtm,
     validation,
     calibration,
+    confidenceCalibrationApplied,
+    confidenceToleranceM,
+    quality,
+    cellStatusTally,
+    gridRecommendation,
     gate,
     intervalM,
     contours,

@@ -5,9 +5,9 @@ interface ElProps {
   text?: string;
   /**
    * RAW HTML / SVG markup, assigned verbatim via `innerHTML`. The
-   * deliberately-ugly name is a code-review tripwire: call sites that
-   * use this option are saying "the markup I'm passing is trusted
-   * static text, NOT user-derived". Never pass scan names, file
+   * deliberately-ugly name makes call sites stand out: using this option
+   * asserts "the markup I'm passing is trusted static text, NOT
+   * user-derived". Never pass scan names, file
    * names, URL params, message-event payloads, or any other
    * user-influenced string here — those must use `text` (which
    * routes through `textContent` and escapes automatically) or a

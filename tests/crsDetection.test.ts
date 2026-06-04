@@ -1,7 +1,7 @@
 /**
  * tests/crsDetection.test.ts
  *
- * Coverage for CRS Phase C — the aggregator that combines VLR + catalog
+ * Coverage for the CRS aggregator that combines VLR + catalog
  * + override signals into a single ResolvedCrs with provenance.
  *
  * Pins the priority order (override > catalog > VLR > default), the

@@ -130,6 +130,7 @@ export class NavController {
   private readonly _onCanvasClick: () => void;
   private readonly _onPointerLockChange: () => void;
   private readonly _onMouseMove: (e: MouseEvent) => void;
+  private readonly _onBlur: () => void;
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -147,12 +148,18 @@ export class NavController {
     this._onCanvasClick = () => this._handleCanvasClick();
     this._onPointerLockChange = () => this._handlePointerLockChange();
     this._onMouseMove = (e) => this._handleMouseMove(e);
+    this._onBlur = () => this._handleBlur();
 
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
     canvas.addEventListener('click', this._onCanvasClick);
     document.addEventListener('pointerlockchange', this._onPointerLockChange);
     document.addEventListener('mousemove', this._onMouseMove);
+    // A held key is released only by `keyup`, which the window receives only
+    // while focused. On any focus loss (alt-tab, OS shortcut, switching apps)
+    // the `keyup` is dropped, so without this the camera would keep orbiting
+    // or moving indefinitely on return. Reset all input when focus is lost.
+    window.addEventListener('blur', this._onBlur);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -215,14 +222,7 @@ export class NavController {
   setInputEnabled(enabled: boolean): void {
     this._inputEnabled = enabled;
     if (!enabled) {
-      this._keys.forward = false;
-      this._keys.backward = false;
-      this._keys.left = false;
-      this._keys.right = false;
-      this._keys.up = false;
-      this._keys.down = false;
-      this._sprint = false;
-      this._velocity = [0, 0, 0];
+      this._clearMovementKeys();
       this._clearOrbitKeys();
       this._controls.enabled = false;
       this._exitPointerLock();
@@ -237,7 +237,9 @@ export class NavController {
     const previous = this._mode;
     this._mode = mode;
     this._tween = null;
-    this._velocity = [0, 0, 0];
+    // Clear all held input across the transition — a movement key held
+    // during a mode switch must not carry over as phantom input.
+    this._clearMovementKeys();
     this._clearOrbitKeys();
 
     if (mode === 'orbit') {
@@ -370,6 +372,7 @@ export class NavController {
     this._canvas.removeEventListener('click', this._onCanvasClick);
     document.removeEventListener('pointerlockchange', this._onPointerLockChange);
     document.removeEventListener('mousemove', this._onMouseMove);
+    window.removeEventListener('blur', this._onBlur);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -558,6 +561,27 @@ export class NavController {
     this._orbitVel = [0, 0, 0];
   }
 
+  /** Release every movement / sprint key and zero the walk-fly velocity. */
+  private _clearMovementKeys(): void {
+    this._keys.forward = false;
+    this._keys.backward = false;
+    this._keys.left = false;
+    this._keys.right = false;
+    this._keys.up = false;
+    this._keys.down = false;
+    this._sprint = false;
+    this._velocity = [0, 0, 0];
+  }
+
+  /**
+   * Focus-loss reset: drop every held key so a lost `keyup` can't strand the
+   * camera in a continuous orbit or walk. Safe to call at any time.
+   */
+  private _handleBlur(): void {
+    this._clearMovementKeys();
+    this._clearOrbitKeys();
+  }
+
   private _handleCanvasClick(): void {
     if (!this._inputEnabled) return;
     if ((this._mode === 'walk' || this._mode === 'fly') && !this._locked) {
@@ -566,7 +590,11 @@ export class NavController {
   }
 
   private _handlePointerLockChange(): void {
+    const wasLocked = this._locked;
     this._locked = document.pointerLockElement === this._canvas;
+    // Mouse-look just ended (Esc, OS app-switch). Stop any walk/fly motion so
+    // the camera doesn't keep drifting while the pointer is free.
+    if (wasLocked && !this._locked) this._clearMovementKeys();
     this._cb.onPointerLockChange?.(this._locked);
   }
 

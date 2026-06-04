@@ -21,6 +21,7 @@
  */
 
 import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence';
+import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { ContourPolyline, StitchedLevel } from './stitchContours';
 import type { StyledLevel } from './contourStyle';
 
@@ -45,6 +46,26 @@ export interface ContourBBox {
   readonly maxY: number;
 }
 
+/**
+ * Per-contour evidence vocabulary surfaced in exports. Each single-grade
+ * run maps cleanly: a confident (solid) run is backed by measured ground,
+ * a dashed run by interpolation, and a gap run is too low-confidence to
+ * trust. (`mixed` / `edgeClipped` are reserved for richer models; the
+ * single-grade-run model emits only these three so the label never
+ * overstates what one feature actually contains.)
+ */
+export type ContourEvidence =
+  | 'measuredBacked'
+  | 'interpolatedBacked'
+  | 'lowConfidence';
+
+/** Map an evidence grade to the exported contour-evidence vocabulary. */
+export function contourEvidence(grade: EvidenceGrade): ContourEvidence {
+  if (grade === 'solid') return 'measuredBacked';
+  if (grade === 'dashed') return 'interpolatedBacked';
+  return 'lowConfidence';
+}
+
 /** The full export model. */
 export interface ContourFeatureModel {
   readonly features: ContourFeature[];
@@ -54,6 +75,8 @@ export interface ContourFeatureModel {
   readonly bbox: ContourBBox | null;
   /** Length-weighted fraction of contour that is dashed or gap. */
   readonly interpolatedFraction: number;
+  /** Coverage provenance the contours inherit from the DTM. */
+  readonly coverageMode: TerrainCoverageMode;
   readonly warnings: string[];
 }
 
@@ -62,6 +85,8 @@ export interface FeatureModelParams {
   readonly crs: string | null;
   readonly verticalDatum?: string | null;
   readonly intervalM: number;
+  /** Coverage provenance from the analysis (default 'full'). */
+  readonly coverageMode?: TerrainCoverageMode;
 }
 
 function segLen(a: [number, number], b: [number, number]): number {
@@ -161,6 +186,9 @@ export function buildFeatureModel(
   if (params.crs == null) {
     warnings.push('CRS unknown — this export is not georeferenced and may be unusable downstream');
   }
+  if (params.verticalDatum == null) {
+    warnings.push('Vertical datum unknown — contour elevations are not tied to a known datum');
+  }
 
   return {
     features,
@@ -169,6 +197,7 @@ export function buildFeatureModel(
     intervalM: params.intervalM,
     bbox,
     interpolatedFraction,
+    coverageMode: params.coverageMode ?? 'full',
     warnings,
   };
 }

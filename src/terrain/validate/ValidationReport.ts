@@ -26,6 +26,19 @@ export interface BandError {
   readonly mae: number;
 }
 
+/**
+ * One held-out point's (predicted confidence, observed error) pair —
+ * the raw evidence the confidence calibration is fit from. Collected only
+ * when the holdout is asked for it (it is otherwise omitted to keep the
+ * report light).
+ */
+export interface ConfidenceSample {
+  /** Predicted (raw heuristic) confidence at the held-out point, 0..100. */
+  readonly confidence: number;
+  /** Absolute vertical residual at that point, source linear units. */
+  readonly absError: number;
+}
+
 /** The result of a hold-out cross-validation pass. */
 export interface ValidationReport {
   /** Root-mean-square vertical residual across all covered held-out points. */
@@ -46,6 +59,12 @@ export interface ValidationReport {
   readonly method: string;
   /** Coverage mode inherited from the underlying DTM build. */
   readonly coverageMode: TerrainCoverageMode;
+  /**
+   * Raw (confidence, error) pairs for every covered held-out point —
+   * present only when the holdout was run with `collectSamples`. Feeds
+   * the confidence calibration fit.
+   */
+  readonly samples?: ReadonlyArray<ConfidenceSample>;
   /** Ordered, human-readable caveats. */
   readonly warnings: string[];
 }

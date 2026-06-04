@@ -18,6 +18,7 @@ function model(): ContourFeatureModel {
     intervalM: 1,
     bbox: { minX: 0, minY: 0, maxX: 1, maxY: 1 },
     interpolatedFraction: 0,
+    coverageMode: 'full',
     warnings: [],
   };
 }

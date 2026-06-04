@@ -18,7 +18,7 @@
  * Pure data: no DOM, no three.js, no I/O. Returns a string / object.
  */
 
-import type { ContourFeatureModel } from './contourFeatureModel';
+import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel';
 
 /** Convert "EPSG:32610" → an OGC URN; pass through anything else. */
 function crsUrn(crs: string): string {
@@ -31,10 +31,13 @@ export function toGeoJSON(model: ContourFeatureModel): Record<string, unknown> {
   const features = model.features.map((f) => ({
     type: 'Feature',
     properties: {
+      interval: model.intervalM,
       elevation: f.value,
       grade: f.grade,
+      evidenceGrade: contourEvidence(f.grade),
       index: f.isIndex,
-      confidence: Math.round(f.meanConfidence),
+      meanConfidence: Math.round(f.meanConfidence),
+      coverageMode: model.coverageMode,
     },
     geometry: {
       type: 'LineString',
@@ -49,9 +52,11 @@ export function toGeoJSON(model: ContourFeatureModel): Record<string, unknown> {
     metadata: {
       intervalM: model.intervalM,
       verticalDatum: model.verticalDatum,
+      coverageMode: model.coverageMode,
       interpolatedFraction: Number.isFinite(model.interpolatedFraction)
         ? Math.round(model.interpolatedFraction * 1000) / 1000
         : null,
+      warnings: model.warnings,
       notSurveyGrade: 'Not survey-grade unless validated against ground-truth control.',
     },
     features,

@@ -24,7 +24,7 @@ describe('validateRemoteEptUrl — happy path', () => {
     if (r.ok) expect(r.url).toBe('https://example.com/dataset/ept.json');
   });
   test('accepts http (not just https)', () => {
-    expect(validateRemoteEptUrl('http://localhost:8080/data/ept.json').ok).toBe(true);
+    expect(validateRemoteEptUrl('http://data.example.com:8080/data/ept.json').ok).toBe(true);
   });
   test('accepts ept.json with a query string (e.g. CDN token)', () => {
     expect(
@@ -48,6 +48,11 @@ describe('validateRemoteEptUrl — rejection paths', () => {
   test('rejects non-http(s) schemes', () => {
     expect(validateRemoteEptUrl('file:///tmp/ept.json').ok).toBe(false);
     expect(validateRemoteEptUrl('ftp://example.com/ept.json').ok).toBe(false);
+  });
+  test('rejects localhost / private hosts (SSRF), even with a valid /ept.json path', () => {
+    expect(validateRemoteEptUrl('http://localhost:8080/data/ept.json').ok).toBe(false);
+    expect(validateRemoteEptUrl('http://192.168.0.10/data/ept.json').ok).toBe(false);
+    expect(validateRemoteEptUrl('http://169.254.169.254/data/ept.json').ok).toBe(false);
   });
   test('rejects URLs with embedded credentials', () => {
     const r = validateRemoteEptUrl('https://user:pass@example.com/dataset/ept.json');

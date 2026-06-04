@@ -86,6 +86,23 @@ export const loadExportStudio = () => import('./export');
  */
 export const loadImageExports = loadExportStudio;
 
+/**
+ * Load the confidence-aware terrain analysis pipeline (ground
+ * classification → DTM → validation → contours). Heavy and only reached
+ * when the user runs the Analyse panel, so it rides its own lazy chunk.
+ * MUST live here (not inlined in main.ts) so the live source-transform
+ * doesn't scramble the import() literal. v0.4.0.
+ */
+export const loadAnalyseContours = () => import('./terrain/contour/analyseContours');
+
+/**
+ * Load the profile PDF builder (pulls in pdf-lib). Only reached when the
+ * user clicks "Export PDF" on a profile. Routed through here for the same
+ * reason as every other dynamic import — the live transform must not see
+ * the literal. v0.4.0.
+ */
+export const loadProfilePdf = () => import('./render/measure/profilePdf');
+
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 

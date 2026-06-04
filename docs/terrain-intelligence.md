@@ -1,12 +1,23 @@
 # Terrain Intelligence
 
-This document describes the Terrain Intelligence foundation that ships
-in OpenLiDARViewer v0.3.9. The foundation lives under `src/terrain/`
-and powers the Inspector's Dataset Intelligence card. Higher-level
-analyses (ground classification, DTM, DSM, contours, hillshade, slope
-maps, height-above-ground) are not part of v0.3.9.
+This document describes the Terrain Intelligence stack under `src/terrain/`.
+It has two layers:
 
-## What v0.3.9 ships
+1. The **foundation** (metrics, scoring, partitioning, caching, worker
+   infrastructure, and the Dataset Intelligence card) introduced in v0.3.9.
+2. The **confidence-aware DTM and contour pipeline** added in v0.4.0:
+   ground classification, a gridded DTM with per-cell confidence, hold-out
+   validation with confidence calibration, and evidence-graded contour
+   export.
+
+Scope note for v0.4.0: the Analyse panel (`src/ui/AnalysePanel.ts`) is
+**mounted as a preview surface** for terrain readiness and contour export.
+It exposes the validated data pipeline conservatively and does NOT yet
+represent a full interactive terrain suite; a minimal "Planned" tag row
+sets that expectation, and there are no dead buttons. A DTM quality gate
+decides whether a professional contour export is offered at all.
+
+## What v0.3.9 shipped (foundation)
 
 - **Contracts** (`TerrainContracts.ts`). Stable type contracts every
   consumer reads. Every result carries `coverage` /
@@ -24,27 +35,49 @@ maps, height-above-ground) are not part of v0.3.9.
   scoring framework that combines slope / roughness / variance /
   density into a `confidence: 0..100` score with a `reasons` array.
   No threshold, no class assignment.
-- **Partitioning** (`TerrainPartition.ts`). Grid + tile partition
-  builders, radius queries, bounding-box queries, neighborhood
-  builders, and a resident-aware filter for streaming clouds.
-- **Cache** (`TerrainCache.ts`). LRU cache for analysis results
-  keyed by dataset fingerprint + tile + parameters + coverage mode.
-  Recency is tracked through `Map` insertion order; eviction is
-  O(k).
-- **Worker infrastructure** (`TerrainWorker.ts`). Job lifecycle
-  with abortable cancellation, progress reporting, typed errors,
-  and clean teardown.
-- **Engine** (`TerrainEngine.ts`). Orchestrator that holds the
-  per-scan partition, routes analysis requests to the worker (or
-  main-thread analyser), and caches results.
-- **Feature flags** (`TerrainFeatureFlags.ts`). Engine + worker on
-  by default. `terrainExperimentalUiEnabled` is off in production.
+- **Partitioning** (`TerrainPartition.ts`), **Cache** (`TerrainCache.ts`),
+  **Worker infrastructure** (`TerrainWorker.ts`), **Engine**
+  (`TerrainEngine.ts`), and **Feature flags** (`TerrainFeatureFlags.ts`).
 - **Dataset Intelligence card** (`src/ui/DatasetIntelligenceCard.ts`,
-  `src/terrain/datasetIntelligence.ts`). Inspector card that reads
-  the foundation outputs and renders Point Density, Terrain
-  Complexity, Ground Visibility, Streaming Coverage, and Terrain
-  Confidence. Informational only. The card never claims to perform
-  ground classification.
+  `src/terrain/datasetIntelligence.ts`). Inspector card that renders Point
+  Density, Terrain Complexity, Ground Visibility, Streaming Coverage, and
+  Terrain Confidence. Informational only; it never claims to perform ground
+  classification.
+
+## What v0.4.0 adds (confidence-aware DTM + contour pipeline)
+
+All of the following are pure-data leaves (no DOM, no three.js), unit-tested,
+and composed by the `analyseContours` orchestrator
+(`src/terrain/contour/analyseContours.ts`).
+
+- **Ground classification** (`ground/groundFilter.ts`). Simple Morphological
+  Filter (SMRF core): minimum-elevation grid with a low-percentile despike,
+  progressive morphological opening with a slope-scaled threshold, and
+  slope-scaled point classification.
+- **DTM rasterisation** (`ground/rasterizeDtm.ts`). Ground returns aggregated
+  to a regular grid; empty cells stay `NaN` (no invented data).
+- **Per-cell confidence** (`ground/cellConfidence.ts`). Produces the
+  confidence-aware DTM — every cell carries an elevation, a 0..100
+  confidence, coverage provenance, and interpolation distance. Void cells are
+  filled by **inverse-distance weighting** (`ground/idwFill.ts`); slope for
+  the roughness penalty uses **Horn's method** (`ground/terrainDerivatives.ts`);
+  measured-cell confidence combines relative and absolute sample adequacy.
+- **Validation + calibration** (`validate/`). Hold-out cross-validation
+  (`holdoutRmse.ts`) measures vertical residual at withheld ground points;
+  `calibrateConfidence.ts` fits a monotonic map from heuristic confidence to
+  measured reliability and recalibrates the reported confidence, so a cell's
+  percentage reflects the probability its elevation is within the measured
+  vertical tolerance. ASPRS vertical accuracy is reported via
+  `verticalAccuracy.ts`.
+- **Evidence-graded contours** (`contour/`). Marching-squares contouring,
+  density-gated intervals, stitching, styling, honesty-preserving smoothing,
+  label placement, hypsometric colouring, and a shared feature model that
+  exports to **GeoJSON, SVG, and DXF**, with each run graded solid /
+  dashed / gap by its supporting confidence.
+- **Cross-section profiles** (`render/measure/`). A bare-earth percentile
+  estimator (`profileSampler.ts`) and a full-page **PDF profile sheet**
+  (`profilePdf.ts`) with a scaled chart, station/elevation/grade table, and
+  civil summary.
 
 ## Honesty contract
 
@@ -60,18 +93,17 @@ interface TerrainCoverageMeta {
 }
 ```
 
-The analyser populates these honestly. The UI surfaces them as a
-quality badge alongside every terrain result chip, and the Dataset
-Intelligence card attaches a streaming caveat ("Analysis is based on
-currently loaded data. Results may change as additional points
-stream.") to any non-`full` row.
+The analyser populates these honestly. The Dataset Intelligence card attaches
+a streaming caveat ("Analysis is based on currently loaded data. Results may
+change as additional points stream.") to any non-`full` row. The DTM/contour
+pipeline extends the same contract: empty cells render as gaps rather than
+fabricated heights, contour exports carry their evidence grade, and the
+confidence figure is calibrated against measured hold-out error rather than
+asserted.
 
-## What is not in v0.3.9
+## Not yet shipped
 
-The following are deliberately not shipped: ground classification,
-DTM / DSM generation, contour extraction, hillshade rendering, slope
-maps, height-above-ground analysis, vegetation detection, building
-detection, and a terrain quality report. The foundation gives a
-single envelope (`TerrainAnalysisResult`) that any future producer
-can populate; v0.3.9 itself ships only the metrics + scoring +
-informational card surface described above.
+Deliberately still out of scope: a ground/vegetation/building
+classification UI, a DSM, slope and hillshade maps, 3D DTM and contour
+overlays, and an automatic terrain quality report. The pipeline produces
+the data these would consume; surfacing them is future work.

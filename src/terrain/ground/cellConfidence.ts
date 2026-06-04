@@ -37,7 +37,9 @@
 
 import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { DemRaster } from './rasterizeDtm';
-import { inpaintNearest, surfaceSlope } from './groundFilter';
+import { inpaintNearest } from './groundFilter';
+import { idwFill } from './idwFill';
+import { hornSlope } from './terrainDerivatives';
 
 /** Per-cell provenance: how the elevation in this cell came to be. */
 export type CellCoverage =
@@ -115,6 +117,16 @@ export interface CellConfidenceParams {
   readonly crs?: string | null;
   /** Vertical datum, passed through to the grid. */
   readonly verticalDatum?: string | null;
+  /**
+   * Absolute sample-adequacy half-count: the per-cell ground-return count
+   * at which the absolute-density factor reaches 0.5. A measured cell's
+   * density confidence is `relative × absolute`, where `absolute =
+   * count / (count + halfCount)`. This stops a 1-return cell in a sparse
+   * scene from scoring 100% just because it matches the (low) scene
+   * median. Default 3. Set 0 to disable the absolute floor (relative
+   * only — the pre-0.4 behaviour).
+   */
+  readonly absoluteHalfCount?: number;
 }
 
 /**
@@ -151,9 +163,19 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   const hadData = new Uint8Array(nCells);
   for (let i = 0; i < nCells; i++) hadData[i] = raster.counts[i] > 0 ? 1 : 0;
 
-  // Fill heights from nearest measured cell. (Cells with no reachable
-  // data are handled below via coverage `none`.)
-  const z = inpaintNearest(raster.z, hadData, cols, rows);
+  // Fill heights. IDW (inverse-distance over the k nearest measured
+  // cells) gives a smooth, locally-supported interpolant; nearest-finite
+  // is the fallback for reachable cells that fall outside the IDW search
+  // radius, so every reachable cell still gets a finite height and the
+  // coverage semantics below are unchanged. Measured cells keep their
+  // own value verbatim. (v0.4.0 — was nearest-neighbour everywhere.)
+  const nearest = inpaintNearest(raster.z, hadData, cols, rows);
+  const idw = idwFill(raster.z, hadData, cols, rows, {});
+  const z = new Float32Array(nCells);
+  for (let i = 0; i < nCells; i++) {
+    if (hadData[i] === 1) z[i] = raster.z[i];
+    else z[i] = Number.isFinite(idw[i]) ? idw[i] : nearest[i];
+  }
 
   // Distance-to-data in cells (multi-source BFS, 8-connectivity).
   const interpDistanceCells = distanceToData(hadData, cols, rows);
@@ -162,8 +184,12 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   const target = params.targetCount ?? medianMeasuredCount(raster.counts);
   const safeTarget = target > 0 ? target : 1;
   const roughFull = params.roughnessFullPenaltySlope ?? 1.0;
+  const absoluteHalfCount = Math.max(0, params.absoluteHalfCount ?? 3);
 
-  const slope = surfaceSlope(z, cols, rows, cellSizeM);
+  // Horn 3x3 slope — isotropic, the same estimator GDAL/ArcGIS use —
+  // drives the interpolation roughness penalty. (v0.4.0 — was a crude
+  // max-neighbour difference.)
+  const slope = hornSlope(z, cols, rows, cellSizeM);
 
   const confidence = new Float32Array(nCells);
   const coverage = new Uint8Array(nCells);
@@ -178,10 +204,16 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       continue;
     }
     if (raster.counts[i] > 0) {
-      // measured
+      // measured. Density confidence combines RELATIVE adequacy (count vs
+      // the scene's typical density) with ABSOLUTE adequacy (count vs a
+      // half-saturation floor), so a single-return cell is never fully
+      // trusted just because the whole scene is sparse. absoluteHalfCount
+      // = 0 disables the floor (pre-0.4 relative-only behaviour).
       coverage[i] = 2;
-      const density = clamp01(raster.counts[i] / safeTarget);
-      confidence[i] = Math.round(100 * density);
+      const count = raster.counts[i];
+      const relative = clamp01(count / safeTarget);
+      const absolute = absoluteHalfCount > 0 ? count / (count + absoluteHalfCount) : 1;
+      confidence[i] = Math.round(100 * relative * absolute);
     } else if (Number.isFinite(interpDistanceCells[i])) {
       // interpolated from reachable data
       coverage[i] = 1;

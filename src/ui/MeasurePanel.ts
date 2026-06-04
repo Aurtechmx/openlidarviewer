@@ -8,6 +8,10 @@
  */
 
 import { el } from './dom';
+// Static import of the loader thunk — the dynamic import() itself lives in
+// lazyChunks.ts (excluded from the live source-transform) so its literal is
+// never scrambled. Importing the thunk pulls nothing heavy into the shell.
+import { loadProfilePdf } from '../lazyChunks';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
 import {
   DIMENSION_LABEL,
@@ -19,7 +23,7 @@ import {
 } from '../render/measure/measurementChains';
 
 /**
- * v0.3.10 (issue #402 — the profile chart used to be 36 px tall,
+ * The profile chart used to be 36 px tall,
  * which was too small to read slope, pick out features, or treat as a
  * deliverable. The CSS now defaults to ~140 px and lets the user drag
  * the south-east handle (CSS `resize: vertical`). We persist the
@@ -36,12 +40,11 @@ const PROFILE_CHART_HEIGHT_KEY = 'olv:measure:profile:chartHeightPx:v1';
  * source of truth as the JS clamp below. Mirrored in `style.css`
  * (`.olv-mp-chart { min-height: 80px; }`); the
  * `profileChartHeightBounds.test.ts` spec pins the two against drift.
- * v0.3.10 honesty-patch code-review #4.
  */
-export const PROFILE_CHART_MIN_HEIGHT_PX = 80;
+export const PROFILE_CHART_MIN_HEIGHT_PX = 160;
 /** Upper bound on the resizable profile chart height. See
  * `PROFILE_CHART_MIN_HEIGHT_PX` for the source-of-truth rationale. */
-export const PROFILE_CHART_MAX_HEIGHT_PX = 360;
+export const PROFILE_CHART_MAX_HEIGHT_PX = 640;
 
 /**
  * v0.3.10 Profile-as-Deliverable — the profile chart now exposes a
@@ -73,6 +76,42 @@ export function autoStationInterval(totalChainageM: number): number {
   let v = 10_000;
   while (totalChainageM / v > 10) v *= 2;
   return v;
+}
+
+/**
+ * Build an SVG path that passes through every point using a uniform
+ * Catmull-Rom spline expressed as cubic Béziers. The curve is
+ * interpolating — it never moves a sample, it only rounds the joins —
+ * so the smoothed line is an honest rendering of the (already
+ * percentile-de-noised) profile, not an approximation that invents a
+ * surface. End segments clamp their phantom neighbour to the endpoint so
+ * the curve starts and ends cleanly. A 2-point run is a straight line.
+ * v0.4.0 Profile-as-Deliverable.
+ */
+/** Sanitise a measurement name into a safe download file stem. */
+function safeFileName(name: string): string {
+  return name.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '') || 'measurement';
+}
+
+export function catmullRomPath(pts: ReadonlyArray<{ x: number; y: number }>): string {
+  const n = pts.length;
+  if (n === 0) return '';
+  const f = (v: number) => v.toFixed(2);
+  if (n === 1) return `M${f(pts[0].x)} ${f(pts[0].y)}`;
+  if (n === 2) return `M${f(pts[0].x)} ${f(pts[0].y)} L${f(pts[1].x)} ${f(pts[1].y)}`;
+  let d = `M${f(pts[0].x)} ${f(pts[0].y)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = pts[i === 0 ? 0 : i - 1];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2 < n ? i + 2 : n - 1];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${f(c1x)} ${f(c1y)} ${f(c2x)} ${f(c2y)} ${f(p2.x)} ${f(p2.y)}`;
+  }
+  return d;
 }
 
 /** Hooks the panel calls back into. */
@@ -132,7 +171,6 @@ export class MeasurePanel {
    * closure over the now-detached chart and over the localStorage
    * write callback). Tracking them here lets the next render
    * `disconnect()` every one before rebuilding the list.
-   * v0.3.10 honesty-patch code-review #1.
    */
   private _chartObservers: ResizeObserver[] = [];
 
@@ -347,6 +385,49 @@ export class MeasurePanel {
     this.element.classList.toggle('olv-hidden', !visible);
   }
 
+  /**
+   * Build and download a full-page PDF profile sheet for one profile
+   * measurement. pdf-lib is dynamic-imported so it stays out of the
+   * initial bundle; the button shows progress and a failure state rather
+   * than failing silently.
+   */
+  private async _exportProfilePdf(
+    s: MeasurementSummary,
+    btn: HTMLButtonElement,
+  ): Promise<void> {
+    if (!s.profileChart || s.profileChart.length < 2) return;
+    const label = btn.textContent ?? 'Export PDF';
+    btn.disabled = true;
+    btn.textContent = 'Building…';
+    try {
+      const { buildProfilePdf } = await loadProfilePdf();
+      const bytes = await buildProfilePdf({
+        name: s.name,
+        samples: s.profileChart,
+        residentOnly: s.profileChartResidentOnly,
+      });
+      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeFileName(s.name)}-profile.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (err) {
+      console.error('OpenLiDARViewer: profile PDF export failed.', err);
+      btn.textContent = 'Export failed';
+      setTimeout(() => {
+        btn.textContent = label;
+        btn.disabled = false;
+      }, 1800);
+      return;
+    }
+    btn.textContent = label;
+    btn.disabled = false;
+  }
+
   /** Rebuild the measurement list from the controller's summaries. */
   update(summaries: MeasurementSummary[]): void {
     this._summaries = summaries;
@@ -367,7 +448,6 @@ export class MeasurePanel {
     // the observers keep their callbacks (and the chart elements
     // they close over) alive until GC happens to collect both —
     // see `_chartObservers` for the full rationale.
-    // v0.3.10 honesty-patch code-review #1.
     for (const ro of this._chartObservers) ro.disconnect();
     this._chartObservers = [];
 
@@ -461,8 +541,8 @@ export class MeasurePanel {
         });
         vexStrip.append(chip);
       }
-      // v0.3.10 (issue #402: the profile chart is now resizable
-      // (CSS `resize: vertical` on `.olv-mp-chart`). Restore the
+      // The profile chart is resizable
+      // (CSS `resize` on `.olv-mp-chart`). Restore the
       // user's last chosen height from localStorage and persist any
       // resize so the panel doesn't snap back to 140 px on every
       // re-render. One key shared across all profiles — users want
@@ -484,11 +564,10 @@ export class MeasurePanel {
         // on `observe()` with the initial box size — without it, every
         // panel re-render would write the default 140 to localStorage
         // even when the user never touched the handle.
-        // v0.3.10 honesty-patch code-review #2.
         //
         // The observer is pushed onto `_chartObservers` so the next
         // `_renderList()` can `disconnect()` it before replacing the
-        // chart DOM nodes (code-review #1).
+        // chart DOM nodes.
         try {
           let primed = false;
           const ro = new ResizeObserver(() => {
@@ -509,9 +588,8 @@ export class MeasurePanel {
         } catch (err) {
           // ResizeObserver is unsupported (jsdom, very old browsers).
           // The chart still renders and resizes via CSS; only the
-          // persistence path drops out. v0.3.10 honesty-patch
-          // code-review #5 — surface the diagnostic instead of a
-          // silent swallow.
+          // persistence path drops out — surface the diagnostic
+          // instead of a silent swallow.
           console.warn(
             'OpenLiDARViewer: ResizeObserver unavailable; profile chart height will not persist across renders.',
             err,
@@ -539,7 +617,22 @@ export class MeasurePanel {
       // labelled button in the destructive rose vocabulary makes the
       // dismiss path discoverable at the moment of "I'm done with this
       // profile." Wires to the same controller delete callback.
+      // v0.4.0 Profile-as-Deliverable — a full-page PDF (scaled chart +
+      // station/elevation/grade table + civil summary) an engineer can
+      // print and measure off. pdf-lib is dynamic-imported on click so it
+      // stays out of the initial bundle.
+      const pdfBtn = el('button', {
+        className: 'olv-mp-profile-pdf',
+        text: 'Export PDF',
+        title: `Export ${s.name} as a scaled profile sheet (PDF)`,
+        ariaLabel: `Export profile ${s.name} as PDF`,
+      });
+      pdfBtn.addEventListener('click', () => {
+        pdfBtn.blur();
+        void this._exportProfilePdf(s, pdfBtn);
+      });
       const clearAction = el('div', { className: 'olv-mp-row-action' }, [
+        pdfBtn,
         el('button', {
           className: 'olv-mp-profile-clear',
           text: 'Clear profile',
@@ -547,7 +640,7 @@ export class MeasurePanel {
           ariaLabel: `Clear profile ${s.name}`,
         }),
       ]);
-      const clearBtn = clearAction.firstElementChild as HTMLButtonElement;
+      const clearBtn = clearAction.lastElementChild as HTMLButtonElement;
       clearBtn.addEventListener('click', () => {
         clearBtn.blur();
         this._cb.onDelete(s.id);
@@ -604,11 +697,18 @@ function renderProfileChart(
   vex: number,
   system: 'metric' | 'imperial',
 ): HTMLElement {
-  const W = 220;
-  const H = 60; // Taller viewBox — gives the axis labels breathing room.
-  const PAD_X = 18; // Room for Y-axis labels on the left.
-  const PAD_TOP = 4;
-  const PAD_BOTTOM = 10; // Room for X-axis labels below.
+  // viewBox proportioned to the (taller-than-wide) chart box so that
+  // `preserveAspectRatio="none"` barely distorts the text — the prior
+  // 220×60 box stretched ~3.5× horizontally and the labels were
+  // unreadable. A near-square unit keeps fonts legible at the doubled
+  // panel height. v0.4.0.
+  const W = 200;
+  const H = 300;
+  const PAD_X = 30; // Room for Y-axis (elevation) labels on the left.
+  const PAD_TOP = 16;
+  const PAD_BOTTOM = 26; // Room for X-axis (chainage) labels below.
+  const FS = 10; // Axis label font size — readable at 2× panel height.
+  const FS_BADGE = 11;
 
   // Find data bounds across hit samples only.
   let xMin = Infinity;
@@ -647,14 +747,16 @@ function renderProfileChart(
   const plotW = plotRight - plotLeft;
   const plotH = plotBottom - plotTop;
 
-  // Walk samples and emit one path per contiguous hit run.
-  const paths: string[] = [];
-  let cur = '';
+  // Walk samples and collect one point-run per contiguous hit run; a
+  // NaN (no-coverage) bin breaks the run so a gap stays a discontinuity.
+  const midY = (yMin + yMax) * 0.5;
+  const runs: Array<Array<{ x: number; y: number }>> = [];
+  let run: Array<{ x: number; y: number }> = [];
   for (const s of samples) {
     if (!Number.isFinite(s.height)) {
-      if (cur) {
-        paths.push(cur);
-        cur = '';
+      if (run.length) {
+        runs.push(run);
+        run = [];
       }
       continue;
     }
@@ -662,13 +764,20 @@ function renderProfileChart(
     // Centre the (yMax+yMin)/2 line vertically when VEX > 1 so the
     // exaggeration grows around the midline rather than collapsing
     // to the top or bottom of the band.
-    const midY = (yMin + yMax) * 0.5;
     const dyVisual = (s.height - midY) / ySpan; // dimensionless
     // Invert: SVG y grows downward, but elevation grows upward.
     const y = plotTop + plotH * 0.5 - dyVisual * plotH;
-    cur += cur === '' ? `M${x.toFixed(2)} ${y.toFixed(2)}` : ` L${x.toFixed(2)} ${y.toFixed(2)}`;
+    run.push({ x, y });
   }
-  if (cur) paths.push(cur);
+  if (run.length) runs.push(run);
+
+  // Render each run as a Catmull-Rom curve that PASSES THROUGH every
+  // sample (it interpolates, it never moves a measured point), so the
+  // line reads as organic terrain rather than a jagged staircase while
+  // staying honest — the de-noising already happened in the sampler's
+  // percentile estimator; this is purely how the through-points are
+  // joined. Gaps are never bridged.
+  const paths = runs.map((pts) => catmullRomPath(pts));
 
   // Station spacing — civil convention.
   const stationInterval = autoStationInterval(xSpan);
@@ -709,18 +818,34 @@ function renderProfileChart(
   const yAxisRules =
     `<line x1="${plotLeft}" y1="${plotTop}" x2="${plotRight}" y2="${plotTop}" stroke="rgba(255,255,255,0.10)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>` +
     `<line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="rgba(255,255,255,0.18)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
-  // X-axis tick labels at each major station.
+  // X-axis tick labels — labelling EVERY station collides in a narrow
+  // chart (the "0m20m40m…" smear). Stride down to at most ~6 labels and
+  // always keep the first and last so the extent stays readable.
+  const MAX_X_LABELS = 6;
+  const lastIdx = stations.length - 1;
+  const labelStride = Math.max(1, Math.ceil(stations.length / MAX_X_LABELS));
   const xLabelParts = stations
     .map((c, i) => {
+      const isLast = i === lastIdx;
+      // Keep strided labels + the last one; drop a strided label that
+      // would crowd the kept last label.
+      if (!isLast && i % labelStride !== 0) return '';
+      if (!isLast && lastIdx - i < labelStride / 2) return '';
       const x = plotLeft + (c / xSpan) * plotW;
-      const anchor = i === 0 ? 'start' : i === stations.length - 1 ? 'end' : 'middle';
-      return `<text x="${x.toFixed(2)}" y="${H - 2}" text-anchor="${anchor}" font-size="5.5" fill="rgba(255,255,255,0.55)" font-family="ui-monospace,monospace">${formatChainage(c)}</text>`;
+      const anchor = i === 0 ? 'start' : isLast ? 'end' : 'middle';
+      return `<text x="${x.toFixed(2)}" y="${H - 8}" text-anchor="${anchor}" font-size="${FS}" fill="rgba(255,255,255,0.62)" font-family="ui-monospace,monospace">${formatChainage(c)}</text>`;
     })
     .join('');
-  // Y-axis tick labels — top and bottom only.
+  // Y-axis tick labels — top and bottom of the VISIBLE band. At VEX 1
+  // these are the true min/max; at higher VEX the band shrinks around
+  // the midline (the curve is exaggerated within the frame), so the
+  // labels must report the band actually shown, not the data extremes —
+  // otherwise the numbers wouldn't match the drawn line. v0.4.0.
+  const visTop = midY + 0.5 * ySpan;
+  const visBot = midY - 0.5 * ySpan;
   const yLabelParts =
-    `<text x="2" y="${plotTop + 4}" font-size="5.5" fill="rgba(255,255,255,0.55)" font-family="ui-monospace,monospace">${formatElevation(yMax)}</text>` +
-    `<text x="2" y="${plotBottom - 1}" font-size="5.5" fill="rgba(255,255,255,0.55)" font-family="ui-monospace,monospace">${formatElevation(yMin)}</text>`;
+    `<text x="3" y="${plotTop + FS}" font-size="${FS}" fill="rgba(255,255,255,0.62)" font-family="ui-monospace,monospace">${formatElevation(visTop)}</text>` +
+    `<text x="3" y="${plotBottom - 2}" font-size="${FS}" fill="rgba(255,255,255,0.62)" font-family="ui-monospace,monospace">${formatElevation(visBot)}</text>`;
   // Station tick caps above the X axis.
   const stationCaps = stations
     .map((c) => {
@@ -731,12 +856,12 @@ function renderProfileChart(
   // VEX indicator — burned into the chart so a screenshot or PDF
   // export carries the scale information unambiguously.
   const vexLabel =
-    `<text x="${plotRight - 2}" y="${plotTop + 5}" text-anchor="end" font-size="5.5" font-weight="600" fill="rgba(255,255,255,0.55)" font-family="ui-monospace,monospace">VEX ${vex}:1</text>`;
+    `<text x="${plotRight - 2}" y="${plotTop + FS_BADGE}" text-anchor="end" font-size="${FS_BADGE}" font-weight="600" fill="rgba(255,255,255,0.6)" font-family="ui-monospace,monospace">VEX ${vex}:1</text>`;
 
   const pathParts = paths
     .map(
       (d) =>
-        `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>`,
+        `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.75" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>`,
     )
     .join('');
 

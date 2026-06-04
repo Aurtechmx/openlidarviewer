@@ -34,6 +34,8 @@ import { LassoVolumeTool } from './ui/LassoVolumeTool';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { AnnotationPanel } from './ui/AnnotationPanel';
+import { AnalysePanel } from './ui/AnalysePanel';
+import type { TerrainPoint } from './terrain/TerrainContracts';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
 import { LoadCancelledError } from './io/loadFile';
@@ -100,6 +102,7 @@ import {
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
   loadViewer,
+  loadAnalyseContours,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -1450,6 +1453,76 @@ const annotationPanel = new AnnotationPanel({
   onHover: (id) => viewer.annotate.hover(id),
 });
 
+// The Analyse panel surfaces terrain readiness (ground confidence, DTM
+// quality, contour readiness) and contour export. v0.4.0. The heavy
+// pipeline is dynamic-imported on demand so it stays out of the initial
+// bundle; the panel only runs when the user clicks "Run terrain analysis".
+let lastCloudName = 'contours';
+const analysePanel = new AnalysePanel({
+  onRun: () => void runTerrainAnalysis(),
+  onSelectInterval: (m) => void runTerrainAnalysis(m),
+  getExportBasename: () => lastCloudName,
+});
+
+/**
+ * Reveal the Analyse panel and seed its export basename. Called from
+ * every load path — static files AND streaming COPC/EPT — so the terrain
+ * tools surface regardless of how the scan was opened. v0.4.0.
+ */
+function revealAnalysePanel(name: string): void {
+  lastCloudName = baseName(name);
+  analysePanel.setVisible(true);
+}
+
+/**
+ * Run the confidence-aware terrain pipeline on the loaded scan and update
+ * the Analyse panel. Points are gathered (and strided if huge) from the
+ * Viewer; the analysis is synchronous but yields once so the busy state
+ * paints, and is fully guarded so a failure never breaks the shell.
+ */
+async function runTerrainAnalysis(intervalM?: number): Promise<void> {
+  const gathered = viewer.gatherTerrainPositions();
+  if (!gathered) {
+    analysePanel.setStatus('Load a scan first, then run terrain analysis.');
+    return;
+  }
+  analysePanel.setBusy(true);
+  // Let the "Analysing…" state paint before the synchronous compute.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    const { analyseContours } = await loadAnalyseContours();
+    const pos = gathered.positions;
+    const n = pos.length / 3;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const x = pos[i * 3];
+      const y = pos[i * 3 + 1];
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    // Aim for a grid ~256 cells across, clamped to a sane floor.
+    const extent = Math.max(maxX - minX, maxY - minY, 1);
+    const cellSizeM = Math.max(0.25, extent / 256);
+    const points: TerrainPoint[] = new Array(n);
+    for (let i = 0; i < n; i++) {
+      points[i] = { x: pos[i * 3], y: pos[i * 3 + 1], z: pos[i * 3 + 2] };
+    }
+    const result = analyseContours(points, { cellSizeM, crs: null, intervalM });
+    analysePanel.setBusy(false);
+    analysePanel.update(result);
+  } catch (err) {
+    console.error('OpenLiDARViewer: terrain analysis failed.', err);
+    analysePanel.setBusy(false);
+    const msg = err instanceof Error ? err.message : String(err);
+    analysePanel.setStatus(`Analysis failed: ${msg}`);
+  }
+}
+
 // Every listener-binding that synchronously dereferences `viewer.*` must
 // wait until the lazy-loaded Viewer chunk has resolved. The handlers
 // themselves are fine to define eagerly (they only fire on user input,
@@ -1636,7 +1709,7 @@ void viewerLoaded.then(() => {
     // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
-    leftPanels.append(measurePanel.element, annotationPanel.element);
+    leftPanels.append(measurePanel.element, annotationPanel.element, analysePanel.element);
     stage.overlay.append(leftPanels);
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
@@ -1961,6 +2034,26 @@ function prewarmForUrl(url: string): void {
   }
 }
 
+/**
+ * Best-effort "is the user on a metered / data-saving connection?" check.
+ * Returns false when the Network Information API is unavailable (Safari /
+ * Firefox) so capable connections still benefit. Used to gate the heavy
+ * Viewer (three.js) idle pre-warm off cellular budgets.
+ */
+function _isDataSaver(): boolean {
+  try {
+    const conn = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (!conn) return false;
+    if (conn.saveData) return true;
+    const et = conn.effectiveType;
+    return et === 'slow-2g' || et === '2g' || et === '3g';
+  } catch {
+    return false;
+  }
+}
+
 let _loadersPrewarmed = false;
 function schedulePrewarm(): void {
   if (_loadersPrewarmed) return;
@@ -1985,6 +2078,14 @@ function schedulePrewarm(): void {
     // Static LAS/LAZ loader sits in its own chunk too — pre-warm it for
     // the "drop a non-COPC LAZ file" path which is the other common case.
     void import('./io/loadLas').catch(() => { /* swallow */ });
+    // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — the single
+    // biggest first-open cost. Warm it during idle too so the first scan
+    // opens without that download on the critical path. Gated on data
+    // charge: skip it under Save-Data or a 2G/3G connection so we never
+    // spend a phone's cellular budget on a scan the user hasn't opened yet.
+    if (!_isDataSaver()) {
+      void loadViewer().catch(() => { /* swallow — open() retries */ });
+    }
   };
   type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
   const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
@@ -2906,6 +3007,9 @@ async function handleFile(file: File): Promise<void> {
 
     if (!bareMode) showProjectCard(result.cloud, result.originalPointCount);
 
+    // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
+    revealAnalysePanel(result.cloud.name);
+
     // Developer diagnostics — the merged telemetry feeds the debug console
     // block, the performance overlay, and (under ?benchmark=1) a benchmark.
     if ((debug || benchmark) && result.telemetry) {
@@ -3098,6 +3202,7 @@ async function openStreamingCopc(
 
   // The metadata-driven scan summary, and a fresh saved-views list.
   const header = cloud.metadata.header;
+  revealAnalysePanel(cloud.name); // streaming COPC also gets the terrain tools
   streamingPanel.setSummary({
     fileName: cloud.name,
     pointFormat: header.pointDataRecordFormat,
@@ -3299,6 +3404,7 @@ async function handleRemoteEpt(url: string): Promise<void> {
     // adapted for EPT's metadata layout.
     const b = detection.metadata.bounds.conforming;
     const schemaSummary = `${detection.metadata.dataType} · ${detection.metadata.schema.length} attrs`;
+    revealAnalysePanel(cloud.name); // streaming EPT also gets the terrain tools
     streamingPanel.setSummary({
       fileName: cloud.name,
       pointFormat: -1,                 // EPT has no LAS PDRF; sentinel
@@ -3659,6 +3765,10 @@ function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
   viewer.setInspectMode(false);
   viewer.clearMeasurements();
+  // Hide + clear the Analyse panel so it doesn't linger with stale
+  // terrain results after the scan is closed. v0.4.0.
+  analysePanel.update(null);
+  analysePanel.setVisible(false);
   dock.setMeasureEnabled(false);
   dock.setInspectEnabled(false);
   dock.setProbeEnabled(false);

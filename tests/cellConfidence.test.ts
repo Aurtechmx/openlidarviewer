@@ -41,9 +41,12 @@ function raster(opts: {
 
 describe('buildDtmGrid', () => {
   it('grades measured > near-interpolated > far-interpolated', () => {
-    // 3x1: one measured cell, then a gap of increasing distance.
+    // 3x1: one WELL-SAMPLED measured cell, then a gap of increasing
+    // distance. The measured cell needs enough returns to clear the
+    // absolute-density floor (v0.4.0) — a structural, not a fluke,
+    // ordering.
     const g = buildDtmGrid(
-      raster({ z: [5, NaN, NaN], counts: [2, 0, 0], cols: 3, rows: 1 }),
+      raster({ z: [5, NaN, NaN], counts: [8, 0, 0], cols: 3, rows: 1 }),
       { crs: 'EPSG:32610' },
     );
     expect(g.coverage[0]).toBe(2); // measured
@@ -51,6 +54,31 @@ describe('buildDtmGrid', () => {
     expect(g.coverage[2]).toBe(1);
     expect(g.confidence[0]).toBeGreaterThan(g.confidence[1]);
     expect(g.confidence[1]).toBeGreaterThan(g.confidence[2]);
+  });
+
+  it('absolute-density floor: a thinly-sampled measured cell is not fully trusted', () => {
+    // Two measured cells, one with a single return and one densely
+    // sampled, in a scene whose median is dragged down by the sparse
+    // cell. Pre-0.4 both would score 100 (relative-only); the absolute
+    // floor must rank the dense cell strictly above the 1-return cell.
+    const g = buildDtmGrid(
+      raster({ z: [5, 6], counts: [1, 20], cols: 2, rows: 1 }),
+      { crs: 'EPSG:32610' },
+    );
+    expect(g.confidence[0]).toBeLessThan(g.confidence[1]);
+    expect(g.confidence[0]).toBeLessThan(100); // 1-return cell capped
+  });
+
+  it('absoluteHalfCount: 0 restores pre-0.4 relative-only density', () => {
+    // Equal counts → relative density = 1 for both cells (each matches
+    // the scene median). With the floor disabled they reach a full 100;
+    // with the floor on they are capped below 100.
+    const r = raster({ z: [5, 6], counts: [20, 20], cols: 2, rows: 1 });
+    const off = buildDtmGrid(r, { crs: 'EPSG:32610', absoluteHalfCount: 0 });
+    expect(off.confidence[0]).toBe(100);
+    expect(off.confidence[1]).toBe(100);
+    const on = buildDtmGrid(r, { crs: 'EPSG:32610' }); // default floor (3)
+    expect(on.confidence[0]).toBeLessThan(100);
   });
 
   it('fills interpolated heights (no NaN where coverage>0) and stays honest', () => {
