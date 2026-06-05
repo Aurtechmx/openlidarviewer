@@ -41,6 +41,8 @@ import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
+import { ClassLegendPanel } from './ui/ClassLegendPanel';
+import { countClasses } from './render/class/classHistogram';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
@@ -1513,6 +1515,28 @@ const analysePanel = new AnalysePanel({
   },
 });
 
+// Classification legend — one row per ASPRS class present in the scan, with a
+// colour swatch (matching "colour by class"), a live "shown" point count, and a
+// visibility checkbox. DISPLAY ONLY: a change applies the 256-entry mask to the
+// GPU and re-renders the legend; it does NOT scope metrics/analysis. v0.4.1.
+const classLegendPanel = new ClassLegendPanel();
+classLegendPanel.onChange((visibility) => {
+  viewer.applyClassVisibility(visibility);
+});
+// Streaming node-ready: fold each newly-resident node's classification into the
+// legend so a class first seen at depth appears as a new row. The legend keeps
+// its current visibility (default visible, but left hidden if the user isolated
+// a class), so a late arrival never silently re-reveals hidden points.
+viewer.onStreamingNodeClasses = (classes) => {
+  if (!classLegendPanel.hasClasses()) {
+    // First node to carry classification on this streaming scan — seed + show.
+    classLegendPanel.setClasses(countClasses(classes));
+    if (classLegendPanel.hasClasses()) classLegendPanel.show();
+  } else {
+    classLegendPanel.mergeClasses(countClasses(classes));
+  }
+};
+
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
 // pipeline if the shape detector misjudged the scan.
@@ -1574,6 +1598,33 @@ function revealAnalysePanel(name: string): void {
   analysePanel.setVisible(!isObject);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(!isObject);
+}
+
+/**
+ * Populate + reveal (or empty-state) the classification legend for the active
+ * scan. Pass the cloud's per-point classification buffer when present, or
+ * `undefined` when the cloud carries no classification channel. DISPLAY-ONLY:
+ * the legend's fresh state is all-visible, so the GPU mask is applied as a
+ * no-op identity mask to keep the unfiltered experience unchanged. v0.4.1.
+ */
+function refreshClassLegend(classification?: ArrayLike<number>): void {
+  if (classification && classification.length > 0) {
+    classLegendPanel.setClasses(countClasses(toClassBuffer(classification)));
+  } else {
+    classLegendPanel.setClasses(new Map());
+  }
+  // Apply the (all-visible) mask so a previously-filtered scan can't leak its
+  // hidden classes onto the freshly loaded one. No-op for the common case.
+  viewer.applyClassVisibility(classLegendPanel.getVisibility());
+  classLegendPanel.show();
+}
+
+/** Narrow an ArrayLike classification source to a typed buffer for counting. */
+function toClassBuffer(src: ArrayLike<number>): Uint8Array {
+  if (src instanceof Uint8Array) return src;
+  const out = new Uint8Array(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = src[i];
+  return out;
 }
 
 /**
@@ -1835,7 +1886,7 @@ void viewerLoaded.then(() => {
     // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
-    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, analysePanel.element, exportPanel.element);
+    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element);
     stage.overlay.append(leftPanels);
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
@@ -3141,6 +3192,16 @@ async function handleFile(file: File): Promise<void> {
     // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
     revealAnalysePanel(result.cloud.name);
 
+    // Classification legend (v0.4.1) — populate from the cloud's per-point
+    // class buffer when present, then show. A scan with no classification
+    // channel renders the panel's empty state. DISPLAY-ONLY; the all-visible
+    // default mask is applied so nothing is hidden on load.
+    try {
+      refreshClassLegend(result.cloud.classification);
+    } catch (err) {
+      if (debug) console.warn('[class-legend] refresh threw', err);
+    }
+
     // Developer diagnostics — the merged telemetry feeds the debug console
     // block, the performance overlay, and (under ?benchmark=1) a benchmark.
     if ((debug || benchmark) && result.telemetry) {
@@ -3307,6 +3368,13 @@ async function openStreamingCopc(
   );
   streamingPanel.setQuality(streamingQuality);
   streamingPanel.setPhase('Streaming coarse geometry…');
+  // Classification legend (v0.4.1) — reset to empty for the new streaming scan.
+  // The legend is seeded + revealed lazily by `viewer.onStreamingNodeClasses`
+  // as nodes carrying classification become resident, and refines as deeper
+  // nodes stream in. A streaming source without a classification channel simply
+  // never seeds the legend, so it stays hidden.
+  classLegendPanel.setClasses(new Map());
+  classLegendPanel.hide();
   // Visual Export Studio — a streaming COPC cloud is now attached;
   // the image-export buttons in the Inspector can light up. The streaming
   // path doesn't go through `inspector.addCloud`, so the gate has to flip
@@ -3900,6 +3968,10 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  // Hide + clear the classification legend so it doesn't linger with a stale
+  // class list after the scan is closed. v0.4.1.
+  classLegendPanel.setClasses(new Map());
+  classLegendPanel.hide();
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();
