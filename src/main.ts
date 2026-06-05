@@ -50,6 +50,7 @@ import { classifyScanShape } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
+import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import type { TerrainPoint } from './terrain/TerrainContracts';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -4187,7 +4188,13 @@ async function saveSnapshot(): Promise<void> {
       annotations: viewer.annotate.getAnnotations().length > 0,
       measurements: viewer.measure.getMeasurements().length > 0,
     });
-    const url = URL.createObjectURL(blob);
+    // `snapshot()` renders the live scene through the class-mask shader, so a
+    // filtered view drops hidden classes from the PNG. Stamp the same scope
+    // banner the Studio export path uses so a filtered snapshot can't leave the
+    // app undisclosed. With an empty stamp (nothing hidden) the helper returns
+    // the input Blob unchanged, keeping the snapshot byte-identical to before.
+    const stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
+    const url = URL.createObjectURL(stamped);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'openlidarviewer.png';
