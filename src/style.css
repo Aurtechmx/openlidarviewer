@@ -843,11 +843,9 @@ button:disabled { cursor: not-allowed; }
 /* Tool dock + backend indicator */
 .olv-dock {
   position: absolute; bottom: 14px; left: 16px;
-  /* Below the navbar (z 22) so that where the wide dock and the centred
-   * mode triangle overlap, the navigation control stays clickable. The
-   * navbar container is pointer-transparent, so the dock's own tools keep
-   * receiving clicks everywhere the two do NOT overlap. Canvas 0 is below
-   * both. */
+  /* The dock owns the bottom band; the nav widget floats above it (see
+   * .olv-navbar) so the two never overlap and never fight for clicks.
+   * z-index 20 keeps the dock above the canvas (0) and the Inspector (15). */
   z-index: 20;
   display: flex; gap: 6px;
   background: var(--panel); border: 0.5px solid var(--hairline);
@@ -1032,18 +1030,16 @@ button:disabled { cursor: not-allowed; }
    Navigation bar — bottom-centre mode switcher, speed slider, controls HUD
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-navbar {
-  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 72px; left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  /* Explicit z-index keeps the NavWidget + camera-preset chips above
-   * the WebGPU canvas and — critically — above the tool dock (z 20).
-   * The bottom-centre mode triangle and the bottom-left dock share the
-   * same bottom band, and once the dock grows wide enough they overlap;
-   * a navigation control must always win that overlap so it stays
-   * clickable. Safe because the navbar CONTAINER is pointer-transparent
-   * (only the interactive widgets opt in below), so raising it never lets
-   * the navbar's empty area steal a dock-tool click. Canvas 0, Inspector
-   * 15, dock 20, navbar 22. */
-  z-index: 22;
+  /* Float the nav widget ABOVE the tool dock's bottom band. The dock is
+   * bottom-left and grows wide; the mode triangle is bottom-centre. If both
+   * sat at the same bottom offset they would overlap horizontally and one
+   * would intercept the other's clicks (whichever is stacked on top). Lifting
+   * the navbar clear of the dock removes the overlap entirely, so neither
+   * steals the other's clicks at any dock width — and the z-order can stay
+   * simple. Canvas 0, navbar 10, Inspector 15, dock 20. */
+  z-index: 10;
   /* The navbar's visual area is mostly informational (HUD legend,
    * triangle frame, presets row label). Make the container itself
    * pointer-transparent — only the interactive widgets (mode buttons,
@@ -1995,7 +1991,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   bottom: calc(16px + env(safe-area-inset-bottom));
   right: calc(18px + env(safe-area-inset-right));
 }
-.olv-navbar { bottom: calc(14px + env(safe-area-inset-bottom)); }
+.olv-navbar { bottom: calc(72px + env(safe-area-inset-bottom)); }
 .olv-version {
   bottom: calc(13px + env(safe-area-inset-bottom));
   right: calc(14px + env(safe-area-inset-right));
