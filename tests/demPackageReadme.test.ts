@@ -24,6 +24,7 @@ function readyResult(): AnalyseContoursResult {
       readiness: 'ready', exportReadiness: 'available',
       crsKnown: true, datumKnown: true, reasons: [],
     },
+    generationParams: { interpolation: 'geodesic', smoothing: true, despike: true },
     warnings: [],
   } as unknown as AnalyseContoursResult;
 }
@@ -46,9 +47,6 @@ const OPTS: Omit<DemReadmeOptions, 'result'> = {
   basename: 'site',
   isGeographic: false,
   boundsMinX: 600000, boundsMinY: 4000000, boundsMaxX: 600002, boundsMaxY: 4000002,
-  interpolation: 'geodesic',
-  smoothingApplied: true,
-  despikeApplied: true,
   generationDateIso: '2026-06-05T00:00:00.000Z',
   softwareName: 'OpenLiDARViewer',
   softwareVersion: '9.9.9',
@@ -99,11 +97,37 @@ describe('buildDemReadme — always-on metadata', () => {
     const txt = buildDemReadme({
       result: noCrs, basename: 'site', isGeographic: false,
       boundsMinX: null, boundsMinY: null, boundsMaxX: null, boundsMaxY: null,
-      interpolation: 'geodesic', smoothingApplied: true, despikeApplied: true,
       generationDateIso: '2026-06-05T00:00:00.000Z',
       softwareName: 'OpenLiDARViewer', softwareVersion: '9.9.9', metricVersion: 'v0.4.1',
     });
     expect(txt).toMatch(/unknown/i);
+  });
+});
+
+describe('buildDemReadme — generation parameters derive from the run', () => {
+  it('reflects the result\'s actual generationParams (smoothing flipped off)', () => {
+    const base = readyResult() as unknown as { generationParams: Record<string, unknown> };
+    const noSmooth = {
+      ...(base as unknown as AnalyseContoursResult),
+      generationParams: { interpolation: 'idw', smoothing: false, despike: false },
+    } as unknown as AnalyseContoursResult;
+    const txt = buildDemReadme({ result: noSmooth, ...OPTS });
+    expect(txt).toMatch(/Interpolation\s+idw void fill/i);
+    expect(txt).toMatch(/Smoothing\s+off/i);
+    expect(txt).toMatch(/Despike\s+off/i);
+    // And the opposite: a smoothing-on result must read "on".
+    const on = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(on).toMatch(/Smoothing\s+on/i);
+    expect(on).toMatch(/Despike\s+on/i);
+  });
+
+  it('says "unknown" rather than defaulting when generationParams is absent', () => {
+    const base = readyResult() as unknown as Record<string, unknown>;
+    delete base.generationParams;
+    const txt = buildDemReadme({ result: base as unknown as AnalyseContoursResult, ...OPTS });
+    expect(txt).toMatch(/Interpolation\s+unknown/i);
+    expect(txt).toMatch(/Smoothing\s+unknown/i);
+    expect(txt).toMatch(/Despike\s+unknown/i);
   });
 });
 

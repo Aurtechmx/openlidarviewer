@@ -147,6 +147,7 @@ describe('buildDemPackage', () => {
         readiness: 'ready', exportReadiness: 'available',
         crsKnown: true, datumKnown: true, reasons: [],
       },
+      generationParams: { interpolation: 'geodesic', smoothing: true, despike: true },
       warnings: [],
     } as unknown as AnalyseContoursResult;
   }

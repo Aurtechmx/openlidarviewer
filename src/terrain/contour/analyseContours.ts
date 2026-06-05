@@ -112,6 +112,21 @@ export interface AnalyseContoursParams {
   readonly labelSpacingM?: number;
 }
 
+/**
+ * Provenance of the actual generation run, populated from the real config the
+ * pipeline used (not mirrored constants). The DEM README derives its
+ * "Generation parameters" section from this so it can never drift from what
+ * actually produced the surface.
+ */
+export interface AnalyseGenerationParams {
+  /** Void-fill interpolation method the DTM builder ran with. */
+  readonly interpolation: 'idw' | 'geodesic';
+  /** True when contour smoothing was applied (params.smooth !== false). */
+  readonly smoothing: boolean;
+  /** True when the blunder-only despike pass ran before building the surface. */
+  readonly despike: boolean;
+}
+
 /** Everything the UI needs from one analysis pass. */
 export interface AnalyseContoursResult {
   readonly dtm: DtmGrid;
@@ -158,6 +173,8 @@ export interface AnalyseContoursResult {
   /** ASPRS vertical accuracy derived from the validation pass. */
   readonly accuracy: VerticalAccuracy;
   readonly elevationRangeM: number;
+  /** Actual generation parameters used (single source of truth for the README). */
+  readonly generationParams: AnalyseGenerationParams;
   readonly warnings: string[];
 }
 
@@ -172,6 +189,10 @@ export function analyseContours(
   const verticalAxis: VerticalAxis = params.verticalAxis ?? 'z';
   const crs = params.crs ?? null;
   const verticalDatum = params.verticalDatum ?? null;
+  // Whether contour smoothing will be applied this run (default on). Captured
+  // once here so the early-return path and the main path agree, and so the
+  // README's provenance reflects the real decision rather than a constant.
+  const smoothingApplied = params.smooth !== false;
 
   // 0) Honour existing classification — drop vegetation / buildings / noise
   // before ground filtering so the bare-earth surface can't anchor to canopy
@@ -220,6 +241,9 @@ export function analyseContours(
   }
   // Conservative, blunder-only thresholds (6σ, ≥30 cm absolute) so legitimate
   // small features in flat terrain are kept; only gross outliers are removed.
+  // The blunder-only despike pass is part of every generation run; the README
+  // derives its provenance from this fact, not a mirrored constant.
+  const despikeApplied = true;
   const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, {
     madThreshold: 6,
     minDeviationM: 0.3,
@@ -241,11 +265,14 @@ export function analyseContours(
       `Outlier detection flagged ${despiked.removed} cells (> 2% of data) — left unchanged; the surface looks noisy rather than spiky.`,
     );
   }
+  // Single source of truth for the void-fill method: the README's provenance
+  // reads this back off the result, so it can't drift from what actually ran.
+  const interpolation: 'idw' | 'geodesic' = 'geodesic';
   let dtm = buildDtmGrid(workingRaster, {
     crs,
     verticalDatum,
     isGeographic: params.isGeographic,
-    interpolation: 'geodesic',
+    interpolation,
     // Demote one-sided (extrapolated) fills toward dashed/gap so surface that
     // is only supported from a single direction can't read as confident.
     extrapolationGuard: { radiusCells: 8, penalty: 0.5 },
@@ -428,6 +455,7 @@ export function analyseContours(
       labels: [],
       accuracy,
       elevationRangeM,
+      generationParams: { interpolation, smoothing: smoothingApplied, despike: despikeApplied },
       warnings,
     };
   }
@@ -443,7 +471,7 @@ export function analyseContours(
 
   // Beauty: smooth high-confidence runs (honesty-preserving — the
   // smoother provably never moves a low-confidence vertex).
-  if (params.smooth !== false) {
+  if (smoothingApplied) {
     stitched = stitched.map((level) => ({
       value: level.value,
       polylines: level.polylines.map((poly) => chaikinSmooth(poly)),
@@ -491,6 +519,7 @@ export function analyseContours(
     labels,
     accuracy,
     elevationRangeM,
+    generationParams: { interpolation, smoothing: smoothingApplied, despike: despikeApplied },
     warnings,
   };
 }

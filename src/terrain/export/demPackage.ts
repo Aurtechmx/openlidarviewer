@@ -33,12 +33,6 @@ export interface DemPackageOptions {
   readonly wkt?: string | null;
   /** True when the horizontal CRS is geographic (lat/lon, degree cells). */
   readonly isGeographic?: boolean;
-  /** Void interpolation method the pipeline used. Default 'geodesic'. */
-  readonly interpolation?: 'idw' | 'geodesic';
-  /** Whether contour smoothing was applied in the pipeline. Default true. */
-  readonly smoothingApplied?: boolean;
-  /** Whether outlier despiking was applied before building the surface. Default true. */
-  readonly despikeApplied?: boolean;
   /** ISO generation timestamp. Default `new Date().toISOString()`. */
   readonly generationDateIso?: string;
   /** Producing software name. Default 'OpenLiDARViewer'. */
@@ -110,9 +104,6 @@ export interface DemReadmeOptions {
   readonly boundsMinY: number | null;
   readonly boundsMaxX: number | null;
   readonly boundsMaxY: number | null;
-  readonly interpolation: 'idw' | 'geodesic';
-  readonly smoothingApplied: boolean;
-  readonly despikeApplied: boolean;
   readonly generationDateIso: string;
   readonly softwareName: string;
   readonly softwareVersion: string;
@@ -219,11 +210,20 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   }
   lines.push(``);
 
+  // Generation parameters are derived from the actual run (result.generationParams),
+  // never mirrored constants. If the field is somehow absent we say "unknown"
+  // rather than silently asserting geodesic/on/on — provenance must stay honest.
+  const gp = result.generationParams;
+  const interpStr = gp ? `${gp.interpolation} void fill` : 'unknown';
+  const smoothStr = gp ? (gp.smoothing ? 'on' : 'off') : 'unknown';
+  const despikeStr = gp
+    ? (gp.despike ? 'on (blunder-only outlier removal)' : 'off')
+    : 'unknown';
   lines.push(
     `Generation parameters`,
-    `  Interpolation  ${opts.interpolation} void fill`,
-    `  Smoothing      ${opts.smoothingApplied ? 'on' : 'off'}`,
-    `  Despike        ${opts.despikeApplied ? 'on (blunder-only outlier removal)' : 'off'}`,
+    `  Interpolation  ${interpStr}`,
+    `  Smoothing      ${smoothStr}`,
+    `  Despike        ${despikeStr}`,
     `  Grid cell size ${dtm.cellSizeM} ${hUnit}`,
     ``,
     `Validated accuracy`,
@@ -305,9 +305,6 @@ export function buildDemPackage(
     basename,
     isGeographic,
     boundsMinX, boundsMinY, boundsMaxX, boundsMaxY,
-    interpolation: options.interpolation ?? 'geodesic',
-    smoothingApplied: options.smoothingApplied ?? true,
-    despikeApplied: options.despikeApplied ?? true,
     generationDateIso: options.generationDateIso ?? new Date().toISOString(),
     softwareName: options.softwareName ?? 'OpenLiDARViewer',
     softwareVersion: options.softwareVersion ?? 'unknown',

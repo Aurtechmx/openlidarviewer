@@ -1000,12 +1000,9 @@ export class AnalysePanel {
         basename,
         wkt: ctx.wkt ?? null,
         isGeographic: ctx.isGeographic ?? false,
-        // Pipeline generation parameters (analyseContours fixes these): geodesic
-        // void fill, contour smoothing on, blunder-only despike on. Pass the
-        // real values so the README documents what actually produced the raster.
-        interpolation: 'geodesic',
-        smoothingApplied: true,
-        despikeApplied: true,
+        // Generation parameters (interpolation / smoothing / despike) are derived
+        // from the actual run inside buildDemPackage via result.generationParams,
+        // so the README can never drift from what produced the raster.
         generationDateIso: new Date().toISOString(),
         softwareName: 'OpenLiDARViewer',
         softwareVersion: __APP_VERSION__,
