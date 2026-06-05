@@ -189,8 +189,41 @@ export function normalText(info: PointInfo): string | null {
   return info.normal ? `${info.normal[0]}, ${info.normal[1]}, ${info.normal[2]}` : null;
 }
 
-/** Clean plain-text form of a picked point, for the clipboard. */
-export function pointInfoCopyText(info: PointInfo): string {
+/**
+ * The class-scope stamp a copied / exported point carries while a class
+ * filter is active — e.g. `"Ground + Building · 2 of 5 classes"`. An empty
+ * string means the view is full (or unscoped), in which case every copy /
+ * JSON path stays byte-identical to the pre-feature output. Callers obtain
+ * the stamp from `scopeStamp(scope, nameOf)` in `class/classScope.ts`; this
+ * module takes the finished string so it stays free of the scope types and
+ * remains trivially unit-testable.
+ */
+export type ClassScopeStamp = string;
+
+/**
+ * Normalise an optional scope stamp: trims whitespace and collapses a
+ * blank / full-view stamp to `null` so the copy / JSON builders can decide
+ * "include a scope line" with a single truthiness check. Keeping this in one
+ * place guarantees the copy text and the JSON payload agree on what counts
+ * as "no active filter".
+ */
+function normalizeScopeStamp(stamp: ClassScopeStamp | undefined): string | null {
+  if (stamp === undefined) return null;
+  const trimmed = stamp.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+/**
+ * Clean plain-text form of a picked point, for the clipboard. When a class
+ * filter is active the caller passes the scope stamp, which is appended as a
+ * trailing `Class scope: …` line so a pasted point is self-describing about
+ * the filter it was copied under. With no stamp (full / unfiltered view) the
+ * output is byte-identical to the pre-feature block.
+ */
+export function pointInfoCopyText(
+  info: PointInfo,
+  scopeStamp?: ClassScopeStamp,
+): string {
   const lines = [
     'OpenLiDARViewer Point Info',
     `Layer: ${info.layer}`,
@@ -211,6 +244,10 @@ export function pointInfoCopyText(info: PointInfo): string {
   if (gps) lines.push(`GPS time: ${gps}`);
   const normal = normalText(info);
   if (normal) lines.push(`Normal: ${normal}`);
+  // Class-scope stamp — last line, present only while a filter is active so
+  // the no-filter clipboard payload is unchanged.
+  const scope = normalizeScopeStamp(scopeStamp);
+  if (scope) lines.push(`Class scope: ${scope}`);
   return lines.join('\n');
 }
 
@@ -230,10 +267,26 @@ export interface PointInfoJson {
   pointSourceId?: number;
   gpsTime?: number;
   normal?: [number, number, number];
+  /**
+   * Active class-filter scope stamp — e.g.
+   * `"Ground + Building · 2 of 5 classes"`. Present ONLY while a class filter
+   * is active, so an unfiltered point's JSON keeps exactly its prior shape
+   * (and key set). Lets a downstream consumer of the copied JSON know the
+   * point was inspected under a class filter.
+   */
+  classScope?: string;
 }
 
-/** Build the JSON-friendly object form — classification as its name. */
-export function pointInfoJson(info: PointInfo): PointInfoJson {
+/**
+ * Build the JSON-friendly object form — classification as its name. When a
+ * class filter is active the caller passes the scope stamp, which is added as
+ * a `classScope` field. With no stamp (full / unfiltered view) the returned
+ * object's key set and values are byte-identical to the pre-feature shape.
+ */
+export function pointInfoJson(
+  info: PointInfo,
+  scopeStamp?: ClassScopeStamp,
+): PointInfoJson {
   const json: PointInfoJson = {
     layer: info.layer,
     index: info.index,
@@ -252,5 +305,8 @@ export function pointInfoJson(info: PointInfo): PointInfoJson {
   if (info.pointSourceId !== undefined) json.pointSourceId = info.pointSourceId;
   if (info.gpsTime !== undefined) json.gpsTime = info.gpsTime;
   if (info.normal) json.normal = info.normal;
+  // Class-scope stamp — added only while a filter is active.
+  const scope = normalizeScopeStamp(scopeStamp);
+  if (scope) json.classScope = scope;
   return json;
 }

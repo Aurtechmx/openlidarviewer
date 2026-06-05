@@ -172,6 +172,17 @@ export class ClassLegendPanel {
     return this._hasChannel;
   }
 
+  /**
+   * Present class codes (count > 0), ascending — the public view of the
+   * legend's class roster. Used to derive a `ClassScope` for exported /
+   * copied surfaces (the scope needs the total number of present classes,
+   * which only the legend tracks for streaming scans). Mirrors the internal
+   * {@link _presentCodes}.
+   */
+  presentCodes(): number[] {
+    return this._presentCodes();
+  }
+
   /** Present class codes (count > 0), ascending. */
   private _presentCodes(): number[] {
     const codes: number[] = [];

@@ -43,7 +43,7 @@ import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import { countClasses } from './render/class/classHistogram';
-import { fullScope, scopeFrom, notScopedSentinel, type ClassScope } from './render/class/classScope';
+import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
@@ -1546,6 +1546,9 @@ classLegendPanel.onChange((visibility) => {
  * however the active scan was opened.
  */
 function refreshScopedReport(): void {
+  // Keep the point-inspector's copy / JSON scope stamp in lockstep with the
+  // live filter — a point copied while filtering must carry the scope.
+  syncInspectClassScope();
   if (viewer.isStreamingActive()) {
     const cloud = lastStreamingReportCloud;
     if (cloud) {
@@ -1570,6 +1573,9 @@ viewer.onStreamingNodeClasses = (classes) => {
   } else {
     classLegendPanel.mergeClasses(countClasses(classes));
   }
+  // A late-arriving class can change the present-class total, so refresh the
+  // inspector's scope stamp ("k of M classes") to keep M accurate.
+  syncInspectClassScope();
 };
 
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
@@ -1652,6 +1658,9 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());
   classLegendPanel.show();
+  // Reset the inspector's copy/JSON scope stamp — the fresh legend is
+  // all-visible, so this clears any stamp left by a prior filtered scan.
+  syncInspectClassScope();
 }
 
 /** Narrow an ArrayLike classification source to a typed buffer for counting. */
@@ -2109,6 +2118,43 @@ function currentClassScope(cloud: PointCloud): ClassScope {
   if (!visibility.isFiltered()) return fullScope();
   const present = [...countClasses(cls).keys()];
   return scopeFrom(visibility.visibleCodes(), present, classificationLabel);
+}
+
+/**
+ * Derive the active class scope from the legend alone — works for both static
+ * and streaming scans because it reads the legend's present-class roster
+ * rather than a resident classification array (a streaming scan has none).
+ * Returns `fullScope` when no classification channel exists or nothing is
+ * filtered, so every export / copy path that consumes this stays
+ * byte-identical to the pre-feature output when no class is hidden.
+ */
+function currentClassScopeFromLegend(): ClassScope {
+  if (!classLegendPanel.hasClasses()) return fullScope();
+  const visibility = classLegendPanel.getVisibility();
+  if (!visibility.isFiltered()) return fullScope();
+  const present = classLegendPanel.presentCodes();
+  if (present.length === 0) return fullScope();
+  return scopeFrom(visibility.visibleCodes(), present, classificationLabel);
+}
+
+/**
+ * The current class-scope stamp string — `''` when the view is full /
+ * unfiltered. Fed to the point-inspector (copy + JSON) and the export
+ * surfaces so a copied / exported artifact made while filtering is
+ * self-describing.
+ */
+function currentClassScopeStamp(): string {
+  return scopeStamp(currentClassScopeFromLegend(), classificationLabel);
+}
+
+/**
+ * Push the current class-scope stamp into the point-inspector. Called after
+ * every legend change and on scan load / close so a point copied while a
+ * filter is active carries the filter it was taken under (and an unfiltered
+ * copy stays byte-identical to before).
+ */
+function syncInspectClassScope(): void {
+  viewer.setInspectClassScopeStamp(currentClassScopeStamp());
 }
 
 /**
@@ -3441,6 +3487,8 @@ async function openStreamingCopc(
   // never seeds the legend, so it stays hidden.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
+  // Clear any prior filtered scan's inspector copy/JSON scope stamp.
+  syncInspectClassScope();
   // Visual Export Studio — a streaming COPC cloud is now attached;
   // the image-export buttons in the Inspector can light up. The streaming
   // path doesn't go through `inspector.addCloud`, so the gate has to flip
@@ -4043,6 +4091,8 @@ function resetToEmptyState(): void {
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
+  // Clear the inspector's copy/JSON scope stamp now there's no active filter.
+  syncInspectClassScope();
   lastStreamingReportCloud = null;
   exportPanel.setVisible(false);
   sourceFileById.clear();

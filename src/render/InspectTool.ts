@@ -195,6 +195,14 @@ export class InspectTool {
   /** The currently selected point, or null when nothing is picked. */
   private _selected: { info: PointInfo; world: THREE.Vector3 } | null = null;
   private _copyTimer: number | null = null;
+  /**
+   * Active class-filter scope stamp — e.g. `"Ground + Building · 2 of 5
+   * classes"`. Empty string when the view is full / unfiltered, in which case
+   * the copied text + JSON stay byte-identical to the pre-feature output.
+   * main.ts pushes this in via {@link setClassScopeStamp} whenever the legend
+   * filter changes, so a point copied while filtering is self-describing.
+   */
+  private _classScopeStamp = '';
   /** Cloud origin + CRS — drives World and Lat/Lon rows. */
   private _coordContext: CoordinateContext = {};
   /**
@@ -275,6 +283,18 @@ export class InspectTool {
     // If a point is already selected, repaint the card so the new
     // World / Lat-Lon rows appear immediately.
     if (this._selected) this._fillCard(this._selected.info);
+  }
+
+  /**
+   * Set the active class-filter scope stamp. When a class filter narrows the
+   * view, the copied text and JSON payload carry this stamp so an exported /
+   * pasted point is self-describing about the filter it was taken under. Pass
+   * an empty string (or omit) to clear it — the no-filter copy / JSON output
+   * is then byte-identical to the pre-feature shape. main.ts calls this from
+   * the class-legend change handler and on scan load / close.
+   */
+  setClassScopeStamp(stamp: string): void {
+    this._classScopeStamp = stamp;
   }
 
   /**
@@ -602,7 +622,9 @@ export class InspectTool {
   /** Copy the selected point's data to the clipboard, then confirm briefly. */
   private async _copy(): Promise<void> {
     if (!this._selected) return;
-    const ok = await copyToClipboard(pointInfoCopyText(this._selected.info));
+    const ok = await copyToClipboard(
+      pointInfoCopyText(this._selected.info, this._classScopeStamp),
+    );
     if (!ok) return;
     this._copyNote.classList.remove('olv-hidden');
     if (this._copyTimer !== null) clearTimeout(this._copyTimer);

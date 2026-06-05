@@ -2952,6 +2952,17 @@ export class Viewer {
     this._inspect.setCoordinateContext(ctx);
   }
 
+  /**
+   * Push the active class-filter scope stamp into the point-inspector so a
+   * copied point's text + JSON carry the filter they were taken under. Pass
+   * an empty string when no class filter is active — the no-filter clipboard
+   * payload is then byte-identical to the pre-feature output. Thin
+   * pass-through so main.ts doesn't reach into the InspectTool directly.
+   */
+  setInspectClassScopeStamp(stamp: string): void {
+    this._inspect.setClassScopeStamp(stamp);
+  }
+
   /** Enter or leave annotation mode (freezes navigation). */
   setAnnotateMode(on: boolean): void {
     this._setToolMode(on ? 'annotate' : 'none');
