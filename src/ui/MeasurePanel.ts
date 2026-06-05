@@ -85,6 +85,35 @@ export function autoStationInterval(totalChainageM: number): number {
 }
 
 /**
+ * "Nice" axis tick values inside [min, max] for the elevation (Y) axis.
+ * Returns rounded values at a 1/2/5×10ⁿ step — the survey/engineering
+ * convention — so the elevation axis reads as e.g. 120 · 125 · 130 rather
+ * than the raw, ragged data min/max. At most `target` ticks (default 4);
+ * always returns the two bounds when the band is degenerate so the axis is
+ * never blank. Pure, deterministic — exported for testing.
+ */
+export function niceElevationTicks(min: number, max: number, target = 4): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    return Number.isFinite(min) ? [min] : [];
+  }
+  const span = max - min;
+  const rawStep = span / Math.max(1, target);
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / mag;
+  const niceUnit = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  const step = niceUnit * mag;
+  const first = Math.ceil(min / step) * step;
+  const ticks: number[] = [];
+  for (let v = first; v <= max + step * 1e-6; v += step) {
+    // Snap to the step grid AND trim binary-float dust (e.g. 3 × 0.1 =
+    // 0.30000000000000004) so labels read as clean 0.3 / 110 / 1200.
+    const snapped = Math.round(v / step) * step;
+    ticks.push(Number(snapped.toFixed(10)));
+  }
+  return ticks;
+}
+
+/**
  * Build an SVG path that passes through every point using a uniform
  * Catmull-Rom spline expressed as cubic Béziers. The curve is
  * interpolating — it never moves a sample, it only rounds the joins —
@@ -754,8 +783,6 @@ function renderProfileChart(
   const PAD_X = 30; // Room for Y-axis (elevation) labels on the left.
   const PAD_TOP = 16;
   const PAD_BOTTOM = 26; // Room for X-axis (chainage) labels below.
-  const FS = 10; // Axis label font size — readable at 2× panel height.
-  const FS_BADGE = 11;
 
   // Find data bounds across hit samples only.
   let xMin = Infinity;
@@ -835,20 +862,46 @@ function renderProfileChart(
   const minorTicks: number[] = [];
   for (let c = 0; c <= xSpan + 1e-9; c += minorInterval) minorTicks.push(c);
 
+  // Visible (VEX-scaled) elevation band — the labels must report the band
+  // actually drawn, not the data extremes, or the numbers wouldn't match the
+  // line. v0.4.0.
+  const visTop = midY + 0.5 * ySpan;
+  const visBot = midY - 0.5 * ySpan;
+  // Nice-number elevation ticks within the visible band (survey convention),
+  // replacing the old ragged min/max-only pair. visualization-expert: a
+  // readable axis is rounded, not raw.
+  const yTicks = niceElevationTicks(visBot, visTop, 4);
+  const elevDecimals = (() => {
+    if (yTicks.length >= 2) {
+      const st = Math.abs(yTicks[1] - yTicks[0]);
+      return st >= 1 ? 0 : st >= 0.1 ? 1 : 2;
+    }
+    return 1;
+  })();
+
   const formatChainage = (m: number): string => {
     if (system === 'imperial') {
       const ft = m * 3.28084;
-      return ft >= 5280 ? `${(ft / 5280).toFixed(1)}mi` : `${Math.round(ft)}ft`;
+      return ft >= 5280 ? `${(ft / 5280).toFixed(1)} mi` : `${Math.round(ft)} ft`;
     }
-    return m >= 1000 ? `${(m / 1000).toFixed(2)}km` : `${Math.round(m)}m`;
+    return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
   };
   const formatElevation = (m: number): string => {
-    if (system === 'imperial') return `${Math.round(m * 3.28084)}ft`;
-    return `${m.toFixed(1)}m`;
+    if (system === 'imperial') return `${Math.round(m * 3.28084)} ft`;
+    return `${m.toFixed(elevDecimals)} m`;
   };
 
-  // Build SVG layers in z-order: minor grid → major grid → axis labels →
-  // station ticks → profile path → VEX badge.
+  // viewBox → box-fraction helpers (preserveAspectRatio="none" stretches the
+  // viewBox to fill the box, so a viewBox fraction equals a box fraction —
+  // which lets the HTML label overlay sit exactly on the SVG geometry without
+  // sharing the SVG's text distortion).
+  const xPct = (c: number): number => ((plotLeft + (c / xSpan) * plotW) / W) * 100;
+  const yPct = (v: number): number =>
+    ((plotTop + plotH * 0.5 - ((v - midY) / ySpan) * plotH) / H) * 100;
+
+  // ── SVG layer: grid + ticks + path only (no text — text lives in the
+  //    non-distorting HTML overlay below). z-order: minor → major → y-grid →
+  //    frame rules → station caps → profile path.
   const minorGridParts = minorTicks
     .map((c) => {
       const x = plotLeft + (c / xSpan) * plotW;
@@ -861,50 +914,22 @@ function renderProfileChart(
       return `<line x1="${x.toFixed(2)}" y1="${plotTop}" x2="${x.toFixed(2)}" y2="${plotBottom}" stroke="rgba(255,255,255,0.10)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
-  // Y-axis: top & bottom horizontal rules.
+  // Horizontal gridlines at the nice elevation ticks.
+  const yGridParts = yTicks
+    .map((v) => {
+      const y = plotTop + plotH * 0.5 - ((v - midY) / ySpan) * plotH;
+      return `<line x1="${plotLeft}" y1="${y.toFixed(2)}" x2="${plotRight}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.07)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
+    })
+    .join('');
   const yAxisRules =
     `<line x1="${plotLeft}" y1="${plotTop}" x2="${plotRight}" y2="${plotTop}" stroke="rgba(255,255,255,0.10)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>` +
     `<line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="rgba(255,255,255,0.18)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
-  // X-axis tick labels — labelling EVERY station collides in a narrow
-  // chart (the "0m20m40m…" smear). Stride down to at most ~6 labels and
-  // always keep the first and last so the extent stays readable.
-  const MAX_X_LABELS = 6;
-  const lastIdx = stations.length - 1;
-  const labelStride = Math.max(1, Math.ceil(stations.length / MAX_X_LABELS));
-  const xLabelParts = stations
-    .map((c, i) => {
-      const isLast = i === lastIdx;
-      // Keep strided labels + the last one; drop a strided label that
-      // would crowd the kept last label.
-      if (!isLast && i % labelStride !== 0) return '';
-      if (!isLast && lastIdx - i < labelStride / 2) return '';
-      const x = plotLeft + (c / xSpan) * plotW;
-      const anchor = i === 0 ? 'start' : isLast ? 'end' : 'middle';
-      return `<text x="${x.toFixed(2)}" y="${H - 8}" text-anchor="${anchor}" font-size="${FS}" fill="rgba(255,255,255,0.62)" font-family="ui-monospace,monospace">${formatChainage(c)}</text>`;
-    })
-    .join('');
-  // Y-axis tick labels — top and bottom of the VISIBLE band. At VEX 1
-  // these are the true min/max; at higher VEX the band shrinks around
-  // the midline (the curve is exaggerated within the frame), so the
-  // labels must report the band actually shown, not the data extremes —
-  // otherwise the numbers wouldn't match the drawn line. v0.4.0.
-  const visTop = midY + 0.5 * ySpan;
-  const visBot = midY - 0.5 * ySpan;
-  const yLabelParts =
-    `<text x="3" y="${plotTop + FS}" font-size="${FS}" fill="rgba(255,255,255,0.62)" font-family="ui-monospace,monospace">${formatElevation(visTop)}</text>` +
-    `<text x="3" y="${plotBottom - 2}" font-size="${FS}" fill="rgba(255,255,255,0.62)" font-family="ui-monospace,monospace">${formatElevation(visBot)}</text>`;
-  // Station tick caps above the X axis.
   const stationCaps = stations
     .map((c) => {
       const x = plotLeft + (c / xSpan) * plotW;
       return `<line x1="${x.toFixed(2)}" y1="${plotBottom - 2}" x2="${x.toFixed(2)}" y2="${plotBottom + 1}" stroke="rgba(255,255,255,0.4)" stroke-width="0.7" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
-  // VEX indicator — burned into the chart so a screenshot or PDF
-  // export carries the scale information unambiguously.
-  const vexLabel =
-    `<text x="${plotRight - 2}" y="${plotTop + FS_BADGE}" text-anchor="end" font-size="${FS_BADGE}" font-weight="600" fill="rgba(255,255,255,0.6)" font-family="ui-monospace,monospace">VEX ${vex}:1</text>`;
-
   const pathParts = paths
     .map(
       (d) =>
@@ -913,13 +938,41 @@ function renderProfileChart(
     .join('');
 
   const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    ${minorGridParts}${majorGridParts}${yAxisRules}${stationCaps}${pathParts}${xLabelParts}${yLabelParts}${vexLabel}
+    ${minorGridParts}${majorGridParts}${yGridParts}${yAxisRules}${stationCaps}${pathParts}
   </svg>`;
+
+  // ── HTML overlay: every numeral, in the brand mono with tabular figures,
+  //    positioned by box-fraction so it never inherits the SVG's horizontal
+  //    stretch. Decorative (aria-hidden) — the station/elevation table below
+  //    is the screen-reader source of truth.
+  const MAX_X_LABELS = 6;
+  const lastIdx = stations.length - 1;
+  const labelStride = Math.max(1, Math.ceil(stations.length / MAX_X_LABELS));
+  // X labels sit just below the plot floor; expressed as a box-fraction so the
+  // gap tracks the axis at any chart height.
+  const xLabelTop = (((plotBottom + 6) / H) * 100).toFixed(2);
+  const xLabelHtml = stations
+    .map((c, i) => {
+      const isLast = i === lastIdx;
+      if (!isLast && i % labelStride !== 0) return '';
+      if (!isLast && lastIdx - i < labelStride / 2) return '';
+      const tx = i === 0 ? '0' : isLast ? '-100%' : '-50%';
+      return `<span class="olv-mp-axis olv-mp-axis-x" style="left:${xPct(c).toFixed(2)}%;top:${xLabelTop}%;transform:translateX(${tx})">${formatChainage(c)}</span>`;
+    })
+    .join('');
+  const yLabelHtml = yTicks
+    .map(
+      (v) =>
+        `<span class="olv-mp-axis olv-mp-axis-y" style="top:${yPct(v).toFixed(2)}%">${formatElevation(v)}</span>`,
+    )
+    .join('');
+  const vexBadge = `<span class="olv-mp-axis olv-mp-vex-badge">VEX ${vex}:1</span>`;
+  const overlay = `<div class="olv-mp-chart-labels" aria-hidden="true">${yLabelHtml}${xLabelHtml}${vexBadge}</div>`;
 
   const trueSpan = yMax - yMin;
   const title =
     `${samples.length} samples · Δh ${trueSpan.toFixed(2)} m · ` +
     `station interval ${formatChainage(stationInterval)} · VEX ${vex}:1 · ` +
     `drag bottom-right to resize`;
-  return el('div', { className: 'olv-mp-chart', unsafeHtml: svg, title });
+  return el('div', { className: 'olv-mp-chart', unsafeHtml: svg + overlay, title });
 }

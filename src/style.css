@@ -2617,6 +2617,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * persisted to localStorage via a ResizeObserver in the panel. */
 .olv-mp-chart {
   display: block;
+  position: relative;
   width: 100%;
   height: 280px;
   min-height: 160px;
@@ -2632,6 +2633,38 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   box-sizing: border-box;
 }
 .olv-mp-chart svg { display: block; width: 100%; height: 100%; }
+
+/* Profile-chart numeral overlay (v0.4.1 typography pass). The numbers are
+ * rendered as positioned HTML — not SVG <text> — so they keep the brand mono
+ * with tabular figures and never inherit the chart SVG's horizontal stretch
+ * (preserveAspectRatio="none"). Inset matches the chart's 2px/4px padding so
+ * the overlay's coordinate box lines up exactly with the SVG plot. */
+.olv-mp-chart-labels {
+  position: absolute;
+  inset: 2px 4px;
+  pointer-events: none;
+  font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.olv-mp-axis {
+  position: absolute;
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--olv-text-muted, #98a2af);
+  white-space: nowrap;
+}
+.olv-mp-axis-y {
+  left: 0;
+  transform: translateY(-50%);
+}
+.olv-mp-vex-badge {
+  top: 0;
+  right: 0;
+  font-weight: 600;
+  color: var(--olv-text, #d6dce5);
+  opacity: 0.72;
+}
 
 /* v0.3.10 Profile-as-Deliverable — vertical exaggeration chip strip.
  * Sits beneath the resizable chart wrapper; one strip per profile
