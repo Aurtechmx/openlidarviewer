@@ -1568,18 +1568,23 @@ function refreshScopedReport(): void {
 // legend so a class first seen at depth appears as a new row. The legend keeps
 // its current visibility (default visible, but left hidden if the user isolated
 // a class), so a late arrival never silently re-reveals hidden points.
-viewer.onStreamingNodeClasses = (classes) => {
-  if (!classLegendPanel.hasClasses()) {
-    // First node to carry classification on this streaming scan — seed + show.
-    classLegendPanel.setClasses(countClasses(classes));
-    if (classLegendPanel.hasClasses()) classLegendPanel.show();
-  } else {
-    classLegendPanel.mergeClasses(countClasses(classes));
-  }
-  // A late-arriving class can change the present-class total, so refresh the
-  // inspector's scope stamp ("k of M classes") to keep M accurate.
-  syncInspectClassScope();
-};
+// Deferred: `viewer` is null until the lazy Viewer chunk resolves, so this hook
+// must be attached inside viewerLoaded (a top-level `viewer.*` write throws at
+// module load and breaks startup — caught by lint:main-deferral).
+void viewerLoaded.then(() => {
+  viewer.onStreamingNodeClasses = (classes) => {
+    if (!classLegendPanel.hasClasses()) {
+      // First node to carry classification on this streaming scan — seed + show.
+      classLegendPanel.setClasses(countClasses(classes));
+      if (classLegendPanel.hasClasses()) classLegendPanel.show();
+    } else {
+      classLegendPanel.mergeClasses(countClasses(classes));
+    }
+    // A late-arriving class can change the present-class total, so refresh the
+    // inspector's scope stamp ("k of M classes") to keep M accurate.
+    syncInspectClassScope();
+  };
+});
 
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
