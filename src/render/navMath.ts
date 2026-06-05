@@ -209,15 +209,24 @@ export function formatDistance(meters: number): string {
  * Selection minimises the *angular* miss — perpendicular offset divided by
  * distance along the ray — so a near point and a far point are judged fairly.
  * That matches what "click on that point" means on screen.
+ *
+ * The optional `accept` predicate filters candidates by point index: any index
+ * for which it returns false is skipped, so the returned hit is the nearest
+ * *accepted* point (the runner-up is surfaced, never silently dropped). Callers
+ * use this to snap only to currently-visible classes — you can't click a point
+ * you can't see. Omit `accept` entirely on the all-visible hot path so no
+ * per-point call is made and behaviour is byte-identical to having no filter.
  */
 export function nearestPointAlongRay(
   positions: Float32Array,
   origin: Vec3,
   dir: Vec3,
+  accept?: (index: number) => boolean,
 ): RayHit | null {
   let best: RayHit | null = null;
   let bestScore = Infinity;
   for (let i = 0; i < positions.length; i += 3) {
+    if (accept !== undefined && !accept(i / 3)) continue;
     const vx = positions[i] - origin[0];
     const vy = positions[i + 1] - origin[1];
     const vz = positions[i + 2] - origin[2];
