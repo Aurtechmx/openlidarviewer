@@ -4371,6 +4371,38 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-assessment.is-limited { border-left-color: var(--rating-weak); }
 .olv-analyse-assessment.is-limited .olv-analyse-assess-verdict { color: var(--rating-weak); }
 .olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: var(--rating-weak); }
+/* Blocked — a distinct, accessible violet so it never reads as "just a worse
+   Limited". The gate stopped this surface; the colour says so unambiguously. */
+.olv-analyse-assessment.is-blocked {
+  border-left-color: var(--rating-blocked, #c084fc);
+  background: rgba(192, 132, 252, 0.07);
+}
+.olv-analyse-assessment.is-blocked .olv-analyse-assess-verdict { color: var(--rating-blocked, #c084fc); }
+.olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked, #c084fc); }
+.olv-analyse-assess-not { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+
+/* Supporting metrics — compact pills under the hero; colour from each metric's
+   own rating, not the overall status, so one weak signal stays visible. */
+.olv-analyse-assess-metrics {
+  display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 8px;
+}
+.olv-analyse-assess-metric {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  padding: 2px 7px; border-radius: 999px;
+  border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
+}
+.olv-analyse-assess-metric-label {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint);
+}
+.olv-analyse-assess-metric-value { font-size: 10.5px; font-weight: 600; color: var(--text-dim); }
+.olv-analyse-assess-metric.is-good { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
+.olv-analyse-assess-metric.is-good .olv-analyse-assess-metric-value { color: var(--rating-excellent); }
+.olv-analyse-assess-metric.is-fair { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
+.olv-analyse-assess-metric.is-fair .olv-analyse-assess-metric-value { color: var(--rating-good); }
+.olv-analyse-assess-metric.is-poor { border-color: color-mix(in srgb, var(--rating-weak) 45%, transparent); }
+.olv-analyse-assess-metric.is-poor .olv-analyse-assess-metric-value { color: var(--rating-weak); }
+.olv-analyse-assess-metric.is-unknown .olv-analyse-assess-metric-value { color: var(--text-faint); font-style: italic; }
 
 /* Collapsible "Details" expander — holds the drill-down metrics under the hero. */
 .olv-analyse-details { margin-bottom: var(--space-lg); }

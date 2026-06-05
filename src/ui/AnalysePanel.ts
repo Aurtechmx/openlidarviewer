@@ -300,35 +300,56 @@ export class AnalysePanel {
    */
   /**
    * The single top-level verdict the reviewer asked for — Good / Preview /
-   * Limited — sitting above every detailed metric so a non-specialist reads
-   * the bottom line first, with the reason and what the surface is good for.
+   * Limited / Blocked — sitting above every detailed metric so a non-specialist
+   * reads the bottom line first: status + folded score, why, what it is good
+   * for, what to be cautious about, what it is NOT for, and the real supporting
+   * metrics behind it (each colour-coded by its own rating).
    */
   private _renderAssessment(): void {
     this._assessmentRow.replaceChildren();
     if (!this._result) return;
     const a = terrainAssessment(this._result);
-    const tier = a.verdict.toLowerCase(); // good | preview | limited
+    const tier = a.status.toLowerCase(); // good | preview | limited | blocked
     this._assessmentRow.className = `olv-analyse-assessment is-${tier}`;
 
     const top = el('div', { className: 'olv-analyse-assess-top' });
-    // Fold the 0–100 terrain quality score into the verdict so the hero is the
-    // single headline (e.g. "Preview · 64/100") — no competing score block.
-    const qs = this._result.qualityScore;
-    const verdictText = qs && Number.isFinite(qs.score) ? `${a.verdict} · ${qs.score}/100` : a.verdict;
+    // The score is folded in from the assessment (single source of truth) so
+    // the hero is the one headline, e.g. "Preview · 64/100".
+    const headline = Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
     top.append(
       el('span', { className: 'olv-analyse-assess-label', text: 'Terrain assessment' }),
-      el('span', { className: 'olv-analyse-assess-verdict', text: verdictText }),
+      el('span', { className: 'olv-analyse-assess-verdict', text: headline }),
     );
     this._assessmentRow.append(top);
     this._assessmentRow.append(el('div', { className: 'olv-analyse-assess-reason', text: a.reason }));
     this._assessmentRow.append(
       el('div', { className: 'olv-analyse-assess-use', text: `Best for: ${a.bestFor}` }),
     );
-    if (a.caution) {
+    if (a.useCaution) {
       this._assessmentRow.append(
-        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.caution}` }),
+        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.useCaution}` }),
       );
     }
+    this._assessmentRow.append(
+      el('div', {
+        className: 'olv-analyse-assess-not',
+        text: `Not for: ${a.notRecommendedFor}`,
+      }),
+    );
+
+    // Compact supporting-metrics list — each metric is a pill whose colour comes
+    // from its own honest rating (good / fair / poor / unknown), never from the
+    // overall status, so a single weak signal stays visible at a glance.
+    const metrics = el('div', { className: 'olv-analyse-assess-metrics' });
+    for (const m of a.supportingMetrics) {
+      const pill = el('div', { className: `olv-analyse-assess-metric is-${m.rating}` });
+      pill.append(
+        el('span', { className: 'olv-analyse-assess-metric-label', text: m.label }),
+        el('span', { className: 'olv-analyse-assess-metric-value', text: m.value }),
+      );
+      metrics.append(pill);
+    }
+    this._assessmentRow.append(metrics);
   }
 
   private _renderScore(): void {
