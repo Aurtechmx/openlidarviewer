@@ -1,4 +1,5 @@
 import type { PointCloud } from '../model/PointCloud';
+import type { ClassScope } from '../render/class/classScope';
 
 export type AnalysisStatus = 'pass' | 'warn' | 'fail' | 'info';
 
@@ -8,20 +9,39 @@ export interface AnalysisRow {
   status: AnalysisStatus;
   /** When true, the row is a diagnostic shown under "Advanced report". */
   advanced?: boolean;
+  /**
+   * Honesty stamp: the class scope this metric was computed under. Set only
+   * on rows whose value changes with the class filter (count, density,
+   * coverage, …). Absent or `{kind:'full'}` means the metric reflects the
+   * whole cloud and renders exactly as it did before class scoping existed.
+   */
+  scope?: ClassScope;
 }
 
 export interface AnalysisResult {
   rows: AnalysisRow[];
+  /** Optional result-level scope; rows may also carry their own. */
+  scope?: ClassScope;
 }
 
 export interface Selection {
   pointIndices: number[];
 }
 
+/** Options threaded into a module run. Optional so existing callers compile unchanged. */
+export interface RunOptions {
+  /**
+   * Restrict class-dependent metrics to the visible subset of classes. When
+   * absent or `{kind:'full'}`, every module behaves byte-identically to before
+   * class scoping existed.
+   */
+  scope?: ClassScope;
+}
+
 export interface AnalysisModule {
   id: string;
   label: string;
-  run(cloud: PointCloud, selection?: Selection): AnalysisResult;
+  run(cloud: PointCloud, selection?: Selection, options?: RunOptions): AnalysisResult;
 }
 
 export class ModuleRegistry {
