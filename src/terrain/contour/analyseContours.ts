@@ -246,6 +246,9 @@ export function analyseContours(
     verticalDatum,
     isGeographic: params.isGeographic,
     interpolation: 'geodesic',
+    // Demote one-sided (extrapolated) fills toward dashed/gap so surface that
+    // is only supported from a single direction can't read as confident.
+    extrapolationGuard: { radiusCells: 8, penalty: 0.5 },
   });
   warnings.push(...dtm.warnings);
 

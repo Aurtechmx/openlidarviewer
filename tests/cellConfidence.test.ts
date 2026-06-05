@@ -11,6 +11,7 @@ import {
   isHonestDtm,
   gradeForConfidence,
   distanceToData,
+  directionalSupport,
   EVIDENCE_THRESHOLDS,
   type DtmGrid,
 } from '../src/terrain/ground/cellConfidence';
@@ -179,5 +180,74 @@ describe('distanceToData', () => {
     const d = distanceToData(Uint8Array.from([0, 0]), 2, 1);
     expect(d[0]).toBe(Infinity);
     expect(d[1]).toBe(Infinity);
+  });
+});
+
+describe('directionalSupport (extrapolation guard core)', () => {
+  it('reports surrounding data as not one-sided', () => {
+    // 5x5, data at the four edge midpoints around the centre (2,2).
+    const had = new Uint8Array(25);
+    const set = (c: number, r: number) => (had[r * 5 + c] = 1);
+    set(2, 0); // N
+    set(2, 4); // S
+    set(0, 2); // W
+    set(4, 2); // E
+    const sup = directionalSupport(had, 5, 5, 2, 2, 4);
+    expect(sup.directions).toBe(4);
+    expect(sup.oneSided).toBe(false);
+  });
+
+  it('flags single-direction data as one-sided', () => {
+    const had = new Uint8Array(25);
+    had[2 * 5 + 0] = 1; // data only due-West of centre
+    const sup = directionalSupport(had, 5, 5, 2, 2, 4);
+    expect(sup.directions).toBe(1);
+    expect(sup.oneSided).toBe(true);
+  });
+
+  it('flags a narrow (<180°) arc as one-sided', () => {
+    const had = new Uint8Array(25);
+    had[2 * 5 + 4] = 1; // E
+    had[4 * 5 + 4] = 1; // SE
+    const sup = directionalSupport(had, 5, 5, 2, 2, 4);
+    expect(sup.directions).toBe(2);
+    expect(sup.oneSided).toBe(true);
+  });
+});
+
+describe('buildDtmGrid extrapolation guard', () => {
+  it('penalises a one-sided fill but leaves a bracketed fill untouched', () => {
+    // One-sided: [measured, gap] — cell 1 is supported only from the West.
+    const oneSidedOff = buildDtmGrid(raster({ z: [5, NaN], counts: [8, 0], cols: 2, rows: 1 }), {
+      crs: 'EPSG:32610',
+    });
+    const oneSidedOn = buildDtmGrid(raster({ z: [5, NaN], counts: [8, 0], cols: 2, rows: 1 }), {
+      crs: 'EPSG:32610',
+      extrapolationGuard: { penalty: 0.5 },
+    });
+    expect(oneSidedOn.confidence[1]).toBeGreaterThan(0);
+    expect(oneSidedOn.confidence[1]).toBeLessThan(oneSidedOff.confidence[1]);
+
+    // Bracketed: [measured, gap, measured] — the centre is supported from
+    // both sides, so the guard must NOT touch it.
+    const bracketOff = buildDtmGrid(
+      raster({ z: [5, NaN, 5], counts: [8, 0, 8], cols: 3, rows: 1 }),
+      { crs: 'EPSG:32610' },
+    );
+    const bracketOn = buildDtmGrid(
+      raster({ z: [5, NaN, 5], counts: [8, 0, 8], cols: 3, rows: 1 }),
+      { crs: 'EPSG:32610', extrapolationGuard: { penalty: 0.5 } },
+    );
+    expect(bracketOn.confidence[1]).toBe(bracketOff.confidence[1]);
+  });
+
+  it('drops single-direction fills to a genuine gap when configured', () => {
+    const g = buildDtmGrid(raster({ z: [5, NaN, NaN], counts: [8, 0, 0], cols: 3, rows: 1 }), {
+      crs: 'EPSG:32610',
+      extrapolationGuard: { dropSingleDirection: true },
+    });
+    expect(g.coverage[1]).toBe(0);
+    expect(g.confidence[1]).toBe(0);
+    expect(isHonestDtm(g)).toBe(true);
   });
 });

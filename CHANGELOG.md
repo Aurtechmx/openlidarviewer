@@ -51,6 +51,12 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Typography refresh: the interface now uses Manrope for text and JetBrains
   Mono for figures and labels (both self-hosted, no external font requests),
   and the data panels render tabular figures so columns of numbers line up.
+- Cross-section profile chart, professional numbers pass: the elevation axis
+  now labels rounded "nice" values (e.g. 120 · 125 · 130) with matching
+  gridlines instead of the raw min/max, and every numeral renders in JetBrains
+  Mono with tabular figures from a positioned overlay — so the axis text no
+  longer inherits the chart's horizontal stretch and reads crisply at any
+  chart height. Units are spaced (e.g. "120 m") and decimals are consistent.
 - Selecting the Profile measurement now clears the Analyse panel and brings
   the Measurements panel forward automatically, so the cross-section chart has
   room and the workflow focus is unambiguous.
@@ -67,6 +73,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Terrain quality: a 0–100 quality score (surfaced in the Analyse panel) built
   from per-cell density, completeness and edge metrics, outlier-rejection DTM
   hardening, and hold-out RMSE stratified by slope and surface zone.
+- DTM extrapolation guard: a filled cell whose supporting ground data lies only
+  on one side is an extrapolation, not a bracketed interpolation, so its
+  confidence is now demoted toward dashed/gap rather than reading as trusted.
+  The guard scans eight rays and measures the angular spread of nearby data; a
+  cell whose support is confined to an arc under 180° is treated as one-sided.
 - Surface models in the Analyse panel: a top-surface DSM with above-ground
   height (canopy and structures), slope, and an exportable hillshade preview.
 - Unit-correct terrain analysis: slope, roughness and hillshade convert

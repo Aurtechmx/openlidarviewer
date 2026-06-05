@@ -153,6 +153,25 @@ export interface CellConfidenceParams {
    * plain Euclidean inverse-distance blend. Default `'idw'`.
    */
   readonly interpolation?: 'idw' | 'geodesic';
+  /**
+   * DTM hardening — extrapolation guard. An interpolated cell whose
+   * supporting data lies only on one side is an *extrapolation*, not an
+   * interpolation, and is the least trustworthy filled surface: there is no
+   * data bracketing it, so the height is a directional guess. The guard
+   * scans eight rays out to `radiusCells` and measures the angular spread of
+   * the directions in which data is found; a cell whose data is confined to
+   * an arc narrower than 180° is "one-sided".
+   *   - `penalty` (default 0.5) multiplies a one-sided cell's confidence, so
+   *     a confident extrapolation is demoted toward dashed/gap.
+   *   - `dropSingleDirection` (default false), when true, drops a cell with
+   *     data in only a single ray-direction to a genuine gap (coverage 0).
+   * Undefined disables the guard entirely (the default — backwards compatible).
+   */
+  readonly extrapolationGuard?: {
+    readonly radiusCells?: number;
+    readonly penalty?: number;
+    readonly dropSingleDirection?: boolean;
+  };
 }
 
 /**
@@ -216,6 +235,10 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   const absoluteHalfCount = Math.max(0, params.absoluteHalfCount ?? 3);
   const maxInterpDist = params.maxInterpDistanceCells;
   const maxInterpSlope = params.maxInterpSlope;
+  const guard = params.extrapolationGuard != null;
+  const guardRadius = Math.max(1, Math.round(params.extrapolationGuard?.radiusCells ?? 8));
+  const guardPenalty = clamp01(params.extrapolationGuard?.penalty ?? 0.5);
+  const guardDrop = params.extrapolationGuard?.dropSingleDirection ?? false;
 
   // Horn 3x3 slope — isotropic, the same estimator GDAL/ArcGIS use —
   // drives the interpolation roughness penalty. (v0.4.0 — was a crude
@@ -256,10 +279,24 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
         coverage[i] = 0;
         confidence[i] = 0;
       } else {
-        coverage[i] = 1;
         const interpScore = 1 / (1 + interpDistanceCells[i]);
         const roughPenalty = clamp01(slope[i] / (roughFull > 0 ? roughFull : 1)) * 0.8;
-        confidence[i] = Math.round(100 * interpScore * (1 - roughPenalty));
+        let base = interpScore * (1 - roughPenalty);
+        // Extrapolation guard: a fill supported only on one side is a
+        // directional guess, not a bracketed interpolation. Demote it (or
+        // drop it to a gap when configured) so one-sided surface can't read
+        // as confident.
+        if (guard) {
+          const sup = directionalSupport(hadData, cols, rows, i % cols, (i - (i % cols)) / cols, guardRadius);
+          if (guardDrop && sup.directions <= 1) {
+            coverage[i] = 0;
+            confidence[i] = 0;
+            continue;
+          }
+          if (sup.directions > 0 && sup.oneSided) base *= guardPenalty;
+        }
+        coverage[i] = 1;
+        confidence[i] = Math.round(100 * base);
       }
     } else {
       // unreachable — genuine gap
@@ -362,6 +399,61 @@ export function distanceToData(hadData: Uint8Array, cols: number, rows: number):
     frontier = next;
   }
   return dist;
+}
+
+/**
+ * Directional data support around an interpolated cell. Marches the eight
+ * compass rays out to `radius` cells and records, for each, whether a
+ * measured (had-data) cell is encountered. Returns how many of the eight
+ * directions found data and whether that data is "one-sided" — i.e. confined
+ * to an arc narrower than 180°, the signature of an extrapolation rather than
+ * a bracketed interpolation.
+ *
+ * Exported for testing. Deterministic, pure.
+ */
+export function directionalSupport(
+  hadData: Uint8Array,
+  cols: number,
+  rows: number,
+  col: number,
+  row: number,
+  radius: number,
+): { directions: number; oneSided: boolean } {
+  // Eight rays, in degrees around the circle (order matters for the gap calc).
+  const rays: ReadonlyArray<readonly [number, number, number]> = [
+    [1, 0, 0], // E
+    [1, 1, 45], // SE (screen-space; sign is irrelevant to the arc width)
+    [0, 1, 90], // S
+    [-1, 1, 135], // SW
+    [-1, 0, 180], // W
+    [-1, -1, 225], // NW
+    [0, -1, 270], // N
+    [1, -1, 315], // NE
+  ];
+  const hitAngles: number[] = [];
+  for (const [dc, dr, deg] of rays) {
+    for (let t = 1; t <= radius; t++) {
+      const c = col + dc * t;
+      const r = row + dr * t;
+      if (c < 0 || c >= cols || r < 0 || r >= rows) break;
+      if (hadData[r * cols + c] === 1) {
+        hitAngles.push(deg);
+        break;
+      }
+    }
+  }
+  const directions = hitAngles.length;
+  if (directions === 0) return { directions: 0, oneSided: false };
+  if (directions === 1) return { directions: 1, oneSided: true };
+  // Largest empty arc between consecutive hit directions (wrapping 360°).
+  hitAngles.sort((a, b) => a - b);
+  let maxGap = 360 - hitAngles[hitAngles.length - 1] + hitAngles[0];
+  for (let k = 1; k < hitAngles.length; k++) {
+    const gap = hitAngles[k] - hitAngles[k - 1];
+    if (gap > maxGap) maxGap = gap;
+  }
+  // Data confined to an arc < 180° ⇒ the cell is not bracketed ⇒ one-sided.
+  return { directions, oneSided: maxGap > 180 };
 }
 
 /** Median of the positive (measured) counts; 0 when none are measured. */
