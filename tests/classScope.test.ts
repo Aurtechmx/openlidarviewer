@@ -13,6 +13,7 @@ import {
   fullScope,
   scopeFrom,
   scopeStamp,
+  notScopedSentinel,
   type ClassScope,
 } from '../src/render/class/classScope';
 
@@ -75,5 +76,17 @@ describe('scopeStamp(subset)', () => {
       totalPresent: 3,
     };
     expect(scopeStamp(scope, nameOf)).toBe('ground + high veg · 2 of 3 classes');
+  });
+});
+
+describe('notScoped sentinel', () => {
+  it('stamps the honesty disclaimer for an un-scopeable header metric', () => {
+    expect(scopeStamp(notScopedSentinel(), nameOf)).toBe(
+      'full cloud (header) — not class-scoped',
+    );
+  });
+
+  it('factory returns the notScoped kind', () => {
+    expect(notScopedSentinel().kind).toBe('notScoped');
   });
 });

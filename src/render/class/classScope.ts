@@ -20,16 +20,30 @@
 export type ClassNameFn = (code: number) => string;
 
 /**
- * Either the unfiltered view, or a subset limited to `codes` out of
- * `totalPresent` classes found in the cloud.
+ * Either the unfiltered view, a subset limited to `codes` out of
+ * `totalPresent` classes found in the cloud, or `notScoped` — an honesty
+ * sentinel for a full-cloud figure that *cannot* be class-scoped (the
+ * streaming header's density/spacing, derived from per-file totals that
+ * have no client-side per-class breakdown). `notScoped` is attached only
+ * while a class filter is active, so the readout can say plainly that the
+ * number still reflects the whole cloud.
  */
 export type ClassScope =
   | { kind: 'full' }
-  | { kind: 'subset'; codes: number[]; totalPresent: number };
+  | { kind: 'subset'; codes: number[]; totalPresent: number }
+  | { kind: 'notScoped' };
 
 /** The unfiltered scope — every present class is shown. */
 export function fullScope(): ClassScope {
   return { kind: 'full' };
+}
+
+/**
+ * The honesty sentinel for a full-cloud metric that can't be class-scoped.
+ * Stamps as "full cloud (header) — not class-scoped".
+ */
+export function notScopedSentinel(): ClassScope {
+  return { kind: 'notScoped' };
 }
 
 /**
@@ -59,6 +73,7 @@ export function scopeFrom(
  */
 export function scopeStamp(scope: ClassScope, nameOf: ClassNameFn): string {
   if (scope.kind === 'full') return '';
+  if (scope.kind === 'notScoped') return 'full cloud (header) — not class-scoped';
   const names = scope.codes.map(nameOf).join(' + ');
   return `${names} · ${scope.codes.length} of ${scope.totalPresent} classes`;
 }
