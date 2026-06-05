@@ -35,6 +35,7 @@ import {
   type ContourFormat,
 } from '../terrain/contour/contourDownload';
 import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
+import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import {
   hypsometricColor,
   DEFAULT_CANOPY_PALETTE,
@@ -129,6 +130,8 @@ export class AnalysePanel {
   private readonly _exportButtons: HTMLButtonElement[] = [];
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
+  /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
+  private _demNote!: HTMLElement;
   private readonly _legend: HTMLElement;
   /** The always-visible minimal "Planned" section. */
   private readonly _roadmap: HTMLElement;
@@ -971,6 +974,13 @@ export class AnalysePanel {
     this._demButton.title = 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet';
     this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
     row.append(this._demButton);
+
+    // Honesty caveat for the DEM export — the raster stays usable for partial /
+    // preview data, but the user is told one line up front (the README carries
+    // the full disclosure). Empty + hidden until _renderExportGate fills it.
+    this._demNote = el('p', { className: 'olv-analyse-dem-note' });
+    this._demNote.style.display = 'none';
+    row.append(this._demNote);
     return row;
   }
 
@@ -990,6 +1000,16 @@ export class AnalysePanel {
         basename,
         wkt: ctx.wkt ?? null,
         isGeographic: ctx.isGeographic ?? false,
+        // Pipeline generation parameters (analyseContours fixes these): geodesic
+        // void fill, contour smoothing on, blunder-only despike on. Pass the
+        // real values so the README documents what actually produced the raster.
+        interpolation: 'geodesic',
+        smoothingApplied: true,
+        despikeApplied: true,
+        generationDateIso: new Date().toISOString(),
+        softwareName: 'OpenLiDARViewer',
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
       });
       const blob = new Blob([bytes as BlobPart], { type: 'application/zip' });
       const url = URL.createObjectURL(blob);
@@ -1140,6 +1160,21 @@ export class AnalysePanel {
     this._demButton.title = hasDtm
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';
+    // One-line caveat under the DEM button when the surface is not full coverage
+    // or the quality gate is preview/blocked — the README spells out the rest.
+    const coverageMode = r.dtm.coverageMode;
+    const notFull = coverageMode !== 'full';
+    const notReady = e === 'previewOnly' || e === 'blocked';
+    if (hasDtm && (notFull || notReady)) {
+      const verdict = e === 'blocked' ? 'blocked' : e === 'previewOnly' ? 'preview' : 'ready';
+      this._demNote.textContent =
+        `Preliminary DEM — coverage: ${coverageMode}; quality gate: ${verdict}. ` +
+        `Exported with a caveat in the README; not for reliable terrain products.`;
+      this._demNote.style.display = '';
+    } else {
+      this._demNote.textContent = '';
+      this._demNote.style.display = 'none';
+    }
     this._legend.style.display = hasFeatures ? '' : 'none';
     if (e === 'blocked') {
       this._exportNote.textContent = `Export disabled — ${r.quality.reasons[0] ?? 'DTM quality gate not met.'}`;
