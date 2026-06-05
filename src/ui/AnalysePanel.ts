@@ -1158,12 +1158,16 @@ export class AnalysePanel {
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';
     // One-line caveat under the DEM button when the surface is not full coverage
-    // or the quality gate is preview/blocked — the README spells out the rest.
+    // or the quality gate is not ready — the README spells out the rest. This
+    // uses the SAME condition the README caveat does (coverage !== 'full' ||
+    // readiness !== 'ready') so the button note and the README can't disagree.
     const coverageMode = r.dtm.coverageMode;
     const notFull = coverageMode !== 'full';
-    const notReady = e === 'previewOnly' || e === 'blocked';
+    const notReady = r.quality.readiness !== 'ready';
     if (hasDtm && (notFull || notReady)) {
-      const verdict = e === 'blocked' ? 'blocked' : e === 'previewOnly' ? 'preview' : 'ready';
+      const verdict = r.quality.readiness === 'blocked'
+        ? 'blocked'
+        : r.quality.readiness === 'previewOnly' ? 'preview' : 'ready';
       this._demNote.textContent =
         `Preliminary DEM — coverage: ${coverageMode}; quality gate: ${verdict}. ` +
         `Exported with a caveat in the README; not for reliable terrain products.`;
