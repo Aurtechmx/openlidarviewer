@@ -237,6 +237,19 @@ function fallbackClassColour(code: number): [number, number, number] {
   return hsvToRgb(hue, 0.75, 0.85);
 }
 
+/**
+ * The categorical [r, g, b] (0-255) colour the renderer uses for an ASPRS
+ * class code in "colour by class" mode. Mapped codes return their palette
+ * entry; unmapped codes fall back to the same deterministic hue the colour
+ * pass uses, so a legend swatch always matches the points on screen. The
+ * code is masked to a byte to match the rest of the class pipeline.
+ */
+export function classColor(code: number): [number, number, number] {
+  const c = code & 0xff;
+  const mapped = CLASS_PALETTE[c];
+  return mapped ? [mapped[0], mapped[1], mapped[2]] : fallbackClassColour(c);
+}
+
 /** Convert HSV (h∈[0,360), s,v∈[0,1]) to RGB (each in 0-255). */
 function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   const hi = Math.floor(h / 60) % 6;
