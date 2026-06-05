@@ -57,6 +57,7 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassVisibility } from './class/classVisibility';
+import { classVisibleAt } from './class/classMaskUniform';
 import { isZUpFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
@@ -764,6 +765,14 @@ export class Viewer {
     new Array<number>(CLASS_COUNT).fill(1),
     'float',
   );
+  /**
+   * True when at least one class is currently hidden. Mirrors the mask written
+   * by `applyClassVisibility` so the pick paths can decide — with a single
+   * boolean check — whether to consult the per-point class filter at all. When
+   * nothing is hidden, picking takes the original no-predicate path and is
+   * byte-identical (and equally fast) to the pre-feature behaviour.
+   */
+  private _classFiltered = false;
   /**
    * Materials whose mesh carries the `aClass` attribute — only these get the
    * class-mask multiply folded into their size node. Materials on class-less
@@ -2377,7 +2386,14 @@ export class Viewer {
     // `uniformArray`'s backing JS array is what its per-render `update()` copies
     // into the padded GPU buffer — mutate it in place (don't replace it).
     const target = this._classMaskUniform.array as number[];
-    for (let code = 0; code < CLASS_COUNT; code++) target[code] = mask[code];
+    let anyHidden = false;
+    for (let code = 0; code < CLASS_COUNT; code++) {
+      target[code] = mask[code];
+      if (mask[code] !== 1) anyHidden = true;
+    }
+    // Cache whether any class is hidden so the pick paths skip the per-point
+    // visibility predicate entirely on the all-visible hot path.
+    this._classFiltered = anyHidden;
     this._bumpRenderActivity();
   }
 
@@ -4321,10 +4337,18 @@ export class Viewer {
     // Pure selection — angular-miss-fair, refinement-aware. Centralised in
     // `streamingPickSelection.ts` so it's unit-tested separately from the
     // Viewer's mesh-lifecycle plumbing.
+    // Only thread classification + the class predicate when a filter is active,
+    // so the all-visible hot path allocates and compares exactly as before.
+    const mask = this._classMaskUniform.array as ArrayLike<number>;
     const pick = selectStreamingPick(
-      eligibleEntries.map((e) => ({ positions: e.decoded.positions, depth: e.depth })),
+      eligibleEntries.map((e) => ({
+        positions: e.decoded.positions,
+        depth: e.depth,
+        classification: this._classFiltered ? e.decoded.classification : undefined,
+      })),
       [o.x, o.y, o.z],
       [d.x, d.y, d.z],
+      this._classFiltered ? (code: number) => classVisibleAt(mask, code) : undefined,
     );
     if (!pick) return null;
     const winning = eligibleEntries[pick.nodeIndex];
@@ -4358,6 +4382,23 @@ export class Viewer {
    * miss. Selection minimises the angular miss, so a near and a far point are
    * judged fairly; only a reasonably on-target hit (~within 4°) is accepted.
    */
+  /**
+   * Build the per-point `accept` predicate that confines a pick to currently-
+   * visible classes — "you can't click a point you can't see". Returns
+   * `undefined` when no class is hidden (the all-visible hot path) or when the
+   * buffer carries no classification, so the caller passes no predicate and the
+   * search runs exactly as it did pre-feature. When a filter is active, the
+   * predicate consults the same 256-entry mask the GPU uses via `classVisibleAt`,
+   * so screen and pick agree point-for-point.
+   */
+  private _classPickAccept(
+    classification: ArrayLike<number> | null | undefined,
+  ): ((index: number) => boolean) | undefined {
+    if (!this._classFiltered || !classification) return undefined;
+    const mask = this._classMaskUniform.array as ArrayLike<number>;
+    return (index: number) => classVisibleAt(mask, classification[index]);
+  }
+
   private _pickDetailed(
     ndcX: number,
     ndcY: number,
@@ -4371,7 +4412,12 @@ export class Viewer {
     let bestScore = Infinity;
     for (const { mesh, cloud } of this._clouds.values()) {
       if (!mesh.visible) continue;
-      const hit = nearestPointAlongRay(cloud.positions, [o.x, o.y, o.z], [d.x, d.y, d.z]);
+      const hit = nearestPointAlongRay(
+        cloud.positions,
+        [o.x, o.y, o.z],
+        [d.x, d.y, d.z],
+        this._classPickAccept(cloud.classification),
+      );
       if (!hit) continue;
       const score = hit.offset / hit.along; // angular miss
       if (score < 0.07 && score < bestScore) {
