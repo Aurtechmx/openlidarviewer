@@ -23,7 +23,11 @@ export function writeMask(v: MaskSource): Float32Array {
 /**
  * Returns whether the class `code` is shown in `mask`, i.e.
  * `mask[code & 0xff] === 1`. Mirrors the per-point test the shader runs.
+ *
+ * Accepts any `ArrayLike<number>` so callers can pass either the built mask
+ * (`Float32Array`) or the live backing array of the GPU uniform (`number[]`);
+ * the `=== 1` test is identical for both.
  */
-export function classVisibleAt(mask: Float32Array, code: number): boolean {
+export function classVisibleAt(mask: ArrayLike<number>, code: number): boolean {
   return mask[code & 0xff] === 1;
 }

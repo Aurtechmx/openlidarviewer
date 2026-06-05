@@ -49,6 +49,13 @@ export interface StreamingPickNode {
   positions: Float32Array;
   /** Octree depth — used to flag refinement when a shallower node wins. */
   depth: number;
+  /**
+   * Per-point ASPRS class code, one entry per point (i.e. `positions.length / 3`
+   * long). Threaded from the node's decoded chunk so the optional class filter
+   * can skip hidden classes. Omitted when no class filter is active — on the
+   * all-visible hot path the caller passes no `accept` predicate at all.
+   */
+  classification?: Uint8Array;
 }
 
 /** The result of `selectStreamingPick` when a node was hit. */
@@ -83,13 +90,21 @@ export const STREAMING_PICK_ANGULAR_TOLERANCE = 0.07;
  * `streamingRefining` hint.
  *
  * The caller must have already filtered `nodes` down to visible + resident
- * entries (this module makes no assumptions about visibility — that lives in
- * the Viewer's pick loop along with the mesh-parent check).
+ * entries (this module makes no assumptions about node-level visibility — that
+ * lives in the Viewer's pick loop along with the mesh-parent check).
+ *
+ * The optional `acceptClass` predicate confines the pick to currently-visible
+ * *classes* — "you can't click a point you can't see". When supplied, each
+ * candidate point is kept only if its node carries a classification and
+ * `acceptClass(code)` is true for that point's class. Omit it on the all-visible
+ * hot path so no per-point call is made and selection is byte-identical to
+ * having no class filter.
  */
 export function selectStreamingPick(
   nodes: readonly StreamingPickNode[],
   origin: Vec3,
   direction: Vec3,
+  acceptClass?: (classCode: number) => boolean,
 ): StreamingPickHit | null {
   if (nodes.length === 0) return null;
 
@@ -101,7 +116,15 @@ export function selectStreamingPick(
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     if (node.depth > maxResidentDepth) maxResidentDepth = node.depth;
-    const hit = nearestPointAlongRay(node.positions, origin, direction);
+    // Confine to visible classes only when a class filter is active AND this
+    // node carries per-point classification. With no filter, pass no predicate
+    // so `nearestPointAlongRay` keeps its untouched hot path.
+    const cls = node.classification;
+    const accept =
+      acceptClass !== undefined && cls !== undefined
+        ? (index: number) => acceptClass(cls[index])
+        : undefined;
+    const hit = nearestPointAlongRay(node.positions, origin, direction, accept);
     if (!hit) continue;
     const score = hit.offset / hit.along;
     if (score >= STREAMING_PICK_ANGULAR_TOLERANCE) continue;
