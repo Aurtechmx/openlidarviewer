@@ -1562,6 +1562,18 @@ export class Viewer {
       {
         onNodeReady: (node, decoded) => {
           renderer.onNodeReady(node, decoded);
+          // DISPLAY-ONLY class legend hook — hand the host the node's decoded
+          // per-point classification so the legend can fold its histogram in.
+          // A DecodedChunk always carries a `classification` array (zero-filled
+          // when the source lacked the field). Pure read; never touches the GPU
+          // mask path above.
+          if (this.onStreamingNodeClasses && decoded.classification) {
+            try {
+              this.onStreamingNodeClasses(decoded.classification);
+            } catch {
+              /* a legend refresh must never break the streaming pipeline */
+            }
+          }
           if (benchmark) {
             benchmark.recordFirstPaint();
             benchmark.recordNodeReady(node.record.id);
@@ -2351,6 +2363,15 @@ export class Viewer {
    * render. We only request a frame so the idle-render throttle doesn't swallow
    * the update.
    */
+  /**
+   * Optional host hook fired once per streaming node as it becomes resident,
+   * with that node's decoded per-point classification. DISPLAY-ONLY: lets the
+   * classification legend fold late-arriving nodes into its histogram. Set to
+   * `undefined` to detach. Never invoked for static clouds (the host already
+   * has their full classification buffer at load time).
+   */
+  onStreamingNodeClasses?: (classes: Uint8Array) => void;
+
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();
     // `uniformArray`'s backing JS array is what its per-render `update()` copies
