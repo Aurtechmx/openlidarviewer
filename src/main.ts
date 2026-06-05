@@ -43,6 +43,8 @@ import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import { countClasses } from './render/class/classHistogram';
+import { fullScope, scopeFrom, notScopedSentinel, type ClassScope } from './render/class/classScope';
+import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
@@ -1519,10 +1521,43 @@ const analysePanel = new AnalysePanel({
 // colour swatch (matching "colour by class"), a live "shown" point count, and a
 // visibility checkbox. DISPLAY ONLY: a change applies the 256-entry mask to the
 // GPU and re-renders the legend; it does NOT scope metrics/analysis. v0.4.1.
+// The streaming cloud whose header report is currently shown, kept so a later
+// class-filter toggle can re-stamp the not-class-scoped sentinel without
+// re-deriving it from scratch. Null for static scans / the empty state.
+let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null = null;
+
 const classLegendPanel = new ClassLegendPanel();
 classLegendPanel.onChange((visibility) => {
   viewer.applyClassVisibility(visibility);
+  // Re-run the scan report so its class-dependent figures (count, density,
+  // coverage) and their honesty stamps update live with the filter. Guarded so
+  // a metrics failure never blocks the GPU mask the user just toggled.
+  try {
+    refreshScopedReport();
+  } catch (err) {
+    if (debug) console.warn('[class-legend] scoped report refresh threw', err);
+  }
 });
+
+/**
+ * Re-render the Inspector's scan report under the current class filter. Routes
+ * to the static module path (re-runs `runModules` with the derived scope) or
+ * the streaming header path (re-stamps the not-class-scoped sentinel), matching
+ * however the active scan was opened.
+ */
+function refreshScopedReport(): void {
+  if (viewer.isStreamingActive()) {
+    const cloud = lastStreamingReportCloud;
+    if (cloud) {
+      inspector.setReport(
+        runStreamingModules(cloud, classLegendPanel.getVisibility().isFiltered()),
+      );
+    }
+    return;
+  }
+  const cloud = activeId ? viewer.getCloud(activeId) : null;
+  if (cloud) inspector.setReport(runModules(cloud, currentClassScope(cloud)));
+}
 // Streaming node-ready: fold each newly-resident node's classification into the
 // legend so a class first seen at depth appears as a new row. The legend keeps
 // its current visibility (default visible, but left hidden if the user isolated
@@ -2048,11 +2083,32 @@ function streamingDebugSample(): StreamingDebugStats | null {
   return sample;
 }
 
-/** Run every registered validation module and flatten the rows. */
-function runModules(cloud: PointCloud): AnalysisRow[] {
+/**
+ * Run every registered validation module and flatten the rows. The optional
+ * `scope` is threaded into each module so class-dependent figures honour the
+ * visible-class subset; when omitted (or full) the output is byte-identical to
+ * the unscoped path.
+ */
+function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
-  for (const module of registry.list()) rows.push(...module.run(cloud).rows);
+  const options = scope ? { scope } : undefined;
+  for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
   return rows;
+}
+
+/**
+ * Derive the class scope for the active static cloud from the legend's
+ * visibility and the classes actually present in the cloud. Returns `fullScope`
+ * when there's no classification channel or nothing is filtered — so the
+ * report renders exactly as it did before class scoping existed.
+ */
+function currentClassScope(cloud: PointCloud): ClassScope {
+  const cls = cloud.classification;
+  if (!cls || cls.length === 0 || !classLegendPanel.hasClasses()) return fullScope();
+  const visibility = classLegendPanel.getVisibility();
+  if (!visibility.isFiltered()) return fullScope();
+  const present = [...countClasses(cls).keys()];
+  return scopeFrom(visibility.visibleCodes(), present, classificationLabel);
 }
 
 /**
@@ -2088,16 +2144,26 @@ function runStreamingModules(cloud: {
   };
   readonly maxDepth?: () => number;
   readonly octree?: { nodes: () => readonly unknown[] };
-}): AnalysisRow[] {
+}, classFilterActive = false): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
   const info = (label: string, value: string): AnalysisRow =>
     ({ label, value, status: 'info' });
+  // Streaming density/spacing are derived from the file header's full-cloud
+  // totals — there is no client-side per-class breakdown to scope them to. So
+  // they stay full-cloud and, when a class filter is active, carry the honesty
+  // sentinel that renders "full cloud (header) — not class-scoped" rather than
+  // pretending the figure honours the filter.
+  const headerMetric = (label: string, value: string): AnalysisRow => {
+    const row = info(label, value);
+    if (classFilterActive) row.scope = notScopedSentinel();
+    return row;
+  };
 
   rows.push(info('Source', cloud.kind === 'ept' ? 'EPT (Entwine Point Tile)' : 'COPC (Cloud Optimized Point Cloud)'));
   if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
     rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
   }
-  rows.push(info('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
+  rows.push(headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
 
   // Bounds — prefer the header's source-coordinate min/max for accuracy.
   const header = cloud.metadata?.header;
@@ -2111,8 +2177,8 @@ function runStreamingModules(cloud: {
     const footprintArea = w * d;
     if (footprintArea > 0 && cloud.sourcePointCount > 0) {
       const density = cloud.sourcePointCount / footprintArea;
-      rows.push(info('Density', `${density.toFixed(1)} pts/m²`));
-      rows.push(info('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
+      rows.push(headerMetric('Density', `${density.toFixed(1)} pts/m²`));
+      rows.push(headerMetric('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
     }
   }
 
@@ -3136,7 +3202,7 @@ async function handleFile(file: File): Promise<void> {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
     }
     try {
-      inspector.setReport(runModules(result.cloud));
+      inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
     } catch (err) {
       if (debug) console.warn('[inspector] runModules + setReport threw', err);
     }
@@ -3390,7 +3456,8 @@ async function openStreamingCopc(
   inspector.setStreamingMode(true);
   try { inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
   catch (err) { if (debug) console.warn('[inspector] setDetail (streaming) threw', err); }
-  try { inspector.setReport(runStreamingModules(cloud)); }
+  lastStreamingReportCloud = cloud;
+  try { inspector.setReport(runStreamingModules(cloud, classLegendPanel.getVisibility().isFiltered())); }
   catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
   try {
     refreshDatasetIntelligenceFromStreamingCloud(cloud);
@@ -3588,14 +3655,18 @@ async function handleRemoteEpt(url: string): Promise<void> {
       // `span` is the points-per-tile analogue), so those rows are
       // omitted on EPT streams.
       const b = detection.metadata.bounds.conforming;
-      inspector.setReport(runStreamingModules({
-        kind: 'ept',
+      const eptReportCloud = {
+        kind: 'ept' as const,
         name: cloud.name,
         sourcePointCount: cloud.sourcePointCount,
         metadata: {
-          header: { min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] },
+          header: { min: [b[0], b[1], b[2]] as [number, number, number], max: [b[3], b[4], b[5]] as [number, number, number] },
         },
-      }));
+      };
+      lastStreamingReportCloud = eptReportCloud;
+      inspector.setReport(
+        runStreamingModules(eptReportCloud, classLegendPanel.getVisibility().isFiltered()),
+      );
     } catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
     void prewarmExportStudio();
 
@@ -3972,6 +4043,7 @@ function resetToEmptyState(): void {
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
+  lastStreamingReportCloud = null;
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();
