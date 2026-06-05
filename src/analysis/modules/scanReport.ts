@@ -1,5 +1,6 @@
-import type { AnalysisModule, AnalysisResult, AnalysisRow } from '../ModuleApi';
+import type { AnalysisModule, AnalysisResult, AnalysisRow, RunOptions } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
+import type { ClassScope } from '../../render/class/classScope';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -7,6 +8,16 @@ function rowInfo(label: string, value: string): AnalysisRow {
 
 function rowWarn(label: string, value: string): AnalysisRow {
   return { label, value, status: 'warn' };
+}
+
+/**
+ * Stamp `scope` onto a row, but only when it is a real subset. A full or
+ * absent scope leaves the row untouched so the unfiltered output stays
+ * byte-identical to the legacy result.
+ */
+function withScope(row: AnalysisRow, scope: ClassScope | undefined): AnalysisRow {
+  if (scope && scope.kind === 'subset') row.scope = scope;
+  return row;
 }
 
 /** Format a length in metres — centimetres below a metre, for readability. */
@@ -24,35 +35,75 @@ export const scanReport: AnalysisModule = {
   id: 'scan-report',
   label: 'Scan Report',
 
-  run(cloud: PointCloud): AnalysisResult {
+  run(cloud: PointCloud, _selection?: unknown, options?: RunOptions): AnalysisResult {
     const rows: AnalysisRow[] = [];
+    const scope = options?.scope;
 
-    const n = cloud.pointCount;
-    rows.push(rowInfo('Point Count', n.toLocaleString('en-US')));
+    // A subset scope restricts every per-point figure (count, footprint,
+    // density, coverage) to the visible classes. The set is masked to a byte
+    // to match how classification is stored and counted elsewhere.
+    const subset =
+      scope && scope.kind === 'subset' && cloud.classification !== undefined
+        ? new Set(scope.codes.map((c) => c & 0xff))
+        : null;
+    const cls = cloud.classification;
+    const isVisible = (i: number): boolean =>
+      subset === null || (cls !== undefined && subset.has(cls[i] & 0xff));
+
+    // ── Per-point scan ──────────────────────────────────────────────────
+    // Full scope: `n` is the cloud's reported point count and the extent comes
+    // from `cloud.bounds()` — byte-identical to the legacy path. Subset scope:
+    // count and extent are recomputed over the visible points only.
+    const totalN = cloud.pointCount;
+    let n = totalN;
+    const bounds = cloud.bounds();
+    let minX = bounds.min[0], minY = bounds.min[1], minZ = bounds.min[2];
+    let maxX = bounds.max[0], maxY = bounds.max[1], maxZ = bounds.max[2];
+
+    if (subset !== null) {
+      n = 0;
+      minX = minY = minZ = Infinity;
+      maxX = maxY = maxZ = -Infinity;
+      const pos = cloud.positions;
+      for (let i = 0; i < totalN; i++) {
+        if (!isVisible(i)) continue;
+        n++;
+        const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+      }
+      if (n === 0) {
+        // No visible points — every extent collapses to zero so the degenerate
+        // branches below report N/A rather than NaN/Infinity arithmetic.
+        minX = minY = minZ = maxX = maxY = maxZ = 0;
+      }
+    }
+
+    rows.push(withScope(rowInfo('Point Count', n.toLocaleString('en-US')), scope));
 
     // Extent — rounded to a tenth of a metre.
-    const bounds = cloud.bounds();
-    const width = bounds.max[0] - bounds.min[0];
-    const depth = bounds.max[1] - bounds.min[1];
-    const height = bounds.max[2] - bounds.min[2];
-    rows.push(rowInfo('Width', `${width.toFixed(1)} m`));
-    rows.push(rowInfo('Depth', `${depth.toFixed(1)} m`));
-    rows.push(rowInfo('Height', `${height.toFixed(1)} m`));
+    const width = maxX - minX;
+    const depth = maxY - minY;
+    const height = maxZ - minZ;
+    rows.push(withScope(rowInfo('Width', `${width.toFixed(1)} m`), scope));
+    rows.push(withScope(rowInfo('Depth', `${depth.toFixed(1)} m`), scope));
+    rows.push(withScope(rowInfo('Height', `${height.toFixed(1)} m`), scope));
 
     const footprintArea = width * depth;
 
     // Point density.
     if (footprintArea <= 0 || n === 0) {
-      rows.push(rowWarn('Density', 'N/A (degenerate footprint)'));
+      rows.push(withScope(rowWarn('Density', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(rowInfo('Density', `${(n / footprintArea).toFixed(1)} pts/m²`));
+      rows.push(withScope(rowInfo('Density', `${(n / footprintArea).toFixed(1)} pts/m²`), scope));
     }
 
     // Estimated point spacing.
     if (footprintArea <= 0 || n === 0) {
-      rows.push(rowWarn('Spacing', 'N/A (degenerate footprint)'));
+      rows.push(withScope(rowWarn('Spacing', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(rowInfo('Spacing', formatLength(Math.sqrt(footprintArea / n))));
+      rows.push(withScope(rowInfo('Spacing', formatLength(Math.sqrt(footprintArea / n))), scope));
     }
 
     // Attribute coverage.
@@ -88,18 +139,27 @@ export const scanReport: AnalysisModule = {
     rows.push({ label: 'Max corner', value: corner(bounds.max), status: 'info', advanced: true });
 
     // Classification coverage — the share of points with a non-zero class
-    // code. A diagnostic, shown under "Advanced report".
+    // code. A diagnostic, shown under "Advanced report". Full scope counts
+    // over the whole buffer (byte-identical to the legacy loop, since the
+    // visible count `n` equals the buffer length); subset scope counts only
+    // the visible points, against the visible count as the denominator.
     let coverage = 'N/A';
     if (hasClassification && n > 0) {
-      const cls = cloud.classification!;
+      const clsBuf = cloud.classification!;
       let nonZero = 0;
-      for (let i = 0; i < n; i++) {
-        if (cls[i] !== 0) nonZero++;
+      for (let i = 0; i < totalN; i++) {
+        if (!isVisible(i)) continue;
+        if (clsBuf[i] !== 0) nonZero++;
       }
       coverage = `${((nonZero / n) * 100).toFixed(1)} %`;
     }
-    rows.push({ label: 'Classification Coverage', value: coverage, status: 'info', advanced: true });
+    rows.push(
+      withScope(
+        { label: 'Classification Coverage', value: coverage, status: 'info', advanced: true },
+        scope,
+      ),
+    );
 
-    return { rows };
+    return scope && scope.kind === 'subset' ? { rows, scope } : { rows };
   },
 };
