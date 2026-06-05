@@ -38,7 +38,11 @@ import {
   vec2,
   vec4,
   float,
+  int,
   uniform,
+  uniformArray,
+  attribute,
+  materialPointSize,
   screenUV,
   screenSize,
   log2,
@@ -52,6 +56,7 @@ import {
 } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
+import type { ClassVisibility } from './class/classVisibility';
 import { isZUpFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
@@ -364,6 +369,13 @@ interface StreamingSession {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ASPRS class codes span a full byte (0-255) for LAS PDRF >= 6, so the GPU
+ * mask uniform is a 256-entry array — one slot per legal class code. Matches
+ * the width of `ClassVisibility` / `toMaskArray()`.
+ */
+const CLASS_COUNT = 256;
 
 /** The four corners of the unit billboard quad shared by every point. */
 const QUAD_CORNERS = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
@@ -733,6 +745,32 @@ export class Viewer {
     this._pointSizeUniform,
     this._attnRef,
   );
+
+  // ── Class visibility (GPU mask) ───────────────────────────────────────────
+  /**
+   * One Viewer-owned 256-entry visibility mask, shared by every point
+   * material (static clouds AND streaming nodes). `1` = show, `0` = hide.
+   * Defaults to all-1 so the unfiltered scene is visually identical to
+   * pre-feature behaviour. `applyClassVisibility` writes new values into
+   * the backing array; the node re-uploads once per render.
+   *
+   * Implementation note: a `uniformArray` of 256 floats was chosen over a
+   * 256x1 DataTexture because it compiles cleanly in this three build's TSL
+   * (`.element(int(aClass))` indexes it directly with no vertex-stage
+   * texture-fetch LOD plumbing). 256 floats live well within the vertex
+   * uniform budget on every WebGPU target and every practical WebGL2 device.
+   */
+  private readonly _classMaskUniform = uniformArray(
+    new Array<number>(CLASS_COUNT).fill(1),
+    'float',
+  );
+  /**
+   * Materials whose mesh carries the `aClass` attribute — only these get the
+   * class-mask multiply folded into their size node. Materials on class-less
+   * meshes keep the exact prior size graph so they are never affected by the
+   * filter (and never reference a missing attribute).
+   */
+  private readonly _materialsWithClass = new WeakSet<THREE.PointsNodeMaterial>();
 
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
@@ -1426,6 +1464,10 @@ export class Viewer {
     // — Classic respects the user's antialiasing preference.
     material.alphaToCoverage =
       splatForcesAlphaToCoverage(this._splatMode) || this._antialiasing;
+    // Record that this material's mesh carries `aClass` BEFORE size-mode
+    // setup, so `_applySizeMode` folds the class-mask multiply into its size
+    // node. Class-less meshes are never registered and keep the prior graph.
+    if (classAttr !== null) this._materialsWithClass.add(material);
     this._applySizeMode(material);
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -2296,6 +2338,26 @@ export class Viewer {
       this._applySizeMode(material);
       material.needsUpdate = true;
     }
+  }
+
+  /**
+   * Apply a class-visibility state to the GPU. Writes the source's 256-entry
+   * mask (`1` = show, `0` = hide) into the shared `_classMaskUniform` so every
+   * point material — static clouds and streaming nodes alike — collapses the
+   * sprite quad of any hidden class to zero size on the next frame.
+   *
+   * No per-material rebuild is needed: the mask node is already wired into each
+   * size graph, and the uniform array re-uploads its current values once per
+   * render. We only request a frame so the idle-render throttle doesn't swallow
+   * the update.
+   */
+  applyClassVisibility(v: ClassVisibility): void {
+    const mask = v.toMaskArray();
+    // `uniformArray`'s backing JS array is what its per-render `update()` copies
+    // into the padded GPU buffer — mutate it in place (don't replace it).
+    const target = this._classMaskUniform.array as number[];
+    for (let code = 0; code < CLASS_COUNT; code++) target[code] = mask[code];
+    this._bumpRenderActivity();
   }
 
   // ── A.6 Inspection presets ──────────────────────────────────────────────
@@ -3610,11 +3672,54 @@ export class Viewer {
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Apply the current point-size mode to one material. */
+  /**
+   * Apply the current point-size mode to one material, folding in the class
+   * visibility mask so it applies in BOTH size modes.
+   *
+   * The class mask must multiply the FINAL resolved size, but the size is
+   * resolved differently per mode: adaptive mode encodes size in
+   * `_adaptiveSizeNode` (driven by `_pointSizeUniform`), while fixed mode uses
+   * the scalar `material.size` and would otherwise leave `sizeNode = null`.
+   * `PointsNodeMaterial` IGNORES `material.size` whenever `sizeNode` is set, so
+   * to keep fixed mode's pixel size while still masking we route fixed mode
+   * through `materialPointSize` (the node form of `material.size`) and multiply
+   * that by the mask. With the default all-1 mask the multiply is the identity,
+   * so the unfiltered scene is pixel-for-pixel unchanged.
+   *
+   * Only materials whose mesh carries `aClass` get the multiply; class-less
+   * meshes keep the exact prior graph (adaptive node or `null`).
+   */
   private _applySizeMode(material: THREE.PointsNodeMaterial): void {
-    material.sizeNode = (
-      this._pointSizeMode === 'adaptive' ? this._adaptiveSizeNode : null
+    const adaptive = this._pointSizeMode === 'adaptive';
+    if (!this._materialsWithClass.has(material)) {
+      material.sizeNode = (
+        adaptive ? this._adaptiveSizeNode : null
+      ) as typeof material.sizeNode;
+      return;
+    }
+    const base: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
+    material.sizeNode = base.mul(
+      this._classMaskMultiplier(),
     ) as typeof material.sizeNode;
+  }
+
+  /**
+   * The per-point class-mask multiplier node: reads the `aClass` instance
+   * attribute, truncates it to an integer class code (class codes are exact
+   * integers in the float attribute), and looks up the shared 256-entry mask.
+   * Resolves to `1` when the class is shown and `0` when hidden — multiplying
+   * a hidden point's size by 0 collapses its sprite quad to nothing.
+   *
+   * Mirrors the `classVisibleAt(mask, code)` test used by the pure helpers and
+   * the UI: `mask[code] === 1`.
+   */
+  private _classMaskMultiplier(): TslNode {
+    // `attribute()` / `int()` / `.element()` are dynamically-typed TSL chains;
+    // route the per-point class code through `TslNode` (the `any` alias used by
+    // every node builder in this file) so the strict overloads don't reject it.
+    const aClass: TslNode = attribute('aClass');
+    const code: TslNode = int(aClass);
+    return (this._classMaskUniform as TslNode).element(code);
   }
 
   /**
