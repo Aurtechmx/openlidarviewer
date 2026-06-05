@@ -213,6 +213,11 @@ export class StreamingRenderer {
     // mask applies to streaming nodes too. A DecodedChunk always carries a
     // `classification` array (zero-filled when the source lacked the field),
     // so streaming meshes always get an `aClass` attribute.
+    //
+    // `buildPointMesh` wires every material's size graph to the Viewer's ONE
+    // shared `_classMaskUniform` node (not a per-node copy), so a node decoded
+    // AFTER a class toggle reads the current mask the moment it is built — no
+    // re-application call is needed for late-arriving nodes.
     const handle: PointMeshHandle = this._viewer.buildPointMesh(
       decoded.positions,
       colors,
