@@ -336,6 +336,14 @@ export interface PointMeshHandle {
   mesh: THREE.Mesh;
   material: THREE.PointsNodeMaterial;
   colorAttr: THREE.InstancedBufferAttribute;
+  /**
+   * The per-point ASPRS classification attribute (`aClass`), one value per
+   * instance, or `null` when the source cloud carried no classification
+   * channel. The class-visibility mask multiplies the resolved point size
+   * by `mask[aClass]`, so a mesh without this attribute is never affected
+   * by class filtering (it stays fully visible).
+   */
+  classAttr: THREE.InstancedBufferAttribute | null;
 }
 
 /**
@@ -1338,6 +1346,10 @@ export class Viewer {
     const { mesh, material, colorAttr } = this.buildPointMesh(
       cloud.positions,
       colorForMode(mode, cloud),
+      // Feed the DOWNSAMPLED classification (carried in lockstep with the
+      // downsampled positions by `downsampleToBudget`), never the original
+      // input — the attribute must align 1:1 with the uploaded points.
+      cloud.classification ?? null,
     );
     this._scene.add(mesh);
 
@@ -1353,17 +1365,38 @@ export class Viewer {
    * it. Picking up the viewer's current point size, size mode and
    * antialiasing means a freshly built mesh matches the rest of the scene.
    */
-  buildPointMesh(positions: Float32Array, colorsU8: Uint8Array): PointMeshHandle {
+  buildPointMesh(
+    positions: Float32Array,
+    colorsU8: Uint8Array,
+    classification: ArrayLike<number> | null = null,
+  ): PointMeshHandle {
     const geometry = new THREE.InstancedBufferGeometry();
     geometry.setAttribute(
       'position',
       new THREE.Float32BufferAttribute(QUAD_CORNERS, 3),
     );
     geometry.setIndex(QUAD_INDEX);
-    geometry.instanceCount = positions.length / 3;
+    const instanceCount = positions.length / 3;
+    geometry.instanceCount = instanceCount;
 
     const positionAttr = new THREE.InstancedBufferAttribute(positions, 3);
     const colorAttr = new THREE.InstancedBufferAttribute(toFloatColors(colorsU8), 3);
+
+    // Per-point ASPRS classification, uploaded as a one-value-per-instance
+    // float attribute named `aClass`. Float (not an integer attribute) keeps
+    // it portable across the WebGPU and WebGL2 backends — the size graph
+    // rounds it back to an int before indexing the class-visibility mask.
+    // When the cloud has no classification channel we skip the attribute
+    // entirely; the size graph's mask lookup is guarded so such meshes stay
+    // fully visible regardless of the active filter.
+    let classAttr: THREE.InstancedBufferAttribute | null = null;
+    if (classification !== null) {
+      const classData = new Float32Array(instanceCount);
+      const n = Math.min(instanceCount, classification.length);
+      for (let i = 0; i < n; i++) classData[i] = classification[i];
+      classAttr = new THREE.InstancedBufferAttribute(classData, 1);
+      geometry.setAttribute('aClass', classAttr);
+    }
 
     // `instancedBufferAttribute` is typed as a broad node-type union; narrow
     // it to each property's accepted type — the itemSize (3) makes it a vec3.
@@ -1397,7 +1430,7 @@ export class Viewer {
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.frustumCulled = false;
-    return { mesh, material, colorAttr };
+    return { mesh, material, colorAttr, classAttr };
   }
 
   /**
