@@ -1495,6 +1495,13 @@ const annotationPanel = new AnnotationPanel({
 // pipeline is dynamic-imported on demand so it stays out of the initial
 // bundle; the panel only runs when the user clicks "Run terrain analysis".
 let lastCloudName = 'contours';
+// Monotonic token for terrain-analysis runs. `runTerrainAnalysis` is async
+// (lazy chunk import + a paint yield), so rapid interval clicks can overlap
+// and resolve out of order, and a run can still be in flight when the scan is
+// closed or swapped. Each invocation captures the token + active dataset at
+// start and bails after every await if a newer run started, the dataset
+// changed, or the panel was closed — only the winning run touches the panel.
+let terrainRunToken = 0;
 const analysePanel = new AnalysePanel({
   onRun: () => void runTerrainAnalysis(),
   onSelectInterval: (m) => void runTerrainAnalysis(m),
@@ -1588,11 +1595,21 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
     analysePanel.setStatus('Load a scan first, then run terrain analysis.');
     return;
   }
+  // Claim a token + snapshot the dataset identity for this run. After every
+  // await we re-check these: a newer run (token mismatch), a different/closed
+  // scan (activeId changed), or a hidden panel means this result is stale and
+  // must not touch the UI — the newer run (or the reset) owns it now.
+  const runToken = ++terrainRunToken;
+  const runDatasetId = activeId;
+  const isStale = (): boolean =>
+    runToken !== terrainRunToken || activeId !== runDatasetId || !analysePanel.isVisible();
   analysePanel.setBusy(true);
   // Let the "Analysing…" state paint before the synchronous compute.
   await new Promise((resolve) => setTimeout(resolve, 0));
+  if (isStale()) return;
   try {
     const { analyseContours } = await loadAnalyseContours();
+    if (isStale()) return;
     const pos = gathered.positions;
     const n = pos.length / 3;
     let minX = Infinity;
@@ -1629,9 +1646,15 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
       classification: gathered.classification,
       intervalM,
     });
+    // Final guard before touching the panel: a newer run, a swapped/closed
+    // scan, or a hidden panel means this result lost the race — drop it and
+    // leave the busy/skeleton state to whoever owns it now.
+    if (isStale()) return;
     analysePanel.setBusy(false);
     analysePanel.update(result);
   } catch (err) {
+    // A stale run must not clobber the winning run's busy flag or status.
+    if (isStale()) return;
     console.error('OpenLiDARViewer: terrain analysis failed.', err);
     analysePanel.setBusy(false);
     const msg = err instanceof Error ? err.message : String(err);
