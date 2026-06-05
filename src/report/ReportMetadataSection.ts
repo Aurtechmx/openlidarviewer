@@ -29,6 +29,17 @@ export interface MetadataInputs {
   /** CRS label + linear unit when the source carries projection metadata. */
   readonly crsName?: string;
   readonly crsUnit?: string;
+  /**
+   * Active class-filter scope stamp — e.g. `"Ground + Building · 2 of 5
+   * classes"`. Present ONLY while a class filter narrows the live view at
+   * export time. When set, the dataset-summary table prepends an honesty row
+   * disclosing the filter and warning that the figures below remain
+   * full-cloud (the PDF's own figures are not re-derived per visible class —
+   * the row makes that explicit rather than presenting filter-affected-looking
+   * numbers silently). Absent / empty for an unfiltered export, in which case
+   * the row list is byte-identical to the pre-feature output.
+   */
+  readonly classScopeNote?: string;
 }
 
 /** Format a metre value: km / m / cm depending on magnitude. */
@@ -52,14 +63,25 @@ function formatInt(n: number): string {
  * capabilities → projection. Optional rows (CRS) appear only when known.
  */
 export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportDatasetRow[] {
-  const rows: ReportDatasetRow[] = [
+  const rows: ReportDatasetRow[] = [];
+  // Class-filter honesty row — prepended so it reads before the figures it
+  // qualifies. Present only while a filter is active; an unfiltered export
+  // omits it entirely, keeping the row list byte-identical to before.
+  const scopeNote = inputs.classScopeNote?.trim();
+  if (scopeNote) {
+    rows.push({
+      label: 'Class filter',
+      value: `${scopeNote} — figures below are full-cloud`,
+    });
+  }
+  rows.push(
     { label: 'File',   value: inputs.fileName },
     { label: 'Format', value: inputs.format },
     { label: 'Points', value: formatInt(inputs.sourcePointCount) },
     { label: 'Width',  value: formatMetres(inputs.width) },
     { label: 'Depth',  value: formatMetres(inputs.depth) },
     { label: 'Height', value: formatMetres(inputs.height) },
-  ];
+  );
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
     rows.push({ label: 'Density', value: `${inputs.density.toFixed(0)} pts/m²` });
   }

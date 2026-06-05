@@ -2427,6 +2427,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasIntensity: modes.includes('intensity'),
       hasClassification: modes.includes('classification'),
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      // Class-filter honesty — when a filter narrows the live view, disclose
+      // it so the PDF's full-cloud figures aren't read as filter-scoped.
+      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
     };
     exportFileStem = baseName(streamingCloud.name);
   } else if (staticCloud) {
@@ -2443,6 +2446,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      // Class-filter honesty — when a filter narrows the live view, disclose
+      // it so the PDF's full-cloud figures aren't read as filter-scoped.
+      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
     };
     exportFileStem = baseName(staticCloud.name);
   } else {
