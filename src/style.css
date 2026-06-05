@@ -2896,6 +2896,69 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: 6px; padding: 6px;
   transition: color 130ms ease, border-color 130ms ease;
 }
+
+/* ── Classification legend panel ─────────────────────────────────────────── */
+.olv-class-panel {
+  width: 218px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+}
+.olv-cl-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
+/* The "Filtered — showing N of M classes" banner — persistent while filtered. */
+.olv-cl-banner {
+  font-size: 10.5px; font-family: var(--mono); color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
+}
+.olv-cl-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.olv-cl-row {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  transition: opacity 130ms ease;
+}
+/* A hidden class reads dimmed so the legend always mirrors the canvas. */
+.olv-cl-row.is-hidden { opacity: 0.42; }
+.olv-cl-check { flex-shrink: 0; margin: 0; cursor: pointer; }
+.olv-cl-swatch {
+  flex-shrink: 0; width: 11px; height: 11px;
+  border-radius: 3px; border: 0.5px solid rgba(255, 255, 255, 0.22);
+}
+.olv-cl-name {
+  flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: var(--text);
+  font-family: var(--font);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Tabular figures so counts line up column-right as they refine while streaming. */
+.olv-cl-count {
+  flex-shrink: 0; font-size: 11px; font-family: var(--mono);
+  color: var(--text-dim); text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.olv-cl-solo {
+  flex-shrink: 0; font-size: 10px; color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 5px; padding: 2px 5px;
+  transition: color 130ms ease, border-color 130ms ease;
+}
+.olv-cl-solo:hover { color: var(--text); border-color: var(--accent); }
+.olv-cl-solo:focus-visible { outline: none; border-color: var(--accent); }
+.olv-cl-empty { font-size: 11.5px; color: var(--text-faint); }
+.olv-cl-footer {
+  display: flex; gap: 6px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-cl-showall {
+  flex: 1; font-size: 11px; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 6px;
+  transition: color 130ms ease, border-color 130ms ease;
+}
+.olv-cl-showall:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.olv-cl-showall:disabled { opacity: 0.4; cursor: default; }
+
 /* ── Keyboard shortcut sheet — v0.3.9 ────────────────────────────────────── */
 .olv-shortcuts {
   position: fixed;
@@ -3432,6 +3495,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* The panel head row gets a tap-area cursor so the affordance reads. */
   .olv-streaming-panel > .olv-panel-head,
   .olv-measure-panel > .olv-panel-head,
+  .olv-class-panel > .olv-panel-head,
   .olv-anno-panel > .olv-ap-head {
     cursor: pointer;
     user-select: none;
@@ -3441,6 +3505,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      Annotations panel's existing `.olv-ap-head` selector still fits. */
   .olv-streaming-panel.olv-collapsed > :not(.olv-panel-head),
   .olv-measure-panel.olv-collapsed > :not(.olv-panel-head),
+  .olv-class-panel.olv-collapsed > :not(.olv-panel-head),
   .olv-anno-panel.olv-collapsed > :not(.olv-ap-head) {
     display: none;
   }
@@ -3452,6 +3517,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    */
   .olv-streaming-panel.olv-collapsed,
   .olv-measure-panel.olv-collapsed,
+  .olv-class-panel.olv-collapsed,
   .olv-anno-panel.olv-collapsed {
     border-radius: 999px;
     padding-left: 16px;
@@ -3464,6 +3530,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      so it reads as a pill-sized chip rather than a half-rendered panel. */
   .olv-streaming-panel.olv-collapsed,
   .olv-measure-panel.olv-collapsed,
+  .olv-class-panel.olv-collapsed,
   .olv-anno-panel.olv-collapsed {
     padding: 6px 12px;
     max-height: none;
