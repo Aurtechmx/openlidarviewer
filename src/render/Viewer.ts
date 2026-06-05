@@ -3362,6 +3362,7 @@ export class Viewer {
   async exportImage(
     mode: ExportMode,
     options: ExportOptions = {},
+    classScopeStamp = '',
   ): Promise<ExportResult> {
     const studio = await loadExportStudio();
     return studio.renderExport(
@@ -3372,6 +3373,10 @@ export class Viewer {
         camera: this._camera,
         canvas: this._canvas,
         adapter: this._buildExportAdapter(),
+        // Class-filter scope stamp from the call site — drives the "showing
+        // N of M classes" banner the Studio composes onto a filtered raster.
+        // Empty string when nothing is hidden, keeping the export unchanged.
+        classScopeStamp,
       },
       options,
     );

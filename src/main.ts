@@ -845,7 +845,9 @@ const inspector = new Inspector({
     const label = modeLabel[mode] ?? mode;
     dropZone.setProgress(`Exporting ${label}…`);
     viewer
-      .exportImage(mode, {})
+      // Thread the active class-scope stamp so a filtered export carries the
+      // "showing N of M classes" banner; empty when nothing is hidden.
+      .exportImage(mode, {}, currentClassScopeStamp())
       .then((result) => {
         downloadBlob(`${base}-${mode}.png`, result.blob);
         recordUsage('export', mode);
