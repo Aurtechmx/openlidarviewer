@@ -51,6 +51,36 @@ function readTiffTags(bytes: Uint8Array): Map<number, number> {
   return tags;
 }
 
+/**
+ * Read the GeoKeyDirectory (tag 34735) of a classic little-endian TIFF and
+ * return the CRS EPSG carried by it: ProjectedCSTypeGeoKey (3072) for a
+ * projected CRS, or GeographicTypeGeoKey (2048) for a geographic one. null when
+ * no CRS key is present.
+ */
+function readTiffCrsEpsg(bytes: Uint8Array): number | null {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ifd = dv.getUint32(4, true);
+  const n = dv.getUint16(ifd, true);
+  let geoDirOffset = -1;
+  let geoDirCount = 0;
+  for (let i = 0; i < n; i++) {
+    const p = ifd + 2 + i * 12;
+    if (dv.getUint16(p, true) === 34735) {
+      geoDirCount = dv.getUint32(p + 4, true);
+      geoDirOffset = dv.getUint32(p + 8, true); // SHORT array > 2 entries → offset
+      break;
+    }
+  }
+  if (geoDirOffset < 0) return null;
+  // Header is 4 shorts; keys follow as [keyId, tagLoc, count, value].
+  for (let i = 4; i + 4 <= geoDirCount; i += 4) {
+    const keyId = dv.getUint16(geoDirOffset + i * 2, true);
+    const value = dv.getUint16(geoDirOffset + (i + 3) * 2, true);
+    if (keyId === 3072 || keyId === 2048) return value;
+  }
+  return null;
+}
+
 describe('writeGeoTiff (Float32 GeoTIFF)', () => {
   it('produces a valid TIFF with the expected raster + geo tags', () => {
     const tif = writeGeoTiff({
@@ -106,12 +136,18 @@ describe('buildDemPackage', () => {
       dtm: {
         z: Z, coverage: COV, cols: COLS, rows: ROWS, cellSizeM: 1,
         originH1: 10, originH2: 20, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703',
+        coverageMode: 'full', meanConfidence: 80,
       },
       surface: { canopy: { heightM: new Float32Array([0, 5, NaN, NaN]) } },
       accuracyStandards: {
         rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
         qualityLevel: 'QL2', qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
       },
+      quality: {
+        readiness: 'ready', exportReadiness: 'available',
+        crsKnown: true, datumKnown: true, reasons: [],
+      },
+      warnings: [],
     } as unknown as AnalyseContoursResult;
   }
 
@@ -122,6 +158,27 @@ describe('buildDemPackage', () => {
       return true;
     }
     return false;
+  }
+
+  /** Extract a stored (uncompressed) entry's bytes from a store-only ZIP. */
+  function extractEntry(zip: Uint8Array, name: string): Uint8Array | null {
+    const dv = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+    const wantName = new TextEncoder().encode(name);
+    let p = 0;
+    while (p + 30 <= zip.length && dv.getUint32(p, true) === 0x04034b50) {
+      const compSize = dv.getUint32(p + 18, true);
+      const nameLen = dv.getUint16(p + 26, true);
+      const extraLen = dv.getUint16(p + 28, true);
+      const nameBytes = zip.subarray(p + 30, p + 30 + nameLen);
+      const dataStart = p + 30 + nameLen + extraLen;
+      let match = nameBytes.length === wantName.length;
+      for (let j = 0; match && j < wantName.length; j++) {
+        if (nameBytes[j] !== wantName[j]) match = false;
+      }
+      if (match) return zip.subarray(dataStart, dataStart + compSize);
+      p = dataStart + compSize;
+    }
+    return null;
   }
 
   it('bundles DTM/DSM/CHM as .asc + .tif, a .prj, and a README', () => {
@@ -140,5 +197,35 @@ describe('buildDemPackage', () => {
     const zip = buildDemPackage(fixtureResult(), { basename: 'site' });
     expect(hasName(zip, 'site.prj')).toBe(false);
     expect(hasName(zip, 'site-dtm.tif')).toBe(true);
+  });
+
+  it('propagates the CRS EPSG into every GeoTIFF and bundles the full file set', () => {
+    const zip = buildDemPackage(fixtureResult(), {
+      worldOrigin: { x: 600000, y: 4000000 }, basename: 'site', wkt: 'PROJCS["x"]',
+    });
+    // Expected entries: .asc + .tif for DTM/DSM/CHM, a .prj, and a README.
+    for (const key of ['dtm', 'dsm', 'chm']) {
+      expect(extractEntry(zip, `site-${key}.asc`)).not.toBeNull();
+      const tif = extractEntry(zip, `site-${key}.tif`);
+      expect(tif).not.toBeNull();
+      // CRS must survive into each GeoTIFF's GeoKeyDirectory.
+      expect(readTiffCrsEpsg(tif!)).toBe(32610);
+    }
+    expect(extractEntry(zip, 'site.prj')).not.toBeNull();
+    expect(extractEntry(zip, 'site-README.txt')).not.toBeNull();
+  });
+
+  it('writes a README that documents coverage, the quality gate and provenance', () => {
+    const zip = buildDemPackage(fixtureResult(), {
+      basename: 'site', generationDateIso: '2026-06-05T00:00:00.000Z',
+      softwareVersion: '9.9.9', metricVersion: 'v0.4.1',
+    });
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site-README.txt')!);
+    expect(readme).toMatch(/Coverage mode/i);
+    expect(readme).toMatch(/Quality gate/i);
+    expect(readme).toContain('2026-06-05T00:00:00.000Z');
+    expect(readme).toContain('v0.4.1');
+    // A full + ready result must NOT carry the preliminary caveat.
+    expect(readme).not.toMatch(/PRELIMINARY/);
   });
 });
