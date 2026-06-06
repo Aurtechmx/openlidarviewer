@@ -2,15 +2,18 @@
  * TerrainPartition.ts
  *
  * Spatial partitioning + neighborhood queries for terrain analyses.
- * Pure data — no DOM, no three.js, no I/O. Used by metrics, ground
- * scoring, and future DTM/DSM/contour/hillshade work.
+ * Pure data — no DOM, no three.js, no I/O. Used by the foundation
+ * metrics and ground-confidence scaffold.
  *
  * Grid partitioning is the foundation: every consumer below
  * (radius queries, bbox queries, neighborhood walks) reuses the
  * same grid. Tile partitioning is a sparse-friendly variant for
  * very-large clouds where most cells are empty.
  *
- * v0.3.9 ships these helpers internally; no UI consumes them yet.
+ * Part of the foundation layer: an internal, feature-flag-gated seam.
+ * The live confidence-aware DTM / DSM / contour pipeline shipped in the
+ * Analyse panel lives under `src/terrain/contour/`, `ground/`, and
+ * `surface/` and does not route through these helpers.
  */
 
 import type {

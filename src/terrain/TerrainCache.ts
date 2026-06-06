@@ -7,8 +7,9 @@
  * point-count-hash, so different parameter sets get distinct
  * entries.
  *
- * v0.3.9 ships this cache for internal consumers. No public UI
- * reads it yet.
+ * Part of the foundation layer: an internal, feature-flag-gated seam for
+ * foundation consumers. The live confidence-aware pipeline that powers the
+ * Analyse panel manages its own results and does not read this cache.
  */
 
 import type { TerrainAnalysisResult } from './TerrainContracts';

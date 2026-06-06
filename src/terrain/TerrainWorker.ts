@@ -1,11 +1,11 @@
 /**
  * TerrainWorker.ts
  *
- * Worker infrastructure for terrain analyses. v0.3.9 ships the
- * orchestrator + protocol; the actual Web Worker module bundles in
- * a later release. The orchestrator runs the work either in a
- * Worker (when `terrainWorkerEnabled` is true and the host registers
- * a worker factory) or inline on the main thread (the fallback).
+ * Worker infrastructure for the terrain foundation layer (an internal,
+ * feature-flag-gated seam — the live Analyse-panel pipeline does not route
+ * through it). The orchestrator runs the work either in a Worker (when
+ * `terrainWorkerEnabled` is true and the host registers a worker factory)
+ * or inline on the main thread (the fallback).
  *
  * Job lifecycle:
  *

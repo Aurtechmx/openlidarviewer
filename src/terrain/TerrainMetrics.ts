@@ -20,9 +20,12 @@
  *   - All metrics return NaN-safe values when the neighborhood is
  *     under-defined (fewer than 4 samples for plane-based metrics).
  *
- * v0.3.9 ships these as INTERNAL deterministic primitives — no
- * public terrain UI consumes them yet. They power the future ground
- * classification, DTM/DSM, hillshade, slope map, and HAG analyses.
+ * These are INTERNAL deterministic primitives of the foundation layer (an
+ * internal, feature-flag-gated seam). The live ground classification,
+ * DTM/DSM, hillshade, slope, and height-above-ground products surfaced in
+ * the Analyse panel are implemented by the confidence-aware pipeline under
+ * `src/terrain/ground/`, `surface/`, and `contour/` and do not consume
+ * these helpers.
  */
 
 import type { TerrainMetric, TerrainNeighborhood, TerrainPoint } from './TerrainContracts';
@@ -508,10 +511,11 @@ import type { GroundScore } from './TerrainContracts';
 
 /**
  * Compute a per-neighborhood ground-likelihood score from the
- * deterministic metrics. SCORING SCAFFOLD ONLY — v0.3.9 does NOT
- * classify points. A future release thresholds the confidence into
- * actual class assignments after the SMRF / PMF / Progressive TIN /
- * slope-filter cascade lands.
+ * deterministic metrics. SCORING SCAFFOLD ONLY — this foundation helper
+ * does NOT classify points; it produces a 0..100 confidence with reasons.
+ * Actual ground classification on the live Analyse path is done by the SMRF
+ * filter in `src/terrain/ground/groundFilter.ts`, independently of this
+ * scaffold.
  *
  * The four axes:
  *
