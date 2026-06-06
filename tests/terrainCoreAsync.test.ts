@@ -23,9 +23,10 @@
  * Pure data: no DOM, no real Worker.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   computeTerrainCoreAsync,
+  getLastTerrainComputePath,
   type TerrainCoreClientLike,
 } from '../src/terrain/worker/computeTerrainCoreAsync';
 import {
@@ -184,6 +185,100 @@ describe('computeTerrainCoreAsync — fallback', () => {
     );
     const direct = computeTerrainCore(pos, params);
     expect(viaFallback.excludedByClassification).toBe(direct.excludedByClassification);
+  });
+});
+
+describe('computeTerrainCoreAsync — failure visibility', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let infoSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+    infoSpy.mockRestore();
+  });
+
+  it('reports via === "worker" on a successful worker compute', async () => {
+    const pos = hillScene();
+    const client: TerrainCoreClientLike = {
+      computeCore: () => Promise.resolve({ __fromWorker: true } as unknown as TerrainCore),
+    };
+    await computeTerrainCoreAsync(pos, pos.length / 3, PARAMS, undefined, undefined, client);
+    expect(getLastTerrainComputePath()).toBe('worker');
+    // Success must NOT warn (a healthy worker is silent on the warn channel).
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns LOUDLY and reports via === "fallback" when the worker fails', async () => {
+    const pos = hillScene();
+    const viaFallback = await computeTerrainCoreAsync(
+      pos,
+      pos.length / 3,
+      PARAMS,
+      undefined,
+      undefined,
+      throwingClient,
+    );
+    // The warning is the must-have signal: a broken worker announces itself.
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0][0])).toMatch(/worker analysis failed/i);
+    // The error itself is included so the developer can see the cause.
+    expect(warnSpy.mock.calls[0][1]).toBeInstanceOf(Error);
+    expect(getLastTerrainComputePath()).toBe('fallback');
+    // …and the fallback core is still correct (analysis never breaks).
+    const direct = computeTerrainCore(pos, PARAMS);
+    expect(Array.from(viaFallback.dtm.z)).toEqual(Array.from(direct.dtm.z));
+  });
+
+  it('warns on an async worker rejection too', async () => {
+    const pos = hillScene();
+    await computeTerrainCoreAsync(
+      pos,
+      pos.length / 3,
+      PARAMS,
+      undefined,
+      undefined,
+      rejectingClient,
+    );
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0][0])).toMatch(/worker analysis failed/i);
+    expect(getLastTerrainComputePath()).toBe('fallback');
+  });
+
+  it('stays SILENT on an abort — no warning, propagates the abort', async () => {
+    const pos = hillScene();
+    const ac = new AbortController();
+    const abortingClient: TerrainCoreClientLike = {
+      computeCore: () => Promise.reject(new Error('Terrain analysis aborted')),
+    };
+    await expect(
+      computeTerrainCoreAsync(pos, pos.length / 3, PARAMS, undefined, ac.signal, abortingClient),
+    ).rejects.toThrow(/abort/i);
+    // An abort is expected cancellation, not a failure — it must not warn.
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('stays SILENT when the signal is already aborted before compute', async () => {
+    const pos = hillScene();
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      computeTerrainCoreAsync(pos, pos.length / 3, PARAMS, undefined, ac.signal, throwingClient),
+    ).rejects.toThrow(/abort/i);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not emit the dev-only info log when ?debug is absent', async () => {
+    const pos = hillScene();
+    const client: TerrainCoreClientLike = {
+      computeCore: () => Promise.resolve({} as TerrainCore),
+    };
+    await computeTerrainCoreAsync(pos, pos.length / 3, PARAMS, undefined, undefined, client);
+    // jsdom's default URL carries no `?debug`, so the success info stays quiet.
+    expect(infoSpy).not.toHaveBeenCalled();
   });
 });
 

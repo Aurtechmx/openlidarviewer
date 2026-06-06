@@ -17,6 +17,12 @@
  * Cancellation: an aborted signal short-circuits BEFORE any compute (worker or
  * fallback) so a superseded run / dataset change does no work. The worker
  * client also drops a late reply for an aborted job.
+ *
+ * Visibility (verification-only, no behaviour change): a REAL worker failure is
+ * announced via `console.warn` BEFORE the fallback (so a broken worker can't
+ * hide behind the still-working main-thread path), while an abort stays silent.
+ * The path taken is also recorded — read it via {@link getLastTerrainComputePath}
+ * — and the success path emits a dev-only `console.info` gated behind `?debug`.
  */
 
 import {
@@ -41,6 +47,37 @@ function isAbortError(err: unknown): boolean {
   if (err instanceof DOMException && err.name === 'AbortError') return true;
   const msg = err instanceof Error ? err.message : String(err);
   return /abort/i.test(msg);
+}
+
+/**
+ * Which thread last computed a terrain core: `'worker'` when the off-thread
+ * path succeeded, `'fallback'` when a worker failure forced the synchronous
+ * main-thread path. This is verification-only instrumentation — a developer
+ * (or the debug overlay) can read it to tell "ran off-thread" from "silently
+ * fell back" without changing any compute behaviour.
+ */
+export type TerrainComputePath = 'worker' | 'fallback';
+
+let lastComputePath: TerrainComputePath | null = null;
+
+/** The path taken by the most recent {@link computeTerrainCoreAsync} call. */
+export function getLastTerrainComputePath(): TerrainComputePath | null {
+  return lastComputePath;
+}
+
+/**
+ * Dev-flag check, mirroring the app's `?debug` convention (see `main.ts` /
+ * `usageCounters.ts`). Gates the success-path `console.info` so normal users
+ * see no console noise; failures are logged unconditionally (see below).
+ * Load-safe in Node/SSR — returns false when there is no `window`.
+ */
+function debugEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return new URLSearchParams(window.location.search).has('debug');
+  } catch {
+    return false;
+  }
 }
 
 // The lazily-constructed singleton worker client. Built on first successful
@@ -110,17 +147,30 @@ export async function computeTerrainCoreAsync(
 
   try {
     const c = client ?? (await getSharedClient());
-    return await c.computeCore(positions, n, coreParams, effectiveClassification, signal);
+    const core = await c.computeCore(positions, n, coreParams, effectiveClassification, signal);
+    // Off-thread success. Record the path; dev-log only under `?debug`.
+    lastComputePath = 'worker';
+    if (debugEnabled()) console.info('[terrain] core computed via worker');
+    return core;
   } catch (err) {
     // A genuine abort is not a worker failure — propagate it so the caller's
     // stale-result guard treats the run as cancelled rather than silently
-    // recomputing on the main thread.
+    // recomputing on the main thread. Stay SILENT: an abort is expected.
     if (isAbortError(err)) throw err;
-    // Any other worker failure → SAFE main-thread fallback. The compute is
-    // synchronous; re-check the signal first so a cancelled run does no work.
+    // Any other worker failure is a REAL failure the developer must see — even
+    // in production, because the fallback otherwise hides it (the app keeps
+    // working, on the main thread, with no signal). Announce it unconditionally
+    // BEFORE falling back so "off-thread success" can't be mistaken for "silent
+    // main-thread fallback".
+    console.warn('[terrain] worker analysis failed; fell back to main thread:', err);
+    // SAFE main-thread fallback. The compute is synchronous; re-check the
+    // signal first so a cancelled run does no work.
     if (signal?.aborted) {
       throw new DOMException('Terrain analysis aborted', 'AbortError');
     }
-    return computeTerrainCore(positions, fallbackParams);
+    const core = computeTerrainCore(positions, fallbackParams);
+    lastComputePath = 'fallback';
+    if (debugEnabled()) console.info('[terrain] core computed via main thread (fallback)');
+    return core;
   }
 }
