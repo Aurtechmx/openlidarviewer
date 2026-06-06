@@ -47,7 +47,6 @@ import { objectMetrics } from './terrain/objectMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { decodeFull } from './convert/decodeFull';
-import type { TerrainPoint } from './terrain/TerrainContracts';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
 import { LoadCancelledError } from './io/loadFile';
@@ -1627,17 +1626,13 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
     // Aim for a grid ~256 cells across, clamped to a sane floor.
     const extent = Math.max(maxX - minX, maxY - minY, 1);
     const cellSizeM = Math.max(0.25, extent / 256);
-    const points: TerrainPoint[] = new Array(n);
-    for (let i = 0; i < n; i++) {
-      points[i] = { x: pos[i * 3], y: pos[i * 3 + 1], z: pos[i * 3 + 2] };
-    }
     // Feed the active scan's resolved CRS + vertical datum into the analysis
     // so the readiness gate and export honesty reflect a georeferenced file
     // (a real horizontal CRS lifts the "CRS unknown" downgrade; a known
     // vertical datum clears the "datum unknown" warning).
     const cur = crsService.current();
     const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
-    const result = analyseContours(points, {
+    const result = analyseContours(pos, {
       cellSizeM,
       crs: crsName,
       isGeographic: cur?.kind === 'geographic',
