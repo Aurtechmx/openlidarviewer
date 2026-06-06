@@ -246,6 +246,7 @@ function paramsKey(params: TerrainCoreParams): string {
     `cls=${classPresence}`,
     `exc=${exclude}`,
     `seed=${params.holdoutSeed ?? ''}`,
+    `agg=${params.aggregation ?? ''}`,
     `g=${ground}`,
   ].join('|');
 }

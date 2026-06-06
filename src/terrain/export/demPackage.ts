@@ -219,9 +219,14 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   const despikeStr = gp
     ? (gp.despike ? 'on (blunder-only outlier removal)' : 'off')
     : 'unknown';
+  // Per-cell aggregation (median by default): the surface estimator each cell
+  // used to combine its ground returns. Reported so the provenance reflects the
+  // real run rather than an assumed mean.
+  const aggStr = gp ? gp.aggregation : 'unknown';
   lines.push(
     `Generation parameters`,
     `  Interpolation  ${interpStr}`,
+    `  Cell aggregation ${aggStr}`,
     `  Smoothing      ${smoothStr}`,
     `  Despike        ${despikeStr}`,
     `  Grid cell size ${dtm.cellSizeM} ${hUnit}`,

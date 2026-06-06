@@ -42,7 +42,7 @@ import {
   type GroundFilterParams,
   type VerticalAxis,
 } from '../ground/groundFilter';
-import { rasterizeDtm } from '../ground/rasterizeDtm';
+import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
 import { buildDtmGrid, type DtmGrid } from '../ground/cellConfidence';
 import { removeSpikes } from '../ground/despike';
 import { computeCellMetrics, type CellMetricsSummary } from '../quality/cellMetrics';
@@ -127,7 +127,27 @@ export interface TerrainCoreParams {
   readonly excludeClasses?: ReadonlyArray<number>;
   /** Hold-out PRNG seed for reproducible validation. Default 1. */
   readonly holdoutSeed?: number;
+  /**
+   * Per-cell aggregation for the LIVE DTM. Default `'median'` (see
+   * {@link LIVE_DTM_AGGREGATION}): the 50th percentile is outlier-resistant, so
+   * a single high (vegetation) or low (multipath) ground return in a cell no
+   * longer drags the cell's elevation the way the arithmetic mean did. The
+   * hold-out validation rebuilds its DTM with the SAME aggregation, so the
+   * reported RMSE measures the surface the user actually receives.
+   */
+  readonly aggregation?: DtmAggregation;
 }
+
+/**
+ * The per-cell aggregation the live pipeline uses for the delivered DTM.
+ *
+ * Switched mean → median as a robustness upgrade: the mean lets one outlier
+ * ground return (a high vegetation hit or a low multipath blunder) pull a
+ * cell's elevation, whereas the median (breakdown point 50 %) rejects it. The
+ * hold-out validation rasterises with this same value so the validated surface
+ * is byte-for-byte the surface that ships, and the DEM provenance reports it.
+ */
+const LIVE_DTM_AGGREGATION: DtmAggregation = 'median';
 
 /**
  * Interval-dependent options for {@link contoursFromCore}. Re-picking any of
@@ -160,6 +180,8 @@ export interface AnalyseGenerationParams {
   readonly smoothing: boolean;
   /** True when the blunder-only despike pass ran before building the surface. */
   readonly despike: boolean;
+  /** Per-cell aggregation the DTM raster was built with (e.g. `'median'`). */
+  readonly aggregation: DtmAggregation;
 }
 
 /**
@@ -210,6 +232,8 @@ export interface TerrainCore {
   readonly maxZ: number;
   /** Void-fill method the DTM builder ran with (provenance). */
   readonly interpolation: 'idw' | 'geodesic';
+  /** Per-cell aggregation the live + hold-out DTM rasters used (provenance). */
+  readonly aggregation: DtmAggregation;
   /** True when the blunder-only despike pass ran (always true today). */
   readonly despikeApplied: boolean;
   /** Resolved horizontal CRS (echoed for the contour stage + result). */
@@ -357,6 +381,11 @@ export function computeTerrainCore(
   warnings.push(...gf.warnings);
 
   // 2) DTM raster aligned to the filter grid + 3) per-cell confidence.
+  // The live surface aggregates each cell by MEDIAN (the robustness upgrade over
+  // the old mean): a lone high/low ground return no longer pulls the cell. The
+  // hold-out validation below rebuilds with this SAME aggregation, so the RMSE
+  // measures the delivered surface, and the DEM provenance reports it.
+  const aggregation: DtmAggregation = params.aggregation ?? LIVE_DTM_AGGREGATION;
   const raster = rasterizeDtm(groundPts, gf.isGround, {
     grid: {
       originH1: gf.originH1,
@@ -365,6 +394,7 @@ export function computeTerrainCore(
       rows: gf.rows,
       cellSizeM: params.cellSizeM,
     },
+    aggregation,
     verticalAxis,
   });
   // 2b) DTM hardening — drop blunder cells (a lone ground return far from its
@@ -431,6 +461,9 @@ export function computeTerrainCore(
     cellSizeM: params.cellSizeM,
     seed: params.holdoutSeed ?? 1,
     verticalAxis,
+    // Validate the SAME surface the user gets: same per-cell aggregation as the
+    // live DTM above (median), so the RMSE isn't measuring a different surface.
+    aggregation,
     isGeographic: params.isGeographic,
     verticalUnitToMetres: params.verticalUnitToMetres,
     collectSamples: true,
@@ -560,6 +593,7 @@ export function computeTerrainCore(
     minZ: Number.isFinite(minZ) ? minZ : Number.NaN,
     maxZ: Number.isFinite(maxZ) ? maxZ : Number.NaN,
     interpolation,
+    aggregation,
     despikeApplied,
     crs,
     verticalDatum,
@@ -617,6 +651,7 @@ export function contoursFromCore(
     interpolation: core.interpolation,
     smoothing: smoothingApplied,
     despike: core.despikeApplied,
+    aggregation: core.aggregation,
   };
 
   // 6-10) Contours → stitch → style → model → tally.

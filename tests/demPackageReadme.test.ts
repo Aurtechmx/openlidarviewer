@@ -24,7 +24,7 @@ function readyResult(): AnalyseContoursResult {
       readiness: 'ready', exportReadiness: 'available',
       crsKnown: true, datumKnown: true, reasons: [],
     },
-    generationParams: { interpolation: 'geodesic', smoothing: true, despike: true },
+    generationParams: { interpolation: 'geodesic', smoothing: true, despike: true, aggregation: 'median' },
     warnings: [],
   } as unknown as AnalyseContoursResult;
 }
@@ -78,6 +78,7 @@ describe('buildDemReadme — always-on metadata', () => {
     expect(txt).toContain('available');
     // Generation parameters
     expect(txt).toMatch(/Interpolation\s+geodesic/i);
+    expect(txt).toMatch(/Cell aggregation\s+median/i);
     expect(txt).toMatch(/Smoothing/i);
     expect(txt).toMatch(/Despik/i);
     // Generation date (ISO)
@@ -109,10 +110,11 @@ describe('buildDemReadme — generation parameters derive from the run', () => {
     const base = readyResult() as unknown as { generationParams: Record<string, unknown> };
     const noSmooth = {
       ...(base as unknown as AnalyseContoursResult),
-      generationParams: { interpolation: 'idw', smoothing: false, despike: false },
+      generationParams: { interpolation: 'idw', smoothing: false, despike: false, aggregation: 'mean' },
     } as unknown as AnalyseContoursResult;
     const txt = buildDemReadme({ result: noSmooth, ...OPTS });
     expect(txt).toMatch(/Interpolation\s+idw void fill/i);
+    expect(txt).toMatch(/Cell aggregation\s+mean/i);
     expect(txt).toMatch(/Smoothing\s+off/i);
     expect(txt).toMatch(/Despike\s+off/i);
     // And the opposite: a smoothing-on result must read "on".
@@ -126,6 +128,7 @@ describe('buildDemReadme — generation parameters derive from the run', () => {
     delete base.generationParams;
     const txt = buildDemReadme({ result: base as unknown as AnalyseContoursResult, ...OPTS });
     expect(txt).toMatch(/Interpolation\s+unknown/i);
+    expect(txt).toMatch(/Cell aggregation\s+unknown/i);
     expect(txt).toMatch(/Smoothing\s+unknown/i);
     expect(txt).toMatch(/Despike\s+unknown/i);
   });
