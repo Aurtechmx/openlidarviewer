@@ -177,14 +177,6 @@ export interface TerrainAnalysisResult extends TerrainCoverageMeta {
   readonly elapsedMs: number;
 }
 
-/** Status of an in-flight terrain job. */
-export type TerrainJobStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
-
 // ── ground-confidence scaffold (no classification yet) ─────────────
 
 /**
