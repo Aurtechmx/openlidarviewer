@@ -113,7 +113,7 @@ import {
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
   loadViewer,
-  loadAnalyseContours,
+  loadTerrainCoreCache,
   loadBatchConverter,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
@@ -1501,6 +1501,11 @@ let lastCloudName = 'contours';
 // start and bails after every await if a newer run started, the dataset
 // changed, or the panel was closed — only the winning run touches the panel.
 let terrainRunToken = 0;
+// Captured once the terrain-core-cache chunk has loaded (first Analyse run),
+// so dataset close / new-cloud load can drop cached cores WITHOUT eagerly
+// pulling the heavy analysis chunk. Null until the first analysis happens —
+// before that there is nothing cached to clear anyway.
+let clearTerrainCoreCacheFn: (() => void) | null = null;
 const analysePanel = new AnalysePanel({
   onRun: () => void runTerrainAnalysis(),
   onSelectInterval: (m) => void runTerrainAnalysis(m),
@@ -1607,7 +1612,18 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
   if (isStale()) return;
   try {
-    const { analyseContours } = await loadAnalyseContours();
+    // The terrain "core" (classification → ground → DTM → validation →
+    // calibration → gate → quality → surface) depends only on the points +
+    // interval-INDEPENDENT params, so it is cached by a fingerprint of the
+    // cloud content + those params. The first Analyse computes it; an interval
+    // change (or a re-opened panel, or a re-run on the same scan) reuses it and
+    // only the cheap contour stage reruns. The cache rides the same lazy chunk
+    // as the analysis pipeline, so there is no extra dynamic import.
+    const { getOrComputeCore, contoursFromCore, clearTerrainCoreCache } =
+      await loadTerrainCoreCache();
+    // Remember the clear fn so dataset close / new-cloud load can drop cached
+    // cores without re-importing this heavy chunk.
+    clearTerrainCoreCacheFn = clearTerrainCoreCache;
     if (isStale()) return;
     const pos = gathered.positions;
     const n = pos.length / 3;
@@ -1632,15 +1648,20 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
     // vertical datum clears the "datum unknown" warning).
     const cur = crsService.current();
     const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
-    const result = analyseContours(pos, {
+    // Interval-independent (cacheable) core params. The fingerprint cache keys
+    // a core by the cloud content + exactly these, so re-picking an interval
+    // hits the cache instead of recomputing the heavy half.
+    const core = getOrComputeCore(pos, {
       cellSizeM,
       crs: crsName,
       isGeographic: cur?.kind === 'geographic',
       verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
       verticalDatum: cur?.verticalDatum ?? null,
       classification: gathered.classification,
-      intervalM,
     });
+    if (isStale()) return;
+    // Cheap interval-dependent stage: contours → stitch → style → labels.
+    const result = contoursFromCore(core, { intervalM });
     // Final guard before touching the panel: a newer run, a swapped/closed
     // scan, or a hidden panel means this result lost the race — drop it and
     // leave the busy/skeleton state to whoever owns it now.
@@ -3918,6 +3939,11 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  // Drop every cached terrain core so a stale core can't be served for a
+  // different scan and memory stays bounded. Guarded: the cache chunk is only
+  // loaded after the first Analyse run, and before that there is nothing to
+  // clear — so this never eagerly pulls the heavy analysis chunk.
+  clearTerrainCoreCacheFn?.();
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();

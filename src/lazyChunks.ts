@@ -96,6 +96,18 @@ export const loadImageExports = loadExportStudio;
 export const loadAnalyseContours = () => import('./terrain/contour/analyseContours');
 
 /**
+ * Load the fingerprint-keyed terrain-core cache, which reuses the heavy,
+ * interval-independent computation across contour-interval changes and
+ * repeated Analyse runs on the same scan. It re-exports {@link
+ * computeTerrainCore} / {@link contoursFromCore} through its own import of
+ * the analysis module, so it rides the SAME lazy chunk as
+ * {@link loadAnalyseContours} (no extra round-trip). Routed through here for
+ * the same reason as every dynamic import — the live source-transform must
+ * not see the literal.
+ */
+export const loadTerrainCoreCache = () => import('./terrain/contour/terrainCoreCache');
+
+/**
  * Load the profile PDF builder (pulls in pdf-lib). Only reached when the
  * user clicks "Export PDF" on a profile. Routed through here for the same
  * reason as every other dynamic import — the live transform must not see
