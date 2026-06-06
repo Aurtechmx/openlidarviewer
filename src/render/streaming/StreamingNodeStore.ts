@@ -26,6 +26,15 @@ export interface NodeCounts {
 export class StreamingNodeStore {
   private readonly _nodes = new Map<string, StreamingNode>();
   private _residentPoints = 0;
+  /**
+   * Live count of nodes in the `queued` state, maintained at every
+   * transition through {@link setState}. Lets the scheduler report the
+   * queued count in O(1) instead of walking every node — the diagnostics
+   * `stats()` and the per-frame `_shouldRenderFrame` idle-render check both
+   * read it on the hot path. All state mutations route through `setState`,
+   * so this counter cannot drift from a ground-truth walk.
+   */
+  private _queuedCount = 0;
 
   /**
    * Register a node record discovered in the hierarchy. Idempotent — a record
@@ -65,6 +74,15 @@ export class StreamingNodeStore {
   }
 
   /**
+   * Count of nodes currently in the `queued` state — maintained O(1) at
+   * every {@link setState} transition. Equals a full walk that counts
+   * `queued` nodes, but without the walk.
+   */
+  get queuedCount(): number {
+    return this._queuedCount;
+  }
+
+  /**
    * Transition a node to a new state, keeping the resident-point total exact.
    * `residentPointCount` is the decoded point count and is recorded only for
    * the `resident` state.
@@ -73,11 +91,17 @@ export class StreamingNodeStore {
     if (node.state === 'resident') {
       this._residentPoints -= node.residentPointCount;
     }
+    // Maintain the O(1) queued counter at the transition: decrement when
+    // a node leaves the queued state, increment when it enters. Every
+    // queued transition (enqueue, dequeue-to-load, cancel, evict-reset,
+    // stop) routes through here, so the counter tracks a ground-truth walk.
+    if (node.state === 'queued') this._queuedCount--;
     node.state = state;
     node.residentPointCount = state === 'resident' ? residentPointCount : 0;
     if (state === 'resident') {
       this._residentPoints += residentPointCount;
     }
+    if (state === 'queued') this._queuedCount++;
     if (state !== 'error') node.error = undefined;
   }
 
