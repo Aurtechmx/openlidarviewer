@@ -15,6 +15,7 @@
   --rating-good: #fbbf24;
   --rating-moderate: #fb923c;
   --rating-weak: #f87171;
+  --rating-blocked: #c084fc;  /* violet — gate blocked, distinct from the amber/red scale */
   --cyan: #00f0ff;        /* Cyan */
   --teal: #00d4c8;        /* Teal */
   --ice: #c9f6ff;         /* Ice Blue */
@@ -246,6 +247,8 @@ body.olv-theme-light {
   --text-faint: #7682a0;
   --accent: #0088c8;
   --accent-soft: rgba(0, 136, 200, 0.18);
+  /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
+  --rating-blocked: #7c3aed;
 }
 
 /*
@@ -264,6 +267,8 @@ body.olv-theme-high-contrast {
   --text-faint: #b3b3b3;
   --accent: #5cd7ff;
   --accent-soft: rgba(92, 215, 255, 0.28);
+  /* Bright violet — high luminance against pure black, holds WCAG AA. */
+  --rating-blocked: #d8b4fe;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2651,7 +2656,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   position: absolute;
   font-size: 10.5px;
   line-height: 1;
-  color: var(--olv-text-muted, #98a2af);
+  color: var(--text-dim);
   white-space: nowrap;
 }
 .olv-mp-axis-y {
@@ -2662,7 +2667,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   top: 0;
   right: 0;
   font-weight: 600;
-  color: var(--olv-text, #d6dce5);
+  color: var(--text);
   opacity: 0.72;
 }
 
@@ -2678,7 +2683,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-vex-chip {
   font-size: 10.5px; padding: 2px 8px;
   border-radius: 4px;
-  color: var(--olv-text-muted, #98a2af);
+  color: var(--text-dim);
   background: rgba(255, 255, 255, 0.03);
   border: 0.5px solid rgba(255, 255, 255, 0.10);
   cursor: pointer;
@@ -2686,7 +2691,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   transition: color 130ms ease, background 130ms ease, border-color 130ms ease;
 }
 .olv-mp-vex-chip:hover {
-  color: var(--olv-text, #d6dce5);
+  color: var(--text);
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.18);
 }
@@ -3752,9 +3757,9 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   display: flex; justify-content: space-between; align-items: baseline;
   font-size: 12px; line-height: 1.45; padding: 2px 0;
 }
-.olv-di-row-name { color: var(--olv-text-muted, #a8b1bc); }
+.olv-di-row-name { color: var(--text-dim); }
 .olv-di-row-value {
-  color: var(--olv-text, #e6ecf2);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
@@ -3776,7 +3781,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   padding: 6px 8px;
   background: rgba(250, 204, 21, 0.08);
   border-left: 2px solid rgba(250, 204, 21, 0.6);
-  color: var(--olv-text-muted, #c7cdd6);
+  color: var(--text-dim);
   font-size: 11px; line-height: 1.4;
   border-radius: 2px;
 }
@@ -3787,7 +3792,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-di-details-summary {
   cursor: pointer; list-style: none;
-  font-size: 11px; color: var(--olv-text-muted, #98a2af);
+  font-size: 11px; color: var(--text-dim);
   padding: 4px 0;
 }
 .olv-di-details-summary::-webkit-details-marker { display: none; }
@@ -3796,11 +3801,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-di-detail {
   display: flex; justify-content: space-between;
-  font-size: 11px; color: var(--olv-text-muted, #a8b1bc);
+  font-size: 11px; color: var(--text-dim);
 }
-.olv-di-detail-value { color: var(--olv-text, #d6dce5); font-variant-numeric: tabular-nums; }
+.olv-di-detail-value { color: var(--text); font-variant-numeric: tabular-nums; }
 .olv-di-empty {
-  font-size: 12px; color: var(--olv-text-muted, #a8b1bc); padding: 4px 0;
+  font-size: 12px; color: var(--text-dim); padding: 4px 0;
 }
 
 /* ─── Get-Started stepper (empty state) ──────────────────────────────
@@ -3824,7 +3829,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   font-size: 10px;
   letter-spacing: 1.6px;
   text-transform: uppercase;
-  color: var(--olv-text-muted, #8b94a3);
+  color: var(--text-dim);
   margin-bottom: 10px;
   font-weight: 600;
 }
@@ -3889,7 +3894,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-getstarted-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--olv-text-muted, #c3cad6);
+  color: var(--text-dim);
   line-height: 1.25;
   font-style: normal;
 }
@@ -3898,7 +3903,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
   font-size: 10.5px;
   letter-spacing: 0.02em;
-  color: var(--olv-text-muted, #8b94a3);
+  color: var(--text-dim);
   opacity: 0.85;
 }
 /* Active state — "you are here" pulse on the dot + brighter title. */
@@ -3913,7 +3918,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   color: var(--accent, #00b2ff);
 }
 .olv-getstarted-step-active .olv-getstarted-sub {
-  color: var(--olv-text, #d6dce5);
+  color: var(--text);
   opacity: 1;
 }
 /* Done state — filled accent dot; dim the title slightly so the active
@@ -3924,7 +3929,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   color: rgba(8, 14, 28, 1);
 }
 .olv-getstarted-step-done .olv-getstarted-title {
-  color: var(--olv-text, #d6dce5);
+  color: var(--text);
 }
 @keyframes olv-getstarted-pulse {
   0%, 100% { box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.16); }
@@ -4164,11 +4169,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-cov { font-size: 10.5px; color: var(--text-dim); font-family: var(--mono); }
 /* Export gate note. */
 .olv-analyse-export-note { font-size: 10px; color: var(--text-faint); margin: 4px 0 0; overflow-wrap: anywhere; }
-/* DEM export honesty caveat — reuses the warn accent (amber). */
+/* DEM export honesty caveat — reuses the readiness amber (--rating-good). */
 .olv-analyse-dem-note {
-  flex-basis: 100%; font-size: 10px; color: var(--warn, #d8a657);
+  flex-basis: 100%; font-size: 10px; color: var(--rating-good);
   margin: 4px 0 0; overflow-wrap: anywhere;
-  padding-left: 8px; border-left: 2px solid var(--warn, #d8a657);
+  padding-left: 8px; border-left: 2px solid var(--rating-good);
 }
 .olv-analyse-dl:disabled { opacity: 0.4; cursor: default; }
 
@@ -4374,11 +4379,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 /* Blocked — a distinct, accessible violet so it never reads as "just a worse
    Limited". The gate stopped this surface; the colour says so unambiguously. */
 .olv-analyse-assessment.is-blocked {
-  border-left-color: var(--rating-blocked, #c084fc);
+  border-left-color: var(--rating-blocked);
   background: rgba(192, 132, 252, 0.07);
 }
-.olv-analyse-assessment.is-blocked .olv-analyse-assess-verdict { color: var(--rating-blocked, #c084fc); }
-.olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked, #c084fc); }
+.olv-analyse-assessment.is-blocked .olv-analyse-assess-verdict { color: var(--rating-blocked); }
+.olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked); }
 .olv-analyse-assess-not { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
 
 /* Supporting metrics — compact pills under the hero; colour from each metric's
@@ -4589,7 +4594,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-object-label { color: var(--text-dim); }
 .olv-object-value { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
 .olv-object-note { font-size: 10px; color: var(--text-faint); line-height: 1.4; margin-top: 2px; }
-.olv-object-note.is-warn { color: var(--warn, #d8a657); }
+.olv-object-note.is-warn { color: var(--rating-good); }
 .olv-object-run-anyway {
   align-self: flex-start; margin-top: 6px; font: inherit; font-size: 10.5px; font-weight: 600;
   color: var(--text-dim); background: transparent;
