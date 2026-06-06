@@ -114,6 +114,7 @@ import {
   loadInstrumentedRangeSource,
   loadViewer,
   loadTerrainCoreCache,
+  loadComputeTerrainCoreAsync,
   loadBatchConverter,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
@@ -1506,6 +1507,11 @@ let terrainRunToken = 0;
 // pulling the heavy analysis chunk. Null until the first analysis happens —
 // before that there is nothing cached to clear anyway.
 let clearTerrainCoreCacheFn: (() => void) | null = null;
+// AbortController for the in-flight terrain-core compute (worker or fallback).
+// A newer run, an interval re-pick, or a dataset close aborts the previous
+// controller so a superseded worker job is cancelled and its reply dropped.
+// Null when no run is in flight.
+let terrainAbort: AbortController | null = null;
 const analysePanel = new AnalysePanel({
   onRun: () => void runTerrainAnalysis(),
   onSelectInterval: (m) => void runTerrainAnalysis(m),
@@ -1607,6 +1613,11 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
   const runDatasetId = activeId;
   const isStale = (): boolean =>
     runToken !== terrainRunToken || activeId !== runDatasetId || !analysePanel.isVisible();
+  // Abort any prior in-flight compute (a superseded run / interval re-pick) so
+  // its worker job is cancelled and its reply dropped, then claim a fresh one.
+  terrainAbort?.abort();
+  const abort = new AbortController();
+  terrainAbort = abort;
   analysePanel.setBusy(true);
   // Let the "Analysing…" state paint before the synchronous compute.
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1619,8 +1630,13 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
     // change (or a re-opened panel, or a re-run on the same scan) reuses it and
     // only the cheap contour stage reruns. The cache rides the same lazy chunk
     // as the analysis pipeline, so there is no extra dynamic import.
-    const { getOrComputeCore, contoursFromCore, clearTerrainCoreCache } =
+    const { getOrComputeCoreAsync, contoursFromCore, clearTerrainCoreCache } =
       await loadTerrainCoreCache();
+    // The worker-backed async compute bridge: it runs the heavy core OFF the
+    // main thread in a dedicated worker, with a SAFE main-thread fallback if the
+    // worker can't load. Lazily imported alongside the cache chunk; importing it
+    // never constructs a Worker (the client is itself dynamic-imported on use).
+    const { computeTerrainCoreAsync } = await loadComputeTerrainCoreAsync();
     // Remember the clear fn so dataset close / new-cloud load can drop cached
     // cores without re-importing this heavy chunk.
     clearTerrainCoreCacheFn = clearTerrainCoreCache;
@@ -1651,14 +1667,26 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
     // Interval-independent (cacheable) core params. The fingerprint cache keys
     // a core by the cloud content + exactly these, so re-picking an interval
     // hits the cache instead of recomputing the heavy half.
-    const core = getOrComputeCore(pos, {
+    const coreParams = {
       cellSizeM,
       crs: crsName,
       isGeographic: cur?.kind === 'geographic',
       verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
       verticalDatum: cur?.verticalDatum ?? null,
       classification: gathered.classification,
-    });
+    };
+    // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
+    // miss the worker computes it off-thread (or the fallback does on-thread if
+    // the worker can't load). The AbortSignal cancels a superseded run.
+    const core = await getOrComputeCoreAsync(pos, coreParams, (input, params) =>
+      computeTerrainCoreAsync(
+        input as Float32Array,
+        (input as Float32Array).length / 3,
+        params,
+        params.classification,
+        abort.signal,
+      ),
+    );
     if (isStale()) return;
     // Cheap interval-dependent stage: contours → stitch → style → labels.
     const result = contoursFromCore(core, { intervalM });
@@ -1671,10 +1699,17 @@ async function runTerrainAnalysis(intervalM?: number): Promise<void> {
   } catch (err) {
     // A stale run must not clobber the winning run's busy flag or status.
     if (isStale()) return;
+    // An aborted run was superseded on purpose (newer run / interval re-pick /
+    // dataset close) — the winning run owns the panel state, so stay quiet.
+    if (abort.signal.aborted) return;
     console.error('OpenLiDARViewer: terrain analysis failed.', err);
     analysePanel.setBusy(false);
     const msg = err instanceof Error ? err.message : String(err);
     analysePanel.setStatus(`Analysis failed: ${msg}`);
+  } finally {
+    // Release the controller reference if it is still ours (a newer run swaps
+    // in its own). Leaves an aborted controller in place for the winner.
+    if (terrainAbort === abort) terrainAbort = null;
   }
 }
 
@@ -3939,6 +3974,10 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  // Abort any in-flight terrain compute (worker job + its reply) so a result
+  // for the now-closed scan can never land on the panel.
+  terrainAbort?.abort();
+  terrainAbort = null;
   // Drop every cached terrain core so a stale core can't be served for a
   // different scan and memory stays bounded. Guarded: the cache chunk is only
   // loaded after the first Analyse run, and before that there is nothing to

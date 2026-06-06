@@ -108,6 +108,18 @@ export const loadAnalyseContours = () => import('./terrain/contour/analyseContou
 export const loadTerrainCoreCache = () => import('./terrain/contour/terrainCoreCache');
 
 /**
+ * Load the worker-backed terrain-core compute bridge. {@link
+ * computeTerrainCoreAsync} runs the heavy core in a dedicated worker (emitted
+ * as its own chunk by Vite's worker pass) with a SAFE main-thread fallback, so
+ * the first Analyse of a large cloud no longer freezes the UI. Importing this
+ * module never constructs a Worker — the worker client is itself
+ * dynamic-imported on first successful use — so it stays loadable everywhere.
+ * Routed through here for the same reason as every dynamic import.
+ */
+export const loadComputeTerrainCoreAsync = () =>
+  import('./terrain/worker/computeTerrainCoreAsync');
+
+/**
  * Load the profile PDF builder (pulls in pdf-lib). Only reached when the
  * user clicks "Export PDF" on a profile. Routed through here for the same
  * reason as every other dynamic import — the live transform must not see

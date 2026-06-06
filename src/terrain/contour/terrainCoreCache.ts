@@ -312,9 +312,80 @@ export function getOrComputeCore(
 }
 
 /**
+ * The async compute function the cache calls on a miss in
+ * {@link getOrComputeCoreAsync}. Returns a Promise of the core so the compute
+ * can run in a worker (with main-thread fallback). Injectable for tests.
+ */
+export type ComputeCoreAsyncFn = (
+  input: TerrainPointInput,
+  params: TerrainCoreParams,
+) => Promise<TerrainCore>;
+
+// In-flight computes keyed by fingerprint, so two near-simultaneous misses for
+// the SAME key (e.g. a re-run while the first is still computing) share one
+// compute instead of spawning two worker jobs. The entry is cleared once the
+// promise settles; only a fulfilled result is stored in the LRU.
+const inFlight = new Map<string, Promise<TerrainCore>>();
+
+/**
+ * Async sibling of {@link getOrComputeCore}: return the cached core for these
+ * positions + core params, or AWAIT `compute` (which may run in a worker), store
+ * the result, and return it. Cache semantics are identical to the sync path —
+ * a hit never calls `compute`; a miss computes once and stores; the LRU evicts
+ * past capacity.
+ *
+ * On a miss two extra guarantees hold:
+ *   - Concurrent misses for the SAME key share one in-flight compute.
+ *   - A rejected compute (including an aborted one) is NOT stored, so a later
+ *     run recomputes rather than serving a failure.
+ */
+export async function getOrComputeCoreAsync(
+  positions: Float32Array,
+  params: TerrainCoreParams,
+  compute: ComputeCoreAsyncFn,
+): Promise<TerrainCore> {
+  const key = coreFingerprint(positions, params);
+  const hit = cache.get(key);
+  if (hit !== undefined) {
+    // Refresh recency: delete + re-set moves the key to the most-recent end.
+    cache.delete(key);
+    cache.set(key, hit);
+    return hit;
+  }
+  // Coalesce concurrent misses for the same key onto one compute.
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const promise = compute(positions, params);
+  inFlight.set(key, promise);
+  let core: TerrainCore;
+  try {
+    core = await promise;
+  } finally {
+    // Always release the in-flight slot, success or failure.
+    inFlight.delete(key);
+  }
+  // Store only on success (a rejection threw above and never reaches here).
+  // Re-check: a clear() during the await must not resurrect a stale entry —
+  // but a fresh store for the current key is correct, so just set + evict.
+  cache.set(key, core);
+  while (cache.size > TERRAIN_CORE_CACHE_SIZE) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  return core;
+}
+
+/**
  * Drop every cached core. Called on dataset close / new-cloud load so a stale
  * core can never be served for a different scan and memory stays bounded.
+ *
+ * In-flight computes are also forgotten so a result that resolves after a clear
+ * does not re-seed the cache for a since-closed scan; the resolving promise's
+ * own caller still receives its value, it simply is not cached.
  */
 export function clearTerrainCoreCache(): void {
   cache.clear();
+  inFlight.clear();
 }
