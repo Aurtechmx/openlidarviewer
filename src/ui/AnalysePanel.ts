@@ -1,24 +1,34 @@
 /**
  * AnalysePanel.ts
  *
- * The Analyse panel is MOUNTED as a preview surface for terrain
- * readiness and contour export. It exposes the validated data pipeline
- * conservatively and does NOT yet represent a full interactive terrain
- * suite — a minimal "Planned" tag row sets that expectation, and there are
- * no dead buttons.
+ * The Analyse panel surfaces terrain readiness and contour/DEM export for
+ * a loaded scan. It exposes the validated data pipeline conservatively and
+ * fitness-for-use — never survey-grade.
  *
  * A plain-DOM panel mirroring MeasurePanel/AnnotationPanel: a `readonly
- * element`, a callbacks object, `update()`, and `setVisible()`. It shows,
- * in order: honesty status chips, DTM & contour readiness, recommended
- * grid + interval, contour export (gated by the DTM quality gate),
- * coverage & confidence, and a minimal "Planned" section. Mounted in
- * `main.ts` next to the Measurements and Annotations panels.
+ * element`, a callbacks object, `update()`, and `setVisible()`. It reads
+ * top-down:
+ *
+ *   1. Terrain Assessment hero — status · score, the headline reason, and
+ *      bestFor / useCaution / notRecommendedFor guidance plus the
+ *      supporting metrics behind the verdict.
+ *   2. Details expander (collapsed) — the honesty status chips
+ *      (Coverage / DTM / CRS / Datum / Export), DTM & contour readiness,
+ *      recommended grid + interval, and coverage & confidence metrics
+ *      (mean confidence, vertical RMSE, NVA / VVA, USGS 3DEP Quality
+ *      Level). Jargon abbreviations carry plain-language hover tooltips.
+ *   3. Surface models — hypsometric / hillshade previews.
+ *   4. Contour & DEM exports — gated by the DTM quality gate.
+ *   5. A NOT_SURVEY_GRADE footer.
+ *
+ * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import {
   ANALYSE_LABELS,
   GRADE_MEANING,
+  METRIC_TOOLTIPS,
   NOT_SURVEY_GRADE,
   describeIntervalOption,
   recommendIntervalText,
@@ -919,6 +929,19 @@ export class AnalysePanel {
     }
   }
 
+  /**
+   * Attach a "what this means" hover hint to a metric node, matching the
+   * affordance the Inspector's DatasetIntelligenceCard uses on its rows:
+   * the plain-language string becomes the `title` attribute and the cursor
+   * turns to `help` so users see more info is one hover away. Additive and
+   * accessible — never changes the displayed value.
+   */
+  private _hint<T extends HTMLElement>(node: T, tooltip: string): T {
+    node.title = tooltip;
+    node.style.cursor = 'help';
+    return node;
+  }
+
   private _renderValidation(): void {
     this._validationRow.replaceChildren();
     const v = this._result?.validation;
@@ -935,7 +958,10 @@ export class AnalysePanel {
         : 'Warning: confidence does not track error here.'
       : 'Calibration not assessable on this scan.';
     this._validationRow.append(
-      el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
+      this._hint(
+        el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
+        METRIC_TOOLTIPS.rmse,
+      ),
       el('div', { className: 'olv-analyse-cal', text: calText }),
     );
 
@@ -946,17 +972,28 @@ export class AnalysePanel {
       const fmtM = (n: number | null): string =>
         n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
       if (std.nvaM != null || std.vvaM != null) {
-        this._validationRow.append(el('div', {
-          className: 'olv-analyse-strata',
-          text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
-        }));
+        this._validationRow.append(this._hint(
+          el('div', {
+            className: 'olv-analyse-strata',
+            text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
+          }),
+          `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
+        ));
       }
       if (std.qualityLevel !== 'unknown') {
-        this._validationRow.append(el('div', {
-          className: 'olv-analyse-ql',
-          text: `USGS 3DEP ${std.qualityLevel}`,
-          title: std.qualityLevelReason,
-        }));
+        const qlReason = std.qualityLevelReason;
+        // Keep the dynamic gate reason in the hint, but lead with the
+        // plain-language explanation of what a Quality Level actually is.
+        const qlTooltip = qlReason
+          ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
+          : METRIC_TOOLTIPS.qualityLevel;
+        this._validationRow.append(this._hint(
+          el('div', {
+            className: 'olv-analyse-ql',
+            text: `USGS 3DEP ${std.qualityLevel}`,
+          }),
+          qlTooltip,
+        ));
       }
     }
 
@@ -1164,15 +1201,19 @@ export class AnalysePanel {
     const dtm = q.readiness === 'ready' ? 'Ready' : q.readiness === 'previewOnly' ? 'Preview' : 'Blocked';
     const exp =
       q.exportReadiness === 'available' ? 'Available' : q.exportReadiness === 'previewOnly' ? 'Preview only' : 'Blocked';
-    const chips: Array<[string, string, Tone]> = [
+    // Optional 4th tuple entry is a plain-language hover hint for the
+    // jargon chips (CRS / Datum), reused from contourCopy so the wording
+    // is single-sourced and consistent with the Details metrics above.
+    const chips: Array<[string, string, Tone, string?]> = [
       ['Coverage', coverage, tri(q.coverageMode === 'full', true)],
       ['DTM', dtm, q.readiness === 'ready' ? 'good' : q.readiness === 'previewOnly' ? 'warn' : 'bad'],
-      ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true)],
-      ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true)],
+      ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true), METRIC_TOOLTIPS.crs],
+      ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true), METRIC_TOOLTIPS.verticalDatum],
       ['Export', exp, q.exportReadiness === 'available' ? 'good' : q.exportReadiness === 'previewOnly' ? 'warn' : 'bad'],
     ];
-    for (const [k, v, tone] of chips) {
+    for (const [k, v, tone, tip] of chips) {
       const chip = el('span', { className: `olv-analyse-chip is-${tone}` });
+      if (tip) this._hint(chip, tip);
       chip.append(
         el('span', { className: 'olv-analyse-chip-k', text: k }),
         el('span', { className: 'olv-analyse-chip-v', text: v }),
