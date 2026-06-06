@@ -49,6 +49,12 @@ export interface TerrainAssessment {
   readonly status: TerrainStatus;
   /** 0..100, folded in from the composite quality score (single source of truth). */
   readonly score: number;
+  /**
+   * Whether `score` is a real, assessed figure. When false the composite score
+   * was absent/non-finite and `score` is a 0 placeholder for the type only —
+   * consumers must render it as "unknown", never as "0/100" (no fabrication).
+   */
+  readonly scoreKnown: boolean;
   /** One-line, plain-language reason. */
   readonly reason: string;
   /** What this surface is suitable for. */
@@ -82,6 +88,18 @@ const LOW_DENSITY_PER_M2 = 1.0;
 /** Ground-return ratio below which the classifier saw too little bare earth. */
 const LOW_GROUND_RATIO = 0.1;
 
+// ── 'Limited' tier thresholds ───────────────────────────────────────────
+// 'Limited' is the "weak but not gate-blocked" tier: a surface the gate let
+// through (ready / previewOnly) that is nonetheless too deficient for reliable
+// terrain products. It only ever LOWERS an already Preview-capped status — it
+// can never raise Blocked and an all-green surface can never reach it.
+/** Composite score below which the surface is too weak to read above Limited. */
+const LIMITED_SCORE_FLOOR = 40;
+/** Count of 'poor'-rated supporting metrics at/above which the surface is Limited. */
+const LIMITED_POOR_METRIC_COUNT = 2;
+/** Interpolation/empty-cell fraction above which the grid is severely deficient. */
+const SEVERE_GAP_FRACTION = 0.6;
+
 function describeCoverage(mode: string): { value: string; rating: SupportingMetric['rating'] } {
   if (mode === 'full') return { value: 'full', rating: 'good' };
   if (mode === 'resident-only') return { value: 'resident-only', rating: 'fair' };
@@ -108,7 +126,13 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   const datum = result.dtm.verticalDatum;
   const coverageMode = result.dtm.coverageMode;
 
-  const score = qs && Number.isFinite(qs.score) ? qs.score : 0;
+  // The composite score is the single source of truth, but it can be genuinely
+  // absent. When missing we keep a numeric `score` of 0 for the type, but track
+  // its absence so the supporting metric can read "unknown" (never "0/100") and
+  // status gating below can ignore it (gating is readiness-driven, not score-
+  // driven). Honesty rule: a missing figure is never fabricated as a real one.
+  const scoreKnown = qs != null && Number.isFinite(qs.score);
+  const score = scoreKnown ? qs.score : 0;
 
   // ── derived fractions ─────────────────────────────────────────────────
   const coveredCells =
@@ -161,8 +185,8 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     },
     {
       label: 'DTM quality',
-      value: `${score}/100`,
-      rating: score >= 70 ? 'good' : score >= 45 ? 'fair' : 'poor',
+      value: scoreKnown ? `${score}/100` : 'unknown',
+      rating: !scoreKnown ? 'unknown' : score >= 70 ? 'good' : score >= 45 ? 'fair' : 'poor',
     },
     {
       label: 'Interpolation',
@@ -208,6 +232,23 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
       rating: datumKnown ? 'good' : 'unknown',
     },
   ];
+
+  // ── 'Limited' cap (weak but not blocked) ──────────────────────────────
+  // Applied after the Preview caps and computed from the real metrics above,
+  // this further lowers an already preview-capped surface to 'Limited' when it
+  // is seriously deficient. It only ever LOWERS (capStatus): Blocked stays
+  // Blocked, and a surface that is still 'Good' here was all-green so it can
+  // never be pulled down. A surface is Limited when ANY of:
+  //   - the composite score is known and below LIMITED_SCORE_FLOOR, OR
+  //   - LIMITED_POOR_METRIC_COUNT or more supporting metrics are rated 'poor', OR
+  //   - interpolation or empty-cell fraction is above SEVERE_GAP_FRACTION.
+  const poorMetricCount = supportingMetrics.filter((m) => m.rating === 'poor').length;
+  const seriouslyDeficient =
+    (scoreKnown && score < LIMITED_SCORE_FLOOR) ||
+    poorMetricCount >= LIMITED_POOR_METRIC_COUNT ||
+    interpFrac > SEVERE_GAP_FRACTION ||
+    emptyFrac > SEVERE_GAP_FRACTION;
+  if (seriouslyDeficient) status = capStatus(status, 'Limited');
 
   // ── reason (one plain line) ───────────────────────────────────────────
   const gateReason = q.reasons?.find((r) => r && r.trim().length > 0);
@@ -256,7 +297,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
         ? 'final deliverables without independent validation'
         : 'terrain products, DEM export, contour generation';
 
-  return { status, score, reason, bestFor, useCaution, notRecommendedFor, supportingMetrics };
+  return { status, score, scoreKnown, reason, bestFor, useCaution, notRecommendedFor, supportingMetrics };
 }
 
 /** Join reason fragments into one sentence: "a, b and c". */

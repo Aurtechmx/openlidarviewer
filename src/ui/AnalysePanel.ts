@@ -315,7 +315,7 @@ export class AnalysePanel {
     const top = el('div', { className: 'olv-analyse-assess-top' });
     // The score is folded in from the assessment (single source of truth) so
     // the hero is the one headline, e.g. "Preview · 64/100".
-    const headline = Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
+    const headline = a.scoreKnown && Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
     top.append(
       el('span', { className: 'olv-analyse-assess-label', text: 'Terrain assessment' }),
       el('span', { className: 'olv-analyse-assess-verdict', text: headline }),

@@ -234,4 +234,61 @@ describe('terrainAssessment', () => {
     const a = terrainAssessment(fixture({ score: 41 }));
     expect(a.score).toBe(41);
   });
+
+  it('is Limited (weak-but-not-blocked) when the surface is seriously deficient', () => {
+    // previewOnly readiness plus a composite score under the Limited floor and
+    // sparse ground returns — a genuinely weak surface that the gate did not
+    // outright block. This must read as Limited, not Preview.
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        score: 28,
+        meanDensity: 0.3,
+        groundPointRatio: 0.05,
+      }),
+    );
+    expect(a.status).toBe('Limited');
+    expect(a.bestFor).toMatch(/visual inspection/i);
+    expect(a.useCaution).toMatch(/too incomplete/i);
+  });
+
+  it('is Limited when two or more supporting metrics are rated poor', () => {
+    // High interpolation + high empty fraction => two poor metrics, but the
+    // gate is only previewOnly (not blocked). Score stays above the floor so
+    // the multi-poor rule is what drives Limited.
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        score: 60,
+        interpolatedFraction: 0.55,
+        emptyFraction: 0.55,
+      }),
+    );
+    expect(a.status).toBe('Limited');
+  });
+
+  it('does not over-trigger Limited: a middling preview surface stays Preview', () => {
+    // A single soft weakness (unknown CRS) on an otherwise healthy, well-scored
+    // surface caps to Preview — it is not seriously deficient, so not Limited.
+    const a = terrainAssessment(fixture({ crs: null, score: 75 }));
+    expect(a.status).toBe('Preview');
+  });
+
+  it('keeps an all-green surface Good (Limited never raises or over-triggers)', () => {
+    const a = terrainAssessment(fixture({ score: 90 }));
+    expect(a.status).toBe('Good');
+  });
+
+  it('renders DTM quality as unknown (never 0/100) when qualityScore is absent', () => {
+    const f = fixture();
+    (f as { qualityScore: unknown }).qualityScore = undefined;
+    const a = terrainAssessment(f);
+    const dtm = findMetric(a.supportingMetrics, 'DTM quality');
+    expect(dtm?.value).toMatch(/unknown/i);
+    expect(dtm?.value).not.toMatch(/0\/100/);
+    expect(dtm?.rating).toBe('unknown');
+    expect(a.scoreKnown).toBe(false);
+    // Status is unaffected by the missing score: gating depends on readiness.
+    expect(a.status).toBe('Good');
+  });
 });
