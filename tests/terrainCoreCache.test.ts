@@ -93,6 +93,48 @@ describe('coreFingerprint', () => {
     expect(longerClass).not.toBe(withClass);
   });
 
+  it('reflects in-place classification CONTENT edits (same length)', () => {
+    // The bug: an in-place reclassify mutates cloud.classification with the
+    // SAME length (and the positions array is untouched), so a presence+length
+    // -only key would not change → stale-core cache hit. The content must be
+    // folded in so the key changes.
+    const pos = makeCloud(300);
+    const classA = new Uint8Array(300);
+    classA.fill(2); // all ground
+    const classB = new Uint8Array(300);
+    classB.fill(2);
+    // Simulate a real in-place reclassify: a contiguous polygon of points
+    // flipped to vegetation. A region this size spans many sampled stride
+    // positions, so the sampled hash detects it (the residual collision only
+    // bites for edits that miss every sampled point — see module header).
+    for (let i = 100; i < 200; i++) classB[i] = 5; // high vegetation
+    const fpA = coreFingerprint(pos, { ...BASE_PARAMS, classification: classA });
+    const fpB = coreFingerprint(pos, { ...BASE_PARAMS, classification: classB });
+    expect(fpB).not.toBe(fpA);
+  });
+
+  it('is stable for identical classification content (no over-invalidation)', () => {
+    const pos = makeCloud(300);
+    const mk = (): Uint8Array => {
+      const c = new Uint8Array(300);
+      for (let i = 0; i < c.length; i++) c[i] = (i % 7) + 1;
+      return c;
+    };
+    // Two distinct arrays, identical content → identical fingerprint.
+    const fp1 = coreFingerprint(pos, { ...BASE_PARAMS, classification: mk() });
+    const fp2 = coreFingerprint(pos, { ...BASE_PARAMS, classification: mk() });
+    expect(fp1).toBe(fp2);
+  });
+
+  it('hashes ReadonlyArray and matching Uint8Array classification alike', () => {
+    const pos = makeCloud(300);
+    const arr = [2, 2, 5, 2, 6, 2, 2, 2, 2, 2];
+    const u8 = Uint8Array.from(arr);
+    expect(
+      coreFingerprint(pos, { ...BASE_PARAMS, classification: arr }),
+    ).toBe(coreFingerprint(pos, { ...BASE_PARAMS, classification: u8 }));
+  });
+
   it('differs when the cloud length differs', () => {
     expect(coreFingerprint(makeCloud(500), BASE_PARAMS)).not.toBe(
       coreFingerprint(makeCloud(600), BASE_PARAMS),
@@ -171,6 +213,61 @@ describe('getOrComputeCore', () => {
     getOrComputeCore(cloudB, BASE_PARAMS, compute); // miss — content changed
     getOrComputeCore(cloudC, BASE_PARAMS, compute); // miss — length changed
     expect(calls).toBe(3);
+  });
+
+  it('recomputes after an in-place classification edit (the stale-core bug)', () => {
+    // Reproduces the review finding: positions are the SAME array (same ref +
+    // content), classification length is unchanged, but the classification was
+    // edited IN PLACE (reclassify/undo). The core depends on classification
+    // content, so this MUST be a miss → recompute, not a stale hit.
+    const pos = makeCloud(800);
+    const classification = new Uint8Array(800);
+    classification.fill(2); // start as all-ground
+    let calls = 0;
+    const compute = () => {
+      calls++;
+      return fakeCore(`c${calls}`);
+    };
+    getOrComputeCore(pos, { ...BASE_PARAMS, classification }, compute);
+    expect(calls).toBe(1);
+    // Re-run with no change → cache hit.
+    getOrComputeCore(pos, { ...BASE_PARAMS, classification }, compute);
+    expect(calls).toBe(1);
+    // Edit classification IN PLACE (same array, same length, positions intact).
+    classification[12] = 5;
+    classification[400] = 6;
+    classification[799] = 7;
+    // Next Analyse run must NOT serve the stale core.
+    getOrComputeCore(pos, { ...BASE_PARAMS, classification }, compute);
+    expect(calls).toBe(2);
+  });
+
+  it('still hits when classification content is unchanged', () => {
+    // Companion to the in-place-edit test: proves we did not over-invalidate.
+    const pos = makeCloud(800);
+    const c1 = new Uint8Array(800);
+    for (let i = 0; i < c1.length; i++) c1[i] = (i % 5) + 1;
+    const c2 = Uint8Array.from(c1); // distinct array, identical content
+    let calls = 0;
+    const compute = () => {
+      calls++;
+      return fakeCore(`c${calls}`);
+    };
+    getOrComputeCore(pos, { ...BASE_PARAMS, classification: c1 }, compute);
+    getOrComputeCore(pos, { ...BASE_PARAMS, classification: c2 }, compute);
+    expect(calls).toBe(1);
+  });
+
+  it('absent-classification path is unchanged (still hits)', () => {
+    const pos = makeCloud(800);
+    let calls = 0;
+    const compute = () => {
+      calls++;
+      return fakeCore('noclass');
+    };
+    getOrComputeCore(pos, BASE_PARAMS, compute);
+    getOrComputeCore(pos, BASE_PARAMS, compute);
+    expect(calls).toBe(1);
   });
 
   it('evicts the least-recently-used entry beyond the cache size', () => {

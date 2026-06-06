@@ -72,6 +72,12 @@ export const TERRAIN_CORE_CACHE_SIZE = 3;
 /** Number of interior samples folded into the content hash (cost is O(this)). */
 const CONTENT_SAMPLES = 64;
 
+/**
+ * Number of interior classification samples folded into the param key (cost is
+ * O(this)). Mirrors {@link CONTENT_SAMPLES}: bounded, independent of N.
+ */
+const CLASS_SAMPLES = 64;
+
 // 64-bit FNV-1a constants, run as two 32-bit halves so the math stays exact in
 // JS doubles (no BigInt needed; >>> 0 keeps each lane 32-bit).
 const FNV_OFFSET_LO = 0x84222325;
@@ -164,16 +170,54 @@ function contentHash(positions: Float32Array): string {
 }
 
 /**
+ * Cheap, stride-sampled 64-bit hash of the per-point classification CONTENT.
+ * The classification can be edited IN PLACE (reclassify / undo) without the
+ * positions array or the classification length changing, so presence + length
+ * alone do NOT distinguish a re-classified cloud — its content must be keyed or
+ * a stale bare-earth core would be served on the next Analyse run. This folds
+ * the length, the first and last values, and up to {@link CLASS_SAMPLES}
+ * evenly-spaced interior values BY INTEGER VALUE (works for both
+ * `ReadonlyArray<number>` and `Uint8Array`). Cost is O(CLASS_SAMPLES).
+ */
+function classificationHash(
+  classification: ReadonlyArray<number> | Uint8Array,
+): string {
+  const h = fnvInit();
+  const len = classification.length;
+  fnvMix(h, len >>> 0);
+  if (len === 0) return fnvHex(h);
+
+  // First + last value — cheap and catches the most common end edits.
+  fnvMix(h, classification[0] >>> 0);
+  fnvMix(h, classification[len - 1] >>> 0);
+
+  // Interior samples at a fixed stride (capped count → bounded cost).
+  const sampleCount = Math.min(CLASS_SAMPLES, len);
+  if (sampleCount > 1) {
+    const stride = Math.max(1, Math.floor(len / sampleCount));
+    for (let i = 0; i < len; i += stride) {
+      fnvMix(h, classification[i] >>> 0);
+    }
+  }
+  return fnvHex(h);
+}
+
+/**
  * Serialise the interval-INDEPENDENT core params into a stable, order-fixed
  * string. Every field {@link computeTerrainCore} reads is included; the contour
  * interval and other interval-stage options are deliberately excluded, so an
  * interval change keeps the same key (and reuses the core).
  *
  * Ground overrides are flattened in a fixed field order (not JSON of the object,
- * whose key order is not guaranteed to be stable across callers). Classification
- * contributes only presence + length — its full contents are not hashed (an
- * index-aligned class array changes with the cloud, which the content hash
- * already covers; hashing it again would be redundant and costly).
+ * whose key order is not guaranteed to be stable across callers).
+ *
+ * Classification contributes presence + length AND a cheap sampled hash of its
+ * CONTENT (see {@link classificationHash}). Content matters because the core
+ * drops vegetation / building / noise returns before ground filtering, so the
+ * bare-earth surface genuinely depends on the class values — and those values
+ * can be edited IN PLACE (reclassify / undo) while the positions array and the
+ * classification length stay unchanged. Keying only presence + length would let
+ * such an edit reuse a stale core and silently emit the wrong DTM.
  */
 function paramsKey(params: TerrainCoreParams): string {
   const g = params.ground;
@@ -187,8 +231,10 @@ function paramsKey(params: TerrainCoreParams): string {
       ].join(',')
     : '';
   const exclude = params.excludeClasses ? Array.from(params.excludeClasses).join('.') : '';
+  // Presence + length + a cheap sampled CONTENT hash, so an in-place
+  // reclassify (same array/length) changes the key and forces a recompute.
   const classPresence = params.classification
-    ? `1:${params.classification.length}`
+    ? `1:${params.classification.length}:${classificationHash(params.classification)}`
     : '0';
   return [
     `cs=${params.cellSizeM}`,
