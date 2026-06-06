@@ -2566,8 +2566,7 @@ function refreshProvenanceFromStreaming(cloud: {
  * Point Density row from declared `pointCount / bbox volume` and the
  * Streaming Coverage row from the source kind. No point iteration,
  * no engine analysis — just stable header-derived facts the user
- * can see immediately. Heavier metric work would land later through
- * the TerrainEngine foundation; the Dataset Intelligence card stays
+ * can see immediately. The Dataset Intelligence card stays
  * header-derived for now.
  */
 function refreshDatasetIntelligenceFromStaticCloud(cloud: {

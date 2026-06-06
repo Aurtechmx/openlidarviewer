@@ -13,11 +13,11 @@
  * Inputs come from layers that already exist:
  *
  *   - point count + bounding-box volume + optional resident-neighbour
- *     density (TerrainPartition)
+ *     density
  *   - aggregate slope / roughness / elevation variance over a
- *     bounded sample (TerrainMetrics, called via TerrainEngine)
+ *     bounded sample
  *   - terrain suggestion (classification histogram, optional)
- *   - coverage meta from TerrainAnalysisResult (TerrainResult)
+ *   - coverage meta from TerrainAnalysisResult
  *
  * The output bands are chosen to be wide enough that small numeric
  * jitter at bucket boundaries doesn't make the card flicker. Every
@@ -96,7 +96,7 @@ export interface DatasetIntelligenceInput {
   readonly bboxVolume?: number;
   /**
    * Average resident-neighbour density (points per metre cubed)
-   * measured by a sampled TerrainEngine pass. Optional — when present
+   * measured by a sampled pass. Optional — when present
    * it overrides the bbox-derived estimate.
    */
   readonly residentDensity?: number;

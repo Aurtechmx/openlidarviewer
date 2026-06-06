@@ -1,14 +1,12 @@
 # Terrain Intelligence
 
 This document describes the Terrain Intelligence stack under `src/terrain/`.
-It has two layers:
-
-1. The **foundation** (metrics, scoring, partitioning, caching, worker
-   infrastructure, and the Dataset Intelligence card) introduced in v0.3.9.
-2. The **confidence-aware DTM and contour pipeline** added in v0.4.0:
-   ground classification, a gridded DTM with per-cell confidence, hold-out
-   validation with confidence calibration, and evidence-graded contour
-   export.
+It centres on the **confidence-aware DTM and contour pipeline** (added in
+v0.4.0): ground classification, a gridded DTM with per-cell confidence,
+hold-out validation with confidence calibration, surface models, and
+evidence-graded contour export. Two supporting pieces sit alongside it: a
+small set of shared type contracts (`TerrainContracts.ts`) and the
+informational **Dataset Intelligence card** (`datasetIntelligence.ts`).
 
 Current capability. The Analyse panel (`src/ui/AnalysePanel.ts`) is
 **mounted** and surfaces the confidence-aware pipeline end to end. It is
@@ -31,44 +29,29 @@ certification (see [What confidence means](#what-confidence-means-and-what-it-do
 
 These products are powered by the confidence-aware pipeline under
 `src/terrain/contour/`, `ground/`, `surface/`, `validate/`, and `export/`.
-The older `src/terrain/` *foundation* (engine, metrics, partitioning, cache,
-worker lifecycle) is a separate, internal seam that sits behind a feature
-flag; it is not on the live Analyse path. The two layers are described below.
+Alongside the pipeline, `TerrainContracts.ts` holds the shared type
+contracts every stage reads, and the Dataset Intelligence card surfaces a
+cheap, header-derived summary in the Inspector. Both are described below.
 
-## The foundation layer
+## Shared contracts and the Dataset Intelligence card
 
-Introduced in v0.3.9. A small set of pure-data contracts and deterministic
-primitives that establish one common envelope for terrain analysis. It is an
-**internal seam, gated behind a feature flag** (`TerrainFeatureFlags.ts`) —
-it backs the informational Dataset Intelligence card and is available for
-future internal consumers, but it is not what produces the DTM, surface
-models, contours, or exports the Analyse panel ships (those run on the live
-pipeline described in the next section).
+Two small, live pieces support the pipeline without being part of it.
 
 - **Contracts** (`TerrainContracts.ts`). Stable type contracts every
-  consumer reads. Every result carries `coverage` /
-  `sourcePointCount` / `analyzedPointCount` / `confidence` /
-  `warnings`, so analyses never imply full-cloud certainty when
-  only resident streaming nodes were walked.
-- **Metrics** (`TerrainMetrics.ts`). Deterministic per-neighborhood
-  metrics: local slope (degrees), roughness (RMS residual), mean
-  curvature, elevation variance, point density, height above local
-  surface, neighborhood elevation range, and local planarity. The
-  metrics module honours an explicit `worldUp` axis and a
-  `linearUnitToMetres` scale so results are reported in metres
-  regardless of the source CRS unit.
-- **Ground confidence scaffold** (`computeGroundScore`). Pure
-  scoring framework that combines slope / roughness / variance /
-  density into a `confidence: 0..100` score with a `reasons` array.
-  No threshold, no class assignment.
-- **Partitioning** (`TerrainPartition.ts`), **Cache** (`TerrainCache.ts`),
-  **Worker infrastructure** (`TerrainWorker.ts`), **Engine**
-  (`TerrainEngine.ts`), and **Feature flags** (`TerrainFeatureFlags.ts`).
+  consumer reads (`TerrainPoint`, `TerrainCoverageMode`, and the result
+  envelope). Every result carries `coverage` / `sourcePointCount` /
+  `analyzedPointCount` / `confidence` / `warnings`, so analyses never imply
+  full-cloud certainty when only resident streaming nodes were walked. These
+  types are imported across the ground, contour, surface, validate, and
+  quality stages.
 - **Dataset Intelligence card** (`src/ui/DatasetIntelligenceCard.ts`,
   `src/terrain/datasetIntelligence.ts`). Inspector card that renders Point
   Density, Terrain Complexity, Ground Visibility, Streaming Coverage, and
-  Terrain Confidence. Informational only; it never claims to perform ground
-  classification.
+  Terrain Confidence. It is **informational only** and header-derived — it
+  computes a cheap summary from declared point count, bounding-box volume,
+  optional resident-neighbour density, and an optional terrain suggestion. It
+  never performs ground classification and renders `—` rather than
+  fabricating a bucket when no signal is available.
 
 ## The live pipeline (confidence-aware DTM, surface models, contours)
 
@@ -227,8 +210,7 @@ against survey-grade data and procedures.
 ## Scope note
 
 The live pipeline above is what produces every terrain product in the
-Analyse panel. The foundation layer remains an internal, flag-gated seam.
-In-scene 3D overlays of the DTM and contours are not part of the live
+Analyse panel. In-scene 3D overlays of the DTM and contours are not part of the live
 pipeline today; the pipeline produces the data such overlays would consume,
 and surfacing them is future work.
 
