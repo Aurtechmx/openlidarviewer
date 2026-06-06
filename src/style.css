@@ -878,7 +878,7 @@ button:disabled { cursor: not-allowed; }
 .olv-status-pass { background: var(--teal); }
 .olv-status-info { background: #6b7079; }
 .olv-status-warn { background: #ef9f27; }
-.olv-status-fail { background: #e24b4a; }
+.olv-status-fail { background: var(--rating-weak); }
 
 /* Advanced report — collapsible diagnostics under the headline metrics */
 .olv-advanced { margin-top: var(--space-2xs); }
@@ -1082,8 +1082,8 @@ button:disabled { cursor: not-allowed; }
   display: block; height: 100%; width: 0%;
   background: var(--accent); transition: width var(--dur-base) var(--ease-standard);
 }
-.olv-toast-error { border-color: rgba(226, 75, 74, 0.5); }
-.olv-toast-error .olv-toast-dot { background: #e24b4a; }
+.olv-toast-error { border-color: color-mix(in srgb, var(--rating-weak) 50%, transparent); }
+.olv-toast-error .olv-toast-dot { background: var(--rating-weak); }
 
 /* ───────────────────────────────────────────────────────────────────────────
    Navigation bar — bottom-centre mode switcher, speed slider, controls HUD
@@ -1165,7 +1165,7 @@ button:disabled { cursor: not-allowed; }
 .olv-modes-triangle .olv-mode:active { transform: scale(0.94); }
 .olv-modes-triangle .olv-mode.olv-mode-active {
   color: var(--accent);
-  background: rgba(0, 178, 255, 0.16);
+  background: var(--accent-soft);
   border-color: var(--accent);
   box-shadow:
     0 0 0 2px rgba(0, 178, 255, 0.25),
@@ -1496,8 +1496,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-status-fail { animation-name: olv-dot-pulse-fail; }
 @keyframes olv-dot-pulse-fail {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(226, 75, 74, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(226, 75, 74, 0.22); }
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rating-weak) 22%, transparent); }
 }
 
 /* Version mark — bottom-right corner, revealed once a scan loads */
@@ -1604,9 +1604,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-crs-meta-row { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-crs-warning {
   font-size: var(--text-xs); color: var(--text-dim);
-  border-left: 2px solid #e24b4a;
+  border-left: 2px solid var(--rating-weak);
   padding: var(--space-sm) var(--space-md);
-  background: rgba(226, 75, 74, 0.06);
+  background: color-mix(in srgb, var(--rating-weak) 6%, transparent);
   border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   line-height: 1.45;
 }
@@ -2139,7 +2139,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     padding: var(--space-sm) var(--space-md);
   }
   .olv-dock.olv-dock-more-open .olv-tool-more {
-    background: rgba(0, 178, 255, 0.14);
+    background: var(--accent-soft);
     color: var(--accent);
   }
 
@@ -2448,12 +2448,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Type colours — note (blue), info (cyan), warning (amber), issue (red). */
 .olv-anno-note .olv-anno-disc { fill: #5b9bd5; }
 .olv-anno-info .olv-anno-disc { fill: #22dcff; }
-.olv-anno-warning .olv-anno-disc { fill: #f0b429; }
-.olv-anno-issue .olv-anno-disc { fill: #e24b4a; }
+.olv-anno-warning .olv-anno-disc { fill: var(--rating-good); }
+.olv-anno-issue .olv-anno-disc { fill: var(--rating-weak); }
 .olv-anno-note .olv-anno-num,
 .olv-anno-info .olv-anno-num,
-.olv-anno-warning .olv-anno-num { fill: #06121a; }
-.olv-anno-issue .olv-anno-num { fill: #ffffff; }
+.olv-anno-warning .olv-anno-num,
+.olv-anno-issue .olv-anno-num { fill: #06121a; }
 /* Hover lifts the marker; selection draws a white ring. */
 .olv-anno-marker:hover .olv-anno-disc,
 .olv-anno-hover .olv-anno-disc { filter: brightness(1.18); }
@@ -2486,8 +2486,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-anno-chip-active { opacity: 1; border-color: var(--accent); }
 .olv-anno-chip-note.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #5b9bd5; }
 .olv-anno-chip-info.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #22dcff; }
-.olv-anno-chip-warning.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #f0b429; }
-.olv-anno-chip-issue.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #e24b4a; }
+.olv-anno-chip-warning.olv-anno-chip-active { box-shadow: inset 0 -2px 0 var(--rating-good); }
+.olv-anno-chip-issue.olv-anno-chip-active { box-shadow: inset 0 -2px 0 var(--rating-weak); }
 .olv-anno-editor-camera {
   display: flex; align-items: center; gap: var(--space-sm);
   font-size: var(--text-xs); color: var(--text-dim); cursor: pointer; user-select: none;
@@ -3209,7 +3209,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-action-active {
   color: var(--text);
   border-color: var(--accent);
-  background: rgba(0, 178, 255, 0.10);
+  background: var(--accent-soft);
 }
 
 /* Chain mode — appears above the measurement list when active. The
@@ -3248,7 +3248,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-chain-chip:hover { color: var(--text); border-color: var(--accent); }
 .olv-mp-chain-chip-active {
   color: var(--text);
-  background: rgba(0, 178, 255, 0.14);
+  background: var(--accent-soft);
   border-color: var(--accent);
 }
 .olv-mp-chain-result {
@@ -3292,7 +3292,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   display: flex; align-items: center; gap: var(--space-sm);
   border-radius: var(--radius-sm); padding: var(--space-xs);
 }
-.olv-ap-row-selected { background: rgba(34, 220, 255, 0.1); }
+.olv-ap-row-selected { background: var(--accent-soft); }
 .olv-ap-badge {
   flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
@@ -3300,8 +3300,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-ap-badge.olv-anno-note { background: #5b9bd5; color: #06121a; }
 .olv-ap-badge.olv-anno-info { background: #22dcff; color: #06121a; }
-.olv-ap-badge.olv-anno-warning { background: #f0b429; color: #06121a; }
-.olv-ap-badge.olv-anno-issue { background: #e24b4a; color: #ffffff; }
+.olv-ap-badge.olv-anno-warning { background: var(--rating-good); color: #06121a; }
+.olv-ap-badge.olv-anno-issue { background: var(--rating-weak); color: #06121a; }
 .olv-ap-name {
   flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: var(--text);
   font-family: var(--font); background: none; border: none; padding: var(--space-2xs) 0;
@@ -3348,7 +3348,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-ap-action:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-ap-action:disabled { opacity: 0.4; cursor: default; }
-.olv-ap-action-armed { color: #e24b4a; border-color: rgba(226, 75, 74, 0.6); }
+.olv-ap-action-armed { color: var(--rating-weak); border-color: color-mix(in srgb, var(--rating-weak) 60%, transparent); }
 
 /* Touch sizing for the measurement controls on phones */
 @media (max-width: 767px) {
@@ -3822,9 +3822,9 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   background: rgba(255, 255, 255, 0.15);
 }
-.olv-di-confidence-chip[data-band="green"]   { background: #4ade80; }
-.olv-di-confidence-chip[data-band="yellow"]  { background: #facc15; }
-.olv-di-confidence-chip[data-band="red"]     { background: #f87171; }
+.olv-di-confidence-chip[data-band="green"]   { background: var(--rating-excellent); }
+.olv-di-confidence-chip[data-band="yellow"]  { background: var(--rating-good); }
+.olv-di-confidence-chip[data-band="red"]     { background: var(--rating-weak); }
 /* v0.3.10 honesty pass — `unknown` band renders muted-gray so the
  * card reads as "we don't know yet" instead of fabricating a
  * green/yellow/red bucket from a hardcoded constant. Mirrors the
@@ -4013,11 +4013,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-run {
   width: 100%; font-size: var(--text-xs); font-weight: 500; padding: var(--space-md);
   border-radius: var(--radius-sm); cursor: pointer; margin-bottom: var(--space-md);
-  color: var(--accent); background: rgba(34, 220, 255, 0.08);
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent);
   border: 0.5px solid var(--accent);
   transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
-.olv-analyse-run:hover { background: rgba(34, 220, 255, 0.16); }
+.olv-analyse-run:hover { background: var(--accent-soft); }
 .olv-analyse-run:disabled { opacity: 0.6; cursor: default; }
 /* Once results exist the action becomes a quiet "Re-run" — visual weight
    follows importance, so the data leads, not the button. */
@@ -4202,11 +4202,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-analyse-chip-k { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
 .olv-analyse-chip-v { color: var(--text); font-weight: 600; }
-.olv-analyse-chip.is-good { border-color: rgba(52, 211, 153, 0.5); }
+.olv-analyse-chip.is-good { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
 .olv-analyse-chip.is-good .olv-analyse-chip-v { color: var(--rating-excellent); }
-.olv-analyse-chip.is-warn { border-color: rgba(251, 191, 36, 0.5); }
+.olv-analyse-chip.is-warn { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
 .olv-analyse-chip.is-warn .olv-analyse-chip-v { color: var(--rating-good); }
-.olv-analyse-chip.is-bad { border-color: rgba(248, 113, 113, 0.5); }
+.olv-analyse-chip.is-bad { border-color: color-mix(in srgb, var(--rating-weak) 45%, transparent); }
 .olv-analyse-chip.is-bad .olv-analyse-chip-v { color: var(--rating-weak); }
 
 /* Recommended grid / interval. */
