@@ -135,6 +135,13 @@ export class AnalysePanel {
   private readonly _legend: HTMLElement;
   /** The always-visible minimal "Planned" section. */
   private readonly _roadmap: HTMLElement;
+  /**
+   * Cancels the relief tile's pending rAF repaint, if one is scheduled. Set
+   * while the interactive hillshade has a frame queued; cleared once it runs.
+   * Re-rendering the surface row (which detaches the old tile) and hiding the
+   * panel both invoke it so a queued frame can't paint a removed canvas.
+   */
+  private _reliefRepaintCancel: (() => void) | null = null;
 
   constructor(callbacks: AnalysePanelCallbacks = {}) {
     this._cb = callbacks;
@@ -388,6 +395,10 @@ export class AnalysePanel {
    * a north-up hillshade preview the user can export as a PNG.
    */
   private _renderSurface(): void {
+    // Drop any frame the previous relief tile queued — the tile it would paint
+    // is about to be detached by replaceChildren().
+    this._reliefRepaintCancel?.();
+    this._reliefRepaintCancel = null;
     this._surfaceRow.replaceChildren();
     const r = this._result;
     const s = r?.surface;
@@ -561,6 +572,37 @@ export class AnalysePanel {
         : `Sun ${String(azimuth).padStart(3, '0')}° · alt ${altitude}°`;
     };
 
+    // Coalesce slider repaints into one rAF: dragging fires many `input`
+    // events per frame, but a full per-cell hillshade + ImageData write is
+    // expensive on a large grid. We keep only a single pending frame; when it
+    // runs it reads the LATEST azimuth/altitude (the slider handlers update
+    // those before scheduling), so intermediate positions are skipped and the
+    // most recent one always wins — including the final value on release.
+    // The pending frame is cancellable from outside (see _reliefRepaintCancel)
+    // so a re-render or panel close can't leave a queued frame painting a
+    // detached canvas.
+    let reliefRafId: number | null = null;
+    const canSchedule = typeof requestAnimationFrame === 'function';
+    const cancelRepaint = (): void => {
+      if (reliefRafId !== null) {
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(reliefRafId);
+        reliefRafId = null;
+      }
+    };
+    const scheduleRepaint = (): void => {
+      // No rAF (e.g. jsdom in tests) — fall back to a synchronous repaint so
+      // behaviour is unchanged where coalescing isn't available.
+      if (!canSchedule) { repaint(); return; }
+      if (reliefRafId !== null) return;
+      reliefRafId = requestAnimationFrame(() => {
+        reliefRafId = null;
+        repaint();
+      });
+    };
+    // Expose the cancel so teardown (surface re-render / panel hide) can drop a
+    // queued frame before this tile is detached.
+    this._reliefRepaintCancel = cancelRepaint;
+
     // Controls: multi-directional toggle + azimuth + altitude.
     const controls = el('div', { className: 'olv-analyse-relief-controls' });
     const multiLabel = el('label', { className: 'olv-analyse-relief-toggle' });
@@ -595,12 +637,12 @@ export class AnalysePanel {
     azInput.addEventListener('input', () => {
       azimuth = Number(azInput.value);
       azVal.textContent = `${String(azimuth).padStart(3, '0')}°`;
-      repaint();
+      scheduleRepaint();
     });
     altInput.addEventListener('input', () => {
       altitude = Number(altInput.value);
       altVal.textContent = `${altitude}°`;
-      repaint();
+      scheduleRepaint();
     });
     controls.append(multiLabel, azRow, altRow);
     tile.append(controls);
@@ -841,6 +883,12 @@ export class AnalysePanel {
   }
 
   setVisible(on: boolean): void {
+    // Hiding the panel mid-drag: drop any queued relief repaint so it can't
+    // fire against a tile that's no longer on screen.
+    if (!on) {
+      this._reliefRepaintCancel?.();
+      this._reliefRepaintCancel = null;
+    }
     this.element.style.display = on ? '' : 'none';
   }
 
