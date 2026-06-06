@@ -19,6 +19,7 @@ import {
   valley,
   sparse,
   edgeClipped,
+  terrace,
   allGround,
   gridFor,
 } from './fixtures/terrainScenes';
@@ -206,5 +207,64 @@ describe('DTM truth — sparse & edge-clipped never fabricate the missing side',
       expect(g.coverage[i]).toBe(0);
       expect(g.confidence[i]).toBe(0);
     }
+  });
+});
+
+describe('DTM truth — terrace staircase has flat treads and stepped extrema', () => {
+  // Construction (fixture): axis 'x', step = floor(col / stepWidthNodes),
+  // z = base + step * stepHeight. Node-per-cell, so cell (col,row) carries
+  // exactly that node's z. With nx = 24 and stepWidthNodes = 8 there are
+  // three full treads: cols 0..7 -> step 0, 8..15 -> step 1, 16..23 -> step 2.
+  const BASE = 100;
+  const STEP_HEIGHT = 5;
+  const STEP_WIDTH = 8;
+  const STEPS = Math.ceil(EXTENT.nx / STEP_WIDTH); // 3 treads
+
+  it('a known tread interior cell equals base + step*stepHeight (tight tol)', () => {
+    const pts = terrace({ ...EXTENT, base: BASE, stepHeight: STEP_HEIGHT, stepWidthNodes: STEP_WIDTH, axis: 'x' });
+    const r = rasterizeDtm(pts, allGround(pts), { grid });
+    // Pick an interior tread cell on step 1 (cols 8..15): col 11, row 12.
+    const col = 11;
+    const row = 12;
+    const step = Math.floor(col / STEP_WIDTH); // 1
+    const expected = BASE + step * STEP_HEIGHT; // 105
+    expect(r.z[row * grid.cols + col]).toBeCloseTo(expected, 6);
+  });
+
+  it('tread interiors are flat: zero along-axis difference away from risers', () => {
+    const pts = terrace({ ...EXTENT, base: BASE, stepHeight: STEP_HEIGHT, stepWidthNodes: STEP_WIDTH, axis: 'x' });
+    const r = rasterizeDtm(pts, allGround(pts), { grid });
+    const row = 12;
+    // Within a tread, neighbouring cells in the same step share elevation
+    // (slope ~ 0); only riser boundaries (col % STEP_WIDTH === 0) may jump.
+    for (let col = 1; col < grid.cols; col++) {
+      const here = r.z[row * grid.cols + col];
+      const prev = r.z[row * grid.cols + (col - 1)];
+      if (col % STEP_WIDTH === 0) {
+        // riser: a clean jump of exactly one stepHeight
+        expect(here - prev).toBeCloseTo(STEP_HEIGHT, 6);
+      } else {
+        // tread interior: perfectly flat
+        expect(here - prev).toBeCloseTo(0, 6);
+      }
+    }
+    // And every cell in a tread equals its analytic tread height.
+    for (let col = 0; col < grid.cols; col++) {
+      const expected = BASE + Math.floor(col / STEP_WIDTH) * STEP_HEIGHT;
+      expect(r.z[row * grid.cols + col]).toBeCloseTo(expected, 6);
+    }
+  });
+
+  it('global max is the top tread and global min is the bottom tread', () => {
+    const pts = terrace({ ...EXTENT, base: BASE, stepHeight: STEP_HEIGHT, stepWidthNodes: STEP_WIDTH, axis: 'x' });
+    const r = rasterizeDtm(pts, allGround(pts), { grid });
+    let maxV = -Infinity;
+    let minV = Infinity;
+    for (let i = 0; i < r.z.length; i++) {
+      if (r.z[i] > maxV) maxV = r.z[i];
+      if (r.z[i] < minV) minV = r.z[i];
+    }
+    expect(minV).toBeCloseTo(BASE, 6); // bottom tread (step 0)
+    expect(maxV).toBeCloseTo(BASE + (STEPS - 1) * STEP_HEIGHT, 6); // top tread
   });
 });
