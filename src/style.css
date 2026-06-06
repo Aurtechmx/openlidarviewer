@@ -45,6 +45,60 @@
   --space-2xl: 16px;
   --space-3xl: 20px;
   --space-4xl: 24px;
+
+  /*
+   * Type scale — seven steps drawn from the most common existing
+   * font-sizes so the bulk of the UI maps onto a token with no
+   * change. The body of the interface lives at --text-xs (11px),
+   * the single most-used size, with smaller meta text at 10px and
+   * progressively larger steps for headings and display numbers.
+   *   --text-2xs 10  dense meta / captions
+   *   --text-xs  11  default UI text (most common)
+   *   --text-sm  12  comfortable body / labels
+   *   --text-md  13  emphasised body
+   *   --text-lg  14  sub-headings
+   *   --text-xl  16  section headings
+   *   --text-2xl 20  panel titles
+   *   --text-3xl 28  display figures
+   */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 20px;
+  --text-3xl: 28px;
+
+  /*
+   * Radius scale — four corner radii plus a pill. Drawn from the
+   * dominant existing radii (6px is by far the most common control
+   * radius) so most surfaces map with no change.
+   *   --radius-xs   4    chips / tight insets
+   *   --radius-sm   6    default control radius (most common)
+   *   --radius-md   8    cards / panels
+   *   --radius-lg  10    large panels / overlays
+   *   --radius-pill 999  fully rounded pills
+   */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /*
+   * Motion scale — three durations and the standard easing. 130ms
+   * is the dominant interaction duration ("fast"); base/slow cover
+   * the slower fades. --ease-standard mirrors the plain `ease`
+   * curve used across nearly every transition.
+   *   --dur-fast 130ms  hovers / control feedback (most common)
+   *   --dur-base 200ms  panel / opacity fades
+   *   --dur-slow 240ms  larger reveal transitions
+   */
+  --dur-fast: 130ms;
+  --dur-base: 200ms;
+  --dur-slow: 240ms;
+  --ease-standard: ease;
 }
 
 /*
@@ -57,13 +111,13 @@
 .olv-workflow-badge {
   position: absolute;
   top: 14px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--space-md);
   background: var(--panel);
   border: 0.5px solid var(--hairline);
-  border-radius: 999px;
-  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  padding: var(--space-sm) var(--space-xl);
   z-index: 90;
-  font-size: 11.5px; color: var(--text);
+  font-size: var(--text-xs); color: var(--text);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 .olv-workflow-badge-dot {
@@ -81,13 +135,13 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
-.olv-workflow-badge-label { font-family: var(--mono); font-size: 11px; }
+.olv-workflow-badge-label { font-family: var(--mono); font-size: var(--text-xs); }
 .olv-workflow-badge-stop {
-  font-size: 10.5px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 5px; padding: 2px 8px; cursor: pointer;
-  transition: color 130ms ease, border-color 130ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-md); cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-workflow-badge-stop:hover { color: var(--text); border-color: var(--accent); }
 
@@ -125,27 +179,27 @@
   color: var(--text);
   background: transparent;
   border: none; outline: none;
-  padding: 16px 20px;
+  padding: var(--space-2xl) var(--space-3xl);
   border-bottom: 0.5px solid var(--hairline);
 }
 .olv-palette-input::placeholder { color: var(--text-faint); }
 .olv-palette-list {
   flex: 1; min-height: 0;
   overflow-y: auto;
-  padding: 6px 6px 8px;
+  padding: var(--space-sm) var(--space-sm) var(--space-md);
 }
 .olv-palette-section {
-  font-size: 10.5px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   letter-spacing: 0.07em; text-transform: uppercase;
-  padding: 10px 12px 4px;
+  padding: var(--space-lg) var(--space-xl) var(--space-xs);
 }
-.olv-palette-section:first-child { padding-top: 4px; }
+.olv-palette-section:first-child { padding-top: var(--space-xs); }
 .olv-palette-row {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--space-lg);
   width: 100%; text-align: left;
   background: transparent; border: none; cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 7px;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font);
 }
@@ -153,36 +207,36 @@
   background: var(--accent-soft);
   color: var(--text);
 }
-.olv-palette-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.olv-palette-row-title { font-size: 13px; }
-.olv-palette-row-hint { font-size: 11px; color: var(--text-dim); }
+.olv-palette-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-palette-row-title { font-size: var(--text-md); }
+.olv-palette-row-hint { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-palette-row-key {
-  font-family: var(--mono); font-size: 11px;
+  font-family: var(--mono); font-size: var(--text-xs);
   color: var(--accent);
   background: rgba(0, 178, 255, 0.10);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
-  border-radius: 4px; padding: 2px 6px;
+  border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm);
   flex-shrink: 0;
 }
 .olv-palette-empty {
-  font-size: 13px; color: var(--text-dim);
-  padding: 24px 20px 28px;
+  font-size: var(--text-md); color: var(--text-dim);
+  padding: var(--space-4xl) var(--space-3xl) 28px;
   text-align: center;
 }
 .olv-palette-hint {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 12px;
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
   border-top: 0.5px solid var(--hairline);
-  font-size: 11px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
 }
 .olv-palette-hint > span:not(.olv-palette-hint-key) {
-  margin-right: 12px;
+  margin-right: var(--space-xl);
 }
 .olv-palette-hint-key {
-  font-family: var(--mono); font-size: 10px;
+  font-family: var(--mono); font-size: var(--text-2xs);
   background: rgba(255, 255, 255, 0.06);
   border: 0.5px solid var(--hairline);
-  border-radius: 4px; padding: 1px 6px;
+  border-radius: var(--radius-xs); padding: 1px var(--space-sm);
 }
 
 /*
@@ -193,20 +247,20 @@
  * paint — the user can pick once and forget it.
  */
 .olv-theme-rail {
-  display: flex; gap: 6px;
-  padding: 6px 0 10px;
+  display: flex; gap: var(--space-sm);
+  padding: var(--space-sm) 0 var(--space-lg);
   border-bottom: 0.5px solid var(--hairline);
-  margin-bottom: 10px;
+  margin-bottom: var(--space-lg);
 }
 .olv-theme-chip {
   flex: 1;
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 8px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
   cursor: pointer;
-  transition: color 130ms ease, border-color 130ms ease, background 130ms ease,
-    transform 90ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+    transform 90ms var(--ease-standard);
 }
 .olv-theme-chip:hover {
   color: var(--text); border-color: var(--accent);
@@ -340,25 +394,25 @@ button:disabled { cursor: not-allowed; }
 .olv-topbar {
   position: absolute; top: 0; left: 0; right: 0;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--space-2xl) var(--space-3xl);
 }
-.olv-wordmark { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
-.olv-topbar-right { display: flex; align-items: center; gap: 10px; }
+.olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
+.olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
 .olv-badge {
-  font-size: 11px; color: var(--accent);
+  font-size: var(--text-xs); color: var(--accent);
   background: rgba(0, 178, 255, 0.1);
   border: 0.5px solid rgba(0, 178, 255, 0.24);
-  border-radius: 7px; padding: 6px 10px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
 }
 /* v0.3.6 design audit (item 9): demoted from a pill to a ghost link so the
  * "Private · on your device" trust-signal pill stays the dominant element
  * in the header. Padding kept so the tap target meets 44 pt on mobile via
  * the touch-target media query. */
 .olv-github {
-  font-size: 11px; color: var(--text-dim); text-decoration: none;
+  font-size: var(--text-xs); color: var(--text-dim); text-decoration: none;
   background: transparent;
   border: none;
-  border-radius: 6px; padding: 6px 8px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
 }
 .olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 
@@ -376,7 +430,7 @@ button:disabled { cursor: not-allowed; }
   /* v0.3.6 desktop-audit fix: tighter vertical rhythm so the title reads
    * as a direct caption to the hero, and the CTA sits as the obvious
    * answer to the question the title poses. */
-  gap: 10px; text-align: center; padding: 24px;
+  gap: 10px; text-align: center; padding: var(--space-4xl);
 }
 /* Hero brand mark — inline SVG icon (orbital rings + glowing core +
  * vertical axis dots) sits above the title in the empty state. v0.3.6
@@ -402,16 +456,16 @@ button:disabled { cursor: not-allowed; }
   .olv-empty-hero { animation: none; }
 }
 .olv-empty-title {
-  font-size: 28px; font-weight: 600; letter-spacing: -0.01em;
+  font-size: var(--text-3xl); font-weight: 600; letter-spacing: -0.01em;
   background: var(--brand-gradient);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.olv-empty-sub { font-size: 13px; color: var(--text-dim); max-width: 440px; line-height: 1.6; }
+.olv-empty-sub { font-size: var(--text-md); color: var(--text-dim); max-width: 440px; line-height: 1.6; }
 /* Format-support note — secondary, demoted below the primary CTA so
  * format jargon doesn't compete with the action label. */
 .olv-empty-formats {
-  font-size: 11px; color: var(--text-faint); max-width: 440px;
-  line-height: 1.5; margin-top: 4px;
+  font-size: var(--text-xs); color: var(--text-faint); max-width: 440px;
+  line-height: 1.5; margin-top: var(--space-xs);
 }
 /*
  * PC STAC "Search by location" disclosure — same <details> base but
@@ -422,52 +476,52 @@ button:disabled { cursor: not-allowed; }
  */
 .olv-pc-search-disclosure[open] {
   border-left: 2px solid rgba(0, 178, 255, 0.55);
-  padding-left: 10px;
+  padding-left: var(--space-lg);
   margin-left: -12px;
 }
 /* Section label above each secondary group ("Quick demos" / "Public
  * LiDAR"). Sets a clear visual break between the three input modes so
  * the user reads three distinct intents, not five competing inputs. */
 .olv-empty-section-label {
-  font-size: 11px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   letter-spacing: 0.06em; text-transform: uppercase;
-  margin-top: 24px; margin-bottom: 2px;
+  margin-top: var(--space-4xl); margin-bottom: var(--space-2xs);
 }
-.olv-samples { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.olv-samples { display: flex; gap: var(--space-lg); flex-wrap: wrap; justify-content: center; }
 .olv-sample {
-  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  display: flex; flex-direction: column; gap: var(--space-2xs); text-align: left;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 10px 16px; color: var(--text);
+  border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-2xl); color: var(--text);
 }
 .olv-sample:hover { border-color: var(--accent); }
-.olv-sample-label { font-size: 13px; }
-.olv-sample-detail { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+.olv-sample-label { font-size: var(--text-md); }
+.olv-sample-detail { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
 
 /* Open-from-URL — the quiet, secondary entry point for a remote COPC scan. */
 .olv-empty-url {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  margin-top: 6px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }
-.olv-url-label { font-size: 12px; color: var(--text-dim); }
-.olv-url-controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.olv-url-label { font-size: var(--text-sm); color: var(--text-dim); }
+.olv-url-controls { display: flex; gap: var(--space-md); flex-wrap: wrap; justify-content: center; }
 .olv-url-input {
   width: 280px; max-width: 64vw;
-  font-size: 12px; color: var(--text); font-family: var(--mono);
+  font-size: var(--text-sm); color: var(--text); font-family: var(--mono);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 12px;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl);
 }
 .olv-url-input::placeholder { color: var(--text-faint); }
 .olv-url-input:focus-visible { outline: none; border-color: var(--accent); }
 .olv-url-btn {
-  font-size: 12px; font-weight: 600; color: var(--text);
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 16px;
-  transition: border-color 140ms ease, transform 90ms ease;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
+  transition: border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-url-btn:hover { border-color: var(--accent); }
 .olv-url-btn:active { transform: scale(0.97); }
 .olv-url-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.olv-url-hint { font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5; }
+.olv-url-hint { font-size: var(--text-xs); color: var(--text-faint); max-width: 360px; line-height: 1.5; }
 
 /* Catalog panel — verified public LiDAR dataset picker on the empty
  * state. Surfaces the curated dropdown (every URL probed at release time)
@@ -476,17 +530,17 @@ button:disabled { cursor: not-allowed; }
  * line plus a scrollable result list for the STAC search results. */
 .olv-catalog {
   display: flex; flex-direction: column; align-items: center;
-  gap: 8px; margin-top: 4px;
+  gap: var(--space-md); margin-top: var(--space-xs);
   width: min(100%, 460px);
 }
-.olv-catalog-title { font-size: 12px; color: var(--text-dim); }
-.olv-catalog-form { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
-.olv-catalog-controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; }
+.olv-catalog-title { font-size: var(--text-sm); color: var(--text-dim); }
+.olv-catalog-form { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); width: 100%; }
+.olv-catalog-controls { display: flex; gap: var(--space-md); flex-wrap: wrap; justify-content: center; width: 100%; }
 .olv-catalog-input {
   flex: 1; min-width: 200px; max-width: 320px;
-  font-size: 12px; color: var(--text);
+  font-size: var(--text-sm); color: var(--text);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 12px;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl);
 }
 .olv-catalog-input::placeholder { color: var(--text-faint); }
 .olv-catalog-input:focus-visible { outline: none; border-color: var(--accent); }
@@ -496,60 +550,60 @@ button:disabled { cursor: not-allowed; }
  * kept; theming the chevron requires JS, and the visual cost is small. */
 .olv-catalog-select {
   flex: 1; min-width: 200px; max-width: 320px;
-  font-size: 12px; color: var(--text);
+  font-size: var(--text-sm); color: var(--text);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 12px;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl);
   cursor: pointer;
 }
 .olv-catalog-select:focus-visible { outline: none; border-color: var(--accent); }
 .olv-catalog-select:disabled { opacity: 0.5; cursor: not-allowed; }
 .olv-catalog-btn {
-  font-size: 12px; font-weight: 600; color: var(--text);
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 16px;
-  transition: border-color 140ms ease, transform 90ms ease;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
+  transition: border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-catalog-btn:hover:not(:disabled) { border-color: var(--accent); }
 .olv-catalog-btn:active:not(:disabled) { transform: scale(0.97); }
 .olv-catalog-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-catalog-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.olv-catalog-hint { font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5; }
+.olv-catalog-hint { font-size: var(--text-xs); color: var(--text-faint); max-width: 360px; line-height: 1.5; }
 .olv-catalog-suppressed {
-  font-size: 11px; color: var(--text-faint); max-width: 360px; line-height: 1.5;
-  padding: 8px 12px; border: 0.5px dashed var(--hairline); border-radius: 8px;
+  font-size: var(--text-xs); color: var(--text-faint); max-width: 360px; line-height: 1.5;
+  padding: var(--space-md) var(--space-xl); border: 0.5px dashed var(--hairline); border-radius: var(--radius-md);
 }
 .olv-catalog-status {
-  font-size: 11.5px; color: var(--text-dim); min-height: 16px;
+  font-size: var(--text-xs); color: var(--text-dim); min-height: 16px;
   max-width: 420px; line-height: 1.5; text-align: center;
 }
 .olv-catalog-results {
-  display: flex; flex-direction: column; gap: 6px; width: 100%;
+  display: flex; flex-direction: column; gap: var(--space-sm); width: 100%;
   max-height: 200px; overflow-y: auto;
 }
 .olv-catalog-result {
-  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  display: flex; flex-direction: column; gap: var(--space-xs); align-items: flex-start;
   text-align: left;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 12px; color: var(--text);
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl); color: var(--text);
   cursor: pointer;
-  transition: border-color 140ms ease;
+  transition: border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-catalog-result:hover { border-color: var(--accent); }
 .olv-catalog-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.olv-catalog-result-main { display: flex; gap: 8px; align-items: baseline; width: 100%; }
+.olv-catalog-result-main { display: flex; gap: var(--space-md); align-items: baseline; width: 100%; }
 .olv-catalog-result-name {
-  font-size: 12px; font-family: var(--mono); color: var(--text);
+  font-size: var(--text-sm); font-family: var(--mono); color: var(--text);
   /* min-width:0 is required for text-overflow:ellipsis to engage on a
    * flex child — without it long dataset names overflow the result row. */
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
 }
-.olv-catalog-result-detail { font-size: 11px; color: var(--text-faint); }
+.olv-catalog-result-detail { font-size: var(--text-xs); color: var(--text-faint); }
 
 /* Inspector */
 .olv-inspector {
   position: absolute; top: 56px; right: 14px; width: 232px;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
   max-height: calc(100% - 80px); overflow-y: auto;
   /* Above the persistent navbar HUD (z-index 10) so the Inspector's
    * scrollable content (Photometric witness, Visuals Studio chips,
@@ -566,7 +620,7 @@ button:disabled { cursor: not-allowed; }
   bottom: 64px;
   max-height: calc(50vh - 84px);
 }
-.olv-panel-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
+.olv-panel-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 /*
  * Inter-section spacing in the Inspector — proximity does the grouping,
  * hairline only reinforces. Inspector stacks 13 collapsible sections on
@@ -574,11 +628,11 @@ button:disabled { cursor: not-allowed; }
  * section" before it reaches the hairline. The hairline drops to half
  * opacity so it doesn't compete with the typographic eyebrow below it.
  */
-.olv-section { margin-top: 16px; padding-top: 8px; border-top: 0.5px solid rgba(255, 255, 255, 0.05); }
+.olv-section { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 0.5px solid rgba(255, 255, 255, 0.05); }
 .olv-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
 .olv-section-label {
-  font-size: 11px; color: var(--text-faint);
-  letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px;
+  font-size: var(--text-xs); color: var(--text-faint);
+  letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: var(--space-md);
 }
 
 /* Collapsible section (<details>) — matches the static section
@@ -586,7 +640,7 @@ button:disabled { cursor: not-allowed; }
  * visual signal is a small caret on the summary that rotates on
  * open. List-style markers are suppressed so the native browser
  * triangle doesn't compete with the custom one. */
-.olv-section-collapsible[open] > summary { margin-bottom: 8px; }
+.olv-section-collapsible[open] > summary { margin-bottom: var(--space-md); }
 .olv-section-collapsible:not([open]) > .olv-section-label { margin-bottom: 0; }
 .olv-section-summary {
   cursor: pointer;
@@ -594,8 +648,8 @@ button:disabled { cursor: not-allowed; }
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 6px;
-  transition: color 130ms ease;
+  gap: var(--space-sm);
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 .olv-section-summary::-webkit-details-marker { display: none; }
 .olv-section-summary::before {
@@ -605,7 +659,7 @@ button:disabled { cursor: not-allowed; }
   border-left: 4px solid var(--text-faint);
   border-top: 3px solid transparent;
   border-bottom: 3px solid transparent;
-  transition: transform 140ms ease;
+  transition: transform var(--dur-fast) var(--ease-standard);
   flex-shrink: 0;
 }
 .olv-section-collapsible[open] > .olv-section-summary::before {
@@ -616,26 +670,26 @@ button:disabled { cursor: not-allowed; }
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.olv-layers { display: flex; flex-direction: column; gap: 6px; }
-.olv-layer { display: flex; align-items: center; gap: 8px; }
+.olv-layers { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-layer { display: flex; align-items: center; gap: var(--space-md); }
 .olv-layer input { accent-color: var(--accent); }
 .olv-layer-name {
   /* min-width:0 lets ellipsis engage so long layer names truncate
    * instead of overflowing the Inspector panel. */
-  flex: 1; min-width: 0; font-size: 11.5px; font-family: var(--mono); color: #d6d9de;
+  flex: 1; min-width: 0; font-size: var(--text-xs); font-family: var(--mono); color: #d6d9de;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.olv-layer-count { font-size: 11px; font-family: var(--mono); color: var(--text-faint); }
-.olv-layer-x { background: none; border: none; color: var(--text-faint); font-size: 14px; line-height: 1; }
+.olv-layer-count { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); }
+.olv-layer-x { background: none; border: none; color: var(--text-faint); font-size: var(--text-lg); line-height: 1; }
 .olv-layer-x:hover { color: var(--text); }
-.olv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.olv-color-by-body { display: flex; flex-direction: column; gap: 8px; }
+.olv-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.olv-color-by-body { display: flex; flex-direction: column; gap: var(--space-md); }
 
 /* Visuals Studio — Visuals Studio. Three chip rails grouped under
  * named labels, plus an Advanced disclosure for white-balance sliders
  * and auto-balance. Sits as a collapsible Inspector section so the
  * panel stays compact when an analyst doesn't need it. */
-.olv-visuals-body { display: flex; flex-direction: column; gap: 6px; }
+.olv-visuals-body { display: flex; flex-direction: column; gap: var(--space-sm); }
 /*
  * Visuals Studio sub-group eyebrow (RGB / Depth / Background).
  * 10 px top margin gives the chip rail above room to breathe before
@@ -643,19 +697,19 @@ button:disabled { cursor: not-allowed; }
  * wrong label (Gestalt proximity ambiguity).
  */
 .olv-visuals-group-label {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
-  margin-top: 10px;
-  margin-bottom: 4px;
+  margin-top: var(--space-lg);
+  margin-bottom: var(--space-xs);
 }
 .olv-visuals-group-label:first-child { margin-top: 0; }
-.olv-visuals-advanced-details { margin-top: 8px; }
+.olv-visuals-advanced-details { margin-top: var(--space-md); }
 .olv-visuals-advanced-hint {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-faint);
-  padding: 6px 0 8px;
+  padding: var(--space-sm) 0 var(--space-md);
   font-style: italic;
 }
 
@@ -669,22 +723,22 @@ button:disabled { cursor: not-allowed; }
   transform: translateX(-50%);
   z-index: 80;
   max-width: min(720px, calc(100vw - 32px));
-  padding: 10px 16px;
+  padding: var(--space-lg) var(--space-2xl);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   color: var(--text);
   background: rgba(11, 17, 33, 0.92);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 220ms ease;
+  transition: opacity 220ms var(--ease-standard);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-xl);
 }
 /* Visible toast stays click-through — it's a passive notification. The
  * action button inside (when present) re-claims pointer events so
@@ -709,16 +763,16 @@ button:disabled { cursor: not-allowed; }
  * action shape so the eye lands on it after reading the result. */
 .olv-lasso-toast-action {
   flex: 0 0 auto;
-  padding: 6px 12px;
+  padding: var(--space-sm) var(--space-xl);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: #0a0e1a;
   background: #00b2ff;
   border: 0.5px solid rgba(0, 178, 255, 0.85);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 120ms ease, transform 120ms ease;
+  transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
 }
 .olv-lasso-toast-action:hover {
   background: #1ec0ff;
@@ -732,26 +786,26 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-visuals-advanced-summary {
   cursor: pointer;
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
   list-style: none;
   user-select: none;
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
 }
 .olv-visuals-advanced-summary::-webkit-details-marker { display: none; }
 .olv-visuals-advanced-summary::before {
   content: '▸';
   display: inline-block;
-  margin-right: 4px;
-  transition: transform 120ms ease-out;
+  margin-right: var(--space-xs);
+  transition: transform var(--dur-fast) ease-out;
 }
 .olv-visuals-advanced-details[open] .olv-visuals-advanced-summary::before {
   transform: rotate(90deg);
 }
-.olv-visuals-advanced { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
-.olv-visuals-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.olv-visuals-advanced { display: flex; flex-direction: column; gap: var(--space-sm); padding-top: var(--space-xs); }
+.olv-visuals-row { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); }
 .olv-visuals-row-name { width: 84px; flex-shrink: 0; color: var(--text-dim); }
 .olv-wb-slider { flex: 1; min-width: 60px; accent-color: var(--accent); }
 .olv-wb-label {
@@ -760,16 +814,16 @@ button:disabled { cursor: not-allowed; }
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
-.olv-wb-auto { margin-top: 2px; }
+.olv-wb-auto { margin-top: var(--space-2xs); }
 /* v0.3.7 final-polish — height percentile-trim slider.
  * Sits beneath the Color By chips when "Height" is the active mode. */
 .olv-height-trim-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
   color: var(--text-dim);
-  padding-top: 2px;
+  padding-top: var(--space-2xs);
 }
 .olv-height-trim-name { flex-shrink: 0; }
 .olv-height-trim-slider { flex: 1; min-width: 80px; accent-color: var(--accent); }
@@ -780,10 +834,10 @@ button:disabled { cursor: not-allowed; }
   text-align: right;
 }
 .olv-chip {
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 4px 8px;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
 }
 .olv-chip:hover { color: var(--text); }
 .olv-chip-active {
@@ -792,8 +846,8 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-slider { width: 100%; accent-color: var(--accent); }
 /* Rendering controls — stacked groups and a labelled slider row. */
-.olv-render-group { display: flex; flex-direction: column; gap: 8px; }
-.olv-render-row { display: flex; align-items: center; gap: 8px; }
+.olv-render-group { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-render-row { display: flex; align-items: center; gap: var(--space-md); }
 /* Sub-group label inside Rendering — "Point size" / "Eye Dome
  * Lighting". Smaller and dimmer than the main section label so the
  * hierarchy reads "section > sub-group > control". */
@@ -804,22 +858,22 @@ button:disabled { cursor: not-allowed; }
  * label (Gestalt proximity ambiguity).
  */
 .olv-render-sublabel {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
-  margin-top: 10px;
+  margin-top: var(--space-lg);
 }
 .olv-render-sublabel:first-child { margin-top: 0; }
-.olv-render-label { font-size: 11px; color: #8a909a; min-width: 52px; }
+.olv-render-label { font-size: var(--text-xs); color: #8a909a; min-width: 52px; }
 .olv-detail-bar { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
 .olv-detail-fill { height: 100%; background: var(--brand-gradient); }
-.olv-detail-text { font-size: 11px; color: var(--text-dim); font-family: var(--mono); margin-top: 6px; }
-.olv-report { display: flex; flex-direction: column; gap: 6px; }
-.olv-report-empty { font-size: 11.5px; color: var(--text-faint); }
-.olv-report-row { display: flex; align-items: center; gap: 8px; }
-.olv-report-label { flex: 1; font-size: 11.5px; color: #d6d9de; }
-.olv-report-value { font-size: 11px; font-family: var(--mono); color: var(--text-dim); text-align: right; }
+.olv-detail-text { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); margin-top: var(--space-sm); }
+.olv-report { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-report-empty { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-report-row { display: flex; align-items: center; gap: var(--space-md); }
+.olv-report-label { flex: 1; font-size: var(--text-xs); color: #d6d9de; }
+.olv-report-value { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim); text-align: right; }
 .olv-status { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .olv-status-pass { background: var(--teal); }
 .olv-status-info { background: #6b7079; }
@@ -827,23 +881,23 @@ button:disabled { cursor: not-allowed; }
 .olv-status-fail { background: #e24b4a; }
 
 /* Advanced report — collapsible diagnostics under the headline metrics */
-.olv-advanced { margin-top: 2px; }
+.olv-advanced { margin-top: var(--space-2xs); }
 .olv-advanced-summary {
   list-style: none; cursor: pointer; user-select: none;
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--text-faint); padding: 6px 0;
-  transition: color 130ms ease;
+  display: flex; align-items: center; gap: var(--space-sm);
+  font-size: var(--text-xs); color: var(--text-faint); padding: var(--space-sm) 0;
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 .olv-advanced-summary::-webkit-details-marker { display: none; }
 .olv-advanced-summary::before {
   content: ""; width: 0; height: 0;
   border-left: 4px solid currentColor;
   border-top: 3px solid transparent; border-bottom: 3px solid transparent;
-  transition: transform 130ms ease;
+  transition: transform var(--dur-fast) var(--ease-standard);
 }
 .olv-advanced[open] .olv-advanced-summary::before { transform: rotate(90deg); }
 .olv-advanced-summary:hover { color: var(--text-dim); }
-.olv-advanced-body { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.olv-advanced-body { display: flex; flex-direction: column; gap: var(--space-sm); padding-top: var(--space-xs); }
 
 /* Tool dock + backend indicator */
 .olv-dock {
@@ -852,9 +906,9 @@ button:disabled { cursor: not-allowed; }
    * .olv-navbar) so the two never overlap and never fight for clicks.
    * z-index 20 keeps the dock above the canvas (0) and the Inspector (15). */
   z-index: 20;
-  display: flex; gap: 6px;
+  display: flex; gap: var(--space-sm);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 9px; padding: 6px;
+  border-radius: var(--radius-md); padding: var(--space-sm);
 }
 /*
  * Gestalt proximity: 6 px gap inside a cluster, 16 px gap between
@@ -862,12 +916,12 @@ button:disabled { cursor: not-allowed; }
  * cluster — Share (start of meta-tools) and Close (start of close
  * cluster). The eye reads three groups instead of a flat row of ten.
  */
-.olv-dock > .olv-dock-gap { margin-left: 16px; }
+.olv-dock > .olv-dock-gap { margin-left: var(--space-2xl); }
 .olv-tool {
-  font-size: 11px; color: #aab0b8;
+  font-size: var(--text-xs); color: #aab0b8;
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 7px; padding: 6px 10px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
 }
 .olv-tool:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-tool:disabled { opacity: 0.4; }
@@ -892,13 +946,13 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-backend {
   position: absolute; bottom: 16px; right: 18px;
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: var(--space-sm);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 7px; padding: 4px 10px;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-lg);
 }
 .olv-backend-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.olv-backend-text { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+.olv-backend-text { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); }
 
 /* Developer performance overlay (?debug=1) */
 .olv-debug {
@@ -906,20 +960,20 @@ button:disabled { cursor: not-allowed; }
   max-width: 320px;
   background: rgba(10, 14, 26, 0.92);
   border: 0.5px solid var(--hairline);
-  border-radius: 9px; padding: 10px 12px;
+  border-radius: var(--radius-md); padding: var(--space-lg) var(--space-xl);
   pointer-events: none;
 }
 .olv-debug-title {
-  font-size: 11px; font-weight: 600; color: var(--accent);
-  margin-bottom: 6px;
+  font-size: var(--text-xs); font-weight: 600; color: var(--accent);
+  margin-bottom: var(--space-sm);
 }
 .olv-debug-label {
   font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--text-faint);
-  margin: 8px 0 2px;
+  margin: var(--space-md) 0 var(--space-2xs);
 }
 .olv-debug-block {
-  margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  margin: 0; font-family: var(--mono); font-size: var(--text-xs); line-height: 1.5;
   color: var(--text-dim); white-space: pre;
 }
 
@@ -933,34 +987,34 @@ button:disabled { cursor: not-allowed; }
 .olv-streaming-panel {
   position: absolute; top: 56px; right: 14px; width: 232px; z-index: 36;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
   max-height: calc(50vh - 40px); overflow-y: auto;
 }
-.olv-streaming-title { font-size: 12px; font-weight: 600; color: var(--text); }
-.olv-streaming-phase { font-size: 11px; color: var(--accent); margin: 4px 0 8px; }
-.olv-streaming-rows { display: flex; flex-direction: column; gap: 4px; }
+.olv-streaming-title { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.olv-streaming-phase { font-size: var(--text-xs); color: var(--accent); margin: var(--space-xs) 0 var(--space-md); }
+.olv-streaming-rows { display: flex; flex-direction: column; gap: var(--space-xs); }
 .olv-streaming-row {
-  display: flex; justify-content: space-between; gap: 10px; font-size: 11px;
+  display: flex; justify-content: space-between; gap: var(--space-lg); font-size: var(--text-xs);
 }
 .olv-streaming-key { color: var(--text-faint); flex: none; }
 .olv-streaming-stat {
   color: var(--text-dim); font-family: var(--mono);
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.olv-streaming-views { display: flex; flex-direction: column; gap: 4px; }
-.olv-streaming-empty { font-size: 11px; color: var(--text-faint); }
-.olv-streaming-view { display: flex; gap: 4px; }
+.olv-streaming-views { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-streaming-empty { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-streaming-view { display: flex; gap: var(--space-xs); }
 .olv-streaming-view-name {
-  flex: 1; min-width: 0; text-align: left; font-size: 11px; color: #aab0b8;
+  flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: #aab0b8;
   background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline); border-radius: 7px; padding: 6px 8px;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .olv-streaming-view-name:hover { color: var(--text); border-color: var(--accent); }
 .olv-streaming-view-del {
-  flex: none; width: 26px; font-size: 13px; color: var(--text-faint);
+  flex: none; width: 26px; font-size: var(--text-md); color: var(--text-faint);
   background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline); border-radius: 7px;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
 }
 .olv-streaming-view-del:hover { color: #ff9a9a; border-color: rgba(255, 120, 120, 0.55); }
 /*
@@ -969,22 +1023,22 @@ button:disabled { cursor: not-allowed; }
  * speak the same typographic language (Gestalt similarity).
  */
 .olv-streaming-label {
-  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--text-faint); margin: 12px 0 8px;
+  font-size: var(--text-xs); letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-faint); margin: var(--space-xl) 0 var(--space-md);
 }
-.olv-streaming-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.olv-streaming-actions { display: flex; gap: 6px; margin-top: 12px; }
+.olv-streaming-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.olv-streaming-actions { display: flex; gap: var(--space-sm); margin-top: var(--space-xl); }
 /*
  * The destructive actions row (Clear cache) gets extra top margin so
  * it visually segregates from the constructive Save view + Pause
  * pair above it (Gestalt common region — destructive deserves its
  * own region, not just a colour cue).
  */
-.olv-streaming-actions + .olv-streaming-actions { margin-top: 16px; }
+.olv-streaming-actions + .olv-streaming-actions { margin-top: var(--space-2xl); }
 .olv-streaming-btn {
-  flex: 1; font-size: 11px; color: #aab0b8;
+  flex: 1; font-size: var(--text-xs); color: #aab0b8;
   background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline); border-radius: 7px; padding: 6px 8px;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
 }
 .olv-streaming-btn:hover { color: var(--text); border-color: var(--accent); }
 
@@ -1008,25 +1062,25 @@ button:disabled { cursor: not-allowed; }
 /* Progress toast */
 .olv-toast {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 16px;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
   min-width: 220px; max-width: 360px;
 }
-.olv-toast-row { display: flex; align-items: center; gap: 8px; }
+.olv-toast-row { display: flex; align-items: center; gap: var(--space-md); }
 .olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 /* `pre-line` lets the multi-line preload summary break on its newlines. */
-.olv-toast-text { font-size: 12px; color: var(--text); white-space: pre-line; line-height: 1.5; flex: 1; }
+.olv-toast-text { font-size: var(--text-sm); color: var(--text); white-space: pre-line; line-height: 1.5; flex: 1; }
 .olv-toast-cancel {
-  flex: none; font-size: 11px; color: var(--text); opacity: 0.7;
+  flex: none; font-size: var(--text-xs); color: var(--text); opacity: 0.7;
   background: transparent; border: 0.5px solid var(--hairline);
-  border-radius: 5px; padding: 4px 10px; cursor: pointer;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-lg); cursor: pointer;
 }
 .olv-toast-cancel:hover { opacity: 1; border-color: var(--accent); }
 .olv-toast-bar { height: 3px; border-radius: 2px; background: var(--hairline); overflow: hidden; }
 .olv-toast-bar-fill {
   display: block; height: 100%; width: 0%;
-  background: var(--accent); transition: width 0.2s ease;
+  background: var(--accent); transition: width var(--dur-base) var(--ease-standard);
 }
 .olv-toast-error { border-color: rgba(226, 75, 74, 0.5); }
 .olv-toast-error .olv-toast-dot { background: #e24b4a; }
@@ -1036,7 +1090,7 @@ button:disabled { cursor: not-allowed; }
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-navbar {
   position: absolute; bottom: 72px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-md);
   /* Float the nav widget ABOVE the tool dock's bottom band. The dock is
    * bottom-left and grows wide; the mode triangle is bottom-centre. If both
    * sat at the same bottom offset they would overlap horizontally and one
@@ -1061,7 +1115,7 @@ button:disabled { cursor: not-allowed; }
 .olv-navbar .olv-cam-chip,
 .olv-navbar .olv-mode,
 .olv-navbar .olv-nav-reset { pointer-events: auto; }
-.olv-nav-row { display: flex; align-items: center; gap: 8px; }
+.olv-nav-row { display: flex; align-items: center; gap: var(--space-md); }
 
 /* v0.3.6 triangle mode switcher — three vertex buttons connected by a
  * dashed cyan outline, with a centre Reset action at the centroid. Users
@@ -1097,12 +1151,12 @@ button:disabled { cursor: not-allowed; }
   border: 0.5px solid var(--hairline);
   border-radius: 50%;
   color: var(--text-dim);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.04em;
   padding: 0;
   cursor: pointer;
-  transition: background 180ms ease, color 180ms ease, border-color 180ms ease,
-              box-shadow 180ms ease, transform 90ms ease;
+  transition: background 180ms var(--ease-standard), color 180ms var(--ease-standard), border-color 180ms var(--ease-standard),
+              box-shadow 180ms var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-modes-triangle .olv-mode:hover:not(.olv-mode-active) {
   color: var(--text);
@@ -1161,10 +1215,10 @@ button:disabled { cursor: not-allowed; }
     0 0 16px 2px rgba(0, 178, 255, 0.28),
     0 2px 10px rgba(0, 0, 0, 0.45);
   transition:
-    background 180ms ease,
-    transform 90ms ease,
-    box-shadow 200ms ease,
-    border-color 180ms ease;
+    background 180ms var(--ease-standard),
+    transform 90ms var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-standard),
+    border-color 180ms var(--ease-standard);
 }
 /* "Frame" tag — appears above the button on hover / focus so the
  * action self-describes the moment the user reaches for it. Kept
@@ -1177,21 +1231,21 @@ button:disabled { cursor: not-allowed; }
   top: -22px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(0, 178, 255, 1);
   background: rgba(8, 14, 28, 0.92);
   border: 1px solid rgba(0, 178, 255, 0.6);
-  border-radius: 4px;
-  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  padding: var(--space-2xs) var(--space-md);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   white-space: nowrap;
   opacity: 0;
   transform: translate(-50%, 4px);
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition: opacity 160ms var(--ease-standard), transform 160ms var(--ease-standard);
 }
 .olv-mode-reset:hover::after,
 .olv-mode-reset:focus-visible::after {
@@ -1234,15 +1288,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Legacy non-triangle mode switcher fallback (kept in case any non-
  * NavBar caller instantiates `.olv-modes` without the triangle class). */
 .olv-modes {
-  display: flex; gap: 2px;
+  display: flex; gap: var(--space-2xs);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 9px; padding: 4px;
+  border-radius: var(--radius-md); padding: var(--space-xs);
 }
 .olv-mode {
-  font-size: 11.5px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: transparent; border: none;
-  border-radius: 6px; padding: 6px 16px;
-  transition: background 140ms ease, color 140ms ease, transform 90ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-2xl);
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-mode:hover:not(.olv-mode-active) { color: var(--text); }
 .olv-mode:active { transform: scale(0.95); }
@@ -1262,18 +1316,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * reads the two as living on one axis.
  */
 .olv-nav-speed {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--space-lg);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 9px; padding: 8px 12px;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl);
   transform: translateY(6px);
 }
 .olv-nav-speed-label {
-  font-size: 11px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   letter-spacing: 0.04em; text-transform: uppercase;
 }
 .olv-speed-slider { width: 116px; }
 .olv-speed-readout {
-  font-size: 11px; font-family: var(--mono); color: var(--text-dim);
+  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim);
   min-width: 30px; text-align: right;
 }
 
@@ -1282,7 +1336,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(11, 17, 33,0.82);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--hairline);
-  border-radius: 11px; padding: 10px 12px;
+  border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
   max-width: 640px;
 }
 /* v0.3.10 — Header row carries the title + X close button.
@@ -1290,10 +1344,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    panel reads as a normal closable card. */
 .olv-nav-hud-header {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; margin-bottom: 8px;
+  gap: var(--space-xl); margin-bottom: var(--space-md);
 }
 .olv-nav-hud-title {
-  font-size: 10.5px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   letter-spacing: 0.07em; text-transform: uppercase;
 }
 .olv-nav-hud-close {
@@ -1302,8 +1356,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   width: 22px; height: 22px;
   background: none; border: none; color: var(--text-faint);
   font-size: 17px; line-height: 1; cursor: pointer;
-  border-radius: 6px;
-  transition: color 120ms ease, background 120ms ease;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
 .olv-nav-hud-close:hover {
   color: var(--text); background: rgba(255, 255, 255, 0.07);
@@ -1319,16 +1373,16 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  *   .olv-legend-group keeps items inside a cluster tight — 6 px row,
  *   14 px column — reinforcing "these belong together."
  */
-.olv-legend { display: flex; flex-direction: column; gap: 10px; }
-.olv-legend-group { display: flex; flex-wrap: wrap; gap: 6px 16px; }
-.olv-legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.olv-legend-text { font-size: 11px; color: var(--text-dim); }
+.olv-legend { display: flex; flex-direction: column; gap: var(--space-lg); }
+.olv-legend-group { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-2xl); }
+.olv-legend-item { display: inline-flex; align-items: center; gap: var(--space-sm); }
+.olv-legend-text { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-key {
-  font-family: var(--mono); font-size: 10px; color: #cdd1d7;
+  font-family: var(--mono); font-size: var(--text-2xs); color: #cdd1d7;
   background: rgba(255, 255, 255, 0.06);
   border: 0.5px solid var(--hairline);
   border-bottom-width: 1.5px;
-  border-radius: 4px; padding: 2px 6px; min-width: 16px; text-align: center;
+  border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm); min-width: 16px; text-align: center;
 }
 
 /*
@@ -1338,25 +1392,25 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * Gestalt typography used by other section labels.
  */
 .olv-cam-presets-row {
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: var(--space-xl);
+  padding-top: var(--space-lg);
   border-top: 0.5px solid rgba(255, 255, 255, 0.05);
 }
 .olv-cam-presets-label {
-  font-size: 10.5px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   letter-spacing: 0.07em; text-transform: uppercase;
-  display: block; margin-bottom: 6px;
+  display: block; margin-bottom: var(--space-sm);
 }
-.olv-cam-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.olv-cam-presets { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 .olv-cam-chip {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: var(--space-sm);
   font-family: var(--font);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 4px 8px;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
   color: var(--text-dim); cursor: pointer;
-  transition: color 130ms ease, border-color 130ms ease, background 130ms ease,
-    transform 90ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+    transform 90ms var(--ease-standard);
 }
 .olv-cam-chip:hover {
   color: var(--text); border-color: var(--accent);
@@ -1367,29 +1421,29 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .olv-cam-chip-key {
-  font-family: var(--mono); font-size: 10px;
+  font-family: var(--mono); font-size: var(--text-2xs);
   color: var(--accent);
   background: rgba(0, 178, 255, 0.10);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
-  border-radius: 3px; padding: 1px 4px; min-width: 14px; text-align: center;
+  border-radius: var(--radius-xs); padding: 1px var(--space-xs); min-width: 14px; text-align: center;
 }
-.olv-cam-chip-label { font-size: 11px; }
+.olv-cam-chip-label { font-size: var(--text-xs); }
 
 /* Centred "click to look" prompt */
 .olv-nav-prompt {
   position: absolute; top: 46%; left: 50%;
   transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
   background: rgba(11, 17, 33,0.86);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.34);
-  border-radius: 12px; padding: 12px 24px;
-  font-size: 13px; color: var(--text);
+  border-radius: 12px; padding: var(--space-xl) var(--space-4xl);
+  font-size: var(--text-md); color: var(--text);
   pointer-events: none; /* clicks pass through to the canvas */
-  opacity: 0; transition: opacity 220ms ease;
+  opacity: 0; transition: opacity 220ms var(--ease-standard);
 }
 .olv-nav-prompt.olv-visible { opacity: 1; animation: olv-prompt-breathe 2.6s ease-in-out infinite; }
-.olv-nav-prompt-sub { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+.olv-nav-prompt-sub { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
 
 @keyframes olv-prompt-breathe {
   0%, 100% { border-color: rgba(0, 178, 255, 0.22); }
@@ -1403,14 +1457,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    Micro-interactions — tactile feedback, eased states, entrance motion
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x {
-  transition: color 130ms ease, border-color 130ms ease,
-    background 130ms ease, transform 90ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-tool:active:not(:disabled),
 .olv-chip:active,
 .olv-sample:active,
 .olv-layer-x:active { transform: scale(0.95); }
-.olv-chip-active { transition: color 130ms ease, background 130ms ease, border-color 130ms ease; }
+.olv-chip-active { transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard); }
 
 /* Keyboard focus — visible, on-brand, never on mouse click */
 .olv-tool:focus-visible, .olv-chip:focus-visible, .olv-mode:focus-visible,
@@ -1449,7 +1503,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Version mark — bottom-right corner, revealed once a scan loads */
 .olv-version {
   position: absolute; bottom: 13px; right: 14px;
-  font-size: 10px; line-height: 1; font-family: var(--mono);
+  font-size: var(--text-2xs); line-height: 1; font-family: var(--mono);
   letter-spacing: 0.03em; color: var(--text-faint);
   pointer-events: auto; user-select: none;
 }
@@ -1469,17 +1523,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  *                          232 px Inspector panel; the grid wraps them into
  *                          4 rows of 2 (last row holds the seventh).
  */
-.olv-export { display: flex; gap: 6px; }
+.olv-export { display: flex; gap: var(--space-sm); }
 .olv-export-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--space-sm);
 }
 .olv-export-btn {
-  flex: 1; font-size: 10.5px; color: var(--text-dim);
+  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 6px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-sm);
   /* Centre the label even when the button is wider than its text — the
    * 2-column grid gives each image-export button ~100 px, well over the
    * label width. `text-align: center` keeps the visual rhythm.
@@ -1492,8 +1546,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 130ms ease, border-color 130ms ease,
-    background 130ms ease, transform 90ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-export-btn:hover { color: var(--text); border-color: var(--accent); }
 .olv-export-btn:active { transform: scale(0.95); }
@@ -1509,15 +1563,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Report PDF row — template picker + generate button, mirrored on the
  * existing `.olv-export` flex idiom. Picker takes the elastic share so
  * a long template label doesn't push the button off the row. */
-.olv-report-row { display: flex; gap: 6px; align-items: stretch; }
+.olv-report-row { display: flex; gap: var(--space-sm); align-items: stretch; }
 .olv-report-row .olv-export-btn { flex: 0 0 auto; }
 .olv-report-select {
   flex: 1; min-width: 0;
-  font-size: 10.5px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 6px;
-  transition: border-color 130ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-sm);
+  transition: border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-report-select:hover:not(:disabled) { border-color: var(--accent); }
 .olv-report-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -1525,11 +1579,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* Saved views (Inspector) */
 .olv-view-save {
-  width: 100%; font-size: 11px; color: var(--accent);
+  width: 100%; font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
-  border-radius: 7px; padding: 6px;
-  transition: background 130ms ease, transform 90ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm);
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-view-save:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-view-save:active { transform: scale(0.98); }
@@ -1539,98 +1593,98 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * so two `<select>`s in the panel don't visually compete. Safety
  * warnings get a coloured left rail so they read as advice, not as
  * decoration. */
-.olv-crs { display: flex; flex-direction: column; gap: 8px; }
-.olv-crs-summary { display: flex; flex-direction: column; gap: 2px; }
-.olv-crs-name { font-size: 12px; color: var(--text); font-weight: 500; }
+.olv-crs { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-crs-summary { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-crs-name { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .olv-crs-epsg {
-  font-size: 10.5px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   font-family: var(--mono);
 }
-.olv-crs-meta { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
-.olv-crs-meta-row { font-size: 11px; color: var(--text-dim); }
+.olv-crs-meta { display: flex; flex-direction: column; gap: 1px; margin-top: var(--space-2xs); }
+.olv-crs-meta-row { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-crs-warning {
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   border-left: 2px solid #e24b4a;
-  padding: 6px 8px;
+  padding: var(--space-sm) var(--space-md);
   background: rgba(226, 75, 74, 0.06);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   line-height: 1.45;
 }
 .olv-crs-warning-soft {
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   border-left: 2px solid var(--accent);
-  padding: 6px 8px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--accent-soft);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   line-height: 1.45;
 }
 .olv-crs-picker-label {
-  font-size: 10.5px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   letter-spacing: 0.04em; text-transform: uppercase;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 .olv-crs-select {
   width: 100%;
-  font-size: 11.5px; color: var(--text);
+  font-size: var(--text-xs); color: var(--text);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 8px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
 }
 .olv-crs-select:hover { border-color: var(--accent); }
 .olv-crs-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.olv-provenance { display: flex; flex-direction: column; gap: 8px; }
+.olv-provenance { display: flex; flex-direction: column; gap: var(--space-md); }
 .olv-prov-headline { display: flex; justify-content: space-between; align-items: center; }
-.olv-prov-label { font-size: 12px; color: var(--text); font-weight: 500; }
+.olv-prov-label { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .olv-prov-confidence {
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-xs);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-dim);
 }
 .olv-prov-confidence-high   { color: var(--accent); border: 0.5px solid var(--accent); }
 .olv-prov-confidence-medium { color: var(--text-dim); border: 0.5px solid var(--hairline); }
 .olv-prov-confidence-low    { color: var(--text-faint); border: 0.5px solid var(--hairline); }
-.olv-prov-signals { display: flex; flex-direction: column; gap: 2px; }
-.olv-prov-signal { font-size: 11px; color: var(--text-dim); }
+.olv-prov-signals { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-prov-signal { font-size: var(--text-xs); color: var(--text-dim); }
 /*
  * Provenance sub-regions get 12 px top margins so each (confidence,
  * signals, ribbon, override) reads as its own concern instead of one
  * blurry list (Gestalt common region — proximity carries grouping in
  * a 5-region card where hairlines would be overkill).
  */
-.olv-prov-ribbon { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.olv-prov-ribbon { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-xl); }
 .olv-prov-ribbon-title {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
 .olv-prov-bound { display: flex; flex-direction: column; gap: 1px; }
-.olv-prov-bound-label  { font-size: 10.5px; color: var(--text-faint); }
-.olv-prov-bound-value  { font-size: 11px;   color: var(--text); }
-.olv-prov-bound-source { font-size: 10px;   color: var(--text-faint); font-style: italic; }
+.olv-prov-bound-label  { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-prov-bound-value  { font-size: var(--text-xs);   color: var(--text); }
+.olv-prov-bound-source { font-size: var(--text-2xs);   color: var(--text-faint); font-style: italic; }
 .olv-prov-disclaimer {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   color: var(--text-faint);
   line-height: 1.45;
   border-top: 0.5px solid var(--hairline);
-  padding-top: 8px;
+  padding-top: var(--space-md);
 }
 .olv-prov-override-row {
-  display: flex; align-items: center; gap: 8px; margin-top: 12px;
+  display: flex; align-items: center; gap: var(--space-md); margin-top: var(--space-xl);
 }
-.olv-prov-override-label { font-size: 10.5px; color: var(--text-faint); }
+.olv-prov-override-label { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-prov-override-select {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 5px;
-  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
   flex: 1;
 }
 
@@ -1643,31 +1697,31 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-stats-section > summary {
   list-style: none;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-faint);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   user-select: none;
   padding: 0;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-md);
 }
 .olv-stats-section > summary::-webkit-details-marker { display: none; }
 .olv-stats-section > summary::before {
   content: '▸';
   display: inline-block;
   width: 12px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-faint);
-  transition: transform 120ms ease;
+  transition: transform var(--dur-fast) var(--ease-standard);
 }
 .olv-stats-section[open] > summary::before { transform: rotate(90deg); }
-.olv-session-stats { display: flex; flex-direction: column; gap: 4px; }
+.olv-session-stats { display: flex; flex-direction: column; gap: var(--space-xs); }
 .olv-stats-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11px;
-  padding: 4px 0;
+  font-size: var(--text-xs);
+  padding: var(--space-xs) 0;
 }
 .olv-stats-label { color: var(--text-dim); }
 .olv-stats-count { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -1675,40 +1729,40 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
   border-top: 0.5px solid var(--hairline);
 }
-.olv-stats-note { font-size: 10.5px; color: var(--text-faint); }
+.olv-stats-note { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-stats-reset {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   color: var(--text-dim);
   background: transparent;
   border: 0.5px solid var(--hairline);
-  border-radius: 5px;
-  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
   cursor: pointer;
 }
 .olv-stats-reset:hover { color: var(--text); border-color: var(--accent); }
 
-.olv-views { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.olv-view-row { display: flex; align-items: center; gap: 6px; }
+.olv-views { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-md); }
+.olv-view-row { display: flex; align-items: center; gap: var(--space-sm); }
 .olv-view-name {
-  flex: 1; min-width: 0; text-align: left; font-size: 11.5px; color: #d6d9de;
+  flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: #d6d9de;
   font-family: var(--font);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 8px;
-  transition: color 130ms ease, border-color 130ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-view-name:hover { border-color: rgba(0, 178, 255, 0.4); }
 .olv-view-name:focus-visible { outline: none; border-color: var(--accent); }
 .olv-view-go {
-  flex-shrink: 0; font-size: 11px; color: var(--accent);
+  flex-shrink: 0; font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
-  border-radius: 6px; padding: 6px 10px;
-  transition: background 130ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: background var(--dur-fast) var(--ease-standard);
 }
 .olv-view-go:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-view-go:active { transform: scale(0.98); }
@@ -1721,39 +1775,39 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(11, 17, 33,0.9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border: 0.5px solid rgba(0, 178, 255, 0.28);
-  border-radius: 12px; padding: 12px 16px;
+  border-radius: 12px; padding: var(--space-xl) var(--space-2xl);
   opacity: 0; pointer-events: none;
-  transition: opacity 240ms ease, transform 240ms ease;
+  transition: opacity var(--dur-slow) var(--ease-standard), transform var(--dur-slow) var(--ease-standard);
 }
 .olv-project-card.olv-visible {
   opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
 }
 .olv-pc-head { display: flex; align-items: center; justify-content: space-between; }
 .olv-pc-title {
-  font-size: 11px; color: var(--accent);
+  font-size: var(--text-xs); color: var(--accent);
   letter-spacing: 0.05em; text-transform: uppercase;
 }
 .olv-pc-dismiss {
   background: none; border: none; color: var(--text-faint);
-  font-size: 16px; line-height: 1; padding: 0 2px;
-  transition: color 130ms ease;
+  font-size: var(--text-xl); line-height: 1; padding: 0 var(--space-2xs);
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 .olv-pc-dismiss:hover { color: var(--text); }
 .olv-pc-name {
-  font-size: 12px; font-family: var(--mono); color: #d6d9de;
-  margin: 8px 0 10px;
+  font-size: var(--text-sm); font-family: var(--mono); color: #d6d9de;
+  margin: var(--space-md) 0 var(--space-lg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.olv-pc-grid { display: flex; flex-direction: column; gap: 6px; }
-.olv-pc-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.olv-pc-label { font-size: 11.5px; color: var(--text-faint); flex-shrink: 0; }
+.olv-pc-grid { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-pc-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-xl); }
+.olv-pc-label { font-size: var(--text-xs); color: var(--text-faint); flex-shrink: 0; }
 .olv-pc-value {
-  font-size: 11.5px; color: var(--text); font-family: var(--mono);
+  font-size: var(--text-xs); color: var(--text); font-family: var(--mono);
   text-align: right;
 }
 .olv-pc-countdown {
   height: 2px; background: var(--brand-gradient); border-radius: 1px;
-  margin-top: 12px; width: 100%;
+  margin-top: var(--space-xl); width: 100%;
   animation: olv-pc-deplete 7s linear forwards;
 }
 @keyframes olv-pc-deplete { from { width: 100%; } to { width: 0%; } }
@@ -1822,27 +1876,27 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* The instruction hint shown while measuring */
 .olv-measure-hint {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 16px;
+  display: flex; align-items: center; gap: var(--space-2xl);
   background: rgba(11, 17, 33,0.9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border: 0.5px solid rgba(0, 178, 255, 0.34);
-  border-radius: 11px; padding: 10px 12px;
+  border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
 }
-.olv-measure-hint-row { display: flex; align-items: center; gap: 10px; }
+.olv-measure-hint-row { display: flex; align-items: center; gap: var(--space-lg); }
 .olv-measure-badge {
-  font-size: 10px; color: var(--accent);
+  font-size: var(--text-2xs); color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
-  border-radius: 6px; padding: 4px 8px;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
   letter-spacing: 0.05em; text-transform: uppercase;
 }
-.olv-measure-hint-text { font-size: 12px; color: var(--text); }
-.olv-measure-actions { display: flex; gap: 6px; }
+.olv-measure-hint-text { font-size: var(--text-sm); color: var(--text); }
+.olv-measure-actions { display: flex; gap: var(--space-sm); }
 .olv-measure-clear, .olv-measure-done {
-  font-size: 11px;
-  border-radius: 6px; padding: 6px 10px;
-  transition: color 130ms ease, background 130ms ease,
-    border-color 130ms ease, transform 90ms ease;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 /*
  * Clear is destructive — it deletes every measurement in the panel.
@@ -1885,55 +1939,55 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(11, 17, 33, 0.94);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border: 0.5px solid rgba(0, 178, 255, 0.34);
-  border-radius: 11px; padding: 12px 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl) var(--space-xl);
   pointer-events: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 .olv-inspect-card-title {
-  font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 10px;
+  font-size: var(--text-sm); font-weight: 600; color: var(--text); margin-bottom: var(--space-lg);
 }
-.olv-inspect-rows { display: flex; flex-direction: column; gap: 6px; }
+.olv-inspect-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
 /* Coordinate-group header — small uppercase divider between Local /
  * World / Geographic / Attributes sections so the dense card scans as
  * four distinct intents instead of one long list. First-of-type has
  * no top margin so it stays tight against the card title. */
 .olv-inspect-group {
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
-  margin-top: 8px;
-  padding-top: 6px;
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
   border-top: 0.5px solid var(--hairline);
 }
 .olv-inspect-group:first-of-type {
   margin-top: 0; padding-top: 0; border-top: none;
 }
 .olv-inspect-row {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-lg);
 }
-.olv-inspect-row-label { font-size: 11px; color: var(--text-faint); }
+.olv-inspect-row-label { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-inspect-row-value {
-  font-size: 11.5px; font-family: var(--mono); color: var(--text);
+  font-size: var(--text-xs); font-family: var(--mono); color: var(--text);
   text-align: right; max-width: 128px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .olv-inspect-card-foot {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: 12px; padding-top: 10px;
+  display: flex; align-items: center; gap: var(--space-lg);
+  margin-top: var(--space-xl); padding-top: var(--space-lg);
   border-top: 0.5px solid var(--hairline);
 }
 .olv-inspect-copy {
-  font-size: 11px; color: var(--accent);
+  font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
-  border-radius: 6px; padding: 6px 12px;
-  transition: background 130ms ease, transform 90ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-xl);
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-inspect-copy:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-inspect-copy:active { transform: scale(0.95); }
 .olv-inspect-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.olv-inspect-copied { font-size: 10.5px; color: var(--teal); }
+.olv-inspect-copied { font-size: var(--text-xs); color: var(--teal); }
 
 /* Respect the OS "reduce motion" setting — disable all non-essential motion */
 @media (prefers-reduced-motion: reduce) {
@@ -1964,10 +2018,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    state. Visible everywhere; it is the touch-friendly path on phones. */
 .olv-open-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 600; color: #04121f;
+  font-size: var(--text-md); font-weight: 600; color: #04121f;
   background: var(--brand-gradient);
-  border: none; border-radius: 9px; padding: 12px 20px;
-  transition: box-shadow 140ms ease, transform 90ms ease;
+  border: none; border-radius: var(--radius-md); padding: var(--space-xl) var(--space-3xl);
+  transition: box-shadow var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-open-btn:hover { box-shadow: 0 6px 22px rgba(0, 178, 255, 0.32); }
 .olv-open-btn:active { transform: scale(0.97); }
@@ -2006,9 +2060,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 @media (max-width: 767px) {
   /* Topbar: tighter padding so the wordmark, badge and link share one row. */
   .olv-topbar {
-    padding-left: calc(12px + env(safe-area-inset-left));
-    padding-right: calc(12px + env(safe-area-inset-right));
-    gap: 8px;
+    padding-left: calc(var(--space-xl) + env(safe-area-inset-left));
+    padding-right: calc(var(--space-xl) + env(safe-area-inset-right));
+    gap: var(--space-md);
   }
 
   /* Empty state can scroll if a short landscape viewport runs out of room. */
@@ -2052,15 +2106,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     bottom: calc(76px + env(safe-area-inset-bottom));
     flex-wrap: nowrap;
     justify-content: center;
-    gap: 4px;
-    padding: 4px;
-    border-radius: 8px;
+    gap: var(--space-xs);
+    padding: var(--space-xs);
+    border-radius: var(--radius-md);
   }
-  .olv-dock > .olv-dock-gap { margin-left: 4px; }
+  .olv-dock > .olv-dock-gap { margin-left: var(--space-xs); }
   .olv-dock .olv-tool {
-    font-size: 10.5px;
-    padding: 6px 8px;
-    border-radius: 6px;
+    font-size: var(--text-xs);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
     /* Square-ish minimum touch surface — 32 px square hits Apple's
        minimum recommendation for a horizontal toolbar row. */
     min-width: 32px;
@@ -2082,7 +2136,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-dock .olv-tool-more {
     color: var(--text-dim);
     letter-spacing: 1px;
-    padding: 6px 8px;
+    padding: var(--space-sm) var(--space-md);
   }
   .olv-dock.olv-dock-more-open .olv-tool-more {
     background: rgba(0, 178, 255, 0.14);
@@ -2110,15 +2164,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     position: absolute;
     left: 50%; transform: translateX(-50%);
     bottom: calc(148px + env(safe-area-inset-bottom));
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: var(--space-md);
     max-width: calc(100vw - 24px);
     background: rgba(11, 17, 33, 0.92);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 0.5px solid rgba(0, 178, 255, 0.34);
-    border-radius: 11px; padding: 10px 10px 10px 16px;
-    font-size: 12px; color: var(--text); text-align: left;
+    border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-lg) var(--space-lg) var(--space-2xl);
+    font-size: var(--text-sm); color: var(--text); text-align: left;
     opacity: 0; pointer-events: none;
-    transition: opacity 240ms ease;
+    transition: opacity var(--dur-slow) var(--ease-standard);
   }
   .olv-touch-hint.olv-visible { opacity: 1; pointer-events: auto; }
   .olv-touch-hint-x {
@@ -2141,13 +2195,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     right: calc(12px + env(safe-area-inset-right));
     bottom: calc(14px + env(safe-area-inset-bottom));
     z-index: 40;
-    font-size: 12px; font-weight: 500; color: var(--accent);
+    font-size: var(--text-sm); font-weight: 500; color: var(--accent);
     background: rgba(11, 17, 33, 0.92);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 0.5px solid rgba(0, 178, 255, 0.42);
-    border-radius: 10px; padding: 0 16px;
+    border-radius: var(--radius-lg); padding: 0 var(--space-2xl);
     min-height: 44px;
-    transition: transform 90ms ease;
+    transition: transform 90ms var(--ease-standard);
   }
   body.olv-has-scan .olv-scaninfo-btn:active { transform: scale(0.97); }
 
@@ -2173,7 +2227,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     width: auto; max-height: 64vh;
     border-radius: 16px 16px 0 0;
     border-bottom: none;
-    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    padding: 14px var(--space-2xl) calc(var(--space-2xl) + env(safe-area-inset-bottom));
     z-index: 60;
     animation: none;
     /* Peek: leave the head visible above the safe-area. The translate
@@ -2202,7 +2256,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      responds to tap. The chevron rotates when the sheet expands. */
   .olv-panel-head {
     display: flex; align-items: center; justify-content: space-between;
-    margin: 6px 0 8px;
+    margin: var(--space-sm) 0 var(--space-md);
     min-height: 44px;
     cursor: pointer;
     -webkit-user-select: none; user-select: none;
@@ -2211,7 +2265,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-panel-head:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
   }
   .olv-panel-head .olv-panel-title {
     margin-bottom: 0;
@@ -2222,9 +2276,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     display: inline-flex; align-items: center; justify-content: center;
     width: 24px; height: 24px;
     color: var(--text-dim);
-    font-size: 14px; line-height: 1;
+    font-size: var(--text-lg); line-height: 1;
     transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
-    margin-right: 4px;
+    margin-right: var(--space-xs);
   }
   .olv-inspector.olv-sheet-open .olv-sheet-chevron {
     transform: rotate(180deg);
@@ -2269,17 +2323,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      the chevron + label form a comfortable tap target. */
   .olv-section-summary {
     min-height: 44px;
-    padding: 4px 0;
-    font-size: 12.5px;
+    padding: var(--space-xs) 0;
+    font-size: var(--text-sm);
   }
 
   /* Visuals Studio group labels (RGB / Depth (EDL) / Background) bump
      from 10 px → 11 px and gain extra top spacing so the rails read as
      distinct groups during a thumb scroll. */
   .olv-visuals-group-label {
-    font-size: 11px;
-    margin-top: 8px;
-    margin-bottom: 4px;
+    font-size: var(--text-xs);
+    margin-top: var(--space-md);
+    margin-bottom: var(--space-xs);
   }
 
   /* Chip rails inside Visuals Studio get a touch-friendly chip size.
@@ -2287,26 +2341,26 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      we add padding + font-size so the chip reads as a labelled control
      rather than a tiny pill stretched vertically. */
   .olv-visuals-body .olv-chip {
-    font-size: 12.5px;
-    padding: 6px 12px;
+    font-size: var(--text-sm);
+    padding: var(--space-sm) var(--space-xl);
   }
   /* Tighter inter-chip gap so the 6-chip RGB rail wraps onto two
      compact rows on a 320 pt viewport instead of three uneven ones. */
-  .olv-visuals-body .olv-chips { gap: 6px; }
+  .olv-visuals-body .olv-chips { gap: var(--space-sm); }
 
   /* Advanced disclosure summary becomes a 44 pt row so opening WB
      sliders is a single tap. */
   .olv-visuals-advanced-summary {
     min-height: 44px;
-    padding: 8px 0;
-    font-size: 12px;
+    padding: var(--space-md) 0;
+    font-size: var(--text-sm);
     display: flex;
     align-items: center;
   }
 
   /* White-balance row: the slider name + value get more room so they
      don't compete with the slider thumb. */
-  .olv-visuals-row { font-size: 12px; gap: 8px; padding: 4px 0; }
+  .olv-visuals-row { font-size: var(--text-sm); gap: var(--space-md); padding: var(--space-xs) 0; }
   .olv-visuals-row-name { width: 88px; }
   .olv-wb-label { width: 36px; }
 
@@ -2342,14 +2396,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* Auto-balance chip lifts so the thumb-tap doesn't fall on the row
      above; the .olv-chip mobile min-height already gives it a 44 pt
      target. */
-  .olv-wb-auto { margin-top: 6px; }
+  .olv-wb-auto { margin-top: var(--space-sm); }
 
   /* Sub-group labels inside the merged Rendering section ("Point size",
      "Eye Dome Lighting") get the same readable bump as the Visuals
      group labels so the two sections feel consistent. */
   .olv-render-sublabel {
-    font-size: 11px;
-    margin-top: 10px;
+    font-size: var(--text-xs);
+    margin-top: var(--space-lg);
   }
 }
 
@@ -2374,7 +2428,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-m-preview { opacity: 0.5; }
 .olv-m-leader { stroke: rgba(0, 178, 255, 0.5); stroke-width: 1.1; }
-.olv-m-label-primary { font-size: 13px; }
+.olv-m-label-primary { font-size: var(--text-md); }
 .olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
 .olv-m-handle:active { cursor: grabbing; }
 
@@ -2389,7 +2443,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-anno-halo { fill: rgba(8, 13, 20, 0.82); }
 .olv-anno-disc { stroke: rgba(8, 13, 20, 0.9); stroke-width: 1; }
 .olv-anno-num {
-  font-size: 12px; font-weight: 700; user-select: none;
+  font-size: var(--text-sm); font-weight: 700; user-select: none;
 }
 /* Type colours — note (blue), info (cyan), warning (amber), issue (red). */
 .olv-anno-note .olv-anno-disc { fill: #5b9bd5; }
@@ -2408,26 +2462,26 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* ── Annotation inline editor ────────────────────────────────────────────── */
 .olv-anno-editor {
   position: absolute; z-index: 30;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: var(--space-md);
   width: 264px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
-.olv-anno-editor-heading { font-size: 12px; font-weight: 600; color: var(--text); }
+.olv-anno-editor-heading { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
 .olv-anno-editor-title,
 .olv-anno-editor-note {
   width: 100%; box-sizing: border-box;
   background: rgba(255, 255, 255, 0.04); color: var(--text);
-  border: 0.5px solid var(--hairline); border-radius: 6px;
-  padding: 6px 8px; font: inherit; font-size: 12px;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); font: inherit; font-size: var(--text-sm);
 }
 .olv-anno-editor-note { resize: vertical; min-height: 52px; }
-.olv-anno-editor-types { display: flex; gap: 4px; }
+.olv-anno-editor-types { display: flex; gap: var(--space-xs); }
 .olv-anno-chip {
-  flex: 1; font-size: 11px; padding: 4px 0; cursor: pointer;
+  flex: 1; font-size: var(--text-xs); padding: var(--space-xs) 0; cursor: pointer;
   background: transparent; color: var(--text); opacity: 0.6;
-  border: 0.5px solid var(--hairline); border-radius: 5px;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
 }
 .olv-anno-chip-active { opacity: 1; border-color: var(--accent); }
 .olv-anno-chip-note.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #5b9bd5; }
@@ -2435,19 +2489,19 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-anno-chip-warning.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #f0b429; }
 .olv-anno-chip-issue.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #e24b4a; }
 .olv-anno-editor-camera {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: var(--space-sm);
+  font-size: var(--text-xs); color: var(--text-dim); cursor: pointer; user-select: none;
 }
 .olv-anno-editor-camera-box { margin: 0; cursor: pointer; accent-color: var(--accent); }
-.olv-anno-editor-link { display: flex; flex-direction: column; gap: 4px; }
-.olv-anno-editor-link-label { font-size: 11px; color: var(--text-dim); }
+.olv-anno-editor-link { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-anno-editor-link-label { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-anno-editor-link-select {
   width: 100%; box-sizing: border-box;
   background: rgba(255, 255, 255, 0.04); color: var(--text);
-  border: 0.5px solid var(--hairline); border-radius: 6px;
-  padding: 6px 8px; font: inherit; font-size: 12px;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); font: inherit; font-size: var(--text-sm);
 }
-.olv-anno-editor-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.olv-anno-editor-actions { display: flex; gap: var(--space-sm); justify-content: flex-end; }
 .olv-anno-editor-cancel,
 /*
  * Save (primary action) — aligned with the rest of the app's primary
@@ -2458,12 +2512,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * similarity).
  */
 .olv-anno-editor-save {
-  font-size: 11px; padding: 6px 12px; cursor: pointer; border-radius: 5px;
+  font-size: var(--text-xs); padding: var(--space-sm) var(--space-xl); cursor: pointer; border-radius: var(--radius-sm);
   color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
   font-weight: 600;
-  transition: background 130ms ease, transform 90ms ease;
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-anno-editor-save:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-anno-editor-save:active { transform: scale(0.96); }
@@ -2471,36 +2525,36 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* ── Annotation hint bar ─────────────────────────────────────────────────── */
 .olv-anno-hint {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: 8px 16px;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
 }
 .olv-anno-hint-badge {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--accent);
 }
-.olv-anno-hint-text { font-size: 12px; color: var(--text); }
+.olv-anno-hint-text { font-size: var(--text-sm); color: var(--text); }
 
 /* ───────────────────────────────────────────────────────────────────────────
    Measurement toolbar (kind picker + actions) and the Measurements panel
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-measure-bar {
   position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-md);
   background: rgba(11, 17, 33, 0.9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border: 0.5px solid rgba(0, 178, 255, 0.34);
-  border-radius: 12px; padding: 10px 12px;
+  border-radius: 12px; padding: var(--space-lg) var(--space-xl);
   max-width: calc(100vw - 24px);
 }
-.olv-mkinds { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.olv-mkinds { display: flex; flex-wrap: wrap; gap: var(--space-xs); justify-content: center; }
 .olv-mkind {
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 10px;
-  transition: color 130ms ease, background 130ms ease,
-    border-color 130ms ease, transform 90ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-mkind:hover { color: var(--text); }
 .olv-mkind:active { transform: scale(0.96); }
@@ -2517,18 +2571,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * would read as a separator between groups, which is wrong — Lasso
  * is a sub-action of Volume, not a sibling group. */
 .olv-mkind-aux {
-  margin-left: 2px;
+  margin-left: var(--space-2xs);
   border-style: dashed;
 }
 .olv-mkind-aux.olv-mkind-active {
   border-style: solid;
 }
 .olv-measure-undo {
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 10px;
-  transition: color 130ms ease, transform 90ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-measure-undo:hover { color: var(--text); }
 .olv-measure-undo:active { transform: scale(0.96); }
@@ -2539,11 +2593,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * "modifier" vs "exit / primary" by colour alone (Gestalt similarity).
  */
 .olv-units-toggle {
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 10px; min-width: 70px;
-  transition: color 130ms ease, border-color 130ms ease, transform 90ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg); min-width: 70px;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-units-toggle:hover { color: var(--text); border-color: var(--accent); }
 .olv-units-toggle:active { transform: scale(0.96); }
@@ -2563,12 +2617,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * makes sense.
  */
 .olv-measure-finish {
-  font-size: 11px; color: var(--accent);
+  font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
-  border-radius: 6px; padding: 6px 10px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
   font-weight: 500;
-  transition: background 130ms ease, transform 90ms ease;
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-measure-finish:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-measure-finish:active { transform: scale(0.96); }
@@ -2584,7 +2638,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* The measurement and annotation panels stack in one left-side column. */
 .olv-left-panels {
   position: absolute; top: 56px; left: 14px;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: var(--space-md);
   max-height: calc(100% - 80px); overflow-y: auto;
   pointer-events: none;
 }
@@ -2597,17 +2651,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   min-width: 218px; max-width: 760px;
   resize: horizontal; overflow: auto;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
 }
-.olv-mp-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
-.olv-mp-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
+.olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
 /* align-items:flex-start + min-width:0 so a long reading can wrap to a
  * second line and shrink inside the fixed-width panel instead of
  * bleeding past the rounded edge (regression: dimension+volume strings
  * like "5.46 m × 11.53 m × 14.13 m · 889.54 m³" overflowed the box). */
-.olv-mp-row { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.olv-mp-row { display: flex; align-items: flex-start; gap: var(--space-sm); min-width: 0; }
 /* Profile measurements stack the headline row over a compact chart strip. */
-.olv-mp-row-stack { display: flex; flex-direction: column; gap: 4px; }
+.olv-mp-row-stack { display: flex; flex-direction: column; gap: var(--space-xs); }
 /* Profile chart strip beneath a profile row. v0.3.10
  * #402: bumped from 36 px → 140 px so the curve is actually readable,
  * and made the box resizable along the vertical axis so an analyst
@@ -2633,8 +2687,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   overflow: hidden;
   color: var(--accent);
   background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
-  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+  padding: var(--space-2xs) var(--space-xs);
   box-sizing: border-box;
 }
 .olv-mp-chart svg { display: block; width: 100%; height: 100%; }
@@ -2654,7 +2708,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-axis {
   position: absolute;
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1;
   color: var(--text-dim);
   white-space: nowrap;
@@ -2677,18 +2731,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * label of the active scale (and so the click target is right next
  * to the chart the user is reading). */
 .olv-mp-vex-strip {
-  display: flex; gap: 4px; padding: 4px 4px 0 4px;
+  display: flex; gap: var(--space-xs); padding: var(--space-xs) var(--space-xs) 0 var(--space-xs);
   align-items: center;
 }
 .olv-mp-vex-chip {
-  font-size: 10.5px; padding: 2px 8px;
-  border-radius: 4px;
+  font-size: var(--text-xs); padding: var(--space-2xs) var(--space-md);
+  border-radius: var(--radius-xs);
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.03);
   border: 0.5px solid rgba(255, 255, 255, 0.10);
   cursor: pointer;
   font-family: var(--olv-mono, ui-monospace, monospace);
-  transition: color 130ms ease, background 130ms ease, border-color 130ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-mp-vex-chip:hover {
   color: var(--text);
@@ -2704,8 +2758,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: 2px solid var(--accent, #00b2ff); outline-offset: 2px;
 }
 .olv-mp-chart-empty {
-  font-size: 10.5px; color: var(--text-faint); font-style: italic;
-  padding: 2px 4px;
+  font-size: var(--text-xs); color: var(--text-faint); font-style: italic;
+  padding: var(--space-2xs) var(--space-xs);
 }
 /* ── Photometric witness (inspector card) ──────────────────────────────
  * The patch view + colour-provenance values block. Shows as a
@@ -2713,17 +2767,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * the analyst can audit a point's captured colour without leaving
  * the inspector. */
 .olv-witness-details {
-  margin-top: 8px;
-  padding: 6px 4px 4px 4px;
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-xs) var(--space-xs) var(--space-xs);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .olv-witness-summary {
   cursor: pointer;
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
-  padding: 2px 0;
+  padding: var(--space-2xs) 0;
   list-style: none;
   user-select: none;
 }
@@ -2731,8 +2785,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-witness-summary::before {
   content: '▸';
   display: inline-block;
-  margin-right: 4px;
-  transition: transform 120ms ease-out;
+  margin-right: var(--space-xs);
+  transition: transform var(--dur-fast) ease-out;
 }
 .olv-witness-details[open] .olv-witness-summary::before {
   transform: rotate(90deg);
@@ -2740,9 +2794,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-witness-grid {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 8px;
+  gap: var(--space-md);
   align-items: start;
-  margin-top: 6px;
+  margin-top: var(--space-sm);
 }
 .olv-witness-canvas {
   display: block;
@@ -2752,13 +2806,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background:
     repeating-conic-gradient(rgba(255, 255, 255, 0.04) 0% 25%, transparent 0% 50%)
     50% / 8px 8px;
 }
-.olv-witness-values { display: flex; flex-direction: column; gap: 2px; }
-.olv-witness-row { display: flex; gap: 6px; font-size: 11px; line-height: 1.35; }
+.olv-witness-values { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-witness-row { display: flex; gap: var(--space-sm); font-size: var(--text-xs); line-height: 1.35; }
 .olv-witness-row-label {
   width: 52px;
   color: var(--text-faint);
@@ -2784,11 +2838,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  *   - prefers-reduced-motion honoured so the caption appears instantly
  *     for users with motion sensitivity. */
 .olv-mp-chart-caveat {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   color: var(--text-faint);
-  padding: 2px 4px;
+  padding: var(--space-2xs) var(--space-xs);
   border-left: 2px solid var(--accent);
-  margin: 2px 0 0 4px;
+  margin: var(--space-2xs) 0 0 var(--space-xs);
   line-height: 1.35;
   animation: olv-caveat-fade-in 200ms ease-out both;
 }
@@ -2808,18 +2862,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * action type reads without parsing the label (v0.3.10 honesty
  * patch — users could not find the existing per-row × delete). */
 .olv-mp-row-action {
-  display: flex; justify-content: flex-end; gap: 6px;
-  padding: 2px 4px 0 4px;
+  display: flex; justify-content: flex-end; gap: var(--space-sm);
+  padding: var(--space-2xs) var(--space-xs) 0 var(--space-xs);
 }
 .olv-mp-profile-pdf {
-  font-size: 11px; padding: 4px 10px;
-  border-radius: 6px;
+  font-size: var(--text-xs); padding: var(--space-xs) var(--space-lg);
+  border-radius: var(--radius-sm);
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   cursor: pointer;
-  transition: color 130ms ease, background 130ms ease, border-color 130ms ease,
-    transform 90ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
+    transform 90ms var(--ease-standard);
 }
 .olv-mp-profile-pdf:hover {
   color: var(--text);
@@ -2832,14 +2886,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .olv-mp-profile-clear {
-  font-size: 11px; padding: 4px 10px;
-  border-radius: 6px;
+  font-size: var(--text-xs); padding: var(--space-xs) var(--space-lg);
+  border-radius: var(--radius-sm);
   color: #ffb3b3;
   background: rgba(255, 100, 100, 0.06);
   border: 0.5px solid rgba(255, 120, 120, 0.32);
   cursor: pointer;
-  transition: color 130ms ease, background 130ms ease, border-color 130ms ease,
-    transform 90ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
+    transform 90ms var(--ease-standard);
 }
 .olv-mp-profile-clear:hover {
   color: #ff7a7a;
@@ -2862,20 +2916,20 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * Hover/focus solidify the border to confirm the affordance.
  */
 .olv-mp-name {
-  flex: 0 1 auto; min-width: 48px; max-width: 45%; font-size: 11.5px; color: var(--text);
+  flex: 0 1 auto; min-width: 48px; max-width: 45%; font-size: var(--text-xs); color: var(--text);
   font-family: var(--font);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px dashed rgba(255, 255, 255, 0.18);
-  border-radius: 5px; padding: 4px 6px;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-sm);
   cursor: text;
-  transition: border-color 130ms ease, border-style 130ms ease;
+  transition: border-color var(--dur-fast) var(--ease-standard), border-style var(--dur-fast) var(--ease-standard);
 }
 .olv-mp-name:hover { border-style: solid; border-color: var(--accent); }
 .olv-mp-name:focus-visible {
   outline: none; border-style: solid; border-color: var(--accent);
 }
 .olv-mp-value {
-  font-size: 11px; font-family: var(--mono); color: var(--text-dim);
+  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim);
   /* Take the leftover width and wrap rather than overflow; min-width:0
    * lets it shrink below content size, overflow-wrap breaks the long
    * monospace reading so it never spills past the panel border. */
@@ -2884,22 +2938,22 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-del {
   background: none; border: none; color: var(--text-faint);
-  font-size: 14px; line-height: 1; flex-shrink: 0; padding: 0 2px;
-  transition: color 130ms ease;
+  font-size: var(--text-lg); line-height: 1; flex-shrink: 0; padding: 0 var(--space-2xs);
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 .olv-mp-del:hover { color: var(--text); }
-.olv-mp-empty { font-size: 11.5px; color: var(--text-faint); }
+.olv-mp-empty { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-mp-footer {
-  display: flex; gap: 6px;
-  margin-top: 10px; padding-top: 10px;
+  display: flex; gap: var(--space-sm);
+  margin-top: var(--space-lg); padding-top: var(--space-lg);
   border-top: 0.5px solid var(--hairline);
 }
 .olv-mp-action {
-  flex: 1; font-size: 11px; color: var(--text-dim);
+  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px;
-  transition: color 130ms ease, border-color 130ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-sm);
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 /* ── Keyboard shortcut sheet — v0.3.9 ────────────────────────────────────── */
 .olv-shortcuts {
@@ -2927,7 +2981,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   display: flex;
   flex-direction: column;
   pointer-events: auto;
-  padding: 16px;
+  padding: var(--space-2xl);
   background: rgba(11, 17, 33, 0.96);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -2938,8 +2992,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-shortcuts-header {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--space-xl);
+  margin-bottom: var(--space-lg);
 }
 .olv-shortcuts-header-titles { flex: 1 1 auto; min-width: 0; }
 .olv-shortcuts-close {
@@ -2947,9 +3001,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px;
   background: none; border: none; color: var(--text-faint);
-  font-size: 20px; line-height: 1; cursor: pointer;
-  border-radius: 8px;
-  transition: color 120ms ease, background 120ms ease;
+  font-size: var(--text-2xl); line-height: 1; cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
 .olv-shortcuts-close:hover {
   color: var(--text); background: rgba(255, 255, 255, 0.07);
@@ -2962,20 +3016,20 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   font-weight: 600;
 }
 .olv-shortcuts-subtitle {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-faint);
-  margin-top: 2px;
+  margin-top: var(--space-2xs);
 }
 .olv-shortcuts-input {
   width: 100%;
   font-family: var(--mono);
-  font-size: 13px;
-  padding: 8px 10px;
+  font-size: var(--text-md);
+  padding: var(--space-md) var(--space-lg);
   color: var(--text);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 8px;
-  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
   box-sizing: border-box;
 }
 .olv-shortcuts-input:focus {
@@ -2986,32 +3040,32 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   flex: 1 1 auto;
   overflow-y: auto;
   margin: 0 -4px;
-  padding: 0 4px;
+  padding: 0 var(--space-xs);
 }
 .olv-shortcuts-section {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
-  padding: 8px 6px 4px;
+  padding: var(--space-md) var(--space-sm) var(--space-xs);
 }
 .olv-shortcuts-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-xl);
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--space-md) var(--space-lg);
   margin: 1px 0;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   text-align: left;
   color: var(--text-dim);
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 110ms ease, color 110ms ease;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
 .olv-shortcuts-row:hover {
   background: rgba(0, 178, 255, 0.08);
@@ -3025,19 +3079,19 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   color: var(--text);
 }
 .olv-shortcuts-row-hint {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-faint);
   margin-top: 1px;
 }
 .olv-shortcuts-row-key {
   flex: 0 0 auto;
   font-family: var(--mono);
-  font-size: 11px;
-  padding: 4px 8px;
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-md);
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
   border: 0.5px solid var(--hairline);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 .olv-shortcuts-row-key-empty {
@@ -3045,27 +3099,27 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   width: 1px;
 }
 .olv-shortcuts-empty {
-  padding: 24px;
+  padding: var(--space-4xl);
   text-align: center;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .olv-shortcuts-hint {
   display: flex;
-  gap: 6px;
+  gap: var(--space-sm);
   align-items: center;
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   color: var(--text-faint);
-  padding: 8px 4px 0;
+  padding: var(--space-md) var(--space-xs) 0;
   border-top: 0.5px solid var(--hairline);
-  margin-top: 8px;
+  margin-top: var(--space-md);
 }
 .olv-shortcuts-hint-key {
   font-family: var(--mono);
-  padding: 1px 6px;
+  padding: 1px var(--space-sm);
   background: rgba(255, 255, 255, 0.05);
   border: 0.5px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   color: var(--text);
 }
 
@@ -3087,7 +3141,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   position: fixed;
   width: 360px;
   pointer-events: auto;
-  padding: 16px 20px;
+  padding: var(--space-2xl) var(--space-3xl);
   background: rgba(11, 17, 33, 0.96);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -3099,37 +3153,37 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-tour-progress {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-faint);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-sm);
 }
 .olv-tour-title {
-  font-size: 16px;
+  font-size: var(--text-xl);
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-md);
 }
 .olv-tour-body {
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 1.45;
   color: var(--text-dim);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-2xl);
 }
 .olv-tour-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-md);
   justify-content: flex-end;
 }
 .olv-tour-btn {
-  font-size: 12px;
-  padding: 6px 16px;
+  font-size: var(--text-sm);
+  padding: var(--space-sm) var(--space-2xl);
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: color 130ms ease, background 130ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
 .olv-tour-btn:hover { color: var(--text); }
 .olv-tour-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
@@ -3142,8 +3196,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-tour-btn-primary:hover { background: #1ec0ff; color: #0a0e1a; }
 .olv-tour-skip {
   display: block;
-  margin-top: 10px;
-  font-size: 11px;
+  margin-top: var(--space-lg);
+  font-size: var(--text-xs);
   color: var(--text-faint);
   background: transparent;
   border: 0;
@@ -3164,15 +3218,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-chain-bar {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 8px 0 6px;
-  padding: 8px;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0 var(--space-sm);
+  padding: var(--space-md);
   background: rgba(255, 255, 255, 0.03);
   border: 0.5px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 .olv-mp-chain-label {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -3180,16 +3234,16 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-chain-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 .olv-mp-chain-chip {
-  font-size: 11px;
-  padding: 4px 8px;
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-md);
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  border-radius: 999px;
-  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
 .olv-mp-chain-chip:hover { color: var(--text); border-color: var(--accent); }
 .olv-mp-chain-chip-active {
@@ -3199,12 +3253,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-chain-result {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text);
-  padding: 4px 0 0;
+  padding: var(--space-xs) 0 0;
 }
 .olv-mp-chain-check {
-  margin-right: 4px;
+  margin-right: var(--space-xs);
   flex: 0 0 auto;
 }
 
@@ -3212,59 +3266,59 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-anno-panel {
   width: 218px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
 }
 .olv-ap-head {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 6px; margin-bottom: 10px;
+  gap: var(--space-sm); margin-bottom: var(--space-lg);
 }
-.olv-ap-title { font-size: 12px; font-weight: 500; }
+.olv-ap-title { font-size: var(--text-sm); font-weight: 500; }
 .olv-ap-sort {
-  font-size: 10.5px; color: var(--text-dim); font-family: var(--font);
+  font-size: var(--text-xs); color: var(--text-dim); font-family: var(--font);
   background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
-  border-radius: 5px; padding: 2px 4px;
+  border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-xs);
 }
 .olv-ap-search {
-  width: 100%; box-sizing: border-box; margin-bottom: 8px;
-  font-size: 11px; color: var(--text); font-family: var(--font);
+  width: 100%; box-sizing: border-box; margin-bottom: var(--space-md);
+  font-size: var(--text-xs); color: var(--text); font-family: var(--font);
   background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 8px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
 }
 .olv-ap-search::placeholder { color: var(--text-faint); }
 .olv-ap-search:focus-visible { outline: none; border-color: var(--accent); }
-.olv-ap-list { display: flex; flex-direction: column; gap: 4px; }
-.olv-ap-empty { font-size: 11.5px; color: var(--text-faint); }
+.olv-ap-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-ap-empty { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-ap-row {
-  display: flex; align-items: center; gap: 6px;
-  border-radius: 6px; padding: 4px;
+  display: flex; align-items: center; gap: var(--space-sm);
+  border-radius: var(--radius-sm); padding: var(--space-xs);
 }
 .olv-ap-row-selected { background: rgba(34, 220, 255, 0.1); }
 .olv-ap-badge {
   flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700;
+  font-size: var(--text-2xs); font-weight: 700;
 }
 .olv-ap-badge.olv-anno-note { background: #5b9bd5; color: #06121a; }
 .olv-ap-badge.olv-anno-info { background: #22dcff; color: #06121a; }
 .olv-ap-badge.olv-anno-warning { background: #f0b429; color: #06121a; }
 .olv-ap-badge.olv-anno-issue { background: #e24b4a; color: #ffffff; }
 .olv-ap-name {
-  flex: 1; min-width: 0; text-align: left; font-size: 11.5px; color: var(--text);
-  font-family: var(--font); background: none; border: none; padding: 2px 0;
+  flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: var(--text);
+  font-family: var(--font); background: none; border: none; padding: var(--space-2xs) 0;
   cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .olv-ap-name:hover { color: var(--accent); }
 .olv-ap-link {
   flex-shrink: 0; max-width: 70px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 9.5px; color: var(--accent);
-  background: var(--accent-soft); border-radius: 4px; padding: 1px 6px;
+  font-size: var(--text-2xs); color: var(--accent);
+  background: var(--accent-soft); border-radius: var(--radius-xs); padding: 1px var(--space-sm);
 }
-.olv-ap-time { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
+.olv-ap-time { font-size: var(--text-2xs); color: var(--text-faint); flex-shrink: 0; }
 .olv-ap-edit {
-  font-size: 10px; color: var(--text-dim); font-family: var(--font);
+  font-size: var(--text-2xs); color: var(--text-dim); font-family: var(--font);
   background: none; border: 0.5px solid var(--hairline);
-  border-radius: 4px; padding: 2px 6px; flex-shrink: 0; cursor: pointer;
+  border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm); flex-shrink: 0; cursor: pointer;
 }
 .olv-ap-edit:hover { color: var(--text); border-color: var(--accent); }
 /*
@@ -3274,10 +3328,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * (no border-only versus border-less mismatch on adjacent peers).
  */
 .olv-ap-del {
-  font-size: 14px; line-height: 1; color: #ffb3b3;
+  font-size: var(--text-lg); line-height: 1; color: #ffb3b3;
   background: rgba(255, 100, 100, 0.06);
   border: 0.5px solid rgba(255, 120, 120, 0.32);
-  border-radius: 4px; padding: 1px 6px; flex-shrink: 0; cursor: pointer;
+  border-radius: var(--radius-xs); padding: 1px var(--space-sm); flex-shrink: 0; cursor: pointer;
 }
 .olv-ap-del:hover {
   color: #ff7a7a;
@@ -3285,12 +3339,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-color: rgba(255, 120, 120, 0.7);
 }
 .olv-ap-footer {
-  margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--hairline);
+  margin-top: var(--space-lg); padding-top: var(--space-lg); border-top: 0.5px solid var(--hairline);
 }
 .olv-ap-action {
-  width: 100%; font-size: 11px; color: var(--text-dim); font-family: var(--font);
+  width: 100%; font-size: var(--text-xs); color: var(--text-dim); font-family: var(--font);
   background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px; cursor: pointer;
+  border-radius: var(--radius-sm); padding: var(--space-sm); cursor: pointer;
 }
 .olv-ap-action:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-ap-action:disabled { opacity: 0.4; cursor: default; }
@@ -3326,7 +3380,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-anno-editor-camera { min-height: 36px; }
 
   /* Annotations panel — touch-sized rows, controls and the sort select. */
-  .olv-ap-row { padding: 6px 4px; }
+  .olv-ap-row { padding: var(--space-sm) var(--space-xs); }
   .olv-ap-name { min-height: 40px; }
   .olv-ap-search { min-height: 44px; }
   .olv-ap-sort, .olv-ap-action { min-height: 44px; }
@@ -3346,7 +3400,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-help-backdrop {
   position: absolute; inset: 0; z-index: 50;
   display: flex; align-items: center; justify-content: center;
-  padding: 24px;
+  padding: var(--space-4xl);
   background: rgba(6, 10, 20, 0.66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
@@ -3358,28 +3412,28 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-help-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 16px; border-bottom: 0.5px solid var(--hairline);
+  padding: var(--space-2xl) var(--space-2xl); border-bottom: 0.5px solid var(--hairline);
 }
-.olv-help-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.olv-help-title { font-size: var(--text-md); font-weight: 600; color: var(--text); }
 .olv-help-close {
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
-  border-radius: 6px; padding: 6px 12px;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-xl);
 }
 .olv-help-close:hover { color: var(--text); border-color: var(--accent); }
-.olv-help-body { padding: 6px 16px 16px; overflow-y: auto; }
-.olv-help-section { margin-top: 16px; }
+.olv-help-body { padding: var(--space-sm) var(--space-2xl) var(--space-2xl); overflow-y: auto; }
+.olv-help-section { margin-top: var(--space-2xl); }
 .olv-help-heading {
-  font-size: 10px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--accent); margin-bottom: 8px;
+  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--accent); margin-bottom: var(--space-md);
 }
-.olv-help-rows { display: flex; flex-direction: column; gap: 6px; }
-.olv-help-row { display: flex; gap: 10px; align-items: baseline; }
+.olv-help-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-help-row { display: flex; gap: var(--space-lg); align-items: baseline; }
 .olv-help-term {
-  flex: 0 0 92px; font-size: 11px; font-weight: 600; color: var(--text);
+  flex: 0 0 92px; font-size: var(--text-xs); font-weight: 600; color: var(--text);
   font-family: var(--mono);
 }
-.olv-help-desc { flex: 1; font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+.olv-help-desc { flex: 1; font-size: var(--text-xs); color: var(--text-dim); line-height: 1.45; }
 
 @media (max-width: 767px) {
   .olv-help-card { width: 100%; }
@@ -3398,11 +3452,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(11, 17, 33, 0.94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.34);
-  border-radius: 8px; padding: 8px 10px;
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }
-.olv-probe-coords { font-size: 11px; font-family: var(--mono); color: var(--text); }
-.olv-probe-attr { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+.olv-probe-coords { font-size: var(--text-xs); font-family: var(--mono); color: var(--text); }
+.olv-probe-attr { font-size: var(--text-2xs); color: var(--text-dim); margin-top: var(--space-xs); }
 
 /* ───────────────────────────────────────────────────────────────────────────
    v0.3.6 mobile collapsible side panels (StreamingPanel / MeasurePanel /
@@ -3415,9 +3469,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-collapse-toggle { display: none; }
 .olv-chevron {
   display: inline-block;
-  font-size: 14px; line-height: 1;
+  font-size: var(--text-lg); line-height: 1;
   color: var(--text-dim);
-  transition: transform 220ms ease;
+  transition: transform 220ms var(--ease-standard);
 }
 
 @media (max-width: 767px) {
@@ -3432,7 +3486,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-collapse-toggle:hover { color: var(--text); }
   .olv-collapse-toggle:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
   }
   /* The panel head row gets a tap-area cursor so the affordance reads. */
   .olv-streaming-panel > .olv-panel-head,
@@ -3458,9 +3512,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-streaming-panel.olv-collapsed,
   .olv-measure-panel.olv-collapsed,
   .olv-anno-panel.olv-collapsed {
-    border-radius: 999px;
-    padding-left: 16px;
-    padding-right: 16px;
+    border-radius: var(--radius-pill);
+    padding-left: var(--space-2xl);
+    padding-right: var(--space-2xl);
   }
   /* Chevron rotates 180° when collapsed so it points down → up to read
      as "expand" affordance. */
@@ -3470,7 +3524,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-streaming-panel.olv-collapsed,
   .olv-measure-panel.olv-collapsed,
   .olv-anno-panel.olv-collapsed {
-    padding: 6px 12px;
+    padding: var(--space-sm) var(--space-xl);
     max-height: none;
   }
 }
@@ -3503,21 +3557,21 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin: 8px 0 4px;
+  gap: var(--space-md);
+  margin: var(--space-md) 0 var(--space-xs);
   max-width: 460px;
 }
 .olv-capture-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
   color: var(--text-dim);
   background: rgba(0, 178, 255, 0.04);
   border: 0.5px solid rgba(0, 178, 255, 0.20);
-  border-radius: 999px;
-  padding: 6px 12px 6px 10px;
-  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+  border-radius: var(--radius-pill);
+  padding: var(--space-sm) var(--space-xl) var(--space-sm) var(--space-lg);
+  transition: border-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard);
   cursor: default;
   user-select: none;
 }
@@ -3538,8 +3592,8 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
 }
 /* Mobile: tighten chip padding so the three fit comfortably on a phone. */
 @media (max-width: 480px) {
-  .olv-empty-capture-kinds { gap: 6px; }
-  .olv-capture-chip { padding: 4px 10px 4px 8px; font-size: 11.5px; }
+  .olv-empty-capture-kinds { gap: var(--space-sm); }
+  .olv-capture-chip { padding: var(--space-xs) var(--space-lg) var(--space-xs) var(--space-md); font-size: var(--text-xs); }
   .olv-capture-chip-icon { width: 14px; height: 14px; }
 }
 
@@ -3549,19 +3603,19 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
 .olv-catalog-quickpicks {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-sm);
   justify-content: center;
-  margin: 2px 0 4px;
+  margin: var(--space-2xs) 0 var(--space-xs);
 }
 .olv-catalog-quickpick {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-dim);
   background: var(--panel);
   border: 0.5px solid var(--hairline);
-  border-radius: 999px;
-  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  padding: var(--space-xs) var(--space-lg);
   cursor: pointer;
-  transition: border-color 140ms ease, color 140ms ease;
+  transition: border-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
 .olv-catalog-quickpick:hover {
   color: var(--text);
@@ -3577,7 +3631,7 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
 .olv-version {
   display: block !important;
   opacity: 0.55;
-  transition: opacity 220ms ease;
+  transition: opacity 220ms var(--ease-standard);
 }
 .olv-version:hover { opacity: 0.9; }
 body.olv-has-scan .olv-version { opacity: 0.7; }
@@ -3602,13 +3656,13 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 
 /* 1. Empty-state status banner — drives offline + retry messaging. */
 .olv-empty-status {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--space-lg);
   width: min(100%, 460px);
   background: rgba(255, 200, 80, 0.06);
   border: 0.5px solid rgba(255, 200, 80, 0.45);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px; color: var(--text); line-height: 1.45;
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-xl);
+  font-size: var(--text-sm); color: var(--text); line-height: 1.45;
   text-align: left;
 }
 .olv-empty-status.olv-empty-status-error {
@@ -3621,24 +3675,24 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-empty-status-action {
   margin-left: auto;
-  font-size: 12px; font-weight: 600; color: var(--accent);
+  font-size: var(--text-sm); font-weight: 600; color: var(--accent);
   background: transparent; border: 0.5px solid var(--accent);
-  border-radius: 6px; padding: 4px 12px;
-  transition: background 140ms ease;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-xl);
+  transition: background var(--dur-fast) var(--ease-standard);
 }
 .olv-empty-status-action:hover { background: var(--accent-soft); }
 .olv-empty-status-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-empty-status-dismiss {
-  font-size: 16px; line-height: 1; color: var(--text-faint);
-  background: transparent; border: none; padding: 4px 6px;
+  font-size: var(--text-xl); line-height: 1; color: var(--text-faint);
+  background: transparent; border: none; padding: var(--space-xs) var(--space-sm);
 }
 .olv-empty-status-dismiss:hover { color: var(--text); }
 
 /* 2. URL row — constraint bullets, inline message, loading spinner. */
 .olv-url-rules {
   margin: 0; padding: 0; list-style: none;
-  display: flex; flex-direction: column; gap: 2px;
-  font-size: 11.5px; color: var(--text-dim); line-height: 1.5;
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  font-size: var(--text-xs); color: var(--text-dim); line-height: 1.5;
   max-width: 360px; text-align: left;
 }
 .olv-url-rules li::before {
@@ -3646,9 +3700,9 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   display: inline-block; width: 10px; text-align: center;
 }
 .olv-url-message {
-  font-size: 11.5px; line-height: 1.5;
+  font-size: var(--text-xs); line-height: 1.5;
   max-width: 360px; text-align: left;
-  padding: 6px 10px; border-radius: 6px;
+  padding: var(--space-sm) var(--space-lg); border-radius: var(--radius-sm);
 }
 .olv-url-message-warning {
   color: #ffcc66;
@@ -3677,17 +3731,17 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 /* 3. Format <details> collapsible. */
 .olv-empty-formats[open] .olv-empty-formats-summary::after { content: ' ▴'; opacity: 0.6; }
 .olv-empty-formats-summary {
-  font-size: 11px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   cursor: pointer; list-style: none;
-  padding: 4px 8px; border-radius: 6px;
-  display: inline-flex; align-items: center; gap: 4px;
+  padding: var(--space-xs) var(--space-md); border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; gap: var(--space-xs);
 }
 .olv-empty-formats-summary::after { content: ' ▾'; opacity: 0.6; }
 .olv-empty-formats-summary::-webkit-details-marker { display: none; }
 .olv-empty-formats-summary:hover { color: var(--text-dim); background: rgba(255,255,255,0.03); }
 .olv-empty-formats-full {
-  font-size: 11px; color: var(--text-faint); font-family: var(--mono);
-  max-width: 440px; line-height: 1.6; margin-top: 6px;
+  font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono);
+  max-width: 440px; line-height: 1.6; margin-top: var(--space-sm);
 }
 
 /* 4. Section caption — quiet helper text under a section label or a
@@ -3697,9 +3751,9 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
  * small positive top margin gives the caption breathing room without
  * a heavy visual break. */
 .olv-empty-section-caption {
-  font-size: 11px; color: var(--text-faint);
+  font-size: var(--text-xs); color: var(--text-faint);
   max-width: 440px; line-height: 1.5;
-  margin: 6px 0;
+  margin: var(--space-sm) 0;
 }
 
 /* 5. Idle CTA pulse — fires at 4 s, suppressed on first interaction. */
@@ -3716,11 +3770,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 /* 6. Mobile clamps — readable hero + tap-sized URL Open. */
 @media (max-width: 480px) {
   .olv-empty-title { font-size: 40px; }
-  .olv-empty-sub { font-size: 13.5px; max-width: 320px; }
+  .olv-empty-sub { font-size: var(--text-md); max-width: 320px; }
   .olv-empty-hero { width: 130px; height: 130px; margin-bottom: -4px; }
   .olv-url-input { width: 100%; max-width: none; flex: 1 1 100%; }
   .olv-url-btn { width: 100%; }
-  .olv-url-controls { flex-direction: column; gap: 8px; }
+  .olv-url-controls { flex-direction: column; gap: var(--space-md); }
   .olv-url-rules { width: min(100%, 320px); }
 }
 /* Existing @media (max-width: 767px) block already enforces 44 pt touch
@@ -3733,14 +3787,14 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
  * No gimmicks; matches the Visuals Studio / Scan Intelligence rhythm.
  */
 .olv-di-card {
-  margin-top: 10px;
-  padding: 10px 12px;
+  margin-top: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
-.olv-di-title { margin-bottom: 6px; }
-.olv-di-body { display: flex; flex-direction: column; gap: 4px; }
+.olv-di-title { margin-bottom: var(--space-sm); }
+.olv-di-body { display: flex; flex-direction: column; gap: var(--space-xs); }
 /* v0.3.10 a11y patch #375 — the rows + details body are now
  * `<dl>` lists with `<dt>/<dd>` pairs (allowed inside a wrapping
  * `<div class="olv-di-row">` per HTML 5.2). Browsers ship default
@@ -3752,10 +3806,10 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-di-details-body dt, .olv-di-details-body dd {
   margin: 0; padding: 0;
 }
-.olv-di-rows { display: flex; flex-direction: column; gap: 2px; }
+.olv-di-rows { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-di-row {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 12px; line-height: 1.45; padding: 2px 0;
+  font-size: var(--text-sm); line-height: 1.45; padding: var(--space-2xs) 0;
 }
 .olv-di-row-name { color: var(--text-dim); }
 .olv-di-row-value {
@@ -3763,7 +3817,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
-.olv-di-confidence-cell { display: inline-flex; align-items: center; gap: 6px; }
+.olv-di-confidence-cell { display: inline-flex; align-items: center; gap: var(--space-sm); }
 .olv-di-confidence-chip {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   background: rgba(255, 255, 255, 0.15);
@@ -3777,35 +3831,35 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
  * `—` label the summariser emits when no engine signal is present. */
 .olv-di-confidence-chip[data-band="unknown"] { background: rgba(255, 255, 255, 0.18); }
 .olv-di-warning {
-  margin-top: 4px;
-  padding: 6px 8px;
+  margin-top: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
   background: rgba(250, 204, 21, 0.08);
   border-left: 2px solid rgba(250, 204, 21, 0.6);
   color: var(--text-dim);
-  font-size: 11px; line-height: 1.4;
+  font-size: var(--text-xs); line-height: 1.4;
   border-radius: 2px;
 }
 .olv-di-details {
-  margin-top: 4px;
+  margin-top: var(--space-xs);
   border-top: 1px solid rgba(255, 255, 255, 0.04);
-  padding-top: 4px;
+  padding-top: var(--space-xs);
 }
 .olv-di-details-summary {
   cursor: pointer; list-style: none;
-  font-size: 11px; color: var(--text-dim);
-  padding: 4px 0;
+  font-size: var(--text-xs); color: var(--text-dim);
+  padding: var(--space-xs) 0;
 }
 .olv-di-details-summary::-webkit-details-marker { display: none; }
 .olv-di-details-body {
-  display: flex; flex-direction: column; gap: 2px; padding: 4px 0 2px;
+  display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-xs) 0 var(--space-2xs);
 }
 .olv-di-detail {
   display: flex; justify-content: space-between;
-  font-size: 11px; color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
 }
 .olv-di-detail-value { color: var(--text); font-variant-numeric: tabular-nums; }
 .olv-di-empty {
-  font-size: 12px; color: var(--text-dim); padding: 4px 0;
+  font-size: var(--text-sm); color: var(--text-dim); padding: var(--space-xs) 0;
 }
 
 /* ─── Get-Started stepper (empty state) ──────────────────────────────
@@ -3818,19 +3872,19 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-getstarted {
   width: 100%;
   max-width: 380px;
-  margin: 16px auto 20px;
+  margin: var(--space-2xl) auto var(--space-3xl);
   text-align: left;
 }
 .olv-getstarted-eyebrow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-md);
   font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   letter-spacing: 1.6px;
   text-transform: uppercase;
   color: var(--text-dim);
-  margin-bottom: 10px;
+  margin-bottom: var(--space-lg);
   font-weight: 600;
 }
 .olv-getstarted-eyebrow::before {
@@ -3851,9 +3905,9 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-getstarted-step {
   display: flex;
-  gap: 12px;
+  gap: var(--space-xl);
   align-items: flex-start;
-  padding: 8px 4px;
+  padding: var(--space-md) var(--space-xs);
   position: relative;
 }
 /* Connector line — runs from each dot down to the next, drawn behind
@@ -3877,22 +3931,22 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   display: grid;
   place-items: center;
   font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: rgba(255, 255, 255, 0.45);
   margin-top: 1px;
   z-index: 1;
-  transition: background 200ms ease, border-color 200ms ease,
-              color 200ms ease, box-shadow 200ms ease;
+  transition: background var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard),
+              color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 .olv-getstarted-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
   padding-top: 1px;
 }
 .olv-getstarted-title {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-dim);
   line-height: 1.25;
@@ -3901,7 +3955,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-getstarted-sub {
   font-style: normal;
   font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   letter-spacing: 0.02em;
   color: var(--text-dim);
   opacity: 0.85;
@@ -3941,27 +3995,27 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 /* Phones — keep the same layout but tighter spacing and a smaller
  * dot so the stepper doesn't dominate the empty-state column. */
 @media (max-width: 767px) {
-  .olv-getstarted { max-width: 320px; margin: 10px auto 16px; }
-  .olv-getstarted-step { padding: 6px 2px; }
-  .olv-getstarted-title { font-size: 12.5px; }
-  .olv-getstarted-sub { font-size: 10px; }
+  .olv-getstarted { max-width: 320px; margin: var(--space-lg) auto var(--space-2xl); }
+  .olv-getstarted-step { padding: var(--space-sm) var(--space-2xs); }
+  .olv-getstarted-title { font-size: var(--text-sm); }
+  .olv-getstarted-sub { font-size: var(--text-2xs); }
 }
 
 /* ── Analyse panel (terrain readiness + contours) — v0.4.0 ──────────────── */
 .olv-analyse-panel {
   width: 248px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px; min-width: 0;
+  border-radius: var(--radius-lg); padding: var(--space-xl); min-width: 0;
 }
-.olv-analyse-title { font-size: 12px; font-weight: 600; margin: 0 0 2px; color: var(--text); }
-.olv-analyse-sub { font-size: 10.5px; color: var(--text-dim); margin: 0 0 8px; }
-.olv-analyse-status { font-size: 11px; color: var(--text-faint); margin: 4px 0 8px; }
+.olv-analyse-title { font-size: var(--text-sm); font-weight: 600; margin: 0 0 var(--space-2xs); color: var(--text); }
+.olv-analyse-sub { font-size: var(--text-xs); color: var(--text-dim); margin: 0 0 var(--space-md); }
+.olv-analyse-status { font-size: var(--text-xs); color: var(--text-faint); margin: var(--space-xs) 0 var(--space-md); }
 .olv-analyse-run {
-  width: 100%; font-size: 11.5px; font-weight: 500; padding: 8px;
-  border-radius: 6px; cursor: pointer; margin-bottom: 8px;
+  width: 100%; font-size: var(--text-xs); font-weight: 500; padding: var(--space-md);
+  border-radius: var(--radius-sm); cursor: pointer; margin-bottom: var(--space-md);
   color: var(--accent); background: rgba(34, 220, 255, 0.08);
   border: 0.5px solid var(--accent);
-  transition: background 130ms ease, color 130ms ease;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
 .olv-analyse-run:hover { background: rgba(34, 220, 255, 0.16); }
 .olv-analyse-run:disabled { opacity: 0.6; cursor: default; }
@@ -3979,11 +4033,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
    viewport, so it can sit as an opt-in chip until the user wants terrain. */
 .olv-analyse-panel .olv-panel-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin: 0 0 8px; cursor: pointer;
+  margin: 0 0 var(--space-md); cursor: pointer;
   -webkit-user-select: none; user-select: none;
 }
 .olv-analyse-panel .olv-panel-title {
-  font-size: 12px; font-weight: 600; color: var(--text); margin: 0;
+  font-size: var(--text-sm); font-weight: 600; color: var(--text); margin: 0;
 }
 .olv-analyse-panel .olv-collapse-toggle {
   display: inline-flex; align-items: center; justify-content: center;
@@ -3992,48 +4046,48 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-analyse-panel .olv-collapse-toggle:hover { color: var(--text); }
 .olv-analyse-panel .olv-collapse-toggle:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px;
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm);
 }
 .olv-analyse-panel.olv-collapsed > :not(.olv-panel-head) { display: none; }
 .olv-analyse-panel.olv-collapsed {
-  width: auto; min-width: 140px; padding: 8px 16px; border-radius: 999px;
+  width: auto; min-width: 140px; padding: var(--space-md) var(--space-2xl); border-radius: var(--radius-pill);
 }
 .olv-analyse-panel.olv-collapsed .olv-panel-head { margin: 0; }
 .olv-analyse-panel.olv-collapsed .olv-chevron { transform: rotate(180deg); }
 
 /* Readiness cards — the lead surface. */
-.olv-analyse-readiness { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.olv-analyse-readiness { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-lg); }
 .olv-analyse-ready {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: var(--space-xl);
   border: 0.5px solid var(--hairline); border-left-width: 3px;
-  border-radius: 6px; padding: 8px 10px; background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm); padding: var(--space-md) var(--space-lg); background: rgba(255, 255, 255, 0.03);
   min-width: 0;
 }
 /* Left column — label over the supporting line; takes the slack. */
 .olv-analyse-ready-main { flex: 1 1 auto; min-width: 0; }
 .olv-analyse-ready-label {
-  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--text-dim);
 }
 .olv-analyse-ready-detail {
-  font-size: 11px; color: var(--text-faint); margin-top: 3px;
+  font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px;
   overflow-wrap: anywhere;
 }
 /* Right column — the headline figure and the rating pill. */
-.olv-analyse-ready-side { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
-.olv-analyse-ready-figure { display: flex; align-items: baseline; gap: 2px; }
+.olv-analyse-ready-side { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-lg); }
+.olv-analyse-ready-figure { display: flex; align-items: baseline; gap: var(--space-2xs); }
 .olv-analyse-ready-value {
   font-family: var(--mono); font-size: 22px; font-weight: 600; line-height: 1;
   color: var(--text); font-variant-numeric: tabular-nums;
 }
-.olv-analyse-ready-figure.is-text .olv-analyse-ready-value { font-size: 14px; }
+.olv-analyse-ready-figure.is-text .olv-analyse-ready-value { font-size: var(--text-lg); }
 .olv-analyse-ready-unit {
-  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  font-family: var(--mono); font-size: var(--text-xs); color: var(--text-dim);
 }
 /* Rating pill — capitalised word on a tinted ground keyed to the rating. */
 .olv-analyse-ready-rating {
-  font-size: 10px; font-weight: 600; text-transform: capitalize;
-  letter-spacing: 0.02em; padding: 3px 9px; border-radius: 999px;
+  font-size: var(--text-2xs); font-weight: 600; text-transform: capitalize;
+  letter-spacing: 0.02em; padding: 3px 9px; border-radius: var(--radius-pill);
   white-space: nowrap;
 }
 /* Rating accents — token-driven, colourblind-paired with the rating word. */
@@ -4095,29 +4149,29 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 
 /* Interval chips. */
-.olv-analyse-intervals { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.olv-analyse-recommend { flex-basis: 100%; font-size: 10.5px; color: var(--text-dim); }
+.olv-analyse-intervals { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.olv-analyse-recommend { flex-basis: 100%; font-size: var(--text-xs); color: var(--text-dim); }
 .olv-analyse-interval {
-  font-size: 11px; padding: 4px 8px; border-radius: 5px; cursor: pointer;
+  font-size: var(--text-xs); padding: var(--space-xs) var(--space-md); border-radius: var(--radius-sm); cursor: pointer;
   color: var(--text-dim); background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  transition: color 130ms ease, border-color 130ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-analyse-interval:hover { color: var(--text); border-color: var(--accent); }
 .olv-analyse-interval.is-active { color: var(--accent); border-color: var(--accent); }
 .olv-analyse-interval.is-disabled { opacity: 0.45; cursor: default; }
 
-.olv-analyse-validation { font-size: 10.5px; color: var(--text-dim); margin-bottom: 6px; }
+.olv-analyse-validation { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-sm); }
 .olv-analyse-rmse { font-family: var(--mono); }
-.olv-analyse-caption { font-size: 10.5px; color: var(--text-dim); margin-bottom: 8px; overflow-wrap: anywhere; }
+.olv-analyse-caption { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-md); overflow-wrap: anywhere; }
 
 /* Export buttons. */
-.olv-analyse-export { display: flex; gap: 6px; margin-bottom: 8px; }
+.olv-analyse-export { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .olv-analyse-dl {
-  flex: 1; font-size: 11px; padding: 6px; border-radius: 6px; cursor: pointer;
+  flex: 1; font-size: var(--text-xs); padding: var(--space-sm); border-radius: var(--radius-sm); cursor: pointer;
   color: var(--text-dim); background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
-  transition: color 130ms ease, border-color 130ms ease;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-analyse-dl:hover { color: var(--text); border-color: var(--accent); }
 /* Primary export (the DEM raster package) — the "take the data with you" action. */
@@ -4128,22 +4182,22 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-dl.is-primary:hover { color: var(--text); }
 
 /* Evidence legend. */
-.olv-analyse-legend { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
-.olv-analyse-legend-item { font-size: 10px; color: var(--text-faint); }
+.olv-analyse-legend { display: flex; flex-direction: column; gap: var(--space-2xs); margin-bottom: var(--space-sm); }
+.olv-analyse-legend-item { font-size: var(--text-2xs); color: var(--text-faint); }
 .olv-analyse-legend-item.is-solid { color: var(--text-dim); }
-.olv-analyse-footer { font-size: 9.5px; color: var(--text-faint); margin: 0; }
+.olv-analyse-footer { font-size: var(--text-2xs); color: var(--text-faint); margin: 0; }
 
 /* ── Analyse v0.4.0 hardening: chips, sections, recommend, coverage, roadmap ── */
 .olv-analyse-section {
-  font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--text-faint); margin: 10px 0 6px;
-  border-top: 0.5px solid var(--hairline); padding-top: 8px;
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-faint); margin: var(--space-lg) 0 var(--space-sm);
+  border-top: 0.5px solid var(--hairline); padding-top: var(--space-md);
 }
 /* Honesty status chips. */
-.olv-analyse-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.olv-analyse-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-xs); }
 .olv-analyse-chip {
-  display: inline-flex; align-items: baseline; gap: 4px;
-  font-size: 10px; padding: 2px 8px; border-radius: 999px;
+  display: inline-flex; align-items: baseline; gap: var(--space-xs);
+  font-size: var(--text-2xs); padding: var(--space-2xs) var(--space-md); border-radius: var(--radius-pill);
   border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
 }
 .olv-analyse-chip-k { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
@@ -4156,33 +4210,33 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-chip.is-bad .olv-analyse-chip-v { color: var(--rating-weak); }
 
 /* Recommended grid / interval. */
-.olv-analyse-recommend-box { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
-.olv-analyse-reco { font-size: 11px; color: var(--text); font-family: var(--mono); }
+.olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
+.olv-analyse-reco { font-size: var(--text-xs); color: var(--text); font-family: var(--mono); }
 /* Quality gate reasons. */
-.olv-analyse-quality { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; }
+.olv-analyse-quality { display: flex; flex-direction: column; gap: var(--space-xs); margin: var(--space-xs) 0; }
 .olv-analyse-reason {
-  font-size: 10.5px; color: var(--text-dim); overflow-wrap: anywhere;
-  padding-left: 8px; border-left: 2px solid var(--rating-good);
+  font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere;
+  padding-left: var(--space-md); border-left: 2px solid var(--rating-good);
 }
 /* Coverage & confidence. */
-.olv-analyse-coverage { display: flex; flex-direction: column; gap: 2px; }
-.olv-analyse-cov { font-size: 10.5px; color: var(--text-dim); font-family: var(--mono); }
+.olv-analyse-coverage { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-cov { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); }
 /* Export gate note. */
-.olv-analyse-export-note { font-size: 10px; color: var(--text-faint); margin: 4px 0 0; overflow-wrap: anywhere; }
+.olv-analyse-export-note { font-size: var(--text-2xs); color: var(--text-faint); margin: var(--space-xs) 0 0; overflow-wrap: anywhere; }
 /* DEM export honesty caveat — reuses the readiness amber (--rating-good). */
 .olv-analyse-dem-note {
-  flex-basis: 100%; font-size: 10px; color: var(--rating-good);
-  margin: 4px 0 0; overflow-wrap: anywhere;
-  padding-left: 8px; border-left: 2px solid var(--rating-good);
+  flex-basis: 100%; font-size: var(--text-2xs); color: var(--rating-good);
+  margin: var(--space-xs) 0 0; overflow-wrap: anywhere;
+  padding-left: var(--space-md); border-left: 2px solid var(--rating-good);
 }
 .olv-analyse-dl:disabled { opacity: 0.4; cursor: default; }
 
 /* Planned — a minimal, quiet tag row of upcoming capabilities. */
-.olv-analyse-roadmap { margin-top: 4px; }
-.olv-analyse-plan { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.olv-analyse-roadmap { margin-top: var(--space-xs); }
+.olv-analyse-plan { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-sm); }
 .olv-analyse-plan-tag {
-  font-size: 10px; color: var(--text-faint);
-  border: 0.5px solid var(--hairline); border-radius: 999px; padding: 2px 8px;
+  font-size: var(--text-2xs); color: var(--text-faint);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-pill); padding: var(--space-2xs) var(--space-md);
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -4201,8 +4255,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-batch-convert-link {
   margin-top: var(--space-lg);
   background: none; border: none;
-  color: var(--accent); font: inherit; font-size: 12px; font-weight: 600;
-  cursor: pointer; padding: var(--space-xs) var(--space-sm); border-radius: 6px;
+  color: var(--accent); font: inherit; font-size: var(--text-sm); font-weight: 600;
+  cursor: pointer; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm);
 }
 .olv-batch-convert-link:hover { text-decoration: underline; }
 .olv-batch-convert-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -4227,47 +4281,47 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 
 .olv-bc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2xl); }
-.olv-bc-title { font-size: 16px; font-weight: 700; margin: 0; }
+.olv-bc-title { font-size: var(--text-xl); font-weight: 700; margin: 0; }
 .olv-bc-close {
-  background: none; border: none; color: var(--text-dim); font-size: 14px;
-  cursor: pointer; padding: var(--space-xs); border-radius: 6px; line-height: 1;
+  background: none; border: none; color: var(--text-dim); font-size: var(--text-lg);
+  cursor: pointer; padding: var(--space-xs); border-radius: var(--radius-sm); line-height: 1;
 }
 .olv-bc-close:hover { color: var(--text); }
 
 /* Each decision is its own region, separated by generous whitespace. */
 .olv-bc-section { margin-bottom: var(--space-2xl); }
 .olv-bc-section-label {
-  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--text-faint); margin-bottom: var(--space-md);
 }
 
 .olv-bc-drop {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
   padding: var(--space-3xl) var(--space-2xl); text-align: center; cursor: pointer;
-  border: 1px dashed var(--hairline); border-radius: 10px;
+  border: 1px dashed var(--hairline); border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.02);
-  transition: border-color 120ms ease, background 120ms ease;
+  transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
 .olv-bc-drop.is-drag { border-color: var(--accent); background: var(--accent-soft); }
-.olv-bc-drop-text { font-size: 12.5px; font-weight: 600; }
-.olv-bc-drop-sub { font-size: 10.5px; color: var(--text-faint); }
+.olv-bc-drop-text { font-size: var(--text-sm); font-weight: 600; }
+.olv-bc-drop-sub { font-size: var(--text-xs); color: var(--text-faint); }
 
 .olv-bc-files { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: var(--space-md); }
 .olv-bc-file-row {
   display: flex; align-items: center; gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md); border-radius: 8px;
+  padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.03);
 }
-.olv-bc-file-name { flex: 1; min-width: 0; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.olv-bc-file-size { font-size: 10.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.olv-bc-file-del { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 11px; padding: var(--space-xs); border-radius: 4px; }
+.olv-bc-file-name { flex: 1; min-width: 0; font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olv-bc-file-size { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.olv-bc-file-del { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--text-xs); padding: var(--space-xs); border-radius: var(--radius-xs); }
 .olv-bc-file-del:hover { color: var(--rating-weak); }
 
 /* Pill groups — similarity = same shape/size; active state contrasts. */
 .olv-bc-pills { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 .olv-bc-pill {
-  font: inherit; font-size: 12px; cursor: pointer;
-  padding: var(--space-sm) var(--space-xl); border-radius: 999px;
+  font: inherit; font-size: var(--text-sm); cursor: pointer;
+  padding: var(--space-sm) var(--space-xl); border-radius: var(--radius-pill);
   border: 0.5px solid var(--hairline); background: transparent; color: var(--text-dim);
 }
 .olv-bc-pill:hover:not(.is-disabled):not(.is-active) { border-color: var(--accent); color: var(--text); }
@@ -4276,52 +4330,52 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 
 .olv-bc-crs-extra { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
 .olv-bc-field { display: flex; flex-direction: column; gap: var(--space-xs); }
-.olv-bc-field-label { font-size: 10.5px; color: var(--text-dim); }
+.olv-bc-field-label { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-bc-input {
-  font: inherit; font-size: 13px; color: var(--text);
+  font: inherit; font-size: var(--text-md); color: var(--text);
   background: rgba(0, 0, 0, 0.25); border: 0.5px solid var(--hairline);
-  border-radius: 8px; padding: var(--space-md); box-sizing: border-box; width: 100%;
+  border-radius: var(--radius-md); padding: var(--space-md); box-sizing: border-box; width: 100%;
 }
 .olv-bc-input:focus { outline: none; border-color: var(--accent); }
 
 /* Single primary action; the hint sits beside it and turns muted-red when blocked. */
 .olv-bc-actions { display: flex; align-items: center; gap: var(--space-xl); margin-bottom: var(--space-2xl); flex-wrap: wrap; }
 .olv-bc-convert {
-  font: inherit; font-size: 13px; font-weight: 700; color: #04121f;
-  background: var(--brand-gradient); border: none; border-radius: 9px;
+  font: inherit; font-size: var(--text-md); font-weight: 700; color: #04121f;
+  background: var(--brand-gradient); border: none; border-radius: var(--radius-md);
   padding: var(--space-xl) var(--space-4xl); cursor: pointer;
 }
 .olv-bc-convert:disabled { opacity: 0.4; cursor: not-allowed; }
-.olv-bc-hint { font-size: 11px; color: var(--text-dim); margin: 0; }
+.olv-bc-hint { font-size: var(--text-xs); color: var(--text-dim); margin: 0; }
 .olv-bc-hint.is-blocked { color: var(--rating-moderate); }
 
 .olv-bc-results { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-bc-results-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-xs); }
-.olv-bc-results-summary { font-size: 11.5px; color: var(--text-dim); }
+.olv-bc-results-summary { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-bc-dlall {
-  font: inherit; font-size: 11.5px; font-weight: 600; color: var(--text);
+  font: inherit; font-size: var(--text-xs); font-weight: 600; color: var(--text);
   background: var(--accent-soft); border: 0.5px solid var(--accent);
-  border-radius: 8px; padding: var(--space-sm) var(--space-xl); cursor: pointer;
+  border-radius: var(--radius-md); padding: var(--space-sm) var(--space-xl); cursor: pointer;
 }
-.olv-bc-row { border: 0.5px solid var(--hairline); border-radius: 8px; padding: var(--space-md); }
+.olv-bc-row { border: 0.5px solid var(--hairline); border-radius: var(--radius-md); padding: var(--space-md); }
 .olv-bc-row.is-error { border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.06); }
 .olv-bc-row-top { display: flex; align-items: center; gap: var(--space-md); }
 .olv-bc-row-icon { font-size: 9px; }
 .olv-bc-row.is-ok .olv-bc-row-icon { color: var(--rating-excellent); }
 .olv-bc-row.is-error .olv-bc-row-icon { color: var(--rating-weak); }
-.olv-bc-row-name { flex: 1; min-width: 0; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.olv-bc-row-meta { font-size: 10.5px; color: var(--text-faint); }
+.olv-bc-row-name { flex: 1; min-width: 0; font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olv-bc-row-meta { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-bc-row-dl {
-  font: inherit; font-size: 10.5px; font-weight: 600; color: var(--accent);
-  background: none; border: 0.5px solid var(--hairline); border-radius: 6px;
+  font: inherit; font-size: var(--text-xs); font-weight: 600; color: var(--accent);
+  background: none; border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-md); cursor: pointer;
 }
 .olv-bc-row-dl:hover { border-color: var(--accent); }
 .olv-bc-row-log { margin: var(--space-sm) 0 0; padding-left: var(--space-xl); display: flex; flex-direction: column; gap: var(--space-2xs); }
-.olv-bc-row-log li { font-size: 10.5px; }
+.olv-bc-row-log li { font-size: var(--text-xs); }
 .olv-bc-log-warn { color: var(--rating-moderate); }
 .olv-bc-log-error { color: var(--rating-weak); }
-.olv-bc-row-error { font-size: 11.5px; color: var(--rating-weak); }
+.olv-bc-row-error { font-size: var(--text-xs); color: var(--rating-weak); }
 
 @media (max-width: 767px) {
   .olv-bc-overlay { padding: 0; align-items: stretch; }
@@ -4332,7 +4386,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-export-panel {
   width: 218px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: var(--space-xl);
+  border-radius: var(--radius-lg); padding: var(--space-xl);
 }
 .olv-export-panel.olv-collapsed > :not(.olv-panel-head) { display: none; }
 .olv-export-panel.olv-collapsed { padding-bottom: var(--space-xl); }
@@ -4340,34 +4394,34 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-export-body { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
 .olv-export-body .olv-bc-section-label { margin-bottom: var(--space-xs); margin-top: var(--space-sm); }
 .olv-export-btn { margin-top: var(--space-sm); padding: var(--space-md) var(--space-xl); width: 100%; }
-.olv-export-status { font-size: 10.5px; color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }
+.olv-export-status { font-size: var(--text-xs); color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }
 .olv-export-status.is-warn { color: var(--rating-moderate); }
 .olv-export-status.is-error { color: var(--rating-weak); }
 @media (max-width: 767px) { .olv-export-panel { width: auto; } }
 
 /* Full-resolution toggle in the Export panel. */
 .olv-export-fullres { display: flex; flex-direction: column; gap: var(--space-2xs); margin-top: var(--space-sm); }
-.olv-export-fullres-label { display: flex; align-items: center; gap: var(--space-sm); font-size: 11.5px; color: var(--text); cursor: pointer; }
+.olv-export-fullres-label { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); color: var(--text); cursor: pointer; }
 .olv-export-fullres-box { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
 .olv-export-fullres-box:disabled { cursor: not-allowed; }
-.olv-export-fullres-hint { font-size: 10px; color: var(--text-faint); line-height: 1.4; }
+.olv-export-fullres-hint { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; }
 
 /* Composite terrain quality score in the Analyse panel. */
 /* Terrain assessment — the single top-level verdict above all metrics. */
 .olv-analyse-assessment {
-  margin-bottom: var(--space-lg); padding: 10px 12px; border-radius: 8px;
+  margin-bottom: var(--space-lg); padding: var(--space-lg) var(--space-xl); border-radius: var(--radius-md);
   border: 0.5px solid var(--hairline); border-left-width: 3px;
   background: rgba(255, 255, 255, 0.03);
 }
-.olv-analyse-assess-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.olv-analyse-assess-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
 .olv-analyse-assess-label {
-  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 .olv-analyse-assess-verdict { font-size: 19px; font-weight: 700; line-height: 1; }
-.olv-analyse-assess-reason { font-size: 11px; color: var(--text-dim); margin-top: 4px; overflow-wrap: anywhere; }
-.olv-analyse-assess-use { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; }
-.olv-analyse-assess-caution { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+.olv-analyse-assess-reason { font-size: var(--text-xs); color: var(--text-dim); margin-top: var(--space-xs); overflow-wrap: anywhere; }
+.olv-analyse-assess-use { font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px; }
+.olv-analyse-assess-caution { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 .olv-analyse-assessment.is-good { border-left-color: var(--rating-excellent); }
 .olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: var(--rating-excellent); }
 .olv-analyse-assessment.is-preview { border-left-color: var(--rating-moderate); }
@@ -4384,23 +4438,23 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-analyse-assessment.is-blocked .olv-analyse-assess-verdict { color: var(--rating-blocked); }
 .olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked); }
-.olv-analyse-assess-not { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+.olv-analyse-assess-not { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 
 /* Supporting metrics — compact pills under the hero; colour from each metric's
    own rating, not the overall status, so one weak signal stays visible. */
 .olv-analyse-assess-metrics {
-  display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 8px;
+  display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-sm); margin-top: var(--space-md);
 }
 .olv-analyse-assess-metric {
-  display: inline-flex; align-items: baseline; gap: 4px;
-  padding: 2px 7px; border-radius: 999px;
+  display: inline-flex; align-items: baseline; gap: var(--space-xs);
+  padding: var(--space-2xs) 7px; border-radius: var(--radius-pill);
   border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
 }
 .olv-analyse-assess-metric-label {
   font-family: var(--mono); font-size: 9px; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint);
 }
-.olv-analyse-assess-metric-value { font-size: 10.5px; font-weight: 600; color: var(--text-dim); }
+.olv-analyse-assess-metric-value { font-size: var(--text-xs); font-weight: 600; color: var(--text-dim); }
 .olv-analyse-assess-metric.is-good { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
 .olv-analyse-assess-metric.is-good .olv-analyse-assess-metric-value { color: var(--rating-excellent); }
 .olv-analyse-assess-metric.is-fair { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
@@ -4413,15 +4467,15 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-details { margin-bottom: var(--space-lg); }
 .olv-analyse-details-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
-  padding: 6px 0; display: flex; align-items: center; gap: 6px;
+  padding: var(--space-sm) 0; display: flex; align-items: center; gap: var(--space-sm);
   border-bottom: 0.5px solid var(--hairline);
 }
 .olv-analyse-details-summary::-webkit-details-marker { display: none; }
 .olv-analyse-details-summary::before {
   content: '▸'; font-size: 9px; color: var(--text-faint);
-  transition: transform 140ms ease;
+  transition: transform var(--dur-fast) var(--ease-standard);
 }
 .olv-analyse-details[open] > .olv-analyse-details-summary::before { transform: rotate(90deg); }
 .olv-analyse-details-summary:hover { color: var(--text); }
@@ -4429,46 +4483,46 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 
 .olv-analyse-score { margin-bottom: var(--space-xl); }
 .olv-analyse-score-head { display: flex; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-md); }
-.olv-analyse-score-num { font-size: 28px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.olv-analyse-score-num { font-size: var(--text-3xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .olv-analyse-score-num.is-excellent { color: var(--rating-excellent); }
 .olv-analyse-score-num.is-good { color: var(--rating-good); }
 .olv-analyse-score-num.is-fair { color: var(--rating-moderate); }
 .olv-analyse-score-num.is-poor { color: var(--rating-weak); }
-.olv-analyse-score-of { font-size: 11px; color: var(--text-faint); }
-.olv-analyse-score-band { margin-left: auto; font-size: 10.5px; font-weight: 600; text-transform: capitalize; color: var(--text-dim); }
+.olv-analyse-score-of { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-analyse-score-band { margin-left: auto; font-size: var(--text-xs); font-weight: 600; text-transform: capitalize; color: var(--text-dim); }
 .olv-analyse-score-band.is-excellent { color: var(--rating-excellent); }
 .olv-analyse-score-band.is-good { color: var(--rating-good); }
 .olv-analyse-score-band.is-fair { color: var(--rating-moderate); }
 .olv-analyse-score-band.is-poor { color: var(--rating-weak); }
 .olv-analyse-score-bars { display: flex; flex-direction: column; gap: var(--space-xs); }
 .olv-analyse-score-comp { display: flex; align-items: center; gap: var(--space-sm); }
-.olv-analyse-score-label { flex: 0 0 84px; font-size: 10px; color: var(--text-dim); }
-.olv-analyse-score-track { flex: 1; height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.olv-analyse-score-fill { height: 100%; border-radius: 999px; background: var(--brand-gradient); }
-.olv-analyse-score-pct { flex: 0 0 34px; text-align: right; font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.olv-analyse-score-label { flex: 0 0 84px; font-size: var(--text-2xs); color: var(--text-dim); }
+.olv-analyse-score-track { flex: 1; height: 4px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.olv-analyse-score-fill { height: 100%; border-radius: var(--radius-pill); background: var(--brand-gradient); }
+.olv-analyse-score-pct { flex: 0 0 34px; text-align: right; font-size: var(--text-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .olv-analyse-score-pct.is-neutral { color: var(--text-faint); font-style: italic; }
 
 /* Surface models section in the Analyse panel (DSM / slope / hillshade). */
 .olv-analyse-surface { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-analyse-surface-stats { display: flex; flex-direction: column; gap: var(--space-2xs); }
-.olv-analyse-surface-stat { font-size: 11px; color: var(--text-dim); }
-.olv-analyse-surface-stat.is-dim { font-size: 10px; color: var(--text-faint); }
+.olv-analyse-surface-stat { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-analyse-surface-stat.is-dim { font-size: var(--text-2xs); color: var(--text-faint); }
 .olv-analyse-hillshade,
 .olv-analyse-raster {
-  width: 100%; height: auto; display: block; border-radius: 8px;
+  width: 100%; height: auto; display: block; border-radius: var(--radius-md);
   border: 0.5px solid var(--hairline); background: #05080f;
   image-rendering: auto;
 }
 /* A labelled preview tile — heading, raster, optional legend, caption, export. */
 .olv-analyse-raster-tile { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-analyse-sublabel {
-  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
-.olv-analyse-caption { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.olv-analyse-caption { font-size: var(--text-2xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 /* Colour-ramp legend under a raster tile. */
-.olv-analyse-legend { display: flex; flex-direction: column; gap: 2px; }
-.olv-analyse-legend-bar { height: 6px; border-radius: 3px; border: 0.5px solid var(--hairline); }
+.olv-analyse-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-legend-bar { height: 6px; border-radius: var(--radius-xs); border: 0.5px solid var(--hairline); }
 .olv-analyse-legend-ticks {
   display: flex; justify-content: space-between;
   font-family: var(--mono); font-size: 9px; color: var(--text-faint);
@@ -4483,26 +4537,26 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 /* Relief tile — adjustable-sun controls. */
 .olv-analyse-relief-controls { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-analyse-relief-toggle {
-  display: flex; align-items: center; gap: 6px; cursor: pointer;
-  font-size: 11px; color: var(--text-dim); user-select: none;
+  display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;
+  font-size: var(--text-xs); color: var(--text-dim); user-select: none;
 }
 .olv-analyse-relief-toggle input { accent-color: var(--accent); cursor: pointer; }
-.olv-analyse-relief-slider { display: flex; align-items: center; gap: 8px; }
+.olv-analyse-relief-slider { display: flex; align-items: center; gap: var(--space-md); }
 .olv-analyse-relief-tag {
-  font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+  font-family: var(--mono); font-size: var(--text-2xs); text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-faint); width: 26px; flex: 0 0 auto;
 }
 .olv-analyse-relief-slider input[type='range'] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
 .olv-analyse-relief-slider input[type='range']:disabled { opacity: 0.4; }
 .olv-analyse-relief-val {
-  font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
   width: 34px; text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums;
 }
 /* Click-to-sample readout under a raster tile. */
 .olv-analyse-raster.is-samplable { cursor: crosshair; }
 .olv-analyse-sample {
-  font-family: var(--mono); font-size: 10px; color: var(--text-dim);
-  font-variant-numeric: tabular-nums; padding: 2px 0;
+  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
+  font-variant-numeric: tabular-nums; padding: var(--space-2xs) 0;
   border-top: 0.5px dashed var(--hairline);
 }
 .olv-analyse-sample.is-empty { color: var(--text-faint); }
@@ -4526,7 +4580,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-relief-slider.is-off { opacity: 0.55; }
 .olv-analyse-relief-slider.is-off .olv-analyse-relief-val { font-style: italic; }
 /* Caption colour transitions gently when the relief mode changes. */
-.olv-analyse-caption { transition: color 120ms ease; }
+.olv-analyse-caption { transition: color var(--dur-fast) var(--ease-standard); }
 /* Histogram bars grow in on first render (motion-safe). */
 @media (prefers-reduced-motion: no-preference) {
   .olv-analyse-hist-bar {
@@ -4536,36 +4590,36 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 @keyframes olv-bar-in { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
 .olv-analyse-surface-dl {
-  align-self: flex-start; font: inherit; font-size: 10.5px; font-weight: 600;
+  align-self: flex-start; font: inherit; font-size: var(--text-xs); font-weight: 600;
   color: var(--accent); background: var(--accent-soft);
-  border: 0.5px solid var(--accent); border-radius: 8px;
+  border: 0.5px solid var(--accent); border-radius: var(--radius-md);
   padding: var(--space-xs) var(--space-md); cursor: pointer;
 }
 .olv-analyse-surface-dl:hover { border-color: var(--accent); }
 
 /* Stratified RMSE breakdown (by slope band / surface zone). */
-.olv-analyse-strata { font-size: 10px; color: var(--text-faint); margin-top: var(--space-2xs); }
+.olv-analyse-strata { font-size: var(--text-2xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 
 /* USGS 3DEP Quality Level badge in the Analyse panel validation section. */
 .olv-analyse-ql {
   align-self: flex-start; margin-top: var(--space-2xs);
-  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--accent); background: var(--accent-soft);
-  border: 0.5px solid var(--accent); border-radius: 6px;
+  border: 0.5px solid var(--accent); border-radius: var(--radius-sm);
   padding: 1px var(--space-xs);
 }
 
 /* Splash reorg: primary action row (Open hero + small Convert chip). */
 .olv-empty-actions {
   display: flex; align-items: center; justify-content: center;
-  gap: 12px; flex-wrap: wrap; margin: 4px 0 2px;
+  gap: var(--space-xl); flex-wrap: wrap; margin: var(--space-xs) 0 var(--space-2xs);
 }
 .olv-convert-chip {
-  font: inherit; font-size: 13px; font-weight: 600;
+  font: inherit; font-size: var(--text-md); font-weight: 600;
   color: var(--accent); background: var(--accent-soft, rgba(0,178,255,0.10));
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  border-radius: 999px; padding: 9px 16px; cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  border-radius: var(--radius-pill); padding: 9px var(--space-2xl); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
   white-space: nowrap;
 }
 .olv-convert-chip:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -4573,11 +4627,11 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 
 /* Splash reorg: one bounded "Explore public LiDAR" card (Gestalt common region). */
 .olv-explore-card {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-lg);
   /* Stay in the centred content column — without a cap the card stretches to
    * the full viewport width on desktop (it lives in a full-width flex column). */
   width: 100%; max-width: 460px; box-sizing: border-box;
-  margin: 8px auto; padding: 16px 14px;
+  margin: var(--space-md) auto; padding: var(--space-2xl) 14px;
   border: 0.5px solid var(--hairline); border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 60%, transparent);
 }
@@ -4587,19 +4641,19 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-object-panel {
   width: 232px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
 }
-.olv-object-body { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
-.olv-object-row { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+.olv-object-body { display: flex; flex-direction: column; gap: 7px; margin-top: var(--space-md); }
+.olv-object-row { display: flex; justify-content: space-between; gap: var(--space-md); font-size: var(--text-xs); }
 .olv-object-label { color: var(--text-dim); }
 .olv-object-value { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
-.olv-object-note { font-size: 10px; color: var(--text-faint); line-height: 1.4; margin-top: 2px; }
+.olv-object-note { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; margin-top: var(--space-2xs); }
 .olv-object-note.is-warn { color: var(--rating-good); }
 .olv-object-run-anyway {
-  align-self: flex-start; margin-top: 6px; font: inherit; font-size: 10.5px; font-weight: 600;
+  align-self: flex-start; margin-top: var(--space-sm); font: inherit; font-size: var(--text-xs); font-weight: 600;
   color: var(--text-dim); background: transparent;
-  border: 0.5px solid var(--hairline); border-radius: 8px;
-  padding: 6px 12px; cursor: pointer;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-xl); cursor: pointer;
 }
 .olv-object-run-anyway:hover { color: var(--accent); border-color: var(--accent); }
 
