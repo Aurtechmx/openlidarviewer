@@ -95,13 +95,17 @@ test('hiding a class raises the filtered banner (and scope-stamps the report whe
 
   // Scope stamp — the scan report re-runs under the visible subset and stamps
   // each class-dependent readout. The report lives in a side panel that may be
-  // collapsed in this context, so assert the stamp only when the report has
-  // rendered rows; never fail the run on the report being off-screen. The
-  // banner above is the unconditional honesty signal.
-  const reportRows = page.locator('.olv-report .olv-report-row');
-  if ((await reportRows.count()) > 0) {
-    await expect(page.locator(SCOPE_STAMP).first()).toBeVisible();
-    await expect(page.locator(SCOPE_STAMP).first()).toContainText('·');
+  // collapsed / off-screen in this context (GPU-less, narrow, or a panel that
+  // opened over it), so gate on the report row being actually VISIBLE — not
+  // merely present in the DOM. When the report is on screen the stamp must be
+  // visible and carry its scope separator; when it's collapsed the rows exist
+  // but are hidden, and we skip rather than fail. The legend banner above is
+  // the unconditional, always-visible honesty signal.
+  const reportRow = page.locator('.olv-report .olv-report-row').first();
+  if (await reportRow.isVisible().catch(() => false)) {
+    const scope = page.locator(SCOPE_STAMP).first();
+    await expect(scope).toBeVisible();
+    await expect(scope).toContainText('·');
   }
 });
 
