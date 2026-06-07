@@ -4235,7 +4235,13 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-caption { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-md); overflow-wrap: anywhere; }
 
 /* Export buttons. */
-.olv-analyse-export { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); }
+/* flex-wrap is REQUIRED: two children use `flex-basis: 100%` (the primary DEM
+   button and the DEM note) and must drop onto their own full-width lines. Without
+   wrap they collapse into slivers on the single row, and the note's vertically
+   wrapped text stretches the row so `align-items: stretch` inflates every button.
+   align-items: flex-start keeps each line's buttons at content height regardless
+   of a taller sibling on the same line. */
+.olv-analyse-export { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .olv-analyse-dl {
   flex: 1; font-size: var(--text-xs); padding: var(--space-sm); border-radius: var(--radius-sm); cursor: pointer;
   color: var(--text-dim); background: rgba(255, 255, 255, 0.04);
