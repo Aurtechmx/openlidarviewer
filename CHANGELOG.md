@@ -49,6 +49,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   confident line, and each exported file is stamped with the style it was made
   with. The on-screen contours are unchanged (the default matches the previous
   smoothing).
+- Non-terrain scan detection: indoor / 360 / phone-LiDAR room and object scans
+  are now recognised as non-terrain (a floor-plus-ceiling enclosure, or a
+  compact object) instead of being pushed through the terrain contour pipeline,
+  which is a category error for them. Such scans get a Space / Object report —
+  overall dimensions (L x W x H, in metres and feet), floor area, ceiling
+  height, enclosed volume, floor / wall / ceiling plane detection, storey count,
+  and a capture-quality block (point count, density, coverage, RGB) — with the
+  same honesty caveats as terrain (figures are based on the loaded / streamed
+  data, ceilings are often sparsely captured, nothing is survey-certified).
+  Terrain contour analysis stays one click away for any scan.
 
 ### Changed
 
