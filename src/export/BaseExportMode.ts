@@ -34,6 +34,7 @@ import * as THREE from 'three/webgpu';
 import type { ColorMode } from '../render/colorModes';
 import type { CommonExportOptions, ExportContext, ExportMode, ExportResult, ExportSceneAdapter } from './types';
 import {
+  composeClassScopeBannerOntoBlob,
   composeScanReportOntoBlob,
   formatInt,
   formatMetres,
@@ -223,9 +224,18 @@ export function buildScanReport(
   title: string,
   adapter: ExportSceneAdapter,
   extraRows: readonly ScanReportRow[] = [],
+  classScopeStamp = '',
 ): ScanReportData {
   const aabb = adapter.localBoundsAabb();
   const rows: ScanReportRow[] = [...baseReportRows(adapter, aabb), ...extraRows];
+  // Class-filter honesty row — appended only while a filter narrows the live
+  // view, so an unfiltered export's card is byte-identical to before. Pairs
+  // with the top-of-image banner; the card row makes the figures' scope
+  // explicit alongside the count / density numbers (which stay full-cloud).
+  const scope = classScopeStamp.trim();
+  if (scope) {
+    rows.push({ label: 'Class filter', value: scope });
+  }
   return {
     title,
     scanName: adapter.sourceName(),
@@ -274,8 +284,16 @@ export async function runStudioExport(
     });
   });
 
-  const report = buildScanReport(reportTitle, context.adapter, extraReportRows);
-  const final = await composeScanReportOntoBlob(blob, report, 'bottom-right');
+  // Class-filter scope stamp threaded from the call site (Viewer → main.ts).
+  // Empty when no class is hidden, so the banner + card row are no-ops and the
+  // export stays byte-identical to the pre-feature image.
+  const classScopeStamp = context.classScopeStamp ?? '';
+  const report = buildScanReport(reportTitle, context.adapter, extraReportRows, classScopeStamp);
+  const withReport = await composeScanReportOntoBlob(blob, report, 'bottom-right');
+  // Draw the "showing N of M classes" caveat banner across the top of the
+  // raster while a filter is active — the escape-hatch closure: a filtered
+  // image can't leave the app without a class-scope stamp.
+  const final = await composeClassScopeBannerOntoBlob(withReport, classScopeStamp);
 
   return {
     blob: final,

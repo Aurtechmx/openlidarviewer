@@ -255,6 +255,105 @@ export async function composeScanReportOntoBlob(
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Class-scope banner (escape-hatch closure for filtered raster exports)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BANNER_BG = 'rgba(180, 90, 20, 0.92)';   // amber — reads as a caveat
+const BANNER_TEXT = '#ffffff';
+const BANNER_FONT_SIZE = 16;
+const BANNER_PAD_X = 16;
+const BANNER_PAD_Y = 9;
+const BANNER_MARGIN = 18;
+
+/**
+ * Draw a class-scope caveat banner across the top-centre of the canvas — e.g.
+ * "Class filter active — Ground + Building · 2 of 5 classes". Called by the
+ * Studio compose path only while a filter hides at least one class, so a
+ * filtered raster carries its own disclosure and can't masquerade as a
+ * full-cloud image. Pure 2-D canvas drawing — no three.js, no WebGPU.
+ */
+export function drawClassScopeBanner(
+  ctx: CanvasRenderingContext2D,
+  scopeStamp: string,
+): void {
+  const stamp = scopeStamp.trim();
+  if (stamp.length === 0) return; // full / unfiltered view — draw nothing.
+  const label = `Class filter active — ${stamp}`;
+
+  ctx.save();
+  ctx.font = `600 ${BANNER_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
+  const textW = ctx.measureText(label).width;
+  const bannerW = Math.min(
+    textW + BANNER_PAD_X * 2,
+    Math.max(0, ctx.canvas.width - BANNER_MARGIN * 2),
+  );
+  const bannerH = BANNER_FONT_SIZE + BANNER_PAD_Y * 2;
+  const x = Math.round((ctx.canvas.width - bannerW) / 2);
+  const y = BANNER_MARGIN;
+
+  // Pill background with a hairline border, mirroring the report card chrome.
+  ctx.fillStyle = BANNER_BG;
+  ctx.strokeStyle = BG_STROKE;
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, bannerW, bannerH, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  // Centred label, truncated with an ellipsis if it would overflow the pill.
+  ctx.fillStyle = BANNER_TEXT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const maxText = bannerW - BANNER_PAD_X * 2;
+  let drawn = label;
+  if (ctx.measureText(drawn).width > maxText) {
+    while (drawn.length > 4 && ctx.measureText(`${drawn}…`).width > maxText) {
+      drawn = drawn.slice(0, -1);
+    }
+    drawn = `${drawn}…`;
+  }
+  ctx.fillText(drawn, ctx.canvas.width / 2, y + bannerH / 2 + 1);
+  ctx.restore();
+}
+
+/**
+ * Compose a class-scope banner onto a PNG Blob — decode, draw the banner,
+ * re-encode. The Studio export pipeline calls this after the scan-report card
+ * is composited, but only while a filter is active. With an empty stamp the
+ * input Blob is returned unchanged, so an unfiltered export is byte-identical
+ * to before. Decode failures return the input Blob (an export that succeeded
+ * at the GL layer still produces an artifact).
+ */
+export async function composeClassScopeBannerOntoBlob(
+  source: Blob,
+  scopeStamp: string,
+): Promise<Blob> {
+  if (scopeStamp.trim().length === 0) return source;
+
+  let img: HTMLImageElement;
+  try {
+    img = await blobToImage(source);
+  } catch (err) {
+    console.warn('[export] class-scope banner skipped — image decode failed:', err);
+    return source;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return source;
+  ctx.drawImage(img, 0, 0);
+  drawClassScopeBanner(ctx, scopeStamp);
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => {
+      if (b) resolve(b);
+      else reject(new Error('composeClassScopeBannerOntoBlob: canvas.toBlob returned null'));
+    }, 'image/png');
+  });
+}
+
 /**
  * Helper — a rounded-corner rect path for `fill` + `stroke`. Inline here so
  * the ScanReportRenderer is self-contained.

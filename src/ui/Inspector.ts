@@ -8,6 +8,8 @@ import {
   type ThemeName,
 } from './themes';
 import type { AnalysisRow } from '../analysis/ModuleApi';
+import { scopeStamp } from '../render/class/classScope';
+import { classificationLabel } from '../render/pointInfo';
 import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
@@ -1229,6 +1231,22 @@ export class Inspector {
 
   /** Build a single status / label / value report row. */
   private _reportRow(row: AnalysisRow): HTMLElement {
+    // Honesty stamp — when a metric was computed under a class filter (subset)
+    // or is a header figure that can't be class-scoped (notScoped sentinel),
+    // append the scope provenance after the value so no filtered readout is
+    // shown unqualified. A full / absent scope yields an empty stamp and the
+    // row renders exactly as it did before class scoping existed.
+    const stamp = row.scope ? scopeStamp(row.scope, classificationLabel) : '';
+    const valueChildren: (HTMLElement | string)[] = [row.value];
+    if (stamp) {
+      valueChildren.push(
+        el('span', {
+          className: 'olv-report-scope',
+          text: ` · ${stamp}`,
+          title: 'Class scope this metric was computed under',
+        }),
+      );
+    }
     return el('div', { className: 'olv-report-row' }, [
       el('span', {
         className: `olv-status olv-status-${row.status}`,
@@ -1244,7 +1262,7 @@ export class Inspector {
         } as const)[row.status],
       }),
       el('span', { className: 'olv-report-label', text: row.label }),
-      el('span', { className: 'olv-report-value', text: row.value }),
+      el('span', { className: 'olv-report-value' }, valueChildren),
     ]);
   }
 

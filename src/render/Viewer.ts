@@ -38,7 +38,11 @@ import {
   vec2,
   vec4,
   float,
+  int,
   uniform,
+  uniformArray,
+  attribute,
+  materialPointSize,
   screenUV,
   screenSize,
   log2,
@@ -52,6 +56,8 @@ import {
 } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
+import type { ClassVisibility } from './class/classVisibility';
+import { classVisibleAt } from './class/classMaskUniform';
 import { isZUpFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode } from './colorModes';
@@ -343,6 +349,14 @@ export interface PointMeshHandle {
   mesh: THREE.Mesh;
   material: THREE.PointsNodeMaterial;
   colorAttr: THREE.InstancedBufferAttribute;
+  /**
+   * The per-point ASPRS classification attribute (`aClass`), one value per
+   * instance, or `null` when the source cloud carried no classification
+   * channel. The class-visibility mask multiplies the resolved point size
+   * by `mask[aClass]`, so a mesh without this attribute is never affected
+   * by class filtering (it stays fully visible).
+   */
+  classAttr: THREE.InstancedBufferAttribute | null;
 }
 
 /**
@@ -363,6 +377,13 @@ interface StreamingSession {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ASPRS class codes span a full byte (0-255) for LAS PDRF >= 6, so the GPU
+ * mask uniform is a 256-entry array — one slot per legal class code. Matches
+ * the width of `ClassVisibility` / `toMaskArray()`.
+ */
+const CLASS_COUNT = 256;
 
 /** The four corners of the unit billboard quad shared by every point. */
 const QUAD_CORNERS = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
@@ -732,6 +753,40 @@ export class Viewer {
     this._pointSizeUniform,
     this._attnRef,
   );
+
+  // ── Class visibility (GPU mask) ───────────────────────────────────────────
+  /**
+   * One Viewer-owned 256-entry visibility mask, shared by every point
+   * material (static clouds AND streaming nodes). `1` = show, `0` = hide.
+   * Defaults to all-1 so the unfiltered scene is visually identical to
+   * pre-feature behaviour. `applyClassVisibility` writes new values into
+   * the backing array; the node re-uploads once per render.
+   *
+   * Implementation note: a `uniformArray` of 256 floats was chosen over a
+   * 256x1 DataTexture because it compiles cleanly in this three build's TSL
+   * (`.element(int(aClass))` indexes it directly with no vertex-stage
+   * texture-fetch LOD plumbing). 256 floats live well within the vertex
+   * uniform budget on every WebGPU target and every practical WebGL2 device.
+   */
+  private readonly _classMaskUniform = uniformArray(
+    new Array<number>(CLASS_COUNT).fill(1),
+    'float',
+  );
+  /**
+   * True when at least one class is currently hidden. Mirrors the mask written
+   * by `applyClassVisibility` so the pick paths can decide — with a single
+   * boolean check — whether to consult the per-point class filter at all. When
+   * nothing is hidden, picking takes the original no-predicate path and is
+   * byte-identical (and equally fast) to the pre-feature behaviour.
+   */
+  private _classFiltered = false;
+  /**
+   * Materials whose mesh carries the `aClass` attribute — only these get the
+   * class-mask multiply folded into their size node. Materials on class-less
+   * meshes keep the exact prior size graph so they are never affected by the
+   * filter (and never reference a missing attribute).
+   */
+  private readonly _materialsWithClass = new WeakSet<THREE.PointsNodeMaterial>();
 
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
@@ -1345,6 +1400,10 @@ export class Viewer {
     const { mesh, material, colorAttr } = this.buildPointMesh(
       cloud.positions,
       colorForMode(mode, cloud),
+      // Feed the DOWNSAMPLED classification (carried in lockstep with the
+      // downsampled positions by `downsampleToBudget`), never the original
+      // input — the attribute must align 1:1 with the uploaded points.
+      cloud.classification ?? null,
     );
     this._scene.add(mesh);
 
@@ -1360,17 +1419,38 @@ export class Viewer {
    * it. Picking up the viewer's current point size, size mode and
    * antialiasing means a freshly built mesh matches the rest of the scene.
    */
-  buildPointMesh(positions: Float32Array, colorsU8: Uint8Array): PointMeshHandle {
+  buildPointMesh(
+    positions: Float32Array,
+    colorsU8: Uint8Array,
+    classification: ArrayLike<number> | null = null,
+  ): PointMeshHandle {
     const geometry = new THREE.InstancedBufferGeometry();
     geometry.setAttribute(
       'position',
       new THREE.Float32BufferAttribute(QUAD_CORNERS, 3),
     );
     geometry.setIndex(QUAD_INDEX);
-    geometry.instanceCount = positions.length / 3;
+    const instanceCount = positions.length / 3;
+    geometry.instanceCount = instanceCount;
 
     const positionAttr = new THREE.InstancedBufferAttribute(positions, 3);
     const colorAttr = new THREE.InstancedBufferAttribute(toFloatColors(colorsU8), 3);
+
+    // Per-point ASPRS classification, uploaded as a one-value-per-instance
+    // float attribute named `aClass`. Float (not an integer attribute) keeps
+    // it portable across the WebGPU and WebGL2 backends — the size graph
+    // rounds it back to an int before indexing the class-visibility mask.
+    // When the cloud has no classification channel we skip the attribute
+    // entirely; the size graph's mask lookup is guarded so such meshes stay
+    // fully visible regardless of the active filter.
+    let classAttr: THREE.InstancedBufferAttribute | null = null;
+    if (classification !== null) {
+      const classData = new Float32Array(instanceCount);
+      const n = Math.min(instanceCount, classification.length);
+      for (let i = 0; i < n; i++) classData[i] = classification[i];
+      classAttr = new THREE.InstancedBufferAttribute(classData, 1);
+      geometry.setAttribute('aClass', classAttr);
+    }
 
     // `instancedBufferAttribute` is typed as a broad node-type union; narrow
     // it to each property's accepted type — the itemSize (3) makes it a vec3.
@@ -1400,11 +1480,15 @@ export class Viewer {
     // — Classic respects the user's antialiasing preference.
     material.alphaToCoverage =
       splatForcesAlphaToCoverage(this._splatMode) || this._antialiasing;
+    // Record that this material's mesh carries `aClass` BEFORE size-mode
+    // setup, so `_applySizeMode` folds the class-mask multiply into its size
+    // node. Class-less meshes are never registered and keep the prior graph.
+    if (classAttr !== null) this._materialsWithClass.add(material);
     this._applySizeMode(material);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.frustumCulled = false;
-    return { mesh, material, colorAttr };
+    return { mesh, material, colorAttr, classAttr };
   }
 
   /**
@@ -1494,6 +1578,18 @@ export class Viewer {
       {
         onNodeReady: (node, decoded) => {
           renderer.onNodeReady(node, decoded);
+          // DISPLAY-ONLY class legend hook — hand the host the node's decoded
+          // per-point classification so the legend can fold its histogram in.
+          // A DecodedChunk always carries a `classification` array (zero-filled
+          // when the source lacked the field). Pure read; never touches the GPU
+          // mask path above.
+          if (this.onStreamingNodeClasses && decoded.classification) {
+            try {
+              this.onStreamingNodeClasses(decoded.classification);
+            } catch {
+              /* a legend refresh must never break the streaming pipeline */
+            }
+          }
           if (benchmark) {
             benchmark.recordFirstPaint();
             benchmark.recordNodeReady(node.record.id);
@@ -2282,6 +2378,42 @@ export class Viewer {
     }
   }
 
+  /**
+   * Apply a class-visibility state to the GPU. Writes the source's 256-entry
+   * mask (`1` = show, `0` = hide) into the shared `_classMaskUniform` so every
+   * point material — static clouds and streaming nodes alike — collapses the
+   * sprite quad of any hidden class to zero size on the next frame.
+   *
+   * No per-material rebuild is needed: the mask node is already wired into each
+   * size graph, and the uniform array re-uploads its current values once per
+   * render. We only request a frame so the idle-render throttle doesn't swallow
+   * the update.
+   */
+  /**
+   * Optional host hook fired once per streaming node as it becomes resident,
+   * with that node's decoded per-point classification. DISPLAY-ONLY: lets the
+   * classification legend fold late-arriving nodes into its histogram. Set to
+   * `undefined` to detach. Never invoked for static clouds (the host already
+   * has their full classification buffer at load time).
+   */
+  onStreamingNodeClasses?: (classes: Uint8Array) => void;
+
+  applyClassVisibility(v: ClassVisibility): void {
+    const mask = v.toMaskArray();
+    // `uniformArray`'s backing JS array is what its per-render `update()` copies
+    // into the padded GPU buffer — mutate it in place (don't replace it).
+    const target = this._classMaskUniform.array as number[];
+    let anyHidden = false;
+    for (let code = 0; code < CLASS_COUNT; code++) {
+      target[code] = mask[code];
+      if (mask[code] !== 1) anyHidden = true;
+    }
+    // Cache whether any class is hidden so the pick paths skip the per-point
+    // visibility predicate entirely on the all-visible hot path.
+    this._classFiltered = anyHidden;
+    this._bumpRenderActivity();
+  }
+
   // ── A.6 Inspection presets ──────────────────────────────────────────────
   /** Currently-applied preset id. Persisted via prefs. */
   private _presetId: PresetId = 'survey';
@@ -2837,6 +2969,17 @@ export class Viewer {
     this._inspect.setCoordinateContext(ctx);
   }
 
+  /**
+   * Push the active class-filter scope stamp into the point-inspector so a
+   * copied point's text + JSON carry the filter they were taken under. Pass
+   * an empty string when no class filter is active — the no-filter clipboard
+   * payload is then byte-identical to the pre-feature output. Thin
+   * pass-through so main.ts doesn't reach into the InspectTool directly.
+   */
+  setInspectClassScopeStamp(stamp: string): void {
+    this._inspect.setClassScopeStamp(stamp);
+  }
+
   /** Enter or leave annotation mode (freezes navigation). */
   setAnnotateMode(on: boolean): void {
     this._setToolMode(on ? 'annotate' : 'none');
@@ -3236,6 +3379,7 @@ export class Viewer {
   async exportImage(
     mode: ExportMode,
     options: ExportOptions = {},
+    classScopeStamp = '',
   ): Promise<ExportResult> {
     const studio = await loadExportStudio();
     return studio.renderExport(
@@ -3246,6 +3390,10 @@ export class Viewer {
         camera: this._camera,
         canvas: this._canvas,
         adapter: this._buildExportAdapter(),
+        // Class-filter scope stamp from the call site — drives the "showing
+        // N of M classes" banner the Studio composes onto a filtered raster.
+        // Empty string when nothing is hidden, keeping the export unchanged.
+        classScopeStamp,
       },
       options,
     );
@@ -3594,11 +3742,54 @@ export class Viewer {
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Apply the current point-size mode to one material. */
+  /**
+   * Apply the current point-size mode to one material, folding in the class
+   * visibility mask so it applies in BOTH size modes.
+   *
+   * The class mask must multiply the FINAL resolved size, but the size is
+   * resolved differently per mode: adaptive mode encodes size in
+   * `_adaptiveSizeNode` (driven by `_pointSizeUniform`), while fixed mode uses
+   * the scalar `material.size` and would otherwise leave `sizeNode = null`.
+   * `PointsNodeMaterial` IGNORES `material.size` whenever `sizeNode` is set, so
+   * to keep fixed mode's pixel size while still masking we route fixed mode
+   * through `materialPointSize` (the node form of `material.size`) and multiply
+   * that by the mask. With the default all-1 mask the multiply is the identity,
+   * so the unfiltered scene is pixel-for-pixel unchanged.
+   *
+   * Only materials whose mesh carries `aClass` get the multiply; class-less
+   * meshes keep the exact prior graph (adaptive node or `null`).
+   */
   private _applySizeMode(material: THREE.PointsNodeMaterial): void {
-    material.sizeNode = (
-      this._pointSizeMode === 'adaptive' ? this._adaptiveSizeNode : null
+    const adaptive = this._pointSizeMode === 'adaptive';
+    if (!this._materialsWithClass.has(material)) {
+      material.sizeNode = (
+        adaptive ? this._adaptiveSizeNode : null
+      ) as typeof material.sizeNode;
+      return;
+    }
+    const base: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
+    material.sizeNode = base.mul(
+      this._classMaskMultiplier(),
     ) as typeof material.sizeNode;
+  }
+
+  /**
+   * The per-point class-mask multiplier node: reads the `aClass` instance
+   * attribute, truncates it to an integer class code (class codes are exact
+   * integers in the float attribute), and looks up the shared 256-entry mask.
+   * Resolves to `1` when the class is shown and `0` when hidden — multiplying
+   * a hidden point's size by 0 collapses its sprite quad to nothing.
+   *
+   * Mirrors the `classVisibleAt(mask, code)` test used by the pure helpers and
+   * the UI: `mask[code] === 1`.
+   */
+  private _classMaskMultiplier(): TslNode {
+    // `attribute()` / `int()` / `.element()` are dynamically-typed TSL chains;
+    // route the per-point class code through `TslNode` (the `any` alias used by
+    // every node builder in this file) so the strict overloads don't reject it.
+    const aClass: TslNode = attribute('aClass');
+    const code: TslNode = int(aClass);
+    return (this._classMaskUniform as TslNode).element(code);
   }
 
   /**
@@ -4179,10 +4370,18 @@ export class Viewer {
     // Pure selection — angular-miss-fair, refinement-aware. Centralised in
     // `streamingPickSelection.ts` so it's unit-tested separately from the
     // Viewer's mesh-lifecycle plumbing.
+    // Only thread classification + the class predicate when a filter is active,
+    // so the all-visible hot path allocates and compares exactly as before.
+    const mask = this._classMaskUniform.array as ArrayLike<number>;
     const pick = selectStreamingPick(
-      eligibleEntries.map((e) => ({ positions: e.decoded.positions, depth: e.depth })),
+      eligibleEntries.map((e) => ({
+        positions: e.decoded.positions,
+        depth: e.depth,
+        classification: this._classFiltered ? e.decoded.classification : undefined,
+      })),
       [o.x, o.y, o.z],
       [d.x, d.y, d.z],
+      this._classFiltered ? (code: number) => classVisibleAt(mask, code) : undefined,
     );
     if (!pick) return null;
     const winning = eligibleEntries[pick.nodeIndex];
@@ -4216,6 +4415,23 @@ export class Viewer {
    * miss. Selection minimises the angular miss, so a near and a far point are
    * judged fairly; only a reasonably on-target hit (~within 4°) is accepted.
    */
+  /**
+   * Build the per-point `accept` predicate that confines a pick to currently-
+   * visible classes — "you can't click a point you can't see". Returns
+   * `undefined` when no class is hidden (the all-visible hot path) or when the
+   * buffer carries no classification, so the caller passes no predicate and the
+   * search runs exactly as it did pre-feature. When a filter is active, the
+   * predicate consults the same 256-entry mask the GPU uses via `classVisibleAt`,
+   * so screen and pick agree point-for-point.
+   */
+  private _classPickAccept(
+    classification: ArrayLike<number> | null | undefined,
+  ): ((index: number) => boolean) | undefined {
+    if (!this._classFiltered || !classification) return undefined;
+    const mask = this._classMaskUniform.array as ArrayLike<number>;
+    return (index: number) => classVisibleAt(mask, classification[index]);
+  }
+
   private _pickDetailed(
     ndcX: number,
     ndcY: number,
@@ -4229,7 +4445,12 @@ export class Viewer {
     let bestScore = Infinity;
     for (const { mesh, cloud } of this._clouds.values()) {
       if (!mesh.visible) continue;
-      const hit = nearestPointAlongRay(cloud.positions, [o.x, o.y, o.z], [d.x, d.y, d.z]);
+      const hit = nearestPointAlongRay(
+        cloud.positions,
+        [o.x, o.y, o.z],
+        [d.x, d.y, d.z],
+        this._classPickAccept(cloud.classification),
+      );
       if (!hit) continue;
       const score = hit.offset / hit.along; // angular miss
       if (score < 0.07 && score < bestScore) {

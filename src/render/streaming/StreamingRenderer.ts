@@ -209,7 +209,20 @@ export class StreamingRenderer {
       if (this._mode === 'elevation') this._recolorAll();
     }
     const colors = streamingNodeColors(this._mode, decoded, this._ranges, this._rgbAppearance);
-    const handle: PointMeshHandle = this._viewer.buildPointMesh(decoded.positions, colors);
+    // Pass the node's decoded per-point classification so the shared class
+    // mask applies to streaming nodes too. A DecodedChunk always carries a
+    // `classification` array (zero-filled when the source lacked the field),
+    // so streaming meshes always get an `aClass` attribute.
+    //
+    // `buildPointMesh` wires every material's size graph to the Viewer's ONE
+    // shared `_classMaskUniform` node (not a per-node copy), so a node decoded
+    // AFTER a class toggle reads the current mask the moment it is built — no
+    // re-application call is needed for late-arriving nodes.
+    const handle: PointMeshHandle = this._viewer.buildPointMesh(
+      decoded.positions,
+      colors,
+      decoded.classification,
+    );
     this._viewer.addStreamingMesh(handle.mesh, decoded, node.record.key.depth);
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,

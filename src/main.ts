@@ -41,10 +41,15 @@ import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
+import { ClassLegendPanel } from './ui/ClassLegendPanel';
+import { countClasses } from './render/class/classHistogram';
+import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
+import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
 import { ExportPanel } from './ui/ExportPanel';
+import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
@@ -832,7 +837,9 @@ const inspector = new Inspector({
     const label = modeLabel[mode] ?? mode;
     dropZone.setProgress(`Exporting ${label}…`);
     viewer
-      .exportImage(mode, {})
+      // Thread the active class-scope stamp so a filtered export carries the
+      // "showing N of M classes" banner; empty when nothing is hidden.
+      .exportImage(mode, {}, currentClassScopeStamp())
       .then((result) => {
         downloadBlob(`${base}-${mode}.png`, result.blob);
         recordUsage('export', mode);
@@ -1525,6 +1532,72 @@ const analysePanel = new AnalysePanel({
   },
 });
 
+// Classification legend — one row per ASPRS class present in the scan, with a
+// colour swatch (matching "colour by class"), a live "shown" point count, and a
+// visibility checkbox. DISPLAY ONLY: a change applies the 256-entry mask to the
+// GPU and re-renders the legend; it does NOT scope metrics/analysis. v0.4.1.
+// The streaming cloud whose header report is currently shown, kept so a later
+// class-filter toggle can re-stamp the not-class-scoped sentinel without
+// re-deriving it from scratch. Null for static scans / the empty state.
+let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null = null;
+
+const classLegendPanel = new ClassLegendPanel();
+classLegendPanel.onChange((visibility) => {
+  viewer.applyClassVisibility(visibility);
+  // Re-run the scan report so its class-dependent figures (count, density,
+  // coverage) and their honesty stamps update live with the filter. Guarded so
+  // a metrics failure never blocks the GPU mask the user just toggled.
+  try {
+    refreshScopedReport();
+  } catch (err) {
+    if (debug) console.warn('[class-legend] scoped report refresh threw', err);
+  }
+});
+
+/**
+ * Re-render the Inspector's scan report under the current class filter. Routes
+ * to the static module path (re-runs `runModules` with the derived scope) or
+ * the streaming header path (re-stamps the not-class-scoped sentinel), matching
+ * however the active scan was opened.
+ */
+function refreshScopedReport(): void {
+  // Keep the point-inspector's copy / JSON scope stamp in lockstep with the
+  // live filter — a point copied while filtering must carry the scope.
+  syncInspectClassScope();
+  if (viewer.isStreamingActive()) {
+    const cloud = lastStreamingReportCloud;
+    if (cloud) {
+      inspector.setReport(
+        runStreamingModules(cloud, classLegendPanel.getVisibility().isFiltered()),
+      );
+    }
+    return;
+  }
+  const cloud = activeId ? viewer.getCloud(activeId) : null;
+  if (cloud) inspector.setReport(runModules(cloud, currentClassScope(cloud)));
+}
+// Streaming node-ready: fold each newly-resident node's classification into the
+// legend so a class first seen at depth appears as a new row. The legend keeps
+// its current visibility (default visible, but left hidden if the user isolated
+// a class), so a late arrival never silently re-reveals hidden points.
+// Deferred: `viewer` is null until the lazy Viewer chunk resolves, so this hook
+// must be attached inside viewerLoaded (a top-level `viewer.*` write throws at
+// module load and breaks startup — caught by lint:main-deferral).
+void viewerLoaded.then(() => {
+  viewer.onStreamingNodeClasses = (classes) => {
+    if (!classLegendPanel.hasClasses()) {
+      // First node to carry classification on this streaming scan — seed + show.
+      classLegendPanel.setClasses(countClasses(classes));
+      if (classLegendPanel.hasClasses()) classLegendPanel.show();
+    } else {
+      classLegendPanel.mergeClasses(countClasses(classes));
+    }
+    // A late-arriving class can change the present-class total, so refresh the
+    // inspector's scope stamp ("k of M classes") to keep M accurate.
+    syncInspectClassScope();
+  };
+});
+
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
 // pipeline if the shape detector misjudged the scan.
@@ -1597,6 +1670,36 @@ function revealAnalysePanel(name: string): void {
   analysePanel.setVisible(!isObject);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(!isObject);
+}
+
+/**
+ * Populate + reveal (or empty-state) the classification legend for the active
+ * scan. Pass the cloud's per-point classification buffer when present, or
+ * `undefined` when the cloud carries no classification channel. DISPLAY-ONLY:
+ * the legend's fresh state is all-visible, so the GPU mask is applied as a
+ * no-op identity mask to keep the unfiltered experience unchanged. v0.4.1.
+ */
+function refreshClassLegend(classification?: ArrayLike<number>): void {
+  if (classification && classification.length > 0) {
+    classLegendPanel.setClasses(countClasses(toClassBuffer(classification)));
+  } else {
+    classLegendPanel.setClasses(new Map());
+  }
+  // Apply the (all-visible) mask so a previously-filtered scan can't leak its
+  // hidden classes onto the freshly loaded one. No-op for the common case.
+  viewer.applyClassVisibility(classLegendPanel.getVisibility());
+  classLegendPanel.show();
+  // Reset the inspector's copy/JSON scope stamp — the fresh legend is
+  // all-visible, so this clears any stamp left by a prior filtered scan.
+  syncInspectClassScope();
+}
+
+/** Narrow an ArrayLike classification source to a typed buffer for counting. */
+function toClassBuffer(src: ArrayLike<number>): Uint8Array {
+  if (src instanceof Uint8Array) return src;
+  const out = new Uint8Array(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = src[i];
+  return out;
 }
 
 // Every listener-binding that synchronously dereferences `viewer.*` must
@@ -1795,7 +1898,7 @@ void viewerLoaded.then(() => {
     // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
-    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, analysePanel.element, exportPanel.element);
+    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element);
     stage.overlay.append(leftPanels);
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
@@ -1957,11 +2060,69 @@ function streamingDebugSample(): StreamingDebugStats | null {
   return sample;
 }
 
-/** Run every registered validation module and flatten the rows. */
-function runModules(cloud: PointCloud): AnalysisRow[] {
+/**
+ * Run every registered validation module and flatten the rows. The optional
+ * `scope` is threaded into each module so class-dependent figures honour the
+ * visible-class subset; when omitted (or full) the output is byte-identical to
+ * the unscoped path.
+ */
+function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
-  for (const module of registry.list()) rows.push(...module.run(cloud).rows);
+  const options = scope ? { scope } : undefined;
+  for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
   return rows;
+}
+
+/**
+ * Derive the class scope for the active static cloud from the legend's
+ * visibility and the classes actually present in the cloud. Returns `fullScope`
+ * when there's no classification channel or nothing is filtered — so the
+ * report renders exactly as it did before class scoping existed.
+ */
+function currentClassScope(cloud: PointCloud): ClassScope {
+  const cls = cloud.classification;
+  if (!cls || cls.length === 0 || !classLegendPanel.hasClasses()) return fullScope();
+  const visibility = classLegendPanel.getVisibility();
+  if (!visibility.isFiltered()) return fullScope();
+  const present = [...countClasses(cls).keys()];
+  return scopeFrom(visibility.visibleCodes(), present, classificationLabel);
+}
+
+/**
+ * Derive the active class scope from the legend alone — works for both static
+ * and streaming scans because it reads the legend's present-class roster
+ * rather than a resident classification array (a streaming scan has none).
+ * Returns `fullScope` when no classification channel exists or nothing is
+ * filtered, so every export / copy path that consumes this stays
+ * byte-identical to the pre-feature output when no class is hidden.
+ */
+function currentClassScopeFromLegend(): ClassScope {
+  if (!classLegendPanel.hasClasses()) return fullScope();
+  const visibility = classLegendPanel.getVisibility();
+  if (!visibility.isFiltered()) return fullScope();
+  const present = classLegendPanel.presentCodes();
+  if (present.length === 0) return fullScope();
+  return scopeFrom(visibility.visibleCodes(), present, classificationLabel);
+}
+
+/**
+ * The current class-scope stamp string — `''` when the view is full /
+ * unfiltered. Fed to the point-inspector (copy + JSON) and the export
+ * surfaces so a copied / exported artifact made while filtering is
+ * self-describing.
+ */
+function currentClassScopeStamp(): string {
+  return scopeStamp(currentClassScopeFromLegend(), classificationLabel);
+}
+
+/**
+ * Push the current class-scope stamp into the point-inspector. Called after
+ * every legend change and on scan load / close so a point copied while a
+ * filter is active carries the filter it was taken under (and an unfiltered
+ * copy stays byte-identical to before).
+ */
+function syncInspectClassScope(): void {
+  viewer.setInspectClassScopeStamp(currentClassScopeStamp());
 }
 
 /**
@@ -1997,16 +2158,26 @@ function runStreamingModules(cloud: {
   };
   readonly maxDepth?: () => number;
   readonly octree?: { nodes: () => readonly unknown[] };
-}): AnalysisRow[] {
+}, classFilterActive = false): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
   const info = (label: string, value: string): AnalysisRow =>
     ({ label, value, status: 'info' });
+  // Streaming density/spacing are derived from the file header's full-cloud
+  // totals — there is no client-side per-class breakdown to scope them to. So
+  // they stay full-cloud and, when a class filter is active, carry the honesty
+  // sentinel that renders "full cloud (header) — not class-scoped" rather than
+  // pretending the figure honours the filter.
+  const headerMetric = (label: string, value: string): AnalysisRow => {
+    const row = info(label, value);
+    if (classFilterActive) row.scope = notScopedSentinel();
+    return row;
+  };
 
   rows.push(info('Source', cloud.kind === 'ept' ? 'EPT (Entwine Point Tile)' : 'COPC (Cloud Optimized Point Cloud)'));
   if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
     rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
   }
-  rows.push(info('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
+  rows.push(headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
 
   // Bounds — prefer the header's source-coordinate min/max for accuracy.
   const header = cloud.metadata?.header;
@@ -2020,8 +2191,8 @@ function runStreamingModules(cloud: {
     const footprintArea = w * d;
     if (footprintArea > 0 && cloud.sourcePointCount > 0) {
       const density = cloud.sourcePointCount / footprintArea;
-      rows.push(info('Density', `${density.toFixed(1)} pts/m²`));
-      rows.push(info('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
+      rows.push(headerMetric('Density', `${density.toFixed(1)} pts/m²`));
+      rows.push(headerMetric('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
     }
   }
 
@@ -2224,6 +2395,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasIntensity: modes.includes('intensity'),
       hasClassification: modes.includes('classification'),
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      // Class-filter honesty — when a filter narrows the live view, disclose
+      // it so the PDF's full-cloud figures aren't read as filter-scoped.
+      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
     };
     exportFileStem = baseName(streamingCloud.name);
   } else if (staticCloud) {
@@ -2240,6 +2414,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      // Class-filter honesty — when a filter narrows the live view, disclose
+      // it so the PDF's full-cloud figures aren't read as filter-scoped.
+      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
     };
     exportFileStem = baseName(staticCloud.name);
   } else {
@@ -2777,7 +2954,7 @@ async function handleFile(file: File): Promise<void> {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
     }
     try {
-      inspector.setReport(runModules(result.cloud));
+      inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
     } catch (err) {
       if (debug) console.warn('[inspector] runModules + setReport threw', err);
     }
@@ -2832,6 +3009,16 @@ async function handleFile(file: File): Promise<void> {
 
     // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
     revealAnalysePanel(result.cloud.name);
+
+    // Classification legend (v0.4.1) — populate from the cloud's per-point
+    // class buffer when present, then show. A scan with no classification
+    // channel renders the panel's empty state. DISPLAY-ONLY; the all-visible
+    // default mask is applied so nothing is hidden on load.
+    try {
+      refreshClassLegend(result.cloud.classification);
+    } catch (err) {
+      if (debug) console.warn('[class-legend] refresh threw', err);
+    }
 
     // Developer diagnostics — the merged telemetry feeds the debug console
     // block, the performance overlay, and (under ?benchmark=1) a benchmark.
@@ -2999,6 +3186,15 @@ async function openStreamingCopc(
   );
   streamingPanel.setQuality(streamingQuality);
   streamingPanel.setPhase('Streaming coarse geometry…');
+  // Classification legend (v0.4.1) — reset to empty for the new streaming scan.
+  // The legend is seeded + revealed lazily by `viewer.onStreamingNodeClasses`
+  // as nodes carrying classification become resident, and refines as deeper
+  // nodes stream in. A streaming source without a classification channel simply
+  // never seeds the legend, so it stays hidden.
+  classLegendPanel.setClasses(new Map());
+  classLegendPanel.hide();
+  // Clear any prior filtered scan's inspector copy/JSON scope stamp.
+  syncInspectClassScope();
   // Visual Export Studio — a streaming COPC cloud is now attached;
   // the image-export buttons in the Inspector can light up. The streaming
   // path doesn't go through `inspector.addCloud`, so the gate has to flip
@@ -3014,7 +3210,8 @@ async function openStreamingCopc(
   inspector.setStreamingMode(true);
   try { inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
   catch (err) { if (debug) console.warn('[inspector] setDetail (streaming) threw', err); }
-  try { inspector.setReport(runStreamingModules(cloud)); }
+  lastStreamingReportCloud = cloud;
+  try { inspector.setReport(runStreamingModules(cloud, classLegendPanel.getVisibility().isFiltered())); }
   catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
   try {
     inspectorCards.refreshDatasetIntelligenceFromStreamingCloud(cloud);
@@ -3212,14 +3409,18 @@ async function handleRemoteEpt(url: string): Promise<void> {
       // `span` is the points-per-tile analogue), so those rows are
       // omitted on EPT streams.
       const b = detection.metadata.bounds.conforming;
-      inspector.setReport(runStreamingModules({
-        kind: 'ept',
+      const eptReportCloud = {
+        kind: 'ept' as const,
         name: cloud.name,
         sourcePointCount: cloud.sourcePointCount,
         metadata: {
-          header: { min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] },
+          header: { min: [b[0], b[1], b[2]] as [number, number, number], max: [b[3], b[4], b[5]] as [number, number, number] },
         },
-      }));
+      };
+      lastStreamingReportCloud = eptReportCloud;
+      inspector.setReport(
+        runStreamingModules(eptReportCloud, classLegendPanel.getVisibility().isFiltered()),
+      );
     } catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
     void prewarmExportStudio();
 
@@ -3599,6 +3800,13 @@ function resetToEmptyState(): void {
   // loaded after the first Analyse run, and before that there is nothing to
   // clear — so this never eagerly pulls the heavy analysis chunk.
   terrainRunner.abortAndClearCache();
+  // Hide + clear the classification legend so it doesn't linger with a stale
+  // class list after the scan is closed. v0.4.1.
+  classLegendPanel.setClasses(new Map());
+  classLegendPanel.hide();
+  // Clear the inspector's copy/JSON scope stamp now there's no active filter.
+  syncInspectClassScope();
+  lastStreamingReportCloud = null;
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();
@@ -3684,7 +3892,13 @@ async function saveSnapshot(): Promise<void> {
       annotations: viewer.annotate.getAnnotations().length > 0,
       measurements: viewer.measure.getMeasurements().length > 0,
     });
-    const url = URL.createObjectURL(blob);
+    // `snapshot()` renders the live scene through the class-mask shader, so a
+    // filtered view drops hidden classes from the PNG. Stamp the same scope
+    // banner the Studio export path uses so a filtered snapshot can't leave the
+    // app undisclosed. With an empty stamp (nothing hidden) the helper returns
+    // the input Blob unchanged, keeping the snapshot byte-identical to before.
+    const stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
+    const url = URL.createObjectURL(stamped);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'openlidarviewer.png';

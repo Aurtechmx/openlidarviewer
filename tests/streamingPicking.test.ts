@@ -217,6 +217,56 @@ describe('selectStreamingPick — stability / determinism', () => {
   });
 });
 
+describe('selectStreamingPick — class filter (visible-classes-only picks)', () => {
+  test('with no acceptClass predicate, classification is ignored (hot path)', () => {
+    // A node carrying classification but no predicate behaves exactly as if
+    // the field were absent — the on-ray point still wins.
+    const n: StreamingPickNode = {
+      positions: new Float32Array([3, 0, -2, 0, 0, -8]),
+      depth: 2,
+      classification: new Uint8Array([2, 6]),
+    };
+    const hit = selectStreamingPick([n], ORIGIN, DIR);
+    expect(hit?.pointIndex).toBe(1);
+  });
+
+  test('rejecting the on-ray point class snaps to the next visible point', () => {
+    // Point index 1 sits on the ray but is class 6 (hidden); class 2 is shown,
+    // so the runner-up (index 0) is surfaced rather than "nothing".
+    // Index 0 is slightly off the ray but within angular tolerance
+    // (0.1/8 ≈ 0.0125 < 0.07); index 1 sits dead on the ray.
+    const n: StreamingPickNode = {
+      positions: new Float32Array([0.1, 0, -8, 0, 0, -8]),
+      depth: 2,
+      classification: new Uint8Array([2, 6]),
+    };
+    const visible = new Set([2]);
+    const hit = selectStreamingPick([n], ORIGIN, DIR, (c) => visible.has(c));
+    expect(hit?.pointIndex).toBe(0);
+    expect(hit?.point[0]).toBeCloseTo(0.1, 6);
+  });
+
+  test('a predicate hiding every point class returns null', () => {
+    const n: StreamingPickNode = {
+      positions: new Float32Array([0, 0, -8]),
+      depth: 2,
+      classification: new Uint8Array([6]),
+    };
+    expect(selectStreamingPick([n], ORIGIN, DIR, () => false)).toBeNull();
+  });
+
+  test('a node without classification is left untouched by the predicate', () => {
+    // Defensive: when a node carries no classification array, the predicate
+    // can't apply, so the node's points stay eligible (never silently dropped).
+    const n: StreamingPickNode = {
+      positions: new Float32Array([0, 0, -8]),
+      depth: 2,
+    };
+    const hit = selectStreamingPick([n], ORIGIN, DIR, () => false);
+    expect(hit?.pointIndex).toBe(0);
+  });
+});
+
 describe('selectStreamingPick — invariant: no silent stale picks', () => {
   test('handing an empty list always returns null (never reuses prior state)', () => {
     // The selector is pure — no internal cache. This test exists to anchor

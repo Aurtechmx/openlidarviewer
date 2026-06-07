@@ -2,7 +2,32 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [Unreleased]
+## [0.4.2] - 2026-06-05
+
+### Added
+
+- Classification legend: a "Classes" panel lists one row per ASPRS class
+  actually present in the loaded scan, each with the renderer's class colour
+  swatch, the class name, and a live count of the points currently shown — so
+  the legend reads as the true colour key for the view, not a static table.
+- Per-class show/hide, isolate, and show-all: untick a class to drop it from
+  the view, use "Solo" to isolate a single class, and "Show all" to bring
+  everything back. A persistent "Filtered — showing N of M classes" banner
+  stays up the whole time a filter is active, so a partial view can never be
+  mistaken for the full cloud. Picking and inspection honour the filter too —
+  you can only pick points in the classes you can see.
+- Metrics follow the visible classes: when classes are hidden, the scan
+  report recomputes over just the visible subset (ground, density, coverage,
+  and the rest), and every filtered readout is stamped with the class scope it
+  was measured under, so no filtered number is ever shown unqualified. Clearing
+  the filter restores the full-cloud figures and removes the stamps.
+- Streaming header metrics that can't be re-derived from the resident view are
+  shown for the full cloud and clearly labelled "not class-scoped", rather than
+  silently mixing a full-cloud figure into an otherwise filtered report.
+- Filtered exports carry their scope: copied points, the PDF report, and the
+  image and snapshot exports are all stamped with the active class filter, so a
+  filtered artifact is self-describing — anyone opening it later can see exactly
+  which classes it represents.
 
 ### Changed
 

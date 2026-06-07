@@ -135,6 +135,16 @@ export interface ExportContext {
   readonly canvas: HTMLCanvasElement;
   /** Narrow adapter into the Viewer for mode swap + capability queries. */
   readonly adapter: ExportSceneAdapter;
+  /**
+   * Active class-filter scope stamp — e.g.
+   * `"Ground + Building · 2 of 5 classes"`. Present ONLY while a class filter
+   * hides at least one class at export time. When set, the Studio export
+   * draws a "showing N of M classes" banner into the raster so a filtered
+   * image is self-describing about the filter it was captured under. Absent /
+   * empty for an unfiltered export, in which case the output is byte-identical
+   * to the pre-feature image.
+   */
+  readonly classScopeStamp?: string;
 }
 
 /**
