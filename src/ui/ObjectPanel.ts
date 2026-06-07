@@ -51,6 +51,13 @@ const areaMft = (v: number): string =>
   Number.isFinite(v) ? `${Math.round(v).toLocaleString()} m² (${Math.round(sqMetresToSqFeet(v)).toLocaleString()} ft²)` : '—';
 const volMft = (v: number): string =>
   Number.isFinite(v) ? `${Math.round(v).toLocaleString()} m³ (${Math.round(cubicMetresToCubicFeet(v)).toLocaleString()} ft³)` : '—';
+// Object-scale variants — compact scans are routinely < 1 m² / < 1 m³, where
+// the interior path's integer rounding would erase the figure, so keep two
+// decimals in metres while reusing the same exact metre→foot conversions.
+const areaMftFine = (v: number): string =>
+  Number.isFinite(v) ? `${v.toFixed(2)} m² (${sqMetresToSqFeet(v).toFixed(1)} ft²)` : '—';
+const volMftFine = (v: number): string =>
+  Number.isFinite(v) ? `${v.toFixed(2)} m³ (${cubicMetresToCubicFeet(v).toFixed(1)} ft³)` : '—';
 
 export class ObjectPanel {
   readonly element: HTMLElement;
@@ -155,12 +162,21 @@ export class ObjectPanel {
       this._runAnywayButton();
       return;
     }
+    const o = metrics.obb;
+    const a = metrics.aabb;
     this._body.append(
-      this._row('Dimensions (oriented)', `${m1(metrics.obb.lengthM)} × ${m1(metrics.obb.widthM)} × ${m1(metrics.obb.heightM)} m`,
-        'Tight bounding box from the object’s own principal axes.'),
-      this._row('Axis-aligned', `${m1(metrics.aabb.lengthM)} × ${m1(metrics.aabb.widthM)} × ${m1(metrics.aabb.heightM)} m`),
-      this._row('Envelope volume', `${m1(metrics.envelopeVolumeM3)} m³`,
-        'Bounding-box volume — an envelope, not a watertight solid volume.'),
+      this._row('Dimensions (oriented)',
+        `${m1(o.lengthM)} × ${m1(o.widthM)} × ${m1(o.heightM)} m`,
+        `${metresToFeet(o.lengthM).toFixed(1)} × ${metresToFeet(o.widthM).toFixed(1)} × ${metresToFeet(o.heightM).toFixed(1)} ft — tight box from the object’s own principal axes.`),
+      this._row('Largest dimension', mft(metrics.longestDimensionM),
+        'Longest side of the oriented box — the headline size figure.'),
+      this._row('Axis-aligned',
+        `${m1(a.lengthM)} × ${m1(a.widthM)} × ${m1(a.heightM)} m`,
+        `${metresToFeet(a.lengthM).toFixed(1)} × ${metresToFeet(a.widthM).toFixed(1)} × ${metresToFeet(a.heightM).toFixed(1)} ft — box aligned to the scan axes.`),
+      this._row('Envelope volume', volMftFine(metrics.envelopeVolumeM3),
+        'Bounding envelope — not a solid volume. A point cloud has no watertight interior.'),
+      this._row('Bounding surface area', areaMftFine(metrics.surfaceAreaM2),
+        'Bounding-box surface area (approximate) — the envelope’s skin, not the object’s true (mesh) surface.'),
       this._row('Points · spacing', `${metrics.pointCount.toLocaleString()} · ~${cm(metrics.medianSpacingM)}`),
       this._row('Scan completeness', `${Math.round(metrics.completenessPct)}% of directions`,
         'Share of viewing directions around the object that have returns.'),

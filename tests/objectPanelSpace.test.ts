@@ -70,20 +70,52 @@ describe('ObjectPanel — space / object routing', () => {
     }
   });
 
-  it('renders the object fields when showing an object', async () => {
-    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
-    const { objectMetrics } = await import('../src/terrain/objectMetrics');
-
+  function cubeShell(): Float32Array {
     const cube: number[] = [];
     for (let u = 0; u <= 4; u += 0.5)
       for (let w = 0; w <= 4; w += 0.5) {
         cube.push(u, w, 0, u, w, 4, u, 0, w, u, 4, w, 0, u, w, 4, u, w);
       }
+    return Float32Array.from(cube);
+  }
+
+  it('renders the object fields when showing an object', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { objectMetrics } = await import('../src/terrain/objectMetrics');
+
     const panel = new ObjectPanel();
-    panel.showObject(objectMetrics(Float32Array.from(cube)), null, null);
+    panel.showObject(objectMetrics(cubeShell()), null, null);
     const text = (panel.element as unknown as FakeEl).textContent;
     expect(text).toContain('Object scan');
     expect(text).toContain('Dimensions (oriented)');
     expect(text).toContain('Envelope volume');
+  });
+
+  it('object report reaches interior parity: m+ft, largest dim, surface, quality', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { objectMetrics } = await import('../src/terrain/objectMetrics');
+    const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
+
+    const pos = cubeShell();
+    const space = spaceMetrics(pos, { upAxis: 'z', spaceKind: 'object', hasRgb: true });
+
+    const panel = new ObjectPanel();
+    panel.showObject(objectMetrics(pos), space, null);
+    const text = (panel.element as unknown as FakeEl).textContent;
+    for (const field of [
+      'Object scan',
+      'Dimensions (oriented)',
+      'Largest dimension',
+      'Envelope volume',
+      'ft³',           // envelope volume shows feet³ alongside metres³
+      'Bounding surface area',
+      'ft²',           // surface area shows feet² alongside metres²
+      'ft)',           // largest dimension shows feet alongside metres
+      'Capture quality',
+      'Density',
+      'Colour (RGB)',
+    ]) {
+      expect(text).toContain(field);
+    }
   });
 });
