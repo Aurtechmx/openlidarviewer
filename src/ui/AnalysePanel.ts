@@ -1,24 +1,34 @@
 /**
  * AnalysePanel.ts
  *
- * The Analyse panel is MOUNTED as a preview surface for terrain
- * readiness and contour export. It exposes the validated data pipeline
- * conservatively and does NOT yet represent a full interactive terrain
- * suite — a minimal "Planned" tag row sets that expectation, and there are
- * no dead buttons.
+ * The Analyse panel surfaces terrain readiness and contour/DEM export for
+ * a loaded scan. It exposes the validated data pipeline conservatively and
+ * fitness-for-use — never survey-grade.
  *
  * A plain-DOM panel mirroring MeasurePanel/AnnotationPanel: a `readonly
- * element`, a callbacks object, `update()`, and `setVisible()`. It shows,
- * in order: honesty status chips, DTM & contour readiness, recommended
- * grid + interval, contour export (gated by the DTM quality gate),
- * coverage & confidence, and a minimal "Planned" section. Mounted in
- * `main.ts` next to the Measurements and Annotations panels.
+ * element`, a callbacks object, `update()`, and `setVisible()`. It reads
+ * top-down:
+ *
+ *   1. Terrain Assessment hero — status · score, the headline reason, and
+ *      bestFor / useCaution / notRecommendedFor guidance plus the
+ *      supporting metrics behind the verdict.
+ *   2. Details expander (collapsed) — the honesty status chips
+ *      (Coverage / DTM / CRS / Datum / Export), DTM & contour readiness,
+ *      recommended grid + interval, and coverage & confidence metrics
+ *      (mean confidence, vertical RMSE, NVA / VVA, USGS 3DEP Quality
+ *      Level). Jargon abbreviations carry plain-language hover tooltips.
+ *   3. Surface models — hypsometric / hillshade previews.
+ *   4. Contour & DEM exports — gated by the DTM quality gate.
+ *   5. A NOT_SURVEY_GRADE footer.
+ *
+ * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import {
   ANALYSE_LABELS,
   GRADE_MEANING,
+  METRIC_TOOLTIPS,
   NOT_SURVEY_GRADE,
   describeIntervalOption,
   recommendIntervalText,
@@ -35,6 +45,7 @@ import {
   type ContourFormat,
 } from '../terrain/contour/contourDownload';
 import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
+import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import {
   hypsometricColor,
   DEFAULT_CANOPY_PALETTE,
@@ -129,9 +140,18 @@ export class AnalysePanel {
   private readonly _exportButtons: HTMLButtonElement[] = [];
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
+  /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
+  private _demNote!: HTMLElement;
   private readonly _legend: HTMLElement;
   /** The always-visible minimal "Planned" section. */
   private readonly _roadmap: HTMLElement;
+  /**
+   * Cancels the relief tile's pending rAF repaint, if one is scheduled. Set
+   * while the interactive hillshade has a frame queued; cleared once it runs.
+   * Re-rendering the surface row (which detaches the old tile) and hiding the
+   * panel both invoke it so a queued frame can't paint a removed canvas.
+   */
+  private _reliefRepaintCancel: (() => void) | null = null;
 
   constructor(callbacks: AnalysePanelCallbacks = {}) {
     this._cb = callbacks;
@@ -297,35 +317,56 @@ export class AnalysePanel {
    */
   /**
    * The single top-level verdict the reviewer asked for — Good / Preview /
-   * Limited — sitting above every detailed metric so a non-specialist reads
-   * the bottom line first, with the reason and what the surface is good for.
+   * Limited / Blocked — sitting above every detailed metric so a non-specialist
+   * reads the bottom line first: status + folded score, why, what it is good
+   * for, what to be cautious about, what it is NOT for, and the real supporting
+   * metrics behind it (each colour-coded by its own rating).
    */
   private _renderAssessment(): void {
     this._assessmentRow.replaceChildren();
     if (!this._result) return;
     const a = terrainAssessment(this._result);
-    const tier = a.verdict.toLowerCase(); // good | preview | limited
+    const tier = a.status.toLowerCase(); // good | preview | limited | blocked
     this._assessmentRow.className = `olv-analyse-assessment is-${tier}`;
 
     const top = el('div', { className: 'olv-analyse-assess-top' });
-    // Fold the 0–100 terrain quality score into the verdict so the hero is the
-    // single headline (e.g. "Preview · 64/100") — no competing score block.
-    const qs = this._result.qualityScore;
-    const verdictText = qs && Number.isFinite(qs.score) ? `${a.verdict} · ${qs.score}/100` : a.verdict;
+    // The score is folded in from the assessment (single source of truth) so
+    // the hero is the one headline, e.g. "Preview · 64/100".
+    const headline = a.scoreKnown && Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
     top.append(
       el('span', { className: 'olv-analyse-assess-label', text: 'Terrain assessment' }),
-      el('span', { className: 'olv-analyse-assess-verdict', text: verdictText }),
+      el('span', { className: 'olv-analyse-assess-verdict', text: headline }),
     );
     this._assessmentRow.append(top);
     this._assessmentRow.append(el('div', { className: 'olv-analyse-assess-reason', text: a.reason }));
     this._assessmentRow.append(
       el('div', { className: 'olv-analyse-assess-use', text: `Best for: ${a.bestFor}` }),
     );
-    if (a.caution) {
+    if (a.useCaution) {
       this._assessmentRow.append(
-        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.caution}` }),
+        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.useCaution}` }),
       );
     }
+    this._assessmentRow.append(
+      el('div', {
+        className: 'olv-analyse-assess-not',
+        text: `Not for: ${a.notRecommendedFor}`,
+      }),
+    );
+
+    // Compact supporting-metrics list — each metric is a pill whose colour comes
+    // from its own honest rating (good / fair / poor / unknown), never from the
+    // overall status, so a single weak signal stays visible at a glance.
+    const metrics = el('div', { className: 'olv-analyse-assess-metrics' });
+    for (const m of a.supportingMetrics) {
+      const pill = el('div', { className: `olv-analyse-assess-metric is-${m.rating}` });
+      pill.append(
+        el('span', { className: 'olv-analyse-assess-metric-label', text: m.label }),
+        el('span', { className: 'olv-analyse-assess-metric-value', text: m.value }),
+      );
+      metrics.append(pill);
+    }
+    this._assessmentRow.append(metrics);
   }
 
   private _renderScore(): void {
@@ -364,6 +405,10 @@ export class AnalysePanel {
    * a north-up hillshade preview the user can export as a PNG.
    */
   private _renderSurface(): void {
+    // Drop any frame the previous relief tile queued — the tile it would paint
+    // is about to be detached by replaceChildren().
+    this._reliefRepaintCancel?.();
+    this._reliefRepaintCancel = null;
     this._surfaceRow.replaceChildren();
     const r = this._result;
     const s = r?.surface;
@@ -537,6 +582,37 @@ export class AnalysePanel {
         : `Sun ${String(azimuth).padStart(3, '0')}° · alt ${altitude}°`;
     };
 
+    // Coalesce slider repaints into one rAF: dragging fires many `input`
+    // events per frame, but a full per-cell hillshade + ImageData write is
+    // expensive on a large grid. We keep only a single pending frame; when it
+    // runs it reads the LATEST azimuth/altitude (the slider handlers update
+    // those before scheduling), so intermediate positions are skipped and the
+    // most recent one always wins — including the final value on release.
+    // The pending frame is cancellable from outside (see _reliefRepaintCancel)
+    // so a re-render or panel close can't leave a queued frame painting a
+    // detached canvas.
+    let reliefRafId: number | null = null;
+    const canSchedule = typeof requestAnimationFrame === 'function';
+    const cancelRepaint = (): void => {
+      if (reliefRafId !== null) {
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(reliefRafId);
+        reliefRafId = null;
+      }
+    };
+    const scheduleRepaint = (): void => {
+      // No rAF (e.g. jsdom in tests) — fall back to a synchronous repaint so
+      // behaviour is unchanged where coalescing isn't available.
+      if (!canSchedule) { repaint(); return; }
+      if (reliefRafId !== null) return;
+      reliefRafId = requestAnimationFrame(() => {
+        reliefRafId = null;
+        repaint();
+      });
+    };
+    // Expose the cancel so teardown (surface re-render / panel hide) can drop a
+    // queued frame before this tile is detached.
+    this._reliefRepaintCancel = cancelRepaint;
+
     // Controls: multi-directional toggle + azimuth + altitude.
     const controls = el('div', { className: 'olv-analyse-relief-controls' });
     const multiLabel = el('label', { className: 'olv-analyse-relief-toggle' });
@@ -571,12 +647,12 @@ export class AnalysePanel {
     azInput.addEventListener('input', () => {
       azimuth = Number(azInput.value);
       azVal.textContent = `${String(azimuth).padStart(3, '0')}°`;
-      repaint();
+      scheduleRepaint();
     });
     altInput.addEventListener('input', () => {
       altitude = Number(altInput.value);
       altVal.textContent = `${altitude}°`;
-      repaint();
+      scheduleRepaint();
     });
     controls.append(multiLabel, azRow, altRow);
     tile.append(controls);
@@ -817,6 +893,12 @@ export class AnalysePanel {
   }
 
   setVisible(on: boolean): void {
+    // Hiding the panel mid-drag: drop any queued relief repaint so it can't
+    // fire against a tile that's no longer on screen.
+    if (!on) {
+      this._reliefRepaintCancel?.();
+      this._reliefRepaintCancel = null;
+    }
     this.element.style.display = on ? '' : 'none';
   }
 
@@ -847,6 +929,19 @@ export class AnalysePanel {
     }
   }
 
+  /**
+   * Attach a "what this means" hover hint to a metric node, matching the
+   * affordance the Inspector's DatasetIntelligenceCard uses on its rows:
+   * the plain-language string becomes the `title` attribute and the cursor
+   * turns to `help` so users see more info is one hover away. Additive and
+   * accessible — never changes the displayed value.
+   */
+  private _hint<T extends HTMLElement>(node: T, tooltip: string): T {
+    node.title = tooltip;
+    node.style.cursor = 'help';
+    return node;
+  }
+
   private _renderValidation(): void {
     this._validationRow.replaceChildren();
     const v = this._result?.validation;
@@ -863,7 +958,10 @@ export class AnalysePanel {
         : 'Warning: confidence does not track error here.'
       : 'Calibration not assessable on this scan.';
     this._validationRow.append(
-      el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
+      this._hint(
+        el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
+        METRIC_TOOLTIPS.rmse,
+      ),
       el('div', { className: 'olv-analyse-cal', text: calText }),
     );
 
@@ -874,17 +972,28 @@ export class AnalysePanel {
       const fmtM = (n: number | null): string =>
         n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
       if (std.nvaM != null || std.vvaM != null) {
-        this._validationRow.append(el('div', {
-          className: 'olv-analyse-strata',
-          text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
-        }));
+        this._validationRow.append(this._hint(
+          el('div', {
+            className: 'olv-analyse-strata',
+            text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
+          }),
+          `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
+        ));
       }
       if (std.qualityLevel !== 'unknown') {
-        this._validationRow.append(el('div', {
-          className: 'olv-analyse-ql',
-          text: `USGS 3DEP ${std.qualityLevel}`,
-          title: std.qualityLevelReason,
-        }));
+        const qlReason = std.qualityLevelReason;
+        // Keep the dynamic gate reason in the hint, but lead with the
+        // plain-language explanation of what a Quality Level actually is.
+        const qlTooltip = qlReason
+          ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
+          : METRIC_TOOLTIPS.qualityLevel;
+        this._validationRow.append(this._hint(
+          el('div', {
+            className: 'olv-analyse-ql',
+            text: `USGS 3DEP ${std.qualityLevel}`,
+          }),
+          qlTooltip,
+        ));
       }
     }
 
@@ -971,6 +1080,13 @@ export class AnalysePanel {
     this._demButton.title = 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet';
     this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
     row.append(this._demButton);
+
+    // Honesty caveat for the DEM export — the raster stays usable for partial /
+    // preview data, but the user is told one line up front (the README carries
+    // the full disclosure). Empty + hidden until _renderExportGate fills it.
+    this._demNote = el('p', { className: 'olv-analyse-dem-note' });
+    this._demNote.style.display = 'none';
+    row.append(this._demNote);
     return row;
   }
 
@@ -990,6 +1106,13 @@ export class AnalysePanel {
         basename,
         wkt: ctx.wkt ?? null,
         isGeographic: ctx.isGeographic ?? false,
+        // Generation parameters (interpolation / smoothing / despike) are derived
+        // from the actual run inside buildDemPackage via result.generationParams,
+        // so the README can never drift from what produced the raster.
+        generationDateIso: new Date().toISOString(),
+        softwareName: 'OpenLiDARViewer',
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
       });
       const blob = new Blob([bytes as BlobPart], { type: 'application/zip' });
       const url = URL.createObjectURL(blob);
@@ -1078,15 +1201,19 @@ export class AnalysePanel {
     const dtm = q.readiness === 'ready' ? 'Ready' : q.readiness === 'previewOnly' ? 'Preview' : 'Blocked';
     const exp =
       q.exportReadiness === 'available' ? 'Available' : q.exportReadiness === 'previewOnly' ? 'Preview only' : 'Blocked';
-    const chips: Array<[string, string, Tone]> = [
+    // Optional 4th tuple entry is a plain-language hover hint for the
+    // jargon chips (CRS / Datum), reused from contourCopy so the wording
+    // is single-sourced and consistent with the Details metrics above.
+    const chips: Array<[string, string, Tone, string?]> = [
       ['Coverage', coverage, tri(q.coverageMode === 'full', true)],
       ['DTM', dtm, q.readiness === 'ready' ? 'good' : q.readiness === 'previewOnly' ? 'warn' : 'bad'],
-      ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true)],
-      ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true)],
+      ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true), METRIC_TOOLTIPS.crs],
+      ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true), METRIC_TOOLTIPS.verticalDatum],
       ['Export', exp, q.exportReadiness === 'available' ? 'good' : q.exportReadiness === 'previewOnly' ? 'warn' : 'bad'],
     ];
-    for (const [k, v, tone] of chips) {
+    for (const [k, v, tone, tip] of chips) {
       const chip = el('span', { className: `olv-analyse-chip is-${tone}` });
+      if (tip) this._hint(chip, tip);
       chip.append(
         el('span', { className: 'olv-analyse-chip-k', text: k }),
         el('span', { className: 'olv-analyse-chip-v', text: v }),
@@ -1140,6 +1267,25 @@ export class AnalysePanel {
     this._demButton.title = hasDtm
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';
+    // One-line caveat under the DEM button when the surface is not full coverage
+    // or the quality gate is not ready — the README spells out the rest. This
+    // uses the SAME condition the README caveat does (coverage !== 'full' ||
+    // readiness !== 'ready') so the button note and the README can't disagree.
+    const coverageMode = r.dtm.coverageMode;
+    const notFull = coverageMode !== 'full';
+    const notReady = r.quality.readiness !== 'ready';
+    if (hasDtm && (notFull || notReady)) {
+      const verdict = r.quality.readiness === 'blocked'
+        ? 'blocked'
+        : r.quality.readiness === 'previewOnly' ? 'preview' : 'ready';
+      this._demNote.textContent =
+        `Preliminary DEM — coverage: ${coverageMode}; quality gate: ${verdict}. ` +
+        `Exported with a caveat in the README; not for reliable terrain products.`;
+      this._demNote.style.display = '';
+    } else {
+      this._demNote.textContent = '';
+      this._demNote.style.display = 'none';
+    }
     this._legend.style.display = hasFeatures ? '' : 'none';
     if (e === 'blocked') {
       this._exportNote.textContent = `Export disabled — ${r.quality.reasons[0] ?? 'DTM quality gate not met.'}`;

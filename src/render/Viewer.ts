@@ -209,6 +209,13 @@ interface CloudEntry {
   colorAttr: THREE.InstancedBufferAttribute;
   /** Current colour mode applied to the colour attribute. */
   mode: ColorMode;
+  /**
+   * Persistent sRGB scratch buffer reused across RGB-appearance recolors
+   * (white-balance drag). Allocated lazily on first recolor and reused
+   * thereafter; only reallocated if the cloud's colour length grows. Avoids
+   * the multi-MB `new Float32Array` on every throttled drag step.
+   */
+  recolorScratch?: Float32Array;
 }
 
 /**
@@ -2046,8 +2053,18 @@ export class Viewer {
       if (!u8 || u8.length === 0) continue;
       const arr = entry.colorAttr.array as Float32Array;
       const n = u8.length;
+      // Reuse a persistent per-cloud scratch buffer instead of allocating
+      // a fresh `Float32Array(n)` on every (throttled) recolor — a
+      // white-balance drag fires this ~12×/sec on multi-MB clouds. Grow
+      // only if the colour length ever exceeds the cached buffer; a `subarray`
+      // view keeps the per-call math operating on exactly `n` elements.
+      let scratch = entry.recolorScratch;
+      if (!scratch || scratch.length < n) {
+        scratch = new Float32Array(n);
+        entry.recolorScratch = scratch;
+      }
+      const srgb = scratch.length === n ? scratch : scratch.subarray(0, n);
       // Step 1: copy sRGB-encoded bytes → sRGB Float32 [0, 1].
-      const srgb = new Float32Array(n);
       for (let i = 0; i < n; i++) srgb[i] = u8[i] / 255;
       // Step 2: apply the appearance bundle in sRGB space.
       applyRgbAppearance(srgb, this._rgbAppearance);

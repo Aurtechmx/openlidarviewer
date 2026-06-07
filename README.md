@@ -107,7 +107,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - **Box clipping / slicing** for interactive cross-cuts
 - **Measurement chains** — combine placed measurements as sum / difference / ratio
 - A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
-- A Dataset Intelligence card backed by the terrain foundation — Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence; renders `—` rather than fabricating a bucket when no signal is available
+- A Dataset Intelligence card — header-derived Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence; renders `—` rather than fabricating a bucket when no signal is available
 - A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates precise
 - Point inspection — click a point to read its coordinates and attributes (including LAS return number, point source ID, GPS time, and UTM + lat/lon when a CRS is known), with one-click copy; or hover with the live probe for a click-free readout
 - Capture provenance from LAS/LAZ and E57 headers — sensor, source software, and date — shown in the Scan Report when the file carries them
@@ -135,27 +135,23 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - An embed mode for `<iframe>` use (`?embed=1`), with a validated `postMessage` bridge for host-page control
 - Developer diagnostics — a live performance overlay (`?debug=1`) and a structured benchmark mode (`?benchmark=1`)
 
-## Terrain Intelligence Foundation
+## Terrain Intelligence
 
-OpenLiDARViewer ships an internal terrain analysis foundation under
-`src/terrain/` (introduced in v0.3.9). The foundation is a small set of
-pure-data contracts and deterministic primitives (per-neighborhood metrics,
-ground-confidence scoring, grid and tile partitioning, LRU cache,
-worker job lifecycle, feature flags) that establish one common
-envelope for every terrain analysis. Every result carries an honesty
-contract: a coverage mode (`full` / `resident-only` / `sampled`),
-the source and analyzed point counts, a 0–100 confidence value, and
-ordered warnings, so an analyser never implies full-cloud certainty
-when only resident streaming nodes were walked.
+OpenLiDARViewer ships a terrain analysis stack under `src/terrain/`. Shared
+type contracts (`TerrainContracts.ts`) give every stage one common honesty
+envelope: a coverage mode (`full` / `resident-only` / `sampled`), the source
+and analyzed point counts, a 0–100 confidence value, and ordered warnings,
+so an analyser never implies full-cloud certainty when only resident
+streaming nodes were walked.
 
-The first user-facing surface is the **Dataset Intelligence card** in
-the Inspector. It reads the foundation outputs and renders five
-informational rows: Point Density, Terrain Complexity, Ground
-Visibility, Streaming Coverage, and Terrain Confidence. Rows for which
-no signal is available render as `—` rather than fabricating a
-confident bucket. The card does not perform ground classification.
+The lightest user-facing surface is the **Dataset Intelligence card** in the
+Inspector. It is header-derived and informational, rendering five rows: Point
+Density, Terrain Complexity, Ground Visibility, Streaming Coverage, and
+Terrain Confidence. Rows for which no signal is available render as `—`
+rather than fabricating a confident bucket. The card does not perform ground
+classification.
 
-Building on that foundation, v0.4.x adds a confidence-aware DTM and
+The main capability is the confidence-aware DTM and
 contour pipeline (`src/terrain/contour/`, `ground/`, `surface/`) surfaced
 through the **Analyse panel**: ground classification, a gridded DTM with
 per-cell confidence and hold-out RMSE validation, a 0–100 terrain quality
@@ -164,11 +160,15 @@ hillshade), a single top-level Terrain Assessment verdict, evidence-graded
 contour export (GeoJSON / SVG / DXF), a printable map sheet, and a
 georeferenced DEM package (ASCII Grid + GeoTIFF). A DTM quality gate
 governs whether a professional contour export is offered, and the panel is
-explicit that its products are for analysis — not survey certification.
+explicit that its products are for analysis — not survey certification. The
+per-cell confidence is calibrated against measured hold-out error, not
+asserted: treat terrain products and DEM exports as deliverable-ready only
+when the Terrain Assessment reads Good, and as preview otherwise.
 
 See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md)
-for the contract definitions and the honesty fields every result
-must carry.
+for the contract definitions and the honesty fields every result must carry,
+and [`docs/validation/terrain-validation-matrix.md`](docs/validation/terrain-validation-matrix.md)
+for how each terrain product is validated.
 
 ## Screenshots
 
@@ -409,7 +409,7 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 - Command palette (`Cmd-K` / `Ctrl-K`) for keyboard-first access to every tool, mode, theme, and export
 - Workflow recorder — save and replay `.olvworkflow` files of camera moves and tool actions
 - Onboarding tour + searchable shortcut sheet (`?`)
-- Terrain Intelligence Foundation (`src/terrain/`) — deterministic, honesty-contracted primitives for ground confidence, partitioning, caching, and worker job lifecycle
+- Terrain Intelligence (`src/terrain/`) — honesty-contracted terrain type contracts and the informational Dataset Intelligence card
 - Dataset Intelligence card — Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence; honest `—` when no signal is available
 - Inspector mini-dashboards — sparklines and gauges for live scan telemetry
 - Mobile touch model — twist + pinch + pan decomposition with dead zones; opt-in 3-finger zoom for advanced users

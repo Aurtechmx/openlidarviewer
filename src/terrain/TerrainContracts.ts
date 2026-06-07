@@ -6,7 +6,7 @@
  * I/O — so the same shape names mean the same thing in the worker,
  * the cache, the engine, and any future UI surface.
  *
- * These are the *foundation* contracts; the engine that uses them stays an
+ * These are the base type contracts; the engine that uses them stays an
  * internal seam. The user-facing terrain products shipped in v0.4.x — ground
  * classification, DTM / DSM, canopy height, contours, hillshade, slope — are
  * produced by the separate `src/terrain/contour|ground|surface` pipeline and
@@ -176,14 +176,6 @@ export interface TerrainAnalysisResult extends TerrainCoverageMeta {
   /** Total wall-clock time in ms for the analysis. */
   readonly elapsedMs: number;
 }
-
-/** Status of an in-flight terrain job. */
-export type TerrainJobStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
 
 // ── ground-confidence scaffold (no classification yet) ─────────────
 

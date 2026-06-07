@@ -3,7 +3,8 @@
  *
  * Pure-data leaf — the gate that decides, BEFORE contour generation and
  * export, whether a DTM is good enough to (a) draw at all, (b) preview
- * for exploration, or (c) hand off as a professional deliverable.
+ * for exploration, or (c) is ready for terrain-product generation under
+ * the current quality gate.
  *
  * It exists so the UI never offers a survey-looking export over a surface
  * that is mostly guessed, ungeoreferenced, or unvalidated. Every
@@ -12,7 +13,7 @@
  * Verdicts:
  *   blocked     — too little measured ground, or no reliable interval:
  *                 contour generation/export should be disabled.
- *   previewOnly — usable for exploration, NOT a professional export
+ *   previewOnly — suitable for visual inspection and exploratory analysis only
  *                 (high interpolation, unvalidated RMSE, or unknown
  *                 CRS / vertical datum).
  *   ready       — enough measured cells, acceptable validated error, low

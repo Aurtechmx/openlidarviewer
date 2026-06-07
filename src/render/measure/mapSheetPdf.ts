@@ -61,6 +61,19 @@ const SEPIA = rgb(0.36, 0.24, 0.13);
 const SEPIA_INDEX = rgb(0.26, 0.16, 0.07);
 const WHITE = rgb(1, 1, 1);
 
+/**
+ * The readiness note printed in the title block. Pure and exported so it can be
+ * asserted without rendering a PDF. Per project stance, this NEVER makes a bare
+ * affirmative survey-grade claim: the 'ready' state states the validation fact
+ * without calling it survey-grade or a certification, and the preview state is
+ * already negated.
+ */
+export function readinessNote(readiness: 'ready' | 'previewOnly' | 'blocked'): string {
+  return readiness === 'ready'
+    ? 'Validated against held-out ground - not a survey certification.'
+    : 'PREVIEW - not survey-grade until validated against control.';
+}
+
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
 function safe(s: string): string {
   const map: Record<string, string> = {
@@ -299,10 +312,7 @@ function drawTitleBlock(
     rightText(`${r[0]}:  ${r[1]}`, rxr, y, 7.5, font, INK);
   });
   const readiness = input.readiness ?? 'previewOnly';
-  const note =
-    readiness === 'ready'
-      ? 'Survey-grade: validated against held-out ground.'
-      : 'PREVIEW - not survey-grade until validated against control.';
+  const note = readinessNote(readiness);
   rightText(note, rxr, topY - 90, 6.5, bold, readiness === 'ready' ? INK : rgb(0.6, 0.2, 0.1));
   rightText('OpenLiDARViewer - terrain analysis', rxr, M - 10 + 2, 6, font, DIM);
 }

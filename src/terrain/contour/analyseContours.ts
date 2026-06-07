@@ -12,6 +12,27 @@
  * measured RMSE → contour at the chosen interval → stitch → style →
  * build export model → tally evidence.
  *
+ * The pipeline is split into two pure halves so the heavy work is never
+ * redone when only the contour interval changes:
+ *
+ *   - {@link computeTerrainCore} runs everything that depends ONLY on the
+ *     points + ground/grid/CRS parameters (classification, ground filter,
+ *     DTM raster + hardening, void fill, hold-out validation, confidence
+ *     calibration, the interval gate itself, quality + scoring, surface
+ *     models). Its result is cacheable across interval changes.
+ *   - {@link contoursFromCore} runs only the interval-dependent stages
+ *     (the interval CHOICE, contours → stitch → style → smooth → labels →
+ *     feature model → tally, and the requested-interval-aware grid
+ *     recommendation).
+ *
+ * {@link analyseContours} is the composition of the two, so its public
+ * result is byte-identical to the single-pass implementation.
+ *
+ * Input: a Float32Array of XYZ triples (length 3N) is the preferred,
+ * zero-copy-friendly entry; `TerrainPoint[]` is still accepted for
+ * existing callers. The typed-array form is boxed into points ONCE inside
+ * the core, so an interval re-run never re-boxes.
+ *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
@@ -21,7 +42,7 @@ import {
   type GroundFilterParams,
   type VerticalAxis,
 } from '../ground/groundFilter';
-import { rasterizeDtm } from '../ground/rasterizeDtm';
+import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
 import { buildDtmGrid, type DtmGrid } from '../ground/cellConfidence';
 import { removeSpikes } from '../ground/despike';
 import { computeCellMetrics, type CellMetricsSummary } from '../quality/cellMetrics';
@@ -68,8 +89,12 @@ import { chaikinSmooth } from './smoothing';
 import { placeLabels, type ContourLabel } from './labelPlacement';
 import { computeVerticalAccuracy, type VerticalAccuracy } from '../validate/verticalAccuracy';
 
-/** Options for {@link analyseContours}. */
-export interface AnalyseContoursParams {
+/**
+ * Core (interval-independent) options for {@link computeTerrainCore}. These
+ * are exactly the parameters the heavy pipeline depends on — none of them
+ * change when only the contour interval is re-picked.
+ */
+export interface TerrainCoreParams {
   /** DTM / contour grid cell size, source linear units. Must be > 0. */
   readonly cellSizeM: number;
   /** Ground-filter overrides (sensible defaults otherwise). */
@@ -89,27 +114,145 @@ export interface AnalyseContoursParams {
   readonly verticalUnitToMetres?: number;
   /** Vertical datum. */
   readonly verticalDatum?: string | null;
-  /** Explicit contour interval; when omitted, the gate's recommendation is used. */
-  readonly intervalM?: number;
-  /** Every Nth contour is an index contour. Default 5. */
-  readonly indexEvery?: number;
   /** Vertical axis of the source frame. Default 'z'. */
   readonly verticalAxis?: VerticalAxis;
   /**
-   * Per-point ASPRS classification, index-aligned with `points`. When present,
-   * vegetation / building / noise returns are dropped before ground filtering
-   * so the bare-earth surface never anchors to canopy or rooftops. The DSM
-   * (top surface, for above-ground height) still uses the full cloud.
+   * Per-point ASPRS classification, index-aligned with the points. When
+   * present, vegetation / building / noise returns are dropped before ground
+   * filtering so the bare-earth surface never anchors to canopy or rooftops.
+   * The DSM (top surface, for above-ground height) still uses the full cloud.
    */
   readonly classification?: ReadonlyArray<number> | Uint8Array;
   /** ASPRS classes to exclude before ground filtering. Default veg/building/noise. */
   readonly excludeClasses?: ReadonlyArray<number>;
   /** Hold-out PRNG seed for reproducible validation. Default 1. */
   readonly holdoutSeed?: number;
+  /**
+   * Per-cell aggregation for the LIVE DTM. Default `'median'` (see
+   * {@link LIVE_DTM_AGGREGATION}): the 50th percentile is outlier-resistant, so
+   * a single high (vegetation) or low (multipath) ground return in a cell no
+   * longer drags the cell's elevation the way the arithmetic mean did. The
+   * hold-out validation rebuilds its DTM with the SAME aggregation, so the
+   * reported RMSE measures the surface the user actually receives.
+   */
+  readonly aggregation?: DtmAggregation;
+}
+
+/**
+ * The per-cell aggregation the live pipeline uses for the delivered DTM.
+ *
+ * Switched mean → median as a robustness upgrade: the mean lets one outlier
+ * ground return (a high vegetation hit or a low multipath blunder) pull a
+ * cell's elevation, whereas the median (breakdown point 50 %) rejects it. The
+ * hold-out validation rasterises with this same value so the validated surface
+ * is byte-for-byte the surface that ships, and the DEM provenance reports it.
+ */
+const LIVE_DTM_AGGREGATION: DtmAggregation = 'median';
+
+/**
+ * Interval-dependent options for {@link contoursFromCore}. Re-picking any of
+ * these is cheap because the core is reused unchanged.
+ */
+export interface IntervalContourParams {
+  /** Explicit contour interval; when omitted, the gate's recommendation is used. */
+  readonly intervalM?: number;
+  /** Every Nth contour is an index contour. Default 5. */
+  readonly indexEvery?: number;
   /** Smooth high-confidence contour runs (honesty-preserving). Default true. */
   readonly smooth?: boolean;
   /** Label spacing along index contours, source units. Default 25×cellSize. */
   readonly labelSpacingM?: number;
+}
+
+/** Options for {@link analyseContours} — the union of the two halves. */
+export interface AnalyseContoursParams extends TerrainCoreParams, IntervalContourParams {}
+
+/**
+ * Provenance of the actual generation run, populated from the real config the
+ * pipeline used (not mirrored constants). The DEM README derives its
+ * "Generation parameters" section from this so it can never drift from what
+ * actually produced the surface.
+ */
+export interface AnalyseGenerationParams {
+  /** Void-fill interpolation method the DTM builder ran with. */
+  readonly interpolation: 'idw' | 'geodesic';
+  /** True when contour smoothing was applied (params.smooth !== false). */
+  readonly smoothing: boolean;
+  /** True when the blunder-only despike pass ran before building the surface. */
+  readonly despike: boolean;
+  /** Per-cell aggregation the DTM raster was built with (e.g. `'median'`). */
+  readonly aggregation: DtmAggregation;
+}
+
+/**
+ * The interval-independent product of the pipeline. Everything here depends
+ * only on the points + {@link TerrainCoreParams}; nothing reads the contour
+ * interval. Cache one of these and re-run {@link contoursFromCore} for as many
+ * intervals as the UI asks for.
+ */
+export interface TerrainCore {
+  readonly dtm: DtmGrid;
+  readonly validation: ValidationReport;
+  readonly calibration: CalibrationResult;
+  /** True when the reported confidence was recalibrated against measured error. */
+  readonly confidenceCalibrationApplied: boolean;
+  /** Vertical tolerance τ the calibrated confidence is defined against, or null. */
+  readonly confidenceToleranceM: number | null;
+  /** DTM quality gate verdict (ready / previewOnly / blocked) + metrics + reasons. */
+  readonly quality: DtmQualityReport;
+  /** Composite 0–100 terrain quality score + weighted component breakdown. */
+  readonly qualityScore: TerrainQualityScore;
+  /** Per-cell metric rollup: density, completeness, edge risk. */
+  readonly cellMetrics: CellMetricsSummary;
+  /** Classified vegetation/building/noise returns dropped before ground filtering. */
+  readonly excludedByClassification: number;
+  /** ASPRS/USGS 3DEP accuracy expression: NVA, VVA, and Quality Level. */
+  readonly accuracyStandards: DemAccuracyStandards;
+  /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
+  readonly surface: {
+    readonly dsm: SurfaceStats;
+    readonly canopy: CanopyHeight;
+    readonly slope: SlopeStats;
+    readonly hillshade: HillshadeResult;
+    /** Cached Horn gradient grids (slope tangent + aspect in radians) on the
+     *  DTM grid, for interactive re-lighting and point sampling. */
+    readonly relief: { readonly slope: Float32Array; readonly aspect: Float32Array };
+  };
+  /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
+  readonly cellStatusTally: CellStatusTally;
+  /** Interval gate (options + recommendation). Interval-independent: it is a
+   *  function of cell size, relief and the measured RMSE only. */
+  readonly gate: IntervalGateResult;
+  /** ASPRS vertical accuracy derived from the validation pass. */
+  readonly accuracy: VerticalAccuracy;
+  readonly elevationRangeM: number;
+  /** Min covered elevation, or NaN when there is no coverage. */
+  readonly minZ: number;
+  /** Max covered elevation, or NaN when there is no coverage. */
+  readonly maxZ: number;
+  /** Void-fill method the DTM builder ran with (provenance). */
+  readonly interpolation: 'idw' | 'geodesic';
+  /** Per-cell aggregation the live + hold-out DTM rasters used (provenance). */
+  readonly aggregation: DtmAggregation;
+  /** True when the blunder-only despike pass ran (always true today). */
+  readonly despikeApplied: boolean;
+  /** Resolved horizontal CRS (echoed for the contour stage + result). */
+  readonly crs: string | null;
+  /** Resolved vertical datum (echoed for the contour stage + result). */
+  readonly verticalDatum: string | null;
+  /** Resolved grid cell size (source units). */
+  readonly cellSizeM: number;
+  /** Grid-recommendation geometry inputs (the contour stage adds the
+   *  interval-dependent requested-interval term). */
+  readonly gridGeometry: {
+    readonly pointCount: number;
+    readonly widthM: number;
+    readonly depthM: number;
+    readonly reliefM: number;
+  };
+  /** Ordered core warnings (classification, ground, despike, void-fill). The
+   *  contour stage appends its interval-dependent warnings after these. */
+  readonly coreWarnings: ReadonlyArray<string>;
 }
 
 /** Everything the UI needs from one analysis pass. */
@@ -158,16 +301,55 @@ export interface AnalyseContoursResult {
   /** ASPRS vertical accuracy derived from the validation pass. */
   readonly accuracy: VerticalAccuracy;
   readonly elevationRangeM: number;
+  /** Actual generation parameters used (single source of truth for the README). */
+  readonly generationParams: AnalyseGenerationParams;
   readonly warnings: string[];
 }
 
 const EMPTY_GATE: IntervalGateResult = { options: [], recommendedM: null, warnings: [] };
 
-/** Run the full honest-contour pipeline on a point set. Deterministic. */
-export function analyseContours(
-  points: ReadonlyArray<TerrainPoint>,
-  params: AnalyseContoursParams,
-): AnalyseContoursResult {
+/**
+ * Box a Float32Array of XYZ triples (length 3N) into `TerrainPoint[]`. The
+ * adapter that lets the existing pure stages — which all speak
+ * `TerrainPoint[]` — consume the zero-copy-friendly typed-array entry. Boxed
+ * ONCE per core run, never per interval.
+ */
+function positionsToPoints(positions: Float32Array): TerrainPoint[] {
+  const n = (positions.length / 3) | 0;
+  const points: TerrainPoint[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    points[i] = { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] };
+  }
+  return points;
+}
+
+/**
+ * Accepted point input: the preferred zero-copy-friendly Float32Array of XYZ
+ * triples (length 3N), or a `TerrainPoint[]` for existing callers.
+ */
+export type TerrainPointInput = Float32Array | ReadonlyArray<TerrainPoint>;
+
+/** Normalise either accepted input form to the `TerrainPoint[]` the stages need. */
+function normalisePoints(input: TerrainPointInput): ReadonlyArray<TerrainPoint> {
+  return input instanceof Float32Array ? positionsToPoints(input) : input;
+}
+
+/**
+ * Run every interval-INDEPENDENT stage of the pipeline. The expensive half:
+ * classification → ground filter → DTM raster + hardening → void fill →
+ * hold-out validation + confidence calibration → interval gate → quality +
+ * scoring → surface models. The result is cacheable; feed it to
+ * {@link contoursFromCore} for as many intervals as needed without redoing any
+ * of this work.
+ *
+ * Accepts a Float32Array of XYZ triples (boxed once internally) or a
+ * `TerrainPoint[]`. Deterministic.
+ */
+export function computeTerrainCore(
+  input: TerrainPointInput,
+  params: TerrainCoreParams,
+): TerrainCore {
+  const points = normalisePoints(input);
   const warnings: string[] = [];
   const verticalAxis: VerticalAxis = params.verticalAxis ?? 'z';
   const crs = params.crs ?? null;
@@ -199,6 +381,11 @@ export function analyseContours(
   warnings.push(...gf.warnings);
 
   // 2) DTM raster aligned to the filter grid + 3) per-cell confidence.
+  // The live surface aggregates each cell by MEDIAN (the robustness upgrade over
+  // the old mean): a lone high/low ground return no longer pulls the cell. The
+  // hold-out validation below rebuilds with this SAME aggregation, so the RMSE
+  // measures the delivered surface, and the DEM provenance reports it.
+  const aggregation: DtmAggregation = params.aggregation ?? LIVE_DTM_AGGREGATION;
   const raster = rasterizeDtm(groundPts, gf.isGround, {
     grid: {
       originH1: gf.originH1,
@@ -207,6 +394,7 @@ export function analyseContours(
       rows: gf.rows,
       cellSizeM: params.cellSizeM,
     },
+    aggregation,
     verticalAxis,
   });
   // 2b) DTM hardening — drop blunder cells (a lone ground return far from its
@@ -220,6 +408,9 @@ export function analyseContours(
   }
   // Conservative, blunder-only thresholds (6σ, ≥30 cm absolute) so legitimate
   // small features in flat terrain are kept; only gross outliers are removed.
+  // The blunder-only despike pass is part of every generation run; the README
+  // derives its provenance from this fact, not a mirrored constant.
+  const despikeApplied = true;
   const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, {
     madThreshold: 6,
     minDeviationM: 0.3,
@@ -241,11 +432,14 @@ export function analyseContours(
       `Outlier detection flagged ${despiked.removed} cells (> 2% of data) — left unchanged; the surface looks noisy rather than spiky.`,
     );
   }
+  // Single source of truth for the void-fill method: the README's provenance
+  // reads this back off the result, so it can't drift from what actually ran.
+  const interpolation: 'idw' | 'geodesic' = 'geodesic';
   let dtm = buildDtmGrid(workingRaster, {
     crs,
     verticalDatum,
     isGeographic: params.isGeographic,
-    interpolation: 'geodesic',
+    interpolation,
     // Demote one-sided (extrapolated) fills toward dashed/gap so surface that
     // is only supported from a single direction can't read as confident.
     extrapolationGuard: { radiusCells: 8, penalty: 0.5 },
@@ -267,6 +461,9 @@ export function analyseContours(
     cellSizeM: params.cellSizeM,
     seed: params.holdoutSeed ?? 1,
     verticalAxis,
+    // Validate the SAME surface the user gets: same per-cell aggregation as the
+    // live DTM above (median), so the RMSE isn't measuring a different surface.
+    aggregation,
     isGeographic: params.isGeographic,
     verticalUnitToMetres: params.verticalUnitToMetres,
     collectSamples: true,
@@ -290,7 +487,10 @@ export function analyseContours(
     ? confidenceCalibration.toleranceM
     : null;
 
-  // 5) Gate intervals against the measured RMSE.
+  // 5) Gate intervals against the measured RMSE. The gate is a function of
+  // cell size, relief and the measured RMSE only — NOT of the chosen interval
+  // — so it is part of the cacheable core. (The interval CHOICE happens in the
+  // contour stage.)
   const gate = elevationRangeM > 0
     ? gateIntervals({
         cellSizeM: params.cellSizeM,
@@ -299,25 +499,11 @@ export function analyseContours(
       })
     : EMPTY_GATE;
 
-  // Choose the interval: explicit > recommended.
-  const intervalM = params.intervalM ?? gate.recommendedM ?? null;
-  if (params.intervalM == null && gate.recommendedM == null) {
-    warnings.push('no reliable contour interval for this scan');
-  }
-
-  // 5b) DTM cell status, the quality gate (ready / previewOnly / blocked),
-  // and a grid + interval recommendation. The gate decides whether the UI
-  // may offer a professional export at all.
+  // 5b) DTM cell status, the quality gate (ready / previewOnly / blocked).
+  // The gate decides whether the UI may offer the terrain-product (contour/DEM) export at all.
   const cellStatusTally = tallyCellStatus(classifyCellStatus(dtm));
   const groundPointRatio =
     gf.sourcePointCount > 0 ? gf.groundPointCount / gf.sourcePointCount : Number.NaN;
-  const gridRecommendation = recommendGrid({
-    pointCount: gf.analyzedPointCount,
-    widthM: dtm.cols * dtm.cellSizeM,
-    depthM: dtm.rows * dtm.cellSizeM,
-    reliefM: elevationRangeM,
-    requestedIntervalM: params.intervalM ?? null,
-  });
   const quality = evaluateDtmQuality({
     tally: cellStatusTally,
     meanCellConfidence: dtm.meanConfidence,
@@ -388,6 +574,86 @@ export function analyseContours(
     relief: { slope: sa.slope, aspect: sa.aspect },
   };
 
+  return {
+    dtm,
+    validation,
+    calibration,
+    confidenceCalibrationApplied,
+    confidenceToleranceM,
+    quality,
+    qualityScore,
+    cellMetrics,
+    excludedByClassification: classFilter.excludedCount,
+    accuracyStandards,
+    surface,
+    cellStatusTally,
+    gate,
+    accuracy,
+    elevationRangeM,
+    minZ: Number.isFinite(minZ) ? minZ : Number.NaN,
+    maxZ: Number.isFinite(maxZ) ? maxZ : Number.NaN,
+    interpolation,
+    aggregation,
+    despikeApplied,
+    crs,
+    verticalDatum,
+    cellSizeM: params.cellSizeM,
+    gridGeometry: {
+      pointCount: gf.analyzedPointCount,
+      widthM: dtm.cols * dtm.cellSizeM,
+      depthM: dtm.rows * dtm.cellSizeM,
+      reliefM: elevationRangeM,
+    },
+    coreWarnings: warnings,
+  };
+}
+
+/**
+ * Run the interval-DEPENDENT half of the pipeline against a precomputed
+ * {@link TerrainCore}: choose the interval, then contours → stitch → style →
+ * smooth → feature model → tally → labels, plus the requested-interval-aware
+ * grid recommendation. Cheap — no DTM, validation or surface work is redone.
+ *
+ * Composes the full {@link AnalyseContoursResult} from the core + the contour
+ * products, so the returned shape is identical to a single-pass run.
+ * Deterministic.
+ */
+export function contoursFromCore(
+  core: TerrainCore,
+  intervalParams: IntervalContourParams = {},
+): AnalyseContoursResult {
+  const { crs, verticalDatum, cellSizeM, dtm, gate, minZ, maxZ } = core;
+  // Whether contour smoothing will be applied this run (default on). Captured
+  // once so the early-return path and the main path agree, and so the README's
+  // provenance reflects the real decision rather than a constant.
+  const smoothingApplied = intervalParams.smooth !== false;
+  // Interval-dependent warnings are appended AFTER the core warnings so the
+  // composed `warnings` array is in the same order as a single-pass run.
+  const warnings: string[] = [...core.coreWarnings];
+
+  // The grid + interval recommendation reads the requested interval, so it is
+  // part of the interval stage (the geometry inputs come from the core).
+  const gridRecommendation = recommendGrid({
+    pointCount: core.gridGeometry.pointCount,
+    widthM: core.gridGeometry.widthM,
+    depthM: core.gridGeometry.depthM,
+    reliefM: core.gridGeometry.reliefM,
+    requestedIntervalM: intervalParams.intervalM ?? null,
+  });
+
+  // Choose the interval: explicit > recommended.
+  const intervalM = intervalParams.intervalM ?? gate.recommendedM ?? null;
+  if (intervalParams.intervalM == null && gate.recommendedM == null) {
+    warnings.push('no reliable contour interval for this scan');
+  }
+
+  const generationParams: AnalyseGenerationParams = {
+    interpolation: core.interpolation,
+    smoothing: smoothingApplied,
+    despike: core.despikeApplied,
+    aggregation: core.aggregation,
+  };
+
   // 6-10) Contours → stitch → style → model → tally.
   if (intervalM == null) {
     const emptyContours: ContourSet = {
@@ -401,17 +667,17 @@ export function analyseContours(
     };
     return {
       dtm,
-      validation,
-      calibration,
-      confidenceCalibrationApplied,
-      confidenceToleranceM,
-      quality,
-      qualityScore,
-      cellMetrics,
-      surface,
-      excludedByClassification: classFilter.excludedCount,
-      accuracyStandards,
-      cellStatusTally,
+      validation: core.validation,
+      calibration: core.calibration,
+      confidenceCalibrationApplied: core.confidenceCalibrationApplied,
+      confidenceToleranceM: core.confidenceToleranceM,
+      quality: core.quality,
+      qualityScore: core.qualityScore,
+      cellMetrics: core.cellMetrics,
+      surface: core.surface,
+      excludedByClassification: core.excludedByClassification,
+      accuracyStandards: core.accuracyStandards,
+      cellStatusTally: core.cellStatusTally,
       gridRecommendation,
       gate,
       intervalM: null,
@@ -426,8 +692,9 @@ export function analyseContours(
       }),
       tally: tallyContourSet(emptyContours),
       labels: [],
-      accuracy,
-      elevationRangeM,
+      accuracy: core.accuracy,
+      elevationRangeM: core.elevationRangeM,
+      generationParams,
       warnings,
     };
   }
@@ -438,12 +705,12 @@ export function analyseContours(
 
   const style = styleLevels(
     contours.levels.map((l) => l.value),
-    { intervalM, indexEvery: params.indexEvery ?? 5 },
+    { intervalM, indexEvery: intervalParams.indexEvery ?? 5 },
   );
 
   // Beauty: smooth high-confidence runs (honesty-preserving — the
   // smoother provably never moves a low-confidence vertex).
-  if (params.smooth !== false) {
+  if (smoothingApplied) {
     stitched = stitched.map((level) => ({
       value: level.value,
       polylines: level.polylines.map((poly) => chaikinSmooth(poly)),
@@ -464,22 +731,22 @@ export function analyseContours(
     .filter((level) => indexValues.has(level.value))
     .flatMap((level) => level.polylines);
   const labels = placeLabels(indexPolylines, {
-    spacingM: params.labelSpacingM ?? Math.max(params.cellSizeM * 25, 1),
+    spacingM: intervalParams.labelSpacingM ?? Math.max(cellSizeM * 25, 1),
   });
 
   return {
     dtm,
-    validation,
-    calibration,
-    confidenceCalibrationApplied,
-    confidenceToleranceM,
-    quality,
-    qualityScore,
-    cellMetrics,
-    surface,
-    excludedByClassification: classFilter.excludedCount,
-    accuracyStandards,
-    cellStatusTally,
+    validation: core.validation,
+    calibration: core.calibration,
+    confidenceCalibrationApplied: core.confidenceCalibrationApplied,
+    confidenceToleranceM: core.confidenceToleranceM,
+    quality: core.quality,
+    qualityScore: core.qualityScore,
+    cellMetrics: core.cellMetrics,
+    surface: core.surface,
+    excludedByClassification: core.excludedByClassification,
+    accuracyStandards: core.accuracyStandards,
+    cellStatusTally: core.cellStatusTally,
     gridRecommendation,
     gate,
     intervalM,
@@ -489,8 +756,25 @@ export function analyseContours(
     model,
     tally,
     labels,
-    accuracy,
-    elevationRangeM,
+    accuracy: core.accuracy,
+    elevationRangeM: core.elevationRangeM,
+    generationParams,
     warnings,
   };
+}
+
+/**
+ * Run the full honest-contour pipeline on a point set. Composition of
+ * {@link computeTerrainCore} (heavy, interval-independent) and
+ * {@link contoursFromCore} (cheap, interval-dependent) so the result is
+ * byte-identical to the original single-pass implementation.
+ *
+ * Accepts the preferred Float32Array of XYZ triples (zero-copy-friendly,
+ * boxed once internally) or a `TerrainPoint[]`. Deterministic.
+ */
+export function analyseContours(
+  input: TerrainPointInput,
+  params: AnalyseContoursParams,
+): AnalyseContoursResult {
+  return contoursFromCore(computeTerrainCore(input, params), params);
 }

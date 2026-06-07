@@ -51,6 +51,31 @@ export const WHAT_THIS_ANSWERS: ReadonlyArray<string> = [
   'How much does the ground rise across this site?',
 ];
 
+/**
+ * Plain-language tooltips for the jargon metrics the Analyse panel
+ * surfaces as bare abbreviations (Details expander + status chips). One
+ * source of truth so the wording stays honest and consistent — fitness-
+ * for-use voice, never a survey-grade claim. The panel imports these and
+ * attaches them as hover hints (the same affordance the Inspector's
+ * DatasetIntelligenceCard uses for its row tooltips).
+ */
+export const METRIC_TOOLTIPS = {
+  rmse:
+    'RMSE — the typical vertical error of the surface, measured against ' +
+    'withheld ground checks.',
+  nva: 'NVA — non-vegetated vertical accuracy, at 95% confidence.',
+  vva: 'VVA — vegetated vertical accuracy, at the 95th percentile.',
+  qualityLevel:
+    'USGS 3DEP Quality Level — the level the surface meets on point ' +
+    'density and vertical accuracy together.',
+  crs:
+    'CRS — coordinate reference system; exports are not georeferenced ' +
+    'without it.',
+  verticalDatum:
+    'Vertical datum — the elevation reference; without it, heights are ' +
+    'not tied to a known zero.',
+} as const;
+
 /** What each evidence grade means, in plain words. */
 export const GRADE_MEANING: Record<EvidenceGrade, string> = {
   solid: 'measured terrain',

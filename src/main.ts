@@ -44,10 +44,8 @@ import { AnalysePanel } from './ui/AnalysePanel';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
-import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { decodeFull } from './convert/decodeFull';
-import type { TerrainPoint } from './terrain/TerrainContracts';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
 import { LoadCancelledError } from './io/loadFile';
@@ -114,7 +112,6 @@ import {
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
   loadViewer,
-  loadAnalyseContours,
   loadBatchConverter,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
@@ -144,13 +141,10 @@ import { CatalogPanel } from './ui/CatalogPanel';
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
 import type { CrsInfo } from './io/crs';
-import {
-  resolvedFromCrsInfo,
-  unknownCrs,
-  type CrsSource,
-  type ResolvedCrs,
-} from './geo/CoordinateTypes';
 import { CrsService } from './geo/CrsService';
+import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
+import { createCrsCoordinator } from './app/crsCoordinator';
+import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -163,12 +157,9 @@ import { CrsService } from './geo/CrsService';
  */
 const crsService = new CrsService();
 import {
-  getOverride as getCrsOverrideForDataset,
   keyForDataset as crsKeyForDataset,
   setOverride as setCrsOverrideForDataset,
-  clearOverride as clearCrsOverrideForDataset,
 } from './geo/CrsOverrideStore';
-import { getCrsEntry } from './geo/CrsRegistry';
 
 // A pointer to the open-source repository for anyone who opens the console on
 // the live site. The deployed bundle is compact-transformed; the readable source — and
@@ -992,6 +983,20 @@ crsService.subscribe((resolved) => {
   else inspector.clearCrs();
 });
 
+// Inspector load-time card refreshers (Provenance + Dataset Intelligence) and
+// the CRS coordinator (resolve + per-scan refresh + override handling) are
+// extracted into `src/app/`. They read the lazy `viewer` and the `activeId`
+// selection through getters so no top-level `viewer.*` dereference is
+// introduced here — `viewer` is null until its chunk resolves.
+const inspectorCards = createInspectorCardRefreshers(inspector);
+const crsCoordinator = createCrsCoordinator({
+  crsService,
+  getViewer: () => viewer,
+  isViewerReady: () => viewerReady,
+  getActiveId: () => activeId,
+  debug,
+});
+
 // v0.3.9 — workflow recorder. The host owns the controller so it can
 // capture from every action handler in one place and dispatch back
 // through the same handlers on replay.
@@ -1495,9 +1500,16 @@ const annotationPanel = new AnnotationPanel({
 // pipeline is dynamic-imported on demand so it stays out of the initial
 // bundle; the panel only runs when the user clicks "Run terrain analysis".
 let lastCloudName = 'contours';
+// The terrain-analysis orchestration (the async run path, the A-1
+// stale-result token guard, the fingerprint cache, and the worker offload)
+// lives in `src/app/terrainAnalysisRunner.ts`. The runner owns its own run
+// state (run token, in-flight AbortController, cache-clear fn) and is wired
+// up just below, once `analysePanel` exists. The panel callbacks reference
+// `terrainRunner` lazily — they only fire on user input, long after the
+// runner is constructed.
 const analysePanel = new AnalysePanel({
-  onRun: () => void runTerrainAnalysis(),
-  onSelectInterval: (m) => void runTerrainAnalysis(m),
+  onRun: () => void terrainRunner.run(),
+  onSelectInterval: (m) => void terrainRunner.run(m),
   getExportBasename: () => lastCloudName,
   getMapContext: () => {
     const cloud = activeId ? viewer.getCloud(activeId) : null;
@@ -1521,8 +1533,19 @@ const objectPanel = new ObjectPanel({
     objectPanel.setVisible(false);
     analysePanel.setVisible(true);
     dock.setAnalyseActive(true);
-    void runTerrainAnalysis();
+    void terrainRunner.run();
   },
+});
+
+// Terrain-analysis runner — extracted into `src/app/`. Constructed here, after
+// `analysePanel`, so the panel/object-panel callbacks above (which fire only on
+// user input) can drive it. Reads the lazy `viewer` and the `activeId`
+// selection through getters so no top-level `viewer.*` dereference is added.
+const terrainRunner = createTerrainAnalysisRunner({
+  getViewer: () => viewer,
+  analysePanel,
+  getActiveId: () => activeId,
+  crsService,
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -1574,69 +1597,6 @@ function revealAnalysePanel(name: string): void {
   analysePanel.setVisible(!isObject);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(!isObject);
-}
-
-/**
- * Run the confidence-aware terrain pipeline on the loaded scan and update
- * the Analyse panel. Points are gathered (and strided if huge) from the
- * Viewer; the analysis is synchronous but yields once so the busy state
- * paints, and is fully guarded so a failure never breaks the shell.
- */
-async function runTerrainAnalysis(intervalM?: number): Promise<void> {
-  const gathered = viewer.gatherTerrainPositions();
-  if (!gathered) {
-    analysePanel.setStatus('Load a scan first, then run terrain analysis.');
-    return;
-  }
-  analysePanel.setBusy(true);
-  // Let the "Analysing…" state paint before the synchronous compute.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  try {
-    const { analyseContours } = await loadAnalyseContours();
-    const pos = gathered.positions;
-    const n = pos.length / 3;
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let i = 0; i < n; i++) {
-      const x = pos[i * 3];
-      const y = pos[i * 3 + 1];
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-    }
-    // Aim for a grid ~256 cells across, clamped to a sane floor.
-    const extent = Math.max(maxX - minX, maxY - minY, 1);
-    const cellSizeM = Math.max(0.25, extent / 256);
-    const points: TerrainPoint[] = new Array(n);
-    for (let i = 0; i < n; i++) {
-      points[i] = { x: pos[i * 3], y: pos[i * 3 + 1], z: pos[i * 3 + 2] };
-    }
-    // Feed the active scan's resolved CRS + vertical datum into the analysis
-    // so the readiness gate and export honesty reflect a georeferenced file
-    // (a real horizontal CRS lifts the "CRS unknown" downgrade; a known
-    // vertical datum clears the "datum unknown" warning).
-    const cur = crsService.current();
-    const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
-    const result = analyseContours(points, {
-      cellSizeM,
-      crs: crsName,
-      isGeographic: cur?.kind === 'geographic',
-      verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
-      verticalDatum: cur?.verticalDatum ?? null,
-      classification: gathered.classification,
-      intervalM,
-    });
-    analysePanel.setBusy(false);
-    analysePanel.update(result);
-  } catch (err) {
-    console.error('OpenLiDARViewer: terrain analysis failed.', err);
-    analysePanel.setBusy(false);
-    const msg = err instanceof Error ? err.message : String(err);
-    analysePanel.setStatus(`Analysis failed: ${msg}`);
-  }
 }
 
 // Every listener-binding that synchronously dereferences `viewer.*` must
@@ -1707,7 +1667,7 @@ void viewerLoaded.then(() => {
   // CRS override picker — persists to localStorage via CrsOverrideStore,
   // re-resolves against the active scan, and refreshes the Inspector
   // so the new label + warning state appear immediately.
-  inspector.setOnCrsOverride(handleCrsOverride);
+  inspector.setOnCrsOverride(crsCoordinator.handleCrsOverride);
 
   // Apply any preferences saved in a previous session, once the GPU backend
   // has initialised (so a saved EDL choice overrides the backend's default
@@ -2462,280 +2422,12 @@ function applyPrefs(): void {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Provenance fingerprint plumbing
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Refresh the Inspector's provenance panel from a freshly loaded static cloud. */
-function refreshProvenance(cloud: {
-  readonly sourceFormat: string;
-  readonly pointCount: number;
-}): void {
-  const signals = signalsForStaticCloud(cloud as never);
-  const f = classifyProvenance(signals);
-  inspector.setProvenance(f);
-}
-
-/** Refresh the Inspector's provenance panel from a freshly attached streaming cloud. */
-function refreshProvenanceFromStreaming(cloud: {
-  readonly kind: 'copc' | 'ept';
-  readonly sourcePointCount?: number;
-}): void {
-  const signals = signalsForStreamingCloud(cloud as never);
-  const f = classifyProvenance(signals);
-  inspector.setProvenance(f);
-}
-
-/**
- * Push a cheap Dataset Intelligence summary into the Inspector's
- * card from data already in hand at load time. This populates the
- * Point Density row from declared `pointCount / bbox volume` and the
- * Streaming Coverage row from the source kind. No point iteration,
- * no engine analysis — just stable header-derived facts the user
- * can see immediately. Heavier metric work would land later through
- * the TerrainEngine foundation; the Dataset Intelligence card stays
- * header-derived for now.
- */
-function refreshDatasetIntelligenceFromStaticCloud(cloud: {
-  readonly pointCount: number;
-  bounds(): { min: [number, number, number]; max: [number, number, number] };
-}): void {
-  try {
-    const b = cloud.bounds();
-    const dx = b.max[0] - b.min[0];
-    const dy = b.max[1] - b.min[1];
-    const dz = b.max[2] - b.min[2];
-    const bboxVolume = dx * dy * dz;
-    inspector.setDatasetIntelligence({
-      pointCount: cloud.pointCount,
-      bboxVolume: Number.isFinite(bboxVolume) && bboxVolume > 0 ? bboxVolume : undefined,
-      coverageMeta: {
-        coverage: 'full',
-        sourcePointCount: cloud.pointCount,
-        analyzedPointCount: cloud.pointCount,
-        // v0.3.10 honesty pass — this path runs at load time from
-        // header data ALONE. No terrain analysis has happened yet, so
-        // we have nothing meaningful to say about confidence. The
-        // prior code pushed a hardcoded `60` here, which rendered as
-        // a green/yellow chip and implied the engine had measured
-        // stability. Leaving the field unset lets the summariser
-        // emit `band: 'unknown'` + `label: '—'`, matching the
-        // "engine-only signals stay '—' until the engine runs"
-        // contract the README documents for the other rows.
-        warnings: [],
-      },
-      metricVersion: TERRAIN_METRIC_VERSION,
-    });
-  } catch {
-    // A cheap summary failure must never block load completion.
-    inspector.clearDatasetIntelligence();
-  }
-}
-
-function refreshDatasetIntelligenceFromStreamingCloud(cloud: {
-  readonly sourcePointCount?: number;
-  readonly metadata?: {
-    readonly header?: {
-      readonly min?: readonly [number, number, number] | number[];
-      readonly max?: readonly [number, number, number] | number[];
-    };
-  };
-}): void {
-  try {
-    const sourcePoints = cloud.sourcePointCount;
-    const hMin = cloud.metadata?.header?.min;
-    const hMax = cloud.metadata?.header?.max;
-    let bboxVolume: number | undefined;
-    if (hMin && hMax && hMin.length >= 3 && hMax.length >= 3) {
-      const dx = hMax[0] - hMin[0];
-      const dy = hMax[1] - hMin[1];
-      const dz = hMax[2] - hMin[2];
-      const v = dx * dy * dz;
-      if (Number.isFinite(v) && v > 0) bboxVolume = v;
-    }
-    inspector.setDatasetIntelligence({
-      pointCount: sourcePoints,
-      bboxVolume,
-      coverageMeta: {
-        coverage: 'resident-only',
-        sourcePointCount: sourcePoints ?? 0,
-        // No resident count yet at attach time; the streaming layer
-        // refines this as nodes land.
-        analyzedPointCount: 0,
-        // v0.3.10 honesty pass — see the static path for the full
-        // reasoning. No engine measurement → no confidence number.
-        // Leaving the field unset surfaces "—" instead of the prior
-        // hardcoded `50` which read as a yellow chip and implied a
-        // streaming-specific stability measurement.
-        warnings: [],
-      },
-      metricVersion: TERRAIN_METRIC_VERSION,
-    });
-  } catch {
-    inspector.clearDatasetIntelligence();
-  }
-}
-
-/** The dataset key (per-scan key for the CRS override store) currently in scope. */
-let _currentCrsDatasetKey: string | undefined;
-// CRS state is owned by `crsService` (declared near the imports).
-// The per-scan refresh paths below still push the resolved CRS into
-// the inspector / point inspector while ALSO publishing to the
-// service so both surfaces agree. Read sites that used to consult a
-// module-local cache now go through `crsService.current()` /
-// `crsService.validation()`.
-
-/**
- * Resolve a `CrsInfo` (from LAS/LAZ VLR, COPC, or EPT) + an optional
- * persisted user override into a single `ResolvedCrs` for the Inspector.
- *
- * Rule of precedence:
- *  1. User override (when present and non-default) wins.
- *  2. Otherwise the detected `CrsInfo` is used.
- *  3. Otherwise we surface "unknown".
- */
-function resolveCloudCrs(
-  cloudName: string,
-  detected: CrsInfo | undefined,
-  detectionSource: CrsSource,
-): ResolvedCrs {
-  const datasetKey = crsKeyForDataset(cloudName);
-  _currentCrsDatasetKey = datasetKey;
-  const override = getCrsOverrideForDataset(datasetKey);
-  if (override) {
-    if (override.kind === 'local') {
-      return {
-        kind: 'local',
-        name: 'Local coordinates (no CRS)',
-        linearUnit: 'unknown',
-        linearUnitToMetres: 1,
-        source: 'user-override',
-        confidence: 'high',
-        userConfirmed: true,
-      };
-    }
-    if (typeof override.epsg === 'number') {
-      const entry = getCrsEntry(override.epsg);
-      return {
-        kind: override.kind,
-        name: entry?.label ?? `EPSG:${override.epsg}`,
-        epsg: override.epsg,
-        linearUnit: override.kind === 'geographic' ? 'unknown' : 'metre',
-        linearUnitToMetres: 1,
-        source: 'user-override',
-        confidence: 'high',
-        userConfirmed: true,
-      };
-    }
-  }
-  const fromDetected = resolvedFromCrsInfo(detected, detectionSource);
-  return fromDetected ?? unknownCrs();
-}
-
-/** Refresh the Inspector's CRS section after a static-cloud load. */
-function refreshCrsForStaticCloud(cloud: {
-  readonly name: string;
-  readonly origin?: readonly [number, number, number];
-  readonly metadata?: { readonly crs?: CrsInfo | null };
-}): void {
-  const resolved = resolveCloudCrs(
-    cloud.name,
-    cloud.metadata?.crs ?? undefined,
-    'las-vlr',
-  );
-  // Publish to the central service so subscribers (today: the lasso
-  // volume gate via `crsService.validation()`; tomorrow: the inspector
-  // override panel via `crsService.subscribe`) see the same value
-  // `resolveCloudCrs` produced. The detection signal is the loader's
-  // VLR; any override has already been applied inside resolveCloudCrs.
-  // The inspector listens via `crsService.subscribe` (wired at boot);
-  // publishing here is the single notification path.
-  crsService.resolveForScan({
-    name: cloud.name,
-    detected: cloud.metadata?.crs ?? undefined,
-    source: 'las-vlr',
-  });
-  // Push the origin + CRS into the point inspector so World + Lat/Lon
-  // rows render against the loaded scan. Wrapped in a viewer-loaded
-  // guard because the viewer chunk may still be loading the very first
-  // time this fires.
-  if (viewerReady) {
-    try { viewer.setInspectCoordinateContext({ origin: cloud.origin, crs: resolved }); }
-    catch (err) { if (debug) console.warn('[crs] setInspectCoordinateContext (static) threw', err); }
-  }
-}
-
-/** Refresh the Inspector's CRS section after a streaming-cloud open. */
-function refreshCrsForStreamingCloud(cloud: {
-  readonly name: string;
-  readonly kind: 'copc' | 'ept';
-  readonly renderOrigin?: readonly [number, number, number];
-  crs(): CrsInfo | undefined;
-}): void {
-  const source: CrsSource = cloud.kind === 'ept' ? 'ept-srs' : 'copc-meta';
-  const resolved = resolveCloudCrs(cloud.name, cloud.crs(), source);
-  // Inspector listens via the boot-time `crsService.subscribe`; no
-  // direct push needed.
-  crsService.resolveForScan({
-    name: cloud.name,
-    detected: cloud.crs(),
-    source,
-  });
-  if (viewerReady) {
-    try {
-      viewer.setInspectCoordinateContext({
-        origin: cloud.renderOrigin,
-        crs: resolved,
-      });
-    } catch (err) {
-      if (debug) console.warn('[crs] setInspectCoordinateContext (streaming) threw', err);
-    }
-  }
-}
-
-/**
- * Handle a user CRS override picked from the Inspector. Persists into
- * the local-first override store, re-resolves against the active scan,
- * and refreshes the Inspector so the new label + warning state show.
- */
-function handleCrsOverride(override: {
-  epsg: number | null;
-  kind: 'projected' | 'geographic' | 'local';
-}): void {
-  if (!_currentCrsDatasetKey) return;
-  // epsg === null with kind === 'local' (tag for "use detected") is the
-  // sentinel the Inspector sends when the user picks "Use detected" or
-  // "Reset to detected". Clear the persisted override and re-derive.
-  if (override.epsg === null && override.kind === 'local') {
-    // Distinguish the two "epsg === null" cases. The Inspector emits the
-    // SAME shape for both — "local coordinates" and "reset to detected".
-    // Treat the no-EPSG override as "clear and re-derive"; the user gets
-    // the detected CRS back, which is the safer fallback. An explicit
-    // local-coordinates choice is rare in practice and can be added as
-    // a follow-up button.
-    clearCrsOverrideForDataset(_currentCrsDatasetKey);
-  } else {
-    setCrsOverrideForDataset(_currentCrsDatasetKey, {
-      epsg: override.epsg,
-      kind: override.kind,
-    });
-    recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);
-  }
-  // Re-run resolution and refresh — uses whichever cloud is currently active.
-  const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
-  const streamingCloud = viewer.streamingCloud;
-  if (streamingCloud) {
-    refreshCrsForStreamingCloud(
-      streamingCloud as {
-        readonly name: string;
-        readonly kind: 'copc' | 'ept';
-        crs(): CrsInfo | undefined;
-      },
-    );
-  } else if (staticCloud) {
-    refreshCrsForStaticCloud(staticCloud);
-  }
-}
+// Provenance + Dataset Intelligence load-time card refreshers live in
+// `src/app/inspectorCardRefreshers.ts` (wired as `inspectorCards`). CRS
+// resolution + per-scan refresh + override handling live in
+// `src/app/crsCoordinator.ts` (wired as `crsCoordinator`). Both are extracted
+// from main.ts unchanged; CRS state is owned by `crsService` (declared near the
+// imports) with the coordinator holding only the per-scan override-store key.
 
 /** High-water mark for measurement count — used to detect new placements. */
 let _lastMeasurementCount = 0;
@@ -3021,12 +2713,12 @@ async function handleFile(file: File): Promise<void> {
     // the Inspector's "Provenance" section. Wrapped because a malformed
     // input shape would have aborted the rest of the post-load setup
     // (including the navBar reveal further down).
-    try { refreshProvenance(result.cloud); }
+    try { inspectorCards.refreshProvenance(result.cloud); }
     catch (err) { if (debug) console.warn('[provenance] refreshProvenance threw', err); }
     // CRS — detected from the loaded cloud's metadata, merged with any
     // persisted user override. Wrapped because a malformed cloud
     // shape shouldn't break the rest of the load.
-    try { refreshCrsForStaticCloud(result.cloud); }
+    try { crsCoordinator.refreshCrsForStaticCloud(result.cloud); }
     catch (err) { if (debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
 
     dropZone.setProgress(formatProgress({ stage: 'rendering' }));
@@ -3078,7 +2770,7 @@ async function handleFile(file: File): Promise<void> {
       inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
-      refreshDatasetIntelligenceFromStaticCloud(
+      inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
         result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
       );
     } catch (err) {
@@ -3279,11 +2971,11 @@ async function openStreamingCopc(
   // the resident set is small. Wrapped because a malformed cloud shape
   // shouldn't break the rest of the streaming load (CRS, attach, color
   // modes, navBar reveal).
-  try { refreshProvenanceFromStreaming(cloud); }
+  try { inspectorCards.refreshProvenanceFromStreaming(cloud); }
   catch (err) { if (debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err); }
   // CRS for streaming clouds — same merge rule as the static path.
   try {
-    refreshCrsForStreamingCloud(cloud as unknown as {
+    crsCoordinator.refreshCrsForStreamingCloud(cloud as unknown as {
       readonly name: string;
       readonly kind: 'copc' | 'ept';
       crs(): CrsInfo | undefined;
@@ -3325,7 +3017,7 @@ async function openStreamingCopc(
   try { inspector.setReport(runStreamingModules(cloud)); }
   catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
   try {
-    refreshDatasetIntelligenceFromStreamingCloud(cloud);
+    inspectorCards.refreshDatasetIntelligenceFromStreamingCloud(cloud);
   } catch (err) {
     if (debug) console.warn('[inspector] dataset intel (streaming) threw', err);
   }
@@ -3900,6 +3592,13 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  // Abort any in-flight terrain compute (worker job + its reply) so a result
+  // for the now-closed scan can never land on the panel, and drop every cached
+  // terrain core so a stale core can't be served for a different scan and
+  // memory stays bounded. Guarded inside the runner: the cache chunk is only
+  // loaded after the first Analyse run, and before that there is nothing to
+  // clear — so this never eagerly pulls the heavy analysis chunk.
+  terrainRunner.abortAndClearCache();
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();
@@ -3917,7 +3616,7 @@ function resetToEmptyState(): void {
   inspector.clearProvenance();
   // `crsService.clear()` broadcasts `null` to the inspector via its
   // subscription, which restores the CRS placeholder.
-  _currentCrsDatasetKey = undefined;
+  crsCoordinator.clearDatasetKey();
   crsService.clear();
   // Clear the point inspector's coordinate context so a future Inspect
   // click on a different scan doesn't compute against the previous

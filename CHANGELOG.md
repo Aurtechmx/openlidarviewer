@@ -2,6 +2,20 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- Terrain DTM now aggregates each grid cell by the MEDIAN of its ground returns
+  instead of the arithmetic mean. The median (50% breakdown point) is resistant
+  to outliers: a single high return (vegetation, a parked vehicle) or low return
+  (multipath) in a cell no longer pulls the cell's elevation, so the bare-earth
+  surface tracks the true ground more faithfully. This changes elevation values
+  in cells that previously had a skewed mix of returns. The hold-out RMSE
+  validation rebuilds its DTM with the same median aggregation, so the reported
+  accuracy continues to measure the surface that ships, and the DEM export
+  README's "Generation parameters" now records the cell aggregation used.
+
 ## [0.4.1] - 2026-06-04
 
 ### Added

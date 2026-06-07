@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildMapSheetPdf } from '../src/render/measure/mapSheetPdf';
+import { buildMapSheetPdf, readinessNote } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 import { demAccuracyStandards } from '../src/terrain/quality/demAccuracyStandards';
 
@@ -50,5 +50,34 @@ describe('buildMapSheetPdf', () => {
     const empty: ContourFeatureModel = { ...model, features: [], bbox: null };
     const bytes = await buildMapSheetPdf({ model: empty, labels: [], sheet: 'a4' });
     expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
+  });
+});
+
+describe('readinessNote', () => {
+  // A bare affirmative claim = "survey-grade"/"survey grade" NOT immediately
+  // preceded by "not ". The project stance is: never claim survey-grade.
+  const bareSurveyGrade = /(?<!not\s)survey.?grade/i;
+
+  it.each(['ready', 'previewOnly', 'blocked'] as const)(
+    'never makes a bare affirmative survey-grade claim for readiness=%s',
+    (readiness) => {
+      const note = readinessNote(readiness);
+      expect(note).not.toMatch(bareSurveyGrade);
+      // Any mention of survey-grade must be negated by a preceding "not".
+      if (/survey.?grade/i.test(note)) {
+        expect(note.toLowerCase()).toMatch(/not\s+survey.?grade/i);
+      }
+    },
+  );
+
+  it('states the validation fact for ready without asserting a certification', () => {
+    const note = readinessNote('ready');
+    expect(note.toLowerCase()).toContain('validated');
+    expect(note.toLowerCase()).toContain('not a survey certification');
+    expect(note).not.toMatch(/\bcertified\b/i);
+  });
+
+  it('keeps the preview note negated', () => {
+    expect(readinessNote('previewOnly').toLowerCase()).toMatch(/not\s+survey-grade/);
   });
 });

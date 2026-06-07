@@ -335,7 +335,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
 }
 
 /**
- * Structural honesty guard — mirrors `isHonestTerrainResult`. A DtmGrid
+ * Structural honesty guard for a DtmGrid. A DtmGrid
  * is honest when its arrays are length-consistent, confidences are in
  * range, and no `measured`/`interpolated` cell carries a non-finite
  * height (only `coverage: none` cells may lack a height).

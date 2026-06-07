@@ -1,61 +1,63 @@
 # Terrain Intelligence
 
 This document describes the Terrain Intelligence stack under `src/terrain/`.
-It has two layers:
+It centres on the **confidence-aware DTM and contour pipeline** (added in
+v0.4.0): ground classification, a gridded DTM with per-cell confidence,
+hold-out validation with confidence calibration, surface models, and
+evidence-graded contour export. Two supporting pieces sit alongside it: a
+small set of shared type contracts (`TerrainContracts.ts`) and the
+informational **Dataset Intelligence card** (`datasetIntelligence.ts`).
 
-1. The **foundation** (metrics, scoring, partitioning, caching, worker
-   infrastructure, and the Dataset Intelligence card) introduced in v0.3.9.
-2. The **confidence-aware DTM and contour pipeline** added in v0.4.0:
-   ground classification, a gridded DTM with per-cell confidence, hold-out
-   validation with confidence calibration, and evidence-graded contour
-   export.
+Current capability. The Analyse panel (`src/ui/AnalysePanel.ts`) is
+**mounted** and surfaces the confidence-aware pipeline end to end. It is
+reachable any time via the "Analyse" tool-dock button and renders, top to
+bottom:
 
-Scope note (current, v0.4.1): the Analyse panel (`src/ui/AnalysePanel.ts`)
-is **mounted** and surfaces the validated pipeline end to end — a single
-top-level Terrain Assessment verdict (Good / Preview / Limited), a 0–100
-quality score, readiness indicators, coverage/confidence, surface models
-(DSM, canopy height, slope, multi-directional hillshade with adjustable
-sun, click-to-sample), and exports: evidence-graded contours (GeoJSON /
-SVG / DXF), a printable map sheet, and a georeferenced DEM package (ASCII
-Grid + GeoTIFF). It is reachable any time via the "Analyse" tool-dock
-button, and a DTM quality gate still governs whether a professional contour
-export is offered (the panel speaks to data quality and fitness-for-use, not
-survey certification). Note: these products are powered by the confidence-aware
-pipeline under `src/terrain/contour/`, `ground/`, and `surface/` — the
-older `src/terrain/` *foundation* (engine, metrics, partitioning, cache)
-remains an internal seam behind a feature flag.
+- a single top-level **Terrain Assessment** verdict (Good / Preview /
+  Limited / Blocked) with a folded 0–100 quality score, a one-line reason,
+  and a short list of supporting metrics;
+- readiness indicators, coverage mode, and per-cell confidence;
+- **surface models** — DSM (digital surface model), canopy height (CHM),
+  slope, and a multi-directional hillshade with an adjustable sun and
+  click-to-sample;
+- **exports** — evidence-graded contours (GeoJSON / SVG / DXF), a printable
+  map sheet, and a georeferenced DEM package (Esri ASCII Grid + GeoTIFF).
 
-## What v0.3.9 shipped (foundation)
+A DTM quality gate governs whether the terrain-product (contour/DEM) export is offered.
+The panel speaks to data quality and fitness-for-use, **not** survey
+certification (see [What confidence means](#what-confidence-means-and-what-it-does-not)).
+
+These products are powered by the confidence-aware pipeline under
+`src/terrain/contour/`, `ground/`, `surface/`, `validate/`, and `export/`.
+Alongside the pipeline, `TerrainContracts.ts` holds the shared type
+contracts every stage reads, and the Dataset Intelligence card surfaces a
+cheap, header-derived summary in the Inspector. Both are described below.
+
+## Shared contracts and the Dataset Intelligence card
+
+Two small, live pieces support the pipeline without being part of it.
 
 - **Contracts** (`TerrainContracts.ts`). Stable type contracts every
-  consumer reads. Every result carries `coverage` /
-  `sourcePointCount` / `analyzedPointCount` / `confidence` /
-  `warnings`, so analyses never imply full-cloud certainty when
-  only resident streaming nodes were walked.
-- **Metrics** (`TerrainMetrics.ts`). Deterministic per-neighborhood
-  metrics: local slope (degrees), roughness (RMS residual), mean
-  curvature, elevation variance, point density, height above local
-  surface, neighborhood elevation range, and local planarity. The
-  metrics module honours an explicit `worldUp` axis and a
-  `linearUnitToMetres` scale so results are reported in metres
-  regardless of the source CRS unit.
-- **Ground confidence scaffold** (`computeGroundScore`). Pure
-  scoring framework that combines slope / roughness / variance /
-  density into a `confidence: 0..100` score with a `reasons` array.
-  No threshold, no class assignment.
-- **Partitioning** (`TerrainPartition.ts`), **Cache** (`TerrainCache.ts`),
-  **Worker infrastructure** (`TerrainWorker.ts`), **Engine**
-  (`TerrainEngine.ts`), and **Feature flags** (`TerrainFeatureFlags.ts`).
+  consumer reads (`TerrainPoint`, `TerrainCoverageMode`, and the result
+  envelope). Every result carries `coverage` / `sourcePointCount` /
+  `analyzedPointCount` / `confidence` / `warnings`, so analyses never imply
+  full-cloud certainty when only resident streaming nodes were walked. These
+  types are imported across the ground, contour, surface, validate, and
+  quality stages.
 - **Dataset Intelligence card** (`src/ui/DatasetIntelligenceCard.ts`,
   `src/terrain/datasetIntelligence.ts`). Inspector card that renders Point
   Density, Terrain Complexity, Ground Visibility, Streaming Coverage, and
-  Terrain Confidence. Informational only; it never claims to perform ground
-  classification.
+  Terrain Confidence. It is **informational only** and header-derived — it
+  computes a cheap summary from declared point count, bounding-box volume,
+  optional resident-neighbour density, and an optional terrain suggestion. It
+  never performs ground classification and renders `—` rather than
+  fabricating a bucket when no signal is available.
 
-## What v0.4.0 adds (confidence-aware DTM + contour pipeline)
+## The live pipeline (confidence-aware DTM, surface models, contours)
 
-All of the following are pure-data leaves (no DOM, no three.js), unit-tested,
-and composed by the `analyseContours` orchestrator
+Added in v0.4.0 and surfaced through the Analyse panel today. All of the
+following are pure-data leaves (no DOM, no three.js), unit-tested, and
+composed by the `analyseContours` orchestrator
 (`src/terrain/contour/analyseContours.ts`).
 
 - **Ground classification** (`ground/groundFilter.ts`). Simple Morphological
@@ -82,6 +84,19 @@ and composed by the `analyseContours` orchestrator
   label placement, hypsometric colouring, and a shared feature model that
   exports to **GeoJSON, SVG, and DXF**, with each run graded solid /
   dashed / gap by its supporting confidence.
+- **Surface models** (`surface/`). From the classified returns and the DTM:
+  a **DSM** (top-surface elevation, `buildDsm.ts`), a **CHM** / canopy
+  height as height-above-ground (CHM = DSM − DTM), **slope** in degrees
+  (Horn's method), and a **hillshade** — single-sun or multi-directional,
+  with an adjustable sun azimuth/altitude — using the ESRI illumination
+  model (`hillshade.ts`). Empty cells stay nodata; nothing is synthesised
+  where the DTM has no ground.
+- **Georeferenced DEM export** (`export/`). The DTM, DSM, and CHM are
+  written as an **Esri ASCII Grid** (`demAsciiGrid.ts`) and a Float32
+  **GeoTIFF** (`demGeoTiff.ts`), bundled by `demPackage.ts` with a `.prj`
+  sidecar (when WKT is available) and a README that records coverage, the
+  quality-gate outcome, and provenance. Empty cells are written as NODATA;
+  CRS/datum warnings travel with the package.
 - **Cross-section profiles** (`render/measure/`). A bare-earth percentile
   estimator (`profileSampler.ts`) and a full-page **PDF profile sheet**
   (`profilePdf.ts`) with a scaled chart, station/elevation/grade table, and
@@ -109,9 +124,96 @@ fabricated heights, contour exports carry their evidence grade, and the
 confidence figure is calibrated against measured hold-out error rather than
 asserted.
 
-## Not yet shipped
+## How the DTM is generated
 
-Deliberately still out of scope: a ground/vegetation/building
-classification UI, a DSM, slope and hillshade maps, 3D DTM and contour
-overlays, and an automatic terrain quality report. The pipeline produces
-the data these would consume; surfacing them is future work.
+The bare-earth DTM is built in stages, each a pure-data leaf:
+
+1. **Ground classification** (`ground/groundFilter.ts`). A Simple
+   Morphological Filter (SMRF core) separates ground from non-ground
+   returns: a minimum-elevation grid with a low-percentile despike,
+   progressive morphological opening with a slope-scaled threshold, then
+   slope-scaled point classification. Where the source file already carries
+   classification, non-ground classes can be excluded directly
+   (`ground/classificationFilter.ts`).
+2. **Rasterisation** (`ground/rasterizeDtm.ts`). Ground returns are
+   aggregated onto a regular grid. Cells with no ground return stay `NaN` —
+   no invented heights.
+3. **Confidence-aware grid** (`ground/cellConfidence.ts`). Each cell gets an
+   elevation, a 0–100 confidence, coverage provenance, and an interpolation
+   distance. Void cells are filled by inverse-distance weighting
+   (`ground/idwFill.ts`); the roughness penalty uses slope from Horn's
+   method (`ground/terrainDerivatives.ts`). A measured cell, an interpolated
+   cell, and an empty cell are always distinguishable downstream.
+
+## How DSM and CHM are generated
+
+The **DSM** (digital surface model) is the *top* surface — the highest
+returns per cell, including buildings and canopy — built by
+`surface/buildDsm.ts`. The **CHM** (canopy height model) is height above
+ground, computed as **CHM = DSM − DTM**, so it reads ~0 over bare earth and
+rises to the structure/canopy height over footprints. Cells where either
+input is nodata produce no DSM/CHM value (`reconstructDsmChm` in
+`export/demPackage.ts` preserves nodata rather than synthesising a surface
+where there is no ground). Slope and hillshade are derived from the same
+grid (see the live-pipeline list above).
+
+## Terrain Assessment
+
+`src/terrain/contour/terrainAssessment.ts` collapses a full analysis into a
+single, plain-language verdict — the line a non-specialist should read
+first, above the detailed metrics. It is **pure-data**: derived entirely
+from the existing quality report, quality score, cell metrics, accuracy
+standards, and coverage, so it never disagrees with the numbers shown
+beneath it.
+
+There are **four statuses**, never collapsed:
+
+| Status | Meaning |
+|---|---|
+| **Good** | Suitable for terrain products and DEM workflows. |
+| **Preview** | Suitable for inspection and measurement, not final deliverables. |
+| **Limited** | Insufficient data quality for reliable terrain products. |
+| **Blocked** | The quality gate blocked it, or there is no usable DTM at all. |
+
+The status is derived in two passes. A baseline comes from the gate's
+readiness (ready → Good, previewOnly → Preview, blocked / no usable DTM →
+Blocked). Then a set of **caps** can only ever pull the status *down*: an
+unknown CRS or vertical datum, high interpolation, resident-only or sampled
+coverage, high empty-cell or edge-risk fractions, and low ground density or
+ground visibility each cap the verdict below Good and stay visible in the
+supporting metrics. A further "Limited" cap lowers an already weak surface
+when the score is very low, several metrics rate poor, or the grid is
+severely gappy.
+
+Terrain Assessment speaks to **fitness-for-use, not certification**. Where a
+value is genuinely unknown it is shown as "unknown" with an unknown rating —
+never fabricated, and never read as `0/100`.
+
+## What confidence means (and what it does not)
+
+The per-cell confidence is **calibrated against measured error**, not
+asserted. Hold-out cross-validation (`validate/holdoutRmse.ts`) withholds a
+share of ground returns and measures the vertical residual at those
+withheld points. `validate/calibrateConfidence.ts` then fits a monotonic map
+from the heuristic confidence to that measured reliability and recalibrates
+the reported figure, so a cell's percentage reflects the probability that
+its elevation is within the measured vertical tolerance. ASPRS vertical
+accuracy (NVA/VVA) is reported via `validate/verticalAccuracy.ts`.
+
+Confidence **does not** mean survey certification. It is a calibrated,
+data-quality estimate from the returns the analyser actually walked. It does
+not stand in for a licensed surveyor, a ground-control network, datum
+validation, or regulatory acceptance — all of which are out of scope. Treat
+terrain products as **preview** unless you have independently validated them
+against survey-grade data and procedures.
+
+## Scope note
+
+The live pipeline above is what produces every terrain product in the
+Analyse panel. In-scene 3D overlays of the DTM and contours are not part of the live
+pipeline today; the pipeline produces the data such overlays would consume,
+and surfacing them is future work.
+
+For how each terrain product is validated — and the manual pre-release
+checks — see
+[validation/terrain-validation-matrix.md](validation/terrain-validation-matrix.md).
