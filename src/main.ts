@@ -41,13 +41,18 @@ import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
+import { ClassLegendPanel } from './ui/ClassLegendPanel';
+import { countClasses } from './render/class/classHistogram';
+import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
+import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
+import type { SpaceKind } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
-import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
+import { spaceMetrics } from './terrain/spaceMetrics';
 import { ExportPanel } from './ui/ExportPanel';
+import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
-import type { TerrainPoint } from './terrain/TerrainContracts';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
 import { LoadCancelledError } from './io/loadFile';
@@ -114,7 +119,6 @@ import {
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
   loadViewer,
-  loadAnalyseContours,
   loadBatchConverter,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
@@ -144,13 +148,10 @@ import { CatalogPanel } from './ui/CatalogPanel';
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
 import type { CrsInfo } from './io/crs';
-import {
-  resolvedFromCrsInfo,
-  unknownCrs,
-  type CrsSource,
-  type ResolvedCrs,
-} from './geo/CoordinateTypes';
 import { CrsService } from './geo/CrsService';
+import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
+import { createCrsCoordinator } from './app/crsCoordinator';
+import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -163,12 +164,9 @@ import { CrsService } from './geo/CrsService';
  */
 const crsService = new CrsService();
 import {
-  getOverride as getCrsOverrideForDataset,
   keyForDataset as crsKeyForDataset,
   setOverride as setCrsOverrideForDataset,
-  clearOverride as clearCrsOverrideForDataset,
 } from './geo/CrsOverrideStore';
-import { getCrsEntry } from './geo/CrsRegistry';
 
 // A pointer to the open-source repository for anyone who opens the console on
 // the live site. The deployed bundle is compact-transformed; the readable source — and
@@ -841,7 +839,9 @@ const inspector = new Inspector({
     const label = modeLabel[mode] ?? mode;
     dropZone.setProgress(`Exporting ${label}…`);
     viewer
-      .exportImage(mode, {})
+      // Thread the active class-scope stamp so a filtered export carries the
+      // "showing N of M classes" banner; empty when nothing is hidden.
+      .exportImage(mode, {}, currentClassScopeStamp())
       .then((result) => {
         downloadBlob(`${base}-${mode}.png`, result.blob);
         recordUsage('export', mode);
@@ -990,6 +990,20 @@ inspector.syncTheme(currentTheme);
 crsService.subscribe((resolved) => {
   if (resolved) inspector.setCrs(resolved);
   else inspector.clearCrs();
+});
+
+// Inspector load-time card refreshers (Provenance + Dataset Intelligence) and
+// the CRS coordinator (resolve + per-scan refresh + override handling) are
+// extracted into `src/app/`. They read the lazy `viewer` and the `activeId`
+// selection through getters so no top-level `viewer.*` dereference is
+// introduced here — `viewer` is null until its chunk resolves.
+const inspectorCards = createInspectorCardRefreshers(inspector);
+const crsCoordinator = createCrsCoordinator({
+  crsService,
+  getViewer: () => viewer,
+  isViewerReady: () => viewerReady,
+  getActiveId: () => activeId,
+  debug,
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
@@ -1413,6 +1427,9 @@ const dock = new ToolDock({
     // demoted it behind the Object panel, opening Analyse takes over —
     // the "run terrain anyway" path, reachable from one obvious place.
     const show = !analysePanel.isVisible();
+    // A manual Analyse toggle is a user override — stop auto-rerouting so a
+    // late streaming node can't yank the panel away.
+    scanRouteOverridden = true;
     analysePanel.setVisible(show);
     if (show) objectPanel.setVisible(false);
     dock.setAnalyseActive(show);
@@ -1495,9 +1512,22 @@ const annotationPanel = new AnnotationPanel({
 // pipeline is dynamic-imported on demand so it stays out of the initial
 // bundle; the panel only runs when the user clicks "Run terrain analysis".
 let lastCloudName = 'contours';
+// The terrain-analysis orchestration (the async run path, the A-1
+// stale-result token guard, the fingerprint cache, and the worker offload)
+// lives in `src/app/terrainAnalysisRunner.ts`. The runner owns its own run
+// state (run token, in-flight AbortController, cache-clear fn) and is wired
+// up just below, once `analysePanel` exists. The panel callbacks reference
+// `terrainRunner` lazily — they only fire on user input, long after the
+// runner is constructed.
 const analysePanel = new AnalysePanel({
-  onRun: () => void runTerrainAnalysis(),
-  onSelectInterval: (m) => void runTerrainAnalysis(m),
+  onRun: () => void terrainRunner.run(),
+  onSelectInterval: (m) => void terrainRunner.run(m),
+  // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
+  // the SAME cached terrain core the runner uses — never mutates the panel.
+  buildResultAtInterval: (m) => terrainRunner.buildResultAtInterval(m),
+  // Same cached-core rebuild, generalised with the contour shape-style picker so
+  // an export reflects the user's chosen interval AND line shape.
+  buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
   getExportBasename: () => lastCloudName,
   getMapContext: () => {
     const cloud = activeId ? viewer.getCloud(activeId) : null;
@@ -1513,16 +1543,112 @@ const analysePanel = new AnalysePanel({
   },
 });
 
+// Classification legend — one row per ASPRS class present in the scan, with a
+// colour swatch (matching "colour by class"), a live "shown" point count, and a
+// visibility checkbox. DISPLAY ONLY: a change applies the 256-entry mask to the
+// GPU and re-renders the legend; it does NOT scope metrics/analysis. v0.4.1.
+// The streaming cloud whose header report is currently shown, kept so a later
+// class-filter toggle can re-stamp the not-class-scoped sentinel without
+// re-deriving it from scratch. Null for static scans / the empty state.
+let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null = null;
+
+const classLegendPanel = new ClassLegendPanel();
+classLegendPanel.onChange((visibility) => {
+  viewer.applyClassVisibility(visibility);
+  // Re-run the scan report so its class-dependent figures (count, density,
+  // coverage) and their honesty stamps update live with the filter. Guarded so
+  // a metrics failure never blocks the GPU mask the user just toggled.
+  try {
+    refreshScopedReport();
+  } catch (err) {
+    if (debug) console.warn('[class-legend] scoped report refresh threw', err);
+  }
+});
+
+/**
+ * Re-render the Inspector's scan report under the current class filter. Routes
+ * to the static module path (re-runs `runModules` with the derived scope) or
+ * the streaming header path (re-stamps the not-class-scoped sentinel), matching
+ * however the active scan was opened.
+ */
+function refreshScopedReport(): void {
+  // Keep the point-inspector's copy / JSON scope stamp in lockstep with the
+  // live filter — a point copied while filtering must carry the scope.
+  syncInspectClassScope();
+  if (viewer.isStreamingActive()) {
+    const cloud = lastStreamingReportCloud;
+    if (cloud) {
+      inspector.setReport(
+        runStreamingModules(cloud, classLegendPanel.getVisibility().isFiltered()),
+      );
+    }
+    return;
+  }
+  const cloud = activeId ? viewer.getCloud(activeId) : null;
+  if (cloud) inspector.setReport(runModules(cloud, currentClassScope(cloud)));
+}
+// Streaming node-ready: fold each newly-resident node's classification into the
+// legend so a class first seen at depth appears as a new row. The legend keeps
+// its current visibility (default visible, but left hidden if the user isolated
+// a class), so a late arrival never silently re-reveals hidden points.
+// Deferred: `viewer` is null until the lazy Viewer chunk resolves, so this hook
+// must be attached inside viewerLoaded (a top-level `viewer.*` write throws at
+// module load and breaks startup — caught by lint:main-deferral).
+void viewerLoaded.then(() => {
+  viewer.onStreamingNodeClasses = (classes) => {
+    if (!classLegendPanel.hasClasses()) {
+      // First node to carry classification on this streaming scan — seed + show.
+      classLegendPanel.setClasses(countClasses(classes));
+      if (classLegendPanel.hasClasses()) classLegendPanel.show();
+    } else {
+      classLegendPanel.mergeClasses(countClasses(classes));
+    }
+    // A late-arriving class can change the present-class total, so refresh the
+    // inspector's scope stamp ("k of M classes") to keep M accurate.
+    syncInspectClassScope();
+  };
+  // Re-evaluate the scan-type routing as the streaming cloud fills in. The
+  // open-time `revealAnalysePanel` runs when only a sparse coarse level may be
+  // resident, so a 360 house can read as terrain early; once enough geometry
+  // has streamed in, re-classify and re-route (only if the verdict changes).
+  // Debounced + growth-gated so a burst of node-ready events can't thrash.
+  viewer.onStreamingNodeReady = () => {
+    if (scanRouteOverridden) return;
+    const resident = viewer.residentPointTotal();
+    if (resident < lastRouteResident * SCAN_REROUTE_GROWTH) return;
+    lastRouteResident = resident;
+    if (scanRouteTimer != null) clearTimeout(scanRouteTimer);
+    scanRouteTimer = setTimeout(() => {
+      scanRouteTimer = null;
+      applyScanRoute(false);
+    }, 500);
+  };
+});
+
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
 // pipeline if the shape detector misjudged the scan.
 const objectPanel = new ObjectPanel({
   onRunTerrainAnyway: () => {
+    // User forced terrain → pin the routing so streaming re-evaluation can't
+    // flip the panel back out from under them.
+    scanRouteOverridden = true;
     objectPanel.setVisible(false);
     analysePanel.setVisible(true);
     dock.setAnalyseActive(true);
-    void runTerrainAnalysis();
+    void terrainRunner.run();
   },
+});
+
+// Terrain-analysis runner — extracted into `src/app/`. Constructed here, after
+// `analysePanel`, so the panel/object-panel callbacks above (which fire only on
+// user input) can drive it. Reads the lazy `viewer` and the `activeId`
+// selection through getters so no top-level `viewer.*` dereference is added.
+const terrainRunner = createTerrainAnalysisRunner({
+  getViewer: () => viewer,
+  analysePanel,
+  getActiveId: () => activeId,
+  crsService,
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -1545,98 +1671,135 @@ const exportPanel = new ExportPanel({
   },
 });
 
+// ── Scan-type routing state ─────────────────────────────────────────────────
+// `revealAnalysePanel` runs once at open, when a streaming cloud may have only
+// a sparse coarse level resident — a misread is likely. `applyScanRoute` is
+// re-run as the cloud fills in (debounced, growth-gated) and only flips panels
+// when the verdict actually changes, so it never thrashes. Once the user forces
+// a panel ("Run terrain anyway" / Analyse toggle) `scanRouteOverridden` pins it.
+let lastScanVerdict: SpaceKind | null = null;
+let scanRouteOverridden = false;
+let lastRouteResident = 0;
+let scanRouteTimer: ReturnType<typeof setTimeout> | null = null;
+/** Re-route only after the resident cloud grows by this factor (cheap gate). */
+const SCAN_REROUTE_GROWTH = 1.4;
+
+/**
+ * Classify the currently-loaded/streamed geometry and route to the Object /
+ * Space panel (non-terrain) or the Analyse panel (terrain). Passes the
+ * resident classification so the vegetation tiebreaker can fire (a classified
+ * forest stays terrain even though its geometry mimics an interior).
+ *
+ * `initial` = the open-time call (always applies + resets the override). A
+ * non-initial call is a streaming re-evaluation: it no-ops unless the verdict
+ * changed, and is skipped once the user has overridden the routing.
+ */
+function applyScanRoute(initial: boolean): void {
+  if (!initial && scanRouteOverridden) return;
+  let shape: ReturnType<typeof classifyScanShape> | null = null;
+  let gathered: ReturnType<typeof viewer.gatherTerrainPositions> = null;
+  try {
+    gathered = viewer.gatherTerrainPositions(60_000);
+    if (gathered) {
+      // Pass classification when index-aligned so the veg tiebreaker can fire.
+      shape = classifyScanShape(gathered.positions, { classification: gathered.classification });
+    }
+  } catch {
+    /* classification is best-effort — fall back to showing terrain analysis */
+    shape = null;
+  }
+  if (debug && shape) {
+    // `?debug` only: dump the raw scan-shape signals so a misroute can be
+    // diagnosed against real numbers instead of guessed at.
+    console.info(
+      `[scan-type] ${initial ? 'open' : 're-route'} verdict=${shape.nonTerrain ? shape.spaceKind : 'terrain'} ` +
+        `up=${shape.up} aspect=${shape.aspect.toFixed(2)} overhang=${Math.round(shape.overhangFraction * 100)}% ` +
+        `wall=${Math.round(shape.wallCoverage * 100)}% floor=${Math.round(shape.floorCoverage * 100)}% ` +
+        `ceil=${Math.round(shape.ceilingCoverage * 100)}% topVeg=${Math.round(shape.topVegFraction * 100)}% ` +
+        `sampled=${gathered?.positions ? gathered.positions.length / 3 : 0} resident=${viewer.residentPointTotal()}`,
+    );
+  }
+  const verdict: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
+  if (!initial) {
+    // Re-route only when the verdict genuinely changes — never thrash panels.
+    if (verdict === null || verdict === lastScanVerdict) return;
+  }
+  lastScanVerdict = verdict;
+
+  let isNonTerrain = false;
+  if (shape && gathered && shape.nonTerrain) {
+    isNonTerrain = true;
+    const activeCloud = activeId ? viewer.getCloud(activeId) : null;
+    const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+    const space = spaceMetrics(gathered.positions, {
+      upAxis: shape.up,
+      spaceKind: shape.spaceKind === 'interior' ? 'interior' : 'object',
+      hasRgb,
+      sourcePointCount: gathered.totalPoints,
+    });
+    if (shape.spaceKind === 'interior') {
+      objectPanel.showSpace(space, shape);
+    } else {
+      objectPanel.showObject(objectMetrics(gathered.positions), space, shape);
+    }
+  }
+  objectPanel.setVisible(isNonTerrain);
+  analysePanel.setVisible(!isNonTerrain);
+  dock.setAnalyseEnabled(true);
+  dock.setAnalyseActive(!isNonTerrain);
+}
+
 /**
  * Reveal the Analyse + Export panels and seed the export basename. Called
  * from every load path — static files AND streaming COPC/EPT — so the terrain
  * and format tools surface regardless of how the scan was opened. v0.4.0.
+ *
+ * Auto-detects the scan shape: any NON-TERRAIN scan — a compact 3-D object OR
+ * an interior space (a room / 360 / multi-room house) — gets the space/object
+ * analysis instead of terrain contours, and terrain is demoted behind a "run
+ * anyway" affordance. Routing is on `nonTerrain`, not just the legacy `kind`,
+ * and re-evaluates as a streaming cloud fills in (see `applyScanRoute`).
  */
 function revealAnalysePanel(name: string): void {
   lastCloudName = baseName(name);
   exportPanel.setVisible(true);
   exportPanel.refresh();
-  // Classify the scan shape: a compact 3-D object gets the Object panel (with
-  // object-appropriate measurements) and terrain analysis is demoted behind a
-  // "run anyway" affordance; terrain / ambiguous scans get the Analyse panel.
-  let isObject = false;
-  try {
-    const gathered = viewer.gatherTerrainPositions(60_000);
-    if (gathered) {
-      const shape = classifyScanShape(gathered.positions);
-      if (shape.kind === 'object') {
-        isObject = true;
-        objectPanel.update(objectMetrics(gathered.positions), shape);
-      }
-    }
-  } catch {
-    /* classification is best-effort — fall back to showing terrain analysis */
-  }
-  objectPanel.setVisible(isObject);
-  analysePanel.setVisible(!isObject);
-  dock.setAnalyseEnabled(true);
-  dock.setAnalyseActive(!isObject);
+  // Fresh scan → clear any prior override + verdict so the open-time route is
+  // authoritative and streaming re-routes can fire again.
+  scanRouteOverridden = false;
+  lastScanVerdict = null;
+  lastRouteResident = viewer.residentPointTotal();
+  applyScanRoute(true);
 }
 
 /**
- * Run the confidence-aware terrain pipeline on the loaded scan and update
- * the Analyse panel. Points are gathered (and strided if huge) from the
- * Viewer; the analysis is synchronous but yields once so the busy state
- * paints, and is fully guarded so a failure never breaks the shell.
+ * Populate + reveal (or empty-state) the classification legend for the active
+ * scan. Pass the cloud's per-point classification buffer when present, or
+ * `undefined` when the cloud carries no classification channel. DISPLAY-ONLY:
+ * the legend's fresh state is all-visible, so the GPU mask is applied as a
+ * no-op identity mask to keep the unfiltered experience unchanged. v0.4.1.
  */
-async function runTerrainAnalysis(intervalM?: number): Promise<void> {
-  const gathered = viewer.gatherTerrainPositions();
-  if (!gathered) {
-    analysePanel.setStatus('Load a scan first, then run terrain analysis.');
-    return;
+function refreshClassLegend(classification?: ArrayLike<number>): void {
+  if (classification && classification.length > 0) {
+    classLegendPanel.setClasses(countClasses(toClassBuffer(classification)));
+  } else {
+    classLegendPanel.setClasses(new Map());
   }
-  analysePanel.setBusy(true);
-  // Let the "Analysing…" state paint before the synchronous compute.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  try {
-    const { analyseContours } = await loadAnalyseContours();
-    const pos = gathered.positions;
-    const n = pos.length / 3;
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let i = 0; i < n; i++) {
-      const x = pos[i * 3];
-      const y = pos[i * 3 + 1];
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-    }
-    // Aim for a grid ~256 cells across, clamped to a sane floor.
-    const extent = Math.max(maxX - minX, maxY - minY, 1);
-    const cellSizeM = Math.max(0.25, extent / 256);
-    const points: TerrainPoint[] = new Array(n);
-    for (let i = 0; i < n; i++) {
-      points[i] = { x: pos[i * 3], y: pos[i * 3 + 1], z: pos[i * 3 + 2] };
-    }
-    // Feed the active scan's resolved CRS + vertical datum into the analysis
-    // so the readiness gate and export honesty reflect a georeferenced file
-    // (a real horizontal CRS lifts the "CRS unknown" downgrade; a known
-    // vertical datum clears the "datum unknown" warning).
-    const cur = crsService.current();
-    const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
-    const result = analyseContours(points, {
-      cellSizeM,
-      crs: crsName,
-      isGeographic: cur?.kind === 'geographic',
-      verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
-      verticalDatum: cur?.verticalDatum ?? null,
-      classification: gathered.classification,
-      intervalM,
-    });
-    analysePanel.setBusy(false);
-    analysePanel.update(result);
-  } catch (err) {
-    console.error('OpenLiDARViewer: terrain analysis failed.', err);
-    analysePanel.setBusy(false);
-    const msg = err instanceof Error ? err.message : String(err);
-    analysePanel.setStatus(`Analysis failed: ${msg}`);
-  }
+  // Apply the (all-visible) mask so a previously-filtered scan can't leak its
+  // hidden classes onto the freshly loaded one. No-op for the common case.
+  viewer.applyClassVisibility(classLegendPanel.getVisibility());
+  classLegendPanel.show();
+  // Reset the inspector's copy/JSON scope stamp — the fresh legend is
+  // all-visible, so this clears any stamp left by a prior filtered scan.
+  syncInspectClassScope();
+}
+
+/** Narrow an ArrayLike classification source to a typed buffer for counting. */
+function toClassBuffer(src: ArrayLike<number>): Uint8Array {
+  if (src instanceof Uint8Array) return src;
+  const out = new Uint8Array(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = src[i];
+  return out;
 }
 
 // Every listener-binding that synchronously dereferences `viewer.*` must
@@ -1707,7 +1870,7 @@ void viewerLoaded.then(() => {
   // CRS override picker — persists to localStorage via CrsOverrideStore,
   // re-resolves against the active scan, and refreshes the Inspector
   // so the new label + warning state appear immediately.
-  inspector.setOnCrsOverride(handleCrsOverride);
+  inspector.setOnCrsOverride(crsCoordinator.handleCrsOverride);
 
   // Apply any preferences saved in a previous session, once the GPU backend
   // has initialised (so a saved EDL choice overrides the backend's default
@@ -1835,7 +1998,7 @@ void viewerLoaded.then(() => {
     // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
-    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, analysePanel.element, exportPanel.element);
+    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element);
     stage.overlay.append(leftPanels);
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
@@ -1997,11 +2160,69 @@ function streamingDebugSample(): StreamingDebugStats | null {
   return sample;
 }
 
-/** Run every registered validation module and flatten the rows. */
-function runModules(cloud: PointCloud): AnalysisRow[] {
+/**
+ * Run every registered validation module and flatten the rows. The optional
+ * `scope` is threaded into each module so class-dependent figures honour the
+ * visible-class subset; when omitted (or full) the output is byte-identical to
+ * the unscoped path.
+ */
+function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
-  for (const module of registry.list()) rows.push(...module.run(cloud).rows);
+  const options = scope ? { scope } : undefined;
+  for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
   return rows;
+}
+
+/**
+ * Derive the class scope for the active static cloud from the legend's
+ * visibility and the classes actually present in the cloud. Returns `fullScope`
+ * when there's no classification channel or nothing is filtered — so the
+ * report renders exactly as it did before class scoping existed.
+ */
+function currentClassScope(cloud: PointCloud): ClassScope {
+  const cls = cloud.classification;
+  if (!cls || cls.length === 0 || !classLegendPanel.hasClasses()) return fullScope();
+  const visibility = classLegendPanel.getVisibility();
+  if (!visibility.isFiltered()) return fullScope();
+  const present = [...countClasses(cls).keys()];
+  return scopeFrom(visibility.visibleCodes(), present, classificationLabel);
+}
+
+/**
+ * Derive the active class scope from the legend alone — works for both static
+ * and streaming scans because it reads the legend's present-class roster
+ * rather than a resident classification array (a streaming scan has none).
+ * Returns `fullScope` when no classification channel exists or nothing is
+ * filtered, so every export / copy path that consumes this stays
+ * byte-identical to the pre-feature output when no class is hidden.
+ */
+function currentClassScopeFromLegend(): ClassScope {
+  if (!classLegendPanel.hasClasses()) return fullScope();
+  const visibility = classLegendPanel.getVisibility();
+  if (!visibility.isFiltered()) return fullScope();
+  const present = classLegendPanel.presentCodes();
+  if (present.length === 0) return fullScope();
+  return scopeFrom(visibility.visibleCodes(), present, classificationLabel);
+}
+
+/**
+ * The current class-scope stamp string — `''` when the view is full /
+ * unfiltered. Fed to the point-inspector (copy + JSON) and the export
+ * surfaces so a copied / exported artifact made while filtering is
+ * self-describing.
+ */
+function currentClassScopeStamp(): string {
+  return scopeStamp(currentClassScopeFromLegend(), classificationLabel);
+}
+
+/**
+ * Push the current class-scope stamp into the point-inspector. Called after
+ * every legend change and on scan load / close so a point copied while a
+ * filter is active carries the filter it was taken under (and an unfiltered
+ * copy stays byte-identical to before).
+ */
+function syncInspectClassScope(): void {
+  viewer.setInspectClassScopeStamp(currentClassScopeStamp());
 }
 
 /**
@@ -2037,16 +2258,26 @@ function runStreamingModules(cloud: {
   };
   readonly maxDepth?: () => number;
   readonly octree?: { nodes: () => readonly unknown[] };
-}): AnalysisRow[] {
+}, classFilterActive = false): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
   const info = (label: string, value: string): AnalysisRow =>
     ({ label, value, status: 'info' });
+  // Streaming density/spacing are derived from the file header's full-cloud
+  // totals — there is no client-side per-class breakdown to scope them to. So
+  // they stay full-cloud and, when a class filter is active, carry the honesty
+  // sentinel that renders "full cloud (header) — not class-scoped" rather than
+  // pretending the figure honours the filter.
+  const headerMetric = (label: string, value: string): AnalysisRow => {
+    const row = info(label, value);
+    if (classFilterActive) row.scope = notScopedSentinel();
+    return row;
+  };
 
   rows.push(info('Source', cloud.kind === 'ept' ? 'EPT (Entwine Point Tile)' : 'COPC (Cloud Optimized Point Cloud)'));
   if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
     rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
   }
-  rows.push(info('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
+  rows.push(headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
 
   // Bounds — prefer the header's source-coordinate min/max for accuracy.
   const header = cloud.metadata?.header;
@@ -2060,8 +2291,8 @@ function runStreamingModules(cloud: {
     const footprintArea = w * d;
     if (footprintArea > 0 && cloud.sourcePointCount > 0) {
       const density = cloud.sourcePointCount / footprintArea;
-      rows.push(info('Density', `${density.toFixed(1)} pts/m²`));
-      rows.push(info('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
+      rows.push(headerMetric('Density', `${density.toFixed(1)} pts/m²`));
+      rows.push(headerMetric('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
     }
   }
 
@@ -2264,6 +2495,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasIntensity: modes.includes('intensity'),
       hasClassification: modes.includes('classification'),
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      // Class-filter honesty — when a filter narrows the live view, disclose
+      // it so the PDF's full-cloud figures aren't read as filter-scoped.
+      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
     };
     exportFileStem = baseName(streamingCloud.name);
   } else if (staticCloud) {
@@ -2280,6 +2514,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      // Class-filter honesty — when a filter narrows the live view, disclose
+      // it so the PDF's full-cloud figures aren't read as filter-scoped.
+      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
     };
     exportFileStem = baseName(staticCloud.name);
   } else {
@@ -2462,280 +2699,12 @@ function applyPrefs(): void {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Provenance fingerprint plumbing
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Refresh the Inspector's provenance panel from a freshly loaded static cloud. */
-function refreshProvenance(cloud: {
-  readonly sourceFormat: string;
-  readonly pointCount: number;
-}): void {
-  const signals = signalsForStaticCloud(cloud as never);
-  const f = classifyProvenance(signals);
-  inspector.setProvenance(f);
-}
-
-/** Refresh the Inspector's provenance panel from a freshly attached streaming cloud. */
-function refreshProvenanceFromStreaming(cloud: {
-  readonly kind: 'copc' | 'ept';
-  readonly sourcePointCount?: number;
-}): void {
-  const signals = signalsForStreamingCloud(cloud as never);
-  const f = classifyProvenance(signals);
-  inspector.setProvenance(f);
-}
-
-/**
- * Push a cheap Dataset Intelligence summary into the Inspector's
- * card from data already in hand at load time. This populates the
- * Point Density row from declared `pointCount / bbox volume` and the
- * Streaming Coverage row from the source kind. No point iteration,
- * no engine analysis — just stable header-derived facts the user
- * can see immediately. Heavier metric work would land later through
- * the TerrainEngine foundation; the Dataset Intelligence card stays
- * header-derived for now.
- */
-function refreshDatasetIntelligenceFromStaticCloud(cloud: {
-  readonly pointCount: number;
-  bounds(): { min: [number, number, number]; max: [number, number, number] };
-}): void {
-  try {
-    const b = cloud.bounds();
-    const dx = b.max[0] - b.min[0];
-    const dy = b.max[1] - b.min[1];
-    const dz = b.max[2] - b.min[2];
-    const bboxVolume = dx * dy * dz;
-    inspector.setDatasetIntelligence({
-      pointCount: cloud.pointCount,
-      bboxVolume: Number.isFinite(bboxVolume) && bboxVolume > 0 ? bboxVolume : undefined,
-      coverageMeta: {
-        coverage: 'full',
-        sourcePointCount: cloud.pointCount,
-        analyzedPointCount: cloud.pointCount,
-        // v0.3.10 honesty pass — this path runs at load time from
-        // header data ALONE. No terrain analysis has happened yet, so
-        // we have nothing meaningful to say about confidence. The
-        // prior code pushed a hardcoded `60` here, which rendered as
-        // a green/yellow chip and implied the engine had measured
-        // stability. Leaving the field unset lets the summariser
-        // emit `band: 'unknown'` + `label: '—'`, matching the
-        // "engine-only signals stay '—' until the engine runs"
-        // contract the README documents for the other rows.
-        warnings: [],
-      },
-      metricVersion: TERRAIN_METRIC_VERSION,
-    });
-  } catch {
-    // A cheap summary failure must never block load completion.
-    inspector.clearDatasetIntelligence();
-  }
-}
-
-function refreshDatasetIntelligenceFromStreamingCloud(cloud: {
-  readonly sourcePointCount?: number;
-  readonly metadata?: {
-    readonly header?: {
-      readonly min?: readonly [number, number, number] | number[];
-      readonly max?: readonly [number, number, number] | number[];
-    };
-  };
-}): void {
-  try {
-    const sourcePoints = cloud.sourcePointCount;
-    const hMin = cloud.metadata?.header?.min;
-    const hMax = cloud.metadata?.header?.max;
-    let bboxVolume: number | undefined;
-    if (hMin && hMax && hMin.length >= 3 && hMax.length >= 3) {
-      const dx = hMax[0] - hMin[0];
-      const dy = hMax[1] - hMin[1];
-      const dz = hMax[2] - hMin[2];
-      const v = dx * dy * dz;
-      if (Number.isFinite(v) && v > 0) bboxVolume = v;
-    }
-    inspector.setDatasetIntelligence({
-      pointCount: sourcePoints,
-      bboxVolume,
-      coverageMeta: {
-        coverage: 'resident-only',
-        sourcePointCount: sourcePoints ?? 0,
-        // No resident count yet at attach time; the streaming layer
-        // refines this as nodes land.
-        analyzedPointCount: 0,
-        // v0.3.10 honesty pass — see the static path for the full
-        // reasoning. No engine measurement → no confidence number.
-        // Leaving the field unset surfaces "—" instead of the prior
-        // hardcoded `50` which read as a yellow chip and implied a
-        // streaming-specific stability measurement.
-        warnings: [],
-      },
-      metricVersion: TERRAIN_METRIC_VERSION,
-    });
-  } catch {
-    inspector.clearDatasetIntelligence();
-  }
-}
-
-/** The dataset key (per-scan key for the CRS override store) currently in scope. */
-let _currentCrsDatasetKey: string | undefined;
-// CRS state is owned by `crsService` (declared near the imports).
-// The per-scan refresh paths below still push the resolved CRS into
-// the inspector / point inspector while ALSO publishing to the
-// service so both surfaces agree. Read sites that used to consult a
-// module-local cache now go through `crsService.current()` /
-// `crsService.validation()`.
-
-/**
- * Resolve a `CrsInfo` (from LAS/LAZ VLR, COPC, or EPT) + an optional
- * persisted user override into a single `ResolvedCrs` for the Inspector.
- *
- * Rule of precedence:
- *  1. User override (when present and non-default) wins.
- *  2. Otherwise the detected `CrsInfo` is used.
- *  3. Otherwise we surface "unknown".
- */
-function resolveCloudCrs(
-  cloudName: string,
-  detected: CrsInfo | undefined,
-  detectionSource: CrsSource,
-): ResolvedCrs {
-  const datasetKey = crsKeyForDataset(cloudName);
-  _currentCrsDatasetKey = datasetKey;
-  const override = getCrsOverrideForDataset(datasetKey);
-  if (override) {
-    if (override.kind === 'local') {
-      return {
-        kind: 'local',
-        name: 'Local coordinates (no CRS)',
-        linearUnit: 'unknown',
-        linearUnitToMetres: 1,
-        source: 'user-override',
-        confidence: 'high',
-        userConfirmed: true,
-      };
-    }
-    if (typeof override.epsg === 'number') {
-      const entry = getCrsEntry(override.epsg);
-      return {
-        kind: override.kind,
-        name: entry?.label ?? `EPSG:${override.epsg}`,
-        epsg: override.epsg,
-        linearUnit: override.kind === 'geographic' ? 'unknown' : 'metre',
-        linearUnitToMetres: 1,
-        source: 'user-override',
-        confidence: 'high',
-        userConfirmed: true,
-      };
-    }
-  }
-  const fromDetected = resolvedFromCrsInfo(detected, detectionSource);
-  return fromDetected ?? unknownCrs();
-}
-
-/** Refresh the Inspector's CRS section after a static-cloud load. */
-function refreshCrsForStaticCloud(cloud: {
-  readonly name: string;
-  readonly origin?: readonly [number, number, number];
-  readonly metadata?: { readonly crs?: CrsInfo | null };
-}): void {
-  const resolved = resolveCloudCrs(
-    cloud.name,
-    cloud.metadata?.crs ?? undefined,
-    'las-vlr',
-  );
-  // Publish to the central service so subscribers (today: the lasso
-  // volume gate via `crsService.validation()`; tomorrow: the inspector
-  // override panel via `crsService.subscribe`) see the same value
-  // `resolveCloudCrs` produced. The detection signal is the loader's
-  // VLR; any override has already been applied inside resolveCloudCrs.
-  // The inspector listens via `crsService.subscribe` (wired at boot);
-  // publishing here is the single notification path.
-  crsService.resolveForScan({
-    name: cloud.name,
-    detected: cloud.metadata?.crs ?? undefined,
-    source: 'las-vlr',
-  });
-  // Push the origin + CRS into the point inspector so World + Lat/Lon
-  // rows render against the loaded scan. Wrapped in a viewer-loaded
-  // guard because the viewer chunk may still be loading the very first
-  // time this fires.
-  if (viewerReady) {
-    try { viewer.setInspectCoordinateContext({ origin: cloud.origin, crs: resolved }); }
-    catch (err) { if (debug) console.warn('[crs] setInspectCoordinateContext (static) threw', err); }
-  }
-}
-
-/** Refresh the Inspector's CRS section after a streaming-cloud open. */
-function refreshCrsForStreamingCloud(cloud: {
-  readonly name: string;
-  readonly kind: 'copc' | 'ept';
-  readonly renderOrigin?: readonly [number, number, number];
-  crs(): CrsInfo | undefined;
-}): void {
-  const source: CrsSource = cloud.kind === 'ept' ? 'ept-srs' : 'copc-meta';
-  const resolved = resolveCloudCrs(cloud.name, cloud.crs(), source);
-  // Inspector listens via the boot-time `crsService.subscribe`; no
-  // direct push needed.
-  crsService.resolveForScan({
-    name: cloud.name,
-    detected: cloud.crs(),
-    source,
-  });
-  if (viewerReady) {
-    try {
-      viewer.setInspectCoordinateContext({
-        origin: cloud.renderOrigin,
-        crs: resolved,
-      });
-    } catch (err) {
-      if (debug) console.warn('[crs] setInspectCoordinateContext (streaming) threw', err);
-    }
-  }
-}
-
-/**
- * Handle a user CRS override picked from the Inspector. Persists into
- * the local-first override store, re-resolves against the active scan,
- * and refreshes the Inspector so the new label + warning state show.
- */
-function handleCrsOverride(override: {
-  epsg: number | null;
-  kind: 'projected' | 'geographic' | 'local';
-}): void {
-  if (!_currentCrsDatasetKey) return;
-  // epsg === null with kind === 'local' (tag for "use detected") is the
-  // sentinel the Inspector sends when the user picks "Use detected" or
-  // "Reset to detected". Clear the persisted override and re-derive.
-  if (override.epsg === null && override.kind === 'local') {
-    // Distinguish the two "epsg === null" cases. The Inspector emits the
-    // SAME shape for both — "local coordinates" and "reset to detected".
-    // Treat the no-EPSG override as "clear and re-derive"; the user gets
-    // the detected CRS back, which is the safer fallback. An explicit
-    // local-coordinates choice is rare in practice and can be added as
-    // a follow-up button.
-    clearCrsOverrideForDataset(_currentCrsDatasetKey);
-  } else {
-    setCrsOverrideForDataset(_currentCrsDatasetKey, {
-      epsg: override.epsg,
-      kind: override.kind,
-    });
-    recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);
-  }
-  // Re-run resolution and refresh — uses whichever cloud is currently active.
-  const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
-  const streamingCloud = viewer.streamingCloud;
-  if (streamingCloud) {
-    refreshCrsForStreamingCloud(
-      streamingCloud as {
-        readonly name: string;
-        readonly kind: 'copc' | 'ept';
-        crs(): CrsInfo | undefined;
-      },
-    );
-  } else if (staticCloud) {
-    refreshCrsForStaticCloud(staticCloud);
-  }
-}
+// Provenance + Dataset Intelligence load-time card refreshers live in
+// `src/app/inspectorCardRefreshers.ts` (wired as `inspectorCards`). CRS
+// resolution + per-scan refresh + override handling live in
+// `src/app/crsCoordinator.ts` (wired as `crsCoordinator`). Both are extracted
+// from main.ts unchanged; CRS state is owned by `crsService` (declared near the
+// imports) with the coordinator holding only the per-scan override-store key.
 
 /** High-water mark for measurement count — used to detect new placements. */
 let _lastMeasurementCount = 0;
@@ -3021,12 +2990,12 @@ async function handleFile(file: File): Promise<void> {
     // the Inspector's "Provenance" section. Wrapped because a malformed
     // input shape would have aborted the rest of the post-load setup
     // (including the navBar reveal further down).
-    try { refreshProvenance(result.cloud); }
+    try { inspectorCards.refreshProvenance(result.cloud); }
     catch (err) { if (debug) console.warn('[provenance] refreshProvenance threw', err); }
     // CRS — detected from the loaded cloud's metadata, merged with any
     // persisted user override. Wrapped because a malformed cloud
     // shape shouldn't break the rest of the load.
-    try { refreshCrsForStaticCloud(result.cloud); }
+    try { crsCoordinator.refreshCrsForStaticCloud(result.cloud); }
     catch (err) { if (debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
 
     dropZone.setProgress(formatProgress({ stage: 'rendering' }));
@@ -3078,14 +3047,14 @@ async function handleFile(file: File): Promise<void> {
       inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
-      refreshDatasetIntelligenceFromStaticCloud(
+      inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
         result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
       );
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
     }
     try {
-      inspector.setReport(runModules(result.cloud));
+      inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
     } catch (err) {
       if (debug) console.warn('[inspector] runModules + setReport threw', err);
     }
@@ -3140,6 +3109,16 @@ async function handleFile(file: File): Promise<void> {
 
     // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
     revealAnalysePanel(result.cloud.name);
+
+    // Classification legend (v0.4.1) — populate from the cloud's per-point
+    // class buffer when present, then show. A scan with no classification
+    // channel renders the panel's empty state. DISPLAY-ONLY; the all-visible
+    // default mask is applied so nothing is hidden on load.
+    try {
+      refreshClassLegend(result.cloud.classification);
+    } catch (err) {
+      if (debug) console.warn('[class-legend] refresh threw', err);
+    }
 
     // Developer diagnostics — the merged telemetry feeds the debug console
     // block, the performance overlay, and (under ?benchmark=1) a benchmark.
@@ -3279,11 +3258,11 @@ async function openStreamingCopc(
   // the resident set is small. Wrapped because a malformed cloud shape
   // shouldn't break the rest of the streaming load (CRS, attach, color
   // modes, navBar reveal).
-  try { refreshProvenanceFromStreaming(cloud); }
+  try { inspectorCards.refreshProvenanceFromStreaming(cloud); }
   catch (err) { if (debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err); }
   // CRS for streaming clouds — same merge rule as the static path.
   try {
-    refreshCrsForStreamingCloud(cloud as unknown as {
+    crsCoordinator.refreshCrsForStreamingCloud(cloud as unknown as {
       readonly name: string;
       readonly kind: 'copc' | 'ept';
       crs(): CrsInfo | undefined;
@@ -3307,6 +3286,15 @@ async function openStreamingCopc(
   );
   streamingPanel.setQuality(streamingQuality);
   streamingPanel.setPhase('Streaming coarse geometry…');
+  // Classification legend (v0.4.1) — reset to empty for the new streaming scan.
+  // The legend is seeded + revealed lazily by `viewer.onStreamingNodeClasses`
+  // as nodes carrying classification become resident, and refines as deeper
+  // nodes stream in. A streaming source without a classification channel simply
+  // never seeds the legend, so it stays hidden.
+  classLegendPanel.setClasses(new Map());
+  classLegendPanel.hide();
+  // Clear any prior filtered scan's inspector copy/JSON scope stamp.
+  syncInspectClassScope();
   // Visual Export Studio — a streaming COPC cloud is now attached;
   // the image-export buttons in the Inspector can light up. The streaming
   // path doesn't go through `inspector.addCloud`, so the gate has to flip
@@ -3322,10 +3310,11 @@ async function openStreamingCopc(
   inspector.setStreamingMode(true);
   try { inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
   catch (err) { if (debug) console.warn('[inspector] setDetail (streaming) threw', err); }
-  try { inspector.setReport(runStreamingModules(cloud)); }
+  lastStreamingReportCloud = cloud;
+  try { inspector.setReport(runStreamingModules(cloud, classLegendPanel.getVisibility().isFiltered())); }
   catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
   try {
-    refreshDatasetIntelligenceFromStreamingCloud(cloud);
+    inspectorCards.refreshDatasetIntelligenceFromStreamingCloud(cloud);
   } catch (err) {
     if (debug) console.warn('[inspector] dataset intel (streaming) threw', err);
   }
@@ -3520,14 +3509,18 @@ async function handleRemoteEpt(url: string): Promise<void> {
       // `span` is the points-per-tile analogue), so those rows are
       // omitted on EPT streams.
       const b = detection.metadata.bounds.conforming;
-      inspector.setReport(runStreamingModules({
-        kind: 'ept',
+      const eptReportCloud = {
+        kind: 'ept' as const,
         name: cloud.name,
         sourcePointCount: cloud.sourcePointCount,
         metadata: {
-          header: { min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] },
+          header: { min: [b[0], b[1], b[2]] as [number, number, number], max: [b[3], b[4], b[5]] as [number, number, number] },
         },
-      }));
+      };
+      lastStreamingReportCloud = eptReportCloud;
+      inspector.setReport(
+        runStreamingModules(eptReportCloud, classLegendPanel.getVisibility().isFiltered()),
+      );
     } catch (err) { if (debug) console.warn('[inspector] setReport (streaming) threw', err); }
     void prewarmExportStudio();
 
@@ -3900,6 +3893,26 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  // Abort any in-flight terrain compute (worker job + its reply) so a result
+  // for the now-closed scan can never land on the panel, and drop every cached
+  // terrain core so a stale core can't be served for a different scan and
+  // memory stays bounded. Guarded inside the runner: the cache chunk is only
+  // loaded after the first Analyse run, and before that there is nothing to
+  // clear — so this never eagerly pulls the heavy analysis chunk.
+  terrainRunner.abortAndClearCache();
+  // Hide + clear the classification legend so it doesn't linger with a stale
+  // class list after the scan is closed. v0.4.1.
+  classLegendPanel.setClasses(new Map());
+  classLegendPanel.hide();
+  // Clear the inspector's copy/JSON scope stamp now there's no active filter.
+  syncInspectClassScope();
+  lastStreamingReportCloud = null;
+  // Cancel any pending scan-type re-route + reset its state so a timer can't
+  // fire against the now-closed scan, and the next open routes from scratch.
+  if (scanRouteTimer != null) { clearTimeout(scanRouteTimer); scanRouteTimer = null; }
+  lastScanVerdict = null;
+  scanRouteOverridden = false;
+  lastRouteResident = 0;
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();
@@ -3917,7 +3930,7 @@ function resetToEmptyState(): void {
   inspector.clearProvenance();
   // `crsService.clear()` broadcasts `null` to the inspector via its
   // subscription, which restores the CRS placeholder.
-  _currentCrsDatasetKey = undefined;
+  crsCoordinator.clearDatasetKey();
   crsService.clear();
   // Clear the point inspector's coordinate context so a future Inspect
   // click on a different scan doesn't compute against the previous
@@ -3985,7 +3998,13 @@ async function saveSnapshot(): Promise<void> {
       annotations: viewer.annotate.getAnnotations().length > 0,
       measurements: viewer.measure.getMeasurements().length > 0,
     });
-    const url = URL.createObjectURL(blob);
+    // `snapshot()` renders the live scene through the class-mask shader, so a
+    // filtered view drops hidden classes from the PNG. Stamp the same scope
+    // banner the Studio export path uses so a filtered snapshot can't leave the
+    // app undisclosed. With an empty stamp (nothing hidden) the helper returns
+    // the input Blob unchanged, keeping the snapshot byte-identical to before.
+    const stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
+    const url = URL.createObjectURL(stamped);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'openlidarviewer.png';

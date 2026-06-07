@@ -1,0 +1,393 @@
+/**
+ * spaceMetrics.ts
+ *
+ * Measurements for a NON-TERRAIN scan — an interior space (a room / 360 /
+ * iPhone-LiDAR capture with a floor + ceiling) or a compact object — computed
+ * in the detected up-frame. This is the space/object-appropriate analysis that
+ * replaces terrain contours for scans `classifyScanShape` flags `nonTerrain`.
+ *
+ * Grounded in what phone capture apps (Polycam Space Mode, Apple RoomPlan)
+ * surface: room dimensions, floor area, ceiling height, enclosed volume,
+ * floor/wall/ceiling presence, storey count, and capture quality.
+ *
+ * HONESTY: every figure is derived from the points currently loaded / streamed
+ * and may change as more streams in. Ceilings are often sparsely captured
+ * (a known RoomPlan-style limitation), so ceiling height and enclosed volume
+ * are approximate. No survey-grade / certified claims are made, and a point
+ * cloud has no watertight interior — "enclosed volume" is floor area × ceiling
+ * height, an envelope, not a solid measurement.
+ *
+ * Pure data, deterministic, O(sampled). No ML, no RANSAC.
+ */
+
+import type { Axis } from './scanShape';
+import { objectMetrics } from './objectMetrics';
+
+/** Exact metre→foot factor (1 ft = 0.3048 m). */
+const FT_PER_M = 1 / 0.3048;
+
+export const metresToFeet = (m: number): number => m * FT_PER_M;
+export const sqMetresToSqFeet = (a: number): number => a * FT_PER_M * FT_PER_M;
+export const cubicMetresToCubicFeet = (v: number): number => v * FT_PER_M * FT_PER_M * FT_PER_M;
+
+/** L × W × H, in metres. Length ≥ width (oriented footprint), height vertical. */
+export interface SpaceDims {
+  readonly lengthM: number;
+  readonly widthM: number;
+  readonly heightM: number;
+}
+
+export interface PlaneReport {
+  readonly floorPresent: boolean;
+  /** Floor plane area (m²) — null when no floor plane is detected. */
+  readonly floorAreaM2: number | null;
+  readonly ceilingPresent: boolean;
+  /** Ceiling plane area (m²) — null when no ceiling is detected (open object). */
+  readonly ceilingAreaM2: number | null;
+  /** Share of perimeter footprint cells whose returns span most of the height. */
+  readonly wallCoveragePct: number;
+  /** Approximate count of dominant wall sides (0..4) — clearly an estimate. */
+  readonly dominantWallDirections: number;
+}
+
+export interface CaptureQuality {
+  /** Points actually used (after striding to the sample budget). */
+  readonly sampledPointCount: number;
+  /** Source / resident point count the sample was drawn from. */
+  readonly sourcePointCount: number;
+  /** Points per m² of occupied footprint. */
+  readonly densityPerM2: number;
+  /** Approximate mean point spacing (m), from areal density. */
+  readonly meanSpacingM: number;
+  /** Occupied footprint fraction (%) — coverage / completeness. */
+  readonly coveragePct: number;
+  /** Whether the scan carries per-point colour. */
+  readonly hasRgb: boolean;
+}
+
+export interface SpaceMetrics {
+  readonly spaceKind: 'interior' | 'object';
+  readonly up: Axis;
+  readonly dims: SpaceDims;
+  /** Occupied-footprint (floor) area, m². */
+  readonly floorAreaM2: number;
+  /** Floor→ceiling height, m — null when no clear ceiling (open object). */
+  readonly ceilingHeightM: number | null;
+  /** Floor area × ceiling height, m³; envelope fallback when no ceiling. */
+  readonly enclosedVolumeM3: number | null;
+  readonly planes: PlaneReport;
+  /** Storey / level count from well-separated floor peaks (≥ ~2.2 m apart). */
+  readonly storyCount: number;
+  readonly quality: CaptureQuality;
+  /** Honesty caveats + basis strings. */
+  readonly reasons: readonly string[];
+}
+
+export interface SpaceMetricsParams {
+  /** Detected up axis (from classifyScanShape). */
+  readonly upAxis: Axis;
+  /** Which presentation to lean on. */
+  readonly spaceKind: 'interior' | 'object';
+  /** Scale from source units to metres (default 1 — assume metres). */
+  readonly unitToMetres?: number;
+  /** Whether the scan carries colour. */
+  readonly hasRgb?: boolean;
+  /** Honest source/resident count the sample was drawn from. */
+  readonly sourcePointCount?: number;
+  /** Max points to sample. Default 60000. */
+  readonly maxSamples?: number;
+  /** Footprint grid resolution (cells per axis). Default 48. */
+  readonly gridN?: number;
+}
+
+/** Vertical band (fraction of height) that counts as floor / ceiling. */
+const PLANE_BAND = 0.15;
+const PLANE_COVER = 0.45;
+/** Min separation (m) between storeys. */
+const STOREY_SEP_M = 2.2;
+const STREAM_CAVEAT =
+  'Based on the points currently loaded / streamed — values may change as more data streams in.';
+
+const upOffsets = (a: Axis): { v: number; h1: number; h2: number } =>
+  a === 'x' ? { v: 0, h1: 1, h2: 2 } : a === 'y' ? { v: 1, h1: 0, h2: 2 } : { v: 2, h1: 0, h2: 1 };
+
+/** 2-D PCA on the horizontal projection → oriented footprint side lengths. */
+function orientedFootprint(h1: number[], h2: number[]): { major: number; minor: number } {
+  const m = h1.length;
+  if (m < 3) return { major: 0, minor: 0 };
+  let cx = 0, cy = 0;
+  for (let i = 0; i < m; i++) { cx += h1[i]; cy += h2[i]; }
+  cx /= m; cy /= m;
+  let xx = 0, yy = 0, xy = 0;
+  for (let i = 0; i < m; i++) {
+    const dx = h1[i] - cx, dy = h2[i] - cy;
+    xx += dx * dx; yy += dy * dy; xy += dx * dy;
+  }
+  xx /= m; yy /= m; xy /= m;
+  const tr = xx + yy;
+  const disc = Math.sqrt(Math.max(0, (tr * tr) / 4 - (xx * yy - xy * xy)));
+  const l1 = tr / 2 + disc;
+  // Principal direction for the larger eigenvalue l1.
+  let ax: number, ay: number;
+  if (Math.abs(xy) > 1e-12) { ax = l1 - yy; ay = xy; } else { ax = 1; ay = 0; }
+  const len = Math.hypot(ax, ay) || 1;
+  ax /= len; ay /= len;
+  const bx = -ay, by = ax; // perpendicular
+  let lo1 = Infinity, hi1 = -Infinity, lo2 = Infinity, hi2 = -Infinity;
+  for (let i = 0; i < m; i++) {
+    const dx = h1[i] - cx, dy = h2[i] - cy;
+    const p1 = dx * ax + dy * ay;
+    const p2 = dx * bx + dy * by;
+    if (p1 < lo1) lo1 = p1; if (p1 > hi1) hi1 = p1;
+    if (p2 < lo2) lo2 = p2; if (p2 > hi2) hi2 = p2;
+  }
+  const r1 = Math.max(0, hi1 - lo1);
+  const r2 = Math.max(0, hi2 - lo2);
+  return { major: Math.max(r1, r2), minor: Math.min(r1, r2) };
+}
+
+/** Count storeys: strong, well-separated FLOOR peaks (a peak with a room above). */
+function countStoreys(hist: Float64Array, binW: number, minV: number, total: number): number {
+  const B = hist.length;
+  let maxC = 0;
+  for (let i = 0; i < B; i++) if (hist[i] > maxC) maxC = hist[i];
+  if (maxC <= 0) return 0;
+  const thresh = 0.25 * maxC;
+  const peaks: Array<{ level: number; count: number }> = [];
+  for (let i = 0; i < B; i++) {
+    if (hist[i] < thresh) continue;
+    const lft = i > 0 ? hist[i - 1] : -1;
+    const rgt = i < B - 1 ? hist[i + 1] : -1;
+    if (hist[i] >= lft && hist[i] >= rgt) peaks.push({ level: minV + (i + 0.5) * binW, count: hist[i] });
+  }
+  // Merge peaks closer than one storey, keeping the stronger.
+  const merged: Array<{ level: number; count: number }> = [];
+  for (const p of peaks) {
+    const last = merged[merged.length - 1];
+    if (!last || p.level - last.level >= STOREY_SEP_M) merged.push({ ...p });
+    else if (p.count > last.count) { last.level = p.level; last.count = p.count; }
+  }
+  // A merged peak is a FLOOR (a storey) when there is point mass in the room
+  // above it — distinguishing floors from ceilings (which have nothing above).
+  let floors = 0;
+  for (const p of merged) {
+    const aboveLo = p.level + 0.5;
+    const aboveHi = p.level + 4.0;
+    let mass = 0;
+    for (let i = 0; i < B; i++) {
+      const lv = minV + (i + 0.5) * binW;
+      if (lv > aboveLo && lv <= aboveHi) mass += hist[i];
+    }
+    if (mass > 0.02 * total) floors++;
+  }
+  return Math.max(1, floors);
+}
+
+export function spaceMetrics(
+  positions: Float32Array | ReadonlyArray<number>,
+  params: SpaceMetricsParams,
+): SpaceMetrics {
+  const up = params.upAxis;
+  const spaceKind = params.spaceKind;
+  const u2m = params.unitToMetres && params.unitToMetres > 0 ? params.unitToMetres : 1;
+  const hasRgb = params.hasRgb === true;
+  const gridN = Math.max(8, Math.floor(params.gridN ?? 48));
+  const maxSamples = Math.max(100, Math.floor(params.maxSamples ?? 60_000));
+  const n = Math.floor(positions.length / 3);
+  const sourcePointCount = params.sourcePointCount ?? n;
+
+  const reasons: string[] = [STREAM_CAVEAT];
+  const blankQuality: CaptureQuality = {
+    sampledPointCount: 0, sourcePointCount, densityPerM2: 0,
+    meanSpacingM: 0, coveragePct: 0, hasRgb,
+  };
+  const blank: SpaceMetrics = {
+    spaceKind, up,
+    dims: { lengthM: 0, widthM: 0, heightM: 0 },
+    floorAreaM2: 0, ceilingHeightM: null, enclosedVolumeM3: null,
+    planes: { floorPresent: false, floorAreaM2: null, ceilingPresent: false, ceilingAreaM2: null, wallCoveragePct: 0, dominantWallDirections: 0 },
+    storyCount: 0, quality: blankQuality,
+    reasons: [...reasons, 'Too few points to measure this space yet.'],
+  };
+  if (n < 16) return blank;
+
+  const { v: vOff, h1: h1Off, h2: h2Off } = upOffsets(up);
+  const stride = Math.max(1, Math.floor(n / maxSamples));
+
+  const H1: number[] = [], H2: number[] = [], V: number[] = [];
+  let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
+  for (let i = 0; i < n; i += stride) {
+    const b = i * 3;
+    const h1 = positions[b + h1Off] * u2m, h2 = positions[b + h2Off] * u2m, vv = positions[b + vOff] * u2m;
+    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(vv)) continue;
+    H1.push(h1); H2.push(h2); V.push(vv);
+    if (h1 < minH1) minH1 = h1; if (h1 > maxH1) maxH1 = h1;
+    if (h2 < minH2) minH2 = h2; if (h2 > maxH2) maxH2 = h2;
+    if (vv < minV) minV = vv; if (vv > maxV) maxV = vv;
+  }
+  const m = V.length;
+  if (m < 16) return blank;
+
+  const ex1 = Math.max(0, maxH1 - minH1);
+  const ex2 = Math.max(0, maxH2 - minH2);
+  const exV = Math.max(0, maxV - minV);
+
+  // ── Oriented dimensions (footprint from 2-D PCA, height from vertical AABB) ──
+  const fp = orientedFootprint(H1, H2);
+  const dims: SpaceDims = { lengthM: fp.major, widthM: fp.minor, heightM: exV };
+
+  // ── Footprint occupancy grid + per-cell vertical span ──
+  // Size the grid to the data: cells finer than the point spacing would leave
+  // gaps and undercount floor area, so derive a target cell ≈ 2× the floor's
+  // horizontal spacing (estimated from the floor-band point count), capped at
+  // the requested resolution.
+  const band0 = PLANE_BAND * exV;
+  let floorBandPts = 0;
+  for (let i = 0; i < m; i++) if (V[i] <= minV + band0) floorBandPts++;
+  const bboxArea = ex1 * ex2;
+  let cols = gridN, rows = gridN;
+  if (floorBandPts > 0 && bboxArea > 0) {
+    const targetCell = 2 * Math.sqrt(bboxArea / floorBandPts);
+    if (targetCell > 0) {
+      cols = Math.min(gridN, Math.max(4, Math.round(ex1 / targetCell)));
+      rows = Math.min(gridN, Math.max(4, Math.round(ex2 / targetCell)));
+    }
+  }
+  const cellW = ex1 > 0 ? ex1 / cols : 1;
+  const cellH = ex2 > 0 ? ex2 / rows : 1;
+  const cellArea = cellW * cellH;
+  const zMin = new Float32Array(cols * rows).fill(Infinity);
+  const zMax = new Float32Array(cols * rows).fill(-Infinity);
+  const occ = new Uint8Array(cols * rows);
+  for (let i = 0; i < m; i++) {
+    let c = Math.floor((H1[i] - minH1) / cellW); if (c < 0) c = 0; else if (c >= cols) c = cols - 1;
+    let r = Math.floor((H2[i] - minH2) / cellH); if (r < 0) r = 0; else if (r >= rows) r = rows - 1;
+    const idx = r * cols + c;
+    occ[idx] = 1;
+    if (V[i] < zMin[idx]) zMin[idx] = V[i];
+    if (V[i] > zMax[idx]) zMax[idx] = V[i];
+  }
+  let occupied = 0;
+  for (let i = 0; i < occ.length; i++) if (occ[i]) occupied++;
+  const floorAreaM2 = occupied * cellArea;
+  const coveragePct = (100 * occupied) / (cols * rows);
+
+  // ── Floor / ceiling planes from the vertical extent bands ──
+  const band = PLANE_BAND * exV;
+  const floorHi = minV + band;
+  const ceilLo = maxV - band;
+  let floorCells = 0, ceilCells = 0;
+  for (let i = 0; i < occ.length; i++) {
+    if (!occ[i]) continue;
+    if (zMin[i] <= floorHi) floorCells++;
+    if (zMax[i] >= ceilLo) ceilCells++;
+  }
+  const floorCoverage = occupied > 0 ? floorCells / occupied : 0;
+  const ceilCoverage = occupied > 0 ? ceilCells / occupied : 0;
+  const floorPresent = exV > 0 && floorCoverage >= PLANE_COVER;
+  const ceilingPresent = exV > 0 && floorPresent && ceilCoverage >= PLANE_COVER;
+
+  // ── Ceiling height from the floor / ceiling histogram peaks ──
+  const B = 64;
+  const binW = exV > 0 ? exV / B : 1;
+  const hist = new Float64Array(B);
+  for (let i = 0; i < m; i++) {
+    let bi = Math.floor((V[i] - minV) / binW); if (bi < 0) bi = 0; else if (bi >= B) bi = B - 1;
+    hist[bi]++;
+  }
+  const peakLevel = (loFrac: number, hiFrac: number): number => {
+    const loB = Math.floor(loFrac * B), hiB = Math.min(B, Math.ceil(hiFrac * B));
+    let bi = loB, best = -1;
+    for (let i = loB; i < hiB; i++) if (hist[i] > best) { best = hist[i]; bi = i; }
+    return minV + (bi + 0.5) * binW;
+  };
+  let ceilingHeightM: number | null = null;
+  if (ceilingPresent) {
+    const floorLevel = peakLevel(0, 0.45);
+    const ceilingLevel = peakLevel(0.55, 1);
+    const h = ceilingLevel - floorLevel;
+    if (h > 0) ceilingHeightM = h;
+  }
+
+  // ── Walls: perimeter footprint cells whose returns span most of the height ──
+  let perim = 0, wallCells = 0;
+  const sideCount = [0, 0, 0, 0]; // left(-h1), right(+h1), front(-h2), back(+h2)
+  const wallSpan = 0.6 * exV;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      if (!occ[idx]) continue;
+      const edge =
+        c === 0 || c === cols - 1 || r === 0 || r === rows - 1 ||
+        !occ[idx - 1] || !occ[idx + 1] ||
+        (r > 0 && !occ[idx - cols]) || (r < rows - 1 && !occ[idx + cols]);
+      if (!edge) continue;
+      perim++;
+      if (exV > 0 && zMax[idx] - zMin[idx] >= wallSpan) {
+        wallCells++;
+        const dl = c, dr = cols - 1 - c, df = r, db = rows - 1 - r;
+        const mn = Math.min(dl, dr, df, db);
+        if (mn === dl) sideCount[0]++;
+        else if (mn === dr) sideCount[1]++;
+        else if (mn === df) sideCount[2]++;
+        else sideCount[3]++;
+      }
+    }
+  }
+  const wallCoveragePct = perim > 0 ? (100 * wallCells) / perim : 0;
+  let dominantWallDirections = 0;
+  if (wallCells > 0) {
+    const sideThresh = Math.max(2, 0.1 * wallCells);
+    for (const s of sideCount) if (s >= sideThresh) dominantWallDirections++;
+  }
+
+  // ── Storey / level count ──
+  const storyCount = countStoreys(hist, binW, minV, m);
+
+  // ── Enclosed volume (envelope) ──
+  let enclosedVolumeM3: number | null;
+  if (ceilingHeightM != null) {
+    enclosedVolumeM3 = floorAreaM2 * ceilingHeightM;
+  } else {
+    // Open object: fall back to the OBB envelope volume (in metres).
+    const om = objectMetrics(u2m === 1 ? positions : scaleCopy(positions, u2m), { maxSamples });
+    enclosedVolumeM3 = om.envelopeVolumeM3 > 0 ? om.envelopeVolumeM3 : dims.lengthM * dims.widthM * dims.heightM;
+  }
+
+  // ── Capture quality ──
+  const densityPerM2 = floorAreaM2 > 0 ? m / floorAreaM2 : 0;
+  const meanSpacingM = densityPerM2 > 0 ? Math.sqrt(1 / densityPerM2) : 0;
+  const quality: CaptureQuality = {
+    sampledPointCount: m, sourcePointCount, densityPerM2, meanSpacingM, coveragePct, hasRgb,
+  };
+
+  if (spaceKind === 'interior') {
+    if (ceilingPresent) {
+      reasons.push('Ceilings are often sparsely captured — ceiling height and enclosed volume are approximate.');
+    } else {
+      reasons.push('No clear ceiling captured yet — height and volume are unavailable until the top surface is scanned.');
+    }
+    reasons.push('Wall and plane figures are pragmatic estimates, not a certified survey.');
+  } else {
+    reasons.push('Open object — enclosed volume is a bounding-box envelope, not a solid measurement.');
+  }
+
+  return {
+    spaceKind, up, dims, floorAreaM2, ceilingHeightM, enclosedVolumeM3,
+    planes: {
+      floorPresent,
+      floorAreaM2: floorPresent ? floorCells * cellArea : null,
+      ceilingPresent,
+      ceilingAreaM2: ceilingPresent ? ceilCells * cellArea : null,
+      wallCoveragePct, dominantWallDirections,
+    },
+    storyCount, quality, reasons,
+  };
+}
+
+/** Copy positions scaled by `s` (only used when a unit conversion is needed). */
+function scaleCopy(positions: Float32Array | ReadonlyArray<number>, s: number): Float32Array {
+  const out = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i++) out[i] = positions[i] * s;
+  return out;
+}

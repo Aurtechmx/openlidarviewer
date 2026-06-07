@@ -16,6 +16,7 @@ function model(): ContourFeatureModel {
     crs: 'EPSG:32610',
     verticalDatum: 'EPSG:5703',
     intervalM: 1,
+    contourStyle: 'smooth',
     bbox: { minX: 0, minY: 0, maxX: 1, maxY: 1 },
     interpolatedFraction: 0,
     coverageMode: 'full',
@@ -44,5 +45,20 @@ describe('serializeContours', () => {
   it('honours a custom basename', () => {
     const f = serializeContours(model(), 'geojson', { basename: 'site-A-contours' });
     expect(f.filename).toBe('site-A-contours.geojson');
+  });
+
+  it('stamps the contour shape style into every serialized format', () => {
+    const m: ContourFeatureModel = { ...model(), contourStyle: 'semi-geometric' };
+    const geo = JSON.parse(serializeContours(m, 'geojson').content) as {
+      metadata: { contourStyle: string; contourStyleLabel: string };
+    };
+    expect(geo.metadata.contourStyle).toBe('semi-geometric');
+    expect(geo.metadata.contourStyleLabel).toBe('Semi-geometric');
+
+    const svg = serializeContours(m, 'svg').content;
+    expect(svg).toMatch(/contour style: Semi-geometric/i);
+
+    const dxf = serializeContours(m, 'dxf').content;
+    expect(dxf).toMatch(/contour style: Semi-geometric/i);
   });
 });

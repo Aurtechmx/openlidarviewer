@@ -23,6 +23,7 @@
  */
 
 import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel';
+import { contourShapeStyleLabel } from './contourShapeStyle';
 
 interface LayerDef {
   readonly name: string;
@@ -47,6 +48,10 @@ export function dxfContours(model: ContourFeatureModel): string {
     out.push(String(code));
     out.push(String(value));
   };
+
+  // Provenance comment (group code 999 — ignored by CAD readers) naming the
+  // shape style the geometry was produced with, so the file is self-describing.
+  pair(999, `OpenLiDARViewer contour style: ${contourShapeStyleLabel(model.contourStyle)}`);
 
   // TABLES → LAYER
   pair(0, 'SECTION');

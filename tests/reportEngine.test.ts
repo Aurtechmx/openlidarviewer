@@ -297,6 +297,47 @@ describe('buildDatasetSummary', () => {
     });
     expect(rows.find((r) => r.label === 'Density')).toBeUndefined();
   });
+
+  // ── Class-filter honesty row (escape-hatch closure) ────────────────────────
+  const baseInputs = {
+    fileName: 'scan.copc.laz',
+    format: 'COPC' as const,
+    sourcePointCount: 1_000,
+    width: 10, depth: 10, height: 5,
+    density: 10,
+    hasRgb: true, hasIntensity: true, hasClassification: true,
+  };
+
+  it('no class filter ⇒ rows are byte-identical to the unstamped output', () => {
+    const base = buildDatasetSummary(baseInputs);
+    // Absent, empty, and whitespace-only notes all mean "no active filter".
+    expect(JSON.stringify(buildDatasetSummary({ ...baseInputs, classScopeNote: undefined }))).toBe(
+      JSON.stringify(base),
+    );
+    expect(JSON.stringify(buildDatasetSummary({ ...baseInputs, classScopeNote: '' }))).toBe(
+      JSON.stringify(base),
+    );
+    expect(JSON.stringify(buildDatasetSummary({ ...baseInputs, classScopeNote: '   ' }))).toBe(
+      JSON.stringify(base),
+    );
+    // No honesty row leaked in.
+    expect(base.find((r) => r.label === 'Class filter')).toBeUndefined();
+  });
+
+  it('active class filter ⇒ prepends a full-cloud disclosure row before the figures', () => {
+    const rows = buildDatasetSummary({
+      ...baseInputs,
+      classScopeNote: 'Ground + Building · 2 of 5 classes',
+    });
+    // The honesty row is first, qualifying everything below it.
+    expect(rows[0].label).toBe('Class filter');
+    expect(rows[0].value).toContain('Ground + Building · 2 of 5 classes');
+    expect(rows[0].value).toContain('full-cloud');
+    // The canonical figure rows still follow in order.
+    expect(rows[1].label).toBe('File');
+    expect(rows[2].label).toBe('Format');
+    expect(rows[3].label).toBe('Points');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

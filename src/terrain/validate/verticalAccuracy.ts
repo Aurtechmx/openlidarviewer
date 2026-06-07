@@ -3,8 +3,8 @@
  *
  * Reports the hold-out validation result in the form surveyors actually
  * recognise: the ASPRS 2014 vertical accuracy statistics. Bare RMSE is
- * fine internally; "NVA / VVA at 95% confidence" is what reads as
- * professional on a deliverable.
+ * fine internally; "NVA / VVA at 95% confidence" is what surveyors
+ * recognise on a deliverable.
  *
  * Definitions (ASPRS Positional Accuracy Standards for Digital Geospatial
  * Data, 2014):

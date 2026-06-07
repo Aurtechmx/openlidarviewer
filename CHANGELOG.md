@@ -2,6 +2,105 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.2] - 2026-06-05
+
+### Added
+
+- Classification legend: a "Classes" panel lists one row per ASPRS class
+  actually present in the loaded scan, each with the renderer's class colour
+  swatch, the class name, and a live count of the points currently shown — so
+  the legend reads as the true colour key for the view, not a static table.
+- Per-class show/hide, isolate, and show-all: untick a class to drop it from
+  the view, use "Solo" to isolate a single class, and "Show all" to bring
+  everything back. A persistent "Filtered — showing N of M classes" banner
+  stays up the whole time a filter is active, so a partial view can never be
+  mistaken for the full cloud. Picking and inspection honour the filter too —
+  you can only pick points in the classes you can see.
+- Metrics follow the visible classes: when classes are hidden, the scan
+  report recomputes over just the visible subset (ground, density, coverage,
+  and the rest), and every filtered readout is stamped with the class scope it
+  was measured under, so no filtered number is ever shown unqualified. Clearing
+  the filter restores the full-cloud figures and removes the stamps.
+- Streaming header metrics that can't be re-derived from the resident view are
+  shown for the full cloud and clearly labelled "not class-scoped", rather than
+  silently mixing a full-cloud figure into an otherwise filtered report.
+- Filtered exports carry their scope: copied points, the PDF report, and the
+  image and snapshot exports are all stamped with the active class filter, so a
+  filtered artifact is self-describing — anyone opening it later can see exactly
+  which classes it represents.
+- Contour map PDF, pre-export dialog: the MAP PDF action now opens a dialog to
+  set the title, "prepared by", a free Project / Notes block, the sheet size and
+  orientation, the final contour interval, and the output filename — each
+  pre-filled with a sensible default from the scan. A re-picked interval
+  regenerates the contours from the already-computed surface (no re-analysis).
+  The measured fields (CRS, vertical datum, scale, NVA / VVA / RMSEz, USGS
+  Quality Level, date) are shown read-only and stay computed from the scan, so a
+  deliverable can be titled and described freely without ever hand-editing the
+  accuracy figures.
+- Interface polish: a consistent button system across the app with clearer
+  primary actions, accessible focus rings, and an obvious, rotating expand /
+  collapse chevron on the collapsible panel headers (Analyse, Export / Convert).
+- Contour shape style, selectable on export: a "Contour style" picker (in the
+  Analyse export section and the map-PDF dialog) chooses how the contour lines
+  are shaped — As measured (crisp), Smooth, Rounded, Generalized, or
+  Semi-geometric — and applies to every contour export (PDF, SVG, DXF, GeoJSON).
+  Smoothing stays honesty-gated: it never moves a low-confidence vertex or
+  bridges a data gap, so a dashed / uncertain run can't be reshaped into a
+  confident line, and each exported file is stamped with the style it was made
+  with. The on-screen contours are unchanged (the default matches the previous
+  smoothing).
+- Non-terrain scan detection: indoor / 360 / phone-LiDAR room and object scans
+  are now recognised as non-terrain (a floor-plus-ceiling enclosure, or a
+  compact object) instead of being pushed through the terrain contour pipeline,
+  which is a category error for them. Such scans get a Space / Object report —
+  overall dimensions (L x W x H, in metres and feet), floor area, ceiling
+  height, enclosed volume, floor / wall / ceiling plane detection, storey count,
+  and a capture-quality block (point count, density, coverage, RGB) — with the
+  same honesty caveats as terrain (figures are based on the loaded / streamed
+  data, ceilings are often sparsely captured, nothing is survey-certified).
+  Terrain contour analysis stays one click away for any scan. Object scans get a
+  matching report at the same depth — oriented and axis-aligned dimensions
+  (metres and feet), largest dimension, bounding-envelope volume (m³ and ft³),
+  an approximate bounding-box surface area, and the same capture-quality block —
+  with the figures honestly labelled as bounding envelopes, not solid or mesh
+  measurements. Scan-type detection is more robust: an interior is recognised
+  from its floor plus wall / floor-to-ceiling columns (so a real multi-room or
+  360 house with a partial, occluded ceiling is no longer mistaken for terrain),
+  and when a scan carries classification a vegetation-dominated canopy keeps a
+  forested drone scan as terrain rather than reading the canopy as a ceiling.
+  Streaming scans re-evaluate their type as more of the cloud arrives.
+- Contour export, simplified: the redundant contour-interval picker and the
+  contour-style selector were removed from the Analyse panel — both are now
+  chosen in the export dialog — and the "MAP PDF" button is renamed
+  "Export Contours" to read as the primary contour-deliverable action.
+
+### Changed
+
+- Terrain DTM now aggregates each grid cell by the MEDIAN of its ground returns
+  instead of the arithmetic mean. The median (50% breakdown point) is resistant
+  to outliers: a single high return (vegetation, a parked vehicle) or low return
+  (multipath) in a cell no longer pulls the cell's elevation, so the bare-earth
+  surface tracks the true ground more faithfully. This changes elevation values
+  in cells that previously had a skewed mix of returns. The hold-out RMSE
+  validation rebuilds its DTM with the same median aggregation, so the reported
+  accuracy continues to measure the surface that ships, and the DEM export
+  README's "Generation parameters" now records the cell aggregation used.
+- Terrain quality is now reported on TWO independent axes instead of one
+  conflated verdict: **Surface Quality** (is the terrain surface internally
+  valid?) and **Export Readiness** (is it georeferenced enough to hand off?).
+  Surface Quality is derived purely from surface metrics (coverage,
+  interpolation, edge risk, density, ground visibility, hold-out RMSE) and is
+  INDEPENDENT of the coordinate system and vertical datum — a dense, clean,
+  well-covered scan with an unknown datum now reads as a good surface. Export
+  Readiness equals Surface Quality further gated by georeferencing: an unknown
+  CRS or vertical datum caps it to "preview" (with an explicit reason such as
+  "vertical datum unknown"), even when the surface itself is good. The Analyse
+  panel shows both axes; DEM and contour/map exports key off Export Readiness;
+  and the DEM/map deliverables still carry their preliminary caveat whenever the
+  georeferenced hand-off is not export-ready. The honesty contract is unchanged
+  — an unknown datum still blocks an export-ready verdict and nothing claims
+  survey-grade.
+
 ## [0.4.1] - 2026-06-04
 
 ### Added

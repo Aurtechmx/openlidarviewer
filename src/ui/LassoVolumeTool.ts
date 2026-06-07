@@ -93,8 +93,17 @@ export class LassoVolumeTool {
         'cursor:crosshair;z-index:3;touch-action:none;',
     );
     this._path = document.createElementNS(SVG_NS, 'path') as SVGPathElement;
-    this._path.setAttribute('fill', 'rgba(0, 178, 255, 0.10)');
-    this._path.setAttribute('stroke', '#00b2ff');
+    // Read the canonical accent token off :root so the lasso overlay
+    // speaks the same colour language as the rest of the UI and tracks
+    // theme switches (dark/light/high-contrast) instead of pinning the
+    // dark-theme hex. Fallback guards a missing/empty custom property.
+    const accent =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--accent')
+        .trim() || '#00b2ff';
+    this._path.setAttribute('fill', accent);
+    this._path.setAttribute('fill-opacity', '0.1');
+    this._path.setAttribute('stroke', accent);
     this._path.setAttribute('stroke-width', '1.5');
     this._path.setAttribute('stroke-dasharray', '5 4');
     this._path.setAttribute('stroke-linejoin', 'round');

@@ -204,6 +204,49 @@ test('pointInfoJson adds the extras only when present', () => {
   );
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// Class-scope stamp on copy + JSON (escape-hatch closure)
+// ────────────────────────────────────────────────────────────────────────────
+
+test('pointInfoCopyText appends a Class scope line when a stamp is given', () => {
+  const text = pointInfoCopyText(
+    makePointInfo(fullRaw()),
+    'Ground + Building · 2 of 5 classes',
+  );
+  expect(text).toContain('Class scope: Ground + Building · 2 of 5 classes');
+  // The scope line is last so the existing block is unchanged above it.
+  expect(text.split('\n').at(-1)).toBe(
+    'Class scope: Ground + Building · 2 of 5 classes',
+  );
+});
+
+test('pointInfoCopyText with no / empty stamp is byte-identical to the unstamped block', () => {
+  const base = pointInfoCopyText(makePointInfo(fullRaw()));
+  // Undefined, empty, and whitespace-only stamps all mean "full view".
+  expect(pointInfoCopyText(makePointInfo(fullRaw()), undefined)).toBe(base);
+  expect(pointInfoCopyText(makePointInfo(fullRaw()), '')).toBe(base);
+  expect(pointInfoCopyText(makePointInfo(fullRaw()), '   ')).toBe(base);
+  // And it stays the documented nine-line block (no scope line leaked in).
+  expect(base.split('\n')).toHaveLength(9);
+});
+
+test('pointInfoJson adds classScope only when a stamp is given', () => {
+  const json = pointInfoJson(
+    makePointInfo(fullRaw()),
+    'Ground · 1 of 3 classes',
+  );
+  expect(json.classScope).toBe('Ground · 1 of 3 classes');
+});
+
+test('pointInfoJson with no / empty stamp keeps exactly the prior key set', () => {
+  const expectedKeys = ['classification', 'index', 'intensity', 'layer', 'rgb', 'x', 'y', 'z'].sort();
+  expect(Object.keys(pointInfoJson(makePointInfo(fullRaw()))).sort()).toEqual(expectedKeys);
+  expect(Object.keys(pointInfoJson(makePointInfo(fullRaw()), '')).sort()).toEqual(expectedKeys);
+  expect(Object.keys(pointInfoJson(makePointInfo(fullRaw()), '  ')).sort()).toEqual(expectedKeys);
+  // Whitespace-only stamp must not produce a classScope key.
+  expect(pointInfoJson(makePointInfo(fullRaw()), '  ').classScope).toBeUndefined();
+});
+
 // --- "still refining" hint passthrough --------------------
 
 test('makePointInfo carries the streamingRefining flag through unchanged', () => {

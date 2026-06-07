@@ -1,27 +1,36 @@
 /**
  * AnalysePanel.ts
  *
- * The Analyse panel is MOUNTED as a preview surface for terrain
- * readiness and contour export. It exposes the validated data pipeline
- * conservatively and does NOT yet represent a full interactive terrain
- * suite — a minimal "Planned" tag row sets that expectation, and there are
- * no dead buttons.
+ * The Analyse panel surfaces terrain readiness and contour/DEM export for
+ * a loaded scan. It exposes the validated data pipeline conservatively and
+ * fitness-for-use — never survey-grade.
  *
  * A plain-DOM panel mirroring MeasurePanel/AnnotationPanel: a `readonly
- * element`, a callbacks object, `update()`, and `setVisible()`. It shows,
- * in order: honesty status chips, DTM & contour readiness, recommended
- * grid + interval, contour export (gated by the DTM quality gate),
- * coverage & confidence, and a minimal "Planned" section. Mounted in
- * `main.ts` next to the Measurements and Annotations panels.
+ * element`, a callbacks object, `update()`, and `setVisible()`. It reads
+ * top-down:
+ *
+ *   1. Terrain Assessment hero — status · score, the headline reason, and
+ *      bestFor / useCaution / notRecommendedFor guidance plus the
+ *      supporting metrics behind the verdict.
+ *   2. Details expander (collapsed) — the honesty status chips
+ *      (Coverage / DTM / CRS / Datum / Export), DTM & contour readiness,
+ *      recommended grid + interval, and coverage & confidence metrics
+ *      (mean confidence, vertical RMSE, NVA / VVA, USGS 3DEP Quality
+ *      Level). Jargon abbreviations carry plain-language hover tooltips.
+ *   3. Surface models — hypsometric / hillshade previews.
+ *   4. Contour & DEM exports — gated by the DTM quality gate.
+ *   5. A NOT_SURVEY_GRADE footer.
+ *
+ * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import {
   ANALYSE_LABELS,
   GRADE_MEANING,
+  METRIC_TOOLTIPS,
   NOT_SURVEY_GRADE,
   describeIntervalOption,
-  recommendIntervalText,
   formatHonestValue,
 } from '../terrain/contour/contourCopy';
 import { interpolatedCaption } from '../terrain/contour/evidenceGrade';
@@ -34,7 +43,24 @@ import {
   triggerBrowserDownload,
   type ContourFormat,
 } from '../terrain/contour/contourDownload';
+import {
+  CONTOUR_SHAPE_STYLES,
+  defaultContourShapeStyle,
+  type ContourShapeStyle,
+} from '../terrain/contour/contourShapeStyle';
 import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
+import { openModal, type ModalHandle } from './Modal';
+import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
+import {
+  SHEET_OPTIONS,
+  ORIENTATION_OPTIONS,
+  sanitizeMapFilename,
+  ensurePdfExtension,
+  defaultMapTitle,
+  defaultMapNotes,
+  defaultMapFilename,
+} from '../render/measure/mapSheetExportOptions';
+import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import {
   hypsometricColor,
   DEFAULT_CANOPY_PALETTE,
@@ -53,6 +79,25 @@ export interface AnalysePanelCallbacks {
   onRun?: () => void;
   /** Re-run the analysis at a chosen contour interval (metres). */
   onSelectInterval?: (intervalM: number) => void;
+  /**
+   * Build a fresh contour result at a chosen interval for the PDF export ONLY,
+   * without mutating the visible panel/result. Implemented by the host over the
+   * same cached terrain core the runner uses, so re-picking the deliverable
+   * interval is cheap (cache hit) and has no panel side effects. When omitted,
+   * the dialog falls back to the current result and disables the interval picker.
+   */
+  buildResultAtInterval?: (intervalM: number) => Promise<AnalyseContoursResult>;
+  /**
+   * Build a fresh contour result at a chosen interval AND shape style for an
+   * export ONLY, over the same cached terrain core, without mutating the visible
+   * panel/result. Generalises {@link buildResultAtInterval} with the contour
+   * shape-style picker. When omitted, exports use the on-screen model as-is and
+   * the style picker cannot regenerate.
+   */
+  buildResultForExport?: (opts: {
+    intervalM: number;
+    shapeStyle: ContourShapeStyle;
+  }) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
   /** Context for the printable map sheet (world origin, title block fields). */
@@ -87,6 +132,17 @@ function section(text: string): HTMLElement {
 /** Prompt shown in a raster tile's sample readout before the user clicks. */
 const SAMPLE_HINT = 'Click the map to sample a point.';
 
+// Session-remembered MAP PDF dialog choices. Module-level by design (per the
+// brief — NOT localStorage): they persist across opens within this tab session
+// only, so the next export pre-fills the user's last Prepared by / Sheet /
+// Orientation / Notes without leaking anything to disk.
+let lastPreparedBy = '';
+let lastSheet: SheetSize = 'letter';
+let lastOrientation: SheetOrientation = 'portrait';
+let lastNotes: string | null = null;
+// The contour shape style is remembered on the panel instance (so it drives all
+// exports), but the MAP-PDF dialog also seeds from the panel's current choice.
+
 /**
  * Split a formatted readiness value into a leading figure and a unit so the
  * UI can set the number large and the unit as a small subscript. Examples:
@@ -112,7 +168,6 @@ export class AnalysePanel {
   private readonly _assessmentRow: HTMLElement;
   private readonly _scoreRow: HTMLElement;
   private readonly _surfaceRow: HTMLElement;
-  private readonly _intervalRow: HTMLElement;
   private readonly _coverageRow: HTMLElement;
   private readonly _validationRow: HTMLElement;
   private readonly _body: HTMLElement;
@@ -127,11 +182,26 @@ export class AnalysePanel {
   private readonly _exportRow: HTMLElement;
   private readonly _exportNote: HTMLElement;
   private readonly _exportButtons: HTMLButtonElement[] = [];
+  /**
+   * The contour shape style applied to the quick GeoJSON / SVG / DXF exports.
+   * The Export-Contours (map PDF) dialog overrides it per-export; there is no
+   * panel-level picker — style is chosen in that dialog.
+   */
+  private _contourStyle: ContourShapeStyle = defaultContourShapeStyle;
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
+  /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
+  private _demNote!: HTMLElement;
   private readonly _legend: HTMLElement;
   /** The always-visible minimal "Planned" section. */
   private readonly _roadmap: HTMLElement;
+  /**
+   * Cancels the relief tile's pending rAF repaint, if one is scheduled. Set
+   * while the interactive hillshade has a frame queued; cleared once it runs.
+   * Re-rendering the surface row (which detaches the old tile) and hiding the
+   * panel both invoke it so a queued frame can't paint a removed canvas.
+   */
+  private _reliefRepaintCancel: (() => void) | null = null;
 
   constructor(callbacks: AnalysePanelCallbacks = {}) {
     this._cb = callbacks;
@@ -178,7 +248,6 @@ export class AnalysePanel {
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
     this._qualityRow = el('div', { className: 'olv-analyse-quality' });
-    this._intervalRow = el('div', { className: 'olv-analyse-intervals' });
     this._coverageRow = el('div', { className: 'olv-analyse-coverage' });
     this._validationRow = el('div', { className: 'olv-analyse-validation' });
     this._body = el('div', { className: 'olv-analyse-body' });
@@ -203,7 +272,6 @@ export class AnalysePanel {
       this._readinessRow,
       this._recommendRow,
       this._qualityRow,
-      this._intervalRow,
       section('Coverage & confidence'),
       this._coverageRow,
       this._validationRow,
@@ -282,7 +350,6 @@ export class AnalysePanel {
     this._renderReadiness();
     this._renderRecommend();
     this._renderQualityReasons();
-    this._renderIntervals();
     this._renderCoverage();
     this._renderValidation();
     this._renderSurface();
@@ -297,35 +364,76 @@ export class AnalysePanel {
    */
   /**
    * The single top-level verdict the reviewer asked for — Good / Preview /
-   * Limited — sitting above every detailed metric so a non-specialist reads
-   * the bottom line first, with the reason and what the surface is good for.
+   * Limited / Blocked — sitting above every detailed metric so a non-specialist
+   * reads the bottom line first: status + folded score, why, what it is good
+   * for, what to be cautious about, what it is NOT for, and the real supporting
+   * metrics behind it (each colour-coded by its own rating).
    */
   private _renderAssessment(): void {
     this._assessmentRow.replaceChildren();
     if (!this._result) return;
     const a = terrainAssessment(this._result);
-    const tier = a.verdict.toLowerCase(); // good | preview | limited
+    const tier = a.status.toLowerCase(); // good | preview | limited | blocked
     this._assessmentRow.className = `olv-analyse-assessment is-${tier}`;
 
     const top = el('div', { className: 'olv-analyse-assess-top' });
-    // Fold the 0–100 terrain quality score into the verdict so the hero is the
-    // single headline (e.g. "Preview · 64/100") — no competing score block.
-    const qs = this._result.qualityScore;
-    const verdictText = qs && Number.isFinite(qs.score) ? `${a.verdict} · ${qs.score}/100` : a.verdict;
+    // SURFACE QUALITY is the primary verdict. The score is folded in from the
+    // assessment (single source of truth) so the hero is the one headline, e.g.
+    // "Surface quality · Good · 84/100".
+    const headline = a.scoreKnown && Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
     top.append(
-      el('span', { className: 'olv-analyse-assess-label', text: 'Terrain assessment' }),
-      el('span', { className: 'olv-analyse-assess-verdict', text: verdictText }),
+      el('span', { className: 'olv-analyse-assess-label', text: 'Surface quality' }),
+      el('span', { className: 'olv-analyse-assess-verdict', text: headline }),
     );
     this._assessmentRow.append(top);
     this._assessmentRow.append(el('div', { className: 'olv-analyse-assess-reason', text: a.reason }));
+
+    // EXPORT READINESS is the SECOND, distinct axis — surface quality gated by
+    // a known CRS + vertical datum. Rendered on its own line with its reason so
+    // a datum-less but clean scan reads "Surface quality: Good · Export
+    // readiness: Preview — vertical datum unknown". Colour reuses the rating
+    // tokens (good / moderate / blocked), never a new hardcoded colour.
+    const exportTier =
+      a.exportReadiness === 'Ready' ? 'good' : a.exportReadiness === 'Blocked' ? 'blocked' : 'preview';
+    const exportLine = el('div', { className: `olv-analyse-assess-export is-${exportTier}` });
+    exportLine.append(
+      el('span', { className: 'olv-analyse-assess-export-label', text: 'Export readiness' }),
+      el('span', { className: 'olv-analyse-assess-export-verdict', text: a.exportReadiness }),
+    );
+    if (a.exportReason) {
+      exportLine.append(
+        el('span', { className: 'olv-analyse-assess-export-reason', text: `— ${a.exportReason}` }),
+      );
+    }
+    this._assessmentRow.append(exportLine);
     this._assessmentRow.append(
       el('div', { className: 'olv-analyse-assess-use', text: `Best for: ${a.bestFor}` }),
     );
-    if (a.caution) {
+    if (a.useCaution) {
       this._assessmentRow.append(
-        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.caution}` }),
+        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.useCaution}` }),
       );
     }
+    this._assessmentRow.append(
+      el('div', {
+        className: 'olv-analyse-assess-not',
+        text: `Not for: ${a.notRecommendedFor}`,
+      }),
+    );
+
+    // Compact supporting-metrics list — each metric is a pill whose colour comes
+    // from its own honest rating (good / fair / poor / unknown), never from the
+    // overall status, so a single weak signal stays visible at a glance.
+    const metrics = el('div', { className: 'olv-analyse-assess-metrics' });
+    for (const m of a.supportingMetrics) {
+      const pill = el('div', { className: `olv-analyse-assess-metric is-${m.rating}` });
+      pill.append(
+        el('span', { className: 'olv-analyse-assess-metric-label', text: m.label }),
+        el('span', { className: 'olv-analyse-assess-metric-value', text: m.value }),
+      );
+      metrics.append(pill);
+    }
+    this._assessmentRow.append(metrics);
   }
 
   private _renderScore(): void {
@@ -364,6 +472,10 @@ export class AnalysePanel {
    * a north-up hillshade preview the user can export as a PNG.
    */
   private _renderSurface(): void {
+    // Drop any frame the previous relief tile queued — the tile it would paint
+    // is about to be detached by replaceChildren().
+    this._reliefRepaintCancel?.();
+    this._reliefRepaintCancel = null;
     this._surfaceRow.replaceChildren();
     const r = this._result;
     const s = r?.surface;
@@ -537,6 +649,37 @@ export class AnalysePanel {
         : `Sun ${String(azimuth).padStart(3, '0')}° · alt ${altitude}°`;
     };
 
+    // Coalesce slider repaints into one rAF: dragging fires many `input`
+    // events per frame, but a full per-cell hillshade + ImageData write is
+    // expensive on a large grid. We keep only a single pending frame; when it
+    // runs it reads the LATEST azimuth/altitude (the slider handlers update
+    // those before scheduling), so intermediate positions are skipped and the
+    // most recent one always wins — including the final value on release.
+    // The pending frame is cancellable from outside (see _reliefRepaintCancel)
+    // so a re-render or panel close can't leave a queued frame painting a
+    // detached canvas.
+    let reliefRafId: number | null = null;
+    const canSchedule = typeof requestAnimationFrame === 'function';
+    const cancelRepaint = (): void => {
+      if (reliefRafId !== null) {
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(reliefRafId);
+        reliefRafId = null;
+      }
+    };
+    const scheduleRepaint = (): void => {
+      // No rAF (e.g. jsdom in tests) — fall back to a synchronous repaint so
+      // behaviour is unchanged where coalescing isn't available.
+      if (!canSchedule) { repaint(); return; }
+      if (reliefRafId !== null) return;
+      reliefRafId = requestAnimationFrame(() => {
+        reliefRafId = null;
+        repaint();
+      });
+    };
+    // Expose the cancel so teardown (surface re-render / panel hide) can drop a
+    // queued frame before this tile is detached.
+    this._reliefRepaintCancel = cancelRepaint;
+
     // Controls: multi-directional toggle + azimuth + altitude.
     const controls = el('div', { className: 'olv-analyse-relief-controls' });
     const multiLabel = el('label', { className: 'olv-analyse-relief-toggle' });
@@ -571,12 +714,12 @@ export class AnalysePanel {
     azInput.addEventListener('input', () => {
       azimuth = Number(azInput.value);
       azVal.textContent = `${String(azimuth).padStart(3, '0')}°`;
-      repaint();
+      scheduleRepaint();
     });
     altInput.addEventListener('input', () => {
       altitude = Number(altInput.value);
       altVal.textContent = `${altitude}°`;
-      repaint();
+      scheduleRepaint();
     });
     controls.append(multiLabel, azRow, altRow);
     tile.append(controls);
@@ -817,6 +960,12 @@ export class AnalysePanel {
   }
 
   setVisible(on: boolean): void {
+    // Hiding the panel mid-drag: drop any queued relief repaint so it can't
+    // fire against a tile that's no longer on screen.
+    if (!on) {
+      this._reliefRepaintCancel?.();
+      this._reliefRepaintCancel = null;
+    }
     this.element.style.display = on ? '' : 'none';
   }
 
@@ -825,26 +974,17 @@ export class AnalysePanel {
     return this.element.style.display !== 'none';
   }
 
-  private _renderIntervals(): void {
-    this._intervalRow.replaceChildren();
-    const gate = this._result?.gate;
-    if (!gate) return;
-    this._intervalRow.append(
-      el('div', { className: 'olv-analyse-recommend', text: recommendIntervalText(gate) }),
-    );
-    for (const opt of gate.options) {
-      const btn = el('button', {
-        className: `olv-analyse-interval${opt.supported ? '' : ' is-disabled'}${
-          this._result?.intervalM === opt.intervalM ? ' is-active' : ''
-        }`,
-        text: describeIntervalOption(opt),
-        title: opt.reason || undefined,
-      });
-      btn.disabled = !opt.supported;
-      // Re-runs the pipeline at the chosen interval via the host callback.
-      btn.addEventListener('click', () => this._cb.onSelectInterval?.(opt.intervalM));
-      this._intervalRow.append(btn);
-    }
+  /**
+   * Attach a "what this means" hover hint to a metric node, matching the
+   * affordance the Inspector's DatasetIntelligenceCard uses on its rows:
+   * the plain-language string becomes the `title` attribute and the cursor
+   * turns to `help` so users see more info is one hover away. Additive and
+   * accessible — never changes the displayed value.
+   */
+  private _hint<T extends HTMLElement>(node: T, tooltip: string): T {
+    node.title = tooltip;
+    node.style.cursor = 'help';
+    return node;
   }
 
   private _renderValidation(): void {
@@ -863,7 +1003,10 @@ export class AnalysePanel {
         : 'Warning: confidence does not track error here.'
       : 'Calibration not assessable on this scan.';
     this._validationRow.append(
-      el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
+      this._hint(
+        el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
+        METRIC_TOOLTIPS.rmse,
+      ),
       el('div', { className: 'olv-analyse-cal', text: calText }),
     );
 
@@ -874,17 +1017,28 @@ export class AnalysePanel {
       const fmtM = (n: number | null): string =>
         n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
       if (std.nvaM != null || std.vvaM != null) {
-        this._validationRow.append(el('div', {
-          className: 'olv-analyse-strata',
-          text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
-        }));
+        this._validationRow.append(this._hint(
+          el('div', {
+            className: 'olv-analyse-strata',
+            text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
+          }),
+          `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
+        ));
       }
       if (std.qualityLevel !== 'unknown') {
-        this._validationRow.append(el('div', {
-          className: 'olv-analyse-ql',
-          text: `USGS 3DEP ${std.qualityLevel}`,
-          title: std.qualityLevelReason,
-        }));
+        const qlReason = std.qualityLevelReason;
+        // Keep the dynamic gate reason in the hint, but lead with the
+        // plain-language explanation of what a Quality Level actually is.
+        const qlTooltip = qlReason
+          ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
+          : METRIC_TOOLTIPS.qualityLevel;
+        this._validationRow.append(this._hint(
+          el('div', {
+            className: 'olv-analyse-ql',
+            text: `USGS 3DEP ${std.qualityLevel}`,
+          }),
+          qlTooltip,
+        ));
       }
     }
 
@@ -932,32 +1086,70 @@ export class AnalysePanel {
     }
   }
 
+  /**
+   * Resolve the feature model to serialize for a contour export at the panel's
+   * current shape style. Reuses the on-screen model when the style already
+   * matches (no recompute); otherwise regenerates from the cached core at the
+   * model's interval + the selected style, without touching the visible panel.
+   */
+  private async _modelForExport(): Promise<{
+    model: AnalyseContoursResult['model'];
+    labels: AnalyseContoursResult['labels'];
+  }> {
+    const r = this._result!;
+    const style = this._contourStyle;
+    if (style === r.model.contourStyle || !this._cb.buildResultForExport) {
+      return { model: r.model, labels: r.labels };
+    }
+    const regenerated = await this._cb.buildResultForExport({
+      intervalM: r.model.intervalM,
+      shapeStyle: style,
+    });
+    return { model: regenerated.model, labels: regenerated.labels };
+  }
+
   private _buildExportRow(): HTMLElement {
     const row = el('div', { className: 'olv-analyse-export' });
     const formats: ContourFormat[] = ['geojson', 'svg', 'dxf'];
     for (const fmt of formats) {
       const btn = el('button', { className: 'olv-analyse-dl', text: fmt.toUpperCase() });
       btn.addEventListener('click', () => {
-        // Hard guard — the quality gate also disables the buttons, but a
-        // blocked export must never write a misleading file.
-        if (
-          !this._result ||
-          this._result.model.features.length === 0 ||
-          this._result.quality.exportReadiness === 'blocked'
-        ) {
-          return;
-        }
-        const basename = this._cb.getExportBasename?.() ?? 'contours';
-        triggerBrowserDownload(
-          serializeContours(this._result.model, fmt, { basename, labels: this._result.labels }),
-        );
+        void (async (): Promise<void> => {
+          // Hard guard — the quality gate also disables the buttons, but a
+          // blocked export must never write a misleading file.
+          if (
+            !this._result ||
+            this._result.model.features.length === 0 ||
+            this._result.quality.exportReadiness === 'blocked'
+          ) {
+            return;
+          }
+          const basename = this._cb.getExportBasename?.() ?? 'contours';
+          const label = btn.textContent ?? fmt.toUpperCase();
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            // Regenerate at the selected shape style (cache hit; reuses the
+            // on-screen model when the style already matches), then serialize.
+            const { model, labels } = await this._modelForExport();
+            triggerBrowserDownload(serializeContours(model, fmt, { basename, labels }));
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('OpenLiDARViewer: contour export failed.', err);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = label;
+          }
+        })();
       });
       this._exportButtons.push(btn);
       row.append(btn);
     }
     // Printable map sheet — the field deliverable (contours + collar + accuracy).
-    const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'MAP PDF' });
-    mapBtn.addEventListener('click', () => void this._exportMapSheet(mapBtn));
+    // Clicking opens a pre-export dialog (title-block fields + interval +
+    // filename) rather than exporting immediately.
+    const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'Export Contours' });
+    mapBtn.addEventListener('click', () => this._openMapPdfDialog(mapBtn));
     this._exportButtons.push(mapBtn);
     row.append(mapBtn);
 
@@ -971,6 +1163,13 @@ export class AnalysePanel {
     this._demButton.title = 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet';
     this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
     row.append(this._demButton);
+
+    // Honesty caveat for the DEM export — the raster stays usable for partial /
+    // preview data, but the user is told one line up front (the README carries
+    // the full disclosure). Empty + hidden until _renderExportGate fills it.
+    this._demNote = el('p', { className: 'olv-analyse-dem-note' });
+    this._demNote.style.display = 'none';
+    row.append(this._demNote);
     return row;
   }
 
@@ -990,6 +1189,13 @@ export class AnalysePanel {
         basename,
         wkt: ctx.wkt ?? null,
         isGeographic: ctx.isGeographic ?? false,
+        // Generation parameters (interpolation / smoothing / despike) are derived
+        // from the actual run inside buildDemPackage via result.generationParams,
+        // so the README can never drift from what produced the raster.
+        generationDateIso: new Date().toISOString(),
+        softwareName: 'OpenLiDARViewer',
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
       });
       const blob = new Blob([bytes as BlobPart], { type: 'application/zip' });
       const url = URL.createObjectURL(blob);
@@ -1007,42 +1213,287 @@ export class AnalysePanel {
     }
   }
 
-  /** Build and download the printable contour map sheet (lazy pdf-lib). */
-  private async _exportMapSheet(btn: HTMLButtonElement): Promise<void> {
+  /**
+   * Open the pre-export MAP PDF dialog: an accessible modal that lets the user
+   * edit the title-block fields, the FINAL contour interval, and the output
+   * filename (all pre-filled from the scan), while the measured/accuracy fields
+   * stay AUTO + LOCKED. On Export it (optionally) regenerates the contour model
+   * at the chosen interval from the cached core — without mutating the panel —
+   * then builds + downloads the PDF.
+   */
+  private _openMapPdfDialog(triggerBtn: HTMLButtonElement): void {
     const r = this._result;
+    // Same hard guard as the export itself — a blocked / empty result never
+    // reaches the dialog.
     if (!r || r.model.features.length === 0 || r.quality.exportReadiness === 'blocked') return;
-    const label = btn.textContent ?? 'MAP PDF';
-    btn.disabled = true;
-    btn.textContent = '…';
-    try {
-      const { buildMapSheetPdf } = await loadMapSheetPdf();
-      const ctx = this._cb.getMapContext?.() ?? {};
-      const bytes = await buildMapSheetPdf({
-        model: r.model,
-        labels: r.labels,
-        worldOrigin: ctx.worldOrigin ?? null,
-        crs: r.model.crs,
-        verticalDatum: r.model.verticalDatum,
-        accuracy: r.accuracyStandards,
-        readiness: r.quality.readiness,
-        title: ctx.title,
-        preparedBy: ctx.preparedBy,
-        sheet: ctx.sheet,
-      });
-      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${this._cb.getExportBasename?.() ?? 'contours'}-map.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('OpenLiDARViewer: map sheet export failed.', err);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = label;
+
+    const ctx = this._cb.getMapContext?.() ?? {};
+    const basename = this._cb.getExportBasename?.() ?? 'contours';
+    const currentInterval = r.model.intervalM;
+    const currentStyle = r.model.contourStyle;
+    const canRegen = typeof this._cb.buildResultForExport === 'function';
+    // Capture one timestamp so the LOCKED "Generated" value the user sees equals
+    // the one printed on the sheet.
+    const generatedAt = new Date();
+
+    // ── editable fields ──────────────────────────────────────────────────────
+    let fieldSeq = 0;
+    const nextId = (): string => `olv-mappdf-${++fieldSeq}`;
+    const field = (labelText: string, control: HTMLElement, hint?: string): HTMLElement => {
+      const id = nextId();
+      control.id = id;
+      const lab = el('label', { className: 'olv-modal-label', text: labelText });
+      lab.setAttribute('for', id);
+      const wrap = el('div', { className: 'olv-modal-field' });
+      wrap.append(lab, control);
+      if (hint) wrap.append(el('p', { className: 'olv-modal-hint', text: hint }));
+      return wrap;
+    };
+
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'olv-modal-input';
+    titleInput.value = defaultMapTitle({ title: ctx.title, basename });
+
+    const preparedInput = document.createElement('input');
+    preparedInput.type = 'text';
+    preparedInput.className = 'olv-modal-input';
+    preparedInput.value = lastPreparedBy;
+    preparedInput.placeholder = 'Name or organisation (optional)';
+
+    const notesInput = document.createElement('textarea');
+    notesInput.className = 'olv-modal-input olv-modal-textarea';
+    notesInput.rows = 3;
+    notesInput.value =
+      lastNotes ?? defaultMapNotes({ basename, intervalM: currentInterval, crs: r.model.crs });
+
+    const sheetSel = document.createElement('select');
+    sheetSel.className = 'olv-modal-input';
+    for (const opt of SHEET_OPTIONS) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === lastSheet) o.selected = true;
+      sheetSel.append(o);
     }
+
+    const orientSel = document.createElement('select');
+    orientSel.className = 'olv-modal-input';
+    for (const opt of ORIENTATION_OPTIONS) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === lastOrientation) o.selected = true;
+      orientSel.append(o);
+    }
+
+    const intervalSel = document.createElement('select');
+    intervalSel.className = 'olv-modal-input';
+    for (const opt of r.gate.options) {
+      const o = document.createElement('option');
+      o.value = String(opt.intervalM);
+      o.textContent = describeIntervalOption(opt);
+      o.disabled = !opt.supported;
+      if (opt.intervalM === currentInterval) o.selected = true;
+      intervalSel.append(o);
+    }
+    // Without a regeneration callback we cannot change the interval honestly —
+    // lock the picker to the current deliverable so the file matches the panel.
+    if (!canRegen) intervalSel.disabled = true;
+
+    // Contour shape style — seeded from the panel's current choice; drives the
+    // shape of the plotted contours on the sheet.
+    const styleSel = document.createElement('select');
+    styleSel.className = 'olv-modal-input';
+    for (const opt of CONTOUR_SHAPE_STYLES) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      o.title = opt.description;
+      if (opt.value === this._contourStyle) o.selected = true;
+      styleSel.append(o);
+    }
+    if (!canRegen) styleSel.disabled = true;
+
+    const filenameInput = document.createElement('input');
+    filenameInput.type = 'text';
+    filenameInput.className = 'olv-modal-input';
+    filenameInput.value = defaultMapFilename(basename);
+
+    const editable = el('div', { className: 'olv-modal-grid' });
+    editable.append(
+      field('Title', titleInput),
+      field('Prepared by', preparedInput),
+      field('Project / Notes', notesInput, 'Free text printed in the title block.'),
+      field('Sheet size', sheetSel),
+      field('Orientation', orientSel),
+      field(
+        'Contour interval',
+        intervalSel,
+        canRegen
+          ? 'The final interval for this deliverable.'
+          : 'Interval regeneration unavailable — using the current contours.',
+      ),
+      field(
+        'Contour style',
+        styleSel,
+        canRegen
+          ? 'The line shape for the plotted contours.'
+          : 'Style regeneration unavailable — using the current contours.',
+      ),
+      field('Output filename', filenameInput, 'A single .pdf is added on download.'),
+    );
+
+    // ── locked / auto section (read-only) ────────────────────────────────────
+    const a = r.accuracyStandards;
+    const fmtM = (v: number | null | undefined): string =>
+      v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—';
+    const lockedRows: Array<[string, string]> = [
+      ['Horizontal CRS', r.model.crs ?? '— not georeferenced'],
+      ['Vertical datum', r.model.verticalDatum ?? '—'],
+      ['NVA (95%)', fmtM(a?.nvaM)],
+      ['VVA (95th pct)', fmtM(a?.vvaM)],
+      ['RMSEz', fmtM(a?.rmseZM)],
+      ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
+      ['Approx. scale', 'auto — fits sheet'],
+      ['Generated', generatedAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],
+    ];
+    const locked = el('div', { className: 'olv-modal-locked' });
+    locked.append(el('div', { className: 'olv-modal-locked-head', text: 'Measured (auto · locked)' }));
+    const lockedGrid = el('div', { className: 'olv-modal-locked-grid' });
+    for (const [k, v] of lockedRows) {
+      lockedGrid.append(
+        el('span', { className: 'olv-modal-locked-k', text: k }),
+        el('span', { className: 'olv-modal-locked-v', text: v }),
+      );
+    }
+    locked.append(
+      lockedGrid,
+      el('p', {
+        className: 'olv-modal-locked-note',
+        text: 'These are measured from the scan and not editable.',
+      }),
+    );
+
+    const body = el('div', { className: 'olv-modal-form' });
+    body.append(editable, locked);
+
+    // ── actions ──────────────────────────────────────────────────────────────
+    const errLine = el('p', { className: 'olv-modal-error' });
+    errLine.style.display = 'none';
+    const cancelBtn = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Cancel' });
+    cancelBtn.setAttribute('type', 'button');
+    const exportBtn = el('button', { className: 'olv-modal-btn olv-modal-cta', text: 'Export PDF' });
+    exportBtn.setAttribute('type', 'button');
+    const footer = el('div', { className: 'olv-modal-actions' });
+    footer.append(errLine, cancelBtn, exportBtn);
+
+    const handle: ModalHandle = openModal({
+      title: 'Export contour map (PDF)',
+      body,
+      footer,
+      returnFocusTo: triggerBtn,
+    });
+
+    cancelBtn.addEventListener('click', () => handle.close());
+
+    exportBtn.addEventListener('click', () => {
+      void (async (): Promise<void> => {
+        errLine.style.display = 'none';
+        exportBtn.disabled = true;
+        cancelBtn.disabled = true;
+        const restoreLabel = exportBtn.textContent ?? 'Export PDF';
+        exportBtn.textContent = 'Exporting…';
+        try {
+          const chosenInterval = Number(intervalSel.value);
+          const chosenStyle = styleSel.value as ContourShapeStyle;
+          // Regenerate ONLY when the interval OR the shape style changed AND a
+          // builder exists — from the cached core, without touching the visible
+          // result.
+          let result = r;
+          if (
+            canRegen &&
+            Number.isFinite(chosenInterval) &&
+            (chosenInterval !== currentInterval || chosenStyle !== currentStyle)
+          ) {
+            result = await this._cb.buildResultForExport!({
+              intervalM: chosenInterval,
+              shapeStyle: chosenStyle,
+            });
+          }
+          // Remember the chosen style as the default for subsequent quick exports.
+          this._contourStyle = chosenStyle;
+          await this._buildAndDownloadMapPdf(result, {
+            title: titleInput.value,
+            preparedBy: preparedInput.value,
+            notes: notesInput.value,
+            sheet: sheetSel.value as SheetSize,
+            orientation: orientSel.value as SheetOrientation,
+            filename: filenameInput.value,
+            worldOrigin: ctx.worldOrigin ?? null,
+            generatedAt,
+          });
+          // Remember the user's choices for the rest of the session.
+          lastPreparedBy = preparedInput.value;
+          lastSheet = sheetSel.value as SheetSize;
+          lastOrientation = orientSel.value as SheetOrientation;
+          lastNotes = notesInput.value;
+          handle.close();
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('OpenLiDARViewer: map sheet export failed.', err);
+          errLine.textContent = 'Export failed — see the console for details.';
+          errLine.style.display = '';
+          exportBtn.disabled = false;
+          cancelBtn.disabled = false;
+          exportBtn.textContent = restoreLabel;
+        }
+      })();
+    });
+  }
+
+  /** Build and download the printable contour map sheet (lazy pdf-lib). */
+  private async _buildAndDownloadMapPdf(
+    result: AnalyseContoursResult,
+    opts: {
+      title: string;
+      preparedBy: string;
+      notes: string;
+      sheet: SheetSize;
+      orientation: SheetOrientation;
+      filename: string;
+      worldOrigin: { x: number; y: number } | null;
+      generatedAt: Date;
+    },
+  ): Promise<void> {
+    const { buildMapSheetPdf } = await loadMapSheetPdf();
+    const bytes = await buildMapSheetPdf({
+      model: result.model,
+      labels: result.labels,
+      worldOrigin: opts.worldOrigin,
+      crs: result.model.crs,
+      verticalDatum: result.model.verticalDatum,
+      accuracy: result.accuracyStandards,
+      // The map sheet is a georeferenced deliverable, so its readiness note
+      // reflects EXPORT readiness (surface quality gated by a known CRS +
+      // datum): a clean surface with an unknown datum prints PREVIEW, not a
+      // validated note. 'available' → 'ready' for the note's vocabulary.
+      readiness:
+        result.quality.exportReadiness === 'available' ? 'ready' : result.quality.exportReadiness,
+      title: opts.title.trim() || undefined,
+      preparedBy: opts.preparedBy.trim() || undefined,
+      notes: opts.notes.trim() || undefined,
+      sheet: opts.sheet,
+      orientation: opts.orientation,
+      generatedAt: opts.generatedAt,
+    });
+    const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = ensurePdfExtension(sanitizeMapFilename(opts.filename));
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   /**
@@ -1078,15 +1529,19 @@ export class AnalysePanel {
     const dtm = q.readiness === 'ready' ? 'Ready' : q.readiness === 'previewOnly' ? 'Preview' : 'Blocked';
     const exp =
       q.exportReadiness === 'available' ? 'Available' : q.exportReadiness === 'previewOnly' ? 'Preview only' : 'Blocked';
-    const chips: Array<[string, string, Tone]> = [
+    // Optional 4th tuple entry is a plain-language hover hint for the
+    // jargon chips (CRS / Datum), reused from contourCopy so the wording
+    // is single-sourced and consistent with the Details metrics above.
+    const chips: Array<[string, string, Tone, string?]> = [
       ['Coverage', coverage, tri(q.coverageMode === 'full', true)],
       ['DTM', dtm, q.readiness === 'ready' ? 'good' : q.readiness === 'previewOnly' ? 'warn' : 'bad'],
-      ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true)],
-      ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true)],
+      ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true), METRIC_TOOLTIPS.crs],
+      ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true), METRIC_TOOLTIPS.verticalDatum],
       ['Export', exp, q.exportReadiness === 'available' ? 'good' : q.exportReadiness === 'previewOnly' ? 'warn' : 'bad'],
     ];
-    for (const [k, v, tone] of chips) {
+    for (const [k, v, tone, tip] of chips) {
       const chip = el('span', { className: `olv-analyse-chip is-${tone}` });
+      if (tip) this._hint(chip, tip);
       chip.append(
         el('span', { className: 'olv-analyse-chip-k', text: k }),
         el('span', { className: 'olv-analyse-chip-v', text: v }),
@@ -1140,6 +1595,28 @@ export class AnalysePanel {
     this._demButton.title = hasDtm
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';
+    // One-line caveat under the DEM button when the surface is not full coverage
+    // or the GEOREFERENCED export is not ready — the README spells out the rest.
+    // The DEM is the georeferenced deliverable, so the note keys off EXPORT
+    // readiness (CRS + datum gated), using the SAME condition the README caveat
+    // does (coverage !== 'full' || exportReadiness !== 'available') so the
+    // button note and the README can't disagree. Any georeferencing gap (unknown
+    // CRS / datum) is named inline.
+    const coverageMode = r.dtm.coverageMode;
+    const notFull = coverageMode !== 'full';
+    const exp = r.quality.exportReadiness;
+    const exportNotReady = exp !== 'available';
+    if (hasDtm && (notFull || exportNotReady)) {
+      const verdict = exp === 'blocked' ? 'blocked' : exp === 'previewOnly' ? 'preview' : 'ready';
+      const georef = r.quality.exportReasons.length > 0 ? ` (${r.quality.exportReasons.join(', ')})` : '';
+      this._demNote.textContent =
+        `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +
+        `Exported with a caveat in the README; not for reliable terrain products.`;
+      this._demNote.style.display = '';
+    } else {
+      this._demNote.textContent = '';
+      this._demNote.style.display = 'none';
+    }
     this._legend.style.display = hasFeatures ? '' : 'none';
     if (e === 'blocked') {
       this._exportNote.textContent = `Export disabled — ${r.quality.reasons[0] ?? 'DTM quality gate not met.'}`;

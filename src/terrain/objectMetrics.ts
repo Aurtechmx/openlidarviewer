@@ -12,10 +12,15 @@
  *   - median nearest-neighbour spacing — the scan's effective resolution;
  *   - angular completeness — the fraction of viewing directions around the
  *     object's centroid that actually have returns, i.e. how much of the
- *     surface was captured vs occluded / missed.
+ *     surface was captured vs occluded / missed;
+ *   - longest dimension — max(L, W, H) of the OBB, the "how big is it"
+ *     headline figure capture apps lead with;
+ *   - bounding-box surface area — 2(LW + LH + WH) of the OBB, an APPROXIMATE
+ *     bound (the envelope's skin), NOT the object's true mesh surface, which is
+ *     not well defined on a raw point cloud and is not fabricated here.
  *
- * Pure data, deterministic, O(sampled). No surface area or solid volume —
- * those are not well defined on a raw point cloud and we won't fabricate them.
+ * Pure data, deterministic, O(sampled). The volume and surface area reported
+ * are envelope (bounding-box) figures, never solid / watertight measurements.
  */
 
 export interface BoxDims {
@@ -30,8 +35,12 @@ export interface ObjectMetrics {
   readonly obb: BoxDims;
   /** Axis-aligned bounding box, sides sorted long→short. */
   readonly aabb: BoxDims;
+  /** max(L, W, H) of the OBB — the headline "how big is it" dimension. */
+  readonly longestDimensionM: number;
   /** OBB volume — an envelope bound, not a solid volume. */
   readonly envelopeVolumeM3: number;
+  /** OBB surface area 2(LW+LH+WH) — a bounding-box approximation, not the mesh skin. */
+  readonly surfaceAreaM2: number;
   /** Median nearest-neighbour distance (scan resolution). */
   readonly medianSpacingM: number;
   /** 0..100 — share of viewing directions around the centroid with returns. */
@@ -98,7 +107,9 @@ export function objectMetrics(
     pointCount: n,
     obb: { lengthM: 0, widthM: 0, heightM: 0 },
     aabb: { lengthM: 0, widthM: 0, heightM: 0 },
+    longestDimensionM: 0,
     envelopeVolumeM3: 0,
+    surfaceAreaM2: 0,
     medianSpacingM: 0,
     completenessPct: 0,
   };
@@ -186,11 +197,14 @@ export function objectMetrics(
   for (let i = 0; i < bins.length; i++) if (bins[i]) hit++;
   const completenessPct = (100 * hit) / (LON * LAT);
 
+  const { lengthM: L, widthM: W, heightM: H } = obb;
   return {
     pointCount: n,
     obb,
     aabb,
-    envelopeVolumeM3: obb.lengthM * obb.widthM * obb.heightM,
+    longestDimensionM: Math.max(L, W, H),
+    envelopeVolumeM3: L * W * H,
+    surfaceAreaM2: 2 * (L * W + L * H + W * H),
     medianSpacingM,
     completenessPct,
   };

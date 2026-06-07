@@ -40,6 +40,14 @@ function liveSourceTransformPlugin() {
     // Vite must read *statically* to split a chunk or bundle a worker:
     //   - `loadFile.ts`        — `new Worker(new URL('./parseWorker.ts', …))`
     //   - `copcWorkerClient.ts`— `new Worker(new URL('./copcWorker.ts', …))`
+    //   - `terrainCoreWorkerClient.ts`
+    //                          — `new Worker(new URL('./terrainCoreWorker.ts', …))`
+    //   - `computeTerrainCoreAsync.ts`
+    //                          — `import('./terrainCoreWorkerClient')`, the
+    //     lazy split point that pulls in the worker client (mirrors how
+    //     `lazyChunks.ts` holds the COPC `import()` literal). Without this the
+    //     stringArray pass scrambles the specifier and neither the client nor
+    //     the `terrainCoreWorker` chunk it constructs ever gets emitted.
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
     //   - `parseBuffer.ts` / `loaderRegistry.ts` / `loadLas.ts` — the loader
     //     chain now reached from the main thread (the format converter's
@@ -53,6 +61,8 @@ function liveSourceTransformPlugin() {
       /node_modules/,
       /loadFile\.ts/,
       /copcWorkerClient\.ts/,
+      /terrainCoreWorkerClient\.ts/,
+      /computeTerrainCoreAsync\.ts/,
       /lazyChunks\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
@@ -104,6 +114,15 @@ function chunkEmissionGuard() {
     'streamingColors',
     'copcWorker',
     'copcWorkerClient',
+    // Terrain core worker offload — `terrainCoreWorkerClient.ts` spins up
+    // `terrainCoreWorker.ts` via `new Worker(new URL(...))`. The live
+    // transform's stringArray pass scrambles that worker-URL literal, so
+    // both files are in the obfuscator `exclude` list above and both chunks
+    // are pinned here. Losing either chunk means `new Worker(...)` throws at
+    // runtime and the offload silently falls back to main-thread compute —
+    // so a regression that drops them must fail the build loudly instead.
+    'terrainCoreWorker',
+    'terrainCoreWorkerClient',
     'LocalFileRangeSource',
     'HttpRangeSource',
     // v0.3.1 — lazy on-demand chunks.

@@ -449,13 +449,13 @@ export class StreamingScheduler {
 
   /** Live counters for the diagnostics overlay. */
   stats(): SchedulerStats {
-    let queued = 0;
-    for (const node of this._cloud.octree.nodes()) {
-      if (node.state === 'queued') queued++;
-    }
+    // O(1) queued count from the store's maintained counter — no per-call
+    // octree walk. `_shouldRenderFrame` polls this every animation frame
+    // while a streaming cloud exists, so the walk used to run each frame
+    // even while idle, partly defeating the idle-render throttle.
     return {
       visible: this._lastVisible,
-      queued,
+      queued: this._cloud.octree.store.queuedCount,
       loading: this._inFlight.size,
       lastTickMs: this._lastTickMs,
       cameraVelocity: this._velocitySmoothed,

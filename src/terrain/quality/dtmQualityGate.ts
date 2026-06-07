@@ -3,20 +3,41 @@
  *
  * Pure-data leaf — the gate that decides, BEFORE contour generation and
  * export, whether a DTM is good enough to (a) draw at all, (b) preview
- * for exploration, or (c) hand off as a professional deliverable.
+ * for exploration, or (c) is ready for terrain-product generation under
+ * the current quality gate.
  *
  * It exists so the UI never offers a survey-looking export over a surface
  * that is mostly guessed, ungeoreferenced, or unvalidated. Every
  * `blocked` or `previewOnly` verdict carries human-readable reasons.
  *
- * Verdicts:
+ * TWO INDEPENDENT AXES (deliberately NOT conflated):
+ *
+ *   1. SURFACE QUALITY (`readiness`) — is the terrain surface internally
+ *      valid? Computed PURELY from surface metrics (measured/interpolated/
+ *      empty/edge-risk ratios, hold-out RMSE, mean confidence, interval
+ *      availability). It is INDEPENDENT of CRS / vertical datum: a dense,
+ *      clean, well-covered scan with an UNKNOWN datum still has GOOD surface
+ *      quality.
+ *
+ *   2. EXPORT READINESS (`exportReadiness`) — is it georeferenced enough to
+ *      hand off? = surface quality, FURTHER gated by georeferencing (known
+ *      CRS + known vertical datum). Unknown CRS or datum CAPS export to
+ *      preview (with an explicit reason in `exportReasons`), even when the
+ *      surface itself is good. A blocked surface blocks export.
+ *
+ * Surface verdicts (`readiness`):
  *   blocked     — too little measured ground, or no reliable interval:
  *                 contour generation/export should be disabled.
- *   previewOnly — usable for exploration, NOT a professional export
- *                 (high interpolation, unvalidated RMSE, or unknown
- *                 CRS / vertical datum).
+ *   previewOnly — suitable for visual inspection and exploratory analysis only
+ *                 (high interpolation, unvalidated RMSE, low confidence).
  *   ready       — enough measured cells, acceptable validated error, low
- *                 interpolation, and a known CRS + vertical datum.
+ *                 interpolation. (CRS / datum do NOT enter this axis.)
+ *
+ * Export verdicts (`exportReadiness`):
+ *   blocked     — the surface is blocked.
+ *   previewOnly — the surface is preview-only, OR the surface is ready but
+ *                 the CRS / vertical datum is unknown (see `exportReasons`).
+ *   available   — the surface is ready AND the CRS + vertical datum are known.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic. Thresholds are
  * named constants here so they can be argued with, not hidden.
@@ -25,7 +46,7 @@
 import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { CellStatusTally } from './dtmCellStatus';
 
-/** Overall readiness verdict. */
+/** Surface-quality verdict — internal validity of the surface (no CRS/datum). */
 export type DtmReadiness = 'ready' | 'previewOnly' | 'blocked';
 /** Export-specific verdict (export is stricter — needs CRS + datum). */
 export type ExportReadiness = 'available' | 'previewOnly' | 'blocked';
@@ -65,7 +86,9 @@ export interface DtmQualityInput {
 
 /** The full quality report. */
 export interface DtmQualityReport {
+  /** SURFACE QUALITY — internal validity of the surface (CRS/datum-independent). */
   readonly readiness: DtmReadiness;
+  /** EXPORT READINESS — surface quality further gated by known CRS + datum. */
   readonly exportReadiness: ExportReadiness;
   // ── metrics ──────────────────────────────────────────────────────────
   readonly measuredCellRatio: number;
@@ -78,8 +101,14 @@ export interface DtmQualityReport {
   readonly coverageMode: TerrainCoverageMode;
   readonly crsKnown: boolean;
   readonly datumKnown: boolean;
-  /** Human-readable reasons for the verdict (always populated for non-ready). */
+  /** Human-readable reasons for the SURFACE verdict (populated for non-ready). */
   readonly reasons: string[];
+  /**
+   * Human-readable reasons the EXPORT verdict is capped below the surface
+   * verdict — i.e. the georeferencing gaps (unknown CRS / vertical datum).
+   * Empty when export readiness simply tracks the surface verdict.
+   */
+  readonly exportReasons: string[];
 }
 
 const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
@@ -119,15 +148,16 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     reasons.push('No contour interval is reliable for this scan (too sparse or vertical error too high).');
     readiness = 'blocked';
   } else {
-    // ── ready vs previewOnly ───────────────────────────────────────────
+    // ── ready vs previewOnly (SURFACE metrics ONLY — no CRS/datum) ──────
+    // CRS / vertical datum are deliberately NOT in this list: they belong to
+    // export readiness, not surface quality. A dense, clean, well-covered
+    // surface with an unknown datum is still a GOOD surface.
     const readyChecks: Array<[boolean, string]> = [
       [measuredOfCovered >= T.readyMeasuredOfCovered, `${pct(interpolatedCellRatio)} of cells are interpolated`],
       [emptyCellRatio <= T.readyMaxEmptyRatio, `${pct(emptyCellRatio)} of the grid has no data`],
       [edgeRiskRatio <= T.readyMaxEdgeRiskRatio, `${pct(edgeRiskRatio)} of cells are a long interpolation from real returns`],
       [rmseOk, 'vertical accuracy could not be validated'],
       [input.meanCellConfidence >= T.readyMinMeanConfidence, 'mean confidence is low'],
-      [crsKnown, 'CRS is unknown'],
-      [datumKnown, 'vertical datum is unknown'],
     ];
     const failed = readyChecks.filter(([ok]) => !ok).map(([, why]) => why);
     if (failed.length === 0) {
@@ -138,12 +168,23 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     }
   }
 
-  // Export is the strict gate: blocked stays blocked; anything short of a
-  // fully-ready, georeferenced surface is preview-only for export.
+  // ── EXPORT READINESS = surface verdict, gated by georeferencing ───────
+  // A blocked surface blocks export. Otherwise export tracks the surface
+  // verdict, but an unknown CRS or vertical datum CAPS it to preview-only
+  // (with an explicit reason) — a good surface can be inspected/measured,
+  // but the georeferenced hand-off requires a known frame + datum.
+  const exportReasons: string[] = [];
   let exportReadiness: ExportReadiness;
-  if (readiness === 'blocked') exportReadiness = 'blocked';
-  else if (readiness === 'ready') exportReadiness = 'available';
-  else exportReadiness = 'previewOnly';
+  if (readiness === 'blocked') {
+    exportReadiness = 'blocked';
+  } else {
+    exportReadiness = readiness === 'ready' ? 'available' : 'previewOnly';
+    if (!crsKnown) exportReasons.push('CRS unknown');
+    if (!datumKnown) exportReasons.push('vertical datum unknown');
+    if (exportReasons.length > 0 && exportReadiness === 'available') {
+      exportReadiness = 'previewOnly';
+    }
+  }
 
   return {
     readiness,
@@ -159,6 +200,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     crsKnown,
     datumKnown,
     reasons,
+    exportReasons,
   };
 }
 

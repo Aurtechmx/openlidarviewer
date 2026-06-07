@@ -103,29 +103,53 @@ describe('evaluateDtmQuality', () => {
     expect(r.measuredCellRatio).toBeCloseTo(0.8, 6);
   });
 
-  it('previewOnly with a reason when CRS is unknown', () => {
+  // SURFACE QUALITY is CRS/datum-independent: an unknown CRS no longer caps the
+  // SURFACE verdict (it stays `ready`). It only caps EXPORT readiness, with the
+  // reason living on `exportReasons`, NOT on the surface `reasons`. This is the
+  // two-axis truth, not a weakening — the honesty (export still gated) is intact.
+  it('surface stays ready while EXPORT is preview-only when CRS is unknown', () => {
     const r = evaluateDtmQuality(baseInput({ crs: null }));
-    expect(r.readiness).toBe('previewOnly');
+    expect(r.readiness).toBe('ready');
     expect(r.exportReadiness).toBe('previewOnly');
-    expect(r.reasons.join(' ')).toMatch(/CRS is unknown/i);
+    expect(r.exportReasons.join(' ')).toMatch(/CRS unknown/i);
+    // CRS is no longer a SURFACE reason — it belongs only to export.
+    expect(r.reasons.join(' ')).not.toMatch(/CRS/i);
   });
 
-  it('previewOnly when vertical datum is unknown', () => {
+  it('surface stays ready while EXPORT is preview-only when vertical datum is unknown', () => {
     const r = evaluateDtmQuality(baseInput({ verticalDatum: null }));
-    expect(r.readiness).toBe('previewOnly');
-    expect(r.reasons.join(' ')).toMatch(/vertical datum is unknown/i);
+    expect(r.readiness).toBe('ready');
+    expect(r.exportReadiness).toBe('previewOnly');
+    expect(r.exportReasons.join(' ')).toMatch(/vertical datum unknown/i);
+    expect(r.reasons.join(' ')).not.toMatch(/datum/i);
   });
 
-  it('previewOnly with combined reasons (high interpolation + unknown CRS)', () => {
+  // SEPARATION (gate level): the SAME surface, CRS+datum known vs datum null —
+  // the surface verdict is identical (ready); only export readiness differs.
+  it('separates the axes: known datum → export available; null datum → export preview', () => {
+    const known = evaluateDtmQuality(baseInput({}));
+    const noDatum = evaluateDtmQuality(baseInput({ verticalDatum: null }));
+    expect(known.readiness).toBe('ready');
+    expect(noDatum.readiness).toBe('ready'); // surface quality unchanged
+    expect(known.exportReadiness).toBe('available');
+    expect(noDatum.exportReadiness).toBe('previewOnly'); // only export gated
+    expect(noDatum.exportReasons.join(' ')).toMatch(/vertical datum unknown/i);
+  });
+
+  it('surface previewOnly for interpolation; export ALSO gated by unknown CRS (separate axes)', () => {
     const r = evaluateDtmQuality(
       baseInput({
         tally: baseTally({ measured: 55, interpolated: 38, empty: 7, total: 100 }),
         crs: null,
       }),
     );
+    // SURFACE: preview-only because of the interpolation, NOT the CRS.
     expect(r.readiness).toBe('previewOnly');
     expect(r.reasons.join(' ')).toMatch(/interpolated/i);
-    expect(r.reasons.join(' ')).toMatch(/CRS/i);
+    expect(r.reasons.join(' ')).not.toMatch(/CRS/i);
+    // EXPORT: also held at preview, here additionally because the CRS is unknown.
+    expect(r.exportReadiness).toBe('previewOnly');
+    expect(r.exportReasons.join(' ')).toMatch(/CRS unknown/i);
   });
 
   it('blocked when almost everything is interpolated', () => {

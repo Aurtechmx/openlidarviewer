@@ -38,6 +38,7 @@ function model(features: ContourFeature[], crs: string | null = 'EPSG:32610'): C
     crs,
     verticalDatum: 'EPSG:5703',
     intervalM: 1,
+    contourStyle: 'smooth',
     bbox: features.length ? { minX, minY, maxX, maxY } : null,
     interpolatedFraction: 0.2,
     coverageMode: 'full',
@@ -124,10 +125,16 @@ describe('dxfContours', () => {
   ]);
   const dxf = dxfContours(m);
 
-  it('is a well-formed minimal DXF', () => {
-    expect(dxf).toMatch(/^0\nSECTION/);
+  it('is a well-formed minimal DXF (a 999 provenance comment then SECTION)', () => {
+    // Leads with a group-code-999 comment (ignored by CAD readers) naming the
+    // contour shape style, immediately followed by the first SECTION.
+    expect(dxf).toMatch(/^999\n[^\n]*\n0\nSECTION/);
     expect(dxf).toMatch(/\nENTITIES\n/);
     expect(dxf.trimEnd().endsWith('EOF')).toBe(true);
+  });
+
+  it('stamps the contour shape style in a 999 comment', () => {
+    expect(dxf).toMatch(/999\nOpenLiDARViewer contour style: Smooth/);
   });
 
   it('defines the honesty layers and routes features to them', () => {

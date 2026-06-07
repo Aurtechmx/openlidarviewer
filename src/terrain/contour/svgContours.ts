@@ -12,6 +12,7 @@
 
 import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel';
 import type { ContourLabel } from './labelPlacement';
+import { contourShapeStyleLabel } from './contourShapeStyle';
 
 /** Options for {@link svgContours}. */
 export interface SvgContourParams {
@@ -61,8 +62,12 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
     labelSize: params.labelSize ?? indexWeight * 3,
   };
 
+  // Self-describing stamp: an XML comment naming the shape style applied to the
+  // geometry (honest about whether the lines are raw or smoothed/generalized).
+  const styleComment = `<!-- contour style: ${contourShapeStyleLabel(model.contourStyle)} -->`;
+
   if (!model.bbox || model.features.length === 0) {
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"></svg>';
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1">${styleComment}</svg>`;
   }
   const { minX, minY, maxX, maxY } = model.bbox;
   const w = maxX - minX + 2 * p.padding;
@@ -111,6 +116,7 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(2)}" height="${h.toFixed(2)}" viewBox="0 0 ${w.toFixed(2)} ${h.toFixed(2)}">`,
+    styleComment,
     caption,
     ...paths,
     ...labels,

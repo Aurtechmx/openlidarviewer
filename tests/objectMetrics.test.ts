@@ -4,6 +4,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { objectMetrics } from '../src/terrain/objectMetrics';
+import {
+  metresToFeet,
+  sqMetresToSqFeet,
+  cubicMetresToCubicFeet,
+} from '../src/terrain/spaceMetrics';
 
 /** A solid-ish 4×2×1 box sampled on a 0.25 grid, optionally rotated about Z. */
 function box(rotRad = 0): Float32Array {
@@ -24,6 +29,31 @@ describe('objectMetrics', () => {
     expect(m.obb.widthM).toBeCloseTo(2, 1);
     expect(m.obb.heightM).toBeCloseTo(1, 1);
     expect(m.envelopeVolumeM3).toBeCloseTo(8, 0);
+  });
+
+  it('reports the longest dimension as max(L,W,H)', () => {
+    const m = objectMetrics(box(0)); // 4 × 2 × 1
+    expect(m.longestDimensionM).toBeCloseTo(4, 1);
+    expect(m.longestDimensionM).toBeCloseTo(Math.max(m.obb.lengthM, m.obb.widthM, m.obb.heightM), 6);
+  });
+
+  it('reports the OBB surface area 2(LW+LH+WH) on a known box', () => {
+    const m = objectMetrics(box(0)); // 4 × 2 × 1 → 2(8+4+2) = 28
+    expect(m.surfaceAreaM2).toBeCloseTo(28, 0);
+    const { lengthM: l, widthM: w, heightM: h } = m.obb;
+    expect(m.surfaceAreaM2).toBeCloseTo(2 * (l * w + l * h + w * h), 6);
+  });
+
+  it('m→ft conversions use the exact 0.3048 factor for length, area, volume', () => {
+    expect(metresToFeet(1)).toBeCloseTo(1 / 0.3048, 10);
+    expect(sqMetresToSqFeet(1)).toBeCloseTo((1 / 0.3048) ** 2, 10);
+    expect(cubicMetresToCubicFeet(1)).toBeCloseTo((1 / 0.3048) ** 3, 10);
+  });
+
+  it('empty cloud reports zeroed longest dimension and surface area', () => {
+    const m = objectMetrics(new Float32Array([0, 0, 0]));
+    expect(m.longestDimensionM).toBe(0);
+    expect(m.surfaceAreaM2).toBe(0);
   });
 
   it('OBB recovers a rotated box that the AABB over-states', () => {

@@ -29,6 +29,7 @@ import {
   DEFAULT_LEGEND_CODES,
   EXPORT_PRESETS,
   getExportPreset,
+  buildScanReport,
 } from '../src/export';
 import type {
   ExportContext,
@@ -139,6 +140,37 @@ test('the default registry pre-registers every visible exporter mode', () => {
   // marching-squares contour lines their names imply.
   expect(defaultExportRegistry.has('depth')).toBe(false);
   expect(defaultExportRegistry.has('contour')).toBe(false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scan-report card — class-scope row (escape-hatch closure)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('buildScanReport: no class filter ⇒ card is byte-identical to the unstamped card', () => {
+  const adapter = stubAdapter({ sourceName: 'scope-fixture', sourcePointCount: 4 });
+  const base = buildScanReport('Height Map', adapter);
+  // Absent, empty, and whitespace-only stamps all mean "no active filter".
+  // Footer carries a timestamp, so compare only the scope-bearing rows.
+  const rowsOf = (stamp?: string) =>
+    JSON.stringify(buildScanReport('Height Map', adapter, [], stamp).rows);
+  expect(rowsOf(undefined)).toBe(JSON.stringify(base.rows));
+  expect(rowsOf('')).toBe(JSON.stringify(base.rows));
+  expect(rowsOf('   ')).toBe(JSON.stringify(base.rows));
+  // No 'Class filter' row leaked into the default card.
+  expect(base.rows.find((r) => r.label === 'Class filter')).toBeUndefined();
+});
+
+test('buildScanReport: active class filter ⇒ appends a Class filter row', () => {
+  const adapter = stubAdapter({ sourceName: 'scope-fixture', sourcePointCount: 4 });
+  const report = buildScanReport(
+    'Height Map',
+    adapter,
+    [],
+    'Ground + Building · 2 of 5 classes',
+  );
+  const row = report.rows.find((r) => r.label === 'Class filter');
+  expect(row).toBeDefined();
+  expect(row?.value).toBe('Ground + Building · 2 of 5 classes');
 });
 
 test('availableModes + unavailableModes — capability gating round-trip', () => {

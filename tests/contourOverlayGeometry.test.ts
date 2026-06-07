@@ -21,6 +21,7 @@ function model(features: ContourFeature[]): ContourFeatureModel {
     crs: 'EPSG:32610',
     verticalDatum: null,
     intervalM: 1,
+    contourStyle: 'smooth',
     bbox: null,
     interpolatedFraction: 0,
     coverageMode: 'full',

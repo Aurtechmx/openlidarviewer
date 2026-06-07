@@ -19,6 +19,7 @@
  */
 
 import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel';
+import { contourShapeStyleLabel } from './contourShapeStyle';
 
 /** Convert "EPSG:32610" → an OGC URN; pass through anything else. */
 function crsUrn(crs: string): string {
@@ -53,6 +54,16 @@ export function toGeoJSON(model: ContourFeatureModel): Record<string, unknown> {
       intervalM: model.intervalM,
       verticalDatum: model.verticalDatum,
       coverageMode: model.coverageMode,
+      // Honest record of the shape transform applied to the geometry. When the
+      // style is not 'crisp' the lines have been smoothed/generalized (within
+      // the confidence gate — gaps are never bridged), so a downstream GIS knows
+      // these are not the raw marching-squares vertices.
+      contourStyle: model.contourStyle,
+      contourStyleLabel: contourShapeStyleLabel(model.contourStyle),
+      geometryNote:
+        model.contourStyle === 'crisp'
+          ? 'Geometry is the raw marching-squares vertices (no smoothing or simplification).'
+          : `Geometry is smoothed/generalized (style: ${contourShapeStyleLabel(model.contourStyle)}); low-confidence and gap vertices are preserved exactly.`,
       interpolatedFraction: Number.isFinite(model.interpolatedFraction)
         ? Math.round(model.interpolatedFraction * 1000) / 1000
         : null,

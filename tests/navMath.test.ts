@@ -134,6 +134,31 @@ describe('nearestPointAlongRay', () => {
     expect(hit?.point).toEqual([0, 0, -8]);
     expect(hit?.along).toBeCloseTo(8, 6);
   });
+
+  test('an accept predicate that admits everything is identical to no predicate', () => {
+    const pts = new Float32Array([5, 0, -10, 0, 0, -20, 5, 5, -15]);
+    const withoutPred = nearestPointAlongRay(pts, origin, dir);
+    const withTrue = nearestPointAlongRay(pts, origin, dir, () => true);
+    expect(withTrue).toEqual(withoutPred);
+    expect(withTrue?.index).toBe(1);
+  });
+
+  test('rejecting the true-nearest returns the next-nearest accepted point', () => {
+    // Index 1 (0,0,-20) sits on the ray and would win; reject it and the
+    // runner-up — the nearest-by-angle of the remaining points — is surfaced
+    // rather than "nothing".
+    const pts = new Float32Array([5, 0, -10, 0, 0, -20, 5, 5, -15]);
+    const hit = nearestPointAlongRay(pts, origin, dir, (i) => i !== 1);
+    expect(hit).not.toBeNull();
+    expect(hit?.index).not.toBe(1);
+    // It must be one of the remaining (accepted) candidates.
+    expect([0, 2]).toContain(hit?.index);
+  });
+
+  test('rejecting every point returns the same no-hit sentinel as before', () => {
+    const pts = new Float32Array([5, 0, -10, 0, 0, -20, 5, 5, -15]);
+    expect(nearestPointAlongRay(pts, origin, dir, () => false)).toBeNull();
+  });
 });
 
 describe('orbitOffset', () => {

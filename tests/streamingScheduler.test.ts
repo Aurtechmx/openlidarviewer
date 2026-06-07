@@ -143,6 +143,72 @@ test('the scheduler streams every visible node within budget', async () => {
   expect(cloud.residentPointCount).toBe(3100);
 });
 
+// The scheduler reports `queued` from an O(1) counter maintained by the
+// node store at every state transition, rather than walking the whole
+// octree on each `stats()` call. This test drives the full lifecycle —
+// enqueue → load → resident → evict → stop — and asserts the maintained
+// count never drifts from a ground-truth walk at any step.
+test('the maintained queued count matches a ground-truth walk at every transition', async () => {
+  let clock = 0;
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    // maxConcurrentDecodes = 1 so the first update leaves several nodes
+    // parked in the `queued` state (only one is dispatched to `loading`),
+    // giving a non-zero count to verify against the walk.
+    { ...streamingBudgets('balanced', false), maxConcurrentDecodes: 1 },
+    { now: () => clock },
+  );
+
+  /** Ground truth: count `queued` nodes by walking the octree. */
+  const walkQueued = (): number =>
+    cloud.octree.nodes().filter((n) => n.state === 'queued').length;
+  /** Assert the O(1) counter equals the walk right now. */
+  const assertNoDrift = (): number => {
+    const reported = scheduler.stats().queued;
+    expect(reported).toBe(walkQueued());
+    return reported;
+  };
+
+  // Before any work — both zero.
+  expect(assertNoDrift()).toBe(0);
+
+  // First update: every visible node is enqueued, then a single decode is
+  // dispatched (maxConcurrentDecodes = 1). The rest stay `queued`.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  const queuedAfterEnqueue = assertNoDrift();
+  expect(queuedAfterEnqueue).toBeGreaterThan(0);
+
+  // Let decodes complete one at a time; check the counter never drifts as
+  // nodes move queued → loading → resident across microtask turns.
+  for (let i = 0; i < 50; i++) {
+    assertNoDrift();
+    const s = scheduler.stats();
+    if (s.queued === 0 && s.loading === 0) break;
+    clock += 16;
+    // Re-tick so the next queued node is dispatched as concurrency frees up.
+    scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  await drain(scheduler);
+  expect(assertNoDrift()).toBe(0);
+  expect(cloud.counts().resident).toBe(5);
+
+  // Shrink the budget hard so eviction fires — the resident→unloaded path
+  // must not perturb the queued counter.
+  scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 1 });
+  clock += 16;
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  assertNoDrift();
+
+  // Stop clears the queue and resets node state — the counter must land on 0.
+  scheduler.stop();
+  expect(assertNoDrift()).toBe(0);
+});
+
 test('shrinking the budget evicts the surplus resident nodes', async () => {
   const cloud = await openCloud();
   const evicted: StreamingNode[] = [];
