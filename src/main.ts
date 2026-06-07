@@ -1708,6 +1708,17 @@ function applyScanRoute(initial: boolean): void {
     /* classification is best-effort — fall back to showing terrain analysis */
     shape = null;
   }
+  if (debug && shape) {
+    // `?debug` only: dump the raw scan-shape signals so a misroute can be
+    // diagnosed against real numbers instead of guessed at.
+    console.info(
+      `[scan-type] ${initial ? 'open' : 're-route'} verdict=${shape.nonTerrain ? shape.spaceKind : 'terrain'} ` +
+        `up=${shape.up} aspect=${shape.aspect.toFixed(2)} overhang=${Math.round(shape.overhangFraction * 100)}% ` +
+        `wall=${Math.round(shape.wallCoverage * 100)}% floor=${Math.round(shape.floorCoverage * 100)}% ` +
+        `ceil=${Math.round(shape.ceilingCoverage * 100)}% topVeg=${Math.round(shape.topVegFraction * 100)}% ` +
+        `sampled=${gathered?.positions ? gathered.positions.length / 3 : 0} resident=${viewer.residentPointTotal()}`,
+    );
+  }
   const verdict: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
   if (!initial) {
     // Re-route only when the verdict genuinely changes — never thrash panels.
