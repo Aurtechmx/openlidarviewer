@@ -3520,6 +3520,108 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
+   Reusable accessible modal (olv-modal) — used by the pre-export MAP PDF
+   dialog. A dimmed, blurred backdrop holds a centred card in the dark
+   "instrument" aesthetic. The primary CTA reuses the accent + elevation
+   treatment of .olv-analyse-run; Cancel stays a quiet secondary.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-modal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-4xl);
+  background: rgba(6, 10, 20, 0.66);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.olv-modal {
+  width: 460px; max-width: 100%; max-height: 100%;
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 12px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+.olv-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-2xl); border-bottom: 0.5px solid var(--hairline);
+}
+.olv-modal-title { font-size: var(--text-md); font-weight: 600; color: var(--text); margin: 0; }
+.olv-modal-x {
+  font-size: var(--text-md); line-height: 1; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: 2px 8px; cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-modal-x:hover { color: var(--text); border-color: var(--accent); }
+.olv-modal-x:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.olv-modal-body { padding: var(--space-2xl); overflow-y: auto; }
+.olv-modal-foot { padding: var(--space-lg) var(--space-2xl) var(--space-2xl); }
+
+.olv-modal-form { display: flex; flex-direction: column; gap: var(--space-2xl); }
+.olv-modal-grid { display: flex; flex-direction: column; gap: var(--space-lg); }
+.olv-modal-field { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-modal-label {
+  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-dim);
+}
+.olv-modal-input {
+  font: inherit; font-size: var(--text-xs); color: var(--text);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-md);
+  width: 100%; box-sizing: border-box;
+  transition: border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-modal-input:focus { outline: none; border-color: var(--accent); }
+.olv-modal-textarea { resize: vertical; min-height: 48px; line-height: 1.4; }
+.olv-modal-hint { font-size: var(--text-2xs); color: var(--text-faint); margin: 2px 0 0; }
+
+/* Locked / auto section — greyed so it reads as visible-but-not-editable. */
+.olv-modal-locked {
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02); padding: var(--space-lg);
+}
+.olv-modal-locked-head {
+  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: var(--space-md);
+}
+.olv-modal-locked-grid {
+  display: grid; grid-template-columns: max-content 1fr;
+  gap: var(--space-2xs) var(--space-lg);
+}
+.olv-modal-locked-k { font-size: var(--text-2xs); color: var(--text-faint); }
+.olv-modal-locked-v {
+  font-size: var(--text-2xs); color: var(--text-dim);
+  font-family: var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.olv-modal-locked-note { font-size: var(--text-2xs); color: var(--text-faint); margin: var(--space-md) 0 0; }
+
+/* Actions row. */
+.olv-modal-actions {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: var(--space-md); flex-wrap: wrap;
+}
+.olv-modal-error {
+  flex: 1 1 100%; font-size: var(--text-2xs); color: var(--rating-moderate); margin: 0 0 var(--space-sm);
+}
+.olv-modal-btn {
+  font: inherit; font-size: var(--text-xs); font-weight: 500;
+  padding: var(--space-md) var(--space-2xl); border-radius: var(--radius-sm); cursor: pointer;
+}
+/* Quiet secondary — Cancel. */
+.olv-modal-cancel {
+  color: var(--text-dim); background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+}
+.olv-modal-cancel:not(:disabled):hover { color: var(--text); border-color: var(--accent); }
+/* Primary CTA — accent fill that lifts (mirrors .olv-analyse-run / .olv-bc-convert). */
+.olv-modal-cta {
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 0.5px solid var(--accent); font-weight: 600;
+}
+.olv-modal-cta:not(:disabled):hover { background: var(--accent-soft); color: var(--text); }
+
+@media (max-width: 767px) {
+  .olv-modal { width: 100%; }
+  .olv-modal-btn { min-height: 44px; }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
    Live-probe readout — a cursor-following hover panel
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-probe-readout {
@@ -4827,7 +4929,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-cl-solo,
 .olv-cl-showall,
 .olv-mp-profile-pdf,
-.olv-object-run-anyway {
+.olv-object-run-anyway,
+.olv-modal-btn {
   transition: color var(--dur-fast) var(--ease-standard),
     background var(--dur-fast) var(--ease-standard),
     border-color var(--dur-fast) var(--ease-standard),
@@ -4847,7 +4950,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-cl-solo:not(:disabled):active,
 .olv-cl-showall:not(:disabled):active,
 .olv-mp-profile-pdf:not(:disabled):active,
-.olv-object-run-anyway:not(:disabled):active {
+.olv-object-run-anyway:not(:disabled):active,
+.olv-modal-btn:not(:disabled):active {
   transform: var(--btn-press);
 }
 /* Crisp, consistent keyboard focus ring on every family (a11y). */
@@ -4863,7 +4967,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-cl-solo:focus-visible,
 .olv-cl-showall:focus-visible,
 .olv-mp-profile-pdf:focus-visible,
-.olv-object-run-anyway:focus-visible {
+.olv-object-run-anyway:focus-visible,
+.olv-modal-btn:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
@@ -4880,7 +4985,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-cl-solo:disabled,
 .olv-cl-showall:disabled,
 .olv-mp-profile-pdf:disabled,
-.olv-object-run-anyway:disabled {
+.olv-object-run-anyway:disabled,
+.olv-modal-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   box-shadow: none;
@@ -4892,20 +4998,23 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
    stay quiet (border + tint only); only these three lift. */
 .olv-analyse-run:not(.is-rerun),
 .olv-analyse-dl.is-primary,
-.olv-bc-convert {
+.olv-bc-convert,
+.olv-modal-cta {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
     0 6px 16px -10px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 .olv-analyse-run:not(.is-rerun):not(:disabled):hover,
 .olv-analyse-dl.is-primary:not(:disabled):hover,
-.olv-bc-convert:not(:disabled):hover {
+.olv-bc-convert:not(:disabled):hover,
+.olv-modal-cta:not(:disabled):hover {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset,
     0 10px 22px -10px color-mix(in srgb, var(--accent) 75%, transparent);
   transform: translateY(-1px);
 }
 .olv-analyse-run:not(.is-rerun):not(:disabled):active,
 .olv-analyse-dl.is-primary:not(:disabled):active,
-.olv-bc-convert:not(:disabled):active {
+.olv-bc-convert:not(:disabled):active,
+.olv-modal-cta:not(:disabled):active {
   transform: var(--btn-press);
 }
 
@@ -4922,7 +5031,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   .olv-cl-solo,
   .olv-cl-showall,
   .olv-mp-profile-pdf,
-  .olv-object-run-anyway {
+  .olv-object-run-anyway,
+  .olv-modal-btn {
     transition: color var(--dur-fast) var(--ease-standard),
       background var(--dur-fast) var(--ease-standard),
       border-color var(--dur-fast) var(--ease-standard);
@@ -4940,7 +5050,9 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   .olv-cl-showall:active,
   .olv-mp-profile-pdf:active,
   .olv-object-run-anyway:active,
+  .olv-modal-btn:active,
   .olv-analyse-run:not(.is-rerun):hover,
   .olv-analyse-dl.is-primary:hover,
-  .olv-bc-convert:hover { transform: none; }
+  .olv-bc-convert:hover,
+  .olv-modal-cta:hover { transform: none; }
 }

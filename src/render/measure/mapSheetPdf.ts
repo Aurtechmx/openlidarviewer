@@ -43,6 +43,8 @@ export interface MapSheetInput {
   readonly readiness?: 'ready' | 'previewOnly' | 'blocked';
   readonly title?: string;
   readonly preparedBy?: string;
+  /** Free-text "Project / Notes" block printed under the identity column. */
+  readonly notes?: string;
   readonly sheet?: SheetSize;
   readonly orientation?: SheetOrientation;
   readonly generatedAt?: Date;
@@ -72,6 +74,66 @@ export function readinessNote(readiness: 'ready' | 'previewOnly' | 'blocked'): s
   return readiness === 'ready'
     ? 'Validated against held-out ground - not a survey certification.'
     : 'PREVIEW - not survey-grade until validated against control.';
+}
+
+/**
+ * Greedy word-wrap a string to a maximum width, capped at `maxLines`. The width
+ * measurer is injected (so the function is pure and unit-testable without a
+ * PDF). When the text overruns `maxLines`, the last kept line is truncated and
+ * an ellipsis appended so a long note degrades gracefully instead of
+ * overflowing the title strip. A single word wider than the line is hard-cut.
+ */
+export function wrapTextToWidth(
+  textStr: string,
+  maxWidthPt: number,
+  fontSizePt: number,
+  measure: (s: string, size: number) => number,
+  maxLines = 3,
+): string[] {
+  const words = textStr.trim().split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 0 || maxWidthPt <= 0 || maxLines <= 0) return [];
+  const fits = (s: string): boolean => measure(s, fontSizePt) <= maxWidthPt;
+  const lines: string[] = [];
+  let line = '';
+  let truncated = false;
+  for (let w = 0; w < words.length; w++) {
+    const word = words[w];
+    const candidate = line ? `${line} ${word}` : word;
+    if (fits(candidate)) {
+      line = candidate;
+      continue;
+    }
+    // Candidate overruns. Commit the current line first.
+    if (line) {
+      lines.push(line);
+      line = '';
+      if (lines.length >= maxLines) { truncated = true; break; }
+    }
+    // The word alone fits on a fresh line — carry it forward.
+    if (fits(word)) {
+      line = word;
+      continue;
+    }
+    // A single word wider than the line: hard-cut it to what fits.
+    let chunk = '';
+    for (const ch of word) {
+      if (fits(chunk + ch)) chunk += ch;
+      else break;
+    }
+    line = chunk || word.slice(0, 1);
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  else if (line) truncated = true;
+
+  // If anything was dropped, ellipsise the final kept line so the overrun reads
+  // as deliberate truncation rather than silently vanishing.
+  if (truncated && lines.length > 0) {
+    const i = lines.length - 1;
+    let last = lines[i];
+    while (last.length > 0 && !fits(`${last}…`)) last = last.slice(0, -1);
+    lines[i] = `${last}…`;
+  }
+  return lines;
 }
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
@@ -282,6 +344,25 @@ function drawTitleBlock(
 
   // Middle column — legend.
   const mxx = M + (PW - 2 * M) * 0.46;
+
+  // Project / Notes — a small wrapped block UNDER the identity rows (which end
+  // at topY-99) and LEFT of the legend column (mxx), so it never collides with
+  // either. Width is bounded by the legend column start; lines are capped so
+  // long text truncates inside the 132pt strip rather than overflowing it.
+  const notes = (input.notes ?? '').trim();
+  if (notes) {
+    const notesX = lx;
+    const notesMaxW = Math.max(60, mxx - lx - 10);
+    text('Project / Notes', notesX, topY - 110, 6, bold, DIM);
+    const noteLines = wrapTextToWidth(
+      notes,
+      notesMaxW,
+      6.5,
+      (s, sz) => font.widthOfTextAtSize(safe(s), sz),
+      2,
+    );
+    noteLines.forEach((ln, i) => text(ln, notesX, topY - 120 - i * 8.5, 6.5, font, INK));
+  }
   text('Legend', mxx, topY - 16, 9, bold);
   const sample = (y: number, label: string, dash: number[] | null, w: number, c = SEPIA): void => {
     const opts: Parameters<PDFPage['drawLine']>[0] = { start: { x: mxx, y: y + 2 }, end: { x: mxx + 26, y: y + 2 }, thickness: w, color: c };

@@ -1517,6 +1517,9 @@ let lastCloudName = 'contours';
 const analysePanel = new AnalysePanel({
   onRun: () => void terrainRunner.run(),
   onSelectInterval: (m) => void terrainRunner.run(m),
+  // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
+  // the SAME cached terrain core the runner uses — never mutates the panel.
+  buildResultAtInterval: (m) => terrainRunner.buildResultAtInterval(m),
   getExportBasename: () => lastCloudName,
   getMapContext: () => {
     const cloud = activeId ? viewer.getCloud(activeId) : null;

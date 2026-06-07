@@ -45,6 +45,17 @@ import {
   type ContourFormat,
 } from '../terrain/contour/contourDownload';
 import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
+import { openModal, type ModalHandle } from './Modal';
+import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
+import {
+  SHEET_OPTIONS,
+  ORIENTATION_OPTIONS,
+  sanitizeMapFilename,
+  ensurePdfExtension,
+  defaultMapTitle,
+  defaultMapNotes,
+  defaultMapFilename,
+} from '../render/measure/mapSheetExportOptions';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import {
   hypsometricColor,
@@ -64,6 +75,14 @@ export interface AnalysePanelCallbacks {
   onRun?: () => void;
   /** Re-run the analysis at a chosen contour interval (metres). */
   onSelectInterval?: (intervalM: number) => void;
+  /**
+   * Build a fresh contour result at a chosen interval for the PDF export ONLY,
+   * without mutating the visible panel/result. Implemented by the host over the
+   * same cached terrain core the runner uses, so re-picking the deliverable
+   * interval is cheap (cache hit) and has no panel side effects. When omitted,
+   * the dialog falls back to the current result and disables the interval picker.
+   */
+  buildResultAtInterval?: (intervalM: number) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
   /** Context for the printable map sheet (world origin, title block fields). */
@@ -97,6 +116,15 @@ function section(text: string): HTMLElement {
 
 /** Prompt shown in a raster tile's sample readout before the user clicks. */
 const SAMPLE_HINT = 'Click the map to sample a point.';
+
+// Session-remembered MAP PDF dialog choices. Module-level by design (per the
+// brief — NOT localStorage): they persist across opens within this tab session
+// only, so the next export pre-fills the user's last Prepared by / Sheet /
+// Orientation / Notes without leaking anything to disk.
+let lastPreparedBy = '';
+let lastSheet: SheetSize = 'letter';
+let lastOrientation: SheetOrientation = 'portrait';
+let lastNotes: string | null = null;
 
 /**
  * Split a formatted readiness value into a leading figure and a unit so the
@@ -1085,8 +1113,10 @@ export class AnalysePanel {
       row.append(btn);
     }
     // Printable map sheet — the field deliverable (contours + collar + accuracy).
+    // Clicking opens a pre-export dialog (title-block fields + interval +
+    // filename) rather than exporting immediately.
     const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'MAP PDF' });
-    mapBtn.addEventListener('click', () => void this._exportMapSheet(mapBtn));
+    mapBtn.addEventListener('click', () => this._openMapPdfDialog(mapBtn));
     this._exportButtons.push(mapBtn);
     row.append(mapBtn);
 
@@ -1150,46 +1180,258 @@ export class AnalysePanel {
     }
   }
 
-  /** Build and download the printable contour map sheet (lazy pdf-lib). */
-  private async _exportMapSheet(btn: HTMLButtonElement): Promise<void> {
+  /**
+   * Open the pre-export MAP PDF dialog: an accessible modal that lets the user
+   * edit the title-block fields, the FINAL contour interval, and the output
+   * filename (all pre-filled from the scan), while the measured/accuracy fields
+   * stay AUTO + LOCKED. On Export it (optionally) regenerates the contour model
+   * at the chosen interval from the cached core — without mutating the panel —
+   * then builds + downloads the PDF.
+   */
+  private _openMapPdfDialog(triggerBtn: HTMLButtonElement): void {
     const r = this._result;
+    // Same hard guard as the export itself — a blocked / empty result never
+    // reaches the dialog.
     if (!r || r.model.features.length === 0 || r.quality.exportReadiness === 'blocked') return;
-    const label = btn.textContent ?? 'MAP PDF';
-    btn.disabled = true;
-    btn.textContent = '…';
-    try {
-      const { buildMapSheetPdf } = await loadMapSheetPdf();
-      const ctx = this._cb.getMapContext?.() ?? {};
-      const bytes = await buildMapSheetPdf({
-        model: r.model,
-        labels: r.labels,
-        worldOrigin: ctx.worldOrigin ?? null,
-        crs: r.model.crs,
-        verticalDatum: r.model.verticalDatum,
-        accuracy: r.accuracyStandards,
-        // The map sheet is a georeferenced deliverable, so its readiness note
-        // reflects EXPORT readiness (surface quality gated by a known CRS +
-        // datum): a clean surface with an unknown datum prints PREVIEW, not a
-        // validated note. 'available' → 'ready' for the note's vocabulary.
-        readiness: r.quality.exportReadiness === 'available' ? 'ready' : r.quality.exportReadiness,
-        title: ctx.title,
-        preparedBy: ctx.preparedBy,
-        sheet: ctx.sheet,
-      });
-      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${this._cb.getExportBasename?.() ?? 'contours'}-map.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('OpenLiDARViewer: map sheet export failed.', err);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = label;
+
+    const ctx = this._cb.getMapContext?.() ?? {};
+    const basename = this._cb.getExportBasename?.() ?? 'contours';
+    const currentInterval = r.model.intervalM;
+    const canRegen = typeof this._cb.buildResultAtInterval === 'function';
+    // Capture one timestamp so the LOCKED "Generated" value the user sees equals
+    // the one printed on the sheet.
+    const generatedAt = new Date();
+
+    // ── editable fields ──────────────────────────────────────────────────────
+    let fieldSeq = 0;
+    const nextId = (): string => `olv-mappdf-${++fieldSeq}`;
+    const field = (labelText: string, control: HTMLElement, hint?: string): HTMLElement => {
+      const id = nextId();
+      control.id = id;
+      const lab = el('label', { className: 'olv-modal-label', text: labelText });
+      lab.setAttribute('for', id);
+      const wrap = el('div', { className: 'olv-modal-field' });
+      wrap.append(lab, control);
+      if (hint) wrap.append(el('p', { className: 'olv-modal-hint', text: hint }));
+      return wrap;
+    };
+
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'olv-modal-input';
+    titleInput.value = defaultMapTitle({ title: ctx.title, basename });
+
+    const preparedInput = document.createElement('input');
+    preparedInput.type = 'text';
+    preparedInput.className = 'olv-modal-input';
+    preparedInput.value = lastPreparedBy;
+    preparedInput.placeholder = 'Name or organisation (optional)';
+
+    const notesInput = document.createElement('textarea');
+    notesInput.className = 'olv-modal-input olv-modal-textarea';
+    notesInput.rows = 3;
+    notesInput.value =
+      lastNotes ?? defaultMapNotes({ basename, intervalM: currentInterval, crs: r.model.crs });
+
+    const sheetSel = document.createElement('select');
+    sheetSel.className = 'olv-modal-input';
+    for (const opt of SHEET_OPTIONS) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === lastSheet) o.selected = true;
+      sheetSel.append(o);
     }
+
+    const orientSel = document.createElement('select');
+    orientSel.className = 'olv-modal-input';
+    for (const opt of ORIENTATION_OPTIONS) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === lastOrientation) o.selected = true;
+      orientSel.append(o);
+    }
+
+    const intervalSel = document.createElement('select');
+    intervalSel.className = 'olv-modal-input';
+    for (const opt of r.gate.options) {
+      const o = document.createElement('option');
+      o.value = String(opt.intervalM);
+      o.textContent = describeIntervalOption(opt);
+      o.disabled = !opt.supported;
+      if (opt.intervalM === currentInterval) o.selected = true;
+      intervalSel.append(o);
+    }
+    // Without a regeneration callback we cannot change the interval honestly —
+    // lock the picker to the current deliverable so the file matches the panel.
+    if (!canRegen) intervalSel.disabled = true;
+
+    const filenameInput = document.createElement('input');
+    filenameInput.type = 'text';
+    filenameInput.className = 'olv-modal-input';
+    filenameInput.value = defaultMapFilename(basename);
+
+    const editable = el('div', { className: 'olv-modal-grid' });
+    editable.append(
+      field('Title', titleInput),
+      field('Prepared by', preparedInput),
+      field('Project / Notes', notesInput, 'Free text printed in the title block.'),
+      field('Sheet size', sheetSel),
+      field('Orientation', orientSel),
+      field(
+        'Contour interval',
+        intervalSel,
+        canRegen
+          ? 'The final interval for this deliverable.'
+          : 'Interval regeneration unavailable — using the current contours.',
+      ),
+      field('Output filename', filenameInput, 'A single .pdf is added on download.'),
+    );
+
+    // ── locked / auto section (read-only) ────────────────────────────────────
+    const a = r.accuracyStandards;
+    const fmtM = (v: number | null | undefined): string =>
+      v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—';
+    const lockedRows: Array<[string, string]> = [
+      ['Horizontal CRS', r.model.crs ?? '— not georeferenced'],
+      ['Vertical datum', r.model.verticalDatum ?? '—'],
+      ['NVA (95%)', fmtM(a?.nvaM)],
+      ['VVA (95th pct)', fmtM(a?.vvaM)],
+      ['RMSEz', fmtM(a?.rmseZM)],
+      ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
+      ['Approx. scale', 'auto — fits sheet'],
+      ['Generated', generatedAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],
+    ];
+    const locked = el('div', { className: 'olv-modal-locked' });
+    locked.append(el('div', { className: 'olv-modal-locked-head', text: 'Measured (auto · locked)' }));
+    const lockedGrid = el('div', { className: 'olv-modal-locked-grid' });
+    for (const [k, v] of lockedRows) {
+      lockedGrid.append(
+        el('span', { className: 'olv-modal-locked-k', text: k }),
+        el('span', { className: 'olv-modal-locked-v', text: v }),
+      );
+    }
+    locked.append(
+      lockedGrid,
+      el('p', {
+        className: 'olv-modal-locked-note',
+        text: 'These are measured from the scan and not editable.',
+      }),
+    );
+
+    const body = el('div', { className: 'olv-modal-form' });
+    body.append(editable, locked);
+
+    // ── actions ──────────────────────────────────────────────────────────────
+    const errLine = el('p', { className: 'olv-modal-error' });
+    errLine.style.display = 'none';
+    const cancelBtn = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Cancel' });
+    cancelBtn.setAttribute('type', 'button');
+    const exportBtn = el('button', { className: 'olv-modal-btn olv-modal-cta', text: 'Export PDF' });
+    exportBtn.setAttribute('type', 'button');
+    const footer = el('div', { className: 'olv-modal-actions' });
+    footer.append(errLine, cancelBtn, exportBtn);
+
+    const handle: ModalHandle = openModal({
+      title: 'Export contour map (PDF)',
+      body,
+      footer,
+      returnFocusTo: triggerBtn,
+    });
+
+    cancelBtn.addEventListener('click', () => handle.close());
+
+    exportBtn.addEventListener('click', () => {
+      void (async (): Promise<void> => {
+        errLine.style.display = 'none';
+        exportBtn.disabled = true;
+        cancelBtn.disabled = true;
+        const restoreLabel = exportBtn.textContent ?? 'Export PDF';
+        exportBtn.textContent = 'Exporting…';
+        try {
+          const chosenInterval = Number(intervalSel.value);
+          // Regenerate ONLY when the interval changed AND a builder exists —
+          // from the cached core, without touching the visible result.
+          let result = r;
+          if (
+            canRegen &&
+            Number.isFinite(chosenInterval) &&
+            chosenInterval !== currentInterval
+          ) {
+            result = await this._cb.buildResultAtInterval!(chosenInterval);
+          }
+          await this._buildAndDownloadMapPdf(result, {
+            title: titleInput.value,
+            preparedBy: preparedInput.value,
+            notes: notesInput.value,
+            sheet: sheetSel.value as SheetSize,
+            orientation: orientSel.value as SheetOrientation,
+            filename: filenameInput.value,
+            worldOrigin: ctx.worldOrigin ?? null,
+            generatedAt,
+          });
+          // Remember the user's choices for the rest of the session.
+          lastPreparedBy = preparedInput.value;
+          lastSheet = sheetSel.value as SheetSize;
+          lastOrientation = orientSel.value as SheetOrientation;
+          lastNotes = notesInput.value;
+          handle.close();
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('OpenLiDARViewer: map sheet export failed.', err);
+          errLine.textContent = 'Export failed — see the console for details.';
+          errLine.style.display = '';
+          exportBtn.disabled = false;
+          cancelBtn.disabled = false;
+          exportBtn.textContent = restoreLabel;
+        }
+      })();
+    });
+  }
+
+  /** Build and download the printable contour map sheet (lazy pdf-lib). */
+  private async _buildAndDownloadMapPdf(
+    result: AnalyseContoursResult,
+    opts: {
+      title: string;
+      preparedBy: string;
+      notes: string;
+      sheet: SheetSize;
+      orientation: SheetOrientation;
+      filename: string;
+      worldOrigin: { x: number; y: number } | null;
+      generatedAt: Date;
+    },
+  ): Promise<void> {
+    const { buildMapSheetPdf } = await loadMapSheetPdf();
+    const bytes = await buildMapSheetPdf({
+      model: result.model,
+      labels: result.labels,
+      worldOrigin: opts.worldOrigin,
+      crs: result.model.crs,
+      verticalDatum: result.model.verticalDatum,
+      accuracy: result.accuracyStandards,
+      // The map sheet is a georeferenced deliverable, so its readiness note
+      // reflects EXPORT readiness (surface quality gated by a known CRS +
+      // datum): a clean surface with an unknown datum prints PREVIEW, not a
+      // validated note. 'available' → 'ready' for the note's vocabulary.
+      readiness:
+        result.quality.exportReadiness === 'available' ? 'ready' : result.quality.exportReadiness,
+      title: opts.title.trim() || undefined,
+      preparedBy: opts.preparedBy.trim() || undefined,
+      notes: opts.notes.trim() || undefined,
+      sheet: opts.sheet,
+      orientation: opts.orientation,
+      generatedAt: opts.generatedAt,
+    });
+    const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = ensurePdfExtension(sanitizeMapFilename(opts.filename));
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   /**

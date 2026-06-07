@@ -20,10 +20,54 @@
 import type { Viewer } from '../render/Viewer';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 import type { CrsService } from '../geo/CrsService';
+import type {
+  AnalyseContoursResult,
+  TerrainCoreParams,
+} from '../terrain/contour/analyseContours';
 import {
   loadTerrainCoreCache,
   loadComputeTerrainCoreAsync,
 } from '../lazyChunks';
+
+/**
+ * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
+ * from the gathered positions, exactly as {@link TerrainAnalysisRunner.run}
+ * does. Factored out so the PDF export's interval re-pick produces a
+ * byte-identical fingerprint and therefore HITS the same cached core instead of
+ * recomputing the heavy half.
+ */
+function deriveCoreParams(
+  positions: Float32Array,
+  classification: Uint8Array | undefined,
+  crsService: CrsService,
+): TerrainCoreParams {
+  const n = positions.length / 3;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  // Aim for a grid ~256 cells across, clamped to a sane floor.
+  const extent = Math.max(maxX - minX, maxY - minY, 1);
+  const cellSizeM = Math.max(0.25, extent / 256);
+  const cur = crsService.current();
+  const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
+  return {
+    cellSizeM,
+    crs: crsName,
+    isGeographic: cur?.kind === 'geographic',
+    verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
+    verticalDatum: cur?.verticalDatum ?? null,
+    classification,
+  };
+}
 
 export interface TerrainAnalysisRunnerDeps {
   /** Returns the lazy Viewer instance (null-typed until its chunk resolves). */
@@ -44,6 +88,14 @@ export interface TerrainAnalysisRunner {
    * paints, and is fully guarded so a failure never breaks the shell.
    */
   run(intervalM?: number): Promise<void>;
+  /**
+   * Build a fresh contour result at a chosen interval for the PDF export WITHOUT
+   * touching the visible panel/result. Reuses the SAME cached-core path as
+   * {@link run} (`getOrComputeCoreAsync` → cache hit → `contoursFromCore`), so a
+   * re-pick on the open scan never recomputes the heavy half. Throws when no
+   * scan is loaded. Has no side effects on the panel.
+   */
+  buildResultAtInterval(intervalM: number): Promise<AnalyseContoursResult>;
   /**
    * Abort any in-flight compute and drop every cached terrain core. Called
    * from the reset-to-empty path so a result for the now-closed scan can never
@@ -127,39 +179,12 @@ export function createTerrainAnalysisRunner(
       clearTerrainCoreCacheFn = clearTerrainCoreCache;
       if (isStale()) return;
       const pos = gathered.positions;
-      const n = pos.length / 3;
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      for (let i = 0; i < n; i++) {
-        const x = pos[i * 3];
-        const y = pos[i * 3 + 1];
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-      // Aim for a grid ~256 cells across, clamped to a sane floor.
-      const extent = Math.max(maxX - minX, maxY - minY, 1);
-      const cellSizeM = Math.max(0.25, extent / 256);
-      // Feed the active scan's resolved CRS + vertical datum into the analysis
-      // so the readiness gate and export honesty reflect a georeferenced file
-      // (a real horizontal CRS lifts the "CRS unknown" downgrade; a known
-      // vertical datum clears the "datum unknown" warning).
-      const cur = crsService.current();
-      const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
       // Interval-independent (cacheable) core params. The fingerprint cache keys
       // a core by the cloud content + exactly these, so re-picking an interval
-      // hits the cache instead of recomputing the heavy half.
-      const coreParams = {
-        cellSizeM,
-        crs: crsName,
-        isGeographic: cur?.kind === 'geographic',
-        verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
-        verticalDatum: cur?.verticalDatum ?? null,
-        classification: gathered.classification,
-      };
+      // hits the cache instead of recomputing the heavy half. Feeds the active
+      // scan's resolved CRS + vertical datum into the analysis so the readiness
+      // gate and export honesty reflect a georeferenced file.
+      const coreParams = deriveCoreParams(pos, gathered.classification, crsService);
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
       // the worker can't load). The AbortSignal cancels a superseded run.
@@ -198,6 +223,32 @@ export function createTerrainAnalysisRunner(
     }
   }
 
+  async function buildResultAtInterval(intervalM: number): Promise<AnalyseContoursResult> {
+    const viewer = getViewer();
+    const gathered = viewer.gatherTerrainPositions();
+    if (!gathered) throw new Error('No scan loaded to build contours from.');
+    // Same cached-core path the run() loop uses. Because deriveCoreParams
+    // reproduces the run's fingerprint exactly, an already-analysed scan HITS
+    // the LRU cache here and no worker job is started — only the cheap
+    // interval-dependent contour stage reruns. We deliberately do NOT touch the
+    // panel or the run token: this is a side-effect-free build for the PDF only.
+    const { getOrComputeCoreAsync, contoursFromCore } = await loadTerrainCoreCache();
+    const { computeTerrainCoreAsync } = await loadComputeTerrainCoreAsync();
+    const coreParams = deriveCoreParams(gathered.positions, gathered.classification, crsService);
+    const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
+      computeTerrainCoreAsync(
+        input as Float32Array,
+        (input as Float32Array).length / 3,
+        params,
+        params.classification,
+        // No abort here: a cache miss (scan analysed under a different fingerprint)
+        // computes once; the export awaits it. There is no superseding run to cancel.
+        new AbortController().signal,
+      ),
+    );
+    return contoursFromCore(core, { intervalM });
+  }
+
   function abortAndClearCache(): void {
     // Abort any in-flight terrain compute (worker job + its reply) so a result
     // for the now-closed scan can never land on the panel.
@@ -210,5 +261,5 @@ export function createTerrainAnalysisRunner(
     clearTerrainCoreCacheFn?.();
   }
 
-  return { run, abortAndClearCache };
+  return { run, buildResultAtInterval, abortAndClearCache };
 }
