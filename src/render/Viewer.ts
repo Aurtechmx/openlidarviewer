@@ -1590,6 +1590,13 @@ export class Viewer {
               /* a legend refresh must never break the streaming pipeline */
             }
           }
+          // Geometry-level node-ready hook — lets the host re-route the scan
+          // type as the cloud fills in. Guarded so a host throw can't break
+          // streaming.
+          if (this.onStreamingNodeReady) {
+            try { this.onStreamingNodeReady(); }
+            catch { /* a re-route must never break the streaming pipeline */ }
+          }
           if (benchmark) {
             benchmark.recordFirstPaint();
             benchmark.recordNodeReady(node.record.id);
@@ -1835,6 +1842,19 @@ export class Viewer {
       sampled: stride > 1,
       totalPoints,
     };
+  }
+
+  /**
+   * Total resident point count — streaming nodes currently decoded, or every
+   * loaded point for static clouds. Cheap (no buffer walk): used to gate a
+   * debounced scan-type re-route so it only fires once the cloud has filled in
+   * materially. v0.4.2.
+   */
+  residentPointTotal(): number {
+    if (this._streaming) return this._streaming.cloud.residentPointCount;
+    let total = 0;
+    for (const { cloud } of this._clouds.values()) total += cloud.pointCount;
+    return total;
   }
 
   /** Show or hide a cloud. */
@@ -2397,6 +2417,14 @@ export class Viewer {
    * has their full classification buffer at load time).
    */
   onStreamingNodeClasses?: (classes: Uint8Array) => void;
+
+  /**
+   * Optional host hook fired once per streaming node as it becomes resident
+   * (geometry, regardless of classification). Lets the host re-evaluate cheap,
+   * resolution-sensitive decisions — e.g. the scan-type routing — as a sparse
+   * early cloud fills in materially. Set to `undefined` to detach.
+   */
+  onStreamingNodeReady?: () => void;
 
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();

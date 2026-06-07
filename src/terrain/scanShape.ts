@@ -1,26 +1,40 @@
 /**
  * scanShape.ts
  *
- * Decide whether a scan is a TERRAIN-like height field (a thin shell over a
- * wide footprint — what the DTM / contour pipeline is built for) or a compact
- * 3-D OBJECT (a phone scan of a sculpture, a chair, a room) where terrain
- * analysis is a category error and would print confident-but-meaningless
- * contours and accuracy figures.
+ * Decide how to ROUTE a scan: a TERRAIN-like height field (a thin shell over a
+ * wide footprint — what the DTM / contour pipeline is built for), an INTERIOR
+ * space (a room / 360 / multi-room house: floor + walls, with or without a
+ * clean ceiling), or a compact 3-D OBJECT (a phone scan of a sculpture). For
+ * the latter two, terrain analysis is a category error that would print
+ * confident-but-meaningless contours and accuracy figures.
  *
- * Two cheap geometric signals, no ML:
+ * Pure data, deterministic, no ML. Operates on an interleaved xyz Float32Array,
+ * with an OPTIONAL index-aligned per-point ASPRS classification.
+ *
+ * The signals (all cheap, grid-based on the detected up frame):
  *   - aspect = vertical extent / horizontal footprint. Terrain is flat-ish
  *     (low aspect); objects are compact or tall (higher aspect).
- *   - overhangFraction = fraction of occupied cells (on the two horizontal
- *     axes) whose returns span a large VERTICAL range — i.e. more than one
- *     surface stacked over the same footprint. Terrain is 2.5-D (one surface
- *     per column → near-zero); objects have undersides / overhangs (high).
+ *   - overhangFraction = fraction of occupied footprint cells whose returns
+ *     span a large VERTICAL range (more than one surface stacked over the same
+ *     footprint). Terrain ≈ 0; interiors AND forests are high.
+ *   - wallCoverage = fraction of occupied cells whose vertical point span is a
+ *     large fraction (≥ WALL_SPAN_FRAC) of the whole extent — a near-full-height
+ *     column: a wall, or a floor-to-ceiling enclosure view. Interiors (esp.
+ *     360) are HIGH; bare terrain ≈ 0; drone-over-roofs low.
+ *   - floorCoverage / ceilingCoverage = occupied-cell fraction with a return in
+ *     the bottom / top band — a floor under / a ceiling over the footprint.
+ *   - topVegFraction = (classification only) fraction of TOP-band returns
+ *     classified as vegetation (ASPRS 3/4/5). High over a wide footprint ⇒ a
+ *     natural canopy, NOT a ceiling ⇒ terrain. This is the forest tiebreaker:
+ *     a forest looks like an interior geometrically (floor + high overhang +
+ *     full-height spans) and only the classification separates the two.
  *
- * Up-axis is DETECTED, not assumed: LAS is Z-up but phone / glTF object scans
- * are often Y-up. The true up is the axis along which the surface is most
- * single-valued, so we try each axis as "up" and keep the one with the least
- * overhang. A caller that already knows the vertical axis can override it.
- *
- * Pure data, deterministic. Operates on an interleaved xyz Float32Array.
+ * Up-axis is DETECTED, not assumed (LAS is Z-up but phone / glTF scans are
+ * often Y-up). A closed room reads ~1.0 overhang on EVERY axis, so least-
+ * overhang can't find up; instead we pick the axis whose LOW surface (per-cell
+ * zMin) is the widest + flattest coherent height field — a floor / ground —
+ * with the floor+ceiling enclosure concentration as a tie-breaking hint. A
+ * caller that already knows the vertical axis can override it.
  */
 
 import type { VerticalAxis } from './ground/groundFilter';
@@ -28,9 +42,8 @@ import type { VerticalAxis } from './ground/groundFilter';
 export type ScanKind = 'terrain' | 'object' | 'ambiguous';
 /**
  * The decisive routing bucket. `terrain` is the only one the DTM / contour
- * pipeline is built for; `interior` (a room / 360 / iPhone-LiDAR space with a
- * floor + ceiling enclosure) and `object` (a compact 3-D scan) both want the
- * space/object analysis instead.
+ * pipeline is built for; `interior` (a room / 360 / multi-room house) and
+ * `object` (a compact 3-D scan) both want the space/object analysis instead.
  */
 export type SpaceKind = 'interior' | 'object' | 'terrain';
 export type Axis = 'x' | 'y' | 'z';
@@ -44,12 +57,17 @@ export interface ScanShape {
   readonly nonTerrain: boolean;
   /** Which non-terrain (or terrain) analysis to emphasise. */
   readonly spaceKind: SpaceKind;
-  /** 0..1 confidence in `kind`. */
+  /** 0..1 confidence in the routing verdict. */
   readonly confidence: number;
   /** Vertical extent / horizontal footprint, in the detected up frame. */
   readonly aspect: number;
   /** Fraction of occupied footprint cells carrying more than one surface. */
   readonly overhangFraction: number;
+  /**
+   * 0..1 — fraction of occupied footprint cells whose vertical point span is a
+   * large fraction of the whole extent (a wall / floor-to-ceiling column).
+   */
+  readonly wallCoverage: number;
   /**
    * 0..1 — fraction of occupied footprint cells with a return near the TOP of
    * the vertical extent (a ceiling sitting over the footprint).
@@ -60,6 +78,11 @@ export interface ScanShape {
    * of the vertical extent (a floor under the footprint).
    */
   readonly floorCoverage: number;
+  /**
+   * 0..1 — fraction of TOP-band returns classified as vegetation (ASPRS
+   * 3/4/5). 0 when no classification is supplied. Drives the forest tiebreaker.
+   */
+  readonly topVegFraction: number;
   /** AABB extents [horizontal1, horizontal2, vertical], source units. */
   readonly extent: readonly [number, number, number];
   /** The detected (or supplied) up axis. */
@@ -71,43 +94,88 @@ export interface ScanShape {
 export interface ScanShapeParams {
   /** Force the up axis instead of detecting it. */
   readonly verticalAxis?: VerticalAxis;
+  /**
+   * Per-point ASPRS classification, index-aligned with the xyz triples. When
+   * present, the vegetation tiebreaker can fire (a classified forest stays
+   * terrain even though its geometry mimics an interior).
+   */
+  readonly classification?: ArrayLike<number>;
   /** Max points to sample for the test. Default 60000. */
   readonly maxSamples?: number;
-  /** Grid resolution (cells per axis) for the overhang test. Default 64. */
+  /** Grid resolution (cells per axis) for the footprint tests. Default 64. */
   readonly gridN?: number;
 }
 
+// ── Object (compact 3-D) thresholds — unchanged, for `kind` back-compat. ─────
 const ASPECT_OBJECT = 0.65;
 const OVERHANG_OBJECT = 0.2;
+
+// ── Band / coverage geometry. ────────────────────────────────────────────────
 /** Vertical band (fraction of vertical extent) that counts as floor / ceiling. */
 const PLANE_BAND = 0.15;
-/** Footprint coverage a floor AND a ceiling must each reach to read as enclosed. */
+/** Footprint coverage a floor AND a ceiling must each reach to read as a clean,
+ *  flat enclosure (the strict signal — a real multi-room house never reaches it
+ *  on the ceiling, which is why `wallCoverage` exists). */
 const ENCLOSURE_COVER = 0.45;
+
+// ── Wall / vertical-span signal. ─────────────────────────────────────────────
+/** A cell whose point span (zMax−zMin) reaches this fraction of the whole
+ *  vertical extent is a near-full-height column: a wall or a floor-to-ceiling
+ *  enclosure view. */
+const WALL_SPAN_FRAC = 0.6;
+
+// ── Interior routing thresholds. ─────────────────────────────────────────────
+/** Floor must cover this much of the footprint to read as an enclosed space. */
+const FLOOR_INTERIOR = 0.5;
+/** Near-full-height columns must reach this share of the footprint (a partial
+ *  ceiling alone won't, so the WALLS carry the multi-room house). */
+const WALL_INTERIOR = 0.25;
+/** Interiors stack surfaces; require at least this much overhang too. */
+const OVERHANG_INTERIOR = 0.15;
+
+// ── Vegetation tiebreaker (classification only). ─────────────────────────────
+/** ASPRS vegetation classes — low (3), medium (4), high (5) veg. */
+const VEG_CLASSES: ReadonlySet<number> = new Set([3, 4, 5]);
+/** Top-band returns this veg-dominated over a wide footprint ⇒ canopy, not a
+ *  ceiling ⇒ terrain, even when overhang / wall coverage look interior. */
+const VEG_DOMINANT = 0.55;
+
+// ── Up-axis detection. ───────────────────────────────────────────────────────
+/** Weight of the floor+ceiling enclosure concentration when scoring an axis as
+ *  "up". The floor-field (fill × flatness) is primary; this only breaks ties —
+ *  notably a closed box, where every axis has an equally flat low surface. */
+const ENCLOSURE_HINT_WEIGHT = 1.5;
+/** Penalty on multi-valued (overhung) columns when scoring an axis as "up".
+ *  The true up is the most single-valued — a sloped height field still ties on
+ *  the flat floor-field along the wrong axis, so this breaks toward the axis
+ *  with one surface per column. Cancels for a closed room (≈1.0 on every axis,
+ *  where the enclosure hint decides). */
+const OVERHANG_PENALTY = 1.0;
+/** Roughness sensitivity for the floor-field flatness term. Higher ⇒ a rough
+ *  low surface is penalised harder. */
+const FLATNESS_K = 8;
+
 const AXIS_NAME: readonly Axis[] = ['x', 'y', 'z'];
+/** [vOff, h1Off, h2Off] for each axis treated as up. */
+const ASSIGN: ReadonlyArray<readonly [number, number, number]> = [
+  [0, 1, 2], // x up
+  [1, 0, 2], // y up
+  [2, 0, 1], // z up
+];
 
-interface AxisShape {
-  aspect: number;
-  overhangFraction: number;
-  ex1: number;
-  ex2: number;
-  exV: number;
-}
-
-interface Enclosure {
-  /** True when a dominant floor AND a dominant ceiling both span the footprint. */
-  ceilingPresent: boolean;
-  /** 0..1 occupied-cell fraction with a return in the bottom band (floor). */
-  floorCoverage: number;
-  /** 0..1 occupied-cell fraction with a return in the top band (ceiling). */
-  ceilingCoverage: number;
-  /** Point concentration in the floor + ceiling bands — used to pick the up axis. */
+interface FloorField {
+  /** fill × flatness of the per-cell zMin (low) surface, 0..~1. */
   score: number;
+  /** Fraction of occupied cells whose column spans multiple surfaces (0..1). */
+  overhang: number;
 }
 
-/** Detect a floor + ceiling enclosure treating `vOff` as up. A room has a
- *  dominant LOW horizontal surface (floor) and a dominant HIGH one (ceiling)
- *  each covering most of the footprint; terrain has neither. */
-function enclosureForAxis(
+/** Score how good a "floor" the per-cell LOW surface (zMin) makes when `vOff`
+ *  is up: the widest (fill) and flattest (low roughness) coherent height field
+ *  wins. A true ground / floor scores high; a wall seen edge-on scores low.
+ *  Also returns the column overhang fraction (multi-valuedness) for the up
+ *  score's single-valuedness penalty. */
+function floorFieldForAxis(
   positions: Float32Array | ReadonlyArray<number>,
   n: number,
   stride: number,
@@ -115,7 +183,7 @@ function enclosureForAxis(
   vOff: number,
   h1Off: number,
   h2Off: number,
-): Enclosure {
+): FloorField {
   let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
   for (let i = 0; i < n; i += stride) {
     const b = i * 3;
@@ -128,69 +196,7 @@ function enclosureForAxis(
   const ex1 = Math.max(0, maxH1 - minH1);
   const ex2 = Math.max(0, maxH2 - minH2);
   const exV = Math.max(0, maxV - minV);
-  if (exV <= 0) return { ceilingPresent: false, floorCoverage: 0, ceilingCoverage: 0, score: 0 };
-
-  const band = PLANE_BAND * exV;
-  const floorHi = minV + band;
-  const ceilLo = maxV - band;
-  const cols = gridN, rows = gridN;
-  const zMin = new Float32Array(cols * rows).fill(Infinity);
-  const zMax = new Float32Array(cols * rows).fill(-Infinity);
-  const cellW = ex1 > 0 ? ex1 / cols : 1;
-  const cellH = ex2 > 0 ? ex2 / rows : 1;
-  let total = 0, floorBandPts = 0, ceilBandPts = 0;
-  for (let i = 0; i < n; i += stride) {
-    const b = i * 3;
-    const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
-    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    total++;
-    if (v <= floorHi) floorBandPts++;
-    if (v >= ceilLo) ceilBandPts++;
-    let c = Math.floor((h1 - minH1) / cellW); if (c < 0) c = 0; else if (c >= cols) c = cols - 1;
-    let r = Math.floor((h2 - minH2) / cellH); if (r < 0) r = 0; else if (r >= rows) r = rows - 1;
-    const idx = r * cols + c;
-    if (v < zMin[idx]) zMin[idx] = v;
-    if (v > zMax[idx]) zMax[idx] = v;
-  }
-  let occupied = 0, floorCells = 0, ceilCells = 0;
-  for (let i = 0; i < cols * rows; i++) {
-    if (zMin[i] === Infinity) continue;
-    occupied++;
-    if (zMin[i] <= floorHi) floorCells++;
-    if (zMax[i] >= ceilLo) ceilCells++;
-  }
-  const floorCoverage = occupied > 0 ? floorCells / occupied : 0;
-  const ceilingCoverage = occupied > 0 ? ceilCells / occupied : 0;
-  const score = total > 0 ? (floorBandPts + ceilBandPts) / total : 0;
-  const ceilingPresent = ceilingCoverage >= ENCLOSURE_COVER && floorCoverage >= ENCLOSURE_COVER;
-  return { ceilingPresent, floorCoverage, ceilingCoverage, score };
-}
-
-/** Compute aspect + overhang treating `vOff` as up and `h1Off`/`h2Off` as the
- *  horizontal plane (all are interleaved-triple offsets 0/1/2). */
-function axisShape(
-  positions: Float32Array | ReadonlyArray<number>,
-  n: number,
-  stride: number,
-  gridN: number,
-  vOff: number,
-  h1Off: number,
-  h2Off: number,
-): AxisShape {
-  let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
-  for (let i = 0; i < n; i += stride) {
-    const b = i * 3;
-    const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
-    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    if (h1 < minH1) minH1 = h1; if (h1 > maxH1) maxH1 = h1;
-    if (h2 < minH2) minH2 = h2; if (h2 > maxH2) maxH2 = h2;
-    if (v < minV) minV = v; if (v > maxV) maxV = v;
-  }
-  const ex1 = Math.max(0, maxH1 - minH1);
-  const ex2 = Math.max(0, maxH2 - minH2);
-  const exV = Math.max(0, maxV - minV);
-  const footprint = Math.max(ex1, ex2, 1e-9);
-  const aspect = exV / footprint;
+  if (exV <= 0) return { score: 0, overhang: 0 };
 
   const cols = gridN, rows = gridN;
   const zMin = new Float32Array(cols * rows).fill(Infinity);
@@ -209,15 +215,149 @@ function axisShape(
     if (v > zMax[idx]) zMax[idx] = v;
   }
   let occupied = 0, stacked = 0;
+  let roughSum = 0, roughCount = 0;
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const z = zMin[idx];
+      if (z === Infinity) continue;
+      occupied++;
+      if (zMax[idx] - z > 1.5 * cellDiag) stacked++;
+      if (c + 1 < cols) { const zr = zMin[idx + 1]; if (zr !== Infinity) { roughSum += Math.abs(z - zr); roughCount++; } }
+      if (r + 1 < rows) { const zd = zMin[idx + cols]; if (zd !== Infinity) { roughSum += Math.abs(z - zd); roughCount++; } }
+    }
+  const fill = occupied / (cols * rows);
+  const roughnessNorm = roughCount > 0 ? (roughSum / roughCount) / exV : 0;
+  const flatness = 1 / (1 + FLATNESS_K * roughnessNorm);
+  return { score: fill * flatness, overhang: occupied > 0 ? stacked / occupied : 0 };
+}
+
+interface Enclosure {
+  /** Point concentration in the floor + ceiling bands — used to pick the up axis. */
+  score: number;
+}
+
+/** Concentration of returns in the floor + ceiling bands treating `vOff` as up.
+ *  A closed room packs most points into the two big horizontal faces, so this
+ *  peaks on the true up axis even when the floor-field is a flat tie. */
+function enclosureForAxis(
+  positions: Float32Array | ReadonlyArray<number>,
+  n: number,
+  stride: number,
+  vOff: number,
+): Enclosure {
+  let minV = Infinity, maxV = -Infinity;
+  for (let i = 0; i < n; i += stride) {
+    const v = positions[i * 3 + vOff];
+    if (!Number.isFinite(v)) continue;
+    if (v < minV) minV = v; if (v > maxV) maxV = v;
+  }
+  const exV = Math.max(0, maxV - minV);
+  if (exV <= 0) return { score: 0 };
+  const band = PLANE_BAND * exV;
+  const floorHi = minV + band;
+  const ceilLo = maxV - band;
+  let total = 0, bandPts = 0;
+  for (let i = 0; i < n; i += stride) {
+    const v = positions[i * 3 + vOff];
+    if (!Number.isFinite(v)) continue;
+    total++;
+    if (v <= floorHi || v >= ceilLo) bandPts++;
+  }
+  return { score: total > 0 ? bandPts / total : 0 };
+}
+
+interface AxisMetrics {
+  aspect: number;
+  overhangFraction: number;
+  wallCoverage: number;
+  floorCoverage: number;
+  ceilingCoverage: number;
+  topVegFraction: number;
+  ex1: number;
+  ex2: number;
+  exV: number;
+}
+
+/** Full per-cell metrics for the CHOSEN up axis: aspect, overhang, wall (full-
+ *  height span) coverage, floor / ceiling band coverage, and — when a
+ *  classification is supplied — the vegetation fraction of the TOP band. */
+function axisMetrics(
+  positions: Float32Array | ReadonlyArray<number>,
+  classification: ArrayLike<number> | undefined,
+  n: number,
+  stride: number,
+  gridN: number,
+  vOff: number,
+  h1Off: number,
+  h2Off: number,
+): AxisMetrics {
+  let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
+  for (let i = 0; i < n; i += stride) {
+    const b = i * 3;
+    const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
+    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    if (h1 < minH1) minH1 = h1; if (h1 > maxH1) maxH1 = h1;
+    if (h2 < minH2) minH2 = h2; if (h2 > maxH2) maxH2 = h2;
+    if (v < minV) minV = v; if (v > maxV) maxV = v;
+  }
+  const ex1 = Math.max(0, maxH1 - minH1);
+  const ex2 = Math.max(0, maxH2 - minH2);
+  const exV = Math.max(0, maxV - minV);
+  const footprint = Math.max(ex1, ex2, 1e-9);
+  const aspect = exV / footprint;
+  if (exV <= 0) {
+    return { aspect, overhangFraction: 0, wallCoverage: 0, floorCoverage: 0, ceilingCoverage: 0, topVegFraction: 0, ex1, ex2, exV };
+  }
+
+  const band = PLANE_BAND * exV;
+  const floorHi = minV + band;
+  const ceilLo = maxV - band;
+  const wallSpan = WALL_SPAN_FRAC * exV;
+  const cols = gridN, rows = gridN;
+  const zMin = new Float32Array(cols * rows).fill(Infinity);
+  const zMax = new Float32Array(cols * rows).fill(-Infinity);
+  const cellW = ex1 > 0 ? ex1 / cols : 1;
+  const cellH = ex2 > 0 ? ex2 / rows : 1;
+  const cellDiag = Math.hypot(cellW, cellH) || 1;
+  const hasClass = !!classification && classification.length === n;
+  let topBandPts = 0, topBandVeg = 0;
+  for (let i = 0; i < n; i += stride) {
+    const b = i * 3;
+    const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
+    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    if (v >= ceilLo) {
+      topBandPts++;
+      if (hasClass && VEG_CLASSES.has((classification as ArrayLike<number>)[i])) topBandVeg++;
+    }
+    let c = Math.floor((h1 - minH1) / cellW); if (c < 0) c = 0; else if (c >= cols) c = cols - 1;
+    let r = Math.floor((h2 - minH2) / cellH); if (r < 0) r = 0; else if (r >= rows) r = rows - 1;
+    const idx = r * cols + c;
+    if (v < zMin[idx]) zMin[idx] = v;
+    if (v > zMax[idx]) zMax[idx] = v;
+  }
+  let occupied = 0, stacked = 0, wallCells = 0, floorCells = 0, ceilCells = 0;
   for (let i = 0; i < cols * rows; i++) {
     if (zMin[i] === Infinity) continue;
     occupied++;
-    if (zMax[i] - zMin[i] > 1.5 * cellDiag) stacked++;
+    const span = zMax[i] - zMin[i];
+    if (span > 1.5 * cellDiag) stacked++;
+    if (span >= wallSpan) wallCells++;
+    if (zMin[i] <= floorHi) floorCells++;
+    if (zMax[i] >= ceilLo) ceilCells++;
   }
-  return { aspect, overhangFraction: occupied > 0 ? stacked / occupied : 0, ex1, ex2, exV };
+  return {
+    aspect,
+    overhangFraction: occupied > 0 ? stacked / occupied : 0,
+    wallCoverage: occupied > 0 ? wallCells / occupied : 0,
+    floorCoverage: occupied > 0 ? floorCells / occupied : 0,
+    ceilingCoverage: occupied > 0 ? ceilCells / occupied : 0,
+    topVegFraction: topBandPts > 0 ? topBandVeg / topBandPts : 0,
+    ex1, ex2, exV,
+  };
 }
 
-/** Classify a scan's shape from its point geometry. */
+/** Classify a scan's shape from its point geometry (+ optional classification). */
 export function classifyScanShape(
   positions: Float32Array | ReadonlyArray<number>,
   params: ScanShapeParams = {},
@@ -225,93 +365,89 @@ export function classifyScanShape(
   const n = Math.floor(positions.length / 3);
   const gridN = Math.max(8, Math.floor(params.gridN ?? 64));
   const maxSamples = Math.max(100, Math.floor(params.maxSamples ?? 60000));
+  const classification = params.classification && params.classification.length === n
+    ? params.classification
+    : undefined;
 
   if (n < 8) {
     return {
       kind: 'ambiguous', nonTerrain: false, spaceKind: 'terrain', confidence: 0,
-      aspect: 0, overhangFraction: 0, ceilingCoverage: 0, floorCoverage: 0,
-      extent: [0, 0, 0], up: 'z', reasons: ['Too few points to classify.'],
+      aspect: 0, overhangFraction: 0, wallCoverage: 0, ceilingCoverage: 0, floorCoverage: 0,
+      topVegFraction: 0, extent: [0, 0, 0], up: 'z', reasons: ['Too few points to classify.'],
     };
   }
   const stride = Math.max(1, Math.floor(n / maxSamples));
 
-  // Pick the up axis: supplied, or detected as the one with least overhang.
-  const ASSIGN: ReadonlyArray<readonly [number, number, number]> = [
-    [0, 1, 2], // x up
-    [1, 0, 2], // y up
-    [2, 0, 1], // z up
-  ];
+  // ── Up-axis: supplied, or detected as the widest + flattest low surface. ──
   let upIdx: number;
-  let sh: AxisShape;
-  let enc: Enclosure;
   if (params.verticalAxis) {
-    // Caller knows the up axis — honour it for shape AND enclosure.
     upIdx = params.verticalAxis === 'y' ? 1 : 2;
-    const [v, h1, h2] = ASSIGN[upIdx];
-    sh = axisShape(positions, n, stride, gridN, v, h1, h2);
-    enc = enclosureForAxis(positions, n, stride, gridN, v, h1, h2);
   } else {
-    // Up axis: least overhang for the terrain/object signals (back-compat),
-    // but if a floor+ceiling enclosure is found, the enclosure's own axis (the
-    // one whose floor+ceiling bands hold the most points) wins — a closed
-    // room reads ~1.0 overhang on every axis, so min-overhang can't find up.
-    let best = -1, bestOv = Infinity, bestSh: AxisShape | null = null;
-    let encBest = -1, encScore = -1, encOf: Enclosure | null = null;
+    let best = -1, bestScore = -Infinity;
     for (let a = 0; a < 3; a++) {
       const [v, h1, h2] = ASSIGN[a];
-      const s = axisShape(positions, n, stride, gridN, v, h1, h2);
-      if (s.overhangFraction < bestOv - 1e-9) { bestOv = s.overhangFraction; best = a; bestSh = s; }
-      const e = enclosureForAxis(positions, n, stride, gridN, v, h1, h2);
-      if (e.score > encScore + 1e-9) { encScore = e.score; encBest = a; encOf = e; }
+      const ff = floorFieldForAxis(positions, n, stride, gridN, v, h1, h2);
+      const enc = enclosureForAxis(positions, n, stride, v);
+      const score = ff.score + ENCLOSURE_HINT_WEIGHT * enc.score - OVERHANG_PENALTY * ff.overhang;
+      if (score > bestScore + 1e-9) { bestScore = score; best = a; }
     }
-    if (encOf && encOf.ceilingPresent) {
-      upIdx = encBest;
-      const [v, h1, h2] = ASSIGN[upIdx];
-      sh = axisShape(positions, n, stride, gridN, v, h1, h2);
-      enc = encOf;
-    } else {
-      upIdx = best;
-      sh = bestSh as AxisShape;
-      const [v, h1, h2] = ASSIGN[upIdx];
-      enc = enclosureForAxis(positions, n, stride, gridN, v, h1, h2);
-    }
+    upIdx = best < 0 ? 2 : best;
   }
   const up = AXIS_NAME[upIdx];
+  const [vOff, h1Off, h2Off] = ASSIGN[upIdx];
+  const m = axisMetrics(positions, classification, n, stride, gridN, vOff, h1Off, h2Off);
 
+  // ── Back-compat verdict (terrain | object | ambiguous) on the two original
+  //    signals only, so existing `kind` callers behave exactly as before. ──
   const reasons: string[] = [];
   let objectVotes = 0;
-  if (sh.aspect >= ASPECT_OBJECT) { objectVotes++; reasons.push(`Compact aspect (height/footprint ${sh.aspect.toFixed(2)}).`); }
-  if (sh.overhangFraction >= OVERHANG_OBJECT) { objectVotes++; reasons.push(`${Math.round(sh.overhangFraction * 100)}% of columns stack multiple surfaces (overhangs).`); }
+  if (m.aspect >= ASPECT_OBJECT) { objectVotes++; reasons.push(`Compact aspect (height/footprint ${m.aspect.toFixed(2)}).`); }
+  if (m.overhangFraction >= OVERHANG_OBJECT) { objectVotes++; reasons.push(`${Math.round(m.overhangFraction * 100)}% of columns stack multiple surfaces (overhangs).`); }
 
-  // Back-compat verdict (terrain | object | ambiguous) on the two original
-  // signals only, so existing `kind` callers behave exactly as before.
   let kind: ScanKind;
-  let confidence: number;
-  if (objectVotes === 2) { kind = 'object'; confidence = 0.9; }
-  else if (objectVotes === 1) { kind = 'ambiguous'; confidence = 0.5; }
-  else {
-    kind = 'terrain'; confidence = 0.85;
-    reasons.push(`Flat, single-surface geometry along ${up} (aspect ${sh.aspect.toFixed(2)}, ${Math.round(sh.overhangFraction * 100)}% stacked).`);
-  }
+  if (objectVotes === 2) kind = 'object';
+  else if (objectVotes === 1) kind = 'ambiguous';
+  else kind = 'terrain';
 
-  // Decisive routing: a floor+ceiling enclosure makes it an interior space even
-  // at low (terrain-like) aspect — that's the iPhone-LiDAR room case. A compact
-  // 3-D scan without an enclosure is an object. Everything else is terrain.
-  const enclosed = enc.ceilingPresent;
-  const nonTerrain = kind === 'object' || enclosed;
+  // ── Decisive routing precedence (documented):
+  //   1. object   — compact 3-D scan (both legacy signals fire).
+  //   2. terrain  — vegetation-dominated upper canopy over a wide footprint
+  //                 (classification only). Beats interior: a forest mimics an
+  //                 interior geometrically, so the classification breaks the tie.
+  //   3. interior — wide floor + (near-full-height WALLS or a clean flat ceiling)
+  //                 + overhang, and NOT veg-dominated. Catches the multi-room
+  //                 house whose ceiling is partial (walls carry it).
+  //   4. terrain  — single-surface height field (everything else / fallback).
+  const wide = m.aspect < ASPECT_OBJECT;
+  const vegDominated = classification !== undefined && wide && m.topVegFraction >= VEG_DOMINANT;
+  const flatCeiling = m.ceilingCoverage >= ENCLOSURE_COVER && m.floorCoverage >= ENCLOSURE_COVER;
+  const interiorEvidence =
+    wide &&
+    !vegDominated &&
+    m.floorCoverage >= FLOOR_INTERIOR &&
+    (m.wallCoverage >= WALL_INTERIOR || flatCeiling) &&
+    m.overhangFraction >= OVERHANG_INTERIOR;
+
+  let nonTerrain: boolean;
   let spaceKind: SpaceKind;
-  if (enclosed && sh.aspect < ASPECT_OBJECT) {
-    spaceKind = 'interior';
+  let confidence: number;
+  if (kind === 'object') {
+    nonTerrain = true; spaceKind = 'object'; confidence = 0.9;
+    reasons.unshift('Compact 3-D object — terrain analysis does not apply.');
+  } else if (vegDominated) {
+    nonTerrain = false; spaceKind = 'terrain'; confidence = 0.85;
+    reasons.unshift(`Top band is ${Math.round(m.topVegFraction * 100)}% vegetation over a wide footprint — natural canopy, not a ceiling.`);
+  } else if (interiorEvidence) {
+    nonTerrain = true; spaceKind = 'interior';
+    confidence = flatCeiling ? 0.9 : 0.8;
     reasons.unshift(
-      `Floor + ceiling enclose ${Math.round(enc.ceilingCoverage * 100)}% of the footprint — interior space.`,
+      flatCeiling
+        ? `Floor + flat ceiling enclose ${Math.round(m.ceilingCoverage * 100)}% of the footprint — interior space.`
+        : `Floor + near-full-height walls (${Math.round(m.wallCoverage * 100)}% of cells) — interior space (ceiling partial).`,
     );
-  } else if (nonTerrain) {
-    spaceKind = 'object';
-    if (enclosed && objectVotes < 2) {
-      reasons.unshift(`Enclosed surfaces over ${Math.round(enc.ceilingCoverage * 100)}% of the footprint.`);
-    }
   } else {
-    spaceKind = 'terrain';
+    nonTerrain = false; spaceKind = 'terrain'; confidence = 0.85;
+    reasons.unshift(`Flat, single-surface geometry along ${up} (aspect ${m.aspect.toFixed(2)}, ${Math.round(m.overhangFraction * 100)}% stacked, ${Math.round(m.wallCoverage * 100)}% full-height).`);
   }
 
   return {
@@ -319,11 +455,13 @@ export function classifyScanShape(
     nonTerrain,
     spaceKind,
     confidence,
-    aspect: sh.aspect,
-    overhangFraction: sh.overhangFraction,
-    ceilingCoverage: enc.ceilingCoverage,
-    floorCoverage: enc.floorCoverage,
-    extent: [sh.ex1, sh.ex2, sh.exV],
+    aspect: m.aspect,
+    overhangFraction: m.overhangFraction,
+    wallCoverage: m.wallCoverage,
+    ceilingCoverage: m.ceilingCoverage,
+    floorCoverage: m.floorCoverage,
+    topVegFraction: m.topVegFraction,
+    extent: [m.ex1, m.ex2, m.exV],
     up,
     reasons,
   };

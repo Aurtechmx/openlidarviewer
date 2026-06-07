@@ -61,6 +61,10 @@ describe('classifyScanShape', () => {
     expect(s.aspect).toBeLessThan(0.65);
     expect(s.ceilingCoverage).toBeGreaterThan(0.45);
     expect(s.floorCoverage).toBeGreaterThan(0.45);
+    // New signal: a closed box is full-height in every column → very high wall
+    // coverage, and no classification means the veg tiebreaker stays inert.
+    expect(s.wallCoverage).toBeGreaterThan(0.9);
+    expect(s.topVegFraction).toBe(0);
     expect(s.nonTerrain).toBe(true);
     expect(s.spaceKind).toBe('interior');
   });

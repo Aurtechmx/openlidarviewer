@@ -47,6 +47,7 @@ import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } 
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
+import type { SpaceKind } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics } from './terrain/spaceMetrics';
 import { ExportPanel } from './ui/ExportPanel';
@@ -1426,6 +1427,9 @@ const dock = new ToolDock({
     // demoted it behind the Object panel, opening Analyse takes over —
     // the "run terrain anyway" path, reachable from one obvious place.
     const show = !analysePanel.isVisible();
+    // A manual Analyse toggle is a user override — stop auto-rerouting so a
+    // late streaming node can't yank the panel away.
+    scanRouteOverridden = true;
     analysePanel.setVisible(show);
     if (show) objectPanel.setVisible(false);
     dock.setAnalyseActive(show);
@@ -1603,6 +1607,22 @@ void viewerLoaded.then(() => {
     // inspector's scope stamp ("k of M classes") to keep M accurate.
     syncInspectClassScope();
   };
+  // Re-evaluate the scan-type routing as the streaming cloud fills in. The
+  // open-time `revealAnalysePanel` runs when only a sparse coarse level may be
+  // resident, so a 360 house can read as terrain early; once enough geometry
+  // has streamed in, re-classify and re-route (only if the verdict changes).
+  // Debounced + growth-gated so a burst of node-ready events can't thrash.
+  viewer.onStreamingNodeReady = () => {
+    if (scanRouteOverridden) return;
+    const resident = viewer.residentPointTotal();
+    if (resident < lastRouteResident * SCAN_REROUTE_GROWTH) return;
+    lastRouteResident = resident;
+    if (scanRouteTimer != null) clearTimeout(scanRouteTimer);
+    scanRouteTimer = setTimeout(() => {
+      scanRouteTimer = null;
+      applyScanRoute(false);
+    }, 500);
+  };
 });
 
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
@@ -1610,6 +1630,9 @@ void viewerLoaded.then(() => {
 // pipeline if the shape detector misjudged the scan.
 const objectPanel = new ObjectPanel({
   onRunTerrainAnyway: () => {
+    // User forced terrain → pin the routing so streaming re-evaluation can't
+    // flip the panel back out from under them.
+    scanRouteOverridden = true;
     objectPanel.setVisible(false);
     analysePanel.setVisible(true);
     dock.setAnalyseActive(true);
@@ -1648,49 +1671,94 @@ const exportPanel = new ExportPanel({
   },
 });
 
+// ── Scan-type routing state ─────────────────────────────────────────────────
+// `revealAnalysePanel` runs once at open, when a streaming cloud may have only
+// a sparse coarse level resident — a misread is likely. `applyScanRoute` is
+// re-run as the cloud fills in (debounced, growth-gated) and only flips panels
+// when the verdict actually changes, so it never thrashes. Once the user forces
+// a panel ("Run terrain anyway" / Analyse toggle) `scanRouteOverridden` pins it.
+let lastScanVerdict: SpaceKind | null = null;
+let scanRouteOverridden = false;
+let lastRouteResident = 0;
+let scanRouteTimer: ReturnType<typeof setTimeout> | null = null;
+/** Re-route only after the resident cloud grows by this factor (cheap gate). */
+const SCAN_REROUTE_GROWTH = 1.4;
+
 /**
- * Reveal the Analyse + Export panels and seed the export basename. Called
- * from every load path — static files AND streaming COPC/EPT — so the terrain
- * and format tools surface regardless of how the scan was opened. v0.4.0.
+ * Classify the currently-loaded/streamed geometry and route to the Object /
+ * Space panel (non-terrain) or the Analyse panel (terrain). Passes the
+ * resident classification so the vegetation tiebreaker can fire (a classified
+ * forest stays terrain even though its geometry mimics an interior).
+ *
+ * `initial` = the open-time call (always applies + resets the override). A
+ * non-initial call is a streaming re-evaluation: it no-ops unless the verdict
+ * changed, and is skipped once the user has overridden the routing.
  */
-function revealAnalysePanel(name: string): void {
-  lastCloudName = baseName(name);
-  exportPanel.setVisible(true);
-  exportPanel.refresh();
-  // Auto-detect the scan shape. Any NON-TERRAIN scan — a compact 3-D object OR
-  // an interior space (a room / 360 / iPhone-LiDAR floor+walls+ceiling) — gets
-  // the space/object analysis instead of terrain contours, and terrain is
-  // demoted behind a "run anyway" affordance. Terrain scans get the Analyse
-  // panel. Routing is on `nonTerrain`, not just the legacy `kind`.
-  let isNonTerrain = false;
+function applyScanRoute(initial: boolean): void {
+  if (!initial && scanRouteOverridden) return;
+  let shape: ReturnType<typeof classifyScanShape> | null = null;
+  let gathered: ReturnType<typeof viewer.gatherTerrainPositions> = null;
   try {
-    const gathered = viewer.gatherTerrainPositions(60_000);
+    gathered = viewer.gatherTerrainPositions(60_000);
     if (gathered) {
-      const shape = classifyScanShape(gathered.positions);
-      if (shape.nonTerrain) {
-        isNonTerrain = true;
-        const activeCloud = activeId ? viewer.getCloud(activeId) : null;
-        const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
-        const space = spaceMetrics(gathered.positions, {
-          upAxis: shape.up,
-          spaceKind: shape.spaceKind === 'interior' ? 'interior' : 'object',
-          hasRgb,
-          sourcePointCount: gathered.totalPoints,
-        });
-        if (shape.spaceKind === 'interior') {
-          objectPanel.showSpace(space, shape);
-        } else {
-          objectPanel.showObject(objectMetrics(gathered.positions), space, shape);
-        }
-      }
+      // Pass classification when index-aligned so the veg tiebreaker can fire.
+      shape = classifyScanShape(gathered.positions, { classification: gathered.classification });
     }
   } catch {
     /* classification is best-effort — fall back to showing terrain analysis */
+    shape = null;
+  }
+  const verdict: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
+  if (!initial) {
+    // Re-route only when the verdict genuinely changes — never thrash panels.
+    if (verdict === null || verdict === lastScanVerdict) return;
+  }
+  lastScanVerdict = verdict;
+
+  let isNonTerrain = false;
+  if (shape && gathered && shape.nonTerrain) {
+    isNonTerrain = true;
+    const activeCloud = activeId ? viewer.getCloud(activeId) : null;
+    const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+    const space = spaceMetrics(gathered.positions, {
+      upAxis: shape.up,
+      spaceKind: shape.spaceKind === 'interior' ? 'interior' : 'object',
+      hasRgb,
+      sourcePointCount: gathered.totalPoints,
+    });
+    if (shape.spaceKind === 'interior') {
+      objectPanel.showSpace(space, shape);
+    } else {
+      objectPanel.showObject(objectMetrics(gathered.positions), space, shape);
+    }
   }
   objectPanel.setVisible(isNonTerrain);
   analysePanel.setVisible(!isNonTerrain);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(!isNonTerrain);
+}
+
+/**
+ * Reveal the Analyse + Export panels and seed the export basename. Called
+ * from every load path — static files AND streaming COPC/EPT — so the terrain
+ * and format tools surface regardless of how the scan was opened. v0.4.0.
+ *
+ * Auto-detects the scan shape: any NON-TERRAIN scan — a compact 3-D object OR
+ * an interior space (a room / 360 / multi-room house) — gets the space/object
+ * analysis instead of terrain contours, and terrain is demoted behind a "run
+ * anyway" affordance. Routing is on `nonTerrain`, not just the legacy `kind`,
+ * and re-evaluates as a streaming cloud fills in (see `applyScanRoute`).
+ */
+function revealAnalysePanel(name: string): void {
+  lastCloudName = baseName(name);
+  exportPanel.setVisible(true);
+  exportPanel.refresh();
+  // Fresh scan → clear any prior override + verdict so the open-time route is
+  // authoritative and streaming re-routes can fire again.
+  scanRouteOverridden = false;
+  lastScanVerdict = null;
+  lastRouteResident = viewer.residentPointTotal();
+  applyScanRoute(true);
 }
 
 /**
@@ -3828,6 +3896,12 @@ function resetToEmptyState(): void {
   // Clear the inspector's copy/JSON scope stamp now there's no active filter.
   syncInspectClassScope();
   lastStreamingReportCloud = null;
+  // Cancel any pending scan-type re-route + reset its state so a timer can't
+  // fire against the now-closed scan, and the next open routes from scratch.
+  if (scanRouteTimer != null) { clearTimeout(scanRouteTimer); scanRouteTimer = null; }
+  lastScanVerdict = null;
+  scanRouteOverridden = false;
+  lastRouteResident = 0;
   exportPanel.setVisible(false);
   sourceFileById.clear();
   reducedById.clear();
