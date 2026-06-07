@@ -99,6 +99,19 @@
   --dur-base: 200ms;
   --dur-slow: 240ms;
   --ease-standard: ease;
+
+  /*
+   * Button system primitives — shared interaction values so every button
+   * family (export, analyse, convert, url, view, class-legend, profile PDF)
+   * presses, focuses, and disables the same way. The look (size, colour,
+   * flex role) stays per-family; only these cross-cutting states are pooled.
+   *   --btn-press         uniform pointer-down "give"
+   *   --focus-ring        crisp keyboard focus outline (a11y)
+   *   --focus-ring-offset gap between control edge and ring
+   */
+  --btn-press: scale(0.97);
+  --focus-ring: 2px solid var(--accent);
+  --focus-ring-offset: 2px;
 }
 
 /*
@@ -3536,7 +3549,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   display: inline-block;
   font-size: var(--text-lg); line-height: 1;
   color: var(--text-dim);
-  transition: transform 220ms var(--ease-standard);
+  transition: transform var(--dur-slow) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
 }
 
 @media (max-width: 767px) {
@@ -4100,22 +4114,51 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 
 /* Analyse panel collapse — the only left panel collapsible on every
    viewport, so it can sit as an opt-in chip until the user wants terrain. */
-.olv-analyse-panel .olv-panel-head {
+/* Desktop-collapsible panel headers (Analyse + Export/Convert) share one
+   affordance: the whole head row is a tappable handle and the chevron lives
+   in a visible bordered chip so the expand/collapse control reads instantly. */
+.olv-analyse-panel .olv-panel-head,
+.olv-export-panel .olv-panel-head {
   display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-sm);
   margin: 0 0 var(--space-md); cursor: pointer;
+  border-radius: var(--radius-sm);
   -webkit-user-select: none; user-select: none;
+  transition: background var(--dur-fast) var(--ease-standard);
 }
-.olv-analyse-panel .olv-panel-title {
+.olv-analyse-panel .olv-panel-head:hover,
+.olv-export-panel .olv-panel-head:hover { background: rgba(255, 255, 255, 0.035); }
+.olv-analyse-panel .olv-panel-head:hover .olv-chevron,
+.olv-export-panel .olv-panel-head:hover .olv-chevron { color: var(--text); }
+.olv-analyse-panel .olv-panel-title,
+.olv-export-panel .olv-panel-title {
   font-size: var(--text-sm); font-weight: 600; color: var(--text); margin: 0;
 }
-.olv-analyse-panel .olv-collapse-toggle {
+/* The chevron sits in a small bordered chip — an unmistakable, button-like
+   target that lifts to accent on hover/focus and never disappears on desktop
+   (overrides the global `.olv-collapse-toggle { display: none }`). */
+.olv-analyse-panel .olv-collapse-toggle,
+.olv-export-panel .olv-collapse-toggle {
   display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: none; color: var(--text-dim);
-  width: 24px; height: 24px; padding: 0; cursor: pointer;
+  flex: 0 0 auto;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
 }
-.olv-analyse-panel .olv-collapse-toggle:hover { color: var(--text); }
-.olv-analyse-panel .olv-collapse-toggle:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm);
+.olv-analyse-panel .olv-collapse-toggle:hover,
+.olv-export-panel .olv-collapse-toggle:hover {
+  color: var(--accent); border-color: var(--accent); background: var(--accent-soft);
+}
+.olv-analyse-panel .olv-collapse-toggle:hover .olv-chevron,
+.olv-export-panel .olv-collapse-toggle:hover .olv-chevron { color: var(--accent); }
+.olv-analyse-panel .olv-collapse-toggle:focus-visible,
+.olv-export-panel .olv-collapse-toggle:focus-visible {
+  outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); border-radius: var(--radius-sm);
 }
 .olv-analyse-panel.olv-collapsed > :not(.olv-panel-head) { display: none; }
 .olv-analyse-panel.olv-collapsed {
@@ -4471,6 +4514,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 }
 .olv-export-panel.olv-collapsed > :not(.olv-panel-head) { display: none; }
 .olv-export-panel.olv-collapsed { padding-bottom: var(--space-xl); }
+.olv-export-panel.olv-collapsed .olv-panel-head { margin: 0; }
 .olv-export-panel.olv-collapsed .olv-chevron { transform: rotate(180deg); }
 .olv-export-body { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
 .olv-export-body .olv-bc-section-label { margin-bottom: var(--space-xs); margin-top: var(--space-sm); }
@@ -4757,3 +4801,146 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 
 /* ui-typography: tabular figures so numbers align in the data-heavy panels. */
 .olv-analyse-panel, .olv-object-panel, .olv-measure-panel { font-variant-numeric: tabular-nums; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Unified button system (export-ui polish)
+
+   A single source of truth for the cross-cutting INTERACTION states every
+   button family shares — motion, pointer-down press, keyboard focus ring, and
+   disabled treatment. Each family keeps its own size / colour / flex role in
+   its rule above; this block only pools the states so the families stay in
+   sync. Placed last so source order wins over the per-family declarations.
+
+   NOTE: the positioned dock controls (.olv-mode*, .olv-mode-reset) are
+   deliberately excluded — they own bespoke transforms (translateX/translate)
+   that a blanket scale() press would clobber.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-export-btn,
+.olv-analyse-dl,
+.olv-analyse-run,
+.olv-bc-convert,
+.olv-bc-dlall,
+.olv-bc-row-dl,
+.olv-url-btn,
+.olv-view-save,
+.olv-view-go,
+.olv-cl-solo,
+.olv-cl-showall,
+.olv-mp-profile-pdf,
+.olv-object-run-anyway {
+  transition: color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
+}
+/* Press affordance — a small, uniform "give" on pointer-down. */
+.olv-export-btn:not(:disabled):active,
+.olv-analyse-dl:not(:disabled):active,
+.olv-analyse-run:not(:disabled):active,
+.olv-bc-convert:not(:disabled):active,
+.olv-bc-dlall:not(:disabled):active,
+.olv-bc-row-dl:not(:disabled):active,
+.olv-url-btn:not(:disabled):active,
+.olv-view-save:not(:disabled):active,
+.olv-view-go:not(:disabled):active,
+.olv-cl-solo:not(:disabled):active,
+.olv-cl-showall:not(:disabled):active,
+.olv-mp-profile-pdf:not(:disabled):active,
+.olv-object-run-anyway:not(:disabled):active {
+  transform: var(--btn-press);
+}
+/* Crisp, consistent keyboard focus ring on every family (a11y). */
+.olv-export-btn:focus-visible,
+.olv-analyse-dl:focus-visible,
+.olv-analyse-run:focus-visible,
+.olv-bc-convert:focus-visible,
+.olv-bc-dlall:focus-visible,
+.olv-bc-row-dl:focus-visible,
+.olv-url-btn:focus-visible,
+.olv-view-save:focus-visible,
+.olv-view-go:focus-visible,
+.olv-cl-solo:focus-visible,
+.olv-cl-showall:focus-visible,
+.olv-mp-profile-pdf:focus-visible,
+.olv-object-run-anyway:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+/* One unmistakable disabled treatment so a dormant action never invites a click. */
+.olv-export-btn:disabled,
+.olv-analyse-dl:disabled,
+.olv-analyse-run:disabled,
+.olv-bc-convert:disabled,
+.olv-bc-dlall:disabled,
+.olv-bc-row-dl:disabled,
+.olv-url-btn:disabled,
+.olv-view-save:disabled,
+.olv-view-go:disabled,
+.olv-cl-solo:disabled,
+.olv-cl-showall:disabled,
+.olv-mp-profile-pdf:disabled,
+.olv-object-run-anyway:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Primary / CTA elevation — the few "take the data with you" actions read
+   raised so the action hierarchy is legible at a glance. Secondary buttons
+   stay quiet (border + tint only); only these three lift. */
+.olv-analyse-run:not(.is-rerun),
+.olv-analyse-dl.is-primary,
+.olv-bc-convert {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 6px 16px -10px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.olv-analyse-run:not(.is-rerun):not(:disabled):hover,
+.olv-analyse-dl.is-primary:not(:disabled):hover,
+.olv-bc-convert:not(:disabled):hover {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset,
+    0 10px 22px -10px color-mix(in srgb, var(--accent) 75%, transparent);
+  transform: translateY(-1px);
+}
+.olv-analyse-run:not(.is-rerun):not(:disabled):active,
+.olv-analyse-dl.is-primary:not(:disabled):active,
+.olv-bc-convert:not(:disabled):active {
+  transform: var(--btn-press);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .olv-export-btn,
+  .olv-analyse-dl,
+  .olv-analyse-run,
+  .olv-bc-convert,
+  .olv-bc-dlall,
+  .olv-bc-row-dl,
+  .olv-url-btn,
+  .olv-view-save,
+  .olv-view-go,
+  .olv-cl-solo,
+  .olv-cl-showall,
+  .olv-mp-profile-pdf,
+  .olv-object-run-anyway {
+    transition: color var(--dur-fast) var(--ease-standard),
+      background var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard);
+  }
+  .olv-export-btn:active,
+  .olv-analyse-dl:active,
+  .olv-analyse-run:active,
+  .olv-bc-convert:active,
+  .olv-bc-dlall:active,
+  .olv-bc-row-dl:active,
+  .olv-url-btn:active,
+  .olv-view-save:active,
+  .olv-view-go:active,
+  .olv-cl-solo:active,
+  .olv-cl-showall:active,
+  .olv-mp-profile-pdf:active,
+  .olv-object-run-anyway:active,
+  .olv-analyse-run:not(.is-rerun):hover,
+  .olv-analyse-dl.is-primary:hover,
+  .olv-bc-convert:hover { transform: none; }
+}
