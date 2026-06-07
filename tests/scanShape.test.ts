@@ -12,6 +12,31 @@ function pts(triples: Array<[number, number, number]>): Float32Array {
   return a;
 }
 
+/**
+ * A synthetic interior: a flat floor grid (z=0) + flat ceiling grid (z=H) over
+ * a 14×29 footprint, with four perimeter wall strips spanning floor→ceiling.
+ * This mirrors the iPhone-LiDAR room scan that wrongly read as terrain.
+ */
+function room(W = 14, D = 29, H = 5, step = 0.5): Float32Array {
+  const t: Array<[number, number, number]> = [];
+  for (let x = 0; x <= W; x += step)
+    for (let y = 0; y <= D; y += step) {
+      t.push([x, y, 0]); // floor
+      t.push([x, y, H]); // ceiling
+    }
+  for (let z = 0; z <= H; z += step)
+    for (let x = 0; x <= W; x += step) {
+      t.push([x, 0, z]); // wall y=0
+      t.push([x, D, z]); // wall y=D
+    }
+  for (let z = 0; z <= H; z += step)
+    for (let y = 0; y <= D; y += step) {
+      t.push([0, y, z]); // wall x=0
+      t.push([W, y, z]); // wall x=W
+    }
+  return pts(t);
+}
+
 describe('classifyScanShape', () => {
   it('flat, wide, single-surface terrain → terrain', () => {
     const t: Array<[number, number, number]> = [];
@@ -22,6 +47,22 @@ describe('classifyScanShape', () => {
     expect(s.up).toBe('z');
     expect(s.aspect).toBeLessThan(0.2);
     expect(s.overhangFraction).toBeLessThan(0.1);
+    expect(s.nonTerrain).toBe(false);
+    expect(s.spaceKind).toBe('terrain');
+  });
+
+  it('an iPhone-LiDAR room (floor+ceiling+walls) → non-terrain interior', () => {
+    // The core regression: low aspect (~0.17) like terrain, but a detected
+    // floor + ceiling enclosure must route it to the space analysis, not
+    // contours. Up is the true vertical (z) even though a closed box reads
+    // ~1.0 overhang on every axis.
+    const s = classifyScanShape(room());
+    expect(s.up).toBe('z');
+    expect(s.aspect).toBeLessThan(0.65);
+    expect(s.ceilingCoverage).toBeGreaterThan(0.45);
+    expect(s.floorCoverage).toBeGreaterThan(0.45);
+    expect(s.nonTerrain).toBe(true);
+    expect(s.spaceKind).toBe('interior');
   });
 
   it('detects a Y-up flat terrain (phone/glTF frame) without being told', () => {
@@ -49,6 +90,10 @@ describe('classifyScanShape', () => {
     expect(s.kind).toBe('object');
     expect(s.aspect).toBeGreaterThan(0.65);
     expect(s.overhangFraction).toBeGreaterThan(0.2);
+    // A compact object stays non-terrain, but routed as object (not interior):
+    // its enclosure exists yet its aspect is high, so it is not a wide space.
+    expect(s.nonTerrain).toBe(true);
+    expect(s.spaceKind).toBe('object');
   });
 
   it('a steep single-surface dome is ambiguous (one signal only)', () => {

@@ -48,6 +48,7 @@ import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import { objectMetrics } from './terrain/objectMetrics';
+import { spaceMetrics } from './terrain/spaceMetrics';
 import { ExportPanel } from './ui/ExportPanel';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
@@ -1656,26 +1657,40 @@ function revealAnalysePanel(name: string): void {
   lastCloudName = baseName(name);
   exportPanel.setVisible(true);
   exportPanel.refresh();
-  // Classify the scan shape: a compact 3-D object gets the Object panel (with
-  // object-appropriate measurements) and terrain analysis is demoted behind a
-  // "run anyway" affordance; terrain / ambiguous scans get the Analyse panel.
-  let isObject = false;
+  // Auto-detect the scan shape. Any NON-TERRAIN scan — a compact 3-D object OR
+  // an interior space (a room / 360 / iPhone-LiDAR floor+walls+ceiling) — gets
+  // the space/object analysis instead of terrain contours, and terrain is
+  // demoted behind a "run anyway" affordance. Terrain scans get the Analyse
+  // panel. Routing is on `nonTerrain`, not just the legacy `kind`.
+  let isNonTerrain = false;
   try {
     const gathered = viewer.gatherTerrainPositions(60_000);
     if (gathered) {
       const shape = classifyScanShape(gathered.positions);
-      if (shape.kind === 'object') {
-        isObject = true;
-        objectPanel.update(objectMetrics(gathered.positions), shape);
+      if (shape.nonTerrain) {
+        isNonTerrain = true;
+        const activeCloud = activeId ? viewer.getCloud(activeId) : null;
+        const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+        const space = spaceMetrics(gathered.positions, {
+          upAxis: shape.up,
+          spaceKind: shape.spaceKind === 'interior' ? 'interior' : 'object',
+          hasRgb,
+          sourcePointCount: gathered.totalPoints,
+        });
+        if (shape.spaceKind === 'interior') {
+          objectPanel.showSpace(space, shape);
+        } else {
+          objectPanel.showObject(objectMetrics(gathered.positions), space, shape);
+        }
       }
     }
   } catch {
     /* classification is best-effort — fall back to showing terrain analysis */
   }
-  objectPanel.setVisible(isObject);
-  analysePanel.setVisible(!isObject);
+  objectPanel.setVisible(isNonTerrain);
+  analysePanel.setVisible(!isNonTerrain);
   dock.setAnalyseEnabled(true);
-  dock.setAnalyseActive(!isObject);
+  dock.setAnalyseActive(!isNonTerrain);
 }
 
 /**

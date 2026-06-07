@@ -4895,6 +4895,10 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
 .olv-object-body { display: flex; flex-direction: column; gap: 7px; margin-top: var(--space-md); }
+.olv-object-subhead {
+  margin-top: var(--space-md); font-size: var(--text-2xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim);
+}
 .olv-object-row { display: flex; justify-content: space-between; gap: var(--space-md); font-size: var(--text-xs); }
 .olv-object-label { color: var(--text-dim); }
 .olv-object-value { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
