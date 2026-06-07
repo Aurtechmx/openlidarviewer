@@ -4362,19 +4362,6 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   .olv-analyse-ready.is-skeleton { animation: none; }
 }
 
-/* Interval chips. */
-.olv-analyse-intervals { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-md); }
-.olv-analyse-recommend { flex-basis: 100%; font-size: var(--text-xs); color: var(--text-dim); }
-.olv-analyse-interval {
-  font-size: var(--text-xs); padding: var(--space-xs) var(--space-md); border-radius: var(--radius-sm); cursor: pointer;
-  color: var(--text-dim); background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
-}
-.olv-analyse-interval:hover { color: var(--text); border-color: var(--accent); }
-.olv-analyse-interval.is-active { color: var(--accent); border-color: var(--accent); }
-.olv-analyse-interval.is-disabled { opacity: 0.45; cursor: default; }
-
 .olv-analyse-validation { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-sm); }
 .olv-analyse-rmse { font-family: var(--mono); }
 .olv-analyse-caption { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-md); overflow-wrap: anywhere; }
@@ -4386,13 +4373,6 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
    wrapped text stretches the row so `align-items: stretch` inflates every button.
    align-items: flex-start keeps each line's buttons at content height regardless
    of a taller sibling on the same line. */
-/* Contour shape-style picker — a compact labelled select above the export
-   buttons. Drives every contour export (GeoJSON / SVG / DXF / Map PDF). */
-.olv-analyse-style-row {
-  display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md);
-}
-.olv-analyse-style-row .olv-modal-label { white-space: nowrap; }
-.olv-analyse-style-select { flex: 1; padding: var(--space-xs) var(--space-md); }
 .olv-analyse-export { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .olv-analyse-dl {
   flex: 1; font-size: var(--text-xs); padding: var(--space-sm); border-radius: var(--radius-sm); cursor: pointer;
