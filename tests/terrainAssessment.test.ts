@@ -130,22 +130,48 @@ describe('terrainAssessment', () => {
     expect(a.status).toBe('Blocked');
   });
 
-  it('caps below Good when the CRS is unknown, and says so', () => {
+  // TWO-AXIS truth: an unknown CRS does NOT cap SURFACE quality (a clean, dense
+  // surface stays Good) — it caps EXPORT READINESS to Preview, with a reason.
+  // This is the new-correct behaviour, not a weakening: the honesty contract
+  // (no survey-grade export without a known frame) lives on the export axis.
+  it('unknown CRS leaves surface quality Good but caps EXPORT readiness to Preview, and says so', () => {
     const a = terrainAssessment(fixture({ crs: null, score: 90 }));
-    expect(a.status).not.toBe('Good');
-    expect(a.status).toBe('Preview');
+    expect(a.status).toBe('Good'); // surface quality NOT capped by CRS
+    expect(a.exportReadiness).toBe('Preview'); // export gated by unknown CRS
+    expect(a.exportReason).toMatch(/CRS/i);
     const crs = findMetric(a.supportingMetrics, 'CRS');
     expect(crs?.value).toMatch(/unknown/i);
     expect(crs?.rating).toBe('unknown');
-    expect(allText(a)).toMatch(/CRS|coordinate/i);
   });
 
-  it('caps below Good when the vertical datum is unknown', () => {
+  it('unknown vertical datum leaves surface quality Good but caps EXPORT readiness to Preview', () => {
     const a = terrainAssessment(fixture({ verticalDatum: null, score: 90 }));
-    expect(a.status).not.toBe('Good');
+    expect(a.status).toBe('Good'); // surface quality NOT capped by datum
+    expect(a.exportReadiness).toBe('Preview');
+    expect(a.exportReason).toMatch(/datum/i);
     const datum = findMetric(a.supportingMetrics, 'Vertical datum');
     expect(datum?.value).toMatch(/unknown/i);
     expect(datum?.rating).toBe('unknown');
+  });
+
+  // The headline separation: the SAME clean, dense scene reads Good/Ready when
+  // georeferenced, and Good/Preview (datum unknown) when the datum is dropped.
+  it('separates the axes: known datum → Good + export Ready; null datum → Good + export Preview', () => {
+    const known = terrainAssessment(fixture({ score: 90 }));
+    expect(known.status).toBe('Good');
+    expect(known.exportReadiness).toBe('Ready');
+    expect(known.exportReason).toBe('');
+
+    const noDatum = terrainAssessment(fixture({ verticalDatum: null, score: 90 }));
+    expect(noDatum.status).toBe('Good'); // surface quality UNCHANGED
+    expect(noDatum.exportReadiness).toBe('Preview'); // only export readiness drops
+    expect(noDatum.exportReason).toMatch(/vertical datum unknown/i);
+  });
+
+  it('a blocked surface blocks export readiness too', () => {
+    const a = terrainAssessment(fixture({ readiness: 'blocked', reasons: ['Too sparse'] }));
+    expect(a.status).toBe('Blocked');
+    expect(a.exportReadiness).toBe('Blocked');
   });
 
   it('caps below Good when interpolation is high', () => {
@@ -201,9 +227,11 @@ describe('terrainAssessment', () => {
     expect(rmse?.rating).toBe('unknown');
   });
 
-  it('maps previewOnly to Preview and surfaces a plain reason', () => {
+  it('maps previewOnly to Preview and surfaces a plain (surface) reason', () => {
+    // The gate's surface verdict is previewOnly with a SURFACE reason (CRS/datum
+    // are no longer surface reasons — they live on the export axis).
     const a = terrainAssessment(
-      fixture({ readiness: 'previewOnly', reasons: ['Preview only: CRS is unknown.'], crs: null }),
+      fixture({ readiness: 'previewOnly', reasons: ['Preview only: mean confidence is low.'] }),
     );
     expect(a.status).toBe('Preview');
     expect(a.reason.length).toBeGreaterThan(0);
@@ -268,9 +296,11 @@ describe('terrainAssessment', () => {
   });
 
   it('does not over-trigger Limited: a middling preview surface stays Preview', () => {
-    // A single soft weakness (unknown CRS) on an otherwise healthy, well-scored
-    // surface caps to Preview — it is not seriously deficient, so not Limited.
-    const a = terrainAssessment(fixture({ crs: null, score: 75 }));
+    // A single soft SURFACE weakness (resident-only coverage) on an otherwise
+    // healthy, well-scored surface caps to Preview — it is not seriously
+    // deficient, so not Limited. (CRS/datum no longer cap surface quality, so
+    // the soft weakness here must be a surface signal.)
+    const a = terrainAssessment(fixture({ coverageMode: 'resident-only', score: 75 }));
     expect(a.status).toBe('Preview');
   });
 

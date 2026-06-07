@@ -152,14 +152,20 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   const datumStatus = dtm.verticalDatum ? 'known' : 'unknown';
   const warnings = result.warnings ?? [];
   const reasons = quality?.reasons ?? [];
+  const exportReasons = quality?.exportReasons ?? [];
 
-  // Prominent top caveat when the data is anything short of full + ready.
+  // Prominent top caveat when the GEOREFERENCED export is anything short of
+  // full coverage + export-ready. The DEM is the georeferenced deliverable, so
+  // its caveat keys off EXPORT readiness (which gates on a known CRS + vertical
+  // datum), NOT surface readiness alone — a clean surface with an unknown datum
+  // must still read PRELIMINARY here. The georeferencing gap is named inline.
   const isFull = coverageMode === 'full';
-  const isReady = verdict === 'ready';
+  const isExportReady = exportStatus === 'available';
+  const georefNote = exportReasons.length ? ` (${exportReasons.join('; ')})` : '';
   const lines: string[] = [];
-  if (!isFull || !isReady) {
+  if (!isFull || !isExportReady) {
     lines.push(
-      `*** PRELIMINARY DEM — coverage: ${coverageMode}; quality gate: ${verdict}. ***`,
+      `*** PRELIMINARY DEM — coverage: ${coverageMode}; export readiness: ${exportStatus}${georefNote}. ***`,
       `*** Not for reliable terrain products. Treat heights and extents as`,
       `*** provisional and read the Quality gate + Warnings sections below.`,
       ``,
@@ -193,12 +199,16 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  ${coverageLabel(coverageMode)}`,
     ``,
     `Quality gate`,
-    `  Verdict        ${verdict}`,
-    `  Export status  ${exportStatus}`,
+    `  Surface quality ${verdict}`,
+    `  Export status   ${exportStatus}`,
   );
   if (reasons.length) {
-    lines.push(`  Reasons`);
+    lines.push(`  Surface reasons`);
     for (const r of reasons) lines.push(`    - ${r}`);
+  }
+  if (exportReasons.length) {
+    lines.push(`  Export reasons (georeferencing)`);
+    for (const r of exportReasons) lines.push(`    - ${r}`);
   }
   lines.push(``);
 

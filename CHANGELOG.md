@@ -40,6 +40,21 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   validation rebuilds its DTM with the same median aggregation, so the reported
   accuracy continues to measure the surface that ships, and the DEM export
   README's "Generation parameters" now records the cell aggregation used.
+- Terrain quality is now reported on TWO independent axes instead of one
+  conflated verdict: **Surface Quality** (is the terrain surface internally
+  valid?) and **Export Readiness** (is it georeferenced enough to hand off?).
+  Surface Quality is derived purely from surface metrics (coverage,
+  interpolation, edge risk, density, ground visibility, hold-out RMSE) and is
+  INDEPENDENT of the coordinate system and vertical datum — a dense, clean,
+  well-covered scan with an unknown datum now reads as a good surface. Export
+  Readiness equals Surface Quality further gated by georeferencing: an unknown
+  CRS or vertical datum caps it to "preview" (with an explicit reason such as
+  "vertical datum unknown"), even when the surface itself is good. The Analyse
+  panel shows both axes; DEM and contour/map exports key off Export Readiness;
+  and the DEM/map deliverables still carry their preliminary caveat whenever the
+  georeferenced hand-off is not export-ready. The honesty contract is unchanged
+  — an unknown datum still blocks an export-ready verdict and nothing claims
+  survey-grade.
 
 ## [0.4.1] - 2026-06-04
 

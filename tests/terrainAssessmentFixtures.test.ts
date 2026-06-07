@@ -56,7 +56,10 @@ function metric(metrics: ReadonlyArray<SupportingMetric>, label: string): Suppor
   return m as SupportingMetric;
 }
 
-/** All the human-readable verdict text, lower-cased, for reason assertions. */
+/** All the human-readable verdict text, lower-cased, for reason assertions.
+ *  Includes BOTH axes — the surface reason/reasons AND the export-readiness
+ *  reason(s) — so a georeferencing gap (CRS/datum) is findable on the export
+ *  axis where it now lives. */
 function verdictText(r: AnalyseContoursResult): string {
   const a = terrainAssessment(r);
   return [
@@ -64,7 +67,9 @@ function verdictText(r: AnalyseContoursResult): string {
     a.bestFor,
     a.useCaution,
     a.notRecommendedFor,
+    a.exportReason,
     ...r.quality.reasons,
+    ...r.quality.exportReasons,
     ...r.warnings,
   ]
     .join(' ')
@@ -161,25 +166,32 @@ describe('terrain VERDICT truth — edge-clipped coverage is reflected', () => {
   });
 });
 
-describe('terrain VERDICT truth — unknown CRS is capped and surfaced', () => {
-  // A clean gentle slope, but no horizontal CRS supplied. EXPECTED: Terrain
-  // Assessment can NEVER be Good (capped at Preview) and the CRS warning is
-  // present. WHY: an ungeoreferenced surface cannot be trusted for terrain
-  // products no matter how clean its geometry — the honesty contract caps it.
+describe('terrain VERDICT truth — unknown CRS gates EXPORT, not surface', () => {
+  // A clean gentle slope, but no horizontal CRS supplied. TWO-AXIS truth:
+  //   - SURFACE quality is NOT capped by the missing CRS — the surface gate
+  //     still reads `ready`, and the surface STATUS is identical to the same
+  //     scene WITH a CRS (geometry didn't change).
+  //   - EXPORT readiness IS capped to preview, with a reason that names the CRS.
+  // This is the new-correct behaviour: an ungeoreferenced but clean surface is
+  // still fine to inspect/measure; only the georeferenced hand-off is gated.
   const r = analyseContours(uniformSlope({ ...EXTENT, gradient: 0.1, z0: 50 }), {
     ...KNOWN,
     crs: null,
   });
+  const known = analyseContours(uniformSlope({ ...EXTENT, gradient: 0.1, z0: 50 }), KNOWN);
   const a = terrainAssessment(r);
 
-  it('cannot be Good (capped to Preview) and the gate is preview-only', () => {
-    expect(a.status).not.toBe('Good');
-    expect(a.status).toBe('Preview');
-    expect(r.quality.readiness).toBe('previewOnly');
+  it('surface quality is NOT capped by the missing CRS (ready, same status as georeferenced)', () => {
+    expect(r.quality.readiness).toBe('ready');
     expect(r.quality.crsKnown).toBe(false);
+    // Same surface as the georeferenced run — CRS did not demote it.
+    expect(a.status).toBe(terrainAssessment(known).status);
   });
 
-  it('the CRS supporting metric reads unknown and the text warns about CRS', () => {
+  it('EXPORT readiness is preview-only with a reason that names the CRS', () => {
+    expect(r.quality.exportReadiness).toBe('previewOnly');
+    expect(r.quality.exportReasons.join(' ')).toMatch(/crs/i);
+    expect(a.exportReadiness).not.toBe('Ready');
     const crs = metric(a.supportingMetrics, 'CRS');
     expect(crs.value).toMatch(/unknown/i);
     expect(crs.rating).toBe('unknown');
@@ -187,28 +199,71 @@ describe('terrain VERDICT truth — unknown CRS is capped and surfaced', () => {
   });
 });
 
-describe('terrain VERDICT truth — unknown vertical datum warns', () => {
-  // Same clean slope, known CRS, but no vertical datum. EXPECTED: cannot be
-  // Good, and the unknown datum is surfaced (metric unknown + a reason that
-  // names the datum). WHY: heights with no vertical reference are not safe for
-  // terrain products; the assessment must say so rather than imply otherwise.
+describe('terrain VERDICT truth — unknown vertical datum gates EXPORT, not surface', () => {
+  // Same clean slope, known CRS, but no vertical datum. TWO-AXIS truth: the
+  // surface gate still reads `ready` (datum does not change the geometry), but
+  // EXPORT readiness is capped to preview with a reason that names the datum.
+  // WHY: heights with no vertical reference are not safe to hand off as a
+  // georeferenced deliverable, even though the surface itself is sound.
   const r = analyseContours(uniformSlope({ ...EXTENT, gradient: 0.1, z0: 50 }), {
     ...KNOWN,
     verticalDatum: null,
   });
+  const known = analyseContours(uniformSlope({ ...EXTENT, gradient: 0.1, z0: 50 }), KNOWN);
   const a = terrainAssessment(r);
 
-  it('cannot be Good and the gate is preview-only', () => {
-    expect(a.status).not.toBe('Good');
-    expect(r.quality.readiness).toBe('previewOnly');
+  it('surface quality is NOT capped by the missing datum (ready, same status as georeferenced)', () => {
+    expect(r.quality.readiness).toBe('ready');
     expect(r.quality.datumKnown).toBe(false);
+    expect(a.status).toBe(terrainAssessment(known).status);
   });
 
-  it('the vertical-datum metric reads unknown and the text names the datum', () => {
+  it('EXPORT readiness is preview-only with a reason that names the datum', () => {
+    expect(r.quality.exportReadiness).toBe('previewOnly');
+    expect(r.quality.exportReasons.join(' ')).toMatch(/datum/i);
+    expect(a.exportReadiness).not.toBe('Ready');
     const datum = metric(a.supportingMetrics, 'Vertical datum');
     expect(datum.value).toMatch(/unknown/i);
     expect(datum.rating).toBe('unknown');
     expect(verdictText(r)).toMatch(/datum/);
+  });
+});
+
+describe('terrain VERDICT truth — Surface-Quality vs Export-Readiness separation', () => {
+  // The headline separation, end-to-end through the live pipeline. A dense,
+  // clean, well-covered slope large enough that no surface cap applies, so the
+  // SURFACE reads Good. Run it twice — fully georeferenced, then with the
+  // vertical datum dropped:
+  //   - known CRS + datum  → Surface Good AND Export Ready (no export reason)
+  //   - SAME scene, datum=null → Surface STILL Good; Export only Preview, with
+  //     the reason "vertical datum unknown".
+  // This proves the two axes move independently: dropping the datum changes the
+  // export verdict WITHOUT touching surface quality.
+  const SCENE = { nx: 96, ny: 96, spacing: 1, gradient: 0.1, z0: 50 } as const;
+  const georeferenced = analyseContours(uniformSlope(SCENE), KNOWN);
+  const aGeo = terrainAssessment(georeferenced);
+  const datumless = analyseContours(uniformSlope(SCENE), { ...KNOWN, verticalDatum: null });
+  const aNull = terrainAssessment(datumless);
+
+  it('georeferenced: Surface Quality Good AND Export Readiness Ready', () => {
+    expect(aGeo.status).toBe('Good');
+    expect(georeferenced.quality.readiness).toBe('ready');
+    expect(aGeo.exportReadiness).toBe('Ready');
+    expect(aGeo.exportReason).toBe('');
+    expect(georeferenced.quality.exportReadiness).toBe('available');
+  });
+
+  it('same scene, datum dropped: Surface Quality STILL Good; Export Readiness only Preview', () => {
+    // Surface quality is byte-for-byte unaffected by the datum.
+    expect(aNull.status).toBe('Good');
+    expect(aNull.status).toBe(aGeo.status);
+    expect(datumless.quality.readiness).toBe('ready');
+    expect(datumless.quality.readiness).toBe(georeferenced.quality.readiness);
+    // Only the export axis drops, and the reason names the datum.
+    expect(aNull.exportReadiness).toBe('Preview');
+    expect(aNull.exportReason).toMatch(/vertical datum unknown/i);
+    expect(datumless.quality.exportReadiness).toBe('previewOnly');
+    expect(datumless.quality.exportReasons.join(' ')).toMatch(/vertical datum unknown/i);
   });
 });
 

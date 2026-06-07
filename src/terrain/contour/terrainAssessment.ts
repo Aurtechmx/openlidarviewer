@@ -8,11 +8,28 @@
  * already exist on the result into one status, one folded 0–100 score, and a
  * short list of supporting metrics that each carry their own plain rating.
  *
- * Four statuses, never collapsed:
- *   Good     — suitable for terrain products and DEM workflows.
+ * TWO INDEPENDENT AXES (deliberately separated):
+ *   - SURFACE QUALITY (`status`) — is the terrain surface internally valid?
+ *     Derived from surface metrics only (coverage, interpolation, edge risk,
+ *     density, ground visibility, RMSE). It is INDEPENDENT of CRS / vertical
+ *     datum: a dense, clean, well-covered scan with an unknown datum can still
+ *     read as Good.
+ *   - EXPORT READINESS (`exportReadiness`) — is it georeferenced enough to hand
+ *     off? = the surface verdict, further gated by a known CRS + vertical datum.
+ *     An unknown CRS or datum caps export to Preview (with `exportReason`), even
+ *     when surface quality is Good.
+ *
+ * Four surface statuses, never collapsed:
+ *   Good     — surface is internally valid; suitable for terrain workflows.
  *   Preview  — suitable for inspection and measurement, not final deliverables.
  *   Limited  — insufficient data quality for reliable terrain products.
  *   Blocked  — the quality gate blocked it, or there is no usable DTM at all.
+ *
+ * Three export-readiness verdicts:
+ *   Ready    — surface is Good AND CRS + vertical datum are known.
+ *   Preview  — surface is below Good, OR the surface is Good but CRS / datum is
+ *              unknown (the reason names which).
+ *   Blocked  — the surface is Blocked.
  *
  * Honesty contract (non-negotiable):
  *   - We NEVER claim "survey-grade", "certified", "guaranteed", or
@@ -20,11 +37,12 @@
  *     tool measures coverage, interpolation and RMSE and applies a gate — it
  *     does not certify a deliverable. A licensed surveyor, a control network,
  *     datum validation and regulatory acceptance are out of scope.
- *   - Unknown CRS or vertical datum REDUCES confidence: such a dataset cannot
- *     read as Good (capped at Preview), and the reason/metrics say so.
+ *   - Unknown CRS or vertical datum does NOT reduce surface quality, but it
+ *     DOES cap EXPORT READINESS to Preview (with a reason) — a georeferenced
+ *     hand-off needs a known frame + datum. Nothing claims survey-grade.
  *   - High interpolation, resident-only / sampled coverage, and low ground
- *     visibility / density each cap the status below Good and stay visible in
- *     the supporting metrics.
+ *     visibility / density each cap the surface status below Good and stay
+ *     visible in the supporting metrics.
  *   - Where a value is unknown we show "unknown" with rating 'unknown' — we
  *     never fabricate a figure.
  *
@@ -37,6 +55,9 @@ import type { AnalyseContoursResult } from './analyseContours';
 
 export type TerrainStatus = 'Good' | 'Preview' | 'Limited' | 'Blocked';
 
+/** Export-readiness verdict — the surface verdict gated by georeferencing. */
+export type ExportReadinessStatus = 'Ready' | 'Preview' | 'Blocked';
+
 /** A single supporting metric: a plain label, a formatted value, and a colour-only rating. */
 export interface SupportingMetric {
   readonly label: string;
@@ -46,7 +67,19 @@ export interface SupportingMetric {
 }
 
 export interface TerrainAssessment {
+  /** SURFACE QUALITY — internal validity of the surface (CRS/datum-independent). */
   readonly status: TerrainStatus;
+  /**
+   * EXPORT READINESS — the surface verdict gated by a known CRS + vertical
+   * datum. Ready only when the surface is Good AND both are known; otherwise
+   * Preview (with `exportReason`), or Blocked when the surface is Blocked.
+   */
+  readonly exportReadiness: ExportReadinessStatus;
+  /**
+   * Why export readiness sits below "Ready" — names the georeferencing gap
+   * (e.g. "vertical datum unknown") or the surface limitation. '' when Ready.
+   */
+  readonly exportReason: string;
   /** 0..100, folded in from the composite quality score (single source of truth). */
   readonly score: number;
   /**
@@ -108,13 +141,18 @@ function describeCoverage(mode: string): { value: string; rating: SupportingMetr
 }
 
 /**
- * Collapse an analysis result into a single top-level assessment.
+ * Collapse an analysis result into a single top-level assessment with TWO axes.
  *
- * Status is derived in two passes: first the gate's readiness gives a baseline
- * (ready→Good, previewOnly→Preview, blocked→Blocked), then a set of caps from
- * CRS, vertical datum, interpolation, coverage mode and ground visibility pull
- * it down so no single weakness can read as Good. A surface with no usable DTM
- * is Blocked outright.
+ * SURFACE QUALITY (`status`) is derived in two passes: first the gate's surface
+ * readiness gives a baseline (ready→Good, previewOnly→Preview, blocked→Blocked),
+ * then a set of SURFACE caps from interpolation, coverage mode, edge risk and
+ * ground visibility pull it down so no single weakness can read as Good. CRS /
+ * vertical datum do NOT enter this axis. A surface with no usable DTM is Blocked.
+ *
+ * EXPORT READINESS (`exportReadiness`) then takes the surface verdict and gates
+ * it on georeferencing: Blocked surface → Blocked; otherwise Ready only when the
+ * surface is Good AND CRS + vertical datum are known, else Preview (with a reason
+ * naming the gap). Export availability downstream keys off THIS axis.
  */
 export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessment {
   const q = result.quality;
@@ -156,8 +194,9 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   else if (q.readiness === 'previewOnly') status = 'Preview';
   else status = 'Good';
 
-  // ── caps (each weakness pulls the ceiling down; never below the gate) ──
-  if (!crsKnown || !datumKnown) status = capStatus(status, 'Preview');
+  // ── SURFACE caps (each weakness pulls the ceiling down; never below gate) ──
+  // CRS / vertical datum deliberately do NOT cap surface quality — they belong
+  // to export readiness, computed separately below.
   if (interpFrac > HIGH_INTERP_FRACTION) status = capStatus(status, 'Preview');
   if (emptyFrac > HIGH_EMPTY_FRACTION) status = capStatus(status, 'Preview');
   if (edgeFrac > HIGH_EDGE_FRACTION) status = capStatus(status, 'Preview');
@@ -258,12 +297,11 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
       ? 'No usable bare-earth surface — too little measured ground to contour.'
       : (gateReason ?? 'The quality gate blocked this surface for terrain products.');
   } else if (status === 'Good') {
-    reason = `${pctStr(1 - interpFrac)} measured ground, georeferenced — passes the quality gate.`;
+    reason = `${pctStr(1 - interpFrac)} measured ground — the surface passes the quality gate.`;
   } else {
-    // Preview / Limited: prefer the gate's own words, else name the strongest cap.
+    // Preview / Limited: surface reason only (CRS/datum live on export, below).
+    // Prefer the gate's own words, else name the strongest SURFACE cap.
     const caps: string[] = [];
-    if (!crsKnown) caps.push('the coordinate system is unknown');
-    if (!datumKnown) caps.push('the vertical datum is unknown');
     if (coverageMode === 'resident-only') caps.push('only resident streaming nodes were walked');
     else if (coverageMode === 'sampled') caps.push('the cloud was sampled, not fully walked');
     if (interpFrac > HIGH_INTERP_FRACTION) caps.push(`${pctStr(interpFrac)} of the surface is interpolated`);
@@ -271,10 +309,42 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     reason = gateReason ?? (caps.length > 0 ? capitalise(joinReasons(caps)) + '.' : 'Usable for inspection, not for final terrain products.');
   }
 
-  // ── bestFor / useCaution / notRecommendedFor ──────────────────────────
+  // ── EXPORT READINESS (surface verdict gated by georeferencing) ────────
+  // Blocked surface ⇒ export blocked. Otherwise Ready only when the surface is
+  // Good AND CRS + datum are both known; an unknown CRS/datum (or any sub-Good
+  // surface) holds export at Preview, with a reason naming the gap.
+  const georefGaps: string[] = [];
+  if (!crsKnown) georefGaps.push('CRS unknown');
+  if (!datumKnown) georefGaps.push('vertical datum unknown');
+  let exportReadiness: ExportReadinessStatus;
+  let exportReason: string;
+  if (status === 'Blocked') {
+    exportReadiness = 'Blocked';
+    exportReason = reason;
+  } else if (status === 'Good' && georefGaps.length === 0) {
+    exportReadiness = 'Ready';
+    exportReason = '';
+  } else {
+    exportReadiness = 'Preview';
+    if (georefGaps.length > 0) {
+      // Georeferencing is the (or a) reason export is held back.
+      exportReason = joinReasons(georefGaps);
+    } else {
+      // Surface itself is below Good — that's why export isn't ready.
+      exportReason = 'surface quality is below export grade — validate before hand-off';
+    }
+  }
+
+  // ── bestFor / useCaution / notRecommendedFor (surface inspection verdict) ──
+  // bestFor speaks to what the SURFACE supports. For a Good surface we only
+  // advertise georeferenced DEM export when export readiness actually allows it
+  // (known CRS + datum); otherwise we point at measurement/inspection and the
+  // export recommendation is carried separately by exportReason.
   const bestFor =
     status === 'Good'
-      ? 'terrain products, DEM export, measurement and inspection'
+      ? exportReadiness === 'Ready'
+        ? 'terrain products, DEM export, measurement and inspection'
+        : 'measurement, inspection and terrain analysis'
       : status === 'Preview'
         ? 'profile review, measurement and terrain inspection'
         : status === 'Limited'
@@ -297,7 +367,18 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
         ? 'final deliverables without independent validation'
         : 'terrain products, DEM export, contour generation';
 
-  return { status, score, scoreKnown, reason, bestFor, useCaution, notRecommendedFor, supportingMetrics };
+  return {
+    status,
+    exportReadiness,
+    exportReason,
+    score,
+    scoreKnown,
+    reason,
+    bestFor,
+    useCaution,
+    notRecommendedFor,
+    supportingMetrics,
+  };
 }
 
 /** Join reason fragments into one sentence: "a, b and c". */

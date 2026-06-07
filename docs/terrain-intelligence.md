@@ -13,9 +13,10 @@ Current capability. The Analyse panel (`src/ui/AnalysePanel.ts`) is
 reachable any time via the "Analyse" tool-dock button and renders, top to
 bottom:
 
-- a single top-level **Terrain Assessment** verdict (Good / Preview /
-  Limited / Blocked) with a folded 0–100 quality score, a one-line reason,
-  and a short list of supporting metrics;
+- a single top-level **Terrain Assessment** with two axes — **Surface
+  Quality** (Good / Preview / Limited / Blocked) and **Export Readiness**
+  (Ready / Preview / Blocked) — a folded 0–100 quality score, a one-line
+  reason, and a short list of supporting metrics;
 - readiness indicators, coverage mode, and per-cell confidence;
 - **surface models** — DSM (digital surface model), canopy height (CHM),
   slope, and a multi-directional hillshade with an adjustable sun and
@@ -23,7 +24,9 @@ bottom:
 - **exports** — evidence-graded contours (GeoJSON / SVG / DXF), a printable
   map sheet, and a georeferenced DEM package (Esri ASCII Grid + GeoTIFF).
 
-A DTM quality gate governs whether the terrain-product (contour/DEM) export is offered.
+A DTM quality gate governs whether the terrain-product (contour/DEM) export is
+offered: export availability keys off **Export Readiness** (Surface Quality
+gated by a known CRS + vertical datum), not Surface Quality alone.
 The panel speaks to data quality and fitness-for-use, **not** survey
 certification (see [What confidence means](#what-confidence-means-and-what-it-does-not)).
 
@@ -166,24 +169,46 @@ from the existing quality report, quality score, cell metrics, accuracy
 standards, and coverage, so it never disagrees with the numbers shown
 beneath it.
 
-There are **four statuses**, never collapsed:
+It reports **two independent axes**, deliberately not conflated:
+
+- **Surface Quality** — *is the terrain surface internally valid?* Derived
+  purely from surface metrics (coverage, interpolation, edge risk, density,
+  ground visibility, hold-out RMSE) and **independent of CRS / vertical
+  datum**. A dense, clean, well-covered scan with an unknown datum still has
+  good Surface Quality.
+- **Export Readiness** — *is it georeferenced enough to hand off?* Equals
+  Surface Quality, further gated by a known CRS **and** vertical datum. An
+  unknown CRS or datum caps Export Readiness to **Preview** (with an explicit
+  reason such as "vertical datum unknown"), even when Surface Quality is good.
+
+Surface Quality has **four statuses**, never collapsed:
 
 | Status | Meaning |
 |---|---|
-| **Good** | Suitable for terrain products and DEM workflows. |
+| **Good** | Surface is internally valid; suitable for terrain workflows. |
 | **Preview** | Suitable for inspection and measurement, not final deliverables. |
 | **Limited** | Insufficient data quality for reliable terrain products. |
 | **Blocked** | The quality gate blocked it, or there is no usable DTM at all. |
 
-The status is derived in two passes. A baseline comes from the gate's
-readiness (ready → Good, previewOnly → Preview, blocked / no usable DTM →
-Blocked). Then a set of **caps** can only ever pull the status *down*: an
-unknown CRS or vertical datum, high interpolation, resident-only or sampled
-coverage, high empty-cell or edge-risk fractions, and low ground density or
-ground visibility each cap the verdict below Good and stay visible in the
-supporting metrics. A further "Limited" cap lowers an already weak surface
-when the score is very low, several metrics rate poor, or the grid is
-severely gappy.
+Surface Quality is derived in two passes. A baseline comes from the gate's
+surface readiness (ready → Good, previewOnly → Preview, blocked / no usable
+DTM → Blocked). Then a set of **surface caps** can only ever pull the status
+*down*: high interpolation, resident-only or sampled coverage, high empty-cell
+or edge-risk fractions, and low ground density or ground visibility each cap
+the verdict below Good and stay visible in the supporting metrics. A further
+"Limited" cap lowers an already weak surface when the score is very low,
+several metrics rate poor, or the grid is severely gappy. **CRS and vertical
+datum do not enter this axis** — they belong to Export Readiness.
+
+Export Readiness then takes the Surface Quality verdict and gates it on
+georeferencing: a Blocked surface blocks export; otherwise it reads **Ready**
+only when the surface is Good *and* the CRS + vertical datum are both known,
+else **Preview** with a reason naming the gap. The user-facing line reads, for
+example, `Surface Quality: Good · Export Readiness: Preview — vertical datum
+unknown`. DEM, contour, and printable-map exports key off Export Readiness:
+a good surface with an unknown datum can still be inspected and measured, but
+the georeferenced hand-off stays gated, and the DEM/map deliverables carry a
+preliminary caveat naming the georeferencing gap.
 
 Terrain Assessment speaks to **fitness-for-use, not certification**. Where a
 value is genuinely unknown it is shown as "unknown" with an unknown rating —

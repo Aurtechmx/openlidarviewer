@@ -330,15 +330,35 @@ export class AnalysePanel {
     this._assessmentRow.className = `olv-analyse-assessment is-${tier}`;
 
     const top = el('div', { className: 'olv-analyse-assess-top' });
-    // The score is folded in from the assessment (single source of truth) so
-    // the hero is the one headline, e.g. "Preview · 64/100".
+    // SURFACE QUALITY is the primary verdict. The score is folded in from the
+    // assessment (single source of truth) so the hero is the one headline, e.g.
+    // "Surface quality · Good · 84/100".
     const headline = a.scoreKnown && Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
     top.append(
-      el('span', { className: 'olv-analyse-assess-label', text: 'Terrain assessment' }),
+      el('span', { className: 'olv-analyse-assess-label', text: 'Surface quality' }),
       el('span', { className: 'olv-analyse-assess-verdict', text: headline }),
     );
     this._assessmentRow.append(top);
     this._assessmentRow.append(el('div', { className: 'olv-analyse-assess-reason', text: a.reason }));
+
+    // EXPORT READINESS is the SECOND, distinct axis — surface quality gated by
+    // a known CRS + vertical datum. Rendered on its own line with its reason so
+    // a datum-less but clean scan reads "Surface quality: Good · Export
+    // readiness: Preview — vertical datum unknown". Colour reuses the rating
+    // tokens (good / moderate / blocked), never a new hardcoded colour.
+    const exportTier =
+      a.exportReadiness === 'Ready' ? 'good' : a.exportReadiness === 'Blocked' ? 'blocked' : 'preview';
+    const exportLine = el('div', { className: `olv-analyse-assess-export is-${exportTier}` });
+    exportLine.append(
+      el('span', { className: 'olv-analyse-assess-export-label', text: 'Export readiness' }),
+      el('span', { className: 'olv-analyse-assess-export-verdict', text: a.exportReadiness }),
+    );
+    if (a.exportReason) {
+      exportLine.append(
+        el('span', { className: 'olv-analyse-assess-export-reason', text: `— ${a.exportReason}` }),
+      );
+    }
+    this._assessmentRow.append(exportLine);
     this._assessmentRow.append(
       el('div', { className: 'olv-analyse-assess-use', text: `Best for: ${a.bestFor}` }),
     );
@@ -1147,7 +1167,11 @@ export class AnalysePanel {
         crs: r.model.crs,
         verticalDatum: r.model.verticalDatum,
         accuracy: r.accuracyStandards,
-        readiness: r.quality.readiness,
+        // The map sheet is a georeferenced deliverable, so its readiness note
+        // reflects EXPORT readiness (surface quality gated by a known CRS +
+        // datum): a clean surface with an unknown datum prints PREVIEW, not a
+        // validated note. 'available' → 'ready' for the note's vocabulary.
+        readiness: r.quality.exportReadiness === 'available' ? 'ready' : r.quality.exportReadiness,
         title: ctx.title,
         preparedBy: ctx.preparedBy,
         sheet: ctx.sheet,
@@ -1268,18 +1292,21 @@ export class AnalysePanel {
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';
     // One-line caveat under the DEM button when the surface is not full coverage
-    // or the quality gate is not ready — the README spells out the rest. This
-    // uses the SAME condition the README caveat does (coverage !== 'full' ||
-    // readiness !== 'ready') so the button note and the README can't disagree.
+    // or the GEOREFERENCED export is not ready — the README spells out the rest.
+    // The DEM is the georeferenced deliverable, so the note keys off EXPORT
+    // readiness (CRS + datum gated), using the SAME condition the README caveat
+    // does (coverage !== 'full' || exportReadiness !== 'available') so the
+    // button note and the README can't disagree. Any georeferencing gap (unknown
+    // CRS / datum) is named inline.
     const coverageMode = r.dtm.coverageMode;
     const notFull = coverageMode !== 'full';
-    const notReady = r.quality.readiness !== 'ready';
-    if (hasDtm && (notFull || notReady)) {
-      const verdict = r.quality.readiness === 'blocked'
-        ? 'blocked'
-        : r.quality.readiness === 'previewOnly' ? 'preview' : 'ready';
+    const exp = r.quality.exportReadiness;
+    const exportNotReady = exp !== 'available';
+    if (hasDtm && (notFull || exportNotReady)) {
+      const verdict = exp === 'blocked' ? 'blocked' : exp === 'previewOnly' ? 'preview' : 'ready';
+      const georef = r.quality.exportReasons.length > 0 ? ` (${r.quality.exportReasons.join(', ')})` : '';
       this._demNote.textContent =
-        `Preliminary DEM — coverage: ${coverageMode}; quality gate: ${verdict}. ` +
+        `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +
         `Exported with a caveat in the README; not for reliable terrain products.`;
       this._demNote.style.display = '';
     } else {
