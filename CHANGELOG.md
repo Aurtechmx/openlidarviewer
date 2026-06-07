@@ -63,7 +63,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   (metres and feet), largest dimension, bounding-envelope volume (m³ and ft³),
   an approximate bounding-box surface area, and the same capture-quality block —
   with the figures honestly labelled as bounding envelopes, not solid or mesh
-  measurements.
+  measurements. Scan-type detection is more robust: an interior is recognised
+  from its floor plus wall / floor-to-ceiling columns (so a real multi-room or
+  360 house with a partial, occluded ceiling is no longer mistaken for terrain),
+  and when a scan carries classification a vegetation-dominated canopy keeps a
+  forested drone scan as terrain rather than reading the canopy as a ceiling.
+  Streaming scans re-evaluate their type as more of the cloud arrives.
+- Contour export, simplified: the redundant contour-interval picker and the
+  contour-style selector were removed from the Analyse panel — both are now
+  chosen in the export dialog — and the "MAP PDF" button is renamed
+  "Export Contours" to read as the primary contour-deliverable action.
 
 ### Changed
 

@@ -31,7 +31,6 @@ import {
   METRIC_TOOLTIPS,
   NOT_SURVEY_GRADE,
   describeIntervalOption,
-  recommendIntervalText,
   formatHonestValue,
 } from '../terrain/contour/contourCopy';
 import { interpolatedCaption } from '../terrain/contour/evidenceGrade';
@@ -169,7 +168,6 @@ export class AnalysePanel {
   private readonly _assessmentRow: HTMLElement;
   private readonly _scoreRow: HTMLElement;
   private readonly _surfaceRow: HTMLElement;
-  private readonly _intervalRow: HTMLElement;
   private readonly _coverageRow: HTMLElement;
   private readonly _validationRow: HTMLElement;
   private readonly _body: HTMLElement;
@@ -184,12 +182,12 @@ export class AnalysePanel {
   private readonly _exportRow: HTMLElement;
   private readonly _exportNote: HTMLElement;
   private readonly _exportButtons: HTMLButtonElement[] = [];
-  /** The contour shape style applied to ALL contour exports (panel-wide). */
+  /**
+   * The contour shape style applied to the quick GeoJSON / SVG / DXF exports.
+   * The Export-Contours (map PDF) dialog overrides it per-export; there is no
+   * panel-level picker — style is chosen in that dialog.
+   */
   private _contourStyle: ContourShapeStyle = defaultContourShapeStyle;
-  /** The "Contour style" picker row shown above the export buttons. */
-  private readonly _styleRow: HTMLElement;
-  /** The panel's contour-style <select>, kept in sync with the dialog's pick. */
-  private _styleSelect: HTMLSelectElement | null = null;
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
   /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
@@ -250,11 +248,9 @@ export class AnalysePanel {
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
     this._qualityRow = el('div', { className: 'olv-analyse-quality' });
-    this._intervalRow = el('div', { className: 'olv-analyse-intervals' });
     this._coverageRow = el('div', { className: 'olv-analyse-coverage' });
     this._validationRow = el('div', { className: 'olv-analyse-validation' });
     this._body = el('div', { className: 'olv-analyse-body' });
-    this._styleRow = this._buildStyleRow();
     this._exportRow = this._buildExportRow();
     this._exportNote = el('p', { className: 'olv-analyse-export-note' });
     this._legend = this._buildLegend();
@@ -276,7 +272,6 @@ export class AnalysePanel {
       this._readinessRow,
       this._recommendRow,
       this._qualityRow,
-      this._intervalRow,
       section('Coverage & confidence'),
       this._coverageRow,
       this._validationRow,
@@ -288,7 +283,6 @@ export class AnalysePanel {
       section('Surface models'),
       this._surfaceRow,
       section('Contour export'),
-      this._styleRow,
       this._exportRow,
       this._exportNote,
       this._legend,
@@ -356,7 +350,6 @@ export class AnalysePanel {
     this._renderReadiness();
     this._renderRecommend();
     this._renderQualityReasons();
-    this._renderIntervals();
     this._renderCoverage();
     this._renderValidation();
     this._renderSurface();
@@ -981,28 +974,6 @@ export class AnalysePanel {
     return this.element.style.display !== 'none';
   }
 
-  private _renderIntervals(): void {
-    this._intervalRow.replaceChildren();
-    const gate = this._result?.gate;
-    if (!gate) return;
-    this._intervalRow.append(
-      el('div', { className: 'olv-analyse-recommend', text: recommendIntervalText(gate) }),
-    );
-    for (const opt of gate.options) {
-      const btn = el('button', {
-        className: `olv-analyse-interval${opt.supported ? '' : ' is-disabled'}${
-          this._result?.intervalM === opt.intervalM ? ' is-active' : ''
-        }`,
-        text: describeIntervalOption(opt),
-        title: opt.reason || undefined,
-      });
-      btn.disabled = !opt.supported;
-      // Re-runs the pipeline at the chosen interval via the host callback.
-      btn.addEventListener('click', () => this._cb.onSelectInterval?.(opt.intervalM));
-      this._intervalRow.append(btn);
-    }
-  }
-
   /**
    * Attach a "what this means" hover hint to a metric node, matching the
    * affordance the Inspector's DatasetIntelligenceCard uses on its rows:
@@ -1116,38 +1087,6 @@ export class AnalysePanel {
   }
 
   /**
-   * The "Contour style" picker — a compact select above the export buttons. The
-   * choice is panel-wide (`this._contourStyle`) and drives EVERY contour export
-   * (GeoJSON / SVG / DXF / Map PDF). It reuses the modal input styling so it
-   * matches the dark hairline aesthetic with no new hardcoded colours.
-   */
-  private _buildStyleRow(): HTMLElement {
-    const row = el('div', { className: 'olv-analyse-style-row' });
-    const id = 'olv-analyse-contour-style';
-    const lab = el('label', { className: 'olv-modal-label', text: 'Contour style' });
-    lab.setAttribute('for', id);
-    const sel = document.createElement('select');
-    sel.id = id;
-    sel.className = 'olv-modal-input olv-analyse-style-select';
-    for (const opt of CONTOUR_SHAPE_STYLES) {
-      const o = document.createElement('option');
-      o.value = opt.value;
-      o.textContent = opt.label;
-      o.title = opt.description;
-      if (opt.value === this._contourStyle) o.selected = true;
-      sel.append(o);
-    }
-    sel.title = CONTOUR_SHAPE_STYLES.find((s) => s.value === this._contourStyle)?.description ?? '';
-    sel.addEventListener('change', () => {
-      this._contourStyle = sel.value as ContourShapeStyle;
-      sel.title = CONTOUR_SHAPE_STYLES.find((s) => s.value === this._contourStyle)?.description ?? '';
-    });
-    this._styleSelect = sel;
-    row.append(lab, sel);
-    return row;
-  }
-
-  /**
    * Resolve the feature model to serialize for a contour export at the panel's
    * current shape style. Reuses the on-screen model when the style already
    * matches (no recompute); otherwise regenerates from the cached core at the
@@ -1209,7 +1148,7 @@ export class AnalysePanel {
     // Printable map sheet — the field deliverable (contours + collar + accuracy).
     // Clicking opens a pre-export dialog (title-block fields + interval +
     // filename) rather than exporting immediately.
-    const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'MAP PDF' });
+    const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'Export Contours' });
     mapBtn.addEventListener('click', () => this._openMapPdfDialog(mapBtn));
     this._exportButtons.push(mapBtn);
     row.append(mapBtn);
@@ -1482,10 +1421,8 @@ export class AnalysePanel {
               shapeStyle: chosenStyle,
             });
           }
-          // Remember the style as the panel-wide choice for subsequent exports,
-          // and reflect it in the panel's own picker.
+          // Remember the chosen style as the default for subsequent quick exports.
           this._contourStyle = chosenStyle;
-          if (this._styleSelect) this._styleSelect.value = chosenStyle;
           await this._buildAndDownloadMapPdf(result, {
             title: titleInput.value,
             preparedBy: preparedInput.value,

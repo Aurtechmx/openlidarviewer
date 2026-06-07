@@ -114,8 +114,9 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   const geojson = page.locator('.olv-analyse-dl', { hasText: 'GEOJSON' });
   await expect(geojson).toBeVisible();
   await expect(geojson).toBeEnabled();
-  // The printable map-sheet PDF export is offered alongside the vector formats.
-  await expect(page.locator('.olv-analyse-dl', { hasText: 'MAP PDF' })).toBeVisible();
+  // The printable map-sheet PDF export (renamed "Export Contours") is offered
+  // alongside the vector formats and opens the pre-export dialog.
+  await expect(page.locator('.olv-analyse-dl', { hasText: 'Export Contours' })).toBeVisible();
   await expect(page.locator('.olv-analyse-export-note')).toContainText(/not survey-grade/i);
   // The DEM raster package is offered as the primary export and stays enabled
   // regardless of the contour gate (a bare-earth raster is valid either way).
