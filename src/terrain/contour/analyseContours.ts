@@ -500,7 +500,7 @@ export function computeTerrainCore(
     : EMPTY_GATE;
 
   // 5b) DTM cell status, the quality gate (ready / previewOnly / blocked).
-  // The gate decides whether the UI may offer a professional export at all.
+  // The gate decides whether the UI may offer the terrain-product (contour/DEM) export at all.
   const cellStatusTally = tallyCellStatus(classifyCellStatus(dtm));
   const groundPointRatio =
     gf.sourcePointCount > 0 ? gf.groundPointCount / gf.sourcePointCount : Number.NaN;

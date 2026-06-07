@@ -23,7 +23,7 @@ bottom:
 - **exports** — evidence-graded contours (GeoJSON / SVG / DXF), a printable
   map sheet, and a georeferenced DEM package (Esri ASCII Grid + GeoTIFF).
 
-A DTM quality gate governs whether a professional contour export is offered.
+A DTM quality gate governs whether the terrain-product (contour/DEM) export is offered.
 The panel speaks to data quality and fitness-for-use, **not** survey
 certification (see [What confidence means](#what-confidence-means-and-what-it-does-not)).
 
