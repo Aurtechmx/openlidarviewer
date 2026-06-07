@@ -58,7 +58,12 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   and a capture-quality block (point count, density, coverage, RGB) — with the
   same honesty caveats as terrain (figures are based on the loaded / streamed
   data, ceilings are often sparsely captured, nothing is survey-certified).
-  Terrain contour analysis stays one click away for any scan.
+  Terrain contour analysis stays one click away for any scan. Object scans get a
+  matching report at the same depth — oriented and axis-aligned dimensions
+  (metres and feet), largest dimension, bounding-envelope volume (m³ and ft³),
+  an approximate bounding-box surface area, and the same capture-quality block —
+  with the figures honestly labelled as bounding envelopes, not solid or mesh
+  measurements.
 
 ### Changed
 
