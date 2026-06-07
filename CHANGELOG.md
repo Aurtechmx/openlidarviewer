@@ -40,6 +40,15 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Interface polish: a consistent button system across the app with clearer
   primary actions, accessible focus rings, and an obvious, rotating expand /
   collapse chevron on the collapsible panel headers (Analyse, Export / Convert).
+- Contour shape style, selectable on export: a "Contour style" picker (in the
+  Analyse export section and the map-PDF dialog) chooses how the contour lines
+  are shaped — As measured (crisp), Smooth, Rounded, Generalized, or
+  Semi-geometric — and applies to every contour export (PDF, SVG, DXF, GeoJSON).
+  Smoothing stays honesty-gated: it never moves a low-confidence vertex or
+  bridges a data gap, so a dashed / uncertain run can't be reshaped into a
+  confident line, and each exported file is stamped with the style it was made
+  with. The on-screen contours are unchanged (the default matches the previous
+  smoothing).
 
 ### Changed
 
