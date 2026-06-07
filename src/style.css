@@ -4419,6 +4419,12 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   font: inherit; font-size: var(--text-md); font-weight: 700; color: #04121f;
   background: var(--brand-gradient); border: none; border-radius: var(--radius-md);
   padding: var(--space-xl) var(--space-4xl); cursor: pointer;
+  /* This CTA also carries `.olv-export-btn`, whose `flex: 1` is meant for the
+     horizontal `.olv-export` ROW. Here the button is a direct child of the
+     COLUMN-flex `.olv-export-body`, where `flex: 1` would make it grow on the
+     vertical axis and balloon if the body ever gains a height. Pin it to its
+     content height (mirrors `.olv-report-row .olv-export-btn`). */
+  flex: 0 0 auto;
 }
 .olv-bc-convert:disabled { opacity: 0.4; cursor: not-allowed; }
 .olv-bc-hint { font-size: var(--text-xs); color: var(--text-dim); margin: 0; }
