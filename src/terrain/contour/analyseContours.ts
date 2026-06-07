@@ -85,7 +85,11 @@ import { stitchContourSet, type StitchedLevel } from './stitchContours';
 import { styleLevels, type ContourStyleResult } from './contourStyle';
 import { buildFeatureModel, type ContourFeatureModel } from './contourFeatureModel';
 import { tallyContourSet, type GradeTally } from './evidenceGrade';
-import { chaikinSmooth } from './smoothing';
+import {
+  applyContourShapeStyle,
+  defaultContourShapeStyle,
+  type ContourShapeStyle,
+} from './contourShapeStyle';
 import { placeLabels, type ContourLabel } from './labelPlacement';
 import { computeVerticalAccuracy, type VerticalAccuracy } from '../validate/verticalAccuracy';
 
@@ -158,7 +162,17 @@ export interface IntervalContourParams {
   readonly intervalM?: number;
   /** Every Nth contour is an index contour. Default 5. */
   readonly indexEvery?: number;
-  /** Smooth high-confidence contour runs (honesty-preserving). Default true. */
+  /**
+   * Shape style for the exported contour geometry (honesty-gated). Default
+   * `'smooth'` — which reproduces the historical Chaikin ×2 default exactly, so
+   * the live on-screen contours are unchanged. Takes precedence over `smooth`.
+   */
+  readonly shapeStyle?: ContourShapeStyle;
+  /**
+   * Legacy boolean toggle for smoothing. Honoured for back-compat when
+   * `shapeStyle` is not given: `false` ⇒ `'crisp'`, otherwise the default
+   * `'smooth'`. Prefer `shapeStyle`.
+   */
   readonly smooth?: boolean;
   /** Label spacing along index contours, source units. Default 25×cellSize. */
   readonly labelSpacingM?: number;
@@ -176,7 +190,12 @@ export interface AnalyseContoursParams extends TerrainCoreParams, IntervalContou
 export interface AnalyseGenerationParams {
   /** Void-fill interpolation method the DTM builder ran with. */
   readonly interpolation: 'idw' | 'geodesic';
-  /** True when contour smoothing was applied (params.smooth !== false). */
+  /** The contour shape style applied to the exported geometry. */
+  readonly contourStyle: ContourShapeStyle;
+  /**
+   * True when contour smoothing was applied. Derived as `style !== 'crisp'` and
+   * kept for back-compat with any consumer that still reads a boolean.
+   */
   readonly smoothing: boolean;
   /** True when the blunder-only despike pass ran before building the surface. */
   readonly despike: boolean;
@@ -623,10 +642,16 @@ export function contoursFromCore(
   intervalParams: IntervalContourParams = {},
 ): AnalyseContoursResult {
   const { crs, verticalDatum, cellSizeM, dtm, gate, minZ, maxZ } = core;
-  // Whether contour smoothing will be applied this run (default on). Captured
-  // once so the early-return path and the main path agree, and so the README's
-  // provenance reflects the real decision rather than a constant.
-  const smoothingApplied = intervalParams.smooth !== false;
+  // The contour shape style for this run. Default 'smooth' reproduces the
+  // historical Chaikin ×2 default exactly, so the live on-screen contours are
+  // byte-identical. `shapeStyle` wins; otherwise the legacy `smooth:false`
+  // boolean maps to 'crisp'. Captured once so every path agrees and the README
+  // provenance reflects the real decision.
+  const shapeStyle: ContourShapeStyle =
+    intervalParams.shapeStyle ??
+    (intervalParams.smooth === false ? 'crisp' : defaultContourShapeStyle);
+  // Back-compat boolean: anything but raw geometry counts as "smoothed".
+  const smoothingApplied = shapeStyle !== 'crisp';
   // Interval-dependent warnings are appended AFTER the core warnings so the
   // composed `warnings` array is in the same order as a single-pass run.
   const warnings: string[] = [...core.coreWarnings];
@@ -649,6 +674,7 @@ export function contoursFromCore(
 
   const generationParams: AnalyseGenerationParams = {
     interpolation: core.interpolation,
+    contourStyle: shapeStyle,
     smoothing: smoothingApplied,
     despike: core.despikeApplied,
     aggregation: core.aggregation,
@@ -689,6 +715,7 @@ export function contoursFromCore(
         verticalDatum,
         intervalM: 0,
         coverageMode: dtm.coverageMode,
+        contourStyle: shapeStyle,
       }),
       tally: tallyContourSet(emptyContours),
       labels: [],
@@ -708,20 +735,21 @@ export function contoursFromCore(
     { intervalM, indexEvery: intervalParams.indexEvery ?? 5 },
   );
 
-  // Beauty: smooth high-confidence runs (honesty-preserving — the
-  // smoother provably never moves a low-confidence vertex).
-  if (smoothingApplied) {
-    stitched = stitched.map((level) => ({
-      value: level.value,
-      polylines: level.polylines.map((poly) => chaikinSmooth(poly)),
-    }));
-  }
+  // Beauty: apply the chosen shape style to the raw stitched runs. Every style
+  // is honesty-gated (the smoother/simplifier provably never move a low-
+  // confidence vertex or bridge a gap). 'crisp' is identity; 'smooth' (default)
+  // is exactly the historical Chaikin ×2, so the live contours are unchanged.
+  stitched = stitched.map((level) => ({
+    value: level.value,
+    polylines: applyContourShapeStyle(level.polylines, shapeStyle, { cellSizeM }),
+  }));
 
   const model = buildFeatureModel(stitched, style.levels, {
     crs,
     verticalDatum,
     intervalM,
     coverageMode: dtm.coverageMode,
+    contourStyle: shapeStyle,
   });
   const tally = tallyContourSet(contours);
 

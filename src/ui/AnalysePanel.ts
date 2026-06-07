@@ -44,6 +44,11 @@ import {
   triggerBrowserDownload,
   type ContourFormat,
 } from '../terrain/contour/contourDownload';
+import {
+  CONTOUR_SHAPE_STYLES,
+  defaultContourShapeStyle,
+  type ContourShapeStyle,
+} from '../terrain/contour/contourShapeStyle';
 import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
@@ -83,6 +88,17 @@ export interface AnalysePanelCallbacks {
    * the dialog falls back to the current result and disables the interval picker.
    */
   buildResultAtInterval?: (intervalM: number) => Promise<AnalyseContoursResult>;
+  /**
+   * Build a fresh contour result at a chosen interval AND shape style for an
+   * export ONLY, over the same cached terrain core, without mutating the visible
+   * panel/result. Generalises {@link buildResultAtInterval} with the contour
+   * shape-style picker. When omitted, exports use the on-screen model as-is and
+   * the style picker cannot regenerate.
+   */
+  buildResultForExport?: (opts: {
+    intervalM: number;
+    shapeStyle: ContourShapeStyle;
+  }) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
   /** Context for the printable map sheet (world origin, title block fields). */
@@ -125,6 +141,8 @@ let lastPreparedBy = '';
 let lastSheet: SheetSize = 'letter';
 let lastOrientation: SheetOrientation = 'portrait';
 let lastNotes: string | null = null;
+// The contour shape style is remembered on the panel instance (so it drives all
+// exports), but the MAP-PDF dialog also seeds from the panel's current choice.
 
 /**
  * Split a formatted readiness value into a leading figure and a unit so the
@@ -166,6 +184,12 @@ export class AnalysePanel {
   private readonly _exportRow: HTMLElement;
   private readonly _exportNote: HTMLElement;
   private readonly _exportButtons: HTMLButtonElement[] = [];
+  /** The contour shape style applied to ALL contour exports (panel-wide). */
+  private _contourStyle: ContourShapeStyle = defaultContourShapeStyle;
+  /** The "Contour style" picker row shown above the export buttons. */
+  private readonly _styleRow: HTMLElement;
+  /** The panel's contour-style <select>, kept in sync with the dialog's pick. */
+  private _styleSelect: HTMLSelectElement | null = null;
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
   /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
@@ -230,6 +254,7 @@ export class AnalysePanel {
     this._coverageRow = el('div', { className: 'olv-analyse-coverage' });
     this._validationRow = el('div', { className: 'olv-analyse-validation' });
     this._body = el('div', { className: 'olv-analyse-body' });
+    this._styleRow = this._buildStyleRow();
     this._exportRow = this._buildExportRow();
     this._exportNote = el('p', { className: 'olv-analyse-export-note' });
     this._legend = this._buildLegend();
@@ -263,6 +288,7 @@ export class AnalysePanel {
       section('Surface models'),
       this._surfaceRow,
       section('Contour export'),
+      this._styleRow,
       this._exportRow,
       this._exportNote,
       this._legend,
@@ -1089,25 +1115,93 @@ export class AnalysePanel {
     }
   }
 
+  /**
+   * The "Contour style" picker — a compact select above the export buttons. The
+   * choice is panel-wide (`this._contourStyle`) and drives EVERY contour export
+   * (GeoJSON / SVG / DXF / Map PDF). It reuses the modal input styling so it
+   * matches the dark hairline aesthetic with no new hardcoded colours.
+   */
+  private _buildStyleRow(): HTMLElement {
+    const row = el('div', { className: 'olv-analyse-style-row' });
+    const id = 'olv-analyse-contour-style';
+    const lab = el('label', { className: 'olv-modal-label', text: 'Contour style' });
+    lab.setAttribute('for', id);
+    const sel = document.createElement('select');
+    sel.id = id;
+    sel.className = 'olv-modal-input olv-analyse-style-select';
+    for (const opt of CONTOUR_SHAPE_STYLES) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      o.title = opt.description;
+      if (opt.value === this._contourStyle) o.selected = true;
+      sel.append(o);
+    }
+    sel.title = CONTOUR_SHAPE_STYLES.find((s) => s.value === this._contourStyle)?.description ?? '';
+    sel.addEventListener('change', () => {
+      this._contourStyle = sel.value as ContourShapeStyle;
+      sel.title = CONTOUR_SHAPE_STYLES.find((s) => s.value === this._contourStyle)?.description ?? '';
+    });
+    this._styleSelect = sel;
+    row.append(lab, sel);
+    return row;
+  }
+
+  /**
+   * Resolve the feature model to serialize for a contour export at the panel's
+   * current shape style. Reuses the on-screen model when the style already
+   * matches (no recompute); otherwise regenerates from the cached core at the
+   * model's interval + the selected style, without touching the visible panel.
+   */
+  private async _modelForExport(): Promise<{
+    model: AnalyseContoursResult['model'];
+    labels: AnalyseContoursResult['labels'];
+  }> {
+    const r = this._result!;
+    const style = this._contourStyle;
+    if (style === r.model.contourStyle || !this._cb.buildResultForExport) {
+      return { model: r.model, labels: r.labels };
+    }
+    const regenerated = await this._cb.buildResultForExport({
+      intervalM: r.model.intervalM,
+      shapeStyle: style,
+    });
+    return { model: regenerated.model, labels: regenerated.labels };
+  }
+
   private _buildExportRow(): HTMLElement {
     const row = el('div', { className: 'olv-analyse-export' });
     const formats: ContourFormat[] = ['geojson', 'svg', 'dxf'];
     for (const fmt of formats) {
       const btn = el('button', { className: 'olv-analyse-dl', text: fmt.toUpperCase() });
       btn.addEventListener('click', () => {
-        // Hard guard — the quality gate also disables the buttons, but a
-        // blocked export must never write a misleading file.
-        if (
-          !this._result ||
-          this._result.model.features.length === 0 ||
-          this._result.quality.exportReadiness === 'blocked'
-        ) {
-          return;
-        }
-        const basename = this._cb.getExportBasename?.() ?? 'contours';
-        triggerBrowserDownload(
-          serializeContours(this._result.model, fmt, { basename, labels: this._result.labels }),
-        );
+        void (async (): Promise<void> => {
+          // Hard guard — the quality gate also disables the buttons, but a
+          // blocked export must never write a misleading file.
+          if (
+            !this._result ||
+            this._result.model.features.length === 0 ||
+            this._result.quality.exportReadiness === 'blocked'
+          ) {
+            return;
+          }
+          const basename = this._cb.getExportBasename?.() ?? 'contours';
+          const label = btn.textContent ?? fmt.toUpperCase();
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            // Regenerate at the selected shape style (cache hit; reuses the
+            // on-screen model when the style already matches), then serialize.
+            const { model, labels } = await this._modelForExport();
+            triggerBrowserDownload(serializeContours(model, fmt, { basename, labels }));
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('OpenLiDARViewer: contour export failed.', err);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = label;
+          }
+        })();
       });
       this._exportButtons.push(btn);
       row.append(btn);
@@ -1197,7 +1291,8 @@ export class AnalysePanel {
     const ctx = this._cb.getMapContext?.() ?? {};
     const basename = this._cb.getExportBasename?.() ?? 'contours';
     const currentInterval = r.model.intervalM;
-    const canRegen = typeof this._cb.buildResultAtInterval === 'function';
+    const currentStyle = r.model.contourStyle;
+    const canRegen = typeof this._cb.buildResultForExport === 'function';
     // Capture one timestamp so the LOCKED "Generated" value the user sees equals
     // the one printed on the sheet.
     const generatedAt = new Date();
@@ -1267,6 +1362,20 @@ export class AnalysePanel {
     // lock the picker to the current deliverable so the file matches the panel.
     if (!canRegen) intervalSel.disabled = true;
 
+    // Contour shape style — seeded from the panel's current choice; drives the
+    // shape of the plotted contours on the sheet.
+    const styleSel = document.createElement('select');
+    styleSel.className = 'olv-modal-input';
+    for (const opt of CONTOUR_SHAPE_STYLES) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      o.title = opt.description;
+      if (opt.value === this._contourStyle) o.selected = true;
+      styleSel.append(o);
+    }
+    if (!canRegen) styleSel.disabled = true;
+
     const filenameInput = document.createElement('input');
     filenameInput.type = 'text';
     filenameInput.className = 'olv-modal-input';
@@ -1285,6 +1394,13 @@ export class AnalysePanel {
         canRegen
           ? 'The final interval for this deliverable.'
           : 'Interval regeneration unavailable — using the current contours.',
+      ),
+      field(
+        'Contour style',
+        styleSel,
+        canRegen
+          ? 'The line shape for the plotted contours.'
+          : 'Style regeneration unavailable — using the current contours.',
       ),
       field('Output filename', filenameInput, 'A single .pdf is added on download.'),
     );
@@ -1351,16 +1467,25 @@ export class AnalysePanel {
         exportBtn.textContent = 'Exporting…';
         try {
           const chosenInterval = Number(intervalSel.value);
-          // Regenerate ONLY when the interval changed AND a builder exists —
-          // from the cached core, without touching the visible result.
+          const chosenStyle = styleSel.value as ContourShapeStyle;
+          // Regenerate ONLY when the interval OR the shape style changed AND a
+          // builder exists — from the cached core, without touching the visible
+          // result.
           let result = r;
           if (
             canRegen &&
             Number.isFinite(chosenInterval) &&
-            chosenInterval !== currentInterval
+            (chosenInterval !== currentInterval || chosenStyle !== currentStyle)
           ) {
-            result = await this._cb.buildResultAtInterval!(chosenInterval);
+            result = await this._cb.buildResultForExport!({
+              intervalM: chosenInterval,
+              shapeStyle: chosenStyle,
+            });
           }
+          // Remember the style as the panel-wide choice for subsequent exports,
+          // and reflect it in the panel's own picker.
+          this._contourStyle = chosenStyle;
+          if (this._styleSelect) this._styleSelect.value = chosenStyle;
           await this._buildAndDownloadMapPdf(result, {
             title: titleInput.value,
             preparedBy: preparedInput.value,

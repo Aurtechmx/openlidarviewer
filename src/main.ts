@@ -1520,6 +1520,9 @@ const analysePanel = new AnalysePanel({
   // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
   // the SAME cached terrain core the runner uses — never mutates the panel.
   buildResultAtInterval: (m) => terrainRunner.buildResultAtInterval(m),
+  // Same cached-core rebuild, generalised with the contour shape-style picker so
+  // an export reflects the user's chosen interval AND line shape.
+  buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
   getExportBasename: () => lastCloudName,
   getMapContext: () => {
     const cloud = activeId ? viewer.getCloud(activeId) : null;

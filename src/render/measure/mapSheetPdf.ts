@@ -17,6 +17,7 @@
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { ContourFeatureModel } from '../../terrain/contour/contourFeatureModel';
 import type { ContourLabel } from '../../terrain/contour/labelPlacement';
+import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle';
 import type { DemAccuracyStandards } from '../../terrain/quality/demAccuracyStandards';
 import {
   fitTransform,
@@ -376,6 +377,8 @@ function drawTitleBlock(
   sample(topY - 71, 'Low-confidence gap', [2, 4], 0.5);
   const interpPct = Math.round((input.model.interpolatedFraction || 0) * 100);
   text(`${interpPct}% of contour length is interpolated`, mxx, topY - 88, 6.5, font, DIM);
+  // Honest stamp of the shape style applied to the plotted contours.
+  text(`Contour style: ${contourShapeStyleLabel(input.model.contourStyle)}`, mxx, topY - 99, 6.5, font, DIM);
 
   // Right column — accuracy + readiness + provenance.
   const rxr = PW - M - 4;

@@ -24,6 +24,7 @@ const model: ContourFeatureModel = {
   crs: 'WGS 84 / UTM zone 11N',
   verticalDatum: 'NAVD88',
   intervalM: 10,
+  contourStyle: 'smooth',
   bbox: { minX: 0, minY: 0, maxX: 100, maxY: 60 },
   interpolatedFraction: 0.12,
   coverageMode: 'full',

@@ -24,6 +24,7 @@ import type {
   AnalyseContoursResult,
   TerrainCoreParams,
 } from '../terrain/contour/analyseContours';
+import type { ContourShapeStyle } from '../terrain/contour/contourShapeStyle';
 import {
   loadTerrainCoreCache,
   loadComputeTerrainCoreAsync,
@@ -96,6 +97,16 @@ export interface TerrainAnalysisRunner {
    * scan is loaded. Has no side effects on the panel.
    */
   buildResultAtInterval(intervalM: number): Promise<AnalyseContoursResult>;
+  /**
+   * Build a fresh contour result at a chosen interval AND shape style for an
+   * export ONLY, over the SAME cached core path as {@link run}. Generalises
+   * {@link buildResultAtInterval} with the contour-shape-style picker; a cache
+   * hit means only the cheap contour stage reruns. No panel side effects.
+   */
+  buildResultForExport(opts: {
+    intervalM: number;
+    shapeStyle: ContourShapeStyle;
+  }): Promise<AnalyseContoursResult>;
   /**
    * Abort any in-flight compute and drop every cached terrain core. Called
    * from the reset-to-empty path so a result for the now-closed scan can never
@@ -223,15 +234,19 @@ export function createTerrainAnalysisRunner(
     }
   }
 
-  async function buildResultAtInterval(intervalM: number): Promise<AnalyseContoursResult> {
+  async function buildResultForExport(opts: {
+    intervalM: number;
+    shapeStyle?: ContourShapeStyle;
+  }): Promise<AnalyseContoursResult> {
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
     if (!gathered) throw new Error('No scan loaded to build contours from.');
     // Same cached-core path the run() loop uses. Because deriveCoreParams
     // reproduces the run's fingerprint exactly, an already-analysed scan HITS
     // the LRU cache here and no worker job is started — only the cheap
-    // interval-dependent contour stage reruns. We deliberately do NOT touch the
-    // panel or the run token: this is a side-effect-free build for the PDF only.
+    // interval-dependent contour stage reruns (now also re-picking the contour
+    // shape style). We deliberately do NOT touch the panel or the run token:
+    // this is a side-effect-free build for an export only.
     const { getOrComputeCoreAsync, contoursFromCore } = await loadTerrainCoreCache();
     const { computeTerrainCoreAsync } = await loadComputeTerrainCoreAsync();
     const coreParams = deriveCoreParams(gathered.positions, gathered.classification, crsService);
@@ -246,7 +261,13 @@ export function createTerrainAnalysisRunner(
         new AbortController().signal,
       ),
     );
-    return contoursFromCore(core, { intervalM });
+    return contoursFromCore(core, { intervalM: opts.intervalM, shapeStyle: opts.shapeStyle });
+  }
+
+  // Back-compat shim: the interval-only builder is the export builder with the
+  // default shape style (the on-screen contour shape).
+  async function buildResultAtInterval(intervalM: number): Promise<AnalyseContoursResult> {
+    return buildResultForExport({ intervalM });
   }
 
   function abortAndClearCache(): void {
@@ -261,5 +282,5 @@ export function createTerrainAnalysisRunner(
     clearTerrainCoreCacheFn?.();
   }
 
-  return { run, buildResultAtInterval, abortAndClearCache };
+  return { run, buildResultAtInterval, buildResultForExport, abortAndClearCache };
 }

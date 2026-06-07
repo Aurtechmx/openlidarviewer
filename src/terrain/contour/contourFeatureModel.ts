@@ -24,6 +24,7 @@ import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence
 import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { ContourPolyline, StitchedLevel } from './stitchContours';
 import type { StyledLevel } from './contourStyle';
+import { defaultContourShapeStyle, type ContourShapeStyle } from './contourShapeStyle';
 
 /** One exportable contour feature: a single-grade run at one elevation. */
 export interface ContourFeature {
@@ -72,6 +73,8 @@ export interface ContourFeatureModel {
   readonly crs: string | null;
   readonly verticalDatum: string | null;
   readonly intervalM: number;
+  /** The contour shape style this model's geometry was produced with. */
+  readonly contourStyle: ContourShapeStyle;
   readonly bbox: ContourBBox | null;
   /** Length-weighted fraction of contour that is dashed or gap. */
   readonly interpolatedFraction: number;
@@ -87,6 +90,8 @@ export interface FeatureModelParams {
   readonly intervalM: number;
   /** Coverage provenance from the analysis (default 'full'). */
   readonly coverageMode?: TerrainCoverageMode;
+  /** Shape style the geometry was produced with (default 'smooth'). */
+  readonly contourStyle?: ContourShapeStyle;
 }
 
 function segLen(a: [number, number], b: [number, number]): number {
@@ -195,6 +200,7 @@ export function buildFeatureModel(
     crs: params.crs,
     verticalDatum: params.verticalDatum ?? null,
     intervalM: params.intervalM,
+    contourStyle: params.contourStyle ?? defaultContourShapeStyle,
     bbox,
     interpolatedFraction,
     coverageMode: params.coverageMode ?? 'full',

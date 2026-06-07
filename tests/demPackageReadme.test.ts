@@ -24,7 +24,7 @@ function readyResult(): AnalyseContoursResult {
       readiness: 'ready', exportReadiness: 'available',
       crsKnown: true, datumKnown: true, reasons: [],
     },
-    generationParams: { interpolation: 'geodesic', smoothing: true, despike: true, aggregation: 'median' },
+    generationParams: { interpolation: 'geodesic', contourStyle: 'smooth', smoothing: true, despike: true, aggregation: 'median' },
     warnings: [],
   } as unknown as AnalyseContoursResult;
 }
@@ -79,7 +79,7 @@ describe('buildDemReadme — always-on metadata', () => {
     // Generation parameters
     expect(txt).toMatch(/Interpolation\s+geodesic/i);
     expect(txt).toMatch(/Cell aggregation\s+median/i);
-    expect(txt).toMatch(/Smoothing/i);
+    expect(txt).toMatch(/Contour style\s+Smooth/i);
     expect(txt).toMatch(/Despik/i);
     // Generation date (ISO)
     expect(txt).toContain('2026-06-05T00:00:00.000Z');
@@ -106,21 +106,29 @@ describe('buildDemReadme — always-on metadata', () => {
 });
 
 describe('buildDemReadme — generation parameters derive from the run', () => {
-  it('reflects the result\'s actual generationParams (smoothing flipped off)', () => {
+  it('reflects the result\'s actual generationParams (crisp contour style)', () => {
     const base = readyResult() as unknown as { generationParams: Record<string, unknown> };
-    const noSmooth = {
+    const crisp = {
       ...(base as unknown as AnalyseContoursResult),
-      generationParams: { interpolation: 'idw', smoothing: false, despike: false, aggregation: 'mean' },
+      generationParams: {
+        interpolation: 'idw', contourStyle: 'crisp', smoothing: false, despike: false, aggregation: 'mean',
+      },
     } as unknown as AnalyseContoursResult;
-    const txt = buildDemReadme({ result: noSmooth, ...OPTS });
+    const txt = buildDemReadme({ result: crisp, ...OPTS });
     expect(txt).toMatch(/Interpolation\s+idw void fill/i);
     expect(txt).toMatch(/Cell aggregation\s+mean/i);
-    expect(txt).toMatch(/Smoothing\s+off/i);
+    expect(txt).toMatch(/Contour style\s+Crisp/i);
     expect(txt).toMatch(/Despike\s+off/i);
-    // And the opposite: a smoothing-on result must read "on".
-    const on = buildDemReadme({ result: readyResult(), ...OPTS });
-    expect(on).toMatch(/Smoothing\s+on/i);
-    expect(on).toMatch(/Despike\s+on/i);
+    // A different style names itself too.
+    const semi = {
+      ...(base as unknown as AnalyseContoursResult),
+      generationParams: {
+        interpolation: 'geodesic', contourStyle: 'semi-geometric', smoothing: true, despike: true, aggregation: 'median',
+      },
+    } as unknown as AnalyseContoursResult;
+    const semiTxt = buildDemReadme({ result: semi, ...OPTS });
+    expect(semiTxt).toMatch(/Contour style\s+Semi-geometric/i);
+    expect(semiTxt).toMatch(/Despike\s+on/i);
   });
 
   it('says "unknown" rather than defaulting when generationParams is absent', () => {
@@ -129,7 +137,7 @@ describe('buildDemReadme — generation parameters derive from the run', () => {
     const txt = buildDemReadme({ result: base as unknown as AnalyseContoursResult, ...OPTS });
     expect(txt).toMatch(/Interpolation\s+unknown/i);
     expect(txt).toMatch(/Cell aggregation\s+unknown/i);
-    expect(txt).toMatch(/Smoothing\s+unknown/i);
+    expect(txt).toMatch(/Contour style\s+unknown/i);
     expect(txt).toMatch(/Despike\s+unknown/i);
   });
 });

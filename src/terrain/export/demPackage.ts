@@ -20,6 +20,7 @@
  */
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
+import { contourShapeStyleLabel } from '../contour/contourShapeStyle';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
@@ -225,7 +226,17 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // rather than silently asserting geodesic/on/on — provenance must stay honest.
   const gp = result.generationParams;
   const interpStr = gp ? `${gp.interpolation} void fill` : 'unknown';
-  const smoothStr = gp ? (gp.smoothing ? 'on' : 'off') : 'unknown';
+  // Contour shape style — names the exact transform the contour geometry used
+  // (replaces the old smoothing on/off boolean, which over-flattened five
+  // distinct styles into two states). Falls back to deriving from the
+  // back-compat `smoothing` boolean if an older result lacks `contourStyle`.
+  const styleStr = gp
+    ? gp.contourStyle
+      ? contourShapeStyleLabel(gp.contourStyle)
+      : gp.smoothing
+        ? 'Smooth'
+        : 'Crisp'
+    : 'unknown';
   const despikeStr = gp
     ? (gp.despike ? 'on (blunder-only outlier removal)' : 'off')
     : 'unknown';
@@ -237,7 +248,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `Generation parameters`,
     `  Interpolation  ${interpStr}`,
     `  Cell aggregation ${aggStr}`,
-    `  Smoothing      ${smoothStr}`,
+    `  Contour style  ${styleStr}`,
     `  Despike        ${despikeStr}`,
     `  Grid cell size ${dtm.cellSizeM} ${hUnit}`,
     ``,

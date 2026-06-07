@@ -16,6 +16,7 @@ function model(): ContourFeatureModel {
     crs: 'EPSG:32610',
     verticalDatum: null,
     intervalM: 1,
+    contourStyle: 'smooth',
     bbox: { minX: 0, minY: 0, maxX: 10, maxY: 0 },
     interpolatedFraction: 0,
     coverageMode: 'full',
