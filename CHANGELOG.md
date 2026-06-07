@@ -28,6 +28,18 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   image and snapshot exports are all stamped with the active class filter, so a
   filtered artifact is self-describing — anyone opening it later can see exactly
   which classes it represents.
+- Contour map PDF, pre-export dialog: the MAP PDF action now opens a dialog to
+  set the title, "prepared by", a free Project / Notes block, the sheet size and
+  orientation, the final contour interval, and the output filename — each
+  pre-filled with a sensible default from the scan. A re-picked interval
+  regenerates the contours from the already-computed surface (no re-analysis).
+  The measured fields (CRS, vertical datum, scale, NVA / VVA / RMSEz, USGS
+  Quality Level, date) are shown read-only and stay computed from the scan, so a
+  deliverable can be titled and described freely without ever hand-editing the
+  accuracy figures.
+- Interface polish: a consistent button system across the app with clearer
+  primary actions, accessible focus rings, and an obvious, rotating expand /
+  collapse chevron on the collapsible panel headers (Analyse, Export / Convert).
 
 ### Changed
 
