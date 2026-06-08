@@ -136,7 +136,7 @@ describe('evaluateDtmQuality', () => {
     expect(noDatum.exportReasons.join(' ')).toMatch(/vertical datum unknown/i);
   });
 
-  it('surface previewOnly for interpolation; export ALSO gated by unknown CRS (separate axes)', () => {
+  it('surface previewOnly for interpolation; export tracks surface and is NOT capped further by CRS', () => {
     const r = evaluateDtmQuality(
       baseInput({
         tally: baseTally({ measured: 55, interpolated: 38, empty: 7, total: 100 }),
@@ -147,9 +147,49 @@ describe('evaluateDtmQuality', () => {
     expect(r.readiness).toBe('previewOnly');
     expect(r.reasons.join(' ')).toMatch(/interpolated/i);
     expect(r.reasons.join(' ')).not.toMatch(/CRS/i);
-    // EXPORT: also held at preview, here additionally because the CRS is unknown.
+    // EXPORT: already preview-only because the SURFACE is preview-only — export
+    // simply tracks the surface verdict here and is NOT demoted *further* by the
+    // unknown CRS (it cannot drop below previewOnly). Per the documented
+    // contract, `exportReasons` lists only the georef gaps that cap export BELOW
+    // the surface verdict; when surface is already previewOnly there is no such
+    // demotion, so the list is empty. (`crsKnown` is still reported for callers.)
     expect(r.exportReadiness).toBe('previewOnly');
-    expect(r.exportReasons.join(' ')).toMatch(/CRS unknown/i);
+    expect(r.exportReasons).toEqual([]);
+    expect(r.crsKnown).toBe(false);
+  });
+
+  it('exportReasons names the georef gap ONLY when it demotes a ready surface below itself', () => {
+    // Surface ready + CRS unknown → export demoted from available to previewOnly:
+    // exportReasons names the gap (this is the only case it's populated).
+    const demoted = evaluateDtmQuality(baseInput({ crs: null }));
+    expect(demoted.readiness).toBe('ready');
+    expect(demoted.exportReadiness).toBe('previewOnly');
+    expect(demoted.exportReasons.join(' ')).toMatch(/CRS unknown/i);
+
+    // Surface previewOnly + CRS unknown → export already tracks the surface, the
+    // georef gap does NOT cap it further, so exportReasons stays empty.
+    const tracking = evaluateDtmQuality(
+      baseInput({
+        tally: baseTally({ measured: 55, interpolated: 38, empty: 7, total: 100 }),
+        crs: null,
+        verticalDatum: null,
+      }),
+    );
+    expect(tracking.readiness).toBe('previewOnly');
+    expect(tracking.exportReadiness).toBe('previewOnly');
+    expect(tracking.exportReasons).toEqual([]);
+
+    // Surface blocked → export blocked; exportReasons empty (export tracks surface).
+    const blocked = evaluateDtmQuality(
+      baseInput({
+        tally: baseTally({ measured: 5, interpolated: 90, empty: 5, total: 100 }),
+        crs: null,
+        verticalDatum: null,
+      }),
+    );
+    expect(blocked.readiness).toBe('blocked');
+    expect(blocked.exportReadiness).toBe('blocked');
+    expect(blocked.exportReasons).toEqual([]);
   });
 
   it('blocked when almost everything is interpolated', () => {

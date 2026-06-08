@@ -170,20 +170,36 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
 
   // ── EXPORT READINESS = surface verdict, gated by georeferencing ───────
   // A blocked surface blocks export. Otherwise export tracks the surface
-  // verdict, but an unknown CRS or vertical datum CAPS it to preview-only
-  // (with an explicit reason) — a good surface can be inspected/measured,
-  // but the georeferenced hand-off requires a known frame + datum.
+  // verdict, but an unknown CRS or vertical datum CAPS it to preview-only — a
+  // good surface can be inspected/measured, but the georeferenced hand-off
+  // requires a known frame + datum.
+  //
+  // `exportReasons` is the list of georef gaps that cap export *below* the
+  // surface verdict. That demotion can ONLY happen when the surface is `ready`
+  // (so export would otherwise be `available`) and a gap drops it to
+  // previewOnly. When the surface is itself previewOnly or blocked, export
+  // already tracks the surface and is not capped further by a georef gap, so
+  // the list stays empty (the gap is not the reason export sits where it does).
+  // `crsKnown` / `datumKnown` remain reported for callers in both cases.
   const exportReasons: string[] = [];
   let exportReadiness: ExportReadiness;
   if (readiness === 'blocked') {
     exportReadiness = 'blocked';
-  } else {
-    exportReadiness = readiness === 'ready' ? 'available' : 'previewOnly';
-    if (!crsKnown) exportReasons.push('CRS unknown');
-    if (!datumKnown) exportReasons.push('vertical datum unknown');
-    if (exportReasons.length > 0 && exportReadiness === 'available') {
+  } else if (readiness === 'ready') {
+    const georefGaps: string[] = [];
+    if (!crsKnown) georefGaps.push('CRS unknown');
+    if (!datumKnown) georefGaps.push('vertical datum unknown');
+    if (georefGaps.length > 0) {
+      // The gap genuinely demotes export from available → previewOnly: record it.
       exportReadiness = 'previewOnly';
+      exportReasons.push(...georefGaps);
+    } else {
+      exportReadiness = 'available';
     }
+  } else {
+    // Surface is previewOnly: export tracks it. A georef gap cannot drop it any
+    // further, so it is not capping export below the surface — leave reasons empty.
+    exportReadiness = 'previewOnly';
   }
 
   return {

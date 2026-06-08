@@ -227,6 +227,46 @@ describe('terrainAssessment', () => {
     expect(rmse?.rating).toBe('unknown');
   });
 
+  // exportReason completeness: when a surface is BELOW Good *and* has a georef
+  // gap, BOTH cap export — so the reason must name BOTH, not just one. Naming
+  // only the georef gap (the old behaviour) was incomplete: it implied that
+  // fixing the CRS/datum alone would make the surface exportable, when the
+  // surface itself is also below export grade. This is a correctness fix.
+  it('names BOTH the surface limitation and the georef gap when both hold export back', () => {
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        reasons: ['Preview only: mean confidence is low.'],
+        crs: null,
+        score: 70,
+      }),
+    );
+    expect(a.exportReadiness).toBe('Preview');
+    // The georef gap is named …
+    expect(a.exportReason).toMatch(/CRS/i);
+    // … AND the surface limitation is named too (one readable sentence).
+    expect(a.exportReason).toMatch(/surface|preview|below/i);
+  });
+
+  it('names ONLY the georef gap when the surface is Good (unchanged behaviour)', () => {
+    const a = terrainAssessment(fixture({ crs: null, verticalDatum: null, score: 90 }));
+    expect(a.status).toBe('Good');
+    expect(a.exportReadiness).toBe('Preview');
+    expect(a.exportReason).toMatch(/CRS unknown/i);
+    expect(a.exportReason).toMatch(/vertical datum unknown/i);
+    // No surface limitation is named — the surface is Good, only georef holds it.
+    expect(a.exportReason).not.toMatch(/below export grade|surface quality is below/i);
+  });
+
+  it('names ONLY the surface limitation when below Good with known CRS+datum (unchanged)', () => {
+    const a = terrainAssessment(
+      fixture({ readiness: 'previewOnly', reasons: ['Preview only: mean confidence is low.'], score: 70 }),
+    );
+    expect(a.exportReadiness).toBe('Preview');
+    expect(a.exportReason).toMatch(/surface|below/i);
+    expect(a.exportReason).not.toMatch(/CRS|datum/i);
+  });
+
   it('maps previewOnly to Preview and surfaces a plain (surface) reason', () => {
     // The gate's surface verdict is previewOnly with a SURFACE reason (CRS/datum
     // are no longer surface reasons — they live on the export axis).

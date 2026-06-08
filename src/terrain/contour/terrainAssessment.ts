@@ -326,8 +326,14 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     exportReason = '';
   } else {
     exportReadiness = 'Preview';
-    if (georefGaps.length > 0) {
-      // Georeferencing is the (or a) reason export is held back.
+    const surfaceBelowGood = status !== 'Good';
+    if (georefGaps.length > 0 && surfaceBelowGood) {
+      // BOTH hold export back: name the surface limitation AND the georef gap,
+      // as one readable sentence. Naming only the georef gap would wrongly imply
+      // that supplying a CRS/datum alone makes the surface exportable.
+      exportReason = `surface quality is below export grade and ${joinReasons(georefGaps)} — validate before hand-off`;
+    } else if (georefGaps.length > 0) {
+      // Surface is Good — georeferencing is the only reason export is held back.
       exportReason = joinReasons(georefGaps);
     } else {
       // Surface itself is below Good — that's why export isn't ready.
