@@ -4716,6 +4716,56 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-assess-metric.is-poor .olv-analyse-assess-metric-value { color: var(--rating-weak); }
 .olv-analyse-assess-metric.is-unknown .olv-analyse-assess-metric-value { color: var(--text-faint); font-style: italic; }
 
+/* Recommended workflow — the checklist that turns the two axes into decisions.
+   Each row's glyph is coloured from the rating tokens via its status class; the
+   word/glyph stays for colourblind safety, never hue alone. Kept quiet. */
+.olv-analyse-workflow {
+  margin-top: var(--space-md); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-analyse-workflow-head {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  margin-bottom: var(--space-xs);
+}
+.olv-analyse-workflow-list { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-workflow-row { display: flex; align-items: baseline; gap: var(--space-sm); }
+.olv-analyse-workflow-glyph {
+  flex: 0 0 auto; width: 1em; text-align: center; font-weight: 700; line-height: 1;
+}
+.olv-analyse-workflow-main {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs); min-width: 0;
+}
+.olv-analyse-workflow-label { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-analyse-workflow-note { font-size: var(--text-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
+.olv-analyse-workflow-row.is-good .olv-analyse-workflow-glyph { color: var(--rating-excellent); }
+.olv-analyse-workflow-row.is-caution .olv-analyse-workflow-glyph { color: var(--rating-good); }
+.olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-glyph { color: var(--rating-blocked); }
+.olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-label { color: var(--text-faint); }
+
+/* "Why? — what's holding this back" — a collapsed honest cause/fix surface,
+   shown only when the verdict is short of fully-good. */
+.olv-analyse-why { margin-top: var(--space-sm); }
+.olv-analyse-why-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  letter-spacing: 0.04em; color: var(--rating-moderate);
+}
+.olv-analyse-why-summary::-webkit-details-marker { display: none; }
+.olv-analyse-why-summary::before { content: '▸ '; }
+.olv-analyse-why[open] .olv-analyse-why-summary::before { content: '▾ '; }
+.olv-analyse-why-subhead {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+  margin-top: var(--space-sm);
+}
+.olv-analyse-why-list { margin: var(--space-2xs) 0 0; padding-left: var(--space-lg); }
+.olv-analyse-why-cause, .olv-analyse-why-fix {
+  font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-2xs);
+  overflow-wrap: anywhere;
+}
+.olv-analyse-why-cause { color: var(--text-faint); }
+
 /* Collapsible "Details" expander — holds the drill-down metrics under the hero. */
 .olv-analyse-details { margin-bottom: var(--space-lg); }
 .olv-analyse-details-summary {

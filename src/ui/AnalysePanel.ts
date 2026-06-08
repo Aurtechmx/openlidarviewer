@@ -9,8 +9,11 @@
  * element`, a callbacks object, `update()`, and `setVisible()`. It reads
  * top-down:
  *
- *   1. Terrain Assessment hero — status · score, the headline reason, and
- *      bestFor / useCaution / notRecommendedFor guidance plus the
+ *   1. Terrain Assessment hero — surface-quality status · score, the headline
+ *      reason, export readiness, then a "Recommended workflow" checklist (each
+ *      supported workflow graded ✓ / ⚠ / ✕ from the two axes — the upgrade over
+ *      the old Best for / Caution / Not for prose), a collapsed "Why? — what's
+ *      holding this back" details when the surface is not fully-good, and the
  *      supporting metrics behind the verdict.
  *   2. Details expander (collapsed) — the honesty status chips
  *      (Coverage / DTM / CRS / Datum / Export), DTM & contour readiness,
@@ -73,6 +76,9 @@ import {
 } from '../terrain/surface/hillshade';
 import { sampleTerrain } from '../terrain/contour/sampleTerrain';
 import { terrainAssessment } from '../terrain/contour/terrainAssessment';
+import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
+import { explainLimitations } from '../terrain/contour/whyNotReasons';
+import { renderWorkflowCard, renderWhyDetails } from './workflowCardRender';
 import type { SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
 import { createScanTypeControl, type ScanTypeControl } from './scanTypeControl';
@@ -419,20 +425,28 @@ export class AnalysePanel {
       );
     }
     this._assessmentRow.append(exportLine);
-    this._assessmentRow.append(
-      el('div', { className: 'olv-analyse-assess-use', text: `Best for: ${a.bestFor}` }),
-    );
-    if (a.useCaution) {
-      this._assessmentRow.append(
-        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.useCaution}` }),
-      );
+
+    // Recommended workflow — the upgrade over the old Best for / Caution / Not
+    // for lines: instead of three prose sentences, a fixed, ordered checklist of
+    // the real workflows the app supports, each graded ✓ / ⚠ / ✕ from the two
+    // axes above (inspection rows from Surface Quality, deliverable rows from
+    // Export Readiness). It carries the same fitness-for-use information, but as
+    // a decision the user can act on at a glance. The pure grader is the single
+    // source; the prose verdict text (a.bestFor etc.) still lives on the
+    // assessment for non-UI consumers (e.g. export README provenance).
+    const workflows = recommendedWorkflows(a, this._result.quality);
+    this._assessmentRow.append(renderWorkflowCard(workflows));
+
+    // Why? — what's holding this back. Shown only when the surface is not
+    // fully-good (Surface Quality below Good, or Export Readiness below Ready):
+    // a collapsed details with the honest causes (each with its figure) AND the
+    // concrete fixes. When everything is green there is nothing to explain, so
+    // the helper returns null and we render nothing.
+    const notFullyGood = a.status !== 'Good' || a.exportReadiness !== 'Ready';
+    if (notFullyGood) {
+      const why = renderWhyDetails(explainLimitations(this._result));
+      if (why) this._assessmentRow.append(why);
     }
-    this._assessmentRow.append(
-      el('div', {
-        className: 'olv-analyse-assess-not',
-        text: `Not for: ${a.notRecommendedFor}`,
-      }),
-    );
 
     // Compact supporting-metrics list — each metric is a pill whose colour comes
     // from its own honest rating (good / fair / poor / unknown), never from the
