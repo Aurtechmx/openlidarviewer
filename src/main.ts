@@ -4053,6 +4053,10 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  // Hide the Space / Object (non-terrain) panel too — it was added after this
+  // reset path and a closed 360 / object scan would otherwise leave its report
+  // lingering over the empty state. v0.4.3.
+  objectPanel.setVisible(false);
   // Abort any in-flight terrain compute (worker job + its reply) so a result
   // for the now-closed scan can never land on the panel, and drop every cached
   // terrain core so a stale core can't be served for a different scan and
