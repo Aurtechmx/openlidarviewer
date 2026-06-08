@@ -20,6 +20,7 @@ import type { TerrainCoverageMode } from '../src/terrain/TerrainContracts';
 
 interface FixtureOpts {
   interpolatedCellRatio?: number;
+  interpolatedOfSurfaceRatio?: number;
   emptyCellRatio?: number;
   edgeRiskRatio?: number;
   measuredCellRatio?: number;
@@ -40,6 +41,7 @@ function fixture(o: FixtureOpts = {}): AnalyseContoursResult {
     readiness: 'previewOnly',
     exportReadiness: 'previewOnly',
     interpolatedCellRatio: o.interpolatedCellRatio ?? 0.1,
+    interpolatedOfSurfaceRatio: o.interpolatedOfSurfaceRatio ?? o.interpolatedCellRatio ?? 0.1,
     emptyCellRatio: o.emptyCellRatio ?? 0.05,
     edgeRiskRatio: o.edgeRiskRatio ?? 0.02,
     measuredCellRatio: o.measuredCellRatio ?? 0.85,
@@ -85,6 +87,16 @@ describe('explainLimitations', () => {
     expect(causeText(r)).toMatch(/55%/);
     expect(causeText(r)).toMatch(/interpolat/i);
     expect(fixText(r)).toMatch(/fly lower|overlap|dens/i);
+  });
+
+  it('"of the surface" uses the of-covered figure, not the whole-grid ratio', () => {
+    // A grid where the whole-grid interpolation ratio is comfortably below the
+    // threshold (30%) but the surface that actually exists is mostly guessed
+    // (60% of covered). The Why-Not cause must speak to the surface figure so a
+    // gappy scan is not described as fine.
+    const r = fixture({ interpolatedCellRatio: 0.3, interpolatedOfSurfaceRatio: 0.6 });
+    expect(causeText(r)).toMatch(/60% of the surface is interpolated/);
+    expect(causeText(r)).not.toMatch(/30%/);
   });
 
   it('high empty coverage → cause names the % with no data and an extend-coverage fix', () => {

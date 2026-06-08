@@ -147,6 +147,13 @@ describe('evaluateDtmQuality', () => {
     expect(r.readiness).toBe('previewOnly');
     expect(r.reasons.join(' ')).toMatch(/interpolated/i);
     expect(r.reasons.join(' ')).not.toMatch(/CRS/i);
+    // The two interpolation figures are distinct and both exposed: 38/100 of the
+    // whole grid, but 38/93 (≈41%) of the COVERED surface. The reason speaks to
+    // the surface figure — the meaningful "how much is guessed" number — so the
+    // gate never understates interpolation by diluting it with empty cells.
+    expect(r.interpolatedCellRatio).toBeCloseTo(0.38, 5);
+    expect(r.interpolatedOfSurfaceRatio).toBeCloseTo(38 / 93, 5);
+    expect(r.reasons.join(' ')).toMatch(/41% of the surface is interpolated/);
     // EXPORT: already preview-only because the SURFACE is preview-only — export
     // simply tracks the surface verdict here and is NOT demoted *further* by the
     // unknown CRS (it cannot drop below previewOnly). Per the documented

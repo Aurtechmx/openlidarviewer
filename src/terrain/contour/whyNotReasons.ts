@@ -78,7 +78,10 @@ export function explainLimitations(result: AnalyseContoursResult): Limitations {
   };
 
   // ── high interpolation ────────────────────────────────────────────────
-  const interpFrac = finite(q.interpolatedCellRatio);
+  // "Of the surface" means of the COVERED cells, not of the whole grid — use the
+  // gate's authoritative of-surface figure (falling back to the whole-grid ratio
+  // only if an older report lacks it). Empty cells are reported separately below.
+  const interpFrac = finite(q.interpolatedOfSurfaceRatio ?? q.interpolatedCellRatio);
   if (Number.isFinite(interpFrac) && interpFrac > HIGH_INTERP_FRACTION) {
     emit(
       'interpolation',

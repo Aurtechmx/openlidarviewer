@@ -92,7 +92,17 @@ export interface DtmQualityReport {
   readonly exportReadiness: ExportReadiness;
   // ── metrics ──────────────────────────────────────────────────────────
   readonly measuredCellRatio: number;
+  /** Interpolated cells as a fraction of the WHOLE grid (sums with measured + empty). */
   readonly interpolatedCellRatio: number;
+  /**
+   * Interpolated cells as a fraction of the COVERED surface (excludes empty
+   * cells). This is the meaningful "how much of the terrain surface is guessed
+   * rather than measured" figure, and the single source of truth wherever a
+   * reason or metric is phrased as "% of the surface is interpolated". Equals
+   * `1 - measuredOfCovered`. Differs from `interpolatedCellRatio` whenever the
+   * grid has empty cells; the two must not be used interchangeably.
+   */
+  readonly interpolatedOfSurfaceRatio: number;
   readonly emptyCellRatio: number;
   readonly edgeRiskRatio: number;
   readonly meanCellConfidence: number;
@@ -125,6 +135,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
   const emptyCellRatio = t.empty / total;
   const edgeRiskRatio = t.edgeRisk / total;
   const measuredOfCovered = covered > 0 ? t.measured / covered : 0;
+  const interpolatedOfSurfaceRatio = covered > 0 ? interpolatedLike / covered : 0;
 
   const crsKnown = input.crs != null;
   const datumKnown = input.verticalDatum != null;
@@ -153,7 +164,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     // export readiness, not surface quality. A dense, clean, well-covered
     // surface with an unknown datum is still a GOOD surface.
     const readyChecks: Array<[boolean, string]> = [
-      [measuredOfCovered >= T.readyMeasuredOfCovered, `${pct(interpolatedCellRatio)} of cells are interpolated`],
+      [measuredOfCovered >= T.readyMeasuredOfCovered, `${pct(interpolatedOfSurfaceRatio)} of the surface is interpolated`],
       [emptyCellRatio <= T.readyMaxEmptyRatio, `${pct(emptyCellRatio)} of the grid has no data`],
       [edgeRiskRatio <= T.readyMaxEdgeRiskRatio, `${pct(edgeRiskRatio)} of cells are a long interpolation from real returns`],
       [rmseOk, 'vertical accuracy could not be validated'],
@@ -207,6 +218,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     exportReadiness,
     measuredCellRatio,
     interpolatedCellRatio,
+    interpolatedOfSurfaceRatio,
     emptyCellRatio,
     edgeRiskRatio,
     meanCellConfidence: input.meanCellConfidence,
