@@ -1765,9 +1765,15 @@ function applyScanRoute(initial: boolean): void {
     const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
     // Compute REAL metrics for the EFFECTIVE type — when forced, the report
     // reflects what's actually there for that interpretation; nothing fabricated.
+    // Feed the active scan's linear-unit-to-metres factor so a foot-based CRS
+    // (or any non-metre source units) reports honest metre/feet dimensions —
+    // the same factor the terrain core uses (see deriveCoreParams). Unknown ⇒ 1
+    // (assume metres) — an honest default, never a fabricated scale.
+    const unitToMetres = crsService.current()?.linearUnitToMetres ?? 1;
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
       spaceKind: effective === 'interior' ? 'interior' : 'object',
+      unitToMetres,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
     });

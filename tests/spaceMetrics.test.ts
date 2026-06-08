@@ -117,6 +117,44 @@ describe('spaceMetrics — storeys & units & objects', () => {
     expect(m.ceilingHeightM as number).toBeLessThan(5.6);
   });
 
+  it('unitToMetres scales length, area AND volume consistently before the m→ft conversion', () => {
+    // A foot-based capture (US survey-foot-ish): the SAME geometry stored once in
+    // metres and once in feet must produce identical metric dimensions/area/volume
+    // when the foot copy carries unitToMetres = 0.3048. This proves the factor is
+    // applied to EVERY length/area/volume path, not just height.
+    const FT = 0.3048;
+    const rM = room(4, 6, 3, 0.25); // small dense room, in metres
+    const rFt = new Float32Array(rM.length);
+    for (let i = 0; i < rM.length; i++) rFt[i] = rM[i] / FT; // same room expressed in feet
+
+    const inMetres = spaceMetrics(rM, { upAxis: 'z', spaceKind: 'interior', gridN: 24 });
+    const inFeet = spaceMetrics(rFt, { upAxis: 'z', spaceKind: 'interior', gridN: 24, unitToMetres: FT });
+
+    // Linear, areal and cubic measures all land back on the metre values.
+    expect(inFeet.dims.lengthM).toBeCloseTo(inMetres.dims.lengthM, 6);
+    expect(inFeet.dims.widthM).toBeCloseTo(inMetres.dims.widthM, 6);
+    expect(inFeet.dims.heightM).toBeCloseTo(inMetres.dims.heightM, 6);
+    expect(inFeet.floorAreaM2).toBeCloseTo(inMetres.floorAreaM2, 5);
+    expect(inFeet.ceilingHeightM as number).toBeCloseTo(inMetres.ceilingHeightM as number, 6);
+    // Cubic measure amplifies float32 storage rounding, so allow 4 places.
+    expect(inFeet.enclosedVolumeM3 as number).toBeCloseTo(inMetres.enclosedVolumeM3 as number, 4);
+  });
+
+  it('a 10 ft extent reads ~3.05 m and ~10 ft after the m↔ft round-trip', () => {
+    // A foot-stored extent: 10 ft along the room length. With unitToMetres=0.3048
+    // the metric height reads ~3.05 m, and converting back to feet reads ~10 ft.
+    const FT = 0.3048;
+    const tenFtRoomMetres = room(3, 4, 10 * FT, 0.2); // 10 ft tall, in metres
+    const tenFtRoomFeet = new Float32Array(tenFtRoomMetres.length);
+    for (let i = 0; i < tenFtRoomMetres.length; i++) tenFtRoomFeet[i] = tenFtRoomMetres[i] / FT;
+    const m = spaceMetrics(tenFtRoomFeet, { upAxis: 'z', spaceKind: 'interior', unitToMetres: FT });
+    const h = m.ceilingHeightM as number;
+    expect(h).toBeGreaterThan(10 * FT - 0.4); // ≈ 3.05 m
+    expect(h).toBeLessThan(10 * FT + 0.4);
+    expect(metresToFeet(h)).toBeGreaterThan(9.5);
+    expect(metresToFeet(h)).toBeLessThan(10.5);
+  });
+
   it('open object → no ceiling height, envelope-volume fallback', () => {
     const m = spaceMetrics(dome(), { upAxis: 'z', spaceKind: 'object' });
     expect(m.ceilingHeightM).toBeNull();
