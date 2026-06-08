@@ -2,6 +2,30 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.3] - Unreleased
+
+### Added
+
+- Manual scan-type override: a "Treat as" control (Auto / Terrain / Object /
+  Interior) in both the terrain Analyse panel and the Space / Object panel lets
+  you correct a misjudged scan in one click. A non-auto choice takes precedence
+  over auto-detection, stays pinned while the cloud streams in, and resets to
+  Auto on each new scan. Metrics are still computed honestly for the chosen
+  type; the panel notes when the type was set manually.
+
+### Changed
+
+- Export provenance is unified: GeoJSON, DXF, SVG, the printable map sheet, and
+  the DEM package now all stamp the same provenance, derived once from the run —
+  software and metric version, date, source, CRS, vertical datum, coverage,
+  contour interval and style, Surface Quality and Export Readiness (with the
+  reason), and the measured accuracy (RMSEz / NVA / VVA / USGS Quality Level) —
+  so no two exported artifacts can disagree, and every one carries the
+  not-survey-grade note.
+- Scan-type detection re-evaluates once the streaming cloud has fully settled
+  ("Streaming ready"), so a type decided on a sparse early frame (which could
+  misread a 360 / interior scan) is corrected on the representative geometry.
+
 ## [0.4.2] - 2026-06-05
 
 ### Added
