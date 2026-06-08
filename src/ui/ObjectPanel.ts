@@ -30,6 +30,17 @@ export interface ObjectPanelCallbacks {
   onRunTerrainAnyway?: () => void;
   /** The user forced a scan type via the "Treat as" override. */
   onScanTypeChange?: (override: ScanTypeOverride) => void;
+  /**
+   * Build + download the Space / Object Report PDF for the current scan. Awaited
+   * so the button can show a busy state; rejects/throws are surfaced as the
+   * button's error state. Present for both interior and object scans.
+   */
+  onExportReport?: () => Promise<void>;
+  /**
+   * Build + download the interior FLOOR-PLAN sketch (SVG). Wired only for
+   * interior scans (the button is rendered interior-only).
+   */
+  onExportFloorPlan?: () => Promise<void>;
 }
 
 function el(
@@ -122,6 +133,63 @@ export class ObjectPanel {
     }
   }
 
+  /**
+   * The analysis-export row. A primary "Report PDF" button is ALWAYS offered;
+   * "Floor plan" is offered ONLY for interior scans (`withFloorPlan`). Mirrors
+   * the AnalysePanel DEM/map buttons — premium button styles, a lazy-loaded
+   * builder behind a busy state, and a graceful error state on failure. The
+   * point-cloud format converter is unaffected (it lives in the Export panel).
+   */
+  private _exportRow(withFloorPlan: boolean): void {
+    const row = el('div', { className: 'olv-object-export' });
+
+    const runAction = (
+      btn: HTMLButtonElement,
+      label: string,
+      action: (() => Promise<void>) | undefined,
+    ): void => {
+      if (!action) return;
+      btn.disabled = true;
+      const prev = btn.textContent ?? label;
+      btn.textContent = '…';
+      void action()
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('OpenLiDARViewer: space/object export failed.', err);
+          btn.textContent = 'Failed';
+        })
+        .finally(() => {
+          btn.disabled = false;
+          if (btn.textContent === '…') btn.textContent = prev;
+          else if (btn.textContent === 'Failed') {
+            setTimeout(() => { btn.textContent = label; }, 2000);
+          }
+        });
+    };
+
+    const reportBtn = el('button', {
+      className: 'olv-object-dl is-primary',
+      text: 'Report PDF',
+      title: 'Download this scan’s measurements as a one-page report (PDF).',
+    }) as HTMLButtonElement;
+    reportBtn.type = 'button';
+    reportBtn.addEventListener('click', () => runAction(reportBtn, 'Report PDF', this._cb.onExportReport));
+    row.append(reportBtn);
+
+    if (withFloorPlan) {
+      const planBtn = el('button', {
+        className: 'olv-object-dl',
+        text: 'Floor plan',
+        title: 'Download an approximate top-down footprint sketch (SVG) — not a measured floor plan.',
+      }) as HTMLButtonElement;
+      planBtn.type = 'button';
+      planBtn.addEventListener('click', () => runAction(planBtn, 'Floor plan', this._cb.onExportFloorPlan));
+      row.append(planBtn);
+    }
+
+    this._body.append(row);
+  }
+
   /** The "Treat as" override row — placed near the run-anyway escape hatch so
    *  fixing a misdetection is one obvious click. Re-applies the current state
    *  because the body is rebuilt on every render. */
@@ -173,6 +241,8 @@ export class ObjectPanel {
     );
     this._quality(space.quality);
     this._caveats(space.reasons);
+    // Interior export row: Report PDF + the interior-only Floor plan sketch.
+    this._exportRow(true);
     const why = shape && shape.reasons.length ? shape.reasons[0].replace(/\.$/, '') : 'interior space';
     this._body.append(el('div', {
       className: 'olv-object-note',
@@ -219,6 +289,8 @@ export class ObjectPanel {
       this._quality(space.quality);
       this._caveats(space.reasons);
     }
+    // Object export row: Report PDF only (no floor plan for objects).
+    this._exportRow(false);
     const why = shape && shape.reasons.length ? ` (${shape.reasons[0].replace(/\.$/, '')})` : '';
     this._body.append(el('div', {
       className: 'olv-object-note',
