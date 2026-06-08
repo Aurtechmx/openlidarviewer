@@ -26,6 +26,23 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   ("Streaming ready"), so a type decided on a sparse early frame (which could
   misread a 360 / interior scan) is corrected on the representative geometry.
 
+### Fixed
+
+- Export honesty wording is tighter: a georeferencing gap (unknown CRS / datum)
+  is only listed as an export reason when it actually holds the export back
+  below the surface quality, and when a surface is both below grade AND not
+  georeferenced the export reason now names both, rather than only the
+  coordinate-system gap.
+- The Space / Object report now respects the scan's real horizontal units, so
+  dimensions, area, and volume read correctly (and convert correctly between
+  metres and feet) for foot-based and other non-metre coordinate systems
+  instead of assuming metres.
+- Interior floor / ceiling / storey detection is more robust: floor and ceiling
+  planes are found from density-weighted height peaks (so a cluttered floor or a
+  sparsely captured ceiling is still detected), and a second storey is only
+  counted when there is a real floor-to-floor gap with mass between the levels —
+  it stays clearly labelled as approximate.
+
 ## [0.4.2] - 2026-06-05
 
 ### Added
