@@ -12,6 +12,7 @@ import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
+import { ThemeToggle } from './ui/ThemeToggle';
 import { ToolDock } from './ui/toolDock';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
@@ -192,11 +193,24 @@ if (!app) throw new Error('OpenLiDARViewer: #app mount point not found');
 let currentTheme: ThemeName = readPersistedTheme();
 applyTheme(document.body, currentTheme);
 
+// v0.4.3 — the theme control is now a single shape-morphing button in the
+// top-right header (ThemeToggle.ts). It's constructed after the Stage so it
+// can mount into the top bar; `setTheme` keeps it in sync when the theme is
+// changed from anywhere else (command palette, workflow replay).
+let themeToggle: ThemeToggle | null = null;
+
 function setTheme(name: ThemeName): void {
-  if (name === currentTheme) return;
+  if (name === currentTheme) {
+    // Even on a no-op palette change, keep the header button's icon in
+    // sync — the call may come from an external surface that set its own
+    // state independently.
+    themeToggle?.setTheme(name);
+    return;
+  }
   currentTheme = name;
   applyTheme(document.body, name);
   writePersistedTheme(name);
+  themeToggle?.setTheme(name);
 }
 
 /** The embed configuration parsed from the URL — the documented embed API. */
@@ -339,6 +353,18 @@ const stage = new Stage(app, {
   catalogPanel: catalogPanel.root,
   onBatchConvert: () => void openBatchConverter(),
 });
+
+// v0.4.3 — the header theme toggle. A single shape-morphing button that
+// cycles Dark → Light → High-contrast → Dark, mounted into the top bar's
+// right cluster (just left of the GitHub link). Its onChange routes through
+// the same `setTheme` the old Inspector chip rail used, so `applyTheme` +
+// persistence are unchanged. Skipped in embed mode, where the top bar — and
+// therefore the mount slot — doesn't exist.
+themeToggle = new ThemeToggle({
+  initial: currentTheme,
+  onChange: (name) => setTheme(name),
+});
+stage.mountThemeToggle(themeToggle.element);
 
 /**
  * Lazily build (once) and open the batch format converter. Its chunk carries
@@ -970,7 +996,6 @@ const inspector = new Inspector({
       persistPrefs();
     });
   },
-  onTheme: (name) => setTheme(name),
   onSplatMode: (id) => {
     viewer.setSplatMode(id);
     syncInspectorRendering();
@@ -978,10 +1003,9 @@ const inspector = new Inspector({
   },
 });
 
-// v0.3.9 — paint the theme chip rail's active state to match whatever
-// was persisted (or 'dark' by default) so the user sees the correct
-// chip lit on first paint.
-inspector.syncTheme(currentTheme);
+// v0.4.3 — the header theme toggle was constructed with the persisted
+// theme as its initial state, so the correct icon is already lit on first
+// paint; no extra sync call is needed here.
 
 // v0.3.9 — the inspector's CRS section now subscribes to the central
 // CrsService. When a scan loads, the service broadcasts the resolved
@@ -1060,8 +1084,8 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
       break;
     case 'theme':
       if (event.name === 'dark' || event.name === 'light' || event.name === 'high-contrast') {
+        // setTheme keeps the header toggle's icon in sync.
         setTheme(event.name);
-        inspector.syncTheme(event.name);
       }
       break;
     case 'tool': {
@@ -1113,7 +1137,8 @@ function buildActionRegistry(): Action[] {
     },
   });
 
-  // Theme — same handler as the Inspector chip rail.
+  // Theme — same handler as the header theme toggle. `setTheme` keeps the
+  // toggle's icon in sync.
   for (const name of THEME_ORDER) {
     actions.push({
       id: `theme.${name}`,
@@ -1123,7 +1148,6 @@ function buildActionRegistry(): Action[] {
       keywords: ['appearance', 'colours', 'colors', 'accessibility'],
       run: () => {
         setTheme(name);
-        inspector.syncTheme(name);
         workflowController.capture({ type: 'theme', name });
       },
     });

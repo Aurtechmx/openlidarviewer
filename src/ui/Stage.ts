@@ -218,6 +218,14 @@ export class Stage {
   /** Bound handlers kept so dispose can detach them. */
   private readonly _onOnline: () => void;
   private readonly _onOffline: () => void;
+  /**
+   * The top bar's right-hand cluster ("Private · on your device" + GitHub).
+   * Held so main.ts can mount the header theme toggle into it. Null in
+   * embed mode, where the top bar is stripped entirely.
+   */
+  private _topBarRight: HTMLElement | null = null;
+  /** The GitHub link — the theme toggle inserts itself just before it. */
+  private _githubLink: HTMLElement | null = null;
 
   constructor(mount: HTMLElement, options: StageOptions = {}) {
     this.canvas = el('canvas', { className: 'olv-canvas' });
@@ -299,7 +307,25 @@ export class Stage {
     github.rel = 'noreferrer';
 
     const right = el('div', { className: 'olv-topbar-right' }, [privacy, github]);
+    this._topBarRight = right;
+    this._githubLink = github;
     return el('header', { className: 'olv-topbar' }, [wordmark, right]);
+  }
+
+  /**
+   * Mount the v0.4.3 header theme toggle into the top bar's right cluster,
+   * positioned just left of the GitHub link so the "Private · on your
+   * device" trust signal keeps its place. No-op in embed mode (no top
+   * bar). Returns true when mounted so callers can branch on it.
+   */
+  mountThemeToggle(element: HTMLElement): boolean {
+    if (!this._topBarRight) return false;
+    if (this._githubLink) {
+      this._topBarRight.insertBefore(element, this._githubLink);
+    } else {
+      this._topBarRight.append(element);
+    }
+    return true;
   }
 
   private _buildEmptyState(options: StageOptions): HTMLElement {

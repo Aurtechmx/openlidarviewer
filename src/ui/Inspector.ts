@@ -1,12 +1,6 @@
 import { el, formatCount } from './dom';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
 import type { DatasetIntelligenceInput } from '../terrain/datasetIntelligence';
-import {
-  THEME_HINT,
-  THEME_LABEL,
-  THEME_ORDER,
-  type ThemeName,
-} from './themes';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import { scopeStamp } from '../render/class/classScope';
 import { classificationLabel } from '../render/pointInfo';
@@ -126,11 +120,6 @@ export interface InspectorCallbacks {
   onAutoBalance: () => void;
   /** Rendering > Splat mode chip rail. */
   onSplatMode: (id: 'classic' | 'soft' | 'inspection') => void;
-  /**
-   * v0.3.9 theme picker — Dark / Light / High-contrast. The handler
-   * lives in main.ts and routes through `applyTheme` + persistence.
-   */
-  onTheme: (name: ThemeName) => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -451,8 +440,6 @@ export class Inspector {
   private readonly _edlStrengthRow: HTMLElement;
   private readonly _aaChip: HTMLButtonElement;
   private readonly _touchChip: HTMLButtonElement;
-  /** v0.3.9 theme chip rail handles (Dark / Light / High-contrast). */
-  private _themeChips: Map<ThemeName, HTMLButtonElement> = new Map();
   private readonly _sizeModeChips: { mode: PointSizeMode; chip: HTMLButtonElement }[];
 
   constructor(callbacks: InspectorCallbacks) {
@@ -668,29 +655,10 @@ export class Inspector {
       ev.stopPropagation();
       this.closeSheet();
     });
-    // v0.3.9 theme chip rail — Dark / Light / High-contrast. Mounted
-    // in the panel head so it's the first surface the user sees on
-    // open. Clicking a chip immediately applies + persists the theme
-    // through main.ts. The initial active state is sync'd from the
-    // persisted theme via `syncTheme()` after construction.
-    const themeChips = new Map<ThemeName, HTMLButtonElement>();
-    const themeRail = el('div', { className: 'olv-theme-rail' });
-    for (const name of THEME_ORDER) {
-      const chip = el('button', {
-        className: 'olv-theme-chip',
-        text: THEME_LABEL[name],
-        title: THEME_HINT[name],
-        ariaLabel: `${THEME_LABEL[name]} theme`,
-      });
-      chip.addEventListener('click', () => {
-        chip.blur();
-        this._cb.onTheme(name);
-        this.syncTheme(name);
-      });
-      themeChips.set(name, chip);
-      themeRail.append(chip);
-    }
-    this._themeChips = themeChips;
+    // v0.4.3 — the theme picker moved OUT of this panel into a single
+    // shape-morphing button in the top-right header (ThemeToggle.ts).
+    // The Scan Intelligence panel no longer carries the Dark / Light /
+    // High-contrast chip rail.
     // The chevron is a CSS-only `▾` glyph; it rotates 180° when the sheet
     // is open. Together with the grip handle and the new tap-the-head
     // behaviour this signals to phone users that the bar at the bottom of
@@ -915,7 +883,6 @@ export class Inspector {
 
     this.element = el('aside', { className: 'olv-inspector' }, [
       head,
-      themeRail,
       this._datasetIntelligence.element,
       this._layersSection,
       this._colorBySection,
@@ -1017,17 +984,6 @@ export class Inspector {
    * react (the desktop layout repositions the panel below the
    * StreamingPanel in this mode to avoid overlap).
    */
-  /**
-   * v0.3.9 — flip the active state on the theme chip rail. Called by
-   * main.ts after a persisted theme is applied on boot, and again
-   * after every user-driven change.
-   */
-  syncTheme(active: ThemeName): void {
-    for (const [name, chip] of this._themeChips) {
-      chip.classList.toggle('olv-theme-chip-active', name === active);
-    }
-  }
-
   setStreamingMode(streaming: boolean): void {
     const hidden = streaming ? 'none' : '';
     this._layersSection.style.display = hidden;

@@ -253,40 +253,60 @@
 }
 
 /*
- * v0.3.9 theme chip rail — sits at the very top of the Inspector
- * panel, below the panel-head title. Three chips
- * (Dark / Light / High-contrast) with an active state that mirrors
- * the persisted choice. Kept compact so it doesn't dominate first
- * paint — the user can pick once and forget it.
+ * v0.4.3 header theme toggle — a single shape-morphing button in the
+ * top-right header (relocated from the Inspector chip rail). One tap
+ * cycles Dark → Light → High-contrast → Dark. The three icon states
+ * (moon / sun / split-circle) are stacked in one box and cross-faded:
+ * only the active one is opaque, the others fade out and scale down.
+ * Everything is `currentColor` so the glyph inherits the header text
+ * colour and stays visible in all three themes.
  */
-.olv-theme-rail {
-  display: flex; gap: var(--space-sm);
-  padding: var(--space-sm) 0 var(--space-lg);
-  border-bottom: 0.5px solid var(--hairline);
-  margin-bottom: var(--space-lg);
-}
-.olv-theme-chip {
-  flex: 1;
-  font-size: var(--text-xs); color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+.olv-theme-toggle {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  padding: 0; margin: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard),
     transform 90ms var(--ease-standard);
 }
-.olv-theme-chip:hover {
-  color: var(--text); border-color: var(--accent);
-  background: rgba(0, 178, 255, 0.08);
+.olv-theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  transform: scale(1.06);
 }
-.olv-theme-chip:active { transform: scale(0.97); }
-.olv-theme-chip-active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.45);
-}
-.olv-theme-chip:focus-visible {
+.olv-theme-toggle:active { transform: scale(0.94); }
+.olv-theme-toggle:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* Each icon state is absolutely stacked in the same 18px box. */
+.olv-theme-icon {
+  position: absolute; inset: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transform: scale(0.6) rotate(-30deg);
+  transition: opacity var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-standard);
+  pointer-events: none;
+}
+.olv-theme-icon svg { width: 18px; height: 18px; display: block; }
+.olv-theme-icon-active {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+}
+/* Respect reduced-motion: cut the morph transition + the hover scale so
+ * the icon just swaps instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-theme-toggle, .olv-theme-icon { transition: none; }
+  .olv-theme-toggle:hover, .olv-theme-toggle:active { transform: none; }
+  .olv-theme-icon { transform: scale(1) rotate(0); }
 }
 
 /*

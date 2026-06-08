@@ -1,37 +1,37 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
-import { dropTinyPly } from './helpers';
 
 /**
- * v0.3.9 Theme system — Dark / Light / High-contrast.
+ * v0.4.3 Theme system — Dark / Light / High-contrast.
  *
- * The pure-data layer is covered by themes.test.ts (21 unit tests).
- * This spec exercises the DOM + persistence wiring: the Inspector
- * chip rail mounts every theme with the correct active state, clicks
- * route through to a body-class swap, and the choice persists across
- * a page reload.
+ * The pure-data layer is covered by themes.test.ts (21 unit tests) and the
+ * control itself by themeToggle.test.ts (7 unit tests). This spec exercises
+ * the DOM + persistence WIRING after the v0.4.3 relocation: the theme
+ * control is no longer an Inspector chip rail — it's a single shape-morphing
+ * button in the top-right header (`.olv-theme-toggle`). It is present on the
+ * empty state (it lives in the top bar, not the scan-gated Inspector), one
+ * click cycles Dark → Light → High-contrast → Dark with the matching
+ * body-class swap, and the choice persists across a page reload.
  *
- * Each test that needs a clean theme starts from a freshly-built
- * context so localStorage from a previous test doesn't leak in. The
- * `newCleanContext` helper also seeds the onboarding-tour-completed
- * key so the tour backdrop doesn't intercept the first click; the
- * default `page` fixture already does this through the global
- * `storageState` in playwright.config, but `browser.newContext()`
- * skips that config and needs the seeding inline.
+ * This is a relocation, not a weakening: every assertion the old chip-rail
+ * spec made (mounts, active state, body-class swap on each theme, reload
+ * persistence) is preserved — only the selector and the click model (cycle
+ * vs. direct pick) changed.
  *
- * The Inspector is hidden on the empty state (the desktop-audit
- * "don't paint placeholder controls before there's a scan" fix), so
- * every test drops the bundled `tiny.ply` fixture first. That makes
- * the inspector — and therefore the theme rail it contains —
- * visible and clickable.
+ * Each test that needs a clean theme starts from a freshly-built context so
+ * localStorage from a previous test doesn't leak in. The helper seeds the
+ * onboarding-tour-completed key so the tour backdrop doesn't intercept the
+ * first click.
  */
 
-const THEMES = [
-  { name: 'Dark', bodyClass: null },
-  { name: 'Light', bodyClass: 'olv-theme-light' },
-  { name: 'High contrast', bodyClass: 'olv-theme-high-contrast' },
-] as const;
-
 const TOUR_KEY = 'olv:tour:v1:completed';
+
+/** The lit icon's `data-theme` — the source of truth for the current theme. */
+async function activeIconTheme(page: Page): Promise<string | null> {
+  return await page.evaluate(() => {
+    const lit = document.querySelector('.olv-theme-icon-active');
+    return lit ? lit.getAttribute('data-theme') : null;
+  });
+}
 
 async function bodyClasses(page: Page): Promise<string[]> {
   return await page.evaluate(() => Array.from(document.body.classList));
@@ -39,9 +39,9 @@ async function bodyClasses(page: Page): Promise<string[]> {
 
 /**
  * Open a fresh browser context with the onboarding tour pre-marked as
- * completed and the page navigated + a tiny.ply fixture dropped so
- * the inspector is visible. Returns the page and a `dispose`
- * function the test should call at the end.
+ * completed and the page navigated, then wait for the header theme toggle.
+ * The toggle lives in the top bar, so — unlike the old chip rail — it's
+ * visible on the empty state with no fixture required.
  */
 async function newCleanPage(
   browser: Browser,
@@ -59,9 +59,7 @@ async function newCleanPage(
   });
   const page = await ctx.newPage();
   await page.goto('/');
-  await dropTinyPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await expect(page.locator('.olv-theme-rail')).toBeVisible();
+  await expect(page.locator('.olv-theme-toggle')).toBeVisible();
   return {
     page,
     dispose: async () => {
@@ -70,81 +68,76 @@ async function newCleanPage(
   };
 }
 
-/**
- * Same idea but for the default `page` fixture — it already inherits
- * the global storageState from playwright.config, so we only need to
- * load the fixture and wait for the rail.
- */
 async function loadAndReady(page: Page): Promise<void> {
   await page.goto('/');
-  await dropTinyPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await expect(page.locator('.olv-theme-rail')).toBeVisible();
+  await expect(page.locator('.olv-theme-toggle')).toBeVisible();
 }
 
-test.describe('theme chip rail — Inspector header', () => {
-  test('the rail mounts a chip for every theme', async ({ page }) => {
+test.describe('header theme toggle — top-right button', () => {
+  test('the toggle mounts an icon for every theme', async ({ page }) => {
     await loadAndReady(page);
-    const rail = page.locator('.olv-theme-rail');
-    await expect(rail).toBeVisible();
-    for (const { name } of THEMES) {
-      const chip = rail.locator('.olv-theme-chip', { hasText: name });
-      await expect(chip, `missing theme chip "${name}"`).toBeVisible();
+    const toggle = page.locator('.olv-theme-toggle');
+    await expect(toggle).toBeVisible();
+    for (const theme of ['dark', 'light', 'high-contrast']) {
+      await expect(
+        toggle.locator(`.olv-theme-icon[data-theme="${theme}"]`),
+        `missing theme icon "${theme}"`,
+      ).toHaveCount(1);
     }
   });
 
-  test('Dark is the default active chip on a clean session', async ({
+  test('Dark is the default lit icon on a clean session', async ({
     browser,
   }) => {
     const { page, dispose } = await newCleanPage(browser);
-    const active = page.locator('.olv-theme-chip-active');
-    await expect(active).toHaveText('Dark');
+    expect(await activeIconTheme(page)).toBe('dark');
+    await expect(page.locator('.olv-theme-toggle')).toHaveAttribute(
+      'aria-label',
+      /Dark/,
+    );
     await dispose();
   });
 });
 
-test.describe('theme switching — body class + active state', () => {
-  test('clicking Light adds the olv-theme-light body class', async ({
+test.describe('theme cycling — body class + lit icon', () => {
+  test('one click cycles Dark → Light and adds olv-theme-light', async ({
     browser,
   }) => {
     const { page, dispose } = await newCleanPage(browser);
-    await page
-      .locator('.olv-theme-rail .olv-theme-chip', { hasText: 'Light' })
-      .click();
+    await page.locator('.olv-theme-toggle').click();
     const classes = await bodyClasses(page);
     expect(classes).toContain('olv-theme-light');
     expect(classes).not.toContain('olv-theme-high-contrast');
-    await expect(page.locator('.olv-theme-chip-active')).toHaveText('Light');
+    expect(await activeIconTheme(page)).toBe('light');
     await dispose();
   });
 
-  test('clicking High contrast swaps the body class cleanly', async ({
+  test('the second click swaps to High contrast cleanly', async ({
     browser,
   }) => {
     const { page, dispose } = await newCleanPage(browser);
-    await page
-      .locator('.olv-theme-rail .olv-theme-chip', { hasText: 'Light' })
-      .click();
-    await page
-      .locator('.olv-theme-rail .olv-theme-chip', { hasText: 'High contrast' })
-      .click();
+    const toggle = page.locator('.olv-theme-toggle');
+    await toggle.click(); // dark → light
+    await toggle.click(); // light → high-contrast
     const classes = await bodyClasses(page);
     expect(classes).toContain('olv-theme-high-contrast');
     expect(classes).not.toContain('olv-theme-light');
+    expect(await activeIconTheme(page)).toBe('high-contrast');
     await dispose();
   });
 
-  test('clicking Dark removes every theme body class', async ({ browser }) => {
+  test('the third click returns to Dark and clears every theme class', async ({
+    browser,
+  }) => {
     const { page, dispose } = await newCleanPage(browser);
-    await page
-      .locator('.olv-theme-rail .olv-theme-chip', { hasText: 'Light' })
-      .click();
-    await page
-      .locator('.olv-theme-rail .olv-theme-chip', { hasText: 'Dark' })
-      .click();
+    const toggle = page.locator('.olv-theme-toggle');
+    await toggle.click(); // dark → light
+    await toggle.click(); // light → high-contrast
+    await toggle.click(); // high-contrast → dark
     const classes = await bodyClasses(page);
     expect(classes).not.toContain('olv-theme-light');
     expect(classes).not.toContain('olv-theme-high-contrast');
+    expect(await activeIconTheme(page)).toBe('dark');
     await dispose();
   });
 });
@@ -154,22 +147,15 @@ test.describe('persistence — theme survives a page reload', () => {
     browser,
   }) => {
     const { page, dispose } = await newCleanPage(browser);
-    await page
-      .locator('.olv-theme-rail .olv-theme-chip', { hasText: 'High contrast' })
-      .click();
-    await expect(page.locator('.olv-theme-chip-active')).toHaveText(
-      'High contrast',
-    );
+    const toggle = page.locator('.olv-theme-toggle');
+    await toggle.click(); // dark → light
+    await toggle.click(); // light → high-contrast
+    expect(await activeIconTheme(page)).toBe('high-contrast');
 
     await page.reload();
-    // After reload the empty state returns — drop the fixture again so
-    // the inspector renders the (now-persisted) active theme chip.
-    await dropTinyPly(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await expect(page.locator('.olv-theme-toggle')).toBeVisible();
 
-    await expect(page.locator('.olv-theme-chip-active')).toHaveText(
-      'High contrast',
-    );
+    expect(await activeIconTheme(page)).toBe('high-contrast');
     const classes = await bodyClasses(page);
     expect(classes).toContain('olv-theme-high-contrast');
     await dispose();
@@ -177,15 +163,12 @@ test.describe('persistence — theme survives a page reload', () => {
 
   test('Light persists across reload', async ({ browser }) => {
     const { page, dispose } = await newCleanPage(browser);
-    await page
-      .locator('.olv-theme-rail .olv-theme-chip', { hasText: 'Light' })
-      .click();
+    await page.locator('.olv-theme-toggle').click(); // dark → light
 
     await page.reload();
-    await dropTinyPly(page);
-    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await expect(page.locator('.olv-theme-toggle')).toBeVisible();
 
-    await expect(page.locator('.olv-theme-chip-active')).toHaveText('Light');
+    expect(await activeIconTheme(page)).toBe('light');
     const classes = await bodyClasses(page);
     expect(classes).toContain('olv-theme-light');
     await dispose();
