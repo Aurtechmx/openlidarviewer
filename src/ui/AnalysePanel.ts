@@ -33,9 +33,16 @@ import {
   GRADE_MEANING,
   METRIC_TOOLTIPS,
   NOT_SURVEY_GRADE,
+  confidenceWord,
   describeIntervalOption,
   formatHonestValue,
 } from '../terrain/contour/contourCopy';
+import { gradeForConfidence } from '../terrain/ground/cellConfidence';
+import {
+  coverageHeatmapImage,
+  COVERAGE_LEGEND,
+  COVERAGE_CAPTION,
+} from '../terrain/surface/coverageHeatmap';
 import { interpolatedCaption } from '../terrain/contour/evidenceGrade';
 import {
   computeTerrainReadiness,
@@ -557,9 +564,111 @@ export class AnalysePanel {
     });
     if (chm) this._surfaceRow.append(chm);
 
+    // Coverage — a green/yellow/red trust read of the bare-earth DTM. Same
+    // confidence the dashed-contour evidence uses, so the two agree.
+    const coverage = this._coverageTile(r);
+    if (coverage) this._surfaceRow.append(coverage);
+
     // Relief — multi-directional / single-sun hillshade with adjustable sun.
     const relief = this._reliefTile(r, s);
     if (relief) this._surfaceRow.append(relief);
+  }
+
+  /**
+   * The coverage heatmap tile — green (strong/measured) / yellow (moderate/
+   * interpolated) / red (weak/extrapolated or gap), with empty cells left
+   * transparent. A projection of the per-cell DTM confidence the pipeline
+   * already computes; no new analysis. Carries a 3-stop legend, a click-to-
+   * sample readout reporting the cell's confidence + grade word, an Export PNG
+   * button, and the honesty caption. Never claims survey-grade.
+   */
+  private _coverageTile(r: AnalyseContoursResult): HTMLElement | null {
+    const cols = r.dtm.cols;
+    const rows = r.dtm.rows;
+    if (!(cols > 0 && rows > 0) || r.dtm.confidence.length !== cols * rows) return null;
+
+    const canvas = this._makeCanvas(cols, rows);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const img = ctx.createImageData(cols, rows);
+      // The rasteriser flips north-up to match the other preview tiles; copy
+      // its RGBA straight into the canvas ImageData.
+      const raster = coverageHeatmapImage(r.dtm, { northUp: true });
+      img.data.set(raster.data);
+      ctx.putImageData(img, 0, 0);
+    }
+
+    const tile = el('div', { className: 'olv-analyse-raster-tile' });
+    tile.append(el('div', { className: 'olv-analyse-sublabel', text: 'Coverage (trust)' }));
+    const wrap = this._rasterWrap(canvas);
+    tile.append(wrap.wrap);
+    tile.append(this._coverageLegend());
+    tile.append(el('div', { className: 'olv-analyse-caption', text: COVERAGE_CAPTION }));
+
+    const readout = this._sampleReadout();
+    tile.append(readout);
+    this._attachCoverageSampler(canvas, wrap.crosshair, cols, rows, readout);
+
+    const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
+    dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'coverage'));
+    tile.append(dl);
+    return tile;
+  }
+
+  /** A discrete 3-stop coverage legend: green / yellow / red = strong / moderate / weak. */
+  private _coverageLegend(): HTMLElement {
+    const wrap = el('div', { className: 'olv-analyse-coverage-legend' });
+    for (const stop of COVERAGE_LEGEND) {
+      const item = el('div', { className: 'olv-analyse-coverage-legend-item' });
+      const sw = el('span', { className: 'olv-analyse-coverage-swatch' });
+      sw.style.background = `rgb(${stop.color.r},${stop.color.g},${stop.color.b})`;
+      item.append(sw, el('span', { text: `${stop.word} — ${stop.meaning}` }));
+      wrap.append(item);
+    }
+    return wrap;
+  }
+
+  /**
+   * Click-to-sample for the coverage tile: maps a click to a DTM cell and
+   * reports that cell's confidence + grade word, reusing the readout style of
+   * the other tiles. Reads the confidence grid directly (sampleTerrain doesn't
+   * carry confidence), so the readout matches the pixel under the crosshair.
+   */
+  private _attachCoverageSampler(
+    canvas: HTMLCanvasElement,
+    crosshair: HTMLElement,
+    cols: number,
+    rows: number,
+    readout: HTMLElement,
+  ): void {
+    canvas.classList.add('is-samplable');
+    canvas.addEventListener('click', (e) => {
+      const r = this._result;
+      if (!r) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const fx = (e.clientX - rect.left) / rect.width;
+      const fy = (e.clientY - rect.top) / rect.height;
+      const col = Math.max(0, Math.min(cols - 1, Math.floor(fx * cols)));
+      const displayRow = Math.max(0, Math.min(rows - 1, Math.floor(fy * rows)));
+      const row = rows - 1 - displayRow; // undo the north-up flip
+      const i = row * cols + col;
+      const covered = r.dtm.coverage[i] !== 0;
+      if (!covered) {
+        readout.textContent = 'Sample · outside coverage';
+        readout.classList.add('is-empty');
+      } else {
+        const conf = r.dtm.confidence[i];
+        const grade = gradeForConfidence(conf);
+        const support = grade === 'solid' ? 'strong' : grade === 'dashed' ? 'moderate' : 'weak';
+        const c = Number.isFinite(conf) ? Math.round(conf) : 0;
+        readout.textContent = `Sample · ${support} support · confidence ${c}% (${confidenceWord(conf)})`;
+        readout.classList.remove('is-empty');
+      }
+      crosshair.style.left = `${(fx * 100).toFixed(2)}%`;
+      crosshair.style.top = `${(fy * 100).toFixed(2)}%`;
+      crosshair.style.display = 'block';
+    });
   }
 
   /**

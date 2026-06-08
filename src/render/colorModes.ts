@@ -10,6 +10,10 @@
 import type { PointCloud } from '../model/PointCloud';
 import { densityForChunk, defaultCellSizeForSpacing } from './densityColors';
 import { computeElevationRange } from './elevationRange';
+import {
+  coverageColorForConfidence,
+  COVERAGE_NONE,
+} from '../terrain/surface/coverageHeatmap';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -28,7 +32,36 @@ export type ColorMode =
    * miss in the single global density figure on the Scan Report. Always
    * available because it derives from positions alone.
    */
-  | 'density';
+  | 'density'
+  /**
+   * Coverage heatmap — green/yellow/red trust read of the bare-earth DTM.
+   * Each point is coloured by the confidence of the DTM cell it falls in
+   * (strong/moderate/weak terrain support); points outside the analysed grid
+   * (or in empty cells) read a neutral dim grey. Only MEANINGFUL after terrain
+   * analysis has run — it needs the confidence grid — so the UI gates the
+   * button on a grid existing. Shares the exact ramp + thresholds with the 2D
+   * Coverage preview tile, so the two surfaces agree.
+   */
+  | 'coverage';
+
+/**
+ * The minimal DTM-confidence grid the `'coverage'` colour mode samples. A
+ * point at world `(x, y)` maps to cell `col = floor((x − originH1) / cellSizeM)`,
+ * `row = floor((y − originH2) / cellSizeM)` — the SAME geometry the DTM raster
+ * was built with (horizontal axes H1=x, H2=y for a z-up frame). A `DtmGrid`
+ * fits this structurally.
+ */
+export interface CoverageColorGrid {
+  /** 0..100 trust per cell, row-major. */
+  readonly confidence: ArrayLike<number>;
+  /** Per-cell provenance (0 = none/empty, >0 = has a height). Row-major. */
+  readonly coverage: ArrayLike<number>;
+  readonly cols: number;
+  readonly rows: number;
+  readonly cellSizeM: number;
+  readonly originH1: number;
+  readonly originH2: number;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Elevation colour ramps — perceptual palettes
@@ -333,6 +366,45 @@ export function colorByClassification(
 }
 
 /**
+ * Colour `count` points by the confidence of the DTM cell each falls in, using
+ * the shared green/yellow/red coverage ramp. Points outside the grid (or in an
+ * empty / no-data cell) get a neutral dim grey. Pure — no renderer, testable.
+ *
+ * The sampling geometry mirrors the DTM raster: `col = floor((x − originH1) /
+ * cellSizeM)`, `row = floor((y − originH2) / cellSizeM)`, index `row*cols+col`.
+ */
+export function colorByCoverage(
+  positions: Float32Array,
+  count: number,
+  grid: CoverageColorGrid,
+): Uint8Array {
+  const out = new Uint8Array(count * 3);
+  const { cols, rows, cellSizeM, originH1, originH2, confidence, coverage } = grid;
+  const inv = cellSizeM > 0 ? 1 / cellSizeM : 0;
+  for (let i = 0; i < count; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    let col = -1;
+    let row = -1;
+    if (inv > 0 && Number.isFinite(x) && Number.isFinite(y)) {
+      col = Math.floor((x - originH1) * inv);
+      row = Math.floor((y - originH2) * inv);
+    }
+    let c = COVERAGE_NONE;
+    if (col >= 0 && col < cols && row >= 0 && row < rows) {
+      const idx = row * cols + col;
+      // An empty / no-data cell stays neutral grey — the point has no analysed
+      // surface beneath it to trust or distrust.
+      if (coverage[idx] !== 0) c = coverageColorForConfidence(confidence[idx]);
+    }
+    out[i * 3] = c.r;
+    out[i * 3 + 1] = c.g;
+    out[i * 3 + 2] = c.b;
+  }
+  return out;
+}
+
+/**
  * Compute a flat interleaved RGB colour array (3 bytes per point) for `cloud`
  * using the specified `mode`.
  *
@@ -351,6 +423,13 @@ export interface ColorForModeOptions {
    * Clamped to [0, 25] inside `computeElevationRange`.
    */
   heightPercentileTrim?: number;
+  /**
+   * The DTM-confidence grid the `'coverage'` mode samples. Supplied by the
+   * Viewer after a terrain analysis runs. When absent in `'coverage'` mode
+   * every point reads the neutral dim grey (no crash) — the UI disables the
+   * Coverage button until a grid exists, so this is the defensive fallback.
+   */
+  coverageGrid?: CoverageColorGrid;
 }
 
 export function colorForMode(
@@ -451,6 +530,24 @@ export function colorForMode(
         positions: cloud.positions,
         cellSize,
       }).colors;
+    }
+
+    // ── coverage (DTM-confidence heatmap) ─────────────────────────────────────
+    case 'coverage': {
+      // No grid yet (analysis hasn't run) → every point is the neutral grey.
+      // The UI gates the button on a grid existing, so this is the safe
+      // fallback rather than an error: a missing grid is a UI state, not a
+      // data defect like a missing attribute.
+      if (!opts?.coverageGrid) {
+        const out = new Uint8Array(n * 3);
+        for (let i = 0; i < n; i++) {
+          out[i * 3] = COVERAGE_NONE.r;
+          out[i * 3 + 1] = COVERAGE_NONE.g;
+          out[i * 3 + 2] = COVERAGE_NONE.b;
+        }
+        return out;
+      }
+      return colorByCoverage(cloud.positions, n, opts.coverageGrid);
     }
   }
 }

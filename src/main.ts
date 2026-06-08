@@ -1745,6 +1745,23 @@ const terrainRunner = createTerrainAnalysisRunner({
   analysePanel,
   getActiveId: () => activeId,
   crsService,
+  // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
+  // so the 3D "Coverage" colour mode can tint the cloud by trust, and enable
+  // the (until-now disabled) Coverage colour chip. The grid the colour mode
+  // samples is exactly the per-cell confidence the dashed-contour evidence uses.
+  onResult: (result) => {
+    const d = result.dtm;
+    viewer.setCoverageGrid({
+      confidence: d.confidence,
+      coverage: d.coverage,
+      cols: d.cols,
+      rows: d.rows,
+      cellSizeM: d.cellSizeM,
+      originH1: d.originH1,
+      originH2: d.originH2,
+    });
+    inspector.setCoverageAvailable(true);
+  },
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -3155,6 +3172,10 @@ async function handleFile(file: File): Promise<void> {
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
     activeId = id;
+    // A freshly opened scan has no terrain analysis yet — drop any prior grid so
+    // the Coverage colour chip starts disabled until this scan is analysed.
+    viewer.setCoverageGrid(null);
+    inspector.setCoverageAvailable(false);
     // Retain the source file + whether the display cloud was reduced, so the
     // Export panel can offer a full-resolution re-decode.
     sourceFileById.set(id, file);
@@ -4088,6 +4109,11 @@ function resetToEmptyState(): void {
   // loaded after the first Analyse run, and before that there is nothing to
   // clear — so this never eagerly pulls the heavy analysis chunk.
   terrainRunner.abortAndClearCache();
+  // Drop the DTM-confidence grid and disable the Coverage colour chip — the
+  // grid belongs to the now-closed scan, so the 3D coverage mode must not tint
+  // a different cloud with stale trust.
+  viewer.setCoverageGrid(null);
+  inspector.setCoverageAvailable(false);
   // Hide + clear the classification legend so it doesn't linger with a stale
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());

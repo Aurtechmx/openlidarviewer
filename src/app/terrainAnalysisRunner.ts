@@ -79,6 +79,13 @@ export interface TerrainAnalysisRunnerDeps {
   getActiveId: () => string | null;
   /** The centralised CRS service — feeds the resolved CRS into the analysis. */
   crsService: CrsService;
+  /**
+   * Fired with the winning run's result right after it lands on the panel. The
+   * host uses it to wire post-analysis state that lives outside the panel — e.g.
+   * adopting the DTM-confidence grid on the Viewer so the "Coverage" colour mode
+   * becomes available. Never fired for a stale / aborted run.
+   */
+  onResult?: (result: AnalyseContoursResult) => void;
 }
 
 export interface TerrainAnalysisRunner {
@@ -126,7 +133,7 @@ export interface TerrainAnalysisRunner {
 export function createTerrainAnalysisRunner(
   deps: TerrainAnalysisRunnerDeps,
 ): TerrainAnalysisRunner {
-  const { getViewer, analysePanel, getActiveId, crsService } = deps;
+  const { getViewer, analysePanel, getActiveId, crsService, onResult } = deps;
 
   // Monotonic token for terrain-analysis runs. `run` is async (lazy chunk
   // import + a paint yield), so rapid interval clicks can overlap and resolve
@@ -217,6 +224,10 @@ export function createTerrainAnalysisRunner(
       if (isStale()) return;
       analysePanel.setBusy(false);
       analysePanel.update(result);
+      // Hand the fresh result to the host AFTER the panel adopts it, so any
+      // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the
+      // same winning result the panel shows.
+      onResult?.(result);
     } catch (err) {
       // A stale run must not clobber the winning run's busy flag or status.
       if (isStale()) return;

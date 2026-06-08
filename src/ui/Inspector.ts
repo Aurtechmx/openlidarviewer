@@ -5,6 +5,7 @@ import type { AnalysisRow } from '../analysis/ModuleApi';
 import { scopeStamp } from '../render/class/classScope';
 import { classificationLabel } from '../render/pointInfo';
 import type { ColorMode } from '../render/colorModes';
+import { buildColorChipModel, COVERAGE_DISABLED_TITLE } from './colorChipModel';
 import type { PointSizeMode } from '../render/pointStyle';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { ExportFormat } from '../io/exporters';
@@ -129,6 +130,7 @@ const MODE_LABELS: Record<ColorMode, string> = {
   classification: 'Class',
   normal: 'Normal',
   density: 'Density',
+  coverage: 'Coverage',
 };
 
 /** Hover hints for each colour mode — what the chip does, for first-time users. */
@@ -139,6 +141,9 @@ const MODE_TITLES: Record<ColorMode, string> = {
   classification: 'Colour points by their ASPRS classification code',
   normal: 'Colour points by surface-normal direction',
   density: 'Colour points by local coverage — dark = sparse, bright = dense',
+  coverage:
+    'Colour points by bare-earth trust — green strong (measured), yellow ' +
+    'moderate (interpolated), red weak (extrapolated/gap). Approximate.',
 };
 
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
@@ -1068,19 +1073,57 @@ export class Inspector {
     this._layerRows.delete(id);
   }
 
+  /** Data-driven colour modes for the active cloud (Coverage is appended separately). */
+  private _modes: ColorMode[] = [];
+  /** The currently-selected colour mode, tracked so a re-render keeps the highlight. */
+  private _activeMode: ColorMode = 'elevation';
+  /**
+   * Whether the "Coverage" chip is enabled. False until a terrain analysis
+   * produces a DTM-confidence grid; the chip is shown DISABLED (so the user
+   * learns the feature exists) with a "Run terrain analysis first" tooltip.
+   */
+  private _coverageAvailable = false;
+
   /** Render the color-mode chips, marking `active` as selected. */
   setColorModes(modes: ColorMode[], active: ColorMode): void {
+    // The Coverage mode is analysis-gated, not data-gated, so it is never part
+    // of the per-cloud `availableModes` list — track the data modes separately
+    // and always append the Coverage chip below.
+    this._modes = modes.filter((m) => m !== 'coverage');
+    this._activeMode = active;
+    this._renderColorChips();
+  }
+
+  /**
+   * Enable / disable the Coverage colour chip. Called when a terrain analysis
+   * confidence grid appears (enable) or the scan is closed (disable). Re-renders
+   * the chip rail so the disabled state + tooltip update in place.
+   */
+  setCoverageAvailable(available: boolean): void {
+    if (this._coverageAvailable === available) return;
+    this._coverageAvailable = available;
+    this._renderColorChips();
+  }
+
+  /** (Re)build the colour-mode chip rail from the tracked mode list + state. */
+  private _renderColorChips(): void {
     this._chips.replaceChildren();
-    for (const mode of modes) {
-      const chip = el('button', {
-        className: 'olv-chip',
-        text: MODE_LABELS[mode],
-        title: MODE_TITLES[mode],
-      });
-      if (mode === active) chip.classList.add('olv-chip-active');
+    const descriptors = buildColorChipModel(this._modes, this._activeMode, this._coverageAvailable);
+    for (const desc of descriptors) {
+      const { mode, active, disabled } = desc;
+      const title =
+        mode === 'coverage' && disabled ? COVERAGE_DISABLED_TITLE : MODE_TITLES[mode];
+      const chip = el('button', { className: 'olv-chip', text: MODE_LABELS[mode], title });
+      if (active) chip.classList.add('olv-chip-active');
+      if (disabled) {
+        chip.disabled = true;
+        chip.classList.add('olv-chip-disabled');
+      }
       chip.addEventListener('click', () => {
+        if (disabled) return; // disabled Coverage chip is a no-op
         for (const other of this._chips.children) other.classList.remove('olv-chip-active');
         chip.classList.add('olv-chip-active');
+        this._activeMode = mode;
         this._cb.onColorMode(mode);
         // v0.3.7 final-polish — show the trim slider when the analyst
         // picks Height. Other modes don't honour the slider so hiding
@@ -1090,7 +1133,7 @@ export class Inspector {
       this._chips.append(chip);
     }
     // Initial visibility for the trim row — track the active mode.
-    this._heightTrimRow.classList.toggle('olv-hidden', active !== 'elevation');
+    this._heightTrimRow.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
   }
 
   /**

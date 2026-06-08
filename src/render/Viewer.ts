@@ -60,7 +60,7 @@ import type { ClassVisibility } from './class/classVisibility';
 import { classVisibleAt } from './class/classMaskUniform';
 import { isZUpFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
-import type { ColorMode } from './colorModes';
+import type { ColorMode, CoverageColorGrid } from './colorModes';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
@@ -1875,6 +1875,36 @@ export class Viewer {
   private _heightPercentileTrim = 5;
 
   /**
+   * The DTM-confidence grid the `'coverage'` colour mode samples, stored after
+   * a terrain analysis lands (mirrors how other post-analysis state is kept on
+   * the Viewer). Null until the first analysis runs; the Coverage colour button
+   * stays disabled while it is null. Cleared on reset / new scan.
+   */
+  private _coverageGrid: CoverageColorGrid | null = null;
+
+  /**
+   * Adopt (or clear) the DTM-confidence grid that the `'coverage'` colour mode
+   * samples. Called when a terrain analysis result lands. Recolours any cloud
+   * currently showing `'coverage'` so it reflects the fresh grid immediately.
+   */
+  setCoverageGrid(grid: CoverageColorGrid | null): void {
+    this._coverageGrid = grid;
+    for (const entry of this._clouds.values()) {
+      if (entry.mode !== 'coverage') continue;
+      const raw = colorForMode('coverage', entry.cloud, { coverageGrid: grid ?? undefined });
+      const arr = entry.colorAttr.array as Float32Array;
+      for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+      entry.colorAttr.needsUpdate = true;
+    }
+    this._bumpRenderActivity();
+  }
+
+  /** True once a DTM-confidence grid exists, so the Coverage colour mode is meaningful. */
+  hasCoverageGrid(): boolean {
+    return this._coverageGrid != null;
+  }
+
+  /**
    * Set the symmetric percentile trim used by the elevation colour
    * mode and reseed every cloud currently rendering in elevation
    * mode. The streaming renderer reads the trim through the same
@@ -2206,6 +2236,7 @@ export class Viewer {
 
     const raw = colorForMode(mode, entry.cloud, {
       heightPercentileTrim: this._heightPercentileTrim,
+      coverageGrid: this._coverageGrid ?? undefined,
     });
     const arr = entry.colorAttr.array as Float32Array;
     for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;

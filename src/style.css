@@ -877,6 +877,10 @@ button:disabled { cursor: not-allowed; }
   color: var(--accent); background: var(--accent-soft);
   border-color: rgba(0, 178, 255, 0.4);
 }
+.olv-chip-disabled {
+  opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
+}
+.olv-chip-disabled:hover { color: var(--text-faint); }
 .olv-slider { width: 100%; accent-color: var(--accent); }
 /* Rendering controls — stacked groups and a labelled slider row. */
 .olv-render-group { display: flex; flex-direction: column; gap: var(--space-md); }
@@ -4829,6 +4833,16 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-legend-ticks {
   display: flex; justify-content: space-between;
   font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+}
+/* Discrete 3-stop coverage legend (green/yellow/red = strong/moderate/weak). */
+.olv-analyse-coverage-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-coverage-legend-item {
+  display: flex; align-items: center; gap: var(--space-2xs);
+  font-size: var(--text-2xs); color: var(--text-faint);
+}
+.olv-analyse-coverage-swatch {
+  width: 10px; height: 10px; border-radius: var(--radius-xs);
+  border: 0.5px solid var(--hairline); flex: 0 0 auto;
 }
 /* Bare-earth elevation histogram. */
 .olv-analyse-hist { display: flex; flex-direction: column; gap: var(--space-2xs); }
