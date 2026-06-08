@@ -52,7 +52,7 @@ import {
   type ContourShapeStyle,
 } from '../terrain/contour/contourShapeStyle';
 import { buildExportProvenance } from '../terrain/export/exportProvenance';
-import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
+import { loadMapSheetPdf, loadDemPackage, loadTerrainReportPdf } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
 import {
@@ -202,6 +202,13 @@ export class AnalysePanel {
   private _contourStyle: ContourShapeStyle = defaultContourShapeStyle;
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
+  /**
+   * Terrain Intelligence Report (PDF) — the client-facing deliverable. Like the
+   * DEM button it is gated only on a result existing (NOT the contour gate): the
+   * report honestly shows the verdicts + which products are Available / Preview /
+   * Blocked, so it is valuable for a preview/blocked scan too.
+   */
+  private _reportButton!: HTMLButtonElement;
   /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
   private _demNote!: HTMLElement;
   private readonly _legend: HTMLElement;
@@ -1204,6 +1211,21 @@ export class AnalysePanel {
     this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
     row.append(this._demButton);
 
+    // Terrain Intelligence Report — the one-click, client-facing deliverable that
+    // assembles the assessment, coverage, accuracy, workflows, warnings and
+    // available products into one sectioned PDF. A primary-ish action distinct
+    // from the contour/DEM/map exports. Deliberately NOT pushed onto
+    // `_exportButtons`: like the DEM, it stays enabled whenever an analysis
+    // exists — it honestly reports a preview/blocked scan rather than hiding it.
+    this._reportButton = el('button', {
+      className: 'olv-analyse-dl is-primary',
+      text: 'Intelligence report (PDF)',
+    });
+    this._reportButton.title =
+      'Download a one-page terrain intelligence report: assessment, coverage, accuracy, recommended workflows and which products you can take away';
+    this._reportButton.addEventListener('click', () => void this._exportTerrainReport(this._reportButton));
+    row.append(this._reportButton);
+
     // Honesty caveat for the DEM export — the raster stays usable for partial /
     // preview data, but the user is told one line up front (the README carries
     // the full disclosure). Empty + hidden until _renderExportGate fills it.
@@ -1247,6 +1269,48 @@ export class AnalysePanel {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: DEM export failed.', err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  /**
+   * Build and download the one-click Terrain Intelligence Report (lazy pdf-lib).
+   * It assembles the on-screen verdicts, coverage, accuracy, workflows, warnings
+   * and available products into a sectioned PDF — NO new analysis — and stamps
+   * the unified provenance (so it matches every other export of this scan).
+   * Filename: `<basename>-terrain-report.pdf`.
+   */
+  private async _exportTerrainReport(btn: HTMLButtonElement): Promise<void> {
+    const r = this._result;
+    if (!r) return;
+    const label = btn.textContent ?? 'Intelligence report (PDF)';
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const { buildTerrainReportPdf } = await loadTerrainReportPdf();
+      const basename = this._cb.getExportBasename?.() ?? 'terrain';
+      // The renderer assembles the content from the SAME result the panel shows,
+      // stamping the unified provenance via these options — so the report's
+      // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
+      // from the GeoJSON / DXF / map sheet / DEM exports of this scan.
+      const bytes = await buildTerrainReportPdf(r, {
+        basename,
+        generatedAt: new Date(),
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
+      });
+      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${basename}-terrain-report.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: terrain report export failed.', err);
     } finally {
       btn.disabled = false;
       btn.textContent = label;
@@ -1642,6 +1706,9 @@ export class AnalysePanel {
     // a bare-earth surface to exist (covered DTM cells).
     const hasDtm = r.dtm.coverage.some((c) => c !== 0);
     this._demButton.disabled = !hasDtm;
+    // The Intelligence Report is gated the same way as the DEM — it only needs an
+    // analysis to summarise; it honestly reports a preview/blocked verdict.
+    this._reportButton.disabled = !hasDtm;
     this._demButton.title = hasDtm
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';

@@ -152,6 +152,16 @@ export const loadDemPackage = () => import('./terrain/export/demPackage');
 export const loadSpaceReportPdf = () => import('./render/measure/spaceReportPdf');
 
 /**
+ * Load the Terrain Intelligence Report PDF builder (also pulls in pdf-lib). Only
+ * reached when the user clicks "Intelligence report (PDF)" on the Analyse panel —
+ * routed here so the live source-transform never sees the literal and pdf-lib
+ * stays in its lazy chunk. The pure content builder
+ * ({@link buildTerrainReportContent}) has NO pdf-lib and is imported directly
+ * where needed. v0.4.3.
+ */
+export const loadTerrainReportPdf = () => import('./render/measure/terrainReportPdf');
+
+/**
  * Load the interior floor-plan compute + SVG renderer. Both are PURE (no pdf-lib,
  * no DOM), so they could ship in the shell, but they are routed here behind the
  * lazy boundary alongside the report PDF so a non-export session downloads
