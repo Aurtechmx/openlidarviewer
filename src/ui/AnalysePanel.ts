@@ -72,11 +72,16 @@ import {
 } from '../terrain/surface/hillshade';
 import { sampleTerrain } from '../terrain/contour/sampleTerrain';
 import { terrainAssessment } from '../terrain/contour/terrainAssessment';
+import type { SpaceKind } from '../terrain/scanShape';
+import type { ScanTypeOverride } from '../terrain/scanRoute';
+import { createScanTypeControl, type ScanTypeControl } from './scanTypeControl';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
   /** Run (or re-run) terrain analysis on the loaded scan. */
   onRun?: () => void;
+  /** The user forced a scan type via the "Treat as" override. */
+  onScanTypeChange?: (override: ScanTypeOverride) => void;
   /** Re-run the analysis at a chosen contour interval (metres). */
   onSelectInterval?: (intervalM: number) => void;
   /**
@@ -202,10 +207,16 @@ export class AnalysePanel {
    * panel both invoke it so a queued frame can't paint a removed canvas.
    */
   private _reliefRepaintCancel: (() => void) | null = null;
+  /** The "Treat as" override control — also reachable from the Object/Space
+   *  panel, wired through the host to the same per-session override state. */
+  private readonly _scanTypeControl: ScanTypeControl;
 
   constructor(callbacks: AnalysePanelCallbacks = {}) {
     this._cb = callbacks;
     this.element = el('section', { className: 'olv-analyse-panel' });
+    this._scanTypeControl = createScanTypeControl({
+      onChange: (o) => this._cb.onScanTypeChange?.(o),
+    });
 
     // Collapsible head (same pattern as the Measurements panel) so the
     // panel is an opt-in chip, not an always-open wall on the left edge.
@@ -296,6 +307,7 @@ export class AnalysePanel {
       this._status,
       this._resultsRegion,
       this._roadmap,
+      this._scanTypeControl.element,
       el('p', { className: 'olv-analyse-footer', text: NOT_SURVEY_GRADE }),
     );
     this._resultsRegion.style.display = 'none';
@@ -972,6 +984,12 @@ export class AnalysePanel {
   /** Whether the panel is currently shown (not display:none). */
   isVisible(): boolean {
     return this.element.style.display !== 'none';
+  }
+
+  /** Reflect the host's override + the effective route in the "Treat as"
+   *  control, so the terrain panel can also force Object / Interior / Auto. */
+  setScanType(override: ScanTypeOverride, effective: SpaceKind | null): void {
+    this._scanTypeControl.set(override, effective);
   }
 
   /**

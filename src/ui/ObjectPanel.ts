@@ -21,11 +21,15 @@ import {
   sqMetresToSqFeet,
   cubicMetresToCubicFeet,
 } from '../terrain/spaceMetrics';
-import type { ScanShape } from '../terrain/scanShape';
+import type { ScanShape, SpaceKind } from '../terrain/scanShape';
+import type { ScanTypeOverride } from '../terrain/scanRoute';
+import { createScanTypeControl, type ScanTypeControl } from './scanTypeControl';
 
 export interface ObjectPanelCallbacks {
   /** Reveal + run the terrain pipeline despite the non-terrain verdict. */
   onRunTerrainAnyway?: () => void;
+  /** The user forced a scan type via the "Treat as" override. */
+  onScanTypeChange?: (override: ScanTypeOverride) => void;
 }
 
 function el(
@@ -64,13 +68,28 @@ export class ObjectPanel {
   private readonly _cb: ObjectPanelCallbacks;
   private readonly _title: HTMLElement;
   private readonly _body: HTMLElement;
+  private readonly _scanTypeControl: ScanTypeControl;
+  // Current override + effective route, re-applied on every render (the body is
+  // rebuilt each showSpace/showObject) so the control never loses its state.
+  private _scanTypeOverride: ScanTypeOverride = 'auto';
+  private _scanTypeEffective: SpaceKind | null = null;
 
   constructor(cb: ObjectPanelCallbacks = {}) {
     this._cb = cb;
     this._title = el('div', { className: 'olv-mp-title', text: 'Object scan' });
     const head = el('div', { className: 'olv-panel-head' }, [this._title]);
     this._body = el('div', { className: 'olv-object-body' });
+    this._scanTypeControl = createScanTypeControl({
+      onChange: (o) => this._cb.onScanTypeChange?.(o),
+    });
     this.element = el('aside', { className: 'olv-object-panel olv-hidden' }, [head, this._body]);
+  }
+
+  /** Reflect the host's override + the effective route in the "Treat as" control. */
+  setScanType(override: ScanTypeOverride, effective: SpaceKind | null): void {
+    this._scanTypeOverride = override;
+    this._scanTypeEffective = effective;
+    this._scanTypeControl.set(override, effective);
   }
 
   setVisible(visible: boolean): void {
@@ -103,7 +122,16 @@ export class ObjectPanel {
     }
   }
 
+  /** The "Treat as" override row — placed near the run-anyway escape hatch so
+   *  fixing a misdetection is one obvious click. Re-applies the current state
+   *  because the body is rebuilt on every render. */
+  private _scanTypeRow(): void {
+    this._scanTypeControl.set(this._scanTypeOverride, this._scanTypeEffective);
+    this._body.append(this._scanTypeControl.element);
+  }
+
   private _runAnywayButton(): void {
+    this._scanTypeRow();
     const runBtn = el('button', {
       className: 'olv-object-run-anyway',
       text: 'Run terrain contours anyway',

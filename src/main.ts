@@ -48,6 +48,7 @@ import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
+import { resolveScanRoute, type ScanTypeOverride } from './terrain/scanRoute';
 import { objectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics } from './terrain/spaceMetrics';
 import { ExportPanel } from './ui/ExportPanel';
@@ -1521,6 +1522,7 @@ let lastCloudName = 'contours';
 // runner is constructed.
 const analysePanel = new AnalysePanel({
   onRun: () => void terrainRunner.run(),
+  onScanTypeChange: (override) => setScanTypeOverride(override),
   onSelectInterval: (m) => void terrainRunner.run(m),
   // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
   // the SAME cached terrain core the runner uses — never mutates the panel.
@@ -1613,7 +1615,9 @@ void viewerLoaded.then(() => {
   // has streamed in, re-classify and re-route (only if the verdict changes).
   // Debounced + growth-gated so a burst of node-ready events can't thrash.
   viewer.onStreamingNodeReady = () => {
-    if (scanRouteOverridden) return;
+    // A manual (non-auto) "Treat as" choice pins the routing exactly like the
+    // "Run terrain anyway" override — a late streaming node must not flip it.
+    if (scanRouteOverridden || scanTypeOverride !== 'auto') return;
     const resident = viewer.residentPointTotal();
     if (resident < lastRouteResident * SCAN_REROUTE_GROWTH) return;
     lastRouteResident = resident;
@@ -1630,14 +1634,12 @@ void viewerLoaded.then(() => {
 // pipeline if the shape detector misjudged the scan.
 const objectPanel = new ObjectPanel({
   onRunTerrainAnyway: () => {
-    // User forced terrain → pin the routing so streaming re-evaluation can't
-    // flip the panel back out from under them.
-    scanRouteOverridden = true;
-    objectPanel.setVisible(false);
-    analysePanel.setVisible(true);
-    dock.setAnalyseActive(true);
-    void terrainRunner.run();
+    // "Run terrain contours anyway" is the explicit, equivalent twin of the
+    // "Treat as: Terrain" override — route both through the same path so the
+    // control, the panels, and the streaming pin stay in sync.
+    setScanTypeOverride('terrain');
   },
+  onScanTypeChange: (override) => setScanTypeOverride(override),
 });
 
 // Terrain-analysis runner — extracted into `src/app/`. Constructed here, after
@@ -1684,6 +1686,25 @@ let scanRouteTimer: ReturnType<typeof setTimeout> | null = null;
 /** Re-route only after the resident cloud grows by this factor (cheap gate). */
 const SCAN_REROUTE_GROWTH = 1.4;
 
+// ── Manual scan-type override ────────────────────────────────────────────────
+// The safety net for a misdetection: the user can FORCE the route via the
+// "Treat as" control in either panel. A non-auto choice WINS over the detected
+// verdict and pins the routing like `scanRouteOverridden` so a streaming
+// re-evaluation can't flip it. Per-session, reset to 'auto' on every new scan.
+let scanTypeOverride: ScanTypeOverride = 'auto';
+
+/**
+ * Apply a manual "Treat as" choice and re-route immediately on the current
+ * geometry. A non-auto override wins (see `resolveScanRoute`) and stays pinned
+ * until the user picks 'auto' (restore detection) or a new scan resets it.
+ */
+function setScanTypeOverride(override: ScanTypeOverride): void {
+  scanTypeOverride = override;
+  // Force-apply over the current geometry — `initial=true` bypasses the
+  // verdict-change + override no-op guards so the choice takes effect at once.
+  applyScanRoute(true);
+}
+
 /**
  * Classify the currently-loaded/streamed geometry and route to the Object /
  * Space panel (non-terrain) or the Analyse panel (terrain). Passes the
@@ -1695,7 +1716,9 @@ const SCAN_REROUTE_GROWTH = 1.4;
  * changed, and is skipped once the user has overridden the routing.
  */
 function applyScanRoute(initial: boolean): void {
-  if (!initial && scanRouteOverridden) return;
+  // A non-auto manual override pins the routing exactly like `scanRouteOverridden`:
+  // a streaming re-evaluation must never flip a deliberate user choice.
+  if (!initial && (scanRouteOverridden || scanTypeOverride !== 'auto')) return;
   let shape: ReturnType<typeof classifyScanShape> | null = null;
   let gathered: ReturnType<typeof viewer.gatherTerrainPositions> = null;
   try {
@@ -1719,25 +1742,32 @@ function applyScanRoute(initial: boolean): void {
         `sampled=${gathered?.positions ? gathered.positions.length / 3 : 0} resident=${viewer.residentPointTotal()}`,
     );
   }
-  const verdict: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
+  // The DETECTED verdict, then the EFFECTIVE route once the manual override is
+  // resolved over it (`resolveScanRoute`): 'auto' defers to detection, any other
+  // choice wins. With no geometry yet there is nothing to force, so stay null.
+  const detected: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
+  const effective: SpaceKind | null =
+    detected !== null ? resolveScanRoute(detected, scanTypeOverride) : null;
   if (!initial) {
-    // Re-route only when the verdict genuinely changes — never thrash panels.
-    if (verdict === null || verdict === lastScanVerdict) return;
+    // Re-route only when the effective route genuinely changes — never thrash.
+    if (effective === null || effective === lastScanVerdict) return;
   }
-  lastScanVerdict = verdict;
+  lastScanVerdict = effective;
 
   let isNonTerrain = false;
-  if (shape && gathered && shape.nonTerrain) {
+  if (shape && gathered && effective !== null && effective !== 'terrain') {
     isNonTerrain = true;
     const activeCloud = activeId ? viewer.getCloud(activeId) : null;
     const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+    // Compute REAL metrics for the EFFECTIVE type — when forced, the report
+    // reflects what's actually there for that interpretation; nothing fabricated.
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
-      spaceKind: shape.spaceKind === 'interior' ? 'interior' : 'object',
+      spaceKind: effective === 'interior' ? 'interior' : 'object',
       hasRgb,
       sourcePointCount: gathered.totalPoints,
     });
-    if (shape.spaceKind === 'interior') {
+    if (effective === 'interior') {
       objectPanel.showSpace(space, shape);
     } else {
       objectPanel.showObject(objectMetrics(gathered.positions), space, shape);
@@ -1747,6 +1777,15 @@ function applyScanRoute(initial: boolean): void {
   analysePanel.setVisible(!isNonTerrain);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(!isNonTerrain);
+  // Keep BOTH panels' "Treat as" controls reflecting the current state, so the
+  // user can switch direction from whichever panel is showing.
+  objectPanel.setScanType(scanTypeOverride, effective);
+  analysePanel.setScanType(scanTypeOverride, effective);
+  // Forcing terrain on a non-terrain scan is the explicit "run anyway": surface
+  // the Analyse panel AND kick the pipeline, matching the old escape hatch.
+  if (!isNonTerrain && scanTypeOverride === 'terrain') {
+    void terrainRunner.run();
+  }
 }
 
 /**
@@ -1765,8 +1804,10 @@ function revealAnalysePanel(name: string): void {
   exportPanel.setVisible(true);
   exportPanel.refresh();
   // Fresh scan → clear any prior override + verdict so the open-time route is
-  // authoritative and streaming re-routes can fire again.
+  // authoritative and streaming re-routes can fire again. The manual "Treat as"
+  // override is per-session-per-scan: a new scan returns to auto-detection.
   scanRouteOverridden = false;
+  scanTypeOverride = 'auto';
   lastScanVerdict = null;
   lastRouteResident = viewer.residentPointTotal();
   applyScanRoute(true);
@@ -3912,6 +3953,7 @@ function resetToEmptyState(): void {
   if (scanRouteTimer != null) { clearTimeout(scanRouteTimer); scanRouteTimer = null; }
   lastScanVerdict = null;
   scanRouteOverridden = false;
+  scanTypeOverride = 'auto';
   lastRouteResident = 0;
   exportPanel.setVisible(false);
   sourceFileById.clear();
