@@ -1692,6 +1692,10 @@ const SCAN_REROUTE_GROWTH = 1.4;
 // verdict and pins the routing like `scanRouteOverridden` so a streaming
 // re-evaluation can't flip it. Per-session, reset to 'auto' on every new scan.
 let scanTypeOverride: ScanTypeOverride = 'auto';
+// One-shot guard: re-evaluate the scan type once the streaming cloud has fully
+// settled ("Streaming ready"), so a verdict decided on a sparse early frame is
+// corrected on representative geometry. Reset per scan.
+let streamingSettledRouted = false;
 
 /**
  * Apply a manual "Treat as" choice and re-route immediately on the current
@@ -1808,6 +1812,7 @@ function revealAnalysePanel(name: string): void {
   // override is per-session-per-scan: a new scan returns to auto-detection.
   scanRouteOverridden = false;
   scanTypeOverride = 'auto';
+  streamingSettledRouted = false;
   lastScanVerdict = null;
   lastRouteResident = viewer.residentPointTotal();
   applyScanRoute(true);
@@ -3817,6 +3822,14 @@ function startStreamingStatusPolling(): void {
       streamingPanel.setPhase('Refining visible detail…');
     } else {
       streamingPanel.setPhase('Streaming ready');
+      // First time the stream settles, re-evaluate the scan type on the now
+      // fully-resident cloud — a sparse early frame can misread a 360 / house
+      // as terrain or object. One-shot per scan; a manual "Treat as" override,
+      // a "run anyway" pin, or an unchanged verdict make this a no-op.
+      if (!streamingSettledRouted) {
+        streamingSettledRouted = true;
+        applyScanRoute(false);
+      }
     }
 
     // Benchmark sampling — only when collecting. The 250 ms cadence catches
@@ -3954,6 +3967,7 @@ function resetToEmptyState(): void {
   lastScanVerdict = null;
   scanRouteOverridden = false;
   scanTypeOverride = 'auto';
+  streamingSettledRouted = false;
   lastRouteResident = 0;
   exportPanel.setVisible(false);
   sourceFileById.clear();
