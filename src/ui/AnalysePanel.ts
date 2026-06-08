@@ -48,6 +48,7 @@ import {
   defaultContourShapeStyle,
   type ContourShapeStyle,
 } from '../terrain/contour/contourShapeStyle';
+import { buildExportProvenance } from '../terrain/export/exportProvenance';
 import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
@@ -1105,25 +1106,23 @@ export class AnalysePanel {
   }
 
   /**
-   * Resolve the feature model to serialize for a contour export at the panel's
-   * current shape style. Reuses the on-screen model when the style already
-   * matches (no recompute); otherwise regenerates from the cached core at the
-   * model's interval + the selected style, without touching the visible panel.
+   * Resolve the full analysis result to serialize for a contour export at the
+   * panel's current shape style. Reuses the on-screen result when the style
+   * already matches (no recompute); otherwise regenerates from the cached core at
+   * the model's interval + the selected style, without touching the visible
+   * panel. Returning the whole result (not just the model) lets the caller derive
+   * the unified export provenance from the SAME result it serialises.
    */
-  private async _modelForExport(): Promise<{
-    model: AnalyseContoursResult['model'];
-    labels: AnalyseContoursResult['labels'];
-  }> {
+  private async _resultForExport(): Promise<AnalyseContoursResult> {
     const r = this._result!;
     const style = this._contourStyle;
     if (style === r.model.contourStyle || !this._cb.buildResultForExport) {
-      return { model: r.model, labels: r.labels };
+      return r;
     }
-    const regenerated = await this._cb.buildResultForExport({
+    return this._cb.buildResultForExport({
       intervalM: r.model.intervalM,
       shapeStyle: style,
     });
-    return { model: regenerated.model, labels: regenerated.labels };
   }
 
   private _buildExportRow(): HTMLElement {
@@ -1148,9 +1147,18 @@ export class AnalysePanel {
           btn.textContent = '…';
           try {
             // Regenerate at the selected shape style (cache hit; reuses the
-            // on-screen model when the style already matches), then serialize.
-            const { model, labels } = await this._modelForExport();
-            triggerBrowserDownload(serializeContours(model, fmt, { basename, labels }));
+            // on-screen result when the style already matches), then serialize
+            // with the unified provenance derived from that SAME result.
+            const result = await this._resultForExport();
+            const provenance = buildExportProvenance(result, {
+              basename,
+              generatedAt: new Date(),
+              softwareVersion: __APP_VERSION__,
+              metricVersion: TERRAIN_METRIC_VERSION,
+            });
+            triggerBrowserDownload(
+              serializeContours(result.model, fmt, { basename, labels: result.labels, provenance }),
+            );
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error('OpenLiDARViewer: contour export failed.', err);
@@ -1485,10 +1493,20 @@ export class AnalysePanel {
     },
   ): Promise<void> {
     const { buildMapSheetPdf } = await loadMapSheetPdf();
+    // The unified provenance, derived from the SAME result the sheet plots, so
+    // the title block's CRS / datum / style / accuracy / readiness / date can't
+    // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
+    const provenance = buildExportProvenance(result, {
+      basename: this._cb.getExportBasename?.() ?? undefined,
+      generatedAt: opts.generatedAt,
+      softwareVersion: __APP_VERSION__,
+      metricVersion: TERRAIN_METRIC_VERSION,
+    });
     const bytes = await buildMapSheetPdf({
       model: result.model,
       labels: result.labels,
       worldOrigin: opts.worldOrigin,
+      provenance,
       crs: result.model.crs,
       verticalDatum: result.model.verticalDatum,
       accuracy: result.accuracyStandards,

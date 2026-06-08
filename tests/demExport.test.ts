@@ -131,6 +131,10 @@ describe('parseEpsg', () => {
 });
 
 describe('buildDemPackage', () => {
+  // A COMPLETE, full-coverage, export-ready result. buildDemPackage now derives
+  // the README's shared provenance via terrainAssessment(result), so the fixture
+  // carries the same fields a real analysis run produces (cellStatusTally,
+  // cellMetrics, qualityScore) — this is a fuller, not weaker, fixture.
   function fixtureResult(): AnalyseContoursResult {
     return {
       dtm: {
@@ -138,6 +142,7 @@ describe('buildDemPackage', () => {
         originH1: 10, originH2: 20, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703',
         coverageMode: 'full', meanConfidence: 80,
       },
+      intervalM: 1,
       surface: { canopy: { heightM: new Float32Array([0, 5, NaN, NaN]) } },
       accuracyStandards: {
         rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
@@ -145,9 +150,12 @@ describe('buildDemPackage', () => {
       },
       quality: {
         readiness: 'ready', exportReadiness: 'available',
-        crsKnown: true, datumKnown: true, reasons: [],
+        crsKnown: true, datumKnown: true, coverageMode: 'full', reasons: [], exportReasons: [],
       },
-      generationParams: { interpolation: 'geodesic', smoothing: true, despike: true },
+      qualityScore: { score: 85 },
+      cellMetrics: { meanDensity: 4.2, edgeRiskRatio: 0.02 },
+      cellStatusTally: { measured: 90, interpolated: 5, lowConfidence: 0, edgeRisk: 0, empty: 5, total: 100 },
+      generationParams: { interpolation: 'geodesic', contourStyle: 'smooth', smoothing: true, despike: true, aggregation: 'median' },
       warnings: [],
     } as unknown as AnalyseContoursResult;
   }
@@ -226,6 +234,11 @@ describe('buildDemPackage', () => {
     expect(readme).toMatch(/Quality gate/i);
     expect(readme).toContain('2026-06-05T00:00:00.000Z');
     expect(readme).toContain('v0.4.1');
+    // The unified provenance block carries the same verdicts every export shows.
+    expect(readme).toMatch(/Provenance/);
+    expect(readme).toMatch(/Surface quality\s+Good/);
+    expect(readme).toMatch(/Export readiness\s+Ready/);
+    expect(readme).toMatch(/not survey-grade/i);
     // A full + ready result must NOT carry the preliminary caveat.
     expect(readme).not.toMatch(/PRELIMINARY/);
   });

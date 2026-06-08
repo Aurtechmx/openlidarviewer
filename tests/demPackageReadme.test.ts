@@ -7,7 +7,13 @@ const ROWS = 2;
 const Z = new Float32Array([10, 20, 30, 40]);
 const COV = new Uint8Array([2, 2, 1, 0]);
 
-/** A 'full' coverage, export-ready analysis result with everything known. */
+/**
+ * A COMPLETE 'full' coverage, export-ready analysis result with everything
+ * known. buildDemReadme now derives its shared provenance via
+ * terrainAssessment(result), so the fixture carries the same fields a real run
+ * produces (cellStatusTally, cellMetrics, qualityScore) — a fuller, not weaker,
+ * fixture.
+ */
 function readyResult(): AnalyseContoursResult {
   return {
     dtm: {
@@ -15,6 +21,7 @@ function readyResult(): AnalyseContoursResult {
       originH1: 0, originH2: 0, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703',
       coverageMode: 'full', meanConfidence: 82,
     },
+    intervalM: 1,
     surface: { canopy: { heightM: new Float32Array([0, 5, NaN, NaN]) } },
     accuracyStandards: {
       rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
@@ -22,8 +29,11 @@ function readyResult(): AnalyseContoursResult {
     },
     quality: {
       readiness: 'ready', exportReadiness: 'available',
-      crsKnown: true, datumKnown: true, reasons: [],
+      crsKnown: true, datumKnown: true, coverageMode: 'full', reasons: [], exportReasons: [],
     },
+    qualityScore: { score: 85 },
+    cellMetrics: { meanDensity: 4.2, edgeRiskRatio: 0.02 },
+    cellStatusTally: { measured: 90, interpolated: 5, lowConfidence: 0, edgeRisk: 0, empty: 5, total: 100 },
     generationParams: { interpolation: 'geodesic', contourStyle: 'smooth', smoothing: true, despike: true, aggregation: 'median' },
     warnings: [],
   } as unknown as AnalyseContoursResult;
@@ -56,9 +66,11 @@ const OPTS: Omit<DemReadmeOptions, 'result'> = {
 describe('buildDemReadme — always-on metadata', () => {
   it('includes every required field for a full/ready result', () => {
     const txt = buildDemReadme({ result: readyResult(), ...OPTS });
-    // CRS + status
+    // CRS + status — now single-sourced from the unified provenance block, which
+    // states the CRS itself (an unknown CRS reads "not georeferenced"), so the
+    // README no longer needs a separate "(known)" annotation.
     expect(txt).toContain('EPSG:32610');
-    expect(txt).toMatch(/Horizontal CRS[\s\S]*known/i);
+    expect(txt).toMatch(/Horizontal CRS\s+EPSG:32610/);
     // Vertical datum + status
     expect(txt).toContain('EPSG:5703');
     // No-data value
@@ -72,13 +84,19 @@ describe('buildDemReadme — always-on metadata', () => {
     expect(txt).toContain('4000002');
     // Coverage mode
     expect(txt).toMatch(/Coverage mode\s+full/i);
-    // Quality-gate verdict + status
+    // Quality-gate section is retained for the per-axis reason lists; the
+    // unified VERDICTS now come from the shared provenance block, in the same
+    // user-facing vocabulary every export uses (Good / Ready) rather than the
+    // gate-internal tokens (ready / available). This is a superset, not a
+    // weakening — the README now agrees word-for-word with the other exports.
     expect(txt).toMatch(/Quality gate/i);
-    expect(txt).toContain('ready');
-    expect(txt).toContain('available');
+    expect(txt).toMatch(/Surface quality\s+Good/);
+    expect(txt).toMatch(/Export readiness\s+Ready/);
+    expect(txt).toMatch(/not survey-grade/i);
     // Generation parameters
     expect(txt).toMatch(/Interpolation\s+geodesic/i);
     expect(txt).toMatch(/Cell aggregation\s+median/i);
+    // Contour style is now single-sourced in the provenance block.
     expect(txt).toMatch(/Contour style\s+Smooth/i);
     expect(txt).toMatch(/Despik/i);
     // Generation date (ISO)

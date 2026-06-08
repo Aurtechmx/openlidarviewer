@@ -6,6 +6,18 @@
 import { describe, it, expect } from 'vitest';
 import { serializeContours } from '../src/terrain/contour/contourDownload';
 import type { ContourFeature, ContourFeatureModel } from '../src/terrain/contour/contourFeatureModel';
+import type { ExportProvenance } from '../src/terrain/export/exportProvenance';
+
+const PROV: ExportProvenance = {
+  software: 'OpenLiDARViewer', softwareVersion: '9.9.9', metricVersion: 'v0.4.1',
+  generated: '2026-06-05T00:00:00.000Z', source: 'site',
+  horizontalCrs: 'EPSG:32610', crsKnown: true, verticalDatum: 'EPSG:5703', datumKnown: true,
+  coverageMode: 'full', contourIntervalM: 1, contourStyle: 'smooth', contourStyleLabel: 'Smooth',
+  surfaceQuality: 'Good', exportReadiness: 'Ready', exportReason: '',
+  accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsQualityLevel: 'QL2' },
+  pointDensityPerM2: 4.2, measuredCells: 90, totalCells: 100, classScope: null, warnings: [],
+  notSurveyGrade: 'Fitness-for-use; not survey-grade unless validated against control.',
+};
 
 function model(): ContourFeatureModel {
   const features: ContourFeature[] = [
@@ -60,5 +72,23 @@ describe('serializeContours', () => {
 
     const dxf = serializeContours(m, 'dxf').content;
     expect(dxf).toMatch(/contour style: Semi-geometric/i);
+  });
+
+  it('threads the unified provenance into every format identically', () => {
+    const m = model();
+    const geo = JSON.parse(serializeContours(m, 'geojson', { provenance: PROV }).content) as {
+      metadata: { horizontalCrs: string; exportReadiness: string; softwareVersion: string };
+    };
+    expect(geo.metadata.horizontalCrs).toBe('EPSG:32610');
+    expect(geo.metadata.exportReadiness).toBe('Ready');
+    expect(geo.metadata.softwareVersion).toBe('9.9.9');
+
+    const svg = serializeContours(m, 'svg', { provenance: PROV }).content;
+    expect(svg).toMatch(/Horizontal CRS\s+EPSG:32610/);
+    expect(svg).toMatch(/Export readiness\s+Ready/);
+
+    const dxf = serializeContours(m, 'dxf', { provenance: PROV }).content;
+    expect(dxf).toMatch(/999\nHorizontal CRS\s+EPSG:32610/);
+    expect(dxf).toMatch(/999\nExport readiness\s+Ready/);
   });
 });

@@ -15,6 +15,7 @@ import type { ContourLabel } from './labelPlacement';
 import { geojsonString } from './geojsonContours';
 import { svgContours } from './svgContours';
 import { dxfContours } from './dxfContours';
+import type { ExportProvenance } from '../export/exportProvenance';
 
 /** Supported pure-data export formats. */
 export type ContourFormat = 'geojson' | 'svg' | 'dxf';
@@ -37,19 +38,24 @@ const MIME: Record<ContourFormat, string> = {
 export function serializeContours(
   model: ContourFeatureModel,
   format: ContourFormat,
-  opts: { basename?: string; labels?: ReadonlyArray<ContourLabel> } = {},
+  opts: {
+    basename?: string;
+    labels?: ReadonlyArray<ContourLabel>;
+    /** Unified provenance, stamped identically into whichever format is chosen. */
+    provenance?: ExportProvenance;
+  } = {},
 ): ContourFile {
   const basename = opts.basename ?? 'contours';
   let content: string;
   switch (format) {
     case 'geojson':
-      content = geojsonString(model);
+      content = geojsonString(model, true, opts.provenance);
       break;
     case 'svg':
-      content = svgContours(model, { labels: opts.labels });
+      content = svgContours(model, { labels: opts.labels, provenance: opts.provenance });
       break;
     case 'dxf':
-      content = dxfContours(model);
+      content = dxfContours(model, opts.provenance);
       break;
   }
   return { filename: `${basename}.${EXT[format]}`, mime: MIME[format], content };

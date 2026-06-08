@@ -20,6 +20,7 @@
 
 import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel';
 import { contourShapeStyleLabel } from './contourShapeStyle';
+import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
 
 /** Convert "EPSG:32610" → an OGC URN; pass through anything else. */
 function crsUrn(crs: string): string {
@@ -27,8 +28,19 @@ function crsUrn(crs: string): string {
   return m ? `urn:ogc:def:crs:EPSG::${m[1]}` : crs;
 }
 
-/** Build the GeoJSON object (foreign members included for provenance). */
-export function toGeoJSON(model: ContourFeatureModel): Record<string, unknown> {
+/**
+ * Build the GeoJSON object (foreign members included for provenance). When the
+ * unified {@link ExportProvenance} is supplied, its structured fields are merged
+ * into the top-level `metadata` member (the superset) WITHOUT clobbering the
+ * model-derived keys already there — so the existing `contourStyle`, `warnings`,
+ * `verticalDatum` etc. are preserved and the file gains the same provenance every
+ * other export carries (CRS, datum, export readiness, software + metric version,
+ * accuracy, generation date).
+ */
+export function toGeoJSON(
+  model: ContourFeatureModel,
+  provenance?: ExportProvenance,
+): Record<string, unknown> {
   const features = model.features.map((f) => ({
     type: 'Feature',
     properties: {
@@ -46,11 +58,8 @@ export function toGeoJSON(model: ContourFeatureModel): Record<string, unknown> {
     },
   }));
 
-  const obj: Record<string, unknown> = {
-    type: 'FeatureCollection',
-    name: 'contours',
-    // Foreign members carry honest provenance into the file itself.
-    metadata: {
+  // Foreign members carry honest provenance into the file itself.
+  const metadata: Record<string, unknown> = {
       intervalM: model.intervalM,
       verticalDatum: model.verticalDatum,
       coverageMode: model.coverageMode,
@@ -69,7 +78,23 @@ export function toGeoJSON(model: ContourFeatureModel): Record<string, unknown> {
         : null,
       warnings: model.warnings,
       notSurveyGrade: 'Not survey-grade unless validated against ground-truth control.',
-    },
+  };
+
+  // Merge the unified provenance as the metadata superset. Existing model-derived
+  // keys win (so nothing regresses — contourStyle, warnings, verticalDatum stay
+  // exactly as before); the provenance only ADDS the fields the file lacked
+  // (software + version, CRS, export readiness, accuracy, generation date …).
+  if (provenance) {
+    const pj = provenanceJson(provenance);
+    for (const [k, v] of Object.entries(pj)) {
+      if (!(k in metadata)) metadata[k] = v;
+    }
+  }
+
+  const obj: Record<string, unknown> = {
+    type: 'FeatureCollection',
+    name: 'contours',
+    metadata,
     features,
   };
   if (model.crs) {
@@ -79,6 +104,10 @@ export function toGeoJSON(model: ContourFeatureModel): Record<string, unknown> {
 }
 
 /** Serialise the model to a GeoJSON string. */
-export function geojsonString(model: ContourFeatureModel, pretty = true): string {
-  return JSON.stringify(toGeoJSON(model), null, pretty ? 2 : 0);
+export function geojsonString(
+  model: ContourFeatureModel,
+  pretty = true,
+  provenance?: ExportProvenance,
+): string {
+  return JSON.stringify(toGeoJSON(model, provenance), null, pretty ? 2 : 0);
 }
