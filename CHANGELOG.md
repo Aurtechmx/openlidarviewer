@@ -28,6 +28,17 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Terrain density and slope now respect the scan's real horizontal units. On a
+  foot-based projected coordinate system, ground density is reported as genuine
+  points per square metre (previously it was measured in square feet but
+  labelled per square metre, understating density by ~10.8×) and the slope used
+  for surface-quality checks is computed over a metre run. Metric (metre) data
+  is unchanged. This matches the existing handling of the vertical axis.
+- A surface rated "Limited" now states a Limited reason instead of borrowing the
+  preview-tier wording, and the "% of the surface is interpolated" figure is
+  consistent everywhere it appears — it always means the share of the captured
+  surface that is interpolated rather than measured, no longer diluted by empty
+  cells in some views.
 - Export honesty wording is tighter: a georeferencing gap (unknown CRS / datum)
   is only listed as an export reason when it actually holds the export back
   below the surface quality, and when a surface is both below grade AND not

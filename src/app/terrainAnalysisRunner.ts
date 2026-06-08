@@ -65,6 +65,7 @@ function deriveCoreParams(
     crs: crsName,
     isGeographic: cur?.kind === 'geographic',
     verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
+    horizontalUnitToMetres: cur?.linearUnitToMetres ?? 1,
     verticalDatum: cur?.verticalDatum ?? null,
     classification,
   };

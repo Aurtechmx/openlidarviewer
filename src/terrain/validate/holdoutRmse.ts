@@ -79,6 +79,11 @@ export interface HoldoutParams {
    * regardless of the source Z unit. Default 1.
    */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Metres per source horizontal unit (~0.3048 for feet) for a projected frame,
+   * so the slope's run is in metres. Ignored when `isGeographic`. Default 1.
+   */
+  readonly horizontalUnitToMetres?: number;
 }
 
 /** Small, fast, deterministic PRNG (mulberry32). */
@@ -182,7 +187,12 @@ export function holdoutValidateDtm(
       : 1;
   // Local slope field for slope-band stratification of the residuals; convert
   // the cell to metres for a geographic frame so the bands aren't all "steep".
-  const slopeField = hornSlope(dtm.z, cols, rows, horizontalCellMetres(cellSizeM, params.isGeographic));
+  const slopeField = hornSlope(
+    dtm.z,
+    cols,
+    rows,
+    horizontalCellMetres(cellSizeM, params.isGeographic, params.horizontalUnitToMetres),
+  );
 
   // Residuals at held-out points.
   const allAbs: number[] = [];

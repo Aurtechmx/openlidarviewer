@@ -12,8 +12,19 @@ export const METRES_PER_DEGREE = 111_320;
 
 /**
  * Horizontal cell size in metres. Converts a degree-denominated cell to metres
- * when the frame is geographic; otherwise returns the cell size unchanged.
+ * when the frame is geographic; for a projected frame it scales by
+ * `horizontalUnitToMetres` (1 for metre data, ~0.3048 for US/international feet)
+ * so slope/roughness derivatives and cell areas are correct for feet-based CRSs.
+ * Default 1 leaves metric projected data unchanged.
  */
-export function horizontalCellMetres(cellSizeM: number, isGeographic?: boolean): number {
-  return isGeographic ? cellSizeM * METRES_PER_DEGREE : cellSizeM;
+export function horizontalCellMetres(
+  cellSizeM: number,
+  isGeographic?: boolean,
+  horizontalUnitToMetres = 1,
+): number {
+  const scale =
+    Number.isFinite(horizontalUnitToMetres) && horizontalUnitToMetres > 0
+      ? horizontalUnitToMetres
+      : 1;
+  return isGeographic ? cellSizeM * METRES_PER_DEGREE : cellSizeM * scale;
 }

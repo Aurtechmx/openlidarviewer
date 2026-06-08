@@ -44,6 +44,13 @@ export interface CellMetricsParams {
   readonly completenessRadius?: number;
   /** Edge-distance (cells) at/below which a measured cell counts as edge-risk. Default 2. */
   readonly edgeThresholdCells?: number;
+  /**
+   * Metres per source horizontal unit, so point densities read as genuine
+   * pts/m² for feet-based (or geographic) frames rather than pts/(source unit)².
+   * 1 for metre data, ~0.3048 for feet; for a geographic frame the caller passes
+   * the metres-per-degree scale. Default 1 (metric projected — unchanged).
+   */
+  readonly horizontalUnitToMetres?: number;
 }
 
 const MEASURED = 2;
@@ -57,7 +64,16 @@ export function computeCellMetrics(
   const n = cols * rows;
   const radius = Math.max(1, Math.floor(params.completenessRadius ?? 1));
   const edgeThreshold = Math.max(1, params.edgeThresholdCells ?? 2);
-  const cellArea = cellSizeM > 0 ? cellSizeM * cellSizeM : 1;
+  // Cell area in REAL metres² so densities are pts/m². For metre data the scale
+  // is 1; for feet (~0.3048) or a geographic frame (metres-per-degree) the
+  // caller supplies the scale, otherwise a foot grid would report ~10.8× too few
+  // points per "m²" by measuring area in source units².
+  const mpu =
+    Number.isFinite(params.horizontalUnitToMetres) && (params.horizontalUnitToMetres as number) > 0
+      ? (params.horizontalUnitToMetres as number)
+      : 1;
+  const cellSizeMetres = cellSizeM * mpu;
+  const cellArea = cellSizeMetres > 0 ? cellSizeMetres * cellSizeMetres : 1;
 
   const pointDensity = new Float32Array(n);
   const localCompleteness = new Float32Array(n);

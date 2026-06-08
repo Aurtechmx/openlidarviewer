@@ -148,6 +148,12 @@ export interface CellConfidenceParams {
    */
   readonly isGeographic?: boolean;
   /**
+   * Metres per source horizontal unit (~0.3048 for feet) for a projected frame,
+   * so the roughness slope's run is in metres. Ignored when `isGeographic`
+   * (metres-per-degree is used instead). Default 1.
+   */
+  readonly horizontalUnitToMetres?: number;
+  /**
    * Void interpolation method. `'geodesic'` measures distance along the
    * surface (won't fill a valley void from across a ridge); `'idw'` is the
    * plain Euclidean inverse-distance blend. Default `'idw'`.
@@ -244,7 +250,12 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   // drives the interpolation roughness penalty. (v0.4.0 — was a crude
   // max-neighbour difference.) For a geographic frame the cell is in degrees,
   // so convert it to metres or every cell reads as near-vertical.
-  const slope = hornSlope(z, cols, rows, horizontalCellMetres(cellSizeM, params.isGeographic));
+  const slope = hornSlope(
+    z,
+    cols,
+    rows,
+    horizontalCellMetres(cellSizeM, params.isGeographic, params.horizontalUnitToMetres),
+  );
 
   const confidence = new Float32Array(nCells);
   const coverage = new Uint8Array(nCells);
