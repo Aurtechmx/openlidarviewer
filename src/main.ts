@@ -49,8 +49,9 @@ import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
 import { resolveScanRoute, type ScanTypeOverride } from './terrain/scanRoute';
-import { objectMetrics } from './terrain/objectMetrics';
-import { spaceMetrics } from './terrain/spaceMetrics';
+import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
+import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
+import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
@@ -121,6 +122,8 @@ import {
   loadInstrumentedRangeSource,
   loadViewer,
   loadBatchConverter,
+  loadSpaceReportPdf,
+  loadFloorPlan,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -1629,6 +1632,32 @@ void viewerLoaded.then(() => {
   };
 });
 
+// The last non-terrain analysis the ObjectPanel rendered, captured so the panel's
+// export buttons (Report PDF / Floor plan) can build their deliverable from the
+// SAME positions + metrics + unit factor that produced the on-screen numbers —
+// nothing recomputed differently, nothing fabricated. Null while terrain / empty.
+interface SpaceExportContext {
+  readonly positions: Float32Array;
+  readonly space: SpaceMetrics;
+  readonly object: ObjectMetrics | null;
+  readonly spaceKind: 'interior' | 'object';
+  readonly unitToMetres: number;
+  readonly upAxis: SpaceMetrics['up'];
+  readonly basename: string;
+}
+let lastSpaceExport: SpaceExportContext | null = null;
+
+/** Download bytes as a file (Blob → anchor click). */
+function downloadFileBytes(filename: string, bytes: Uint8Array, mime: string): void {
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
 // pipeline if the shape detector misjudged the scan.
@@ -1640,6 +1669,47 @@ const objectPanel = new ObjectPanel({
     setScanTypeOverride('terrain');
   },
   onScanTypeChange: (override) => setScanTypeOverride(override),
+  // Build + download the one-page Space / Object report (lazy pdf-lib). For an
+  // interior scan, the density-derived floor-plan sketch is embedded too. The
+  // small dedicated provenance is built inside buildSpaceReportPdf from these
+  // exact inputs, so the PDF can never disagree with the panel.
+  onExportReport: async () => {
+    const ctx = lastSpaceExport;
+    if (!ctx) return;
+    const { buildSpaceReportPdf } = await loadSpaceReportPdf();
+    let floorPlan = null;
+    if (ctx.spaceKind === 'interior') {
+      const { computeFloorPlan } = await loadFloorPlan();
+      floorPlan = computeFloorPlan(ctx.positions, {
+        upAxis: ctx.upAxis,
+        unitToMetres: ctx.unitToMetres,
+      });
+    }
+    const bytes = await buildSpaceReportPdf({
+      space: ctx.space,
+      object: ctx.object,
+      name: ctx.basename,
+      softwareVersion: __APP_VERSION__,
+      metricVersion: TERRAIN_METRIC_VERSION,
+      generatedAt: new Date(),
+      unitToMetres: ctx.unitToMetres,
+      floorPlan,
+    });
+    downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf');
+  },
+  // Build + download the interior-only floor-plan sketch as a standalone SVG.
+  // Clearly labelled approximate by the renderer itself.
+  onExportFloorPlan: async () => {
+    const ctx = lastSpaceExport;
+    if (!ctx || ctx.spaceKind !== 'interior') return;
+    const { computeFloorPlan, floorPlanSvg } = await loadFloorPlan();
+    const plan = computeFloorPlan(ctx.positions, {
+      upAxis: ctx.upAxis,
+      unitToMetres: ctx.unitToMetres,
+    });
+    const svg = floorPlanSvg(plan, { title: ctx.basename });
+    downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');
+  },
 });
 
 // Terrain-analysis runner — extracted into `src/app/`. Constructed here, after
@@ -1672,6 +1742,21 @@ const exportPanel = new ExportPanel({
     return decodeFull(await f.arrayBuffer(), f.name);
   },
 });
+
+/** True when the resolved CRS is a real-world frame (projected / geographic). */
+function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
+  return resolved != null && (resolved.kind === 'projected' || resolved.kind === 'geographic');
+}
+
+// Drive the Export panel's Coordinate-System auto-collapse from the CRS service:
+// an ungeoreferenced (local / unknown) scan has no real-world CRS to keep /
+// assign / reproject, so the step collapses to a one-line note. A georeferenced
+// scan behaves exactly as before. Fires on every resolve / override change, plus
+// once here to seed the initial (no-scan ⇒ collapsed) state.
+crsService.subscribe((resolved) => {
+  exportPanel.setCrsKnown(crsIsKnown(resolved));
+});
+exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
 // ── Scan-type routing state ─────────────────────────────────────────────────
 // `revealAnalysePanel` runs once at open, when a streaming cloud may have only
@@ -1777,12 +1862,27 @@ function applyScanRoute(initial: boolean): void {
       hasRgb,
       sourcePointCount: gathered.totalPoints,
     });
-    if (effective === 'interior') {
+    const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
+    const object = spaceKind === 'object' ? objectMetrics(gathered.positions) : null;
+    if (spaceKind === 'interior') {
       objectPanel.showSpace(space, shape);
     } else {
-      objectPanel.showObject(objectMetrics(gathered.positions), space, shape);
+      objectPanel.showObject(object, space, shape);
     }
+    // Cache the EXACT inputs behind the on-screen report so the panel's export
+    // buttons (Report PDF / Floor plan) build from the same positions + metrics +
+    // unit factor — copied so a later streaming buffer reuse can't corrupt it.
+    lastSpaceExport = {
+      positions: Float32Array.from(gathered.positions),
+      space,
+      object,
+      spaceKind,
+      unitToMetres,
+      upAxis: shape.up,
+      basename: lastCloudName || 'scan',
+    };
   }
+  if (!isNonTerrain) lastSpaceExport = null;
   objectPanel.setVisible(isNonTerrain);
   analysePanel.setVisible(!isNonTerrain);
   dock.setAnalyseEnabled(true);
