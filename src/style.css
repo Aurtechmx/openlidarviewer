@@ -4939,25 +4939,41 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 /* Manual scan-type override ("Treat as") — the safety net for a misdetection.
  * Reused verbatim by the Object/Space panel and the terrain Analyse panel; the
  * <select> mirrors the restrained Report-PDF picker so it stays quiet. */
+/* "Treat scan as" — a VISIBLE segmented selector (Terrain·Object·Interior·Auto)
+   instead of a buried dropdown, so correcting a misdetected scan is one click. */
 .olv-scan-type {
-  display: flex; align-items: center; gap: var(--space-sm);
+  display: flex; flex-direction: column; gap: var(--space-2xs);
   margin-top: var(--space-sm); font-size: var(--text-xs);
 }
+.olv-scan-type-head {
+  display: flex; align-items: baseline; gap: var(--space-sm);
+}
 .olv-scan-type-label {
-  display: flex; align-items: center; gap: var(--space-sm);
-  color: var(--text-dim); white-space: nowrap;
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-faint); white-space: nowrap;
 }
-.olv-scan-type-select {
-  font: inherit; font-size: var(--text-xs); color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-sm);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-standard);
+.olv-scan-type-note { font-size: var(--text-2xs); color: var(--accent); }
+/* Segmented button group. */
+.olv-scan-type-seg {
+  display: flex; gap: 0;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  overflow: hidden;
 }
-.olv-scan-type-select:hover:not(:disabled) { border-color: var(--accent); }
-.olv-scan-type-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.olv-scan-type-note { font-size: var(--text-2xs); color: var(--text-faint); }
+.olv-scan-type-opt {
+  flex: 1; min-width: 0;
+  font: inherit; font-size: var(--text-2xs); font-weight: 500;
+  color: var(--text-dim); background: rgba(255, 255, 255, 0.03);
+  border: none; border-right: 0.5px solid var(--hairline);
+  padding: var(--space-xs) var(--space-2xs); cursor: pointer; white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
+}
+.olv-scan-type-opt:last-child { border-right: none; }
+.olv-scan-type-opt:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.olv-scan-type-opt.is-active {
+  color: var(--accent); background: var(--accent-soft); font-weight: 600;
+}
+.olv-scan-type-opt:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
 
 /* ui-typography: tabular figures so numbers align in the data-heavy panels. */
 .olv-analyse-panel, .olv-object-panel, .olv-measure-panel { font-variant-numeric: tabular-nums; }
