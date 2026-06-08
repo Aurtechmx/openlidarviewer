@@ -155,6 +155,47 @@ describe('spaceMetrics — storeys & units & objects', () => {
     expect(metresToFeet(h)).toBeLessThan(10.5);
   });
 
+  it('a single tall room is one storey, not two (a ceiling is not a second floor)', () => {
+    // One enclosed room 0 → 4 m. The ceiling is a strong height peak, but it is
+    // NOT a floor: there is no room (point mass) above it, and no real
+    // floor-to-floor gap. Storey detection must read 1, never 2.
+    const m = spaceMetrics(room(8, 8, 4, 0.3), { upAxis: 'z', spaceKind: 'interior' });
+    expect(m.storyCount).toBe(1);
+  });
+
+  it('still detects the floor in a cluttered room (furniture mass above the floor band)', () => {
+    // A room whose floor is partly occluded by clutter: the bare floor plane is
+    // present, but a slab of "furniture" points sits 0.4–0.9 m above it across
+    // much of the footprint, so a naive band-coverage test (does each cell have a
+    // return near the floor?) is depressed. The density-weighted height peak still
+    // finds the floor, so floorPresent stays true and a ceiling height is read.
+    const t: Array<[number, number, number]> = [];
+    const W = 12, D = 12, H = 4, step = 0.5;
+    // Floor + ceiling, but the central footprint's floor is OCCLUDED — no bare
+    // floor return there, only clutter sitting 0.4–0.9 m up. Ceiling stays full.
+    const central = (x: number, y: number): boolean => x >= 2 && x <= W - 2 && y >= 2 && y <= D - 2;
+    for (let x = 0; x <= W; x += step)
+      for (let y = 0; y <= D; y += step) {
+        if (!central(x, y)) t.push([x, y, 0]); // floor only at the perimeter ring
+        t.push([x, y, H]); // ceiling everywhere
+      }
+    for (let z = 0; z <= H; z += step)
+      for (let x = 0; x <= W; x += step) { t.push([x, 0, z]); t.push([x, D, z]); }
+    for (let z = 0; z <= H; z += step)
+      for (let y = 0; y <= D; y += step) { t.push([0, y, z]); t.push([W, y, z]); }
+    // Clutter: a dense low slab over the central footprint, 0.4–0.9 m up — this
+    // is the lowest return in those cells, so a raw band test misses the floor.
+    for (let x = 2; x <= W - 2; x += step)
+      for (let y = 2; y <= D - 2; y += step)
+        for (let z = 0.4; z <= 0.9; z += 0.25) t.push([x, y, z]);
+    const m = spaceMetrics(pts(t), { upAxis: 'z', spaceKind: 'interior' });
+    expect(m.planes.floorPresent).toBe(true);
+    expect(m.ceilingHeightM).not.toBeNull();
+    expect(m.ceilingHeightM as number).toBeGreaterThan(3.4);
+    expect(m.ceilingHeightM as number).toBeLessThan(4.6);
+    expect(m.storyCount).toBe(1);
+  });
+
   it('open object → no ceiling height, envelope-volume fallback', () => {
     const m = spaceMetrics(dome(), { upAxis: 'z', spaceKind: 'object' });
     expect(m.ceilingHeightM).toBeNull();
