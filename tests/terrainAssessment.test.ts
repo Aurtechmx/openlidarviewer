@@ -187,6 +187,31 @@ describe('terrainAssessment', () => {
     expect(a.status).not.toBe('Good');
   });
 
+  it('a Limited surface does not borrow the gate’s "Preview only" wording', () => {
+    // Regression: a real project showed "Limited · 49/100" with the reason
+    // "Preview only: 46% of cells are interpolated." — the Limited headline must
+    // not describe itself as "preview only".
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        reasons: ['Preview only: 46% of cells are interpolated.'],
+        interpolatedFraction: 0.46,
+        score: 30, // below LIMITED_SCORE_FLOOR -> Limited
+        crs: null,
+        verticalDatum: null,
+      }),
+    );
+    expect(a.status).toBe('Limited');
+    expect(a.reason).not.toMatch(/preview only/i);
+    expect(a.reason).toMatch(/insufficient/i);
+    expect(a.reason).toMatch(/46% of the surface is interpolated/);
+    // Export reason names both the surface limitation and the georef gaps, with
+    // a clean separator (no awkward "...grade and CRS... and datum...").
+    expect(a.exportReadiness).toBe('Preview');
+    expect(a.exportReason).toContain('below export grade;');
+    expect(a.exportReason).not.toMatch(/grade and/i);
+  });
+
   it('makes resident-only coverage visible and never reads as Good', () => {
     const a = terrainAssessment(fixture({ coverageMode: 'resident-only', score: 90 }));
     expect(a.status).not.toBe('Good');

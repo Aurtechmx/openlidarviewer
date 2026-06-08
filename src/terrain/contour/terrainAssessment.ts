@@ -300,13 +300,25 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     reason = `${pctStr(1 - interpFrac)} measured ground — the surface passes the quality gate.`;
   } else {
     // Preview / Limited: surface reason only (CRS/datum live on export, below).
-    // Prefer the gate's own words, else name the strongest SURFACE cap.
     const caps: string[] = [];
     if (coverageMode === 'resident-only') caps.push('only resident streaming nodes were walked');
     else if (coverageMode === 'sampled') caps.push('the cloud was sampled, not fully walked');
     if (interpFrac > HIGH_INTERP_FRACTION) caps.push(`${pctStr(interpFrac)} of the surface is interpolated`);
+    if (emptyFrac > HIGH_EMPTY_FRACTION) caps.push(`${pctStr(emptyFrac)} of the grid has no data`);
+    if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of cells are a long interpolation from real returns`);
     if (density < LOW_DENSITY_PER_M2) caps.push('ground returns are sparse');
-    reason = gateReason ?? (caps.length > 0 ? capitalise(joinReasons(caps)) + '.' : 'Usable for inspection, not for final terrain products.');
+    if (status === 'Limited') {
+      // The surface was downgraded BELOW the gate's preview tier, so do NOT
+      // reuse the gate's "Preview only: …" wording — it would contradict the
+      // Limited headline. State the Limited framing from the strongest caps.
+      reason =
+        caps.length > 0
+          ? `Insufficient quality for reliable terrain products — ${joinReasons(caps)}.`
+          : 'Insufficient data quality for reliable terrain products.';
+    } else {
+      // Preview: the gate's own "Preview only: …" wording matches this tier.
+      reason = gateReason ?? (caps.length > 0 ? capitalise(joinReasons(caps)) + '.' : 'Usable for inspection, not for final terrain products.');
+    }
   }
 
   // ── EXPORT READINESS (surface verdict gated by georeferencing) ────────
@@ -331,7 +343,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
       // BOTH hold export back: name the surface limitation AND the georef gap,
       // as one readable sentence. Naming only the georef gap would wrongly imply
       // that supplying a CRS/datum alone makes the surface exportable.
-      exportReason = `surface quality is below export grade and ${joinReasons(georefGaps)} — validate before hand-off`;
+      exportReason = `surface quality is below export grade; ${joinReasons(georefGaps)} — validate before hand-off`;
     } else if (georefGaps.length > 0) {
       // Surface is Good — georeferencing is the only reason export is held back.
       exportReason = joinReasons(georefGaps);
