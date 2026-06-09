@@ -366,6 +366,37 @@ describe('getOrComputeCoreAsync — cache + async path', () => {
     expect(a).toBe(b);
   });
 
+  it('a clear() during an in-flight compute does not re-seed the cache', async () => {
+    const pos = hillScene();
+    let calls = 0;
+    let release!: (c: TerrainCore) => void;
+    const compute = (): Promise<TerrainCore> => {
+      calls++;
+      return new Promise<TerrainCore>((res) => {
+        release = res;
+      });
+    };
+    // Miss starts a compute; while it is in flight the scan is closed → clear().
+    const inflight = getOrComputeCoreAsync(pos, PARAMS, compute);
+    clearTerrainCoreCache();
+    // The now-superseded compute finally resolves.
+    release({ __tag: 'stale' } as unknown as TerrainCore);
+    const stale = await inflight;
+    // The original caller still receives its value …
+    expect((stale as unknown as { __tag: string }).__tag).toBe('stale');
+    // … but it must NOT have been cached: an identical later request recomputes
+    // instead of being served the resurrected stale core. (Without the epoch
+    // guard the stale core would be cached and this call would hit it.)
+    let recomputed = false;
+    const fresh = await getOrComputeCoreAsync(pos, PARAMS, () => {
+      recomputed = true;
+      return Promise.resolve({ __tag: 'fresh' } as unknown as TerrainCore);
+    });
+    expect(recomputed).toBe(true);
+    expect((fresh as unknown as { __tag: string }).__tag).toBe('fresh');
+    expect(calls).toBe(1);
+  });
+
   it('integrates with computeTerrainCoreAsync fallback through the cache', async () => {
     const pos = hillScene();
     const core = await getOrComputeCoreAsync(pos, PARAMS, (input, params) =>

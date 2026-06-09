@@ -162,7 +162,11 @@ export async function computeTerrainCoreAsync(
     // working, on the main thread, with no signal). Announce it unconditionally
     // BEFORE falling back so "off-thread success" can't be mistaken for "silent
     // main-thread fallback".
-    console.warn('[terrain] worker analysis failed; fell back to main thread:', err);
+    // Include the point count: the fallback runs computeTerrainCore SYNCHRONOUSLY
+    // on the main thread, so a large n here is the signal for a UI stall — the
+    // one diagnostic a developer needs to tell "worker glitch on a small scan"
+    // from "main-thread freeze on a big one".
+    console.warn(`[terrain] worker analysis failed; fell back to main thread (${n} pts):`, err);
     // SAFE main-thread fallback. The compute is synchronous; re-check the
     // signal first so a cancelled run does no work.
     if (signal?.aborted) {

@@ -10,6 +10,7 @@ import {
 } from '../src/terrain/quality/dtmCellStatus';
 import {
   evaluateDtmQuality,
+  DTM_QUALITY_THRESHOLDS as T,
   type DtmQualityInput,
 } from '../src/terrain/quality/dtmQualityGate';
 import { recommendGrid } from '../src/terrain/quality/recommendGrid';
@@ -251,5 +252,76 @@ describe('recommendGrid', () => {
   it('coarsens the grid when the extent would blow the memory budget', () => {
     const r = recommendGrid({ pointCount: 10_000_000, widthM: 5000, depthM: 5000, reliefM: 100, memoryBudgetCells: 1_000_000 });
     expect((5000 / r.cellSizeM) * (5000 / r.cellSizeM)).toBeLessThanOrEqual(1_000_000);
+  });
+});
+
+// ── Calibration pins ────────────────────────────────────────────────────────
+// Each test sits ONE metric exactly on its documented threshold and one step
+// past it, holding the others green, so the Good/Preview/Limited boundaries are
+// proven against ground truth rather than assumed — and a change to a constant
+// in DTM_QUALITY_THRESHOLDS surfaces here as a failing pin instead of silently
+// shifting every verdict. The constant is asserted alongside the behaviour so
+// the two cannot drift apart.
+describe('evaluateDtmQuality — threshold boundaries', () => {
+  it('blocks just below the measured-of-covered floor, not at it', () => {
+    expect(T.blockMeasuredOfCovered).toBe(0.15);
+    // measuredOfCovered = measured / (measured + interpolated); empty excluded.
+    const below = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 14, interpolated: 86, total: 100 }) }), // 0.14
+    );
+    expect(below.readiness).toBe('blocked');
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 15, interpolated: 85, total: 100 }) }), // 0.15
+    );
+    expect(at.readiness).not.toBe('blocked'); // exactly on the floor is NOT blocked
+    expect(at.readiness).toBe('previewOnly'); // still below the ready bar
+  });
+
+  it('is ready at the measured-of-covered ready bar, preview just below', () => {
+    expect(T.readyMeasuredOfCovered).toBe(0.6);
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 60, interpolated: 40, total: 100 }) }), // 0.60
+    );
+    expect(at.readiness).toBe('ready');
+    const below = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 59, interpolated: 41, total: 100 }) }), // 0.59
+    );
+    expect(below.readiness).toBe('previewOnly');
+    expect(below.reasons.join(' ')).toMatch(/interpolated/i);
+  });
+
+  it('is ready at the empty-ratio ceiling, preview just over', () => {
+    expect(T.readyMaxEmptyRatio).toBe(0.4);
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 60, empty: 40, total: 100 }) }), // 0.40
+    );
+    expect(at.readiness).toBe('ready');
+    const over = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 59, empty: 41, total: 100 }) }), // 0.41
+    );
+    expect(over.readiness).toBe('previewOnly');
+    expect(over.reasons.join(' ')).toMatch(/no data/i);
+  });
+
+  it('is ready at the edge-risk ceiling, preview just over', () => {
+    expect(T.readyMaxEdgeRiskRatio).toBe(0.15);
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 85, edgeRisk: 15, total: 100 }) }), // 0.15
+    );
+    expect(at.readiness).toBe('ready');
+    const over = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 84, edgeRisk: 16, total: 100 }) }), // 0.16
+    );
+    expect(over.readiness).toBe('previewOnly');
+    expect(over.reasons.join(' ')).toMatch(/long interpolation/i);
+  });
+
+  it('is ready at the mean-confidence floor, preview just below', () => {
+    expect(T.readyMinMeanConfidence).toBe(55);
+    const at = evaluateDtmQuality(baseInput({ meanCellConfidence: 55 }));
+    expect(at.readiness).toBe('ready');
+    const below = evaluateDtmQuality(baseInput({ meanCellConfidence: 54 }));
+    expect(below.readiness).toBe('previewOnly');
+    expect(below.reasons.join(' ')).toMatch(/confidence/i);
   });
 });

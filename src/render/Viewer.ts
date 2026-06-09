@@ -2294,6 +2294,15 @@ export class Viewer {
    * space. Returns the change summary. No-op when the cloud doesn't
    * carry classification data or the polygon is under-defined.
    */
+  /**
+   * Edit per-point classification in place inside a polygon. NOTE for whoever
+   * wires this to a UI tool: an in-place class edit changes the bare-earth
+   * surface, but the terrain-core cache keys classification by a SAMPLED hash —
+   * a small edit can miss every sample and serve a stale core on the next
+   * Analyse. The wiring MUST call `clearTerrainCoreCache()` (or the runner's
+   * reset) after a successful edit / undo so the next analysis recomputes.
+   * There is no live caller yet, so this is a precondition, not a current bug.
+   */
   reclassifyInPolygon(
     id: string,
     polygon: ReadonlyArray<[number, number, number]>,
