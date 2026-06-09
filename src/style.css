@@ -428,7 +428,17 @@ button:disabled { cursor: not-allowed; }
   position: absolute; top: 0; left: 0; right: 0;
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--space-2xl) var(--space-3xl);
+  /* The empty-state backdrop (.olv-empty) is a full-viewport, pointer-
+     capturing layer that appears later in the DOM, so without an explicit
+     stack it sits ABOVE this header and swallows clicks to the theme toggle
+     and links before a scan loads. Lift the header above that backdrop, but
+     keep it below the functional panels (z 10+). The bar itself is made
+     click-through so its empty middle never steals clicks from centred
+     empty-state content beneath it; only its real controls capture input. */
+  z-index: 4;
+  pointer-events: none;
 }
+.olv-topbar > * { pointer-events: auto; }
 .olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
 .olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
 .olv-badge {
