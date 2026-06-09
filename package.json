@@ -25,6 +25,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:build": "npm run build && BUILD_CONTRACT=1 vitest run tests/chunkIsolation.test.ts tests/orbitSmoke.test.ts",
     "test:e2e": "playwright test",
     "test:smoke": "playwright test tests/e2e/smoke.spec.ts",
     "lint:main-deferral": "node scripts/lint-main-deferral.mjs"
