@@ -344,7 +344,9 @@ const stage = new Stage(app, {
   // contextual, plain-English message under the URL input + offer a Retry
   // banner. The dropZone error toast still fires as a backup channel
   // because it remains visible after the empty state hides.
-  onOpenUrl: (url) => handleRemoteUrl(url).catch((err) => {
+  // The Stage's Cancel-button signal is threaded through so its abort
+  // actually reaches the in-flight fetches (Fix: it used to be dropped).
+  onOpenUrl: (url, signal) => handleRemoteUrl(url, signal).catch((err) => {
     const message = err instanceof Error ? err.message : 'Failed to open the URL.';
     dropZone.setError(message);
     // Re-throw so Stage's inline branch sees the error too.
@@ -637,6 +639,9 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  // Another bare-key handler (e.g. `bindShortcuts`) already consumed this
+  // keystroke — never double-fire on the same key press.
+  if (e.defaultPrevented) return;
   if (e.key === 'l' || e.key === 'L') {
     // Don't hijack key events from form inputs.
     const target = e.target as HTMLElement | null;
@@ -653,16 +658,21 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // v0.3.9 Smart camera presets: T / I / O / P each fire a tuned
+  // v0.3.9 Smart camera presets: T / O / P each fire a tuned
   // pose via Viewer.setCameraPreset(). Modifier-key combos are
   // skipped so we don't fight Cmd-T (new tab) etc.
+  //
+  // 'I' is deliberately NOT bound here. Bare 'I' belongs to the
+  // Inspect tool (`bindShortcuts` → onInspect — what the HelpOverlay and
+  // tool dock advertise); binding Iso to the same key made both fire on
+  // one keystroke in v0.4.3. The Iso preset stays reachable via the
+  // NavBar view chips and the command palette.
   if (
     !e.ctrlKey &&
     !e.metaKey &&
     !e.altKey &&
     !e.shiftKey &&
     (e.key === 't' || e.key === 'T' ||
-      e.key === 'i' || e.key === 'I' ||
       e.key === 'o' || e.key === 'O' ||
       e.key === 'p' || e.key === 'P')
   ) {
@@ -670,8 +680,11 @@ window.addEventListener('keydown', (e) => {
     const tag = target?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
     const k = e.key.toLowerCase();
-    const preset = k === 't' ? 'top' : k === 'i' ? 'iso' : k === 'o' ? 'oblique' : 'planar';
+    const preset = k === 't' ? 'top' : k === 'o' ? 'oblique' : 'planar';
     const fired = viewer?.setCameraPreset(preset);
+    // Mark the keystroke consumed so any later bare-key handler
+    // (`bindShortcuts`) sees `defaultPrevented` and stays quiet.
+    e.preventDefault();
     if (fired) {
       showLassoToast(
         `Camera · ${preset[0].toUpperCase() + preset.slice(1)} view.`,
@@ -696,6 +709,10 @@ function showLassoToast(
   if (_lassoToastEl === null) {
     _lassoToastEl = document.createElement('div');
     _lassoToastEl.className = 'olv-lasso-toast';
+    // Announce toast text to assistive tech — these toasts are the only
+    // feedback channel for several flows (tool hints, rejected opens).
+    _lassoToastEl.setAttribute('role', 'status');
+    _lassoToastEl.setAttribute('aria-live', 'polite');
     document.body.append(_lassoToastEl);
   }
   // Rebuild contents from scratch each call so an info toast cleanly
@@ -1105,14 +1122,17 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
 function buildActionRegistry(): Action[] {
   const actions: Action[] = [];
 
-  // Camera presets — same handlers as T / I / O / P.
+  // Camera presets — same handlers as the T / O / P keys.
   for (const name of CAMERA_PRESET_ORDER) {
     const label = CAMERA_PRESET_LABEL[name];
     actions.push({
       id: `camera.${name}`,
       title: `${label} view`,
       section: 'Camera',
-      keys: CAMERA_PRESET_KEY[name],
+      // Iso's advertised 'I' chip is suppressed: bare 'I' is the Inspect
+      // tool shortcut (see the keydown handler above) — Iso is palette /
+      // NavBar only. Advertising a key that doesn't fire would be worse.
+      keys: name === 'iso' ? undefined : CAMERA_PRESET_KEY[name],
       hint: `Frame the scan with the ${label.toLowerCase()} preset.`,
       keywords: ['view', 'pose', 'orbit'],
       run: () => {
@@ -1560,14 +1580,23 @@ const analysePanel = new AnalysePanel({
   getExportBasename: () => lastCloudName,
   getMapContext: () => {
     const cloud = activeId ? viewer.getCloud(activeId) : null;
-    const origin = cloud?.origin;
+    // Streamed COPC / EPT scans never enter `viewer.getCloud` — their
+    // recentre offset lives on the streaming source (`renderOrigin`) and
+    // their CRS on `crs()`. Fall back to those when no static cloud is
+    // active, so a contour export from a streamed scan keeps its world
+    // origin and EPSG stamp instead of silently degrading to local frame.
+    const streaming = cloud ? null : viewer.streamingCloud;
+    const origin = cloud?.origin ?? streaming?.renderOrigin;
     const cur = crsService.current();
     return {
-      worldOrigin: origin ? { x: origin[0], y: origin[1] } : null,
+      // All three axes: contour serialization shifts elevations by `z` so
+      // exported contour levels read in real-world (e.g. orthometric) height
+      // rather than the recentred local frame.
+      worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
       title: `${lastCloudName} — Contours`,
       sheet: 'letter',
       isGeographic: cur?.kind === 'geographic',
-      wkt: cloud?.metadata?.crs?.wkt ?? null,
+      wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
     };
   },
 });
@@ -1761,6 +1790,15 @@ const terrainRunner = createTerrainAnalysisRunner({
       originH2: d.originH2,
     });
     inspector.setCoverageAvailable(true);
+    // Fold the run's real analysed-point count into the Dataset Intelligence
+    // card — the same `dtm.analyzedPointCount` the terrain report's
+    // "Analysed points" row prints, so card and PDF agree. The streaming
+    // attach-time summary necessarily wrote `analyzedPointCount: 0` (nothing
+    // analysed yet); without this the Details row reads "Analyzed Points 0"
+    // forever on streamed scans. The refresher only acts when the last
+    // summary came from the streaming path, and the runner's stale-result
+    // guard means this never fires for a closed/replaced scan.
+    inspectorCards.noteAnalyzedPointCount(result.dtm.analyzedPointCount);
   },
 });
 
@@ -3123,14 +3161,20 @@ async function handleFile(file: File): Promise<void> {
   // One load at a time. The shared parse worker decodes a single file; a
   // second load started mid-flight would hijack the first one's worker. The
   // in-progress load carries a Cancel control if the user wants to switch.
-  if (loading) return;
-  // ensure the lazy-loaded Viewer is ready before touching it.
-  await viewerLoaded;
+  if (loading) {
+    showLassoToast('Already loading — cancel the current load first.');
+    return;
+  }
+  // Claim the flag SYNCHRONOUSLY — the `await viewerLoaded` below yields to
+  // the event loop, and a second drop in that window used to pass the
+  // `loading` guard too (TOCTOU). The `finally` below is the only reset.
   loading = true;
   const controller = new AbortController();
   dropZone.setProgress(`Reading ${file.name}…`);
   dropZone.setCancelHandler(() => controller.abort());
   try {
+    // ensure the lazy-loaded Viewer is ready before touching it.
+    await viewerLoaded;
     // COPC files take the streaming pipeline, not the static loader. The
     // range-source module is part of the lazy COPC chunk.
     const headSlice = await file.slice(0, 4096).arrayBuffer();
@@ -3566,7 +3610,7 @@ async function openStreamingCopc(
  * url-open message). Keeps format dispatch in one place so adding 3D
  * Tiles support in a future format here is a one-line addition.
  */
-async function handleRemoteUrl(url: string): Promise<void> {
+async function handleRemoteUrl(url: string, signal?: AbortSignal): Promise<void> {
   // EPT detection is URL-pattern only — fast, no network, no schema fetch.
   // The check is inlined here (mirroring `detectEptUrl` in `eptDetect.ts`)
   // so the routing decision is synchronous and doesn't depend on the EPT
@@ -3579,8 +3623,50 @@ async function handleRemoteUrl(url: string): Promise<void> {
   } catch {
     isEpt = /(?:^|\/)ept\.json(?:\?|#|$)/i.test(url);
   }
-  if (isEpt) return handleRemoteEpt(url);
-  return handleRemoteCopc(url);
+  if (isEpt) return handleRemoteEpt(url, signal);
+  return handleRemoteCopc(url, signal);
+}
+
+/**
+ * Wire an optional outer abort signal (the Stage URL field's Cancel
+ * button) into a load's own AbortController (the progress toast's Cancel)
+ * so EITHER cancel aborts the in-flight fetches. Returns a cleanup that
+ * detaches the listener — call it on every exit path so a long-lived
+ * outer signal can't accumulate listeners across loads. (Mirrors the
+ * private `composeSignals` discipline inside `HttpRangeSource`.)
+ */
+/**
+ * True when `err` is a user-initiated abort, in any of the shapes a cancel
+ * can surface as on the remote-open path:
+ *
+ *  - the platform's DOMException named `AbortError` (a fetch aborted
+ *    directly by the linked signal), or
+ *  - `RangeReadError` with code `'aborted'` — `HttpRangeSource` wraps the
+ *    platform abort in its typed error before it reaches us.
+ *
+ * The Stage URL-field Cancel aborts the linked signal while a fetch or
+ * range probe is in flight; neither rejection is our LoadCancelledError,
+ * so cancel handling must recognise all three shapes.
+ */
+function isAbortError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { name?: unknown; code?: unknown };
+  if (e.name === 'AbortError') return true;
+  return e.name === 'RangeReadError' && e.code === 'aborted';
+}
+
+function linkAbortSignals(
+  outer: AbortSignal | undefined,
+  controller: AbortController,
+): () => void {
+  if (!outer) return () => {};
+  if (outer.aborted) {
+    controller.abort();
+    return () => {};
+  }
+  const onAbort = (): void => controller.abort();
+  outer.addEventListener('abort', onAbort, { once: true });
+  return () => outer.removeEventListener('abort', onAbort);
 }
 
 /**
@@ -3595,29 +3681,42 @@ async function handleRemoteUrl(url: string): Promise<void> {
  *      uses — the scheduler / renderer / picking path don't see the
  *      format difference.
  */
-async function handleRemoteEpt(url: string): Promise<void> {
-  if (loading) return;
+async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void> {
+  if (loading) {
+    showLassoToast('Already loading — cancel the current load first.');
+    return;
+  }
+  // Claim the flag SYNCHRONOUSLY. Every await below yields to the event
+  // loop, and a second open started in that window used to pass the
+  // `loading` guard too (TOCTOU). The `finally` below is the only reset.
+  loading = true;
+  const controller = new AbortController();
+  // Compose the Stage URL-field Cancel (outer signal) with the progress
+  // toast's Cancel (this controller): either abort cancels the load.
+  const unlinkAbort = linkAbortSignals(signal, controller);
   // Fire the streaming + EPT chunk pre-warm immediately. Each dynamic
   // import is one HTTP fetch + parse; running them in parallel with
   // the manifest GET below cuts cold-start by 200–700 ms.
   prewarmForUrl(url);
-  // URL validation is pure — run it before awaiting the lazy Viewer so a
-  // malformed URL always surfaces an error toast, even if the Viewer chunk
-  // hasn't loaded yet or the GPU backend can't initialise.
-  const eptUrlMod = await loadEpt();
-  const check = eptUrlMod.validateRemoteEptUrl(url);
-  if (!check.ok) {
-    dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
-    return;
-  }
-  // The actual streaming open touches viewer state — defer until the lazy
-  // Viewer chunk is up.
-  await viewerLoaded;
-  loading = true;
-  const controller = new AbortController();
-  dropZone.setProgress(`Reading EPT manifest from ${shortUrl(url)}…`);
-  dropZone.setCancelHandler(() => controller.abort());
+  // Declared outside the try so the catch can use the module's error
+  // classifier when the module loaded, and a plain classifier when the
+  // chunk fetch itself was the failure.
+  let eptUrlMod: Awaited<ReturnType<typeof loadEpt>> | null = null;
   try {
+    // URL validation is pure — run it before awaiting the lazy Viewer so a
+    // malformed URL always surfaces an error toast, even if the Viewer chunk
+    // hasn't loaded yet or the GPU backend can't initialise.
+    eptUrlMod = await loadEpt();
+    const check = eptUrlMod.validateRemoteEptUrl(url);
+    if (!check.ok) {
+      dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
+      return;
+    }
+    // The actual streaming open touches viewer state — defer until the lazy
+    // Viewer chunk is up.
+    await viewerLoaded;
+    dropZone.setProgress(`Reading EPT manifest from ${shortUrl(url)}…`);
+    dropZone.setCancelHandler(() => controller.abort());
     const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
 
     // Fetch the manifest. We use plain `fetch` rather than the
@@ -3748,7 +3847,11 @@ async function handleRemoteEpt(url: string): Promise<void> {
     dropZone.setProgress(null);
   } catch (err) {
     dropZone.setCancelHandler(null);
-    if (err instanceof LoadCancelledError) {
+    // A user-initiated cancel surfaces two ways: our own LoadCancelledError,
+    // or a DOMException named `AbortError` when the Stage URL-field Cancel
+    // aborts the linked signal mid-fetch. Both mean "the user changed their
+    // mind" — neither is an error to report or count.
+    if (err instanceof LoadCancelledError || isAbortError(err)) {
       dropZone.setProgress(null);
     } else {
       if (debug) console.error('OpenLiDARViewer — remote EPT error', err);
@@ -3756,10 +3859,15 @@ async function handleRemoteEpt(url: string): Promise<void> {
       // classified error messages, matching the COPC
       // remote-UX polish. `describeRemoteEptError` distinguishes CORS,
       // 404, 5xx, hierarchy vs. tile fetch, and transport failures.
-      dropZone.setError(eptUrlMod.describeRemoteEptError(err, url));
+      // Fall back to the generic classifier when the EPT chunk itself
+      // failed to load (so `eptUrlMod` never arrived).
+      dropZone.setError(
+        eptUrlMod ? eptUrlMod.describeRemoteEptError(err, url) : describeLoadError(err),
+      );
       closeStreaming();
     }
   } finally {
+    unlinkAbort();
     loading = false;
   }
 }
@@ -3781,34 +3889,43 @@ function remoteEptName(url: string): string {
  * checks both up front, so a misconfigured host fails fast with a precise
  * reason rather than a stalled load.
  */
-async function handleRemoteCopc(url: string): Promise<void> {
-  if (loading) return;
-  // URL validation is pure — run it before awaiting the lazy Viewer so a
-  // malformed URL always surfaces an error toast, even if the Viewer chunk
-  // hasn't loaded yet or the GPU backend can't initialise.
-  const check = validateRemoteCopcUrl(url);
-  if (!check.ok) {
-    dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
+async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void> {
+  if (loading) {
+    showLassoToast('Already loading — cancel the current load first.');
     return;
   }
-  // Fire the streaming-chunk pre-warm immediately — these dynamic
-  // imports are independent of `viewerLoaded` and the HEAD probe, and
-  // each one is a separate HTTP fetch. Parallelising them with the
-  // probe shaves the smaller of the two latencies off cold-start
-  // (often 100–300 ms). The chunks are idempotent / cached, so the
-  // real `await Promise.all([loadStreamingPointCloud(), …])` inside
-  // `openStreamingCopc` typically resolves instantly by the time
-  // we reach it.
-  prewarmForUrl(url);
-
-  // The actual streaming open touches viewer state — defer until the lazy
-  // Viewer chunk is up.
-  await viewerLoaded;
+  // Claim the flag SYNCHRONOUSLY. Every await below yields to the event
+  // loop, and a second open started in that window used to pass the
+  // `loading` guard too (TOCTOU). The `finally` below is the only reset.
   loading = true;
   const controller = new AbortController();
-  dropZone.setProgress(`Connecting to ${shortUrl(url)}…`);
-  dropZone.setCancelHandler(() => controller.abort());
+  // Compose the Stage URL-field Cancel (outer signal) with the progress
+  // toast's Cancel (this controller): either abort cancels the load.
+  const unlinkAbort = linkAbortSignals(signal, controller);
   try {
+    // URL validation is pure — run it before awaiting the lazy Viewer so a
+    // malformed URL always surfaces an error toast, even if the Viewer chunk
+    // hasn't loaded yet or the GPU backend can't initialise.
+    const check = validateRemoteCopcUrl(url);
+    if (!check.ok) {
+      dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
+      return;
+    }
+    // Fire the streaming-chunk pre-warm immediately — these dynamic
+    // imports are independent of `viewerLoaded` and the HEAD probe, and
+    // each one is a separate HTTP fetch. Parallelising them with the
+    // probe shaves the smaller of the two latencies off cold-start
+    // (often 100–300 ms). The chunks are idempotent / cached, so the
+    // real `await Promise.all([loadStreamingPointCloud(), …])` inside
+    // `openStreamingCopc` typically resolves instantly by the time
+    // we reach it.
+    prewarmForUrl(url);
+
+    // The actual streaming open touches viewer state — defer until the lazy
+    // Viewer chunk is up.
+    await viewerLoaded;
+    dropZone.setProgress(`Connecting to ${shortUrl(url)}…`);
+    dropZone.setCancelHandler(() => controller.abort());
     // The remote range source is part of the lazy COPC chunk.
     const { HttpRangeSource } = await loadHttpRangeSource();
     const range = new HttpRangeSource(url);
@@ -3822,7 +3939,9 @@ async function handleRemoteCopc(url: string): Promise<void> {
     dropZone.setProgress(null);
   } catch (err) {
     dropZone.setCancelHandler(null);
-    if (err instanceof LoadCancelledError) {
+    // See the EPT handler: AbortError = Stage URL-field Cancel — a user
+    // decision, not a load failure.
+    if (err instanceof LoadCancelledError || isAbortError(err)) {
       dropZone.setProgress(null);
     } else {
       if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
@@ -3832,6 +3951,7 @@ async function handleRemoteCopc(url: string): Promise<void> {
       closeStreaming();
     }
   } finally {
+    unlinkAbort();
     loading = false;
   }
 }

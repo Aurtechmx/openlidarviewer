@@ -33,8 +33,18 @@
  * the Dataset Intelligence card. Bump this when the deterministic metric set
  * changes; callers reference the constant rather than hard-coding a string so
  * the version can never drift between call sites again.
+ *
+ * v0.4.4 — bumped because the release changed metric semantics:
+ *   - aspect (and hillshade lighting) was mirrored north–south on the
+ *     northing-up analysis grids; the formula was corrected, so aspect-derived
+ *     values differ from v0.4.1 output for the same cloud;
+ *   - contours are now registered to cell centres, removing a systematic
+ *     half-cell southwest shift relative to the exported DEM;
+ *   - horizontal linear units are read from the horizontal CRS only (a
+ *     compound WKT's vertical UNIT no longer wins, fixing ~3.28× errors on
+ *     US-survey-feet scans).
  */
-export const TERRAIN_METRIC_VERSION = 'v0.4.1';
+export const TERRAIN_METRIC_VERSION = 'v0.4.4';
 
 import type {
   TerrainCoverageMeta,

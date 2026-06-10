@@ -10,7 +10,11 @@
  * (CAD). PDF is produced by the report subsystem, not here.
  */
 
-import type { ContourFeatureModel } from './contourFeatureModel';
+import {
+  shiftFeatureModelToWorld,
+  type ContourFeatureModel,
+  type ContourWorldOrigin,
+} from './contourFeatureModel';
 import type { ContourLabel } from './labelPlacement';
 import { geojsonString } from './geojsonContours';
 import { svgContours } from './svgContours';
@@ -34,6 +38,14 @@ const MIME: Record<ContourFormat, string> = {
   dxf: 'application/dxf',
 };
 
+/**
+ * Warning stamped onto an export whose caller could not supply a world
+ * origin. Exported so tests / callers can match it without duplicating
+ * the wording.
+ */
+export const LOCAL_FRAME_WARNING =
+  'World origin unknown — coordinates are in the local (recentred) scan frame; CRS stamp omitted (local frame).';
+
 /** Serialise a model to a named file in the requested format. Pure data. */
 export function serializeContours(
   model: ContourFeatureModel,
@@ -43,19 +55,55 @@ export function serializeContours(
     labels?: ReadonlyArray<ContourLabel>;
     /** Unified provenance, stamped identically into whichever format is chosen. */
     provenance?: ExportProvenance;
+    /**
+     * World-frame origin the loader subtracted on load. When supplied, every
+     * coordinate (and elevation, when `z` is present) is shifted back into
+     * the model's CRS frame before serialisation — the same registration the
+     * DEM package applies. When absent/null the geometry is left in the
+     * LOCAL frame and the CRS stamp is OMITTED: stamping a real EPSG code on
+     * recentred coordinates made a GIS drop the contours at the CRS origin
+     * (v0.4.3 bug).
+     */
+    worldOrigin?: ContourWorldOrigin | null;
   } = {},
 ): ContourFile {
   const basename = opts.basename ?? 'contours';
+
+  // ── Frame registration (world vs local) ───────────────────────────────
+  let exportModel = model;
+  let exportLabels = opts.labels;
+  const origin = opts.worldOrigin;
+  if (origin) {
+    exportModel = shiftFeatureModelToWorld(model, origin);
+    // Labels are placed in the same local frame as the geometry — shift
+    // them identically so they stay on their lines (and state the world
+    // elevation when a vertical origin is known).
+    const oz = origin.z ?? 0;
+    exportLabels = opts.labels?.map((l) => ({
+      ...l,
+      x: l.x + origin.x,
+      y: l.y + origin.y,
+      value: l.value + oz,
+    }));
+  } else if (model.crs != null) {
+    // Honest fallback: never stamp an EPSG code on local coordinates.
+    exportModel = {
+      ...model,
+      crs: null,
+      warnings: [...model.warnings, LOCAL_FRAME_WARNING],
+    };
+  }
+
   let content: string;
   switch (format) {
     case 'geojson':
-      content = geojsonString(model, true, opts.provenance);
+      content = geojsonString(exportModel, true, opts.provenance);
       break;
     case 'svg':
-      content = svgContours(model, { labels: opts.labels, provenance: opts.provenance });
+      content = svgContours(exportModel, { labels: exportLabels, provenance: opts.provenance });
       break;
     case 'dxf':
-      content = dxfContours(model, opts.provenance);
+      content = dxfContours(exportModel, opts.provenance);
       break;
   }
   return { filename: `${basename}.${EXT[format]}`, mime: MIME[format], content };

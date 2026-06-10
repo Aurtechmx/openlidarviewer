@@ -8,14 +8,19 @@
  */
 
 /** Output formats the converter can write. */
-export type ConvertFormat = 'las' | 'laz' | 'xyz' | 'asc';
+export type ConvertFormat = 'las14' | 'las' | 'laz' | 'xyz' | 'asc';
 
 /** Human-readable labels + file extensions for each output format. */
 export const CONVERT_FORMATS: Record<
   ConvertFormat,
   { label: string; ext: string; binary: boolean; available: boolean }
 > = {
-  las: { label: 'LAS', ext: 'las', binary: true, available: true },
+  // LAS 1.4 (point formats 6/7) leads because it is the converter's default:
+  // modern consumers all read 1.4 and the extended records keep the full
+  // 8-bit classification. LAS 1.2 stays as an explicit legacy-tool choice —
+  // its 5-bit classification field clamps classes above 31.
+  las14: { label: 'LAS 1.4', ext: 'las', binary: true, available: true },
+  las: { label: 'LAS 1.2', ext: 'las', binary: true, available: true },
   // LAZ *encoding* is not yet possible client-side — the bundled laz-perf
   // WASM is a decoder only. Surfaced honestly rather than silently dropped.
   laz: { label: 'LAZ', ext: 'laz', binary: true, available: false },

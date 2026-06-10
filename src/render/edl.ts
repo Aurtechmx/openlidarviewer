@@ -38,6 +38,91 @@ export const EDL_STRENGTH_RANGE = { min: 0, max: 1.5 } as const;
 const MIN_DIST = 1e-4;
 
 /**
+ * Floor applied to the camera near plane inside the logarithmic depth
+ * encoding, exactly as three.js's `viewZToLogarithmicDepth` clamps it
+ * (`near = near.max(1e-6)`), so a `near = 0` camera never divides by zero.
+ */
+const LOG_DEPTH_NEAR_MIN = 1e-6;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logarithmic depth-buffer encoding
+//
+// The Viewer constructs its renderer with `logarithmicDepthBuffer: true`, so
+// the depth texture the EDL pass samples is NOT standard perspective depth.
+// three.js's node pipeline (r184, `NodeMaterial.setupDepth` →
+// `viewZToLogarithmicDepth`) overwrites fragment depth with the Ulrich
+// near-anchored logarithmic encoding:
+//
+//     raw = log2(eyeDist / near') / log2(far / near'),   near' = max(near, 1e-6)
+//
+// where `eyeDist` is the positive eye-space distance (-viewZ). This maps
+// eyeDist = near → 0 and eyeDist = far → 1, with constant *relative* depth
+// precision across the whole range — which is why a 50 km survey and a 5 m
+// indoor scan can share one depth buffer without z-fighting.
+//
+// NOTE this is the WebGPURenderer/node-pipeline convention, used by BOTH the
+// WebGPU backend and the WebGL 2 fallback (they compile the same node graph).
+// It is deliberately NOT the legacy WebGLRenderer GLSL-chunk convention
+// (`gl_FragDepth = log2(1 + w) / log2(1 + far)`), which this app never uses.
+//
+// Inverting for the eye distance (solve the forward formula for eyeDist):
+//
+//     raw · log2(far / near') = log2(eyeDist / near')
+//     eyeDist                 = near' · 2^(raw · log2(far / near'))
+//
+// The GPU-side EDL node in `Viewer.ts` mirrors these formulas node-for-node;
+// the unit tests on these CPU twins pin the maths down.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Forward logarithmic depth encoding — the value three.js writes into the
+ * depth buffer for a fragment at positive eye-space distance `eyeDist`, when
+ * the renderer was created with `logarithmicDepthBuffer: true`.
+ *
+ * Exists chiefly so tests can round-trip {@link logDepthToEyeDistance}
+ * against the exact forward formula the GPU applies.
+ *
+ * @param eyeDist - Positive eye-space distance of the fragment (world units).
+ * @param near - Camera near plane (clamped to >= 1e-6, as three.js does).
+ * @param far - Camera far plane.
+ */
+export function eyeDistanceToLogDepth(
+  eyeDist: number,
+  near: number,
+  far: number,
+): number {
+  const n = Math.max(near, LOG_DEPTH_NEAR_MIN);
+  return Math.log2(Math.max(eyeDist, MIN_DIST) / n) / Math.log2(far / n);
+}
+
+/**
+ * Invert a logarithmic depth-buffer sample back to a positive eye-space
+ * distance: `eyeDist = near' · 2^(raw · log2(far / near'))`.
+ *
+ * This is the inversion the EDL pass must use when the renderer owns a
+ * logarithmic depth buffer. Feeding a log-encoded sample through the standard
+ * `perspectiveDepthToViewZ` formula instead computes obscurance in the wrong
+ * space — far too weak near the camera, erratic at distance — which was
+ * exactly the v0.4.x rendering defect this function fixes.
+ *
+ * The result is floored at the same `MIN_DIST` (1e-4) the obscurance maths
+ * uses, so a raw sample of 0 with a degenerate near plane can never reach the
+ * downstream `log2` as zero.
+ *
+ * @param raw - The depth-buffer sample in [0, 1] (0 = near plane, 1 = far).
+ * @param near - Camera near plane (clamped to >= 1e-6, as three.js does).
+ * @param far - Camera far plane.
+ */
+export function logDepthToEyeDistance(
+  raw: number,
+  near: number,
+  far: number,
+): number {
+  const n = Math.max(near, LOG_DEPTH_NEAR_MIN);
+  return Math.max(n * Math.pow(2, raw * Math.log2(far / n)), MIN_DIST);
+}
+
+/**
  * Noise gate, in log2(eye-distance) units. A neighbour must sit at least this
  * much deeper before it contributes any obscurance.
  *

@@ -6,8 +6,9 @@
  * navigation controls, and the keyboard shortcuts.
  *
  * Static content — no live state, one close button. It is opened from the tool
- * dock's Help button or the `?` shortcut, and closed by the button, a backdrop
- * click, or Escape. Browser-bound (DOM); not imported in Node tests.
+ * dock's Help button (the `?` key belongs to the ShortcutSheet), and closed by
+ * the button, a backdrop click, or Escape. Browser-bound (DOM); not imported
+ * in Node tests.
  */
 
 import { el } from './dom';
@@ -77,11 +78,18 @@ export class HelpOverlay {
           ['A', 'Toggle the Annotate tool.'],
           ['M', 'Toggle the Measure tool.'],
           ['I', 'Toggle the Inspect tool.'],
+          ['L', 'Toggle the lasso volume tool.'],
+          ['T / O / P', 'Camera presets — Top, Oblique and Planar views.'],
+          ['H', 'Show or hide the controls HUD.'],
           ['V', 'Save the current camera view.'],
           ['Delete', 'Remove the selected annotation.'],
           ['Ctrl+Z', 'Undo an annotation change; add Shift to redo.'],
+          ['Cmd/Ctrl+K', 'Open the command palette.'],
           ['Esc', 'Cancel the active tool or draft.'],
-          ['?', 'Open or close this help.'],
+          // `?` is owned by the ShortcutSheet (main.ts binds it before the
+          // tool shortcuts and consumes the keystroke) — describe that
+          // truthfully rather than claiming it toggles this overlay.
+          ['?', 'Open the keyboard shortcut sheet.'],
         ]),
         section('Saving your work', [
           ['Snapshot', 'Exports a PNG with placed measurements and annotations.'],

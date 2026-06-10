@@ -14,6 +14,7 @@
 
 import type { E57Field } from './schema';
 import { physicalToLogical } from './depage';
+import { validateDeclaredPointCount } from '../validateCount';
 
 /** Decoded point data — one Float64 column per prototype field, by field name. */
 export type DecodedColumns = Record<string, Float64Array>;
@@ -44,6 +45,32 @@ export function decodeCompressedVector(
   // boundary, not merely on the first non-data byte.
   const sectionEnd = sectionStart + sectionLogicalLength;
 
+  // Allocation guard — `decodeField` below allocates one Float64Array of
+  // `recordCount` values PER prototype field, and `recordCount` comes from
+  // an XML attribute in a possibly-remote file. Bound it by the bytes this
+  // section can actually hold at the prototype's own minimal record size
+  // before any column is allocated. (The truncation guards inside
+  // `decodeField` then handle byte-exact shortfalls; this guard exists to
+  // stop a header claiming 10^12 records from allocating terabytes first.)
+  // Float fields can't pack below their IEEE width; integer fields can't
+  // pack below their declared bit width — so the per-record floor is the
+  // prototype's summed minimum, never less than one byte.
+  let minBitsPerRecord = 0;
+  for (const field of prototype) {
+    minBitsPerRecord +=
+      field.type === 'float' ? (field.floatBytes ?? 8) * 8 : (field.bitWidth ?? 0);
+  }
+  const minBytesPerRecord = Math.max(1, Math.floor(minBitsPerRecord / 8));
+  // The section's own declared length is also file data — cap it by the
+  // bytes genuinely present so a lying section header can't widen the bound.
+  const sectionBytes = Math.max(0, Math.min(sectionLogicalLength, logical.length - sectionStart));
+  const count = validateDeclaredPointCount(
+    recordCount,
+    sectionBytes,
+    minBytesPerRecord,
+    'E57 CompressedVector',
+  );
+
   // Collect each field's per-packet bytestream chunks.
   const fieldCount = prototype.length;
   const chunks: Uint8Array[][] = prototype.map(() => []);
@@ -70,7 +97,7 @@ export function decodeCompressedVector(
 
   const columns: DecodedColumns = {};
   prototype.forEach((field, f) => {
-    columns[field.name] = decodeField(concat(chunks[f]), field, recordCount);
+    columns[field.name] = decodeField(concat(chunks[f]), field, count);
   });
   return columns;
 }

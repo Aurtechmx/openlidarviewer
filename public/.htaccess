@@ -1,0 +1,79 @@
+# .htaccess — deployment headers for lidar.aurtech.mx
+#
+# Lives in public/ so Vite copies it verbatim to the dist root; the host
+# runs LiteSpeed, which honours Apache directives. Two jobs:
+#
+#   1. Caching. Vite emits content-hashed filenames under /assets/
+#      (e.g. index-Bx3F9aQ2.js), so those files can be cached forever —
+#      a content change produces a new URL. index.html is the ONE file
+#      that must never be cached stale, because it is what points at the
+#      current hashes; a cached index.html referencing purged assets is
+#      the classic "white screen after deploy" failure.
+#
+#   2. Security headers. The app is fully client-side (no cookies, no
+#      auth), so the set is small: transport hardening + MIME sniffing /
+#      referrer / sensor-permission lockdowns.
+
+# ── MIME types ──────────────────────────────────────────────────────────────
+# WASM must be served as application/wasm or browsers refuse
+# WebAssembly.instantiateStreaming(). (The laz-perf WASM ships embedded in
+# JS today, but any future split-out .wasm asset must not 404 into
+# text/plain.)
+AddType application/wasm .wasm
+# The PWA manifest's correct type (some stacks default to text/plain).
+AddType application/manifest+json .webmanifest
+
+# ── Caching ─────────────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+  # Hashed build assets: cache forever. The filename IS the cache key —
+  # Vite's pattern is <name>-<base64-ish hash>.<ext> under /assets/.
+  <FilesMatch "-[A-Za-z0-9_-]{8,}\.(js|css|wasm|woff2?|png|jpg|jpeg|svg|webp)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # The HTML shell: always revalidate. `no-cache` (not `no-store`) lets the
+  # browser keep a copy but forces a conditional request, so deploys take
+  # effect on the next load while unchanged shells still 304.
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+
+  # Root icons/share images look hash-like to the rule above
+  # (`apple-touch-icon.png` matches the `-…8+ chars…` pattern) but are NOT
+  # content-hashed — they must stay refreshable. Later FilesMatch wins, so
+  # this override must remain BELOW the immutable rule.
+  <FilesMatch "^(apple-touch-icon\.png|og-card\.jpg|favicon\.(ico|svg))$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+
+  # ── Security headers ──────────────────────────────────────────────────────
+  # HTTPS-only for a year, subdomains included. (Do not add `preload`
+  # without registering at hstspreload.org first.)
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  # Never MIME-sniff — pairs with the explicit AddType entries above.
+  Header always set X-Content-Type-Options "nosniff"
+  # Full referrer only same-origin; cross-origin gets just the origin, and
+  # nothing on HTTPS→HTTP. The viewer puts share state in the URL fragment
+  # (never sent in referrers anyway), but this keeps query params private.
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  # The viewer never uses these sensors; deny them outright so embedded
+  # third-party content can't request them either.
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+
+  # ── Content-Security-Policy (NOT YET ENFORCED) ────────────────────────────
+  # Suggested starting policy, deliberately commented out. It MUST be
+  # tested in Report-Only mode against a real deploy before enforcing:
+  #   - 'wasm-unsafe-eval' is required for the embedded laz-perf WASM
+  #     (compiled from a base64 blob, not fetched), but exact browser
+  #     behaviour should be verified.
+  #   - worker-src needs blob: — Vite can emit module workers via blob URLs.
+  #   - connect-src needs https: for remote dataset streaming (COPC/EPT
+  #     range requests to arbitrary user-supplied hosts).
+  #   - style-src is the open question: any inline style="" attributes in
+  #     the DOM (the UI sets element.style from JS, which is fine, but
+  #     audit for literal style attributes) would need 'unsafe-inline'.
+  # Watch the report-only console warnings for a release cycle, then
+  # rename the header to Content-Security-Policy.
+  #
+  # Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self'; base-uri 'self'; form-action 'self'"
+</IfModule>

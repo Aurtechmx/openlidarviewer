@@ -3,8 +3,12 @@
  *
  * Slope (degrees) and hillshade (shaded relief) rasters from an elevation
  * surface, using the Horn slope/aspect already used elsewhere. Hillshade is
- * the standard ESRI illumination model; aspect from `hornSlopeAspect`
- * (atan2(dz/dy, −dz/dx)) is exactly the convention that model expects.
+ * the standard ESRI illumination model; aspect from `hornSlopeAspect` is the
+ * downslope direction in the math frame (atan2(−dz/dy, −dz/dx) on our
+ * northing-up grids — see terrainDerivatives.ts), which is the same frame
+ * `azimuthToMathRad` converts the sun azimuth into, so the cos(az − aspect)
+ * alignment term below compares like with like. This module computes no
+ * derivatives of its own.
  *
  * Pure data — no DOM. Deterministic. Assumes Z is in the same linear unit as
  * X/Y (true for metric projected data); `zFactor` lets a caller correct it.

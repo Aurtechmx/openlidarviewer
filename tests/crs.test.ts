@@ -87,6 +87,32 @@ test('crsFromWkt — international foot detection', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WKT — compound (horizontal + vertical) — the unit must come from the
+// HORIZONTAL slice. The vertical block almost always carries UNIT["metre",1],
+// and v0.4.3 scanned the full text so that metre clause won over the
+// horizontal US-survey-foot one.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// State Plane CA V in US survey feet + NAVD88 height in metres.
+const COMPD_SP_FTUS_NAVD88_M_WKT =
+  'COMPD_CS["NAD83 / California zone 5 (ftUS) + NAVD88 height",' +
+  NAD83_SP_CA_V_WKT +
+  ',VERT_CS["NAVD88 height",VERT_DATUM["North American Vertical Datum 1988",2005,' +
+  'AUTHORITY["EPSG","5103"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],' +
+  'AXIS["Gravity-related height",UP],AUTHORITY["EPSG","5703"]]]';
+
+test('crsFromWkt — COMPD_CS: horizontal survey-foot unit beats vertical metres', () => {
+  const crs = crsFromWkt(COMPD_SP_FTUS_NAVD88_M_WKT);
+  expect(crs.epsg).toBe(2229);
+  // The horizontal unit is the US survey foot — the vertical block's
+  // UNIT["metre",1] must NOT win just because it appears later in the text.
+  expect(crs.linearUnit).toBe('us-survey-foot');
+  expect(crs.linearUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
+  // The vertical datum is still parsed from the vertical block.
+  expect(crs.verticalDatum).toContain('NAVD88');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // WKT — geographic (degrees)
 // ─────────────────────────────────────────────────────────────────────────────
 

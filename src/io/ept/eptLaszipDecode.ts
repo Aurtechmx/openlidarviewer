@@ -37,6 +37,7 @@
 
 import { parseLasHeader } from '../lasHeader';
 import { getLazPerf } from '../loadLas';
+import { validateDeclaredPointCount } from '../validateCount';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,6 +143,9 @@ function buildContext(buffer: ArrayBuffer): TileDecodeContext {
  * Throws:
  *   • If the buffer isn't a LASF-signed file.
  *   • If the LAS point data record format isn't one of {0, 1, 2, 3, 6, 7, 8}.
+ *   • If the per-tile header declares more points than the tile bytes
+ *     could plausibly hold (typed malformed-file LoadError — blocks a
+ *     hostile remote tile from forcing a giant allocation below).
  *   • If the laz-perf WASM fails to instantiate (network / sandbox issue).
  *
  * Resolves with a `DecodedChunk` shaped exactly like the COPC pipeline
@@ -153,7 +157,16 @@ export async function decodeEptLaszipTile(
   renderOrigin: readonly [number, number, number],
 ): Promise<DecodedChunk> {
   const ctx = buildContext(buffer);
-  const n = ctx.pointCount;
+  // Bound the per-tile declared count by the tile's own bytes BEFORE the
+  // seven typed-array allocations below. EPT tiles arrive from remote
+  // URLs; 1 byte/point compressed is far below any genuine LAZ stream,
+  // so this only trips on a header lying by orders of magnitude.
+  const n = validateDeclaredPointCount(
+    ctx.pointCount,
+    buffer.byteLength,
+    1,
+    'EPT laszip tile',
+  );
   const lazPerf = await getLazPerf();
   const fileBytes = new Uint8Array(buffer);
 

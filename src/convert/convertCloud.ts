@@ -11,7 +11,7 @@
 
 import type { PointCloud } from '../model/PointCloud';
 import { cloudToGlobal } from './globalPoints';
-import { writeLas } from './writeLas';
+import { writeLas, writeLas14 } from './writeLas';
 import { writeXyz, writeAsc } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import { isGeographicEpsg, epsgLabel, epsgToProj4 } from './epsg';
@@ -24,6 +24,7 @@ import {
 } from './types';
 
 const MIME: Record<string, string> = {
+  las14: 'application/octet-stream',
   las: 'application/octet-stream',
   xyz: 'text/plain',
   asc: 'text/plain',
@@ -119,14 +120,19 @@ export function convertCloud(
   const filename = `${baseName(cloud.name)}.${spec.ext}`;
 
   let bytes: Uint8Array;
-  if (opts.format === 'las') {
-    if (outEpsg != null && outEpsg > 65535) {
+  if (opts.format === 'las' || opts.format === 'las14') {
+    const srcCrs = cloud.metadata?.crs;
+    // LAS 1.4 wants the CRS as OGC WKT for point formats 6+. A real WKT only
+    // exists when the source carried one AND nothing changed (keep mode) —
+    // after assign/reproject the source WKT would describe the wrong CRS,
+    // so those modes fall back to a GeoKey tag built from the EPSG.
+    const wkt = opts.format === 'las14' && mode === 'keep' ? (srcCrs?.wkt ?? null) : null;
+    if (outEpsg != null && outEpsg > 65535 && wkt == null) {
       log.push({
         level: 'warn',
         message: `EPSG:${outEpsg} is too large to record in a LAS GeoKey — the file is written without a CRS tag.`,
       });
     }
-    const srcCrs = cloud.metadata?.crs;
     // Linear unit: kept files carry the source unit; reprojected output is in
     // metres (our reproject targets are metric/degree); assigned tags leave it
     // implied by the EPSG. Vertical datum is preserved (no mode transforms Z).
@@ -134,12 +140,42 @@ export function convertCloud(
       mode === 'reproject' ? 9001
       : mode === 'keep' && srcCrs ? unitToGeoTiff(srcCrs.linearUnit)
       : null;
-    bytes = writeLas(g, {
-      epsg: outEpsg ?? undefined,
-      isGeographic: geo,
-      linearUnitCode,
-      verticalEpsg: srcCrs?.verticalEpsg ?? null,
-    });
+    if (opts.format === 'las14') {
+      if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
+        log.push({
+          level: 'info',
+          message: 'No WKT available for this CRS — recorded as GeoTIFF keys (strict LAS 1.4 readers prefer WKT for point formats 6+).',
+        });
+      }
+      bytes = writeLas14(g, {
+        epsg: outEpsg ?? undefined,
+        isGeographic: geo,
+        linearUnitCode,
+        verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        wkt,
+      });
+    } else {
+      // LAS 1.2 stores the classification in 5 bits — count what the mask
+      // will destroy and say so, instead of silently zeroing class 64 etc.
+      if (g.classification) {
+        let clamped = 0;
+        for (let i = 0; i < g.count; i++) {
+          if (g.classification[i] > 31) clamped++;
+        }
+        if (clamped > 0) {
+          log.push({
+            level: 'warn',
+            message: `LAS 1.2 stores 5-bit classes — ${clamped.toLocaleString()} points with classes > 31 were clamped; use LAS 1.4 to preserve them.`,
+          });
+        }
+      }
+      bytes = writeLas(g, {
+        epsg: outEpsg ?? undefined,
+        isGeographic: geo,
+        linearUnitCode,
+        verticalEpsg: srcCrs?.verticalEpsg ?? null,
+      });
+    }
   } else {
     const text =
       opts.format === 'asc'

@@ -12,10 +12,25 @@
 
 import { createLazPerf } from 'laz-perf';
 import { LAZ_PERF_WASM_BASE64 } from '../../lazPerfWasm';
+import { validateDeclaredPointCount } from '../../validateCount';
 import { decodeRecords, chunkTransferables } from '../copcChunkDecode';
 import type { ChunkDecodeMetadata } from '../copcChunkDecode';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
+
+/**
+ * Hard ceiling on points in a single COPC node. The hierarchy parser
+ * (`copcHierarchy.ts`) accepts any positive int32 point count, but real
+ * COPC nodes are bounded in practice — writers target tens of thousands
+ * of points per node; even pathological single-node files stay far under
+ * this. A node claiming more is malformed, and honouring it would size
+ * `pointCount * recordLength` output buffers (plus the decoded attribute
+ * arrays in `decodeRecords`) into the gigabytes. Errors here cross the
+ * worker boundary as a plain message string (see the catch below), so a
+ * typed LoadError's message — which deliberately contains "malformed" —
+ * is re-classified correctly on the main thread.
+ */
+const MAX_NODE_POINTS = 50_000_000;
 
 interface DecodeMessage {
   type: 'decode';
@@ -67,6 +82,22 @@ function decompressChunk(
   chunk: ArrayBuffer,
   meta: ChunkDecodeMetadata,
 ): Uint8Array {
+  // Allocation guard — bound the node's declared count by its compressed
+  // bytes (1 byte/point is far below any genuine LAZ stream) and by the
+  // practical node ceiling BEFORE sizing the output buffer below.
+  const pointCount = validateDeclaredPointCount(
+    meta.pointCount,
+    chunk.byteLength,
+    1,
+    'COPC node',
+  );
+  if (pointCount > MAX_NODE_POINTS) {
+    throw new Error(
+      `malformed COPC: node claims ${pointCount.toLocaleString('en-US')} points ` +
+        `(limit ${MAX_NODE_POINTS.toLocaleString('en-US')}).`,
+    );
+  }
+
   const compressed = new Uint8Array(chunk);
   const recordLength = meta.pointRecordLength;
   const chunkPtr = lazPerf._malloc(compressed.byteLength);
@@ -75,8 +106,8 @@ function decompressChunk(
   try {
     lazPerf.HEAPU8.set(compressed, chunkPtr);
     decoder.open(meta.pointDataRecordFormat, recordLength, chunkPtr);
-    const out = new Uint8Array(meta.pointCount * recordLength);
-    for (let i = 0; i < meta.pointCount; i++) {
+    const out = new Uint8Array(pointCount * recordLength);
+    for (let i = 0; i < pointCount; i++) {
       decoder.getPoint(pointPtr);
       // `HEAPU8` is re-read each iteration — laz-perf may grow (and detach) it.
       out.set(

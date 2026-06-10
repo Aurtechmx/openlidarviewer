@@ -22,6 +22,9 @@ import type { StreamingNode } from './StreamingNode';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { ColorMode } from '../colorModes';
 import { streamingNodeColors, intensityRangeOf } from './streamingColors';
+// Shared sRGB → linear seam (a leaf module — no Viewer cycle). The recolour
+// path must apply the same EOTF the initial `buildPointMesh` upload does.
+import { writeFloatColorsInto } from '../colorEncode';
 import { computeElevationRange } from '../elevationRange';
 import type { StreamingColorRanges } from './streamingColors';
 import type { RgbAppearance } from '../rgbAppearance';
@@ -376,7 +379,10 @@ export class StreamingRenderer {
     for (const entry of this._meshes.values()) {
       const colors = streamingNodeColors(this._mode, entry.decoded, this._ranges, this._rgbAppearance);
       const array = entry.colorAttr.array as Float32Array;
-      for (let i = 0; i < colors.length; i++) array[i] = colors[i] / 255;
+      // sRGB → linear via the shared EOTF seam — a bare `/255` here left the
+      // recoloured nodes sRGB-encoded in a linear attribute, so switching
+      // colour mode visibly paled streaming nodes vs their initial upload.
+      writeFloatColorsInto(array, colors);
       entry.colorAttr.needsUpdate = true;
     }
   }

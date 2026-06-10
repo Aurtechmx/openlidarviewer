@@ -69,11 +69,28 @@ describe('Aspect truth (Horn) — downhill direction in the math frame', () => {
     expect(Math.abs(deg - 180)).toBeLessThanOrEqual(1);
   });
 
-  it('slope rising south (axis y) -> aspect ~ 90 deg', () => {
+  it('slope rising north (axis y, +y = northing) -> aspect ~ 270 deg (downhill south)', () => {
+    // Grids are NORTHING-UP (row+1 = north), so a surface rising with y
+    // rises toward the NORTH and drains south. South in the math frame
+    // (CCW from east) is 270 deg. The pre-v0.4.4 expectation of 90 deg
+    // encoded the mirrored (+y = south) convention.
     const z = rasterZ(uniformSlope({ ...EXTENT, gradient: 0.5, axis: 'y' }));
     const { aspect } = hornSlopeAspect(z, grid.cols, grid.rows, grid.cellSizeM);
     const deg = wrap360(aspect[12 * grid.cols + 12] * RAD);
-    expect(Math.abs(deg - 90)).toBeLessThanOrEqual(1);
+    expect(Math.abs(deg - 270)).toBeLessThanOrEqual(1);
+  });
+
+  it('plane descending to the north (z = -y) faces north -> aspect ~ 90 deg math (geographic 0/360)', () => {
+    // Aspect is the DOWNSLOPE direction. z falls as northing grows, so the
+    // slope faces north: math-frame 90 deg, which `azimuthToMathRad` maps to
+    // geographic azimuth 0/360 (north). Regression for the N-S mirror bug.
+    const z = rasterZ(uniformSlope({ ...EXTENT, gradient: -0.5, axis: 'y' }));
+    const { aspect } = hornSlopeAspect(z, grid.cols, grid.rows, grid.cellSizeM);
+    const mathDeg = wrap360(aspect[12 * grid.cols + 12] * RAD);
+    expect(Math.abs(mathDeg - 90)).toBeLessThanOrEqual(1);
+    // Same reading expressed as a geographic azimuth: (450 − math) mod 360.
+    const geoDeg = wrap360(450 - mathDeg);
+    expect(Math.min(geoDeg, 360 - geoDeg)).toBeLessThanOrEqual(1); // ~0/360 = north
   });
 
   it('ridge: aspect flips across the crest (west flank faces W, east flank faces E)', () => {

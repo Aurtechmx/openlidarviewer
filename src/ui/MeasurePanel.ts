@@ -8,6 +8,9 @@
  */
 
 import { el } from './dom';
+// Guarded localStorage access — bare getItem/setItem throws in sandboxed
+// iframes (the embed path) and some privacy modes; see safeStorage.ts.
+import { storageGet, storageSet } from './safeStorage';
 // Static import of the loader thunk — the dynamic import() itself lives in
 // lazyChunks.ts (excluded from the live source-transform) so its literal is
 // never scrambled. Importing the thunk pulls nothing heavy into the shell.
@@ -310,7 +313,7 @@ export class MeasurePanel {
    * to read). One key, panel-wide; clamped to the CSS resize bounds.
    */
   private _restorePanelWidth(): void {
-    const stored = Number(localStorage.getItem(MEASURE_PANEL_WIDTH_KEY));
+    const stored = Number(storageGet(MEASURE_PANEL_WIDTH_KEY));
     if (
       Number.isFinite(stored) &&
       stored >= MEASURE_PANEL_MIN_WIDTH_PX &&
@@ -334,7 +337,7 @@ export class MeasurePanel {
           MEASURE_PANEL_MAX_WIDTH_PX,
           Math.max(MEASURE_PANEL_MIN_WIDTH_PX, Math.round(w)),
         );
-        localStorage.setItem(MEASURE_PANEL_WIDTH_KEY, String(clamped));
+        storageSet(MEASURE_PANEL_WIDTH_KEY, String(clamped));
       });
       this._panelWidthObserver.observe(this.element);
     } catch {
@@ -584,7 +587,7 @@ export class MeasurePanel {
       // across all profile rows; one key, all profiles. Clamp to a
       // member of the canonical 1/2/5/10 set so a hand-edited
       // localStorage value can't blow up the chart.
-      const storedVex = Number(localStorage.getItem(PROFILE_VEX_KEY));
+      const storedVex = Number(storageGet(PROFILE_VEX_KEY));
       const vex = PROFILE_VEX_OPTIONS.includes(storedVex as 1 | 2 | 5 | 10)
         ? storedVex
         : 1;
@@ -612,7 +615,7 @@ export class MeasurePanel {
         chip.addEventListener('click', () => {
           chip.blur();
           if (v === vex) return;
-          localStorage.setItem(PROFILE_VEX_KEY, String(v));
+          storageSet(PROFILE_VEX_KEY, String(v));
           this._renderList();
         });
         vexStrip.append(chip);
@@ -624,7 +627,7 @@ export class MeasurePanel {
       // re-render. One key shared across all profiles — users want
       // consistent reading height, not per-profile memory.
       if (chart.classList.contains('olv-mp-chart')) {
-        const stored = Number(localStorage.getItem(PROFILE_CHART_HEIGHT_KEY));
+        const stored = Number(storageGet(PROFILE_CHART_HEIGHT_KEY));
         if (
           Number.isFinite(stored) &&
           stored >= PROFILE_CHART_MIN_HEIGHT_PX &&
@@ -656,7 +659,7 @@ export class MeasurePanel {
               h >= PROFILE_CHART_MIN_HEIGHT_PX &&
               h <= PROFILE_CHART_MAX_HEIGHT_PX
             ) {
-              localStorage.setItem(PROFILE_CHART_HEIGHT_KEY, String(Math.round(h)));
+              storageSet(PROFILE_CHART_HEIGHT_KEY, String(Math.round(h)));
             }
           });
           ro.observe(chart);

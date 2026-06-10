@@ -256,17 +256,19 @@ export class NavBar {
     // who never touches the keyboard still discovers them.
     const cameraPresetsRow = el('div', { className: 'olv-cam-presets' });
     for (const name of CAMERA_PRESET_ORDER) {
+      // An empty key means "no keyboard binding" (Iso lost bare `I` to the
+      // Inspect tool in v0.4.4) — skip the key chip and shortcut hint then.
       const key = CAMERA_PRESET_KEY[name];
       const label = CAMERA_PRESET_LABEL[name];
       const btn = el('button', {
         className: 'olv-cam-chip',
-        title: `${label} view — keyboard shortcut: ${key}`,
-        ariaLabel: `${label} camera view (${key})`,
+        title: key ? `${label} view — keyboard shortcut: ${key}` : `${label} view`,
+        ariaLabel: key ? `${label} camera view (${key})` : `${label} camera view`,
       });
-      btn.append(
-        el('span', { className: 'olv-cam-chip-key', text: key }),
-        el('span', { className: 'olv-cam-chip-label', text: label }),
-      );
+      if (key) {
+        btn.append(el('span', { className: 'olv-cam-chip-key', text: key }));
+      }
+      btn.append(el('span', { className: 'olv-cam-chip-label', text: label }));
       btn.addEventListener('click', () => {
         btn.blur();
         callbacks.onCameraPreset(name);

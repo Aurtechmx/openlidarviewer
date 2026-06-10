@@ -32,6 +32,7 @@ import { LAZ_PERF_WASM_BASE64 } from './lazPerfWasm';
 import type { LasHeader } from './lasHeader';
 import type { ProgressUpdate } from './loadProgress';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
+import { validateDeclaredPointCount } from './validateCount';
 import {
   allocRawPoints,
   decodeContext,
@@ -39,6 +40,16 @@ import {
   decodingUpdate,
   type RawPoints,
 } from './lasDecodeShared';
+
+/**
+ * Conservative floor on compressed bytes per LAZ point. Real-world LAZ
+ * compresses ~30-byte records to roughly 2–5 bytes; 1 byte/point is far
+ * below anything a genuine file produces, so the bound only trips on a
+ * header lying about its count by orders of magnitude (the case that
+ * matters — a remote file declaring 10^12 points would otherwise drive
+ * a multi-terabyte allocation in `allocRawPoints` below).
+ */
+const MIN_COMPRESSED_BYTES_PER_POINT = 1;
 
 /** Decode the embedded base64 laz-perf WASM into bytes for `createLazPerf`. */
 function lazPerfWasmBinary(): Uint8Array {
@@ -94,7 +105,15 @@ export async function decodeLaz(
   onProgress?: (u: ProgressUpdate) => void,
 ): Promise<RawPoints> {
   const ctx = decodeContext(header, origin);
-  const pointCount = header.pointCount;
+  // Bound the declared count by the compressed payload BEFORE sizing the
+  // output arrays or entering the getPoint loop — the LAZ mirror of the
+  // record-length clamp `loadLas.ts` applies to uncompressed files.
+  const pointCount = validateDeclaredPointCount(
+    header.pointCount,
+    buffer.byteLength,
+    MIN_COMPRESSED_BYTES_PER_POINT,
+    'LAZ file',
+  );
   const step = Math.max(1, Math.floor(stride));
   const total = Math.ceil(pointCount / step);
 

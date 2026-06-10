@@ -43,6 +43,16 @@ export interface InspectorCardRefreshers {
       };
     };
   }): void;
+  /**
+   * Fold a real analysed-point count from a finished terrain run into the
+   * card. Only acts when the last summary came from the STREAMING path, whose
+   * attach-time summary necessarily wrote `analyzedPointCount: 0` ("no
+   * analysis yet") — without this, the Details panel keeps reading
+   * "Analyzed Points 0" forever on streamed scans, even after a run walked
+   * hundreds of thousands of points. The static path already carries a count
+   * and is left untouched.
+   */
+  noteAnalyzedPointCount(count: number): void;
 }
 
 /**
@@ -53,6 +63,14 @@ export interface InspectorCardRefreshers {
 export function createInspectorCardRefreshers(
   inspector: Inspector,
 ): InspectorCardRefreshers {
+  // The last summary pushed by the STREAMING refresher, remembered so a
+  // finished terrain run can re-push it with the real analysed-point count
+  // (see `noteAnalyzedPointCount`). Nulled by the static refresher so a
+  // streamed-scan summary can never be merged onto a later static scan; the
+  // terrain runner's stale-result guard already prevents a result for a
+  // closed scan from reaching `noteAnalyzedPointCount` at all.
+  let lastStreamingSummary: Parameters<Inspector['setDatasetIntelligence']>[0] | null = null;
+
   function refreshProvenance(cloud: {
     readonly sourceFormat: string;
     readonly pointCount: number;
@@ -84,6 +102,8 @@ export function createInspectorCardRefreshers(
     readonly pointCount: number;
     bounds(): { min: [number, number, number]; max: [number, number, number] };
   }): void {
+    // A static summary supersedes any remembered streaming one.
+    lastStreamingSummary = null;
     try {
       const b = cloud.bounds();
       const dx = b.max[0] - b.min[0];
@@ -137,14 +157,15 @@ export function createInspectorCardRefreshers(
         const v = dx * dy * dz;
         if (Number.isFinite(v) && v > 0) bboxVolume = v;
       }
-      inspector.setDatasetIntelligence({
+      const summary = {
         pointCount: sourcePoints,
         bboxVolume,
         coverageMeta: {
-          coverage: 'resident-only',
+          coverage: 'resident-only' as const,
           sourcePointCount: sourcePoints ?? 0,
-          // No resident count yet at attach time; the streaming layer
-          // refines this as nodes land.
+          // Nothing has been analysed at attach time. `noteAnalyzedPointCount`
+          // replaces this with the real walked-point count once a terrain run
+          // finishes; until then the Details row honestly reads "0".
           analyzedPointCount: 0,
           // v0.3.10 honesty pass — see the static path for the full
           // reasoning. No engine measurement → no confidence number.
@@ -154,10 +175,27 @@ export function createInspectorCardRefreshers(
           warnings: [],
         },
         metricVersion: TERRAIN_METRIC_VERSION,
-      });
+      };
+      lastStreamingSummary = summary;
+      inspector.setDatasetIntelligence(summary);
     } catch {
+      lastStreamingSummary = null;
       inspector.clearDatasetIntelligence();
     }
+  }
+
+  function noteAnalyzedPointCount(count: number): void {
+    const base = lastStreamingSummary;
+    if (!base || !Number.isFinite(count) || count <= 0) return;
+    const updated = {
+      ...base,
+      coverageMeta: {
+        ...base.coverageMeta!,
+        analyzedPointCount: Math.round(count),
+      },
+    };
+    lastStreamingSummary = updated;
+    inspector.setDatasetIntelligence(updated);
   }
 
   return {
@@ -165,5 +203,6 @@ export function createInspectorCardRefreshers(
     refreshProvenanceFromStreaming,
     refreshDatasetIntelligenceFromStaticCloud,
     refreshDatasetIntelligenceFromStreamingCloud,
+    noteAnalyzedPointCount,
   };
 }

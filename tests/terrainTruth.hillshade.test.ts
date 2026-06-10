@@ -64,17 +64,21 @@ describe('Hillshade truth — a slope facing the sun is brighter than one facing
 });
 
 describe('Hillshade truth — N/E/S/W-facing slopes shade as the azimuth predicts', () => {
-  // Build the four cardinal downslopes. Downhill direction = aspect:
+  // Build the four cardinal downslopes. Downhill direction = aspect.
+  // Grids are NORTHING-UP (row+1 = north, +y = north), so a surface that
+  // FALLS with y descends to the north (faces north):
   //   downhill E: z falls with x (gradient -0.5, axis x)
   //   downhill W: z rises with x (gradient +0.5, axis x)
-  //   downhill N: z rises with y/row (gradient +0.5, axis y)  [N = smaller row]
-  //   downhill S: z falls with y/row (gradient -0.5, axis y)
+  //   downhill N: z falls with y (gradient -0.5, axis y)
+  //   downhill S: z rises with y (gradient +0.5, axis y)
+  // (Pre-v0.4.4 these N/S fixtures were swapped, encoding the mirrored
+  // +y = south convention the aspect bug compensated for.)
   const G = 0.5;
   const slopes = {
     E: uniformSlope({ ...EXTENT, gradient: -G, axis: 'x' }),
     W: uniformSlope({ ...EXTENT, gradient: +G, axis: 'x' }),
-    N: uniformSlope({ ...EXTENT, gradient: +G, axis: 'y' }),
-    S: uniformSlope({ ...EXTENT, gradient: -G, axis: 'y' }),
+    N: uniformSlope({ ...EXTENT, gradient: -G, axis: 'y' }),
+    S: uniformSlope({ ...EXTENT, gradient: +G, axis: 'y' }),
   };
 
   it('sun due east (az 90): E-facing brightest, W-facing darkest, N/S equal between', () => {
@@ -113,5 +117,19 @@ describe('Hillshade truth — N/E/S/W-facing slopes shade as the azimuth predict
     // Pin verified values.
     expect(Math.abs(w - 218)).toBeLessThanOrEqual(1);
     expect(Math.abs(e - 104)).toBeLessThanOrEqual(1);
+  });
+
+  it('regression: a plane descending to the NORTH is lit by the default NW sun', () => {
+    // The v0.4.3 aspect bug mirrored hillshade north-south: a north-facing
+    // slope rendered as if it faced south, so the default 315 deg (NW) sun
+    // shadowed it. With the northing-up convention fixed, the north-facing
+    // plane (z falls as y/northing grows) must be brighter than the
+    // south-facing one, and brighter than flat Lambert (180 at altitude 45).
+    const opts = { azimuthDeg: 315, altitudeDeg: 45 } as const;
+    const northFacing = shadeOf(slopes.N, opts)[centre];
+    const southFacing = shadeOf(slopes.S, opts)[centre];
+    expect(northFacing).toBeGreaterThan(southFacing);
+    expect(northFacing).toBeGreaterThan(180);
+    expect(southFacing).toBeLessThan(180);
   });
 });

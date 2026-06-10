@@ -39,7 +39,9 @@ export class ExportPanel {
   private readonly _fullResRow: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
 
-  private _format: ConvertFormat = 'las';
+  // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
+  // default the panel to it so the pill selection matches the recommended choice.
+  private _format: ConvertFormat = 'las14';
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';

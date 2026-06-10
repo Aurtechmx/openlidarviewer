@@ -83,6 +83,52 @@ export interface ContourFeatureModel {
   readonly warnings: string[];
 }
 
+/**
+ * The world-frame origin the loader subtracted from the cloud on load
+ * (Float32 recentring). The terrain pipeline — and therefore this model —
+ * runs in that LOCAL frame; adding the origin back converts coordinates to
+ * the real CRS frame the model's `crs` field names. `z` shifts contour
+ * elevation values too; callers that only track a horizontal origin may
+ * omit it (elevations then stay in the local vertical frame).
+ */
+export interface ContourWorldOrigin {
+  readonly x: number;
+  readonly y: number;
+  readonly z?: number;
+}
+
+/**
+ * Return a copy of the model with every coordinate (and elevation value)
+ * shifted from the local (recentred) frame into the world frame. This is
+ * the same registration step the DEM package applies via `xll = ox +
+ * dtm.originH1` — without it an export carries small local coordinates
+ * stamped with a real EPSG code, which a GIS then places at the CRS
+ * origin (v0.4.3 bug). A zero origin returns the model unchanged.
+ */
+export function shiftFeatureModelToWorld(
+  model: ContourFeatureModel,
+  origin: ContourWorldOrigin,
+): ContourFeatureModel {
+  const ox = origin.x;
+  const oy = origin.y;
+  const oz = origin.z ?? 0;
+  if (ox === 0 && oy === 0 && oz === 0) return model;
+  const features = model.features.map((f) => ({
+    ...f,
+    value: f.value + oz,
+    coordinates: f.coordinates.map(([x, y]) => [x + ox, y + oy] as [number, number]),
+  }));
+  const bbox: ContourBBox | null = model.bbox
+    ? {
+        minX: model.bbox.minX + ox,
+        minY: model.bbox.minY + oy,
+        maxX: model.bbox.maxX + ox,
+        maxY: model.bbox.maxY + oy,
+      }
+    : null;
+  return { ...model, features, bbox };
+}
+
 /** Options for {@link buildFeatureModel}. */
 export interface FeatureModelParams {
   readonly crs: string | null;

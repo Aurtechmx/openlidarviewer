@@ -12,6 +12,12 @@
  *        it directly for a small fixture scene.
  *     3. Abort BEFORE compute — rejects with an AbortError, no fallback compute.
  *     4. A worker-reported ABORT is propagated, not silently recomputed.
+ *     4b. STALE-RESULT RACE — the worker fails for real AND the caller's signal
+ *         aborts before the fallback runs (dataset changed mid-run): rejects
+ *         with an AbortError and never returns a fallback core; the inverse
+ *         (signal present but never fired) falls back normally; and an
+ *         oversize run (n > MAX_FALLBACK_POINTS) rejects with the too-large
+ *         error instead of freezing the main thread.
  *
  *   getOrComputeCoreAsync (the cache + async path):
  *     5. Computes once, reuses on the second call (hit → no recompute).
@@ -27,6 +33,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   computeTerrainCoreAsync,
   getLastTerrainComputePath,
+  MAX_FALLBACK_POINTS,
   type TerrainCoreClientLike,
 } from '../src/terrain/worker/computeTerrainCoreAsync';
 import {
@@ -279,6 +286,131 @@ describe('computeTerrainCoreAsync — failure visibility', () => {
     await computeTerrainCoreAsync(pos, pos.length / 3, PARAMS, undefined, undefined, client);
     // jsdom's default URL carries no `?debug`, so the success info stays quiet.
     expect(infoSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('computeTerrainCoreAsync — fallback stale-result race + oversize guard', () => {
+  // The fallback path warns loudly on a real worker failure (pinned above);
+  // silence the channel here so the suite output stays clean.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
+  /** Seed lastComputePath with a known 'worker' value via a healthy client. */
+  async function seedWorkerPath(pos: Float32Array): Promise<void> {
+    const healthy: TerrainCoreClientLike = {
+      computeCore: () => Promise.resolve({ __seed: true } as unknown as TerrainCore),
+    };
+    await computeTerrainCoreAsync(pos, pos.length / 3, PARAMS, undefined, undefined, healthy);
+    expect(getLastTerrainComputePath()).toBe('worker');
+  }
+
+  it('rejects with an AbortError — and ignores the stale fallback — when the signal fires during a REAL worker failure', async () => {
+    const pos = hillScene();
+    await seedWorkerPath(pos);
+
+    const ac = new AbortController();
+    // The worker fails for a real (non-abort) reason, and the dataset change
+    // lands at the same moment: the abort fires BEFORE the synchronous
+    // fallback would start. The abort re-check in computeTerrainCoreAsync
+    // must win — the run is cancelled, not silently recomputed.
+    const racingClient: TerrainCoreClientLike = {
+      computeCore: () => {
+        ac.abort();
+        return Promise.reject(new Error('worker message failed'));
+      },
+    };
+    const err = await computeTerrainCoreAsync(
+      pos,
+      pos.length / 3,
+      PARAMS,
+      undefined,
+      ac.signal,
+      racingClient,
+    ).then(
+      () => {
+        throw new Error('resolved — a stale fallback core was returned for an aborted run');
+      },
+      (e: unknown) => e,
+    );
+    // A genuine AbortError, not the worker error and not a fallback result.
+    expect(err).toBeInstanceOf(DOMException);
+    expect((err as DOMException).name).toBe('AbortError');
+    // The stale-result guard held: the fallback never computed, so the path
+    // marker still reads the seeded 'worker' value (a fallback compute would
+    // have flipped it).
+    expect(getLastTerrainComputePath()).toBe('worker');
+    // The REAL worker failure still announced itself (an abort alone is
+    // silent, but a broken worker must never hide behind a cancelled run).
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0][0])).toMatch(/worker analysis failed/i);
+  });
+
+  it('falls back normally when a signal is supplied but never fires (inverse of the race)', async () => {
+    const pos = hillScene();
+    const ac = new AbortController(); // present, never aborted
+    const viaFallback = await computeTerrainCoreAsync(
+      pos,
+      pos.length / 3,
+      PARAMS,
+      undefined,
+      ac.signal,
+      rejectingClient,
+    );
+    const direct = computeTerrainCore(pos, PARAMS);
+    expect(Array.from(viaFallback.dtm.z)).toEqual(Array.from(direct.dtm.z));
+    expect(getLastTerrainComputePath()).toBe('fallback');
+  });
+
+  it('rejects with the too-large error — never a frozen main thread — when the worker fails on an oversize run', async () => {
+    const pos = hillScene();
+    await seedWorkerPath(pos);
+
+    const n = MAX_FALLBACK_POINTS + 1;
+    const err = await computeTerrainCoreAsync(
+      pos, // the guard fires on the declared count, before any compute
+      n,
+      PARAMS,
+      undefined,
+      undefined,
+      throwingClient,
+    ).then(
+      () => {
+        throw new Error('resolved — the oversize fallback guard did not fire');
+      },
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(Error);
+    const msg = String((err as Error).message);
+    expect(msg).toMatch(/too\s+large/i);
+    // The message names BOTH the offending size and the limit — the figures a
+    // developer needs to size the sample down.
+    expect(msg).toContain(String(n));
+    expect(msg).toContain(String(MAX_FALLBACK_POINTS));
+    // Not an abort (the caller must treat this as a real failure) …
+    expect((err as Error).name).not.toBe('AbortError');
+    // … and no fallback compute happened (path marker keeps its seeded value).
+    expect(getLastTerrainComputePath()).toBe('worker');
+  });
+
+  it('a run exactly AT the limit still falls back (the guard is strictly greater-than)', async () => {
+    const pos = hillScene();
+    // n == MAX_FALLBACK_POINTS must pass the guard. The synchronous fallback
+    // reads the positions array itself (not n), so the small fixture computes
+    // a real core — what is under test is the boundary of the guard.
+    const core = await computeTerrainCoreAsync(
+      pos,
+      MAX_FALLBACK_POINTS,
+      PARAMS,
+      undefined,
+      undefined,
+      throwingClient,
+    );
+    const direct = computeTerrainCore(pos, PARAMS);
+    expect(Array.from(core.dtm.z)).toEqual(Array.from(direct.dtm.z));
+    expect(getLastTerrainComputePath()).toBe('fallback');
   });
 });
 

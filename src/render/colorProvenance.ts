@@ -23,6 +23,8 @@
  * of the math.
  */
 
+import { srgbToLinearScalar } from './colorEncode';
+
 /** A formatted colour provenance row — every channel as a string. */
 export interface ColorProvenance {
   /** Scanner-stored sRGB Uint8 — `[r, g, b]` in `[0, 255]`. */
@@ -35,9 +37,11 @@ export interface ColorProvenance {
   readonly hex: string;
 }
 
+// u8 adapter over the shared EOTF seam in `colorEncode.ts` (an import-free
+// leaf, so this module stays pure data). One curve for renderer and card —
+// the provenance values can no longer drift from what the GPU multiplies.
 function srgb8ToLinearFloat(v: number): number {
-  const x = v / 255;
-  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  return srgbToLinearScalar(v / 255);
 }
 
 function linearFloatToSrgb8(v: number): number {

@@ -235,10 +235,14 @@ export function crsFromWkt(wkt: string): CrsInfo {
   let linearUnit: CrsLinearUnit = 'unknown';
   let linearUnitToMetres = 1;
   if (!isGeographic) {
-    const allUnits = [...text.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)];
-    // The projected linear unit is the LAST UNIT match (after the inner
-    // GEOGCS's angular UNIT). Walking from the back also handles compound
-    // CRSs that embed multiple sub-CRSs.
+    // Scan ONLY the horizontal slice. A COMPD_CS's vertical block carries
+    // its own UNIT (almost always metres); scanning the full text let that
+    // vertical metre clause win over the horizontal one — e.g. a state-plane
+    // CRS in US survey feet + NAVD88 metres parsed as metres.
+    const allUnits = [...horizText.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)];
+    // The projected linear unit is the LAST UNIT match in the horizontal
+    // slice (after the inner GEOGCS's angular UNIT). For non-compound WKT
+    // `horizText === text`, so this path is unchanged there.
     const projectedUnit = allUnits[allUnits.length - 1];
     if (projectedUnit) {
       const unitName = projectedUnit[1].toLowerCase();
