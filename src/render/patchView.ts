@@ -24,6 +24,8 @@
  * ships through the same module-graph seam every Stream A leaf uses.
  */
 
+import { srgbToLinearScalar } from './colorEncode';
+
 /** A 3D vector — `[x, y, z]`. */
 export type Vec3 = readonly [number, number, number];
 
@@ -106,13 +108,13 @@ function normalize(v: Vec3): Vec3 {
 }
 
 /**
- * Piecewise sRGB → linear (IEC 61966-2-1). Matches three.js's
- * `Color.SRGBToLinear` and the loader's `toFloatColors`. Kept inline so
- * the module stays a pure leaf — no cross-module dependency.
+ * Piecewise sRGB Uint8 → linear (IEC 61966-2-1). Thin u8 adapter over the
+ * shared `srgbToLinearScalar` seam in `colorEncode.ts` — itself an
+ * import-free leaf, so this module's pure-leaf / Node-testable status is
+ * preserved while the EOTF curve can no longer drift from the GPU path.
  */
 function srgb8ToLinearFloat(v: number): number {
-  const x = v / 255;
-  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  return srgbToLinearScalar(v / 255);
 }
 
 /**

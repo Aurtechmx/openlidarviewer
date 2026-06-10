@@ -8,12 +8,20 @@
  * the axes and under-reported it on the diagonals) and had no aspect.
  *
  * Horn (1981) fits a plane to the 3x3 neighbourhood with a weighted
- * central difference:
+ * central difference. GRID CONVENTION: our rasters are NORTHING-UP —
+ * `rasterizeDtm` maps row = floor((y − origin) / cell), so row+1 is one
+ * cell NORTH (unlike image rasters, where row+1 is south). Hence:
  *
  *   dz/dx = ((zE + 2·zE + zE) − (zW + 2·zW + zW)) / (8·cell)   [weighted]
- *   dz/dy = ((zS + 2·zS + zS) − (zN + 2·zN + zN)) / (8·cell)
+ *   dz/dy = ((zN + 2·zN + zN) − (zS + 2·zS + zS)) / (8·cell)   [= +∂z/∂northing]
  *   slope = hypot(dz/dx, dz/dy)            (rise/run, dimensionless)
- *   aspect = atan2(dz/dy, −dz/dx)          (radians, math convention)
+ *   aspect = atan2(−dz/dy, −dz/dx)         (radians, math frame, downslope)
+ *
+ * Aspect is the DOWNSLOPE direction −∇z = (−dz/dx, −dz/dy) expressed as a
+ * math-frame angle (CCW from east; π/2 = north). Because dz/dy here is
+ * +∂z/∂northing, BOTH components must be negated — the ESRI textbook form
+ * atan2(dz/dy, −dz/dx) assumes image rows (row+1 = south) and mirrored our
+ * aspect north–south (v0.4.3 bug: hillshade lit the wrong flank).
  *
  * The weighting (corners 1, edges 2) makes the estimate isotropic and
  * smooths single-cell noise — which is exactly what the confidence
@@ -28,7 +36,11 @@
 export interface TerrainDerivatives {
   /** Slope as rise/run (dimensionless). 0 on flat ground. */
   readonly slope: Float32Array;
-  /** Aspect in radians, atan2(dz/dy, −dz/dx); 0 where slope is ~0. */
+  /**
+   * Aspect in radians — the DOWNSLOPE direction in the math frame (CCW from
+   * east; π/2 = north), atan2(−dz/dy, −dz/dx) on the northing-up grid.
+   * 0 where slope is ~0.
+   */
   readonly aspect: Float32Array;
 }
 
@@ -74,10 +86,15 @@ export function hornSlopeAspect(
       const h = at(row + 1, col, e);
       const ii = at(row + 1, col + 1, e);
 
+      // Northing-up grid: row+1 (g, h, ii) is NORTH, row−1 (a, b, c) is
+      // south, so dzdy is +∂z/∂northing.
       const dzdx = (c + 2 * f + ii - (a + 2 * d + g)) / (8 * cellSizeM);
       const dzdy = (g + 2 * h + ii - (a + 2 * b + c)) / (8 * cellSizeM);
       slope[i] = Math.hypot(dzdx, dzdy);
-      aspect[i] = dzdx === 0 && dzdy === 0 ? 0 : Math.atan2(dzdy, -dzdx);
+      // Aspect = downslope direction −∇z in the math frame: negate BOTH
+      // gradient components. atan2(+dzdy, −dzdx) (the image-row ESRI form)
+      // mirrored aspect north–south on this northing-up grid.
+      aspect[i] = dzdx === 0 && dzdy === 0 ? 0 : Math.atan2(-dzdy, -dzdx);
     }
   }
   return { slope, aspect };

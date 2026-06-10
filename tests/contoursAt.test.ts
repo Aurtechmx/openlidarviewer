@@ -64,10 +64,34 @@ describe('contoursAt', () => {
         segCount++;
         const mx = (s.x1 + s.x2) / 2;
         const my = (s.y1 + s.y2) / 2;
-        expect(Math.abs(zfn(mx, my) - level.value)).toBeLessThan(1e-4);
+        // CELL-CENTRE REGISTRATION: z[row][col] = zfn(col, row) is the value
+        // of the cell whose centre sits at world (col + 0.5, row + 0.5) with
+        // a 1 m cell. The surface as a function of WORLD coordinates is
+        // therefore zfn(wx − 0.5, wy − 0.5).
+        expect(Math.abs(zfn(mx - 0.5, my - 0.5) - level.value)).toBeLessThan(1e-4);
       }
     }
     expect(segCount).toBeGreaterThan(0);
+  });
+
+  it('registers contours to CELL CENTRES (single-ramp analytic truth)', () => {
+    // A 2x2 grid, z = col: cell values 0 and 1, cell centres at world
+    // x = 0.5 and x = 1.5 (origin 0, 1 m cells). The 0.5 m contour of the
+    // ramp between those centres is the vertical line x = 1.0 — exactly
+    // midway BETWEEN the cell centres. The pre-v0.4.4 corner registration
+    // placed it at x = 0.5 (half a cell south-west of the true crossing).
+    const set = contoursAt(grid((x) => x, 2, 2), { intervalM: 1, levels: [0.5] });
+    expect(set.levels.length).toBe(1);
+    const segs = set.levels[0].segments;
+    expect(segs.length).toBeGreaterThan(0);
+    for (const s of segs) {
+      expect(s.x1).toBeCloseTo(1.0, 6);
+      expect(s.x2).toBeCloseTo(1.0, 6);
+      // The segment spans the marching square vertically, between the two
+      // row centres y = 0.5 and y = 1.5.
+      expect(Math.min(s.y1, s.y2)).toBeCloseTo(0.5, 6);
+      expect(Math.max(s.y1, s.y2)).toBeCloseTo(1.5, 6);
+    }
   });
 
   it('is deterministic', () => {

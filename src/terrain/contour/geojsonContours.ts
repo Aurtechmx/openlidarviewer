@@ -97,6 +97,11 @@ export function toGeoJSON(
     metadata,
     features,
   };
+  // FRAME CONTRACT: the CRS stamp asserts the coordinates are IN that CRS
+  // frame. The caller (serializeContours) is responsible for shifting a
+  // local-frame model into the world frame first — or for nulling `crs`
+  // when no world origin is known — so this writer never georeferences
+  // recentred local coordinates.
   if (model.crs) {
     obj.crs = { type: 'name', properties: { name: crsUrn(model.crs) } };
   }

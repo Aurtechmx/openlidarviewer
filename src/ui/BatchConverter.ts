@@ -33,7 +33,10 @@ export class BatchConverter {
   private readonly _crsRow: HTMLElement;
 
   private _files: BatchInput[] = [];
-  private _format: ConvertFormat = 'las';
+  // LAS 1.4 is the default: modern consumers all read it, and its extended
+  // point formats keep the full 8-bit classification (1.2 clamps to 5 bits).
+  // LAS 1.2 stays selectable for legacy-tool compatibility.
+  private _format: ConvertFormat = 'las14';
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';

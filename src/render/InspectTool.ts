@@ -25,6 +25,7 @@ import {
   gpsTimeText,
   normalText,
   pointInfoCopyText,
+  splitPointCoords,
 } from './pointInfo';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { latLonToUtm, utmConverter } from '../geo/UtmConverter';
@@ -427,30 +428,26 @@ export class InspectTool {
   private _fillCard(info: PointInfo): void {
     const rows: HTMLElement[] = [];
 
-    // ── Local coordinates — always shown (the renderer's frame) ─────────────
-    rows.push(coordGroupHeader('Local'));
-    rows.push(infoRow('X', `${info.x} m`));
-    rows.push(infoRow('Y', `${info.y} m`));
-    rows.push(infoRow('Z', `${info.z} m`));
-
-    // ── World coordinates — when an origin offset exists ───────────────────
-    const origin = this._coordContext.origin;
-    const localX = Number.parseFloat(String(info.x));
-    const localY = Number.parseFloat(String(info.y));
-    const localZ = Number.parseFloat(String(info.z));
-    const worldX = origin && Number.isFinite(localX) ? localX + origin[0] : undefined;
-    const worldY = origin && Number.isFinite(localY) ? localY + origin[1] : undefined;
-    const worldZ = origin && Number.isFinite(localZ) ? localZ + origin[2] : undefined;
+    // ── Coordinate frames ───────────────────────────────────────────────────
+    // Frame convention: `makePointInfo` already added the load-time origin
+    // back, so `info.x/y/z` ARE world coordinates. The local (recentred
+    // render-buffer) values are `info − origin`. v0.4.3 added the origin a
+    // second time here, doubling every easting/northing and feeding the
+    // doubled values into the geographic projection below.
+    const split = splitPointCoords(info, this._coordContext.origin);
     const worldLabels = labelsForCrs(this._coordContext.crs);
-    if (
-      typeof worldX === 'number' &&
-      typeof worldY === 'number' &&
-      typeof worldZ === 'number'
-    ) {
-      rows.push(coordGroupHeader(worldLabels.heading));
-      rows.push(infoRow(worldLabels.x, `${worldX.toFixed(3)} m`));
-      rows.push(infoRow(worldLabels.y, `${worldY.toFixed(3)} m`));
-      rows.push(infoRow(worldLabels.z, `${worldZ.toFixed(3)} m`));
+    rows.push(coordGroupHeader(worldLabels.heading));
+    rows.push(infoRow(worldLabels.x, `${split.world.x} m`));
+    rows.push(infoRow(worldLabels.y, `${split.world.y} m`));
+    rows.push(infoRow(worldLabels.z, `${split.world.z} m`));
+
+    // Local group — only when an origin shift exists; otherwise local ==
+    // world and a second identical group would be noise.
+    if (split.local) {
+      rows.push(coordGroupHeader('Local'));
+      rows.push(infoRow('X', `${split.local.x.toFixed(3)} m`));
+      rows.push(infoRow('Y', `${split.local.y.toFixed(3)} m`));
+      rows.push(infoRow('Z', `${split.local.z.toFixed(3)} m`));
     }
 
     // ── Geographic coordinates — when CRS supports projection to WGS84 ────
@@ -461,18 +458,13 @@ export class InspectTool {
     let lat: number | undefined;
     let lon: number | undefined;
     let elev: number | undefined;
-    if (
-      crs &&
-      typeof worldX === 'number' &&
-      typeof worldY === 'number' &&
-      typeof worldZ === 'number' &&
-      utmConverter.canConvert(crs, WGS84_GEOGRAPHIC) === true
-    ) {
-      // Source is a projected UTM zone — convert to WGS-84 lat/lon
-      // for the Geographic row, then derive a fresh UTM zone from
-      // that lat/lon for the UTM row (it'll match the source zone).
+    if (crs && utmConverter.canConvert(crs, WGS84_GEOGRAPHIC) === true) {
+      // Source is a projected UTM zone — convert the WORLD position
+      // (info.x/y/z, already origin-restored) to WGS-84 lat/lon for the
+      // Geographic row, then derive a fresh UTM zone from that lat/lon
+      // for the UTM row (it'll match the source zone).
       const geo = utmConverter.toGeographic(
-        { x: worldX, y: worldY, z: worldZ },
+        { x: split.world.x, y: split.world.y, z: split.world.z },
         crs,
       );
       if (geo.ok) {
@@ -480,12 +472,12 @@ export class InspectTool {
         lon = geo.value.lon;
         elev = geo.value.elevation;
       }
-    } else if (crs && crs.kind === 'geographic' && typeof worldX === 'number' && typeof worldY === 'number') {
+    } else if (crs && crs.kind === 'geographic') {
       // Source is already geographic — World row carried lon/lat
       // directly; reuse them for the UTM derivation.
-      lat = worldY;
-      lon = worldX;
-      elev = typeof worldZ === 'number' ? worldZ : undefined;
+      lat = split.world.y;
+      lon = split.world.x;
+      elev = split.world.z;
     }
 
     if (typeof lat === 'number' && typeof lon === 'number') {

@@ -86,9 +86,11 @@ export interface UniformSlopeParams extends SceneExtent {
  * KNOWN TRUTH (Horn, cell = spacing):
  *   - Horn slope value = gradient exactly (interior cells).
  *   - Slope angle = atan(gradient) in degrees.
- *   - Aspect = atan2(dz/dy, -dz/dx) points DOWNHILL in the math frame:
+ *   - Aspect = atan2(-dz/dy, -dz/dx) points DOWNHILL in the math frame
+ *     (grids are NORTHING-UP: row+1 = north, so +y is north):
  *       axis 'x' (rises east): dz/dx>0, dz/dy=0 -> aspect = pi (180 deg, west).
- *       axis 'y' (rises south, larger row): dz/dy>0 -> aspect = +pi/2 (90 deg).
+ *       axis 'y' (rises NORTH, larger row): dz/dy>0 -> aspect = -pi/2
+ *       (270 deg, downhill south).
  *     (Aspect convention verified against terrainDerivatives.hornSlopeAspect.)
  *   - DTM cell elevations match the analytic plane evaluated at each node.
  */

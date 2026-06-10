@@ -75,24 +75,34 @@ export function bindShortcuts(handlers: ShortcutHandlers): () => void {
     // Every other shortcut is a bare key — leave browser / OS combos alone.
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+    // Every handled bare key calls `preventDefault()` so any OTHER bare-key
+    // window handler (e.g. main.ts's T/O/P camera presets, which bails on
+    // `defaultPrevented` just like the check at the top of this handler)
+    // sees the keystroke as consumed. This is what stops 'I' from firing
+    // both Inspect and a camera preset on one press (the v0.4.3 collision).
     switch (e.key) {
       case 'a':
       case 'A':
+        e.preventDefault();
         handlers.onAnnotate();
         return;
       case 'm':
       case 'M':
+        e.preventDefault();
         handlers.onMeasure();
         return;
       case 'i':
       case 'I':
+        e.preventDefault();
         handlers.onInspect();
         return;
       case 'v':
       case 'V':
+        e.preventDefault();
         handlers.onSaveView();
         return;
       case '?':
+        e.preventDefault();
         handlers.onToggleHelp();
         return;
       case 'Delete':

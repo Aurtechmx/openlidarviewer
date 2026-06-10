@@ -47,6 +47,7 @@ import {
   screenSize,
   log2,
   exp,
+  exp2,
   max,
   length,
   smoothstep,
@@ -174,6 +175,9 @@ import {
   isWithinSettleWindow,
 } from './orbitFeel';
 import { selectStreamingPick } from './streaming/streamingPickSelection';
+// The shared sRGB → linear seam — every Float32 colour-attribute write goes
+// through this so recolour paths match the initial `toFloatColors` upload.
+import { writeFloatColorsInto } from './colorEncode';
 // The streaming render engine is type-only here and dynamically imported in
 // `attachStreamingCloud`, so `src/render/streaming/*` (scheduler, renderer,
 // octree, cache) stays out of the initial bundle and loads only when a COPC
@@ -182,7 +186,7 @@ import { selectStreamingPick } from './streaming/streamingPickSelection';
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
 import type { StreamingRenderer } from './streaming/StreamingRenderer';
 import type { StreamingSource } from './streaming/StreamingSource';
-import { streamingBudgets } from './streaming/streamingBudget';
+import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
 // The streaming-engine `import()` split points live in `lazyChunks.ts` — a
@@ -501,11 +505,10 @@ function stridePositions(src: Float32Array, stride: number): Float32Array {
 
 function toFloatColors(u8: Uint8Array): Float32Array {
   const f = new Float32Array(u8.length);
-  for (let i = 0; i < u8.length; i++) {
-    const v = u8[i] / 255;
-    // Piecewise sRGB → linear (matches three.js's Color.SRGBToLinear).
-    f[i] = v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-  }
+  // Delegates to the shared EOTF seam in `colorEncode.ts` so the in-place
+  // recolour paths (colour-mode switch, coverage grid, percentile trim,
+  // classification refresh, streaming recolour) apply byte-identical maths.
+  writeFloatColorsInto(f, u8);
   return f;
 }
 
@@ -528,6 +531,12 @@ type TslNode = any; // eslint-disable-line @typescript-eslint/no-explicit-any
  * darkens the pixel in proportion to how far it recedes behind them. Works in
  * `log2(eye distance)` so the cue is scale-invariant. Mirrors `edlObscurance`
  * and `edlShade` in `edl.ts`, which are unit-tested.
+ *
+ * @param usesLogDepth - Whether the renderer owns a logarithmic depth buffer,
+ * read back off the renderer instance at construction. Decides which depth
+ * inversion the node graph is built with (the graph is compiled once, and the
+ * renderer's depth mode is fixed at construction, so a build-time branch is
+ * correct — no per-pixel uniform needed).
  */
 function buildEdlOutputNode(
   scenePass: ReturnType<typeof pass>,
@@ -535,14 +544,47 @@ function buildEdlOutputNode(
   near: TslNode,
   far: TslNode,
   radiusPx: number,
+  usesLogDepth: boolean,
 ): TslNode {
   const colorNode: TslNode = scenePass.getTextureNode();
   const depthNode: TslNode = scenePass.getTextureNode('depth');
 
   // Positive eye-space distance at a screen UV, floored away from zero so the
   // following log2 is always finite.
+  //
+  // The inversion MUST match the encoding the renderer actually wrote:
+  //
+  //  • Logarithmic depth buffer (this app's default — see the renderer
+  //    construction): three's node pipeline (`NodeMaterial.setupDepth` →
+  //    `viewZToLogarithmicDepth`) replaces fragment depth with the Ulrich
+  //    near-anchored log encoding
+  //        raw = log2(eyeDist / near') / log2(far / near'),
+  //        near' = max(near, 1e-6),
+  //    so the eye distance is recovered with
+  //        eyeDist = near' · 2^(raw · log2(far / near')).
+  //    This mirrors `logDepthToEyeDistance` in `edl.ts` (unit-tested) exactly,
+  //    including the 1e-6 near clamp. Both the WebGPU backend and the WebGL 2
+  //    fallback compile this same node graph, so one inversion covers both.
+  //    (Deliberately NOT the legacy WebGLRenderer chunk
+  //    `log2(1 + w) / log2(1 + far)` — that convention never runs here.)
+  //
+  //  • Standard perspective depth otherwise: three's own
+  //    `perspectiveDepthToViewZ` (which internally also handles a reversed
+  //    depth buffer) recovers viewZ; negate for a positive distance.
+  //
+  // Using the wrong inversion is not subtle: treating a log-encoded sample as
+  // perspective depth computes obscurance in the wrong space — EDL reads far
+  // too weak up close and erratic at range — silently defeating the
+  // unit-tested maths in `edl.ts`. That was the v0.4.x audit defect.
   const eyeDistAt = Fn(([sampleUv]: TslNode[]): TslNode => {
     const raw: TslNode = depthNode.sample(sampleUv).r;
+    if (usesLogDepth) {
+      const nearClamped: TslNode = max(near, float(1e-6));
+      const eyeDist: TslNode = nearClamped.mul(
+        exp2(raw.mul(log2(far.div(nearClamped)))),
+      );
+      return max(eyeDist, float(1e-4));
+    }
     return max(perspectiveDepthToViewZ(raw, near, far).negate(), float(1e-4));
   });
 
@@ -931,6 +973,17 @@ export class Viewer {
     // The scene renders into a pass; the EDL node shades it from the pass's
     // colour and depth. The pipeline is driven only while EDL is enabled (see
     // the render loop); its node graph compiles lazily on first use.
+    //
+    // Depth-encoding flag: read back off the renderer instance rather than
+    // hard-coding `true` to match the constructor option above. three's base
+    // `Renderer` class stores the option verbatim (`this.logarithmicDepthBuffer`),
+    // and the node pipeline keys its fragment-depth override on that same
+    // property — so deriving the EDL inversion from it keeps the two in
+    // lock-step even if a future three release stops honouring (or starts
+    // ignoring) the option on one backend.
+    const usesLogDepth =
+      (this._renderer as unknown as { logarithmicDepthBuffer?: boolean })
+        .logarithmicDepthBuffer === true;
     this._scenePass = pass(this._scene, this._camera);
     this._post = new THREE.RenderPipeline(this._renderer);
     this._post.outputNode = buildEdlOutputNode(
@@ -939,6 +992,7 @@ export class Viewer {
       this._edlNear,
       this._edlFar,
       EDL_DEFAULTS.radiusPx,
+      usesLogDepth,
     ) as typeof this._post.outputNode;
 
     // ── OrbitControls ─────────────────────────────────────────────────────
@@ -1746,6 +1800,10 @@ export class Viewer {
     entry.mesh.geometry.dispose();
     entry.material.dispose();
     this._clouds.delete(id);
+    // Drop the per-cloud undo / highlight snapshots too — without this the
+    // maps retain full-size buffers for every cloud ever removed (leak).
+    this._classSnapshots.delete(id);
+    this._selectionSnapshots.delete(id);
     // Refresh the orbit-clamp envelope so removing the last static cloud
     // doesn't leave the camera clamping to its ghost bounds.
     this._orbitClampAabb = this._visibleCloudAabb();
@@ -1893,7 +1951,9 @@ export class Viewer {
       if (entry.mode !== 'coverage') continue;
       const raw = colorForMode('coverage', entry.cloud, { coverageGrid: grid ?? undefined });
       const arr = entry.colorAttr.array as Float32Array;
-      for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+      // sRGB → linear via the shared EOTF seam — a bare `/255` here would
+      // double-encode and visibly pale the cloud vs the initial upload.
+      writeFloatColorsInto(arr, raw);
       entry.colorAttr.needsUpdate = true;
     }
     this._bumpRenderActivity();
@@ -1920,7 +1980,8 @@ export class Viewer {
         heightPercentileTrim: next,
       });
       const arr = entry.colorAttr.array as Float32Array;
-      for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+      // sRGB → linear via the shared EOTF seam (see colorEncode.ts).
+      writeFloatColorsInto(arr, raw);
       entry.colorAttr.needsUpdate = true;
       void id; // silence the unused-binding lint
     }
@@ -2215,8 +2276,8 @@ export class Viewer {
       // Step 2: apply the appearance bundle in sRGB space.
       applyRgbAppearance(srgb, this._rgbAppearance);
       // Step 3: linearise via the piecewise sRGB EOTF — same maths as
-      // `toFloatColors`, kept inline so the helper stays a private
-      // implementation detail and `colorModes.ts` remains a leaf.
+      // `writeFloatColorsInto` (colorEncode.ts), kept inline because the
+      // source here is already FLOAT sRGB (post-appearance), not Uint8.
       for (let i = 0; i < n; i++) {
         const v = srgb[i];
         arr[i] = v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
@@ -2239,7 +2300,9 @@ export class Viewer {
       coverageGrid: this._coverageGrid ?? undefined,
     });
     const arr = entry.colorAttr.array as Float32Array;
-    for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+    // sRGB → linear via the shared EOTF seam — keeps a mode switch
+    // byte-identical to what the initial `toFloatColors` upload produced.
+    writeFloatColorsInto(arr, raw);
     entry.colorAttr.needsUpdate = true;
     entry.mode = mode;
     // Color buffer just changed — make sure the idle-render throttle
@@ -2358,7 +2421,8 @@ export class Viewer {
     if (entry.mode === 'classification') {
       const raw = colorForMode('classification', entry.cloud);
       const arr = entry.colorAttr.array as Float32Array;
-      for (let i = 0; i < raw.length; i++) arr[i] = raw[i] / 255;
+      // sRGB → linear via the shared EOTF seam (see colorEncode.ts).
+      writeFloatColorsInto(arr, raw);
       entry.colorAttr.needsUpdate = true;
     }
   }
@@ -3262,6 +3326,21 @@ export class Viewer {
       totalPoints += cloud.pointCount;
       if (mesh.visible) displayedPoints += cloud.pointCount;
     }
+    // Static byte estimate first — the streaming layout differs per point.
+    let gpuBytesEstimate = displayedPoints * BYTES_PER_GPU_POINT;
+
+    // A streaming cloud renders through its own node meshes, not
+    // `this._clouds`, so without this fold the overlay reported 0 points
+    // while a COPC/EPT scan was clearly on screen. Resident = uploaded to
+    // the GPU right now; source = the whole remote file. The byte estimate
+    // uses the streaming layout's own per-point cost (estimateGpuBytes),
+    // which differs from the static BYTES_PER_GPU_POINT.
+    if (this._streaming) {
+      const resident = this._streaming.cloud.residentPointCount;
+      displayedPoints += resident;
+      totalPoints += this._streaming.cloud.sourcePointCount;
+      gpuBytesEstimate += estimateGpuBytes(resident);
+    }
 
     // three.js names this counter `drawCalls` on the WebGPU backend and
     // `calls` on WebGL 2 — read whichever the active backend populated.
@@ -3276,7 +3355,7 @@ export class Viewer {
       drawCalls,
       displayedPoints,
       totalPoints,
-      gpuBytesEstimate: displayedPoints * BYTES_PER_GPU_POINT,
+      gpuBytesEstimate,
     };
   }
 
@@ -3793,6 +3872,10 @@ export class Viewer {
     for (const id of [...this._clouds.keys()]) {
       this.removeCloud(id);
     }
+    // `removeCloud` drops each cloud's snapshots, but clear both maps
+    // outright in case a snapshot ever outlived its cloud entry.
+    this._classSnapshots.clear();
+    this._selectionSnapshots.clear();
     this.detachStreamingCloud();
     this._nav.dispose();
     this._measure.dispose();

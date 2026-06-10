@@ -172,12 +172,22 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
 
   const levels: ContourLevel[] = levelValues.map((value) => ({ value, segments: [] }));
 
-  // Corner world positions for a cell at (col,row).
+  // Corner world positions for the marching square spanning cells
+  // (col,row)…(col+1,row+1).
+  //
+  // CELL-CENTRE REGISTRATION: a DTM value z[row*cols+col] is the
+  // representative elevation of the whole cell, i.e. it "lives" at the cell
+  // CENTRE (originH + (col + 0.5)·cell), not at the cell's lower-left node.
+  // Marching squares samples the four cell VALUES of a 2×2 block, so the
+  // square's geometric corners are those four cell centres — hence the
+  // +0.5·cellSizeM on both axes. v0.4.3 omitted the offset, shifting every
+  // contour half a cell toward the south-west of where the surface actually
+  // crosses the level.
   const cornerXY = (col: number, row: number): [number, number][] => [
-    [originH1 + col * cellSizeM, originH2 + row * cellSizeM], // v0 BL
-    [originH1 + (col + 1) * cellSizeM, originH2 + row * cellSizeM], // v1 BR
-    [originH1 + (col + 1) * cellSizeM, originH2 + (row + 1) * cellSizeM], // v2 TR
-    [originH1 + col * cellSizeM, originH2 + (row + 1) * cellSizeM], // v3 TL
+    [originH1 + (col + 0.5) * cellSizeM, originH2 + (row + 0.5) * cellSizeM], // v0 BL
+    [originH1 + (col + 1.5) * cellSizeM, originH2 + (row + 0.5) * cellSizeM], // v1 BR
+    [originH1 + (col + 1.5) * cellSizeM, originH2 + (row + 1.5) * cellSizeM], // v2 TR
+    [originH1 + (col + 0.5) * cellSizeM, originH2 + (row + 1.5) * cellSizeM], // v3 TL
   ];
 
   // Interpolate the crossing point on an edge for level v.

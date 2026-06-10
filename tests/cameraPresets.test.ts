@@ -42,16 +42,23 @@ describe('camera preset registry', () => {
     expect(CAMERA_PRESET_ORDER).toEqual(['top', 'iso', 'oblique', 'planar']);
   });
 
-  it('every preset has a label + keyboard shortcut', () => {
+  it('every preset has a label; keys are single letters or deliberately empty', () => {
     for (const name of CAMERA_PRESET_ORDER) {
       expect(CAMERA_PRESET_LABEL[name]).toBeTruthy();
-      expect(CAMERA_PRESET_KEY[name]).toMatch(/^[A-Z]$/);
+      // Iso deliberately has NO key: bare `I` belongs to the Inspect tool
+      // (v0.4.4 collision fix). Empty string = "no chip, no binding".
+      if (name === 'iso') {
+        expect(CAMERA_PRESET_KEY[name]).toBe('');
+      } else {
+        expect(CAMERA_PRESET_KEY[name]).toMatch(/^[A-Z]$/);
+      }
     }
   });
 
-  it('keyboard shortcuts are unique', () => {
-    const keys = CAMERA_PRESET_ORDER.map((n) => CAMERA_PRESET_KEY[n]);
+  it('non-empty keyboard shortcuts are unique and never reuse the Inspect key', () => {
+    const keys = CAMERA_PRESET_ORDER.map((n) => CAMERA_PRESET_KEY[n]).filter(Boolean);
     expect(new Set(keys).size).toBe(keys.length);
+    expect(keys).not.toContain('I');
   });
 });
 

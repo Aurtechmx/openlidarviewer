@@ -1,4 +1,10 @@
-import { edlObscurance, edlShade, edlDefaultEnabled } from '../src/render/edl';
+import {
+  edlObscurance,
+  edlShade,
+  edlDefaultEnabled,
+  eyeDistanceToLogDepth,
+  logDepthToEyeDistance,
+} from '../src/render/edl';
 
 // ────────────────────────────────────────────────────────────────────────────
 // edlObscurance — the log2(eye-distance) depth-discontinuity sum
@@ -91,6 +97,87 @@ describe('edlShade', () => {
         expect(s).toBeLessThanOrEqual(1);
       }
     }
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// logDepthToEyeDistance — inverting the logarithmic depth-buffer encoding
+//
+// The renderer draws with `logarithmicDepthBuffer: true`, so the EDL pass
+// samples Ulrich near-anchored log depth, not standard perspective depth:
+//     raw = log2(eyeDist / near') / log2(far / near'),  near' = max(near, 1e-6)
+// These tests pin the CPU twin of the GPU inversion node in `Viewer.ts`.
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('logDepthToEyeDistance', () => {
+  // The Viewer's actual camera planes at construction.
+  const NEAR = 0.1;
+  const FAR = 5_000_000;
+
+  test('hand-computed point: near=1, far=1024 — eye distance 32 encodes to exactly 0.5', () => {
+    // Forward: log2(32 / 1) / log2(1024 / 1) = 5 / 10 = 0.5.
+    expect(eyeDistanceToLogDepth(32, 1, 1024)).toBeCloseTo(0.5, 12);
+    // Inverse: 1 · 2^(0.5 · log2(1024)) = 2^5 = 32.
+    expect(logDepthToEyeDistance(0.5, 1, 1024)).toBeCloseTo(32, 10);
+  });
+
+  test('depth 0 decodes to the near plane, depth 1 to the far plane', () => {
+    expect(logDepthToEyeDistance(0, NEAR, FAR)).toBeCloseTo(NEAR, 10);
+    // Far is huge, so compare with a relative tolerance.
+    expect(logDepthToEyeDistance(1, NEAR, FAR) / FAR).toBeCloseTo(1, 10);
+  });
+
+  test('the near and far planes encode to depth 0 and 1', () => {
+    expect(eyeDistanceToLogDepth(NEAR, NEAR, FAR)).toBeCloseTo(0, 12);
+    expect(eyeDistanceToLogDepth(FAR, NEAR, FAR)).toBeCloseTo(1, 12);
+  });
+
+  test('round-trips across seven orders of magnitude of eye distance', () => {
+    // A 5 m indoor scan and a 50 km survey share one depth buffer — the
+    // inversion must be exact everywhere in between, not just at the planes.
+    for (const d of [0.1, 0.5, 5, 120, 9_876.5, 1_000_000, 4_999_999]) {
+      const raw = eyeDistanceToLogDepth(d, NEAR, FAR);
+      expect(raw).toBeGreaterThanOrEqual(0);
+      expect(raw).toBeLessThanOrEqual(1);
+      // Relative comparison: distances span 0.1 … 5e6.
+      expect(logDepthToEyeDistance(raw, NEAR, FAR) / d).toBeCloseTo(1, 8);
+    }
+  });
+
+  test('is strictly monotonic — a deeper sample decodes to a larger distance', () => {
+    let prev = 0;
+    for (const raw of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1]) {
+      const d = logDepthToEyeDistance(raw, NEAR, FAR);
+      expect(d).toBeGreaterThan(prev);
+      prev = d;
+    }
+  });
+
+  test('a degenerate near plane of 0 is clamped (to 1e-6) instead of dividing by zero', () => {
+    const raw = eyeDistanceToLogDepth(10, 0, 1000);
+    expect(Number.isFinite(raw)).toBe(true);
+    expect(logDepthToEyeDistance(raw, 0, 1000) / 10).toBeCloseTo(1, 8);
+  });
+
+  test('keeps the 1e-4 distance floor so the downstream log2 stays finite', () => {
+    // raw = 0 with a zero near plane decodes to the clamped near of 1e-6,
+    // which the MIN_DIST floor lifts to 1e-4 — same semantics as the GPU
+    // node's max(…, 1e-4) and edlObscurance's own floor.
+    expect(logDepthToEyeDistance(0, 0, 1000)).toBe(1e-4);
+    expect(Number.isFinite(Math.log2(logDepthToEyeDistance(0, 0, 1000)))).toBe(true);
+  });
+
+  test('mis-decoding log depth with the perspective formula is badly wrong (the fixed bug)', () => {
+    // The defect this inversion fixes: a mid-scene point at 707 m
+    // (geometric mean of near/far ≈ sqrt(0.1 · 5e6)) log-encodes to ~0.5.
+    // The standard perspective inversion near·far/(far − (far−near)·raw)
+    // would read that sample as ~0.2 m — off by more than three orders of
+    // magnitude, which is why EDL obscurance landed in the wrong space.
+    const trueDist = Math.sqrt(NEAR * FAR); // ≈ 707.1
+    const raw = eyeDistanceToLogDepth(trueDist, NEAR, FAR);
+    const perspectiveMisread = (NEAR * FAR) / (FAR - (FAR - NEAR) * raw);
+    expect(logDepthToEyeDistance(raw, NEAR, FAR) / trueDist).toBeCloseTo(1, 8);
+    expect(perspectiveMisread).toBeLessThan(trueDist / 1000);
   });
 });
 

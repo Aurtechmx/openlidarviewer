@@ -26,6 +26,8 @@
  * not ours).
  */
 
+import { storageGet, storageSet } from './safeStorage';
+
 /** Names a theme. Stable string — persisted in localStorage. */
 export type ThemeName = 'dark' | 'light' | 'high-contrast';
 
@@ -113,16 +115,12 @@ export interface ThemeBody {
  * Read the persisted theme from localStorage. Returns 'dark' on a
  * missing or malformed value — never throws, even when localStorage
  * itself is unavailable (e.g. cross-origin iframes, privacy modes).
+ * The guarded access lives in `safeStorage.ts` (this module is where
+ * the pattern was first established).
  */
 export function readPersistedTheme(): ThemeName {
-  try {
-    if (typeof localStorage === 'undefined') return 'dark';
-    const raw = localStorage.getItem(THEME_STORAGE_KEY);
-    if (isThemeName(raw)) return raw;
-    return 'dark';
-  } catch {
-    return 'dark';
-  }
+  const raw = storageGet(THEME_STORAGE_KEY);
+  return isThemeName(raw) ? raw : 'dark';
 }
 
 /**
@@ -130,10 +128,5 @@ export function readPersistedTheme(): ThemeName {
  * any storage error (quota, security, privacy mode). Never throws.
  */
 export function writePersistedTheme(name: ThemeName): void {
-  try {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(THEME_STORAGE_KEY, name);
-  } catch {
-    // Best-effort persistence; ignore quota / security failures.
-  }
+  storageSet(THEME_STORAGE_KEY, name);
 }

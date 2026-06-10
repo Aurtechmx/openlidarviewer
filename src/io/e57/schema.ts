@@ -144,6 +144,22 @@ function readPose(scan: XmlNode): E57Pose | null {
   };
 }
 
+/**
+ * Read + validate a scan's declared record count. The value comes from an
+ * XML attribute in a possibly-remote file, and it later sizes one
+ * Float64Array per prototype field — so a non-integer, negative, or
+ * beyond-2^53 value must fail HERE, loudly, rather than poison the decoder's
+ * allocation arithmetic. (The byte-level plausibility bound lives in
+ * `compressedVector.ts`, next to the allocations it protects.)
+ */
+function readRecordCount(points: XmlNode): number {
+  const count = attrNum(points, 'recordCount', 0);
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new Error(`E57: invalid recordCount "${count}" — expected a non-negative integer.`);
+  }
+  return count;
+}
+
 /** Interpret one `data3D` scan structure. */
 function readScan(scan: XmlNode): E57Scan {
   const points = child(scan, 'points');
@@ -164,7 +180,7 @@ function readScan(scan: XmlNode): E57Scan {
   return {
     name: child(scan, 'name')?.text ?? 'Scan',
     guid: child(scan, 'guid')?.text ?? '',
-    recordCount: attrNum(points, 'recordCount', 0),
+    recordCount: readRecordCount(points),
     fileOffset: attrNum(points, 'fileOffset', 0),
     prototype: proto.children.map(readField),
     pose: readPose(scan),

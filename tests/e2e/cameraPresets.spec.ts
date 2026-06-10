@@ -6,9 +6,18 @@ import { dropTinyPly } from './helpers';
  *
  * The data-layer geometry is covered by cameraPresets.test.ts (36
  * unit tests). This spec exercises the DOM + keyboard wiring: the
- * NavBar chip rail mounts every preset with a visible key hint, each
- * chip clicks without throwing a console error, and the T / I / O / P
- * keyboard shortcuts route through the same handler.
+ * NavBar chip rail mounts every preset, each chip clicks without
+ * throwing a console error, and the T / O / P keyboard shortcuts
+ * route through the same handler.
+ *
+ * v0.4.4: Iso has NO keyboard shortcut any more. Bare `I` belongs to
+ * the Inspect tool (`bindShortcuts` → onInspect); binding both made
+ * a single keystroke toggle Inspect AND snap the camera (the v0.4.3
+ * collision). `CAMERA_PRESET_KEY.iso` is now `''`, so the Iso chip
+ * renders without an `.olv-cam-chip-key` badge and its tooltip is
+ * just "Iso view" (src/ui/NavBar.ts — key chip skipped when the key
+ * is empty). Iso stays reachable via the chip and the command
+ * palette; these specs pin that split.
  *
  * What this spec does NOT assert: the camera actually moved to the
  * target pose. Headless WebGL pose tracking is flaky and the
@@ -24,22 +33,25 @@ async function loadSample(page: Page): Promise<void> {
   await page.waitForTimeout(800);
 }
 
-const PRESETS = [
+/** The presets that still own a bare-key shortcut (Iso lost `I` in v0.4.4). */
+const KEYED_PRESETS = [
   { name: 'Top', key: 'T' },
-  { name: 'Iso', key: 'I' },
   { name: 'Oblique', key: 'O' },
   { name: 'Planar', key: 'P' },
 ] as const;
 
+/** Every preset chip in display order — Iso is click/palette-only. */
+const ALL_PRESET_NAMES = ['Top', 'Iso', 'Oblique', 'Planar'] as const;
+
 test.describe('camera presets — NavBar chip rail', () => {
-  test('the rail mounts a chip for every preset with a visible key hint', async ({
+  test('the rail mounts a chip for every preset; only T/O/P carry a key hint', async ({
     page,
   }) => {
     await loadSample(page);
     const rail = page.locator('.olv-cam-presets');
     await expect(rail).toBeVisible();
 
-    for (const { name, key } of PRESETS) {
+    for (const { name, key } of KEYED_PRESETS) {
       const chip = rail
         .locator('.olv-cam-chip')
         .filter({ hasText: name });
@@ -47,13 +59,18 @@ test.describe('camera presets — NavBar chip rail', () => {
       const keyBadge = chip.locator('.olv-cam-chip-key');
       await expect(keyBadge).toHaveText(key);
     }
+
+    // Iso renders WITHOUT a key badge — bare `I` belongs to Inspect now.
+    const isoChip = rail.locator('.olv-cam-chip').filter({ hasText: 'Iso' });
+    await expect(isoChip, 'missing camera preset chip "Iso"').toBeVisible();
+    await expect(isoChip.locator('.olv-cam-chip-key')).toHaveCount(0);
   });
 
-  test('every preset chip carries a tooltip that names its keyboard shortcut', async ({
+  test('tooltips name the shortcut for T/O/P; the Iso tooltip names none', async ({
     page,
   }) => {
     await loadSample(page);
-    for (const { name, key } of PRESETS) {
+    for (const { name, key } of KEYED_PRESETS) {
       const chip = page
         .locator('.olv-cam-presets .olv-cam-chip')
         .filter({ hasText: name });
@@ -62,9 +79,17 @@ test.describe('camera presets — NavBar chip rail', () => {
       expect(title).toContain(name);
       expect(title).toContain(key);
     }
+
+    const isoChip = page
+      .locator('.olv-cam-presets .olv-cam-chip')
+      .filter({ hasText: 'Iso' });
+    // Exactly "Iso view" — no "keyboard shortcut" suffix.
+    expect(await isoChip.getAttribute('title')).toBe('Iso view');
   });
 
-  test('clicking each chip fires without a page error', async ({ page }) => {
+  test('clicking each chip (Iso included) fires without a page error', async ({
+    page,
+  }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => {
@@ -72,7 +97,7 @@ test.describe('camera presets — NavBar chip rail', () => {
     });
 
     await loadSample(page);
-    for (const { name } of PRESETS) {
+    for (const name of ALL_PRESET_NAMES) {
       const chip = page
         .locator('.olv-cam-presets .olv-cam-chip')
         .filter({ hasText: name });
@@ -84,7 +109,7 @@ test.describe('camera presets — NavBar chip rail', () => {
 });
 
 test.describe('camera presets — keyboard shortcuts', () => {
-  test('T / I / O / P each route through the preset handler without error', async ({
+  test('T / O / P fire their preset with a toast; I does NOT fire Iso', async ({
     page,
   }) => {
     const errors: string[] = [];
@@ -97,10 +122,22 @@ test.describe('camera presets — keyboard shortcuts', () => {
     // Click anywhere outside form inputs so keyboard events land on body.
     await page.locator('.olv-stage').click({ position: { x: 1, y: 1 } });
 
-    for (const { key } of PRESETS) {
-      await page.keyboard.press(key);
-      await page.waitForTimeout(150);
-    }
+    // Each keyed preset announces itself via the shared lasso toast
+    // (main.ts: `Camera · <Name> view.`) and consumes the keystroke.
+    const toast = page.locator('.olv-lasso-toast');
+    await page.keyboard.press('T');
+    await expect(toast).toHaveText('Camera · Top view.');
+    await page.keyboard.press('O');
+    await expect(toast).toHaveText('Camera · Oblique view.');
+    await page.keyboard.press('P');
+    await expect(toast).toHaveText('Camera · Planar view.');
+
+    // Bare `I` toggles the Inspect tool, NOT the Iso preset — the toast
+    // must still read "Planar" (no `Camera · Iso view.` ever appears).
+    await page.keyboard.press('I');
+    await page.waitForTimeout(300);
+    await expect(toast).toHaveText('Camera · Planar view.');
+
     expect(errors).toEqual([]);
   });
 

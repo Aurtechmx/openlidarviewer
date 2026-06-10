@@ -1,0 +1,17 @@
+{
+  "name": "OpenLiDARViewer",
+  "short_name": "OpenLiDAR",
+  "description": "Open any 3D scan — drone LiDAR or phone scan — instantly and privately, in a browser tab.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0a0e1a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

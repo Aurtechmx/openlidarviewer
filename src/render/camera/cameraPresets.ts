@@ -61,10 +61,17 @@ export const CAMERA_PRESET_LABEL: Readonly<Record<CameraPresetName, string>> = {
   planar: 'Planar',
 };
 
-/** Keyboard shortcut for each preset. Case-insensitive at the handler. */
+/**
+ * Keyboard shortcut for each preset. Case-insensitive at the handler.
+ *
+ * Iso has no key: bare `I` belongs to the Inspect tool (see
+ * `bindShortcuts`), and binding both produced a tool-toggle + camera-snap
+ * double fire (v0.4.4 fix). Iso stays reachable via the NavBar button and
+ * the command palette. An empty string means "no key chip, no binding".
+ */
 export const CAMERA_PRESET_KEY: Readonly<Record<CameraPresetName, string>> = {
   top: 'T',
-  iso: 'I',
+  iso: '',
   oblique: 'O',
   planar: 'P',
 };

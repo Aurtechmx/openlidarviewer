@@ -137,6 +137,13 @@ export class ToolDock {
       callbacks.onAnalyseToggle();
     });
 
+    // Toggle buttons must carry aria-pressed from creation — the attribute's
+    // mere presence is what tells assistive tech "this is a toggle", so it
+    // cannot wait for the first set*Active() call.
+    for (const toggle of [this._measure, this._inspect, this._probe, this._annotate, this._analyse]) {
+      toggle.setAttribute('aria-pressed', 'false');
+    }
+
     // (Slice/Section was previously rendered here as a permanently
     // disabled button. A disabled tool in an active cluster reads as
     // broken rather than as a roadmap signal — Gestalt similarity
@@ -231,8 +238,11 @@ export class ToolDock {
 
   /** Reflect whether measurement mode is currently active. */
   setMeasureActive(active: boolean): void {
+    // aria-pressed is the canonical toggle-state signal for screen readers;
+    // the class only restyles. The label stays 'Measure' in both states —
+    // the old 'Measuring…' swap shifted the dock layout on every toggle.
     this._measure.classList.toggle('olv-tool-active', active);
-    this._measure.textContent = active ? 'Measuring…' : 'Measure';
+    this._measure.setAttribute('aria-pressed', String(active));
   }
 
   /** Enable or disable the Inspect tool — enabled once a scan is loaded. */
@@ -246,8 +256,9 @@ export class ToolDock {
 
   /** Reflect whether point-inspection mode is currently active. */
   setInspectActive(active: boolean): void {
+    // Stable label + aria-pressed — see setMeasureActive for the rationale.
     this._inspect.classList.toggle('olv-tool-active', active);
-    this._inspect.textContent = active ? 'Inspecting…' : 'Inspect';
+    this._inspect.setAttribute('aria-pressed', String(active));
   }
 
   /** Enable or disable the live Probe — enabled once a scan is loaded. */
@@ -261,8 +272,9 @@ export class ToolDock {
 
   /** Reflect whether live-probe mode is currently active. */
   setProbeActive(active: boolean): void {
+    // Stable label + aria-pressed — see setMeasureActive for the rationale.
     this._probe.classList.toggle('olv-tool-active', active);
-    this._probe.textContent = active ? 'Probing…' : 'Probe';
+    this._probe.setAttribute('aria-pressed', String(active));
   }
 
   /** Enable or disable the Annotate tool — enabled once a scan is loaded. */
@@ -276,8 +288,9 @@ export class ToolDock {
 
   /** Reflect whether annotation mode is currently active. */
   setAnnotateActive(active: boolean): void {
+    // Stable label + aria-pressed — see setMeasureActive for the rationale.
     this._annotate.classList.toggle('olv-tool-active', active);
-    this._annotate.textContent = active ? 'Annotating…' : 'Annotate';
+    this._annotate.setAttribute('aria-pressed', String(active));
   }
 
   /** Enable or disable the Analyse tool — enabled once a scan is loaded. */
@@ -292,6 +305,7 @@ export class ToolDock {
   /** Reflect whether the terrain analysis panel is currently open. */
   setAnalyseActive(active: boolean): void {
     this._analyse.classList.toggle('olv-tool-active', active);
+    this._analyse.setAttribute('aria-pressed', String(active));
   }
 
   /** Enable or disable the Close action — enabled once a scan is loaded. */

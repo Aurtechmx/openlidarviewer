@@ -34,8 +34,13 @@ export interface StageOptions {
    * entry point for streaming a remote COPC scan. Returning a Promise lets
    * the field manage its own loading + error UI; resolve = clear, reject
    * with an Error = inline error message, AbortError = user cancelled.
+   *
+   * `signal` is the Stage's own cancel signal: it aborts when the user
+   * presses the field's Cancel button (or the empty state hides). The host
+   * MUST honour it — before v0.4.4 the Cancel button aborted a signal
+   * nobody consumed, so an in-flight stream kept downloading.
    */
-  onOpenUrl?: (url: string) => void | Promise<void>;
+  onOpenUrl?: (url: string, signal?: AbortSignal) => void | Promise<void>;
   /**
    * Called when the user chooses "Batch convert files" on the empty state —
    * opens the format converter without loading a scan into the 3D view.
@@ -749,7 +754,16 @@ export class Stage {
    *     tap away.
    */
   private async _handleUrlSubmit(url: string, options: StageOptions): Promise<void> {
-    if (!url) return;
+    if (!url) {
+      // An empty "Open" press used to be a silent no-op — tell the user
+      // what the field wants instead of doing nothing (E-hierarchy:
+      // communicate, don't ignore).
+      this._showUrlError(
+        'Enter a URL to a .copc.laz file or an EPT dataset (ept.json).',
+        'warning',
+      );
+      return;
+    }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       this._showUrlError(
         'You\'re offline. Connect to the internet to stream a remote scan, ' +
@@ -768,7 +782,10 @@ export class Stage {
     this._urlAbortController = controller;
 
     try {
-      const result = options.onOpenUrl?.(url);
+      // Hand the controller's signal to the host so the Cancel button's
+      // abort actually reaches the in-flight fetches (it previously
+      // aborted a signal nobody consumed).
+      const result = options.onOpenUrl?.(url, controller.signal);
       if (result instanceof Promise) {
         await result;
       }
@@ -849,7 +866,17 @@ export class Stage {
       button.type = 'button'; // suppress the form's default submit
       button.textContent = 'Cancel';
       button.title = 'Cancel the in-flight load';
-      button.onclick = () => this._cancelUrlLoad();
+      // WHY preventDefault: clicking Cancel runs _cancelUrlLoad →
+      // _setUrlLoading(false), which flips this button back to
+      // type="submit" while the click event is still dispatching. The
+      // browser then evaluates the click's default action against the
+      // *current* type and submits the form — instantly re-starting the
+      // very load the user just cancelled. Suppressing the default
+      // action up front breaks that re-submission loop.
+      button.onclick = (e) => {
+        e.preventDefault();
+        this._cancelUrlLoad();
+      };
     } else {
       button.classList.remove('olv-url-btn-loading');
       button.type = 'submit';

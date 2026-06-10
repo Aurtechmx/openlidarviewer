@@ -65,5 +65,5 @@ bundle-stats.html
 .fuse_hidden*
 pw.sandbox.config.mjs
 
-# private thinking tier lives OUTSIDE the repo; belt-and-suspenders
-_PRIVATE/
+# local-only scratch
+scratch/

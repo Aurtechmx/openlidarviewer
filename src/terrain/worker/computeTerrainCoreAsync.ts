@@ -58,6 +58,14 @@ function isAbortError(err: unknown): boolean {
  */
 export type TerrainComputePath = 'worker' | 'fallback';
 
+/**
+ * Hard ceiling for the synchronous main-thread fallback. Production callers
+ * stride to ≤ 300 000 points before reaching this module, so the limit is
+ * future-proofing, not a live constraint — see the guard in
+ * {@link computeTerrainCoreAsync} for the rationale.
+ */
+export const MAX_FALLBACK_POINTS = 1_000_000;
+
 let lastComputePath: TerrainComputePath | null = null;
 
 /** The path taken by the most recent {@link computeTerrainCoreAsync} call. */
@@ -171,6 +179,20 @@ export async function computeTerrainCoreAsync(
     // signal first so a cancelled run does no work.
     if (signal?.aborted) {
       throw new DOMException('Terrain analysis aborted', 'AbortError');
+    }
+    // Ceiling on the synchronous fallback. Every production caller routes
+    // through `gatherTerrainPositions()` which strides to ≤ 300 000 points,
+    // so this never fires today — it exists to protect FUTURE callers (e.g.
+    // a full-resolution analysis path) from silently freezing the main
+    // thread when the worker is unavailable. 1M points keeps generous
+    // headroom over the current cap while still bounding the stall.
+    if (n > MAX_FALLBACK_POINTS) {
+      throw new Error(
+        `Terrain worker unavailable and the dataset (${n} points) is too ` +
+          `large to analyse safely on the main thread (limit ` +
+          `${MAX_FALLBACK_POINTS}). Reload to restore the worker, or reduce ` +
+          `the analysis sample size.`,
+      );
     }
     const core = computeTerrainCore(positions, fallbackParams);
     lastComputePath = 'fallback';

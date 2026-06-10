@@ -2,6 +2,195 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.4] - 2026-06-09
+
+Final release. Sections below fold in the post-audit hardening batch.
+
+### Added
+
+- Dropping several files at once now says what happened: the first file opens
+  as before, and a toast names it and reports how many companions were
+  ignored, pointing at the batch converter — instead of silently discarding
+  everything past the first file.
+
+- The batch converter can write LAS 1.4 (point data record formats 6/7), and
+  it is now the default output format. The extended records carry the full
+  8-bit classification, so classes above 31 — class 64, vendor codes up to
+  255 — survive conversion intact where LAS 1.2's 5-bit field destroyed them
+  (the audit defect). Format 7 is picked automatically when the cloud has
+  colour (RGB upscaled 8→16 bit losslessly), format 6 otherwise; up to 15
+  returns are tallied into the extended uint64 by-return counts. When the
+  source carries a WKT CRS and coordinates are kept, the WKT travels into the
+  1.4 file with the global-encoding WKT bit set (as the spec requires for
+  formats 6+); when only an EPSG is known, the GeoKey tag is written instead
+  and the log says so. These extended records are also what COPC requires, so
+  this writer is the foundation for future COPC output.
+
+### Changed
+
+- The previous LAS output is now labelled "LAS 1.2" (next to "LAS 1.4") so the
+  version choice is explicit, and it warns per file — instead of staying
+  silent — when its 5-bit classification field clamps classes above 31,
+  pointing at LAS 1.4 as the lossless choice.
+- The Export panel now defaults to LAS 1.4, matching the batch converter's
+  recommended format instead of pre-selecting the lossy LAS 1.2 legacy choice.
+- Faint UI text (`--text-faint`) is lighter in the dark theme and darker in
+  the light theme so hints, captions and placeholders clear WCAG AA contrast;
+  the high-contrast theme already passed and is unchanged.
+- The tool dock's toggle buttons (Measure, Inspect, Probe, Annotate, Analyse)
+  keep a stable label and expose their on/off state through `aria-pressed`
+  instead of swapping to "Measuring…"-style text — screen readers now hear
+  the toggle state, and the dock no longer shifts layout on every toggle.
+- The synchronous main-thread terrain fallback (used only when the analysis
+  worker fails) now has a 1 M-point ceiling. Every production caller strides
+  the analysis sample to ≤ 300 000 points, so the ceiling never fires today —
+  it protects future full-resolution callers from a silent main-thread freeze
+  by failing with a clear message instead.
+
+### Fixed
+
+- The Dataset Intelligence card — and every provenance stamp fed from the same
+  constant: terrain reports, DEM-package READMEs, contour exports, space
+  reports — no longer claims "Metric Version v0.4.1". The shared
+  `TERRAIN_METRIC_VERSION` was not bumped when 0.4.4 changed the metric
+  definitions (the aspect north–south mirror fix, cell-centre contour
+  registration, and the compound-WKT horizontal-unit fix all change what the
+  metrics report for the same cloud); it now reads v0.4.4 and its doc comment
+  records why.
+- The Dataset Intelligence card's "Analyzed Points" row no longer reads "0"
+  forever on streamed COPC / EPT scans. The attach-time summary honestly
+  starts at 0 (nothing analysed yet), but nothing ever updated it; a finished
+  terrain run now folds its real analysed-point count — the same
+  `dtm.analyzedPointCount` the terrain report's "Analysed points" row prints —
+  back into the card, so the card and the PDF agree.
+- The Help overlay's shortcut list no longer drifts from the actual bindings:
+  it now lists the T / O / P camera presets, L (lasso volume), H (controls
+  HUD) and Cmd/Ctrl-K (command palette), and the `?` entry says what `?`
+  really does — open the keyboard shortcut sheet, which owns that key.
+- Load-status announcements for screen readers now come from two permanently
+  rendered, visually hidden live regions (polite status + assertive alert)
+  instead of the toast itself — a toast hidden with `display:none` leaves the
+  accessibility tree, so its announcements fired unreliably or not at all.
+- The `?debug=1` overlay's frame stats now include streamed COPC / EPT
+  clouds: resident points fold into the displayed count and GPU byte
+  estimate, and the source's total point count folds into the total —
+  previously a streamed scan reported zero points while clearly on screen.
+- Contour exports from a streamed COPC / EPT scan keep their world origin
+  and EPSG stamp: the map context now falls back to the streaming source's
+  render origin and CRS when no static cloud is active, instead of silently
+  degrading to a local frame.
+- The scalar sRGB → linear EOTF copies in the photometric patch view and the
+  colour-provenance card now delegate to the shared seam in `colorEncode.ts`,
+  so the curve can no longer drift from what the GPU pipeline applies.
+- Eye Dome Lighting obscurance is no longer computed in the wrong depth space.
+  The renderer draws with a logarithmic depth buffer, but the EDL pass was
+  inverting its depth samples with the standard perspective formula
+  (`perspectiveDepthToViewZ`) — decoding log-encoded values as if they were
+  perspective depth, so the depth cue read far too weak up close and erratic
+  at range, silently defeating the unit-tested EDL maths. The pass now applies
+  the matching logarithmic inversion,
+  `eyeDist = near′ · 2^(depth · log2(far / near′))` with `near′ = max(near,
+  1e-6)` — the exact inverse of three.js's near-anchored log-depth encoding on
+  both the WebGPU backend and the WebGL 2 fallback — and keeps the perspective
+  path for a renderer built without log depth. The depth mode is read back off
+  the renderer at construction rather than assumed, and the inversion is
+  pinned CPU-side by new unit tests (`logDepthToEyeDistance` in `edl.ts`),
+  following the same mirrored-math pattern as the splat shader.
+- Clicking Cancel on an in-flight "Open from URL" load no longer instantly
+  restarts the very load it just aborted. The cancel handler flipped the
+  button back to `type="submit"` while the click event was still
+  dispatching, so the browser evaluated the click's default action against
+  the new type and re-submitted the form — Cancel aborted the stream and
+  then immediately kicked off the same request again. The handler now
+  suppresses the click's default action before cancelling, so Cancel means
+  cancel.
+
+### Notes
+
+- New regression tests pin provenance consistency across every exporter — the
+  DEM README, contour GeoJSON / DXF / SVG, map-sheet PDF and terrain report
+  are driven from one analysis run and must agree word-for-word on the
+  surface-quality and export-readiness verdicts, CRS, datum, accuracy and
+  software stamps — and pin the terrain-core fallback's stale-result
+  (abort-during-worker-failure) and oversize (`MAX_FALLBACK_POINTS`) guards.
+- A static-analysis guard now pins every `unsafeHtml` call site to a
+  hand-reviewed allowlist — all seven current sites carry only literal SVG
+  icons or chart markup composed from numeric inputs — and fails on any new
+  site, any stale entry, or any argument naming user-shaped data (scan / file
+  / dataset names, URL params, message payloads), so the `innerHTML` escape
+  hatch in `dom.ts` cannot silently regress into an XSS sink.
+
+### Earlier in this release
+
+A correctness and hardening release driven by a full-codebase audit. Every fix
+below was verified against the v0.4.3 source before being applied.
+
+### Fixed — survey-output correctness
+
+- The point Inspector no longer applies the world origin twice. World
+  coordinates, and the Geographic / UTM rows derived from them, were shifted by
+  a full extra origin (e.g. ~+500 000 E / +4 500 000 N on a UTM scan). The
+  card now shows the true World position, and a separate Local group (renderer
+  frame) only when an origin exists.
+- Contour vector exports (GeoJSON, DXF, SVG) are now georeferenced. They
+  previously wrote origin-recentred local coordinates while stamping a real
+  EPSG CRS, landing hundreds of kilometres from truth in GIS software; contour
+  elevation values were offset by the vertical origin as well. Exports now
+  shift geometry and levels to world coordinates — and when no origin is
+  available, the EPSG stamp is omitted and a "local frame" warning is attached
+  instead of claiming a CRS.
+- Horizontal linear units are read from the horizontal CRS only. A compound
+  WKT (projected + vertical) in US survey feet was previously measured as
+  metres because the vertical axis's UNIT won the scan (~3.28× error in every
+  derived measure).
+- Aspect (and therefore hillshade lighting) is no longer mirrored north–south
+  on the northing-up analysis grids; a north-facing slope now reports north,
+  and the default 315° sun lights from the northwest as labelled.
+- Contours are registered to cell centres, removing a systematic half-cell
+  southwest shift relative to the exported DEM GeoTIFF of the same surface.
+
+### Fixed — stability and behaviour
+
+- Malformed or hostile files can no longer trigger runaway allocations: LAZ,
+  COPC, EPT and E57 decoders now validate file-declared point/record counts
+  against the actual bytes available before allocating (a shared
+  `validateDeclaredPointCount` guard), failing with a typed malformed-file error.
+- Recoloring after the initial upload (color-mode switches, coverage grids,
+  height trims, classification edits, streaming recolors) now applies the same
+  sRGB→linear conversion as the first upload, through one shared seam —
+  switching Elevation → RGB no longer washes out the cloud.
+- Removing a cloud releases its classification and selection snapshots
+  (previously retained for the session — up to ~5 MB per edited scan).
+- The URL field's Cancel button actually cancels the in-flight download (the
+  abort signal is now threaded through to the loader), and submitting an empty
+  URL explains what is expected instead of silently doing nothing.
+- Concurrent open requests are rejected race-free (the loading flag is set
+  synchronously), with a toast — "Already loading — cancel the current load
+  first." — instead of silence.
+- Pressing `I` no longer fires the Inspect tool and the Iso camera preset on
+  the same keystroke: bare `I` belongs to Inspect (as the help advertises);
+  the Iso preset remains on the view chips and command palette. All bare-key
+  handlers now honour and set `defaultPrevented` so collisions cannot recur.
+- Panel-width persistence no longer throws (and blocks boot) when browser
+  storage is unavailable; all storage access goes through one guarded helper.
+
+### Added
+
+- Load progress, errors, and toasts are announced to screen readers
+  (`role="status"` / `role="alert"` with polite live regions).
+- Share metadata (Open Graph / Twitter card), an SVG favicon, an
+  apple-touch-icon link, and a web app manifest.
+- A commented production `.htaccess` (long-lived immutable caching for hashed
+  assets, HSTS, nosniff, referrer and permissions policies, WASM MIME type,
+  and a Content-Security-Policy draft in report-only form for testing).
+
+### Notes
+
+- Aspect/hillshade truth-test fixtures that encoded the mirrored convention
+  were corrected alongside the fix; new regression tests cover the Inspector
+  origin, contour world-origin shift, compound-WKT units, cell-centre
+  registration, and the decoder allocation guards.
+
 ## [0.4.3] - 2026-06-09
 
 ### Added

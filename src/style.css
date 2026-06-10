@@ -6,7 +6,7 @@
   --hairline: rgba(140, 170, 230, 0.14);
   --text: #eef3fb;
   --text-dim: #9aa6bd;
-  --text-faint: #6b768f;
+  --text-faint: #8a94ad; /* lightened from #6b768f to clear WCAG AA (≥4.5:1) on --bg */
   --accent: #00b2ff;      /* Electric Blue */
   --accent-soft: rgba(0, 178, 255, 0.16);
   /* Readiness rating scale — semantic, colourblind-paired with the word. */
@@ -331,7 +331,7 @@ body.olv-theme-light {
   --hairline: rgba(35, 60, 110, 0.20);
   --text: #0a1430;
   --text-dim: #46546e;
-  --text-faint: #7682a0;
+  --text-faint: #5d6a87; /* darkened from #7682a0 to clear WCAG AA (≥4.5:1) on the light --bg */
   --accent: #0088c8;
   --accent-soft: rgba(0, 136, 200, 0.18);
   /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
@@ -1501,6 +1501,20 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* Utility — always wins over a component's own `display`. */
 .olv-hidden { display: none !important; }
+
+/* Utility — visually hidden but still rendered, so screen readers and
+   aria-live regions keep working (display:none silences live regions).
+   Standard clip pattern. */
+.olv-visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ───────────────────────────────────────────────────────────────────────────
    Micro-interactions — tactile feedback, eased states, entrance motion

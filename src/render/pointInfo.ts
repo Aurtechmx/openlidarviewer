@@ -147,6 +147,43 @@ export function makePointInfo(raw: RawPointInfo): PointInfo {
   return info;
 }
 
+/**
+ * A point's coordinates split into the two frames the inspector card shows.
+ * `world` is the real, georeferenced position; `local` is the renderer's
+ * recentred frame, or `null` when no origin shift exists (local == world,
+ * so the card shows a single group instead of two identical ones).
+ */
+export interface SplitPointCoords {
+  world: { x: number; y: number; z: number };
+  local: { x: number; y: number; z: number } | null;
+}
+
+/**
+ * Split a picked point into world / local coordinates for display.
+ *
+ * IMPORTANT frame convention: {@link makePointInfo} already adds the
+ * load-time origin back, so `info.x/y/z` ARE world coordinates. The local
+ * (recentred render-buffer) position is therefore `info − origin`, never
+ * `info + origin` — adding the origin a second time produced doubled
+ * eastings/northings in v0.4.3's inspector card and fed garbage into the
+ * geographic projection. Kept pure and DOM-free so it is unit-testable.
+ */
+export function splitPointCoords(
+  info: Pick<PointInfo, 'x' | 'y' | 'z'>,
+  origin: readonly [number, number, number] | undefined,
+): SplitPointCoords {
+  const world = { x: info.x, y: info.y, z: info.z };
+  if (!origin) return { world, local: null };
+  return {
+    world,
+    local: {
+      x: world.x - origin[0],
+      y: world.y - origin[1],
+      z: world.z - origin[2],
+    },
+  };
+}
+
 /** The intensity field's display text — the value, or "Not available". */
 export function intensityText(info: PointInfo): string {
   return info.intensity === null ? 'Not available' : String(info.intensity);

@@ -121,7 +121,12 @@ export interface AnalysePanelCallbacks {
   getExportBasename?: () => string;
   /** Context for the printable map sheet (world origin, title block fields). */
   getMapContext?: () => {
-    worldOrigin?: { x: number; y: number } | null;
+    /**
+     * Load-time recentring origin (world = local + origin). `z` is optional:
+     * when the host supplies it, contour exports also shift elevations into
+     * the world vertical frame; without it only x/y are registered.
+     */
+    worldOrigin?: { x: number; y: number; z?: number } | null;
     title?: string;
     preparedBy?: string;
     sheet?: 'letter' | 'a4' | 'a3';
@@ -1286,8 +1291,20 @@ export class AnalysePanel {
               softwareVersion: __APP_VERSION__,
               metricVersion: TERRAIN_METRIC_VERSION,
             });
+            // World-frame registration: the analysis runs in the cloud's
+            // recentred LOCAL frame, so exports must add the load-time
+            // origin back (the same `worldOrigin` the DEM package and map
+            // sheet already use). When the host can't supply one,
+            // serializeContours omits the CRS stamp rather than
+            // georeferencing local coordinates.
+            const worldOrigin = this._cb.getMapContext?.().worldOrigin ?? null;
             triggerBrowserDownload(
-              serializeContours(result.model, fmt, { basename, labels: result.labels, provenance }),
+              serializeContours(result.model, fmt, {
+                basename,
+                labels: result.labels,
+                provenance,
+                worldOrigin,
+              }),
             );
           } catch (err) {
             // eslint-disable-next-line no-console
