@@ -279,6 +279,14 @@ export type ComputeCoreFn = (
 // moves a key to the most-recent end.
 const cache = new Map<string, TerrainCore>();
 
+// Monotonic generation counter, bumped by every {@link clearTerrainCoreCache}.
+// The async miss path snapshots it before awaiting and refuses to store its
+// result if the epoch moved while it was in flight — so a compute that started
+// before a scan was closed/replaced cannot resurrect an entry in the cache the
+// clear was meant to empty. (The sync path cannot interleave a clear, so it
+// needs no epoch.)
+let cacheEpoch = 0;
+
 /**
  * Return the cached {@link TerrainCore} for these positions + core params, or
  * compute it (via `compute`, default {@link computeTerrainCore}), store it, and
@@ -357,6 +365,12 @@ export async function getOrComputeCoreAsync(
   const existing = inFlight.get(key);
   if (existing) return existing;
 
+  // Snapshot the cache generation BEFORE awaiting. If a clear() runs while this
+  // compute is in flight (scan closed / replaced), the epoch moves and we must
+  // NOT store the result — otherwise the resolved core would resurrect an entry
+  // in the cache the clear was meant to empty, defeating the "reuse only within
+  // one open scan" guarantee.
+  const epoch = cacheEpoch;
   const promise = compute(positions, params);
   inFlight.set(key, promise);
   let core: TerrainCore;
@@ -366,9 +380,10 @@ export async function getOrComputeCoreAsync(
     // Always release the in-flight slot, success or failure.
     inFlight.delete(key);
   }
-  // Store only on success (a rejection threw above and never reaches here).
-  // Re-check: a clear() during the await must not resurrect a stale entry —
-  // but a fresh store for the current key is correct, so just set + evict.
+  // Store only on success (a rejection threw above and never reaches here) AND
+  // only if no clear() intervened. The caller still receives the value either
+  // way — a superseded run simply isn't cached.
+  if (epoch !== cacheEpoch) return core;
   cache.set(key, core);
   while (cache.size > TERRAIN_CORE_CACHE_SIZE) {
     const oldest = cache.keys().next().value;
@@ -389,4 +404,7 @@ export async function getOrComputeCoreAsync(
 export function clearTerrainCoreCache(): void {
   cache.clear();
   inFlight.clear();
+  // Bump the generation so any compute that is still in flight will refuse to
+  // store its (now-stale) result when it finally resolves.
+  cacheEpoch++;
 }

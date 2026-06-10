@@ -2,6 +2,58 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.3] - 2026-06-09
+
+### Added
+
+- Manual scan-type override: a "Treat as" control (Auto / Terrain / Object /
+  Interior) in both the terrain Analyse panel and the Space / Object panel lets
+  you correct a misjudged scan in one click. A non-auto choice takes precedence
+  over auto-detection, stays pinned while the cloud streams in, and resets to
+  Auto on each new scan. Metrics are still computed honestly for the chosen
+  type; the panel notes when the type was set manually.
+
+### Changed
+
+- Export provenance is unified: GeoJSON, DXF, SVG, the printable map sheet, and
+  the DEM package now all stamp the same provenance, derived once from the run —
+  software and metric version, date, source, CRS, vertical datum, coverage,
+  contour interval and style, Surface Quality and Export Readiness (with the
+  reason), and the measured accuracy (RMSEz / NVA / VVA / USGS Quality Level) —
+  so no two exported artifacts can disagree, and every one carries the
+  not-survey-grade note.
+- Scan-type detection re-evaluates once the streaming cloud has fully settled
+  ("Streaming ready"), so a type decided on a sparse early frame (which could
+  misread a 360 / interior scan) is corrected on the representative geometry.
+
+### Fixed
+
+- Terrain density and slope now respect the scan's real horizontal units. On a
+  foot-based projected coordinate system, ground density is reported as genuine
+  points per square metre (previously it was measured in square feet but
+  labelled per square metre, understating density by ~10.8×) and the slope used
+  for surface-quality checks is computed over a metre run. Metric (metre) data
+  is unchanged. This matches the existing handling of the vertical axis.
+- A surface rated "Limited" now states a Limited reason instead of borrowing the
+  preview-tier wording, and the "% of the surface is interpolated" figure is
+  consistent everywhere it appears — it always means the share of the captured
+  surface that is interpolated rather than measured, no longer diluted by empty
+  cells in some views.
+- Export honesty wording is tighter: a georeferencing gap (unknown CRS / datum)
+  is only listed as an export reason when it actually holds the export back
+  below the surface quality, and when a surface is both below grade AND not
+  georeferenced the export reason now names both, rather than only the
+  coordinate-system gap.
+- The Space / Object report now respects the scan's real horizontal units, so
+  dimensions, area, and volume read correctly (and convert correctly between
+  metres and feet) for foot-based and other non-metre coordinate systems
+  instead of assuming metres.
+- Interior floor / ceiling / storey detection is more robust: floor and ceiling
+  planes are found from density-weighted height peaks (so a cluttered floor or a
+  sparsely captured ceiling is still detected), and a second storey is only
+  counted when there is a real floor-to-floor gap with mass between the levels —
+  it stays clearly labelled as approximate.
+
 ## [0.4.2] - 2026-06-05
 
 ### Added

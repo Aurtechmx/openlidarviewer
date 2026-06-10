@@ -26,8 +26,12 @@ jobs:
       # regression in the chunking contract.
       - name: Production build
         run: npm run build
+      # BUILD_CONTRACT=1 opts the post-build contract tests (chunk isolation,
+      # orbit smoke) in — they read the dist/ just built above. A plain
+      # `npm test` (local dev) leaves the flag unset and self-skips them, so a
+      # stale or missing dist/ can never make the default command fail.
       - name: Unit tests
-        run: npm test
+        run: BUILD_CONTRACT=1 npm test
 
   smoke:
     runs-on: ubuntu-latest

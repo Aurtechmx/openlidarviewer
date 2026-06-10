@@ -253,40 +253,60 @@
 }
 
 /*
- * v0.3.9 theme chip rail — sits at the very top of the Inspector
- * panel, below the panel-head title. Three chips
- * (Dark / Light / High-contrast) with an active state that mirrors
- * the persisted choice. Kept compact so it doesn't dominate first
- * paint — the user can pick once and forget it.
+ * v0.4.3 header theme toggle — a single shape-morphing button in the
+ * top-right header (relocated from the Inspector chip rail). One tap
+ * cycles Dark → Light → High-contrast → Dark. The three icon states
+ * (moon / sun / split-circle) are stacked in one box and cross-faded:
+ * only the active one is opaque, the others fade out and scale down.
+ * Everything is `currentColor` so the glyph inherits the header text
+ * colour and stays visible in all three themes.
  */
-.olv-theme-rail {
-  display: flex; gap: var(--space-sm);
-  padding: var(--space-sm) 0 var(--space-lg);
-  border-bottom: 0.5px solid var(--hairline);
-  margin-bottom: var(--space-lg);
-}
-.olv-theme-chip {
-  flex: 1;
-  font-size: var(--text-xs); color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+.olv-theme-toggle {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  padding: 0; margin: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard),
     transform 90ms var(--ease-standard);
 }
-.olv-theme-chip:hover {
-  color: var(--text); border-color: var(--accent);
-  background: rgba(0, 178, 255, 0.08);
+.olv-theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  transform: scale(1.06);
 }
-.olv-theme-chip:active { transform: scale(0.97); }
-.olv-theme-chip-active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.45);
-}
-.olv-theme-chip:focus-visible {
+.olv-theme-toggle:active { transform: scale(0.94); }
+.olv-theme-toggle:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* Each icon state is absolutely stacked in the same 18px box. */
+.olv-theme-icon {
+  position: absolute; inset: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transform: scale(0.6) rotate(-30deg);
+  transition: opacity var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-standard);
+  pointer-events: none;
+}
+.olv-theme-icon svg { width: 18px; height: 18px; display: block; }
+.olv-theme-icon-active {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+}
+/* Respect reduced-motion: cut the morph transition + the hover scale so
+ * the icon just swaps instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-theme-toggle, .olv-theme-icon { transition: none; }
+  .olv-theme-toggle:hover, .olv-theme-toggle:active { transform: none; }
+  .olv-theme-icon { transform: scale(1) rotate(0); }
 }
 
 /*
@@ -408,7 +428,17 @@ button:disabled { cursor: not-allowed; }
   position: absolute; top: 0; left: 0; right: 0;
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--space-2xl) var(--space-3xl);
+  /* The empty-state backdrop (.olv-empty) is a full-viewport, pointer-
+     capturing layer that appears later in the DOM, so without an explicit
+     stack it sits ABOVE this header and swallows clicks to the theme toggle
+     and links before a scan loads. Lift the header above that backdrop, but
+     keep it below the functional panels (z 10+). The bar itself is made
+     click-through so its empty middle never steals clicks from centred
+     empty-state content beneath it; only its real controls capture input. */
+  z-index: 4;
+  pointer-events: none;
 }
+.olv-topbar > * { pointer-events: auto; }
 .olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
 .olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
 .olv-badge {
@@ -857,6 +887,10 @@ button:disabled { cursor: not-allowed; }
   color: var(--accent); background: var(--accent-soft);
   border-color: rgba(0, 178, 255, 0.4);
 }
+.olv-chip-disabled {
+  opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
+}
+.olv-chip-disabled:hover { color: var(--text-faint); }
 .olv-slider { width: 100%; accent-color: var(--accent); }
 /* Rendering controls — stacked groups and a labelled slider row. */
 .olv-render-group { display: flex; flex-direction: column; gap: var(--space-md); }
@@ -4611,6 +4645,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-export-status { font-size: var(--text-xs); color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }
 .olv-export-status.is-warn { color: var(--rating-moderate); }
 .olv-export-status.is-error { color: var(--rating-weak); }
+/* One-line note shown in place of the CRS step when the scan is ungeoreferenced. */
+.olv-export-crs-note { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; margin: var(--space-2xs) 0 0; }
 @media (max-width: 767px) { .olv-export-panel { width: auto; } }
 
 /* Full-resolution toggle in the Export panel. */
@@ -4694,6 +4730,56 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-assess-metric.is-poor .olv-analyse-assess-metric-value { color: var(--rating-weak); }
 .olv-analyse-assess-metric.is-unknown .olv-analyse-assess-metric-value { color: var(--text-faint); font-style: italic; }
 
+/* Recommended workflow — the checklist that turns the two axes into decisions.
+   Each row's glyph is coloured from the rating tokens via its status class; the
+   word/glyph stays for colourblind safety, never hue alone. Kept quiet. */
+.olv-analyse-workflow {
+  margin-top: var(--space-md); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-analyse-workflow-head {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  margin-bottom: var(--space-xs);
+}
+.olv-analyse-workflow-list { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-workflow-row { display: flex; align-items: baseline; gap: var(--space-sm); }
+.olv-analyse-workflow-glyph {
+  flex: 0 0 auto; width: 1em; text-align: center; font-weight: 700; line-height: 1;
+}
+.olv-analyse-workflow-main {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs); min-width: 0;
+}
+.olv-analyse-workflow-label { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-analyse-workflow-note { font-size: var(--text-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
+.olv-analyse-workflow-row.is-good .olv-analyse-workflow-glyph { color: var(--rating-excellent); }
+.olv-analyse-workflow-row.is-caution .olv-analyse-workflow-glyph { color: var(--rating-good); }
+.olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-glyph { color: var(--rating-blocked); }
+.olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-label { color: var(--text-faint); }
+
+/* "Why? — what's holding this back" — a collapsed honest cause/fix surface,
+   shown only when the verdict is short of fully-good. */
+.olv-analyse-why { margin-top: var(--space-sm); }
+.olv-analyse-why-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  letter-spacing: 0.04em; color: var(--rating-moderate);
+}
+.olv-analyse-why-summary::-webkit-details-marker { display: none; }
+.olv-analyse-why-summary::before { content: '▸ '; }
+.olv-analyse-why[open] .olv-analyse-why-summary::before { content: '▾ '; }
+.olv-analyse-why-subhead {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+  margin-top: var(--space-sm);
+}
+.olv-analyse-why-list { margin: var(--space-2xs) 0 0; padding-left: var(--space-lg); }
+.olv-analyse-why-cause, .olv-analyse-why-fix {
+  font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-2xs);
+  overflow-wrap: anywhere;
+}
+.olv-analyse-why-cause { color: var(--text-faint); }
+
 /* Collapsible "Details" expander — holds the drill-down metrics under the hero. */
 .olv-analyse-details { margin-bottom: var(--space-lg); }
 .olv-analyse-details-summary {
@@ -4757,6 +4843,16 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-legend-ticks {
   display: flex; justify-content: space-between;
   font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+}
+/* Discrete 3-stop coverage legend (green/yellow/red = strong/moderate/weak). */
+.olv-analyse-coverage-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-coverage-legend-item {
+  display: flex; align-items: center; gap: var(--space-2xs);
+  font-size: var(--text-2xs); color: var(--text-faint);
+}
+.olv-analyse-coverage-swatch {
+  width: 10px; height: 10px; border-radius: var(--radius-xs);
+  border: 0.5px solid var(--hairline); flex: 0 0 auto;
 }
 /* Bare-earth elevation histogram. */
 .olv-analyse-hist { display: flex; flex-direction: column; gap: var(--space-2xs); }
@@ -4884,6 +4980,28 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-object-value { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
 .olv-object-note { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; margin-top: var(--space-2xs); }
 .olv-object-note.is-warn { color: var(--rating-good); }
+
+/* Non-terrain analysis export row — Report PDF (primary) + interior-only Floor
+ * plan. Mirrors the Analyse panel's export-row look (premium buttons, busy state
+ * handled in ObjectPanel). */
+.olv-object-export {
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-sm);
+  margin-top: var(--space-md); margin-bottom: var(--space-xs);
+}
+.olv-object-dl {
+  flex: 1; font-size: var(--text-xs); padding: var(--space-sm); border-radius: var(--radius-sm); cursor: pointer;
+  color: var(--text-dim); background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-object-dl:hover { color: var(--text); border-color: var(--accent); }
+.olv-object-dl:disabled { opacity: 0.4; cursor: default; }
+.olv-object-dl.is-primary {
+  color: var(--accent); background: var(--accent-soft);
+  border-color: var(--accent); font-weight: 600;
+}
+.olv-object-dl.is-primary:hover { color: var(--text); }
+
 .olv-object-run-anyway {
   align-self: flex-start; margin-top: var(--space-sm); font: inherit; font-size: var(--text-xs); font-weight: 600;
   color: var(--text-dim); background: transparent;
@@ -4891,6 +5009,45 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   padding: var(--space-sm) var(--space-xl); cursor: pointer;
 }
 .olv-object-run-anyway:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Manual scan-type override ("Treat as") — the safety net for a misdetection.
+ * Reused verbatim by the Object/Space panel and the terrain Analyse panel; the
+ * <select> mirrors the restrained Report-PDF picker so it stays quiet. */
+/* "Treat scan as" — a VISIBLE segmented selector (Terrain·Object·Interior·Auto)
+   instead of a buried dropdown, so correcting a misdetected scan is one click. */
+.olv-scan-type {
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  margin-top: var(--space-sm); font-size: var(--text-xs);
+}
+.olv-scan-type-head {
+  display: flex; align-items: baseline; gap: var(--space-sm);
+}
+.olv-scan-type-label {
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-faint); white-space: nowrap;
+}
+.olv-scan-type-note { font-size: var(--text-2xs); color: var(--accent); }
+/* Segmented button group. */
+.olv-scan-type-seg {
+  display: flex; gap: 0;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.olv-scan-type-opt {
+  flex: 1; min-width: 0;
+  font: inherit; font-size: var(--text-2xs); font-weight: 500;
+  color: var(--text-dim); background: rgba(255, 255, 255, 0.03);
+  border: none; border-right: 0.5px solid var(--hairline);
+  padding: var(--space-xs) var(--space-2xs); cursor: pointer; white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
+}
+.olv-scan-type-opt:last-child { border-right: none; }
+.olv-scan-type-opt:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.olv-scan-type-opt.is-active {
+  color: var(--accent); background: var(--accent-soft); font-weight: 600;
+}
+.olv-scan-type-opt:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
 
 /* ui-typography: tabular figures so numbers align in the data-heavy panels. */
 .olv-analyse-panel, .olv-object-panel, .olv-measure-panel { font-variant-numeric: tabular-nums; }

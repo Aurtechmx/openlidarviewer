@@ -12,6 +12,7 @@ import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
+import { ThemeToggle } from './ui/ThemeToggle';
 import { ToolDock } from './ui/toolDock';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
@@ -48,8 +49,10 @@ import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
-import { objectMetrics } from './terrain/objectMetrics';
-import { spaceMetrics } from './terrain/spaceMetrics';
+import { resolveScanRoute, type ScanTypeOverride } from './terrain/scanRoute';
+import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
+import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
+import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
@@ -120,6 +123,8 @@ import {
   loadInstrumentedRangeSource,
   loadViewer,
   loadBatchConverter,
+  loadSpaceReportPdf,
+  loadFloorPlan,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -188,11 +193,24 @@ if (!app) throw new Error('OpenLiDARViewer: #app mount point not found');
 let currentTheme: ThemeName = readPersistedTheme();
 applyTheme(document.body, currentTheme);
 
+// v0.4.3 — the theme control is now a single shape-morphing button in the
+// top-right header (ThemeToggle.ts). It's constructed after the Stage so it
+// can mount into the top bar; `setTheme` keeps it in sync when the theme is
+// changed from anywhere else (command palette, workflow replay).
+let themeToggle: ThemeToggle | null = null;
+
 function setTheme(name: ThemeName): void {
-  if (name === currentTheme) return;
+  if (name === currentTheme) {
+    // Even on a no-op palette change, keep the header button's icon in
+    // sync — the call may come from an external surface that set its own
+    // state independently.
+    themeToggle?.setTheme(name);
+    return;
+  }
   currentTheme = name;
   applyTheme(document.body, name);
   writePersistedTheme(name);
+  themeToggle?.setTheme(name);
 }
 
 /** The embed configuration parsed from the URL — the documented embed API. */
@@ -335,6 +353,18 @@ const stage = new Stage(app, {
   catalogPanel: catalogPanel.root,
   onBatchConvert: () => void openBatchConverter(),
 });
+
+// v0.4.3 — the header theme toggle. A single shape-morphing button that
+// cycles Dark → Light → High-contrast → Dark, mounted into the top bar's
+// right cluster (just left of the GitHub link). Its onChange routes through
+// the same `setTheme` the old Inspector chip rail used, so `applyTheme` +
+// persistence are unchanged. Skipped in embed mode, where the top bar — and
+// therefore the mount slot — doesn't exist.
+themeToggle = new ThemeToggle({
+  initial: currentTheme,
+  onChange: (name) => setTheme(name),
+});
+stage.mountThemeToggle(themeToggle.element);
 
 /**
  * Lazily build (once) and open the batch format converter. Its chunk carries
@@ -966,7 +996,6 @@ const inspector = new Inspector({
       persistPrefs();
     });
   },
-  onTheme: (name) => setTheme(name),
   onSplatMode: (id) => {
     viewer.setSplatMode(id);
     syncInspectorRendering();
@@ -974,10 +1003,9 @@ const inspector = new Inspector({
   },
 });
 
-// v0.3.9 — paint the theme chip rail's active state to match whatever
-// was persisted (or 'dark' by default) so the user sees the correct
-// chip lit on first paint.
-inspector.syncTheme(currentTheme);
+// v0.4.3 — the header theme toggle was constructed with the persisted
+// theme as its initial state, so the correct icon is already lit on first
+// paint; no extra sync call is needed here.
 
 // v0.3.9 — the inspector's CRS section now subscribes to the central
 // CrsService. When a scan loads, the service broadcasts the resolved
@@ -1056,8 +1084,8 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
       break;
     case 'theme':
       if (event.name === 'dark' || event.name === 'light' || event.name === 'high-contrast') {
+        // setTheme keeps the header toggle's icon in sync.
         setTheme(event.name);
-        inspector.syncTheme(event.name);
       }
       break;
     case 'tool': {
@@ -1109,7 +1137,8 @@ function buildActionRegistry(): Action[] {
     },
   });
 
-  // Theme — same handler as the Inspector chip rail.
+  // Theme — same handler as the header theme toggle. `setTheme` keeps the
+  // toggle's icon in sync.
   for (const name of THEME_ORDER) {
     actions.push({
       id: `theme.${name}`,
@@ -1119,7 +1148,6 @@ function buildActionRegistry(): Action[] {
       keywords: ['appearance', 'colours', 'colors', 'accessibility'],
       run: () => {
         setTheme(name);
-        inspector.syncTheme(name);
         workflowController.capture({ type: 'theme', name });
       },
     });
@@ -1521,6 +1549,7 @@ let lastCloudName = 'contours';
 // runner is constructed.
 const analysePanel = new AnalysePanel({
   onRun: () => void terrainRunner.run(),
+  onScanTypeChange: (override) => setScanTypeOverride(override),
   onSelectInterval: (m) => void terrainRunner.run(m),
   // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
   // the SAME cached terrain core the runner uses — never mutates the panel.
@@ -1613,7 +1642,9 @@ void viewerLoaded.then(() => {
   // has streamed in, re-classify and re-route (only if the verdict changes).
   // Debounced + growth-gated so a burst of node-ready events can't thrash.
   viewer.onStreamingNodeReady = () => {
-    if (scanRouteOverridden) return;
+    // A manual (non-auto) "Treat as" choice pins the routing exactly like the
+    // "Run terrain anyway" override — a late streaming node must not flip it.
+    if (scanRouteOverridden || scanTypeOverride !== 'auto') return;
     const resident = viewer.residentPointTotal();
     if (resident < lastRouteResident * SCAN_REROUTE_GROWTH) return;
     lastRouteResident = resident;
@@ -1625,18 +1656,83 @@ void viewerLoaded.then(() => {
   };
 });
 
+// The last non-terrain analysis the ObjectPanel rendered, captured so the panel's
+// export buttons (Report PDF / Floor plan) can build their deliverable from the
+// SAME positions + metrics + unit factor that produced the on-screen numbers —
+// nothing recomputed differently, nothing fabricated. Null while terrain / empty.
+interface SpaceExportContext {
+  readonly positions: Float32Array;
+  readonly space: SpaceMetrics;
+  readonly object: ObjectMetrics | null;
+  readonly spaceKind: 'interior' | 'object';
+  readonly unitToMetres: number;
+  readonly upAxis: SpaceMetrics['up'];
+  readonly basename: string;
+}
+let lastSpaceExport: SpaceExportContext | null = null;
+
+/** Download bytes as a file (Blob → anchor click). */
+function downloadFileBytes(filename: string, bytes: Uint8Array, mime: string): void {
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
 // pipeline if the shape detector misjudged the scan.
 const objectPanel = new ObjectPanel({
   onRunTerrainAnyway: () => {
-    // User forced terrain → pin the routing so streaming re-evaluation can't
-    // flip the panel back out from under them.
-    scanRouteOverridden = true;
-    objectPanel.setVisible(false);
-    analysePanel.setVisible(true);
-    dock.setAnalyseActive(true);
-    void terrainRunner.run();
+    // "Run terrain contours anyway" is the explicit, equivalent twin of the
+    // "Treat as: Terrain" override — route both through the same path so the
+    // control, the panels, and the streaming pin stay in sync.
+    setScanTypeOverride('terrain');
+  },
+  onScanTypeChange: (override) => setScanTypeOverride(override),
+  // Build + download the one-page Space / Object report (lazy pdf-lib). For an
+  // interior scan, the density-derived floor-plan sketch is embedded too. The
+  // small dedicated provenance is built inside buildSpaceReportPdf from these
+  // exact inputs, so the PDF can never disagree with the panel.
+  onExportReport: async () => {
+    const ctx = lastSpaceExport;
+    if (!ctx) return;
+    const { buildSpaceReportPdf } = await loadSpaceReportPdf();
+    let floorPlan = null;
+    if (ctx.spaceKind === 'interior') {
+      const { computeFloorPlan } = await loadFloorPlan();
+      floorPlan = computeFloorPlan(ctx.positions, {
+        upAxis: ctx.upAxis,
+        unitToMetres: ctx.unitToMetres,
+      });
+    }
+    const bytes = await buildSpaceReportPdf({
+      space: ctx.space,
+      object: ctx.object,
+      name: ctx.basename,
+      softwareVersion: __APP_VERSION__,
+      metricVersion: TERRAIN_METRIC_VERSION,
+      generatedAt: new Date(),
+      unitToMetres: ctx.unitToMetres,
+      floorPlan,
+    });
+    downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf');
+  },
+  // Build + download the interior-only floor-plan sketch as a standalone SVG.
+  // Clearly labelled approximate by the renderer itself.
+  onExportFloorPlan: async () => {
+    const ctx = lastSpaceExport;
+    if (!ctx || ctx.spaceKind !== 'interior') return;
+    const { computeFloorPlan, floorPlanSvg } = await loadFloorPlan();
+    const plan = computeFloorPlan(ctx.positions, {
+      upAxis: ctx.upAxis,
+      unitToMetres: ctx.unitToMetres,
+    });
+    const svg = floorPlanSvg(plan, { title: ctx.basename });
+    downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');
   },
 });
 
@@ -1649,6 +1745,23 @@ const terrainRunner = createTerrainAnalysisRunner({
   analysePanel,
   getActiveId: () => activeId,
   crsService,
+  // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
+  // so the 3D "Coverage" colour mode can tint the cloud by trust, and enable
+  // the (until-now disabled) Coverage colour chip. The grid the colour mode
+  // samples is exactly the per-cell confidence the dashed-contour evidence uses.
+  onResult: (result) => {
+    const d = result.dtm;
+    viewer.setCoverageGrid({
+      confidence: d.confidence,
+      coverage: d.coverage,
+      cols: d.cols,
+      rows: d.rows,
+      cellSizeM: d.cellSizeM,
+      originH1: d.originH1,
+      originH2: d.originH2,
+    });
+    inspector.setCoverageAvailable(true);
+  },
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -1671,6 +1784,21 @@ const exportPanel = new ExportPanel({
   },
 });
 
+/** True when the resolved CRS is a real-world frame (projected / geographic). */
+function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
+  return resolved != null && (resolved.kind === 'projected' || resolved.kind === 'geographic');
+}
+
+// Drive the Export panel's Coordinate-System auto-collapse from the CRS service:
+// an ungeoreferenced (local / unknown) scan has no real-world CRS to keep /
+// assign / reproject, so the step collapses to a one-line note. A georeferenced
+// scan behaves exactly as before. Fires on every resolve / override change, plus
+// once here to seed the initial (no-scan ⇒ collapsed) state.
+crsService.subscribe((resolved) => {
+  exportPanel.setCrsKnown(crsIsKnown(resolved));
+});
+exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
+
 // ── Scan-type routing state ─────────────────────────────────────────────────
 // `revealAnalysePanel` runs once at open, when a streaming cloud may have only
 // a sparse coarse level resident — a misread is likely. `applyScanRoute` is
@@ -1684,6 +1812,29 @@ let scanRouteTimer: ReturnType<typeof setTimeout> | null = null;
 /** Re-route only after the resident cloud grows by this factor (cheap gate). */
 const SCAN_REROUTE_GROWTH = 1.4;
 
+// ── Manual scan-type override ────────────────────────────────────────────────
+// The safety net for a misdetection: the user can FORCE the route via the
+// "Treat as" control in either panel. A non-auto choice WINS over the detected
+// verdict and pins the routing like `scanRouteOverridden` so a streaming
+// re-evaluation can't flip it. Per-session, reset to 'auto' on every new scan.
+let scanTypeOverride: ScanTypeOverride = 'auto';
+// One-shot guard: re-evaluate the scan type once the streaming cloud has fully
+// settled ("Streaming ready"), so a verdict decided on a sparse early frame is
+// corrected on representative geometry. Reset per scan.
+let streamingSettledRouted = false;
+
+/**
+ * Apply a manual "Treat as" choice and re-route immediately on the current
+ * geometry. A non-auto override wins (see `resolveScanRoute`) and stays pinned
+ * until the user picks 'auto' (restore detection) or a new scan resets it.
+ */
+function setScanTypeOverride(override: ScanTypeOverride): void {
+  scanTypeOverride = override;
+  // Force-apply over the current geometry — `initial=true` bypasses the
+  // verdict-change + override no-op guards so the choice takes effect at once.
+  applyScanRoute(true);
+}
+
 /**
  * Classify the currently-loaded/streamed geometry and route to the Object /
  * Space panel (non-terrain) or the Analyse panel (terrain). Passes the
@@ -1695,7 +1846,9 @@ const SCAN_REROUTE_GROWTH = 1.4;
  * changed, and is skipped once the user has overridden the routing.
  */
 function applyScanRoute(initial: boolean): void {
-  if (!initial && scanRouteOverridden) return;
+  // A non-auto manual override pins the routing exactly like `scanRouteOverridden`:
+  // a streaming re-evaluation must never flip a deliberate user choice.
+  if (!initial && (scanRouteOverridden || scanTypeOverride !== 'auto')) return;
   let shape: ReturnType<typeof classifyScanShape> | null = null;
   let gathered: ReturnType<typeof viewer.gatherTerrainPositions> = null;
   try {
@@ -1719,34 +1872,71 @@ function applyScanRoute(initial: boolean): void {
         `sampled=${gathered?.positions ? gathered.positions.length / 3 : 0} resident=${viewer.residentPointTotal()}`,
     );
   }
-  const verdict: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
+  // The DETECTED verdict, then the EFFECTIVE route once the manual override is
+  // resolved over it (`resolveScanRoute`): 'auto' defers to detection, any other
+  // choice wins. With no geometry yet there is nothing to force, so stay null.
+  const detected: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
+  const effective: SpaceKind | null =
+    detected !== null ? resolveScanRoute(detected, scanTypeOverride) : null;
   if (!initial) {
-    // Re-route only when the verdict genuinely changes — never thrash panels.
-    if (verdict === null || verdict === lastScanVerdict) return;
+    // Re-route only when the effective route genuinely changes — never thrash.
+    if (effective === null || effective === lastScanVerdict) return;
   }
-  lastScanVerdict = verdict;
+  lastScanVerdict = effective;
 
   let isNonTerrain = false;
-  if (shape && gathered && shape.nonTerrain) {
+  if (shape && gathered && effective !== null && effective !== 'terrain') {
     isNonTerrain = true;
     const activeCloud = activeId ? viewer.getCloud(activeId) : null;
     const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+    // Compute REAL metrics for the EFFECTIVE type — when forced, the report
+    // reflects what's actually there for that interpretation; nothing fabricated.
+    // Feed the active scan's linear-unit-to-metres factor so a foot-based CRS
+    // (or any non-metre source units) reports honest metre/feet dimensions —
+    // the same factor the terrain core uses (see deriveCoreParams). Unknown ⇒ 1
+    // (assume metres) — an honest default, never a fabricated scale.
+    const unitToMetres = crsService.current()?.linearUnitToMetres ?? 1;
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
-      spaceKind: shape.spaceKind === 'interior' ? 'interior' : 'object',
+      spaceKind: effective === 'interior' ? 'interior' : 'object',
+      unitToMetres,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
     });
-    if (shape.spaceKind === 'interior') {
+    const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
+    const object = spaceKind === 'object' ? objectMetrics(gathered.positions) : null;
+    if (spaceKind === 'interior') {
       objectPanel.showSpace(space, shape);
     } else {
-      objectPanel.showObject(objectMetrics(gathered.positions), space, shape);
+      objectPanel.showObject(object, space, shape);
     }
+    // Cache the EXACT inputs behind the on-screen report so the panel's export
+    // buttons (Report PDF / Floor plan) build from the same positions + metrics +
+    // unit factor — copied so a later streaming buffer reuse can't corrupt it.
+    lastSpaceExport = {
+      positions: Float32Array.from(gathered.positions),
+      space,
+      object,
+      spaceKind,
+      unitToMetres,
+      upAxis: shape.up,
+      basename: lastCloudName || 'scan',
+    };
   }
+  if (!isNonTerrain) lastSpaceExport = null;
   objectPanel.setVisible(isNonTerrain);
   analysePanel.setVisible(!isNonTerrain);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(!isNonTerrain);
+  // Keep BOTH panels' "Treat as" controls reflecting the current state, so the
+  // user can switch direction from whichever panel is showing.
+  objectPanel.setScanType(scanTypeOverride, effective);
+  analysePanel.setScanType(scanTypeOverride, effective);
+  // Forcing terrain on a non-terrain scan is the explicit "run anyway": surface
+  // the Analyse panel AND kick the pipeline, matching the old escape hatch.
+  if (!isNonTerrain && scanTypeOverride === 'terrain') {
+    void terrainRunner.run();
+  }
 }
 
 /**
@@ -1765,8 +1955,11 @@ function revealAnalysePanel(name: string): void {
   exportPanel.setVisible(true);
   exportPanel.refresh();
   // Fresh scan → clear any prior override + verdict so the open-time route is
-  // authoritative and streaming re-routes can fire again.
+  // authoritative and streaming re-routes can fire again. The manual "Treat as"
+  // override is per-session-per-scan: a new scan returns to auto-detection.
   scanRouteOverridden = false;
+  scanTypeOverride = 'auto';
+  streamingSettledRouted = false;
   lastScanVerdict = null;
   lastRouteResident = viewer.residentPointTotal();
   applyScanRoute(true);
@@ -2979,6 +3172,10 @@ async function handleFile(file: File): Promise<void> {
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
     activeId = id;
+    // A freshly opened scan has no terrain analysis yet — drop any prior grid so
+    // the Coverage colour chip starts disabled until this scan is analysed.
+    viewer.setCoverageGrid(null);
+    inspector.setCoverageAvailable(false);
     // Retain the source file + whether the display cloud was reduced, so the
     // Export panel can offer a full-resolution re-decode.
     sourceFileById.set(id, file);
@@ -3776,6 +3973,14 @@ function startStreamingStatusPolling(): void {
       streamingPanel.setPhase('Refining visible detail…');
     } else {
       streamingPanel.setPhase('Streaming ready');
+      // First time the stream settles, re-evaluate the scan type on the now
+      // fully-resident cloud — a sparse early frame can misread a 360 / house
+      // as terrain or object. One-shot per scan; a manual "Treat as" override,
+      // a "run anyway" pin, or an unchanged verdict make this a no-op.
+      if (!streamingSettledRouted) {
+        streamingSettledRouted = true;
+        applyScanRoute(false);
+      }
     }
 
     // Benchmark sampling — only when collecting. The 250 ms cadence catches
@@ -3893,6 +4098,10 @@ function resetToEmptyState(): void {
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);
   analysePanel.setVisible(false);
+  // Hide the Space / Object (non-terrain) panel too — it was added after this
+  // reset path and a closed 360 / object scan would otherwise leave its report
+  // lingering over the empty state. v0.4.3.
+  objectPanel.setVisible(false);
   // Abort any in-flight terrain compute (worker job + its reply) so a result
   // for the now-closed scan can never land on the panel, and drop every cached
   // terrain core so a stale core can't be served for a different scan and
@@ -3900,6 +4109,11 @@ function resetToEmptyState(): void {
   // loaded after the first Analyse run, and before that there is nothing to
   // clear — so this never eagerly pulls the heavy analysis chunk.
   terrainRunner.abortAndClearCache();
+  // Drop the DTM-confidence grid and disable the Coverage colour chip — the
+  // grid belongs to the now-closed scan, so the 3D coverage mode must not tint
+  // a different cloud with stale trust.
+  viewer.setCoverageGrid(null);
+  inspector.setCoverageAvailable(false);
   // Hide + clear the classification legend so it doesn't linger with a stale
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
@@ -3912,6 +4126,8 @@ function resetToEmptyState(): void {
   if (scanRouteTimer != null) { clearTimeout(scanRouteTimer); scanRouteTimer = null; }
   lastScanVerdict = null;
   scanRouteOverridden = false;
+  scanTypeOverride = 'auto';
+  streamingSettledRouted = false;
   lastRouteResident = 0;
   exportPanel.setVisible(false);
   sourceFileById.clear();

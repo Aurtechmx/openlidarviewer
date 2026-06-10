@@ -47,6 +47,27 @@ describe('computeCellMetrics', () => {
     expect(metrics.pointDensity[4]).toBe(0); // non-measured centre
   });
 
+  it('density is pts/m² — a feet cell area is scaled to metres before dividing', () => {
+    // 1-unit cells with 1 point each. In metric data that's 1 pt/m². If the
+    // source unit is US feet (0.3048 m), the real cell is 0.3048 m on a side =
+    // 0.0929 m², so the SAME points are ~10.76 pts/m² — not 1.
+    const g = grid({
+      cols: 2, rows: 2, cellSizeM: 1,
+      coverage: [2, 2, 2, 2],
+      counts: [1, 1, 1, 1],
+    });
+    const metric = computeCellMetrics(g, { horizontalUnitToMetres: 1 }).summary;
+    expect(metric.meanDensity).toBeCloseTo(1, 6);
+
+    const feet = computeCellMetrics(g, { horizontalUnitToMetres: 0.3048 }).summary;
+    expect(feet.meanDensity).toBeCloseTo(1 / (0.3048 * 0.3048), 4); // ≈ 10.76 pts/m²
+    expect(feet.meanDensity).toBeGreaterThan(metric.meanDensity);
+
+    // A missing / non-positive scale falls back to 1 (no silent zero-divide).
+    const fallback = computeCellMetrics(g, { horizontalUnitToMetres: 0 }).summary;
+    expect(fallback.meanDensity).toBeCloseTo(1, 6);
+  });
+
   it('local completeness is the measured fraction of the neighbourhood', () => {
     // Fully measured 3×3.
     const full = grid({

@@ -1,16 +1,11 @@
 import { el, formatCount } from './dom';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
 import type { DatasetIntelligenceInput } from '../terrain/datasetIntelligence';
-import {
-  THEME_HINT,
-  THEME_LABEL,
-  THEME_ORDER,
-  type ThemeName,
-} from './themes';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import { scopeStamp } from '../render/class/classScope';
 import { classificationLabel } from '../render/pointInfo';
 import type { ColorMode } from '../render/colorModes';
+import { buildColorChipModel, COVERAGE_DISABLED_TITLE } from './colorChipModel';
 import type { PointSizeMode } from '../render/pointStyle';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { ExportFormat } from '../io/exporters';
@@ -126,11 +121,6 @@ export interface InspectorCallbacks {
   onAutoBalance: () => void;
   /** Rendering > Splat mode chip rail. */
   onSplatMode: (id: 'classic' | 'soft' | 'inspection') => void;
-  /**
-   * v0.3.9 theme picker — Dark / Light / High-contrast. The handler
-   * lives in main.ts and routes through `applyTheme` + persistence.
-   */
-  onTheme: (name: ThemeName) => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -140,6 +130,7 @@ const MODE_LABELS: Record<ColorMode, string> = {
   classification: 'Class',
   normal: 'Normal',
   density: 'Density',
+  coverage: 'Coverage',
 };
 
 /** Hover hints for each colour mode — what the chip does, for first-time users. */
@@ -150,6 +141,9 @@ const MODE_TITLES: Record<ColorMode, string> = {
   classification: 'Colour points by their ASPRS classification code',
   normal: 'Colour points by surface-normal direction',
   density: 'Colour points by local coverage — dark = sparse, bright = dense',
+  coverage:
+    'Colour points by bare-earth trust — green strong (measured), yellow ' +
+    'moderate (interpolated), red weak (extrapolated/gap). Approximate.',
 };
 
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
@@ -451,8 +445,6 @@ export class Inspector {
   private readonly _edlStrengthRow: HTMLElement;
   private readonly _aaChip: HTMLButtonElement;
   private readonly _touchChip: HTMLButtonElement;
-  /** v0.3.9 theme chip rail handles (Dark / Light / High-contrast). */
-  private _themeChips: Map<ThemeName, HTMLButtonElement> = new Map();
   private readonly _sizeModeChips: { mode: PointSizeMode; chip: HTMLButtonElement }[];
 
   constructor(callbacks: InspectorCallbacks) {
@@ -668,29 +660,10 @@ export class Inspector {
       ev.stopPropagation();
       this.closeSheet();
     });
-    // v0.3.9 theme chip rail — Dark / Light / High-contrast. Mounted
-    // in the panel head so it's the first surface the user sees on
-    // open. Clicking a chip immediately applies + persists the theme
-    // through main.ts. The initial active state is sync'd from the
-    // persisted theme via `syncTheme()` after construction.
-    const themeChips = new Map<ThemeName, HTMLButtonElement>();
-    const themeRail = el('div', { className: 'olv-theme-rail' });
-    for (const name of THEME_ORDER) {
-      const chip = el('button', {
-        className: 'olv-theme-chip',
-        text: THEME_LABEL[name],
-        title: THEME_HINT[name],
-        ariaLabel: `${THEME_LABEL[name]} theme`,
-      });
-      chip.addEventListener('click', () => {
-        chip.blur();
-        this._cb.onTheme(name);
-        this.syncTheme(name);
-      });
-      themeChips.set(name, chip);
-      themeRail.append(chip);
-    }
-    this._themeChips = themeChips;
+    // v0.4.3 — the theme picker moved OUT of this panel into a single
+    // shape-morphing button in the top-right header (ThemeToggle.ts).
+    // The Scan Intelligence panel no longer carries the Dark / Light /
+    // High-contrast chip rail.
     // The chevron is a CSS-only `▾` glyph; it rotates 180° when the sheet
     // is open. Together with the grip handle and the new tap-the-head
     // behaviour this signals to phone users that the bar at the bottom of
@@ -915,7 +888,6 @@ export class Inspector {
 
     this.element = el('aside', { className: 'olv-inspector' }, [
       head,
-      themeRail,
       this._datasetIntelligence.element,
       this._layersSection,
       this._colorBySection,
@@ -1017,17 +989,6 @@ export class Inspector {
    * react (the desktop layout repositions the panel below the
    * StreamingPanel in this mode to avoid overlap).
    */
-  /**
-   * v0.3.9 — flip the active state on the theme chip rail. Called by
-   * main.ts after a persisted theme is applied on boot, and again
-   * after every user-driven change.
-   */
-  syncTheme(active: ThemeName): void {
-    for (const [name, chip] of this._themeChips) {
-      chip.classList.toggle('olv-theme-chip-active', name === active);
-    }
-  }
-
   setStreamingMode(streaming: boolean): void {
     const hidden = streaming ? 'none' : '';
     this._layersSection.style.display = hidden;
@@ -1112,19 +1073,57 @@ export class Inspector {
     this._layerRows.delete(id);
   }
 
+  /** Data-driven colour modes for the active cloud (Coverage is appended separately). */
+  private _modes: ColorMode[] = [];
+  /** The currently-selected colour mode, tracked so a re-render keeps the highlight. */
+  private _activeMode: ColorMode = 'elevation';
+  /**
+   * Whether the "Coverage" chip is enabled. False until a terrain analysis
+   * produces a DTM-confidence grid; the chip is shown DISABLED (so the user
+   * learns the feature exists) with a "Run terrain analysis first" tooltip.
+   */
+  private _coverageAvailable = false;
+
   /** Render the color-mode chips, marking `active` as selected. */
   setColorModes(modes: ColorMode[], active: ColorMode): void {
+    // The Coverage mode is analysis-gated, not data-gated, so it is never part
+    // of the per-cloud `availableModes` list — track the data modes separately
+    // and always append the Coverage chip below.
+    this._modes = modes.filter((m) => m !== 'coverage');
+    this._activeMode = active;
+    this._renderColorChips();
+  }
+
+  /**
+   * Enable / disable the Coverage colour chip. Called when a terrain analysis
+   * confidence grid appears (enable) or the scan is closed (disable). Re-renders
+   * the chip rail so the disabled state + tooltip update in place.
+   */
+  setCoverageAvailable(available: boolean): void {
+    if (this._coverageAvailable === available) return;
+    this._coverageAvailable = available;
+    this._renderColorChips();
+  }
+
+  /** (Re)build the colour-mode chip rail from the tracked mode list + state. */
+  private _renderColorChips(): void {
     this._chips.replaceChildren();
-    for (const mode of modes) {
-      const chip = el('button', {
-        className: 'olv-chip',
-        text: MODE_LABELS[mode],
-        title: MODE_TITLES[mode],
-      });
-      if (mode === active) chip.classList.add('olv-chip-active');
+    const descriptors = buildColorChipModel(this._modes, this._activeMode, this._coverageAvailable);
+    for (const desc of descriptors) {
+      const { mode, active, disabled } = desc;
+      const title =
+        mode === 'coverage' && disabled ? COVERAGE_DISABLED_TITLE : MODE_TITLES[mode];
+      const chip = el('button', { className: 'olv-chip', text: MODE_LABELS[mode], title });
+      if (active) chip.classList.add('olv-chip-active');
+      if (disabled) {
+        chip.disabled = true;
+        chip.classList.add('olv-chip-disabled');
+      }
       chip.addEventListener('click', () => {
+        if (disabled) return; // disabled Coverage chip is a no-op
         for (const other of this._chips.children) other.classList.remove('olv-chip-active');
         chip.classList.add('olv-chip-active');
+        this._activeMode = mode;
         this._cb.onColorMode(mode);
         // v0.3.7 final-polish — show the trim slider when the analyst
         // picks Height. Other modes don't honour the slider so hiding
@@ -1134,7 +1133,7 @@ export class Inspector {
       this._chips.append(chip);
     }
     // Initial visibility for the trim row — track the active mode.
-    this._heightTrimRow.classList.toggle('olv-hidden', active !== 'elevation');
+    this._heightTrimRow.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
   }
 
   /**

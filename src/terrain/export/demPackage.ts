@@ -20,7 +20,7 @@
  */
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
-import { contourShapeStyleLabel } from '../contour/contourShapeStyle';
+import { buildExportProvenance, provenanceLines } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
@@ -52,10 +52,6 @@ export function parseEpsg(id: string | null | undefined): number | null {
 }
 
 const NO_DATA = -9999;
-
-function fmt(v: number | null | undefined, d = 2): string {
-  return v != null && Number.isFinite(v) ? v.toFixed(d) : '—';
-}
 
 /** Print a numeric coordinate at full precision, or an explicit fallback. */
 function coord(v: number | null | undefined): string {
@@ -132,8 +128,18 @@ function coverageLabel(mode: string): string {
 export function buildDemReadme(opts: DemReadmeOptions): string {
   const { result, basename, isGeographic } = opts;
   const dtm = result.dtm;
-  const acc = result.accuracyStandards;
   const quality = result.quality;
+
+  // ONE provenance object — the SAME builder every other export uses — so the
+  // README's reference frame, verdicts, accuracy, software + version and date
+  // are word-for-word identical to the GeoJSON / DXF / SVG / map sheet.
+  const p = buildExportProvenance(result, {
+    basename,
+    generatedAt: opts.generationDateIso,
+    softwareVersion: opts.softwareVersion,
+    metricVersion: opts.metricVersion,
+  });
+
   const cov = (() => {
     let measured = 0; let interp = 0; const total = dtm.coverage.length;
     for (let i = 0; i < dtm.coverage.length; i++) {
@@ -144,29 +150,22 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   })();
   const pct = (n: number): string => (cov.total ? `${Math.round((100 * n) / cov.total)}%` : '—');
   const hUnit = isGeographic ? 'degrees' : 'm';
-  const coverageMode = dtm.coverageMode ?? 'unknown';
-  const verdict = quality?.readiness ?? 'unknown';
-  const exportStatus = quality?.exportReadiness ?? 'unknown';
-  const crsStr = dtm.crs ?? 'unknown';
-  const crsStatus = dtm.crs ? 'known' : 'unknown — exports are NOT reliably georeferenced';
-  const datumStr = dtm.verticalDatum ?? 'unknown';
-  const datumStatus = dtm.verticalDatum ? 'known' : 'unknown';
-  const warnings = result.warnings ?? [];
   const reasons = quality?.reasons ?? [];
   const exportReasons = quality?.exportReasons ?? [];
+  const warnings = result.warnings ?? [];
 
-  // Prominent top caveat when the GEOREFERENCED export is anything short of
-  // full coverage + export-ready. The DEM is the georeferenced deliverable, so
-  // its caveat keys off EXPORT readiness (which gates on a known CRS + vertical
-  // datum), NOT surface readiness alone — a clean surface with an unknown datum
-  // must still read PRELIMINARY here. The georeferencing gap is named inline.
-  const isFull = coverageMode === 'full';
-  const isExportReady = exportStatus === 'available';
-  const georefNote = exportReasons.length ? ` (${exportReasons.join('; ')})` : '';
+  // Prominent top caveat when the GEOREFERENCED export is anything short of full
+  // coverage + export-ready. The DEM is the georeferenced deliverable, so its
+  // caveat keys off the unified EXPORT readiness verdict (which already gates on
+  // a known CRS + vertical datum) — a clean surface with an unknown datum still
+  // reads PRELIMINARY here. The reason is named inline.
+  const isFull = p.coverageMode === 'full';
+  const isExportReady = p.exportReadiness === 'Ready';
+  const caveatNote = p.exportReason ? ` (${p.exportReason})` : '';
   const lines: string[] = [];
   if (!isFull || !isExportReady) {
     lines.push(
-      `*** PRELIMINARY DEM — coverage: ${coverageMode}; export readiness: ${exportStatus}${georefNote}. ***`,
+      `*** PRELIMINARY DEM — coverage: ${p.coverageMode}; export readiness: ${p.exportReadiness}${caveatNote}. ***`,
       `*** Not for reliable terrain products. Treat heights and extents as`,
       `*** provisional and read the Quality gate + Warnings sections below.`,
       ``,
@@ -190,19 +189,17 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
-    ``,
-    `Reference system`,
-    `  Horizontal CRS ${crsStr}  (${crsStatus})`,
-    `  Vertical datum ${datumStr}  (${datumStatus})`,
     `  Elevation unit metres`,
     ``,
     `Coverage mode`,
-    `  ${coverageLabel(coverageMode)}`,
+    `  ${coverageLabel(p.coverageMode)}`,
     ``,
-    `Quality gate`,
-    `  Surface quality ${verdict}`,
-    `  Export status   ${exportStatus}`,
   );
+
+  // Quality gate — the unified verdicts come from the provenance block below;
+  // here we surface the gate's own per-axis REASON lists (surface + export
+  // georeferencing) so a preview / blocked export explains itself in full.
+  lines.push(`Quality gate`);
   if (reasons.length) {
     lines.push(`  Surface reasons`);
     for (const r of reasons) lines.push(`    - ${r}`);
@@ -210,6 +207,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   if (exportReasons.length) {
     lines.push(`  Export reasons (georeferencing)`);
     for (const r of exportReasons) lines.push(`    - ${r}`);
+  }
+  if (!reasons.length && !exportReasons.length) {
+    lines.push(`  (no gate reasons — see Export readiness in Provenance below)`);
   }
   lines.push(``);
 
@@ -224,45 +224,24 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // Generation parameters are derived from the actual run (result.generationParams),
   // never mirrored constants. If the field is somehow absent we say "unknown"
   // rather than silently asserting geodesic/on/on — provenance must stay honest.
+  // (The contour STYLE lives in the Provenance block below — single-sourced — so
+  // it can't drift from what the other exports stamp.)
   const gp = result.generationParams;
   const interpStr = gp ? `${gp.interpolation} void fill` : 'unknown';
-  // Contour shape style — names the exact transform the contour geometry used
-  // (replaces the old smoothing on/off boolean, which over-flattened five
-  // distinct styles into two states). Falls back to deriving from the
-  // back-compat `smoothing` boolean if an older result lacks `contourStyle`.
-  const styleStr = gp
-    ? gp.contourStyle
-      ? contourShapeStyleLabel(gp.contourStyle)
-      : gp.smoothing
-        ? 'Smooth'
-        : 'Crisp'
-    : 'unknown';
   const despikeStr = gp
     ? (gp.despike ? 'on (blunder-only outlier removal)' : 'off')
     : 'unknown';
-  // Per-cell aggregation (median by default): the surface estimator each cell
-  // used to combine its ground returns. Reported so the provenance reflects the
-  // real run rather than an assumed mean.
   const aggStr = gp ? gp.aggregation : 'unknown';
   lines.push(
     `Generation parameters`,
     `  Interpolation  ${interpStr}`,
     `  Cell aggregation ${aggStr}`,
-    `  Contour style  ${styleStr}`,
     `  Despike        ${despikeStr}`,
     `  Grid cell size ${dtm.cellSizeM} ${hUnit}`,
     ``,
-    `Validated accuracy`,
-    `  Vertical RMSEz ${fmt(acc.rmseZM)} m`,
-    `  NVA (95%)      ${fmt(acc.nvaM)} m   (non-vegetated vertical accuracy, RMSEz x 1.96)`,
-    `  VVA (95th pct) ${fmt(acc.vvaM)} m   (vegetated vertical accuracy)`,
-    `  Point density  ${fmt(acc.pointDensityPerM2, 1)} pts/m²`,
-    `  USGS 3DEP      ${acc.qualityLevel} — ${acc.qualityLevelReason}`,
-    ``,
+    // The unified provenance block — IDENTICAL lines to every other export.
     `Provenance`,
-    `  Generated      ${opts.generationDateIso}`,
-    `  Software       ${opts.softwareName} ${opts.softwareVersion}`,
-    `  Metric version ${opts.metricVersion}`,
+    ...provenanceLines(p).map((l) => `  ${l}`),
     ``,
     `The ASCII grids and GeoTIFFs describe the same surfaces; use whichever your`,
     `software prefers. Interpolated cells are real estimates between measured`,

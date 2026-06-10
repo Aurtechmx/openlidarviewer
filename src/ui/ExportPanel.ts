@@ -30,8 +30,10 @@ export interface ExportPanelCallbacks {
 export class ExportPanel {
   readonly element: HTMLElement;
   private readonly _formatRow: HTMLElement;
+  private readonly _crsLabel: HTMLElement;
   private readonly _crsRow: HTMLElement;
   private readonly _crsExtra: HTMLElement;
+  private readonly _crsLocalNote: HTMLElement;
   private readonly _exportBtn: HTMLButtonElement;
   private readonly _status: HTMLElement;
   private readonly _fullResRow: HTMLElement;
@@ -43,6 +45,13 @@ export class ExportPanel {
   private _sourceEpsg = '';
   private _fullRes = false;
   private _busy = false;
+  /**
+   * Whether the active scan carries a real-world CRS (projected / geographic).
+   * When false the Coordinate-System step is collapsed — a local-coordinate scan
+   * has no real-world CRS to keep / assign / reproject, so the converter forces
+   * 'keep' and shows a one-line note instead of the three pills.
+   */
+  private _crsKnown = true;
 
   constructor(callbacks: ExportPanelCallbacks) {
     this._cb = callbacks;
@@ -61,8 +70,14 @@ export class ExportPanel {
     head.addEventListener('click', (e) => { if (e.target === head || e.target === title) toggle(); });
 
     this._formatRow = el('div', { className: 'olv-bc-pills' });
+    this._crsLabel = this._label('Coordinate system');
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
+    this._crsLocalNote = el('p', {
+      className: 'olv-export-crs-note',
+      text: 'Local coordinates — no real-world CRS to assign or reproject.',
+    });
+    this._crsLocalNote.style.display = 'none';
     this._fullResRow = el('div', { className: 'olv-export-fullres' });
     this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
@@ -72,9 +87,10 @@ export class ExportPanel {
     body.append(
       this._label('Output format'),
       this._formatRow,
-      this._label('Coordinate system'),
+      this._crsLabel,
       this._crsRow,
       this._crsExtra,
+      this._crsLocalNote,
       this._fullResRow,
       this._exportBtn,
       this._status,
@@ -97,6 +113,36 @@ export class ExportPanel {
   /** Re-evaluate the full-resolution availability for the active cloud. */
   refresh(): void {
     this._renderFullResRow();
+  }
+
+  /**
+   * Tell the panel whether the active scan has a real-world CRS (projected /
+   * geographic). When `false` the Coordinate-System step collapses: the Keep /
+   * Assign EPSG / Reproject pills + any EPSG fields are hidden, the mode is
+   * forced back to 'keep' (a local scan can only be kept), and a one-line note
+   * explains why. When `true` the step behaves exactly as before. The format
+   * conversion (LAS / LAZ / XYZ / ASC) and full-resolution behaviour are
+   * untouched either way.
+   */
+  setCrsKnown(known: boolean): void {
+    this._crsKnown = known;
+    if (!known && this._crsMode !== 'keep') {
+      // A local scan cannot assign / reproject — reset to keep so an export can't
+      // carry a stale mode from a previously-loaded georeferenced scan.
+      this._crsMode = 'keep';
+      this._renderCrsPills();
+      this._renderCrsExtra();
+    }
+    this._renderCrsStep();
+  }
+
+  /** Show or collapse the Coordinate-System step per the known-CRS signal. */
+  private _renderCrsStep(): void {
+    const collapsed = !this._crsKnown;
+    this._crsLabel.style.display = collapsed ? 'none' : '';
+    this._crsRow.style.display = collapsed ? 'none' : '';
+    this._crsExtra.style.display = collapsed ? 'none' : '';
+    this._crsLocalNote.style.display = collapsed ? '' : 'none';
   }
 
   /**

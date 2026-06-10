@@ -24,6 +24,7 @@
 
 import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel';
 import { contourShapeStyleLabel } from './contourShapeStyle';
+import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
 
 interface LayerDef {
   readonly name: string;
@@ -41,17 +42,28 @@ function layerFor(f: ContourFeature): string {
   return f.grade === 'solid' ? 'CONTOUR_INTER' : 'CONTOUR_UNCERTAIN';
 }
 
-/** Serialise the model to a minimal ASCII DXF string. */
-export function dxfContours(model: ContourFeatureModel): string {
+/**
+ * Serialise the model to a minimal ASCII DXF string. When the unified
+ * {@link ExportProvenance} is supplied, the full provenance block is emitted as
+ * leading group-code-999 comments (ignored by CAD readers) so the file is
+ * self-describing with the SAME provenance every other export carries. Without
+ * provenance it falls back to the lone shape-style comment (back-compat).
+ */
+export function dxfContours(model: ContourFeatureModel, provenance?: ExportProvenance): string {
   const out: string[] = [];
   const pair = (code: number, value: string | number) => {
     out.push(String(code));
     out.push(String(value));
   };
 
-  // Provenance comment (group code 999 — ignored by CAD readers) naming the
-  // shape style the geometry was produced with, so the file is self-describing.
-  pair(999, `OpenLiDARViewer contour style: ${contourShapeStyleLabel(model.contourStyle)}`);
+  // Provenance comments (group code 999 — ignored by CAD readers) so the file is
+  // self-describing. With the unified provenance every line is stamped; without
+  // it, the lone shape-style comment is kept for back-compat.
+  if (provenance) {
+    for (const line of provenanceLines(provenance)) pair(999, line);
+  } else {
+    pair(999, `OpenLiDARViewer contour style: ${contourShapeStyleLabel(model.contourStyle)}`);
+  }
 
   // TABLES → LAYER
   pair(0, 'SECTION');

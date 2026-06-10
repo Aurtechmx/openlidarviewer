@@ -187,6 +187,31 @@ describe('terrainAssessment', () => {
     expect(a.status).not.toBe('Good');
   });
 
+  it('a Limited surface does not borrow the gate’s "Preview only" wording', () => {
+    // Regression: a real project showed "Limited · 49/100" with the reason
+    // "Preview only: 46% of cells are interpolated." — the Limited headline must
+    // not describe itself as "preview only".
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        reasons: ['Preview only: 46% of cells are interpolated.'],
+        interpolatedFraction: 0.46,
+        score: 30, // below LIMITED_SCORE_FLOOR -> Limited
+        crs: null,
+        verticalDatum: null,
+      }),
+    );
+    expect(a.status).toBe('Limited');
+    expect(a.reason).not.toMatch(/preview only/i);
+    expect(a.reason).toMatch(/insufficient/i);
+    expect(a.reason).toMatch(/46% of the surface is interpolated/);
+    // Export reason names both the surface limitation and the georef gaps, with
+    // a clean separator (no awkward "...grade and CRS... and datum...").
+    expect(a.exportReadiness).toBe('Preview');
+    expect(a.exportReason).toContain('below export grade;');
+    expect(a.exportReason).not.toMatch(/grade and/i);
+  });
+
   it('makes resident-only coverage visible and never reads as Good', () => {
     const a = terrainAssessment(fixture({ coverageMode: 'resident-only', score: 90 }));
     expect(a.status).not.toBe('Good');
@@ -225,6 +250,46 @@ describe('terrainAssessment', () => {
     const rmse = findMetric(a.supportingMetrics, 'Vertical RMSE');
     expect(rmse?.value).toMatch(/unknown/i);
     expect(rmse?.rating).toBe('unknown');
+  });
+
+  // exportReason completeness: when a surface is BELOW Good *and* has a georef
+  // gap, BOTH cap export — so the reason must name BOTH, not just one. Naming
+  // only the georef gap (the old behaviour) was incomplete: it implied that
+  // fixing the CRS/datum alone would make the surface exportable, when the
+  // surface itself is also below export grade. This is a correctness fix.
+  it('names BOTH the surface limitation and the georef gap when both hold export back', () => {
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        reasons: ['Preview only: mean confidence is low.'],
+        crs: null,
+        score: 70,
+      }),
+    );
+    expect(a.exportReadiness).toBe('Preview');
+    // The georef gap is named …
+    expect(a.exportReason).toMatch(/CRS/i);
+    // … AND the surface limitation is named too (one readable sentence).
+    expect(a.exportReason).toMatch(/surface|preview|below/i);
+  });
+
+  it('names ONLY the georef gap when the surface is Good (unchanged behaviour)', () => {
+    const a = terrainAssessment(fixture({ crs: null, verticalDatum: null, score: 90 }));
+    expect(a.status).toBe('Good');
+    expect(a.exportReadiness).toBe('Preview');
+    expect(a.exportReason).toMatch(/CRS unknown/i);
+    expect(a.exportReason).toMatch(/vertical datum unknown/i);
+    // No surface limitation is named — the surface is Good, only georef holds it.
+    expect(a.exportReason).not.toMatch(/below export grade|surface quality is below/i);
+  });
+
+  it('names ONLY the surface limitation when below Good with known CRS+datum (unchanged)', () => {
+    const a = terrainAssessment(
+      fixture({ readiness: 'previewOnly', reasons: ['Preview only: mean confidence is low.'], score: 70 }),
+    );
+    expect(a.exportReadiness).toBe('Preview');
+    expect(a.exportReason).toMatch(/surface|below/i);
+    expect(a.exportReason).not.toMatch(/CRS|datum/i);
   });
 
   it('maps previewOnly to Preview and surfaces a plain (surface) reason', () => {

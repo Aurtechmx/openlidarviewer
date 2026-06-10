@@ -1,5 +1,11 @@
 import { colorForMode, availableModes, defaultMode } from '../src/render/colorModes';
 import { PointCloud } from '../src/model/PointCloud';
+import {
+  COVERAGE_STRONG,
+  COVERAGE_MODERATE,
+  COVERAGE_WEAK,
+  COVERAGE_NONE,
+} from '../src/terrain/surface/coverageHeatmap';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -277,6 +283,88 @@ describe('colorForMode — normal', () => {
   test('throws when normals are absent', () => {
     const cloud = makePositionsOnlyCloud();
     expect(() => colorForMode('normal', cloud)).toThrow();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// colorForMode — coverage (DTM-confidence heatmap on the cloud)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('colorForMode — coverage', () => {
+  // A 2x2 confidence grid at origin (0,0), 1 m cells:
+  //   col0,row0 strong   col1,row0 moderate
+  //   col0,row1 weak      col1,row1 empty (no data)
+  const coverageGrid = {
+    confidence: new Float32Array([
+      80, 50, // row 0: strong, moderate
+      10, 0,  // row 1: weak, empty
+    ]),
+    coverage: new Uint8Array([2, 1, 1, 0]),
+    cols: 2,
+    rows: 2,
+    cellSizeM: 1,
+    originH1: 0,
+    originH2: 0,
+  };
+
+  test('tints each point by the confidence of the cell it falls in', () => {
+    // Points placed in the centre of each of the four cells.
+    const cloud = new PointCloud({
+      positions: new Float32Array([
+        0.5, 0.5, 0, // → col0,row0 strong (green)
+        1.5, 0.5, 0, // → col1,row0 moderate (yellow)
+        0.5, 1.5, 0, // → col0,row1 weak (red)
+        1.5, 1.5, 0, // → col1,row1 empty (grey)
+      ]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'cov.las',
+    });
+    const out = colorForMode('coverage', cloud, { coverageGrid });
+    expect(out.length).toBe(4 * 3);
+    expect([out[0], out[1], out[2]]).toEqual([
+      COVERAGE_STRONG.r, COVERAGE_STRONG.g, COVERAGE_STRONG.b,
+    ]);
+    expect([out[3], out[4], out[5]]).toEqual([
+      COVERAGE_MODERATE.r, COVERAGE_MODERATE.g, COVERAGE_MODERATE.b,
+    ]);
+    expect([out[6], out[7], out[8]]).toEqual([
+      COVERAGE_WEAK.r, COVERAGE_WEAK.g, COVERAGE_WEAK.b,
+    ]);
+    // Empty cell → neutral dim grey, not a coverage colour.
+    expect([out[9], out[10], out[11]]).toEqual([
+      COVERAGE_NONE.r, COVERAGE_NONE.g, COVERAGE_NONE.b,
+    ]);
+  });
+
+  test('points outside the analysed grid get the neutral grey', () => {
+    const cloud = new PointCloud({
+      positions: new Float32Array([
+        -5, -5, 0, // left/below the grid
+        100, 100, 0, // right/above the grid
+      ]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'outside.las',
+    });
+    const out = colorForMode('coverage', cloud, { coverageGrid });
+    expect([out[0], out[1], out[2]]).toEqual([
+      COVERAGE_NONE.r, COVERAGE_NONE.g, COVERAGE_NONE.b,
+    ]);
+    expect([out[3], out[4], out[5]]).toEqual([
+      COVERAGE_NONE.r, COVERAGE_NONE.g, COVERAGE_NONE.b,
+    ]);
+  });
+
+  test('without a coverage grid, every point is the neutral grey (no throw)', () => {
+    const cloud = makePositionsOnlyCloud();
+    expect(() => colorForMode('coverage', cloud)).not.toThrow();
+    const out = colorForMode('coverage', cloud);
+    for (let i = 0; i < cloud.pointCount; i++) {
+      expect([out[i * 3], out[i * 3 + 1], out[i * 3 + 2]]).toEqual([
+        COVERAGE_NONE.r, COVERAGE_NONE.g, COVERAGE_NONE.b,
+      ]);
+    }
   });
 });
 

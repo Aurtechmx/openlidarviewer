@@ -9,8 +9,11 @@
  * element`, a callbacks object, `update()`, and `setVisible()`. It reads
  * top-down:
  *
- *   1. Terrain Assessment hero — status · score, the headline reason, and
- *      bestFor / useCaution / notRecommendedFor guidance plus the
+ *   1. Terrain Assessment hero — surface-quality status · score, the headline
+ *      reason, export readiness, then a "Recommended workflow" checklist (each
+ *      supported workflow graded ✓ / ⚠ / ✕ from the two axes — the upgrade over
+ *      the old Best for / Caution / Not for prose), a collapsed "Why? — what's
+ *      holding this back" details when the surface is not fully-good, and the
  *      supporting metrics behind the verdict.
  *   2. Details expander (collapsed) — the honesty status chips
  *      (Coverage / DTM / CRS / Datum / Export), DTM & contour readiness,
@@ -30,9 +33,16 @@ import {
   GRADE_MEANING,
   METRIC_TOOLTIPS,
   NOT_SURVEY_GRADE,
+  confidenceWord,
   describeIntervalOption,
   formatHonestValue,
 } from '../terrain/contour/contourCopy';
+import { gradeForConfidence } from '../terrain/ground/cellConfidence';
+import {
+  coverageHeatmapImage,
+  COVERAGE_LEGEND,
+  COVERAGE_CAPTION,
+} from '../terrain/surface/coverageHeatmap';
 import { interpolatedCaption } from '../terrain/contour/evidenceGrade';
 import {
   computeTerrainReadiness,
@@ -48,7 +58,8 @@ import {
   defaultContourShapeStyle,
   type ContourShapeStyle,
 } from '../terrain/contour/contourShapeStyle';
-import { loadMapSheetPdf, loadDemPackage } from '../lazyChunks';
+import { buildExportProvenance } from '../terrain/export/exportProvenance';
+import { loadMapSheetPdf, loadDemPackage, loadTerrainReportPdf } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
 import {
@@ -72,11 +83,19 @@ import {
 } from '../terrain/surface/hillshade';
 import { sampleTerrain } from '../terrain/contour/sampleTerrain';
 import { terrainAssessment } from '../terrain/contour/terrainAssessment';
+import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
+import { explainLimitations } from '../terrain/contour/whyNotReasons';
+import { renderWorkflowCard, renderWhyDetails } from './workflowCardRender';
+import type { SpaceKind } from '../terrain/scanShape';
+import type { ScanTypeOverride } from '../terrain/scanRoute';
+import { createScanTypeControl, type ScanTypeControl } from './scanTypeControl';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
   /** Run (or re-run) terrain analysis on the loaded scan. */
   onRun?: () => void;
+  /** The user forced a scan type via the "Treat as" override. */
+  onScanTypeChange?: (override: ScanTypeOverride) => void;
   /** Re-run the analysis at a chosen contour interval (metres). */
   onSelectInterval?: (intervalM: number) => void;
   /**
@@ -190,6 +209,13 @@ export class AnalysePanel {
   private _contourStyle: ContourShapeStyle = defaultContourShapeStyle;
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
+  /**
+   * Terrain Intelligence Report (PDF) — the client-facing deliverable. Like the
+   * DEM button it is gated only on a result existing (NOT the contour gate): the
+   * report honestly shows the verdicts + which products are Available / Preview /
+   * Blocked, so it is valuable for a preview/blocked scan too.
+   */
+  private _reportButton!: HTMLButtonElement;
   /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
   private _demNote!: HTMLElement;
   private readonly _legend: HTMLElement;
@@ -202,10 +228,16 @@ export class AnalysePanel {
    * panel both invoke it so a queued frame can't paint a removed canvas.
    */
   private _reliefRepaintCancel: (() => void) | null = null;
+  /** The "Treat as" override control — also reachable from the Object/Space
+   *  panel, wired through the host to the same per-session override state. */
+  private readonly _scanTypeControl: ScanTypeControl;
 
   constructor(callbacks: AnalysePanelCallbacks = {}) {
     this._cb = callbacks;
     this.element = el('section', { className: 'olv-analyse-panel' });
+    this._scanTypeControl = createScanTypeControl({
+      onChange: (o) => this._cb.onScanTypeChange?.(o),
+    });
 
     // Collapsible head (same pattern as the Measurements panel) so the
     // panel is an opt-in chip, not an always-open wall on the left edge.
@@ -296,6 +328,7 @@ export class AnalysePanel {
       this._status,
       this._resultsRegion,
       this._roadmap,
+      this._scanTypeControl.element,
       el('p', { className: 'olv-analyse-footer', text: NOT_SURVEY_GRADE }),
     );
     this._resultsRegion.style.display = 'none';
@@ -406,20 +439,28 @@ export class AnalysePanel {
       );
     }
     this._assessmentRow.append(exportLine);
-    this._assessmentRow.append(
-      el('div', { className: 'olv-analyse-assess-use', text: `Best for: ${a.bestFor}` }),
-    );
-    if (a.useCaution) {
-      this._assessmentRow.append(
-        el('div', { className: 'olv-analyse-assess-caution', text: `Caution: ${a.useCaution}` }),
-      );
+
+    // Recommended workflow — the upgrade over the old Best for / Caution / Not
+    // for lines: instead of three prose sentences, a fixed, ordered checklist of
+    // the real workflows the app supports, each graded ✓ / ⚠ / ✕ from the two
+    // axes above (inspection rows from Surface Quality, deliverable rows from
+    // Export Readiness). It carries the same fitness-for-use information, but as
+    // a decision the user can act on at a glance. The pure grader is the single
+    // source; the prose verdict text (a.bestFor etc.) still lives on the
+    // assessment for non-UI consumers (e.g. export README provenance).
+    const workflows = recommendedWorkflows(a, this._result.quality);
+    this._assessmentRow.append(renderWorkflowCard(workflows));
+
+    // Why? — what's holding this back. Shown only when the surface is not
+    // fully-good (Surface Quality below Good, or Export Readiness below Ready):
+    // a collapsed details with the honest causes (each with its figure) AND the
+    // concrete fixes. When everything is green there is nothing to explain, so
+    // the helper returns null and we render nothing.
+    const notFullyGood = a.status !== 'Good' || a.exportReadiness !== 'Ready';
+    if (notFullyGood) {
+      const why = renderWhyDetails(explainLimitations(this._result));
+      if (why) this._assessmentRow.append(why);
     }
-    this._assessmentRow.append(
-      el('div', {
-        className: 'olv-analyse-assess-not',
-        text: `Not for: ${a.notRecommendedFor}`,
-      }),
-    );
 
     // Compact supporting-metrics list — each metric is a pill whose colour comes
     // from its own honest rating (good / fair / poor / unknown), never from the
@@ -523,9 +564,111 @@ export class AnalysePanel {
     });
     if (chm) this._surfaceRow.append(chm);
 
+    // Coverage — a green/yellow/red trust read of the bare-earth DTM. Same
+    // confidence the dashed-contour evidence uses, so the two agree.
+    const coverage = this._coverageTile(r);
+    if (coverage) this._surfaceRow.append(coverage);
+
     // Relief — multi-directional / single-sun hillshade with adjustable sun.
     const relief = this._reliefTile(r, s);
     if (relief) this._surfaceRow.append(relief);
+  }
+
+  /**
+   * The coverage heatmap tile — green (strong/measured) / yellow (moderate/
+   * interpolated) / red (weak/extrapolated or gap), with empty cells left
+   * transparent. A projection of the per-cell DTM confidence the pipeline
+   * already computes; no new analysis. Carries a 3-stop legend, a click-to-
+   * sample readout reporting the cell's confidence + grade word, an Export PNG
+   * button, and the honesty caption. Never claims survey-grade.
+   */
+  private _coverageTile(r: AnalyseContoursResult): HTMLElement | null {
+    const cols = r.dtm.cols;
+    const rows = r.dtm.rows;
+    if (!(cols > 0 && rows > 0) || r.dtm.confidence.length !== cols * rows) return null;
+
+    const canvas = this._makeCanvas(cols, rows);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const img = ctx.createImageData(cols, rows);
+      // The rasteriser flips north-up to match the other preview tiles; copy
+      // its RGBA straight into the canvas ImageData.
+      const raster = coverageHeatmapImage(r.dtm, { northUp: true });
+      img.data.set(raster.data);
+      ctx.putImageData(img, 0, 0);
+    }
+
+    const tile = el('div', { className: 'olv-analyse-raster-tile' });
+    tile.append(el('div', { className: 'olv-analyse-sublabel', text: 'Coverage (trust)' }));
+    const wrap = this._rasterWrap(canvas);
+    tile.append(wrap.wrap);
+    tile.append(this._coverageLegend());
+    tile.append(el('div', { className: 'olv-analyse-caption', text: COVERAGE_CAPTION }));
+
+    const readout = this._sampleReadout();
+    tile.append(readout);
+    this._attachCoverageSampler(canvas, wrap.crosshair, cols, rows, readout);
+
+    const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
+    dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'coverage'));
+    tile.append(dl);
+    return tile;
+  }
+
+  /** A discrete 3-stop coverage legend: green / yellow / red = strong / moderate / weak. */
+  private _coverageLegend(): HTMLElement {
+    const wrap = el('div', { className: 'olv-analyse-coverage-legend' });
+    for (const stop of COVERAGE_LEGEND) {
+      const item = el('div', { className: 'olv-analyse-coverage-legend-item' });
+      const sw = el('span', { className: 'olv-analyse-coverage-swatch' });
+      sw.style.background = `rgb(${stop.color.r},${stop.color.g},${stop.color.b})`;
+      item.append(sw, el('span', { text: `${stop.word} — ${stop.meaning}` }));
+      wrap.append(item);
+    }
+    return wrap;
+  }
+
+  /**
+   * Click-to-sample for the coverage tile: maps a click to a DTM cell and
+   * reports that cell's confidence + grade word, reusing the readout style of
+   * the other tiles. Reads the confidence grid directly (sampleTerrain doesn't
+   * carry confidence), so the readout matches the pixel under the crosshair.
+   */
+  private _attachCoverageSampler(
+    canvas: HTMLCanvasElement,
+    crosshair: HTMLElement,
+    cols: number,
+    rows: number,
+    readout: HTMLElement,
+  ): void {
+    canvas.classList.add('is-samplable');
+    canvas.addEventListener('click', (e) => {
+      const r = this._result;
+      if (!r) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const fx = (e.clientX - rect.left) / rect.width;
+      const fy = (e.clientY - rect.top) / rect.height;
+      const col = Math.max(0, Math.min(cols - 1, Math.floor(fx * cols)));
+      const displayRow = Math.max(0, Math.min(rows - 1, Math.floor(fy * rows)));
+      const row = rows - 1 - displayRow; // undo the north-up flip
+      const i = row * cols + col;
+      const covered = r.dtm.coverage[i] !== 0;
+      if (!covered) {
+        readout.textContent = 'Sample · outside coverage';
+        readout.classList.add('is-empty');
+      } else {
+        const conf = r.dtm.confidence[i];
+        const grade = gradeForConfidence(conf);
+        const support = grade === 'solid' ? 'strong' : grade === 'dashed' ? 'moderate' : 'weak';
+        const c = Number.isFinite(conf) ? Math.round(conf) : 0;
+        readout.textContent = `Sample · ${support} support · confidence ${c}% (${confidenceWord(conf)})`;
+        readout.classList.remove('is-empty');
+      }
+      crosshair.style.left = `${(fx * 100).toFixed(2)}%`;
+      crosshair.style.top = `${(fy * 100).toFixed(2)}%`;
+      crosshair.style.display = 'block';
+    });
   }
 
   /**
@@ -974,6 +1117,12 @@ export class AnalysePanel {
     return this.element.style.display !== 'none';
   }
 
+  /** Reflect the host's override + the effective route in the "Treat as"
+   *  control, so the terrain panel can also force Object / Interior / Auto. */
+  setScanType(override: ScanTypeOverride, effective: SpaceKind | null): void {
+    this._scanTypeControl.set(override, effective);
+  }
+
   /**
    * Attach a "what this means" hover hint to a metric node, matching the
    * affordance the Inspector's DatasetIntelligenceCard uses on its rows:
@@ -1087,25 +1236,23 @@ export class AnalysePanel {
   }
 
   /**
-   * Resolve the feature model to serialize for a contour export at the panel's
-   * current shape style. Reuses the on-screen model when the style already
-   * matches (no recompute); otherwise regenerates from the cached core at the
-   * model's interval + the selected style, without touching the visible panel.
+   * Resolve the full analysis result to serialize for a contour export at the
+   * panel's current shape style. Reuses the on-screen result when the style
+   * already matches (no recompute); otherwise regenerates from the cached core at
+   * the model's interval + the selected style, without touching the visible
+   * panel. Returning the whole result (not just the model) lets the caller derive
+   * the unified export provenance from the SAME result it serialises.
    */
-  private async _modelForExport(): Promise<{
-    model: AnalyseContoursResult['model'];
-    labels: AnalyseContoursResult['labels'];
-  }> {
+  private async _resultForExport(): Promise<AnalyseContoursResult> {
     const r = this._result!;
     const style = this._contourStyle;
     if (style === r.model.contourStyle || !this._cb.buildResultForExport) {
-      return { model: r.model, labels: r.labels };
+      return r;
     }
-    const regenerated = await this._cb.buildResultForExport({
+    return this._cb.buildResultForExport({
       intervalM: r.model.intervalM,
       shapeStyle: style,
     });
-    return { model: regenerated.model, labels: regenerated.labels };
   }
 
   private _buildExportRow(): HTMLElement {
@@ -1130,9 +1277,18 @@ export class AnalysePanel {
           btn.textContent = '…';
           try {
             // Regenerate at the selected shape style (cache hit; reuses the
-            // on-screen model when the style already matches), then serialize.
-            const { model, labels } = await this._modelForExport();
-            triggerBrowserDownload(serializeContours(model, fmt, { basename, labels }));
+            // on-screen result when the style already matches), then serialize
+            // with the unified provenance derived from that SAME result.
+            const result = await this._resultForExport();
+            const provenance = buildExportProvenance(result, {
+              basename,
+              generatedAt: new Date(),
+              softwareVersion: __APP_VERSION__,
+              metricVersion: TERRAIN_METRIC_VERSION,
+            });
+            triggerBrowserDownload(
+              serializeContours(result.model, fmt, { basename, labels: result.labels, provenance }),
+            );
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error('OpenLiDARViewer: contour export failed.', err);
@@ -1163,6 +1319,21 @@ export class AnalysePanel {
     this._demButton.title = 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet';
     this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
     row.append(this._demButton);
+
+    // Terrain Intelligence Report — the one-click, client-facing deliverable that
+    // assembles the assessment, coverage, accuracy, workflows, warnings and
+    // available products into one sectioned PDF. A primary-ish action distinct
+    // from the contour/DEM/map exports. Deliberately NOT pushed onto
+    // `_exportButtons`: like the DEM, it stays enabled whenever an analysis
+    // exists — it honestly reports a preview/blocked scan rather than hiding it.
+    this._reportButton = el('button', {
+      className: 'olv-analyse-dl is-primary',
+      text: 'Intelligence report (PDF)',
+    });
+    this._reportButton.title =
+      'Download a one-page terrain intelligence report: assessment, coverage, accuracy, recommended workflows and which products you can take away';
+    this._reportButton.addEventListener('click', () => void this._exportTerrainReport(this._reportButton));
+    row.append(this._reportButton);
 
     // Honesty caveat for the DEM export — the raster stays usable for partial /
     // preview data, but the user is told one line up front (the README carries
@@ -1207,6 +1378,48 @@ export class AnalysePanel {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: DEM export failed.', err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  /**
+   * Build and download the one-click Terrain Intelligence Report (lazy pdf-lib).
+   * It assembles the on-screen verdicts, coverage, accuracy, workflows, warnings
+   * and available products into a sectioned PDF — NO new analysis — and stamps
+   * the unified provenance (so it matches every other export of this scan).
+   * Filename: `<basename>-terrain-report.pdf`.
+   */
+  private async _exportTerrainReport(btn: HTMLButtonElement): Promise<void> {
+    const r = this._result;
+    if (!r) return;
+    const label = btn.textContent ?? 'Intelligence report (PDF)';
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const { buildTerrainReportPdf } = await loadTerrainReportPdf();
+      const basename = this._cb.getExportBasename?.() ?? 'terrain';
+      // The renderer assembles the content from the SAME result the panel shows,
+      // stamping the unified provenance via these options — so the report's
+      // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
+      // from the GeoJSON / DXF / map sheet / DEM exports of this scan.
+      const bytes = await buildTerrainReportPdf(r, {
+        basename,
+        generatedAt: new Date(),
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
+      });
+      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${basename}-terrain-report.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: terrain report export failed.', err);
     } finally {
       btn.disabled = false;
       btn.textContent = label;
@@ -1467,10 +1680,20 @@ export class AnalysePanel {
     },
   ): Promise<void> {
     const { buildMapSheetPdf } = await loadMapSheetPdf();
+    // The unified provenance, derived from the SAME result the sheet plots, so
+    // the title block's CRS / datum / style / accuracy / readiness / date can't
+    // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
+    const provenance = buildExportProvenance(result, {
+      basename: this._cb.getExportBasename?.() ?? undefined,
+      generatedAt: opts.generatedAt,
+      softwareVersion: __APP_VERSION__,
+      metricVersion: TERRAIN_METRIC_VERSION,
+    });
     const bytes = await buildMapSheetPdf({
       model: result.model,
       labels: result.labels,
       worldOrigin: opts.worldOrigin,
+      provenance,
       crs: result.model.crs,
       verticalDatum: result.model.verticalDatum,
       accuracy: result.accuracyStandards,
@@ -1592,6 +1815,9 @@ export class AnalysePanel {
     // a bare-earth surface to exist (covered DTM cells).
     const hasDtm = r.dtm.coverage.some((c) => c !== 0);
     this._demButton.disabled = !hasDtm;
+    // The Intelligence Report is gated the same way as the DEM — it only needs an
+    // analysis to summarise; it honestly reports a preview/blocked verdict.
+    this._reportButton.disabled = !hasDtm;
     this._demButton.title = hasDtm
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';

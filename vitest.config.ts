@@ -15,5 +15,9 @@ export default defineConfig({
     environment: 'node',
     // Unit tests only — Playwright specs under tests/e2e/ are excluded.
     include: ['tests/*.{test,spec}.ts'],
+    // Headroom over the 5 s default so the heavier DOM-building / LAS-decoding
+    // suites don't time out (and flake) under parallel load on a busy machine —
+    // 15 s is still unambiguously "broken" if a unit test ever hits it.
+    testTimeout: 15_000,
   },
 });

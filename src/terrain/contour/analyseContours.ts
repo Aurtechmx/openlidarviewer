@@ -63,7 +63,7 @@ import {
   type HillshadeResult,
 } from '../surface/hillshade';
 import { hornSlopeAspect } from '../ground/terrainDerivatives';
-import { horizontalCellMetres } from '../ground/horizontalScale';
+import { horizontalCellMetres, METRES_PER_DEGREE } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
 import { checkCalibration } from '../validate/calibrationCheck';
@@ -116,6 +116,13 @@ export interface TerrainCoreParams {
    * the "Vertical RMSE … m" readout are correct for feet-based CRSs. Default 1.
    */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Metres per source horizontal unit (1 for metre data, ~0.3048 for feet).
+   * Densities, cell areas and slope runs are scaled by this so a feet-based
+   * projected CRS reports genuine pts/m² and correct slope, mirroring
+   * `verticalUnitToMetres` on the Z axis. Ignored when `isGeographic` (the
+   * metres-per-degree scale is used instead). Default 1. */
+  readonly horizontalUnitToMetres?: number;
   /** Vertical datum. */
   readonly verticalDatum?: string | null;
   /** Vertical axis of the source frame. Default 'z'. */
@@ -458,6 +465,7 @@ export function computeTerrainCore(
     crs,
     verticalDatum,
     isGeographic: params.isGeographic,
+    horizontalUnitToMetres: params.horizontalUnitToMetres,
     interpolation,
     // Demote one-sided (extrapolated) fills toward dashed/gap so surface that
     // is only supported from a single direction can't read as confident.
@@ -485,6 +493,7 @@ export function computeTerrainCore(
     aggregation,
     isGeographic: params.isGeographic,
     verticalUnitToMetres: params.verticalUnitToMetres,
+    horizontalUnitToMetres: params.horizontalUnitToMetres,
     collectSamples: true,
   });
   const calibration = checkCalibration(validation);
@@ -536,7 +545,17 @@ export function computeTerrainCore(
 
   // Composite 0–100 terrain quality score + the per-cell metric rollup it
   // draws on (density, completeness, edge risk). Complements the verdict.
-  const cellMetrics = computeCellMetrics(dtm).summary;
+  // Effective metres per horizontal unit: metres-per-degree for a geographic
+  // frame, else the projected unit scale (1 for metres, ~0.3048 for feet). Feeds
+  // both the density (pts/m²) and the slope run so they read in real metres.
+  const horizUnitToMetres = params.isGeographic
+    ? METRES_PER_DEGREE
+    : params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0
+      ? params.horizontalUnitToMetres
+      : 1;
+  const cellMetrics = computeCellMetrics(dtm, {
+    horizontalUnitToMetres: horizUnitToMetres,
+  }).summary;
   // Express the validated accuracy in ASPRS/USGS 3DEP terms (NVA, VVA, QL) so
   // the surface can be judged against recognised accuracy standards.
   const accuracyStandards = demAccuracyStandards(
@@ -574,7 +593,11 @@ export function computeTerrainCore(
   // frame is geographic that cell size is in degrees, so convert to metres to
   // keep the gradient dimensionless. Z-only products (DSM, height-above-ground)
   // need no such correction.
-  const horizCellM = horizontalCellMetres(dtm.cellSizeM, params.isGeographic);
+  const horizCellM = horizontalCellMetres(
+    dtm.cellSizeM,
+    params.isGeographic,
+    params.horizontalUnitToMetres,
+  );
   // Compute the Horn slope/aspect ONCE and reuse it for the slope stats, the
   // hillshade, and the exposed relief grids — re-lighting the surface at a new
   // sun angle in the UI is then a cheap per-cell pass with no Horn recompute.

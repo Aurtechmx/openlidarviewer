@@ -13,6 +13,7 @@
 import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel';
 import type { ContourLabel } from './labelPlacement';
 import { contourShapeStyleLabel } from './contourShapeStyle';
+import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
 
 /** Options for {@link svgContours}. */
 export interface SvgContourParams {
@@ -28,6 +29,21 @@ export interface SvgContourParams {
   readonly labels?: ReadonlyArray<ContourLabel>;
   /** Label font size in world units. Default = 3×indexWeight. */
   readonly labelSize?: number;
+  /**
+   * Unified export provenance. When supplied, the full provenance block is
+   * emitted in a leading `<metadata>` element (with the lines as an XML comment)
+   * so the SVG carries the SAME provenance every other export does. Without it,
+   * the lone shape-style comment is kept for back-compat.
+   */
+  readonly provenance?: ExportProvenance;
+}
+
+/** Escape the five XML-significant characters for safe `<metadata>` text. */
+function xmlEscape(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 /** Resolved style values (all defaults applied). */
@@ -62,12 +78,16 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
     labelSize: params.labelSize ?? indexWeight * 3,
   };
 
-  // Self-describing stamp: an XML comment naming the shape style applied to the
-  // geometry (honest about whether the lines are raw or smoothed/generalized).
+  // Self-describing stamp. With the unified provenance the full block is emitted
+  // in a <metadata> element (lines inside an XML comment so any reader can lift
+  // them); without it, the lone shape-style comment is kept for back-compat.
   const styleComment = `<!-- contour style: ${contourShapeStyleLabel(model.contourStyle)} -->`;
+  const provStamp = params.provenance
+    ? `<metadata><!--\n${provenanceLines(params.provenance).map(xmlEscape).join('\n')}\n--></metadata>`
+    : styleComment;
 
   if (!model.bbox || model.features.length === 0) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1">${styleComment}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1">${provStamp}</svg>`;
   }
   const { minX, minY, maxX, maxY } = model.bbox;
   const w = maxX - minX + 2 * p.padding;
@@ -116,7 +136,7 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(2)}" height="${h.toFixed(2)}" viewBox="0 0 ${w.toFixed(2)} ${h.toFixed(2)}">`,
-    styleComment,
+    provStamp,
     caption,
     ...paths,
     ...labels,

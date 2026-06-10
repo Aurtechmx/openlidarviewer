@@ -146,7 +146,22 @@ function orientedFootprint(h1: number[], h2: number[]): { major: number; minor: 
   return { major: Math.max(r1, r2), minor: Math.min(r1, r2) };
 }
 
-/** Count storeys: strong, well-separated FLOOR peaks (a peak with a room above). */
+/**
+ * Count storeys from the height histogram. A storey is a strong FLOOR peak with
+ * a genuine room above it AND a real floor-to-floor separation to the next one.
+ *
+ * Robustness rules (deterministic; tuned to avoid over-counting):
+ *   - peaks must clear a mass threshold (local maxima of ≥25% of the tallest bin);
+ *   - candidate floor peaks merge when closer than one storey (STOREY_SEP_M),
+ *     keeping the stronger — so a single thick slab is one storey, not several;
+ *   - a merged peak only counts as a storey when there is point MASS in the room
+ *     above it (distinguishing a floor from a ceiling, which has nothing above);
+ *   - to count a SECOND (or later) storey, there must additionally be a real
+ *     floor-to-floor gap to the previous counted floor AND a separating interface
+ *     (point mass — a ceiling/floor slab) BETWEEN the two levels. This stops a
+ *     single tall room's ceiling (a strong high peak with empty space below it)
+ *     from being mistaken for a second floor.
+ */
 function countStoreys(hist: Float64Array, binW: number, minV: number, total: number): number {
   const B = hist.length;
   let maxC = 0;
@@ -167,18 +182,37 @@ function countStoreys(hist: Float64Array, binW: number, minV: number, total: num
     if (!last || p.level - last.level >= STOREY_SEP_M) merged.push({ ...p });
     else if (p.count > last.count) { last.level = p.level; last.count = p.count; }
   }
-  // A merged peak is a FLOOR (a storey) when there is point mass in the room
-  // above it — distinguishing floors from ceilings (which have nothing above).
-  let floors = 0;
-  for (const p of merged) {
-    const aboveLo = p.level + 0.5;
-    const aboveHi = p.level + 4.0;
+  /** Point mass within the half-open height band (lo, hi]. */
+  const massBetween = (lo: number, hi: number): number => {
     let mass = 0;
     for (let i = 0; i < B; i++) {
       const lv = minV + (i + 0.5) * binW;
-      if (lv > aboveLo && lv <= aboveHi) mass += hist[i];
+      if (lv > lo && lv <= hi) mass += hist[i];
     }
-    if (mass > 0.02 * total) floors++;
+    return mass;
+  };
+  // Count floors with a room above; require a real gap AND a separating interface
+  // (point mass) between successive counted floors.
+  const MIN_ROOM_MASS = 0.02 * total; // a real room above the floor
+  const MIN_INTERFACE_MASS = 0.01 * total; // a slab/ceiling separating two storeys
+  let floors = 0;
+  let prevFloorLevel = -Infinity;
+  for (const p of merged) {
+    const roomAbove = massBetween(p.level + 0.5, p.level + 4.0);
+    if (roomAbove <= MIN_ROOM_MASS) continue; // a ceiling, not a floor — skip
+    if (floors === 0) {
+      floors = 1;
+      prevFloorLevel = p.level;
+      continue;
+    }
+    // Second+ storey: needs a genuine floor-to-floor gap AND a separating
+    // interface (point mass) between the previous floor and this one.
+    const gapOk = p.level - prevFloorLevel >= STOREY_SEP_M;
+    const interfaceMass = massBetween(prevFloorLevel + 0.5, p.level - 0.5);
+    if (gapOk && interfaceMass > MIN_INTERFACE_MASS) {
+      floors++;
+      prevFloorLevel = p.level;
+    }
   }
   return Math.max(1, floors);
 }
@@ -272,7 +306,29 @@ export function spaceMetrics(
   const floorAreaM2 = occupied * cellArea;
   const coveragePct = (100 * occupied) / (cols * rows);
 
-  // ── Floor / ceiling planes from the vertical extent bands ──
+  // ── Height histogram (density over vertical extent) — the primary signal ──
+  // Built before plane detection so floor/ceiling are picked from density-weighted
+  // peaks (where the point MASS sits), which survives a cluttered floor or a
+  // partial ceiling far better than a raw per-cell band-coverage test alone.
+  const B = 64;
+  const binW = exV > 0 ? exV / B : 1;
+  const hist = new Float64Array(B);
+  for (let i = 0; i < m; i++) {
+    let bi = Math.floor((V[i] - minV) / binW); if (bi < 0) bi = 0; else if (bi >= B) bi = B - 1;
+    hist[bi]++;
+  }
+  /** Bin (level) of the strongest histogram peak within [loFrac, hiFrac). */
+  const peakBin = (loFrac: number, hiFrac: number): { bin: number; count: number; level: number } => {
+    const loB = Math.floor(loFrac * B), hiB = Math.min(B, Math.ceil(hiFrac * B));
+    let bi = loB, best = -1;
+    for (let i = loB; i < hiB; i++) if (hist[i] > best) { best = hist[i]; bi = i; }
+    return { bin: bi, count: best, level: minV + (bi + 0.5) * binW };
+  };
+  const peakLevel = (loFrac: number, hiFrac: number): number => peakBin(loFrac, hiFrac).level;
+
+  // ── Floor / ceiling planes ──
+  // Per-cell band coverage (does each footprint cell carry a return near the very
+  // bottom / top of the extent?) — kept as a corroborating signal.
   const band = PLANE_BAND * exV;
   const floorHi = minV + band;
   const ceilLo = maxV - band;
@@ -284,23 +340,26 @@ export function spaceMetrics(
   }
   const floorCoverage = occupied > 0 ? floorCells / occupied : 0;
   const ceilCoverage = occupied > 0 ? ceilCells / occupied : 0;
-  const floorPresent = exV > 0 && floorCoverage >= PLANE_COVER;
-  const ceilingPresent = exV > 0 && floorPresent && ceilCoverage >= PLANE_COVER;
 
-  // ── Ceiling height from the floor / ceiling histogram peaks ──
-  const B = 64;
-  const binW = exV > 0 ? exV / B : 1;
-  const hist = new Float64Array(B);
-  for (let i = 0; i < m; i++) {
-    let bi = Math.floor((V[i] - minV) / binW); if (bi < 0) bi = 0; else if (bi >= B) bi = B - 1;
-    hist[bi]++;
-  }
-  const peakLevel = (loFrac: number, hiFrac: number): number => {
-    const loB = Math.floor(loFrac * B), hiB = Math.min(B, Math.ceil(hiFrac * B));
-    let bi = loB, best = -1;
-    for (let i = loB; i < hiB; i++) if (hist[i] > best) { best = hist[i]; bi = i; }
-    return minV + (bi + 0.5) * binW;
-  };
+  // Density-weighted peaks: the dominant low-band and high-band histogram peaks.
+  // A peak is "strong" when it carries a meaningful share of the total mass,
+  // so a sparsely-captured (partial) ceiling or a clutter-occluded floor — which
+  // a raw coverage test can miss — is still found by the mass it concentrates.
+  const PEAK_MASS_FRACTION = 0.04; // ≥4% of points in one ~1/64-extent bin
+  const floorPeak = peakBin(0, 0.45);
+  const ceilPeak = peakBin(0.55, 1);
+  const massThresh = PEAK_MASS_FRACTION * m;
+  const floorPeakStrong = exV > 0 && floorPeak.count >= massThresh;
+  const ceilPeakStrong = exV > 0 && ceilPeak.count >= massThresh && ceilPeak.bin > floorPeak.bin;
+
+  // Floor present when EITHER a strong low peak OR good band coverage says so.
+  const floorPresent = exV > 0 && (floorPeakStrong || floorCoverage >= PLANE_COVER);
+  // Ceiling present (requires a floor) when EITHER a strong, separated high peak
+  // OR good band coverage says so.
+  const ceilingPresent =
+    exV > 0 && floorPresent && (ceilPeakStrong || ceilCoverage >= PLANE_COVER);
+
+  // ── Ceiling height from the density-weighted floor / ceiling peaks ──
   let ceilingHeightM: number | null = null;
   if (ceilingPresent) {
     const floorLevel = peakLevel(0, 0.45);

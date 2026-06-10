@@ -10,6 +10,7 @@ import {
 } from '../src/terrain/quality/dtmCellStatus';
 import {
   evaluateDtmQuality,
+  DTM_QUALITY_THRESHOLDS as T,
   type DtmQualityInput,
 } from '../src/terrain/quality/dtmQualityGate';
 import { recommendGrid } from '../src/terrain/quality/recommendGrid';
@@ -136,7 +137,7 @@ describe('evaluateDtmQuality', () => {
     expect(noDatum.exportReasons.join(' ')).toMatch(/vertical datum unknown/i);
   });
 
-  it('surface previewOnly for interpolation; export ALSO gated by unknown CRS (separate axes)', () => {
+  it('surface previewOnly for interpolation; export tracks surface and is NOT capped further by CRS', () => {
     const r = evaluateDtmQuality(
       baseInput({
         tally: baseTally({ measured: 55, interpolated: 38, empty: 7, total: 100 }),
@@ -147,9 +148,56 @@ describe('evaluateDtmQuality', () => {
     expect(r.readiness).toBe('previewOnly');
     expect(r.reasons.join(' ')).toMatch(/interpolated/i);
     expect(r.reasons.join(' ')).not.toMatch(/CRS/i);
-    // EXPORT: also held at preview, here additionally because the CRS is unknown.
+    // The two interpolation figures are distinct and both exposed: 38/100 of the
+    // whole grid, but 38/93 (≈41%) of the COVERED surface. The reason speaks to
+    // the surface figure — the meaningful "how much is guessed" number — so the
+    // gate never understates interpolation by diluting it with empty cells.
+    expect(r.interpolatedCellRatio).toBeCloseTo(0.38, 5);
+    expect(r.interpolatedOfSurfaceRatio).toBeCloseTo(38 / 93, 5);
+    expect(r.reasons.join(' ')).toMatch(/41% of the surface is interpolated/);
+    // EXPORT: already preview-only because the SURFACE is preview-only — export
+    // simply tracks the surface verdict here and is NOT demoted *further* by the
+    // unknown CRS (it cannot drop below previewOnly). Per the documented
+    // contract, `exportReasons` lists only the georef gaps that cap export BELOW
+    // the surface verdict; when surface is already previewOnly there is no such
+    // demotion, so the list is empty. (`crsKnown` is still reported for callers.)
     expect(r.exportReadiness).toBe('previewOnly');
-    expect(r.exportReasons.join(' ')).toMatch(/CRS unknown/i);
+    expect(r.exportReasons).toEqual([]);
+    expect(r.crsKnown).toBe(false);
+  });
+
+  it('exportReasons names the georef gap ONLY when it demotes a ready surface below itself', () => {
+    // Surface ready + CRS unknown → export demoted from available to previewOnly:
+    // exportReasons names the gap (this is the only case it's populated).
+    const demoted = evaluateDtmQuality(baseInput({ crs: null }));
+    expect(demoted.readiness).toBe('ready');
+    expect(demoted.exportReadiness).toBe('previewOnly');
+    expect(demoted.exportReasons.join(' ')).toMatch(/CRS unknown/i);
+
+    // Surface previewOnly + CRS unknown → export already tracks the surface, the
+    // georef gap does NOT cap it further, so exportReasons stays empty.
+    const tracking = evaluateDtmQuality(
+      baseInput({
+        tally: baseTally({ measured: 55, interpolated: 38, empty: 7, total: 100 }),
+        crs: null,
+        verticalDatum: null,
+      }),
+    );
+    expect(tracking.readiness).toBe('previewOnly');
+    expect(tracking.exportReadiness).toBe('previewOnly');
+    expect(tracking.exportReasons).toEqual([]);
+
+    // Surface blocked → export blocked; exportReasons empty (export tracks surface).
+    const blocked = evaluateDtmQuality(
+      baseInput({
+        tally: baseTally({ measured: 5, interpolated: 90, empty: 5, total: 100 }),
+        crs: null,
+        verticalDatum: null,
+      }),
+    );
+    expect(blocked.readiness).toBe('blocked');
+    expect(blocked.exportReadiness).toBe('blocked');
+    expect(blocked.exportReasons).toEqual([]);
   });
 
   it('blocked when almost everything is interpolated', () => {
@@ -204,5 +252,76 @@ describe('recommendGrid', () => {
   it('coarsens the grid when the extent would blow the memory budget', () => {
     const r = recommendGrid({ pointCount: 10_000_000, widthM: 5000, depthM: 5000, reliefM: 100, memoryBudgetCells: 1_000_000 });
     expect((5000 / r.cellSizeM) * (5000 / r.cellSizeM)).toBeLessThanOrEqual(1_000_000);
+  });
+});
+
+// ── Calibration pins ────────────────────────────────────────────────────────
+// Each test sits ONE metric exactly on its documented threshold and one step
+// past it, holding the others green, so the Good/Preview/Limited boundaries are
+// proven against ground truth rather than assumed — and a change to a constant
+// in DTM_QUALITY_THRESHOLDS surfaces here as a failing pin instead of silently
+// shifting every verdict. The constant is asserted alongside the behaviour so
+// the two cannot drift apart.
+describe('evaluateDtmQuality — threshold boundaries', () => {
+  it('blocks just below the measured-of-covered floor, not at it', () => {
+    expect(T.blockMeasuredOfCovered).toBe(0.15);
+    // measuredOfCovered = measured / (measured + interpolated); empty excluded.
+    const below = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 14, interpolated: 86, total: 100 }) }), // 0.14
+    );
+    expect(below.readiness).toBe('blocked');
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 15, interpolated: 85, total: 100 }) }), // 0.15
+    );
+    expect(at.readiness).not.toBe('blocked'); // exactly on the floor is NOT blocked
+    expect(at.readiness).toBe('previewOnly'); // still below the ready bar
+  });
+
+  it('is ready at the measured-of-covered ready bar, preview just below', () => {
+    expect(T.readyMeasuredOfCovered).toBe(0.6);
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 60, interpolated: 40, total: 100 }) }), // 0.60
+    );
+    expect(at.readiness).toBe('ready');
+    const below = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 59, interpolated: 41, total: 100 }) }), // 0.59
+    );
+    expect(below.readiness).toBe('previewOnly');
+    expect(below.reasons.join(' ')).toMatch(/interpolated/i);
+  });
+
+  it('is ready at the empty-ratio ceiling, preview just over', () => {
+    expect(T.readyMaxEmptyRatio).toBe(0.4);
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 60, empty: 40, total: 100 }) }), // 0.40
+    );
+    expect(at.readiness).toBe('ready');
+    const over = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 59, empty: 41, total: 100 }) }), // 0.41
+    );
+    expect(over.readiness).toBe('previewOnly');
+    expect(over.reasons.join(' ')).toMatch(/no data/i);
+  });
+
+  it('is ready at the edge-risk ceiling, preview just over', () => {
+    expect(T.readyMaxEdgeRiskRatio).toBe(0.15);
+    const at = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 85, edgeRisk: 15, total: 100 }) }), // 0.15
+    );
+    expect(at.readiness).toBe('ready');
+    const over = evaluateDtmQuality(
+      baseInput({ tally: baseTally({ measured: 84, edgeRisk: 16, total: 100 }) }), // 0.16
+    );
+    expect(over.readiness).toBe('previewOnly');
+    expect(over.reasons.join(' ')).toMatch(/long interpolation/i);
+  });
+
+  it('is ready at the mean-confidence floor, preview just below', () => {
+    expect(T.readyMinMeanConfidence).toBe(55);
+    const at = evaluateDtmQuality(baseInput({ meanCellConfidence: 55 }));
+    expect(at.readiness).toBe('ready');
+    const below = evaluateDtmQuality(baseInput({ meanCellConfidence: 54 }));
+    expect(below.readiness).toBe('previewOnly');
+    expect(below.reasons.join(' ')).toMatch(/confidence/i);
   });
 });

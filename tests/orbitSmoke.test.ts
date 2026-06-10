@@ -24,9 +24,11 @@
  *      may script against, and accidentally dropping them would break
  *      embed integrations.
  *
- * If `dist/` doesn't exist yet (running tests against a clean checkout),
- * the test self-skips with a single info-level note rather than blocking
- * the suite. CI builds before testing, so this only skips in dev.
+ * This is a post-build contract: it reads the emitted `dist/` bundle, so it
+ * only runs when BUILD_CONTRACT=1 is set against a FRESH build (via
+ * `npm run test:build` and in CI, which builds first). A plain `npm test`
+ * self-skips, so a missing or stale `dist/` can never make the default test
+ * command fail or flake.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -37,7 +39,11 @@ import { fileURLToPath } from 'node:url';
 const distAssetsDir = join(
   fileURLToPath(new URL('../dist/assets', import.meta.url)),
 );
-const shouldRun = existsSync(distAssetsDir);
+// Gate on an explicit opt-in, NOT merely on dist/ existing: a STALE dist would
+// otherwise fail this post-build contract during a normal `npm test`. It runs
+// only when BUILD_CONTRACT=1 (set by `npm run test:build` and CI, both of which
+// build first); a plain `npm test` skips it.
+const shouldRun = existsSync(distAssetsDir) && process.env.BUILD_CONTRACT === '1';
 
 const describeOrSkip = shouldRun ? describe : describe.skip;
 

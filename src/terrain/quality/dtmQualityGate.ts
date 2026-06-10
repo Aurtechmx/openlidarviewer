@@ -92,7 +92,17 @@ export interface DtmQualityReport {
   readonly exportReadiness: ExportReadiness;
   // ── metrics ──────────────────────────────────────────────────────────
   readonly measuredCellRatio: number;
+  /** Interpolated cells as a fraction of the WHOLE grid (sums with measured + empty). */
   readonly interpolatedCellRatio: number;
+  /**
+   * Interpolated cells as a fraction of the COVERED surface (excludes empty
+   * cells). This is the meaningful "how much of the terrain surface is guessed
+   * rather than measured" figure, and the single source of truth wherever a
+   * reason or metric is phrased as "% of the surface is interpolated". Equals
+   * `1 - measuredOfCovered`. Differs from `interpolatedCellRatio` whenever the
+   * grid has empty cells; the two must not be used interchangeably.
+   */
+  readonly interpolatedOfSurfaceRatio: number;
   readonly emptyCellRatio: number;
   readonly edgeRiskRatio: number;
   readonly meanCellConfidence: number;
@@ -125,6 +135,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
   const emptyCellRatio = t.empty / total;
   const edgeRiskRatio = t.edgeRisk / total;
   const measuredOfCovered = covered > 0 ? t.measured / covered : 0;
+  const interpolatedOfSurfaceRatio = covered > 0 ? interpolatedLike / covered : 0;
 
   const crsKnown = input.crs != null;
   const datumKnown = input.verticalDatum != null;
@@ -153,7 +164,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     // export readiness, not surface quality. A dense, clean, well-covered
     // surface with an unknown datum is still a GOOD surface.
     const readyChecks: Array<[boolean, string]> = [
-      [measuredOfCovered >= T.readyMeasuredOfCovered, `${pct(interpolatedCellRatio)} of cells are interpolated`],
+      [measuredOfCovered >= T.readyMeasuredOfCovered, `${pct(interpolatedOfSurfaceRatio)} of the surface is interpolated`],
       [emptyCellRatio <= T.readyMaxEmptyRatio, `${pct(emptyCellRatio)} of the grid has no data`],
       [edgeRiskRatio <= T.readyMaxEdgeRiskRatio, `${pct(edgeRiskRatio)} of cells are a long interpolation from real returns`],
       [rmseOk, 'vertical accuracy could not be validated'],
@@ -170,20 +181,36 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
 
   // ── EXPORT READINESS = surface verdict, gated by georeferencing ───────
   // A blocked surface blocks export. Otherwise export tracks the surface
-  // verdict, but an unknown CRS or vertical datum CAPS it to preview-only
-  // (with an explicit reason) — a good surface can be inspected/measured,
-  // but the georeferenced hand-off requires a known frame + datum.
+  // verdict, but an unknown CRS or vertical datum CAPS it to preview-only — a
+  // good surface can be inspected/measured, but the georeferenced hand-off
+  // requires a known frame + datum.
+  //
+  // `exportReasons` is the list of georef gaps that cap export *below* the
+  // surface verdict. That demotion can ONLY happen when the surface is `ready`
+  // (so export would otherwise be `available`) and a gap drops it to
+  // previewOnly. When the surface is itself previewOnly or blocked, export
+  // already tracks the surface and is not capped further by a georef gap, so
+  // the list stays empty (the gap is not the reason export sits where it does).
+  // `crsKnown` / `datumKnown` remain reported for callers in both cases.
   const exportReasons: string[] = [];
   let exportReadiness: ExportReadiness;
   if (readiness === 'blocked') {
     exportReadiness = 'blocked';
-  } else {
-    exportReadiness = readiness === 'ready' ? 'available' : 'previewOnly';
-    if (!crsKnown) exportReasons.push('CRS unknown');
-    if (!datumKnown) exportReasons.push('vertical datum unknown');
-    if (exportReasons.length > 0 && exportReadiness === 'available') {
+  } else if (readiness === 'ready') {
+    const georefGaps: string[] = [];
+    if (!crsKnown) georefGaps.push('CRS unknown');
+    if (!datumKnown) georefGaps.push('vertical datum unknown');
+    if (georefGaps.length > 0) {
+      // The gap genuinely demotes export from available → previewOnly: record it.
       exportReadiness = 'previewOnly';
+      exportReasons.push(...georefGaps);
+    } else {
+      exportReadiness = 'available';
     }
+  } else {
+    // Surface is previewOnly: export tracks it. A georef gap cannot drop it any
+    // further, so it is not capping export below the surface — leave reasons empty.
+    exportReadiness = 'previewOnly';
   }
 
   return {
@@ -191,6 +218,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     exportReadiness,
     measuredCellRatio,
     interpolatedCellRatio,
+    interpolatedOfSurfaceRatio,
     emptyCellRatio,
     edgeRiskRatio,
     meanCellConfidence: input.meanCellConfidence,

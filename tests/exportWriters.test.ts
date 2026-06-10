@@ -10,6 +10,34 @@ import type {
   ContourFeature,
   ContourFeatureModel,
 } from '../src/terrain/contour/contourFeatureModel';
+import type { ExportProvenance } from '../src/terrain/export/exportProvenance';
+
+/** A complete provenance fixture, the shared object every export stamps. */
+const PROV: ExportProvenance = {
+  software: 'OpenLiDARViewer',
+  softwareVersion: '9.9.9',
+  metricVersion: 'v0.4.1',
+  generated: '2026-06-05T00:00:00.000Z',
+  source: 'site',
+  horizontalCrs: 'EPSG:32610',
+  crsKnown: true,
+  verticalDatum: 'EPSG:5703',
+  datumKnown: true,
+  coverageMode: 'full',
+  contourIntervalM: 1,
+  contourStyle: 'smooth',
+  contourStyleLabel: 'Smooth',
+  surfaceQuality: 'Good',
+  exportReadiness: 'Ready',
+  exportReason: '',
+  accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsQualityLevel: 'QL2' },
+  pointDensityPerM2: 4.2,
+  measuredCells: 90,
+  totalCells: 100,
+  classScope: null,
+  warnings: [],
+  notSurveyGrade: 'Fitness-for-use; not survey-grade unless validated against control.',
+};
 
 function feat(
   grade: ContourFeature['grade'],
@@ -84,6 +112,23 @@ describe('toGeoJSON', () => {
     const gj = toGeoJSON(m) as any;
     expect(String(gj.metadata.notSurveyGrade)).toMatch(/not survey-grade/i);
   });
+
+  it('merges the unified provenance into metadata as a superset (no regression)', () => {
+    const gj = toGeoJSON(m, PROV) as any;
+    // Existing model-derived keys are preserved.
+    expect(gj.metadata.contourStyle).toBe('smooth');
+    expect(gj.metadata.coverageMode).toBe('full');
+    expect(Array.isArray(gj.metadata.warnings)).toBe(true);
+    // The unified provenance adds the fields the file used to lack.
+    expect(gj.metadata.horizontalCrs).toBe('EPSG:32610');
+    expect(gj.metadata.verticalDatum).toBe('EPSG:5703');
+    expect(gj.metadata.softwareVersion).toBe('9.9.9');
+    expect(gj.metadata.metricVersion).toBe('v0.4.1');
+    expect(gj.metadata.exportReadiness).toBe('Ready');
+    expect(gj.metadata.surfaceQuality).toBe('Good');
+    expect(gj.metadata.accuracy.usgsQualityLevel).toBe('QL2');
+    expect(gj.metadata.generated).toBe('2026-06-05T00:00:00.000Z');
+  });
 });
 
 describe('svgContours', () => {
@@ -102,6 +147,18 @@ describe('svgContours', () => {
     const svg = svgContours(model([]));
     expect(svg).toMatch(/<svg/);
     expect(svg).not.toMatch(/<path/);
+  });
+
+  it('stamps the unified provenance in a <metadata> block when supplied', () => {
+    const svg = svgContours(
+      model([feat('solid', [[0, 0], [10, 0]], 10, true)]),
+      { provenance: PROV },
+    );
+    expect(svg).toMatch(/<metadata>/);
+    expect(svg).toMatch(/Horizontal CRS\s+EPSG:32610/);
+    expect(svg).toMatch(/Export readiness\s+Ready/);
+    expect(svg).toMatch(/Software\s+OpenLiDARViewer 9\.9\.9/);
+    expect(svg).toMatch(/not survey-grade/i);
   });
 
   it('flips Y so larger world-Y maps nearer the top (smaller svg-Y)', () => {
@@ -152,5 +209,17 @@ describe('dxfContours', () => {
     // The 4-vertex closed ring at elevation 5.
     expect(dxf).toMatch(/LWPOLYLINE/);
     expect(dxf).toMatch(/\n90\n4\n70\n1\n38\n5\n/);
+  });
+
+  it('emits the unified provenance as leading 999 comments when supplied', () => {
+    const withProv = dxfContours(m, PROV);
+    // Same provenance lines every other export carries, as 999 comments.
+    expect(withProv).toMatch(/999\nSoftware\s+OpenLiDARViewer 9\.9\.9/);
+    expect(withProv).toMatch(/999\nHorizontal CRS\s+EPSG:32610/);
+    expect(withProv).toMatch(/999\nExport readiness\s+Ready/);
+    expect(withProv).toMatch(/999\nNote\s+.*not survey-grade/i);
+    // Still a well-formed DXF: comments precede the first SECTION.
+    expect(withProv).toMatch(/999\nNote[\s\S]*0\nSECTION/);
+    expect(withProv.trimEnd().endsWith('EOF')).toBe(true);
   });
 });

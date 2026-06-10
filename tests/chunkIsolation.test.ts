@@ -82,7 +82,13 @@ function findChunk(prefix: string, files: readonly string[]): string | undefined
 
 describe('post-build chunk isolation contract', () => {
   const files = listDistAssets();
-  const distExists = files.length > 0;
+  // Gate on an explicit opt-in, NOT merely on dist/ existing: a STALE dist (an
+  // older build still on disk) would otherwise fail this contract during a
+  // normal `npm test`, making the default command non-deterministic. The
+  // contract is only meaningful immediately after a build, so it runs only when
+  // BUILD_CONTRACT=1 is set — which `npm run test:build` and CI (which builds
+  // first) do, and a plain `npm test` does not.
+  const distExists = files.length > 0 && process.env.BUILD_CONTRACT === '1';
 
   it.skipIf(!distExists)('every required chunk is emitted by name', () => {
     for (const prefix of REQUIRED_CHUNK_PREFIXES) {

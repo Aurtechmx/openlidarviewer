@@ -10,6 +10,18 @@ import {
 } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 import { demAccuracyStandards } from '../src/terrain/quality/demAccuracyStandards';
+import type { ExportProvenance } from '../src/terrain/export/exportProvenance';
+
+const PROV: ExportProvenance = {
+  software: 'OpenLiDARViewer', softwareVersion: '9.9.9', metricVersion: 'v0.4.1',
+  generated: '2026-06-05T00:00:00.000Z', source: 'site',
+  horizontalCrs: 'WGS 84 / UTM zone 11N', crsKnown: true, verticalDatum: 'NAVD88', datumKnown: true,
+  coverageMode: 'full', contourIntervalM: 10, contourStyle: 'smooth', contourStyleLabel: 'Smooth',
+  surfaceQuality: 'Good', exportReadiness: 'Ready', exportReason: '',
+  accuracy: { rmseZM: 0.08, nvaM: 0.16, vvaM: 0.21, usgsQualityLevel: 'QL2' },
+  pointDensityPerM2: 3, measuredCells: 90, totalCells: 100, classScope: null, warnings: [],
+  notSurveyGrade: 'Fitness-for-use; not survey-grade unless validated against control.',
+};
 
 function feature(value: number, isIndex: boolean, pts: Array<[number, number]>): ContourFeature {
   return { value, isIndex, grade: 'solid', meanConfidence: 90, closed: false, coordinates: pts };
@@ -49,6 +61,33 @@ describe('buildMapSheetPdf', () => {
     // PDF magic header.
     const head = String.fromCharCode(...bytes.slice(0, 5));
     expect(head).toBe('%PDF-');
+  });
+
+  it('renders the title block sourced from the unified provenance', async () => {
+    // The title block now single-sources its CRS / datum / style / accuracy /
+    // readiness / date from the shared provenance object so it can't drift from
+    // the other exports. A binary PDF can't be text-asserted here, but supplying
+    // the provenance must still produce a valid sheet (the strings come from `p`).
+    const bytes = await buildMapSheetPdf({
+      model,
+      labels: [{ x: 50, y: 10, value: 100, angleRad: 0.1 }],
+      worldOrigin: { x: 585000, y: 3386000 },
+      provenance: PROV,
+      title: 'El Picacho — Contours (10 m)',
+      preparedBy: 'Survey Co.',
+    });
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
+  });
+
+  it('renders with a not-georeferenced / no-accuracy provenance without throwing', async () => {
+    const preview: ExportProvenance = {
+      ...PROV, horizontalCrs: 'not georeferenced', crsKnown: false,
+      verticalDatum: 'unknown', datumKnown: false, accuracy: null,
+      exportReadiness: 'Preview', exportReason: 'CRS unknown and vertical datum unknown',
+    };
+    const bytes = await buildMapSheetPdf({ model, labels: [], provenance: preview });
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
   });
 
   it('still produces a PDF when there are no contours', async () => {

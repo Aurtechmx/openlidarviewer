@@ -142,6 +142,42 @@ export const loadMapSheetPdf = () => import('./render/measure/mapSheetPdf');
  */
 export const loadDemPackage = () => import('./terrain/export/demPackage');
 
+/**
+ * Load the Space / Object Report PDF builder (also pulls in pdf-lib). Only
+ * reached when the user clicks "Report PDF" on the non-terrain ObjectPanel —
+ * routed here so the live transform never sees the literal and pdf-lib stays in
+ * its lazy chunk. The floor-plan SVG renderer is pure (no pdf-lib) and is
+ * imported directly where needed.
+ */
+export const loadSpaceReportPdf = () => import('./render/measure/spaceReportPdf');
+
+/**
+ * Load the Terrain Intelligence Report PDF builder (also pulls in pdf-lib). Only
+ * reached when the user clicks "Intelligence report (PDF)" on the Analyse panel —
+ * routed here so the live source-transform never sees the literal and pdf-lib
+ * stays in its lazy chunk. The pure content builder
+ * ({@link buildTerrainReportContent}) has NO pdf-lib and is imported directly
+ * where needed. v0.4.3.
+ */
+export const loadTerrainReportPdf = () => import('./render/measure/terrainReportPdf');
+
+/**
+ * Load the interior floor-plan compute + SVG renderer. Both are PURE (no pdf-lib,
+ * no DOM), so they could ship in the shell, but they are routed here behind the
+ * lazy boundary alongside the report PDF so a non-export session downloads
+ * neither — and, critically, so `main.ts` reaches them through a plain static
+ * import of this helper (the live source-transform must never see the import
+ * literal). v0.4.3.
+ */
+export const loadFloorPlan = () =>
+  Promise.all([
+    import('./terrain/space/floorPlan'),
+    import('./terrain/space/floorPlanSvg'),
+  ]).then(([compute, svg]) => ({
+    computeFloorPlan: compute.computeFloorPlan,
+    floorPlanSvg: svg.floorPlanSvg,
+  }));
+
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 

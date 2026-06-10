@@ -93,6 +93,44 @@ function house360(W = 14, D = 29, H = 5, step = 0.5): Float32Array {
   return pts(t);
 }
 
+// A larger, more SEVERE multi-room house at the real failing scan's extent
+// (~29×13×5): three interior partitions, a multi-height ceiling covering only
+// ~20% of the footprint, and clutter. The walls — not the sparse ceiling — must
+// carry the interior verdict. This mirrors the real 360 house that streamed in
+// as "Object" on a sparse early frame; on full geometry it is unambiguously an
+// interior, so the classifier needs no threshold change — only the streaming
+// re-evaluation on settle. This fixture locks that in.
+function houseSevere(W = 29, D = 13, H = 3, step = 0.4): Float32Array {
+  const t: Array<[number, number, number]> = [];
+  const wallX = (x: number, y0: number, y1: number, h = H): void => {
+    for (let y = y0; y <= y1; y += step)
+      for (let z = 0; z <= h; z += step) t.push([x, y, z]);
+  };
+  const wallY = (y: number, x0: number, x1: number, h = H): void => {
+    for (let x = x0; x <= x1; x += step)
+      for (let z = 0; z <= h; z += step) t.push([x, y, z]);
+  };
+  // Full floor.
+  for (let x = 0; x <= W; x += step)
+    for (let y = 0; y <= D; y += step) t.push([x, y, 0]);
+  // Perimeter walls (a tall room strip x>21 rises to 4.8 m).
+  wallX(0, 0, D); wallX(W, 0, D, 4.8); wallY(0, 0, W); wallY(D, 0, W);
+  // Interior partitions → several rooms.
+  wallX(7, 0, D); wallX(14, 0, D); wallX(21, 0, D); wallY(6, 0, W);
+  // PARTIAL multi-height ceiling: only ~20% of the footprint is capped.
+  for (let x = 0; x <= W; x += step)
+    for (let y = 0; y <= 2.5; y += step) t.push([x, y, H]);
+  for (let x = 21; x <= W; x += step)
+    for (let y = 0; y <= D; y += step) t.push([x, y, 4.8]);
+  // Furniture clutter (mid heights).
+  const sevBlocks: Array<[number, number]> = [[3, 8], [10, 4], [17, 9], [25, 5]];
+  for (const [bx, by] of sevBlocks)
+    for (let dx = 0; dx <= 1.5; dx += step)
+      for (let dy = 0; dy <= 1.5; dy += step)
+        for (let z = 0.3; z <= 1.2; z += step) t.push([bx + dx, by + dy, z]);
+  return pts(t);
+}
+
 // ── 4. clean single room: closed floor + ceiling + perimeter walls. ──────────
 function room(W = 12, D = 18, H = 3, step = 0.5): Float32Array {
   const t: Array<[number, number, number]> = [];
@@ -202,5 +240,12 @@ describe('scan-type matrix', () => {
     expect(s.up).toBe('z');
     expect(s.nonTerrain).toBe(false);
     expect(s.spaceKind).toBe('terrain');
+  });
+
+  it('8. severe multi-room house (real extent, ~20% ceiling) → interior', () => {
+    const s = classifyScanShape(houseSevere());
+    expect(s.up).toBe('z');
+    expect(s.nonTerrain).toBe(true);
+    expect(s.spaceKind).toBe('interior');
   });
 });

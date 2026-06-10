@@ -1,0 +1,322 @@
+/**
+ * terrainReportContent.test.ts
+ *
+ * The pure, single-source content model behind the Terrain Intelligence Report
+ * PDF. It is an ASSEMBLY of the existing terrain modules — terrainAssessment,
+ * recommendedWorkflows, explainLimitations, the DEM accuracy standards and the
+ * unified export provenance — so the report can never disagree with the panel.
+ *
+ * These tests verify, WITHOUT pdf-lib:
+ *   - every section is present and fed from the real assessment / workflow /
+ *     why-not / accuracy values;
+ *   - a Good + Ready scan marks every terrain product Available, emits no "How
+ *     to improve" section, and still carries the not-survey-grade note;
+ *   - a Preview scan with an unknown datum marks products Preview / Blocked,
+ *     populates Warnings + How-to-improve with their figures, and never claims
+ *     survey-grade;
+ *   - null accuracy renders as em-dash / "unknown", never a fabricated zero.
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  buildTerrainReportContent,
+  type TerrainReportContent,
+} from '../src/terrain/export/terrainReportContent';
+import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportProvenance';
+import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
+
+/**
+ * A complete, full-coverage, export-ready analysis result with everything known
+ * (Good surface + known CRS/datum + measured accuracy). Mirrors the fixture
+ * shape used by exportProvenance.test.ts so the two stay aligned.
+ */
+function readyResult(): AnalyseContoursResult {
+  return {
+    dtm: {
+      crs: 'EPSG:32610',
+      verticalDatum: 'EPSG:5703',
+      coverageMode: 'full',
+      meanConfidence: 82,
+      cols: 200,
+      rows: 150,
+      cellSizeM: 1,
+      sourcePointCount: 1_200_000,
+      analyzedPointCount: 900_000,
+    },
+    intervalM: 1,
+    model: {
+      crs: 'EPSG:32610',
+      verticalDatum: 'EPSG:5703',
+      intervalM: 1,
+      contourStyle: 'smooth',
+      coverageMode: 'full',
+      features: [{}, {}],
+    },
+    accuracyStandards: {
+      rmseZM: 0.14,
+      nvaM: 0.27,
+      vvaM: 0.3,
+      pointDensityPerM2: 4.2,
+      qualityLevel: 'QL2',
+      qualityLevelReason: '4.2 pts/m² and 0.14 m RMSEz meet QL2.',
+    },
+    quality: {
+      readiness: 'ready',
+      exportReadiness: 'available',
+      crsKnown: true,
+      datumKnown: true,
+      coverageMode: 'full',
+      reasons: [],
+      exportReasons: [],
+      interpolatedCellRatio: 0.06,
+      emptyCellRatio: 0.05,
+      edgeRiskRatio: 0.02,
+      meanCellConfidence: 82,
+      groundPointRatio: 0.6,
+    },
+    qualityScore: { score: 85 },
+    cellMetrics: { meanDensity: 4.2, edgeRiskRatio: 0.02 },
+    cellStatusTally: {
+      measured: 90,
+      interpolated: 5,
+      lowConfidence: 0,
+      edgeRisk: 0,
+      empty: 5,
+      total: 100,
+    },
+    excludedByClassification: 1200,
+    generationParams: {
+      interpolation: 'geodesic',
+      contourStyle: 'smooth',
+      smoothing: true,
+      despike: true,
+      aggregation: 'median',
+    },
+    warnings: [],
+  } as unknown as AnalyseContoursResult;
+}
+
+/**
+ * A Preview-grade result: high interpolation, resident-only coverage, unknown
+ * vertical datum, and NO measured accuracy. The assessment caps it to Preview
+ * and export readiness to Preview (the datum gap names the reason).
+ */
+function previewResult(): AnalyseContoursResult {
+  return {
+    dtm: {
+      crs: 'EPSG:32610',
+      verticalDatum: null,
+      coverageMode: 'resident-only',
+      meanConfidence: 48,
+      cols: 80,
+      rows: 60,
+      cellSizeM: 2,
+      sourcePointCount: 300_000,
+      analyzedPointCount: 120_000,
+    },
+    intervalM: 2,
+    model: {
+      crs: 'EPSG:32610',
+      verticalDatum: null,
+      intervalM: 2,
+      contourStyle: 'crisp',
+      coverageMode: 'resident-only',
+      features: [{}],
+    },
+    accuracyStandards: {
+      rmseZM: null,
+      nvaM: null,
+      vvaM: null,
+      pointDensityPerM2: 0,
+      qualityLevel: 'unknown',
+      qualityLevelReason: 'Not enough validated points to measure RMSEz.',
+    },
+    quality: {
+      readiness: 'previewOnly',
+      exportReadiness: 'previewOnly',
+      crsKnown: true,
+      datumKnown: false,
+      coverageMode: 'resident-only',
+      reasons: ['Surface is preview-only — high interpolation.'],
+      exportReasons: ['vertical datum unknown'],
+      interpolatedCellRatio: 0.55,
+      emptyCellRatio: 0.2,
+      edgeRiskRatio: 0.05,
+      meanCellConfidence: 48,
+      groundPointRatio: 0.6,
+    },
+    qualityScore: { score: 41 },
+    cellMetrics: { meanDensity: 1.4, edgeRiskRatio: 0.05 },
+    cellStatusTally: {
+      measured: 40,
+      interpolated: 40,
+      lowConfidence: 0,
+      edgeRisk: 0,
+      empty: 20,
+      total: 100,
+    },
+    excludedByClassification: 0,
+    generationParams: {
+      interpolation: 'idw',
+      contourStyle: 'crisp',
+      smoothing: false,
+      despike: true,
+      aggregation: 'median',
+    },
+    warnings: ['Void-filled 40% of cells by interpolation.'],
+  } as unknown as AnalyseContoursResult;
+}
+
+const OPTS = {
+  basename: 'site-42',
+  generatedAt: '2026-06-05T00:00:00.000Z',
+  softwareVersion: '9.9.9',
+  metricVersion: 'v0.4.1',
+} as const;
+
+/** Collect every value string in a content's sections. */
+function allValues(c: TerrainReportContent): string {
+  return c.sections.flatMap((s) => s.rows.map((r) => `${r.label} ${r.value}`)).join(' | ');
+}
+
+describe('buildTerrainReportContent — section presence + sourcing', () => {
+  it('produces every required section, in order', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const titles = c.sections.map((s) => s.title);
+    expect(titles).toContain('Dataset Summary');
+    expect(titles).toContain('Terrain Assessment');
+    expect(titles).toContain('Coverage Analysis');
+    expect(titles).toContain('Quality Metrics');
+    expect(titles).toContain('Recommended Workflows');
+    expect(titles).toContain('Terrain Products Available');
+  });
+
+  it('Dataset Summary carries the scan name, source point count, software + date', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const ds = c.sections.find((s) => s.title === 'Dataset Summary')!;
+    const text = ds.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
+    expect(text).toMatch(/site-42/);
+    expect(text).toMatch(/1,200,000/); // source point count, grouped
+    expect(text).toMatch(/EPSG:32610/); // horizontal CRS
+    expect(text).toMatch(/OpenLiDARViewer 9\.9\.9/);
+    expect(text).toMatch(/2026-06-05/);
+  });
+
+  it('Terrain Assessment carries the real verdict + score + export readiness', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const ta = c.sections.find((s) => s.title === 'Terrain Assessment')!;
+    const text = ta.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
+    expect(text).toMatch(/Good/);
+    expect(text).toMatch(/85\/100/);
+    expect(text).toMatch(/Ready/);
+  });
+
+  it('Quality Metrics carries RMSEz / NVA / VVA / USGS QL from the standards', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const qm = c.sections.find((s) => s.title === 'Quality Metrics')!;
+    const text = qm.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
+    expect(text).toMatch(/0\.14 m/); // RMSEz
+    expect(text).toMatch(/0\.27 m/); // NVA
+    expect(text).toMatch(/QL2/);
+  });
+
+  it('the not-survey-grade note is always present in the footer', () => {
+    const good = buildTerrainReportContent(readyResult(), OPTS);
+    const prev = buildTerrainReportContent(previewResult(), OPTS);
+    expect(good.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
+    expect(prev.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
+    expect(good.notSurveyGrade).toMatch(/not survey-grade/i);
+    // never an affirmative survey-grade claim anywhere
+    expect(allValues(good)).not.toMatch(/\bsurvey-grade\b(?!\s|$)/i);
+  });
+});
+
+describe('buildTerrainReportContent — Good + Ready scan', () => {
+  it('marks every terrain product Available', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const products = c.products;
+    expect(products.length).toBe(3);
+    for (const p of products) expect(p.availability).toBe('Available');
+    const labels = products.map((p) => p.label).join(',');
+    expect(labels).toMatch(/DEM/);
+    expect(labels).toMatch(/Contour/);
+    expect(labels).toMatch(/Map sheet/);
+  });
+
+  it('omits the How-to-improve section and emits no warnings', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    expect(c.howToImprove.length).toBe(0);
+    expect(c.warnings.length).toBe(0);
+  });
+
+  it('every recommended workflow is graded good (✓)', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    expect(c.workflows.length).toBeGreaterThan(0);
+    for (const w of c.workflows) expect(w.mark).toBe('✓');
+  });
+});
+
+describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
+  it('marks the deliverable products Preview (export readiness held back)', () => {
+    const c = buildTerrainReportContent(previewResult(), OPTS);
+    for (const p of c.products) expect(p.availability).toBe('Preview');
+  });
+
+  it('populates Warnings from result.warnings + explainLimitations causes, deduped, with figures', () => {
+    const c = buildTerrainReportContent(previewResult(), OPTS);
+    expect(c.warnings.length).toBeGreaterThan(0);
+    const joined = c.warnings.join(' | ');
+    // a real warning from the run
+    expect(joined).toMatch(/Void-filled 40%/);
+    // an explainLimitations cause, carrying its honest figure
+    expect(joined).toMatch(/55% of the surface is interpolated/);
+    // the datum gap is surfaced as a cause
+    expect(joined).toMatch(/vertical datum is unknown/i);
+    // no duplicate entries
+    expect(new Set(c.warnings).size).toBe(c.warnings.length);
+  });
+
+  it('populates How-to-improve with the explainLimitations fixes', () => {
+    const c = buildTerrainReportContent(previewResult(), OPTS);
+    expect(c.howToImprove.length).toBeGreaterThan(0);
+    const joined = c.howToImprove.join(' | ');
+    expect(joined).toMatch(/datum/i);
+  });
+
+  it('never claims survey-grade', () => {
+    const c = buildTerrainReportContent(previewResult(), OPTS);
+    const everything = [
+      allValues(c),
+      ...c.warnings,
+      ...c.howToImprove,
+      ...c.workflows.map((w) => `${w.label} ${w.note ?? ''}`),
+      ...c.products.map((p) => `${p.label} ${p.note ?? ''}`),
+      c.notSurveyGrade,
+    ].join(' ');
+    // The only allowed mention is the standing negated note ("not survey-grade").
+    const affirmative = everything.replace(/not survey-grade/gi, '');
+    expect(affirmative).not.toMatch(/survey-grade/i);
+  });
+});
+
+describe('buildTerrainReportContent — honest nulls', () => {
+  it('renders null accuracy as em-dash / unknown, never a fabricated zero', () => {
+    const c = buildTerrainReportContent(previewResult(), OPTS);
+    const qm = c.sections.find((s) => s.title === 'Quality Metrics')!;
+    const byLabel = (needle: string): string =>
+      qm.rows.find((r) => r.label.includes(needle))?.value ?? '';
+    expect(byLabel('RMSEz')).toMatch(/—|unknown/);
+    expect(byLabel('NVA')).toMatch(/—|unknown/);
+    expect(byLabel('VVA')).toMatch(/—|unknown/);
+    expect(byLabel('USGS')).toMatch(/—|unknown/);
+    // never "0.00 m" fabricated for a missing measurement
+    expect(qm.rows.map((r) => r.value).join(' ')).not.toMatch(/0\.00 m/);
+  });
+
+  it('renders unknown vertical datum honestly in the Dataset Summary', () => {
+    const c = buildTerrainReportContent(previewResult(), OPTS);
+    const ds = c.sections.find((s) => s.title === 'Dataset Summary')!;
+    const datum = ds.rows.find((r) => r.label.toLowerCase().includes('datum'))?.value ?? '';
+    expect(datum).toMatch(/unknown/i);
+  });
+});

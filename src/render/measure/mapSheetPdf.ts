@@ -19,6 +19,7 @@ import type { ContourFeatureModel } from '../../terrain/contour/contourFeatureMo
 import type { ContourLabel } from '../../terrain/contour/labelPlacement';
 import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle';
 import type { DemAccuracyStandards } from '../../terrain/quality/demAccuracyStandards';
+import type { ExportProvenance } from '../../terrain/export/exportProvenance';
 import {
   fitTransform,
   niceStep,
@@ -49,6 +50,15 @@ export interface MapSheetInput {
   readonly sheet?: SheetSize;
   readonly orientation?: SheetOrientation;
   readonly generatedAt?: Date;
+  /**
+   * The unified export provenance. When supplied, the title block SOURCES its
+   * CRS, vertical datum, contour style, accuracy, export-readiness verdict and
+   * generation date FROM IT — so the map sheet can never drift from the GeoJSON
+   * / DXF / SVG / DEM exports of the same scan. The layout is unchanged; only
+   * the strings are single-sourced. Falls back to the discrete fields when
+   * absent (back-compat).
+   */
+  readonly provenance?: ExportProvenance;
 }
 
 const SHEET_PT: Record<SheetSize, readonly [number, number]> = {
@@ -321,20 +331,31 @@ function drawTitleBlock(
   const topY = M + TB;
   page.drawLine({ start: { x: M, y: topY }, end: { x: PW - M, y: topY }, thickness: 1, color: FRAME });
 
+  // Single-source the title-block strings from the unified provenance when it is
+  // supplied, so the sheet's CRS / datum / interval / style / accuracy / date /
+  // export-readiness can never drift from the other exports of the same scan. The
+  // layout is untouched — only the values are sourced from `p`.
+  const prov = input.provenance;
+  const crsStr = prov ? prov.horizontalCrs : (input.crs ?? '— not georeferenced');
+  const datumStr = prov ? prov.verticalDatum : (input.verticalDatum ?? '—');
+  const generatedStr = prov
+    ? prov.generated.slice(0, 16).replace('T', ' ') + ' UTC'
+    : (input.generatedAt ?? new Date()).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+
   // Left column — identity + reference frame.
   const lx = M + 4;
   text(input.title ?? 'Contour Map', lx, topY - 16, 14, bold);
-  const interval = input.model.intervalM;
+  const interval = prov?.contourIntervalM ?? input.model.intervalM;
   const scaleN =
     bbox && frame.w > 0
       ? Math.round(mapScaleRatio(fitTransform(bbox, { x: frame.x + 6, y: frame.y + 6, w: frame.w - 12, h: frame.h - 12 }).scale))
       : 0;
   const rows: Array<[string, string]> = [
-    ['Horizontal CRS', input.crs ?? '— not georeferenced'],
-    ['Vertical datum', input.verticalDatum ?? '—'],
-    ['Contour interval', Number.isFinite(interval) ? `${interval} ${input.crs ? '' : '(units)'}`.trim() : '—'],
+    ['Horizontal CRS', crsStr],
+    ['Vertical datum', datumStr],
+    ['Contour interval', interval != null && Number.isFinite(interval) ? `${interval} ${prov?.crsKnown ?? input.crs ? '' : '(units)'}`.trim() : '—'],
     ['Approx. scale', scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—'],
-    ['Generated', (input.generatedAt ?? new Date()).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],
+    ['Generated', generatedStr],
     ['Prepared by', input.preparedBy ?? '—'],
   ];
   rows.forEach((r, i) => {
@@ -377,25 +398,48 @@ function drawTitleBlock(
   sample(topY - 71, 'Low-confidence gap', [2, 4], 0.5);
   const interpPct = Math.round((input.model.interpolatedFraction || 0) * 100);
   text(`${interpPct}% of contour length is interpolated`, mxx, topY - 88, 6.5, font, DIM);
-  // Honest stamp of the shape style applied to the plotted contours.
-  text(`Contour style: ${contourShapeStyleLabel(input.model.contourStyle)}`, mxx, topY - 99, 6.5, font, DIM);
+  // Honest stamp of the shape style applied to the plotted contours (sourced
+  // from the unified provenance when present, so it matches every other export).
+  const styleLabel = prov ? prov.contourStyleLabel : contourShapeStyleLabel(input.model.contourStyle);
+  text(`Contour style: ${styleLabel}`, mxx, topY - 99, 6.5, font, DIM);
 
   // Right column — accuracy + readiness + provenance.
   const rxr = PW - M - 4;
   rightText('Survey accuracy', rxr, topY - 16, 9, bold);
-  const a = input.accuracy ?? null;
   const fmtM = (v: number | null | undefined): string => (v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—');
-  const aRows: Array<[string, string]> = [
-    ['NVA (95%)', fmtM(a?.nvaM)],
-    ['VVA (95th pct)', fmtM(a?.vvaM)],
-    ['RMSEz', fmtM(a?.rmseZM)],
-    ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
-  ];
+  // Accuracy rows, single-sourced from provenance when present (its accuracy
+  // block is null when the run measured none, in which case every figure reads
+  // '—' rather than a fabricated zero).
+  const aRows: Array<[string, string]> = prov
+    ? [
+        ['NVA (95%)', fmtM(prov.accuracy?.nvaM)],
+        ['VVA (95th pct)', fmtM(prov.accuracy?.vvaM)],
+        ['RMSEz', fmtM(prov.accuracy?.rmseZM)],
+        ['USGS 3DEP', prov.accuracy && prov.accuracy.usgsQualityLevel !== 'unknown' ? prov.accuracy.usgsQualityLevel : '—'],
+      ]
+    : (() => {
+        const a = input.accuracy ?? null;
+        return [
+          ['NVA (95%)', fmtM(a?.nvaM)],
+          ['VVA (95th pct)', fmtM(a?.vvaM)],
+          ['RMSEz', fmtM(a?.rmseZM)],
+          ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
+        ];
+      })();
   aRows.forEach((r, i) => {
     const y = topY - 34 - i * 13;
     rightText(`${r[0]}:  ${r[1]}`, rxr, y, 7.5, font, INK);
   });
-  const readiness = input.readiness ?? 'previewOnly';
+  // Export-readiness verdict — single-sourced from the unified provenance so the
+  // sheet's readiness note can't disagree with the other exports. Maps the
+  // provenance verdict (Ready / Preview / Blocked) onto the note vocabulary.
+  const readiness: 'ready' | 'previewOnly' | 'blocked' = prov
+    ? prov.exportReadiness === 'Ready'
+      ? 'ready'
+      : prov.exportReadiness === 'Blocked'
+        ? 'blocked'
+        : 'previewOnly'
+    : input.readiness ?? 'previewOnly';
   const note = readinessNote(readiness);
   rightText(note, rxr, topY - 90, 6.5, bold, readiness === 'ready' ? INK : rgb(0.6, 0.2, 0.1));
   rightText('OpenLiDARViewer - terrain analysis', rxr, M - 10 + 2, 6, font, DIM);
