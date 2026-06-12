@@ -140,18 +140,29 @@ function formatVolume(cubicMetres: number, system: UnitSystem): string {
 // Public entry
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Compute one measurement's headline value, formatted with the right unit. */
-function computeValue(m: Measurement, system: UnitSystem): string {
+/**
+ * Compute one measurement's headline value, formatted with the right unit.
+ *
+ * `f` is the render-units → metres factor (the scan CRS's
+ * `linearUnitToMetres`, the SAME seam the live MeasureController applies at
+ * its display boundary). Measurement points are stored in RENDER units, so a
+ * foot-based scan must be scaled exactly once before formatting — lengths ×f,
+ * areas ×f², volumes ×f³. Angles and slope grades are ratios and need no
+ * scaling. Default 1 (metre / local scans are unaffected).
+ */
+function computeValue(m: Measurement, system: UnitSystem, f: number): string {
   switch (m.kind) {
     case 'distance':
-      return m.points.length >= 2 ? formatLinear(dist(m.points[0], m.points[1]), system) : '—';
+      return m.points.length >= 2
+        ? formatLinear(dist(m.points[0], m.points[1]) * f, system)
+        : '—';
     case 'polyline':
-      return formatLinear(polyLen(m.points), system);
+      return formatLinear(polyLen(m.points) * f, system);
     case 'area':
-      return formatArea(polyArea(m.points), system);
+      return formatArea(polyArea(m.points) * f * f, system);
     case 'height':
       return m.points.length >= 2
-        ? formatLinear(Math.abs(m.points[1][2] - m.points[0][2]), system)
+        ? formatLinear(Math.abs(m.points[1][2] - m.points[0][2]) * f, system)
         : '—';
     case 'angle':
       return m.points.length >= 3
@@ -168,7 +179,7 @@ function computeValue(m: Measurement, system: UnitSystem): string {
       // measurement-detail blocks.
       if (m.points.length < 2) return '—';
       const length3d = dist(m.points[0], m.points[1]);
-      return formatLinear(length3d, system);
+      return formatLinear(length3d * f, system);
     }
     case 'box': {
       // v0.3.10 deliverable-completion patch — the report engine used to
@@ -184,7 +195,7 @@ function computeValue(m: Measurement, system: UnitSystem): string {
       const w = Math.abs(b[0] - a[0]);
       const d = Math.abs(b[1] - a[1]);
       const h = Math.abs(b[2] - a[2]);
-      const cubicMetres = w * d * h;
+      const cubicMetres = w * d * h * f * f * f;
       return formatVolume(cubicMetres, system);
     }
     case 'volume': {
@@ -200,12 +211,13 @@ function computeValue(m: Measurement, system: UnitSystem): string {
       // headline exactly here (see MeasureController._headlineText)
       // so the PDF and the panel agree to the digit.
       if (m.points.length < 3) return '—';
-      const area = formatArea(polyAreaHorizontal(m.points), system);
+      const area = formatArea(polyAreaHorizontal(m.points) * f * f, system);
       const v = m.volume;
       if (!v) return `${area} footprint · cut/fill —`;
-      const fill = formatVolume(Math.max(0, v.fill), system);
-      const cut = formatVolume(Math.max(0, v.cut), system);
-      const net = formatVolume(Math.abs(v.net), system);
+      const f3 = f * f * f;
+      const fill = formatVolume(Math.max(0, v.fill) * f3, system);
+      const cut = formatVolume(Math.max(0, v.cut) * f3, system);
+      const net = formatVolume(Math.abs(v.net) * f3, system);
       const netSign = v.net < 0 ? 'cut' : 'fill';
       return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
     }
@@ -223,16 +235,21 @@ function computeValue(m: Measurement, system: UnitSystem): string {
 function buildProfileExtras(
   m: Measurement,
   system: UnitSystem,
+  f: number,
 ): ReportProfileDeliverableExtras | undefined {
   if (m.kind !== 'profile' || m.points.length < 2) return undefined;
   const a = m.points[0];
   const b = m.points[1];
   // Horizontal length determines the station interval. Mirror the
   // chart's `autoStationInterval` logic — civil convention prefers
-  // multiples of 1/2/5/10/20/25/50/100/200/500 metres.
+  // multiples of 1/2/5/10/20/25/50/100/200/500 metres. The ladder is in
+  // METRES, so pick the interval against the metre-converted length and
+  // convert it back into render units for the geometric station walk — the
+  // chainages then scale ×f once at the formatting boundary like every
+  // other length here.
   const horizontalLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (!Number.isFinite(horizontalLen) || horizontalLen <= 0) return undefined;
-  const interval = autoStationIntervalForReport(horizontalLen);
+  const interval = autoStationIntervalForReport(horizontalLen * f) / f;
   const stations = stationsAlongLine({ a, b, intervalM: interval });
   if (stations.length === 0) return undefined;
   // Slope grades: use profile samples if the measurement carries them.
@@ -242,15 +259,16 @@ function buildProfileExtras(
 
   const length3d = dist(a, b);
   const dz = Math.abs(b[2] - a[2]);
+  // Grade is a ratio of two same-unit lengths — unit-factor invariant.
   const gradePercent = horizontalLen > 0 ? ((b[2] - a[2]) / horizontalLen) * 100 : 0;
   const summaryLine =
-    `Horizontal ${formatLinear(horizontalLen, system)} · ` +
-    `3D ${formatLinear(length3d, system)} · ` +
-    `Δh ${formatLinear(dz, system)} · ` +
+    `Horizontal ${formatLinear(horizontalLen * f, system)} · ` +
+    `3D ${formatLinear(length3d * f, system)} · ` +
+    `Δh ${formatLinear(dz * f, system)} · ` +
     `${gradePercent.toFixed(2)}% grade`;
 
   const stationsLine = stations
-    .map((s) => formatLinear(s.chainage, system))
+    .map((s) => formatLinear(s.chainage * f, system))
     .join(' · ');
 
   const slopeLine = Number.isFinite(summary.maxGradePercent)
@@ -266,7 +284,7 @@ function buildProfileExtras(
   return {
     summary: summaryLine,
     stations: stationsLine,
-    stationInterval: `Station interval ${formatLinear(interval, system)} (${stations.length} stations)`,
+    stationInterval: `Station interval ${formatLinear(interval * f, system)} (${stations.length} stations)`,
     slopeSummary: slopeLine,
     coverageCaveat: m.profileChartResidentOnly
       ? 'Resident-node analysis only — profile may refine as streaming loads.'
@@ -292,16 +310,29 @@ function autoStationIntervalForReport(totalChainageM: number): number {
   return v;
 }
 
-/** Build the report-row list from a measurement collection. */
+/**
+ * Build the report-row list from a measurement collection.
+ *
+ * `unitToMetres` is the scan CRS's render-units → metres factor (the SAME
+ * `linearUnitToMetres` seam the live MeasureController applies at its display
+ * boundary). Measurement records carry RENDER-unit coordinates, so a
+ * foot-based scan must be converted exactly once here — lengths ×f, areas
+ * ×f², volumes ×f³ — or the PDF disagrees with every on-screen readout by
+ * 3.28× (the v0.4.5 measure-unit fix). Defaults to 1, so metric / local
+ * scans and legacy callers are byte-identical. Non-finite / non-positive
+ * factors fall back to 1 — an honest no-op, never a fabricated scale.
+ */
 export function buildMeasurementRows(
   measurements: readonly Measurement[],
   unitSystem: UnitSystem,
+  unitToMetres = 1,
 ): readonly ReportMeasurementRow[] {
+  const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   return measurements.map((m) => ({
     name: m.name,
     kind: m.kind,
-    value: computeValue(m, unitSystem),
+    value: computeValue(m, unitSystem, f),
     pointCount: m.points.length,
-    profileExtras: m.kind === 'profile' ? buildProfileExtras(m, unitSystem) : undefined,
+    profileExtras: m.kind === 'profile' ? buildProfileExtras(m, unitSystem, f) : undefined,
   }));
 }

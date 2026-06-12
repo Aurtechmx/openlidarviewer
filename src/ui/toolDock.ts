@@ -99,6 +99,10 @@ export class ToolDock {
 
     // Measure starts disabled — enabled by setMeasureEnabled once a scan loads.
     this._measure = this._tool('Measure', 'Load a scan to enable measurement', true);
+    // Stable hook for the onboarding tour's spotlight (v0.4.5) — the tour's
+    // only other selector keys off the tooltip text, which changes with
+    // enablement, so the spotlight used to miss the disabled button.
+    this._measure.classList.add('olv-dock-measure');
     this._measure.addEventListener('click', () => {
       this._measure.blur();
       callbacks.onMeasureToggle();

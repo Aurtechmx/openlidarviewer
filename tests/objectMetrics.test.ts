@@ -10,6 +10,18 @@ import {
   cubicMetresToCubicFeet,
 } from '../src/terrain/spaceMetrics';
 
+/** Small, fast, deterministic PRNG (mulberry32) — keeps the density test reproducible. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** A solid-ish 4×2×1 box sampled on a 0.25 grid, optionally rotated about Z. */
 function box(rotRad = 0): Float32Array {
   const out: number[] = [];
@@ -69,6 +81,38 @@ describe('objectMetrics', () => {
     const m = objectMetrics(box(0), { probeSamples: 1500 });
     expect(m.medianSpacingM).toBeGreaterThan(0.2);
     expect(m.medianSpacingM).toBeLessThan(0.4);
+  });
+
+  it('median spacing describes the cloud, not the probe (√(P/N) correction)', () => {
+    // Known-density synthetic surface: N = 20 000 uniform points over a
+    // 20 × 20 m plane → 50 pts/m². For a 2-D Poisson process the median
+    // nearest-neighbour distance is √(ln 2 / (π·d)) ≈ 0.4697/√50 ≈ 0.066 m.
+    // The probe measures only 2 000 points (5 pts/m² → ≈ 0.21 m); the
+    // √(P/N) correction must bring the report back to the cloud's ~0.066 m.
+    const rand = mulberry32(42);
+    const N = 20_000;
+    const full = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      full[i * 3] = rand() * 20;
+      full[i * 3 + 1] = rand() * 20;
+      full[i * 3 + 2] = 0;
+    }
+    const expected = Math.sqrt(Math.LN2 / (Math.PI * 50)); // ≈ 0.0664 m
+    const m = objectMetrics(full); // probe defaults to 2000
+    expect(m.medianSpacingM).toBeGreaterThan(expected * 0.75);
+    expect(m.medianSpacingM).toBeLessThan(expected * 1.35);
+
+    // Strided-gather path: pass every 4th point plus the honest source count —
+    // the report must still describe the 20 000-point scan, not the gather.
+    const gathered = new Float32Array((N / 4) * 3);
+    for (let i = 0; i < N / 4; i++) {
+      gathered[i * 3] = full[i * 4 * 3];
+      gathered[i * 3 + 1] = full[i * 4 * 3 + 1];
+      gathered[i * 3 + 2] = 0;
+    }
+    const g = objectMetrics(gathered, { sourcePointCount: N });
+    expect(g.medianSpacingM).toBeGreaterThan(expected * 0.75);
+    expect(g.medianSpacingM).toBeLessThan(expected * 1.35);
   });
 
   it('completeness is high for a full sphere shell, low for a flat plane', () => {

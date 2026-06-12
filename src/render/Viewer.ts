@@ -59,7 +59,8 @@ import {
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassVisibility } from './class/classVisibility';
 import { classVisibleAt } from './class/classMaskUniform';
-import { isZUpFormat } from '../io/sniffFormat';
+import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
+import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
@@ -116,8 +117,17 @@ export interface LassoVolumeReturn {
 import { NavController } from './NavController';
 import type { NavMode, CameraPose } from './NavController';
 import { computeScaleBar, pixelsPerMetreAt } from './scaleBar';
+// Pure top-down framing math for the georeferenced Studio export (C4). A
+// dependency-free leaf, so this static import does NOT merge the lazy
+// pngWorldFile/Studio chunks into the shell bundle.
+import { frameTopDownOrtho } from './export/orthoFraming';
 import { MeasureController } from './measure/MeasureController';
-import { sampleProfile } from './measure/profileSampler';
+import {
+  sampleProfile,
+  autoCorridorWidth,
+  DEFAULT_GROUND_PERCENTILE,
+  DEFAULT_PROFILE_SAMPLE_COUNT,
+} from './measure/profileSampler';
 import { volumeCutFill } from './measure/volume';
 import {
   applyClassSwap,
@@ -141,7 +151,7 @@ import {
   type RgbAppearancePresetId,
 } from './rgbAppearance';
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
-import type { ProfileChartSample, VolumeRecord } from './measure/types';
+import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
 import {
   decompose2Pointer,
   isZero as gestureIsZero,
@@ -1076,7 +1086,16 @@ export class Viewer {
     // pure-data `sampleProfile`. Returns null when no positions are
     // available so the controller leaves the chart unset.
     this._measure.setProfileSampler(
-      (a, b): { samples: ProfileChartSample[]; residentOnly: boolean } | null => {
+      (
+        a,
+        b,
+        opts,
+      ): {
+        samples: ProfileChartSample[];
+        residentOnly: boolean;
+        corridorWidth: number;
+        groundPercentile: number;
+      } | null => {
         // Track each buffer's classification alongside it so the profile can
         // be computed over classified ground (vegetation / buildings dropped).
         const buffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
@@ -1120,15 +1139,40 @@ export class Viewer {
           if (classification && cls) for (let i = 0; i < m; i++) classification[coff + i] = cls[i];
           coff += m;
         }
-        // Default 64-sample resolution gives a smooth chart at <50 ms even on
-        // a 1 M-point cloud; the panel can re-request a denser sample later.
-        const samples = sampleProfile({ a, b, up: [0, 0, 1], positions, samples: 64, classification });
+        // `up` is the configured world up — hardcoding [0,0,1] here cut Y-up
+        // phone scans along the wrong axis (v0.4.4 audit, B1). The same
+        // format-driven up the navigation/measure context already uses.
+        const up: Vec3 = [this._worldUp.x, this._worldUp.y, this._worldUp.z];
+        // Sampler parameters (B7/B8, v0.4.5): the controller's resample path
+        // passes user overrides; absent/null fields fall back to the standing
+        // defaults — the 5 %-of-length auto corridor, p25, 64 bins. Every
+        // value that ACTUALLY shaped the estimate is passed back so it lands
+        // on the measurement record and the PDF/CSV provenance prints the
+        // real numbers instead of "auto" (B4).
+        const corridorWidth = opts?.corridorWidth ?? autoCorridorWidth(a, b, up);
+        const groundPercentile = opts?.groundPercentile ?? DEFAULT_GROUND_PERCENTILE;
+        const sampleCount = opts?.sampleCount ?? DEFAULT_PROFILE_SAMPLE_COUNT;
+        const samples = sampleProfile({
+          a,
+          b,
+          up,
+          positions,
+          samples: sampleCount,
+          bandWidth: corridorWidth,
+          groundPercentile,
+          classification,
+        });
         // The chart is "resident-only" whenever any streaming bytes are
         // in the walk and there is no fully-loaded static cloud beside
         // it — that's exactly the case where additional nodes may
         // refine the profile as they stream in.
         const residentOnly = streamingPoints > 0 && staticPoints === 0;
-        return { samples, residentOnly };
+        return {
+          samples,
+          residentOnly,
+          corridorWidth,
+          groundPercentile,
+        };
       },
     );
     // Volume sampler — feeds the cut/fill record half of a Volume
@@ -1832,6 +1876,13 @@ export class Viewer {
     residentOnly: boolean;
     sampled: boolean;
     totalPoints: number;
+    /**
+     * `'z'` when every contributing source is z-up BY SPEC (LAS/LAZ/XYZ/E57/…
+     * statics, COPC/EPT streams) so scan-shape detection can skip its up-axis
+     * guess; `undefined` when any phone-scan format (PLY/OBJ/glTF) contributes
+     * and the frame is genuinely ambiguous. v0.4.5 — see scanShape.ts header.
+     */
+    verticalAxisHint?: 'z';
   } | null {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
@@ -1840,6 +1891,7 @@ export class Viewer {
     let staticPoints = 0;
     let streamingPoints = 0;
     let anyClass = false;
+    const staticFormats: SourceFormat[] = [];
     const alignedClass = (
       cls: ArrayLike<number> | null | undefined,
       pos: Float32Array,
@@ -1851,6 +1903,7 @@ export class Viewer {
         if (cls) anyClass = true;
         buffers.push({ pos: cloud.positions, cls });
         staticPoints += cloud.positions.length / 3;
+        staticFormats.push(cloud.sourceFormat);
       }
     }
     for (const { decoded } of this._streamingPickData.values()) {
@@ -1899,6 +1952,7 @@ export class Viewer {
       residentOnly: streamingPoints > 0 && staticPoints === 0,
       sampled: stride > 1,
       totalPoints,
+      verticalAxisHint: verticalAxisHintForSources(staticFormats, streamingPoints > 0),
     };
   }
 
@@ -1933,23 +1987,25 @@ export class Viewer {
   private _heightPercentileTrim = 5;
 
   /**
-   * The DTM-confidence grid the `'coverage'` colour mode samples, stored after
-   * a terrain analysis lands (mirrors how other post-analysis state is kept on
-   * the Viewer). Null until the first analysis runs; the Coverage colour button
-   * stays disabled while it is null. Cleared on reset / new scan.
+   * The DTM-confidence grid the `'coverage'` and `'confidence'` colour modes
+   * sample, stored after a terrain analysis lands (mirrors how other
+   * post-analysis state is kept on the Viewer). Null until the first analysis
+   * runs; both trust-overlay colour buttons stay disabled while it is null.
+   * Cleared on reset / new scan.
    */
   private _coverageGrid: CoverageColorGrid | null = null;
 
   /**
-   * Adopt (or clear) the DTM-confidence grid that the `'coverage'` colour mode
-   * samples. Called when a terrain analysis result lands. Recolours any cloud
-   * currently showing `'coverage'` so it reflects the fresh grid immediately.
+   * Adopt (or clear) the DTM-confidence grid that the `'coverage'` and
+   * `'confidence'` colour modes sample. Called when a terrain analysis result
+   * lands. Recolours any cloud currently showing either trust overlay so it
+   * reflects the fresh grid immediately.
    */
   setCoverageGrid(grid: CoverageColorGrid | null): void {
     this._coverageGrid = grid;
     for (const entry of this._clouds.values()) {
-      if (entry.mode !== 'coverage') continue;
-      const raw = colorForMode('coverage', entry.cloud, { coverageGrid: grid ?? undefined });
+      if (entry.mode !== 'coverage' && entry.mode !== 'confidence') continue;
+      const raw = colorForMode(entry.mode, entry.cloud, { coverageGrid: grid ?? undefined });
       const arr = entry.colorAttr.array as Float32Array;
       // sRGB → linear via the shared EOTF seam — a bare `/255` here would
       // double-encode and visibly pale the cloud vs the initial upload.
@@ -1959,7 +2015,10 @@ export class Viewer {
     this._bumpRenderActivity();
   }
 
-  /** True once a DTM-confidence grid exists, so the Coverage colour mode is meaningful. */
+  /**
+   * True once a DTM-confidence grid exists, so the Coverage / Confidence
+   * colour modes are meaningful.
+   */
   hasCoverageGrid(): boolean {
     return this._coverageGrid != null;
   }
@@ -3825,7 +3884,148 @@ export class Viewer {
         }
         return any ? [minX, minY, minZ, maxX, maxY, maxZ] : null;
       },
+      georefContext(): {
+        worldOrigin: { x: number; y: number } | null;
+        wkt: string | null;
+      } | null {
+        // Mirrors main.ts's `getMapContext` (the contour/DEM seam): the
+        // streaming cloud's recentre offset lives on `renderOrigin` and its
+        // CRS on `crs()`; static clouds carry both on the cloud record.
+        if (viewer._streaming) {
+          const origin = viewer._streaming.cloud.renderOrigin;
+          return {
+            worldOrigin: origin ? { x: origin[0], y: origin[1] } : null,
+            wkt: viewer._streaming.cloud.crs()?.wkt ?? null,
+          };
+        }
+        // Static path: only assert a single, unambiguous frame. With several
+        // clouds loaded the per-cloud origins can differ — a world file in
+        // one cloud's frame would silently misplace the others, so we only
+        // georeference when every loaded cloud shares the SAME origin.
+        let worldOrigin: { x: number; y: number } | null = null;
+        let wkt: string | null = null;
+        let any = false;
+        for (const { cloud } of viewer._clouds.values()) {
+          any = true;
+          const o = cloud.origin;
+          if (!o) return null;
+          if (worldOrigin === null) {
+            worldOrigin = { x: o[0], y: o[1] };
+          } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
+            return null; // conflicting frames — honestly not georeferenceable
+          }
+          if (wkt == null) wkt = cloud.metadata?.crs?.wkt ?? null;
+        }
+        return any ? { worldOrigin, wkt } : null;
+      },
+      async framedTopDownSnapshot(options: { widthPx?: number }): Promise<{
+        blob: Blob;
+        widthPx: number;
+        heightPx: number;
+        extent: { minX: number; minY: number; maxX: number; maxY: number };
+      } | null> {
+        const aabb = this.localBoundsAabb();
+        if (!aabb) return null;
+        return viewer._renderFramedTopDown(aabb, options.widthPx);
+      },
     };
+  }
+
+  /**
+   * Render the scene through a TRUE top-down orthographic camera framing the
+   * full XY footprint and capture it as a PNG (the georeferenced ortho path
+   * of the Visual Export Studio, v0.4.5). The framed render is the only
+   * raster an affine `.pgw` world file can describe — the WYSIWYG snapshot's
+   * perspective projection cannot be georeferenced.
+   *
+   * Renders DIRECT (no EDL post pass): the EDL pipeline's scene pass is
+   * bound to the live perspective camera, and depth-edge shading is a
+   * reading aid, not data — a placed GIS raster should carry the points'
+   * colours, nothing else. No overlays / scan-report card are composited
+   * either: their pixels would corrupt the raster as data (the metadata
+   * travels in the ZIP's `.pgw`/`.prj` sidecars instead).
+   *
+   * The renderer size round-trip is `try/finally`-wrapped so a throw cannot
+   * leave the live canvas at export resolution.
+   */
+  private async _renderFramedTopDown(
+    aabb: readonly [number, number, number, number, number, number],
+    widthPx?: number,
+  ): Promise<{
+    blob: Blob;
+    widthPx: number;
+    heightPx: number;
+    extent: { minX: number; minY: number; maxX: number; maxY: number };
+  } | null> {
+    await this.ready;
+    // All numbers come from the pure, unit-tested framing planner — the
+    // extent it returns is DERIVED from the camera pose + frustum
+    // (`orthoFrustumWorldRect`), so the rectangle the world file describes
+    // is by construction the rectangle this camera renders. The planner is
+    // a dependency-free leaf module, so importing it statically here does
+    // not pull the lazy Studio chunk into the shell bundle.
+    const framing = frameTopDownOrtho(aabb, widthPx);
+    if (!framing) return null; // degenerate footprint
+    const { frustum, camera: pose } = framing;
+    const camera = new THREE.OrthographicCamera(
+      frustum.left,
+      frustum.right,
+      frustum.top,
+      frustum.bottom,
+      frustum.near,
+      frustum.far,
+    );
+    // Straight down (-Z; render space is Z-up) with +Y at the image top, so
+    // the raster is north-up — the orientation the world file asserts.
+    camera.position.set(pose.x, pose.y, pose.z);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(pose.x, pose.y, pose.lookZ);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+
+    // Output size: requested width (default 2048), height from the
+    // footprint aspect so pixels stay square to within the 1 px rounding the
+    // world file's independent X/Y scales absorb exactly.
+    const outW = framing.widthPx;
+    const outH = framing.heightPx;
+
+    const gl = this._renderer.domElement as HTMLCanvasElement;
+    const prevSize = this._renderer.getSize(new THREE.Vector2());
+    const prevRatio = this._renderer.getPixelRatio();
+    try {
+      // Pixel ratio 1 so the drawing buffer is EXACTLY outW × outH — the
+      // world file divides the extent by these pixel counts.
+      this._renderer.setPixelRatio(1);
+      this._renderer.setSize(outW, outH, false);
+      // Two render+present cycles for the same WebGPU buffer-flush reason
+      // `snapshot()` documents: a single un-awaited render captures the
+      // previous frame.
+      const present = (): Promise<void> => {
+        this._renderer.render(this._scene, camera);
+        return new Promise((resolve) => {
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => resolve());
+          } else {
+            setTimeout(resolve, 0);
+          }
+        });
+      };
+      await present();
+      await present();
+      const blob = await this._canvasToBlob(gl);
+      return {
+        blob,
+        widthPx: outW,
+        heightPx: outH,
+        // The frustum-derived rectangle — exactly what the camera framed.
+        extent: framing.extent,
+      };
+    } finally {
+      this._renderer.setPixelRatio(prevRatio);
+      this._renderer.setSize(prevSize.x, prevSize.y, false);
+      // Repaint the live view at the restored size on the next frames.
+      this._bumpRenderActivity();
+    }
   }
 
   /**

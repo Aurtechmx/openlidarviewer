@@ -19,6 +19,7 @@ type Handler = () => void;
 class FakeEl {
   title = '';
   type = '';
+  disabled = false;
   private _text = '';
   readonly dataset: Record<string, string> = {};
   private readonly _attrs = new Map<string, string>();
@@ -45,6 +46,7 @@ class FakeEl {
   }
   setAttribute(k: string, v: string): void { this._attrs.set(k, v); }
   getAttribute(k: string): string | null { return this._attrs.get(k) ?? null; }
+  removeAttribute(k: string): void { this._attrs.delete(k); }
   append(...kids: FakeEl[]): void { this.children.push(...kids); }
   addEventListener(type: string, fn: Handler): void {
     const list = this._handlers.get(type) ?? [];
@@ -115,5 +117,251 @@ describe('createScanTypeControl', () => {
     byVal('terrain').click();
     byVal('auto').click();
     expect(seen).toEqual(['interior', 'terrain', 'auto']);
+  });
+});
+
+// The product decision for the dead-panel bug: when detection reads the scan
+// as an interior / compact object, the Terrain segment is DISABLED with the
+// reason — disabled + title/aria-disabled + a visible reason line — so one
+// click can no longer tear down the Space/Object panel. The explicit
+// "Run terrain contours anyway" hatch (host-side) is the deliberate override.
+describe('createScanTypeControl — disabled-with-reason', () => {
+  const REASON =
+    "This scan reads as an interior — terrain analysis would be misleading. " +
+    "Use 'Run terrain contours anyway' to override.";
+
+  it('disables the listed segment with title, aria-disabled and the reason line', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+
+    control.set('auto', 'interior', { terrain: REASON });
+    const terrain = byVal('terrain');
+    expect(terrain.disabled).toBe(true);
+    expect(terrain.classList.contains('is-disabled')).toBe(true);
+    expect(terrain.getAttribute('aria-disabled')).toBe('true');
+    expect(terrain.title).toBe(REASON);
+    // The visible reason line carries the same text and is no longer hidden.
+    const reason = root.find('olv-scan-type-reason')!;
+    expect(reason.textContent).toBe(REASON);
+    expect(reason.classList.contains('olv-hidden')).toBe(false);
+    // The other three pills stay fully clickable.
+    for (const v of ['object', 'interior', 'auto']) {
+      expect(byVal(v).disabled).toBe(false);
+      expect(byVal(v).getAttribute('aria-disabled')).toBe('false');
+      expect(byVal(v).classList.contains('is-disabled')).toBe(false);
+    }
+  });
+
+  it('a click on the disabled segment is a guarded no-op', async () => {
+    const seen: string[] = [];
+    const { control, root } = await build((o) => seen.push(o));
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'interior', { terrain: REASON });
+    byVal('terrain').click();   // disabled — must not fire
+    byVal('interior').click();  // enabled — must fire
+    expect(seen).toEqual(['interior']);
+  });
+
+  it('never locks out the CURRENT override — a forced choice stays escapable', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    // The user already forced terrain (e.g. via the escape hatch / earlier
+    // state): the Terrain segment must show as ACTIVE, not disabled, and the
+    // way back (Auto / Object / Interior) stays enabled.
+    control.set('terrain', 'terrain', { terrain: REASON });
+    const terrain = byVal('terrain');
+    expect(terrain.classList.contains('is-active')).toBe(true);
+    expect(terrain.disabled).toBe(false);
+    expect(terrain.getAttribute('aria-disabled')).toBe('false');
+    for (const v of ['object', 'interior', 'auto']) {
+      expect(byVal(v).disabled).toBe(false);
+    }
+    // No segment is disabled, so the reason line hides.
+    const reason = root.find('olv-scan-type-reason')!;
+    expect(reason.classList.contains('olv-hidden')).toBe(true);
+  });
+
+  it('re-enables cleanly when the disabled map is dropped', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'interior', { terrain: REASON });
+    expect(byVal('terrain').disabled).toBe(true);
+
+    control.set('auto', 'terrain'); // detection now says terrain — no map
+    const terrain = byVal('terrain');
+    expect(terrain.disabled).toBe(false);
+    expect(terrain.classList.contains('is-disabled')).toBe(false);
+    expect(terrain.getAttribute('aria-disabled')).toBe('false');
+    expect(terrain.title).toBe('');
+    const reason = root.find('olv-scan-type-reason')!;
+    expect(reason.classList.contains('olv-hidden')).toBe(true);
+    expect(reason.textContent).toBe('');
+  });
+});
+
+// v0.4.5: while detection is UNSETTLED under Auto, the RESOLVED verdict is
+// shown without being adopted — the detected pill gets an `is-detected` mark +
+// aria-description and the Auto label reads "Auto (Interior)". Auto stays the
+// active (aria-pressed) segment until the host reports the verdict as settled
+// (see the soft-commit describe below).
+describe('createScanTypeControl — detected-type display under Auto (unsettled)', () => {
+  it('marks the detected pill and relabels Auto when detection resolves interior', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+
+    control.set('auto', 'interior', { terrain: 'reads as interior' });
+    const interior = byVal('interior');
+    const auto = byVal('auto');
+    // Auto remains the SELECTED mode…
+    expect(auto.classList.contains('is-active')).toBe(true);
+    expect(auto.getAttribute('aria-pressed')).toBe('true');
+    expect(interior.classList.contains('is-active')).toBe(false);
+    // …while the Interior pill is visibly marked as the detected type…
+    expect(interior.classList.contains('is-detected')).toBe(true);
+    expect(interior.getAttribute('aria-description')).toContain('Detected automatically');
+    expect(interior.getAttribute('aria-description')).toContain('interior');
+    // …and the Auto label carries the resolved verdict.
+    expect(auto.textContent).toBe('Auto (Interior)');
+    // The detected pill stays clickable (only Terrain is ruled out here).
+    expect(interior.disabled).toBe(false);
+  });
+
+  it('marks the terrain pill when detection resolves terrain', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'terrain');
+    expect(byVal('terrain').classList.contains('is-detected')).toBe(true);
+    expect(byVal('auto').textContent).toBe('Auto (Terrain)');
+    expect(byVal('interior').classList.contains('is-detected')).toBe(false);
+  });
+
+  it('clears the detected mark + label under a manual override and on re-detection', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+
+    control.set('auto', 'interior');
+    expect(byVal('interior').classList.contains('is-detected')).toBe(true);
+
+    // Manual override: the override pill is active; no pill claims "detected"
+    // (the effective route is the user's choice, not a detection) and the Auto
+    // label reverts to plain "Auto".
+    control.set('object', 'object');
+    for (const v of ['terrain', 'object', 'interior', 'auto']) {
+      expect(byVal(v).classList.contains('is-detected')).toBe(false);
+      expect(byVal(v).getAttribute('aria-description')).toBe(null);
+    }
+    expect(byVal('auto').textContent).toBe('Auto');
+
+    // Back to Auto with a NEW verdict: the mark moves, never accumulates.
+    control.set('auto', 'object');
+    expect(byVal('object').classList.contains('is-detected')).toBe(true);
+    expect(byVal('interior').classList.contains('is-detected')).toBe(false);
+    expect(byVal('auto').textContent).toBe('Auto (Object)');
+  });
+
+  it('shows plain "Auto" while detection has not resolved yet', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', null);
+    expect(byVal('auto').textContent).toBe('Auto');
+    for (const v of ['terrain', 'object', 'interior']) {
+      expect(byVal(v).classList.contains('is-detected')).toBe(false);
+    }
+  });
+});
+
+// The settled soft-commit: once the host reports the auto verdict as SETTLED
+// (static-load detection or the streaming settle one-shot), the control
+// COMMITS to the detected type — the detected pill becomes the selected
+// segment (aria-pressed), still wearing its "detected" accent dot so the
+// auto-detected origin stays visible. NOT a manual override: no "(manual)"
+// note, every pill (including Auto, the way back to re-detection) stays
+// clickable, and the host resets the flag on a new scan.
+describe('createScanTypeControl — settled soft-commit', () => {
+  const REASON =
+    "This scan reads as an interior — terrain analysis would be misleading. " +
+    "Use 'Run terrain contours anyway' to override.";
+
+  it('commits the selection to the detected pill (aria-pressed moves off Auto)', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'interior', { terrain: REASON }, true);
+    const interior = byVal('interior');
+    const auto = byVal('auto');
+    expect(interior.classList.contains('is-active')).toBe(true);
+    expect(interior.getAttribute('aria-pressed')).toBe('true');
+    expect(auto.classList.contains('is-active')).toBe(false);
+    expect(auto.getAttribute('aria-pressed')).toBe('false');
+    // The accent dot still says "this was auto-detected".
+    expect(interior.classList.contains('is-detected')).toBe(true);
+    expect(interior.getAttribute('aria-description')).toContain('Detected automatically');
+  });
+
+  it('a commit is NOT a manual override: no "(manual)" note, plain Auto pill', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'interior', undefined, true);
+    expect(root.find('olv-scan-type-note')!.classList.contains('olv-hidden')).toBe(true);
+    // Auto reverts to a plain pill — its job is now "re-run detection".
+    expect(byVal('auto').textContent).toBe('Auto');
+    expect(byVal('auto').title).toContain('re-run auto-detection');
+  });
+
+  it('every pill stays clickable after the commit — including Auto (re-detect)', async () => {
+    const seen: string[] = [];
+    const { control, root } = await build((o) => seen.push(o));
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'interior', { terrain: REASON }, true);
+    byVal('auto').click();     // back to re-detection
+    byVal('object').click();   // any manual pick
+    byVal('interior').click(); // re-clicking the committed pill is harmless
+    expect(seen).toEqual(['auto', 'object', 'interior']);
+  });
+
+  it('keeps the disabled-Terrain reason exactly as in the uncommitted state', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'interior', { terrain: REASON }, true);
+    const terrain = byVal('terrain');
+    expect(terrain.disabled).toBe(true);
+    expect(terrain.getAttribute('aria-disabled')).toBe('true');
+    expect(terrain.title).toBe(REASON);
+    const reason = root.find('olv-scan-type-reason')!;
+    expect(reason.textContent).toBe(REASON);
+    expect(reason.classList.contains('olv-hidden')).toBe(false);
+  });
+
+  it('commits the Terrain pill when the settled verdict is terrain', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'terrain', undefined, true);
+    expect(byVal('terrain').classList.contains('is-active')).toBe(true);
+    expect(byVal('terrain').classList.contains('is-detected')).toBe(true);
+    expect(byVal('auto').classList.contains('is-active')).toBe(false);
+  });
+
+  it('a new scan returns the selection to Auto (host passes committed=false)', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    control.set('auto', 'interior', undefined, true);
+    expect(byVal('interior').classList.contains('is-active')).toBe(true);
+    // New scan: detection unresolved again, no commit.
+    control.set('auto', null);
+    expect(byVal('auto').classList.contains('is-active')).toBe(true);
+    expect(byVal('auto').getAttribute('aria-pressed')).toBe('true');
+    expect(byVal('interior').classList.contains('is-active')).toBe(false);
+    expect(byVal('interior').classList.contains('is-detected')).toBe(false);
+  });
+
+  it('a manual override beats the committed flag; unresolved detection ignores it', async () => {
+    const { control, root } = await build();
+    const byVal = (v: string) => root.findAll('olv-scan-type-opt').find((o) => o.dataset.value === v)!;
+    // Manual override + committed=true (host race): the override pill wins.
+    control.set('object', 'object', undefined, true);
+    expect(byVal('object').classList.contains('is-active')).toBe(true);
+    expect(root.find('olv-scan-type-note')!.classList.contains('olv-hidden')).toBe(false);
+    // committed with NO resolved verdict: stays on Auto (nothing to commit to).
+    control.set('auto', null, undefined, true);
+    expect(byVal('auto').classList.contains('is-active')).toBe(true);
   });
 });

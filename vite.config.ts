@@ -160,6 +160,25 @@ function chunkEmissionGuard() {
     // by loadLas.ts when a `.laz` file is opened (and by EPT laszip
     // tile decode). Uncompressed `.las` files never download it.
     'lazDecode',
+    // v0.4.5 — runtime dynamic-import seams that used to live inline in
+    // main.ts / CatalogPanel.ts (transformed modules), where the live
+    // stringArray pass scrambled the specifiers: `planetaryComputer` and
+    // `rgbAutoNormalize` were silently never emitted (dead catalog search
+    // and Auto-balance on the deployed site) and the `loadLas` pre-warm
+    // 404'd on every boot. All four now route through lazyChunks.ts;
+    // pinned so a re-inline fails the build loudly.
+    'loadLas',
+    'planetaryComputer',
+    'rgbAutoNormalize',
+    'embedBridge',
+    // v0.4.5 — interior floor-plan pipeline + Space/Object report PDF,
+    // reached only through lazyChunks.ts (loadFloorPlan / loadSpaceReportPdf).
+    // Pinned like every other lazy seam so a refactor that re-inlines the
+    // import() (or a transform pass that scrambles it) fails the build
+    // loudly instead of silently killing the panel's export buttons.
+    'extractFloorPlan',
+    'floorPlanSvg',
+    'spaceReportPdf',
     // Vendor chunks pinned via manualChunks. The presence of these
     // chunks proves the manualChunks rule is still active — losing them
     // would re-inflate the loadLas / report chunks.

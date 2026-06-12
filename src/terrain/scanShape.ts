@@ -35,6 +35,23 @@
  * zMin) is the widest + flattest coherent height field — a floor / ground —
  * with the floor+ceiling enclosure concentration as a tie-breaking hint. A
  * caller that already knows the vertical axis can override it.
+ *
+ * v0.4.5 GRAVITY PRIOR (live-bug fix): detection alone misread z-thin 360
+ * interiors whose WALLS are densely sampled and whose floor is sparse and
+ * cluttered — a dense flat wall is a *perfect* "floor field" (fill 1.0,
+ * flatness ~1.0) and the enclosure hint then rewards the two opposing walls
+ * as "floor + ceiling", so a horizontal axis won and every Space-panel figure
+ * (H, footprint, floor plan, storeys) came out sideways. Two countermeasures:
+ *   1. z is the INCUMBENT — point-cloud formats are z-up by spec (LAS/LAZ/
+ *      COPC/EPT) far more often than not, so a lateral axis must now beat z's
+ *      score by a clear margin (×1.25), not by an epsilon. Ties also resolve
+ *      to z (the old loop took the FIRST axis on near-ties, i.e. x).
+ *   2. Wall-as-floor discrimination — a candidate axis is penalised by the
+ *      fraction of its footprint cells spanning near the FULL vertical extent.
+ *      Seen sideways, the opposing walls + floor stack into full-span columns
+ *      (wall mass masquerading as floor evidence); seen upright, only the
+ *      true wall perimeter spans full height. The penalty cancels on a closed
+ *      box (1.0 on every axis), where the enclosure hint still decides.
  */
 
 import type { VerticalAxis } from './ground/groundFilter';
@@ -151,6 +168,24 @@ const ENCLOSURE_HINT_WEIGHT = 1.5;
  *  with one surface per column. Cancels for a closed room (≈1.0 on every axis,
  *  where the enclosure hint decides). */
 const OVERHANG_PENALTY = 1.0;
+/** Penalty on full-vertical-span (wall-like) columns when scoring an axis as
+ *  "up" — the wall-as-floor discriminator. On the misread z-thin 360 interior
+ *  the sideways frame stacks walls + floor into full-span columns on ~0.9 of
+ *  its cells while the upright frame has them only on the wall perimeter
+ *  (~0.2), so this term separates the two by ~0.5 where the raw scores
+ *  differed by only ~1.3×. 0.75 chosen so the penalty dominates that gap but
+ *  never outweighs a genuine floor field (max ff + hint ≈ 2.5). */
+const WALL_AS_FLOOR_PENALTY = 0.75;
+/** Gravity prior — z is the incumbent up axis (z-up is the point-cloud-format
+ *  norm); a lateral axis must beat z's score by this factor to override it.
+ *  Genuine y-up phone terrain clears it easily (y ≈ 0.93 vs z ≈ 0.40 on the
+ *  flat-field suite case); the misread interior (x ≈ 1.28× z pre-penalty) did
+ *  not deserve to. */
+const GRAVITY_MARGIN = 1.25;
+/** Absolute fallback margin used when z's score is non-positive (a
+ *  multiplicative margin is meaningless across zero): a lateral axis must then
+ *  beat z by this absolute gap. */
+const GRAVITY_MARGIN_ABS = 0.1;
 /** Roughness sensitivity for the floor-field flatness term. Higher ⇒ a rough
  *  low surface is penalised harder. */
 const FLATNESS_K = 8;
@@ -168,6 +203,14 @@ interface FloorField {
   score: number;
   /** Fraction of occupied cells whose column spans multiple surfaces (0..1). */
   overhang: number;
+  /**
+   * Fraction of occupied cells whose column spans ≥ WALL_SPAN_FRAC of the
+   * whole vertical extent (0..1) — wall-like, full-height columns. High on a
+   * sideways frame (walls + floor stack into every column), low on the true
+   * up (only the wall perimeter is full-height). Drives the wall-as-floor
+   * penalty in the up score.
+   */
+  wallFrac: number;
 }
 
 /** Score how good a "floor" the per-cell LOW surface (zMin) makes when `vOff`
@@ -196,7 +239,7 @@ function floorFieldForAxis(
   const ex1 = Math.max(0, maxH1 - minH1);
   const ex2 = Math.max(0, maxH2 - minH2);
   const exV = Math.max(0, maxV - minV);
-  if (exV <= 0) return { score: 0, overhang: 0 };
+  if (exV <= 0) return { score: 0, overhang: 0, wallFrac: 0 };
 
   const cols = gridN, rows = gridN;
   const zMin = new Float32Array(cols * rows).fill(Infinity);
@@ -214,22 +257,29 @@ function floorFieldForAxis(
     if (v < zMin[idx]) zMin[idx] = v;
     if (v > zMax[idx]) zMax[idx] = v;
   }
-  let occupied = 0, stacked = 0;
+  let occupied = 0, stacked = 0, wallCells = 0;
   let roughSum = 0, roughCount = 0;
+  const wallSpan = WALL_SPAN_FRAC * exV;
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
       const z = zMin[idx];
       if (z === Infinity) continue;
       occupied++;
-      if (zMax[idx] - z > 1.5 * cellDiag) stacked++;
+      const span = zMax[idx] - z;
+      if (span > 1.5 * cellDiag) stacked++;
+      if (span >= wallSpan) wallCells++;
       if (c + 1 < cols) { const zr = zMin[idx + 1]; if (zr !== Infinity) { roughSum += Math.abs(z - zr); roughCount++; } }
       if (r + 1 < rows) { const zd = zMin[idx + cols]; if (zd !== Infinity) { roughSum += Math.abs(z - zd); roughCount++; } }
     }
   const fill = occupied / (cols * rows);
   const roughnessNorm = roughCount > 0 ? (roughSum / roughCount) / exV : 0;
   const flatness = 1 / (1 + FLATNESS_K * roughnessNorm);
-  return { score: fill * flatness, overhang: occupied > 0 ? stacked / occupied : 0 };
+  return {
+    score: fill * flatness,
+    overhang: occupied > 0 ? stacked / occupied : 0,
+    wallFrac: occupied > 0 ? wallCells / occupied : 0,
+  };
 }
 
 interface Enclosure {
@@ -378,20 +428,33 @@ export function classifyScanShape(
   }
   const stride = Math.max(1, Math.floor(n / maxSamples));
 
-  // ── Up-axis: supplied, or detected as the widest + flattest low surface. ──
+  // ── Up-axis: supplied, or detected as the widest + flattest low surface
+  //    UNDER the gravity prior — z is the incumbent (z-up is the point-cloud
+  //    norm) and a lateral axis must beat z's score by a clear margin, with
+  //    full-height wall-like columns penalised so dense walls can't buy a
+  //    sideways frame on a 360 interior (see header). ──
   let upIdx: number;
   if (params.verticalAxis) {
     upIdx = params.verticalAxis === 'y' ? 1 : 2;
   } else {
-    let best = -1, bestScore = -Infinity;
+    const scores = new Array<number>(3);
     for (let a = 0; a < 3; a++) {
       const [v, h1, h2] = ASSIGN[a];
       const ff = floorFieldForAxis(positions, n, stride, gridN, v, h1, h2);
       const enc = enclosureForAxis(positions, n, stride, v);
-      const score = ff.score + ENCLOSURE_HINT_WEIGHT * enc.score - OVERHANG_PENALTY * ff.overhang;
-      if (score > bestScore + 1e-9) { bestScore = score; best = a; }
+      scores[a] =
+        ff.score +
+        ENCLOSURE_HINT_WEIGHT * enc.score -
+        OVERHANG_PENALTY * ff.overhang -
+        WALL_AS_FLOOR_PENALTY * ff.wallFrac;
     }
-    upIdx = best < 0 ? 2 : best;
+    const zScore = scores[2];
+    // Multiplicative margin only makes sense above zero; below it, fall back
+    // to an absolute gap. Ties (e.g. a perfect cube) stay with z — the old
+    // first-axis-wins loop resolved them to x, which was never right.
+    const threshold = zScore > 0 ? zScore * GRAVITY_MARGIN : zScore + GRAVITY_MARGIN_ABS;
+    const bestLateral = scores[0] >= scores[1] ? 0 : 1;
+    upIdx = scores[bestLateral] > threshold ? bestLateral : 2;
   }
   const up = AXIS_NAME[upIdx];
   const [vOff, h1Off, h2Off] = ASSIGN[upIdx];

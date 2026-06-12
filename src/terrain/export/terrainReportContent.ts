@@ -7,7 +7,13 @@
  * module so the report can never disagree with the on-screen Analyse panel.
  *
  * Source-of-truth map (each section is fed by an existing module):
- *   - Dataset Summary       ← the DtmGrid + {@link buildExportProvenance}.
+ *   - Executive Summary     ← {@link terrainAssessment} (the verdict + reason
+ *                             joined into the one sentence the panel leads with,
+ *                             plus export readiness and "best for").
+ *   - Dataset Statistics    ← the DtmGrid + {@link buildExportProvenance}, plus
+ *                             (when the caller supplies it) the Inspector's
+ *                             {@link DatasetIntelligence} bucket labels — the
+ *                             SAME strings the Dataset Intelligence card shows.
  *   - Terrain Assessment    ← {@link terrainAssessment} (Surface Quality verdict
  *                             + 0–100 score + reason; Export Readiness + reason).
  *   - Coverage Analysis     ← the DTM quality gate ratios + mean confidence.
@@ -16,8 +22,9 @@
  *   - Warnings              ← `result.warnings` + {@link explainLimitations}
  *                             causes (deduped, each carrying its figure).
  *   - Recommended Workflows ← {@link recommendedWorkflows} (✓ / ⚠ / ✕).
- *   - Terrain Products      ← export readiness + the contour gate, mirroring the
- *                             deliverable-class workflow grading.
+ *   - Terrain Products      ← {@link terrainProducts} — the SAME view the
+ *                             Analyse panel's products list renders, so the PDF
+ *                             and the panel can never grade a product apart.
  *   - How to improve        ← {@link explainLimitations} fixes (only when the
  *                             surface is not fully-good).
  *   - Footer                ← {@link provenanceLines} + the not-survey-grade note.
@@ -35,8 +42,11 @@
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import { terrainAssessment } from '../contour/terrainAssessment';
+import { readinessLine } from '../quality/readinessEngine';
 import { recommendedWorkflows, type WorkflowItem } from '../contour/recommendedWorkflow';
+import { terrainProducts } from '../contour/terrainProducts';
 import { explainLimitations } from '../contour/whyNotReasons';
+import type { DatasetIntelligence } from '../datasetIntelligence';
 import {
   buildExportProvenance,
   provenanceLines,
@@ -75,6 +85,17 @@ export interface TerrainReportProduct {
   readonly availability: 'Available' | 'Preview' | 'Blocked';
   /** Short, honest qualifier for Preview / Blocked products (absent for Available). */
   readonly note?: string;
+}
+
+/**
+ * Options for {@link buildTerrainReportContent}. Extends the provenance options
+ * (the same bundle every other export passes) with the OPTIONAL Dataset
+ * Intelligence summary — the pure bucket view the Inspector card renders. When
+ * absent / null the intelligence rows are simply omitted (honest: the report
+ * never re-derives buckets the card did not show).
+ */
+export interface TerrainReportContentOptions extends ExportProvenanceOptions {
+  readonly intelligence?: DatasetIntelligence | null;
 }
 
 /** The complete, pure content model the PDF renderer lays out. */
@@ -124,23 +145,6 @@ function markFor(status: WorkflowItem['status']): TerrainReportWorkflow['mark'] 
   return status === 'good' ? '✓' : status === 'caution' ? '⚠' : '✕';
 }
 
-/** Map an export-readiness verdict onto a product availability label + note. */
-function productFromReadiness(
-  label: string,
-  readiness: 'Ready' | 'Preview' | 'Blocked',
-  reason: string,
-): TerrainReportProduct {
-  if (readiness === 'Ready') return { label, availability: 'Available' };
-  if (readiness === 'Blocked') {
-    return { label, availability: 'Blocked', note: reason || 'quality gate stopped this surface' };
-  }
-  return {
-    label,
-    availability: 'Preview',
-    note: reason || 'preview only — not for final deliverables',
-  };
-}
-
 /**
  * Assemble the Terrain Intelligence Report content from an analysis result. This
  * is a PURE PROJECTION of the existing modules — it computes nothing new. Missing
@@ -149,7 +153,7 @@ function productFromReadiness(
  */
 export function buildTerrainReportContent(
   result: AnalyseContoursResult,
-  opts: ExportProvenanceOptions = {},
+  opts: TerrainReportContentOptions = {},
 ): TerrainReportContent {
   // The unified provenance — the SAME object every other export stamps — gives
   // the header / footer fields (software, version, date, CRS, datum, coverage,
@@ -166,7 +170,26 @@ export function buildTerrainReportContent(
   const acc = result.accuracyStandards ?? null;
   const hasAcc = provenance.accuracy != null;
 
-  // ── Dataset Summary ─────────────────────────────────────────────────────
+  // ── Executive Summary ───────────────────────────────────────────────────
+  // The one-glance verdict a client reads first. Every fragment is an
+  // assessment-minted string — status, reason, readiness, bestFor — joined
+  // with the same " — " separator the provenance lines already use, so the
+  // sentence can never carry prose the panel did not show.
+  const executiveSummary: TerrainReportSection = {
+    title: 'Executive Summary',
+    rows: [
+      { label: 'Verdict', value: `${assessment.status} — ${assessment.reason}` },
+      {
+        label: 'Export readiness',
+        // The readiness engine's own "Tier — reason" formatting — identical
+        // to the Export readiness provenance line stamped on every artifact.
+        value: readinessLine(assessment.exportReadiness, assessment.exportReason),
+      },
+      { label: 'Best for', value: assessment.bestFor },
+    ],
+  };
+
+  // ── Dataset Statistics ──────────────────────────────────────────────────
   // Footprint = grid extent (cols/rows × cell size). Honest when the grid is
   // absent. Classification availability is inferred from whether the run
   // dropped any classified non-ground returns (excludedByClassification > 0)
@@ -182,8 +205,22 @@ export function buildTerrainReportContent(
   const classified =
     (result.excludedByClassification ?? 0) > 0 ? 'Yes' : 'No';
 
-  const datasetSummary: TerrainReportSection = {
-    title: 'Dataset Summary',
+  // Dataset Intelligence bucket rows — present ONLY when the caller passed the
+  // card's summary through. The labels are the card's own strings (already
+  // honest: 'unknown' buckets render as "—"), so the PDF and the Inspector can
+  // never disagree on a bucket.
+  const intel = opts.intelligence ?? null;
+  const intelligenceRows: TerrainReportRow[] = intel
+    ? [
+        { label: 'Point density (class)', value: intel.density.label },
+        { label: 'Terrain complexity', value: intel.complexity.label },
+        { label: 'Ground visibility', value: intel.groundVisibility.label },
+        { label: 'Metric stability', value: intel.confidence.label },
+      ]
+    : [];
+
+  const datasetStatistics: TerrainReportSection = {
+    title: 'Dataset Statistics',
     rows: [
       { label: 'Scan', value: provenance.source ?? 'Untitled scan' },
       { label: 'Source points', value: fmtInt(dtm?.sourcePointCount) },
@@ -193,6 +230,7 @@ export function buildTerrainReportContent(
         label: 'Ground density',
         value: density != null ? `${density.toFixed(1)} pts/m²` : DASH,
       },
+      ...intelligenceRows,
       { label: 'Coverage mode', value: provenance.coverageMode },
       { label: 'Horizontal CRS', value: provenance.horizontalCrs },
       { label: 'Vertical datum', value: provenance.verticalDatum },
@@ -298,17 +336,22 @@ export function buildTerrainReportContent(
       : { label: w.label, mark: markFor(w.status) },
   );
 
-  // ── Terrain Products Available (mirror the deliverable-class grading) ────
-  // Each take-away product keys off export readiness (the surface verdict gated
-  // by a known CRS + datum, which already folds in the contour gate), so the
-  // client sees exactly what they can take away and why it is held back.
-  const er = assessment.exportReadiness;
-  const erReason = assessment.exportReason;
-  const products: TerrainReportProduct[] = [
-    productFromReadiness('DEM (elevation rasters)', er, erReason),
-    productFromReadiness('Contours', er, erReason),
-    productFromReadiness('Map sheet (PDF)', er, erReason),
-  ];
+  // ── Terrain Products Available — the SAME view the panel renders ─────────
+  // {@link terrainProducts} is the Analyse panel's products list (a pure
+  // projection of the graded workflows). Reusing it verbatim — rather than
+  // re-deriving availability from export readiness here — means the PDF lists
+  // the same six products, with the same Ready/Preview/Blocked words and the
+  // SAME engine-selected reason text (productReasonFor: the figure-quoting
+  // surface line or the georef-gap export reason), as the on-screen card.
+  // 'Ready' renames to 'Available' (the report speaks in take-away
+  // vocabulary); Ready rows carry no reason in the view, so they carry no
+  // note here either — a ready product needs no excuse.
+  const products: TerrainReportProduct[] = terrainProducts(assessment, workflowItems).map(
+    (p) =>
+      p.statusWord === 'Ready' || p.reason == null
+        ? { label: p.label, availability: p.statusWord === 'Ready' ? ('Available' as const) : p.statusWord }
+        : { label: p.label, availability: p.statusWord, note: p.reason },
+  );
 
   // The workflow + products lists are ALSO surfaced as label/value sections so
   // the `sections` array is the single canonical print order. The typed
@@ -333,7 +376,8 @@ export function buildTerrainReportContent(
     title: provenance.source ?? 'Untitled scan',
     subtitle: 'Terrain Intelligence Report',
     sections: [
-      datasetSummary,
+      executiveSummary,
+      datasetStatistics,
       assessmentSection,
       coverageSection,
       qualitySection,

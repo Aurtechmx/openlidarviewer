@@ -43,8 +43,8 @@ import {
   type VerticalAxis,
 } from '../ground/groundFilter';
 import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
-import { buildDtmGrid, type DtmGrid } from '../ground/cellConfidence';
-import { removeSpikes } from '../ground/despike';
+import type { DtmGrid } from '../ground/cellConfidence';
+import { buildSurfaceFromRaster, LIVE_INTERPOLATION } from '../ground/surfaceFromRaster';
 import { computeCellMetrics, type CellMetricsSummary } from '../quality/cellMetrics';
 import { terrainQualityScore, type TerrainQualityScore } from '../quality/terrainQualityScore';
 import { demAccuracyStandards, type DemAccuracyStandards } from '../quality/demAccuracyStandards';
@@ -138,6 +138,17 @@ export interface TerrainCoreParams {
   readonly excludeClasses?: ReadonlyArray<number>;
   /** Hold-out PRNG seed for reproducible validation. Default 1. */
   readonly holdoutSeed?: number;
+  /**
+   * Scan-points per analysed point — `totalPoints / sampledPoints` from the
+   * gather that strided the cloud down to this input. Per-cell densities (and
+   * the USGS Quality Level graded from them) are multiplied by this so they
+   * describe the SCAN, not the subsample: a stride-50 gather otherwise reports
+   * a density 50× too low and an unfairly failing QL. Default 1 (input is the
+   * full cloud, or the stride is unknown — density then describes the analysed
+   * sample only). Coverage/confidence/RMSE are NOT scaled: they genuinely
+   * measure the analysed points.
+   */
+  readonly samplePointScale?: number;
   /**
    * Per-cell aggregation for the LIVE DTM. Default `'median'` (see
    * {@link LIVE_DTM_AGGREGATION}): the 50th percentile is outlier-resistant, so
@@ -423,54 +434,30 @@ export function computeTerrainCore(
     aggregation,
     verticalAxis,
   });
-  // 2b) DTM hardening — drop blunder cells (a lone ground return far from its
-  //     neighbours) so they don't warp the surface; the builder re-fills them
-  //     by interpolation. Real outliers only — smooth terrain loses nothing.
-  let workingRaster = raster;
-  const hadData0 = new Uint8Array(raster.counts.length);
-  let measuredCellCount = 0;
-  for (let i = 0; i < hadData0.length; i++) {
-    if (raster.counts[i] > 0) { hadData0[i] = 1; measuredCellCount++; }
-  }
-  // Conservative, blunder-only thresholds (6σ, ≥30 cm absolute) so legitimate
-  // small features in flat terrain are kept; only gross outliers are removed.
-  // The blunder-only despike pass is part of every generation run; the README
-  // derives its provenance from this fact, not a mirrored constant.
+  // 2b + 3) DTM hardening (blunder-only despike with the 2 % safety cap) +
+  // geodesic void fill + extrapolation-guarded confidence — all through the
+  // ONE shared raster→grid constructor, so the hold-out validation below
+  // provably builds the SAME kind of surface (it calls the same function).
+  // The despike pass is part of every generation run; the README derives its
+  // provenance from this fact, not a mirrored constant.
   const despikeApplied = true;
-  const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, {
-    madThreshold: 6,
-    minDeviationM: 0.3,
-  });
-  // Safety cap: if "outliers" exceed 2% of measured cells the data is noisy,
-  // not spiky — removing that much would distort the surface, so leave it.
-  const removalCap = Math.max(4, Math.ceil(measuredCellCount * 0.02));
-  if (despiked.removed > 0 && despiked.removed <= removalCap) {
-    const counts2 = raster.counts.slice();
-    let filled = 0;
-    for (let i = 0; i < counts2.length; i++) {
-      if (despiked.hadData[i] === 0) counts2[i] = 0;
-      if (counts2[i] > 0) filled++;
-    }
-    workingRaster = { ...raster, z: despiked.z, counts: counts2, filledCellCount: filled };
-    warnings.push(`Removed ${despiked.removed} outlier ground cell(s) before building the surface.`);
-  } else if (despiked.removed > removalCap) {
-    warnings.push(
-      `Outlier detection flagged ${despiked.removed} cells (> 2% of data) — left unchanged; the surface looks noisy rather than spiky.`,
-    );
-  }
-  // Single source of truth for the void-fill method: the README's provenance
-  // reads this back off the result, so it can't drift from what actually ran.
-  const interpolation: 'idw' | 'geodesic' = 'geodesic';
-  let dtm = buildDtmGrid(workingRaster, {
+  const built = buildSurfaceFromRaster(raster, {
     crs,
     verticalDatum,
     isGeographic: params.isGeographic,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
-    interpolation,
-    // Demote one-sided (extrapolated) fills toward dashed/gap so surface that
-    // is only supported from a single direction can't read as confident.
-    extrapolationGuard: { radiusCells: 8, penalty: 0.5 },
   });
+  if (built.despikedCellCount > 0) {
+    warnings.push(`Removed ${built.despikedCellCount} outlier ground cell(s) before building the surface.`);
+  } else if (built.cappedOutlierCount > 0) {
+    warnings.push(
+      `Outlier detection flagged ${built.cappedOutlierCount} cells (> 2% of data) — left unchanged; the surface looks noisy rather than spiky.`,
+    );
+  }
+  // Single source of truth for the void-fill method: the README's provenance
+  // reads this back off the result, so it can't drift from what actually ran.
+  const interpolation: 'idw' | 'geodesic' = LIVE_INTERPOLATION;
+  let dtm = built.dtm;
   warnings.push(...dtm.warnings);
 
   // Elevation range over covered cells (drives gating + styling).
@@ -555,6 +542,10 @@ export function computeTerrainCore(
       : 1;
   const cellMetrics = computeCellMetrics(dtm, {
     horizontalUnitToMetres: horizUnitToMetres,
+    // Stride honesty: scale per-cell counts back to the SCAN so the density —
+    // and the USGS QL graded from it below — describe the survey, not the
+    // analysed subsample (see TerrainCoreParams.samplePointScale).
+    countScale: params.samplePointScale,
   }).summary;
   // Express the validated accuracy in ASPRS/USGS 3DEP terms (NVA, VVA, QL) so
   // the surface can be judged against recognised accuracy standards.

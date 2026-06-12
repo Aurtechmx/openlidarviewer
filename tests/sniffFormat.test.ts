@@ -1,4 +1,4 @@
-import { sniffFormat } from '../src/io/sniffFormat';
+import { sniffFormat, verticalAxisHintForSources } from '../src/io/sniffFormat';
 
 /** Build an ArrayBuffer whose leading bytes are the given ASCII string. */
 function bufWithMagic(magic: string, totalLen = 64): ArrayBuffer {
@@ -123,5 +123,30 @@ describe('sniffFormat — unknown', () => {
 
   test('magic bytes win over a misleading extension', () => {
     expect(sniffFormat(bufWithMagic('ply'), 'mesh.obj')).toBe('ply');
+  });
+});
+
+describe('verticalAxisHintForSources — the loader z-up hint (v0.4.5)', () => {
+  // LAS is z-up by spec — detection has nothing to decide, hint it.
+  test('all-survey static sources hint z', () => {
+    expect(verticalAxisHintForSources(['las'], false)).toBe('z');
+    expect(verticalAxisHintForSources(['las', 'laz', 'e57', 'xyz'], false)).toBe('z');
+  });
+
+  test('streaming-only (COPC/EPT are LAS-family) hints z', () => {
+    expect(verticalAxisHintForSources([], true)).toBe('z');
+  });
+
+  test('any phone-scan mesh format leaves detection active', () => {
+    expect(verticalAxisHintForSources(['ply'], false)).toBeUndefined();
+    expect(verticalAxisHintForSources(['gltf'], false)).toBeUndefined();
+    // Mixed: one ambiguous-frame contributor poisons the hint — better to
+    // detect than to force a frame that is wrong for part of the buffer.
+    expect(verticalAxisHintForSources(['las', 'obj'], false)).toBeUndefined();
+    expect(verticalAxisHintForSources(['glb'], true)).toBeUndefined();
+  });
+
+  test('an empty gather never fabricates a hint', () => {
+    expect(verticalAxisHintForSources([], false)).toBeUndefined();
   });
 });

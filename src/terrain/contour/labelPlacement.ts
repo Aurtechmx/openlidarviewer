@@ -27,6 +27,23 @@ export interface ContourLabel {
   readonly value: number;
 }
 
+/**
+ * Decimal places an elevation label needs so adjacent contour levels stay
+ * DISTINGUISHABLE: the smallest d (0..3) for which `interval × 10^d` is a
+ * whole number. A 0.25 m interval needs 2 decimals (100.25 vs 100.50); a 0.5 m
+ * interval needs 1; metre-and-up intervals need none. Whole-metre rounding
+ * collapsed every sub-metre level onto identical labels (v0.4.4 defect).
+ * Invalid / non-finite intervals fall back to 0 (label whole units).
+ */
+export function decimalsForInterval(intervalM: number | null | undefined): number {
+  if (intervalM == null || !Number.isFinite(intervalM) || intervalM <= 0) return 0;
+  for (let d = 0; d <= 3; d++) {
+    const scaled = intervalM * 10 ** d;
+    if (Math.abs(scaled - Math.round(scaled)) < 1e-6) return d;
+  }
+  return 3;
+}
+
 /** Options for {@link placeLabels}. */
 export interface LabelParams {
   /** Target spacing between labels along a line, source linear units. Must be > 0. */

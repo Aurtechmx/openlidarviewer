@@ -66,6 +66,16 @@ export interface CalibrationFitParams {
   readonly minSamples?: number;
   /** Number of equal-width confidence bins over [0,100]. Default 10. */
   readonly bins?: number;
+  /**
+   * Minimum samples a BIN needs before it may contribute a curve knot.
+   * Default 5. The same honesty guard as `minSamples`, at bin granularity:
+   * a 2-sample bin's "reliability" is a coin flip, and because the remap is
+   * flat-extrapolated past the end knots, one noisy near-empty low bin used
+   * to drag EVERY low-raw-confidence cell on the live grid down with it
+   * (surfaced by v0.4.5's unified hold-out surface, whose extrapolation
+   * guard legitimately produces a few very-low-confidence samples).
+   */
+  readonly minBinCount?: number;
 }
 
 const identity: ConfidenceCalibration = {
@@ -104,10 +114,14 @@ export function fitConfidenceCalibration(
     if (s.absError <= tol) binHit[b] += 1;
   }
 
-  // Collect non-empty bins as (meanConf, reliability, count), ascending.
+  // Collect adequately-populated bins as (meanConf, reliability, count),
+  // ascending. Bins below the occupancy floor are EXCLUDED, not merged: a
+  // handful of samples cannot establish a reliability, and a noisy end bin
+  // would otherwise set the flat-extrapolated value for everything beyond it.
+  const minBinCount = Math.max(1, Math.floor(params.minBinCount ?? 5));
   const pts: Array<{ x: number; y: number; w: number }> = [];
   for (let b = 0; b < binCount; b++) {
-    if (binN[b] === 0) continue;
+    if (binN[b] < minBinCount) continue;
     pts.push({ x: binSum[b] / binN[b], y: binHit[b] / binN[b], w: binN[b] });
   }
   if (pts.length < 2) return { ...identity, toleranceM: tol, sampleSize: samples.length };

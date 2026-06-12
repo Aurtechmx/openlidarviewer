@@ -204,6 +204,54 @@ describe('spaceMetrics — storeys & units & objects', () => {
     expect(m.enclosedVolumeM3 as number).toBeGreaterThan(0);
   });
 
+  it('density describes the SCAN: a 4×4 m-grid plane with sourcePointCount 10× reads 10× denser', () => {
+    // Hand-computed: 16 points on a 4×4 grid over 3×3 m, all z = 0.
+    // Footprint grid: floor-band points = 16, bbox area = 9 → target cell
+    // 2·√(9/16) = 1.5 → cols = rows = max(4, round(3/1.5)) = 4, cell 0.75 m,
+    // all 16 cells occupied → floorArea = 16 · 0.5625 = 9 m². With
+    // sourcePointCount = 160 (a stride-10 gather) the scan density is
+    // 160 / 9 ≈ 17.78 pts/m² — NOT the sample's 16 / 9.
+    const t: Array<[number, number, number]> = [];
+    for (let x = 0; x <= 3; x++) for (let y = 0; y <= 3; y++) t.push([x, y, 0]);
+    const sampled = spaceMetrics(pts(t), {
+      upAxis: 'z', spaceKind: 'interior', sourcePointCount: 160,
+    });
+    expect(sampled.quality.sampledPointCount).toBe(16);
+    expect(sampled.quality.sourcePointCount).toBe(160);
+    expect(sampled.quality.densityPerM2).toBeCloseTo(160 / 9, 6);
+    expect(sampled.quality.meanSpacingM).toBeCloseTo(Math.sqrt(9 / 160), 6);
+    expect(sampled.reasons.some((r) => /scaled from a/.test(r))).toBe(true);
+
+    // Without a larger source count the figures describe the points given.
+    const full = spaceMetrics(pts(t), { upAxis: 'z', spaceKind: 'interior' });
+    expect(full.quality.densityPerM2).toBeCloseTo(16 / 9, 6);
+    expect(full.reasons.some((r) => /scaled from a/.test(r))).toBe(false);
+  });
+
+  it('magnitude: a strided room sample with sourcePointCount lands near the full-cloud density', () => {
+    // The full room is the truth; a stride-5 gather + the honest source count
+    // must report a density close to the full run (same scan, same area), and
+    // ~5× the dishonest unscaled figure.
+    const full = room();
+    const fullCount = full.length / 3;
+    const strided: number[] = [];
+    for (let i = 0; i < fullCount; i += 5) {
+      strided.push(full[i * 3], full[i * 3 + 1], full[i * 3 + 2]);
+    }
+    const truth = spaceMetrics(full, { upAxis: 'z', spaceKind: 'interior' });
+    const scaled = spaceMetrics(Float32Array.from(strided), {
+      upAxis: 'z', spaceKind: 'interior', sourcePointCount: fullCount,
+    });
+    const unscaled = spaceMetrics(Float32Array.from(strided), {
+      upAxis: 'z', spaceKind: 'interior',
+    });
+    // Within 25% of the truth (the sparser cloud re-sizes the footprint grid
+    // slightly), where the unscaled figure was ~5× off.
+    expect(scaled.quality.densityPerM2).toBeGreaterThan(truth.quality.densityPerM2 * 0.75);
+    expect(scaled.quality.densityPerM2).toBeLessThan(truth.quality.densityPerM2 * 1.25);
+    expect(scaled.quality.densityPerM2 / unscaled.quality.densityPerM2).toBeCloseTo(5, 1);
+  });
+
   it('too few points → graceful unknowns', () => {
     const m = spaceMetrics(pts([[0, 0, 0], [1, 1, 1], [2, 0, 1]]), { upAxis: 'z', spaceKind: 'interior' });
     expect(m.ceilingHeightM).toBeNull();

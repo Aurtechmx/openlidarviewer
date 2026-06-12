@@ -19,12 +19,18 @@
  *   gated by a known CRS + vertical datum, plus the contour gate): Ready ⇒ good;
  *   Preview ⇒ caution; Blocked ⇒ blocked.
  *
+ * v0.4.5 convergence: the grading + note table above no longer lives here —
+ * it is {@link productGradesFor} in the readiness engine, the SAME table
+ * {@link deriveReadiness} folds into its verdict. This module only assigns
+ * the two class grades to the six fixed rows.
+ *
  * Honesty contract: caution/blocked deliverable rows carry a short, plain note
- * (e.g. "preview only — not for final deliverables", "georeferencing
+ * (e.g. "preview only — additional validation recommended", "georeferencing
  * incomplete") that NEVER claims survey-grade. Deterministic and pure.
  */
 
-import type { TerrainAssessment, TerrainStatus, ExportReadinessStatus } from './terrainAssessment';
+import type { TerrainAssessment } from './terrainAssessment';
+import { productGradesFor } from '../quality/readinessEngine';
 import type { DtmQualityReport } from '../quality/dtmQualityGate';
 
 /** A single graded workflow row. */
@@ -37,53 +43,13 @@ export interface WorkflowItem {
   readonly note?: string;
 }
 
-/** Inspection-class rows grade off SURFACE QUALITY. */
-function gradeFromSurface(status: TerrainStatus): WorkflowItem['status'] {
-  switch (status) {
-    case 'Good':
-    case 'Preview':
-      return 'good';
-    case 'Limited':
-      return 'caution';
-    case 'Blocked':
-    default:
-      return 'blocked';
-  }
-}
-
-/** Deliverable-class rows grade off EXPORT READINESS. */
-function gradeFromExport(readiness: ExportReadinessStatus): WorkflowItem['status'] {
-  switch (readiness) {
-    case 'Ready':
-      return 'good';
-    case 'Preview':
-      return 'caution';
-    case 'Blocked':
-    default:
-      return 'blocked';
-  }
-}
-
-/**
- * The deliverable note. For caution we explain WHY the deliverable is held back
- * (georeferencing incomplete vs. preview-only surface) so the row is actionable
- * at a glance; for blocked we say the gate stopped it. Never survey-grade.
- */
-function deliverableNote(
-  grade: WorkflowItem['status'],
-  assessment: TerrainAssessment,
-): string | undefined {
-  if (grade === 'good') return undefined;
-  if (grade === 'blocked') return 'quality gate stopped this surface';
-  // caution: a known georef gap means the surface is fine but the hand-off frame
-  // is incomplete; otherwise the surface itself is only preview-grade.
-  const georefOnly =
-    assessment.status === 'Good' && assessment.exportReadiness === 'Preview';
-  return georefOnly ? 'georeferencing incomplete' : 'preview only — not for final deliverables';
-}
-
 /**
  * Project the assessment onto the fixed, ordered workflow checklist.
+ *
+ * Grades and deliverable notes come from the readiness engine's single
+ * grading table ({@link productGradesFor}), fed the two tiers the assessment
+ * already carries — so a row here can never grade apart from the engine's
+ * verdict (or from the Terrain Products view downstream).
  *
  * `gate` is accepted for parity with the assessment (the contour gate already
  * feeds export readiness upstream); it is not required to grade the rows, since
@@ -93,9 +59,10 @@ export function recommendedWorkflows(
   assessment: TerrainAssessment,
   _gate?: DtmQualityReport,
 ): WorkflowItem[] {
-  const surface = gradeFromSurface(assessment.status);
-  const exportGrade = gradeFromExport(assessment.exportReadiness);
-  const note = deliverableNote(exportGrade, assessment);
+  const grades = productGradesFor(assessment.status, assessment.exportReadiness);
+  const surface = grades.inspection.status;
+  const exportGrade = grades.deliverable.status;
+  const note = grades.deliverable.note;
 
   const item = (label: string, status: WorkflowItem['status'], n?: string): WorkflowItem =>
     n != null ? { label, status, note: n } : { label, status };

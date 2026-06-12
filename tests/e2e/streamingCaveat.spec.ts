@@ -15,8 +15,11 @@ import fs from 'node:fs';
  * runs end-to-end locally where the developer has it.
  */
 
+// Same fixture-resolution rule as streaming.spec.ts: env var first, then the
+// repo root — never a machine-specific absolute path.
 const COPC_FILE =
-  '/sessions/charming-vigilant-heisenberg/mnt/OPENLIDAR/autzen-classified.copc.laz';
+  process.env.OLV_AUTZEN_FIXTURE ??
+  new URL('../../autzen-classified.copc.laz', import.meta.url).pathname;
 
 const hasAutzenFixture = fs.existsSync(COPC_FILE);
 

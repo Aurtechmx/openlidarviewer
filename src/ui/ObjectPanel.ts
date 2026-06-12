@@ -23,7 +23,11 @@ import {
 } from '../terrain/spaceMetrics';
 import type { ScanShape, SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
-import { createScanTypeControl, type ScanTypeControl } from './scanTypeControl';
+import {
+  createScanTypeControl,
+  type ScanTypeControl,
+  type ScanTypeDisabledReasons,
+} from './scanTypeControl';
 
 export interface ObjectPanelCallbacks {
   /** Reveal + run the terrain pipeline despite the non-terrain verdict. */
@@ -80,10 +84,13 @@ export class ObjectPanel {
   private readonly _title: HTMLElement;
   private readonly _body: HTMLElement;
   private readonly _scanTypeControl: ScanTypeControl;
-  // Current override + effective route, re-applied on every render (the body is
-  // rebuilt each showSpace/showObject) so the control never loses its state.
+  // Current override + effective route + disabled-with-reason map, re-applied
+  // on every render (the body is rebuilt each showSpace/showObject) so the
+  // control never loses its state.
   private _scanTypeOverride: ScanTypeOverride = 'auto';
   private _scanTypeEffective: SpaceKind | null = null;
+  private _scanTypeDisabled: ScanTypeDisabledReasons | undefined;
+  private _scanTypeCommitted = false;
 
   constructor(cb: ObjectPanelCallbacks = {}) {
     this._cb = cb;
@@ -96,11 +103,23 @@ export class ObjectPanel {
     this.element = el('aside', { className: 'olv-object-panel olv-hidden' }, [head, this._body]);
   }
 
-  /** Reflect the host's override + the effective route in the "Treat as" control. */
-  setScanType(override: ScanTypeOverride, effective: SpaceKind | null): void {
+  /**
+   * Reflect the host's override + the effective route in the "Treat as"
+   * control. `disabled` greys out segments the detection has ruled out (e.g.
+   * Terrain on an interior/object scan) with their visible reasons — the
+   * "Run terrain contours anyway" escape hatch below stays functional.
+   */
+  setScanType(
+    override: ScanTypeOverride,
+    effective: SpaceKind | null,
+    disabled?: ScanTypeDisabledReasons,
+    detectionCommitted?: boolean,
+  ): void {
     this._scanTypeOverride = override;
     this._scanTypeEffective = effective;
-    this._scanTypeControl.set(override, effective);
+    this._scanTypeDisabled = disabled;
+    this._scanTypeCommitted = detectionCommitted === true;
+    this._scanTypeControl.set(override, effective, disabled, detectionCommitted);
   }
 
   setVisible(visible: boolean): void {
@@ -135,7 +154,8 @@ export class ObjectPanel {
 
   /**
    * The analysis-export row. A primary "Report PDF" button is ALWAYS offered;
-   * "Floor plan" is offered ONLY for interior scans (`withFloorPlan`). Mirrors
+   * "Floor plan preview" is offered ONLY for interior scans (`withFloorPlan`),
+   * with the standing experimental note underneath. Mirrors
    * the AnalysePanel DEM/map buttons — premium button styles, a lazy-loaded
    * builder behind a busy state, and a graceful error state on failure. The
    * point-cloud format converter is unaffected (it lives in the Export panel).
@@ -179,22 +199,35 @@ export class ObjectPanel {
     if (withFloorPlan) {
       const planBtn = el('button', {
         className: 'olv-object-dl',
-        text: 'Floor plan',
-        title: 'Download an approximate top-down footprint sketch (SVG) — not a measured floor plan.',
+        text: 'Floor plan preview',
+        title: 'Download an approximate top-down wall-trace sketch (SVG) — not a measured floor plan.',
       }) as HTMLButtonElement;
       planBtn.type = 'button';
-      planBtn.addEventListener('click', () => runAction(planBtn, 'Floor plan', this._cb.onExportFloorPlan));
+      planBtn.addEventListener('click', () => runAction(planBtn, 'Floor plan preview', this._cb.onExportFloorPlan));
       row.append(planBtn);
     }
 
     this._body.append(row);
+    if (withFloorPlan) {
+      // The standing experimental hint for the preview export, in the panel's
+      // note style (same vocabulary as the sheet and report carry).
+      this._body.append(el('div', {
+        className: 'olv-object-note',
+        text: 'Floor plan preview is experimental — requires visual validation.',
+      }));
+    }
   }
 
   /** The "Treat as" override row — placed near the run-anyway escape hatch so
    *  fixing a misdetection is one obvious click. Re-applies the current state
    *  because the body is rebuilt on every render. */
   private _scanTypeRow(): void {
-    this._scanTypeControl.set(this._scanTypeOverride, this._scanTypeEffective);
+    this._scanTypeControl.set(
+      this._scanTypeOverride,
+      this._scanTypeEffective,
+      this._scanTypeDisabled,
+      this._scanTypeCommitted,
+    );
     this._body.append(this._scanTypeControl.element);
   }
 
@@ -241,7 +274,7 @@ export class ObjectPanel {
     );
     this._quality(space.quality);
     this._caveats(space.reasons);
-    // Interior export row: Report PDF + the interior-only Floor plan sketch.
+    // Interior export row: Report PDF + the interior-only Floor plan preview.
     this._exportRow(true);
     const why = shape && shape.reasons.length ? shape.reasons[0].replace(/\.$/, '') : 'interior space';
     this._body.append(el('div', {

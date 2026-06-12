@@ -32,7 +32,7 @@ import { groupBySection, rankActions, type Action } from './actionRegistry';
 
 /**
  * Format a key string for display. Adds OS-appropriate symbols when
- * the action's `keys` field uses the canonical "Cmd-K" / "Cmd-Shift-R"
+ * the action's `keys` field uses the canonical "Cmd-K" / "Cmd-Shift-U"
  * shape. Other key chips render verbatim ("?", "Esc", "L", "T").
  */
 export function formatShortcutKeys(keys: string | undefined): string {

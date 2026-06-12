@@ -3,7 +3,8 @@
  *
  * Pure descriptor for the Inspector's colour-mode chip rail. Splitting the
  * "which chips, in what state" decision out of the DOM-building method makes the
- * load-bearing rule — the Coverage chip is always shown but DISABLED until a
+ * load-bearing rule — the analysis-gated chips (Coverage, and its
+ * colourblind-safe twin Confidence) are always shown but DISABLED until a
  * terrain-analysis confidence grid exists — unit-testable without constructing
  * the whole Inspector (which needs a real DOM).
  *
@@ -12,8 +13,14 @@
 
 import type { ColorMode } from '../render/colorModes';
 
-/** Tooltip shown on the Coverage chip while it is disabled (no analysis yet). */
+/** Tooltip shown on a gated chip while it is disabled (no analysis yet). */
 export const COVERAGE_DISABLED_TITLE = 'Run terrain analysis first';
+
+/**
+ * The analysis-gated trust-overlay modes, in rail order. Both sample the same
+ * DTM-confidence grid, so they share one availability gate.
+ */
+export const ANALYSIS_GATED_MODES: ReadonlyArray<ColorMode> = ['coverage', 'confidence'];
 
 /** One chip in the colour-mode rail. */
 export interface ColorChipDescriptor {
@@ -26,11 +33,12 @@ export interface ColorChipDescriptor {
 
 /**
  * Build the chip rail for `modes` (the per-cloud data-driven modes), with the
- * analysis-gated `'coverage'` chip ALWAYS appended last so the feature is
- * discoverable. Coverage is disabled (and never active) until `coverageAvailable`.
+ * analysis-gated `'coverage'` + `'confidence'` chips ALWAYS appended last so
+ * the features are discoverable. Both are disabled (and never active) until
+ * `coverageAvailable` — they read the same post-analysis grid.
  *
- * Any `'coverage'` entry already in `modes` is ignored — coverage is appended
- * here exactly once, regardless of input, so callers can pass the raw
+ * Any gated entry already in `modes` is ignored — each is appended here
+ * exactly once, regardless of input, so callers can pass the raw
  * `availableModes(cloud)` list safely.
  */
 export function buildColorChipModel(
@@ -40,16 +48,18 @@ export function buildColorChipModel(
 ): ColorChipDescriptor[] {
   const out: ColorChipDescriptor[] = [];
   for (const mode of modes) {
-    if (mode === 'coverage') continue; // appended once below
+    if (ANALYSIS_GATED_MODES.includes(mode)) continue; // appended once below
     out.push({ mode, active: mode === active, disabled: false });
   }
-  const coverageDisabled = !coverageAvailable;
-  out.push({
-    mode: 'coverage',
-    // A disabled chip is never highlighted as active, even if `active` is
-    // 'coverage' (e.g. a restored session that named coverage before analysis).
-    active: !coverageDisabled && active === 'coverage',
-    disabled: coverageDisabled,
-  });
+  const disabled = !coverageAvailable;
+  for (const mode of ANALYSIS_GATED_MODES) {
+    out.push({
+      mode,
+      // A disabled chip is never highlighted as active, even if `active` names
+      // it (e.g. a restored session that named coverage before analysis).
+      active: !disabled && active === mode,
+      disabled,
+    });
+  }
   return out;
 }

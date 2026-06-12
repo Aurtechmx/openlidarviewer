@@ -41,6 +41,7 @@ function deriveCoreParams(
   positions: Float32Array,
   classification: Uint8Array | undefined,
   crsService: CrsService,
+  totalPoints?: number,
 ): TerrainCoreParams {
   const n = positions.length / 3;
   let minX = Infinity;
@@ -60,6 +61,15 @@ function deriveCoreParams(
   const cellSizeM = Math.max(0.25, extent / 256);
   const cur = crsService.current();
   const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
+  // Stride honesty: the gather caps huge clouds (≤ 300 k points), so per-cell
+  // densities — and the USGS QL graded from them — must be scaled back up by
+  // scan-points-per-analysed-point or a stride-50 gather reads 50× too sparse.
+  // ≥ 1 always (an un-strided gather scales by exactly 1); guarded against a
+  // zero/absent count so a degenerate gather can never produce 0/NaN/Infinity.
+  const samplePointScale =
+    totalPoints != null && Number.isFinite(totalPoints) && n > 0
+      ? Math.max(1, totalPoints / n)
+      : 1;
   return {
     cellSizeM,
     crs: crsName,
@@ -68,6 +78,7 @@ function deriveCoreParams(
     horizontalUnitToMetres: cur?.linearUnitToMetres ?? 1,
     verticalDatum: cur?.verticalDatum ?? null,
     classification,
+    samplePointScale,
   };
 }
 
@@ -203,7 +214,12 @@ export function createTerrainAnalysisRunner(
       // hits the cache instead of recomputing the heavy half. Feeds the active
       // scan's resolved CRS + vertical datum into the analysis so the readiness
       // gate and export honesty reflect a georeferenced file.
-      const coreParams = deriveCoreParams(pos, gathered.classification, crsService);
+      const coreParams = deriveCoreParams(
+        pos,
+        gathered.classification,
+        crsService,
+        gathered.totalPoints,
+      );
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
       // the worker can't load). The AbortSignal cancels a superseded run.
@@ -261,7 +277,12 @@ export function createTerrainAnalysisRunner(
     // this is a side-effect-free build for an export only.
     const { getOrComputeCoreAsync, contoursFromCore } = await loadTerrainCoreCache();
     const { computeTerrainCoreAsync } = await loadComputeTerrainCoreAsync();
-    const coreParams = deriveCoreParams(gathered.positions, gathered.classification, crsService);
+    const coreParams = deriveCoreParams(
+      gathered.positions,
+      gathered.classification,
+      crsService,
+      gathered.totalPoints,
+    );
     const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
       computeTerrainCoreAsync(
         input as Float32Array,

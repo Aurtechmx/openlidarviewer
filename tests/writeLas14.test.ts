@@ -67,6 +67,15 @@ describe('writeLas14 header', () => {
     // No WKT given → global-encoding WKT bit (bit 4) stays clear.
     expect(view.getUint16(6, true) & 0x10).toBe(0);
 
+    // Returns above the extended 15-slot range clamp to the TOP slot, exactly
+    // like the record field's Math.min(15, …) clamp — never into slot 1.
+    // Hand-computed for [1, 16, 20]: slot 1 → 1, slot 15 → 2.
+    const high = writeLas14(sampleGlobal({ returnNumber: Uint8Array.from([1, 16, 20]) }));
+    const hv = new DataView(high.buffer, high.byteOffset, high.byteLength);
+    expect(hv.getBigUint64(255, true)).toBe(1n); // return 1
+    for (let r = 1; r < 14; r++) expect(hv.getBigUint64(255 + r * 8, true)).toBe(0n);
+    expect(hv.getBigUint64(255 + 14 * 8, true)).toBe(2n); // returns 16+20 → slot 15
+
     // The app's own header parser agrees.
     const header = parseLasHeader(las.buffer as ArrayBuffer);
     expect(header.versionMinor).toBe(4);

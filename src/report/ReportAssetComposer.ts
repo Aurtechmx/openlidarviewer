@@ -51,6 +51,14 @@ export interface ComposeReportInputs {
   readonly measurements: readonly Measurement[];
   readonly unitSystem: UnitSystem;
   /**
+   * Render-units → metres factor for the measurement values (the scan CRS's
+   * `linearUnitToMetres`, the same seam the live MeasureController applies).
+   * Measurement records carry RENDER-unit coordinates, so a foot-based scan
+   * needs this for the PDF to agree with the on-screen readouts. Default 1
+   * (metre / local scans, and every pre-existing caller, are unaffected).
+   */
+  readonly unitToMetres?: number;
+  /**
    * Optional caller-supplied acceptance rows for the `scan-acceptance`
    * template. When omitted, the composer derives a small set of
    * metadata-only rows from the loaded scan (point count, CRS,
@@ -107,7 +115,11 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     annotations: buildAnnotationRows(input.annotations, {
       sortBy: input.annotationSort ?? (templateId === 'qa-validation' ? 'type' : 'createdAt'),
     }),
-    measurements: buildMeasurementRows(input.measurements, input.unitSystem),
+    measurements: buildMeasurementRows(
+      input.measurements,
+      input.unitSystem,
+      input.unitToMetres ?? 1,
+    ),
     technicalNotes: input.technicalNotes,
     acceptanceChecks,
     provenance: input.provenance,

@@ -5,7 +5,8 @@ import { dropTinyPly } from './helpers';
  * Visuals Studio — mobile viewport contract.
  *
  * The Inspector bottom-sheet is the primary entry point for visual
- * controls on phones. The Visuals Studio section adds three chip rails,
+ * controls on phones. The Visuals Studio section adds four chip rails
+ * (Workflow, RGB, Depth, Background — Workflow joined in v0.4.5),
  * an Advanced disclosure and two slider rows; the mobile CSS layer
  * (see @media (max-width: 767px) in src/style.css) bumps each of those
  * surfaces to a 44 pt thumb-friendly target. This spec pins the touch

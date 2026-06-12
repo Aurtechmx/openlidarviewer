@@ -24,14 +24,25 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
-import type { ProfileChartSample } from './types';
+import type { ProfileChartSample, UnitSystem } from './types';
 import {
   computeCivilProfileStats,
-  formatStationing,
   formatGradePercent,
   formatGradeRatio,
   formatGradeDegrees,
 } from './civilProfileStats';
+// Profile Intelligence (v0.4.5) — gain/loss, steepest station range, and the
+// located extremes come from the same pure module the panel renders, so the
+// sheet and the on-screen summary can never disagree. `formatStation` is the
+// unit-aware civil stationing (metric km+m / imperial 100-ft stations) the
+// panel's station table already prints.
+import { computeProfileSummary, formatStation } from './profileSummary';
+// Unit-aware length formatting — the SAME formatter every panel readout uses,
+// so the sheet and the screen can never disagree on a number's unit.
+import { formatLength } from './format';
+
+/** Same constant the format/summary modules keep module-local. */
+const FEET_PER_METRE = 3.280839895013123;
 
 export interface ProfilePdfInput {
   /** Measurement name, shown as the sheet subtitle. */
@@ -50,6 +61,12 @@ export interface ProfilePdfInput {
   readonly residentOnly?: boolean;
   /** Generation timestamp (defaults to now). */
   readonly generatedAt?: Date;
+  /**
+   * Active unit system (v0.4.5, B9): imperial sheets print feet on the
+   * elevation axis + summary + station table and US 100-ft stationing on
+   * the chainage axis. Defaults to metric (the pre-v0.4.5 sheet).
+   */
+  readonly unitSystem?: UnitSystem;
 }
 
 const PAGE_W = 792; // US Letter landscape
@@ -125,6 +142,12 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
 
   const stats = computeCivilProfileStats(input.samples);
   const when = input.generatedAt ?? new Date();
+  // Unit system (B9): every printed number converts ONCE through `k`; the
+  // underlying samples/stats stay metres so the geometry math is untouched.
+  const system: UnitSystem = input.unitSystem ?? 'metric';
+  const k = system === 'metric' ? 1 : FEET_PER_METRE;
+  const unit = system === 'metric' ? 'm' : 'ft';
+  const lenStr = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
 
   // ── Page 1: chart + summary ────────────────────────────────────────────
   const page = doc.addPage([PAGE_W, PAGE_H]);
@@ -153,6 +176,36 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     font,
     INK_DIM,
   );
+  // Provenance header line (v0.4.5, B4) — the CRS, corridor width and
+  // ground percentile the section was actually computed with, right-aligned
+  // under the timestamp so a printed sheet is self-describing at a glance
+  // (the summary block repeats them in full lower down). Omitted entirely
+  // when the caller knows none of them — no row of dashes.
+  {
+    const meta = [
+      input.crs ? `CRS ${input.crs}` : null,
+      input.corridorWidthM != null
+        ? `corridor +/-${lenStr(input.corridorWidthM)}`
+        : null,
+      input.groundPercentile != null
+        ? `ground p${Math.round(input.groundPercentile)}`
+        : null,
+    ].filter((s): s is string => s !== null);
+    if (meta.length > 0) {
+      // Measure the WinAnsi-safe text — the raw string may hold glyphs the
+      // standard font cannot even measure without throwing.
+      const line = winAnsiSafe(meta.join('  ·  '));
+      text(
+        page,
+        line,
+        PAGE_W - M - font.widthOfTextAtSize(line, 8),
+        PAGE_H - M - 16,
+        8,
+        font,
+        INK_DIM,
+      );
+    }
+  }
 
   // Plot box (pdf coords, y up). Top edge below the header.
   const plotLeft = M + 52;
@@ -167,29 +220,55 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const maxEl = stats.maxElevation;
   const span = stats.reliefSpan;
 
-  if (len > 0 && minEl != null && maxEl != null && span != null && span >= 0) {
+  // The finite checks are a v0.4.5 crash guard: a corrupt sample (Infinity /
+  // NaN chainage or elevation) would otherwise pass `len > 0`, and the grid
+  // walks below — float accumulators — would loop forever building a PDF
+  // that never finishes. Corrupt geometry takes the honest "nothing to plot"
+  // branch instead.
+  if (
+    Number.isFinite(len) && len > 0 &&
+    minEl != null && maxEl != null && span != null &&
+    Number.isFinite(span) && span >= 0
+  ) {
     const elSpan = span < 1e-6 ? 1 : span; // avoid /0 on a flat line
     const mapX = (c: number) => plotLeft + (c / len) * plotW;
     const mapYdown = (e: number) => (1 - (e - minEl) / elSpan) * plotH; // local y-down
 
-    // Grid — vertical (chainage) and horizontal (elevation).
-    const hInt = niceInterval(len);
-    for (let c = 0, k = 0; c <= len + 1e-9; c += hInt, k++) {
-      const x = mapX(c);
+    // Grid — vertical (chainage) and horizontal (elevation). Tick VALUES are
+    // chosen in the DISPLAY unit (B9): an imperial sheet needs gridlines on
+    // nice 10/25/50 ft steps, not on metre steps relabelled in feet — the
+    // display values convert back through `/k` only for positioning.
+    // Both walks are iteration-capped — `niceInterval` keeps ≤ ~12 lines, so
+    // 64 is far beyond legitimate counts and bounds the loop on any input.
+    const hInt = niceInterval(len * k);
+    for (let cD = 0, n = 0; cD <= len * k + 1e-9 && n < 64; cD += hInt, n++) {
+      const x = mapX(cD / k);
       page.drawLine({ start: { x, y: plotTopY }, end: { x, y: plotBotY }, thickness: 0.5, color: GRID });
-      text(page, formatStationing(c), x - 14, plotBotY - 12, 7, mono, INK_DIM);
+      text(page, formatStation(cD / k, system), x - 14, plotBotY - 12, 7, mono, INK_DIM);
     }
-    const vInt = niceInterval(elSpan);
-    for (let e = Math.ceil(minEl / vInt) * vInt; e <= maxEl + 1e-9; e += vInt) {
-      const y = plotTopY - mapYdown(e);
+    const vInt = niceInterval(elSpan * k);
+    for (
+      let eD = Math.ceil((minEl * k) / vInt) * vInt, n = 0;
+      eD <= maxEl * k + 1e-9 && n < 64;
+      eD += vInt, n++
+    ) {
+      const y = plotTopY - mapYdown(eD / k);
       page.drawLine({ start: { x: plotLeft, y }, end: { x: plotRight, y }, thickness: 0.5, color: GRID_MINOR });
-      text(page, `${e.toFixed(1)}`, M, y - 3, 7, mono, INK_DIM);
+      text(page, `${eD.toFixed(1)}`, M, y - 3, 7, mono, INK_DIM);
     }
     // Axis frame.
     page.drawLine({ start: { x: plotLeft, y: plotTopY }, end: { x: plotLeft, y: plotBotY }, thickness: 1, color: INK_DIM });
     page.drawLine({ start: { x: plotLeft, y: plotBotY }, end: { x: plotRight, y: plotBotY }, thickness: 1, color: INK_DIM });
-    text(page, 'Elevation (m)', M, plotTopY + 6, 8, bold, INK_DIM);
-    text(page, 'Chainage (station km+m)', plotRight - 130, plotBotY - 26, 8, bold, INK_DIM);
+    text(page, `Elevation (${unit})`, M, plotTopY + 6, 8, bold, INK_DIM);
+    text(
+      page,
+      system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)',
+      plotRight - 130,
+      plotBotY - 26,
+      8,
+      bold,
+      INK_DIM,
+    );
 
     // Curve runs (break on gaps), drawn through every sample.
     let run: Array<{ x: number; y: number }> = [];
@@ -225,13 +304,21 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     text(page, 'No covered samples — nothing to plot.', plotLeft, plotTopY - 20, 11, font, INK_DIM);
   }
 
-  // Summary block (two columns of label:value).
+  // Summary block (two columns of label:value). The Profile Intelligence
+  // rows (gain/loss, steepest station range, located extremes — v0.4.5) come
+  // from the shared pure module so they match the panel's summary exactly.
+  const intel = computeProfileSummary(input.samples);
   const sumTop = plotBotY - 48;
-  const fmtEl = (v: number | null) => (v == null ? '—' : `${v.toFixed(2)} m`);
   const rows: Array<[string, string]> = [
-    ['Length (horizontal)', `${len.toFixed(2)} m`],
-    ['Relief (height change)', stats.reliefSpan == null ? '-' : `${stats.reliefSpan.toFixed(2)} m`],
-    ['Min / Max elevation', `${fmtEl(stats.minElevation)}  /  ${fmtEl(stats.maxElevation)}`],
+    ['Length (horizontal)', lenStr(len)],
+    ['Relief (height change)', stats.reliefSpan == null ? '-' : lenStr(stats.reliefSpan)],
+    ['Min / Max elevation', `${lenStr(stats.minElevation)}  /  ${lenStr(stats.maxElevation)}`],
+    [
+      'Elevation gain / loss',
+      intel.gainM == null || intel.lossM == null
+        ? '—'
+        : `+${lenStr(intel.gainM)}  /  -${lenStr(intel.lossM)}`,
+    ],
     [
       'Mean grade',
       `${formatGradePercent(stats.meanGrade)}  (${formatGradeRatio(stats.meanGrade)}, ${formatGradeDegrees(stats.meanGrade)})`,
@@ -240,10 +327,25 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       'Max grade',
       `${formatGradePercent(stats.maxGrade)}  (${formatGradeRatio(stats.maxGrade)}, ${formatGradeDegrees(stats.maxGrade)})`,
     ],
+    [
+      'Steepest section',
+      intel.steepest == null
+        ? '—'
+        : `${formatStation(intel.steepest.fromChainage, system)} -> ` +
+          `${formatStation(intel.steepest.toChainage, system)}  ` +
+          `(${formatGradePercent(intel.steepest.grade)})`,
+    ],
+    [
+      'Highest / Lowest point',
+      intel.highest == null || intel.lowest == null
+        ? '—'
+        : `${lenStr(intel.highest.elevation)} @ ${formatStation(intel.highest.chainage, system)}  /  ` +
+          `${lenStr(intel.lowest.elevation)} @ ${formatStation(intel.lowest.chainage, system)}`,
+    ],
     ['Samples · coverage', `${stats.sampleCount}  ·  ${(stats.coverage * 100).toFixed(0)}%`],
     [
       'Corridor half-width',
-      input.corridorWidthM != null ? `${input.corridorWidthM.toFixed(2)} m` : 'auto (5% of length)',
+      input.corridorWidthM != null ? lenStr(input.corridorWidthM) : 'auto (5% of length)',
     ],
     [
       'Estimator',
@@ -269,7 +371,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   text(page, prov, M, M - 10, 8, font, INK_DIM);
 
   // ── Page 2+: station table ─────────────────────────────────────────────
-  renderStationTable(doc, font, bold, mono, stats.stations, input.name);
+  renderStationTable(doc, font, bold, mono, stats.stations, input.name, system);
 
   return doc.save();
 }
@@ -282,7 +384,11 @@ function renderStationTable(
   mono: PDFFont,
   stations: ReturnType<typeof computeCivilProfileStats>['stations'],
   name: string,
+  system: UnitSystem,
 ): void {
+  // B9: the table prints in the display unit; geometry stays metres.
+  const k = system === 'metric' ? 1 : FEET_PER_METRE;
+  const unit = system === 'metric' ? 'm' : 'ft';
   const colCount = 4;
   const colGap = 14;
   const usableW = PAGE_W - 2 * M;
@@ -293,7 +399,7 @@ function renderStationTable(
   const rowsPerCol = Math.floor((topY - bottomY) / rowH) - 1; // minus header
 
   const fmtGrade = (g: number | null) => (g == null ? '—' : `${(g * 100).toFixed(2)}%`);
-  const fmtEl = (e: number | null) => (e == null ? 'gap' : e.toFixed(2));
+  const fmtEl = (e: number | null) => (e == null ? 'gap' : (e * k).toFixed(2));
 
   let idx = 0;
   while (idx < stations.length) {
@@ -301,7 +407,7 @@ function renderStationTable(
     const put = (s: string, x: number, y: number, size: number, f: PDFFont, color = INK) =>
       page.drawText(winAnsiSafe(s), { x, y, size, font: f, color });
     put('Station table', M, PAGE_H - M - 4, 14, bold);
-    put(`${name} - STA, elevation (m), grade to next`, M, PAGE_H - M - 20, 9, font, INK_DIM);
+    put(`${name} - STA, elevation (${unit}), grade to next`, M, PAGE_H - M - 20, 9, font, INK_DIM);
 
     for (let col = 0; col < colCount && idx < stations.length; col++) {
       const x = M + col * (colW + colGap);
@@ -317,7 +423,7 @@ function renderStationTable(
       for (let r = 0; r < rowsPerCol && idx < stations.length; r++, idx++) {
         const st = stations[idx];
         const y = topY - 12 - r * rowH;
-        put(formatStationing(st.chainage), x, y, 7.5, mono, INK);
+        put(formatStation(st.chainage, system), x, y, 7.5, mono, INK);
         put(fmtEl(st.elevation), x + 78, y, 7.5, mono, INK);
         put(fmtGrade(st.gradeToNext), x + 122, y, 7.5, mono, INK_DIM);
       }

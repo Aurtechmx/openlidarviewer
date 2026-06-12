@@ -294,3 +294,55 @@ describe('KIND_DIMENSIONS — registry', () => {
     }
   });
 });
+
+describe('aggregate through the CRS unit factor (v0.4.5, B2)', () => {
+  // Foot-CRS fixture: render units are feet, f = 0.3048 m per unit.
+  const F = 0.3048;
+
+  it('lengths scale ×f: a 10-unit span sums to 3.048 m', () => {
+    const r = aggregate([distanceM([0, 0, 0], [10, 0, 0])], 'sum', 'length', [0, 0, 1], F);
+    expect(r.value).toBeCloseTo(3.048, 12);
+    expect(r.unit).toBe('m');
+  });
+
+  it('areas scale ×f²: a 10-unit square sums to 9.290304 m²', () => {
+    // 100 unit² × 0.3048² = 9.290304 m².
+    const r = aggregate([areaSquare(10)], 'sum', 'area', [0, 0, 1], F);
+    expect(r.value).toBeCloseTo(9.290304, 12);
+  });
+
+  it('volumes scale ×f³: a 2×3×4 box fills 0.679604318208 m³', () => {
+    // 24 unit³ × 0.3048³ = 24 × 0.028316846592 = 0.679604318208 m³.
+    const box: Measurement = {
+      id: 'b1',
+      kind: 'box',
+      name: 'b',
+      points: [
+        [0, 0, 0],
+        [2, 3, 4],
+      ],
+    };
+    const r = aggregate([box], 'sum', 'volume-fill', [0, 0, 1], F);
+    expect(r.value).toBeCloseTo(0.679604318208, 12);
+  });
+
+  it('dimensionless dimensions ignore the factor entirely', () => {
+    const angle: Measurement = {
+      id: 'a1',
+      kind: 'angle',
+      name: 'a',
+      points: [
+        [1, 0, 0],
+        [0, 0, 0],
+        [0, 1, 0],
+      ],
+    };
+    const r = aggregate([angle], 'max', 'angle', [0, 0, 1], F);
+    expect(r.value).toBeCloseTo(90, 9);
+  });
+
+  it('the factor defaults to 1 — pre-B2 call sites are unchanged', () => {
+    const r = aggregate([distanceM([0, 0, 0], [10, 0, 0])], 'sum', 'length');
+    expect(r.value).toBeCloseTo(10, 12);
+  });
+});

@@ -77,6 +77,14 @@ export interface ProfileSample {
   distance: number;
   /** Elevation at this distance (along `up`). NaN if no points were near. */
   height: number;
+  /**
+   * How many corridor points fed this bin's percentile estimate (0 for a
+   * gap). Carried into the profile CSV so a reviewer can see the evidence
+   * density behind each station, not just the reduced elevation. Optional in
+   * the type (pre-v0.4.5 series and hand-built test fixtures omit it) but
+   * `sampleProfile` always emits it.
+   */
+  count?: number;
 }
 
 /** Inputs to `sampleProfile`. */
@@ -118,7 +126,160 @@ export interface SampleProfileInput {
 
 const MIN_SAMPLES = 2;
 const MAX_SAMPLES = 512;
-const DEFAULT_GROUND_PERCENTILE = 25;
+/**
+ * Default bare-earth percentile. Exported (v0.4.5) so the Viewer can pass the
+ * value it actually sampled with into the measurement record for PDF/CSV
+ * provenance, instead of the provenance layer hard-coding a second "25".
+ */
+export const DEFAULT_GROUND_PERCENTILE = 25;
+
+// ── User-settable sampler bounds (v0.4.5, B7/B8) ────────────────────────────
+// One source of truth shared by the MeasurePanel controls (input min/max),
+// the MeasureController's clamp, and the tests — the rule can never fork.
+
+/** Default bin count along the line — the pre-v0.4.5 fixed resolution. */
+export const DEFAULT_PROFILE_SAMPLE_COUNT = 64;
+/**
+ * Sample-count choices the panel offers. The ceiling matches the sampler's
+ * own MAX_SAMPLES clamp; the floor (32) keeps a chart readable — below that
+ * the Catmull-Rom rendering over-smooths real relief.
+ */
+export const PROFILE_SAMPLE_COUNT_OPTIONS = [32, 64, 128, 256, 512] as const;
+/**
+ * Corridor half-width the user may set, in METRES. The floor stops a corridor
+ * thinner than typical point spacing (every bin would be an honest-but-useless
+ * gap); the ceiling stops a swath so wide the "profile" averages the whole
+ * site. Values outside clamp, they never error.
+ */
+export const MIN_CORRIDOR_HALF_WIDTH_M = 0.05;
+export const MAX_CORRIDOR_HALF_WIDTH_M = 500;
+
+/**
+ * Normalise a panel resample request into sampler inputs (pure, B7/B8):
+ * clamp the metre corridor to the bounds above THEN convert to render units
+ * (÷ `unitToMetres` — the exact inverse of the B2 summary scaling, so what
+ * the user typed is what the sampler walks on a foot-CRS scan), clamp the
+ * percentile to 0..100, round the sample count (sampleProfile applies its
+ * own 2..512 clamp). Null / non-finite fields stay null = "use the default".
+ */
+export function normaliseResampleParams(
+  params: {
+    corridorWidthM?: number | null;
+    groundPercentile?: number | null;
+    sampleCount?: number | null;
+  },
+  unitToMetres: number,
+): {
+  corridorWidth: number | null;
+  groundPercentile: number | null;
+  sampleCount: number | null;
+} {
+  const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
+  const corridorWidth =
+    params.corridorWidthM != null && Number.isFinite(params.corridorWidthM)
+      ? Math.min(
+          MAX_CORRIDOR_HALF_WIDTH_M,
+          Math.max(MIN_CORRIDOR_HALF_WIDTH_M, params.corridorWidthM),
+        ) / f
+      : null;
+  const groundPercentile =
+    params.groundPercentile != null && Number.isFinite(params.groundPercentile)
+      ? Math.min(100, Math.max(0, params.groundPercentile))
+      : null;
+  const sampleCount =
+    params.sampleCount != null && Number.isFinite(params.sampleCount)
+      ? Math.round(params.sampleCount)
+      : null;
+  return { corridorWidth, groundPercentile, sampleCount };
+}
+
+// ── Sampler-preference persistence seam (v0.4.5, B7/B8) ─────────────────────
+// The controller persists the last-applied sampler parameters through the
+// guarded safeStorage wrapper so the user's choices survive a reload and
+// shape the NEXT profile they draw, not just the row they tweaked. The
+// JSON round-trip lives here as pure functions — the storage call sites
+// stay one-liners and the validation rules are hand-testable in Node.
+
+/** localStorage key for the persisted sampler preferences. */
+export const PROFILE_SAMPLER_DEFAULTS_KEY = 'olv:measure:profile:samplerDefaults:v1';
+
+/** The persisted shape — metre-space, matching the panel's request shape. */
+export interface PersistedSamplerParams {
+  readonly corridorWidthM: number | null;
+  readonly groundPercentile: number | null;
+  readonly sampleCount: number | null;
+}
+
+/**
+ * Serialise sampler preferences for storage. Non-finite / absent fields
+ * normalise to null, so a Reset (all nulls) persists as an explicit
+ * "back to the defaults" record rather than leaving a stale preference.
+ */
+export function encodeSamplerParams(params: {
+  corridorWidthM?: number | null;
+  groundPercentile?: number | null;
+  sampleCount?: number | null;
+}): string {
+  const num = (v: number | null | undefined): number | null =>
+    v != null && Number.isFinite(v) ? v : null;
+  return JSON.stringify({
+    corridorWidthM: num(params.corridorWidthM),
+    groundPercentile: num(params.groundPercentile),
+    sampleCount: num(params.sampleCount),
+  });
+}
+
+/**
+ * Parse a persisted preference record. Returns null — "no stored
+ * preference, use the standing defaults" — for absent storage, malformed
+ * JSON, non-object payloads, and the all-null record a Reset writes.
+ * Field values are validated for finiteness only; range clamping is
+ * `normaliseResampleParams`'s job at the point of use, so a hand-edited
+ * out-of-range value degrades to a clamp, never an error.
+ */
+export function decodeSamplerParams(raw: string | null): PersistedSamplerParams | null {
+  if (raw == null) return null;
+  try {
+    const obj: unknown = JSON.parse(raw);
+    if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
+    const rec = obj as Record<string, unknown>;
+    const num = (v: unknown): number | null =>
+      typeof v === 'number' && Number.isFinite(v) ? v : null;
+    const out: PersistedSamplerParams = {
+      corridorWidthM: num(rec.corridorWidthM),
+      groundPercentile: num(rec.groundPercentile),
+      sampleCount: num(rec.sampleCount),
+    };
+    const allNull =
+      out.corridorWidthM === null && out.groundPercentile === null && out.sampleCount === null;
+    return allNull ? null : out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The corridor auto-rule: half-width = 5 % of the horizontal line length.
+ * One constant, two consumers — `sampleProfile`'s `bandWidth: null` fallback
+ * and `autoCorridorWidth` below — so the rule can never fork.
+ */
+export const AUTO_CORRIDOR_FRACTION = 0.05;
+
+/**
+ * The corridor half-width `sampleProfile` would choose for `bandWidth: null`:
+ * 5 % of the horizontal (perpendicular-to-`up`) length of a → b. Exported so
+ * the caller can compute the value FIRST, pass it explicitly, and stamp the
+ * same number into the measurement's provenance (profile PDF header, B4) —
+ * the alternative is every consumer printing "auto" and the analyst never
+ * learning what width actually shaped the estimate.
+ */
+export function autoCorridorWidth(a: Vec3, b: Vec3, up: Vec3): number {
+  const u = normalize(up);
+  const ab = sub(b, a);
+  const v = dot(ab, u);
+  const h: Vec3 = [ab[0] - u[0] * v, ab[1] - u[1] * v, ab[2] - u[2] * v];
+  return length(h) * AUTO_CORRIDOR_FRACTION;
+}
 
 /**
  * Type-7 quantile (linear interpolation between order statistics) over a
@@ -166,9 +327,11 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   // Degenerate line (a == b in plan) — return two samples at a's elevation.
   if (horizontalLen < 1e-9) {
     const aH = dot(input.a, u);
+    // Degenerate line: the heights are the endpoint's own elevation, not a
+    // corridor statistic — count 0 keeps the evidence column honest.
     return [
-      { distance: 0, height: aH },
-      { distance: 0, height: aH },
+      { distance: 0, height: aH, count: 0 },
+      { distance: 0, height: aH, count: 0 },
     ];
   }
 
@@ -180,7 +343,10 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   const binElevations: number[][] = new Array(samples);
   for (let i = 0; i < samples; i++) binElevations[i] = [];
 
-  const band = input.bandWidth == null ? horizontalLen * 0.05 : Math.max(0, input.bandWidth);
+  const band =
+    input.bandWidth == null
+      ? horizontalLen * AUTO_CORRIDOR_FRACTION
+      : Math.max(0, input.bandWidth);
   const bandSq = band * band;
   const percentile =
     input.groundPercentile == null ? DEFAULT_GROUND_PERCENTILE : input.groundPercentile;
@@ -241,7 +407,7 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
       const sorted = Float64Array.from(els).sort();
       height = percentileSorted(sorted, sorted.length, percentile);
     }
-    out[i] = { distance: i * binStep, height };
+    out[i] = { distance: i * binStep, height, count: els.length };
   }
   return out;
 }

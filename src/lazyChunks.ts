@@ -162,19 +162,28 @@ export const loadSpaceReportPdf = () => import('./render/measure/spaceReportPdf'
 export const loadTerrainReportPdf = () => import('./render/measure/terrainReportPdf');
 
 /**
- * Load the interior floor-plan compute + SVG renderer. Both are PURE (no pdf-lib,
- * no DOM), so they could ship in the shell, but they are routed here behind the
- * lazy boundary alongside the report PDF so a non-export session downloads
- * neither — and, critically, so `main.ts` reaches them through a plain static
- * import of this helper (the live source-transform must never see the import
- * literal). v0.4.3.
+ * Load the Studio PNG world-file packager (`.pgw` + `.prj` + store-only ZIP).
+ * Pure and small, but only reached when a GEOREFERENCED ortho export completes
+ * — routed here so the ZIP writer stays out of the shell bundle and the live
+ * source-transform never sees the import literal. v0.4.5 (workplan C4).
+ */
+export const loadPngWorldFile = () => import('./render/export/pngWorldFile');
+
+/**
+ * Load the interior floor-plan pipeline + SVG renderer. Both are PURE (no
+ * pdf-lib, no DOM), so they could ship in the shell, but they are routed here
+ * behind the lazy boundary alongside the report PDF so a non-export session
+ * downloads neither — and, critically, so `main.ts` reaches them through a
+ * plain static import of this helper (the live source-transform must never see
+ * the import literal). v0.4.5: the old density-silhouette sketch is replaced
+ * by the real wall-extraction pipeline (`terrain/space/floorplan/`).
  */
 export const loadFloorPlan = () =>
   Promise.all([
-    import('./terrain/space/floorPlan'),
-    import('./terrain/space/floorPlanSvg'),
+    import('./terrain/space/floorplan/extractFloorPlan'),
+    import('./terrain/space/floorplan/floorPlanSvg'),
   ]).then(([compute, svg]) => ({
-    computeFloorPlan: compute.computeFloorPlan,
+    extractFloorPlan: compute.extractFloorPlan,
     floorPlanSvg: svg.floorPlanSvg,
   }));
 
@@ -244,3 +253,33 @@ export const loadEpt = () =>
  * before render, e.g.).
  */
 export const loadReportEngine = () => import('./report');
+
+/**
+ * Load the Microsoft Planetary Computer catalog adapter. Reached from the
+ * Catalog panel's "browse" flow (CatalogPanel.ts) and the deep-link open
+ * path (main.ts) — both transformed modules, so the import literal must
+ * live here, not inline at the call sites.
+ */
+export const loadPlanetaryComputerCatalog = () =>
+  import('./io/catalog/planetaryComputer');
+
+/**
+ * Load the RGB auto-balance analyser. Only the Visuals Studio
+ * "Auto-balance" action reaches it; the analyser stays out of the
+ * startup chunk.
+ */
+export const loadRgbAutoNormalize = () => import('./render/rgbAutoNormalize');
+
+/**
+ * Load the embed-mode postMessage bridge (`?embed=1` sessions only).
+ */
+export const loadEmbedBridge = () => import('./ui/embedBridge');
+
+/**
+ * Pre-warm the static LAS/LAZ loader chunk. The real load path reaches
+ * `loadLas` through `parseBuffer.ts` (an excluded module); this helper
+ * exists for main.ts's idle-time pre-warm, whose inline `import()` literal
+ * the live transform used to scramble into a raw `/assets/io/loadLas`
+ * fetch — a 404 console.error on every boot of the deployed site.
+ */
+export const loadLasLoader = () => import('./io/loadLas');

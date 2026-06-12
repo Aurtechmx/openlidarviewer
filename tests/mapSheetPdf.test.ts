@@ -20,7 +20,7 @@ const PROV: ExportProvenance = {
   surfaceQuality: 'Good', exportReadiness: 'Ready', exportReason: '',
   accuracy: { rmseZM: 0.08, nvaM: 0.16, vvaM: 0.21, usgsQualityLevel: 'QL2' },
   pointDensityPerM2: 3, measuredCells: 90, totalCells: 100, classScope: null, warnings: [],
-  notSurveyGrade: 'Fitness-for-use; not survey-grade unless validated against control.',
+  notSurveyGrade: 'Suitability: not survey-grade unless validated against ground-truth control.',
 };
 
 function feature(value: number, isIndex: boolean, pts: Array<[number, number]>): ContourFeature {

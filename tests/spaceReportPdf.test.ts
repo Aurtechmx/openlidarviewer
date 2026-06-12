@@ -9,12 +9,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildSpaceReportPdf } from '../src/render/measure/spaceReportPdf';
-import { computeFloorPlan } from '../src/terrain/space/floorPlan';
+import { extractFloorPlan } from '../src/terrain/space/floorplan/extractFloorPlan';
 import { spaceMetrics } from '../src/terrain/spaceMetrics';
 import { objectMetrics } from '../src/terrain/objectMetrics';
 import { classifyScanShape } from '../src/terrain/scanShape';
 
-function room(W = 14, D = 29, H = 5, step = 0.5): Float32Array {
+// 0.1 m sampling: dense enough that the wall-extraction pipeline produces a
+// real plan to embed (0.5 m walls would be sparser than the 5 cm wall mask).
+function room(W = 14, D = 29, H = 5, step = 0.1): Float32Array {
   const t: number[] = [];
   const push = (x: number, y: number, z: number): void => { t.push(x, y, z); };
   for (let x = 0; x <= W; x += step)
@@ -44,7 +46,8 @@ describe('buildSpaceReportPdf', () => {
     const pos = room();
     const shape = classifyScanShape(pos);
     const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', hasRgb: true });
-    const floorPlan = computeFloorPlan(pos, { upAxis: shape.up });
+    const floorPlan = extractFloorPlan(pos, { upAxis: shape.up });
+    expect(floorPlan.wallRings.length).toBeGreaterThan(0); // the plan IS embedded
     const bytes = await buildSpaceReportPdf({
       space,
       name: 'House 360',

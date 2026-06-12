@@ -1,11 +1,18 @@
 import { el, formatCount } from './dom';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
-import type { DatasetIntelligenceInput } from '../terrain/datasetIntelligence';
+import type {
+  DatasetIntelligence,
+  DatasetIntelligenceInput,
+} from '../terrain/datasetIntelligence';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import { scopeStamp } from '../render/class/classScope';
 import { classificationLabel } from '../render/pointInfo';
 import type { ColorMode } from '../render/colorModes';
-import { buildColorChipModel, COVERAGE_DISABLED_TITLE } from './colorChipModel';
+import {
+  buildColorChipModel,
+  COVERAGE_DISABLED_TITLE,
+  ANALYSIS_GATED_MODES,
+} from './colorChipModel';
 import type { PointSizeMode } from '../render/pointStyle';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { ExportFormat } from '../io/exporters';
@@ -31,6 +38,12 @@ import {
   getReportTemplate,
 } from '../report/ReportTemplates';
 import type { ReportTemplateId } from '../report/types';
+// Workflow presets (v0.4.5) — pure table; the rail renders it, main.ts
+// applies it through the Viewer's existing setters.
+import {
+  listTerrainWorkflowPresets,
+  type TerrainWorkflowPresetId,
+} from '../render/terrainWorkflowPresets';
 
 /** The render-quality state the Inspector's Rendering controls reflect. */
 export interface RenderingState {
@@ -121,6 +134,13 @@ export interface InspectorCallbacks {
   onAutoBalance: () => void;
   /** Rendering > Splat mode chip rail. */
   onSplatMode: (id: 'classic' | 'soft' | 'inspection') => void;
+  /**
+   * Visuals Studio > Workflow chip rail (v0.4.5) — apply a terrain workflow
+   * preset (Terrain / Construction / Mining / Forestry / Hydrology /
+   * Archaeology). A pure bundle over existing knobs; main.ts fans it out to
+   * the Viewer's setters and re-syncs.
+   */
+  onTerrainWorkflowPreset: (id: TerrainWorkflowPresetId) => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -131,6 +151,7 @@ const MODE_LABELS: Record<ColorMode, string> = {
   normal: 'Normal',
   density: 'Density',
   coverage: 'Coverage',
+  confidence: 'Confidence',
 };
 
 /** Hover hints for each colour mode — what the chip does, for first-time users. */
@@ -144,6 +165,10 @@ const MODE_TITLES: Record<ColorMode, string> = {
   coverage:
     'Colour points by bare-earth trust — green strong (measured), yellow ' +
     'moderate (interpolated), red weak (extrapolated/gap). Approximate.',
+  confidence:
+    'Colour points by bare-earth trust on the colourblind-safe Cividis ramp — ' +
+    'bright strong (measured), mid moderate (interpolated), dark weak ' +
+    '(extrapolated/gap). Same buckets as Coverage. Approximate.',
 };
 
 const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
@@ -204,7 +229,9 @@ const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
     title:
       'Captures the current on-screen view in whatever colour mode is active. ' +
       'To get a distinct image, switch the Color by chip before clicking — ' +
-      'otherwise this matches Height Map when you are viewing in elevation.',
+      'otherwise this matches Height Map when you are viewing in elevation. ' +
+      'Georeferenced scans (known CRS + world origin) instead download a ' +
+      'top-down ortho ZIP with .pgw/.prj sidecars that GIS tools place directly.',
   },
   // Depth Map + Contour Map intentionally absent — their previous
   // implementations produced an elevation raster (same as Height Map)
@@ -226,6 +253,12 @@ export interface VisualsStudioState {
   readonly temperature: number;
   /** Current white-balance tint; only meaningful for streaming COPC. */
   readonly tint: number;
+  /**
+   * Workflow preset rail state (v0.4.5): the preset the current knobs match,
+   * `'custom'` when the user deviated from every preset, or null/absent to
+   * leave the rail unhighlighted (pre-v0.4.5 callers omit the field).
+   */
+  readonly workflowPresetId?: TerrainWorkflowPresetId | 'custom' | null;
 }
 
 /** The six RGB appearance chips Visuals Studio surfaces. */
@@ -351,6 +384,8 @@ export class Inspector {
   private readonly _visualsRgbRail = el('div', { className: 'olv-chips' });
   private readonly _visualsEdlRail = el('div', { className: 'olv-chips' });
   private readonly _visualsSkyRail = el('div', { className: 'olv-chips' });
+  /** Visuals Studio > Workflow preset rail (v0.4.5) + its "Custom" state chip. */
+  private readonly _visualsWorkflowRail = el('div', { className: 'olv-chips' });
   /** Rendering > Splat mode chip rail. */
   private readonly _visualsSplatRail = el('div', { className: 'olv-chips' });
   /**
@@ -757,6 +792,47 @@ export class Inspector {
     // callback; `syncVisuals` updates the active class on every rail
     // when the Viewer state changes from outside (preset import,
     // public-API call, etc.).
+    // Workflow preset rail (v0.4.5) — Terrain / Construction / Mining /
+    // Forestry / Hydrology / Archaeology, plus a non-interactive "Custom"
+    // chip that lights up when the current knobs match no preset (the user
+    // deviated). One click fans the bundle out through main.ts.
+    for (const preset of listTerrainWorkflowPresets()) {
+      const chip = el('button', {
+        className: 'olv-chip',
+        text: preset.label,
+        title: preset.description,
+      });
+      chip.dataset.presetId = preset.id;
+      // aria-pressed is the canonical toggle-state signal — the active class
+      // alone is colour-only, invisible to a screen reader. syncVisuals keeps
+      // it in lockstep with the highlight.
+      chip.setAttribute('aria-pressed', 'false');
+      chip.addEventListener('click', () => {
+        chip.blur();
+        this._cb.onTerrainWorkflowPreset(preset.id);
+      });
+      this._visualsWorkflowRail.append(chip);
+    }
+    {
+      // "Custom" is a STATE indicator, not an action — disabled so it can't
+      // be clicked, present so a deviation is named rather than silently
+      // un-highlighting every preset.
+      const custom = el('button', {
+        className: 'olv-chip olv-chip-custom',
+        text: 'Custom',
+        title:
+          'Your current look does not match a workflow preset — adjust any ' +
+          'preset by hand and this lights up. Click a preset to return to it.',
+      });
+      custom.disabled = true;
+      custom.dataset.presetId = 'custom';
+      // The Custom chip is a pressed-state peer of the presets: when the user
+      // deviates it is the "active" pill, and aria-pressed must say so even
+      // though the button itself is inert.
+      custom.setAttribute('aria-pressed', 'false');
+      this._visualsWorkflowRail.append(custom);
+    }
+
     for (const def of VISUALS_RGB_CHIPS) {
       const chip = el('button', {
         className: 'olv-chip',
@@ -857,6 +933,10 @@ export class Inspector {
     );
 
     const visualsBody = el('div', { className: 'olv-visuals-body' }, [
+      // Workflow presets lead the Studio: the highest-leverage, least-effort
+      // control answers "what job is this scan for?" before per-knob rails.
+      el('div', { className: 'olv-visuals-group-label', text: 'Workflow' }),
+      this._visualsWorkflowRail,
       el('div', { className: 'olv-visuals-group-label', text: 'RGB' }),
       this._visualsRgbRail,
       el('div', { className: 'olv-visuals-group-label', text: 'Depth (EDL)' }),
@@ -1073,31 +1153,33 @@ export class Inspector {
     this._layerRows.delete(id);
   }
 
-  /** Data-driven colour modes for the active cloud (Coverage is appended separately). */
+  /** Data-driven colour modes for the active cloud (gated chips are appended separately). */
   private _modes: ColorMode[] = [];
   /** The currently-selected colour mode, tracked so a re-render keeps the highlight. */
   private _activeMode: ColorMode = 'elevation';
   /**
-   * Whether the "Coverage" chip is enabled. False until a terrain analysis
-   * produces a DTM-confidence grid; the chip is shown DISABLED (so the user
-   * learns the feature exists) with a "Run terrain analysis first" tooltip.
+   * Whether the analysis-gated chips ("Coverage" + its colourblind-safe twin
+   * "Confidence") are enabled. False until a terrain analysis produces a
+   * DTM-confidence grid; the chips are shown DISABLED (so the user learns the
+   * features exist) with a "Run terrain analysis first" tooltip.
    */
   private _coverageAvailable = false;
 
   /** Render the color-mode chips, marking `active` as selected. */
   setColorModes(modes: ColorMode[], active: ColorMode): void {
-    // The Coverage mode is analysis-gated, not data-gated, so it is never part
-    // of the per-cloud `availableModes` list — track the data modes separately
-    // and always append the Coverage chip below.
-    this._modes = modes.filter((m) => m !== 'coverage');
+    // The Coverage / Confidence modes are analysis-gated, not data-gated, so
+    // they are never part of the per-cloud `availableModes` list — track the
+    // data modes separately and always append the gated chips below.
+    this._modes = modes.filter((m) => !ANALYSIS_GATED_MODES.includes(m));
     this._activeMode = active;
     this._renderColorChips();
   }
 
   /**
-   * Enable / disable the Coverage colour chip. Called when a terrain analysis
-   * confidence grid appears (enable) or the scan is closed (disable). Re-renders
-   * the chip rail so the disabled state + tooltip update in place.
+   * Enable / disable the analysis-gated colour chips (Coverage + Confidence —
+   * both read the same grid). Called when a terrain analysis confidence grid
+   * appears (enable) or the scan is closed (disable). Re-renders the chip
+   * rail so the disabled state + tooltip update in place.
    */
   setCoverageAvailable(available: boolean): void {
     if (this._coverageAvailable === available) return;
@@ -1111,8 +1193,7 @@ export class Inspector {
     const descriptors = buildColorChipModel(this._modes, this._activeMode, this._coverageAvailable);
     for (const desc of descriptors) {
       const { mode, active, disabled } = desc;
-      const title =
-        mode === 'coverage' && disabled ? COVERAGE_DISABLED_TITLE : MODE_TITLES[mode];
+      const title = disabled ? COVERAGE_DISABLED_TITLE : MODE_TITLES[mode];
       const chip = el('button', { className: 'olv-chip', text: MODE_LABELS[mode], title });
       if (active) chip.classList.add('olv-chip-active');
       if (disabled) {
@@ -1120,7 +1201,7 @@ export class Inspector {
         chip.classList.add('olv-chip-disabled');
       }
       chip.addEventListener('click', () => {
-        if (disabled) return; // disabled Coverage chip is a no-op
+        if (disabled) return; // a disabled (analysis-gated) chip is a no-op
         for (const other of this._chips.children) other.classList.remove('olv-chip-active');
         chip.classList.add('olv-chip-active');
         this._activeMode = mode;
@@ -1155,6 +1236,16 @@ export class Inspector {
     for (const chip of this._visualsSkyRail.children) {
       const id = (chip as HTMLElement).dataset?.presetId;
       chip.classList.toggle('olv-chip-active', id === state.skyPresetId);
+    }
+    // Workflow rail (v0.4.5): light the matched preset, or the "Custom"
+    // state chip when the knobs match none. An absent/null field clears all.
+    // aria-pressed mirrors the class so the active pill is announced, not
+    // just coloured.
+    for (const chip of this._visualsWorkflowRail.children) {
+      const id = (chip as HTMLElement).dataset?.presetId;
+      const active = state.workflowPresetId != null && id === state.workflowPresetId;
+      chip.classList.toggle('olv-chip-active', active);
+      chip.setAttribute('aria-pressed', String(active));
     }
     this._wbTemperatureSlider.value = String(Math.round(state.temperature * 100));
     this._wbTintSlider.value = String(Math.round(state.tint * 100));
@@ -1372,6 +1463,15 @@ export class Inspector {
   /** Drop the Dataset Intelligence card back to its empty state. */
   clearDatasetIntelligence(): void {
     this._datasetIntelligence.clear();
+  }
+
+  /**
+   * The Dataset Intelligence summary currently on the card, or null when the
+   * card is empty. Read by the Terrain Intelligence Report (v0.4.5) so the
+   * PDF's bucket labels are the card's own strings — never re-derived.
+   */
+  get datasetIntelligence(): DatasetIntelligence | null {
+    return this._datasetIntelligence.current;
   }
 
   /**

@@ -53,6 +53,7 @@ import {
   triggerBrowserDownload,
   type ContourFormat,
 } from '../terrain/contour/contourDownload';
+import type { DxfLinearUnit } from '../terrain/contour/dxfContours';
 import {
   CONTOUR_SHAPE_STYLES,
   defaultContourShapeStyle,
@@ -84,11 +85,21 @@ import {
 import { sampleTerrain } from '../terrain/contour/sampleTerrain';
 import { terrainAssessment } from '../terrain/contour/terrainAssessment';
 import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
+import { terrainProducts } from '../terrain/contour/terrainProducts';
 import { explainLimitations } from '../terrain/contour/whyNotReasons';
-import { renderWorkflowCard, renderWhyDetails } from './workflowCardRender';
+import {
+  renderTerrainProducts,
+  renderWorkflowCard,
+  renderWhyDetails,
+} from './workflowCardRender';
 import type { SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
-import { createScanTypeControl, type ScanTypeControl } from './scanTypeControl';
+import type { DatasetIntelligence } from '../terrain/datasetIntelligence';
+import {
+  createScanTypeControl,
+  type ScanTypeControl,
+  type ScanTypeDisabledReasons,
+} from './scanTypeControl';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -119,6 +130,23 @@ export interface AnalysePanelCallbacks {
   }) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
+  /**
+   * Switch the 3D viewer's colour mode to the colourblind-safe 'confidence'
+   * trust overlay — the SAME per-cell confidence + strong/moderate/weak
+   * buckets as the coverage tile's legend, rendered on Cividis stops. Wired
+   * by the host to the Viewer + the Inspector's COLOR BY chip rail; when
+   * omitted the coverage tile simply renders no link (e.g. an embed without
+   * a colour-mode rail).
+   */
+  onColorByConfidence?: () => void;
+  /**
+   * The Inspector's Dataset Intelligence summary for the loaded scan, or null
+   * when the card is empty. Read at Terrain Intelligence Report export time so
+   * the PDF's Dataset Statistics section carries the SAME bucket labels
+   * (density / complexity / ground visibility / metric stability) the card
+   * shows. When omitted or null the report simply skips those rows.
+   */
+  getDatasetIntelligence?: () => DatasetIntelligence | null;
   /** Context for the printable map sheet (world origin, title block fields). */
   getMapContext?: () => {
     /**
@@ -134,6 +162,13 @@ export interface AnalysePanelCallbacks {
     isGeographic?: boolean;
     /** CRS WKT for the DEM export's .prj sidecar, when known. */
     wkt?: string | null;
+    /**
+     * Resolved linear unit of the horizontal CRS, when known. Drives the DXF
+     * `$INSUNITS` header and the SVG scale note so a foot-based CRS stamps
+     * feet (and an unresolved frame stamps honest "unitless") instead of the
+     * metre default. Omitted ⇒ serializeContours' standing metre assumption.
+     */
+    linearUnit?: DxfLinearUnit;
   };
 }
 
@@ -445,16 +480,24 @@ export class AnalysePanel {
     }
     this._assessmentRow.append(exportLine);
 
-    // Recommended workflow — the upgrade over the old Best for / Caution / Not
-    // for lines: instead of three prose sentences, a fixed, ordered checklist of
-    // the real workflows the app supports, each graded ✓ / ⚠ / ✕ from the two
-    // axes above (inspection rows from Surface Quality, deliverable rows from
-    // Export Readiness). It carries the same fitness-for-use information, but as
-    // a decision the user can act on at a glance. The pure grader is the single
-    // source; the prose verdict text (a.bestFor etc.) still lives on the
-    // assessment for non-UI consumers (e.g. export README provenance).
+    // Terrain Products (v0.4.5) — the per-deliverable status list the user
+    // reads first: one row per product, Ready ✓ / Preview ⚠ / Blocked ✕ with
+    // its one-line reason. A pure VIEW over the same graded workflow rows —
+    // `terrainProducts` renames the grades and selects assessment-minted
+    // reason strings, minting nothing — so the list can never disagree with
+    // the checklist below it. The full "Recommended workflow" checklist stays
+    // available, collapsed, for anyone who wants the verb-level detail.
     const workflows = recommendedWorkflows(a, this._result.quality);
-    this._assessmentRow.append(renderWorkflowCard(workflows));
+    this._assessmentRow.append(renderTerrainProducts(terrainProducts(a, workflows)));
+    const workflowDetail = el('details', { className: 'olv-analyse-workflow-details' });
+    workflowDetail.append(
+      el('summary', {
+        className: 'olv-analyse-workflow-details-summary',
+        text: 'Workflow detail',
+      }),
+      renderWorkflowCard(workflows),
+    );
+    this._assessmentRow.append(workflowDetail);
 
     // Why? — what's holding this back. Shown only when the surface is not
     // fully-good (Surface Quality below Good, or Export Readiness below Ready):
@@ -617,6 +660,22 @@ export class AnalysePanel {
     const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
     dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'coverage'));
     tile.append(dl);
+
+    // Link to the 3D 'Confidence' colour mode — the colourblind-safe twin of
+    // this tile, painting the SAME buckets onto the point cloud itself. Lives
+    // on the tile because the tile's legend is where the buckets are defined;
+    // the Inspector's COLOR BY rail carries the matching chip.
+    if (this._cb.onColorByConfidence) {
+      const link = el('button', {
+        className: 'olv-analyse-surface-dl',
+        text: 'Colour 3D by confidence',
+        title:
+          'Colour the 3D point cloud by this per-cell confidence — same ' +
+          'strong/moderate/weak buckets, colourblind-safe (Cividis) ramp',
+      });
+      link.addEventListener('click', () => this._cb.onColorByConfidence?.());
+      tile.append(link);
+    }
     return tile;
   }
 
@@ -1122,10 +1181,29 @@ export class AnalysePanel {
     return this.element.style.display !== 'none';
   }
 
+  /**
+   * Programmatically expand the panel out of its collapsed-chip state. The
+   * panel is constructed collapsed (it earns its height only once the user
+   * wants terrain), but when the host routes here by FORCING terrain over a
+   * non-terrain detection it must expand — otherwise the busy state, the
+   * result, and the "Treat as" control (the way back to the Space/Object
+   * panel) are all hidden under the chip and the hand-off reads as the panel
+   * simply shutting down.
+   */
+  expand(): void {
+    this.element.classList.remove('olv-collapsed');
+  }
+
   /** Reflect the host's override + the effective route in the "Treat as"
-   *  control, so the terrain panel can also force Object / Interior / Auto. */
-  setScanType(override: ScanTypeOverride, effective: SpaceKind | null): void {
-    this._scanTypeControl.set(override, effective);
+   *  control, so the terrain panel can also force Object / Interior / Auto.
+   *  `disabled` greys out segments detection has ruled out, with reasons. */
+  setScanType(
+    override: ScanTypeOverride,
+    effective: SpaceKind | null,
+    disabled?: ScanTypeDisabledReasons,
+    detectionCommitted?: boolean,
+  ): void {
+    this._scanTypeControl.set(override, effective, disabled, detectionCommitted);
   }
 
   /**
@@ -1297,13 +1375,17 @@ export class AnalysePanel {
             // sheet already use). When the host can't supply one,
             // serializeContours omits the CRS stamp rather than
             // georeferencing local coordinates.
-            const worldOrigin = this._cb.getMapContext?.().worldOrigin ?? null;
+            const mapCtx = this._cb.getMapContext?.();
+            const worldOrigin = mapCtx?.worldOrigin ?? null;
             triggerBrowserDownload(
               serializeContours(result.model, fmt, {
                 basename,
                 labels: result.labels,
                 provenance,
                 worldOrigin,
+                // Resolved CRS unit → DXF $INSUNITS + the SVG scale note, so a
+                // foot-based CRS stamps feet instead of the metre default.
+                linearUnit: mapCtx?.linearUnit,
               }),
             );
           } catch (err) {
@@ -1426,6 +1508,10 @@ export class AnalysePanel {
         generatedAt: new Date(),
         softwareVersion: __APP_VERSION__,
         metricVersion: TERRAIN_METRIC_VERSION,
+        // The Inspector card's CURRENT bucket summary (or null) — the report's
+        // Dataset Statistics rows must be the card's own strings, never a
+        // re-derivation that could disagree with what the user saw on screen.
+        intelligence: this._cb.getDatasetIntelligence?.() ?? null,
       });
       const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);

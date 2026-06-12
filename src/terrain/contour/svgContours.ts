@@ -11,7 +11,7 @@
  */
 
 import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel';
-import type { ContourLabel } from './labelPlacement';
+import { decimalsForInterval, type ContourLabel } from './labelPlacement';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
 
@@ -36,6 +36,12 @@ export interface SvgContourParams {
    * the lone shape-style comment is kept for back-compat.
    */
   readonly provenance?: ExportProvenance;
+  /**
+   * Abbreviation of the drawing's linear unit ('m', 'ft', 'ftUS') for the
+   * visible scale note. Default 'm' — the terrain stack's standing metric
+   * assumption; callers that resolve a feet CRS pass theirs.
+   */
+  readonly unitLabel?: string;
 }
 
 /** Escape the five XML-significant characters for safe `<metadata>` text. */
@@ -111,6 +117,10 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
   // Elevation labels with a halo: a white stroke painted BEHIND the
   // glyph fill (paint-order: stroke) knocks the contour line out from
   // under the text — the single biggest "real topo map" cue.
+  // Decimals derive from the contour interval so sub-metre levels stay
+  // distinguishable (whole-unit rounding collapsed a 0.25 interval's labels
+  // onto identical values — v0.4.4 defect).
+  const labelDecimals = decimalsForInterval(model.intervalM);
   const labels: string[] = [];
   for (const lab of params.labels ?? []) {
     const lx = sx(lab.x).toFixed(3);
@@ -125,9 +135,24 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
       `  <text x="${lx}" y="${ly}" transform="rotate(${deg.toFixed(2)} ${lx} ${ly})" ` +
         `font-size="${p.labelSize.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" ` +
         `style="paint-order:stroke;stroke:#ffffff;stroke-width:${halo};fill:${p.stroke};` +
-        `font-family:sans-serif">${Math.round(lab.value)}</text>`,
+        `font-family:sans-serif">${lab.value.toFixed(labelDecimals)}</text>`,
     );
   }
+
+  // Visible scale note (bottom-left): the drawing has no physical scale — one
+  // SVG user unit IS one source linear unit — so say exactly that, plus the
+  // contour interval. Without this the deliverable carried no unit/scale cue
+  // anywhere in the visible drawing.
+  const unitLabel = params.unitLabel ?? 'm';
+  const noteSize = Math.max(p.labelSize, 1);
+  const intervalNote =
+    Number.isFinite(model.intervalM) && model.intervalM > 0
+      ? `Contour interval ${model.intervalM.toFixed(labelDecimals)} ${unitLabel} · `
+      : '';
+  const scaleNote =
+    `  <text x="${(p.padding * 0.5).toFixed(2)}" y="${(h - noteSize * 0.5).toFixed(2)}" ` +
+    `font-size="${noteSize.toFixed(2)}" fill="${p.stroke}" font-family="sans-serif">` +
+    `${intervalNote}1 SVG unit = 1 ${unitLabel} (source CRS units)</text>`;
 
   const caption =
     Number.isFinite(model.interpolatedFraction) && model.interpolatedFraction > 0
@@ -140,6 +165,7 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
     caption,
     ...paths,
     ...labels,
+    scaleNote,
     '</svg>',
   ].join('\n');
 }

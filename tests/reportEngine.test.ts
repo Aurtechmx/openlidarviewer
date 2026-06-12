@@ -423,6 +423,75 @@ describe('buildMeasurementRows', () => {
     const rows = buildMeasurementRows(broken, 'metric');
     expect(rows[0].value).toBe('—');
   });
+
+  // ── unitToMetres factor (v0.4.5 measure-unit fix, report boundary) ────────
+  // Measurement points are RENDER units; on a foot-based CRS the report must
+  // apply the same linearUnitToMetres factor the live readouts use — lengths
+  // ×f, areas ×f², volumes ×f³ — exactly once, at the formatting boundary.
+  describe('unitToMetres factor', () => {
+    const FT = 0.3048; // international foot → metres
+
+    it('scales lengths ×f: a 10 ft span reads 3.05 m, not 10 m', () => {
+      const rows = buildMeasurementRows(measurements, 'metric', FT);
+      expect(rows[0].value).toBe('3.05 m'); // 10 ft × 0.3048
+      expect(rows[2].value).toBe('91.4 cm'); // 3 ft height
+    });
+
+    it('scales areas ×f²: a 10×10 ft footprint reads 9.29 m²', () => {
+      const rows = buildMeasurementRows(measurements, 'metric', FT);
+      expect(rows[1].value).toBe('9.29 m²'); // 100 sq ft × 0.3048²
+    });
+
+    it('round-trips imperial: a 10 ft span on a foot CRS reads 10.00 ft', () => {
+      const rows = buildMeasurementRows(measurements, 'imperial', FT);
+      expect(rows[0].value).toBe('10.00 ft');
+    });
+
+    it('scales volumes ×f³ (box and cut/fill)', () => {
+      const vols: Measurement[] = [
+        { id: 'b1', kind: 'box', name: 'Box', points: [[0, 0, 0], [2, 3, 4]] },
+        {
+          id: 'v1',
+          kind: 'volume',
+          name: 'Pad',
+          points: [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]],
+          volume: {
+            fill: 24,
+            cut: 0,
+            net: 24,
+            referenceZ: 0,
+            footprintArea: 100,
+            pointsInPolygon: 400,
+            density: 4,
+            confidence: 'medium',
+          },
+        },
+      ];
+      const rows = buildMeasurementRows(vols, 'metric', FT);
+      // 24 cu render-units × 0.3048³ = 0.679604… m³
+      expect(rows[0].value).toBe('0.68 m³');
+      expect(rows[1].value).toContain('9.29 m²'); // footprint ×f²
+      expect(rows[1].value).toContain('+0.68 m³ fill'); // fill ×f³
+    });
+
+    it('leaves ratios (slope / angle) unscaled', () => {
+      const ratios: Measurement[] = [
+        { id: 's1', kind: 'slope', name: 'Ramp', points: [[0, 0, 0], [10, 0, 1]] },
+        { id: 'g1', kind: 'angle', name: 'Corner', points: [[1, 0, 0], [0, 0, 0], [0, 1, 0]] },
+      ];
+      const metric = buildMeasurementRows(ratios, 'metric');
+      const scaled = buildMeasurementRows(ratios, 'metric', FT);
+      expect(scaled[0].value).toBe(metric[0].value); // 10.00%
+      expect(scaled[1].value).toBe(metric[1].value); // 90.0°
+    });
+
+    it('defaults to 1 and rejects a degenerate factor (0 / NaN) honestly', () => {
+      const plain = buildMeasurementRows(measurements, 'metric');
+      expect(buildMeasurementRows(measurements, 'metric', 1)).toEqual(plain);
+      expect(buildMeasurementRows(measurements, 'metric', 0)).toEqual(plain);
+      expect(buildMeasurementRows(measurements, 'metric', Number.NaN)).toEqual(plain);
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -117,6 +117,34 @@ export interface ExportSceneAdapter {
    * when undefined.
    */
   captureLabel?(): { label: string; confidence: 'low' | 'medium' | 'high' } | null;
+  /**
+   * Georeference context for the world-file path (v0.4.5, workplan C4):
+   * the load-time world origin (the recentre shift the loaders applied)
+   * and the source CRS WKT. Returns null fields when the app cannot
+   * honestly assert either — multiple clouds with conflicting origins, a
+   * local-frame scan, or no CRS VLR. Optional so older adapters / test
+   * stubs keep type-checking; the ortho exporter treats "absent" as
+   * "not georeferenceable" and ships the plain WYSIWYG PNG.
+   */
+  georefContext?(): {
+    worldOrigin: { x: number; y: number } | null;
+    wkt: string | null;
+  } | null;
+  /**
+   * Render the loaded cloud through a TRUE top-down orthographic camera
+   * framing the full XY footprint (north-up, +Y at the image top) and
+   * return the capture plus the exact local-frame extent the camera
+   * framed. This is the only render an affine world file can describe —
+   * the live perspective snapshot cannot be georeferenced. Returns null
+   * when no cloud is loaded or the device cannot complete the framed
+   * render; the caller falls back to the WYSIWYG snapshot path.
+   */
+  framedTopDownSnapshot?(options: { widthPx?: number }): Promise<{
+    blob: Blob;
+    widthPx: number;
+    heightPx: number;
+    extent: { minX: number; minY: number; maxX: number; maxY: number };
+  } | null>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -268,6 +296,30 @@ export type ImageExportOptions = CommonExportOptions;
 // Result + factory contract
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Everything the host needs to package a top-down ortho PNG with its
+ * `.pgw` + `.prj` sidecars (`buildStudioPngPackage` in
+ * `render/export/pngWorldFile.ts`). Present ONLY when the raster was a
+ * true top-down orthographic framing AND both the world origin and the
+ * CRS WKT are known — a world file on a perspective snapshot would lie.
+ */
+export interface ExportWorldFile {
+  /** Local-frame extent the orthographic camera framed exactly. */
+  readonly extent: {
+    readonly minX: number;
+    readonly minY: number;
+    readonly maxX: number;
+    readonly maxY: number;
+  };
+  /** Raster size in pixels — the world file's per-pixel scale divisors. */
+  readonly widthPx: number;
+  readonly heightPx: number;
+  /** Load-time world origin to add back (mirrors the DEM package). */
+  readonly worldOrigin: { readonly x: number; readonly y: number };
+  /** Horizontal CRS WKT for the `.prj` sidecar. */
+  readonly wkt: string;
+}
+
 /** The structured product of one export — handed back for download. */
 export interface ExportResult {
   blob: Blob;
@@ -278,6 +330,12 @@ export interface ExportResult {
   mimeType: string;
   /** Free-form details an exporter may surface (e.g. minZ/maxZ for height map). */
   metadata?: Readonly<Record<string, number | string>>;
+  /**
+   * World-file sidecar data (v0.4.5) — when present, the host downloads
+   * a `PNG + .pgw + .prj` ZIP instead of the bare PNG so GIS tools place
+   * the raster. Absent on every non-georeferenceable export.
+   */
+  worldFile?: ExportWorldFile;
 }
 
 /**

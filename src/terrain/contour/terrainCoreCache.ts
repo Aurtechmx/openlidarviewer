@@ -245,6 +245,10 @@ function paramsKey(params: TerrainCoreParams): string {
     `va=${params.verticalAxis ?? ''}`,
     `cls=${classPresence}`,
     `exc=${exclude}`,
+    // Stride-honesty scale: it multiplies per-cell densities (and the USGS QL
+    // graded from them) inside the cached core, so a re-gather at a different
+    // stride must MISS the cache instead of serving a stale density grade.
+    `sps=${params.samplePointScale ?? ''}`,
     `seed=${params.holdoutSeed ?? ''}`,
     `agg=${params.aggregation ?? ''}`,
     `g=${ground}`,

@@ -90,6 +90,84 @@ export function epsgToProj4(epsg: number): string | null {
   return null;
 }
 
+/**
+ * The geodetic datum family behind an EPSG code we can resolve. Used ONLY for
+ * transform honesty (below) — never for the projection math itself.
+ */
+export type DatumFamily =
+  | 'WGS84'
+  | 'NAD83'
+  | 'NAD27'
+  | 'ETRS89'
+  | 'GDA94'
+  | 'GDA2020'
+  | 'NZGD2000'
+  | 'CGCS2000'
+  | 'OSGB36'
+  | 'RGF93';
+
+/** Map a resolvable EPSG code to its datum family, or null when unknown. */
+export function epsgDatumFamily(epsg: number): DatumFamily | null {
+  if (!Number.isInteger(epsg)) return null;
+  // Geographic + world codes.
+  if (epsg === 4326 || epsg === 3857 || epsg === 3395 || epsg === 4978) return 'WGS84';
+  if (epsg === 4269 || epsg === 5070) return 'NAD83';
+  if (epsg === 4267) return 'NAD27';
+  if (epsg === 4258 || epsg === 3035) return 'ETRS89';
+  if (epsg === 4283 || epsg === 3577) return 'GDA94';
+  if (epsg === 7844) return 'GDA2020';
+  if (epsg === 4167 || epsg === 2193) return 'NZGD2000';
+  if (epsg === 4490) return 'CGCS2000';
+  if (epsg === 27700) return 'OSGB36';
+  if (epsg === 2154) return 'RGF93';
+  // Parametric UTM / MGA families (mirror epsgToProj4's ranges exactly).
+  if (epsg >= 32601 && epsg <= 32660) return 'WGS84';
+  if (epsg >= 32701 && epsg <= 32760) return 'WGS84';
+  if (epsg >= 26901 && epsg <= 26923) return 'NAD83';
+  if (epsg >= 26701 && epsg <= 26722) return 'NAD27';
+  if (epsg >= 25828 && epsg <= 25838) return 'ETRS89';
+  if (epsg >= 28348 && epsg <= 28358) return 'GDA94';
+  if (epsg >= 7846 && epsg <= 7859) return 'GDA2020';
+  return null;
+}
+
+/**
+ * Honesty check for a cross-datum transform our proj4 definitions cannot model
+ * faithfully. Returns a human-readable caveat when the requested src→dst pair
+ * resolves and proj4 will happily "succeed", but the DATUM leg of the
+ * transform is known to be missing or degenerate:
+ *
+ *   - NAD27 ↔ anything else: proj4js bundles no NADCON/NTv2 distortion grids,
+ *     so the NAD27 leg degrades to a coarse parametric shift — horizontal
+ *     errors of 10 m+ are normal (worse in Alaska / at datum edges).
+ *   - GDA94 ↔ GDA2020: both are defined here as null shifts to WGS84, so the
+ *     "transform" applies an IDENTITY datum shift while the true plate-motion
+ *     difference is ≈ 1.8 m and growing.
+ *
+ * Transforms WITHIN one family (e.g. NAD27 UTM zone → NAD27 geographic) are a
+ * pure projection change — no datum leg, no caveat. Conventionally-coincident
+ * pairs (WGS84↔ETRS89/NZGD2000/CGCS2000/GDA2020, sub-metre by definition at
+ * their reference epochs) stay quiet so the warning keeps its signal.
+ */
+export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | null {
+  const a = epsgDatumFamily(srcEpsg);
+  const b = epsgDatumFamily(dstEpsg);
+  if (a == null || b == null || a === b) return null;
+  if (a === 'NAD27' || b === 'NAD27') {
+    return (
+      'NAD27 datum grids (NADCON/NTv2) are not bundled — the NAD27 leg of this ' +
+      'transform uses a coarse parametric shift; horizontal errors of 10 m or more are expected'
+    );
+  }
+  if ((a === 'GDA94' && b === 'GDA2020') || (a === 'GDA2020' && b === 'GDA94')) {
+    return (
+      'GDA94 and GDA2020 are both defined as identity shifts to WGS84 here, so no real ' +
+      'datum shift was applied — the true GDA94→GDA2020 difference is ≈ 1.8 m (plate motion)'
+    );
+  }
+  return null;
+}
+
 /** A human label for an EPSG code (best-effort, for logs/UI). */
 export function epsgLabel(epsg: number): string {
   const NAMED: Record<number, string> = {

@@ -103,7 +103,17 @@ function deriveQuantisation(
     Math.floor(min[1]),
     Math.floor(min[2]),
   ];
-  return { min, max, scale, offset };
+  // Header bounds must describe the file's CONTENT, i.e. the coordinates a
+  // reader reconstructs from the quantised int32 records — not the raw input
+  // doubles. Quantisation is monotone (round of a shifted/scaled value), so
+  // the extremes survive: snap min/max through the same round-trip the point
+  // records take. Raw doubles in the header made strict validators (lasinfo,
+  // PDAL) flag points "outside the header bounds" by up to half a scale step.
+  const snap = (v: number, a: number): number =>
+    offset[a] + Math.round((v - offset[a]) / scale[a]) * scale[a];
+  const qMin: [number, number, number] = [snap(min[0], 0), snap(min[1], 1), snap(min[2], 2)];
+  const qMax: [number, number, number] = [snap(max[0], 0), snap(max[1], 1), snap(max[2], 2)];
+  return { min: qMin, max: qMax, scale, offset };
 }
 
 /**
@@ -190,9 +200,15 @@ function writeScaleOffsetBounds(
 }
 
 /**
- * Tally points per return number into `slots` buckets. Returns are 1-based;
- * a missing attribute or an out-of-range value lands in slot 0 (return 1),
- * mirroring how the record writer clamps the per-point return field.
+ * Tally points per return number into `slots` buckets, mirroring how the
+ * record writer CLAMPS the per-point return field rather than wrapping it:
+ * returns are 1-based; a missing attribute or a value below 1 clamps to slot 0
+ * (return 1, matching `Math.max(1, r)` in the record); a value ABOVE the
+ * histogram's range clamps to the TOP slot — the old code dropped those into
+ * slot 0, so the header tally claimed first-returns that the records describe
+ * as last-returns. (LAS 1.2's legacy histogram has 5 slots while its record
+ * field clamps at 7; returns 6–7 land in the top slot — the closest honest
+ * bucket a 5-slot histogram has. LAS 1.4's 15 slots match its field exactly.)
  */
 function tallyByReturn(g: GlobalPoints, slots: number): Uint32Array {
   const byReturn = new Uint32Array(slots);
@@ -200,6 +216,7 @@ function tallyByReturn(g: GlobalPoints, slots: number): Uint32Array {
     for (let i = 0; i < g.count; i++) {
       const r = g.returnNumber[i];
       if (r >= 1 && r <= slots) byReturn[r - 1]++;
+      else if (r > slots) byReturn[slots - 1]++;
       else byReturn[0]++;
     }
   } else {

@@ -11,12 +11,20 @@
 
 import proj4 from 'proj4';
 import type { GlobalPoints } from './globalPoints';
-import { epsgToProj4 } from './epsg';
+import { epsgToProj4, datumShiftCaveat } from './epsg';
 
 export interface ReprojectResult {
   readonly points: GlobalPoints;
   readonly transformed: boolean;
   readonly note: string;
+  /**
+   * Non-null when the transform "succeeded" but its DATUM leg is known to be
+   * missing or degenerate (grid-less NAD27, identity GDA94↔GDA2020 — see
+   * `datumShiftCaveat`). The caller MUST surface this as a warning: a silent
+   * "reprojected ✓" on such a pair ships coordinates metres-to-tens-of-metres
+   * off. Always null when `transformed` is false (nothing moved).
+   */
+  readonly datumCaveat: string | null;
 }
 
 /**
@@ -31,15 +39,15 @@ export function reprojectGlobal(
   dstEpsg: number,
 ): ReprojectResult {
   if (srcEpsg === dstEpsg) {
-    return { points: g, transformed: false, note: 'source and target CRS are identical — no transform needed' };
+    return { points: g, transformed: false, note: 'source and target CRS are identical — no transform needed', datumCaveat: null };
   }
   const srcDef = epsgToProj4(srcEpsg);
   const dstDef = epsgToProj4(dstEpsg);
   if (!srcDef) {
-    return { points: g, transformed: false, note: `cannot resolve source EPSG:${srcEpsg} — coordinates left unchanged` };
+    return { points: g, transformed: false, note: `cannot resolve source EPSG:${srcEpsg} — coordinates left unchanged`, datumCaveat: null };
   }
   if (!dstDef) {
-    return { points: g, transformed: false, note: `cannot resolve target EPSG:${dstEpsg} — coordinates left unchanged` };
+    return { points: g, transformed: false, note: `cannot resolve target EPSG:${dstEpsg} — coordinates left unchanged`, datumCaveat: null };
   }
 
   try {
@@ -58,6 +66,9 @@ export function reprojectGlobal(
       points: { ...g, x, y, z },
       transformed: true,
       note: `reprojected EPSG:${srcEpsg} → EPSG:${dstEpsg}`,
+      // Datum honesty: proj4 has now "succeeded", but for grid-less / identity
+      // datum pairs that success is only the PROJECTION math — flag it.
+      datumCaveat: datumShiftCaveat(srcEpsg, dstEpsg),
     };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
@@ -65,6 +76,7 @@ export function reprojectGlobal(
       points: g,
       transformed: false,
       note: `reprojection failed (${detail}) — coordinates left unchanged`,
+      datumCaveat: null,
     };
   }
 }

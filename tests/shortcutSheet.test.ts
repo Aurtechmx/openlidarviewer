@@ -56,10 +56,10 @@ describe('formatShortcutKeys — display formatting', () => {
   it('composes multiple modifiers in one chord', () => {
     vi.stubGlobal('navigator', { platform: 'MacIntel' });
     try {
-      const out = formatShortcutKeys('Cmd-Shift-R');
+      const out = formatShortcutKeys('Cmd-Shift-U');
       expect(out).toContain('⌘');
       expect(out).toContain('⇧');
-      expect(out).toContain('R');
+      expect(out).toContain('U');
     } finally {
       vi.unstubAllGlobals();
     }

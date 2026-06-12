@@ -440,6 +440,9 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-topbar > * { pointer-events: auto; }
 .olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
+/* The official brand mark (public/brand-mark.svg, via <img>) beside the
+ * top-bar text wordmark. */
+.olv-wordmark-mark { display: block; width: 28px; height: 28px; flex: none; }
 .olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
 .olv-badge {
   font-size: var(--text-xs); color: var(--accent);
@@ -475,29 +478,22 @@ button:disabled { cursor: not-allowed; }
    * answer to the question the title poses. */
   gap: 10px; text-align: center; padding: var(--space-4xl);
 }
-/* Hero brand mark — inline SVG icon (orbital rings + glowing core +
- * vertical axis dots) sits above the title in the empty state. v0.3.6
- * desktop-audit fix: bumped from 140 px to 200 px on desktop so the
- * brand moment carries the first paint instead of being dwarfed by
- * the 56 px title. Mobile clamp below keeps it readable on phones. */
+/* Hero — the official brand mark (public/brand-mark.svg, via <img>)
+ * stacked above the quiet uppercase text wordmark. The text styles live
+ * on the container and inherit into .olv-empty-hero-text. */
 .olv-empty-hero {
-  width: 200px; height: 200px;
-  margin-bottom: -10px;
-  display: flex; align-items: center; justify-content: center;
-  animation: olv-hero-breathe 6s ease-in-out infinite;
-  filter: drop-shadow(0 6px 28px rgba(0, 178, 255, 0.32));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: var(--space-md);
 }
-.olv-empty-hero .olv-hero-mark-svg {
-  display: block;
-  width: 100%; height: 100%;
-}
-@keyframes olv-hero-breathe {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.025); opacity: 0.96; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .olv-empty-hero { animation: none; }
-}
+.olv-empty-hero-mark { display: block; width: 104px; height: 104px; }
 .olv-empty-title {
   font-size: var(--text-3xl); font-weight: 600; letter-spacing: -0.01em;
   background: var(--brand-gradient);
@@ -891,6 +887,12 @@ button:disabled { cursor: not-allowed; }
   opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
 }
 .olv-chip-disabled:hover { color: var(--text-faint); }
+/* Workflow rail (v0.4.5): "Custom" is a STATE chip, not an action — muted
+   until the user's knobs deviate from every preset, then it lights via the
+   shared .olv-chip-active vocabulary. */
+.olv-chip-custom { cursor: default; opacity: 0.55; }
+.olv-chip-custom:hover { color: var(--text-dim); }
+.olv-chip-custom.olv-chip-active { opacity: 1; }
 .olv-slider { width: 100%; accent-color: var(--accent); }
 /* Rendering controls — stacked groups and a labelled slider row. */
 .olv-render-group { display: flex; flex-direction: column; gap: var(--space-md); }
@@ -2698,11 +2700,21 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
-/* The measurement and annotation panels stack in one left-side column. */
+/* The measurement and annotation panels stack in one left-side column.
+ *
+ * `--olv-measure-bar-clear` (v0.4.5 overlap fix) is the measured height of the
+ * measure toolbar plus a column gap while the toolbar is visible — written
+ * by a ResizeObserver in main.ts — and 0px whenever it is hidden. The
+ * toolbar is centred at the same `top: 56px` band this column anchors to,
+ * and activating Measure auto-opens the Measurements panel, so without the
+ * offset the panel painted OVER the toolbar's left half (hiding the first
+ * kind pills). Pushing the column's top down by the toolbar's real height
+ * keeps both fully visible at every viewport width, including phones where
+ * the wrapped toolbar is tall and spans the full row. */
 .olv-left-panels {
-  position: absolute; top: 56px; left: 14px;
+  position: absolute; top: calc(56px + var(--olv-measure-bar-clear, 0px)); left: 14px;
   display: flex; flex-direction: column; gap: var(--space-md);
-  max-height: calc(100% - 80px); overflow-y: auto;
+  max-height: calc(100% - 80px - var(--olv-measure-bar-clear, 0px)); overflow-y: auto;
   pointer-events: none;
 }
 .olv-left-panels > * { pointer-events: auto; }
@@ -2918,6 +2930,139 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     animation: none;
   }
 }
+/* Profile Intelligence summary (v0.4.5) — the civil headline numbers under
+ * the chart: a quiet two-column label/value grid in <dl> semantics. Mono
+ * tabular figures so the values column reads like a survey card. */
+.olv-mp-profile-summary {
+  display: grid; grid-template-columns: auto 1fr;
+  column-gap: var(--space-md); row-gap: var(--space-2xs);
+  margin: var(--space-2xs) var(--space-xs) 0 var(--space-xs);
+}
+.olv-mp-summary-row { display: contents; }
+.olv-mp-summary-label {
+  font-size: var(--text-2xs); color: var(--text-faint); white-space: nowrap;
+}
+.olv-mp-summary-value {
+  margin: 0; font-family: var(--mono); font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums; color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* Profile sampler controls (v0.4.5, B7/B8) — a collapsed <details> directly
+ * under the chart whose <summary> doubles as the chart caption: the corridor
+ * half-width, ground percentile and sample count that ACTUALLY shaped the
+ * chart (same provenance values the PDF header prints). Opening it exposes
+ * the inputs + Reset. Mono numerals so the caption reads as data. */
+.olv-mp-sampler {
+  margin: var(--space-2xs) var(--space-xs) 0 var(--space-xs);
+}
+.olv-mp-sampler-summary {
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  padding: var(--space-2xs) 0;
+  list-style: none;
+  user-select: none;
+}
+.olv-mp-sampler-summary::-webkit-details-marker { display: none; }
+.olv-mp-sampler-summary::before {
+  content: '\25B8';
+  display: inline-block;
+  margin-right: var(--space-xs);
+  transition: transform var(--dur-fast) ease-out;
+}
+.olv-mp-sampler[open] .olv-mp-sampler-summary::before {
+  transform: rotate(90deg);
+}
+.olv-mp-sampler-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) 0 var(--space-2xs) var(--space-sm);
+}
+.olv-mp-sampler-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.olv-mp-sampler-label {
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-mp-sampler-input {
+  width: 76px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 4px;
+  padding: var(--space-2xs) var(--space-xs);
+}
+.olv-mp-sampler-reset {
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  background: none;
+  border: 0.5px solid var(--hairline);
+  border-radius: 4px;
+  padding: var(--space-2xs) var(--space-xs);
+  cursor: pointer;
+}
+.olv-mp-sampler-reset:hover { color: var(--text-dim); }
+
+/* In-panel station table (v0.4.5, B5) — a collapsed <details> under the
+ * profile summary holding the exact station/chainage/elevation/grade rows
+ * (the same row model the CSV exports). Collapsed by default so a profile
+ * row stays compact; the wrap scrolls so a 64-station table can't swallow
+ * the panel. Summary styling mirrors `.olv-witness-summary` so disclosure
+ * affordances read identically across panels. */
+.olv-mp-stations {
+  margin: var(--space-2xs) var(--space-xs) 0 var(--space-xs);
+}
+.olv-mp-stations-summary {
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: var(--space-2xs) 0;
+  list-style: none;
+  user-select: none;
+}
+.olv-mp-stations-summary::-webkit-details-marker { display: none; }
+.olv-mp-stations-summary::before {
+  content: '\25B8';
+  display: inline-block;
+  margin-right: var(--space-xs);
+  transition: transform var(--dur-fast) ease-out;
+}
+.olv-mp-stations[open] .olv-mp-stations-summary::before {
+  transform: rotate(90deg);
+}
+.olv-mp-stations-wrap { max-height: 220px; overflow-y: auto; }
+.olv-mp-stations-table {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--mono); font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums; color: var(--text-dim);
+}
+.olv-mp-stations-th {
+  text-align: left; font-weight: 500; color: var(--text-faint);
+  padding: var(--space-2xs) var(--space-sm) var(--space-2xs) 0;
+  border-bottom: 0.5px solid var(--hairline);
+  position: sticky; top: 0; background: var(--panel);
+}
+.olv-mp-stations-td {
+  padding: var(--space-2xs) var(--space-sm) var(--space-2xs) 0;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+}
+
 /* "Clear profile" action row beneath a profile chart. The wrapper
  * pushes the button to the right so it doesn't compete visually with
  * the chart itself; the button borrows the same destructive rose
@@ -3296,6 +3441,21 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   color: var(--text-dim);
   margin-bottom: var(--space-2xl);
 }
+/* Key-term highlight in step copy (v0.4.5). <mark> defaults to the UA's
+   yellow (and, unstyled, key terms read like raw selection-blue against the
+   dark card) — restyle it into the brand vocabulary: accent-tinted pill,
+   readable accent text, rounded corners. */
+.olv-tour-mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-weight: 500;
+}
+/* Rapid Next-clicking double-click-selects card text, which looks like a
+   broken highlight; tour copy is read, not copied, so disable selection on
+   the whole card. */
+.olv-tour-card { user-select: none; -webkit-user-select: none; }
 .olv-tour-actions {
   display: flex;
   gap: var(--space-md);
@@ -4004,7 +4164,8 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 @media (max-width: 480px) {
   .olv-empty-title { font-size: 40px; }
   .olv-empty-sub { font-size: var(--text-md); max-width: 320px; }
-  .olv-empty-hero { width: 130px; height: 130px; margin-bottom: -4px; }
+  .olv-empty-hero { font-size: var(--text-sm); letter-spacing: 0.18em; margin-bottom: var(--space-sm); }
+  .olv-empty-hero-mark { width: 76px; height: 76px; }
   .olv-url-input { width: 100%; max-width: none; flex: 1 1 100%; }
   .olv-url-btn { width: 100%; }
   .olv-url-controls { flex-direction: column; gap: var(--space-md); }
@@ -4771,6 +4932,74 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-glyph { color: var(--rating-blocked); }
 .olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-label { color: var(--text-faint); }
 
+/* Terrain Products (v0.4.5) — the compact per-product status list rendered
+   ABOVE the workflow checklist. Real <ul>/<li> semantics (the reset below
+   strips the marker, not the role); the verdict is carried by the status
+   WORD next to the glyph, so colour is reinforcement, never the message. */
+.olv-analyse-products {
+  margin-top: var(--space-md); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-analyse-products-head {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  margin-bottom: var(--space-xs);
+}
+.olv-analyse-products-list {
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  margin: 0; padding: 0; list-style: none;
+}
+.olv-analyse-product {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+}
+.olv-analyse-product-head {
+  display: grid; grid-template-columns: 1em auto 1fr;
+  align-items: baseline; column-gap: var(--space-sm); min-width: 0;
+}
+.olv-analyse-product-glyph { text-align: center; font-weight: 700; line-height: 1; }
+.olv-analyse-product-label { font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
+.olv-analyse-product-status {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.04em; justify-self: start;
+}
+/* Line two: the engine-selected reason, IN FULL — it wraps, never ellipsizes,
+   and indents under the label so the glyph column stays a clean rail. Absent
+   on Ready rows (a ready product needs no excuse). */
+.olv-analyse-product-reason {
+  font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.45;
+  margin-left: calc(1em + var(--space-sm));
+  white-space: normal; overflow-wrap: break-word; min-width: 0;
+}
+.olv-analyse-product-reason-label {
+  font-family: var(--mono); font-weight: 500; letter-spacing: 0.04em;
+  text-transform: uppercase; font-size: 0.92em;
+  margin-right: var(--space-2xs);
+}
+.olv-analyse-product.is-ready .olv-analyse-product-glyph,
+.olv-analyse-product.is-ready .olv-analyse-product-status { color: var(--rating-excellent); }
+.olv-analyse-product.is-preview .olv-analyse-product-glyph,
+.olv-analyse-product.is-preview .olv-analyse-product-status { color: var(--rating-good); }
+.olv-analyse-product.is-blocked .olv-analyse-product-glyph,
+.olv-analyse-product.is-blocked .olv-analyse-product-status { color: var(--rating-blocked); }
+.olv-analyse-product.is-blocked .olv-analyse-product-label { color: var(--text-faint); }
+
+/* The original "Recommended workflow" checklist, kept available but collapsed
+   beneath the products list (same expander vocabulary as .olv-analyse-why). */
+.olv-analyse-workflow-details { margin-top: var(--space-xs); }
+.olv-analyse-workflow-details-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  letter-spacing: 0.04em; color: var(--text-faint);
+}
+.olv-analyse-workflow-details-summary::-webkit-details-marker { display: none; }
+.olv-analyse-workflow-details-summary::before { content: '▸ '; }
+.olv-analyse-workflow-details[open] .olv-analyse-workflow-details-summary::before { content: '▾ '; }
+/* Inside the expander the checklist doesn't need its own top rule — the
+   summary line already separates it. */
+.olv-analyse-workflow-details .olv-analyse-workflow {
+  margin-top: var(--space-xs); padding-top: 0; border-top: none;
+}
+
 /* "Why? — what's holding this back" — a collapsed honest cause/fix surface,
    shown only when the verdict is short of fully-good. */
 .olv-analyse-why { margin-top: var(--space-sm); }
@@ -5062,6 +5291,35 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   color: var(--accent); background: var(--accent-soft); font-weight: 600;
 }
 .olv-scan-type-opt:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
+/* Auto-detected pill (v0.4.5): while "Auto" is the SELECTED segment, the pill
+   matching the resolved verdict carries a small accent dot so the detection is
+   visible without being adopted as the active choice. Pairs with the pill's
+   aria-description and the "Auto (Interior)" label on the Auto segment. */
+.olv-scan-type-opt.is-detected { position: relative; color: var(--text); }
+.olv-scan-type-opt.is-detected::after {
+  content: '';
+  position: absolute; top: 3px; right: 4px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+}
+/* When the detected pill is ALSO the active one (manual choice matching
+   detection can't happen — detected only shows under Auto — but Auto itself
+   never gets the dot), keep the disabled state's muting authoritative. */
+.olv-scan-type-opt.is-detected.is-disabled { color: var(--text-dim); }
+/* Disabled segment — detection has ruled this route out (e.g. Terrain on an
+   interior/object scan). Same recipe as .olv-bc-pill.is-disabled; the hover
+   lift is suppressed so the segment reads as intentionally off. */
+.olv-scan-type-opt.is-disabled,
+.olv-scan-type-opt.is-disabled:hover {
+  opacity: 0.4; cursor: not-allowed;
+  color: var(--text-dim); background: rgba(255, 255, 255, 0.03);
+}
+/* The visible "why" line under the segmented group — shown only while a
+   segment is disabled, so the reason never relies on a hover title alone. */
+.olv-scan-type-reason {
+  margin: var(--space-2xs) 0 0;
+  font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.45;
+}
 
 /* ui-typography: tabular figures so numbers align in the data-heavy panels. */
 .olv-analyse-panel, .olv-object-panel, .olv-measure-panel { font-variant-numeric: tabular-nums; }

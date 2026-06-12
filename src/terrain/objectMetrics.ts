@@ -52,6 +52,13 @@ export interface ObjectMetricsParams {
   readonly maxSamples?: number;
   /** Points sampled for the O(n²) spacing/completeness passes. Default 2000. */
   readonly probeSamples?: number;
+  /**
+   * Honest source/resident point count when `positions` is itself already a
+   * strided gather of a larger scan. Feeds the spacing correction below so the
+   * reported resolution describes the SCAN, not the gather. Defaults to the
+   * point count of `positions`.
+   */
+  readonly sourcePointCount?: number;
 }
 
 /** Jacobi eigen-decomposition of a symmetric 3×3 — returns column eigenvectors. */
@@ -178,7 +185,21 @@ export function objectMetrics(
     if (Number.isFinite(best)) nnDist.push(Math.sqrt(best));
   }
   nnDist.sort((a, b) => a - b);
-  const medianSpacingM = nnDist.length ? nnDist[Math.floor(nnDist.length / 2)] : 0;
+  const probeSpacingM = nnDist.length ? nnDist[Math.floor(nnDist.length / 2)] : 0;
+  // The probe measures the spacing of P points; the SCAN has N (≥ P) points
+  // over the same surface. For uniform sampling of a 2-D manifold (what a
+  // scanned surface is) spacing scales as 1/√density, so the scan's spacing is
+  // the probe's × √(P/N). Without this the figure was inflated ~√(N/P) — e.g.
+  // ~5.5× on a 60 k gather probed at 2 000 (the v0.4.3 audit finding). N is
+  // the caller-supplied source count when the gather is itself a stride.
+  const fullCount = Math.max(
+    n,
+    Number.isFinite(params.sourcePointCount) && (params.sourcePointCount as number) > 0
+      ? Math.floor(params.sourcePointCount as number)
+      : 0,
+  );
+  const medianSpacingM =
+    P > 0 && fullCount > P ? probeSpacingM * Math.sqrt(P / fullCount) : probeSpacingM;
 
   // ── angular completeness — share of direction bins (from centroid) hit ──
   const LON = 24, LAT = 12;

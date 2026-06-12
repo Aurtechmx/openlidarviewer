@@ -28,6 +28,7 @@ class FakeEl {
   readonly tagName: string;
   constructor(tagName: string) { this.tagName = tagName; }
   setAttribute(): void { /* no-op */ }
+  removeAttribute(): void { /* no-op */ }
   set textContent(v: string) { this._text = v; }
   get textContent(): string {
     return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');

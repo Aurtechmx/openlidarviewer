@@ -90,6 +90,10 @@ describe('buildExportProvenance — field derivation', () => {
     const p = buildExportProvenance(readyResult(), OPTS);
     expect(p.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
     expect(p.notSurveyGrade).toMatch(/not survey-grade/i);
+    // v0.4.5 wording — plain "Suitability" language; the "Fitness-for-use"
+    // QA jargon confused users and must never come back.
+    expect(p.notSurveyGrade).toMatch(/^Suitability:/);
+    expect(p.notSurveyGrade).not.toMatch(/fitness/i);
   });
 
   it('says "not georeferenced" / "unknown" for missing CRS + datum (no fabrication)', () => {

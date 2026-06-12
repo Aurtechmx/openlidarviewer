@@ -14,6 +14,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { WorkflowItem } from '../src/terrain/contour/recommendedWorkflow';
+import type { TerrainProduct } from '../src/terrain/contour/terrainProducts';
 import type { Limitations } from '../src/terrain/contour/whyNotReasons';
 
 class FakeEl {
@@ -99,6 +100,66 @@ describe('renderWorkflowCard', () => {
     expect(glyphs[0].textContent).toBe('✓');
     expect(glyphs[3].textContent).toBe('⚠');
     expect(glyphs[5].textContent).toBe('✕');
+  });
+});
+
+describe('renderTerrainProducts', () => {
+  // A deliberately long, figure-quoting reason — the render must carry it
+  // byte-identical (full text, wrapping handled by CSS, never an ellipsis).
+  const LONG_REASON =
+    'Insufficient quality for reliable terrain products — only resident streaming nodes were walked, 72% of the surface is interpolated, and ground returns are sparse.';
+  const PRODUCTS: TerrainProduct[] = [
+    { label: 'Profiles', status: 'ready', statusWord: 'Ready', glyph: '✓' },
+    { label: 'DTM/DEM export', status: 'preview', statusWord: 'Preview', glyph: '⚠', reason: LONG_REASON },
+    { label: 'Map sheet', status: 'blocked', statusWord: 'Blocked', glyph: '✕', reason: 'quality gate stopped this surface' },
+  ];
+
+  it('renders real list semantics: one <ul> with one <li> per product', async () => {
+    const { renderTerrainProducts } = await load();
+    const card = renderTerrainProducts(PRODUCTS) as unknown as FakeEl;
+    expect(card.findTag('ul').length).toBe(1);
+    const items = card.findTag('li');
+    expect(items.length).toBe(PRODUCTS.length);
+    expect(items[0].classList.contains('is-ready')).toBe(true);
+    expect(items[1].classList.contains('is-preview')).toBe(true);
+    expect(items[2].classList.contains('is-blocked')).toBe(true);
+  });
+
+  it('is never colour-only: the status WORD is text, the glyph decorative', async () => {
+    const { renderTerrainProducts } = await load();
+    const card = renderTerrainProducts(PRODUCTS) as unknown as FakeEl;
+    const words = card.findAll('olv-analyse-product-status');
+    expect(words.map((w) => w.textContent)).toEqual(['Ready', 'Preview', 'Blocked']);
+    const glyphs = card.findAll('olv-analyse-product-glyph');
+    expect(glyphs.map((g) => g.textContent)).toEqual(['✓', '⚠', '✕']);
+    for (const g of glyphs) expect(g.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('two-line rows: a head line per product, a "Reason:" line only below Ready', async () => {
+    const { renderTerrainProducts } = await load();
+    const card = renderTerrainProducts(PRODUCTS) as unknown as FakeEl;
+    // Every row has the head line (glyph + label + status word).
+    expect(card.findAll('olv-analyse-product-head').length).toBe(3);
+    // Only the non-ready rows grow the second line; the Ready row has none.
+    const reasons = card.findAll('olv-analyse-product-reason');
+    expect(reasons.length).toBe(2);
+    const items = card.findTag('li');
+    expect(items[0].find('olv-analyse-product-reason')).toBeNull();
+    // The line is labelled "Reason:" for sighted users …
+    expect(reasons[0].find('olv-analyse-product-reason-label')!.textContent).toBe('Reason:');
+    // … and lives INSIDE the product's own <li>, so assistive tech reads
+    // product, status and reason as one list item.
+    expect(items[1].find('olv-analyse-product-reason')).not.toBeNull();
+    expect(items[2].find('olv-analyse-product-reason')).not.toBeNull();
+  });
+
+  it('carries the FULL reason text — byte-identical, never truncated', async () => {
+    const { renderTerrainProducts } = await load();
+    const card = renderTerrainProducts(PRODUCTS) as unknown as FakeEl;
+    const texts = card.findAll('olv-analyse-product-reason-text');
+    expect(texts[0].textContent).toBe(LONG_REASON); // the long one, whole
+    expect(texts[0].textContent).not.toContain('…');
+    expect(texts[1].textContent).toBe('quality gate stopped this surface');
   });
 });
 

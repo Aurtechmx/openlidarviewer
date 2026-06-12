@@ -52,9 +52,9 @@ deterministic. Run them with `npx vitest run`.
   estimates from the returns the analyser walked — not a survey
   certification. See
   [terrain-intelligence.md](../terrain-intelligence.md#what-confidence-means-and-what-it-does-not).
-- Terrain products are **fit for final deliverables only when the Terrain
-  Assessment reads Good**. Preview / Limited / Blocked surfaces are for
-  inspection and measurement; validate independently before relying on them.
+- Terrain products are **export-Ready only when the Terrain Assessment reads
+  Good**. Preview / Limited / Blocked surfaces are for inspection and
+  measurement; additional validation is recommended before relying on them.
 
 ## Manual pre-release checks
 

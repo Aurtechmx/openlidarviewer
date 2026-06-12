@@ -51,7 +51,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Inspect any point: click it to read its exact coordinates (UTM + lat/lon when CRS is known), intensity, classification, GPS time, and colour, then copy them in one click.
 - A Scan Intelligence panel that reports point count, dimensions, density, spacing, and detected attributes, plus a Dataset Intelligence card with honest `—` when no signal is available.
 - Visuals Studio with three chip rails for colour mode, RGB preset, and sky/EDL, plus white-balance assist on streaming COPC.
-- Theme system (Dark / Light / High-contrast), a command palette (`Cmd-K`), a workflow recorder (`.olvworkflow`), and a searchable shortcut sheet.
+- Theme system (Dark / Light / High-contrast), a command palette (`Cmd-K`), and a searchable shortcut sheet.
 - Save camera viewpoints, export PNG snapshots, re-export the cloud (PLY/OBJ/XYZ/CSV), or compose multi-page PDF technical reports.
 - A clean dark interface aimed at researchers, developers, and geospatial work.
 
@@ -116,7 +116,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 ### Annotation, sessions & reporting
 - Annotations — drop categorised, titled markers with notes, browse and search them in a panel, capture the camera viewpoint with each, and undo/redo changes
 - Inspection sessions — export measurements, annotations, and named views to one JSON file and reload them later
-- Workflow recorder — save and replay a `.olvworkflow` of camera moves, mode switches, and tool actions for repeatable demos and inspections
+- Workflow recorder — temporarily disabled in 0.4.5 while its shortcut and replay-file experience get a design pass (see the CHANGELOG); `.olvworkflow` recording/replay will return in a later release
 - Multi-page PDF technical reports — six built-in templates with branding and unit-system awareness
 - Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, and contour map exports
 - Screenshot export that burns in placed measurements and annotations as inspection evidence
