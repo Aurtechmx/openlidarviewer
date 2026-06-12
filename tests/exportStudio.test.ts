@@ -234,6 +234,156 @@ test('a larger focal distance produces a wider orthographic frame', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Georeferenced ortho path (v0.4.5, workplan C4) — world-file threading
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { shouldExportGeoreferencedOrtho } from '../src/export';
+
+/** Stub adapter with the georef hooks wired to fixed values. */
+function georefAdapter(opts: {
+  worldOrigin?: { x: number; y: number } | null;
+  wkt?: string | null;
+  aabb?: readonly [number, number, number, number, number, number] | null;
+  framed?: boolean;
+  framedReturnsNull?: boolean;
+}): ExportSceneAdapter & { framedCalls: Array<{ widthPx?: number }> } {
+  const base = stubAdapter({ aabb: opts.aabb });
+  const framedCalls: Array<{ widthPx?: number }> = [];
+  return {
+    ...base,
+    framedCalls,
+    georefContext: () => ({
+      worldOrigin: opts.worldOrigin ?? null,
+      wkt: opts.wkt ?? null,
+    }),
+    ...(opts.framed === false
+      ? {}
+      : {
+          framedTopDownSnapshot: async (o: { widthPx?: number }) => {
+            framedCalls.push(o);
+            if (opts.framedReturnsNull) return null;
+            // Hand-computed fixture: AABB [0,0,0,10,10,5] → footprint 10 × 10
+            // → at widthPx 200 the height is 200 (square footprint).
+            return {
+              blob: new Blob(['png'], { type: 'image/png' }),
+              widthPx: o.widthPx ?? 2048,
+              heightPx: o.widthPx ?? 2048,
+              extent: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+            };
+          },
+        }),
+  };
+}
+
+test('shouldExportGeoreferencedOrtho: all four gates must hold', () => {
+  const origin = { x: 500_000, y: 4_000_000 };
+  const wkt = 'PROJCS["test"]';
+  // Happy path.
+  expect(
+    shouldExportGeoreferencedOrtho(georefAdapter({ worldOrigin: origin, wkt }), ''),
+  ).toBe(true);
+  // No framed hook (older host / plain stub).
+  expect(
+    shouldExportGeoreferencedOrtho(
+      georefAdapter({ worldOrigin: origin, wkt, framed: false }),
+      '',
+    ),
+  ).toBe(false);
+  // No cloud loaded.
+  expect(
+    shouldExportGeoreferencedOrtho(
+      georefAdapter({ worldOrigin: origin, wkt, aabb: null }),
+      '',
+    ),
+  ).toBe(false);
+  // Missing world origin / missing or blank WKT — the .prj honesty gate.
+  expect(
+    shouldExportGeoreferencedOrtho(georefAdapter({ worldOrigin: null, wkt }), ''),
+  ).toBe(false);
+  expect(
+    shouldExportGeoreferencedOrtho(georefAdapter({ worldOrigin: origin, wkt: null }), ''),
+  ).toBe(false);
+  expect(
+    shouldExportGeoreferencedOrtho(georefAdapter({ worldOrigin: origin, wkt: '   ' }), ''),
+  ).toBe(false);
+  // Active class filter — the banner contract wins; stays a view capture.
+  expect(
+    shouldExportGeoreferencedOrtho(
+      georefAdapter({ worldOrigin: origin, wkt }),
+      'Ground + Building · 2 of 5 classes',
+    ),
+  ).toBe(false);
+  // A plain stub without georefContext at all.
+  expect(shouldExportGeoreferencedOrtho(stubAdapter({}), '')).toBe(false);
+});
+
+test('orthographic-rgb render: georeferenced path returns worldFile data verbatim', async () => {
+  const origin = { x: 500_000, y: 4_000_000 };
+  const adapter = georefAdapter({ worldOrigin: origin, wkt: '  PROJCS["test"]  ' });
+  const ctx = stubContext(adapter);
+  const result = await orthographicRgbExporter.render(ctx, { width: 200 });
+  expect(adapter.framedCalls).toEqual([{ widthPx: 200 }]);
+  expect(result.mode).toBe('orthographic-rgb');
+  expect(result.width).toBe(200);
+  expect(result.height).toBe(200);
+  expect(result.worldFile).toBeDefined();
+  expect(result.worldFile?.extent).toEqual({ minX: 0, minY: 0, maxX: 10, maxY: 10 });
+  expect(result.worldFile?.widthPx).toBe(200);
+  expect(result.worldFile?.heightPx).toBe(200);
+  expect(result.worldFile?.worldOrigin).toEqual(origin);
+  // WKT is trimmed before it travels — the .prj must not carry padding.
+  expect(result.worldFile?.wkt).toBe('PROJCS["test"]');
+  expect(result.metadata?.framing).toBe('top-down orthographic');
+});
+
+test('orthographic-rgb render: worldFile feeds buildStudioPngPackage end-to-end', async () => {
+  // The same threading main.ts performs: exporter result → zip package.
+  const { buildStudioPngPackage } = await import('../src/render/export/pngWorldFile');
+  const adapter = georefAdapter({
+    worldOrigin: { x: 100, y: 200 },
+    wkt: 'PROJCS["x"]',
+  });
+  const result = await orthographicRgbExporter.render(stubContext(adapter), { width: 200 });
+  const wf = result.worldFile!;
+  const pkg = buildStudioPngPackage({
+    basename: 'scan-orthographic-rgb',
+    png: new Uint8Array([1, 2, 3]),
+    extent: wf.extent,
+    widthPx: wf.widthPx,
+    heightPx: wf.heightPx,
+    worldOrigin: wf.worldOrigin,
+    wkt: wf.wkt,
+  });
+  expect(pkg).not.toBeNull();
+  expect(pkg?.georeferenced).toBe(true);
+  expect(pkg?.filename).toBe('scan-orthographic-rgb.zip');
+});
+
+test('orthographic-rgb render: a null framed render falls back to the view capture', async () => {
+  // framedTopDownSnapshot returning null (device hiccup) must not fail the
+  // export — it falls through to the WYSIWYG snapshot path, whose product
+  // carries NO worldFile. The fallback path composes the scan-report card
+  // through canvas APIs unavailable in Node, so we assert the fallthrough by
+  // the snapshot() call + the eventual (expected) canvas error, not by blob.
+  let snapshotCalled = false;
+  const adapter = georefAdapter({
+    worldOrigin: { x: 1, y: 2 },
+    wkt: 'PROJCS["x"]',
+    framedReturnsNull: true,
+  });
+  const orig = adapter.snapshot.bind(adapter);
+  adapter.snapshot = async (o) => {
+    snapshotCalled = true;
+    return orig(o);
+  };
+  await orthographicRgbExporter.render(stubContext(adapter), {}).catch(() => {
+    /* Node has no Image/canvas for the report-card composition — fine. */
+  });
+  expect(adapter.framedCalls.length).toBe(1);
+  expect(snapshotCalled).toBe(true);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HeightMapExporter — isAvailable + ramps
 // ─────────────────────────────────────────────────────────────────────────────
 

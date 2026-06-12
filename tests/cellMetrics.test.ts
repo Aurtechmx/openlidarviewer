@@ -68,6 +68,30 @@ describe('computeCellMetrics', () => {
     expect(fallback.meanDensity).toBeCloseTo(1, 6);
   });
 
+  it('countScale multiplies densities back to the SCAN (stride honesty)', () => {
+    // Hand-computed: 8 analysed points per 4 m² cell at a gather stride of 5
+    // means the SCAN put 40 points there → 10 pts/m², not 2.
+    const g = grid({
+      cols: 2, rows: 2, cellSizeM: 2,
+      coverage: [2, 2, 2, 2],
+      counts: [8, 8, 8, 8],
+    });
+    const scaled = computeCellMetrics(g, { countScale: 5 });
+    expect(scaled.metrics.pointDensity[0]).toBeCloseTo(10, 6);
+    expect(scaled.summary.meanDensity).toBeCloseTo(10, 6);
+    expect(scaled.summary.medianDensity).toBeCloseTo(10, 6);
+
+    // Default (1) and invalid scales leave the measured density alone — a
+    // scale below 1 would fabricate a density LOWER than what was measured.
+    expect(computeCellMetrics(g).summary.meanDensity).toBeCloseTo(2, 6);
+    expect(computeCellMetrics(g, { countScale: 0.5 }).summary.meanDensity).toBeCloseTo(2, 6);
+    expect(computeCellMetrics(g, { countScale: Number.NaN }).summary.meanDensity).toBeCloseTo(2, 6);
+
+    // Composes with the unit scale: feet cells AND a stride together.
+    const both = computeCellMetrics(g, { countScale: 5, horizontalUnitToMetres: 0.3048 });
+    expect(both.summary.meanDensity).toBeCloseTo(10 / (0.3048 * 0.3048), 4);
+  });
+
   it('local completeness is the measured fraction of the neighbourhood', () => {
     // Fully measured 3×3.
     const full = grid({

@@ -9,8 +9,12 @@ import fs from 'node:fs';
  * on CI runners (and any clone without the fixture) they skip cleanly.
  */
 
+// Resolved from the OLV_AUTZEN_FIXTURE env var, falling back to the repo
+// root — never a machine-specific absolute path, so any clone that drops the
+// fixture next to package.json (or exports the env var) runs the full suite.
 const COPC_FILE =
-  '/sessions/charming-vigilant-heisenberg/mnt/OPENLIDAR/autzen-classified.copc.laz';
+  process.env.OLV_AUTZEN_FIXTURE ??
+  new URL('../../autzen-classified.copc.laz', import.meta.url).pathname;
 
 /** True when the 80 MB autzen COPC fixture is on disk at COPC_FILE. */
 const hasAutzenFixture = fs.existsSync(COPC_FILE);

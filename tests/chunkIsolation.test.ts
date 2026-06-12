@@ -46,6 +46,20 @@ const REQUIRED_CHUNK_PREFIXES = [
   'EptChunkDecoder',
   'DebugOverlay',
   'streamingBenchmark',
+  // v0.4.5 — dynamic-import seams moved into lazyChunks.ts after the live
+  // transform's stringArray pass scrambled their inline specifiers (missing
+  // planetaryComputer / rgbAutoNormalize chunks; loadLas pre-warm 404).
+  'loadLas',
+  'planetaryComputer',
+  'rgbAutoNormalize',
+  'embedBridge',
+  // v0.4.5 — interior floor-plan pipeline + Space/Object report PDF, lazy
+  // via lazyChunks.ts (loadFloorPlan / loadSpaceReportPdf). Pinned so a
+  // re-inline (or a scrambled specifier) can't silently kill the Object
+  // panel's "Floor plan" / "Report PDF" exports on the deployed site.
+  'extractFloorPlan',
+  'floorPlanSvg',
+  'spaceReportPdf',
 ] as const;
 
 /**

@@ -24,11 +24,36 @@ import {
   type ChainOperation,
   type ChainResult,
 } from '../render/measure/measurementChains';
+// Profile Intelligence (v0.4.5) — pure summary + CSV builder shared with the
+// PDF so panel, sheet and data export can never disagree on a number. Light
+// (no pdf-lib), so a static import keeps the panel a leaf module.
+import {
+  buildProfileCsv,
+  computeProfileSummary,
+  profileStationRows,
+  profileSummaryRows,
+} from '../render/measure/profileSummary';
+// Δh in the chart tooltip goes through the shared formatter so it carries
+// its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
+// imperial mode).
+import { formatLength } from '../render/measure/format';
+// B7/B8 (v0.4.5) — sampler-control defaults + bounds, read from the sampler
+// module so the inputs, the controller clamp and the tests share one rule.
+import {
+  DEFAULT_GROUND_PERCENTILE,
+  MAX_CORRIDOR_HALF_WIDTH_M,
+  MIN_CORRIDOR_HALF_WIDTH_M,
+  PROFILE_SAMPLE_COUNT_OPTIONS,
+} from '../render/measure/profileSampler';
+import type { ProfileResampleParams } from '../render/measure/MeasureController';
+
+/** Metres → feet — the same factor the chart's imperial labels use. */
+const FT_PER_M = 3.28084;
 
 /**
  * The profile chart used to be 36 px tall,
  * which was too small to read slope, pick out features, or treat as a
- * deliverable. The CSS now defaults to ~140 px and lets the user drag
+ * deliverable. The CSS now defaults to 280 px and lets the user drag
  * the south-east handle (CSS `resize: vertical`). We persist the
  * chosen height under this key so the panel doesn't snap back on every
  * re-render. One key shared across all profile rows — users want
@@ -41,7 +66,7 @@ const PROFILE_CHART_HEIGHT_KEY = 'olv:measure:profile:chartHeightPx:v1';
  * pixels. Exported so the matching unit test (and any future code
  * path that needs to clamp a stored height) can read from the same
  * source of truth as the JS clamp below. Mirrored in `style.css`
- * (`.olv-mp-chart { min-height: 80px; }`); the
+ * (`.olv-mp-chart { min-height: 160px; }`); the
  * `profileChartHeightBounds.test.ts` spec pins the two against drift.
  */
 /** Panel-width resize bounds (drag the SE handle to widen the profile chart).
@@ -56,16 +81,26 @@ export const PROFILE_CHART_MIN_HEIGHT_PX = 160;
 export const PROFILE_CHART_MAX_HEIGHT_PX = 640;
 
 /**
- * v0.3.10 Profile-as-Deliverable — the profile chart now exposes a
- * vertical-exaggeration (VEX) picker so an analyst can read slope
- * discontinuities that a 1:1 chart would hide. Four canonical values
- * are surfaced: 1:1 (true scale), 2:1, 5:1, 10:1. Persisted globally
- * across all profile rows under the same key so the panel doesn't
- * snap back between renders. One key, all profiles — civil/survey
- * users want consistent reading scale, not per-profile memory.
+ * v0.3.10 Profile-as-Deliverable — the profile chart exposes a vertical
+ * stretch picker so an analyst can read slope discontinuities the fitted
+ * chart would hide. Four canonical multipliers: Fit (1), 2×, 5×, 10×.
+ * v0.4.5 honesty (B3): these are multiples of the FITTED elevation scale,
+ * not "N:1" paper ratios — the resizable chart stretches X and Y
+ * independently, so a true ratio is impossible to promise here (the PDF
+ * export states real 1:N scales). Persisted globally across all profile
+ * rows under the same key so the panel doesn't snap back between renders.
+ * One key, all profiles — civil/survey users want consistent reading
+ * scale, not per-profile memory.
  */
 export const PROFILE_VEX_OPTIONS = [1, 2, 5, 10] as const;
 const PROFILE_VEX_KEY = 'olv:measure:profile:vex:v1';
+
+/**
+ * Trailing-edge debounce for the sampler controls (B7/B8). Long enough to
+ * coalesce a held number-spinner burst into one resample, short enough that
+ * a single deliberate change still feels immediate.
+ */
+const SAMPLER_DEBOUNCE_MS = 250;
 
 /**
  * Pick the largest "nice" station interval that produces no more
@@ -105,9 +140,16 @@ export function niceElevationTicks(min: number, max: number, target = 4): number
   const norm = rawStep / mag;
   const niceUnit = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
   const step = niceUnit * mag;
+  // Crash guard (v0.4.5): a denormal-tiny span underflows `mag` to 0, which
+  // makes `step` 0 — and a `v += 0` loop pushes ticks forever until the tab
+  // dies of OOM. An infinite `step` (span near Number.MAX_VALUE) is the same
+  // class. Fall back to the two bounds: a degenerate axis, never a hang.
+  if (!Number.isFinite(step) || step <= 0) return [min, max];
   const first = Math.ceil(min / step) * step;
   const ticks: number[] = [];
-  for (let v = first; v <= max + step * 1e-6; v += step) {
+  // Belt-and-braces iteration cap — `target` is ~4, so 64 is far beyond any
+  // legitimate tick count and bounds the loop even on adversarial floats.
+  for (let v = first; v <= max + step * 1e-6 && ticks.length < 64; v += step) {
     // Snap to the step grid AND trim binary-float dust (e.g. 3 × 0.1 =
     // 0.30000000000000004) so labels read as clean 0.3 / 110 / 1200.
     const snapped = Math.round(v / step) * step;
@@ -181,6 +223,26 @@ export interface MeasurePanelCallbacks {
    * v0.3.10 Profile-as-Deliverable stream.
    */
   getUnitSystem?: () => 'metric' | 'imperial';
+  /**
+   * CRS provenance for the profile PDF header (v0.4.5, B4) — resolved by the
+   * host from the CRS service AT EXPORT TIME, so a late CRS confirmation or
+   * user override is reflected on the sheet. Optional; when absent (or when
+   * the scan is local/unknown) the PDF keeps its honest
+   * "— (not georeferenced)" fallback.
+   */
+  getProfileExportContext?: () => {
+    crs: string | null;
+    verticalDatum: string | null;
+  };
+  /**
+   * Re-sample one profile with user-set sampler parameters (B7/B8, v0.4.5):
+   * corridor half-width in METRES, bare-earth percentile, sample count. Null
+   * fields reset that parameter to its default (auto corridor / p25 / 64).
+   * The controller re-samples and emits a change; the panel re-renders with
+   * the values that actually shaped the new chart. Optional — without it the
+   * sampler controls are simply not rendered.
+   */
+  onProfileResample?: (id: string, params: ProfileResampleParams) => void;
 }
 
 export class MeasurePanel {
@@ -213,6 +275,13 @@ export class MeasurePanel {
    * `disconnect()` every one before rebuilding the list.
    */
   private _chartObservers: ResizeObserver[] = [];
+  /**
+   * Pending debounced sampler-resample timer (B7/B8). One panel-wide handle
+   * — the user can only interact with one control at a time, and a new edit
+   * anywhere supersedes the pending one. Cancelled by `_renderList` so a
+   * stale timer can never fire against torn-down inputs.
+   */
+  private _samplerTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(callbacks: MeasurePanelCallbacks) {
     this._cb = callbacks;
@@ -480,10 +549,25 @@ export class MeasurePanel {
     btn.textContent = 'Building…';
     try {
       const { buildProfilePdf } = await loadProfilePdf();
+      // B4 — pass everything the app actually knows. The builder has carried
+      // these parameters since v0.4.0; this call site discarding them was why
+      // every sheet printed "auto (5 % of length)" / "p25" /
+      // "not georeferenced" even when the CRS service had resolved the frame.
+      const ctx = this._cb.getProfileExportContext
+        ? this._cb.getProfileExportContext()
+        : null;
       const bytes = await buildProfilePdf({
         name: s.name,
         samples: s.profileChart,
         residentOnly: s.profileChartResidentOnly,
+        corridorWidthM: s.profileCorridorWidthM ?? null,
+        groundPercentile: s.profileGroundPercentile ?? null,
+        crs: ctx?.crs ?? null,
+        verticalDatum: ctx?.verticalDatum ?? null,
+        // B9 — the builder has honoured the unit system since the imperial
+        // sweep, but this call site never passed it, so every sheet printed
+        // metric regardless of the toggle. Same source the chart/CSV read.
+        unitSystem: this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
       });
       const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
@@ -505,6 +589,172 @@ export class MeasurePanel {
     }
     btn.textContent = label;
     btn.disabled = false;
+  }
+
+  /**
+   * Download the profile's station data as a CSV (station, chainage, ground
+   * elevation, corridor point count, grade-to-next), in the active unit
+   * system. Synchronous — the builder is pure string assembly, so unlike the
+   * PDF there is no chunk to load and no busy state to manage. v0.4.5,
+   * closing the "no profile CSV, station table PDF-only" audit gap.
+   */
+  private _exportProfileCsv(s: MeasurementSummary): void {
+    if (!s.profileChart || s.profileChart.length < 2) return;
+    const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+    const csv = buildProfileCsv(s.profileChart, system);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeFileName(s.name)}-profile.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  /**
+   * The profile sampler controls (B7/B8, v0.4.5): a `<details>` whose summary
+   * is the live caption — "Corridor ±… · ground p… · N samples" — and whose
+   * body holds the corridor / percentile / sample-count inputs plus a Reset.
+   * Corridor is entered in the display unit (m or ft) and converted to metres
+   * before it reaches the controller, which clamps to the shared bounds.
+   * Returns null when the host wired no resample callback or the row carries
+   * no chart (pre-chart session imports).
+   */
+  private _buildSamplerControls(
+    s: MeasurementSummary,
+    system: 'metric' | 'imperial',
+  ): HTMLElement | null {
+    const resample = this._cb.onProfileResample;
+    if (!resample || !s.profileChart || s.profileChart.length < 2) return null;
+    const imperial = system === 'imperial';
+    const corrM = s.profileCorridorWidthM;
+    const pct = s.profileGroundPercentile ?? DEFAULT_GROUND_PERCENTILE;
+    const nSamples = s.profileChart.length;
+
+    // Caption — the chart's provenance line. "auto" only appears for
+    // pre-v0.4.5 measurements whose record never stored the corridor.
+    const caption =
+      `Corridor ±${corrM != null ? formatLength(corrM, system) : 'auto'} · ` +
+      `ground p${pct} · ${nSamples} samples`;
+
+    const unitLabel = imperial ? 'ft' : 'm';
+    const toDisplay = (m: number): number => (imperial ? m * FT_PER_M : m);
+    const corrInput = el('input', {
+      className: 'olv-mp-sampler-input',
+      title:
+        'Corridor half-width on each side of the line — points beyond it are ' +
+        'ignored. Wider smooths; narrower follows micro-relief.',
+      ariaLabel: `Corridor half-width (${unitLabel})`,
+    }) as HTMLInputElement;
+    corrInput.type = 'number';
+    corrInput.min = String(toDisplay(MIN_CORRIDOR_HALF_WIDTH_M));
+    corrInput.max = String(Math.round(toDisplay(MAX_CORRIDOR_HALF_WIDTH_M)));
+    corrInput.step = 'any';
+    if (corrM != null) corrInput.value = String(Number(toDisplay(corrM).toFixed(2)));
+    else corrInput.placeholder = 'auto';
+
+    const pctInput = el('input', {
+      className: 'olv-mp-sampler-input',
+      title:
+        'Per-bin elevation percentile: 25 estimates bare earth (rejects ' +
+        'vegetation above), 50 is the median, 100 follows the canopy top.',
+      ariaLabel: 'Ground percentile (0–100)',
+    }) as HTMLInputElement;
+    pctInput.type = 'number';
+    pctInput.min = '0';
+    pctInput.max = '100';
+    pctInput.step = '5';
+    pctInput.value = String(pct);
+
+    const cntSelect = el('select', {
+      className: 'olv-mp-sampler-input',
+      title: 'Bins along the line — more bins resolve shorter features.',
+      ariaLabel: 'Sample count',
+    }) as HTMLSelectElement;
+    for (const n of PROFILE_SAMPLE_COUNT_OPTIONS) {
+      const opt = el('option', { text: String(n) }) as HTMLOptionElement;
+      opt.value = String(n);
+      cntSelect.append(opt);
+    }
+    // Pre-select the chart's actual bin count when it is one of the choices;
+    // otherwise fall back to the default so the select never lies silently
+    // (the caption above always states the true count).
+    cntSelect.value = (PROFILE_SAMPLE_COUNT_OPTIONS as readonly number[]).includes(nSamples)
+      ? String(nSamples)
+      : '64';
+
+    const apply = (): void => {
+      const rawCorr = corrInput.value.trim();
+      const corrVal = rawCorr === '' ? NaN : Number(rawCorr);
+      const cnt = Number(cntSelect.value);
+      const pctVal = Number(pctInput.value);
+      resample(s.id, {
+        // Empty input = keep auto; the controller clamps out-of-range values.
+        corridorWidthM: Number.isFinite(corrVal) ? (imperial ? corrVal / FT_PER_M : corrVal) : null,
+        groundPercentile: Number.isFinite(pctVal) ? pctVal : null,
+        sampleCount: Number.isFinite(cnt) ? cnt : null,
+      });
+    };
+    // Debounced apply — same timer-coalescing pattern the panel's resize
+    // persistence uses. Every successful resample re-renders the whole list
+    // (the controller emits a change), which REPLACES these inputs; holding
+    // a number spinner therefore fires a burst of 'change' events against a
+    // node that is being torn down per step. The trailing-edge debounce
+    // coalesces the burst into one resample after the user settles. Pending
+    // timers are tracked panel-wide so `_renderList` can cancel them before
+    // rebuilding (the same hygiene `_chartObservers` gets) — a stale timer
+    // firing after a re-render would resample with values that already
+    // shaped the chart.
+    const applyDebounced = (): void => {
+      if (this._samplerTimer !== null) clearTimeout(this._samplerTimer);
+      this._samplerTimer = setTimeout(() => {
+        this._samplerTimer = null;
+        apply();
+      }, SAMPLER_DEBOUNCE_MS);
+    };
+    corrInput.addEventListener('change', applyDebounced);
+    pctInput.addEventListener('change', applyDebounced);
+    cntSelect.addEventListener('change', applyDebounced);
+
+    const resetBtn = el('button', {
+      className: 'olv-mp-sampler-reset',
+      text: 'Reset',
+      title: 'Back to the defaults — auto corridor (5% of length), p25, 64 samples',
+      ariaLabel: `Reset sampling parameters for ${s.name}`,
+    });
+    resetBtn.addEventListener('click', () => {
+      resetBtn.blur();
+      // Reset is immediate and beats any pending debounced edit — a stale
+      // timer firing after this would re-apply the values just discarded.
+      if (this._samplerTimer !== null) {
+        clearTimeout(this._samplerTimer);
+        this._samplerTimer = null;
+      }
+      resample(s.id, { corridorWidthM: null, groundPercentile: null, sampleCount: null });
+    });
+
+    const field = (labelText: string, input: HTMLElement): HTMLElement =>
+      el('label', { className: 'olv-mp-sampler-field' }, [
+        el('span', { className: 'olv-mp-sampler-label', text: labelText }),
+        input,
+      ]);
+
+    const body = el('div', { className: 'olv-mp-sampler-body' }, [
+      field(`Corridor ± (${unitLabel})`, corrInput),
+      field('Ground percentile', pctInput),
+      field('Samples', cntSelect),
+      resetBtn,
+    ]);
+    return el('details', { className: 'olv-mp-sampler' }, [
+      el('summary', {
+        className: 'olv-mp-sampler-summary',
+        text: caption,
+        title: 'The sampling parameters that shaped this chart — open to adjust.',
+      }),
+      body,
+    ]);
   }
 
   /** Rebuild the measurement list from the controller's summaries. */
@@ -529,6 +779,13 @@ export class MeasurePanel {
     // see `_chartObservers` for the full rationale.
     for (const ro of this._chartObservers) ro.disconnect();
     this._chartObservers = [];
+    // Cancel any pending debounced resample — its closure references inputs
+    // this rebuild is about to replace, and the values it would apply
+    // already shaped the chart being rendered (resample → change → here).
+    if (this._samplerTimer !== null) {
+      clearTimeout(this._samplerTimer);
+      this._samplerTimer = null;
+    }
 
     if (this._summaries.length === 0) {
       this._list.replaceChildren(
@@ -597,18 +854,34 @@ export class MeasurePanel {
       // chip writes the new VEX to localStorage and triggers a
       // re-render of the whole measurements list, so every profile
       // row picks up the new scale consistently.
+      // B3 honesty (v0.4.5): the chips used to read "1:1 / 2:1 / …" but the
+      // chart is NOT a true-ratio drawing — `preserveAspectRatio="none"`
+      // stretches X and Y independently with the dragged panel size, so
+      // "1:1" never meant 1:1. The control now says what it actually does:
+      // "Fit" fills the height with the elevation band, and N× stretches
+      // that fitted scale (clipping what leaves the band). True stated 1:N
+      // scales live on the PDF export, which computes real paper ratios.
       const vexStrip = el('div', {
         className: 'olv-mp-vex-strip',
-        title: 'Vertical exaggeration — visually scales the elevation axis',
-        ariaLabel: 'Vertical exaggeration',
+        title:
+          'Vertical stretch — multiplies the fitted elevation scale. ' +
+          'Not a true-ratio drawing (the chart stretches with the panel); ' +
+          'use Export PDF for stated 1:N scales.',
+        ariaLabel: 'Vertical stretch',
       });
       vexStrip.setAttribute('role', 'radiogroup');
       for (const v of PROFILE_VEX_OPTIONS) {
         const chip = el('button', {
           className: 'olv-mp-vex-chip' + (v === vex ? ' olv-mp-vex-chip-active' : ''),
-          text: `${v}:1`,
-          title: `${v}:1 vertical exaggeration`,
-          ariaLabel: `Set vertical exaggeration to ${v} to 1`,
+          text: v === 1 ? 'Fit' : `${v}×`,
+          title:
+            v === 1
+              ? 'Fit — the elevation band fills the chart height'
+              : `${v}× vertical stretch of the fitted scale (relief outside the band is clipped)`,
+          ariaLabel:
+            v === 1
+              ? 'Fit the elevation band to the chart height'
+              : `Set vertical stretch to ${v} times the fitted scale`,
         });
         chip.setAttribute('role', 'radio');
         chip.setAttribute('aria-checked', v === vex ? 'true' : 'false');
@@ -675,7 +948,91 @@ export class MeasurePanel {
           );
         }
       }
-      const children: HTMLElement[] = [headRow, chart, vexStrip];
+      // Sampler controls + caption (v0.4.5, B7/B8). The caption — the values
+      // that ACTUALLY shaped the chart (corridor half-width, ground
+      // percentile, sample count) — doubles as the disclosure summary so it
+      // is always visible under the chart; opening it exposes the inputs.
+      // Same provenance values the PDF header prints, so screen and sheet
+      // can never disagree.
+      const samplerBlock = this._buildSamplerControls(s, system);
+      // Profile Intelligence summary (v0.4.5) — the civil headline numbers
+      // beneath the chart, so length / gain / steepest section are readable
+      // without exporting a PDF. Pure module computes; the panel only renders.
+      // Description-list semantics so a screen reader pairs each label with
+      // its value (the chart itself stays decorative/aria-hidden).
+      const summary = computeProfileSummary(s.profileChart);
+      const summaryList = el('dl', {
+        className: 'olv-mp-profile-summary',
+        ariaLabel: `Profile summary for ${s.name}`,
+      });
+      for (const row of profileSummaryRows(summary, system)) {
+        summaryList.append(
+          el('div', { className: 'olv-mp-summary-row' }, [
+            el('dt', { className: 'olv-mp-summary-label', text: row.label }),
+            el('dd', { className: 'olv-mp-summary-value', text: row.value }),
+          ]),
+        );
+      }
+      // In-panel station table (v0.4.5, B5) — collapsed by default so the
+      // row stays compact, but the exact station/chainage/elevation values
+      // are finally readable (and screen-reader reachable) WITHOUT exporting
+      // a PDF. Built from `profileStationRows`, the same row model the CSV
+      // writes, so the on-screen numbers and the export can never disagree.
+      // This is also what makes the chart's aria-hidden honest: there is now
+      // a real table in the DOM acting as the accessible source of truth.
+      const stationRows = profileStationRows(s.profileChart, system);
+      const unitLabel = system === 'metric' ? 'm' : 'ft';
+      const headerCells = [
+        'Station',
+        `Chainage (${unitLabel})`,
+        `Elevation (${unitLabel})`,
+        'Points',
+        'Grade (%)',
+      ].map((h) => {
+        const th = el('th', { className: 'olv-mp-stations-th', text: h });
+        th.setAttribute('scope', 'col');
+        return th;
+      });
+      const tbody = el('tbody');
+      for (const r of stationRows) {
+        // The row model uses '' for honest gaps (CSV blanks); the table
+        // shows an em dash so a gap is visibly "no data", not an empty cell.
+        const dash = (v: string) => (v === '' ? '—' : v);
+        tbody.append(
+          el('tr', {}, [
+            el('td', { className: 'olv-mp-stations-td', text: r.station }),
+            el('td', { className: 'olv-mp-stations-td', text: dash(r.chainage) }),
+            el('td', { className: 'olv-mp-stations-td', text: dash(r.elevation) }),
+            el('td', { className: 'olv-mp-stations-td', text: dash(r.points) }),
+            el('td', { className: 'olv-mp-stations-td', text: dash(r.grade) }),
+          ]),
+        );
+      }
+      const stationTable = el(
+        'table',
+        {
+          className: 'olv-mp-stations-table',
+          ariaLabel: `Station table for ${s.name}`,
+        },
+        [el('thead', {}, [el('tr', {}, headerCells)]), tbody],
+      );
+      const stationDetails = el('details', { className: 'olv-mp-stations' }, [
+        el('summary', {
+          className: 'olv-mp-stations-summary',
+          text: `Station table (${stationRows.length})`,
+          title: 'Exact station / chainage / elevation / grade values — the same rows the CSV exports.',
+        }),
+        el('div', { className: 'olv-mp-stations-wrap' }, [stationTable]),
+      ]);
+
+      const children: HTMLElement[] = [
+        headRow,
+        chart,
+        vexStrip,
+        ...(samplerBlock ? [samplerBlock] : []),
+        summaryList,
+        stationDetails,
+      ];
       // Streaming-resident caveat: surface a coverage caption beneath the
       // chart so the analyst understands the profile only reflects the
       // points currently resident in memory, and may refine as more
@@ -710,7 +1067,23 @@ export class MeasurePanel {
         pdfBtn.blur();
         void this._exportProfilePdf(s, pdfBtn);
       });
+      // v0.4.5 — station-data CSV next to the PDF: the audit gap was "no
+      // profile CSV, station table PDF-only". Pure builder, synchronous, no
+      // lazy chunk needed.
+      const csvBtn = el('button', {
+        className: 'olv-mp-profile-pdf',
+        text: 'CSV',
+        title:
+          `Export ${s.name} station data as CSV — ` +
+          'station, chainage, ground elevation, corridor point count, grade.',
+        ariaLabel: `Export profile ${s.name} station data as CSV`,
+      });
+      csvBtn.addEventListener('click', () => {
+        csvBtn.blur();
+        this._exportProfileCsv(s);
+      });
       const clearAction = el('div', { className: 'olv-mp-row-action' }, [
+        csvBtn,
         pdfBtn,
         el('button', {
           className: 'olv-mp-profile-clear',
@@ -757,11 +1130,14 @@ export class MeasurePanel {
  *   - X-axis chainage labels at every major gridline.
  *   - Y-axis elevation labels at the top and bottom of the band.
  *   - Station tick marks above the X axis at every major chainage.
- *   - Vertical exaggeration (VEX) applied to the Y mapping — chart is
- *     drawn at the chosen ratio so a 1 % grade reads as 1 % on the
- *     wall (or 10 % at VEX 10:1).
- *   - The "what scale is this" indicator burned into the bottom-right
- *     corner so a screenshot or PDF export is unambiguous.
+ *   - Vertical stretch applied to the Y mapping. v0.4.5 honesty (B3):
+ *     this is a multiple of the FITTED scale, not a true paper ratio —
+ *     `preserveAspectRatio="none"` stretches X and Y independently with
+ *     the dragged panel size, so a stated "1:1" was never true. The
+ *     control/badge now say "Fit / N× fit", relief leaving the band is
+ *     clipped (SVG clip-path), and true 1:N scales live on the PDF.
+ *   - The "what stretch is this" badge burned into the corner so a
+ *     screenshot is unambiguous.
  *
  * NaN samples still split the line — a gap reads as a discontinuity,
  * not a phantom interpolation. The "no coverage" empty state is
@@ -771,6 +1147,14 @@ export class MeasurePanel {
  * the resizable wrapper (`.olv-mp-chart`). `preserveAspectRatio="none"`
  * stretches the viewBox to fill the box.
  */
+/**
+ * Monotonic counter for per-chart SVG clip-path ids. Clip-path ids are
+ * document-global, and several profile rows can be in the DOM at once —
+ * a fixed id would make every chart clip against whichever <defs> the
+ * browser resolves first.
+ */
+let chartClipSeq = 0;
+
 function renderProfileChart(
   samples: readonly { distance: number; height: number }[],
   vex: number,
@@ -793,7 +1177,11 @@ function renderProfileChart(
   let yMin = Infinity;
   let yMax = -Infinity;
   for (const s of samples) {
-    if (!Number.isFinite(s.height)) continue;
+    // A non-finite DISTANCE is excluded too (v0.4.5 crash guard): an
+    // Infinity chainage would make `xSpan` infinite, and the station /
+    // minor-grid walks below would then push gridlines forever — a frozen
+    // tab, not a chart. Such a sample is corrupt; treat it as a gap.
+    if (!Number.isFinite(s.height) || !Number.isFinite(s.distance)) continue;
     if (s.distance < xMin) xMin = s.distance;
     if (s.distance > xMax) xMax = s.distance;
     if (s.height < yMin) yMin = s.height;
@@ -830,7 +1218,9 @@ function renderProfileChart(
   const runs: Array<Array<{ x: number; y: number }>> = [];
   let run: Array<{ x: number; y: number }> = [];
   for (const s of samples) {
-    if (!Number.isFinite(s.height)) {
+    // Same corrupt-sample rule as the bounds scan above: a non-finite
+    // distance OR height is a gap, never a plotted point.
+    if (!Number.isFinite(s.height) || !Number.isFinite(s.distance)) {
       if (run.length) {
         runs.push(run);
         run = [];
@@ -856,14 +1246,21 @@ function renderProfileChart(
   // joined. Gaps are never bridged.
   const paths = runs.map((pts) => catmullRomPath(pts));
 
-  // Station spacing — civil convention.
+  // Station spacing — civil convention. The walks are iteration-capped
+  // (v0.4.5 crash guard): `xSpan` is finite by the bounds scan above, but a
+  // float-accumulator loop inside a render path must be bounded by
+  // construction — an unbounded push here is a frozen tab.
   const stationInterval = autoStationInterval(xSpan);
   const stations: number[] = [];
-  for (let c = 0; c <= xSpan + 1e-9; c += stationInterval) stations.push(c);
+  for (let c = 0; c <= xSpan + 1e-9 && stations.length < 256; c += stationInterval) {
+    stations.push(c);
+  }
   // Minor grid: 5 divisions per major.
   const minorInterval = stationInterval / 5;
   const minorTicks: number[] = [];
-  for (let c = 0; c <= xSpan + 1e-9; c += minorInterval) minorTicks.push(c);
+  for (let c = 0; c <= xSpan + 1e-9 && minorTicks.length < 1280; c += minorInterval) {
+    minorTicks.push(c);
+  }
 
   // Visible (VEX-scaled) elevation band — the labels must report the band
   // actually drawn, not the data extremes, or the numbers wouldn't match the
@@ -889,8 +1286,19 @@ function renderProfileChart(
     }
     return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
   };
+  // Imperial tick decimals (B9): rounding to whole feet collapsed adjacent
+  // labels on sub-metre relief (a 0.2 m step is 0.66 ft — every tick read
+  // the same number). Derive the decimal count from the tick STEP in feet,
+  // same rule the metric branch applies to metres.
+  const elevDecimalsFt = (() => {
+    if (yTicks.length >= 2) {
+      const stepFt = Math.abs(yTicks[1] - yTicks[0]) * 3.28084;
+      return stepFt >= 1 ? 0 : stepFt >= 0.1 ? 1 : 2;
+    }
+    return 1;
+  })();
   const formatElevation = (m: number): string => {
-    if (system === 'imperial') return `${Math.round(m * 3.28084)} ft`;
+    if (system === 'imperial') return `${(m * 3.28084).toFixed(elevDecimalsFt)} ft`;
     return `${m.toFixed(elevDecimals)} m`;
   };
 
@@ -940,14 +1348,27 @@ function renderProfileChart(
     )
     .join('');
 
+  // Clip the curve to the plot box (B3). At >1× vertical stretch the mapped
+  // Y runs outside the visible band by construction; without a clip-path the
+  // curve silently overdrew the axis labels and chart frame, which made the
+  // stretch look like a rendering bug rather than a deliberate crop. The id
+  // is per-chart (module counter) — multiple profile rows share one DOM and
+  // SVG clip-path ids are document-global.
+  const clipId = `olv-mp-clip-${chartClipSeq++}`;
+  const clipDef =
+    `<defs><clipPath id="${clipId}">` +
+    `<rect x="${plotLeft}" y="${plotTop}" width="${plotW}" height="${plotH}"/>` +
+    `</clipPath></defs>`;
+
   const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    ${minorGridParts}${majorGridParts}${yGridParts}${yAxisRules}${stationCaps}${pathParts}
+    ${clipDef}${minorGridParts}${majorGridParts}${yGridParts}${yAxisRules}${stationCaps}<g clip-path="url(#${clipId})">${pathParts}</g>
   </svg>`;
 
   // ── HTML overlay: every numeral, in the brand mono with tabular figures,
   //    positioned by box-fraction so it never inherits the SVG's horizontal
-  //    stretch. Decorative (aria-hidden) — the station/elevation table below
-  //    is the screen-reader source of truth.
+  //    stretch. Decorative (aria-hidden) — the collapsible station TABLE the
+  //    panel renders beneath the summary (v0.4.5, B5) is the screen-reader
+  //    source of truth for exact station/elevation values.
   const MAX_X_LABELS = 6;
   const lastIdx = stations.length - 1;
   const labelStride = Math.max(1, Math.ceil(stations.length / MAX_X_LABELS));
@@ -969,13 +1390,19 @@ function renderProfileChart(
         `<span class="olv-mp-axis olv-mp-axis-y" style="top:${yPct(v).toFixed(2)}%">${formatElevation(v)}</span>`,
     )
     .join('');
-  const vexBadge = `<span class="olv-mp-axis olv-mp-vex-badge">VEX ${vex}:1</span>`;
+  // Honest badge (B3): "VEX 5:1" implied a true paper ratio the resizable,
+  // independently-stretched chart cannot promise. "5× fit" states what the
+  // mapping really is — five times the fitted elevation scale.
+  const vexLabel = vex === 1 ? 'Fit' : `${vex}× fit`;
+  const vexBadge = `<span class="olv-mp-axis olv-mp-vex-badge">${vexLabel}</span>`;
   const overlay = `<div class="olv-mp-chart-labels" aria-hidden="true">${yLabelHtml}${xLabelHtml}${vexBadge}</div>`;
 
   const trueSpan = yMax - yMin;
+  // Δh through the shared formatter so it carries its unit in both unit
+  // systems (B9 — this tooltip used to hardcode "m" in imperial mode).
   const title =
-    `${samples.length} samples · Δh ${trueSpan.toFixed(2)} m · ` +
-    `station interval ${formatChainage(stationInterval)} · VEX ${vex}:1 · ` +
+    `${samples.length} samples · Δh ${formatLength(trueSpan, system)} · ` +
+    `station interval ${formatChainage(stationInterval)} · vertical ${vexLabel} · ` +
     `drag bottom-right to resize`;
   return el('div', { className: 'olv-mp-chart', unsafeHtml: svg + overlay, title });
 }

@@ -53,6 +53,7 @@ import {
   getCuratedLocation,
 } from '../io/catalog/curatedLocations';
 import type { PcStacItem } from '../io/catalog/planetaryComputer';
+import { loadPlanetaryComputerCatalog } from '../lazyChunks';
 
 export interface CatalogPanelOptions {
   /**
@@ -344,7 +345,9 @@ export class CatalogPanel {
     status.textContent = '';
     results.replaceChildren();
     try {
-      const mod = await import('../io/catalog/planetaryComputer');
+      // Reached through lazyChunks so the live transform can't scramble
+      // the import specifier (see lazyChunks.ts).
+      const mod = await loadPlanetaryComputerCatalog();
       const items = await mod.searchByLatLon(
         { lat, lon, signal: this._pcAbort.signal },
       );

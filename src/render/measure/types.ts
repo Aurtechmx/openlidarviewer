@@ -65,6 +65,13 @@ export interface ProfileChartSample {
   distance: number;
   /** Elevation at this distance, measured along the world up vector. */
   height: number;
+  /**
+   * Corridor point count behind this bin's elevation estimate. Optional so a
+   * measurement loaded from a pre-v0.4.5 session file (recorded before the
+   * sampler stored counts) still validates; consumers (the profile CSV)
+   * render an honest blank rather than a fabricated 0.
+   */
+  count?: number;
 }
 
 /**
@@ -130,6 +137,20 @@ export interface Measurement {
    * the profile can change as more nodes stream in.
    */
   profileChartResidentOnly?: boolean;
+  /**
+   * Profile only — the corridor half-width the sampler ACTUALLY used, in
+   * RENDER (source) units, the same space as `points`. Stamped at commit
+   * (v0.4.5, B4) so the PDF/CSV provenance can print the real value instead
+   * of "auto"; converted to metres at the controller's summary boundary
+   * alongside the chart series. Optional: pre-v0.4.5 measurements omit it.
+   */
+  profileCorridorWidth?: number;
+  /**
+   * Profile only — the bare-earth percentile (0..100) the sampler reduced
+   * each corridor with. Dimensionless, so no unit conversion. Optional, same
+   * provenance rationale as `profileCorridorWidth`.
+   */
+  profileGroundPercentile?: number;
   /**
    * Volume only — the cut/fill record from `volumeCutFill`. Optional so
    * a volume measurement loaded from a session file that pre-dates the

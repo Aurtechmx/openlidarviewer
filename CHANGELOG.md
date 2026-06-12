@@ -2,6 +2,695 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.5] - 2026-06-10
+
+The honesty-and-deliverables release: one readiness engine behind every export
+verdict, a colourblind-safe confidence overlay, profile intelligence (summary,
+station table, CSV, sampler controls), the Terrain Intelligence Report,
+workflow presets, true measurement units on foot-CRS scans, and an accessible
+onboarding tour.
+
+### Fixed
+
+- (2026-06-12 amendment) The streaming settle one-shot could STILL leave an
+  interior scan uncommitted — the field report after the depth-gate +
+  spend-on-verdict fix below. The remaining hole was the spend rule itself:
+  "spend once detection reached a verdict" also spent on a verdict the
+  planner REFUSED. Past the depth gate the resident set can still be
+  ceiling-heavy (the gather walks the coarse nodes first), so the settled
+  evaluation can read TERRAIN against a standing interior route; the
+  mid-session no-flip guard rightly refuses that flip — no apply, no commit —
+  but the one-shot counted it as "reached a verdict", spent itself, and the
+  "Treat as" pill stayed on Auto forever while the panel showed Interior.
+  `settleOneShotSpent` now spends only when the verdict actually LANDED
+  (the planner applied it, or the settled soft-commit fired) or when no
+  commit can ever come (pinned / manual override); a refused verdict and an
+  undecidable frame both RE-ARM the one-shot. Re-attempts are gated on the
+  resident set actually changing (re-reading an identical idle frame cannot
+  change the verdict; a failed gather may retry at once) and bounded by
+  `SETTLE_RETRY_CAP` (40) so a permanently refused scan can never
+  re-classify on every poll forever. The exact failure sequence is pinned in
+  `tests/streamingSettleCommit.test.ts`: settle at depth 2 reads terrain
+  (refused, one-shot stays armed, no churn on the unchanged frame) → a later
+  ready poll on grown geometry reads interior → the Interior pill commits;
+  plus the retry-cap bound.
+- (2026-06-12 amendment) Opening the interior floor-plan SVG (or the Space
+  Report PDF embedding the same model) could make the machine crawl on a
+  dense scan: the emitted geometry was unbounded. The DECORATIVE scanned-
+  floor fill traced every furniture-occlusion shadow and unhealed pinhole
+  into its own hole subpath — a synthetic dense patchy room reproduced 200+
+  hole rings (~86% of all emitted vertices) on a single room, scaling
+  linearly with scan area — the wall mask can reach 1024² cells, and every
+  classified unknown gap became its own dashed segment. The model now ships
+  with budgets: the floor fill drops holes, keeps only the largest outer
+  regions (≤ 24), and simplifies at twice the wall tolerance; every layer
+  has a vertex budget (walls 3 500 / floor 1 000 / contents 500 ≤
+  `PLAN_VERTEX_BUDGET` 5 000) enforced by proportional Douglas-Peucker
+  tightening then smallest-ring dropping (`capRingVertices` — DP only ever
+  removes raster vertices, nothing is fabricated); and dashed unknown gaps
+  are deduped and capped at the 32 widest (`MAX_UNKNOWN_GAPS`) while the
+  footer keeps reporting the full classified tally. The dense-room sheet is
+  byte-size pinned in `tests/floorPlanBudget.test.ts`; the same budgeted
+  model feeds the PDF embed. Floor AREA is still measured on the raw
+  presence mask before any of this — the printed figure is unaffected.
+- (2026-06-12 amendment) The floor-plan sheet reads like an actual floor
+  plan: overall W × D dimension lines are drawn architecturally (extension
+  lines off the plan corners, 45° ticks, the measurement written on the
+  line, depth label rotated along its line); the dims line prints the floor
+  area from the scanned-floor fill region — never the bbox product, so an
+  L-shaped room prints its true ~68 m², not 80 (`tests/
+  floorPlanSheetCalibration.test.ts` pins it against the model figure); and
+  the wall poché renders at a 0.10 m architectural minimum (a stud wall is
+  ≥ ~0.09 m — the 5 cm mask-cell strip read toy-like), with the stroke
+  symmetrically widening the traced strip and a footer note keeping the
+  honest MEASURED thickness on the sheet. Geometry is untouched and walls
+  measured at/above the minimum keep a hairline outline only.
+- With "Treat scan as" on Auto, the terrain Surface-Quality/Analyse panel
+  could surface on its own for a scan whose settled verdict is interior: a
+  sparse mid-stream frame can momentarily read as terrain, and the streaming
+  re-evaluation flipped the session's panels to terrain before the
+  fully-resident geometry corrected the verdict. The routing decision now
+  lives in a pure, matrix-tested planner (`planScanRoute`): a streaming
+  re-evaluation can only re-route TOWARD the Object/Space panel (its purpose
+  is rescuing interiors/objects misread on a sparse early frame) and never
+  flips the session to terrain, and the terrain pipeline NEVER auto-runs from
+  detection — only the explicit "Run terrain contours anyway" hatch or a
+  manual Terrain override expands the Analyse panel and starts an analysis,
+  exactly as before. The "Treat as" control also stops hiding what Auto
+  resolved to: while Auto stays the selected mode, its label reads
+  "Auto (Interior)" (or Object / Terrain) and the detected pill carries a
+  small accent dot plus an aria-description, so "detected as interior" is
+  visible at a glance instead of living only in hover titles. Once the
+  verdict SETTLES — the open-time detection of a fully loaded static file,
+  or the one-shot re-evaluation when a streaming cloud reaches "Streaming
+  ready" — the control soft-commits: the detected pill becomes the selected
+  segment (aria-pressed), still wearing its "detected" accent dot so the
+  auto-detected origin stays visible, and Auto reverts to a plain pill whose
+  click re-runs detection. The commit is detection-sourced, never a manual
+  override: no "(manual)" note, no routing pin (the streaming guards behave
+  exactly as before — `planScanRoute` still routes on the effective type),
+  it resets to Auto on every new scan and on any user click, and it only
+  fires when the settled verdict matches the route actually standing (a
+  settled terrain read against a standing interior route never claims the
+  pill — the routing guard refused it). Sparse mid-stream frames only ever
+  route, never commit. Route-matrix
+  tests pin every cell: interior/object-detected + Auto ⇒ Object panel, no
+  terrain panel, no run; terrain-detected ⇒ panel shown collapsed, still no
+  auto-run; hatch and manual overrides still run; re-evaluation never flips
+  to terrain and still rescues an early terrain misread into interior.
+- The settled soft-commit above could silently never land on a streamed scan:
+  the "Streaming ready" poll fired the settle one-shot on the FIRST
+  scheduler-idle frame and spent it unconditionally — but the scheduler often
+  reads idle at the root level (depth 0, the same reality the streaming
+  benchmark's coarse-stable guard documents) long before the cloud fills in,
+  so the one-shot ran on a sparse frame whose verdict was terrain (refused by
+  the mid-session no-flip guard — no apply, no commit) or undecidable (gather
+  empty — no commit possible), and the GENUINE settle later could never move
+  the "Treat as" pill off Auto ("Streaming ready" + Terrain disabled with the
+  interior reason + Auto still selected). Two guards now keep the one-shot
+  THE settled verdict: a depth gate (`settleTargetDepth` — the settled
+  evaluation isn't even attempted until the resident set spans the
+  hierarchy's own depth, capped at 2, mirroring the coarse-stable guard) and
+  spend-on-verdict (`settleOneShotSpent` — `applyScanRoute` reports whether
+  detection actually reached a verdict, or routing is pinned/manual; an
+  undecidable frame leaves the one-shot armed so the next ready poll retries
+  on fuller geometry). Routing semantics are unchanged — a reached verdict is
+  final whatever the planner did with it. The screenshot sequence is pinned
+  end-to-end against the real planner + "Treat as" control (stream → early
+  interior verdict → Object panel → settle confirms the same verdict ⇒ the
+  Interior pill commits), alongside the premature-root-idle and
+  undecidable-frame regressions (`tests/streamingSettleCommit.test.ts`).
+- The interior floor-plan export was replaced with a wall-trace extraction
+  pipeline (preview — the export is labelled "Floor plan preview" and marked
+  experimental, pending visual validation against real scans). The old
+  generator traced one blob around a coarse (≤48-cell) occupancy grid of the
+  WHOLE cloud — floor, furniture, and ceiling smeared together — and drew
+  fabricated straight "wall" lines along the bounding-box edges; on a real
+  360 scan the result was an unrecognisable sketch. The new pipeline
+  (`terrain/space/floorplan/`) runs: a wall-height
+  point slice 0.7–1.8 m above the detected floor (full-height fallback when
+  no floor exists), an adaptive 2–5 cm density-thresholded wall mask,
+  morphological closing that bridges scan dropouts but is capped so doorways
+  (≥ 0.6 m) always stay open, boundary vectorisation with Douglas-Peucker
+  simplification, and dominant-axis snapping that only engages when the wall
+  direction histogram is clearly bimodal at 90° (no fabricated right
+  angles on round or irregular rooms). The SVG sheet now draws solid wall
+  poché with door openings as real gaps, a light scanned-floor interior
+  fill, a scale bar and overall dimensions in the measurement panel's unit
+  system (metric or imperial first), the local-frame orientation note, and
+  the standing suitability caveat; the Space Report PDF embeds the same
+  model. Hardened against the real-360-scan failure modes the first cut
+  still tripped over: the export now re-gathers at the terrain budget
+  (300 k points) instead of reusing the 60 k routing snapshot, the wall-mask
+  cell GROWS (to ≤ 0.3 m, still under any doorway) when the slice is too
+  sparse to support 5 cm cells instead of starving into speckle, the slice
+  is clipped to the occupancy-weighted dense footprint first so 360 noise
+  arms can no longer inflate the sheet's extents (connected-component mass,
+  not a per-cell threshold — random arm clusters don't survive), and a
+  missing floor peak falls back to a robust low-percentile band anchor
+  (plus one widened-band retry) instead of smearing floor + furniture +
+  ceiling into the "walls" at full height — the floor FILL still requires a
+  real detected floor plane, and the sheet states which basis was used.
+  A realism pass (`floorplan/regularize.ts`) then makes the honest trace
+  READ like a floor plan: compact off-wall islands in the wall mask —
+  furniture, shelving, plants caught by the wall-height band (43 of the 70
+  poché subpaths on the user's real 360 sheet) — are lifted out of the wall
+  poché and drawn as light grey room-contents hints (the architectural
+  convention; toggleable, and the sheet says so), with near-wall fragments
+  kept as walls so a jamb return severed by a door gap is never erased;
+  stair-step jogs of up to one mask cell merge into single straight wall
+  lines at the runs' length-weighted mean; sub-0.25 m out-and-back spurs
+  (flat-tip and V-apex) are cut back while door jambs survive by
+  construction (a jamb's flanks are the wall run itself); and zero-width
+  tracing slivers die a mean-thickness filter. A second realism round
+  (`floorplan/centerline.ts`), driven by the surviving artifact classes on
+  the user's next real 360 sheet (blobby double-wall mass with voids punched
+  through it, splatter-shaped contents hints, and gaps the sheet could not
+  tell apart from doorways), promotes the wall-thickness normalisation that
+  was deferred: a chamfer distance transform plus Zhang-Suen thinning fit a
+  centerline through every wall strip (loops and door gaps preserved by
+  construction), medial-axis spurs shorter than the local half-thickness are
+  pruned, and the walls re-extrude at min(local, measured-median) thickness
+  clamped to the traced mask — echo-fattened runs (a wall scanned from both
+  sides, clutter fused against a wall) collapse onto their centerline at the
+  thickness the building actually measures, while clean walls round-trip
+  bit-identically (the pass only ever removes excess; its output is a strict
+  subset of its input, so it can never invent wall). Free-standing masses
+  far thicker than the building's walls (kitchen islands, sofa groups)
+  demote from the poché to the contents layer instead of being traced as
+  fake architecture. Contents hints simplify to the convex hull per blob —
+  the honest "something stands here, about this big" footprint instead of
+  raster splatter. And wall gaps are now CLASSIFIED by jamb evidence
+  (`classifyWallGaps`): two wall ends whose runs point at each other
+  squarely (within ~23°) across a clear 0.55–1.4 m opening are a doorway
+  and stay genuinely open; facing ends without that evidence — ragged/skewed
+  ends, non-door widths up to 2.5 m — are honest UNKNOWN gaps drawn as a
+  dashed line on the SVG sheet and the Space Report PDF ("the wall may
+  continue here; the scan can't say"), and anything wider stays an
+  undecorated hole. The sheet's footer reports the collapsed echo mass, the
+  demotions, and the door/unknown gap tally. The plan sheet and
+  the Space panel also stop disagreeing about size (the real sheet read
+  12.9 × 15.0 m while the panel claimed 24.72 × 13.76 m): the panel's
+  dimensions now clip 360 noise arms with the SAME dense-footprint rule the
+  plan uses (the model exposes the clip bbox), and both report the strays
+  they excluded. Synthetic-room tests pin walls to within 5 cm + one cell,
+  door preservation, floor area to ±2%, an L-shaped room's reflex corner,
+  50% wall-dropout healing, a sealed two-room scan keeping BOTH room
+  interiors (every loop above the speckle floor survives, never just the
+  largest), a 4%-density strided sample staying traceable via the grown
+  cell, a 20 m noise arm being clipped (extents stay the room's), the
+  percentile and widened-band anchors, and the honest empty result below
+  500 points; the realism round adds a 1 × 0.5 m mid-room island leaving
+  the poché for a contents hint, a jittered wall straightening to one line,
+  a 0.15 m stub spur dying while both door jambs survive, hand-truth jog /
+  spike / sliver cases, and a plan-vs-panel extents cross-check on the
+  noise-arm scene; the centerline round adds hand-computed chamfer
+  distances, a fat strip thinning to a 1-cell line and a wall loop keeping
+  its loop, spur-prune survivor/victim pairs, a clean room round-tripping
+  through the normaliser vs a 0.5 m echo-fattened wall collapsing to the
+  median, a free-standing fat mass demoting to contents, square-jamb /
+  skewed / over-wide / L-corner gap classification truth, convex-hull
+  containment, and an end-to-end double-walled room whose door classifies
+  by its jambs while the echo mass collapses.
+- The surface-quality panel's reason sentence no longer mislabels the
+  edge-risk chip's figure. The chip (cellMetrics' edge-risk ratio) counts
+  MEASURED cells sitting near the data boundary — cells with real returns
+  that are merely least supported — but the Limited/Preview reason called
+  that same number "cells that are a long interpolation from real returns",
+  which describes the OTHER edge metric (the gate's tally of interpolated
+  cells far from any measurement). The reason now reads "N% of measured
+  cells sit at the edge of the data, where the surface is least supported";
+  the gate's own wording (where the phrase is true) is unchanged. A field
+  fixture pins the interior-360 case (Limited 52/100, interpolation 72%,
+  edge risk 53%) so the chips and the reason sentence provably quote the
+  same numbers.
+- Activating Measure no longer opens the Measurements panel on top of the
+  measure toolbar. The centred toolbar and the left panel column both
+  anchored to the same `top: 56px` band, and entering measure mode
+  auto-opens the Measurements panel into that column — so the panel painted
+  over the toolbar's left half and hid the first kind pills (Distance /
+  Polyline / Area…). The toolbar's height is dynamic (pills wrap at narrow
+  widths, Finish polygon comes and goes), so instead of a static offset a
+  ResizeObserver now mirrors the toolbar's real height into a CSS custom
+  property (`--olv-measure-bar-clear`) that pushes the panel column — and
+  its scroll budget — below the toolbar while it is visible, at every
+  viewport width including phones, and snaps it back up when measure mode
+  exits. The embed's `?measurements=1` path gets the same guard.
+- Hardened the measurement stack against crash-class degenerate inputs after
+  a report of the app dying mid-session with many chained distance
+  measurements placed. The measurement-label collision layout — which runs
+  inside the per-frame render loop and scales with the number of placed
+  measurements — is now bounded by construction: a non-finite label anchor (a
+  vertex projected at the camera plane) is placed as-is instead of joining
+  collision tests, a push-down move must make strict progress so a float
+  boundary can never re-trigger forever, and a hard pass cap converts any
+  residual pathology into a cosmetic overlap instead of a frozen tab. The
+  profile chart's elevation-tick and station-grid walks, and the profile
+  PDF's grid loops, are guarded the same way: a denormal elevation span used
+  to underflow the tick step to zero and push gridlines until the tab ran out
+  of memory, and a corrupt (non-finite) chainage sample made the station walk
+  infinite — both now degrade to an honest minimal axis or the "nothing to
+  plot" branch. Chain aggregates and the station table tolerate unknown
+  measurement kinds / dimensions from forward-compat session files instead
+  of throwing in the panel's render path, and every degenerate unit factor,
+  zero-length segment and NaN value is pinned to its honest "—" fallback by
+  a new regression suite (`tests/measureCrashGuards.test.ts`).
+- Replaced the "Fitness-for-use" wording stamped on PDF reports and export
+  provenance (profile sheets, terrain/space reports, DXF/SVG/GeoJSON/README
+  stamps) with plain language. The standing note now reads "Suitability: not
+  survey-grade unless validated against ground-truth control." — same honesty
+  contract, no QA jargon.
+- Clicking "Terrain" in the TREAT SCAN AS control on an interior / object
+  scan no longer shuts the Space/Object panel down into a dead end. The
+  click tore the panel down and handed off to the Analyse panel still in its
+  collapsed-chip state — the busy status, the (usually blocked) terrain
+  result, and the Treat-as control that is the only way back were all hidden
+  under the chip. The Terrain segment is now disabled with the visible
+  reason while detection reads the scan as an interior or compact object
+  (the explicit "Run terrain contours anyway" escape hatch remains the
+  deliberate override); when terrain IS forced, the Analyse panel expands so
+  the result and the way back are on screen; and switching back to
+  Object / Interior / Auto always restores the Space/Object panel — even if
+  geometry gathering fails at that moment it renders its honest empty state
+  instead of tearing down.
+- The live-deployment build no longer loses lazy feature chunks. Four
+  dynamic `import()` calls lived inline in modules the deploy transform
+  rewrites, which scrambled their specifiers: the Planetary Computer
+  catalog search and the Visuals Studio Auto-balance chunks were silently
+  never emitted (both features dead on the deployed site, working in a
+  source checkout), and the idle-time LAS-loader pre-warm fetched a raw
+  `/assets/io/loadLas` URL — a 404 logged on every boot. All four imports
+  now route through the `lazyChunks.ts` seam that exists for exactly this,
+  and the chunk-emission guard pins them so a re-inline fails the build
+  loudly instead of shipping silently broken features.
+- The Space panel no longer reports sideways metrics on 360-style interiors
+  whose walls are densely scanned and whose floor is sparse or cluttered. The
+  up-axis detector used to crown a dense flat wall as the "floor" — every
+  figure on the panel (height, floor area, the floor-plan sketch) was then
+  computed in a sideways frame, which is how a 5 m-tall room reported
+  H = 23 m and exported a side elevation labelled as a floor plan. Detection
+  now treats Z as the incumbent (point-cloud formats are Z-up by spec): a
+  horizontal axis must beat it by a clear margin, full-height wall-like
+  columns no longer count as floor evidence, and ties resolve to Z instead of
+  X. On top of that, LAS/LAZ and streamed COPC/EPT scans now tell the
+  detector their frame outright — the up-axis guess only runs at all for
+  formats whose frame is genuinely ambiguous (PLY, OBJ, glTF), where it still
+  detects Y-up phone scans exactly as before.
+- Elevation profiles are now sampled along the scan's actual up axis. The
+  sampler was hardcoded to Z-up, so a profile cut through a Y-up phone scan
+  measured "height" along a horizontal axis.
+- Measurements on foot-based coordinate systems now read in true units. The
+  measure stack assumed render coordinates were metres, so a 10 ft span on a
+  US-survey-foot scan displayed as "10 m" — wrong by a factor of 3.28 — in
+  every readout: the distance/area/volume headlines, the on-canvas labels,
+  the live placement hints, chain aggregates, the profile chart axes, the
+  profile summary, the station data and the CSV/PDF exports. The scan CRS's
+  linear-unit factor (the same seam the terrain and space panels already
+  read) is now threaded into the measurement controller and applied exactly
+  once at its display boundary — lengths ×f, areas ×f², volumes ×f³, and the
+  profile sample series before it fans out — so formatted labels and raw
+  chart numerals can never disagree. The measurement table in generated
+  report PDFs (all six Report Engine templates) applies the same factor at
+  its own formatting boundary, so a report handed to a client agrees with
+  the on-screen panel to the digit. Metric and local scans are unaffected.
+- The profile PDF no longer discards what the app already knows. Every sheet
+  printed "auto (5 % of length)", "p25" and "Horizontal CRS — (not
+  georeferenced)" even when the CRS service had resolved the frame and the
+  sampler had used concrete parameters. The corridor width and ground
+  percentile that actually shaped the estimate are now stamped onto the
+  measurement when it commits, the resolved CRS and vertical datum are read
+  at export time, and all of it lands on the sheet — in the summary block
+  and in a compact provenance line in the header.
+- The profile chart's vertical-scale control is now honest. The chips said
+  "1:1 / 2:1 / 5:1 / 10:1", but the chart never drew true ratios — it
+  stretches with the resizable panel, so "1:1" depended on how the panel was
+  dragged, and at higher settings the curve silently spilled past the plot
+  frame. The chips now read "Fit / 2× / 5× / 10×" (multiples of the fitted
+  elevation scale), the curve is clipped to the plot box so relief leaving
+  the visible band reads as a deliberate crop rather than a glitch, and the
+  in-chart badge says the same thing. True stated 1:N scales remain on the
+  PDF export, which computes real paper ratios.
+- Imperial elevation tick labels on the profile chart no longer collapse
+  into duplicates on sub-metre relief — they carry the decimals the tick
+  step needs instead of rounding to whole feet. The chart tooltip's Δh also
+  honours the unit toggle now, instead of always printing metres.
+- The profile PDF sheet honours the unit toggle. The builder grew imperial
+  support in this cycle's unit sweep — feet on the elevation axis and grid,
+  US 100-ft stationing on the chainage axis, converted summary and station
+  table — but the export button never told it which system was active, so
+  every sheet still printed metric regardless. The panel now passes the
+  same unit system the chart and CSV already read, and a sheet exported in
+  imperial mode is imperial end-to-end: axes, gridline labels, summary
+  block (length, relief, gain/loss, extremes, corridor) and the station
+  table.
+- XYZ and CSV exports of geographic (lat/lon) scans no longer truncate
+  position to street-block precision. Coordinates were always written at a
+  fixed 3 decimals — millimetres on a projected CRS, but ~110 m on a degree
+  axis. When the cloud's CRS is geographic, x and y now carry 7 decimals
+  (1e-7° ≈ 1 cm at the equator); z stays at 3 decimals, since heights are
+  linear units even in a geographic CRS. Projected and local exports are
+  byte-identical to before.
+- The converter no longer reports "reprojected" as a clean success when the
+  datum leg of the transform is known to be missing or degenerate. GDA94 →
+  GDA2020 resolves to an identity shift here (the true plate-motion
+  difference is ≈ 1.8 m), and NAD27 transforms run without NADCON grids
+  (errors of 10 m or more) — both used to log the same success line as a
+  genuine transform. They now log an explicit warning naming the problem, and
+  the conversion report's CRS status says "APPROXIMATE datum shift" instead
+  of a bare "reprojected". Same-datum reprojects and a skipped/unresolvable
+  reproject behave as before (the latter already warned loudly).
+- A skipped reproject no longer stamps the metre GeoKey on the output LAS.
+  The linear-unit tag keyed off the requested MODE, so when the transform
+  could not be resolved and the file stayed in its source (possibly
+  US-survey-foot) CRS, it was still tagged 9001 "metre" — a unit lie baked
+  into the deliverable. The tag now follows what actually happened: applied
+  reproject → metre, skipped reproject / keep → the source CRS's own unit.
+- Density, spacing and the USGS Quality Level now describe the scan, not the
+  analysis subsample. Every analysis path strides big clouds down to a budget
+  (≤ 60 k for the space panel, ≤ 300 k for terrain), but the density figures
+  divided only the sampled count by the area — a stride-100 scan read 100×
+  too sparse, the object panel's median spacing was inflated ~√(N/2000), and
+  the QL grade judged the subsample instead of the survey. The space panel
+  now scales by its known source count (and says so in its caveats), the
+  object metrics correct the nearest-neighbour probe by √(P/N), and the
+  terrain pipeline accepts the gather's stride (`samplePointScale`) and
+  multiplies per-cell densities back to the scan before the QL grade is
+  assigned. Coverage, confidence and RMSE are untouched — they genuinely
+  measure the analysed points.
+- The hold-out validation now builds its surface exactly like the live
+  pipeline. It used to skip the blunder despike and the extrapolation guard
+  and dropped the horizontal-unit scale, so the RMSE — and the confidence
+  calibration fitted from it — measured a *different* surface than the one
+  delivered. Both paths now construct their grid through one shared
+  raster→grid constructor, making the divergence structurally impossible.
+  The per-slope/zone residual tables also bin points with the same floor
+  convention the raster was built with; the old `Math.round` attributed
+  half of every cell's points to the neighbouring cell. The confidence
+  calibration fitted from the unified validation additionally requires a
+  minimum per-bin sample count before a bin may shape the curve — a
+  2-sample bin's 50 % "reliability" is a coin flip, and because the remap
+  extrapolates flat past its end knots, one near-empty noisy bin could
+  drag every low-confidence cell on the live grid down with it.
+- LAS export headers now tell the truth twice over: returns above the
+  histogram range (> 5 for LAS 1.2's legacy tally, > 15 for 1.4's extended
+  tally) clamp into the top slot to match how the point records clamp the
+  field, instead of being counted as first returns; and the header min/max
+  bounds are written from the quantised values the records reconstruct,
+  not the raw input doubles — strict validators no longer flag points
+  "outside the header bounds" by half a scale step.
+
+- The onboarding tour is no longer keyboard- and screen-reader-hostile.
+  Key terms in step copy ("colour mode", "Visuals Studio", "Chain") used
+  to read as raw selection-blue text; they now render as properly themed
+  highlights, and the card itself can no longer be accidentally
+  text-selected by rapid Next-clicking. The card announces itself as a
+  modal dialog (role, aria-modal, labelled by its title and described by
+  its body), focus lands on the Next button at every step and Tab cycles
+  within the card's buttons instead of escaping into the page behind the
+  backdrop. Arrow keys step forward and back, Enter advances, and Esc now
+  does what the welcome copy always promised — skips the tour and
+  remembers that, instead of silently re-showing it next session. The
+  step text is a polite live region, so each step's copy is actually
+  announced even though focus stays parked on Next. The "Open a scan"
+  step now spotlights the empty state's real open button — its old
+  selector pointed at a dock button that has never existed, so the
+  spotlight silently failed on every first run — the Measure step gained
+  a stable hook on the dock button (its old selector matched only the
+  enabled-state tooltip text), and a step whose target is present but
+  hidden (the dock collapses on the empty state) now centres its card
+  instead of pinning a 16-pixel spotlight to the screen corner.
+
+### Added
+
+- (2026-06-12 amendment) Floor Plan Preview sheet quick wins — presentation
+  and threading over data the pipeline already computes (the wall-graph /
+  room-segmentation engine itself stays scheduled for 0.4.6; the export
+  remains a labelled, experimental preview):
+  - ARCHITECTURAL SHEET STYLING: the wall poché prints in near-black #111
+    architectural ink on the white sheet (theme-agnostic), dimension and
+    extension lines draw thinner (0.55 px), every CLASSIFIED doorway gets a
+    door-leaf swing symbol (quarter-circle arc from one jamb, radius = the
+    clear gap width, opening toward the plan centre — a drawing symbol, not
+    a hinge-side claim), and a tidy bottom-right title block carries title,
+    overall dims, floor area, scale text (nominal ratio + the graphic bar,
+    which stays the trustworthy reference) and date, like a real sheet.
+  - APPROXIMATE REGION AREAS: each kept floor-fill region prints its own
+    polygon area ("≈ 12.3 m²") centred in regions ≥ 3 m² whose extent fits
+    the label (centroid-inside check, no label squeezed into a sliver), and
+    the footer lists every region's area. Labelled honestly as approximate
+    scanned-floor extents — these are the floor-fill regions, NOT
+    wall-measured rooms (that needs the 0.4.6 wall graph).
+  - WALL CONFIDENCE: every wall ring now carries an OBSERVED fraction —
+    its outline sampled against the PRE-CLOSE density mask, so cells filled
+    by morphological closing read as interpolation, not observation
+    (`wallRingObservedFrac`, threaded through the model). Rings under 60%
+    observed (`OBSERVED_FRAC_MIN`) render as a yellow-tinted poché with the
+    footer note "Tinted walls: interpolated from sparse evidence…" — coarse
+    and honest, a boundary-sample statistic, not a survey confidence figure.
+    Hole rings follow their containing outer so the poché stays punched.
+  - SNAP CONTROL: the dominant-axis snap is now governed by a documented
+    `SNAP_MODE` constant in `vectorize.ts` — 'auto' (default: snap only when
+    the direction histogram is clearly bimodal at ~90°, exactly the previous
+    behaviour), 'off' (never snap), 'strong' (force the strongest axis when
+    the auto gates fail; the sheet footer then says right angles may be
+    assumed where the scan shows none). A UI control is deferred; the
+    resolver (`resolveSnapAxes`) reports mode + forced-ness for the footer.
+  All four are pinned in `tests/floorPlanQuickWins.test.ts` (door-arc count
+  and radius per classified doorway, area labels within ±2% of the region
+  polygon area, observed-fraction threshold + tint partition, snap modes),
+  and the sheet was render-verified in headless Chromium.
+- A colourblind-safe "Confidence" colour mode — the Cividis twin of the
+  Coverage trust overlay. The coverage mode's traffic-light ramp says the
+  right thing but says it in colours ~8 % of users cannot tell apart, so
+  the per-cell DTM confidence now also renders on three exact Cividis
+  stops (the one palette the catalogue tags fully colour-blind safe):
+  bright = strong (measured), mid = moderate (interpolated), dark = weak
+  (extrapolated / gap) — deliberately the t 0.2 stop rather than the ramp
+  floor, which would vanish into the dark canvas and read as "no data"
+  instead of "untrustworthy data". The buckets are the SAME
+  `gradeForConfidence` thresholds the coverage minimap legend, the
+  dashed-contour evidence and the click-to-sample readout use, and the
+  3D mode shares the coverage mode's grid-lookup core, so the two
+  overlays can disagree only about hue, never about which cell a point
+  samples or how trusted it is. Empty cells stay neutral grey (3D) or
+  transparent (2D raster) — a hole is never painted as a confidence. The
+  chip sits next to Coverage on the Inspector's COLOR BY rail (both
+  analysis-gated, with the same "Run terrain analysis first" tooltip
+  until a grid exists), and the Analyse panel's coverage tile gained a
+  "Colour 3D by confidence" link that paints the tile's own buckets onto
+  the cloud.
+- Real raster icons for the web manifest. The manifest declared only the
+  SVG favicon, so the installable-app baseline (a 192 px and a 512 px
+  PNG) was unmet and install surfaces fell back to whatever they could
+  scrape. `public/icon-192.png` and `public/icon-512.png` are rasterised
+  from the official logo asset (see the brand bullet under Changed) by a
+  new `scripts/make-brand-rasters.py` (Pillow, supersampled master so
+  edges stay crisp at 192 px) and declared in `manifest.webmanifest`
+  with `purpose: "any maskable"`. The same script also renders the
+  180 px apple-touch-icon, the 16/32/48 `favicon.ico`, the vector
+  `favicon.svg` and the `og-card.jpg` share image from the identical
+  source, so every identity surface regenerates from the one logo file.
+- Terrain Intelligence Report. One click on the Analyse panel
+  ("Intelligence report (PDF)", next to the DEM and map-sheet exports)
+  assembles everything the app already computed about a surface into a
+  client-facing PDF. It opens with an Executive Summary — the assessment's
+  own verdict sentence (status plus reason), the export readiness with its
+  reason, and what the surface is honestly best for; never new prose —
+  then Dataset Statistics: scan metadata plus, when the Inspector's
+  Dataset Intelligence card has them, the card's exact density /
+  complexity / ground-visibility / metric-stability bucket labels (the
+  rows are simply omitted when the card is empty, never re-derived). The
+  body carries the terrain assessment with its 0–100 score and reason,
+  coverage analysis (measured / interpolated / empty / edge-risk ratios
+  and mean confidence), the ASPRS/USGS quality metrics when they were
+  measured, deduped warnings with their figures, the recommended-workflow
+  checklist, the SAME six-product Terrain Products status list the panel
+  leads with — one projection feeds both, so the PDF and the panel can
+  never grade a product apart — and how-to-improve fixes when the surface
+  is not fully good. Every string is sourced from an existing module — the
+  report can never disagree with the on-screen panel — and the footer
+  carries the same unified provenance block (software version, metric
+  version, CRS, datum, coverage mode) every other export stamps, pinned by
+  the cross-export provenance-consistency test. Unknown values print as
+  em-dashes, never fabricated zeros, and the standing not-survey-grade
+  note is always present.
+- Workflow presets in the Visuals Studio. A new chip row — Terrain ·
+  Construction · Mining · Forestry · Hydrology · Archaeology — sets up the
+  whole look for a job in one click: colour mode, EDL depth shading, point
+  size and sizing mode, background, and how much of the elevation band the
+  height ramp spans (Mining and Hydrology use the untrimmed band so pit
+  floors and subtle channels keep colour resolution; Archaeology pairs the
+  strongest depth-edge shading with fine fixed points for micro-relief).
+  Every preset is a pure bundle over knobs that already existed — no new
+  rendering machinery. Hand-adjust any of those knobs afterwards and the
+  rail switches to a "Custom" state chip instead of pretending you are
+  still on the preset; clicking a preset returns to it exactly. The pills
+  expose their pressed state through `aria-pressed`, so a screen reader
+  hears which preset (or "Custom") is active instead of a colour-only
+  highlight.
+- Profile summary. Every profile now shows the civil headline numbers under
+  its chart — length, elevation gain/loss, average grade, max grade, the
+  steepest section as a station range, and the highest/lowest points with
+  their stations — in the active unit system. The same summary is printed on
+  the profile PDF sheet, computed by the same code, so the panel and the
+  print can never disagree. Figures are only derived between adjacent covered
+  stations: a coverage gap contributes nothing, and an unmeasurable figure
+  reads "—", never 0.
+- Profile CSV export. A "CSV" button next to the profile's "Export PDF"
+  downloads the station data — station, chainage, ground elevation, the
+  corridor point count behind each elevation, and grade to the next station —
+  in the active unit system, with the unit named in the column headers. The
+  station table was previously locked inside the PDF.
+- In-panel station table. Each profile row now carries a collapsed "Station
+  table" disclosure under its summary with the exact station / chainage /
+  elevation / points / grade values — built from the same rows the CSV
+  exports, so the screen and the file can never disagree. It is also the
+  chart's accessible counterpart: the decorative SVG used to point screen
+  readers at a station table that did not exist in the panel.
+- Profile sampling controls. The parameters that shape every profile —
+  corridor half-width, ground percentile, and sample count — are now
+  user-settable, per profile, from a small disclosure under the chart whose
+  always-visible caption states the values that actually produced the line
+  ("Corridor ±2.5 m · ground p25 · 64 samples" — the same numbers the PDF
+  header prints). Changing a value re-samples immediately; out-of-range
+  inputs clamp to sane bounds (corridor 0.05–500 m, percentile 0–100; the
+  sample picker offers 32–512 bins) rather than erroring; Reset returns to the defaults
+  (auto corridor at 5 % of length, p25, 64 bins). On foot-CRS scans the
+  corridor you type in display units is the corridor the sampler walks —
+  the same unit seam the readouts use, applied in reverse. A 1 km section
+  no longer silently aggregates a 100 m swath at ~16 m bin spacing with no
+  way to see or change either. The values you settle on persist: they are
+  remembered across reloads and applied to the next profile you draw, and
+  Reset clears the remembered preference along with the row. Rapid edits —
+  a held spinner arrow — coalesce into one re-sample instead of one per
+  step.
+- Intensity and classification ride along in XYZ/CSV exports. The columns
+  appear only when the cloud actually carries the channel — raw 16-bit
+  intensity and the raw ASPRS class code, after the r/g/b columns — and
+  they are never a guessing game for the next tool: the CSV header row
+  names every column, and an XYZ with the extra columns starts with a
+  `# columns: …` comment line (a plain x-y-z export stays byte-identical
+  to earlier releases). Both channels previously vanished on the way out.
+- Terrain Products. The Analyse panel now leads with a compact status list —
+  Profiles, Measurements, Terrain review, DTM/DEM export, Contours, Map
+  sheet — each marked Ready ✓ / Preview ⚠ / Blocked ✕, and every product
+  sitting below Ready carrying its own full "Reason:" line on a second row
+  that wraps (the first cut ellipsized the reason into one line — "Preview
+  Insufficient qua…"). The reason is the most specific string the readiness
+  engine already minted for that product (`productReasonFor`): the export
+  reason naming the exact georeferencing gap ("vertical datum unknown") when
+  that is what holds a deliverable back, otherwise the assessment's surface
+  line quoting the measured figure ("50% of the surface is interpolated"),
+  with the short workflow note only as a last resort — and Ready rows carry
+  no reason at all. The Terrain Intelligence Report's products section
+  prints the same engine-selected text, word for word. It re-presents the
+  assessment the panel already computed (nothing is re-judged), the status
+  travels as a word next to the icon rather than by colour alone, and the
+  original "Recommended workflow" checklist remains available beneath it,
+  collapsed.
+- Contour DXF files now open in CAD with their units declared and their
+  labels attached. A minimal HEADER section carries `$INSUNITS` (metres by
+  default, feet / US survey feet when the CRS resolves to them, honest
+  "unitless" when unknown), so imports stop prompting for — or silently
+  assuming — drawing units. The elevation labels that previously existed
+  only in the SVG and PDF now ride along as TEXT entities on their own
+  CONTOUR_TEXT layer, so they can be frozen or restyled independently of
+  the linework.
+- Contour SVG labels carry the decimals their interval needs — a 0.25 m
+  interval prints 10.25 / 10.50 instead of collapsing every level onto
+  "10" — and every sheet now states its interval and scale in the visible
+  drawing ("Contour interval 0.5 m · 1 SVG unit = 1 m"), since the file
+  previously carried no unit or scale cue a reader could see.
+- Georeferenced ortho export. On a scan with a known CRS and world origin,
+  the Studio's "View capture" (Orthographic RGB) button now renders a true
+  top-down orthographic frame of the full footprint and downloads it as a
+  small ZIP — the PNG plus a `.pgw` world file and a `.prj` — that QGIS and
+  ArcGIS place exactly. The framed render is the only raster an affine
+  world file can honestly describe, so the perspective view capture is
+  never given one: scans without a CRS or origin, multi-cloud sessions
+  with conflicting frames, and class-filtered exports (whose caveat banner
+  would corrupt a placed raster's pixels) all keep the existing bare-PNG
+  download and filename. The `.prj` is deliberately impossible to attach
+  to local-frame coordinates (the v0.4.3 contour-georeferencing lesson,
+  applied by construction).
+
+### Changed
+
+- (2026-06-12 amendment) Claim-accuracy wording pass on the two places the
+  product talked itself up beyond its validation evidence. The interior
+  floor-plan export is now labelled **"Floor plan preview"** everywhere the
+  user sees it — the Space-panel button (with an "experimental — requires
+  visual validation" note beside it), the standalone SVG sheet (subtitle
+  "Floor Plan Preview — approximate wall-trace sketch" plus the same
+  experimental caveat in the footer's warning style), and the Space Report
+  PDF's embedded-plan section — code and module names are unchanged. And the
+  standing deliverable-note wording minted by the readiness engine changed
+  from "preview only — not for final deliverables" to **"preview only —
+  additional validation recommended"** at its single source
+  (`readinessEngine.deliverableNote`), so every consumer — the workflow
+  checklist, Terrain Products rows, the Terrain Intelligence Report, and
+  every DXF/SVG/GeoJSON/README provenance stamp — inherits the new wording
+  verbatim; docs and the pinned test literals were updated to match. No
+  behaviour change, wording only.
+- The workflow recorder is disabled for this release (product decision).
+  Its original `Cmd/Ctrl+Shift+R` chord collided with the browser's
+  hard-refresh — toggling a recording reloaded the page and lost the live
+  session — and rather than ship a mid-cycle rebind that risks fresh
+  shortcut-collision confusion, the feature is switched off entirely while
+  the "Replay a workflow file…" experience (the recipient must already have
+  the same scan open) gets a proper design pass. The shortcut, the three
+  Workflow command-palette actions, the shortcut-sheet entries and the
+  recording badge are all absent in this build; `.olvworkflow` recording and
+  replay will return in a later release. When it does, the shortcut will be
+  `Cmd/Ctrl+Shift+U`: `U` is unbound in Chrome, Firefox and Safari, Edge's
+  Read Aloud on `Ctrl+Shift+U` is page-interceptable (unlike reserved combos
+  such as `Cmd+Shift+W` / `Cmd+Shift+T`), and no in-app binding uses `U`,
+  bare or modified. The recorder engine and its unit tests remain in the
+  tree behind the `WORKFLOW_RECORDER_ENABLED` flag in
+  `src/ui/WorkflowController.ts`.
+- The export-readiness verdict now has exactly one author. The same
+  judgement — Ready / Preview / Blocked, the reason naming what holds it
+  back, and the per-product good / caution / blocked grades — was derived
+  or re-quoted with private mapping tables in four places (the terrain
+  assessment minted the tier and reason inline, the recommended-workflow
+  checklist re-graded it with its own note table, the Terrain Products
+  list renamed the grades with a third table, and the provenance stamp
+  and report rows each formatted the "Tier — reason" line themselves), so
+  a future edit to any one table could have let an exported file grade a
+  product differently from the panel. All of it now lives in
+  `terrain/quality/readinessEngine.ts` — one `deriveReadiness` function
+  returning `{tier, reason, productGrades}`, plus the shared word / glyph
+  vocabulary and the one "Tier — reason" formatter — and every former
+  author is a view over its output. No string changed: the engine was
+  conformed to the existing wording, and the provenance-consistency and
+  report-content suites pass unchanged; a new suite pins the
+  single-source contract by swapping the engine's verdict for a sentinel
+  and watching it surface verbatim in the assessment, the workflow
+  checklist, the products list, every provenance stamp and the report.
+- The brand now derives from the official OpenLiDARViewer logo file — no
+  redrawn geometry anywhere. The invented orbit-rings mark that
+  previously carried the identity (and the interim plain placeholder
+  tile that briefly replaced it) are both gone; every identity surface
+  is produced from the delivered asset itself. `public/brand-logo.svg`
+  is the logo verbatim (the point-cloud-orb mark plus its raster
+  wordmark band), and `public/brand-mark.svg` is the same file with only
+  its root viewBox cropped to the mark region — nothing repainted. The
+  in-app top bar and empty-state hero render that mark via `<img src>`
+  (the asset never passes through the `unsafeHtml` escape hatch, so the
+  XSS-guard allowlist keeps no brand entries), with the wordmark kept as
+  real text beside/beneath it for light-theme and screen-reader
+  legibility. All raster assets are RASTERISED from the logo file by the
+  new `scripts/make-brand-rasters.py` (which retires the Pillow redraw
+  script `make-manifest-icons.py`): `favicon.svg` is the mark's own
+  pixels downscaled onto the #0a0e1a plate for contrast,
+  `icon-192.png` / `icon-512.png` put the mark on the rounded brand-dark
+  plate, `apple-touch-icon.png` is full-bleed with no alpha for iOS,
+  `favicon.ico` (16/32/48) is the real asset downscaled — soft at 16 px
+  by honest choice rather than redrawn — and `og-card.jpg` (1200×630)
+  now carries the full official lockup on the deep-navy field with the
+  "Visualize. Explore. Understand." tagline in cyan beneath it.
+  `public/BRANDING-TODO.txt` is deleted: the logo arrived.
+
 ## [0.4.4] - 2026-06-09
 
 Final release. Sections below fold in the post-audit hardening batch.

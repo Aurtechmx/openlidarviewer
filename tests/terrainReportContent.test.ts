@@ -9,11 +9,17 @@
  * These tests verify, WITHOUT pdf-lib:
  *   - every section is present and fed from the real assessment / workflow /
  *     why-not / accuracy values;
+ *   - the Executive Summary verdict sentence is assessment-minted (status +
+ *     reason, readiness + reason) — never new prose;
+ *   - the Terrain Products list IS the panel's terrainProducts view (six
+ *     products, Ready→Available renamed), not a parallel derivation;
+ *   - Dataset Statistics carries the Inspector card's intelligence bucket
+ *     labels when (and only when) the caller supplies them;
  *   - a Good + Ready scan marks every terrain product Available, emits no "How
  *     to improve" section, and still carries the not-survey-grade note;
- *   - a Preview scan with an unknown datum marks products Preview / Blocked,
- *     populates Warnings + How-to-improve with their figures, and never claims
- *     survey-grade;
+ *   - a Preview scan with an unknown datum marks the deliverable products
+ *     Preview, populates Warnings + How-to-improve with their figures, and
+ *     never claims survey-grade;
  *   - null accuracy renders as em-dash / "unknown", never a fabricated zero.
  */
 
@@ -23,6 +29,10 @@ import {
   type TerrainReportContent,
 } from '../src/terrain/export/terrainReportContent';
 import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportProvenance';
+import { terrainAssessment } from '../src/terrain/contour/terrainAssessment';
+import { recommendedWorkflows } from '../src/terrain/contour/recommendedWorkflow';
+import { terrainProducts } from '../src/terrain/contour/terrainProducts';
+import type { DatasetIntelligence } from '../src/terrain/datasetIntelligence';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 /**
@@ -180,10 +190,11 @@ function allValues(c: TerrainReportContent): string {
 }
 
 describe('buildTerrainReportContent — section presence + sourcing', () => {
-  it('produces every required section, in order', () => {
+  it('produces every required section, leading with the Executive Summary', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
     const titles = c.sections.map((s) => s.title);
-    expect(titles).toContain('Dataset Summary');
+    expect(titles[0]).toBe('Executive Summary');
+    expect(titles).toContain('Dataset Statistics');
     expect(titles).toContain('Terrain Assessment');
     expect(titles).toContain('Coverage Analysis');
     expect(titles).toContain('Quality Metrics');
@@ -191,15 +202,67 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     expect(titles).toContain('Terrain Products Available');
   });
 
-  it('Dataset Summary carries the scan name, source point count, software + date', () => {
+  it('Executive Summary is the assessment verdict sentence, not new prose', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
-    const ds = c.sections.find((s) => s.title === 'Dataset Summary')!;
+    const a = terrainAssessment(readyResult());
+    const es = c.sections.find((s) => s.title === 'Executive Summary')!;
+    const row = (label: string): string =>
+      es.rows.find((r) => r.label === label)?.value ?? '(missing)';
+    // Verdict = "<status> — <reason>" from terrainAssessment, verbatim parts.
+    expect(row('Verdict')).toBe(`${a.status} — ${a.reason}`);
+    expect(row('Verdict')).toMatch(/^Good — /); // hand-pinned for this fixture
+    // Ready run carries no reason suffix — bare verdict, never " — ".
+    expect(row('Export readiness')).toBe('Ready');
+    // Best-for is the assessment's own suitability line.
+    expect(row('Best for')).toBe(a.bestFor);
+    expect(row('Best for').length).toBeGreaterThan(0);
+  });
+
+  it('Dataset Statistics carries the scan name, source point count, software + date', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    const ds = c.sections.find((s) => s.title === 'Dataset Statistics')!;
     const text = ds.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
     expect(text).toMatch(/site-42/);
     expect(text).toMatch(/1,200,000/); // source point count, grouped
     expect(text).toMatch(/EPSG:32610/); // horizontal CRS
     expect(text).toMatch(/OpenLiDARViewer 9\.9\.9/);
     expect(text).toMatch(/2026-06-05/);
+  });
+
+  it('Dataset Statistics carries the intelligence bucket labels only when supplied', () => {
+    // Hand-built summary in the card's own vocabulary — the report must echo
+    // the labels verbatim (they are the card's strings, not re-derived).
+    const intelligence: DatasetIntelligence = {
+      density: { bucket: 'dense', label: 'Dense' },
+      complexity: { bucket: 'moderate', label: 'Moderate' },
+      groundVisibility: { bucket: 'good', label: 'Good' },
+      coverage: { bucket: 'full', label: 'Full Dataset' },
+      confidence: { value: 82, band: 'green', label: '82%' },
+      details: {
+        coverageMode: 'Full Dataset',
+        sourcePointCount: 1_200_000,
+        analyzedPointCount: 900_000,
+        metricVersion: 'v0.4.4',
+        engineStatus: 'active',
+      },
+    };
+    const withIntel = buildTerrainReportContent(readyResult(), { ...OPTS, intelligence });
+    const ds = withIntel.sections.find((s) => s.title === 'Dataset Statistics')!;
+    const row = (label: string): string =>
+      ds.rows.find((r) => r.label === label)?.value ?? '(missing)';
+    expect(row('Point density (class)')).toBe('Dense');
+    expect(row('Terrain complexity')).toBe('Moderate');
+    expect(row('Ground visibility')).toBe('Good');
+    expect(row('Metric stability')).toBe('82%');
+
+    // Without the summary the rows are OMITTED — never fabricated buckets.
+    const without = buildTerrainReportContent(readyResult(), OPTS);
+    const dsWithout = without.sections.find((s) => s.title === 'Dataset Statistics')!;
+    const labels = dsWithout.rows.map((r) => r.label);
+    expect(labels).not.toContain('Point density (class)');
+    expect(labels).not.toContain('Terrain complexity');
+    expect(labels).not.toContain('Ground visibility');
+    expect(labels).not.toContain('Metric stability');
   });
 
   it('Terrain Assessment carries the real verdict + score + export readiness', () => {
@@ -232,15 +295,34 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
 });
 
 describe('buildTerrainReportContent — Good + Ready scan', () => {
-  it('marks every terrain product Available', () => {
+  it('lists the SAME six products as the panel view, all Available', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
     const products = c.products;
-    expect(products.length).toBe(3);
-    for (const p of products) expect(p.availability).toBe('Available');
-    const labels = products.map((p) => p.label).join(',');
-    expect(labels).toMatch(/DEM/);
-    expect(labels).toMatch(/Contour/);
-    expect(labels).toMatch(/Map sheet/);
+    // The panel's terrainProducts view lists six take-aways — the report must
+    // carry the identical list (Ready renamed Available), not a subset.
+    expect(products.map((p) => p.label)).toEqual([
+      'Profiles',
+      'Measurements',
+      'Terrain review',
+      'DTM/DEM export',
+      'Contours',
+      'Map sheet',
+    ]);
+    for (const p of products) {
+      expect(p.availability).toBe('Available');
+      expect(p.note).toBeUndefined(); // ready rows carry no excuse
+    }
+  });
+
+  it('the products list IS the terrainProducts view (no parallel derivation)', () => {
+    const result = readyResult();
+    const c = buildTerrainReportContent(result, OPTS);
+    const a = terrainAssessment(result);
+    const view = terrainProducts(a, recommendedWorkflows(a, result.quality));
+    expect(c.products.map((p) => p.label)).toEqual(view.map((v) => v.label));
+    expect(c.products.map((p) => p.availability)).toEqual(
+      view.map((v) => (v.statusWord === 'Ready' ? 'Available' : v.statusWord)),
+    );
   });
 
   it('omits the How-to-improve section and emits no warnings', () => {
@@ -257,9 +339,42 @@ describe('buildTerrainReportContent — Good + Ready scan', () => {
 });
 
 describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
-  it('marks the deliverable products Preview (export readiness held back)', () => {
+  it('marks every product Preview, each row quoting the figure-bearing surface reason in full', () => {
+    // Hand-computed: this fixture grades the SURFACE 'Limited' (two poor
+    // supporting metrics — DTM quality 41/100 and ~50% interpolation), so the
+    // inspection-class rows are caution → Preview, and the deliverable-class
+    // rows key off export readiness (Preview). On a sub-Good surface the
+    // engine's productReasonFor selects the assessment's figure-quoting
+    // surface line for BOTH classes — more specific than the generic
+    // "preview only — additional validation recommended" workflow note.
+    const result = previewResult();
+    const c = buildTerrainReportContent(result, OPTS);
+    expect(c.products.length).toBe(6);
+    const a = terrainAssessment(result);
+    for (const p of c.products) {
+      expect(p.availability).toBe('Preview');
+      // The SAME engine string the panel renders, byte-identical and whole.
+      expect(p.note).toBe(a.reason);
+      expect(p.note).toMatch(/Insufficient quality/);
+      // The reason QUOTES the measured figure (50% interpolated here).
+      expect(p.note).toMatch(/50% of the surface is interpolated/);
+    }
+  });
+
+  it("the report's product notes are the panel view's reasons, row for row", () => {
+    const result = previewResult();
+    const c = buildTerrainReportContent(result, OPTS);
+    const a = terrainAssessment(result);
+    const view = terrainProducts(a, recommendedWorkflows(a, result.quality));
+    expect(c.products.map((p) => p.note)).toEqual(view.map((v) => v.reason));
+  });
+
+  it('the Executive Summary readiness line names the datum gap', () => {
     const c = buildTerrainReportContent(previewResult(), OPTS);
-    for (const p of c.products) expect(p.availability).toBe('Preview');
+    const es = c.sections.find((s) => s.title === 'Executive Summary')!;
+    const readiness = es.rows.find((r) => r.label === 'Export readiness')?.value ?? '';
+    expect(readiness).toMatch(/^Preview — /);
+    expect(readiness).toMatch(/datum/i);
   });
 
   it('populates Warnings from result.warnings + explainLimitations causes, deduped, with figures', () => {
@@ -313,9 +428,9 @@ describe('buildTerrainReportContent — honest nulls', () => {
     expect(qm.rows.map((r) => r.value).join(' ')).not.toMatch(/0\.00 m/);
   });
 
-  it('renders unknown vertical datum honestly in the Dataset Summary', () => {
+  it('renders unknown vertical datum honestly in the Dataset Statistics', () => {
     const c = buildTerrainReportContent(previewResult(), OPTS);
-    const ds = c.sections.find((s) => s.title === 'Dataset Summary')!;
+    const ds = c.sections.find((s) => s.title === 'Dataset Statistics')!;
     const datum = ds.rows.find((r) => r.label.toLowerCase().includes('datum'))?.value ?? '';
     expect(datum).toMatch(/unknown/i);
   });

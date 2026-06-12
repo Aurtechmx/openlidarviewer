@@ -68,9 +68,11 @@ const MODE_LABEL: Record<ColorMode, string> = {
   classification: 'Class',
   normal: 'Normal',
   density: 'Density',
-  // Streaming clouds don't expose the Coverage mode (it's a static-terrain
-  // product); the label is here only to satisfy the exhaustive ColorMode map.
+  // Streaming clouds don't expose the Coverage / Confidence modes (they're
+  // static-terrain products); the labels are here only to satisfy the
+  // exhaustive ColorMode map.
   coverage: 'Coverage',
+  confidence: 'Confidence',
 };
 
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];

@@ -8,7 +8,17 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { sampleProfile, summariseProfile } from '../src/render/measure/profileSampler';
+import {
+  sampleProfile,
+  summariseProfile,
+  autoCorridorWidth,
+  normaliseResampleParams,
+  encodeSamplerParams,
+  decodeSamplerParams,
+  MIN_CORRIDOR_HALF_WIDTH_M,
+  MAX_CORRIDOR_HALF_WIDTH_M,
+  PROFILE_SAMPLE_COUNT_OPTIONS,
+} from '../src/render/measure/profileSampler';
 
 const Z_UP: [number, number, number] = [0, 0, 1];
 
@@ -275,5 +285,190 @@ describe('summariseProfile — chart card headline strip', () => {
       { distance: 2, height: 3 },
     ]);
     expect(summary.coverage).toBe(1);
+  });
+});
+
+describe('sampleProfile — per-bin evidence counts (v0.4.5)', () => {
+  it('emits the corridor point count behind each bin, 0 for a gap', () => {
+    // Three points stack on the bin at distance 0; the far bin sees none.
+    const positions = pack([
+      [0, 0, 1],
+      [0, 0.2, 2],
+      [0, -0.2, 3],
+    ]);
+    const out = sampleProfile({
+      a: [0, 0, 0],
+      b: [10, 0, 0],
+      up: Z_UP,
+      positions,
+      samples: 2,
+      bandWidth: 1,
+    });
+    expect(out[0].count).toBe(3);
+    expect(out[1].count).toBe(0);
+    expect(Number.isNaN(out[1].height)).toBe(true);
+  });
+});
+
+describe('autoCorridorWidth (v0.4.5, B4 provenance)', () => {
+  it('is 5 % of the HORIZONTAL length — the vertical leg never widens the band', () => {
+    // a → b spans (30, 40) in plan = 50 m horizontal; the 12 m climb is
+    // along up and must not contribute. 50 × 0.05 = 2.5.
+    expect(autoCorridorWidth([0, 0, 0], [30, 40, 12], Z_UP)).toBeCloseTo(2.5, 12);
+  });
+
+  it('projects out whichever axis is up', () => {
+    // Y-up: the horizontal plane is XZ, so the span is hypot(30, 12).
+    expect(
+      autoCorridorWidth([0, 0, 0], [30, 40, 12], [0, 1, 0]),
+    ).toBeCloseTo(Math.hypot(30, 12) * 0.05, 12);
+  });
+
+  it('degenerate line (a = b) yields a zero-width corridor', () => {
+    expect(autoCorridorWidth([3, 4, 5], [3, 4, 5], Z_UP)).toBe(0);
+  });
+
+  it('passing it explicitly reproduces the bandWidth:null auto result exactly', () => {
+    // The Viewer now computes the corridor first (to stamp provenance) and
+    // hands it to the sampler; this pins that the explicit value IS the
+    // auto value, so the stamped number is honest.
+    const positions = pack([
+      [1, 0.1, 5],
+      [5, -0.2, 7],
+      [9, 0.3, 6],
+    ]);
+    const a: [number, number, number] = [0, 0, 0];
+    const b: [number, number, number] = [10, 0, 0];
+    const auto = sampleProfile({ a, b, up: Z_UP, positions, samples: 8 });
+    const explicit = sampleProfile({
+      a, b, up: Z_UP, positions, samples: 8,
+      bandWidth: autoCorridorWidth(a, b, Z_UP),
+    });
+    expect(explicit).toEqual(auto);
+  });
+});
+
+describe('normaliseResampleParams — the B7/B8 panel→sampler seam (hand-computed)', () => {
+  it('passes in-range values through, converting metres → render units', () => {
+    // Metric scan (factor 1): the metre value IS the render value.
+    expect(normaliseResampleParams({ corridorWidthM: 2.5 }, 1)).toEqual({
+      corridorWidth: 2.5,
+      groundPercentile: null,
+      sampleCount: null,
+    });
+    // Foot-CRS scan (factor 0.3048): a 3.048 m corridor is 10 render feet —
+    // the exact inverse of the B2 summary scaling.
+    expect(
+      normaliseResampleParams({ corridorWidthM: 3.048 }, 0.3048).corridorWidth,
+    ).toBeCloseTo(10, 12);
+  });
+
+  it('clamps the corridor to the shared bounds BEFORE unit conversion', () => {
+    // 0.001 m clamps up to the 0.05 m floor; 9 999 m clamps down to 500 m.
+    expect(normaliseResampleParams({ corridorWidthM: 0.001 }, 1).corridorWidth).toBe(
+      MIN_CORRIDOR_HALF_WIDTH_M,
+    );
+    expect(normaliseResampleParams({ corridorWidthM: 9999 }, 1).corridorWidth).toBe(
+      MAX_CORRIDOR_HALF_WIDTH_M,
+    );
+    // Clamp happens in metres: floor 0.05 m on a foot scan = 0.05/0.3048 render ft.
+    expect(
+      normaliseResampleParams({ corridorWidthM: 0.001 }, 0.3048).corridorWidth,
+    ).toBeCloseTo(MIN_CORRIDOR_HALF_WIDTH_M / 0.3048, 12);
+  });
+
+  it('clamps the percentile to 0..100 and rounds the sample count', () => {
+    expect(normaliseResampleParams({ groundPercentile: -5 }, 1).groundPercentile).toBe(0);
+    expect(normaliseResampleParams({ groundPercentile: 120 }, 1).groundPercentile).toBe(100);
+    expect(normaliseResampleParams({ groundPercentile: 50 }, 1).groundPercentile).toBe(50);
+    expect(normaliseResampleParams({ sampleCount: 33.4 }, 1).sampleCount).toBe(33);
+  });
+
+  it('null / non-finite fields stay null ("use the default"), bad factors fall back to 1', () => {
+    expect(normaliseResampleParams({}, 1)).toEqual({
+      corridorWidth: null,
+      groundPercentile: null,
+      sampleCount: null,
+    });
+    expect(
+      normaliseResampleParams({ corridorWidthM: Number.NaN, sampleCount: null }, 1)
+        .corridorWidth,
+    ).toBeNull();
+    // A zero/garbage unit factor must not divide the corridor to Infinity —
+    // mislabelled-as-metres (factor 1) is the documented fallback.
+    expect(normaliseResampleParams({ corridorWidthM: 2 }, 0).corridorWidth).toBe(2);
+  });
+
+  it('every panel sample-count option survives the sampler clamp unchanged', () => {
+    // Hand-checked against MIN/MAX_SAMPLES (2..512): a profile resampled at
+    // any offered option must come back with exactly that many bins.
+    const positions = pack([[5, 0, 3]]);
+    for (const n of PROFILE_SAMPLE_COUNT_OPTIONS) {
+      const out = sampleProfile({
+        a: [0, 0, 0],
+        b: [10, 0, 0],
+        up: Z_UP,
+        positions,
+        samples: n,
+      });
+      expect(out.length).toBe(n);
+    }
+  });
+});
+
+describe('encode/decodeSamplerParams — the B7/B8 persistence seam', () => {
+  it('round-trips a full preference record', () => {
+    const enc = encodeSamplerParams({ corridorWidthM: 2.5, groundPercentile: 50, sampleCount: 128 });
+    expect(decodeSamplerParams(enc)).toEqual({
+      corridorWidthM: 2.5,
+      groundPercentile: 50,
+      sampleCount: 128,
+    });
+  });
+
+  it('round-trips a partial record (unset fields stay null = "default")', () => {
+    const enc = encodeSamplerParams({ sampleCount: 256 });
+    expect(decodeSamplerParams(enc)).toEqual({
+      corridorWidthM: null,
+      groundPercentile: null,
+      sampleCount: 256,
+    });
+  });
+
+  it('a Reset (all nulls) decodes to null — "no stored preference"', () => {
+    const enc = encodeSamplerParams({
+      corridorWidthM: null,
+      groundPercentile: null,
+      sampleCount: null,
+    });
+    expect(decodeSamplerParams(enc)).toBeNull();
+  });
+
+  it('encode normalises non-finite values to null rather than persisting them', () => {
+    const enc = encodeSamplerParams({ corridorWidthM: Number.NaN, groundPercentile: Infinity });
+    expect(decodeSamplerParams(enc)).toBeNull();
+  });
+
+  it('decode refuses garbage: absent storage, bad JSON, wrong shapes, wrong types', () => {
+    expect(decodeSamplerParams(null)).toBeNull();
+    expect(decodeSamplerParams('not json {')).toBeNull();
+    expect(decodeSamplerParams('"a string"')).toBeNull();
+    expect(decodeSamplerParams('[1,2,3]')).toBeNull();
+    expect(decodeSamplerParams('null')).toBeNull();
+    // A hand-edited string value drops to null instead of poisoning the
+    // sampler; the surviving numeric field still applies.
+    expect(decodeSamplerParams('{"corridorWidthM":"wide","sampleCount":64}')).toEqual({
+      corridorWidthM: null,
+      groundPercentile: null,
+      sampleCount: 64,
+    });
+  });
+
+  it('out-of-range persisted values degrade via the SAME clamp the panel uses', () => {
+    // decode leaves the value as stored; normaliseResampleParams clamps at
+    // the point of use — one rule for live edits and reloads alike.
+    const decoded = decodeSamplerParams(encodeSamplerParams({ corridorWidthM: 9999 }))!;
+    expect(decoded.corridorWidthM).toBe(9999);
+    expect(normaliseResampleParams(decoded, 1).corridorWidth).toBe(MAX_CORRIDOR_HALF_WIDTH_M);
   });
 });

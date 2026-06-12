@@ -48,6 +48,7 @@ export type {
   ExportResult,
   ExportSceneAdapter,
   ExportUnavailableReason,
+  ExportWorldFile,
   HeightMapOptions,
   HeightMapRamp,
   ImageExportContext,
@@ -58,7 +59,11 @@ export type {
   IntensityOptions,
   OrthographicRgbOptions,
 } from './types';
-export { orthographicRgbExporter, orthoCameraForPerspective } from './OrthographicRgbExporter';
+export {
+  orthographicRgbExporter,
+  orthoCameraForPerspective,
+  shouldExportGeoreferencedOrtho,
+} from './OrthographicRgbExporter';
 export { heightMapExporter, HEIGHT_MAP_RAMPS, HEIGHT_MAP_RESOLUTIONS } from './HeightMapExporter';
 export { intensityExporter } from './IntensityExporter';
 export { classificationExporter } from './ClassificationExporter';

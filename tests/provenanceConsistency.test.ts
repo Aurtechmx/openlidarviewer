@@ -39,6 +39,9 @@ import {
   buildTerrainReportContent,
   type TerrainReportContent,
 } from '../src/terrain/export/terrainReportContent';
+import { terrainAssessment } from '../src/terrain/contour/terrainAssessment';
+import { recommendedWorkflows } from '../src/terrain/contour/recommendedWorkflow';
+import { terrainProducts } from '../src/terrain/contour/terrainProducts';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 import type {
   ContourFeatureModel,
@@ -350,13 +353,42 @@ describe('provenance consistency — export-ready run', () => {
     // … and its footer lines are the SAME formatter output every text export stamps.
     expect([...report.provenanceLines]).toEqual(provenanceLines(prov));
     // The user-visible rows are sourced from it too.
-    expect(reportRow(report, 'Dataset Summary', 'Horizontal CRS')).toBe(prov.horizontalCrs);
-    expect(reportRow(report, 'Dataset Summary', 'Vertical datum')).toBe(prov.verticalDatum);
-    expect(reportRow(report, 'Dataset Summary', 'Coverage mode')).toBe(prov.coverageMode);
-    expect(reportRow(report, 'Dataset Summary', 'Software')).toBe(`${prov.software} ${prov.softwareVersion}`);
+    expect(reportRow(report, 'Dataset Statistics', 'Horizontal CRS')).toBe(prov.horizontalCrs);
+    expect(reportRow(report, 'Dataset Statistics', 'Vertical datum')).toBe(prov.verticalDatum);
+    expect(reportRow(report, 'Dataset Statistics', 'Coverage mode')).toBe(prov.coverageMode);
+    expect(reportRow(report, 'Dataset Statistics', 'Software')).toBe(`${prov.software} ${prov.softwareVersion}`);
     expect(reportRow(report, 'Terrain Assessment', 'Surface quality')).toBe(prov.surfaceQuality);
     expect(reportRow(report, 'Terrain Assessment', 'Export readiness')).toBe(prov.exportReadiness);
     expect(reportRow(report, 'Quality Metrics', 'Vertical RMSEz')).toBe(`${prov.accuracy!.rmseZM!.toFixed(2)} m`);
+  });
+
+  it('the report Executive Summary opens with the SAME verdicts the provenance stamps', async () => {
+    const { prov, report } = await readyOutputs();
+    // The verdict sentence is "<surfaceQuality> — <reason>": its leading token
+    // must be the provenance's surface tier, so the headline can never say
+    // "Good" while the stamped metadata says "Preview".
+    expect(reportRow(report, 'Executive Summary', 'Verdict')).toMatch(
+      new RegExp(`^${prov.surfaceQuality} — `),
+    );
+    // Ready run: the readiness row is the bare verdict (no reason suffix).
+    expect(reportRow(report, 'Executive Summary', 'Export readiness')).toBe(
+      prov.exportReadiness,
+    );
+  });
+
+  it('the report Terrain Products list mirrors the panel terrainProducts view', async () => {
+    const { report } = await readyOutputs();
+    const a = terrainAssessment(readyResult());
+    const view = terrainProducts(a, recommendedWorkflows(a));
+    // Same six products, same order, Ready renamed Available — the PDF and
+    // the Analyse panel grade products from one projection, never two.
+    expect(report.products.map((p) => p.label)).toEqual(view.map((v) => v.label));
+    expect(report.products.map((p) => p.availability)).toEqual(
+      view.map((v) => (v.statusWord === 'Ready' ? 'Available' : v.statusWord)),
+    );
+    // … and the report's per-product notes ARE the panel rows' reasons —
+    // the engine-selected strings, byte-identical (none here: all Ready).
+    expect(report.products.map((p) => p.note)).toEqual(view.map((v) => v.reason));
   });
 
   it('EVERY exporter reports the same export-readiness verdict (no drift)', async () => {
@@ -452,9 +484,35 @@ describe('provenance consistency — un-georeferenced (Preview) run', () => {
     expect(o.svg).toContain(readinessLine);
     expect(String(o.geojson.metadata.exportReason)).toBe(reason);
     expect(reportRow(o.report, 'Terrain Assessment', 'Export note')).toBe(reason);
+    // The report's Executive Summary readiness line spells the SAME sentence:
+    // "<verdict> — <reason>" with no rewording.
+    expect(reportRow(o.report, 'Executive Summary', 'Export readiness')).toBe(
+      `${o.prov.exportReadiness} — ${reason}`,
+    );
     // The DEM README's leading caveat names the same verdict + reason inline.
     expect(o.demReadme).toMatch(/PRELIMINARY/);
     expect(o.demReadme).toContain(`export readiness: Preview (${reason})`);
+  });
+
+  it('the report product reasons quote the SAME engine reason the provenance stamps', async () => {
+    const o = await previewOutputs();
+    // Good surface, georef-only gap: the engine's export reason ("CRS unknown
+    // and vertical datum unknown") is THE deliverable reason — the same
+    // string stamped on every artifact, never a reworded parallel.
+    const a = terrainAssessment(noGeorefResult());
+    const view = terrainProducts(a, recommendedWorkflows(a));
+    expect(o.report.products.map((p) => p.note)).toEqual(view.map((v) => v.reason));
+    for (const label of ['DTM/DEM export', 'Contours', 'Map sheet']) {
+      const p = o.report.products.find((x) => x.label === label)!;
+      expect(p.availability).toBe('Preview');
+      expect(p.note).toBe(o.prov.exportReason);
+    }
+    // Inspection rows stay Available with no excuse — the surface is Good.
+    for (const label of ['Profiles', 'Measurements', 'Terrain review']) {
+      const p = o.report.products.find((x) => x.label === label)!;
+      expect(p.availability).toBe('Available');
+      expect(p.note).toBeUndefined();
+    }
   });
 
   it('the map sheet prints the negated PREVIEW note and the honest CRS, never the ready note', async () => {

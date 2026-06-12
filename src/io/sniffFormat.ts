@@ -40,6 +40,30 @@ export function isZUpFormat(format: SourceFormat): boolean {
   );
 }
 
+/**
+ * The vertical-axis hint scan-shape detection should run with, given the
+ * source formats feeding the analysis buffer. LAS/LAZ (and the COPC/EPT
+ * streams built on them) are z-up BY SPEC, so detection has nothing to decide
+ * — feeding the hint stops a pathological interior (dense walls, sparse
+ * floor) from buying a sideways frame. Phone-scan mesh formats (PLY, OBJ,
+ * GLB/GLTF) have genuinely ambiguous frames, so ANY such contributor leaves
+ * detection active (`undefined`). An empty gather also returns `undefined` —
+ * never a fabricated hint.
+ *
+ * Pure seam for `Viewer.gatherTerrainPositions`, unit-tested directly.
+ */
+export function verticalAxisHintForSources(
+  staticFormats: ReadonlyArray<SourceFormat>,
+  hasStreaming: boolean,
+): 'z' | undefined {
+  if (staticFormats.length === 0 && !hasStreaming) return undefined;
+  // Streaming sources are COPC/EPT — LAS-family, z-up by spec.
+  for (const f of staticFormats) {
+    if (!isZUpFormat(f)) return undefined;
+  }
+  return 'z';
+}
+
 /** Read the first `count` bytes of `buffer` as an ASCII string. */
 function readAscii(buffer: ArrayBuffer, count: number): string {
   const view = new Uint8Array(buffer, 0, Math.min(count, buffer.byteLength));

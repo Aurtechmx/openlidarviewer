@@ -11,12 +11,28 @@
  * machine; this file owns the pixels.
  *
  * The overlay is `position: fixed` so it floats above every panel
- * and updates on window resize. Esc dismisses (no persist) and
- * "Skip tour" persists.
+ * and updates on window resize.
+ *
+ * Accessibility (v0.4.5): the card is a `role="dialog"` with
+ * `aria-modal`, labelled by its title and described by its body; focus
+ * moves to the Next button on every step change and Tab cycles within
+ * the card's buttons (the Modal.ts trap pattern, specialised to the
+ * card's three fixed buttons). The step text (progress + title + body)
+ * is one polite, atomic live region so each step's copy is announced
+ * even though focus stays parked on Next. Keyboard: → / Enter advance,
+ * ← steps back, Esc skips — the same outcome the "Skip tour" button
+ * persists, which is what the welcome copy ("Press Esc any time to
+ * skip") promises. Key terms in step copy (`*term*`) render as themed
+ * `<mark>` elements, not raw selection-blue text.
  */
 
 import { el } from '../dom';
-import { TourSession, type TourSnapshot, type TourStep } from './tourSteps';
+import {
+  TourSession,
+  splitEmphasis,
+  type TourSnapshot,
+  type TourStep,
+} from './tourSteps';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -86,13 +102,50 @@ export class TourOverlay {
       this._backBtn,
       this._nextBtn,
     ]);
-    this._card = el('div', { className: 'olv-tour-card olv-hidden' }, [
+    // The step text (progress + title + body) lives in ONE polite live
+    // region: focus stays parked on the Next button across steps, so without
+    // a live region a screen-reader user pressing Next hears only "Next,
+    // button" again and never the new step's copy. aria-atomic makes each
+    // step announce as a whole (the three children are replaced together).
+    const live = el('div', { className: 'olv-tour-live' }, [
       this._progress,
       this._title,
       this._body,
+    ]);
+    live.setAttribute('aria-live', 'polite');
+    live.setAttribute('aria-atomic', 'true');
+    this._card = el('div', { className: 'olv-tour-card olv-hidden' }, [
+      live,
       actions,
       this._skipBtn,
     ]);
+    // Dialog semantics (v0.4.5): without these, a screen reader read the
+    // card as loose page text and never announced it as a modal step.
+    this._title.id = 'olv-tour-title';
+    this._body.id = 'olv-tour-body';
+    this._card.setAttribute('role', 'dialog');
+    this._card.setAttribute('aria-modal', 'true');
+    this._card.setAttribute('aria-labelledby', this._title.id);
+    this._card.setAttribute('aria-describedby', this._body.id);
+    // Focus trap — the Modal.ts pattern specialised to the card's three
+    // fixed buttons (Back / Next / Skip; Back drops out while disabled).
+    this._card.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [this._backBtn, this._nextBtn, this._skipBtn].filter(
+        (b) => !b.disabled,
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !this._card.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
 
     this.element = el('div', { className: 'olv-tour-root olv-hidden' }, [
       this._backdrop as unknown as HTMLElement,
@@ -106,9 +159,34 @@ export class TourOverlay {
     document.body.append(this.element);
     this._detach = this._session.subscribe((snap) => this._render(snap));
     this._onKey = (e) => {
-      if (e.key === 'Escape' && this._session.state === 'running') {
-        // Esc dismisses without persisting — the tour re-shows next session.
-        this._session.dismiss();
+      if (this._session.state !== 'running') return;
+      if (e.key === 'Escape') {
+        // Esc SKIPS (persisting the seen-flag) — the welcome copy promises
+        // "Press Esc any time to skip", and before v0.4.5 it silently
+        // dismissed instead, re-showing the tour every session.
+        e.preventDefault();
+        this._session.skip();
+        return;
+      }
+      // Keyboard stepping (v0.4.5): → advances, ← steps back. Enter also
+      // advances, but ONLY when focus is not already on one of the card's
+      // buttons — a focused button fires its own click on Enter, and a
+      // second session call here would double-step.
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        this._session.next();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        this._session.back();
+        return;
+      }
+      if (e.key === 'Enter') {
+        const a = document.activeElement;
+        if (a === this._backBtn || a === this._nextBtn || a === this._skipBtn) return;
+        e.preventDefault();
+        this._session.next();
       }
     };
     this._onResize = () => {
@@ -137,6 +215,9 @@ export class TourOverlay {
 
   /** Re-render against a snapshot — called on subscribe + resize. */
   private _render(snap: TourSnapshot): void {
+    // A resize re-render of the SAME step must not steal focus from a
+    // button the user tabbed to — only a step change moves focus.
+    const stepChanged = this._currentSnapshot?.step?.id !== snap.step?.id;
     this._currentSnapshot = snap;
     if (snap.state !== 'running' || !snap.step) {
       this.element.classList.add('olv-hidden');
@@ -144,13 +225,25 @@ export class TourOverlay {
     }
     this.element.classList.remove('olv-hidden');
     this._title.textContent = snap.step.title;
-    this._body.textContent = snap.step.body;
+    // Body copy renders `*key terms*` as themed <mark> elements. Built as
+    // real DOM nodes from the pure splitter — copy can never inject HTML.
+    this._body.replaceChildren(
+      ...splitEmphasis(snap.step.body).map((seg) =>
+        seg.mark
+          ? el('mark', { className: 'olv-tour-mark', text: seg.text })
+          : document.createTextNode(seg.text),
+      ),
+    );
     this._progress.textContent = `Step ${snap.index + 1} of ${snap.total}`;
     this._backBtn.disabled = snap.index === 0;
     this._nextBtn.textContent =
       snap.index === snap.total - 1 ? 'Done' : 'Next';
 
     this._positionSpotlightAndCard(snap.step);
+
+    // Move focus to the primary action on every step change so keyboard +
+    // screen-reader users land on "what do I do next" without hunting.
+    if (stepChanged) this._nextBtn.focus();
   }
 
   /** Position the spotlight + tooltip card relative to the step target. */
@@ -160,7 +253,14 @@ export class TourOverlay {
     let target: DOMRect | null = null;
     if (step.target) {
       const node = document.querySelector<HTMLElement>(step.target);
-      if (node) target = node.getBoundingClientRect();
+      if (node) {
+        const rect = node.getBoundingClientRect();
+        // A matched-but-HIDDEN target (e.g. the tool dock, which collapses
+        // on the empty state) measures 0×0 at the viewport origin. Treating
+        // that as a real target used to pin a 16 px spotlight + the card to
+        // the top-left corner — read it as "no target" so the card centres.
+        if (rect.width > 1 && rect.height > 1) target = rect;
+      }
     }
 
     if (!target) {

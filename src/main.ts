@@ -30,7 +30,7 @@ import { ShortcutSheet } from './ui/ShortcutSheet';
 import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
-import { WorkflowController } from './ui/WorkflowController';
+import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import {
   CAMERA_PRESET_KEY,
@@ -40,6 +40,12 @@ import {
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
+// Workflow presets (v0.4.5) — pure table + matcher; applied through the
+// Viewer's existing setters in the Inspector callback below.
+import {
+  getTerrainWorkflowPreset,
+  matchTerrainWorkflowPreset,
+} from './render/terrainWorkflowPresets';
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
@@ -49,7 +55,12 @@ import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
-import { resolveScanRoute, type ScanTypeOverride } from './terrain/scanRoute';
+import {
+  planScanRoute,
+  settleOneShotSpent,
+  settleTargetDepth,
+  type ScanTypeOverride,
+} from './terrain/scanRoute';
 import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
@@ -125,6 +136,11 @@ import {
   loadBatchConverter,
   loadSpaceReportPdf,
   loadFloorPlan,
+  loadPngWorldFile,
+  loadPlanetaryComputerCatalog,
+  loadRgbAutoNormalize,
+  loadEmbedBridge,
+  loadLasLoader,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -319,7 +335,7 @@ const catalogPanel = new CatalogPanel({
     // enabled, and the resulting URL is valid for ~1 hour.
     void (async () => {
       try {
-        const mod = await import('./io/catalog/planetaryComputer');
+        const mod = await loadPlanetaryComputerCatalog();
         const signed = await mod.signAssetUrl(item.assetUrl);
         await handleRemoteUrl(signed);
       } catch (err) {
@@ -845,12 +861,16 @@ const inspector = new Inspector({
   onColorMode: (mode) => {
     currentColorMode = mode;
     if (activeId) viewer.setColorMode(activeId, mode);
+    // Workflow rail (v0.4.5): a colour-mode change can enter/leave a preset.
+    syncInspectorVisuals();
   },
   onHeightPercentileTrim: (trim) => {
     viewer.setHeightPercentileTrim(trim);
+    syncInspectorVisuals();
   },
   onPointSize: (size) => {
     viewer.setPointSize(size);
+    syncInspectorVisuals();
     persistPrefs();
   },
   onToggleVisible: (id, visible) => viewer.setCloudVisible(id, visible),
@@ -889,7 +909,40 @@ const inspector = new Inspector({
       // Thread the active class-scope stamp so a filtered export carries the
       // "showing N of M classes" banner; empty when nothing is hidden.
       .exportImage(mode, {}, currentClassScopeStamp())
-      .then((result) => {
+      .then(async (result) => {
+        // Georeferenced ortho path (v0.4.5, workplan C4): when the exporter
+        // returned world-file data (true top-down ortho frame + known world
+        // origin + CRS WKT), the download is one ZIP — PNG + `.pgw` + `.prj`
+        // — that QGIS/ArcGIS place directly. Every other export keeps the
+        // existing bare-PNG download and filename. Packaging failures fall
+        // back to the bare PNG rather than sinking an export that already
+        // rendered fine.
+        if (result.worldFile) {
+          try {
+            const { buildStudioPngPackage } = await loadPngWorldFile();
+            const wf = result.worldFile;
+            const pkg = buildStudioPngPackage({
+              basename: `${base}-${mode}`,
+              png: new Uint8Array(await result.blob.arrayBuffer()),
+              extent: wf.extent,
+              widthPx: wf.widthPx,
+              heightPx: wf.heightPx,
+              worldOrigin: wf.worldOrigin,
+              wkt: wf.wkt,
+            });
+            if (pkg) {
+              downloadBlob(
+                pkg.filename,
+                new Blob([pkg.zip as BlobPart], { type: 'application/zip' }),
+              );
+              recordUsage('export', mode);
+              dropZone.setProgress(null);
+              return;
+            }
+          } catch (err) {
+            console.warn('[image-export] world-file packaging failed — shipping bare PNG:', err);
+          }
+        }
         downloadBlob(`${base}-${mode}.png`, result.blob);
         recordUsage('export', mode);
         dropZone.setProgress(null);
@@ -955,6 +1008,7 @@ const inspector = new Inspector({
   },
   onPointSizeMode: (mode) => {
     viewer.setPointSizeMode(mode);
+    syncInspectorVisuals();
     persistPrefs();
   },
   onAntialiasing: (on) => {
@@ -1005,7 +1059,7 @@ const inspector = new Inspector({
     if (!id) return;
     const cloud = viewer.getCloud(id);
     if (!cloud || !cloud.colors) return;
-    void import('./render/rgbAutoNormalize').then(({ rgbAutoNormalize }) => {
+    void loadRgbAutoNormalize().then(({ rgbAutoNormalize }) => {
       const suggestion = rgbAutoNormalize({ colorsU8: cloud.colors! });
       if (!suggestion) return;
       viewer.setRgbAppearance(suggestion.settings);
@@ -1015,6 +1069,40 @@ const inspector = new Inspector({
   },
   onSplatMode: (id) => {
     viewer.setSplatMode(id);
+    syncInspectorRendering();
+    persistPrefs();
+  },
+  // Workflow presets (v0.4.5) — fan one pure bundle out through the
+  // EXISTING setters, then re-sync every Inspector surface the bundle
+  // touched. No new rendering machinery: the preset module is a table.
+  onTerrainWorkflowPreset: (id) => {
+    const p = getTerrainWorkflowPreset(id);
+    viewer.setEdlPreset(p.edlPresetId);
+    viewer.setPointSize(p.pointSize);
+    viewer.setPointSizeMode(p.pointSizeMode);
+    viewer.setSky(p.sky);
+    viewer.setHeightPercentileTrim(p.heightPercentileTrim);
+    // Colour mode is per-cloud and channel-gated: a cloud without the
+    // channel throws from colorForMode — skip it (keeping its current
+    // colours) rather than failing the rest of the bundle, and only
+    // record `currentColorMode` once the guarded set actually applied
+    // so the chip rail stays honest on channel-less clouds. Streaming
+    // clouds recolour through their own seam.
+    if (activeId) {
+      try {
+        viewer.setColorMode(activeId, p.colorMode);
+        currentColorMode = p.colorMode;
+      } catch (err) {
+        console.warn(`[workflow-preset] colour mode ${p.colorMode} skipped:`, err);
+      }
+    }
+    try {
+      viewer.setStreamingColorMode(p.colorMode);
+    } catch (err) {
+      console.warn(`[workflow-preset] streaming colour mode skipped:`, err);
+    }
+    syncColorModeForActive();
+    syncInspectorVisuals();
     syncInspectorRendering();
     persistPrefs();
   },
@@ -1054,8 +1142,17 @@ const crsCoordinator = createCrsCoordinator({
 // v0.3.9 — workflow recorder. The host owns the controller so it can
 // capture from every action handler in one place and dispatch back
 // through the same handlers on replay.
+//
+// v0.4.5 — feature-flagged OFF (see WORKFLOW_RECORDER_ENABLED in
+// WorkflowController.ts for the product rationale). The controller is
+// still constructed so the unconditional `capture()` calls in the
+// action handlers below stay valid no-ops, but the badge is only
+// mounted — and the shortcut / palette entries only registered —
+// when the flag is on.
 const workflowController = new WorkflowController();
-stage.overlay.append(workflowController.badge);
+if (WORKFLOW_RECORDER_ENABLED) {
+  stage.overlay.append(workflowController.badge);
+}
 
 // v0.3.9 — command palette (Cmd-K / Ctrl-K). The host owns the
 // registry so every action stays close to the handler that powers
@@ -1233,84 +1330,92 @@ function buildActionRegistry(): Action[] {
   );
 
   // Workflow recorder — Start / Stop+Save / Open a file.
-  actions.push(
-    {
-      id: 'workflow.start',
-      title: 'Start recording workflow',
-      section: 'Workflow',
-      keys: 'Cmd-Shift-R',
-      // v0.3.10 — `.olvworkflow` files capture camera
-      // moves and tool actions ONLY (no scan data, no measurements). To
-      // replay one the recipient needs the same scan file already open
-      // locally. Without that disclosure users will share a workflow,
-      // the recipient opens it, nothing happens, and trust is lost the
-      // way it was with the pre-v0.3.10 "Share" button. The hint below
-      // sets that expectation at recording start, the stop-save title
-      // makes the file format explicit, and the save toast confirms
-      // both what was saved and what the recipient needs to use it.
-      hint:
-        'Records camera moves and tool actions only — to replay later you ' +
-        '(or the recipient) need the same scan open.',
-      keywords: ['record', 'macro', 'demo'],
-      run: () => {
-        if (workflowController.state === 'idle') {
-          workflowController.startRecording();
-          showLassoToast('Workflow · recording started. Use the badge to stop.');
-        }
+  //
+  // v0.4.5 — gated behind WORKFLOW_RECORDER_ENABLED (currently false; see
+  // WorkflowController.ts for the product rationale). The entries must be
+  // ABSENT from the registry when the flag is off — not merely inert — so
+  // the command palette and the shortcut sheet (both of which render
+  // straight from this registry) show nothing for the feature.
+  if (WORKFLOW_RECORDER_ENABLED) {
+    actions.push(
+      {
+        id: 'workflow.start',
+        title: 'Start recording workflow',
+        section: 'Workflow',
+        keys: 'Cmd-Shift-U',
+        // v0.3.10 — `.olvworkflow` files capture camera
+        // moves and tool actions ONLY (no scan data, no measurements). To
+        // replay one the recipient needs the same scan file already open
+        // locally. Without that disclosure users will share a workflow,
+        // the recipient opens it, nothing happens, and trust is lost the
+        // way it was with the pre-v0.3.10 "Share" button. The hint below
+        // sets that expectation at recording start, the stop-save title
+        // makes the file format explicit, and the save toast confirms
+        // both what was saved and what the recipient needs to use it.
+        hint:
+          'Records camera moves and tool actions only — to replay later you ' +
+          '(or the recipient) need the same scan open.',
+        keywords: ['record', 'macro', 'demo'],
+        run: () => {
+          if (workflowController.state === 'idle') {
+            workflowController.startRecording();
+            showLassoToast('Workflow · recording started. Use the badge to stop.');
+          }
+        },
       },
-    },
-    {
-      id: 'workflow.stop-save',
-      title: 'Stop and save workflow (.olvworkflow)',
-      section: 'Workflow',
-      hint:
-        'Saves a replay of camera moves and tool actions — replay needs ' +
-        'the same scan loaded on the other end.',
-      keywords: ['export', 'finish', 'save'],
-      run: () => {
-        const workflow = workflowController.stopRecording();
-        if (workflow) {
-          workflowController.download(workflow);
-          showLassoToast(
-            'Workflow saved. Replay needs the same scan open on the other end.',
-          );
-        } else {
-          showLassoToast('Workflow · nothing recorded yet.');
-        }
+      {
+        id: 'workflow.stop-save',
+        title: 'Stop and save workflow (.olvworkflow)',
+        section: 'Workflow',
+        hint:
+          'Saves a replay of camera moves and tool actions — replay needs ' +
+          'the same scan loaded on the other end.',
+        keywords: ['export', 'finish', 'save'],
+        run: () => {
+          const workflow = workflowController.stopRecording();
+          if (workflow) {
+            workflowController.download(workflow);
+            showLassoToast(
+              'Workflow saved. Replay needs the same scan open on the other end.',
+            );
+          } else {
+            showLassoToast('Workflow · nothing recorded yet.');
+          }
+        },
       },
-    },
-    {
-      id: 'workflow.load-replay',
-      title: 'Replay a workflow file…',
-      section: 'Workflow',
-      hint: 'Pick a .olvworkflow file and play it back.',
-      keywords: ['load', 'import', 'open', 'macro'],
-      run: () => {
-        const input = el('input', { className: 'olv-hidden' });
-        input.type = 'file';
-        input.accept = '.olvworkflow,application/json';
-        input.addEventListener('change', () => {
-          const file = input.files?.[0];
-          input.remove();
-          if (!file) return;
-          void (async () => {
-            try {
-              const workflow = await workflowController.loadFromFile(file);
-              workflowController.replay(workflow, dispatchWorkflowEvent);
-              showLassoToast(
-                `Workflow · playing ${workflow.events.length} event${workflow.events.length === 1 ? '' : 's'}.`,
-              );
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : 'unknown error';
-              showLassoToast(`Workflow · couldn't load file: ${msg}`);
-            }
-          })();
-        });
-        document.body.append(input);
-        input.click();
+      {
+        id: 'workflow.load-replay',
+        title: 'Replay a workflow file…',
+        section: 'Workflow',
+        hint: 'Pick a .olvworkflow file and play it back.',
+        keywords: ['load', 'import', 'open', 'macro'],
+        run: () => {
+          const input = el('input', { className: 'olv-hidden' });
+          input.type = 'file';
+          input.accept = '.olvworkflow,application/json';
+          input.addEventListener('change', () => {
+            const file = input.files?.[0];
+            input.remove();
+            if (!file) return;
+            void (async () => {
+              try {
+                const workflow = await workflowController.loadFromFile(file);
+                workflowController.replay(workflow, dispatchWorkflowEvent);
+                showLassoToast(
+                  `Workflow · playing ${workflow.events.length} event${workflow.events.length === 1 ? '' : 's'}.`,
+                );
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : 'unknown error';
+                showLassoToast(`Workflow · couldn't load file: ${msg}`);
+              }
+            })();
+          });
+          document.body.append(input);
+          input.click();
+        },
       },
-    },
-  );
+    );
+  }
 
   // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
   // command palette so users who skipped or dismissed can re-trigger
@@ -1380,33 +1485,54 @@ window.addEventListener('keydown', (e) => {
   shortcutSheet.toggle();
 });
 
-// Cmd-Shift-R / Ctrl-Shift-R toggles workflow recording. When idle,
+// Cmd-Shift-U / Ctrl-Shift-U toggles workflow recording. When idle,
 // start a recording; when recording, stop and immediately download
 // the workflow file. Replay is reachable via the command palette.
-window.addEventListener('keydown', (e) => {
-  const isRecorder =
-    (e.key === 'r' || e.key === 'R') &&
-    e.shiftKey &&
-    (e.metaKey || e.ctrlKey);
-  if (!isRecorder) return;
-  e.preventDefault();
-  if (workflowController.state === 'recording') {
-    const workflow = workflowController.stopRecording();
-    if (workflow) {
-      workflowController.download(workflow);
-      // v0.3.10 — match the toast wording from the
-      // command-palette path so users see the same expectation either way.
-      showLassoToast(
-        'Workflow saved. Replay needs the same scan open on the other end.',
-      );
-    } else {
-      showLassoToast('Workflow · nothing recorded yet.');
+//
+// Why U? The original Cmd/Ctrl-Shift-R collided with the browser's
+// hard-refresh — recording a workflow reloaded the page. Surveying
+// Cmd/Ctrl-Shift-<letter> across Chrome / Firefox / Safari / Edge,
+// nearly every letter is taken: A (tab search), B (bookmarks bar),
+// C (inspect element), D (bookmark tabs), G (find previous),
+// H (home/history), I/J/K (devtools), M (responsive/profile),
+// N (incognito — reserved), O (bookmark manager), P (private window),
+// R (hard refresh), S (screenshot), T (reopen tab — reserved),
+// V (paste-match-style), W (close window — reserved, cannot be
+// intercepted), Y (Firefox downloads), Z (our own redo). U is unbound
+// in Chrome, Firefox and Safari; Edge's Ctrl-Shift-U (Read Aloud) is
+// page-interceptable, so our preventDefault() wins. No in-app binding
+// uses U, bare or modified. e.code === 'KeyU' keeps the chord
+// layout-independent (Shift can change e.key on some layouts).
+// v0.4.5 — the listener is only installed when WORKFLOW_RECORDER_ENABLED
+// is true (it currently is not; see WorkflowController.ts). With the flag
+// off the chord falls through untouched to the browser, exactly as if the
+// feature never existed.
+if (WORKFLOW_RECORDER_ENABLED) {
+  window.addEventListener('keydown', (e) => {
+    const isRecorder =
+      (e.code === 'KeyU' || e.key === 'u' || e.key === 'U') &&
+      e.shiftKey &&
+      (e.metaKey || e.ctrlKey);
+    if (!isRecorder) return;
+    e.preventDefault();
+    if (workflowController.state === 'recording') {
+      const workflow = workflowController.stopRecording();
+      if (workflow) {
+        workflowController.download(workflow);
+        // v0.3.10 — match the toast wording from the
+        // command-palette path so users see the same expectation either way.
+        showLassoToast(
+          'Workflow saved. Replay needs the same scan open on the other end.',
+        );
+      } else {
+        showLassoToast('Workflow · nothing recorded yet.');
+      }
+    } else if (workflowController.state === 'idle') {
+      workflowController.startRecording();
+      showLassoToast('Workflow · recording started. Use the badge to stop.');
     }
-  } else if (workflowController.state === 'idle') {
-    workflowController.startRecording();
-    showLassoToast('Workflow · recording started. Use the badge to stop.');
-  }
-});
+  });
+}
 
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
 function isRgbAppearancePresetId(
@@ -1446,12 +1572,24 @@ function isSkyPresetId(
  * fires, on session restore, and on initial paint after a scan loads.
  */
 function syncInspectorVisuals(): void {
+  // Workflow rail (v0.4.5): re-derive which preset (if any) the CURRENT
+  // knobs equal. Any hand-tweak of a preset-managed knob → 'custom'.
+  const workflowPresetId =
+    matchTerrainWorkflowPreset({
+      colorMode: currentColorMode ?? null,
+      edlPresetId: viewer.edlPresetId,
+      pointSize: viewer.pointSize,
+      pointSizeMode: viewer.pointSizeMode,
+      skyPresetId: viewer.skyPresetId,
+      heightPercentileTrim: viewer.heightPercentileTrim,
+    }) ?? 'custom';
   inspector.syncVisuals({
     rgbAppearancePresetId: viewer.rgbAppearancePresetId,
     edlPresetId: viewer.edlPresetId,
     skyPresetId: viewer.skyPresetId,
     temperature: viewer.rgbAppearance.temperature ?? 0,
     tint: viewer.rgbAppearance.tint ?? 0,
+    workflowPresetId,
   });
   // Advanced disclosure (Temperature, Tint, Auto-balance) only makes
   // sense on streaming COPC tiles — for local LAZ the RGB preset
@@ -1536,15 +1674,66 @@ const measurePanel = new MeasurePanel({
     // Filter the controller's measurements to the panel-selected set
     // and aggregate via the pure-data module. The panel owns the
     // selection state; the controller owns the data + unit context.
+    // The CRS unit factor (B2, v0.4.5) rides along so chain sums over a
+    // foot-CRS scan come back in true metres like every other readout.
     const all = viewer.measure.getMeasurements();
     const wanted = new Set(ids);
     const selected = all.filter((m) => wanted.has(m.id));
-    return aggregateMeasurements(selected, operation, dimension);
+    return aggregateMeasurements(
+      selected,
+      operation,
+      dimension,
+      [0, 0, 1],
+      viewer.measure.unitToMetres,
+    );
   },
   // v0.3.10 Profile-as-Deliverable — expose the controller's unit
   // system to the panel so the profile chart's axis labels (chainage,
   // elevation) read in the user's preferred units.
   getUnitSystem: () => viewer.measure.unitSystem,
+  // v0.4.5 (B4) — CRS provenance for the profile PDF header, resolved at
+  // export time so a late confirmation/override lands on the sheet. Local
+  // and unknown frames return nulls and the PDF keeps its honest
+  // "— (not georeferenced)" fallback.
+  getProfileExportContext: () => {
+    const cur = crsService.current();
+    if (!cur || (cur.kind !== 'projected' && cur.kind !== 'geographic')) {
+      return { crs: null, verticalDatum: null };
+    }
+    return {
+      // "EPSG:NNNN — name" when the code is known; the resolved name alone
+      // otherwise (it already falls back to the WKT name / EPSG label).
+      crs: cur.epsg != null ? `EPSG:${cur.epsg} — ${cur.name}` : cur.name,
+      verticalDatum: cur.verticalDatum ?? null,
+    };
+  },
+  // B7/B8 (v0.4.5) — the panel's sampler controls re-sample through the
+  // controller, which clamps the values, converts the metre corridor back to
+  // render units, and emits a change so the panel re-renders with the values
+  // that actually shaped the new chart.
+  onProfileResample: (id, params) => {
+    viewer.measure.resampleProfile(id, params);
+  },
+});
+
+// B2 (v0.4.5) — feed the measure stack the SAME render-units → metres seam
+// the terrain/space paths already read (`crsService.linearUnitToMetres`,
+// see the terrain run + terrainAnalysisRunner). Render space keeps the
+// scan's source units, so a foot-CRS scan must scale every measure readout
+// once, at the controller boundary; the subscription keeps a late resolve
+// or a user override in lockstep.
+//
+// Deferred behind viewerLoaded: `viewer` is null until the lazy chunk
+// resolves, so a top-level dereference throws at startup — and
+// CrsService.subscribe fires the listener synchronously on registration,
+// which would hit the same null (swallowed, silently dropping the seed).
+// Subscribing inside the .then is sufficient on its own: the immediate
+// fire seeds the CURRENT factor, covering a CRS that resolved before the
+// viewer chunk did, and every later resolve/override re-fires it.
+void viewerLoaded.then(() => {
+  crsService.subscribe((resolved) => {
+    viewer.measure.setUnitToMetres(resolved?.linearUnitToMetres ?? 1);
+  });
 });
 // The Annotations panel lists placed annotations; the controller drives it.
 const annotationPanel = new AnnotationPanel({
@@ -1578,6 +1767,26 @@ const analysePanel = new AnalysePanel({
   // an export reflects the user's chosen interval AND line shape.
   buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
   getExportBasename: () => lastCloudName,
+  // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
+  // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
+  // are the card's own strings (null when the card is empty — the report
+  // then omits those rows rather than re-deriving them).
+  getDatasetIntelligence: () => inspector.datasetIntelligence,
+  // Confidence overlay (v0.4.5): the coverage tile's "Colour 3D by confidence"
+  // link switches the loaded cloud to the colourblind-safe 'confidence' colour
+  // mode — the same DTM-confidence grid the tile renders — and re-syncs the
+  // Inspector's COLOR BY rail so the matching chip lights up. Guarded on a
+  // grid existing (the link only renders after an analysis, but the scan may
+  // have been closed since).
+  onColorByConfidence: () => {
+    if (!activeId || !viewer.hasCoverageGrid()) return;
+    const cloud = viewer.getCloud(activeId);
+    if (!cloud) return;
+    currentColorMode = 'confidence';
+    viewer.setColorMode(activeId, 'confidence');
+    inspector.setColorModes(availableModes(cloud), 'confidence');
+    syncInspectorVisuals();
+  },
   getMapContext: () => {
     const cloud = activeId ? viewer.getCloud(activeId) : null;
     // Streamed COPC / EPT scans never enter `viewer.getCloud` — their
@@ -1597,6 +1806,12 @@ const analysePanel = new AnalysePanel({
       sheet: 'letter',
       isGeographic: cur?.kind === 'geographic',
       wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
+      // The resolved CRS's linear unit (same seam every other unit consumer
+      // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
+      // scale note says ft — and a local/unresolved frame stamps an honest
+      // "unitless" rather than asserting metres. Undefined before a CRS
+      // resolves ⇒ serializeContours keeps its standing metre default.
+      linearUnit: cur?.linearUnit,
     };
   },
 });
@@ -1686,7 +1901,7 @@ void viewerLoaded.then(() => {
 });
 
 // The last non-terrain analysis the ObjectPanel rendered, captured so the panel's
-// export buttons (Report PDF / Floor plan) can build their deliverable from the
+// export buttons (Report PDF / Floor plan preview) can build their deliverable from the
 // SAME positions + metrics + unit factor that produced the on-screen numbers —
 // nothing recomputed differently, nothing fabricated. Null while terrain / empty.
 interface SpaceExportContext {
@@ -1699,6 +1914,26 @@ interface SpaceExportContext {
   readonly basename: string;
 }
 let lastSpaceExport: SpaceExportContext | null = null;
+
+// The routing gather that fills `lastSpaceExport` is capped at 60 k points —
+// plenty for classification + metrics, far too sparse for tracing 2–5 cm wall
+// cells on a multi-room scan (the wall-height slice of a 60 k sample of a
+// 400 m² interior leaves ~1 return per wall cell and the plan fragments).
+// Floor-plan extraction therefore re-gathers at the terrain-analysis budget;
+// the routing snapshot stays as the metrics source AND the fallback when the
+// fresh gather fails (e.g. mid-stream).
+const FLOORPLAN_GATHER_POINTS = 300_000;
+
+/** Densest available positions for floor-plan extraction (fallback: ctx). */
+function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
+  try {
+    const dense = viewer.gatherTerrainPositions(FLOORPLAN_GATHER_POINTS);
+    if (dense && dense.positions.length > ctx.positions.length) return dense.positions;
+  } catch {
+    /* best-effort — the routing snapshot below is always valid */
+  }
+  return ctx.positions;
+}
 
 /** Download bytes as a file (Blob → anchor click). */
 function downloadFileBytes(filename: string, bytes: Uint8Array, mime: string): void {
@@ -1732,10 +1967,13 @@ const objectPanel = new ObjectPanel({
     const { buildSpaceReportPdf } = await loadSpaceReportPdf();
     let floorPlan = null;
     if (ctx.spaceKind === 'interior') {
-      const { computeFloorPlan } = await loadFloorPlan();
-      floorPlan = computeFloorPlan(ctx.positions, {
+      const { extractFloorPlan } = await loadFloorPlan();
+      // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
+      // tracing (see FLOORPLAN_GATHER_POINTS).
+      floorPlan = extractFloorPlan(floorPlanPositions(ctx), {
         upAxis: ctx.upAxis,
         unitToMetres: ctx.unitToMetres,
+        maxSamples: FLOORPLAN_GATHER_POINTS,
       });
     }
     const bytes = await buildSpaceReportPdf({
@@ -1750,17 +1988,22 @@ const objectPanel = new ObjectPanel({
     });
     downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf');
   },
-  // Build + download the interior-only floor-plan sketch as a standalone SVG.
-  // Clearly labelled approximate by the renderer itself.
+  // Build + download the interior-only floor plan as a standalone SVG sheet.
+  // v0.4.5: real wall-extraction pipeline (wall-band slice → density mask →
+  // vectorised walls), labelled with its honest basis by the renderer itself.
+  // Dimension / scale-bar units follow the live measurement unit system.
   onExportFloorPlan: async () => {
     const ctx = lastSpaceExport;
     if (!ctx || ctx.spaceKind !== 'interior') return;
-    const { computeFloorPlan, floorPlanSvg } = await loadFloorPlan();
-    const plan = computeFloorPlan(ctx.positions, {
+    const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
+    // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
+    // tracing (see FLOORPLAN_GATHER_POINTS).
+    const plan = extractFloorPlan(floorPlanPositions(ctx), {
       upAxis: ctx.upAxis,
       unitToMetres: ctx.unitToMetres,
+      maxSamples: FLOORPLAN_GATHER_POINTS,
     });
-    const svg = floorPlanSvg(plan, { title: ctx.basename });
+    const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem });
     downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');
   },
 });
@@ -1775,9 +2018,10 @@ const terrainRunner = createTerrainAnalysisRunner({
   getActiveId: () => activeId,
   crsService,
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
-  // so the 3D "Coverage" colour mode can tint the cloud by trust, and enable
-  // the (until-now disabled) Coverage colour chip. The grid the colour mode
-  // samples is exactly the per-cell confidence the dashed-contour evidence uses.
+  // so the 3D "Coverage" colour mode (and its colourblind-safe "Confidence"
+  // twin) can tint the cloud by trust, and enable the (until-now disabled)
+  // gated colour chips. The grid the colour modes sample is exactly the
+  // per-cell confidence the dashed-contour evidence uses.
   onResult: (result) => {
     const d = result.dtm;
     viewer.setCoverageGrid({
@@ -1860,6 +2104,23 @@ let scanTypeOverride: ScanTypeOverride = 'auto';
 // settled ("Streaming ready"), so a verdict decided on a sparse early frame is
 // corrected on representative geometry. Reset per scan.
 let streamingSettledRouted = false;
+// Settled-evaluation bookkeeping for the re-arming one-shot (v0.4.5b fix —
+// a REFUSED settled verdict no longer spends the one-shot, so it can retry):
+// attempts feed the SETTLE_RETRY_CAP, the resident count gates re-attempts on
+// actual geometry change (an idle stream re-reads the same frame — pointless),
+// and `lastSettleUndecided` lets a failed gather retry on the very next poll
+// (its failure is not a property of the geometry). All reset per scan.
+let settleAttempts = 0;
+let lastSettleResident = -1;
+let lastSettleUndecided = false;
+// True once a SETTLED auto-mode verdict soft-committed the "Treat as" control
+// to the detected pill (static-load detection or the streaming settle
+// one-shot — `plan.commitDetected`). Display-only state: routing still follows
+// `scanTypeOverride`/detection exactly as before, it never pins anything, and
+// it resets on every new scan and on any user click (a manual pick shows that
+// pick; clicking Auto returns to the uncommitted Auto presentation while
+// detection re-runs).
+let scanDetectionCommitted = false;
 
 /**
  * Apply a manual "Treat as" choice and re-route immediately on the current
@@ -1868,9 +2129,34 @@ let streamingSettledRouted = false;
  */
 function setScanTypeOverride(override: ScanTypeOverride): void {
   scanTypeOverride = override;
+  // Any user click clears the settled soft-commit: a manual pick shows that
+  // pick, and clicking Auto means "re-detect" — the control returns to the
+  // uncommitted Auto presentation until the next settled verdict (if any).
+  scanDetectionCommitted = false;
   // Force-apply over the current geometry — `initial=true` bypasses the
   // verdict-change + override no-op guards so the choice takes effect at once.
   applyScanRoute(true);
+}
+
+/**
+ * The disabled-with-reason map for the "Treat as" control, derived from the
+ * DETECTED verdict: when detection says interior / compact object, the
+ * Terrain segment is greyed out (running contours there is misleading) and
+ * the explicit "Run terrain contours anyway" hatch stays the override.
+ */
+function treatAsDisabledFor(
+  detected: SpaceKind | null,
+): { terrain: string } | undefined {
+  return detected === 'interior' || detected === 'object'
+    ? {
+        terrain:
+          (detected === 'interior'
+            ? 'This scan reads as an interior'
+            : 'This scan reads as a compact object') +
+          ' — terrain analysis would be misleading. ' +
+          "Use 'Run terrain contours anyway' to override.",
+      }
+    : undefined;
 }
 
 /**
@@ -1882,18 +2168,38 @@ function setScanTypeOverride(override: ScanTypeOverride): void {
  * `initial` = the open-time call (always applies + resets the override). A
  * non-initial call is a streaming re-evaluation: it no-ops unless the verdict
  * changed, and is skipped once the user has overridden the routing.
+ *
+ * `settled` = this evaluation runs on settled geometry (static load, or the
+ * streaming settle one-shot). A settled auto-mode verdict soft-commits the
+ * "Treat as" control to the detected pill (`plan.commitDetected`) — display
+ * only, routing semantics unchanged.
+ *
+ * Returns whether a SETTLED call spent the streaming settle one-shot
+ * (`settleOneShotSpent`): true once the settled verdict LANDED (the planner
+ * applied it or the soft-commit fired) — or once no commit can ever come
+ * (pinned / manual override) — false when the verdict was REFUSED by the
+ * routing guards or the frame was undecidable, so the "Streaming ready" poll
+ * keeps the one-shot armed and retries on fuller geometry (bounded by
+ * SETTLE_RETRY_CAP). Non-settled callers ignore the value.
  */
-function applyScanRoute(initial: boolean): void {
+function applyScanRoute(initial: boolean, settled = false): boolean {
   // A non-auto manual override pins the routing exactly like `scanRouteOverridden`:
-  // a streaming re-evaluation must never flip a deliberate user choice.
-  if (!initial && (scanRouteOverridden || scanTypeOverride !== 'auto')) return;
+  // a streaming re-evaluation must never flip a deliberate user choice. The
+  // one-shot is spent: a pinned/manual session never soft-commits.
+  if (!initial && (scanRouteOverridden || scanTypeOverride !== 'auto')) return true;
   let shape: ReturnType<typeof classifyScanShape> | null = null;
   let gathered: ReturnType<typeof viewer.gatherTerrainPositions> = null;
   try {
     gathered = viewer.gatherTerrainPositions(60_000);
     if (gathered) {
-      // Pass classification when index-aligned so the veg tiebreaker can fire.
-      shape = classifyScanShape(gathered.positions, { classification: gathered.classification });
+      // Pass classification when index-aligned so the veg tiebreaker can fire,
+      // and the loader's vertical-axis hint so z-up-by-spec formats (LAS/LAZ/
+      // COPC/EPT/…) never run the up-axis guess at all — detection stays
+      // active only for genuinely ambiguous frames (PLY/OBJ/glTF). v0.4.5.
+      shape = classifyScanShape(gathered.positions, {
+        classification: gathered.classification,
+        verticalAxis: gathered.verticalAxisHint,
+      });
     }
   } catch {
     /* classification is best-effort — fall back to showing terrain analysis */
@@ -1910,21 +2216,57 @@ function applyScanRoute(initial: boolean): void {
         `sampled=${gathered?.positions ? gathered.positions.length / 3 : 0} resident=${viewer.residentPointTotal()}`,
     );
   }
-  // The DETECTED verdict, then the EFFECTIVE route once the manual override is
-  // resolved over it (`resolveScanRoute`): 'auto' defers to detection, any other
-  // choice wins. With no geometry yet there is nothing to force, so stay null.
+  // The DETECTED verdict, then the full routing decision from the pure planner
+  // (`planScanRoute`): 'auto' defers to detection, any other choice wins; when
+  // detection has nothing to say a NON-AUTO override still routes by itself.
+  // The planner also encodes the v0.4.5 guarantees: a streaming re-evaluation
+  // never flips the session TO terrain (it only rescues interiors/objects
+  // misread on a sparse frame), and `runTerrain` is true ONLY for the explicit
+  // hatch / manual Terrain override — auto-detection never starts an analysis.
   const detected: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
-  const effective: SpaceKind | null =
-    detected !== null ? resolveScanRoute(detected, scanTypeOverride) : null;
-  if (!initial) {
-    // Re-route only when the effective route genuinely changes — never thrash.
-    if (effective === null || effective === lastScanVerdict) return;
+  const plan = planScanRoute({
+    detected,
+    override: scanTypeOverride,
+    initial,
+    lastVerdict: lastScanVerdict,
+    pinned: scanRouteOverridden,
+    settled,
+  });
+  // A settled verdict soft-commits the "Treat as" pill to the detected type
+  // (sticky for the rest of the scan's display updates; cleared on a new scan
+  // or any user click). Independent of `plan.apply`: the settle one-shot
+  // usually CONFIRMS the standing verdict — a routing no-op — but the control
+  // must still move off Auto onto the now-settled pill.
+  if (plan.commitDetected !== null) scanDetectionCommitted = true;
+  // The settled one-shot's spend decision (see the doc comment above): spent
+  // only when the verdict actually LANDED (applied or committed) or when no
+  // commit can ever come (pinned / manual). A REFUSED verdict (e.g. a
+  // ceiling-heavy early frame reading terrain against a standing interior
+  // route — the no-flip guard rejects it without a commit) and an undecidable
+  // frame both leave the one-shot ARMED for a later ready poll, bounded by
+  // SETTLE_RETRY_CAP via the attempt counter.
+  if (settled) lastSettleUndecided = detected === null;
+  const oneShotSpent = settleOneShotSpent({
+    detected,
+    override: scanTypeOverride,
+    pinned: scanRouteOverridden,
+    applied: plan.apply,
+    committed: plan.commitDetected !== null,
+    attempts: settleAttempts,
+  });
+  if (!plan.apply) {
+    if (plan.commitDetected !== null) {
+      const committedDisabled = treatAsDisabledFor(detected);
+      objectPanel.setScanType(scanTypeOverride, plan.commitDetected, committedDisabled, true);
+      analysePanel.setScanType(scanTypeOverride, plan.commitDetected, committedDisabled, true);
+    }
+    return oneShotSpent;
   }
+  const effective = plan.effective;
   lastScanVerdict = effective;
 
-  let isNonTerrain = false;
-  if (shape && gathered && effective !== null && effective !== 'terrain') {
-    isNonTerrain = true;
+  const isNonTerrain = plan.showObjectPanel;
+  if (isNonTerrain && shape && gathered) {
     const activeCloud = activeId ? viewer.getCloud(activeId) : null;
     const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
     // Compute REAL metrics for the EFFECTIVE type — when forced, the report
@@ -1942,14 +2284,20 @@ function applyScanRoute(initial: boolean): void {
       sourcePointCount: gathered.totalPoints,
     });
     const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
-    const object = spaceKind === 'object' ? objectMetrics(gathered.positions) : null;
+    // Same stride honesty as spaceMetrics above: the gather caps at 60 k, so
+    // the spacing probe must be corrected against the SCAN's resident count or
+    // the reported resolution describes the subsample (√(N/P) too coarse).
+    const object =
+      spaceKind === 'object'
+        ? objectMetrics(gathered.positions, { sourcePointCount: gathered.totalPoints })
+        : null;
     if (spaceKind === 'interior') {
       objectPanel.showSpace(space, shape);
     } else {
       objectPanel.showObject(object, space, shape);
     }
     // Cache the EXACT inputs behind the on-screen report so the panel's export
-    // buttons (Report PDF / Floor plan) build from the same positions + metrics +
+    // buttons (Report PDF / Floor plan preview) build from the same positions + metrics +
     // unit factor — copied so a later streaming buffer reuse can't corrupt it.
     lastSpaceExport = {
       positions: Float32Array.from(gathered.positions),
@@ -1960,21 +2308,48 @@ function applyScanRoute(initial: boolean): void {
       upAxis: shape.up,
       basename: lastCloudName || 'scan',
     };
+  } else if (isNonTerrain) {
+    // The user forced a non-terrain route but the geometry gather / classifier
+    // failed right now (e.g. mid-stream). Keep the Space/Object panel ALIVE
+    // with its honest empty state — which still carries the "Treat as" control
+    // and the run-anyway hatch — instead of tearing it down. Never a dead panel.
+    lastSpaceExport = null;
+    if (effective === 'interior') objectPanel.showSpace(null, null);
+    else objectPanel.showObject(null, null, null);
+  } else {
+    lastSpaceExport = null;
   }
-  if (!isNonTerrain) lastSpaceExport = null;
-  objectPanel.setVisible(isNonTerrain);
-  analysePanel.setVisible(!isNonTerrain);
+  objectPanel.setVisible(plan.showObjectPanel);
+  analysePanel.setVisible(plan.showAnalysePanel);
   dock.setAnalyseEnabled(true);
-  dock.setAnalyseActive(!isNonTerrain);
+  dock.setAnalyseActive(plan.showAnalysePanel);
+  // When DETECTION says the scan is an interior / compact object, the Terrain
+  // segment of the "Treat as" control is disabled with the reason — running
+  // contours on a room or an object is misleading, and the explicit
+  // "Run terrain contours anyway" hatch remains the deliberate override. The
+  // control itself never locks out the CURRENT override, so a previously
+  // forced terrain choice stays visible and escapable (Auto/Object/Interior
+  // remain one click away).
+  const treatAsDisabled = treatAsDisabledFor(detected);
   // Keep BOTH panels' "Treat as" controls reflecting the current state, so the
-  // user can switch direction from whichever panel is showing.
-  objectPanel.setScanType(scanTypeOverride, effective);
-  analysePanel.setScanType(scanTypeOverride, effective);
-  // Forcing terrain on a non-terrain scan is the explicit "run anyway": surface
-  // the Analyse panel AND kick the pipeline, matching the old escape hatch.
-  if (!isNonTerrain && scanTypeOverride === 'terrain') {
+  // user can switch direction from whichever panel is showing. The committed
+  // flag (settled-verdict soft commit) only ever shows under auto mode — a
+  // manual override displays the override pill regardless.
+  const committed = scanTypeOverride === 'auto' && scanDetectionCommitted;
+  objectPanel.setScanType(scanTypeOverride, effective, treatAsDisabled, committed);
+  analysePanel.setScanType(scanTypeOverride, effective, treatAsDisabled, committed);
+  // Forcing terrain is the explicit "run anyway": surface the Analyse panel
+  // AND kick the pipeline, matching the old escape hatch. The panel must also
+  // EXPAND out of its collapsed-chip state — it is built collapsed, and routing
+  // the user to a chip that hides the busy state, the result, and the way back
+  // is exactly the dead-panel bug this guards against. `plan.runTerrain` is
+  // true ONLY for the manual 'terrain' override — a detected-terrain route
+  // shows the collapsed panel but NEVER starts the analysis by itself.
+  if (plan.runTerrain) {
+    analysePanel.expand();
     void terrainRunner.run();
   }
+  return oneShotSpent;
 }
 
 /**
@@ -1988,19 +2363,27 @@ function applyScanRoute(initial: boolean): void {
  * anyway" affordance. Routing is on `nonTerrain`, not just the legacy `kind`,
  * and re-evaluates as a streaming cloud fills in (see `applyScanRoute`).
  */
-function revealAnalysePanel(name: string): void {
+function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name);
   exportPanel.setVisible(true);
   exportPanel.refresh();
   // Fresh scan → clear any prior override + verdict so the open-time route is
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
-  // override is per-session-per-scan: a new scan returns to auto-detection.
+  // override is per-session-per-scan: a new scan returns to auto-detection,
+  // and any settled soft-commit from the previous scan is forgotten.
   scanRouteOverridden = false;
   scanTypeOverride = 'auto';
   streamingSettledRouted = false;
+  settleAttempts = 0;
+  lastSettleResident = -1;
+  lastSettleUndecided = false;
+  scanDetectionCommitted = false;
   lastScanVerdict = null;
   lastRouteResident = viewer.residentPointTotal();
-  applyScanRoute(true);
+  // `settled` = the geometry is fully loaded at open time (every static path).
+  // Streaming callers pass false: their open-time verdict runs on a sparse
+  // coarse frame, so the "Treat as" commit waits for the settle one-shot.
+  applyScanRoute(true, settled);
 }
 
 /**
@@ -2215,6 +2598,37 @@ stage.overlay.append(navBar.element, navBar.prompt, navBar.touchHint);
 // before this resolves (start screen empty state, sample buttons, URL
 // field, drop zone) are all owned by Stage / DropZone and don't depend on
 // the Viewer.
+
+/**
+ * Keep the left panel column clear of the measure toolbar (v0.4.5 overlap
+ * fix). The toolbar (`.olv-measure-bar`) is centred at the same `top: 56px`
+ * band the `.olv-left-panels` column anchors to, and activating Measure
+ * auto-opens the Measurements panel into that column — so the panel used to
+ * paint over the toolbar's left half, hiding the first kind pills. The
+ * toolbar's height is dynamic (kind pills wrap at narrow widths, the
+ * Finish-polygon button comes and goes, hint text reflows), so a static CSS
+ * offset can't be right at every width. Instead a ResizeObserver mirrors
+ * the toolbar's REAL height into the `--olv-measure-bar-clear` custom property
+ * the column's `top` is computed from; `olv-hidden` is `display: none`, so
+ * the observer fires with a zero box when the toolbar hides and the column
+ * snaps back up. No-ops (keeping the static layout) where ResizeObserver
+ * is unavailable.
+ */
+function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): void {
+  if (typeof ResizeObserver === 'undefined') return;
+  try {
+    const ro = new ResizeObserver(() => {
+      const h = bar.offsetHeight; // 0 while .olv-hidden (display: none)
+      // 8px = the column's own --space-md gap, so toolbar → first panel
+      // reads with the same rhythm as panel → panel.
+      column.style.setProperty('--olv-measure-bar-clear', h > 0 ? `${h + 8}px` : '0px');
+    });
+    ro.observe(bar);
+  } catch {
+    /* Static layout fallback — only ancient engines, overlap is cosmetic. */
+  }
+}
+
 void viewerLoaded.then(() => {
   if (!bareMode) {
     // The tool overlays go in first so the panels paint above them.
@@ -2231,6 +2645,9 @@ void viewerLoaded.then(() => {
     leftPanels.className = 'olv-left-panels';
     leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element);
     stage.overlay.append(leftPanels);
+    // Push the column below the measure toolbar whenever it is visible —
+    // see wireMeasureBarClearance for why this is measured, not static CSS.
+    wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
     stage.overlay.append(projectCard.element);
@@ -2295,6 +2712,12 @@ void viewerLoaded.then(() => {
       leftPanels.className = 'olv-left-panels';
       leftPanels.append(...panels);
       stage.overlay.append(leftPanels);
+      // Same toolbar-overlap guard as the full app — the embed's
+      // ?measurements=1 path shows the same centred toolbar over the
+      // same left column.
+      if (embedConfig.forceMeasurements) {
+        wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
+      }
     }
   }
 });
@@ -2303,7 +2726,7 @@ void viewerLoaded.then(() => {
 // `?embed=1` is a minority of traffic; non-embed loads should not pay
 // the ~5 KB embed-bridge cost.
 async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge').startEmbedBridge> {
-  const m = await import('./ui/embedBridge');
+  const m = await loadEmbedBridge();
   return m.startEmbedBridge;
 }
 
@@ -2665,7 +3088,7 @@ function schedulePrewarm(): void {
       .catch(() => { /* swallow — actual COPC open retries */ });
     // Static LAS/LAZ loader sits in its own chunk too — pre-warm it for
     // the "drop a non-COPC LAZ file" path which is the other common case.
-    void import('./io/loadLas').catch(() => { /* swallow */ });
+    void loadLasLoader().catch(() => { /* swallow */ });
     // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — the single
     // biggest first-open cost. Warm it during idle too so the first scan
     // opens without that download on the critical path. Gated on data
@@ -2811,6 +3234,10 @@ async function generateReportPdf(templateId: string): Promise<void> {
     annotations: viewer.annotate.getAnnotations(),
     measurements: viewer.measure.getMeasurements(),
     unitSystem: viewer.measure.unitSystem,
+    // Render-units → metres, the SAME factor the live measure readouts apply
+    // (B2, v0.4.5) — so the report PDF's measurement values agree with the
+    // panel to the digit on foot-based CRSs.
+    unitToMetres: viewer.measure.unitToMetres,
     provenance: provenanceFp,
   });
 
@@ -3563,7 +3990,7 @@ async function openStreamingCopc(
 
   // The metadata-driven scan summary, and a fresh saved-views list.
   const header = cloud.metadata.header;
-  revealAnalysePanel(cloud.name); // streaming COPC also gets the terrain tools
+  revealAnalysePanel(cloud.name, false); // streaming COPC also gets the terrain tools
   streamingPanel.setSummary({
     fileName: cloud.name,
     pointFormat: header.pointDataRecordFormat,
@@ -3824,7 +4251,7 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     // adapted for EPT's metadata layout.
     const b = detection.metadata.bounds.conforming;
     const schemaSummary = `${detection.metadata.dataType} · ${detection.metadata.schema.length} attrs`;
-    revealAnalysePanel(cloud.name); // streaming EPT also gets the terrain tools
+    revealAnalysePanel(cloud.name, false); // streaming EPT also gets the terrain tools
     streamingPanel.setSummary({
       fileName: cloud.name,
       pointFormat: -1,                 // EPT has no LAS PDRF; sentinel
@@ -4093,13 +4520,41 @@ function startStreamingStatusPolling(): void {
       streamingPanel.setPhase('Refining visible detail…');
     } else {
       streamingPanel.setPhase('Streaming ready');
-      // First time the stream settles, re-evaluate the scan type on the now
-      // fully-resident cloud — a sparse early frame can misread a 360 / house
-      // as terrain or object. One-shot per scan; a manual "Treat as" override,
-      // a "run anyway" pin, or an unchanged verdict make this a no-op.
+      // First time the stream GENUINELY settles, re-evaluate the scan type on
+      // the now fully-resident cloud — a sparse early frame can misread a
+      // 360 / house as terrain or object. One-shot per scan; a manual "Treat
+      // as" override or a "run anyway" pin make this a no-op (and spend it).
+      //
+      // Two guards keep the one-shot THE settled verdict (v0.4.5 fix — the
+      // pill stayed on Auto after "Streaming ready" because a transient idle
+      // had silently spent the one-shot without committing):
+      //   1. DEPTH GATE — the scheduler often reads idle at the root level
+      //      (depth 0) long before the cloud fills in (same reality the
+      //      benchmark's coarse-stable guard handles below). Don't even
+      //      attempt the settled evaluation until the resident set spans the
+      //      hierarchy's own depth (capped at 2).
+      //   2. SPEND-ON-LANDED-VERDICT (v0.4.5b) — `applyScanRoute` reports
+      //      whether the settled verdict actually LANDED (applied or
+      //      committed) or routing is pinned/manual. A REFUSED verdict (a
+      //      ceiling-heavy early frame reading terrain against a standing
+      //      interior route) and an undecidable frame both leave the one-shot
+      //      ARMED so a later ready poll retries on fuller geometry — gated
+      //      on the resident set actually CHANGING (re-reading an identical
+      //      frame cannot change the verdict; a failed gather may retry at
+      //      once) and bounded by SETTLE_RETRY_CAP inside the spend rule.
       if (!streamingSettledRouted) {
-        streamingSettledRouted = true;
-        applyScanRoute(false);
+        const hierarchyDepth = cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0;
+        if (hasResidentAtDepth(cloud, settleTargetDepth(hierarchyDepth))) {
+          const resident = cloud.residentPointCount;
+          if (settleAttempts === 0 || resident !== lastSettleResident || lastSettleUndecided) {
+            settleAttempts++;
+            lastSettleResident = resident;
+            // settled=true: this is THE settled verdict for a streaming scan —
+            // under auto mode it soft-commits the "Treat as" pill to the
+            // detected type (display only; routing guards unchanged).
+            streamingSettledRouted = applyScanRoute(false, true);
+          }
+        }
       }
     }
 
@@ -4248,6 +4703,10 @@ function resetToEmptyState(): void {
   scanRouteOverridden = false;
   scanTypeOverride = 'auto';
   streamingSettledRouted = false;
+  settleAttempts = 0;
+  lastSettleResident = -1;
+  lastSettleUndecided = false;
+  scanDetectionCommitted = false;
   lastRouteResident = 0;
   exportPanel.setVisible(false);
   sourceFileById.clear();

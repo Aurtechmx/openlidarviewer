@@ -1,44 +1,61 @@
 /**
  * colorChipModel.test.ts
  *
- * The colour-mode chip rail's load-bearing rule: the Coverage chip is ALWAYS
- * present (so the feature is discoverable) but DISABLED until a terrain-analysis
- * confidence grid exists, and selecting it before then is a no-op. Tested as a
- * pure descriptor so it needs no DOM / Inspector construction.
+ * The colour-mode chip rail's load-bearing rule: the analysis-gated chips
+ * (Coverage, and its colourblind-safe twin Confidence — v0.4.5) are ALWAYS
+ * present (so the features are discoverable) but DISABLED until a
+ * terrain-analysis confidence grid exists, and selecting one before then is a
+ * no-op. Tested as a pure descriptor so it needs no DOM / Inspector
+ * construction.
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildColorChipModel, COVERAGE_DISABLED_TITLE } from '../src/ui/colorChipModel';
+import {
+  buildColorChipModel,
+  COVERAGE_DISABLED_TITLE,
+  ANALYSIS_GATED_MODES,
+} from '../src/ui/colorChipModel';
 import type { ColorMode } from '../src/render/colorModes';
 
 const DATA_MODES: ColorMode[] = ['rgb', 'elevation', 'classification', 'density'];
 
 describe('buildColorChipModel', () => {
-  it('always appends the Coverage chip, exactly once, last', () => {
+  it('always appends the gated chips, exactly once each, last (Coverage then Confidence)', () => {
     const chips = buildColorChipModel(DATA_MODES, 'elevation', false);
-    const coverage = chips.filter((c) => c.mode === 'coverage');
-    expect(coverage).toHaveLength(1);
-    expect(chips[chips.length - 1].mode).toBe('coverage');
+    expect(chips.filter((c) => c.mode === 'coverage')).toHaveLength(1);
+    expect(chips.filter((c) => c.mode === 'confidence')).toHaveLength(1);
+    expect(chips[chips.length - 2].mode).toBe('coverage');
+    expect(chips[chips.length - 1].mode).toBe('confidence');
+    expect(ANALYSIS_GATED_MODES).toEqual(['coverage', 'confidence']);
   });
 
-  it('disables Coverage until a grid is available', () => {
+  it('disables Coverage and Confidence until a grid is available', () => {
     const before = buildColorChipModel(DATA_MODES, 'elevation', false);
     expect(before.find((c) => c.mode === 'coverage')!.disabled).toBe(true);
+    expect(before.find((c) => c.mode === 'confidence')!.disabled).toBe(true);
 
     const after = buildColorChipModel(DATA_MODES, 'elevation', true);
     expect(after.find((c) => c.mode === 'coverage')!.disabled).toBe(false);
+    expect(after.find((c) => c.mode === 'confidence')!.disabled).toBe(false);
   });
 
-  it('never marks the disabled Coverage chip active, even if it is the active mode', () => {
-    const chips = buildColorChipModel(DATA_MODES, 'coverage', false);
-    const coverage = chips.find((c) => c.mode === 'coverage')!;
-    expect(coverage.disabled).toBe(true);
-    expect(coverage.active).toBe(false);
+  it('never marks a disabled gated chip active, even if it is the active mode', () => {
+    for (const mode of ANALYSIS_GATED_MODES) {
+      const chips = buildColorChipModel(DATA_MODES, mode, false);
+      const chip = chips.find((c) => c.mode === mode)!;
+      expect(chip.disabled).toBe(true);
+      expect(chip.active).toBe(false);
+    }
   });
 
-  it('marks Coverage active once available and selected', () => {
-    const chips = buildColorChipModel(DATA_MODES, 'coverage', true);
-    expect(chips.find((c) => c.mode === 'coverage')!.active).toBe(true);
+  it('marks a gated chip active once available and selected', () => {
+    expect(
+      buildColorChipModel(DATA_MODES, 'coverage', true).find((c) => c.mode === 'coverage')!.active,
+    ).toBe(true);
+    expect(
+      buildColorChipModel(DATA_MODES, 'confidence', true).find((c) => c.mode === 'confidence')!
+        .active,
+    ).toBe(true);
   });
 
   it('highlights the active data mode and enables every data chip', () => {
@@ -47,13 +64,18 @@ describe('buildColorChipModel', () => {
     expect(cls.active).toBe(true);
     expect(cls.disabled).toBe(false);
     for (const c of chips) {
-      if (c.mode !== 'coverage') expect(c.disabled).toBe(false);
+      if (!ANALYSIS_GATED_MODES.includes(c.mode)) expect(c.disabled).toBe(false);
     }
   });
 
-  it('ignores a stray coverage entry in the input modes (appends once)', () => {
-    const chips = buildColorChipModel([...DATA_MODES, 'coverage'], 'elevation', true);
+  it('ignores stray gated entries in the input modes (appends once each)', () => {
+    const chips = buildColorChipModel(
+      [...DATA_MODES, 'coverage', 'confidence'],
+      'elevation',
+      true,
+    );
     expect(chips.filter((c) => c.mode === 'coverage')).toHaveLength(1);
+    expect(chips.filter((c) => c.mode === 'confidence')).toHaveLength(1);
   });
 
   it('exposes the disabled tooltip copy for the UI', () => {

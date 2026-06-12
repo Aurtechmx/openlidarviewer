@@ -1,23 +1,38 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * v0.3.9 workflow recorder — Cmd-Shift-R / Ctrl-Shift-R.
+ * v0.3.9 workflow recorder — Cmd-Shift-U / Ctrl-Shift-U
+ * (rebound from Cmd-Shift-R post-0.4.5: that chord is the browser's
+ * hard-refresh, so toggling the recorder reloaded the page).
  *
  * The pure data layer (event schema, file format, scheduler) is
  * covered by workflowRecorder.test.ts (25 unit tests). This spec
- * exercises the DOM wiring: Cmd-Shift-R toggles a visible recording
+ * exercises the DOM wiring: Cmd-Shift-U toggles a visible recording
  * badge; the badge carries a Stop button; firing an action while
  * recording captures into the live session; stopping triggers a
  * file download via a programmatic <a download> click.
  */
 
+// v0.4.5 — mirrors WORKFLOW_RECORDER_ENABLED in src/ui/WorkflowController.ts
+// (kept as a local constant so this Playwright spec doesn't import app
+// source). The recorder is disabled for this release by product decision —
+// avoid shortcut-collision confusion from the mid-cycle R→U rebind, and the
+// replay-a-file UX needs a design pass — so every spec here is skipped, not
+// deleted. Flip BOTH constants to true together when the feature returns.
+const WORKFLOW_RECORDER_ENABLED = false;
+
+test.skip(
+  !WORKFLOW_RECORDER_ENABLED,
+  'workflow recorder is feature-flagged off for this release (see WORKFLOW_RECORDER_ENABLED in src/ui/WorkflowController.ts)',
+);
+
 async function pressRecordToggle(page: Page): Promise<void> {
   // Playwright's `ControlOrMeta` maps to Cmd on macOS, Ctrl elsewhere.
-  await page.keyboard.press('ControlOrMeta+Shift+KeyR');
+  await page.keyboard.press('ControlOrMeta+Shift+KeyU');
 }
 
 test.describe('workflow recorder — recording lifecycle', () => {
-  test('Cmd-Shift-R shows the recording badge', async ({ page }) => {
+  test('Cmd-Shift-U shows the recording badge', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.olv-workflow-badge')).toBeHidden();
     await pressRecordToggle(page);
@@ -51,7 +66,7 @@ test.describe('workflow recorder — recording lifecycle', () => {
     await expect(page.locator('.olv-workflow-badge')).toBeHidden();
   });
 
-  test('Cmd-Shift-R twice toggles the badge off', async ({ page }) => {
+  test('Cmd-Shift-U twice toggles the badge off', async ({ page }) => {
     await page.goto('/');
     await pressRecordToggle(page);
     await expect(page.locator('.olv-workflow-badge')).toBeVisible();

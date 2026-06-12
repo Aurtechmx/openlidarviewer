@@ -76,6 +76,10 @@ export function convertCloud(
   let g = cloudToGlobal(cloud);
   let outEpsg: number | null = sourceEpsg;
   let crsNote: string;
+  // True only when a reproject ACTUALLY moved coordinates into the target CRS.
+  // Output-CRS-dependent stamps below (the metre GeoKey) key off this, not off
+  // the requested mode — a skipped reproject leaves the file in its SOURCE CRS.
+  let reprojectApplied = false;
 
   if (mode === 'keep') {
     crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : 'no CRS (local coordinates)';
@@ -104,10 +108,20 @@ export function convertCloud(
     }
     const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg);
     g = r.points;
-    if (r.transformed) {
+    if (r.transformed && r.datumCaveat == null) {
+      reprojectApplied = true;
       outEpsg = opts.targetEpsg;
       crsNote = r.note;
       log.push({ level: 'info', message: r.note });
+    } else if (r.transformed) {
+      // Transformed, but the datum leg is known-missing/degenerate (grid-less
+      // NAD27, identity GDA94↔GDA2020). The coordinates ARE in the target
+      // projection, so the file is stamped with the target CRS — but the
+      // status and log say "approximate", never a clean "reprojected ✓".
+      reprojectApplied = true;
+      outEpsg = opts.targetEpsg;
+      crsNote = `${r.note} — APPROXIMATE datum shift`;
+      log.push({ level: 'warn', message: `${r.note}, but ${r.datumCaveat}.` });
     } else {
       // Could not resolve a transform — keep source CRS, warn loudly.
       outEpsg = sourceEpsg;
@@ -133,12 +147,15 @@ export function convertCloud(
         message: `EPSG:${outEpsg} is too large to record in a LAS GeoKey — the file is written without a CRS tag.`,
       });
     }
-    // Linear unit: kept files carry the source unit; reprojected output is in
-    // metres (our reproject targets are metric/degree); assigned tags leave it
-    // implied by the EPSG. Vertical datum is preserved (no mode transforms Z).
+    // Linear unit: kept files carry the source unit; output that was ACTUALLY
+    // reprojected is in metres (our reproject targets are metric/degree); a
+    // SKIPPED reproject leaves the file in its source CRS, so it carries the
+    // source unit exactly like keep mode (stamping 9001 on a skipped reproject
+    // mislabelled foot data as metres — v0.4.4 defect). Assigned tags leave the
+    // unit implied by the EPSG. Vertical datum is preserved (no mode moves Z).
     const linearUnitCode =
-      mode === 'reproject' ? 9001
-      : mode === 'keep' && srcCrs ? unitToGeoTiff(srcCrs.linearUnit)
+      mode === 'reproject' && reprojectApplied ? 9001
+      : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCrs.linearUnit)
       : null;
     if (opts.format === 'las14') {
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {

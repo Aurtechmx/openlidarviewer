@@ -56,100 +56,6 @@ export interface StageOptions {
 }
 
 /**
- * The OpenLiDARViewer brand mark — a glowing central sphere ringed by two
- * dotted orbital bands with a vertical axis of dots, drawn as a crisp SVG so
- * it stays sharp at the 18 px top-bar size.
- */
-const MARK = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-<defs><radialGradient id="olvLogoCore" cx="42%" cy="38%" r="70%">
-<stop offset="0%" stop-color="#eafdff"/><stop offset="46%" stop-color="#22dcff"/>
-<stop offset="100%" stop-color="#0083dc"/></radialGradient></defs>
-<ellipse cx="12" cy="9.8" rx="9" ry="2.5" fill="none" stroke="#00b2ff" stroke-width="1.15"
- stroke-linecap="round" stroke-dasharray="0 2.1"/>
-<ellipse cx="12" cy="14.2" rx="9" ry="2.5" fill="none" stroke="#00b2ff" stroke-width="1.15"
- stroke-linecap="round" stroke-dasharray="0 2.1"/>
-<circle cx="12" cy="7" r="1.3" fill="#36d9ff"/><circle cx="12" cy="3.9" r="0.8" fill="#2bb6ef"/>
-<circle cx="12" cy="17" r="1.3" fill="#36d9ff"/><circle cx="12" cy="20.1" r="0.8" fill="#2bb6ef"/>
-<circle cx="12" cy="12" r="3.2" fill="url(#olvLogoCore)"/></svg>`;
-
-/**
- * The hero version of the brand mark — same DNA as `MARK` (orbital rings,
- * glowing core, vertical axis dots) at a larger canvas with extra detail:
- *   • Three concentric dotted orbital ellipses with subtle inner/outer
- *     opacity falloff so the rings read as 3D depth rather than flat.
- *   • A horizontal lens-flare ridge across the core for a "ping" feel.
- *   • Soft outer halo around the core so the cyan reads as emissive even
- *     against the dark-navy stage background.
- *   • A six-dot vertical axis above + below the core (two large near
- *     the equator, mid + pole on each side) — the same axis as MARK
- *     extended into the larger canvas.
- *
- * Pure inline SVG — ~1.4 KB, no raster. The square + wordmark variant
- * (public/olv-hero.{webp,png}) is the asset for marketing surfaces; the
- * icon-only SVG below is what reads cleanly above the "Open a scan"
- * title without doubling the wordmark already in the top bar.
- */
-const HERO_MARK = `<svg viewBox="0 0 200 200" aria-hidden="true" class="olv-hero-mark-svg" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <!-- Core: bright white-cyan inner → cyan mid → brand blue at edge. -->
-    <radialGradient id="olvHeroCore" cx="42%" cy="36%" r="64%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="32%" stop-color="#a8f1ff"/>
-      <stop offset="68%" stop-color="#22dcff"/>
-      <stop offset="100%" stop-color="#0083dc"/>
-    </radialGradient>
-    <!-- Subtle emissive halo around the core, restrained so it doesn't
-         flood the orbital rings. -->
-    <radialGradient id="olvHeroHalo" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="rgba(60,225,255,0.35)"/>
-      <stop offset="55%" stop-color="rgba(0,178,255,0.10)"/>
-      <stop offset="100%" stop-color="rgba(0,178,255,0)"/>
-    </radialGradient>
-    <!-- Horizontal lens-flare ridge — centred, fades out before the
-         canvas edge so it reads as a "ping" not a full crossbar. -->
-    <linearGradient id="olvHeroFlare" x1="0%" y1="50%" x2="100%" y2="50%">
-      <stop offset="0%" stop-color="rgba(34,220,255,0)"/>
-      <stop offset="35%" stop-color="rgba(168,241,255,0.85)"/>
-      <stop offset="50%" stop-color="#ffffff"/>
-      <stop offset="65%" stop-color="rgba(168,241,255,0.85)"/>
-      <stop offset="100%" stop-color="rgba(34,220,255,0)"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Back orbital ring — slightly above centre, wider + fainter so the
-       cluster reads as 3D depth. Round-cap stroke-dasharray draws the
-       ring as a sequence of round dots at the cap radius. -->
-  <ellipse cx="100" cy="86" rx="66" ry="17" fill="none" stroke="#22d4ff" stroke-width="2"
-    stroke-linecap="round" stroke-dasharray="0 4" opacity="0.75"/>
-
-  <!-- Front orbital ring — slightly below centre, narrower + brighter. -->
-  <ellipse cx="100" cy="114" rx="66" ry="17" fill="none" stroke="#3cdfff" stroke-width="2.2"
-    stroke-linecap="round" stroke-dasharray="0 3.8" opacity="0.98"/>
-
-  <!-- Vertical axis dots — four above, four below. Sized small → large
-       as they approach the equator; the dot adjacent to each ring is
-       the most prominent (they read as the "poles" of the torus).
-       Spacing kept tight so the axis doesn't outreach the rings. -->
-  <circle cx="100" cy="34" r="1.8" fill="#2bb6ef"/>
-  <circle cx="100" cy="48" r="3" fill="#36d9ff"/>
-  <circle cx="100" cy="62" r="4.2" fill="#3ce0ff"/>
-  <circle cx="100" cy="76" r="5.4" fill="#3ce0ff"/>
-  <circle cx="100" cy="124" r="5.4" fill="#3ce0ff"/>
-  <circle cx="100" cy="138" r="4.2" fill="#3ce0ff"/>
-  <circle cx="100" cy="152" r="3" fill="#36d9ff"/>
-  <circle cx="100" cy="166" r="1.8" fill="#2bb6ef"/>
-
-  <!-- Soft outer halo so the core reads as emissive. -->
-  <circle cx="100" cy="100" r="28" fill="url(#olvHeroHalo)"/>
-
-  <!-- Horizontal lens-flare ridge crossing the equator. -->
-  <rect x="18" y="98.2" width="164" height="3.2" fill="url(#olvHeroFlare)"/>
-
-  <!-- The glowing core. -->
-  <circle cx="100" cy="100" r="11" fill="url(#olvHeroCore)"/>
-</svg>`;
-
-/**
  * iPhone-Safari single-tab memory cap is empirically around 350-500 MB; LAS
  * captures above ~1.2 GB on disk routinely crash. Threshold deliberately
  * generous — we'd rather a borderline file pass than a real one block.
@@ -161,6 +67,25 @@ const MOBILE_MEMORY_WARN_BYTES = 1_200_000_000;
  * cheaper than a typical app update.
  */
 const CELLULAR_WARN_BYTES = 250_000_000;
+
+/**
+ * The official OpenLiDARViewer brand mark — `public/brand-mark.svg`, the
+ * delivered logo asset cropped (via its root viewBox, nothing redrawn) to
+ * the point-cloud-orb mark region. Rendered with `<img src>` rather than
+ * inline SVG so the asset ships byte-faithful and never enters the
+ * `unsafeHtml` escape hatch. `BASE_URL` keeps the reference correct under
+ * the relative-base (`./`) production build.
+ */
+const MARK_SRC = `${import.meta.env.BASE_URL}brand-mark.svg`;
+
+/** Build an `<img>` for the official brand mark. Decorative by default. */
+function brandMarkImg(className: string, alt = ''): HTMLImageElement {
+  const img = el('img', { className });
+  img.src = MARK_SRC;
+  img.alt = alt;
+  img.decoding = 'async';
+  return img;
+}
 
 /** Coarse mobile detection — matches Stage's mobile copy + size breakpoints. */
 function isMobileViewport(): boolean {
@@ -291,8 +216,15 @@ export class Stage {
   }
 
   private _buildTopBar(): HTMLElement {
-    const wordmark = el('div', { className: 'olv-wordmark', unsafeHtml: MARK });
-    wordmark.append(el('span', { text: 'OpenLiDARViewer' }));
+    // The official brand mark (public/brand-mark.svg, via <img>) beside the
+    // text wordmark. The mark is the delivered logo asset — the asset's own
+    // raster wordmark band stays cropped out here because it is near-white
+    // and sized for dark hero fields, not a 28 px light-theme top bar.
+    const wordmark = el('div', { className: 'olv-wordmark' });
+    wordmark.append(
+      brandMarkImg('olv-wordmark-mark'),
+      el('span', { text: 'OpenLiDARViewer' }),
+    );
 
     const privacy = el('div', {
       className: 'olv-badge',
@@ -338,14 +270,15 @@ export class Stage {
     // instruction is meaningless (iOS Safari has no drag-and-drop), so the
     // mobile variant leads with the pick-from-device action.
     const mobile = isMobileViewport();
-    // Hero brand mark sits above the title — same design DNA as the
-    // top-bar wordmark, scaled up. Pure inline SVG (no raster, no
-    // request) so it appears in the same paint as the title.
-    const heroMark = el('div', {
-      className: 'olv-empty-hero',
-      unsafeHtml: HERO_MARK,
-      ariaLabel: 'OpenLiDARViewer',
-    });
+    // Hero: the official brand mark (public/brand-mark.svg, via <img> —
+    // the delivered logo asset, mark-only crop) above the text wordmark.
+    // The text stays as real text (not the asset's near-white raster
+    // wordmark band) so it remains legible on the light theme and to
+    // screen readers; the image itself is decorative (alt="").
+    const heroMark = el('div', { className: 'olv-empty-hero' }, [
+      brandMarkImg('olv-empty-hero-mark'),
+      el('span', { className: 'olv-empty-hero-text', text: 'OpenLiDARViewer' }),
+    ]);
     const title = el('h1', { className: 'olv-empty-title', text: 'Open a scan' });
     // v0.3.6 desktop-audit fix: one consolidated trust line. Replaces three
     // separate "verified at release time" / "verified at build time" / CORS

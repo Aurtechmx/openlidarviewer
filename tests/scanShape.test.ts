@@ -115,6 +115,35 @@ describe('classifyScanShape', () => {
     expect(s.kind).toBe('ambiguous');
   });
 
+  it('keeps z up for a z-thin 360 interior with dense walls and a sparse floor', () => {
+    // The v0.4.4 live bug (V045_WORKPLAN.md, Workstream A1): a dense flat
+    // wall scores as a perfect "floor field" (fill 1.0, flatness ~1.0) and
+    // the enclosure hint rewards the two opposing walls, so detection used to
+    // pick up = 'x' on exactly this shape. The gravity prior (z incumbent,
+    // 1.25× margin) + the wall-as-floor penalty must keep z.
+    let s0 = 7;
+    const rnd = () => { s0 = (s0 * 1103515245 + 12345) & 0x7fffffff; return s0 / 0x7fffffff; };
+    const t: Array<[number, number, number]> = [];
+    const W = 14.1, D = 28.8, H = 5.1;
+    for (let x = 0; x <= W; x += 0.6)
+      for (let y = 0; y <= D; y += 0.6) t.push([x, y, rnd() * 0.5]); // sparse cluttered floor
+    for (let z = 0; z <= H; z += 0.12) {
+      for (let x = 0; x <= W; x += 0.12) {
+        t.push([x, 0.05 * rnd(), z + 0.05 * rnd()]);
+        t.push([x, D - 0.05 * rnd(), z + 0.05 * rnd()]);
+      }
+      for (let y = 0; y <= D; y += 0.12) {
+        t.push([0.05 * rnd(), y, z + 0.05 * rnd()]);
+        t.push([W - 0.05 * rnd(), y, z + 0.05 * rnd()]);
+      }
+    }
+    const s = classifyScanShape(pts(t));
+    expect(s.up).toBe('z');
+    // Extent must read in the upright frame: footprint 14.1 × 28.8, height 5.1.
+    expect(s.extent[2]).toBeGreaterThan(4.8);
+    expect(s.extent[2]).toBeLessThan(5.5);
+  });
+
   it('an explicit verticalAxis override is honoured', () => {
     // Force Z-up on a Y-up flat field: now the (wrong) axis sees the lateral
     // extent stacked, so it no longer reads as clean terrain.

@@ -22,26 +22,63 @@ function coord(v: number): string {
 }
 
 /**
+ * Horizontal-coordinate formatter for XYZ/CSV (v0.4.5, workplan C5).
+ * Projected/local frames keep the millimetre 3 dp; a GEOGRAPHIC CRS gets
+ * 7 dp, because 3 dp of a degree is ~110 m of position — the old fixed
+ * precision silently destroyed lat/lon exports. 1e-7° ≈ 1.1 cm at the
+ * equator, matching the survey convention for degree output. Z stays 3 dp
+ * in both cases (heights are linear units even in a geographic CRS).
+ */
+function horizontalCoordFormatter(cloud: PointCloud): (v: number) => string {
+  return cloud.metadata?.crs?.isGeographic === true ? (v) => v.toFixed(7) : coord;
+}
+
+/**
  * Serialise to plain-text XYZ (or CSV when `delimiter` is `,`).
- * Columns: `x y z` and, when the cloud has colour, `r g b` in 0–255.
- * A CSV gets a header row.
+ * Columns: `x y z`, then — each only when the cloud carries the channel —
+ * `r g b` (0–255), `intensity` (raw 16-bit) and `classification` (raw
+ * ASPRS code). A CSV always gets a header row naming the columns; an XYZ
+ * gets a `# columns: …` comment line only when the optional intensity /
+ * classification columns are present (so a plain x-y-z file stays
+ * byte-identical to earlier releases, and the extra columns are never a
+ * guessing game for the next tool). Importers — ours included — skip
+ * `#` comment lines by long-standing XYZ convention.
  */
 export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   const { positions, colors, origin } = cloud;
   const n = cloud.pointCount;
   const lines: string[] = [];
   const csv = delimiter === ',';
-  if (csv) lines.push(colors ? 'x,y,z,r,g,b' : 'x,y,z');
+  const hcoord = horizontalCoordFormatter(cloud);
+  // Length guards: a malformed cloud with a misaligned channel drops the
+  // column rather than writing values from the wrong points.
+  const intensity =
+    cloud.intensity && cloud.intensity.length === n ? cloud.intensity : undefined;
+  const classification =
+    cloud.classification && cloud.classification.length === n
+      ? cloud.classification
+      : undefined;
+  const columns = [
+    'x',
+    'y',
+    'z',
+    ...(colors ? ['r', 'g', 'b'] : []),
+    ...(intensity ? ['intensity'] : []),
+    ...(classification ? ['classification'] : []),
+  ];
+  if (csv) lines.push(columns.join(','));
+  else if (intensity || classification) lines.push(`# columns: ${columns.join(' ')}`);
 
   for (let i = 0; i < n; i++) {
-    const x = coord(positions[i * 3] + origin[0]);
-    const y = coord(positions[i * 3 + 1] + origin[1]);
-    const z = coord(positions[i * 3 + 2] + origin[2]);
-    if (colors) {
-      lines.push([x, y, z, colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]].join(delimiter));
-    } else {
-      lines.push([x, y, z].join(delimiter));
-    }
+    const row: Array<string | number> = [
+      hcoord(positions[i * 3] + origin[0]),
+      hcoord(positions[i * 3 + 1] + origin[1]),
+      coord(positions[i * 3 + 2] + origin[2]),
+    ];
+    if (colors) row.push(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
+    if (intensity) row.push(intensity[i]);
+    if (classification) row.push(classification[i]);
+    lines.push(row.join(delimiter));
   }
   return lines.join('\n') + '\n';
 }

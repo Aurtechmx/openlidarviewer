@@ -51,6 +51,15 @@ export interface CellMetricsParams {
    * the metres-per-degree scale. Default 1 (metric projected — unchanged).
    */
   readonly horizontalUnitToMetres?: number;
+  /**
+   * Scan-points per analysed point (totalPoints / sampledPoints from the
+   * gather), ≥ 1. The grid's per-cell `counts` tally only the points that
+   * REACHED the analysis after striding; multiplying by the known stride makes
+   * the densities — and everything graded from them (USGS QL) — describe the
+   * SCAN rather than the subsample. Default 1 (no striding / unknown — the
+   * caller should then label density figures "of analysed sample").
+   */
+  readonly countScale?: number;
 }
 
 const MEASURED = 2;
@@ -74,6 +83,14 @@ export function computeCellMetrics(
       : 1;
   const cellSizeMetres = cellSizeM * mpu;
   const cellArea = cellSizeMetres > 0 ? cellSizeMetres * cellSizeMetres : 1;
+  // Stride correction: per-cell counts only saw the analysed subsample, so
+  // multiply by scan-points-per-analysed-point (≥ 1, default 1) to report the
+  // SCAN's density. Non-finite / sub-1 values fall back to 1 — a scale below 1
+  // would fabricate a density lower than what was actually measured.
+  const countScale =
+    Number.isFinite(params.countScale) && (params.countScale as number) > 1
+      ? (params.countScale as number)
+      : 1;
 
   const pointDensity = new Float32Array(n);
   const localCompleteness = new Float32Array(n);
@@ -85,7 +102,7 @@ export function computeCellMetrics(
 
   // Point density per measured cell.
   for (let i = 0; i < n; i++) {
-    if (measured[i]) pointDensity[i] = g.counts[i] / cellArea;
+    if (measured[i]) pointDensity[i] = (g.counts[i] * countScale) / cellArea;
   }
 
   // Local completeness — fraction of the IN-BOUNDS neighbourhood that is

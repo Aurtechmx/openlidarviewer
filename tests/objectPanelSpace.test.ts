@@ -15,6 +15,7 @@ class FakeEl {
   className = '';
   title = '';
   type = '';
+  disabled = false;
   private _text = '';
   readonly children: FakeEl[] = [];
   readonly dataset: Record<string, string> = {};
@@ -22,6 +23,7 @@ class FakeEl {
   readonly tagName: string;
   constructor(tagName: string) { this.tagName = tagName; }
   setAttribute(): void { /* no-op */ }
+  removeAttribute(): void { /* no-op */ }
   set textContent(v: string) { this._text = v; }
   get textContent(): string {
     return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
@@ -29,6 +31,13 @@ class FakeEl {
   append(...kids: FakeEl[]): void { this.children.push(...kids); }
   replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
   addEventListener(): void { /* no-op */ }
+}
+
+/** Depth-first flatten of a FakeEl tree (self included). */
+function flatten(root: FakeEl, acc: FakeEl[] = []): FakeEl[] {
+  acc.push(root);
+  for (const c of root.children) flatten(c, acc);
+  return acc;
 }
 
 beforeAll(() => {
@@ -119,5 +128,55 @@ describe('ObjectPanel — space / object routing', () => {
     ]) {
       expect(text).toContain(field);
     }
+  });
+
+  // The dead-panel fix: when detection reads the scan as interior/object the
+  // host passes a disabled-with-reason map for the Terrain segment. The
+  // ObjectPanel must carry it through every body rebuild (showSpace/showObject
+  // re-render the control), keep the visible reason line, and keep the
+  // "Run terrain contours anyway" escape hatch functional.
+  it('keeps the Treat-as Terrain segment disabled (with reason) across a re-render', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
+    const { classifyScanShape } = await import('../src/terrain/scanShape');
+
+    const REASON =
+      "This scan reads as an interior — terrain analysis would be misleading. " +
+      "Use 'Run terrain contours anyway' to override.";
+    const pos = room();
+    const shape = classifyScanShape(pos);
+    const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior' });
+
+    const panel = new ObjectPanel();
+    panel.setScanType('auto', 'interior', { terrain: REASON });
+    panel.showSpace(space, shape); // body rebuild — the disabled state must survive
+
+    const root = panel.element as unknown as FakeEl;
+    const all = flatten(root);
+    const pill = (v: string) =>
+      all.find((e) => e.className.includes('olv-scan-type-opt') && e.dataset.value === v)!;
+
+    // Terrain: disabled + the reason as its title (the codebase pattern).
+    expect(pill('terrain').disabled).toBe(true);
+    expect(pill('terrain').title).toBe(REASON);
+    // The other three routes stay clickable.
+    for (const v of ['object', 'interior', 'auto']) expect(pill(v).disabled).toBe(false);
+    // The visible reason line rides in the rendered panel text.
+    expect(root.textContent).toContain("Use 'Run terrain contours anyway' to override");
+    // The explicit escape hatch is still rendered.
+    expect(all.some((e) => e.className.includes('olv-object-run-anyway'))).toBe(true);
+  });
+
+  it('the empty interior state still offers the Treat-as control and the hatch', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const panel = new ObjectPanel();
+    // The graceful-recovery path: a forced non-terrain route with no metrics
+    // available must render an alive panel, never a torn-down one.
+    panel.showSpace(null, null);
+    const root = panel.element as unknown as FakeEl;
+    const all = flatten(root);
+    expect(root.textContent).toContain('No space measurements available');
+    expect(all.filter((e) => e.className.includes('olv-scan-type-opt')).length).toBe(4);
+    expect(all.some((e) => e.className.includes('olv-object-run-anyway'))).toBe(true);
   });
 });

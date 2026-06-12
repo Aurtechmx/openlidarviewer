@@ -31,7 +31,11 @@ export interface TourStep {
   readonly target: string | null;
   /** Headline shown in the tooltip card. */
   readonly title: string;
-  /** Body copy shown beneath the headline. */
+  /**
+   * Body copy shown beneath the headline. `*asterisk-wrapped*` spans are
+   * key-term highlights — the overlay renders them as themed `<mark>`
+   * elements (see {@link splitEmphasis}); everything else is plain text.
+   */
   readonly body: string;
   /** Where the tooltip card sits relative to the target. */
   readonly placement: TourPlacement;
@@ -43,7 +47,12 @@ export interface TourStep {
   readonly runIf?: () => boolean;
 }
 
-/** The default v0.3.9 tour — five steps spanning the most-discovered surfaces. */
+/**
+ * The default tour — five steps spanning the most-discovered surfaces.
+ * Copy verified against the live UI in the v0.4.5 pass; each claim below
+ * names the surface that backs it (Stage empty state, Inspector sections,
+ * dock + MeasurePanel, command palette).
+ */
 export const DEFAULT_TOUR: readonly TourStep[] = [
   {
     id: 'welcome',
@@ -54,27 +63,38 @@ export const DEFAULT_TOUR: readonly TourStep[] = [
     placement: 'center',
   },
   {
-    id: 'dock-open',
-    target: '.olv-dock-open, .olv-dock button[title*="Open"]',
+    id: 'open-scan',
+    // The empty state's primary CTA (Stage.ts `.olv-open-btn`). The old
+    // selector pointed at a dock "Open" button that has never existed —
+    // the spotlight silently failed on every first run.
+    target: '.olv-open-btn',
     title: 'Open a scan',
     body:
-      'Drop a .laz, .copc.laz, .e57, or .ply file here, or paste a URL to a public Cloud-Optimized Point Cloud.',
+      'Drop a .las, .laz, .e57, or .ply file anywhere on the page, pick one ' +
+      'with this button, or stream a *.copc.laz* URL from the field below.',
     placement: 'bottom',
   },
   {
+    // Copy verified v0.4.5: the Inspector really does carry all five —
+    // the CRS section, the "N / M points" count, the Dataset Intelligence
+    // density row, the "Color by" section and the Visuals Studio rails.
     id: 'inspector',
-    target: '.olv-inspector, .olv-side',
+    target: '.olv-inspector',
     title: 'Inspector',
     body:
-      'CRS, point count, density, colour mode, and the Visuals Studio all live here. Sections collapse to keep the first paint clean.',
+      'CRS, point count, density, *colour mode*, and the *Visuals Studio* all live here. Sections collapse to keep the first paint clean.',
     placement: 'left',
   },
   {
+    // `.olv-dock-measure` is the stable hook toolDock.ts now stamps on the
+    // Measure button; the title fallback only matched the enabled-state
+    // tooltip. On the empty state the dock is hidden — the overlay detects
+    // the zero-size target and centres the card instead.
     id: 'measure',
     target: '.olv-dock-measure, .olv-dock button[title*="Measure"]',
     title: 'Measure',
     body:
-      'Distance, area, height, slope, profile, box, volume, and freehand lasso volume. Click "Chain" in the panel to aggregate across measurements.',
+      'Distance, area, height, slope, profile, box, volume, and freehand lasso volume. Click *Chain* in the panel to aggregate across measurements.',
     placement: 'bottom',
   },
   {
@@ -82,10 +102,36 @@ export const DEFAULT_TOUR: readonly TourStep[] = [
     target: null,
     title: 'Command palette',
     body:
-      'Press Cmd-K (Mac) or Ctrl-K to find any action by name — camera presets, themes, tool toggles, and more.',
+      'Press *Cmd-K* (Mac) or *Ctrl-K* to find any action by name — camera presets, themes, tool toggles, and more.',
     placement: 'center',
   },
 ];
+
+/** One segment of a step body: plain text, or an emphasised key term. */
+export interface BodySegment {
+  readonly text: string;
+  /** True for `*wrapped*` spans — rendered as a themed <mark>. */
+  readonly mark: boolean;
+}
+
+/**
+ * Split a step body into plain / emphasised segments. `*term*` marks a key
+ * term; an unpaired `*` is treated as literal text (never a dangling
+ * highlight). Pure — the overlay builds real DOM nodes from the segments,
+ * so step copy can never inject HTML.
+ */
+export function splitEmphasis(body: string): BodySegment[] {
+  const out: BodySegment[] = [];
+  const re = /\*([^*]+)\*/g;
+  let last = 0;
+  for (let m = re.exec(body); m !== null; m = re.exec(body)) {
+    if (m.index > last) out.push({ text: body.slice(last, m.index), mark: false });
+    out.push({ text: m[1], mark: true });
+    last = m.index + m[0].length;
+  }
+  if (last < body.length) out.push({ text: body.slice(last), mark: false });
+  return out;
+}
 
 /** Outcome of the user's interaction with the tour. */
 export type TourOutcome = 'completed' | 'skipped' | 'dismissed';

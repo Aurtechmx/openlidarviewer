@@ -13,7 +13,12 @@ import { computeElevationRange } from './elevationRange';
 import {
   coverageColorForConfidence,
   COVERAGE_NONE,
+  type CoverageRgb,
 } from '../terrain/surface/coverageHeatmap';
+import {
+  confidenceColorForConfidence,
+  CONFIDENCE_NONE,
+} from '../terrain/surface/confidenceOverlay';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -42,7 +47,16 @@ export type ColorMode =
    * button on a grid existing. Shares the exact ramp + thresholds with the 2D
    * Coverage preview tile, so the two surfaces agree.
    */
-  | 'coverage';
+  | 'coverage'
+  /**
+   * Confidence overlay — the COLOURBLIND-SAFE twin of `'coverage'`. The same
+   * calibrated per-cell DTM confidence, the SAME strong/moderate/weak buckets
+   * (gradeForConfidence — the thresholds the Analyse panel's minimap legend
+   * uses), but coloured on exact Cividis stops (the only catalogue palette
+   * tagged fully CVD-safe) instead of green/yellow/red. Analysis-gated like
+   * coverage: the UI keeps the button disabled until a confidence grid exists.
+   */
+  | 'confidence';
 
 /**
  * The minimal DTM-confidence grid the `'coverage'` colour mode samples. A
@@ -378,6 +392,41 @@ export function colorByCoverage(
   count: number,
   grid: CoverageColorGrid,
 ): Uint8Array {
+  return colorByGridConfidence(positions, count, grid, coverageColorForConfidence, COVERAGE_NONE);
+}
+
+/**
+ * Colour `count` points by the confidence of the DTM cell each falls in, on
+ * the COLOURBLIND-SAFE Cividis confidence ramp — the same grid lookup, the
+ * same trust buckets, the same neutral-grey fallback as `colorByCoverage`;
+ * only the ramp differs. Pure — no renderer, testable.
+ */
+export function colorByConfidence(
+  positions: Float32Array,
+  count: number,
+  grid: CoverageColorGrid,
+): Uint8Array {
+  return colorByGridConfidence(
+    positions,
+    count,
+    grid,
+    confidenceColorForConfidence,
+    CONFIDENCE_NONE,
+  );
+}
+
+/**
+ * Shared grid-lookup core for the two trust overlays. One loop so the
+ * coverage and confidence modes can never disagree about WHICH cell a point
+ * samples — they may only disagree about the hue that cell paints.
+ */
+function colorByGridConfidence(
+  positions: Float32Array,
+  count: number,
+  grid: CoverageColorGrid,
+  colorFor: (confidence: number) => CoverageRgb,
+  none: CoverageRgb,
+): Uint8Array {
   const out = new Uint8Array(count * 3);
   const { cols, rows, cellSizeM, originH1, originH2, confidence, coverage } = grid;
   const inv = cellSizeM > 0 ? 1 / cellSizeM : 0;
@@ -390,12 +439,12 @@ export function colorByCoverage(
       col = Math.floor((x - originH1) * inv);
       row = Math.floor((y - originH2) * inv);
     }
-    let c = COVERAGE_NONE;
+    let c = none;
     if (col >= 0 && col < cols && row >= 0 && row < rows) {
       const idx = row * cols + col;
       // An empty / no-data cell stays neutral grey — the point has no analysed
       // surface beneath it to trust or distrust.
-      if (coverage[idx] !== 0) c = coverageColorForConfidence(confidence[idx]);
+      if (coverage[idx] !== 0) c = colorFor(confidence[idx]);
     }
     out[i * 3] = c.r;
     out[i * 3 + 1] = c.g;
@@ -424,10 +473,11 @@ export interface ColorForModeOptions {
    */
   heightPercentileTrim?: number;
   /**
-   * The DTM-confidence grid the `'coverage'` mode samples. Supplied by the
-   * Viewer after a terrain analysis runs. When absent in `'coverage'` mode
-   * every point reads the neutral dim grey (no crash) — the UI disables the
-   * Coverage button until a grid exists, so this is the defensive fallback.
+   * The DTM-confidence grid the `'coverage'` and `'confidence'` modes sample.
+   * Supplied by the Viewer after a terrain analysis runs. When absent in
+   * either mode every point reads the neutral dim grey (no crash) — the UI
+   * disables both buttons until a grid exists, so this is the defensive
+   * fallback.
    */
   coverageGrid?: CoverageColorGrid;
 }
@@ -548,6 +598,23 @@ export function colorForMode(
         return out;
       }
       return colorByCoverage(cloud.positions, n, opts.coverageGrid);
+    }
+
+    // ── confidence (colourblind-safe trust overlay) ───────────────────────────
+    case 'confidence': {
+      // Same analysis-gated contract as 'coverage': a missing grid is a UI
+      // state, not a data defect, so every point reads the neutral grey
+      // (CONFIDENCE_NONE === COVERAGE_NONE) instead of throwing.
+      if (!opts?.coverageGrid) {
+        const out = new Uint8Array(n * 3);
+        for (let i = 0; i < n; i++) {
+          out[i * 3] = CONFIDENCE_NONE.r;
+          out[i * 3 + 1] = CONFIDENCE_NONE.g;
+          out[i * 3 + 2] = CONFIDENCE_NONE.b;
+        }
+        return out;
+      }
+      return colorByConfidence(cloud.positions, n, opts.coverageGrid);
     }
   }
 }

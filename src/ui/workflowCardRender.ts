@@ -18,6 +18,7 @@
  */
 
 import type { WorkflowItem } from '../terrain/contour/recommendedWorkflow';
+import type { TerrainProduct } from '../terrain/contour/terrainProducts';
 import type { Limitations } from '../terrain/contour/whyNotReasons';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -56,6 +57,47 @@ export function renderWorkflowCard(items: ReadonlyArray<WorkflowItem>): HTMLElem
       main.append(el('span', { className: 'olv-analyse-workflow-note', text: item.note }));
     }
     row.append(main);
+    list.append(row);
+  }
+  card.append(list);
+  return card;
+}
+
+/**
+ * Build the "Terrain Products" status list (v0.4.5) — the compact per-product
+ * re-presentation of the workflow grades the panel leads with. Real list
+ * semantics (<ul>/<li>) so assistive tech announces "list, 6 items", and the
+ * verdict travels as TEXT (the status word) beside the decorative glyph —
+ * never colour-only. Each row is TWO lines: the product + glyph + status word,
+ * then — only when the product sits below Ready — a smaller "Reason:" line
+ * carrying the engine-selected reason IN FULL (wrapping, never ellipsized).
+ * The reason lives inside the same <li> as the verdict, so a screen reader
+ * hears product, status and reason as one list item. The pure mapper
+ * (`terrainProducts`) supplies every string; this builder only lays them out.
+ */
+export function renderTerrainProducts(products: ReadonlyArray<TerrainProduct>): HTMLElement {
+  const card = el('div', { className: 'olv-analyse-products' });
+  card.append(el('div', { className: 'olv-analyse-products-head', text: 'Terrain products' }));
+  const list = el('ul', { className: 'olv-analyse-products-list' });
+  for (const p of products) {
+    const row = el('li', { className: `olv-analyse-product is-${p.status}` });
+    const glyph = el('span', { className: 'olv-analyse-product-glyph', text: p.glyph });
+    glyph.setAttribute('aria-hidden', 'true'); // decorative — the word carries it
+    const head = el('div', { className: 'olv-analyse-product-head' });
+    head.append(
+      glyph,
+      el('span', { className: 'olv-analyse-product-label', text: p.label }),
+      el('span', { className: 'olv-analyse-product-status', text: p.statusWord }),
+    );
+    row.append(head);
+    if (p.reason) {
+      const reason = el('div', { className: 'olv-analyse-product-reason' });
+      reason.append(
+        el('span', { className: 'olv-analyse-product-reason-label', text: 'Reason:' }),
+        el('span', { className: 'olv-analyse-product-reason-text', text: p.reason }),
+      );
+      row.append(reason);
+    }
     list.append(row);
   }
   card.append(list);

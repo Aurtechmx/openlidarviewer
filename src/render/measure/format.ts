@@ -91,6 +91,51 @@ export function formatProfileHeadline(
   return `${len}  · Δh ${sign}${drop}  · ${grade}`;
 }
 
+/**
+ * Render-space variants (v0.4.5, B2). Measurement geometry lives in the
+ * scan's SOURCE units — a foot-CRS LAS keeps feet in render space — so every
+ * display boundary must multiply by the CRS's `linearUnitToMetres` factor
+ * exactly ONCE before the metre-based formatters above run. Lengths scale
+ * ×f, areas ×f², volumes ×f³; angles/grades are dimensionless and need no
+ * factor. These wrappers exist (rather than inlining `v * f` at ~35 call
+ * sites in the DOM-bound controller) so the foot-CRS truth tests can pin the
+ * exact labels in Node. An invalid factor (NaN, 0, negative) falls back to 1
+ * — mislabelling a local scan as metres is the pre-B2 status quo; multiplying
+ * by garbage would be strictly worse.
+ */
+function safeFactor(unitToMetres: number): number {
+  return Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
+}
+
+/** Format a length given in render (source) units. */
+export function formatLengthRender(
+  renderUnits: number,
+  unitToMetres: number,
+  system: UnitSystem,
+): string {
+  return formatLength(renderUnits * safeFactor(unitToMetres), system);
+}
+
+/** Format an area given in square render (source) units. */
+export function formatAreaRender(
+  renderUnitsSq: number,
+  unitToMetres: number,
+  system: UnitSystem,
+): string {
+  const f = safeFactor(unitToMetres);
+  return formatArea(renderUnitsSq * f * f, system);
+}
+
+/** Format a volume given in cubic render (source) units. */
+export function formatVolumeRender(
+  renderUnitsCu: number,
+  unitToMetres: number,
+  system: UnitSystem,
+): string {
+  const f = safeFactor(unitToMetres);
+  return formatVolume(renderUnitsCu * f * f * f, system);
+}
+
 /** Format a volume in cubic metres for the active unit system. */
 export function formatVolume(cubicMetres: number, system: UnitSystem): string {
   if (!Number.isFinite(cubicMetres) || cubicMetres < 0) return '—';

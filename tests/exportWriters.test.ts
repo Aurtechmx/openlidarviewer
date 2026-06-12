@@ -36,7 +36,7 @@ const PROV: ExportProvenance = {
   totalCells: 100,
   classScope: null,
   warnings: [],
-  notSurveyGrade: 'Fitness-for-use; not survey-grade unless validated against control.',
+  notSurveyGrade: 'Suitability: not survey-grade unless validated against ground-truth control.',
 };
 
 function feat(

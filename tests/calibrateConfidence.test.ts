@@ -58,6 +58,30 @@ describe('fitConfidenceCalibration', () => {
     expect(cal.remap(60)).toBeGreaterThan(90); // reliable, not collapsed to 0
   });
 
+  it('a near-empty noisy bin cannot bend the curve (min bin occupancy)', () => {
+    // 96 well-behaved samples at confidence ~45 (≈81% reliable) plus TWO
+    // stray samples at confidence 25, one of which misses tolerance — a
+    // 50% "reliability" measured from a coin flip. Because the remap is
+    // flat-extrapolated past the end knots, that 2-sample bin used to set
+    // the calibrated value for EVERY raw confidence ≤ 25 (and to drag the
+    // 25–45 interpolation down with it). Bins under the occupancy floor
+    // (default 5) are now excluded, so low raw confidences inherit the
+    // first REAL knot instead.
+    const s: ConfidenceSample[] = [];
+    for (let i = 0; i < 96; i++) s.push({ confidence: 45, absError: i < 78 ? 0.1 : 3 });
+    for (let i = 0; i < 40; i++) s.push({ confidence: 85, absError: i < 38 ? 0.1 : 3 });
+    s.push({ confidence: 25, absError: 0.1 });
+    s.push({ confidence: 25, absError: 3 });
+    const cal = fitConfidenceCalibration(s, { toleranceM: 1, bins: 10 });
+    expect(cal.assessable).toBe(true);
+    // No knot from the 2-sample bin: nothing maps to its 50% coin flip.
+    expect(cal.curve.every((k) => k.count >= 5)).toBe(true);
+    expect(cal.remap(25)).toBeGreaterThan(70); // ≈ the measured 81%, not 50%
+    // An explicit lower floor re-admits the bin (the knob is honoured).
+    const loose = fitConfidenceCalibration(s, { toleranceM: 1, bins: 10, minBinCount: 1 });
+    expect(loose.remap(25)).toBeLessThan(70);
+  });
+
   it('enforces monotonicity even when raw reliability is non-monotone', () => {
     // Mid band MORE reliable than the high band → PAV must pool them so
     // the curve never decreases.

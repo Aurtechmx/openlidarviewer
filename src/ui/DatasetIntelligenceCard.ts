@@ -68,6 +68,9 @@ export class DatasetIntelligenceCard {
   private readonly _confidenceValue: HTMLElement;
   private readonly _confidenceChip: HTMLElement;
 
+  /** The summary currently on display — see the `current` getter. */
+  private _current: DatasetIntelligence | null = null;
+
   constructor() {
     // v0.3.10 a11y patch #375 — the five card rows and the Details
     // disclosure are semantic term/definition pairs ("Point Density"
@@ -190,7 +193,18 @@ export class DatasetIntelligenceCard {
       this.clear();
       return;
     }
+    this._current = intel;
     this._render(intel);
+  }
+
+  /**
+   * The summary currently on display, or null after `clear()`. Exposed so the
+   * Terrain Intelligence Report can stamp the SAME bucket labels the card
+   * shows (v0.4.5) — re-running `summariseDataset` at export time could drift
+   * if the orchestrator pushed fresher inputs between paint and export.
+   */
+  get current(): DatasetIntelligence | null {
+    return this._current;
   }
 
   /**
@@ -200,6 +214,7 @@ export class DatasetIntelligenceCard {
    * informational gain.
    */
   clear(): void {
+    this._current = null;
     this.element.classList.add('olv-hidden');
   }
 

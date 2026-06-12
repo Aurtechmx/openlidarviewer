@@ -2,7 +2,7 @@
  * objectPanelExport.test.ts
  *
  * The non-terrain export row: a "Report PDF" button is present for BOTH object
- * and interior scans; a "Floor plan" button is present ONLY for interior scans.
+ * and interior scans; a "Floor plan preview" button is present ONLY for interior scans.
  * Runs in the node environment via the same recording DOM stub as
  * objectPanelSpace.test.ts.
  */
@@ -21,6 +21,7 @@ class FakeEl {
   readonly tagName: string;
   constructor(tagName: string) { this.tagName = tagName; }
   setAttribute(): void { /* no-op */ }
+  removeAttribute(): void { /* no-op */ }
   set textContent(v: string) { this._text = v; }
   get textContent(): string {
     return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
@@ -65,7 +66,7 @@ function cubeShell(): Float32Array {
 }
 
 describe('ObjectPanel — export row gating', () => {
-  it('interior scan: Report PDF + Floor plan buttons present', async () => {
+  it('interior scan: Report PDF + Floor plan preview buttons present', async () => {
     const { ObjectPanel } = await import('../src/ui/ObjectPanel');
     const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
     const { classifyScanShape } = await import('../src/terrain/scanShape');
@@ -81,10 +82,10 @@ describe('ObjectPanel — export row gating', () => {
     panel.showSpace(space, shape);
     const root = panel.element as unknown as FakeEl;
     expect(root.findByText('Report PDF').length).toBe(1);
-    expect(root.findByText('Floor plan').length).toBe(1);
+    expect(root.findByText('Floor plan preview').length).toBe(1);
   });
 
-  it('object scan: Report PDF present, Floor plan absent', async () => {
+  it('object scan: Report PDF present, Floor plan preview absent', async () => {
     const { ObjectPanel } = await import('../src/ui/ObjectPanel');
     const { objectMetrics } = await import('../src/terrain/objectMetrics');
 
@@ -95,6 +96,6 @@ describe('ObjectPanel — export row gating', () => {
     panel.showObject(objectMetrics(cubeShell()), null, null);
     const root = panel.element as unknown as FakeEl;
     expect(root.findByText('Report PDF').length).toBe(1);
-    expect(root.findByText('Floor plan').length).toBe(0);
+    expect(root.findByText('Floor plan preview').length).toBe(0);
   });
 });

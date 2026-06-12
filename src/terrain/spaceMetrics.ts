@@ -22,6 +22,7 @@
 
 import type { Axis } from './scanShape';
 import { objectMetrics } from './objectMetrics';
+import { denseFootprintBbox } from './space/floorplan/wallSlice';
 
 /** Exact metre→foot factor (1 ft = 0.3048 m). */
 const FT_PER_M = 1 / 0.3048;
@@ -55,9 +56,15 @@ export interface CaptureQuality {
   readonly sampledPointCount: number;
   /** Source / resident point count the sample was drawn from. */
   readonly sourcePointCount: number;
-  /** Points per m² of occupied footprint. */
+  /**
+   * Points per m² of occupied footprint, describing the SCAN: the sampled
+   * count is scaled back up by the known stride (sourcePointCount /
+   * sampledPointCount — uniform striding, so the ratio IS the stride). The
+   * pre-v0.4.5 figure divided only the sample by the area, under-reporting
+   * density by the stride factor (100× at stride 100).
+   */
   readonly densityPerM2: number;
-  /** Approximate mean point spacing (m), from areal density. */
+  /** Approximate mean point spacing (m), from the scan's areal density. */
   readonly meanSpacingM: number;
   /** Occupied footprint fraction (%) — coverage / completeness. */
   readonly coveragePct: number;
@@ -248,19 +255,50 @@ export function spaceMetrics(
   const { v: vOff, h1: h1Off, h2: h2Off } = upOffsets(up);
   const stride = Math.max(1, Math.floor(n / maxSamples));
 
-  const H1: number[] = [], H2: number[] = [], V: number[] = [];
-  let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
+  let H1: number[] = [], H2: number[] = [], V: number[] = [];
   for (let i = 0; i < n; i += stride) {
     const b = i * 3;
     const h1 = positions[b + h1Off] * u2m, h2 = positions[b + h2Off] * u2m, vv = positions[b + vOff] * u2m;
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(vv)) continue;
     H1.push(h1); H2.push(h2); V.push(vv);
-    if (h1 < minH1) minH1 = h1; if (h1 > maxH1) maxH1 = h1;
-    if (h2 < minH2) minH2 = h2; if (h2 > maxH2) maxH2 = h2;
-    if (vv < minV) minV = vv; if (vv > maxV) maxV = vv;
+  }
+  if (V.length < 16) return blank;
+
+  // ── Dense-footprint clip — the SAME rule the floor-plan slice applies ──
+  // 360 scans trail sparse stray returns ("noise arms") tens of metres past
+  // the building. The floor plan clips them before tracing walls; until
+  // v0.4.5 the panel did NOT, so the panel's L × W (PCA over everything,
+  // arms included) could disagree with the plan sheet's extents by 2×. Both
+  // now measure the same dense footprint, and the exclusion is reported.
+  let clippedCount = 0;
+  const denseBox = denseFootprintBbox(H1, H2);
+  if (denseBox) {
+    const [bx0, by0, bx1, by1] = denseBox;
+    const fH1: number[] = [], fH2: number[] = [], fV: number[] = [];
+    for (let i = 0; i < V.length; i++) {
+      if (H1[i] < bx0 || H1[i] > bx1 || H2[i] < by0 || H2[i] > by1) continue;
+      fH1.push(H1[i]); fH2.push(H2[i]); fV.push(V[i]);
+    }
+    // Only ever REMOVE outliers — keep the raw sample if the clip would eat
+    // most of the scan (pathological distribution).
+    if (fV.length >= Math.max(16, V.length * 0.5)) {
+      clippedCount = V.length - fV.length;
+      H1 = fH1; H2 = fH2; V = fV;
+    }
+  }
+  if (clippedCount > 0) {
+    reasons.push(
+      `${clippedCount.toLocaleString()} stray return(s) outside the dense footprint were excluded — dimensions describe the scanned space, matching the floor-plan sheet.`,
+    );
+  }
+
+  let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
+  for (let i = 0; i < V.length; i++) {
+    if (H1[i] < minH1) minH1 = H1[i]; if (H1[i] > maxH1) maxH1 = H1[i];
+    if (H2[i] < minH2) minH2 = H2[i]; if (H2[i] > maxH2) maxH2 = H2[i];
+    if (V[i] < minV) minV = V[i]; if (V[i] > maxV) maxV = V[i];
   }
   const m = V.length;
-  if (m < 16) return blank;
 
   const ex1 = Math.max(0, maxH1 - minH1);
   const ex2 = Math.max(0, maxH2 - minH2);
@@ -332,11 +370,29 @@ export function spaceMetrics(
   const band = PLANE_BAND * exV;
   const floorHi = minV + band;
   const ceilLo = maxV - band;
-  let floorCells = 0, ceilCells = 0;
-  for (let i = 0; i < occ.length; i++) {
-    if (!occ[i]) continue;
-    if (zMin[i] <= floorHi) floorCells++;
-    if (zMax[i] >= ceilLo) ceilCells++;
+  // Walk cells by (r, c) so each cell knows whether it sits on the footprint
+  // EDGE — a real ceiling is a horizontal surface over the room, so its returns
+  // land on INTERIOR cells too, while wall tops reach the top band only on
+  // perimeter cells. Counting interior ceiling cells separately lets the
+  // ceiling test reject wall mass (a 360 scan of an open-top space otherwise
+  // "detects" a ceiling that is not there — v0.4.5 vertical-axis bug).
+  let floorCells = 0, ceilCells = 0, interiorOcc = 0, ceilInteriorCells = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      if (!occ[idx]) continue;
+      if (zMin[idx] <= floorHi) floorCells++;
+      const hitsCeil = zMax[idx] >= ceilLo;
+      if (hitsCeil) ceilCells++;
+      const edge =
+        c === 0 || c === cols - 1 || r === 0 || r === rows - 1 ||
+        !occ[idx - 1] || !occ[idx + 1] ||
+        (r > 0 && !occ[idx - cols]) || (r < rows - 1 && !occ[idx + cols]);
+      if (!edge) {
+        interiorOcc++;
+        if (hitsCeil) ceilInteriorCells++;
+      }
+    }
   }
   const floorCoverage = occupied > 0 ? floorCells / occupied : 0;
   const ceilCoverage = occupied > 0 ? ceilCells / occupied : 0;
@@ -354,10 +410,17 @@ export function spaceMetrics(
 
   // Floor present when EITHER a strong low peak OR good band coverage says so.
   const floorPresent = exV > 0 && (floorPeakStrong || floorCoverage >= PLANE_COVER);
+  // Interior-cell evidence gate for the ceiling: when the footprint has interior
+  // cells at all, require that a meaningful share of them carry a top-band
+  // return. Wall tops alone (perimeter-only top-band mass) must never read as a
+  // ceiling. Degenerate grids with no interior cells skip the gate rather than
+  // false-negative a tiny room.
+  const ceilInteriorOk =
+    interiorOcc === 0 || ceilInteriorCells >= Math.max(2, 0.05 * interiorOcc);
   // Ceiling present (requires a floor) when EITHER a strong, separated high peak
-  // OR good band coverage says so.
+  // OR good band coverage says so — AND the interior-cell evidence holds.
   const ceilingPresent =
-    exV > 0 && floorPresent && (ceilPeakStrong || ceilCoverage >= PLANE_COVER);
+    exV > 0 && floorPresent && ceilInteriorOk && (ceilPeakStrong || ceilCoverage >= PLANE_COVER);
 
   // ── Ceiling height from the density-weighted floor / ceiling peaks ──
   let ceilingHeightM: number | null = null;
@@ -401,24 +464,51 @@ export function spaceMetrics(
   }
 
   // ── Storey / level count ──
-  const storyCount = countStoreys(hist, binW, minV, m);
+  // Multi-storey claims are gated on a detected ceiling: without any top
+  // surface the histogram peaks are wall / clutter mass, and the live v0.4.4
+  // bug showed an open-top space reporting 3 storeys. One floor ⇒ one storey,
+  // never more, until a ceiling is actually captured.
+  const rawStoreys = countStoreys(hist, binW, minV, m);
+  const storyCount =
+    spaceKind === 'interior' && !ceilingPresent ? Math.min(rawStoreys, 1) : rawStoreys;
 
   // ── Enclosed volume (envelope) ──
+  // GATED on a detected ceiling for interiors: "floor area × ceiling height"
+  // is only honest when a ceiling exists. The old OBB-envelope fallback printed
+  // a confident m³ figure on the same panel that said "ceiling not detected"
+  // (live v0.4.4 bug: 1,750 m³ on an open-top space) — interiors now report
+  // null instead, matching the reason string below. Objects keep the envelope
+  // fallback, which their reason string has always described as an envelope.
   let enclosedVolumeM3: number | null;
   if (ceilingHeightM != null) {
     enclosedVolumeM3 = floorAreaM2 * ceilingHeightM;
-  } else {
+  } else if (spaceKind === 'object') {
     // Open object: fall back to the OBB envelope volume (in metres).
     const om = objectMetrics(u2m === 1 ? positions : scaleCopy(positions, u2m), { maxSamples });
     enclosedVolumeM3 = om.envelopeVolumeM3 > 0 ? om.envelopeVolumeM3 : dims.lengthM * dims.widthM * dims.heightM;
+  } else {
+    enclosedVolumeM3 = null;
   }
 
   // ── Capture quality ──
-  const densityPerM2 = floorAreaM2 > 0 ? m / floorAreaM2 : 0;
+  // Density must describe the SCAN, not the sample: the gather + the local
+  // stride both subsample uniformly, so the source-to-sample count ratio is
+  // exactly the combined stride and scales the density back honestly. (The
+  // pre-v0.4.5 `m / floorAreaM2` under-reported a stride-100 scan 100×.)
+  // Guarded ≥ 1 so a caller passing a stale/smaller sourcePointCount can
+  // never silently SHRINK the measured density.
+  const sampleScale = sourcePointCount > m ? sourcePointCount / m : 1;
+  const densityPerM2 = floorAreaM2 > 0 ? (m * sampleScale) / floorAreaM2 : 0;
   const meanSpacingM = densityPerM2 > 0 ? Math.sqrt(1 / densityPerM2) : 0;
   const quality: CaptureQuality = {
     sampledPointCount: m, sourcePointCount, densityPerM2, meanSpacingM, coveragePct, hasRgb,
   };
+  if (sampleScale > 1) {
+    reasons.push(
+      `Density and spacing are scaled from a ${m.toLocaleString()}-point sample to the full ` +
+        `${sourcePointCount.toLocaleString()}-point scan (uniform-stride assumption).`,
+    );
+  }
 
   if (spaceKind === 'interior') {
     if (ceilingPresent) {

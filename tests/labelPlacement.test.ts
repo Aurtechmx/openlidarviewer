@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { placeLabels } from '../src/terrain/contour/labelPlacement';
+import { placeLabels, decimalsForInterval } from '../src/terrain/contour/labelPlacement';
 import { gradeForConfidence } from '../src/terrain/ground/cellConfidence';
 import type { ContourPolyline, ContourVertex } from '../src/terrain/contour/stitchContours';
 
@@ -21,6 +21,28 @@ function straightLine(confAt: (x: number) => number): ContourPolyline {
   for (let x = 0; x <= 100; x += 10) vertices.push(v(x, 0, confAt(x)));
   return { value: 50, vertices, closed: false };
 }
+
+describe('decimalsForInterval', () => {
+  it('returns the decimals that keep adjacent levels distinguishable', () => {
+    // Hand-computed: smallest d with interval × 10^d a whole number.
+    expect(decimalsForInterval(5)).toBe(0);
+    expect(decimalsForInterval(1)).toBe(0);
+    expect(decimalsForInterval(0.5)).toBe(1);
+    expect(decimalsForInterval(0.2)).toBe(1);
+    expect(decimalsForInterval(0.25)).toBe(2);
+    expect(decimalsForInterval(2.5)).toBe(1);
+    expect(decimalsForInterval(0.125)).toBe(3);
+  });
+
+  it('falls back to 0 for invalid intervals and caps at 3', () => {
+    expect(decimalsForInterval(0)).toBe(0);
+    expect(decimalsForInterval(-1)).toBe(0);
+    expect(decimalsForInterval(Number.NaN)).toBe(0);
+    expect(decimalsForInterval(null)).toBe(0);
+    expect(decimalsForInterval(undefined)).toBe(0);
+    expect(decimalsForInterval(1 / 3)).toBe(3); // never more than 3
+  });
+});
 
 describe('placeLabels', () => {
   it('places evenly spaced labels along a confident line', () => {

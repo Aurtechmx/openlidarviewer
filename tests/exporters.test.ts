@@ -12,6 +12,38 @@ function makeCloud(positions: number[], origin: [number, number, number], colors
   });
 }
 
+/** A cloud with the optional channels / CRS metadata the C5 columns need. */
+function makeRichCloud(opts: {
+  positions: number[];
+  origin: [number, number, number];
+  colors?: number[];
+  intensity?: number[];
+  classification?: number[];
+  geographic?: boolean;
+}): PointCloud {
+  return new PointCloud({
+    positions: new Float32Array(opts.positions),
+    colors: opts.colors ? new Uint8Array(opts.colors) : undefined,
+    intensity: opts.intensity ? new Uint16Array(opts.intensity) : undefined,
+    classification: opts.classification ? new Uint8Array(opts.classification) : undefined,
+    origin: opts.origin,
+    sourceFormat: 'xyz',
+    name: 'test',
+    metadata:
+      opts.geographic === undefined
+        ? undefined
+        : {
+            crs: {
+              source: 'wkt',
+              name: opts.geographic ? 'WGS 84' : 'WGS 84 / UTM zone 12N',
+              linearUnit: opts.geographic ? 'unknown' : 'metre',
+              linearUnitToMetres: 1,
+              isGeographic: opts.geographic,
+            },
+          },
+  });
+}
+
 describe('toXyz / toCsv', () => {
   test('writes global coordinates (local position + origin)', () => {
     const cloud = makeCloud([0, 0, 0, 1, 2, 3], [100, 200, 300]);
@@ -31,6 +63,72 @@ describe('toXyz / toCsv', () => {
     const lines = toCsv(cloud).trim().split('\n');
     expect(lines[0]).toBe('x,y,z');
     expect(lines[1]).toBe('0.000,0.000,0.000');
+  });
+});
+
+describe('XYZ/CSV optional columns + geographic precision (v0.4.5, C5)', () => {
+  test('geographic CRS writes lat/lon at 7 dp; z stays 3 dp', () => {
+    // Origin carries the degrees as exact doubles; local offset 0.5 is
+    // exact in binary, so the sum is exactly 12.8456789 / -33.6456789.
+    const cloud = makeRichCloud({
+      positions: [0.5, 0.5, 0.25],
+      origin: [12.3456789, -34.1456789, 100],
+      geographic: true,
+    });
+    expect(toXyz(cloud).trim()).toBe('12.8456789 -33.6456789 100.250');
+    expect(toCsv(cloud).trim().split('\n')[1]).toBe('12.8456789,-33.6456789,100.250');
+  });
+
+  test('projected CRS keeps the millimetre 3 dp', () => {
+    const cloud = makeRichCloud({
+      positions: [0.5, 0.5, 0.25],
+      origin: [500000, 4100000, 100],
+      geographic: false,
+    });
+    expect(toXyz(cloud).trim()).toBe('500000.500 4100000.500 100.250');
+  });
+
+  test('intensity + classification columns follow rgb, in header order', () => {
+    const cloud = makeRichCloud({
+      positions: [1, 2, 3],
+      origin: [0, 0, 0],
+      colors: [255, 128, 0],
+      intensity: [40000],
+      classification: [2],
+    });
+    const csv = toCsv(cloud).trim().split('\n');
+    expect(csv[0]).toBe('x,y,z,r,g,b,intensity,classification');
+    expect(csv[1]).toBe('1.000,2.000,3.000,255,128,0,40000,2');
+  });
+
+  test('XYZ documents the optional columns in a # header line', () => {
+    const cloud = makeRichCloud({
+      positions: [1, 2, 3],
+      origin: [0, 0, 0],
+      intensity: [123],
+      classification: [5],
+    });
+    const lines = toXyz(cloud).trim().split('\n');
+    expect(lines[0]).toBe('# columns: x y z intensity classification');
+    expect(lines[1]).toBe('1.000 2.000 3.000 123 5');
+  });
+
+  test('a plain x-y-z cloud stays byte-identical to earlier releases (no header)', () => {
+    const cloud = makeCloud([0, 0, 0], [0, 0, 0]);
+    expect(toXyz(cloud)).toBe('0.000 0.000 0.000\n');
+  });
+
+  test('XYZ with the # header line still round-trips through loadXyz', async () => {
+    const cloud = makeRichCloud({
+      positions: [0.5, 1.5, 2.5],
+      origin: [500000, 4100000, 100],
+      intensity: [7],
+      classification: [2],
+    });
+    const text = toXyz(cloud);
+    const reloaded = await loadXyz(new TextEncoder().encode(text).buffer as ArrayBuffer);
+    expect(reloaded.pointCount).toBe(1);
+    expect(reloaded.positions[0] + reloaded.origin[0]).toBeCloseTo(500000.5, 2);
   });
 });
 

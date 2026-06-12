@@ -80,18 +80,17 @@ const FORBIDDEN_IDENTIFIERS =
  *   (`toFixed`/`Math.round` output), nice-number ticks and fixed unit
  *   strings — the "chart paths the renderer composed itself from
  *   numeric inputs" case the dom.ts contract names.
- * - src/ui/Stage.ts — `MARK` (top-bar wordmark) and `HERO_MARK`
- *   (empty-state hero): module-level literal SVG constants.
  * - src/ui/Stage.ts — `k.icon`: the local `KINDS` const of literal
- *   capture-kind SVG chips.
+ *   capture-kind SVG chips. (The former `MARK` / `HERO_MARK` inline-SVG
+ *   entries are gone for good: the official brand mark renders via
+ *   `<img src>` pointing at public/brand-mark.svg — a static asset URL,
+ *   never `unsafeHtml` — so the top bar / hero need no allowlist entry.)
  */
 const ALLOWLIST: readonly string[] = [
   'src/ui/NavBar.ts::<svg viewBox="0 0 140 110"',
   'src/ui/NavBar.ts::olv-mode-icon',
   'src/ui/ThemeToggle.ts::ICON_SVG[name]',
   'src/ui/MeasurePanel.ts::svg + overlay',
-  'src/ui/Stage.ts::olv-wordmark',
-  'src/ui/Stage.ts::HERO_MARK',
   'src/ui/Stage.ts::olv-capture-chip-icon',
 ];
 

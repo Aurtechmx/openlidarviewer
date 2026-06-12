@@ -8,6 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   DEFAULT_TOUR,
   TourSession,
+  splitEmphasis,
   type TourStep,
   type TourStoragePort,
 } from '../src/ui/onboarding/tourSteps';
@@ -180,5 +181,49 @@ describe('TourSession.subscribe — listener contract', () => {
     s.subscribe(good);
     s.start();
     expect(good).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('splitEmphasis — *key term* highlights in step copy (v0.4.5)', () => {
+  it('splits plain text and marked terms, hand-checked', () => {
+    expect(splitEmphasis('CRS, *colour mode*, and the *Visuals Studio* live here.')).toEqual([
+      { text: 'CRS, ', mark: false },
+      { text: 'colour mode', mark: true },
+      { text: ', and the ', mark: false },
+      { text: 'Visuals Studio', mark: true },
+      { text: ' live here.', mark: false },
+    ]);
+  });
+
+  it('a body with no asterisks is one plain segment', () => {
+    expect(splitEmphasis('No highlights here.')).toEqual([
+      { text: 'No highlights here.', mark: false },
+    ]);
+  });
+
+  it('an unpaired asterisk stays literal text — never a dangling mark', () => {
+    expect(splitEmphasis('a * b')).toEqual([{ text: 'a * b', mark: false }]);
+  });
+
+  it('handles marks at the very start and end', () => {
+    expect(splitEmphasis('*Cmd-K* or *Ctrl-K*')).toEqual([
+      { text: 'Cmd-K', mark: true },
+      { text: ' or ', mark: false },
+      { text: 'Ctrl-K', mark: true },
+    ]);
+  });
+
+  it('every DEFAULT_TOUR body parses with balanced marks (no stray asterisks)', () => {
+    for (const step of DEFAULT_TOUR) {
+      const segs = splitEmphasis(step.body);
+      // Re-joining the segments reproduces the copy minus the markers.
+      const joined = segs.map((x) => x.text).join('');
+      expect(joined).toBe(step.body.replace(/\*/g, ''));
+      // No segment is empty and no plain segment still carries a marker.
+      for (const seg of segs) {
+        expect(seg.text.length).toBeGreaterThan(0);
+        if (!seg.mark) expect(seg.text.includes('*')).toBe(false);
+      }
+    }
   });
 });

@@ -26,7 +26,7 @@ import {
   buildSpaceReportContent,
   type SpaceReportContent,
 } from '../../terrain/space/spaceReportLayout';
-import type { FloorPlan } from '../../terrain/space/floorPlan';
+import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 
 export interface SpaceReportPdfInput {
   readonly space: SpaceMetrics | null;
@@ -36,14 +36,15 @@ export interface SpaceReportPdfInput {
   readonly metricVersion?: string | null;
   readonly generatedAt?: Date | string | null;
   readonly unitToMetres?: number;
-  /** Interior-only: the density-derived footprint to embed on the page. */
-  readonly floorPlan?: FloorPlan | null;
+  /** Interior-only: the extracted wall-plan model to embed on the page. */
+  readonly floorPlan?: FloorPlanModel | null;
 }
 
 const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
 const FRAME = rgb(0.2, 0.22, 0.26);
 const FILL = rgb(0.93, 0.945, 0.96);
+const CONTENTS = rgb(0.87, 0.885, 0.91);
 const WARN = rgb(0.54, 0.18, 0.11);
 const WHITE = rgb(1, 1, 1);
 
@@ -95,10 +96,10 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
     y -= 8;
   }
 
-  // ── Interior floor-plan sketch (embedded, clearly approximate) ──
-  if (input.floorPlan && input.floorPlan.outline.length >= 3) {
+  // ── Interior floor plan (embedded, clearly approximate) ──
+  if (input.floorPlan && input.floorPlan.wallRings.length > 0) {
     y -= 4;
-    text('Floor plan (approximate sketch)', M, y, 11, bold, INK);
+    text('Floor plan preview (walls traced from the scan)', M, y, 11, bold, INK);
     y -= 8;
     const planTop = y;
     const planBox = { x: M, y: planTop - 180, w: PW - 2 * M, h: 176 };
@@ -161,11 +162,11 @@ function drawWrapped(
   return cy;
 }
 
-/** Draw the density-traced footprint (outline + walls + scale + dims) in a box. */
+/** Draw the extracted wall plan (floor fill + wall poché + dims) in a box. */
 function drawFloorPlan(
   page: PDFPage,
   box: { x: number; y: number; w: number; h: number },
-  plan: FloorPlan,
+  plan: FloorPlanModel,
   font: PDFFont,
   bold: PDFFont,
 ): void {
@@ -187,25 +188,43 @@ function drawFloorPlan(
   const pageY = (yy: number): number => offY + (yy - minY) * scale;
   const svgY = (py: number): number => PH - py;
 
-  // Footprint outline as a filled, blocky polygon.
-  if (plan.outline.length >= 3) {
+  /** All rings of one layer as a single nonzero-winding SVG path: the trace
+   * emits outer rings CCW and holes CW, so one fill keeps holes (and door
+   * gaps) open in the PDF exactly as in the standalone SVG. */
+  const ringsPath = (rings: ReadonlyArray<ReadonlyArray<readonly [number, number]>>): string => {
     let d = '';
-    plan.outline.forEach((p, i) => {
-      d += `${i === 0 ? 'M' : 'L'}${pageX(p[0]).toFixed(2)} ${svgY(pageY(p[1])).toFixed(2)} `;
-    });
-    d += 'Z';
-    page.drawSvgPath(d, { x: 0, y: PH, color: FILL, borderColor: INK, borderWidth: 1.2 });
+    for (const ring of rings) {
+      ring.forEach((p, i) => {
+        d += `${i === 0 ? 'M' : 'L'}${pageX(p[0]).toFixed(2)} ${svgY(pageY(p[1])).toFixed(2)} `;
+      });
+      d += 'Z ';
+    }
+    return d.trim();
+  };
+
+  // Scanned-floor interior (light), contents hints (grey), wall poché on top.
+  if (plan.floorRings.length > 0) {
+    page.drawSvgPath(ringsPath(plan.floorRings), { x: 0, y: PH, color: FILL, borderColor: FRAME, borderWidth: 0.4 });
   }
-  // Dominant wall lines.
-  for (const wall of plan.walls) {
-    const [a, b] = wall.segment;
+  if (plan.contentRings.length > 0) {
+    page.drawSvgPath(ringsPath(plan.contentRings), { x: 0, y: PH, color: CONTENTS, borderColor: FRAME, borderWidth: 0.3 });
+  }
+  if (plan.wallRings.length > 0) {
+    page.drawSvgPath(ringsPath(plan.wallRings), { x: 0, y: PH, color: INK, borderColor: INK, borderWidth: 0.4 });
+  }
+  // Unknown wall gaps (no square jamb evidence — unscanned or unclassifiable)
+  // as light dashed lines, matching the standalone SVG sheet; classified
+  // doorways stay genuine openings.
+  for (const g of plan.unknownGaps) {
     page.drawLine({
-      start: { x: pageX(a[0]), y: pageY(a[1]) },
-      end: { x: pageX(b[0]), y: pageY(b[1]) },
-      thickness: 2.2,
-      color: INK,
+      start: { x: pageX(g.a[0]), y: pageY(g.a[1]) },
+      end: { x: pageX(g.b[0]), y: pageY(g.b[1]) },
+      thickness: 0.8,
+      color: DIM,
+      dashArray: [3, 2.5],
     });
   }
+
   // Dimensions + caption.
   const wFt = plan.widthM / 0.3048;
   const dFt = plan.depthM / 0.3048;
@@ -213,7 +232,7 @@ function drawFloorPlan(
     safe(`W ${plan.widthM.toFixed(1)} m (${wFt.toFixed(1)} ft) x D ${plan.depthM.toFixed(1)} m (${dFt.toFixed(1)} ft)`),
     { x: box.x + 6, y: box.y + 6, size: 7.5, font, color: INK },
   );
-  page.drawText(safe('Approximate sketch from point density - not a measured floor plan.'), {
+  page.drawText(safe('Experimental preview - walls traced from the scan, not a measured floor plan; requires visual validation.'), {
     x: box.x + 6,
     y: box.y + box.h - 11,
     size: 7,

@@ -23,11 +23,8 @@
 
 import type { TerrainPoint } from '../TerrainContracts';
 import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
-import {
-  buildDtmGrid,
-  gradeForConfidence,
-  type EvidenceGrade,
-} from '../ground/cellConfidence';
+import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence';
+import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
 import type { VerticalAxis } from '../ground/groundFilter';
 import { axisGetters } from '../ground/axisGetters';
 import { horizontalCellMetres } from '../ground/horizontalScale';
@@ -168,17 +165,21 @@ export function holdoutValidateDtm(
   const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
   const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
 
-  // Build the DTM from TRAIN only.
+  // Build the DTM from TRAIN only — through the SAME shared raster→grid
+  // constructor the live pipeline uses (despike + extrapolation guard + unit
+  // params included), so the validated surface is constructed exactly like
+  // the delivered one. Before v0.4.5 this path skipped the despike and the
+  // extrapolation guard and dropped `horizontalUnitToMetres`, so the
+  // confidence calibration was fit against a DIFFERENT surface.
   const raster = rasterizeDtm(train, new Uint8Array(train.length).fill(1), {
     grid: { originH1: minH1, originH2: minH2, cols, rows, cellSizeM },
     aggregation: params.aggregation ?? 'mean',
     verticalAxis: vertical,
   });
-  const dtm = buildDtmGrid(raster, {
+  const { dtm } = buildSurfaceFromRaster(raster, {
     targetCount: params.targetCount,
     isGeographic: params.isGeographic,
-    // Validate the SAME surface the production DTM builds.
-    interpolation: 'geodesic',
+    horizontalUnitToMetres: params.horizontalUnitToMetres,
   });
   // Residuals are reported in metres regardless of the source vertical unit.
   const vMetres =
@@ -259,9 +260,13 @@ export function holdoutValidateDtm(
     bandSumSq[grade] += sq;
     bandSumAbs[grade] += abs;
     bandCount[grade] += 1;
-    // Stratify by the nearest cell's slope band and surface zone.
-    const ncol = clampCol(Math.round((getH1(p) - minH1) / cellSizeM));
-    const nrow = clampRow(Math.round((getH2(p) - minH2) / cellSizeM));
+    // Stratify by the CONTAINING cell's slope band and surface zone — floor
+    // binning, the same convention the raster was built with. `Math.round`
+    // here attributed points in the right/upper half of each cell to the
+    // NEXT cell over (audit finding: half-cell misattribution in the
+    // per-slope/zone RMSE tables).
+    const ncol = clampCol(Math.floor((getH1(p) - minH1) / cellSizeM));
+    const nrow = clampRow(Math.floor((getH2(p) - minH2) / cellSizeM));
     const nci = nrow * cols + ncol;
     const sb = slopeBandFor(slopeField[nci]);
     slopeSq[sb] += sq;

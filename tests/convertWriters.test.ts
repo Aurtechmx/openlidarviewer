@@ -103,6 +103,48 @@ describe('writeLas', () => {
     expect(view.getUint32(100, true)).toBe(0); // no VLR rather than a corrupt tag
   });
 
+  it('tallies returns > 5 into the TOP legacy slot, matching the record clamp', () => {
+    // returnNumber [1, 6, 9]: the record writer clamps high returns rather
+    // than wrapping them, so the legacy 5-slot histogram must put 6 and 9 in
+    // slot 5 — the old code dropped both into slot 1 (a first-return claim
+    // the records contradict). Hand-computed: [1, 0, 0, 0, 2].
+    const g = sampleGlobal({ returnNumber: Uint8Array.from([1, 6, 9]) });
+    const las = writeLas(g);
+    const view = new DataView(las.buffer, las.byteOffset, las.byteLength);
+    const byReturn = [0, 1, 2, 3, 4].map((r) => view.getUint32(111 + r * 4, true));
+    expect(byReturn).toEqual([1, 0, 0, 0, 2]);
+    // A missing / zero return still clamps LOW to slot 1.
+    const g0 = sampleGlobal({ returnNumber: Uint8Array.from([0, 2, 5]) });
+    const las0 = writeLas(g0);
+    const v0 = new DataView(las0.buffer, las0.byteOffset, las0.byteLength);
+    expect([0, 1, 2, 3, 4].map((r) => v0.getUint32(111 + r * 4, true))).toEqual([1, 1, 0, 0, 1]);
+  });
+
+  it('writes header min/max from the QUANTISED values the records reconstruct', () => {
+    // x = [0.0004, 1.0006] at mm scale, offset floor(min)=0: the records hold
+    // round(0.0004/0.001)=0 and round(1.0006/0.001)=1001, which reconstruct to
+    // 0 and 1001×0.001. The header bounds must be exactly those reconstructed
+    // values — the raw doubles (0.0004 / 1.0006) describe coordinates the
+    // file does not contain (strict validators flag points outside bounds).
+    const g = sampleGlobal({
+      x: Float64Array.from([0.0004, 1.0006, 0.5]),
+      y: Float64Array.from([0, 0, 0]),
+      z: Float64Array.from([0, 0, 0]),
+    });
+    const las = writeLas(g);
+    const view = new DataView(las.buffer, las.byteOffset, las.byteLength);
+    const maxX = view.getFloat64(179, true);
+    const minX = view.getFloat64(187, true);
+    expect(minX).toBe(0); // round(0.0004 / 0.001) = 0 → 0
+    expect(maxX).toBe(1001 * 0.001); // bit-identical to the reconstruction
+    // And the record agrees with the header exactly.
+    const pdo = view.getUint32(96, true);
+    const scaleX = view.getFloat64(131, true);
+    const offX = view.getFloat64(155, true);
+    const recon = offX + view.getInt32(pdo + 20, true) * scaleX; // 2nd point (fmt 0)
+    expect(recon).toBe(maxX);
+  });
+
   it('widens the scale so a huge extent never overflows int32', () => {
     // 6 000 km extent at 1 mm would need ~6e9 counts — past int32. The writer
     // must widen the scale and still reconstruct coordinates faithfully.

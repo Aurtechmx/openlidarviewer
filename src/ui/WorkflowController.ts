@@ -12,6 +12,20 @@ import {
 } from '../render/workflow/workflowRecorder';
 
 /**
+ * WHY this flag exists (product call, v0.4.5): the workflow recorder ships
+ * DISABLED this release rather than rebound. The Cmd/Ctrl+Shift+R → U rebind
+ * fixed the hard-refresh collision, but shipping a chord swap mid-cycle risks
+ * exactly the shortcut-collision confusion it was meant to cure, and the
+ * "Replay a workflow file…" UX (recipient must already have the same scan
+ * open) needs a design pass before we stand behind it. The module and its
+ * pure-logic unit tests stay in the tree; flipping this to `true` restores
+ * the Cmd/Ctrl+Shift+U shortcut, the three palette/shortcut-sheet actions,
+ * and the on-screen badge in one place. Keep the mirror constant in
+ * tests/e2e/workflowRecorder.spec.ts in sync when flipping.
+ */
+export const WORKFLOW_RECORDER_ENABLED: boolean = false;
+
+/**
  * WorkflowController.ts
  *
  * The host-side glue for the v0.3.9 workflow recorder. Owns:
@@ -25,7 +39,7 @@ import {
  * It does NOT own:
  *   - the actual action handlers (the host injects them via
  *     `dispatcher` in `replay`)
- *   - the keystroke binding (main.ts binds Cmd-Shift-R once)
+ *   - the keystroke binding (main.ts binds Cmd-Shift-U once)
  *   - the action registry itself (the command palette holds it)
  *
  * State machine:

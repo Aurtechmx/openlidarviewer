@@ -36,6 +36,7 @@ class FakeEl {
   readonly tagName: string;
   constructor(tagName: string) { this.tagName = tagName; }
   setAttribute(): void { /* no-op */ }
+  removeAttribute(): void { /* no-op */ }
   /** Canvas 2D context is unavailable in the stub — the tile path is null-safe. */
   getContext(): null { return null; }
   getBoundingClientRect(): { width: number; height: number; left: number; top: number } {

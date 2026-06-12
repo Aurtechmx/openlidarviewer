@@ -21,11 +21,13 @@
  *
  * Four surface statuses, never collapsed:
  *   Good     — surface is internally valid; suitable for terrain workflows.
- *   Preview  — suitable for inspection and measurement, not final deliverables.
+ *   Preview  — suitable for inspection and measurement; additional validation
+ *              recommended before deliverable use.
  *   Limited  — insufficient data quality for reliable terrain products.
  *   Blocked  — the quality gate blocked it, or there is no usable DTM at all.
  *
- * Three export-readiness verdicts:
+ * Three export-readiness verdicts (derived by quality/readinessEngine — the
+ * single source of the verdict — and copied here verbatim):
  *   Ready    — surface is Good AND CRS + vertical datum are known.
  *   Preview  — surface is below Good, OR the surface is Good but CRS / datum is
  *              unknown (the reason names which).
@@ -52,11 +54,22 @@
  */
 
 import type { AnalyseContoursResult } from './analyseContours';
+import {
+  deriveReadiness,
+  joinReasons,
+  type SurfaceTier,
+  type ReadinessTier,
+} from '../quality/readinessEngine';
 
-export type TerrainStatus = 'Good' | 'Preview' | 'Limited' | 'Blocked';
+/**
+ * Surface-quality tier. The vocabulary lives in the readiness engine (the
+ * single source of the verdict grammar); this alias keeps the historical
+ * name every consumer imports.
+ */
+export type TerrainStatus = SurfaceTier;
 
 /** Export-readiness verdict — the surface verdict gated by georeferencing. */
-export type ExportReadinessStatus = 'Ready' | 'Preview' | 'Blocked';
+export type ExportReadinessStatus = ReadinessTier;
 
 /** A single supporting metric: a plain label, a formatted value, and a colour-only rating. */
 export interface SupportingMetric {
@@ -245,6 +258,10 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
       rating: emptyFrac <= 0.2 ? 'good' : emptyFrac <= HIGH_EMPTY_FRACTION ? 'fair' : 'poor',
     },
     {
+      // cellMetrics.edgeRiskRatio — measured cells near the data boundary
+      // (least neighbour support). DISTINCT from the gate's 'edgeRisk' cell
+      // status (interpolated cells far from any measurement); the reason
+      // sentence below words each truthfully.
       label: 'Edge risk',
       value: pctStr(edgeFrac),
       rating: edgeFrac <= 0.05 ? 'good' : edgeFrac <= HIGH_EDGE_FRACTION ? 'fair' : 'poor',
@@ -305,7 +322,13 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     else if (coverageMode === 'sampled') caps.push('the cloud was sampled, not fully walked');
     if (interpFrac > HIGH_INTERP_FRACTION) caps.push(`${pctStr(interpFrac)} of the surface is interpolated`);
     if (emptyFrac > HIGH_EMPTY_FRACTION) caps.push(`${pctStr(emptyFrac)} of the grid has no data`);
-    if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of cells are a long interpolation from real returns`);
+    // `edgeFrac` is cellMetrics.edgeRiskRatio: the fraction of MEASURED cells
+    // that sit within a couple of cells of the data boundary. Those cells HAVE
+    // real returns — they are just least supported by neighbours. The old
+    // wording here ("a long interpolation from real returns") described the
+    // OTHER edge metric (the gate's tally of interpolated cells far from any
+    // measurement, dtmCellStatus 'edgeRisk') and was untrue for this one.
+    if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of measured cells sit at the edge of the data, where the surface is least supported`);
     if (density < LOW_DENSITY_PER_M2) caps.push('ground returns are sparse');
     if (status === 'Limited') {
       // The surface was downgraded BELOW the gate's preview tier, so do NOT
@@ -322,36 +345,18 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   }
 
   // ── EXPORT READINESS (surface verdict gated by georeferencing) ────────
-  // Blocked surface ⇒ export blocked. Otherwise Ready only when the surface is
-  // Good AND CRS + datum are both known; an unknown CRS/datum (or any sub-Good
-  // surface) holds export at Preview, with a reason naming the gap.
-  const georefGaps: string[] = [];
-  if (!crsKnown) georefGaps.push('CRS unknown');
-  if (!datumKnown) georefGaps.push('vertical datum unknown');
-  let exportReadiness: ExportReadinessStatus;
-  let exportReason: string;
-  if (status === 'Blocked') {
-    exportReadiness = 'Blocked';
-    exportReason = reason;
-  } else if (status === 'Good' && georefGaps.length === 0) {
-    exportReadiness = 'Ready';
-    exportReason = '';
-  } else {
-    exportReadiness = 'Preview';
-    const surfaceBelowGood = status !== 'Good';
-    if (georefGaps.length > 0 && surfaceBelowGood) {
-      // BOTH hold export back: name the surface limitation AND the georef gap,
-      // as one readable sentence. Naming only the georef gap would wrongly imply
-      // that supplying a CRS/datum alone makes the surface exportable.
-      exportReason = `surface quality is below export grade; ${joinReasons(georefGaps)} — validate before hand-off`;
-    } else if (georefGaps.length > 0) {
-      // Surface is Good — georeferencing is the only reason export is held back.
-      exportReason = joinReasons(georefGaps);
-    } else {
-      // Surface itself is below Good — that's why export isn't ready.
-      exportReason = 'surface quality is below export grade — validate before hand-off';
-    }
-  }
+  // Derived by THE readiness engine — the single source of the verdict — and
+  // copied onto the assessment verbatim. The tier/reason rules (Blocked
+  // surface ⇒ Blocked; Ready only when Good + CRS + datum; otherwise Preview
+  // with a reason naming the gap) live in deriveReadiness, nowhere else.
+  const verdict = deriveReadiness({
+    surfaceTier: status,
+    surfaceReason: reason,
+    crsKnown,
+    datumKnown,
+  });
+  const exportReadiness: ExportReadinessStatus = verdict.tier;
+  const exportReason: string = verdict.reason;
 
   // ── bestFor / useCaution / notRecommendedFor (surface inspection verdict) ──
   // bestFor speaks to what the SURFACE supports. For a Good surface we only
@@ -397,13 +402,6 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     notRecommendedFor,
     supportingMetrics,
   };
-}
-
-/** Join reason fragments into one sentence: "a, b and c". */
-function joinReasons(parts: string[]): string {
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
 }
 
 function capitalise(s: string): string {

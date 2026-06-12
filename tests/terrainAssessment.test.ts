@@ -374,6 +374,81 @@ describe('terrainAssessment', () => {
     expect(a.status).toBe('Good');
   });
 
+  // ── Panel-math validation: the real interior-360 case (v0.4.5 field report) ──
+  // A 360 interior COPC, terrain analysis forced: panel showed "Limited 52/100",
+  // reason "72% of the surface is interpolated and 53% of cells are a long
+  // interpolation", chips: coverage full, ground density 1047.3 pts/m², DTM
+  // quality 52/100, interpolation 72%, empty cells 0%, edge risk 53%, vertical
+  // RMSE 0.15 m, CRS unknown. This pins (a) the tier derivation (52 ≥ the
+  // Limited score floor, so Limited comes from the 2-poor-metric rule AND the
+  // severe-gap rule, interp 0.72 > 0.6), (b) that the reason sentence quotes the
+  // SAME numbers the chips show, and (c) the wording fix: cellMetrics'
+  // edgeRiskRatio counts MEASURED cells near the data boundary, so the reason
+  // must no longer call them "a long interpolation from real returns" (that
+  // phrase belongs to the gate's tally-based edgeRisk cell status only).
+  describe('interior-360 field case (Limited 52/100)', () => {
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        reasons: ['Preview only: 72% of the surface is interpolated and 53% of cells are a long interpolation from real returns.'],
+        interpolatedFraction: 0.72,
+        edgeRiskRatio: 0.53,
+        emptyFraction: 0,
+        score: 52,
+        meanDensity: 1047.3,
+        rmseZM: 0.15,
+        crs: null,
+        verticalDatum: null,
+      }),
+    );
+
+    it('maps the field numbers to Limited with the 52 score intact', () => {
+      expect(a.status).toBe('Limited');
+      expect(a.score).toBe(52);
+      expect(a.scoreKnown).toBe(true);
+      // 52 is ABOVE the Limited score floor (40): Limited is driven by the
+      // two-poor-metric rule (interp 72% + edge 53%) and the severe-gap rule
+      // (0.72 > 0.6) — both must independently hold for these numbers.
+      const poor = a.supportingMetrics.filter((m) => m.rating === 'poor').map((m) => m.label);
+      expect(poor).toContain('Interpolation');
+      expect(poor).toContain('Edge risk');
+      expect(poor.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('chips carry the field values with honest ratings', () => {
+      expect(findMetric(a.supportingMetrics, 'Coverage')?.value).toBe('full');
+      expect(findMetric(a.supportingMetrics, 'Ground density')?.value).toBe('1047.3 pts/m²');
+      expect(findMetric(a.supportingMetrics, 'Ground density')?.rating).toBe('good');
+      expect(findMetric(a.supportingMetrics, 'DTM quality')?.value).toBe('52/100');
+      expect(findMetric(a.supportingMetrics, 'DTM quality')?.rating).toBe('fair');
+      expect(findMetric(a.supportingMetrics, 'Interpolation')?.value).toBe('72%');
+      expect(findMetric(a.supportingMetrics, 'Empty cells')?.value).toBe('0%');
+      expect(findMetric(a.supportingMetrics, 'Edge risk')?.value).toBe('53%');
+      expect(findMetric(a.supportingMetrics, 'Vertical RMSE')?.value).toBe('0.15 m');
+      expect(findMetric(a.supportingMetrics, 'Vertical RMSE')?.rating).toBe('fair');
+      expect(findMetric(a.supportingMetrics, 'CRS')?.value).toBe('unknown');
+    });
+
+    it('the reason quotes the SAME percentages as the chips', () => {
+      expect(a.reason).toMatch(/^Insufficient quality/);
+      expect(a.reason).toContain('72% of the surface is interpolated');
+      expect(a.reason).toContain('53% of measured cells sit at the edge of the data');
+    });
+
+    it('no longer mislabels boundary-measured cells as "a long interpolation"', () => {
+      // cellMetrics.edgeRiskRatio cells ARE measured (they have real returns,
+      // just near the data edge) — calling them interpolated was untrue.
+      expect(a.reason).not.toMatch(/long interpolation/i);
+    });
+
+    it('export readiness is Preview, naming the surface limitation AND the georef gaps', () => {
+      expect(a.exportReadiness).toBe('Preview');
+      expect(a.exportReason).toContain('surface quality is below export grade');
+      expect(a.exportReason).toMatch(/CRS unknown/);
+      expect(a.exportReason).toMatch(/vertical datum unknown/);
+    });
+  });
+
   it('renders DTM quality as unknown (never 0/100) when qualityScore is absent', () => {
     const f = fixture();
     (f as { qualityScore: unknown }).qualityScore = undefined;

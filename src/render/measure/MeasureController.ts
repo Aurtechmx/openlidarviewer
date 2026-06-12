@@ -39,15 +39,32 @@ import {
   BOX_EDGES,
 } from './geometry';
 import {
-  formatLength,
-  formatArea,
+  formatLengthRender,
+  formatAreaRender,
+  formatVolumeRender,
   formatAngle,
   formatBearing,
   formatGrade,
   formatProfileHeadline,
   formatBoxHeadline,
-  formatVolume,
 } from './format';
+// B2 (v0.4.5) — one unit seam: the chart series is converted render-units →
+// metres in `getSummaries` by the same module the panel/CSV/PDF read, so
+// labels and raw numerals can never drift apart.
+import { scaleProfileSamples } from './profileSummary';
+// B7/B8 (v0.4.5) — pure clamp + unit conversion for the resample path, read
+// from the sampler module so panel inputs, clamp and tests share one rule.
+// The encode/decode pair is the persistence seam: the user's last-applied
+// sampler parameters survive a reload and shape the next profile drawn.
+import {
+  PROFILE_SAMPLER_DEFAULTS_KEY,
+  decodeSamplerParams,
+  encodeSamplerParams,
+  normaliseResampleParams,
+} from './profileSampler';
+// Guarded localStorage access — the same seam every UI preference uses;
+// storage failures degrade to "the preference doesn't persist", never throw.
+import { storageGet, storageSet } from '../../ui/safeStorage';
 import { autoReferenceZ } from './volume';
 import { MeasureOverlay } from './MeasureOverlay';
 import type {
@@ -145,6 +162,46 @@ export interface MeasureCallbacks {
   onExit: () => void;
 }
 
+/**
+ * The profile sampler's structured return shape. `samples` is the
+ * height-vs-distance polyline in RENDER (source) units; `residentOnly` flags
+ * a streaming-resident-only walk. `corridorWidth` (render units) and
+ * `groundPercentile` are the sampler parameters that actually shaped the
+ * estimate — stamped onto the measurement so the PDF/CSV provenance prints
+ * real values (v0.4.5, B4). Both optional for older sampler wirings.
+ */
+export interface ProfileSamplerResult {
+  samples: ProfileChartSample[];
+  residentOnly: boolean;
+  corridorWidth?: number;
+  groundPercentile?: number;
+}
+
+/**
+ * User overrides forwarded to the profile sampler (B7/B8, v0.4.5). All fields
+ * are in RENDER (source) units / raw values — the controller converts the
+ * panel's metre input before building this. Null/absent fields mean "use the
+ * standing default" (auto 5 %-of-length corridor, p25, 64 bins).
+ */
+export interface ProfileSamplerOptions {
+  corridorWidth?: number | null;
+  groundPercentile?: number | null;
+  sampleCount?: number | null;
+}
+
+/**
+ * The MeasurePanel's resample request (B7/B8, v0.4.5). Corridor half-width is
+ * in METRES (the display/CSV unit) — the controller converts it back to
+ * render units through the same B2 factor the summaries apply forward, so a
+ * foot-CRS scan resamples the corridor the user actually asked for. Null
+ * fields reset that parameter to its default.
+ */
+export interface ProfileResampleParams {
+  corridorWidthM?: number | null;
+  groundPercentile?: number | null;
+  sampleCount?: number | null;
+}
+
 /** A compact, display-ready summary of one measurement, for the panel. */
 export interface MeasurementSummary {
   id: string;
@@ -164,6 +221,15 @@ export interface MeasurementSummary {
    * analyst understands the line may refine as more nodes stream in.
    */
   profileChartResidentOnly?: boolean;
+  /**
+   * Profile only — the corridor half-width the sampler actually used, in
+   * METRES (already through the B2 unit factor). Feeds the PDF's provenance
+   * rows/header so the sheet stops printing "auto (5 % of length)" when the
+   * true value is known. Optional: pre-v0.4.5 measurements never stored it.
+   */
+  profileCorridorWidthM?: number;
+  /** Profile only — the sampler's bare-earth percentile (dimensionless). */
+  profileGroundPercentile?: number;
   /**
    * Volume only — when true, the cut/fill record was sampled from
    * streaming resident nodes only. The panel surfaces a coverage caption
@@ -223,7 +289,8 @@ export class MeasureController {
     | ((
         a: Vec3,
         b: Vec3,
-      ) => ProfileChartSample[] | { samples: ProfileChartSample[]; residentOnly: boolean } | null)
+        opts?: ProfileSamplerOptions,
+      ) => ProfileChartSample[] | ProfileSamplerResult | null)
     | null = null;
   /**
    * Volume sampler — injected by the Viewer once a cloud is attached.
@@ -263,6 +330,15 @@ export class MeasureController {
   private _active = false;
   private _worldUp: Vec3 = [0, 0, 1];
   private _units: UnitSystem = 'metric';
+  /**
+   * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
+   * space keeps SOURCE units — a foot-CRS LAS stores feet — so every readout
+   * the controller emits passes through this factor exactly once: lengths
+   * ×f, areas ×f², volumes ×f³, and the profile chart series at the
+   * `getSummaries` boundary. 1 for metric / local / unknown CRSs (the
+   * pre-B2 behaviour).
+   */
+  private _unitToMetres = 1;
   private readonly _counters: Record<MeasurementKind, number> = {
     distance: 0,
     polyline: 0,
@@ -402,6 +478,31 @@ export class MeasureController {
     return this._units;
   }
 
+  /** The render-units → metres factor currently applied (1 = metres/local). */
+  get unitToMetres(): number {
+    return this._unitToMetres;
+  }
+
+  /**
+   * Inject the scan CRS's linear-unit → metres factor — the SAME seam the
+   * terrain/space paths read (`crsService.current().linearUnitToMetres`).
+   * Applying it here, at the controller boundary, keeps headline labels,
+   * overlay labels, the chart series, the summary block, the CSV and the
+   * PDF in lockstep; a format-only seam would convert the labels while the
+   * chart's raw numerals (ticks, stationing, CSV columns) stayed behind.
+   * Invalid factors (NaN, 0, negative) fall back to 1 — mislabelled-as-
+   * metres is the known pre-B2 behaviour; scaling by garbage is worse.
+   */
+  setUnitToMetres(factor: number): void {
+    const f = Number.isFinite(factor) && factor > 0 ? factor : 1;
+    if (f === this._unitToMetres) return;
+    this._unitToMetres = f;
+    // Stored geometry is untouched (render units stay the source of truth);
+    // re-emit so every label and the panel re-derive through the new factor.
+    this._updateHint();
+    this._emitChange();
+  }
+
   /** A snapshot of all completed measurements. */
   getMeasurements(): Measurement[] {
     return this._measurements;
@@ -418,13 +519,22 @@ export class MeasureController {
 
   /** Compact per-measurement summaries for the Measurements panel. */
   getSummaries(): MeasurementSummary[] {
+    // B2 — the ONE place the profile series crosses from render units into
+    // metres. Every consumer past this line (chart axes, summary <dl>, CSV,
+    // PDF) speaks metres, so the factor can never be applied twice or
+    // forgotten by one of them. Re-derived per call: a late CRS resolve or
+    // user override re-emits change and the next refresh re-scales.
+    const f = this._unitToMetres;
     return this._measurements.map((m) => ({
       id: m.id,
       kind: m.kind,
       name: m.name,
       value: this._headlineText(m),
-      profileChart: m.profileChart,
+      profileChart: m.profileChart ? scaleProfileSamples(m.profileChart, f) : undefined,
       profileChartResidentOnly: m.profileChartResidentOnly,
+      profileCorridorWidthM:
+        m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
+      profileGroundPercentile: m.profileGroundPercentile,
       volumeResidentOnly: m.volumeResidentOnly,
     }));
   }
@@ -501,13 +611,48 @@ export class MeasureController {
       | ((
           a: Vec3,
           b: Vec3,
-        ) =>
-          | ProfileChartSample[]
-          | { samples: ProfileChartSample[]; residentOnly: boolean }
-          | null)
+          opts?: ProfileSamplerOptions,
+        ) => ProfileChartSample[] | ProfileSamplerResult | null)
       | null,
   ): void {
     this._profileSampler = sampler;
+  }
+
+  /**
+   * Re-sample one profile measurement with user-set sampler parameters
+   * (B7/B8, v0.4.5): corridor half-width (metres), bare-earth percentile and
+   * sample count. Null/absent fields reset to the defaults (auto corridor,
+   * p25, 64 bins). Inputs are clamped to the shared bounds, never rejected.
+   * Returns true when the measurement was re-sampled and a change emitted;
+   * false when the id is unknown / not a profile / no sampler is wired —
+   * the panel leaves the row untouched in that case.
+   */
+  resampleProfile(id: string, params: ProfileResampleParams): boolean {
+    if (!this._profileSampler) return false;
+    const m = this._measurements.find((x) => x.id === id);
+    if (!m || m.kind !== 'profile' || m.points.length < 2) return false;
+    // Clamp in METRES (the user's input space), then convert to render units
+    // through the same B2 factor the summary boundary applies forward — the
+    // exact inverse, so what the user typed is what the sampler walks. The
+    // normalisation is pure + tested in profileSampler.ts.
+    const opts = normaliseResampleParams(params, this._unitToMetres);
+    try {
+      const result = this._profileSampler(m.points[0], m.points[1], opts);
+      if (!result) return false;
+      this._stampProfileSample(m, result);
+    } catch {
+      // Sampler errors must not poison the existing measurement — the row
+      // keeps its previous chart and the panel stays consistent.
+      return false;
+    }
+    // Persist the applied parameters (metre-space, pre-clamp — the clamp
+    // re-runs at every use) so they survive a reload and become the standing
+    // preference for the NEXT profile drawn (`_commitDraft` reads them). A
+    // Reset persists the all-null record, which decodes back to "no
+    // preference" — future commits return to the true defaults.
+    storageSet(PROFILE_SAMPLER_DEFAULTS_KEY, encodeSamplerParams(params));
+    this._emitChange();
+    return true;
   }
 
   /**
@@ -729,6 +874,41 @@ export class MeasureController {
     };
   }
 
+  /**
+   * Stamp a profile-sampler result onto a measurement record. Normalises
+   * both legacy (raw array) and current ({samples, residentOnly, …}) sampler
+   * return shapes; keeps the B4 provenance fields (corridor / percentile, in
+   * render units) so the PDF/CSV print the values that actually shaped the
+   * estimate. Shared by the commit path and the resample path (B7/B8) so the
+   * two can never stamp differently.
+   */
+  private _stampProfileSample(
+    m: Measurement,
+    result: ProfileChartSample[] | ProfileSamplerResult,
+  ): void {
+    const samples = Array.isArray(result) ? result : result.samples;
+    const residentOnly = Array.isArray(result) ? false : result.residentOnly;
+    if (!samples || samples.length === 0) return;
+    m.profileChart = samples;
+    // Resident-only reflects the LATEST sample — a re-sample after streaming
+    // completes may clear the caveat, so assign rather than only-set-true.
+    m.profileChartResidentOnly = residentOnly || undefined;
+    if (!Array.isArray(result)) {
+      if (
+        typeof result.corridorWidth === 'number' &&
+        Number.isFinite(result.corridorWidth)
+      ) {
+        m.profileCorridorWidth = result.corridorWidth;
+      }
+      if (
+        typeof result.groundPercentile === 'number' &&
+        Number.isFinite(result.groundPercentile)
+      ) {
+        m.profileGroundPercentile = result.groundPercentile;
+      }
+    }
+  }
+
   private _commitDraft(): void {
     if (!this._draft) return;
     const m = this._draft;
@@ -739,17 +919,15 @@ export class MeasureController {
     // scalar metrics row.
     if (m.kind === 'profile' && this._profileSampler && m.points.length >= 2) {
       try {
-        const result = this._profileSampler(m.points[0], m.points[1]);
-        if (result) {
-          // Normalise both legacy (raw array) and current ({samples,
-          // residentOnly}) sampler return shapes.
-          const samples = Array.isArray(result) ? result : result.samples;
-          const residentOnly = Array.isArray(result) ? false : result.residentOnly;
-          if (samples && samples.length > 0) {
-            m.profileChart = samples;
-            if (residentOnly) m.profileChartResidentOnly = true;
-          }
-        }
+        // The user's persisted sampler preferences (B7/B8) apply to every
+        // new profile, normalised through the same metre→render-unit clamp
+        // the resample path uses. A missing / malformed / reset record
+        // decodes to null and the standing defaults apply — exactly the
+        // pre-preference behaviour.
+        const stored = decodeSamplerParams(storageGet(PROFILE_SAMPLER_DEFAULTS_KEY));
+        const opts = stored ? normaliseResampleParams(stored, this._unitToMetres) : undefined;
+        const result = this._profileSampler(m.points[0], m.points[1], opts);
+        if (result) this._stampProfileSample(m, result);
       } catch {
         // Sampler errors must not poison the measurement; the scalar
         // metrics still display correctly without the chart.
@@ -851,13 +1029,31 @@ export class MeasureController {
     this._emitChange();
   }
 
+  // ── unit-aware formatting (B2) ──────────────────────────────────────────
+  // Geometry math runs in render (source) units; these three wrappers are
+  // the only way a length / area / volume becomes a label, so the CRS unit
+  // factor is applied exactly once per readout and can't be missed by a
+  // future call site.
+
+  private _fmtLen(renderUnits: number): string {
+    return formatLengthRender(renderUnits, this._unitToMetres, this._units);
+  }
+
+  private _fmtArea(renderUnitsSq: number): string {
+    return formatAreaRender(renderUnitsSq, this._unitToMetres, this._units);
+  }
+
+  private _fmtVol(renderUnitsCu: number): string {
+    return formatVolumeRender(renderUnitsCu, this._unitToMetres, this._units);
+  }
+
   /** The headline value string for a measurement, shown in the panel. */
   private _headlineText(m: Measurement): string {
     const p = m.points;
     switch (m.kind) {
       case 'distance': {
         if (p.length < 2) return '—';
-        const len = formatLength(distance(p[0], p[1]), this._units);
+        const len = this._fmtLen(distance(p[0], p[1]));
         const az = bearingDegrees(p[0], p[1], this._worldUp);
         // Append the compass bearing when the segment has a horizontal run —
         // a survey staple. Purely vertical pairs have no bearing, so just the
@@ -865,15 +1061,12 @@ export class MeasureController {
         return Number.isFinite(az) ? `${len} · ${formatBearing(az)}` : len;
       }
       case 'polyline':
-        return formatLength(polylineLength(p).total, this._units);
+        return this._fmtLen(polylineLength(p).total);
       case 'area':
-        return p.length >= 3 ? formatArea(polygonAreaPlanar(p), this._units) : '—';
+        return p.length >= 3 ? this._fmtArea(polygonAreaPlanar(p)) : '—';
       case 'height':
         return p.length >= 2
-          ? formatLength(
-              Math.abs(verticalDelta(p[0], p[1], this._worldUp).vertical),
-              this._units,
-            )
+          ? this._fmtLen(Math.abs(verticalDelta(p[0], p[1], this._worldUp).vertical))
           : '—';
       case 'angle':
         return p.length >= 3 ? formatAngle(angleAtVertex(p[0], p[1], p[2])) : '—';
@@ -886,8 +1079,9 @@ export class MeasureController {
         if (p.length < 2) return '—';
         const pm = profileMetrics(p[0], p[1], this._worldUp);
         return formatProfileHeadline(
-          pm.length3d,
-          pm.verticalDrop,
+          // Lengths through the B2 unit factor; grade is dimensionless.
+          pm.length3d * this._unitToMetres,
+          pm.verticalDrop * this._unitToMetres,
           pm.gradePercent,
           this._units,
         );
@@ -895,19 +1089,26 @@ export class MeasureController {
       case 'box': {
         if (p.length < 2) return '—';
         const m = boxMetrics(boxFromCorners(p[0], p[1]));
-        return formatBoxHeadline(m.width, m.depth, m.height, m.volume, this._units);
+        return formatBoxHeadline(
+          // Axis lengths xf, volume xf^3 (B2).
+          m.width * this._unitToMetres,
+          m.depth * this._unitToMetres,
+          m.height * this._unitToMetres,
+          m.volume * this._unitToMetres * this._unitToMetres * this._unitToMetres,
+          this._units,
+        );
       }
       case 'volume': {
         if (p.length < MIN_POINTS.volume) return '—';
         // Polygon area always available; cut / fill / net come from the
         // sampler-stamped record. When the record is missing (no cloud,
         // pre-sampler session file) the headline still shows the area.
-        const area = formatArea(polygonAreaHorizontal(p, this._worldUp), this._units);
+        const area = this._fmtArea(polygonAreaHorizontal(p, this._worldUp));
         const v = m.volume;
         if (!v) return `${area} footprint · cut/fill —`;
-        const fill = formatVolume(Math.max(0, v.fill), this._units);
-        const cut = formatVolume(Math.max(0, v.cut), this._units);
-        const net = formatVolume(Math.abs(v.net), this._units);
+        const fill = this._fmtVol(Math.max(0, v.fill));
+        const cut = this._fmtVol(Math.max(0, v.cut));
+        const net = this._fmtVol(Math.abs(v.net));
         const netSign = v.net < 0 ? 'cut' : 'fill';
         return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
       }
@@ -948,18 +1149,18 @@ export class MeasureController {
         return `${VERB} the first point on the scan`;
       case 'polyline': {
         if (!d || d.points.length < 2) return `${VERB} points along the path`;
-        const total = formatLength(polylineLength(d.points).total, this._units);
+        const total = this._fmtLen(polylineLength(d.points).total);
         return `${total} · ${VERB} more, click the first vertex or press Enter to finish`;
       }
       case 'area': {
         if (!d || d.points.length < 3) return `${VERB} polygon vertices — three or more`;
-        const area = formatArea(polygonAreaPlanar(d.points), this._units);
+        const area = this._fmtArea(polygonAreaPlanar(d.points));
         return `${area} · ${VERB} more, click the first vertex or press Enter to close`;
       }
       case 'volume': {
         if (!d || d.points.length < 3)
           return `${VERB} the volume polygon — three or more vertices on the surface`;
-        const area = formatArea(polygonAreaHorizontal(d.points, this._worldUp), this._units);
+        const area = this._fmtArea(polygonAreaHorizontal(d.points, this._worldUp));
         return `${area} footprint · click the first vertex or press Enter to compute cut/fill`;
       }
       case 'height':
@@ -1010,7 +1211,7 @@ export class MeasureController {
       E.push({ a: pts[0], b: pts[1], style: 'solid' });
       L.push({
         anchor: midpoint(pts[0], pts[1]),
-        text: formatLength(distance(pts[0], pts[1]), this._units),
+        text: this._fmtLen(distance(pts[0], pts[1])),
         primary: true,
       });
       return;
@@ -1021,13 +1222,13 @@ export class MeasureController {
         E.push({ a: pts[i - 1], b: pts[i], style: 'solid' });
         L.push({
           anchor: midpoint(pts[i - 1], pts[i]),
-          text: formatLength(r.segments[i - 1], this._units),
+          text: this._fmtLen(r.segments[i - 1]),
           primary: false,
         });
       }
       L.push({
         anchor: pts[pts.length - 1],
-        text: formatLength(r.total, this._units),
+        text: this._fmtLen(r.total),
         primary: true,
       });
       return;
@@ -1037,8 +1238,8 @@ export class MeasureController {
         E.push({ a: pts[i], b: pts[(i + 1) % pts.length], style: 'solid' });
       }
       P.push({ points: pts });
-      const planar = formatArea(polygonAreaPlanar(pts), this._units);
-      const horiz = formatArea(polygonAreaHorizontal(pts, this._worldUp), this._units);
+      const planar = this._fmtArea(polygonAreaPlanar(pts));
+      const horiz = this._fmtArea(polygonAreaHorizontal(pts, this._worldUp));
       L.push({ anchor: centroid(pts), text: `${planar} · map ${horiz}`, primary: true });
       return;
     }
@@ -1050,12 +1251,12 @@ export class MeasureController {
       E.push({ a: elbow, b, style: 'solid' });
       L.push({
         anchor: midpoint(elbow, b),
-        text: formatLength(Math.abs(d.vertical), this._units),
+        text: this._fmtLen(Math.abs(d.vertical)),
         primary: true,
       });
       L.push({
         anchor: midpoint(a, elbow),
-        text: formatLength(d.horizontal, this._units),
+        text: this._fmtLen(d.horizontal),
         primary: false,
       });
       return;
@@ -1074,12 +1275,12 @@ export class MeasureController {
       });
       L.push({
         anchor: midpoint(elbow, b),
-        text: formatLength(Math.abs(s.rise), this._units),
+        text: this._fmtLen(Math.abs(s.rise)),
         primary: false,
       });
       L.push({
         anchor: midpoint(a, elbow),
-        text: formatLength(s.run, this._units),
+        text: this._fmtLen(s.run),
         primary: false,
       });
       return;
@@ -1109,8 +1310,9 @@ export class MeasureController {
       L.push({
         anchor: midpoint(a, b),
         text: formatProfileHeadline(
-          pm.length3d,
-          pm.verticalDrop,
+          // Lengths through the B2 unit factor; grade is dimensionless.
+          pm.length3d * this._unitToMetres,
+          pm.verticalDrop * this._unitToMetres,
           pm.gradePercent,
           this._units,
         ),
@@ -1118,12 +1320,12 @@ export class MeasureController {
       });
       L.push({
         anchor: midpoint(elbow, b),
-        text: formatLength(Math.abs(pm.verticalDrop), this._units),
+        text: this._fmtLen(Math.abs(pm.verticalDrop)),
         primary: false,
       });
       L.push({
         anchor: midpoint(a, elbow),
-        text: formatLength(pm.lengthHorizontal, this._units),
+        text: this._fmtLen(pm.lengthHorizontal),
         primary: false,
       });
     }
@@ -1159,10 +1361,11 @@ export class MeasureController {
       L.push({
         anchor: centre,
         text: formatBoxHeadline(
-          metrics.width,
-          metrics.depth,
-          metrics.height,
-          metrics.volume,
+          // Axis lengths xf, volume xf^3 (B2).
+          metrics.width * this._unitToMetres,
+          metrics.depth * this._unitToMetres,
+          metrics.height * this._unitToMetres,
+          metrics.volume * this._unitToMetres * this._unitToMetres * this._unitToMetres,
           this._units,
         ),
         primary: true,
@@ -1206,7 +1409,7 @@ export class MeasureController {
       E.push({ a: last, b: cur, style: 'preview' });
       L.push({
         anchor: midpoint(last, cur),
-        text: formatLength(distance(last, cur), this._units),
+        text: this._fmtLen(distance(last, cur)),
         primary: true,
       });
       return;
@@ -1215,7 +1418,7 @@ export class MeasureController {
       E.push({ a: last, b: cur, style: 'preview' });
       L.push({
         anchor: cur,
-        text: formatLength(polylineLength([...pts, cur]).total, this._units),
+        text: this._fmtLen(polylineLength([...pts, cur]).total),
         primary: true,
       });
       return;
@@ -1228,7 +1431,7 @@ export class MeasureController {
         P.push({ points: ring });
         L.push({
           anchor: centroid(ring),
-          text: formatArea(polygonAreaPlanar(ring), this._units),
+          text: this._fmtArea(polygonAreaPlanar(ring)),
           primary: true,
         });
       }
@@ -1247,7 +1450,7 @@ export class MeasureController {
         P.push({ points: ring });
         L.push({
           anchor: centroid(ring),
-          text: formatArea(polygonAreaHorizontal(ring, this._worldUp), this._units),
+          text: this._fmtArea(polygonAreaHorizontal(ring, this._worldUp)),
           primary: true,
         });
       }
@@ -1259,10 +1462,7 @@ export class MeasureController {
       E.push({ a: elbow, b: cur, style: 'preview' });
       L.push({
         anchor: midpoint(elbow, cur),
-        text: formatLength(
-          Math.abs(verticalDelta(pts[0], cur, this._worldUp).vertical),
-          this._units,
-        ),
+        text: this._fmtLen(Math.abs(verticalDelta(pts[0], cur, this._worldUp).vertical)),
         primary: true,
       });
       return;
@@ -1302,8 +1502,9 @@ export class MeasureController {
       L.push({
         anchor: midpoint(pts[0], cur),
         text: formatProfileHeadline(
-          pm.length3d,
-          pm.verticalDrop,
+          // Lengths through the B2 unit factor; grade is dimensionless.
+          pm.length3d * this._unitToMetres,
+          pm.verticalDrop * this._unitToMetres,
           pm.gradePercent,
           this._units,
         ),
@@ -1328,10 +1529,11 @@ export class MeasureController {
       L.push({
         anchor: centre,
         text: formatBoxHeadline(
-          metrics.width,
-          metrics.depth,
-          metrics.height,
-          metrics.volume,
+          // Axis lengths xf, volume xf^3 (B2).
+          metrics.width * this._unitToMetres,
+          metrics.depth * this._unitToMetres,
+          metrics.height * this._unitToMetres,
+          metrics.volume * this._unitToMetres * this._unitToMetres * this._unitToMetres,
           this._units,
         ),
         primary: true,

@@ -24,9 +24,13 @@
  *     `NaN` for min / max so the caller can render "—" rather than
  *     "0 m" (which would imply a real measured value of zero).
  *
- * All values are returned in metres / square metres / cubic metres —
- * the same internal units the geometry module uses. The UI layer
- * formats them with the active unit system (metric / imperial) via
+ * All values are returned in metres / square metres / cubic metres.
+ * Geometry math runs in RENDER (source) units — a foot-CRS scan keeps
+ * feet in render space — so `aggregate` takes the CRS's
+ * `unitToMetres` factor (B2, v0.4.5) and scales each contributed
+ * value by f^power(dimension): lengths ×f, areas ×f², volumes ×f³,
+ * heights ×f; angles and grades are dimensionless. The UI layer then
+ * formats with the active unit system (metric / imperial) via
  * `formatLength` / `formatArea` / `formatVolume`.
  */
 
@@ -124,6 +128,23 @@ const DIMENSION_UNIT: Readonly<Record<ChainDimension, string>> = {
 };
 
 /**
+ * The power of the render-unit → metre factor each dimension needs:
+ * 1 for lengths/heights, 2 for areas, 3 for volumes, 0 for the
+ * dimensionless angle/grade. Single table so a future dimension can't
+ * forget its unit behaviour (B2).
+ */
+const DIMENSION_UNIT_POWER: Readonly<Record<ChainDimension, number>> = {
+  length: 1,
+  area: 2,
+  'volume-fill': 3,
+  'volume-cut': 3,
+  'volume-net': 3,
+  height: 1,
+  angle: 0,
+  grade: 0,
+};
+
+/**
  * Compute a measurement's value FOR a specific dimension, or `null`
  * when the measurement doesn't contribute to that dimension.
  *
@@ -216,12 +237,22 @@ export function aggregate(
   operation: ChainOperation,
   dimension: ChainDimension,
   worldUp: Vec3 = [0, 0, 1],
+  unitToMetres = 1,
 ): ChainResult {
   const totalCount = measurements.length;
+  // B2 — geometry values arrive in render (source) units; convert into the
+  // dimension's canonical metre-based unit ONCE, here, so min/max/mean all
+  // operate on already-true values. Invalid factors fall back to 1 (the
+  // pre-B2 "assume metres" behaviour — never multiply by garbage).
+  const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
+  // `?? 0` guards a dimension string this build doesn't know (a forward-
+  // compat session / embed caller): power 0 means "no scaling", and the
+  // unknown dimension contributes nothing below — never a NaN aggregate.
+  const k = Math.pow(f, DIMENSION_UNIT_POWER[dimension] ?? 0);
   const values: number[] = [];
   for (const m of measurements) {
     const v = valueForDimension(m, dimension, worldUp);
-    if (v !== null && Number.isFinite(v)) values.push(v);
+    if (v !== null && Number.isFinite(v)) values.push(v * k);
   }
   const contributingCount = values.length;
   const unit = DIMENSION_UNIT[dimension];
@@ -294,7 +325,12 @@ export function supportedDimensions(
 ): ChainDimension[] {
   const seen = new Set<ChainDimension>();
   for (const m of measurements) {
-    for (const dim of KIND_DIMENSIONS[m.kind]) {
+    // A measurement kind this build doesn't know (an imported session from a
+    // newer version) has no table row — iterating `undefined` would throw in
+    // the panel's render path, so it simply contributes no dimensions.
+    const dims = KIND_DIMENSIONS[m.kind];
+    if (!dims) continue;
+    for (const dim of dims) {
       seen.add(dim);
     }
   }

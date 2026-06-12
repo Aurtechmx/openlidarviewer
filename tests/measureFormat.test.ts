@@ -84,3 +84,60 @@ describe('formatGrade', () => {
     expect(formatGrade(Infinity)).toBe('vertical');
   });
 });
+
+/**
+ * B2 (v0.4.5) — render-space formatting through the CRS unit factor.
+ * Truth fixture: a US-survey-foot CRS (EPSG:2225-style), where
+ * 1 render unit = 1200/3937 m exactly. Every expectation below is
+ * hand-computed:
+ *
+ *   10 sft  = 10 × 0.30480060960121924 m = 3.0480060960121924 m
+ *           = 10.00002 international ft  (sft/ft = 1.000002)
+ */
+import {
+  formatLengthRender,
+  formatAreaRender,
+  formatVolumeRender,
+} from '../src/render/measure/format';
+
+const US_SURVEY_FOOT = 1200 / 3937; // 0.30480060960121924 m
+
+describe('formatLengthRender (B2 foot-CRS fixture)', () => {
+  it('labels a 10 sft span correctly in both unit systems', () => {
+    // 3.0480060960121924 m → "3.05 m"; NOT the pre-B2 "10.00 m".
+    expect(formatLengthRender(10, US_SURVEY_FOOT, 'metric')).toBe('3.05 m');
+    // 10.00002 ft → "10.00 ft" — the span reads back as the feet it is.
+    expect(formatLengthRender(10, US_SURVEY_FOOT, 'imperial')).toBe('10.00 ft');
+  });
+
+  it('factor 1 is a byte-identical passthrough (metric/local scans)', () => {
+    expect(formatLengthRender(5, 1, 'metric')).toBe(formatLength(5, 'metric'));
+    expect(formatLengthRender(5, 1, 'imperial')).toBe(formatLength(5, 'imperial'));
+  });
+
+  it('invalid factors fall back to 1, never multiply by garbage', () => {
+    expect(formatLengthRender(10, Number.NaN, 'metric')).toBe('10.00 m');
+    expect(formatLengthRender(10, 0, 'metric')).toBe('10.00 m');
+    expect(formatLengthRender(10, -2, 'metric')).toBe('10.00 m');
+  });
+});
+
+describe('formatAreaRender (B2: areas scale by the factor squared)', () => {
+  it('1000 sft² = 92.90 m² = 1,000.0 ft²', () => {
+    // 1000 × (1200/3937)² = 92.90341161327482 m².
+    expect(formatAreaRender(1000, US_SURVEY_FOOT, 'metric')).toBe('92.90 m²');
+    // 92.903411… m² × 10.76391042 ft²/m² = 1000.004000004 ft².
+    expect(formatAreaRender(1000, US_SURVEY_FOOT, 'imperial')).toBe('1,000.0 ft²');
+  });
+});
+
+describe('formatVolumeRender (B2: volumes scale by the factor cubed)', () => {
+  // International foot here so the imperial round-trip is exact.
+  const INTL_FOOT = 0.3048;
+  it('1000 ft³ = 28.32 m³ = 37.04 yd³', () => {
+    // 1000 × 0.3048³ = 28.316846592 m³.
+    expect(formatVolumeRender(1000, INTL_FOOT, 'metric')).toBe('28.32 m³');
+    // Back through 35.31466672 ft³/m³ = 1000 ft³ = 37.037 yd³.
+    expect(formatVolumeRender(1000, INTL_FOOT, 'imperial')).toBe('37.04 yd³');
+  });
+});

@@ -34,17 +34,19 @@ import {
   type TerrainStatus,
   type ExportReadinessStatus,
 } from '../contour/terrainAssessment';
+import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
 
 /** Producing software name — single source of truth for every export stamp. */
 export const SOFTWARE_NAME = 'OpenLiDARViewer';
 
 /**
- * The standing honesty note stamped on every artifact. Deliberately phrased as
- * fitness-for-use, never an affirmative survey-grade claim.
+ * The standing honesty note stamped on every artifact. Plain language about
+ * what the output is suitable for — never an affirmative survey-grade claim.
+ * (v0.4.5 wording: the previous "Fitness-for-use" QA jargon confused users.)
  */
 export const NOT_SURVEY_GRADE_NOTE =
-  'Fitness-for-use; not survey-grade unless validated against control.';
+  'Suitability: not survey-grade unless validated against ground-truth control.';
 
 /** Validated vertical-accuracy figures, present only when the run measured them. */
 export interface ExportProvenanceAccuracy {
@@ -230,10 +232,9 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Contour interval', p.contourIntervalM != null ? `${p.contourIntervalM} m` : 'none'),
     kv('Contour style', p.contourStyleLabel),
     kv('Surface quality', p.surfaceQuality),
-    kv(
-      'Export readiness',
-      p.exportReason ? `${p.exportReadiness} — ${p.exportReason}` : p.exportReadiness,
-    ),
+    // The "Tier — reason" formatting is the readiness engine's, so this stamp
+    // and the Terrain Intelligence Report row can never word the verdict apart.
+    kv('Export readiness', readinessLine(p.exportReadiness, p.exportReason)),
     kv('Vertical RMSEz', p.accuracy ? fmtM(p.accuracy.rmseZM) : 'unknown'),
     kv('NVA (95%)', p.accuracy ? fmtM(p.accuracy.nvaM) : 'unknown'),
     kv('VVA (95th pct)', p.accuracy ? fmtM(p.accuracy.vvaM) : 'unknown'),

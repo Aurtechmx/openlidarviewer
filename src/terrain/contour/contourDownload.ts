@@ -18,7 +18,7 @@ import {
 import type { ContourLabel } from './labelPlacement';
 import { geojsonString } from './geojsonContours';
 import { svgContours } from './svgContours';
-import { dxfContours } from './dxfContours';
+import { dxfContours, type DxfLinearUnit } from './dxfContours';
 import type { ExportProvenance } from '../export/exportProvenance';
 
 /** Supported pure-data export formats. */
@@ -65,6 +65,12 @@ export function serializeContours(
      * (v0.4.3 bug).
      */
     worldOrigin?: ContourWorldOrigin | null;
+    /**
+     * Resolved linear unit of the horizontal CRS. Drives the DXF `$INSUNITS`
+     * header and the SVG scale note. Default 'metre' (the stack's standing
+     * assumption); pass the resolved unit for feet-based CRSs.
+     */
+    linearUnit?: DxfLinearUnit;
   } = {},
 ): ContourFile {
   const basename = opts.basename ?? 'contours';
@@ -94,16 +100,32 @@ export function serializeContours(
     };
   }
 
+  // Unit stamp for the human-facing formats. 'metre' is the standing default;
+  // the abbreviation feeds the SVG's visible scale note.
+  const linearUnit = opts.linearUnit ?? 'metre';
+  const unitLabel =
+    linearUnit === 'foot' ? 'ft' : linearUnit === 'us-survey-foot' ? 'ftUS' : linearUnit === 'unknown' ? 'unit' : 'm';
+
   let content: string;
   switch (format) {
     case 'geojson':
       content = geojsonString(exportModel, true, opts.provenance);
       break;
     case 'svg':
-      content = svgContours(exportModel, { labels: exportLabels, provenance: opts.provenance });
+      content = svgContours(exportModel, {
+        labels: exportLabels,
+        provenance: opts.provenance,
+        unitLabel,
+      });
       break;
     case 'dxf':
-      content = dxfContours(exportModel, opts.provenance);
+      // Labels ride into the DXF too (their own TEXT layer), shifted into the
+      // same frame as the geometry above.
+      content = dxfContours(exportModel, {
+        provenance: opts.provenance,
+        labels: exportLabels,
+        linearUnit,
+      });
       break;
   }
   return { filename: `${basename}.${EXT[format]}`, mime: MIME[format], content };

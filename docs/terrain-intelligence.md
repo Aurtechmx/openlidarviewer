@@ -94,6 +94,14 @@ composed by the `analyseContours` orchestrator
   with an adjustable sun azimuth/altitude — using the ESRI illumination
   model (`hillshade.ts`). Empty cells stay nodata; nothing is synthesised
   where the DTM has no ground.
+- **Trust overlays** (`surface/coverageHeatmap.ts`,
+  `surface/confidenceOverlay.ts`). Two projections of the per-cell DTM
+  confidence onto the Analyse panel's 2D preview tile and the 3D point cloud
+  ("Coverage" / "Confidence" colour modes): the same strong / moderate / weak
+  buckets (`gradeForConfidence`) rendered as the conventional traffic-light
+  ramp, and as exact Cividis stops for colour-blind-safe reading. Empty cells
+  stay transparent (2D) or neutral grey (3D) — a hole is never painted as a
+  confidence.
 - **Georeferenced DEM export** (`export/`). The DTM, DSM, and CHM are
   written as an **Esri ASCII Grid** (`demAsciiGrid.ts`) and a Float32
   **GeoTIFF** (`demGeoTiff.ts`), bundled by `demPackage.ts` with a `.prj`
@@ -186,7 +194,7 @@ Surface Quality has **four statuses**, never collapsed:
 | Status | Meaning |
 |---|---|
 | **Good** | Surface is internally valid; suitable for terrain workflows. |
-| **Preview** | Suitable for inspection and measurement, not final deliverables. |
+| **Preview** | Suitable for inspection and measurement; additional validation recommended before deliverable use. |
 | **Limited** | Insufficient data quality for reliable terrain products. |
 | **Blocked** | The quality gate blocked it, or there is no usable DTM at all. |
 
