@@ -131,6 +131,16 @@ function segDist(
   return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
 }
 
+/**
+ * Douglas-Peucker on an OPEN chain (endpoints kept) — exported for the wall
+ * graph's edge straightener (wallGraph.ts), which simplifies skeleton PATHS
+ * (node → node, open) rather than closed rings. Same machinery as
+ * {@link simplifyRing}, minus the ring anchoring.
+ */
+export function simplifyChain(pts: Ring, epsilon: number): Array<readonly [number, number]> {
+  return dpChain(pts, epsilon);
+}
+
 /** Douglas-Peucker on an OPEN chain (endpoints kept), iterative stack. */
 function dpChain(pts: Ring, epsilon: number): Array<readonly [number, number]> {
   const n = pts.length;

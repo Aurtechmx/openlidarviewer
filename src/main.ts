@@ -1924,6 +1924,29 @@ let lastSpaceExport: SpaceExportContext | null = null;
 // fresh gather fails (e.g. mid-stream).
 const FLOORPLAN_GATHER_POINTS = 300_000;
 
+/**
+ * Floor-plan extraction DEFAULTS plumbed into both export paths (PDF report +
+ * standalone SVG sheet) so the two NEVER diverge. These are the v0.4.6 knobs
+ * the pipeline exposes — the adaptive wall-band toggle and the axis-snap
+ * policy — pinned here at sane defaults:
+ *   - `adaptiveBand: true` — re-centre the wall slice on the detected
+ *     wall-evidence z-peak so countertop / industrial scans whose walls sit
+ *     outside the standard 0.7–1.8 m band still slice correctly; the fixed
+ *     band is kept when no clear peak is found (so normal rooms are unchanged).
+ *   - `snapMode` left at the module default ('auto' — snap only on a genuinely
+ *     bimodal ~90° direction histogram).
+ * v0.4.7: the ObjectPanel now exposes a compact "Floor plan options" control
+ * (Walls Auto/Square/As-is → snap auto/strong/off, plus an Adaptive-height
+ * toggle). Both callers spread this defaults object FIRST and then the panel's
+ * live `objectPanel.floorPlanOptions()` selection, so user choices win while
+ * the defaults still seed an export taken before any interaction. Because both
+ * paths spread the same panel object, the report PDF's embedded plan and the
+ * standalone sheet stay extracted with identical settings by construction.
+ */
+const FLOORPLAN_OPTIONS = {
+  adaptiveBand: true,
+} as const;
+
 /** Densest available positions for floor-plan extraction (fallback: ctx). */
 function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
   try {
@@ -1974,6 +1997,10 @@ const objectPanel = new ObjectPanel({
         upAxis: ctx.upAxis,
         unitToMetres: ctx.unitToMetres,
         maxSamples: FLOORPLAN_GATHER_POINTS,
+        ...FLOORPLAN_OPTIONS,
+        // User-tunable wall-snapping + adaptive-band selections from the panel
+        // (defaults mirror FLOORPLAN_OPTIONS); spread last so they win.
+        ...objectPanel.floorPlanOptions(),
       });
     }
     const bytes = await buildSpaceReportPdf({
@@ -1985,6 +2012,9 @@ const objectPanel = new ObjectPanel({
       generatedAt: new Date(),
       unitToMetres: ctx.unitToMetres,
       floorPlan,
+      // The embedded plan's dimension line follows the live measurement unit
+      // system, exactly like the standalone SVG sheet below.
+      unitSystem: viewer.measure.unitSystem,
     });
     downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf');
   },
@@ -2002,6 +2032,10 @@ const objectPanel = new ObjectPanel({
       upAxis: ctx.upAxis,
       unitToMetres: ctx.unitToMetres,
       maxSamples: FLOORPLAN_GATHER_POINTS,
+      ...FLOORPLAN_OPTIONS,
+      // User-tunable wall-snapping + adaptive-band selections from the panel
+      // (defaults mirror FLOORPLAN_OPTIONS); spread last so they win.
+      ...objectPanel.floorPlanOptions(),
     });
     const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem });
     downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');

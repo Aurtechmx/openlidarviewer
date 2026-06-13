@@ -1,6 +1,6 @@
 {
   "name": "openlidarviewer",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
   "license": "MIT",
   "type": "module",

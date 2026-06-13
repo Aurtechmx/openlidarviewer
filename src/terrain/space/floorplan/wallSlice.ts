@@ -51,7 +51,19 @@ export interface WallSliceParams {
   readonly bandLowM?: number;
   /** Band top, metres above the detected floor. Default 1.8. */
   readonly bandHighM?: number;
+  /**
+   * Adapt the wall band to the densest vertical wall-return zone above the
+   * floor instead of using the fixed {@link bandLowM}–{@link bandHighM} band.
+   * Default true. When a clear wall-evidence peak is found the band is
+   * RE-CENTRED on it (countertop / industrial scans whose walls sit outside
+   * 0.7–1.8 m then slice correctly); when no clear peak exists the fixed
+   * default band is used unchanged. Set false to pin the fixed band.
+   */
+  readonly adaptiveBand?: boolean;
 }
+
+/** How the wall band's vertical extent was chosen. */
+export type BandBasis = 'fixed' | 'adaptive';
 
 /** How the wall band's floor anchor was determined. */
 export type FloorBasis = 'histogram' | 'percentile' | 'none';
@@ -60,6 +72,13 @@ export interface WallSlice {
   /** Wall-band point coordinates in the floor plane (h1 / h2), metres. */
   readonly xs: Float64Array;
   readonly ys: Float64Array;
+  /**
+   * Per-band-point ELEVATION (vertical axis, metres, slice frame), parallel to
+   * {@link xs}/{@link ys}. Kept so a downstream pass can build a per-cell
+   * height profile (z-spread) for the furniture-vs-structure classifier — a
+   * tall thin column spans the whole band; a low blob occupies only its bottom.
+   */
+  readonly zs: Float64Array;
   readonly count: number;
   /** Floor-band points (returns within ±0.15 m of the floor level), metres. */
   readonly floorXs: Float64Array;
@@ -77,6 +96,12 @@ export interface WallSlice {
   /** Band offsets actually used, metres above the anchor (0/0 when unbanded). */
   readonly bandLowUsedM: number;
   readonly bandHighUsedM: number;
+  /**
+   * Whether the band offsets were the FIXED default (0.7–1.8 m or the widened
+   * retry) or ADAPTIVE (re-centred on the detected wall-evidence z-peak).
+   * 'fixed' when no band was cut at all (full-height fallback).
+   */
+  readonly bandBasis: BandBasis;
   /**
    * Detected floor elevation (metres, slice frame) — null when no HISTOGRAM
    * floor plane was found (a percentile anchor does not claim a floor plane).
@@ -117,6 +142,138 @@ const V_CLAMP_HI = 0.995;
 /** Widened-band retry, metres above the anchor. */
 const WIDE_BAND_LOW_M = 0.4;
 const WIDE_BAND_HIGH_M = 2.4;
+
+// ── Adaptive wall-band detection ─────────────────────────────────────────────
+/** Bin width (m) of the above-floor wall-evidence histogram. */
+const ADAPT_BIN_M = 0.1;
+/** Ignore returns below this height above the floor (floor + low clutter). */
+const ADAPT_FLOOR_CLEARANCE_M = 0.15;
+/** Ignore returns above this height (ceilings on tall industrial scans). */
+const ADAPT_CEILING_CLAMP_M = 6.0;
+/**
+ * A wall-evidence zone must hold a SUSTAINED density across its whole window:
+ * its LEAST-dense bin must still carry at least this fraction of the mean
+ * above-clearance bin mass. Walls return at every elevation (every bin in the
+ * window is populated), so a wall window clears this; a floor/ceiling plane or
+ * a furniture top is a single dense SPIKE with sparse neighbours, so its
+ * window's minimum bin is near-empty and it is rejected. (Scoring by the
+ * window MINIMUM, not its sum, is what separates a broad wall slab from a
+ * narrow horizontal-plane spike — see {@link detectWallBand}.)
+ */
+const ADAPT_SUSTAIN_FRAC = 0.5;
+/** Vertical window (m) the wall evidence is measured over (a slab is ~0.8 m). */
+const ADAPT_PEAK_WINDOW_M = 0.8;
+/**
+ * Minimum re-centre distance (m): if the detected wall zone's centre sits
+ * within this of the fixed band's centre, the fixed band is kept (no point
+ * nudging a slice that is already on the walls — keeps standard rooms on the
+ * well-tested 0.7–1.8 m band). Only a genuinely off-centre wall zone adapts.
+ */
+const ADAPT_RECENTRE_MIN_M = 0.35;
+
+/**
+ * Detect the densest vertical WALL-EVIDENCE zone above the floor and return a
+ * band re-centred on it; null when no clear sustained peak exists (the caller
+ * then keeps the fixed default band).
+ *
+ * WHY a sustained window, not a bare max bin: architectural walls return at
+ * EVERY elevation of the room, so a wall zone shows up as a broad plateau of
+ * vertical density; furniture (a countertop edge, a cabinet top) or a
+ * floor/ceiling plane shows up as a narrow SPIKE at one height. Scoring the
+ * densest contiguous {@link ADAPT_PEAK_WINDOW_M}-tall window by its WEAKEST
+ * bin (so a one-bin spike never wins) and requiring that sustained floor to
+ * clear {@link ADAPT_SUSTAIN_FRAC} of the mean bin mass keeps the detector
+ * locked onto walls and off horizontal planes / low clutter — and lets it
+ * FIND walls at non-standard heights (counters at 0.3–2.5 m, racking,
+ * mezzanines) the fixed 0.7–1.8 m band would slice through or miss entirely.
+ *
+ * `defaultCentreM` (the fixed band's centre above the anchor) is the
+ * TIE-BREAK target: when the wall evidence is broad and uniform (a normal
+ * full-height room), many windows tie on the weakest-bin score, so the
+ * detector keeps the one nearest the default centre — and when that nearest
+ * window IS essentially the default band ({@link ADAPT_RECENTRE_MIN_M} away or
+ * less), it returns null so the fixed band stands unchanged. The adaptive band
+ * therefore only MOVES the slice when there is a genuinely off-centre wall
+ * zone, never when the standard band already sits on the walls.
+ *
+ * Returns offsets ABOVE THE ANCHOR (metres), centred on the chosen window with
+ * the requested band thickness, clamped so the band never dips below the floor
+ * clearance. Exported for unit tests.
+ */
+export function detectWallBand(
+  V: ReadonlyArray<number>,
+  anchor: number,
+  bandThicknessM: number,
+  defaultCentreM: number,
+): { lowM: number; highM: number } | null {
+  const m = V.length;
+  if (m < MIN_BAND_POINTS || !(bandThicknessM > 0)) return null;
+  // Histogram of heights ABOVE the floor anchor, within the clearance/ceiling
+  // window so the floor and far ceiling cannot dominate.
+  const lo = ADAPT_FLOOR_CLEARANCE_M;
+  const hi = ADAPT_CEILING_CLAMP_M;
+  const nBins = Math.max(1, Math.ceil((hi - lo) / ADAPT_BIN_M));
+  const hist = new Float64Array(nBins);
+  let total = 0;
+  for (let i = 0; i < m; i++) {
+    const h = V[i] - anchor;
+    if (h < lo || h >= hi) continue;
+    let bi = Math.floor((h - lo) / ADAPT_BIN_M);
+    if (bi >= nBins) bi = nBins - 1;
+    hist[bi]++;
+    total++;
+  }
+  if (total < MIN_BAND_POINTS) return null;
+  // Highest occupied bin (so the "mean bin mass" reflects the real vertical
+  // extent of returns, not the full 6 m clearance window most of which is air).
+  let lastOccupied = -1;
+  for (let i = nBins - 1; i >= 0; i--) {
+    if (hist[i] > 0) { lastOccupied = i; break; }
+  }
+  if (lastOccupied < 0) return null;
+  const occupiedBins = lastOccupied + 1;
+  const meanBinMass = total / occupiedBins;
+  // Slide a window of ADAPT_PEAK_WINDOW_M; score each by its WEAKEST bin (the
+  // sustained-density floor of the window), so a broad wall slab beats a
+  // narrow horizontal-plane / furniture spike whose neighbours are near-empty.
+  const winBins = Math.max(1, Math.round(ADAPT_PEAK_WINDOW_M / ADAPT_BIN_M));
+  if (winBins > occupiedBins) return null;
+  const winSpanM = winBins * ADAPT_BIN_M;
+  let bestStart = -1;
+  let bestMin = -1;
+  let bestCentreDist = Infinity;
+  for (let s = 0; s + winBins <= occupiedBins; s++) {
+    let windowMin = Infinity;
+    for (let k = 0; k < winBins; k++) if (hist[s + k] < windowMin) windowMin = hist[s + k];
+    const centreM = lo + s * ADAPT_BIN_M + winSpanM / 2;
+    const centreDist = Math.abs(centreM - defaultCentreM);
+    // Maximise the sustained floor; among ties prefer the window nearest the
+    // default band centre (so uniform full-height walls keep the standard band).
+    if (windowMin > bestMin || (windowMin === bestMin && centreDist < bestCentreDist)) {
+      bestMin = windowMin;
+      bestStart = s;
+      bestCentreDist = centreDist;
+    }
+  }
+  // The sustained floor must clear ADAPT_SUSTAIN_FRAC of the mean bin mass —
+  // otherwise there is no broad wall zone and the fixed band stands.
+  if (bestStart < 0 || bestMin < ADAPT_SUSTAIN_FRAC * meanBinMass) return null;
+  // Centre of the densest sustained window, in metres above the anchor.
+  const winLoM = lo + bestStart * ADAPT_BIN_M;
+  const centreM = winLoM + winSpanM / 2;
+  // If the detected wall zone is essentially where the default band already
+  // sits, do not re-centre — let the fixed band stand (keeps normal rooms on
+  // the well-tested 0.7–1.8 m slice).
+  if (Math.abs(centreM - defaultCentreM) <= ADAPT_RECENTRE_MIN_M) return null;
+  let lowM = centreM - bandThicknessM / 2;
+  let highM = centreM + bandThicknessM / 2;
+  // Never dip below the floor clearance — a band must clear the floor itself.
+  if (lowM < lo) {
+    highM += lo - lowM;
+    lowM = lo;
+  }
+  return { lowM, highM };
+}
 /** Coarse footprint grid resolution for the dense-footprint clip. */
 const FOOTPRINT_BINS = 96;
 /** A footprint cell needs this many points to join a component. */
@@ -260,10 +417,10 @@ export function wallSlice(
   const n = Math.floor(positions.length / 3);
 
   const empty: WallSlice = {
-    xs: EMPTY, ys: EMPTY, count: 0,
+    xs: EMPTY, ys: EMPTY, zs: EMPTY, count: 0,
     floorXs: EMPTY, floorYs: EMPTY, floorCount: 0,
     usedWallBand: false, floorBasis: 'none',
-    bandLowUsedM: 0, bandHighUsedM: 0,
+    bandLowUsedM: 0, bandHighUsedM: 0, bandBasis: 'fixed',
     floorLevelM: null,
     bbox: [0, 0, 0, 0], sampledCount: 0, clippedCount: 0, clipBbox: null,
   };
@@ -350,18 +507,37 @@ export function wallSlice(
     return k;
   };
 
-  // Standard band first; one widened retry; then the full-height fallback.
+  // Band selection. When adaptive (default), first try a band RE-CENTRED on
+  // the densest vertical wall-evidence zone above the floor — this is what
+  // lets countertop / industrial scans, whose walls sit outside 0.7–1.8 m,
+  // slice correctly. If no clear wall-evidence peak exists, or its band is too
+  // sparse, fall back to the fixed default band, then the widened retry, then
+  // the full-height fallback. The fixed thickness for the adaptive band is the
+  // configured default span (bandHigh − bandLow) so the caller still controls
+  // how thick a slice it wants.
+  const adaptiveOn = params.adaptiveBand ?? true;
   let usedWallBand = false;
   let floorBasis: FloorBasis = 'none';
+  let bandBasis: BandBasis = 'fixed';
   let bandLowUsed = 0, bandHighUsed = 0;
   let lo = -Infinity, hi = Infinity;
   if (Number.isFinite(anchor)) {
-    for (const [bl, bh] of [[bandLow, bandHigh], [WIDE_BAND_LOW_M, WIDE_BAND_HIGH_M]] as const) {
+    interface Candidate { bl: number; bh: number; basis: BandBasis }
+    const candidates: Candidate[] = [];
+    if (adaptiveOn) {
+      const defaultCentreM = (bandLow + bandHigh) / 2;
+      const adapt = detectWallBand(V, anchor, bandHigh - bandLow, defaultCentreM);
+      if (adapt) candidates.push({ bl: adapt.lowM, bh: adapt.highM, basis: 'adaptive' });
+    }
+    candidates.push({ bl: bandLow, bh: bandHigh, basis: 'fixed' });
+    candidates.push({ bl: WIDE_BAND_LOW_M, bh: WIDE_BAND_HIGH_M, basis: 'fixed' });
+    for (const { bl, bh, basis } of candidates) {
       if (countInBand(anchor + bl, anchor + bh) >= MIN_BAND_POINTS) {
         lo = anchor + bl;
         hi = anchor + bh;
         usedWallBand = true;
         floorBasis = anchorBasis;
+        bandBasis = basis;
         bandLowUsed = bl;
         bandHighUsed = bh;
         break;
@@ -369,13 +545,13 @@ export function wallSlice(
     }
   }
 
-  const xs: number[] = [], ys: number[] = [];
+  const xs: number[] = [], ys: number[] = [], zs: number[] = [];
   const fxs: number[] = [], fys: number[] = [];
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (let i = 0; i < m; i++) {
     const vv = V[i];
     if (vv >= lo && vv <= hi) {
-      xs.push(H1[i]); ys.push(H2[i]);
+      xs.push(H1[i]); ys.push(H2[i]); zs.push(vv);
       if (H1[i] < minX) minX = H1[i];
       if (H1[i] > maxX) maxX = H1[i];
       if (H2[i] < minY) minY = H2[i];
@@ -392,6 +568,7 @@ export function wallSlice(
   return {
     xs: Float64Array.from(xs),
     ys: Float64Array.from(ys),
+    zs: Float64Array.from(zs),
     count: xs.length,
     floorXs: Float64Array.from(fxs),
     floorYs: Float64Array.from(fys),
@@ -400,6 +577,7 @@ export function wallSlice(
     floorBasis,
     bandLowUsedM: bandLowUsed,
     bandHighUsedM: bandHighUsed,
+    bandBasis,
     floorLevelM,
     bbox: [minX, minY, maxX, maxY],
     sampledCount: m,

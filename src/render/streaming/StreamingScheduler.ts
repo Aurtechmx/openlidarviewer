@@ -634,9 +634,14 @@ export class StreamingScheduler {
     const store = this._cloud.octree.store;
 
     // A node queued last tick is reconsidered fresh — reset it to unloaded.
-    // (Cheap pass; runs every tick regardless of fast-path.)
-    for (const node of this._cloud.octree.nodes()) {
-      if (node.state === 'queued') store.setState(node, 'unloaded');
+    // Runs every tick regardless of fast-path, so it walks the maintained
+    // queued SET (a handful of nodes), not the whole 28 k-node hierarchy via
+    // `nodes()` — which allocated a throwaway 28 k-element array every tick
+    // and re-scanned every node to find the few `queued` ones. Set deletion
+    // during `for...of` is spec-safe (`setState`→`unloaded` removes from the
+    // queued set, which is the set being iterated).
+    for (const node of store.queuedNodes()) {
+      store.setState(node, 'unloaded');
     }
 
     // stable-camera fast path. If the scheduling
@@ -671,7 +676,9 @@ export class StreamingScheduler {
       const planes = frustumPlanesFromViewProjection(view.viewProjection);
       // Score every visible node.
       const freshScored: { node: StreamingNode; candidate: ScoredCandidate }[] = [];
-      for (const node of this._cloud.octree.nodes()) {
+      // Walk the store's zero-allocation node iterator rather than `nodes()`,
+      // which materialises a 28 k-element array on every rescore.
+      for (const node of store.iterate()) {
         const box = this._localBounds.get(node.record.id);
         let score = 0;
         if (box && boxInFrustum(box, planes)) {

@@ -7,8 +7,10 @@
  * as genuine gaps, while UNKNOWN gaps — facing wall ends without square jamb
  * evidence — are drawn as light dashed lines), a light scanned-floor
  * interior fill underneath, door-leaf swing arcs on classified doorways,
- * approximate region-area labels in the floor-fill regions (scanned-floor
- * extents, not wall-graph rooms — the footer says so), a yellow-tinted poché
+ * "Room N · area" labels at each segmented room's pole of inaccessibility
+ * plus a footer room schedule (roomDetect.ts; when NO rooms were segmented,
+ * the old approximate region-area labels of the floor-fill regions render
+ * instead — scanned-floor extents, and the footer says so), a yellow-tinted poché
  * for wall rings mostly interpolated by gap-closing (per-ring observed
  * fraction below OBSERVED_FRAC_MIN), a scale bar, overall W × D dimensions,
  * a bottom-right title block (title / dims / area / scale / date), the
@@ -74,6 +76,30 @@ export const MIN_ROOM_LABEL_M2 = 3;
  * never drawn as walls either way.
  */
 export const SHOW_CONTENTS_HINTS = true;
+
+/**
+ * Reconcile the gross floor-region ring areas to the net scanned floor area.
+ *
+ * The region rings are vectorised from the CLOSED, simplified floor mask (holes
+ * healed, boundary rounded outward), so their summed polygon area is a GROSS
+ * extent that can exceed `floorAreaM2` (measured on the OPEN presence mask —
+ * net scanned cells). A region breakdown that sums to MORE than the stated
+ * floor area is incoherent, so we return a single multiplicative factor (≤ 1)
+ * that scales every region down proportionally to make the breakdown sum equal
+ * the floor area. Returns 1 when there is nothing to reconcile (no floor area,
+ * no regions, or the raw sum already fits within the floor area) — the factor
+ * never scales a region UP.
+ */
+export function regionAreaReconcileScale(
+  rawRegionAreasM2: readonly number[],
+  floorAreaM2: number | null,
+): number {
+  if (floorAreaM2 == null || floorAreaM2 <= 0 || rawRegionAreasM2.length === 0) return 1;
+  let sum = 0;
+  for (const a of rawRegionAreasM2) sum += a;
+  if (sum <= floorAreaM2 || sum <= 0) return 1;
+  return floorAreaM2 / sum;
+}
 
 /** XML-escape a string for safe insertion into SVG text / attributes. */
 export function escapeXml(s: string): string {
@@ -238,10 +264,30 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
   }
 
   // ── Approximate floor-region areas (the floor-fill regions the extractor
-  //    kept — scanned-floor extents, NOT wall-graph rooms; said so below). ──
-  const regionAreasM2 = model.floorRings
-    .map((r) => Math.abs(ringSignedArea(r)))
-    .filter((a) => a > 0.01);
+  //    kept — scanned-floor extents, NOT wall-graph rooms; said so below).
+  //    Only labelled when NO segmented rooms exist — once roomDetect.ts has
+  //    real wall-bounded rooms, those carry the labels and the schedule. ──
+  //
+  //    Coherence guard (v0.4.6): the region rings are vectorised from the
+  //    CLOSED, simplified floor mask — closing heals furniture/occlusion holes
+  //    and simplification rounds the boundary OUTWARD, so the rings' polygon
+  //    area is a GROSS extent that can (and did: 106.6 m² vs a 94.4 m² floor)
+  //    exceed the headline `floorAreaM2`, which is measured on the OPEN
+  //    presence mask (net scanned cells). A region sum larger than the stated
+  //    floor area is incoherent on an honesty-first sheet. When the raw region
+  //    sum overshoots the net floor area we scale every region proportionally
+  //    so the breakdown sums to the floor area exactly — the relative extents
+  //    (which region is bigger) stay honest, and no figure ever exceeds the
+  //    headline. Never scales UP (a smaller-than-floor sum is left as-is).
+  const rawRegionAreasM2 =
+    model.rooms.length > 0 || model.roomSegmentation === 'open-space'
+      ? []
+      : model.floorRings.map((r) => Math.abs(ringSignedArea(r))).filter((a) => a > 0.01);
+  // One scale factor (≤ 1) reconciling the gross region rings to the net floor
+  // area — applied to BOTH the footer sum and the in-plan per-region labels so
+  // the sheet never shows two different areas for the same region.
+  const regionAreaScale = regionAreaReconcileScale(rawRegionAreasM2, model.floorAreaM2);
+  const regionAreasM2 = rawRegionAreasM2.map((a) => a * regionAreaScale);
 
   // The standing experimental note leads the footer — the sheet must carry the
   // same caveat the panel button shows.
@@ -259,6 +305,21 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
       `Approx. region areas (scanned-floor extents, not wall-measured rooms): ${regionAreasM2
         .map((a) => areaShort(a, unitSystem))
         .join(', ')}.`,
+    );
+  }
+  // Room schedule (rooms from the wall-graph flood fill — areas measured on
+  // the region mask, doors kept distinct, unknown gaps never closed). Printed
+  // ONLY for the 'rooms' outcome — the open-space / unsegmented cases print an
+  // honest single line instead of a fabricated numbered schedule.
+  if (model.rooms.length > 0) {
+    footerReasons.push(
+      `Room schedule (flood-fill of the wall graph, approx.): ${model.rooms
+        .map((r, i) => `Room ${i + 1} ${areaShort(r.areaM2, unitSystem)}`)
+        .join(' · ')}.`,
+    );
+  } else if (model.roomSegmentation === 'open-space') {
+    footerReasons.push(
+      `Single open space (no interior partitions reliably segmented): ~${areaShort(model.openSpaceAreaM2, unitSystem)}.`,
     );
   }
   if (weakRings.length > 0) {
@@ -301,8 +362,12 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
   // ── Title ──
   const title = escapeXml((opts.title ?? 'Floor plan preview').trim() || 'Floor plan preview');
   parts.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="${INK}">${title}</text>`);
+  // Claim-accurate subtitle: "wall-graph reconstruction" only when the walls
+  // really were re-extruded from the centerline graph; still a preview.
   parts.push(
-    `<text x="${pad}" y="46" font-size="11" fill="${DIM}">Floor Plan Preview — approximate wall-trace sketch (top-down)</text>`,
+    `<text x="${pad}" y="46" font-size="11" fill="${DIM}">Floor Plan Preview — ${
+      model.fromWallGraph ? 'wall-graph reconstruction' : 'approximate wall-trace sketch'
+    } (top-down)</text>`,
   );
 
   if (model.wallRings.length === 0) {
@@ -420,14 +485,67 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
     parts.push(
       `<text x="${depthLabelX}" y="${depthLabelY}" font-size="10" text-anchor="middle" fill="${INK}" transform="rotate(-90 ${depthLabelX} ${depthLabelY})">${escapeXml(lengthLabel(model.depthM, unitSystem))}</text></g>`,
     );
+    // ── Room labels: "Room N · 12.3 m²" at each segmented room's pole of
+    //    inaccessibility (roomDetect.ts guarantees the anchor is inside the
+    //    region, so no centroid check is needed). Drawn only when the text
+    //    fits the room's extent; the footer schedule always carries the full
+    //    list, so a too-small room loses its in-plan label, not its claim. ──
+    if (model.rooms.length > 0) {
+      const labels: string[] = [];
+      model.rooms.forEach((room, i) => {
+        const txt = `Room ${i + 1} · ${areaShort(room.areaM2, unitSystem)}`;
+        const wPx = txt.length * 5.6 + 6;
+        let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
+        for (const [x, y] of room.ring) {
+          if (x < rMinX) rMinX = x;
+          if (x > rMaxX) rMaxX = x;
+          if (y < rMinY) rMinY = y;
+          if (y > rMaxY) rMaxY = y;
+        }
+        if ((rMaxX - rMinX) * scale < wPx || (rMaxY - rMinY) * scale < 14) return;
+        labels.push(
+          `<text x="${px(room.label[0]).toFixed(1)}" y="${(py(room.label[1]) + 3.5).toFixed(1)}" text-anchor="middle">${escapeXml(txt)}</text>`,
+        );
+      });
+      if (labels.length > 0) {
+        parts.push(
+          `<g class="room-labels" font-size="10" font-weight="bold" fill="#2c3640">${labels.join('')}</g>`,
+        );
+      }
+    }
     // ── Approximate region area labels, centred in floor-fill regions large
     //    enough to carry them (≥ MIN_ROOM_LABEL_M2 and the text fits inside
     //    the region's extent with its centroid inside the polygon). These are
-    //    scanned-floor regions, not wall-graph rooms — the footer says so. ──
-    {
+    //    scanned-floor regions, not wall-graph rooms — the footer says so.
+    //    Skipped when real rooms exist (their labels supersede these). ──
+    // Open-space label: ONE honest "Open space · ~N m²" at the largest
+    // floor-fill region's interior point, in place of the scattered region
+    // areas — the floor is essentially one connected space, not many rooms.
+    if (model.rooms.length === 0 && model.roomSegmentation === 'open-space') {
+      let big: Ring | null = null;
+      let bigA = 0;
+      for (const ring of model.floorRings) {
+        const a = ringSignedArea(ring);
+        if (a > bigA) { bigA = a; big = ring; }
+      }
+      if (big) {
+        const c = ringCentroid(big);
+        const anchor = pointInRing(c, big) ? c : big[0];
+        const txt = `Open space · ~${areaShort(model.openSpaceAreaM2, unitSystem)}`;
+        parts.push(
+          `<g class="room-labels open-space" font-size="11" font-weight="bold" fill="#2c3640"><text x="${px(anchor[0]).toFixed(1)}" y="${(py(anchor[1]) + 4).toFixed(1)}" text-anchor="middle">${escapeXml(txt)}</text></g>`,
+        );
+      }
+    }
+    // Approximate region-area labels — only for the 'unsegmented' fallback
+    // (no rooms, no dominant open space). The 'rooms' and 'open-space' cases
+    // carry their own labels above.
+    if (model.rooms.length === 0 && model.roomSegmentation === 'unsegmented') {
       const labels: string[] = [];
       for (const ring of model.floorRings) {
-        const aM2 = ringSignedArea(ring);
+        // Same reconcile scale as the footer sum — the in-plan label and the
+        // footer must report one coherent area per region (never > floor area).
+        const aM2 = Math.abs(ringSignedArea(ring)) * regionAreaScale;
         if (aM2 < MIN_ROOM_LABEL_M2) continue;
         const c = ringCentroid(ring);
         if (!pointInRing(c, ring)) continue; // centroid outside a concave region

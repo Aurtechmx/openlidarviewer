@@ -7,6 +7,7 @@ import {
   buildMapSheetPdf,
   readinessNote,
   wrapTextToWidth,
+  scaleBarUnit,
 } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 import { demAccuracyStandards } from '../src/terrain/quality/demAccuracyStandards';
@@ -43,7 +44,39 @@ const model: ContourFeatureModel = {
   warnings: [],
 };
 
+describe('scaleBarUnit — label follows the source CRS (label-vs-value)', () => {
+  it('labels metres, grouping to km past 1000 (metric default)', () => {
+    expect(scaleBarUnit(200, undefined)).toEqual({ unit: 'm', divisor: 1 });
+    expect(scaleBarUnit(200, 'metre')).toEqual({ unit: 'm', divisor: 1 });
+    expect(scaleBarUnit(2000, 'metre')).toEqual({ unit: 'km', divisor: 1000 });
+  });
+  it('labels feet on a foot CRS and NEVER groups to km', () => {
+    // 1000 ft must read "1000 ft", not "1 km" — that was the drift.
+    expect(scaleBarUnit(1000, 'foot')).toEqual({ unit: 'ft', divisor: 1 });
+    expect(scaleBarUnit(2000, 'us-survey-foot')).toEqual({ unit: 'ft', divisor: 1 });
+    expect(scaleBarUnit(50, 'foot')).toEqual({ unit: 'ft', divisor: 1 });
+  });
+  it('keeps the metre default for an unresolved (unknown) unit (back-compat)', () => {
+    expect(scaleBarUnit(200, 'unknown')).toEqual({ unit: 'm', divisor: 1 });
+    expect(scaleBarUnit(2000, 'unknown')).toEqual({ unit: 'km', divisor: 1000 });
+  });
+});
+
 describe('buildMapSheetPdf', () => {
+  it('builds a valid sheet for a foot CRS without throwing', async () => {
+    const bytes = await buildMapSheetPdf({
+      model,
+      labels: [{ x: 50, y: 10, value: 100, angleRad: 0.1 }],
+      worldOrigin: { x: 6_500_000, y: 1_800_000 },
+      crs: 'NAD83 / California zone 5 (ftUS)',
+      verticalDatum: 'NAVD88 (ftUS)',
+      linearUnit: 'us-survey-foot',
+      readiness: 'previewOnly',
+      title: 'Foot CRS site',
+    });
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
+  });
+
   it('renders a valid PDF with contours, collar, and accuracy', async () => {
     const bytes = await buildMapSheetPdf({
       model,

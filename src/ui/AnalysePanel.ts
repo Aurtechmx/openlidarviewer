@@ -83,7 +83,7 @@ import {
   computeMultiHillshade,
 } from '../terrain/surface/hillshade';
 import { sampleTerrain } from '../terrain/contour/sampleTerrain';
-import { terrainAssessment } from '../terrain/contour/terrainAssessment';
+import { terrainAssessment, type SupportingMetric } from '../terrain/contour/terrainAssessment';
 import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
 import { terrainProducts } from '../terrain/contour/terrainProducts';
 import { explainLimitations } from '../terrain/contour/whyNotReasons';
@@ -510,19 +510,122 @@ export class AnalysePanel {
       if (why) this._assessmentRow.append(why);
     }
 
-    // Compact supporting-metrics list — each metric is a pill whose colour comes
-    // from its own honest rating (good / fair / poor / unknown), never from the
-    // overall status, so a single weak signal stays visible at a glance.
-    const metrics = el('div', { className: 'olv-analyse-assess-metrics' });
-    for (const m of a.supportingMetrics) {
-      const pill = el('div', { className: `olv-analyse-assess-metric is-${m.rating}` });
-      pill.append(
+    // Supporting metrics — each metric is a pill whose colour comes from its own
+    // honest rating (good / fair / poor / unknown), never from the overall
+    // status, so a single weak signal stays visible at a glance.
+    //
+    // DENSITY REDUCTION (v0.4.6 saturation audit): instead of one flat 9-pill
+    // pile, the chips are tiered. A small PRIMARY row of the 2–3 decisive chips
+    // (DTM quality + Coverage + the worst-rated remaining signal) is ALWAYS
+    // visible; the FULL nine, grouped into Coverage / Surface / Accuracy /
+    // Georef clusters, live in an "All metrics" <details> that defaults open on
+    // desktop and collapsed on mobile (CSS-driven, see _syncMetricsDisclosure).
+    // Nothing is hidden from a trust decision — the verdict, export readiness,
+    // terrain products and the "Why?" causes all stay always-visible above this;
+    // only the full numeric breakdown is tiered behind one keyboard-accessible
+    // disclosure, with the headline numbers promoted into the primary row.
+    this._assessmentRow.append(this._renderAssessMetrics(a.supportingMetrics));
+  }
+
+  /**
+   * Render the supporting-metrics block: an always-visible primary row of the
+   * decisive chips plus a grouped, collapsible "All metrics" disclosure holding
+   * the full nine in Coverage / Surface / Accuracy / Georef clusters. Pure DOM
+   * grouping — every chip the assessment minted is still present and reachable;
+   * the disclosure only tiers the full set behind a default-open (desktop) /
+   * default-collapsed (mobile) expander so the panel reads less dense at a glance.
+   */
+  private _renderAssessMetrics(metrics: ReadonlyArray<SupportingMetric>): HTMLElement {
+    const wrap = el('div', { className: 'olv-analyse-assess-metricwrap' });
+    const byLabel = new Map(metrics.map((m) => [m.label, m] as const));
+
+    const pill = (m: SupportingMetric): HTMLElement => {
+      const p = el('div', { className: `olv-analyse-assess-metric is-${m.rating}` });
+      p.append(
         el('span', { className: 'olv-analyse-assess-metric-label', text: m.label }),
         el('span', { className: 'olv-analyse-assess-metric-value', text: m.value }),
       );
-      metrics.append(pill);
+      return p;
+    };
+
+    // ── PRIMARY (always visible): the decisive few ────────────────────────
+    // DTM quality is the headline number; Coverage frames everything else. The
+    // third slot is the single most concerning remaining signal — the worst-
+    // rated chip among the rest (poor > fair > unknown > good) — so whatever is
+    // actually dragging this surface down is never buried behind the disclosure.
+    const ratingRank: Record<SupportingMetric['rating'], number> = {
+      poor: 0,
+      fair: 1,
+      unknown: 2,
+      good: 3,
+    };
+    const primaryLabels = new Set(['DTM quality', 'Coverage']);
+    const rest = metrics.filter((m) => !primaryLabels.has(m.label));
+    const worst = rest
+      .slice()
+      .sort((x, y) => ratingRank[x.rating] - ratingRank[y.rating])[0];
+    if (worst) primaryLabels.add(worst.label);
+    const primary = el('div', { className: 'olv-analyse-assess-metrics is-primary' });
+    for (const label of ['DTM quality', 'Coverage', worst?.label]) {
+      const m = label ? byLabel.get(label) : undefined;
+      if (m) primary.append(pill(m));
     }
-    this._assessmentRow.append(metrics);
+    wrap.append(primary);
+
+    // ── ALL METRICS (grouped, progressive disclosure) ─────────────────────
+    // Four meaningful clusters instead of a flat pile. Demote the Georef cluster
+    // header note when both georef chips read "unknown" (not informative beyond
+    // the export-readiness line already shown above) — the chips still render,
+    // just flagged so the always-"unknown" pair never masquerades as signal.
+    const clusters: Array<{ name: string; labels: string[] }> = [
+      { name: 'Coverage', labels: ['Coverage', 'Empty cells', 'Interpolation'] },
+      { name: 'Surface', labels: ['Ground density', 'DTM quality', 'Edge risk'] },
+      { name: 'Accuracy', labels: ['Vertical RMSE'] },
+      { name: 'Georef', labels: ['CRS', 'Vertical datum'] },
+    ];
+    const details = el('details', { className: 'olv-analyse-assess-metrics-all' });
+    details.append(
+      el('summary', {
+        className: 'olv-analyse-assess-metrics-summary',
+        text: 'All metrics',
+      }),
+    );
+    for (const cluster of clusters) {
+      const present = cluster.labels
+        .map((l) => byLabel.get(l))
+        .filter((m): m is SupportingMetric => m != null);
+      if (present.length === 0) continue;
+      const allUnknown = present.every((m) => m.rating === 'unknown');
+      const group = el('div', {
+        className: `olv-analyse-assess-metricgroup${allUnknown ? ' is-uninformative' : ''}`,
+      });
+      group.append(
+        el('div', { className: 'olv-analyse-assess-metricgroup-name', text: cluster.name }),
+      );
+      const row = el('div', { className: 'olv-analyse-assess-metrics' });
+      for (const m of present) row.append(pill(m));
+      group.append(row);
+      details.append(group);
+    }
+    // Default open on desktop, collapsed on mobile — set imperatively so it
+    // tracks viewport changes without duplicating the chips in the DOM.
+    this._syncMetricsDisclosure(details);
+    wrap.append(details);
+    return wrap;
+  }
+
+  /**
+   * Open the "All metrics" disclosure on desktop, collapse it on mobile. Uses a
+   * matchMedia query (no resize listener churn — set once at render, the panel
+   * re-renders on every analysis). Honesty-first: nothing is removed from the
+   * DOM, only the default open-state differs, so every chip stays reachable.
+   */
+  private _syncMetricsDisclosure(details: HTMLDetailsElement): void {
+    const narrow =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(max-width: 640px)').matches
+        : false;
+    details.open = !narrow;
   }
 
   private _renderScore(): void {
@@ -1259,11 +1362,21 @@ export class AnalysePanel {
       }
       if (std.qualityLevel !== 'unknown') {
         const qlReason = std.qualityLevelReason;
+        // When the gather strided the cloud, the density behind the QL is a
+        // uniform-stride extrapolation (the core pushes a warning saying so).
+        // Carry that into the QL hint so the chip is never read as an exact,
+        // directly-counted grade — the same honesty the space-scan path gives.
+        const strideNote = (this._result?.warnings ?? []).some((w) =>
+          w.includes('uniform-stride assumption'),
+        )
+          ? ' Density is scaled from the analysed sample (uniform-stride assumption), so this grade is an estimate.'
+          : '';
         // Keep the dynamic gate reason in the hint, but lead with the
         // plain-language explanation of what a Quality Level actually is.
-        const qlTooltip = qlReason
-          ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
-          : METRIC_TOOLTIPS.qualityLevel;
+        const qlTooltip =
+          (qlReason
+            ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
+            : METRIC_TOOLTIPS.qualityLevel) + strideNote;
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-ql',
@@ -1459,6 +1572,9 @@ export class AnalysePanel {
         basename,
         wkt: ctx.wkt ?? null,
         isGeographic: ctx.isGeographic ?? false,
+        // Resolved linear unit so a foot-based CRS labels the README's cell
+        // size / bounds / elevation as feet instead of the metre default.
+        linearUnit: ctx.linearUnit,
         // Generation parameters (interpolation / smoothing / despike) are derived
         // from the actual run inside buildDemPackage via result.generationParams,
         // so the README can never drift from what produced the raster.
@@ -1783,6 +1899,9 @@ export class AnalysePanel {
     },
   ): Promise<void> {
     const { buildMapSheetPdf } = await loadMapSheetPdf();
+    // Resolved linear unit so the sheet's scale bar + 1:N ratio honour a foot
+    // CRS (the map is drawn in source units) instead of the metre default.
+    const linearUnit = this._cb.getMapContext?.()?.linearUnit;
     // The unified provenance, derived from the SAME result the sheet plots, so
     // the title block's CRS / datum / style / accuracy / readiness / date can't
     // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
@@ -1799,6 +1918,7 @@ export class AnalysePanel {
       provenance,
       crs: result.model.crs,
       verticalDatum: result.model.verticalDatum,
+      linearUnit,
       accuracy: result.accuracyStandards,
       // The map sheet is a georeferenced deliverable, so its readiness note
       // reflects EXPORT readiness (surface quality gated by a known CRS +

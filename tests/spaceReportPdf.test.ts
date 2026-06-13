@@ -28,6 +28,26 @@ function room(W = 14, D = 29, H = 5, step = 0.1): Float32Array {
   return Float32Array.from(t);
 }
 
+/** A z-up 10 × 8 × 2.5 m PARTITIONED two-room scan (divider at x = 5 with a
+ * 0.9 m door gap), so the floor plan segments into two distinct rooms — the
+ * room-drawing path the PDF embed exercises. FIX 1: a single open room reads
+ * as 'open-space' instead, so the room path needs a genuinely partitioned scan. */
+function twoRoomCloud(step = 0.05): Float32Array {
+  const W = 10, D = 8, H = 2.5;
+  const gapY: readonly [number, number] = [3.5, 4.4];
+  const t: number[] = [];
+  for (let x = 0; x <= W + 1e-9; x += step)
+    for (let y = 0; y <= D + 1e-9; y += step) t.push(x, y, 0);
+  for (let z = 0; z <= H + 1e-9; z += step) {
+    for (let x = 0; x <= W + 1e-9; x += step) { t.push(x, 0, z); t.push(x, D, z); }
+    for (let y = step; y < D - 1e-9; y += step) {
+      t.push(0, y, z); t.push(W, y, z);
+      if (y < gapY[0] - 1e-9 || y > gapY[1] + 1e-9) t.push(5, y, z); // divider
+    }
+  }
+  return Float32Array.from(t);
+}
+
 function cubeShell(): Float32Array {
   const cube: number[] = [];
   for (let u = 0; u <= 4; u += 0.5)
@@ -73,6 +93,27 @@ describe('buildSpaceReportPdf', () => {
 
   it('is graceful with null metrics', async () => {
     const bytes = await buildSpaceReportPdf({ space: null, name: 'Empty' });
+    expect(isPdf(bytes)).toBe(true);
+  });
+
+  it('builds the imperial-unit interior report with rooms in the embed', async () => {
+    // v0.4.6: the embedded plan's dimension line follows the caller's unit
+    // system, and segmented rooms draw their labels — smoke both paths in one
+    // build (text-level wording is covered by the SVG tests; pdf-lib content
+    // streams are compressed, so this pins bytes + model preconditions).
+    const pos = twoRoomCloud();
+    const shape = classifyScanShape(pos);
+    const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', hasRgb: true });
+    const floorPlan = extractFloorPlan(pos, { upAxis: shape.up });
+    expect(floorPlan.rooms.length).toBeGreaterThanOrEqual(1); // rooms ARE drawn
+    const bytes = await buildSpaceReportPdf({
+      space,
+      name: 'House 360',
+      softwareVersion: '0.4.5',
+      metricVersion: 'v0.4.1',
+      floorPlan,
+      unitSystem: 'imperial',
+    });
     expect(isPdf(bytes)).toBe(true);
   });
 });

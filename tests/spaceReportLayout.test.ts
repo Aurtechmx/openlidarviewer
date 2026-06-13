@@ -61,7 +61,7 @@ describe('buildSpaceReportContent — interior', () => {
     for (const field of [
       'House 360', 'Dimensions', 'L x W x H', 'Floor area', 'Ceiling height',
       'Enclosed volume', 'Storeys', 'Planes', 'Floor', 'Ceiling', 'Walls',
-      'Capture quality', 'Density', 'Coverage', 'Colour (RGB)',
+      'Capture quality', 'Density', 'Bounding area filled', 'Colour (RGB)',
     ]) {
       expect(text, `missing "${field}"`).toContain(field);
     }

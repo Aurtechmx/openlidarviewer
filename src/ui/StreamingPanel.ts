@@ -90,12 +90,104 @@ function formatDim(n: number): string {
   return v >= 100 ? v.toFixed(0) : v.toFixed(1);
 }
 
+/**
+ * Label + value for the resolution row of the scan summary.
+ *
+ * COPC's metadata `spacing` is a METRIC root-node point spacing (CRS units —
+ * metres for the usual projected scans), so it reads as "1.20 m". EPT's `span`
+ * is a DIMENSIONLESS points-per-tile budget (the octree resolution analogue),
+ * NOT a distance — feeding it into the same bare "Spacing" row read as "128 m"
+ * of spacing, a label-vs-value drift. EPT therefore gets its own "Node budget"
+ * label and a "pts/node" value so the number is never mistaken for a distance.
+ * Pure + DOM-free so the decision is unit-tested without standing up the panel.
+ */
+export function spacingRowFor(
+  format: 'copc' | 'ept' | undefined,
+  spacing: number,
+): { readonly label: string; readonly value: string; readonly title: string } {
+  if (format === 'ept') {
+    return {
+      label: 'Node budget',
+      value: `~${Math.round(spacing).toLocaleString()} pts/node`,
+      title: 'EPT octree resolution — target points per node, not a metric spacing.',
+    };
+  }
+  return {
+    label: 'Spacing',
+    value: `${spacing.toFixed(2)} m`,
+    title: 'Root-node point spacing in the dataset’s CRS units.',
+  };
+}
+
+/**
+ * The determinate-progress readout for the streaming loader, derived purely
+ * from the live status counters (no DOM) so the fraction/label logic is
+ * unit-tested directly.
+ *
+ * HONESTY: `fraction` is RESIDENT nodes ÷ KNOWN nodes — the share of the
+ * octree that is currently LOADED into the scene, NOT a download percentage
+ * (a streaming source has no fixed "total bytes" to download against). The
+ * label says "resident" for exactly this reason. When the total node count is
+ * not yet known (knownNodes ≤ 0, the brief window before the root's hierarchy
+ * is read), the fraction is `null` and the caller shows the indeterminate
+ * shimmer instead of a misleading 0%/100% bar.
+ */
+export interface StreamingProgress {
+  /** resident/known node fraction in [0,1], or null when total is unknown. */
+  readonly fraction: number | null;
+  /** Whether the fraction is known (drives determinate vs. shimmer). */
+  readonly determinate: boolean;
+  /** Compact "X / Y nodes resident" line. */
+  readonly nodesLabel: string;
+  /** Tabular "X.XM / Y.YM pts" line (millions, one decimal). */
+  readonly pointsLabel: string;
+}
+
+/** Format a raw point count as "X.XM" (millions, one decimal). */
+function pointsMillions(n: number): string {
+  // Sub-100k reads as "0.0M", which is honest at this scale and keeps the two
+  // sides of the ratio in the SAME unit (no "12k / 4.2M" mixed-unit row).
+  return `${(Math.max(0, n) / 1_000_000).toFixed(1)}M`;
+}
+
+/**
+ * Derive the streaming progress readout from the live counters. Pure; see
+ * {@link StreamingProgress} for the honesty contract on the fraction.
+ */
+export function streamingProgress(status: StreamingStatus): StreamingProgress {
+  const known = status.knownNodes;
+  const determinate = known > 0;
+  // Clamp to [0,1]: resident can momentarily exceed a stale known count
+  // between hierarchy refreshes, and we never want a >100% bar.
+  const fraction = determinate
+    ? Math.min(1, Math.max(0, status.loadedNodes / known))
+    : null;
+  return {
+    fraction,
+    determinate,
+    nodesLabel: `${status.loadedNodes} / ${determinate ? known : '?'} nodes resident`,
+    pointsLabel: `${pointsMillions(status.displayedPoints)} / ${pointsMillions(
+      status.sourcePoints,
+    )} pts`,
+  };
+}
+
 /** The streaming-scan panel. */
 export class StreamingPanel {
   readonly element: HTMLElement;
   private readonly _callbacks: StreamingPanelCallbacks;
   private readonly _title: HTMLElement;
   private readonly _phase: HTMLElement;
+  // Determinate load-progress treatment under the phase line: a thin
+  // brand-gradient bar (resident/known node fraction) + a tabular pts readout.
+  private readonly _progress: HTMLElement;
+  private readonly _progressTrack: HTMLElement;
+  private readonly _progressFill: HTMLElement;
+  private readonly _progressNodes: HTMLElement;
+  private readonly _progressPoints: HTMLElement;
+  // Sticky terminal state: once "Streaming ready" lands, the bar reads 100%
+  // and stops reacting to late jitter in the counters.
+  private _streamReady = false;
   private readonly _summary: HTMLElement;
   private readonly _nodes: HTMLElement;
   private readonly _points: HTMLElement;
@@ -111,6 +203,27 @@ export class StreamingPanel {
     this._callbacks = callbacks;
 
     this._phase = el('div', { className: 'olv-streaming-phase', text: 'Detecting COPC…' });
+
+    // ── Determinate progress treatment ──
+    // The bar fill is a real ARIA progressbar; its value/text track the
+    // resident-node fraction. When the total is unknown the track carries the
+    // indeterminate-shimmer class instead (the fill is hidden), so the user
+    // still sees motion without a fabricated percentage.
+    this._progressFill = el('div', { className: 'olv-stream-prog-fill' });
+    this._progressTrack = el('div', { className: 'olv-stream-prog-track' }, [this._progressFill]);
+    this._progressTrack.setAttribute('role', 'progressbar');
+    this._progressTrack.setAttribute('aria-label', 'Resident detail loaded');
+    this._progressTrack.setAttribute('aria-valuemin', '0');
+    this._progressTrack.setAttribute('aria-valuemax', '100');
+    this._progressNodes = el('span', { className: 'olv-stream-prog-nodes', text: '—' });
+    this._progressPoints = el('span', { className: 'olv-stream-prog-points', text: '—' });
+    this._progress = el('div', { className: 'olv-stream-prog olv-hidden' }, [
+      this._progressTrack,
+      el('div', { className: 'olv-stream-prog-readout' }, [
+        this._progressNodes,
+        this._progressPoints,
+      ]),
+    ]);
     this._summary = el('div', { className: 'olv-streaming-rows' });
     this._nodes = el('span', { className: 'olv-streaming-stat', text: '—' });
     this._points = el('span', { className: 'olv-streaming-stat', text: '—' });
@@ -183,6 +296,7 @@ export class StreamingPanel {
     this.element = el('div', { className: 'olv-streaming-panel olv-hidden' }, [
       head,
       this._phase,
+      this._progress,
       el('div', { className: 'olv-streaming-label', text: 'Scan' }),
       this._summary,
       el('div', { className: 'olv-streaming-label', text: 'Streaming' }),
@@ -219,11 +333,33 @@ export class StreamingPanel {
     this.element.classList.add('olv-hidden');
     this._paused = false;
     this._pause.textContent = 'Pause';
+    // Reset the progress treatment for the next scan.
+    this._streamReady = false;
+    this._progress.classList.add('olv-hidden');
+    this._progressTrack.classList.remove('olv-stream-prog-shimmer');
+    this._progressFill.style.width = '0%';
   }
 
-  /** Set the high-level load phase line. */
+  /**
+   * Set the high-level load phase line.
+   *
+   * The terminal "Streaming ready" phase latches a sticky 100% on the bar
+   * (`_streamReady`) so the determinate fill reads full and stops reacting to
+   * late counter jitter; any earlier phase un-latches it.
+   */
   setPhase(phase: string): void {
     this._phase.textContent = phase;
+    const ready = phase === 'Streaming ready';
+    if (ready !== this._streamReady) {
+      this._streamReady = ready;
+      if (ready) {
+        // Full, determinate, no shimmer — the load has genuinely settled.
+        this._progress.classList.remove('olv-hidden');
+        this._progressTrack.classList.remove('olv-stream-prog-shimmer');
+        this._progressFill.style.width = '100%';
+        this._progressTrack.setAttribute('aria-valuenow', '100');
+      }
+    }
   }
 
   /** Populate the one-time scan summary from the streaming source's metadata. */
@@ -247,7 +383,13 @@ export class StreamingPanel {
           `${formatDim(summary.width)} × ${formatDim(summary.depth)} × ${formatDim(summary.height)}`,
         ),
       ),
-      this._statRow('Spacing', this._value(summary.spacing.toFixed(2))),
+      // COPC `spacing` is a metric distance; EPT `span` is a points-per-tile
+      // budget. `spacingRowFor` labels + units each correctly so neither is
+      // misread (see its doc-comment for the label-vs-value drift it fixes).
+      (() => {
+        const r = spacingRowFor(summary.format, summary.spacing);
+        return this._statRow(r.label, this._value(r.value, r.title));
+      })(),
       this._statRow(
         'Octree',
         this._value(`depth ${summary.octreeDepth} · ${summary.nodeCount} nodes`),
@@ -276,13 +418,39 @@ export class StreamingPanel {
     this._selectQuality(quality);
   }
 
-  /** Update the live status numbers. */
+  /** Update the live status numbers + the determinate progress treatment. */
   setStatus(status: StreamingStatus): void {
     this._nodes.textContent = `${status.loadedNodes} / ${status.knownNodes}`;
     this._points.textContent = `${formatCount(status.displayedPoints)} / ${formatCount(
       status.sourcePoints,
     )}`;
     this._cache.textContent = formatBytes(status.cacheBytes);
+    this._updateProgress(status);
+  }
+
+  /**
+   * Drive the progress bar from the live counters. Determinate (brand-gradient
+   * fill at resident/known fraction) when the total node count is known; the
+   * indeterminate shimmer otherwise. Once "Streaming ready" has latched, the
+   * bar stays full — the load is settled and late jitter must not pull it back.
+   */
+  private _updateProgress(status: StreamingStatus): void {
+    if (this._streamReady) return;
+    const p = streamingProgress(status);
+    this._progress.classList.remove('olv-hidden');
+    this._progressNodes.textContent = p.nodesLabel;
+    this._progressPoints.textContent = p.pointsLabel;
+    if (p.determinate && p.fraction != null) {
+      this._progressTrack.classList.remove('olv-stream-prog-shimmer');
+      const pct = Math.round(p.fraction * 100);
+      this._progressFill.style.width = `${pct}%`;
+      this._progressTrack.setAttribute('aria-valuenow', String(pct));
+    } else {
+      // Total unknown — honest indeterminate shimmer, no fabricated percentage.
+      this._progressTrack.classList.add('olv-stream-prog-shimmer');
+      this._progressFill.style.width = '0%';
+      this._progressTrack.removeAttribute('aria-valuenow');
+    }
   }
 
   /** Populate the saved-views list. */

@@ -41,6 +41,12 @@ export interface MapSheetInput {
   readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
   readonly crs?: string | null;
   readonly verticalDatum?: string | null;
+  /**
+   * Resolved linear unit of a projected CRS. The map frame's ground coordinates
+   * are in SOURCE units, so the scale bar must label them in the right unit — a
+   * foot-based CRS reads "ft", not "m". Omitted ⇒ the standing metre default.
+   */
+  readonly linearUnit?: 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
   readonly accuracy?: DemAccuracyStandards | null;
   readonly readiness?: 'ready' | 'previewOnly' | 'blocked';
   readonly title?: string;
@@ -145,6 +151,26 @@ export function wrapTextToWidth(
     lines[i] = `${last}…`;
   }
   return lines;
+}
+
+/**
+ * The scale-bar ground unit + per-label divisor for a given total ground length
+ * and the map's SOURCE linear unit. Pure and exported so the label-vs-value
+ * contract can be asserted without rendering a PDF.
+ *
+ * The map frame is drawn in the CRS's source units, so the bar's `totalGround`
+ * is in those units. A foot CRS labels feet plainly with no km grouping — the
+ * bar must never read "1 km" for what is really 1000 ft. Metres (the standing
+ * default for an omitted / metre / unknown unit) group up to km past 1000.
+ */
+export function scaleBarUnit(
+  totalGround: number,
+  linearUnit: MapSheetInput['linearUnit'],
+): { unit: string; divisor: number } {
+  const isFootUnit = linearUnit === 'foot' || linearUnit === 'us-survey-foot';
+  if (isFootUnit) return { unit: 'ft', divisor: 1 };
+  const groupKm = totalGround >= 1000;
+  return { unit: groupKm ? 'km' : 'm', divisor: groupKm ? 1000 : 1 };
 }
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
@@ -303,8 +329,10 @@ function drawMap(
     for (let i = 0; i < bar.segments; i++) {
       page.drawRectangle({ x: bx + i * segPt, y: by, width: segPt, height: 4, color: i % 2 === 0 ? INK : WHITE, borderColor: INK, borderWidth: 0.5 });
     }
-    const unit = bar.totalGround >= 1000 ? 'km' : 'm';
-    const scl = bar.totalGround >= 1000 ? 1000 : 1;
+    // Scale-bar ground unit follows the map's SOURCE linear unit (see
+    // scaleBarUnit): a foot CRS reads "ft", never the metre default or a bogus
+    // "km" for 1000 ft.
+    const { unit, divisor: scl } = scaleBarUnit(bar.totalGround, input.linearUnit);
     for (let i = 0; i <= bar.segments; i++) {
       const v = (bar.segGround * i) / scl;
       const lbl = `${Number.isInteger(v) ? v : v.toFixed(1)}`;
@@ -346,9 +374,22 @@ function drawTitleBlock(
   const lx = M + 4;
   text(input.title ?? 'Contour Map', lx, topY - 16, 14, bold);
   const interval = prov?.contourIntervalM ?? input.model.intervalM;
+  // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
+  // on a foot CRS (the map is drawn in source units). 1 for metric / unknown.
+  const worldUnitToMetres =
+    input.linearUnit === 'foot'
+      ? 0.3048
+      : input.linearUnit === 'us-survey-foot'
+        ? 1200 / 3937
+        : 1;
   const scaleN =
     bbox && frame.w > 0
-      ? Math.round(mapScaleRatio(fitTransform(bbox, { x: frame.x + 6, y: frame.y + 6, w: frame.w - 12, h: frame.h - 12 }).scale))
+      ? Math.round(
+          mapScaleRatio(
+            fitTransform(bbox, { x: frame.x + 6, y: frame.y + 6, w: frame.w - 12, h: frame.h - 12 }).scale,
+            worldUnitToMetres,
+          ),
+        )
       : 0;
   const rows: Array<[string, string]> = [
     ['Horizontal CRS', crsStr],

@@ -53,6 +53,46 @@ test('StreamingNodeStore.counts and setError report lifecycle state', () => {
   expect(b.error).toBe('decode failed');
 });
 
+test('StreamingNodeStore maintained resident/queued sets match a ground-truth walk', () => {
+  // Guards the v0.4.6 perf fix: the scheduler walks `residentNodes()` /
+  // `queuedNodes()` every tick instead of `all().filter(...)` over the whole
+  // 28 k-node hierarchy. The maintained sets must stay bit-identical to a full
+  // walk across every transition, or the scheduler would evict/reconsider the
+  // wrong nodes.
+  const store = new StreamingNodeStore();
+  const nodes = Array.from({ length: 50 }, (_, i) => store.add(record(`n${i}`, 100 + i)));
+
+  const walkResident = (): Set<unknown> =>
+    new Set(store.all().filter((n) => n.state === 'resident'));
+  const walkQueued = (): Set<unknown> =>
+    new Set(store.all().filter((n) => n.state === 'queued'));
+  const setMatchesWalk = (): void => {
+    expect(new Set(store.residentNodes())).toEqual(walkResident());
+    expect(new Set(store.queuedNodes())).toEqual(walkQueued());
+    expect([...store.residentNodes()].length).toBe(store.counts().resident);
+    expect([...store.queuedNodes()].length).toBe(store.queuedCount);
+  };
+
+  setMatchesWalk(); // empty
+  // Drive a realistic lifecycle churn over a subset.
+  for (let i = 0; i < nodes.length; i += 2) store.setState(nodes[i], 'queued');
+  setMatchesWalk();
+  for (let i = 0; i < nodes.length; i += 4) store.setState(nodes[i], 'loading');
+  setMatchesWalk();
+  for (let i = 0; i < nodes.length; i += 4) store.setState(nodes[i], 'resident', 200);
+  setMatchesWalk();
+  // Evict some residents, re-queue some others, error one — all paths.
+  store.setState(nodes[0], 'unloaded');
+  store.setState(nodes[8], 'unloaded');
+  store.setState(nodes[12], 'queued');
+  store.setError(nodes[16], 'boom');
+  setMatchesWalk();
+
+  // iterate() yields every known node with zero filtering.
+  expect([...store.iterate()].length).toBe(store.size);
+  expect(new Set(store.iterate())).toEqual(new Set(store.all()));
+});
+
 // --- StreamingOctree + StreamingPointCloud -----------------------------------
 
 test('StreamingPointCloud.open ingests a single-page hierarchy', async () => {

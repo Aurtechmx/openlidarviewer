@@ -106,11 +106,25 @@ describe('explainLimitations', () => {
     expect(fixText(r)).toMatch(/coverage|passes/i);
   });
 
-  it('high edge risk → cause names the % long-reach cells and an extend-past fix', () => {
+  it('high edge risk → cause names the % boundary-measured cells and an extend-past fix', () => {
     const r = fixture({ edgeRiskRatio: 0.3 });
     expect(causeText(r)).toMatch(/30%/);
-    expect(causeText(r)).toMatch(/edge|long interpolation|reach/i);
+    expect(causeText(r)).toMatch(/edge|reach/i);
     expect(fixText(r)).toMatch(/extend|past the area/i);
+  });
+
+  it('does NOT mislabel the boundary-measured edge metric as "long interpolation"', () => {
+    // REGRESSION: q.edgeRiskRatio is wired from cellMetrics.edgeRiskRatio
+    // (analyseContours), i.e. MEASURED cells that sit near the data boundary —
+    // they have real returns, just least neighbour support. The "Why?" cause
+    // must NOT describe them with the gate's tally-metric phrasing ("a long
+    // interpolation from real returns"), which belongs to dtmCellStatus
+    // 'edgeRisk' (interpolated cells far from any measurement). This keeps the
+    // wording fix consistent with terrainAssessment, which renders in the same
+    // surface-quality section directly above this "Why?" panel.
+    const r = fixture({ edgeRiskRatio: 0.53 });
+    expect(causeText(r)).not.toMatch(/long interpolation/i);
+    expect(causeText(r)).toMatch(/53% of measured cells sit at the edge of the data/);
   });
 
   it('low ground visibility / low confidence → ground-visibility cause + fix', () => {

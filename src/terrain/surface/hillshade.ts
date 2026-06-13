@@ -50,8 +50,12 @@ export interface HillshadeResult {
   readonly rows: number;
 }
 
-/** Convert a north-clockwise sun azimuth (degrees) into the math frame (rad). */
-function azimuthToMathRad(azimuthDeg: number): number {
+/**
+ * Convert a north-clockwise sun azimuth (degrees) into the math frame (rad).
+ * Exported so the engine's GPU hillshade kernel (engine/gpuBackend.ts) uses
+ * THIS conversion — one definition, nothing to drift.
+ */
+export function azimuthToMathRad(azimuthDeg: number): number {
   let azMath = (360 - azimuthDeg + 90) % 360;
   if (azMath < 0) azMath += 360;
   return azMath * DEG;

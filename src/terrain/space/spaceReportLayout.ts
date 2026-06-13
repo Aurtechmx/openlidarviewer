@@ -118,7 +118,10 @@ function captureSection(q: SpaceMetrics['quality']): ReportSection {
       { label: 'Points (used / source)', value: `${i0(q.sampledPointCount)} / ${i0(q.sourcePointCount)}` },
       { label: 'Density', value: `${q.densityPerM2.toFixed(1)} pts/m²` },
       { label: 'Mean spacing', value: cm(q.meanSpacingM) },
-      { label: 'Coverage', value: `${Math.round(q.coveragePct)}% of footprint` },
+      // HONESTY: coveragePct is occupied / (cols*rows) over the bounding-box
+      // grid — a fill ratio of the extent, not a traced footprint. Label says so
+      // (matches the ObjectPanel "Bounding area filled" row).
+      { label: 'Bounding area filled', value: `${Math.round(q.coveragePct)}%` },
       { label: 'Colour (RGB)', value: q.hasRgb ? 'Yes' : 'No' },
     ],
   };

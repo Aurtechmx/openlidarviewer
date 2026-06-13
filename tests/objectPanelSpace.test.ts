@@ -167,6 +167,43 @@ describe('ObjectPanel — space / object routing', () => {
     expect(all.some((e) => e.className.includes('olv-object-run-anyway'))).toBe(true);
   });
 
+  // FIX 2: the secondary caveats collapse into ONE <details> disclosure
+  // (collapsed by default), with the single decision-critical "not a certified
+  // survey" line kept visible above it. Nothing is removed — every caveat
+  // string stays in the DOM (the collapsed <details> content), so selectors
+  // and AT users still reach them.
+  it('collapses the secondary caveats into one disclosure, lead kept visible', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
+    const { classifyScanShape } = await import('../src/terrain/scanShape');
+
+    const pos = room();
+    const shape = classifyScanShape(pos);
+    const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior' });
+
+    const panel = new ObjectPanel();
+    panel.showSpace(space, shape);
+    const root = panel.element as unknown as FakeEl;
+    const all = flatten(root);
+
+    // Exactly ONE collapsible caveat disclosure, with a "details"/"summary".
+    const details = all.filter((e) => e.tagName === 'details' && e.className.includes('olv-object-caveats'));
+    expect(details.length).toBe(1);
+    const summary = all.find((e) => e.className.includes('olv-object-caveats-summary'));
+    expect(summary).toBeDefined();
+    expect(summary!.textContent).toMatch(/About these figures/);
+
+    // The decision-critical honesty line stays a VISIBLE lead note (not tucked
+    // inside the disclosure).
+    const lead = all.find((e) => e.className.includes('is-lead'));
+    expect(lead).toBeDefined();
+    expect(lead!.textContent).toMatch(/not a certified survey/i);
+
+    // Every secondary caveat is still present in the DOM (collapsed, not gone).
+    expect(root.textContent).toContain('currently loaded / streamed');
+    expect(root.textContent).toMatch(/pragmatic estimates, not a certified survey/);
+  });
+
   it('the empty interior state still offers the Treat-as control and the hatch', async () => {
     const { ObjectPanel } = await import('../src/ui/ObjectPanel');
     const panel = new ObjectPanel();

@@ -7,6 +7,57 @@
  * in Node; `InspectTool` renders it.
  */
 
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
+
+/**
+ * Labels + per-axis unit suffixes for the inspector's World coordinate group.
+ *
+ * The headings/labels switch on the CRS kind — Easting/Northing for a
+ * projected CRS, Longitude/Latitude for a geographic one, plain X/Y/Z for
+ * local/unknown. The UNIT suffixes matter as much as the labels: a geographic
+ * dataset's X/Y are DEGREES, not metres, so rendering them with " m" (as the
+ * card did pre-fix) was a label-vs-value drift — the World group printed
+ * "Longitude: -122.4 m". Z stays metric (elevation) in every frame. Pure +
+ * DOM-free so it lives next to `splitPointCoords` and is unit-tested here
+ * rather than dragging the three.js-bound `InspectTool` into Node.
+ */
+export interface WorldCoordLabels {
+  readonly heading: string;
+  readonly x: string;
+  readonly y: string;
+  readonly z: string;
+  readonly xUnit: string;
+  readonly yUnit: string;
+  readonly zUnit: string;
+}
+
+/** Build the World-group labels + units for a resolved CRS (or undefined). */
+export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels {
+  if (!crs || crs.kind === 'local' || crs.kind === 'unknown') {
+    return { heading: 'World', x: 'X', y: 'Y', z: 'Z', xUnit: ' m', yUnit: ' m', zUnit: ' m' };
+  }
+  if (crs.kind === 'geographic') {
+    return {
+      heading: 'World (geographic)',
+      x: 'Longitude',
+      y: 'Latitude',
+      z: 'Elevation',
+      xUnit: '°',
+      yUnit: '°',
+      zUnit: ' m',
+    };
+  }
+  return {
+    heading: `World (${crs.name})`,
+    x: 'Easting',
+    y: 'Northing',
+    z: 'Elevation',
+    xUnit: ' m',
+    yUnit: ' m',
+    zUnit: ' m',
+  };
+}
+
 /** ASPRS standard point classification names (LAS 1.1–1.4, classes 0–18). */
 const ASPRS_CLASSES: Record<number, string> = {
   0: 'Created, never classified',
