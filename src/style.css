@@ -6026,3 +6026,134 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-bc-convert:hover,
   .olv-modal-cta:hover { transform: none; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Phone bottom-sheet (design audit 1.3 follow-up)
+
+   Below the mobile breakpoint the floating desktop panels are re-parented (in
+   main.ts) into one bottom sheet behind a View · Analyse · Layers tablist. The
+   sheet is the single phone surface — it supersedes both the capped left-panel
+   stack and the Inspector's standalone "Scan Info" sheet. Desktop never shows
+   it (display:none below), so this whole block is mobile-only.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-mobile-sheet { display: none; }
+
+@media (max-width: 767px) {
+  .olv-mobile-sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    /* Above the canvas (0), left panels and dock (20); below the help modal
+       (80) and command palette (200). */
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    max-height: 72vh;
+    background: var(--panel-raised, var(--panel));
+    border-top: 1px solid var(--hairline-strong, var(--hairline));
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow-raised, 0 -14px 38px rgba(0, 0, 0, 0.5));
+    padding-bottom: env(safe-area-inset-bottom);
+    pointer-events: auto;
+  }
+  .olv-mobile-sheet.olv-hidden { display: none; }
+
+  /* Head: a grip line, the segmented tablist, and the collapse handle. */
+  .olv-msheet-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 14px var(--space-md) var(--space-sm);
+    flex: 0 0 auto;
+  }
+  .olv-msheet-head::before {
+    content: "";
+    position: absolute; top: 6px; left: 50%;
+    transform: translateX(-50%);
+    width: 38px; height: 4px; border-radius: 2px;
+    background: rgba(140, 170, 230, 0.42);
+  }
+  .olv-msheet-tabs {
+    display: flex; flex: 1 1 auto; gap: 2px;
+    background: var(--panel-recessive, rgba(255, 255, 255, 0.05));
+    border-radius: 10px; padding: 3px;
+  }
+  .olv-msheet-tab {
+    flex: 1 1 0; min-height: 40px;
+    border: 0; border-radius: 8px; background: transparent;
+    color: var(--text-dim); font: inherit; font-weight: 500;
+    cursor: pointer;
+    transition: background 160ms ease, color 160ms ease;
+  }
+  .olv-msheet-tab.is-active {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: var(--shadow-raised, 0 1px 3px rgba(0, 0, 0, 0.28));
+  }
+  .olv-msheet-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .olv-msheet-handle {
+    position: relative;
+    width: 44px; min-height: 40px; flex: 0 0 auto;
+    border: 0; background: transparent; color: var(--text-dim);
+    border-radius: 8px; cursor: pointer;
+  }
+  .olv-msheet-handle::before {
+    content: "";
+    position: absolute; inset: 0; margin: auto;
+    width: 11px; height: 11px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: translateY(-2px) rotate(45deg); /* points down → tap to collapse */
+    transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-handle::before {
+    transform: translateY(2px) rotate(-135deg); /* points up → tap to expand */
+  }
+
+  /* Body: the active tabpanel only; scrolls inside the sheet. */
+  .olv-msheet-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 var(--space-md) var(--space-md);
+  }
+  .olv-msheet-body.olv-hidden { display: none; }
+  .olv-msheet-slot { display: none; }
+  .olv-msheet-slot.is-active { display: block; }
+
+  /* Re-parented panels flow normally, full width, opaque, no fixed position or
+     drag-resize. Each panel keeps its own internal markup + logic. */
+  .olv-mobile-sheet .olv-inspector,
+  .olv-mobile-sheet .olv-analyse-panel,
+  .olv-mobile-sheet .olv-object-panel,
+  .olv-mobile-sheet .olv-class-panel,
+  .olv-mobile-sheet .olv-measure-panel,
+  .olv-mobile-sheet .olv-anno-panel,
+  .olv-mobile-sheet .olv-export-panel {
+    position: static;
+    inset: auto;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    max-height: none;
+    margin: 0 0 var(--space-md) 0;
+    transform: none;
+    background: var(--panel);
+    box-shadow: none;
+    resize: none;
+    overflow: visible;
+    animation: none;
+  }
+  .olv-mobile-sheet .olv-msheet-slot > *:last-child { margin-bottom: 0; }
+
+  /* The Inspector loses its standalone-sheet furniture inside the unified sheet:
+     the grip line, the tap-to-toggle chevron, and the close button are the
+     parent sheet's job now. Its content shows in full (no peek/translate). */
+  .olv-mobile-sheet .olv-inspector::before { display: none; }
+  .olv-mobile-sheet .olv-inspector .olv-sheet-chevron,
+  .olv-mobile-sheet .olv-inspector .olv-sheet-close { display: none; }
+  .olv-mobile-sheet .olv-inspector .olv-panel-head { cursor: default; }
+}

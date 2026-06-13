@@ -53,6 +53,7 @@ import { countClasses } from './render/class/classHistogram';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
+import { MobileSheet } from './ui/MobileSheet';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
 import {
@@ -2397,6 +2398,11 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
  * anyway" affordance. Routing is on `nonTerrain`, not just the legacy `kind`,
  * and re-evaluates as a streaming cloud fills in (see `applyScanRoute`).
  */
+// Set once the mobile bottom-sheet is wired (full app only). Lets the scan
+// lifecycle (reveal / reset) re-evaluate whether the phone sheet should show,
+// without main.ts holding a direct reference to the sheet instance.
+let syncMobileSheet: (() => void) | null = null;
+
 function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name);
   exportPanel.setVisible(true);
@@ -2418,6 +2424,8 @@ function revealAnalysePanel(name: string, settled = true): void {
   // Streaming callers pass false: their open-time verdict runs on a sparse
   // coarse frame, so the "Treat as" commit waits for the settle one-shot.
   applyScanRoute(true, settled);
+  // A scan is now loaded — let the phone sheet show (no-op on desktop).
+  syncMobileSheet?.();
 }
 
 /**
@@ -2692,7 +2700,74 @@ void viewerLoaded.then(() => {
     // The live-probe readout follows the cursor above the panels.
     stage.overlay.append(viewer.probeElements.readout);
     // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
+    // On phones it is superseded by the unified bottom sheet below (CSS hides
+    // it under that breakpoint); on desktop it is unused (the Inspector is a
+    // normal panel there). Kept appended so the desktop/no-sheet path is intact.
     stage.overlay.append(inspector.sheetToggle);
+
+    // ── Phone bottom-sheet (design audit 1.3 follow-up) ───────────────────
+    // Below the mobile breakpoint the floating panels don't fit side-by-side,
+    // so one bottom sheet hosts them behind a View · Analyse · Layers tablist.
+    // The sheet owns only the chrome; here we RE-PARENT the existing panel
+    // elements into its slots on mobile and restore them to their desktop homes
+    // on a wider viewport. Re-parenting a live node keeps its listeners, so no
+    // panel is re-wired on a breakpoint flip. Desktop layout is untouched.
+    const mobileSheet = new MobileSheet();
+    stage.overlay.append(mobileSheet.element);
+
+    const toMobileLayout = (): void => {
+      mobileSheet.slot('view').append(inspector.element);
+      mobileSheet.slot('analyse').append(analysePanel.element, objectPanel.element);
+      mobileSheet
+        .slot('layers')
+        .append(
+          classLegendPanel.element,
+          measurePanel.element,
+          annotationPanel.element,
+          exportPanel.element,
+        );
+      // The now-empty left column would still capture touches over its band —
+      // hide it. The Inspector's standalone "Scan Info" launcher is superseded.
+      leftPanels.classList.add('olv-hidden');
+      inspector.sheetToggle.classList.add('olv-hidden');
+    };
+    const toDesktopLayout = (): void => {
+      leftPanels.classList.remove('olv-hidden');
+      inspector.sheetToggle.classList.remove('olv-hidden');
+      // Inspector returns to the overlay in its original slot (just before the
+      // streaming panel); the left column is rebuilt in its original order.
+      stage.overlay.insertBefore(inspector.element, streamingPanel.element);
+      leftPanels.append(
+        measurePanel.element,
+        annotationPanel.element,
+        objectPanel.element,
+        classLegendPanel.element,
+        analysePanel.element,
+        exportPanel.element,
+      );
+    };
+
+    const mobileMql =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(max-width: 767px)')
+        : null;
+    let mobileApplied = false;
+    const applyMobileSheet = (): void => {
+      const isMobile = mobileMql ? mobileMql.matches : false;
+      if (isMobile !== mobileApplied) {
+        if (isMobile) toMobileLayout();
+        else toDesktopLayout();
+        mobileApplied = isMobile;
+      }
+      // The sheet only shows on a phone WITH a scan loaded; otherwise the empty
+      // slots would float a chrome bar over the empty state.
+      mobileSheet.setVisible(isMobile && hasScan());
+    };
+    // Expose to the scan lifecycle so reveal / reset re-evaluate visibility.
+    syncMobileSheet = applyMobileSheet;
+    mobileMql?.addEventListener('change', applyMobileSheet);
+    applyMobileSheet();
+
     // The help overlay is a modal — appended last so it sits above everything.
     stage.overlay.append(helpOverlay.element);
 
@@ -4711,6 +4786,8 @@ function resetToEmptyState(): void {
   // reset path and a closed 360 / object scan would otherwise leave its report
   // lingering over the empty state. v0.4.3.
   objectPanel.setVisible(false);
+  // No scan → hide the phone bottom-sheet (no-op on desktop).
+  syncMobileSheet?.();
   // Abort any in-flight terrain compute (worker job + its reply) so a result
   // for the now-closed scan can never land on the panel, and drop every cached
   // terrain core so a stale core can't be served for a different scan and
