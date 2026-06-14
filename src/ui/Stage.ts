@@ -1,5 +1,6 @@
 import { el } from './dom';
 import { openConfirm } from './Modal';
+import { FullscreenToggle } from './FullscreenToggle';
 
 /** A built-in sample scan offered on the empty state. */
 export interface Sample {
@@ -244,7 +245,16 @@ export class Stage {
     github.target = '_blank';
     github.rel = 'noreferrer';
 
-    const right = el('div', { className: 'olv-topbar-right' }, [privacy, github]);
+    // Full-screen toggle — lives in the header cluster (just left of the
+    // theme toggle, which inserts itself before GitHub). Self-contained:
+    // it drives the Fullscreen API on the whole app and tracks F11/Esc too.
+    const fullscreen = new FullscreenToggle();
+
+    const right = el('div', { className: 'olv-topbar-right' }, [
+      privacy,
+      fullscreen.element,
+      github,
+    ]);
     this._topBarRight = right;
     this._githubLink = github;
     return el('header', { className: 'olv-topbar' }, [wordmark, right]);

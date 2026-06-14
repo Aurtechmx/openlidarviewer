@@ -315,6 +315,38 @@
 .olv-theme-toggle:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
+
+/* Full-screen toggle — same ghost-icon treatment as the theme toggle so the
+   header cluster reads as one family (Gestalt similarity). */
+.olv-fs-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; margin: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard),
+    transform 90ms var(--ease-standard);
+}
+.olv-fs-toggle svg { width: 17px; height: 17px; display: block; }
+.olv-fs-toggle:hover {
+  color: var(--text);
+  border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  transform: scale(1.06);
+}
+.olv-fs-toggle:active { transform: scale(0.94); }
+.olv-fs-toggle.is-fs { color: var(--accent); }
+.olv-fs-toggle:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-fs-toggle { transition: none; }
+  .olv-fs-toggle:hover, .olv-fs-toggle:active { transform: none; }
+}
 /* Each icon state is absolutely stacked in the same 18px box. */
 .olv-theme-icon {
   position: absolute; inset: 0;
