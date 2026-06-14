@@ -77,7 +77,14 @@ export class ExportPanel {
     head.append(title, collapseBtn);
     const toggle = () => this.element.classList.toggle('olv-collapsed');
     collapseBtn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
-    head.addEventListener('click', (e) => { if (e.target === head || e.target === title) toggle(); });
+    // Toggle on a click anywhere in the head EXCEPT the collapse button (which
+    // handles itself + stops propagation). `title` now holds an icon + a
+    // <span>, so a click lands on those children — match any descendant of the
+    // title, not just the title node itself, or the head row never expands.
+    head.addEventListener('click', (e) => {
+      const node = e.target as Node;
+      if (e.target === head || title.contains(node)) toggle();
+    });
 
     this._formatRow = el('div', { className: 'olv-bc-pills' });
     this._crsLabel = this._label('Coordinate system');
