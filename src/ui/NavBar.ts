@@ -296,7 +296,9 @@ export class NavBar {
     // at a face to measure it flat" controls. Sits under the angled Camera
     // presets (Gestalt proximity: both are "ways to aim the camera"), but in
     // its own labelled row so the two intents stay distinct.
-    const viewsRow = el('div', { className: 'olv-cam-presets' });
+    // Distinct row class (NOT `olv-cam-presets`) so the camera-preset specs'
+    // `.olv-cam-presets` locators keep resolving to the single "Camera" row.
+    const viewsRow = el('div', { className: 'olv-cam-views' });
     for (const view of STANDARD_VIEW_ORDER) {
       const label = STANDARD_VIEW_LABEL[view];
       const btn = el('button', {

@@ -29,12 +29,9 @@ async function loadSample(page: Page): Promise<void> {
 /** The six standard views in their display order. */
 const VIEW_NAMES = ['Top', 'Bottom', 'Front', 'Back', 'Left', 'Right'] as const;
 
-/** The `.olv-cam-presets` row whose label reads "Views" (not "Camera"). */
+/** The dedicated "Views" row (its own class, distinct from `.olv-cam-presets`). */
 function viewsRow(page: Page): Locator {
-  return page
-    .locator('.olv-cam-presets-row')
-    .filter({ has: page.locator('.olv-cam-presets-label', { hasText: 'Views' }) })
-    .locator('.olv-cam-presets');
+  return page.locator('.olv-cam-views');
 }
 
 test.describe('standard views — NavBar "Views" row', () => {
