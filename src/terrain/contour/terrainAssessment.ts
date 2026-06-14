@@ -304,7 +304,18 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     poorMetricCount >= LIMITED_POOR_METRIC_COUNT ||
     interpFrac > SEVERE_GAP_FRACTION ||
     emptyFrac > SEVERE_GAP_FRACTION;
-  if (seriouslyDeficient) status = capStatus(status, 'Limited');
+  // A 'resident-only' analysis is a PARTIAL stream — only the streamed-in octree
+  // nodes were walked, typically a coarse overview far sparser than the full
+  // cloud. Its interpolation / edge / density figures reflect how little has
+  // loaded, not a final judgment of the scan, so a streaming scan that is
+  // actually fine reads as 'Limited' with alarming "100% at the edge" reasons.
+  // Don't render that definitive downgrade on incomplete data: hold the verdict
+  // at the gate's 'Preview' (preliminary) and let a re-run on the fully-streamed
+  // cloud (coverageMode 'full') give the real grade. A genuinely unusable
+  // surface is still caught by the gate's Blocked path above, which is not
+  // gated here.
+  const partialStream = coverageMode === 'resident-only';
+  if (seriouslyDeficient && !partialStream) status = capStatus(status, 'Limited');
 
   // ── reason (one plain line) ───────────────────────────────────────────
   const gateReason = q.reasons?.find((r) => r && r.trim().length > 0);
@@ -330,7 +341,14 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     // measurement, dtmCellStatus 'edgeRisk') and was untrue for this one.
     if (edgeFrac > HIGH_EDGE_FRACTION) caps.push(`${pctStr(edgeFrac)} of measured cells sit at the edge of the data, where the surface is least supported`);
     if (density < LOW_DENSITY_PER_M2) caps.push('ground returns are sparse');
-    if (status === 'Limited') {
+    if (coverageMode === 'resident-only') {
+      // PARTIAL STREAM: lead with the honest "only part has loaded" framing, not
+      // the sparse interpolation / edge figures (which are streaming artefacts
+      // that firm up as more nodes arrive). The full breakdown still lives in
+      // the supporting metrics + the "Why?" details for anyone who wants it.
+      reason =
+        'Preliminary — only the streamed-in part of the scan has been analysed so far. Let the full cloud stream in, then re-run for a final assessment.';
+    } else if (status === 'Limited') {
       // The surface was downgraded BELOW the gate's preview tier, so do NOT
       // reuse the gate's "Preview only: …" wording — it would contradict the
       // Limited headline. State the Limited framing from the strongest caps.

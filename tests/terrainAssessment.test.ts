@@ -227,6 +227,40 @@ describe('terrainAssessment', () => {
     expect(cov?.value).toMatch(/sampled/i);
   });
 
+  it('a resident-only PARTIAL STREAM stays Preview (not Limited) and reads as preliminary', () => {
+    // The real-world case: a streaming COPC analysed on the few resident octree
+    // nodes is sparse (high interpolation, ~all measured cells near a gap) — but
+    // that reflects how little has loaded, not the scan. It must NOT render a
+    // definitive "Limited"; the verdict stays Preview and the reason says so.
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        coverageMode: 'resident-only',
+        interpolatedFraction: 0.49,
+        edgeRiskRatio: 1.0,
+        score: 56,
+      }),
+    );
+    expect(a.status).toBe('Preview');
+    expect(a.reason).toMatch(/preliminary/i);
+    expect(a.reason).toMatch(/stream/i);
+    expect(a.reason).not.toMatch(/insufficient quality/i);
+    expect(a.reason).not.toMatch(/100% of measured cells/i);
+  });
+
+  it('the SAME deficiency on a fully-walked cloud IS Limited (guard is partial-stream-only)', () => {
+    const a = terrainAssessment(
+      fixture({
+        readiness: 'previewOnly',
+        coverageMode: 'full',
+        interpolatedFraction: 0.49,
+        edgeRiskRatio: 1.0,
+        score: 56,
+      }),
+    );
+    expect(a.status).toBe('Limited');
+  });
+
   it('populates supportingMetrics with the required labels', () => {
     const a = terrainAssessment(fixture());
     const labels = a.supportingMetrics.map((m) => m.label);
