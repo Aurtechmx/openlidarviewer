@@ -2325,6 +2325,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       unitToMetres,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
+      // A still-streaming cloud is measured on its resident subset only — lead
+      // the caveats with the stronger "Preliminary — partial stream" note.
+      residentOnly: gathered.residentOnly,
     });
     const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
     // Same stride honesty as spaceMetrics above: the gather caps at 60 k, so

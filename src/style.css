@@ -5701,6 +5701,15 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* The decision-critical caveat that stays visible above the collapsed
    disclosure reads a touch firmer than the tucked-away secondary notes. */
 .olv-object-note.is-lead { color: var(--text); }
+/* A partial-stream "Preliminary —" lead reads as a warning: these figures will
+   change as more of the scan loads, so it earns the caution rule + a firmer
+   weight, distinct from the standing not-survey-grade honesty line. */
+.olv-object-note.is-preliminary {
+  color: var(--text);
+  font-weight: 500;
+  --caveat-rule: var(--rating-preview, var(--accent));
+  background: color-mix(in srgb, var(--rating-preview, var(--accent)) 9%, transparent);
+}
 
 /* v0.4.6 caveat-collapse: the secondary honest caveats fold into ONE native
    <details> disclosure (collapsed by default) so the panel is not a wall of

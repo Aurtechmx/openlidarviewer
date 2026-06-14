@@ -81,6 +81,20 @@ describe('ObjectPanel — space / object routing', () => {
     }
   });
 
+  it('surfaces a "Preliminary — partial stream" caveat for a resident-only space', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
+    const { classifyScanShape } = await import('../src/terrain/scanShape');
+    const pos = room();
+    const shape = classifyScanShape(pos);
+    const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', residentOnly: true });
+    const panel = new ObjectPanel();
+    panel.showSpace(space, shape);
+    const text = (panel.element as unknown as FakeEl).textContent;
+    expect(text).toContain('Preliminary —');
+    expect(text).toContain('will change as more loads');
+  });
+
   function cubeShell(): Float32Array {
     const cube: number[] = [];
     for (let u = 0; u <= 4; u += 0.5)

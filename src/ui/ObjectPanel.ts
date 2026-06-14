@@ -219,13 +219,23 @@ export class ObjectPanel {
    */
   private _caveats(reasons: ReadonlyArray<string>): void {
     if (reasons.length === 0) return;
-    // Pick the decision-critical headline: the certified-survey honesty line
-    // if present (it is, for interiors), else the first reason as a fallback.
-    const leadIdx = reasons.findIndex((r) => /not a certified survey/i.test(r));
-    const lead = leadIdx >= 0 ? reasons[leadIdx] : reasons[0];
-    const rest = reasons.filter((_, i) => i !== (leadIdx >= 0 ? leadIdx : 0));
+    // Pick the decision-critical headline. A genuine partial-stream "Preliminary
+    // —" caveat wins outright (the figures are provisional on a partial load);
+    // else the certified-survey honesty line (present for interiors); else the
+    // first reason as a fallback.
+    const partialIdx = reasons.findIndex((r) => /^Preliminary —/.test(r));
+    const certIdx = reasons.findIndex((r) => /not a certified survey/i.test(r));
+    const leadIdx = partialIdx >= 0 ? partialIdx : certIdx >= 0 ? certIdx : 0;
+    const lead = reasons[leadIdx];
+    const rest = reasons.filter((_, i) => i !== leadIdx);
+    const isPreliminary = leadIdx === partialIdx && partialIdx >= 0;
 
-    this._body.append(el('div', { className: 'olv-object-note is-lead', text: lead }));
+    this._body.append(
+      el('div', {
+        className: `olv-object-note is-lead${isPreliminary ? ' is-preliminary' : ''}`,
+        text: lead,
+      }),
+    );
 
     if (rest.length === 0) return;
     // ONE collapsed disclosure for the secondary caveats. Native

@@ -89,6 +89,17 @@ describe('spaceMetrics — interior', () => {
     expect(m.quality.hasRgb).toBe(false);
     expect(m.reasons.some((r) => /currently loaded \/ streamed/.test(r))).toBe(true);
   });
+
+  it('leads with a "Preliminary — partial stream" caveat when residentOnly', () => {
+    const partial = spaceMetrics(room(), { upAxis: 'z', spaceKind: 'interior', residentOnly: true });
+    // The partial-stream caveat is the FIRST reason (the panel leads with it).
+    expect(partial.reasons[0]).toMatch(/^Preliminary —/);
+    expect(partial.reasons[0]).toMatch(/will change as more loads/);
+    // The generic "currently loaded" caveat is replaced, not stacked.
+    expect(partial.reasons.some((r) => /currently loaded \/ streamed/.test(r))).toBe(false);
+    // A full (non-resident) gather keeps the milder caveat, not "Preliminary".
+    expect(m.reasons[0]).not.toMatch(/^Preliminary —/);
+  });
 });
 
 describe('spaceMetrics — storeys & units & objects', () => {
