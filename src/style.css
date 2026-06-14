@@ -5391,12 +5391,35 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   --caveat-rule: var(--rating-blocked);
   background: color-mix(in srgb, var(--rating-blocked) 9%, transparent);
 }
-/* v0.4.6 (design audit 2.1): "Reason:" prefix → quiet sentence-case sans. */
+/* v0.4.6 (design audit 2.1): "Reason" → quiet sentence-case sans.
+   The reason is now a collapsed <details> toggle (a product whose reason simply
+   repeats the verdict is suppressed entirely; only a product-specific reason
+   renders, collapsed). The <summary> is the clickable label. */
+.olv-analyse-product-reason > summary.olv-analyse-product-reason-label {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex; align-items: center; gap: var(--space-2xs);
+  -webkit-tap-highlight-color: transparent;
+}
+.olv-analyse-product-reason > summary.olv-analyse-product-reason-label::-webkit-details-marker {
+  display: none;
+}
+/* A small disclosure caret that rotates when the reason is opened. */
+.olv-analyse-product-reason > summary.olv-analyse-product-reason-label::before {
+  content: "›";
+  display: inline-block;
+  transition: transform 160ms ease;
+  color: var(--text-faint);
+}
+.olv-analyse-product-reason[open] > summary.olv-analyse-product-reason-label::before {
+  transform: rotate(90deg);
+}
 .olv-analyse-product-reason-label {
   font-family: var(--font); font-weight: 600; letter-spacing: 0;
   text-transform: none; font-size: 1em; color: var(--text-faint);
   margin-right: var(--space-2xs);
 }
+.olv-analyse-product-reason-text { margin-top: var(--space-2xs); display: block; }
 .olv-analyse-product.is-ready .olv-analyse-product-glyph,
 .olv-analyse-product.is-ready .olv-analyse-product-status { color: var(--rating-excellent); }
 .olv-analyse-product.is-preview .olv-analyse-product-glyph,

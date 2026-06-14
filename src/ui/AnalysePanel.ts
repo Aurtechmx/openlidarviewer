@@ -488,7 +488,10 @@ export class AnalysePanel {
     // the checklist below it. The full "Recommended workflow" checklist stays
     // available, collapsed, for anyone who wants the verb-level detail.
     const workflows = recommendedWorkflows(a, this._result.quality);
-    this._assessmentRow.append(renderTerrainProducts(terrainProducts(a, workflows)));
+    // Pass the verdict reason so products held back by that SAME surface reason
+    // don't repeat it on every row (it is already shown once on the verdict);
+    // only a product-specific reason renders, and then collapsed behind a toggle.
+    this._assessmentRow.append(renderTerrainProducts(terrainProducts(a, workflows), a.reason));
     const workflowDetail = el('details', { className: 'olv-analyse-workflow-details' });
     workflowDetail.append(
       el('summary', {

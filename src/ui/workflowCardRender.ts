@@ -75,7 +75,10 @@ export function renderWorkflowCard(items: ReadonlyArray<WorkflowItem>): HTMLElem
  * hears product, status and reason as one list item. The pure mapper
  * (`terrainProducts`) supplies every string; this builder only lays them out.
  */
-export function renderTerrainProducts(products: ReadonlyArray<TerrainProduct>): HTMLElement {
+export function renderTerrainProducts(
+  products: ReadonlyArray<TerrainProduct>,
+  sharedReason?: string,
+): HTMLElement {
   const card = el('div', { className: 'olv-analyse-products' });
   card.append(el('div', { className: 'olv-analyse-products-head', text: 'Terrain products' }));
   const list = el('ul', { className: 'olv-analyse-products-list' });
@@ -90,13 +93,18 @@ export function renderTerrainProducts(products: ReadonlyArray<TerrainProduct>): 
       el('span', { className: 'olv-analyse-product-status', text: p.statusWord }),
     );
     row.append(head);
-    if (p.reason) {
-      const reason = el('div', { className: 'olv-analyse-product-reason' });
-      reason.append(
-        el('span', { className: 'olv-analyse-product-reason-label', text: 'Reason:' }),
-        el('span', { className: 'olv-analyse-product-reason-text', text: p.reason }),
+    // De-dup: when a product is held back by the SAME surface reason already
+    // shown once on the verdict above, repeating it on every row is noise — the
+    // common case where one weak surface caps all six products. Show the per-row
+    // reason only when it ADDS information (differs from the verdict reason), and
+    // even then collapse it behind a toggle so the list stays scannable.
+    if (p.reason && p.reason !== sharedReason) {
+      const details = el('details', { className: 'olv-analyse-product-reason' });
+      details.append(
+        el('summary', { className: 'olv-analyse-product-reason-label', text: 'Reason' }),
+        el('div', { className: 'olv-analyse-product-reason-text', text: p.reason }),
       );
-      row.append(reason);
+      row.append(details);
     }
     list.append(row);
   }
