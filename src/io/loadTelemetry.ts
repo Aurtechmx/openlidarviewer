@@ -40,7 +40,11 @@ const TELEMETRY_ROWS: [string, keyof LoadTelemetry][] = [
   ['downsample', 'downsampleMs'],
   ['gpu upload', 'gpuUploadMs'],
   ['first render', 'firstRenderMs'],
-  ['total', 'totalLoadMs'],
+  // Wall-clock end-to-end (drop → resolved). It is LESS than the sum of the
+  // stages above because the worker stages (decode / downsample) overlap the
+  // main-thread stages — so the "(wall)" tag flags it as elapsed time, not an
+  // accounting total, and the rows never look like they fail to add up.
+  ['total (wall)', 'totalLoadMs'],
 ];
 
 /**

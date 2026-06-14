@@ -196,7 +196,12 @@ export class DebugOverlay {
       this._live.textContent = [
         `backend       ${backendLabel}`,
         `fps           ${stats.fps.toFixed(0)}  (${stats.frameMs.toFixed(1)} ms)`,
-        `draw calls    ${stats.drawCalls}`,
+        // A WebGPU backend can report 0 draw calls even while millions of
+        // points are clearly on screen (the EDL post-pipeline / streaming path
+        // doesn't always populate renderer.info). A bare "0" then reads as
+        // false; surface "—" (unmeasured) instead so the overlay never asserts
+        // an obviously-wrong count.
+        `draw calls    ${stats.drawCalls > 0 || stats.displayedPoints === 0 ? stats.drawCalls : '—'}`,
         `points        ${formatInt(stats.displayedPoints)} shown` +
           ` / ${formatInt(stats.totalPoints)} total`,
         `gpu estimate  ${formatBytes(stats.gpuBytesEstimate)}`,

@@ -227,7 +227,11 @@ export class ClassLegendPanel {
     this._empty.classList.add('olv-hidden');
     this._list.classList.remove('olv-hidden');
 
-    this._list.replaceChildren(...codes.map((code) => this._row(code)));
+    // Solo only means something when there's more than one class to isolate
+    // FROM — with a single class, "Solo" would just flip the panel into a
+    // filtered state with no visible change, so it's disabled.
+    const soloUseful = codes.length > 1;
+    this._list.replaceChildren(...codes.map((code) => this._row(code, soloUseful)));
 
     // Persistent banner — only while a filter is active.
     if (this._visibility.isFiltered()) {
@@ -242,7 +246,7 @@ export class ClassLegendPanel {
   }
 
   /** Build one class row: swatch · name · count · solo · checkbox. */
-  private _row(code: number): HTMLElement {
+  private _row(code: number, soloUseful = true): HTMLElement {
     const on = this._visibility.isVisible(code);
     const name = classificationLabel(code);
 
@@ -263,9 +267,10 @@ export class ClassLegendPanel {
     const solo = el('button', {
       className: 'olv-cl-solo olv-cl-solo-ico',
       unsafeHtml: ICON_SOLO + '<span class="olv-cl-solo-label">Solo</span>',
-      title: `Show only ${name}`,
+      title: soloUseful ? `Show only ${name}` : 'Only one class — nothing to isolate from',
       ariaLabel: `Show only ${name}`,
-    });
+    }) as HTMLButtonElement;
+    solo.disabled = !soloUseful;
     solo.addEventListener('click', () => {
       solo.blur();
       this._visibility.isolate(code);
