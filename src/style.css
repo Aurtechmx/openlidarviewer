@@ -2152,22 +2152,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border: 0.5px solid rgba(0, 178, 255, 0.34);
   border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
 }
-/*
- * The live instruction ("Tap the first point…") floats as a glass pill just
- * to the RIGHT of the rail, vertically centred — a status readout beside the
- * tools rather than a row that widens the column. Absolutely positioned, so
- * it never affects the rail's width.
- */
+/* The live instruction ("Tap the first point…") sits as a tidy inline row
+ * between the kind tools and the actions on desktop. (On the phone rail it is
+ * hidden — the on-canvas pulsing dot carries the guidance there.) */
 .olv-measure-hint-row {
-  position: absolute; left: calc(100% + 12px); top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex; align-items: center; gap: var(--space-sm);
-  white-space: nowrap; pointer-events: none;
-  background: rgba(11, 17, 33, 0.82);
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(0, 178, 255, 0.24);
-  border-radius: var(--radius-pill); padding: var(--space-xs) var(--space-md);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
+  display: inline-flex; align-items: center; gap: var(--space-md);
+  white-space: nowrap;
 }
 .olv-measure-badge {
   font-size: var(--text-2xs); color: var(--accent);
@@ -2178,9 +2168,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-measure-hint-text { font-size: var(--text-sm); color: var(--text); }
 .olv-measure-actions {
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
-  margin-top: var(--space-2xs); padding-top: var(--space-sm);
-  border-top: 0.5px solid var(--hairline);
+  display: flex; flex-direction: row; align-items: center; gap: var(--space-sm);
 }
 .olv-measure-clear, .olv-measure-done {
   font-size: var(--text-xs);
@@ -2855,27 +2843,28 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    Measurement toolbar (kind picker + actions) and the Measurements panel
    ─────────────────────────────────────────────────────────────────────────── */
 /*
- * The measurement toolbar is a vertical icon RAIL pinned to the left edge and
- * centred vertically (Photoshop / Blender pattern). A column of futuristic
- * glyph tools, a hairline divider, then the action icons — the canvas top
- * stays clear and the rail never fights the top-right panels. The live
- * instruction floats as a pill beside the rail (see .olv-measure-hint-row).
+ * DESKTOP: the measurement toolbar is a horizontal glass bar pinned to the top
+ * centre — clear of the left-docked panels, the right-hand inspector, and the
+ * bottom dock. (A left-edge vertical rail would collide with the left-docked
+ * panel column, which on desktop also lives at left:14; that rail layout is
+ * therefore scoped to the phone breakpoint, where the panels move into the
+ * bottom sheet and free the left column.) Three stacked rows: the kind tools,
+ * the live instruction, then the action buttons.
  */
 .olv-measure-bar {
-  position: absolute; top: 50%; left: 14px; transform: translateY(-50%);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
   gap: var(--space-sm); z-index: 36;
-  background: rgba(11, 17, 33, 0.72);
-  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-  border: 0.5px solid rgba(0, 178, 255, 0.22);
-  border-radius: var(--radius-pill); padding: var(--space-md) var(--space-xs);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
-  width: max-content; max-width: 70px;
-  /* Visible overflow so the right-side hover tooltips are never clipped. */
-  max-height: calc(100vh - 96px); overflow: visible;
+  background: rgba(11, 17, 33, 0.82);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 0.5px solid rgba(0, 178, 255, 0.28);
+  border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
+  /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
+  width: max-content; max-width: calc(100vw - 680px);
+  overflow: visible;
 }
 .olv-mkinds {
-  display: flex; flex-direction: column; align-items: center;
+  display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center;
   gap: var(--space-xs);
 }
 .olv-mkind {
@@ -2990,8 +2979,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mkind, .olv-micon-btn { position: relative; }
 .olv-measure-bar [data-tip]::after {
   content: attr(data-tip);
-  position: absolute; left: calc(100% + 12px); top: 50%;
-  transform: translateY(-50%) translateX(-4px);
+  position: absolute; top: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%) translateY(-4px);
   padding: 4px 9px; border-radius: var(--radius-sm);
   background: rgba(8, 13, 26, 0.94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -3003,17 +2992,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
 }
 .olv-measure-bar [data-tip]::before {
-  content: ''; position: absolute; left: calc(100% + 7px); top: 50%;
-  width: 7px; height: 7px; transform: translateY(-50%) rotate(45deg);
+  content: ''; position: absolute; top: calc(100% + 3px); left: 50%;
+  width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
   background: rgba(8, 13, 26, 0.94);
   border-left: 0.5px solid rgba(0, 178, 255, 0.42);
-  border-bottom: 0.5px solid rgba(0, 178, 255, 0.42);
+  border-top: 0.5px solid rgba(0, 178, 255, 0.42);
   opacity: 0; pointer-events: none; z-index: 60;
   transition: opacity 140ms var(--ease-standard);
 }
 .olv-measure-bar [data-tip]:hover::after,
 .olv-measure-bar [data-tip]:focus-visible::after {
-  opacity: 1; transform: translateY(-50%) translateX(0);
+  opacity: 1; transform: translateX(-50%) translateY(0);
 }
 .olv-measure-bar [data-tip]:hover::before,
 .olv-measure-bar [data-tip]:focus-visible::before { opacity: 1; }
