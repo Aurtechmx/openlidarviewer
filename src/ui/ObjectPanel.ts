@@ -23,11 +23,53 @@ import {
 } from '../terrain/spaceMetrics';
 import type { ScanShape, SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
+import type { SnapMode } from '../terrain/space/floorplan/vectorize';
+// Type-only — the runtime helper (and the heavy extractor it reads) stay in the
+// lazy floor-plan chunk; the panel only renders a struct the host computes there.
+import type { FloorPlanConfidence } from '../terrain/space/floorplan/floorPlanConfidence';
 import {
   createScanTypeControl,
   type ScanTypeControl,
   type ScanTypeDisabledReasons,
 } from './scanTypeControl';
+
+/**
+ * The user-tunable subset of the floor-plan extraction settings, surfaced as a
+ * compact control under the "Floor plan preview" button. The host reads this
+ * back via {@link ObjectPanel.floorPlanOptions} and spreads it into BOTH the
+ * standalone-SVG and embedded-PDF extract calls, so the two artifacts can never
+ * disagree on the policy the user chose.
+ *
+ *   - `snapMode` — wall axis-snapping: 'auto' (snap only when the scan is
+ *     genuinely rectilinear), 'strong' ("Square" — force the dominant axis
+ *     pair), 'off' ("As-is" — leave directions exactly as traced);
+ *   - `adaptiveBand` — let the wall-slice band widen/retry when the fixed band
+ *     is too sparse, vs. pinning the fixed band.
+ *
+ * The defaults mirror main.ts FLOORPLAN_OPTIONS (the headless defaults this
+ * control was plumbed against): snap 'auto', adaptive band on.
+ */
+export interface FloorPlanExportOptions {
+  readonly snapMode: SnapMode;
+  readonly adaptiveBand: boolean;
+}
+
+/** The control's default selections — must mirror main.ts FLOORPLAN_OPTIONS. */
+export const FLOOR_PLAN_EXPORT_DEFAULTS: FloorPlanExportOptions = {
+  snapMode: 'auto',
+  adaptiveBand: true,
+};
+
+/** The three "Walls" segments, in display order, mapped to their snap modes. */
+const WALL_SEGMENTS: ReadonlyArray<{
+  readonly mode: SnapMode;
+  readonly label: string;
+  readonly title: string;
+}> = [
+  { mode: 'auto', label: 'Auto', title: 'Snap walls to right angles only when the scan is genuinely rectilinear (recommended).' },
+  { mode: 'strong', label: 'Square', title: 'Force walls onto the dominant perpendicular axis pair — right angles may be assumed where the scan shows none.' },
+  { mode: 'off', label: 'As-is', title: 'Leave wall directions exactly as traced — no axis snapping.' },
+];
 
 export interface ObjectPanelCallbacks {
   /** Reveal + run the terrain pipeline despite the non-terrain verdict. */
@@ -91,6 +133,16 @@ export class ObjectPanel {
   private _scanTypeEffective: SpaceKind | null = null;
   private _scanTypeDisabled: ScanTypeDisabledReasons | undefined;
   private _scanTypeCommitted = false;
+  // The floor-plan export options the user picked, held across body rebuilds
+  // (showSpace re-renders the body each call). Seeded with the headless
+  // defaults so an export before any interaction matches FLOORPLAN_OPTIONS.
+  private _floorPlan: FloorPlanExportOptions = { ...FLOOR_PLAN_EXPORT_DEFAULTS };
+  /**
+   * The floor-plan confidence summary slot — empty until the host runs a
+   * "Floor plan preview" export and feeds back the computed figures. Recreated
+   * on each body rebuild, so a re-render clears a stale summary.
+   */
+  private _floorPlanSummaryEl: HTMLElement | null = null;
 
   constructor(cb: ObjectPanelCallbacks = {}) {
     this._cb = cb;
@@ -126,6 +178,16 @@ export class ObjectPanel {
     this.element.classList.toggle('olv-hidden', !visible);
   }
 
+  /**
+   * The floor-plan export options the user currently has selected. The host
+   * spreads this into the extractFloorPlan() call for BOTH the standalone SVG
+   * and the report-embedded plan, so a single source of truth drives both
+   * artifacts. Returns a copy so callers can't mutate internal state.
+   */
+  floorPlanOptions(): FloorPlanExportOptions {
+    return { ...this._floorPlan };
+  }
+
   private _row(label: string, value: string, hint?: string): HTMLElement {
     return el('div', { className: 'olv-object-row' }, [
       el('span', { className: 'olv-object-label', text: label }),
@@ -140,16 +202,64 @@ export class ObjectPanel {
         'Points used for this analysis and the total they were sampled from.'),
       this._row('Density · spacing', `${q.densityPerM2.toFixed(1)} pts/m² · ~${cm(q.meanSpacingM)}`,
         'Approximate areal density and mean point spacing.'),
-      this._row('Coverage', `${Math.round(q.coveragePct)}% of footprint`,
-        'Share of the footprint with returns — completeness so far.'),
+      // HONESTY: coveragePct is occupied-cells / (cols*rows) over the scan's
+      // axis-aligned BOUNDING-BOX grid (spaceMetrics.ts) — a fill ratio of the
+      // extent, not of a traced footprint outline. Label + hint say exactly
+      // that so the words match the computation (label==value).
+      this._row('Bounding area filled', `${Math.round(q.coveragePct)}%`,
+        'Share of the scan’s bounding-box footprint grid whose cells contain returns — a fill ratio of the extent, not of a measured room outline.'),
       this._row('Colour (RGB)', q.hasRgb ? 'Yes' : 'No'),
     );
   }
 
+  /**
+   * Render the honest caveats WITHOUT the orange wall-of-notes. WHY: every
+   * `reasons` entry used to stack as its own `.olv-object-note`, so a normal
+   * interior scan showed ~5 stacked notes ("Based on points currently
+   * loaded…", "N stray returns excluded…", "Density scaled…", "Ceilings
+   * sparsely captured…", "Wall and plane figures are pragmatic estimates…")
+   * that ate the panel. The single most decision-critical line — the
+   * "pragmatic estimates, not a certified survey" honesty statement — stays
+   * visible; the remaining secondary caveats fold into ONE collapsed
+   * <details> disclosure ("About these figures"). Nothing is removed: the
+   * collapsed content is still in the DOM (selectors/e2e that assert a caveat
+   * string is present keep passing), just tucked behind a real
+   * <details>/<summary> (native a11y, keyboard, animates cleanly).
+   */
   private _caveats(reasons: ReadonlyArray<string>): void {
-    for (const r of reasons) {
-      this._body.append(el('div', { className: 'olv-object-note', text: r }));
-    }
+    if (reasons.length === 0) return;
+    // Pick the decision-critical headline. A genuine partial-stream "Preliminary
+    // —" caveat wins outright (the figures are provisional on a partial load);
+    // else the certified-survey honesty line (present for interiors); else the
+    // first reason as a fallback.
+    const partialIdx = reasons.findIndex((r) => /^Preliminary —/.test(r));
+    const certIdx = reasons.findIndex((r) => /not a certified survey/i.test(r));
+    const leadIdx = partialIdx >= 0 ? partialIdx : certIdx >= 0 ? certIdx : 0;
+    const lead = reasons[leadIdx];
+    const rest = reasons.filter((_, i) => i !== leadIdx);
+    const isPreliminary = leadIdx === partialIdx && partialIdx >= 0;
+
+    this._body.append(
+      el('div', {
+        className: `olv-object-note is-lead${isPreliminary ? ' is-preliminary' : ''}`,
+        text: lead,
+      }),
+    );
+
+    if (rest.length === 0) return;
+    // ONE collapsed disclosure for the secondary caveats. Native
+    // <details>/<summary> gives real keyboard + aria-expanded semantics for
+    // free; the CSS animates the open/close. All `rest` strings live in the
+    // DOM even while collapsed, so nothing is hidden from tests or AT users.
+    const details = el('details', { className: 'olv-object-caveats' });
+    details.append(
+      el('summary', {
+        className: 'olv-object-caveats-summary',
+        text: `About these figures (${rest.length})`,
+      }),
+      ...rest.map((r) => el('div', { className: 'olv-object-note', text: r })),
+    );
+    this._body.append(details);
   }
 
   /**
@@ -209,13 +319,126 @@ export class ObjectPanel {
 
     this._body.append(row);
     if (withFloorPlan) {
+      // The compact options control for the preview export — wall snapping +
+      // adaptive band — sits directly under the button it tunes.
+      this._body.append(this._floorPlanOptionsRow());
       // The standing experimental hint for the preview export, in the panel's
       // note style (same vocabulary as the sheet and report carry).
       this._body.append(el('div', {
         className: 'olv-object-note',
         text: 'Floor plan preview is experimental — requires visual validation.',
       }));
+      // Empty confidence slot — filled by showFloorPlanSummary() after the host
+      // builds the preview, so the user gets a one-glance trust read.
+      this._floorPlanSummaryEl = el('div', { className: 'olv-floorplan-confidence olv-hidden' });
+      this._body.append(this._floorPlanSummaryEl);
+    } else {
+      this._floorPlanSummaryEl = null;
     }
+  }
+
+  /**
+   * Render the floor-plan confidence summary after a "Floor plan preview" run.
+   * The host computes {@link FloorPlanConfidence} inside the lazy floor-plan
+   * chunk (where the extractor already lives) and hands the plain struct here,
+   * so the panel never pulls the heavy floor-plan code into its own bundle.
+   * Claim-accurate: rooms only when segmented, openings are classified doorways,
+   * "weak wall evidence" is a boundary-sample statistic — never survey-grade.
+   */
+  showFloorPlanSummary(c: FloorPlanConfidence): void {
+    const slot = this._floorPlanSummaryEl;
+    if (!slot) return;
+    const head = el('div', { className: 'olv-floorplan-confidence-head' }, [
+      el('span', { className: 'olv-floorplan-confidence-label', text: 'Floor plan confidence' }),
+      el('span', {
+        className: `olv-floorplan-confidence-band is-${c.band}`,
+        text: c.bandLabel,
+      }),
+    ]);
+    const stats = el('div', { className: 'olv-floorplan-confidence-stats' }, [
+      el('span', { text: `Rooms: ${c.roomsLabel}` }),
+      el('span', { text: `Walls: ${c.walls}` }),
+      el('span', { text: `Openings: ${c.openings}` }),
+    ]);
+    const weak = el('div', {
+      className: 'olv-floorplan-confidence-weak',
+      text: `Weak wall evidence: ${c.weakWallPct}%`,
+    });
+    slot.replaceChildren(head, stats, weak);
+    slot.classList.remove('olv-hidden');
+  }
+
+  /**
+   * The compact floor-plan EXPORT OPTIONS control: a 3-segment "Walls" picker
+   * (Auto / Square / As-is → snap auto / strong / off) and an "Adaptive height"
+   * toggle. Selections write straight into `_floorPlan`, which the host reads
+   * via {@link floorPlanOptions} at export time — so both the SVG and the
+   * report-embedded plan honour the same choice.
+   *
+   * a11y: the segments are real <input type="radio"> in a named group inside a
+   * <fieldset>/<legend>, so the group is announced and arrow-key navigable; the
+   * toggle is a real labelled <input type="checkbox">. The visible chips are the
+   * <label>s — clicking text or chip both flip the underlying control.
+   */
+  private _floorPlanOptionsRow(): HTMLElement {
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = 'olv-fp-options';
+
+    const legend = document.createElement('legend');
+    legend.className = 'olv-fp-options-legend';
+    legend.textContent = 'Floor plan options';
+    fieldset.append(legend);
+
+    // ── Walls segmented control (radio group) ──
+    const wallsRow = el('div', { className: 'olv-fp-opt-row' });
+    wallsRow.append(el('span', { className: 'olv-fp-opt-label', text: 'Walls' }));
+    const seg = document.createElement('div');
+    seg.className = 'olv-fp-seg';
+    seg.setAttribute('role', 'radiogroup');
+    seg.setAttribute('aria-label', 'Wall axis snapping');
+    // Unique group name so multiple panel instances don't share radio state.
+    const groupName = `olv-fp-walls-${Math.random().toString(36).slice(2, 8)}`;
+    for (const segDef of WALL_SEGMENTS) {
+      const id = `${groupName}-${segDef.mode}`;
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = groupName;
+      input.id = id;
+      input.className = 'olv-fp-seg-input';
+      input.value = segDef.mode;
+      input.checked = this._floorPlan.snapMode === segDef.mode;
+      input.addEventListener('change', () => {
+        if (input.checked) this._floorPlan = { ...this._floorPlan, snapMode: segDef.mode };
+      });
+      const label = document.createElement('label');
+      label.className = 'olv-fp-seg-label';
+      label.htmlFor = id;
+      label.title = segDef.title;
+      label.textContent = segDef.label;
+      seg.append(input, label);
+    }
+    wallsRow.append(seg);
+    fieldset.append(wallsRow);
+
+    // ── Adaptive height toggle (checkbox) ──
+    const toggle = document.createElement('label');
+    toggle.className = 'olv-fp-toggle';
+    toggle.title =
+      'Let the wall-height slice widen and retry when the fixed band is too sparse, instead of pinning the fixed band.';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'olv-fp-toggle-input';
+    check.checked = this._floorPlan.adaptiveBand;
+    check.addEventListener('change', () => {
+      this._floorPlan = { ...this._floorPlan, adaptiveBand: check.checked };
+    });
+    const toggleText = document.createElement('span');
+    toggleText.className = 'olv-fp-toggle-text';
+    toggleText.textContent = 'Adaptive height';
+    toggle.append(check, toggleText);
+    fieldset.append(toggle);
+
+    return fieldset;
   }
 
   /** The "Treat as" override row — placed near the run-anyway escape hatch so

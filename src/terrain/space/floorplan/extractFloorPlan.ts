@@ -40,7 +40,19 @@
  *                             spurs and tracing slivers are removed, and
  *                             wall gaps are classified door-vs-unknown by
  *                             jamb evidence (unknown gaps render dashed).
- *                             Door jambs survive every pass by construction.
+ *                             Door jambs survive every pass by construction;
+ *   5. wall graph + rooms ({@link buildWallGraph}, {@link extrudeWallGraph},
+ *      {@link detectRooms} — the v0.4.6 hardening)
+ *                           — the pruned skeleton becomes an explicit
+ *                             {nodes, edges} graph (per-edge measured
+ *                             thickness + observed fraction, straightened
+ *                             centerlines); the wall mask is RE-EXTRUDED from
+ *                             the graph (constant thickness per run, corner
+ *                             joins at junctions), and rooms are segmented by
+ *                             flood fill bounded by those walls + closed
+ *                             doorway spans (door-separated rooms stay
+ *                             distinct; unknown gaps never seal — an
+ *                             unscanned divider merges its regions).
  *
  * The model also carries the SCANNED-FLOOR region (for the light interior
  * fill — honest captured extent, not a synthetic room polygon) and a floor
@@ -55,9 +67,10 @@
  */
 
 import type { Axis } from '../../scanShape';
-import { wallSlice, type FloorBasis } from './wallSlice';
+import { wallSlice, type FloorBasis, type BandBasis } from './wallSlice';
 import {
   buildOccupancyMask,
+  buildCellHeightProfile,
   closeMask,
   closeRadiusCells,
   maskAreaM2,
@@ -71,6 +84,7 @@ import {
   SNAP_MODE,
   ringSignedArea,
   type Ring,
+  type SnapMode,
 } from './vectorize';
 import {
   classifyIslands,
@@ -82,8 +96,11 @@ import {
   SLIVER_THICKNESS_CELL_FRAC,
 } from './regularize';
 import { normalizeWallThickness, classifyWallGaps, type PlanGap } from './centerline';
+import { buildWallGraph, extrudeWallGraph } from './wallGraph';
+import { detectRooms, type RoomRegion, type RoomSegmentation } from './roomDetect';
 
 export type { PlanGap } from './centerline';
+export type { RoomRegion, RoomSegmentation } from './roomDetect';
 
 /** A closed plan ring, metres in the floor plane (h1 east, h2 north). */
 export type PlanRing = Ring;
@@ -112,6 +129,39 @@ export interface FloorPlanModel {
    */
   readonly doorways: ReadonlyArray<PlanGap>;
   readonly unknownGaps: ReadonlyArray<PlanGap>;
+  /**
+   * Rooms segmented by flood fill bounded by the wall-graph walls plus the
+   * classified doorways' closed spans (roomDetect.ts). Door-separated rooms
+   * stay distinct; unknown gaps are never closed, so an unscanned divider
+   * merges its regions instead of fabricating a wall. Empty when the graph
+   * pass did not run or no enclosed region survived.
+   */
+  readonly rooms: ReadonlyArray<RoomRegion>;
+  /**
+   * Honest segmentation outcome (roomDetect.ts). 'rooms' — the room schedule
+   * is real; 'open-space' — the floor is essentially ONE connected space
+   * ({@link openSpaceAreaM2}), not a multi-room partition; 'unsegmented' —
+   * rooms could not be reliably separated from the wall returns. The sheet /
+   * panel print the schedule ONLY for 'rooms', and the honest line otherwise —
+   * never a fabricated "5 rooms" on a floor the scan could not partition.
+   */
+  readonly roomSegmentation: RoomSegmentation;
+  /**
+   * The "open space" area, m², when {@link roomSegmentation} is 'open-space'
+   * (the single dominant interior region); 0 otherwise. Reported as
+   * "Open space · ~N m²" — an honest one-region figure, not a room.
+   */
+  readonly openSpaceAreaM2: number;
+  /**
+   * True when the wall poché was re-extruded FROM the centerline wall graph
+   * (wallGraph.ts) — one measured thickness per wall run, corner joins at
+   * junctions — rather than traced straight off the normalised mask. The
+   * sheet may then honestly say "wall-graph reconstruction".
+   */
+  readonly fromWallGraph: boolean;
+  /** Wall-graph size (footer provenance) — 0/0 when the graph did not run. */
+  readonly wallGraphNodeCount: number;
+  readonly wallGraphEdgeCount: number;
   /**
    * Per-ring OBSERVED fraction, aligned 1:1 with {@link wallRings}: how much
    * of each ring's outline is backed by raw (pre-close) wall returns, sampled
@@ -143,6 +193,15 @@ export interface FloorPlanModel {
    * (band anchor only — no floor fill claimed), 'none' = full-height fallback.
    */
   readonly floorBasis: FloorBasis;
+  /**
+   * Whether the wall slice used the FIXED default band (0.7–1.8 m / the
+   * widened retry) or an ADAPTIVE band re-centred on the detected
+   * wall-evidence z-peak. 'fixed' when no band was cut (full-height fallback).
+   */
+  readonly bandBasis: BandBasis;
+  /** Wall-band offsets actually used, metres above the floor anchor. */
+  readonly bandLowUsedM: number;
+  readonly bandHighUsedM: number;
   /** Stray returns excluded by the dense-footprint clip (noise arms etc.). */
   readonly clippedCount: number;
   /**
@@ -167,6 +226,21 @@ export interface FloorPlanParams {
   /** Wall band bottom / top, metres above the floor. Defaults 0.7 / 1.8. */
   readonly bandLowM?: number;
   readonly bandHighM?: number;
+  /**
+   * Re-centre the wall slice on the detected wall-evidence z-peak (so
+   * countertop / industrial scans whose walls sit outside 0.7–1.8 m slice
+   * correctly). Default true; the fixed band is kept when no clear peak is
+   * found. Set false to pin the fixed {@link bandLowM}–{@link bandHighM} band.
+   */
+  readonly adaptiveBand?: boolean;
+  /**
+   * Axis-snapping policy for the wall vectoriser (vectorize.ts SNAP_MODE):
+   * 'auto' (default) snaps only when the direction histogram is genuinely
+   * bimodal at ~90°; 'off' leaves directions exactly as traced; 'strong'
+   * forces the dominant axis pair (right angles may be assumed where the scan
+   * shows none — the sheet says so). Defaults to the module {@link SNAP_MODE}.
+   */
+  readonly snapMode?: SnapMode;
   /** Openings at least this wide are never sealed by closing. Default 0.6 m. */
   readonly keepOpenM?: number;
   /** Minimum points for any extraction at all. Default 500. */
@@ -206,6 +280,21 @@ export const PLAN_VERTEX_BUDGET =
   WALL_VERTEX_BUDGET + FLOOR_VERTEX_BUDGET + CONTENTS_VERTEX_BUDGET;
 /** At most this many dashed unknown-gap segments are emitted. */
 export const MAX_UNKNOWN_GAPS = 32;
+/**
+ * At most this many (largest) contents/furniture hint blobs are DRAWN. The
+ * classifier on a cluttered 360 interior can lift 30–40 compact islands; a
+ * sheet stippled with that many tiny grey specks reads as noise, not a layout
+ * aid. We keep the N largest by footprint area (the ones a reader can actually
+ * make sense of) and drop the speck tail. The footer reports the FULL found
+ * count and how many were drawn — same honesty pattern as MAX_UNKNOWN_GAPS.
+ */
+export const MAX_CONTENTS_HINTS = 12;
+/**
+ * Contents blobs smaller than this (m²) are dropped entirely before the
+ * largest-N cap — below roughly a stool's footprint a grey speck carries no
+ * layout information, only clutter.
+ */
+export const MIN_CONTENTS_HINT_M2 = 0.12;
 
 /** Total vertex count across a set of rings. */
 export const ringVertexCount = (rings: ReadonlyArray<Ring>): number =>
@@ -318,6 +407,12 @@ const emptyModel = (reasons: string[]): FloorPlanModel => ({
   contentsCount: 0,
   doorways: [],
   unknownGaps: [],
+  rooms: [],
+  roomSegmentation: 'unsegmented',
+  openSpaceAreaM2: 0,
+  fromWallGraph: false,
+  wallGraphNodeCount: 0,
+  wallGraphEdgeCount: 0,
   wallThicknessM: null,
   thicknessNormalized: false,
   widthM: 0,
@@ -327,6 +422,9 @@ const emptyModel = (reasons: string[]): FloorPlanModel => ({
   floorAreaM2: null,
   usedWallBand: false,
   floorBasis: 'none',
+  bandBasis: 'fixed',
+  bandLowUsedM: 0,
+  bandHighUsedM: 0,
   clippedCount: 0,
   clipBbox: null,
   snappedToAxes: false,
@@ -391,6 +489,7 @@ export function extractFloorPlan(
     maxSamples: params.maxSamples,
     bandLowM: params.bandLowM,
     bandHighM: params.bandHighM,
+    adaptiveBand: params.adaptiveBand,
   });
   if (slice.count < 64) {
     return emptyModel(['No wall-height structure found in the scan.', SUITABILITY_NOTE]);
@@ -405,7 +504,14 @@ export function extractFloorPlan(
   const closedGrid = closeMask(rawGrid, closeRadiusCells(cell, keepOpenM));
 
   // ── 3. Island classification: furniture out of the poché ──
-  const islands = classifyIslands(closedGrid);
+  // Per-cell height profile (z min/max per cell) from the slice's band points,
+  // so the classifier can weigh a component's VERTICAL extent: a tall thin
+  // column spans the band (→ structure) while a low wide blob fills only a
+  // shallow slab (→ furniture). The profile aligns to the same cell layout as
+  // the (closed) wall grid; the band span is the reference z-extent.
+  const bandSpanM = Math.max(0, slice.bandHighUsedM - slice.bandLowUsedM);
+  const hp = buildCellHeightProfile(closedGrid, slice.xs, slice.ys, slice.zs, slice.count);
+  const islands = classifyIslands(closedGrid, { zMin: hp.zMin, zMax: hp.zMax, bandSpanM });
 
   // ── 3.6. Centerline pass (centerline.ts): wall-thickness normalisation.
   //         Echo-fattened runs (a wall scanned from both sides, clutter fused
@@ -433,11 +539,31 @@ export function extractFloorPlan(
   // ── 4. Vectorise (axis snap only when the histogram is truly bimodal),
   //       then regularize (jog merge / spur kill / sliver filter) ──
   const unsnapped = vectorise(wallGrid, null);
-  const snap = resolveSnapAxes(unsnapped, SNAP_MODE);
+  const snap = resolveSnapAxes(unsnapped, params.snapMode ?? SNAP_MODE);
   const axes = snap.axes;
-  const wallRingsRaw = axes
-    ? vectorise(wallGrid, axes.thetaRad, true)
-    : vectorise(wallGrid, null, true);
+
+  // ── 4.2. Wall graph + re-extrusion (wallGraph.ts, the v0.4.6 hardening):
+  //         junctions/endpoints of the pruned skeleton become NODES, the
+  //         skeleton paths between them EDGES (straightened, one measured
+  //         thickness + observed fraction each), and the wall mask is
+  //         re-extruded FROM the graph — consistent thickness per run, clean
+  //         corner joins at junctions. Falls back to the normalised mask when
+  //         the graph is degenerate (no edges) or its extrusion loses every
+  //         traceable ring — the sheet then must NOT claim a graph. ──
+  const graph = buildWallGraph(wallGrid, norm.skeleton, {
+    snapThetaRad: axes?.thetaRad ?? null,
+    raw: rawGrid,
+  });
+  let fromWallGraph = graph.edges.length > 0;
+  let planGrid = fromWallGraph ? extrudeWallGraph(graph, wallGrid) : wallGrid;
+  let wallRingsRaw = axes
+    ? vectorise(planGrid, axes.thetaRad, true)
+    : vectorise(planGrid, null, true);
+  if (wallRingsRaw.length === 0 && fromWallGraph) {
+    fromWallGraph = false;
+    planGrid = wallGrid;
+    wallRingsRaw = axes ? vectorise(wallGrid, axes.thetaRad, true) : vectorise(wallGrid, null, true);
+  }
   if (wallRingsRaw.length === 0) {
     return emptyModel(['No coherent wall outline could be traced.', SUITABILITY_NOTE]);
   }
@@ -451,14 +577,24 @@ export function extractFloorPlan(
   // Contents hints: convex hull per blob (outer rings only — a furniture
   // hint needs no holes). The raw raster outline of a blob is ragged noise;
   // its hull is the honest "something stands here, about this big" footprint.
+  // Drop sub-threshold specks, then keep only the MAX_CONTENTS_HINTS largest by
+  // footprint area — a sheet stippled with 30+ tiny grey blobs reads as noise,
+  // not a layout aid (the footer reports the full found count + how many were
+  // drawn). `drawnContentsCount` feeds the honest reason line below.
+  const allContentRings = contentsGrid
+    ? vectorise(contentsGrid, null)
+        .filter((r) => ringSignedArea(r) > 0)
+        .map(convexHullRing)
+    : [];
+  const contentRingsKept = allContentRings
+    .map((r) => ({ ring: r, areaM2: Math.abs(ringSignedArea(r)) }))
+    .filter((e) => e.areaM2 >= MIN_CONTENTS_HINT_M2)
+    .sort((a, b) => b.areaM2 - a.areaM2)
+    .slice(0, MAX_CONTENTS_HINTS)
+    .map((e) => e.ring);
+  const drawnContentsCount = contentRingsKept.length;
   const contentRings = contentsGrid
-    ? capRingVertices(
-        vectorise(contentsGrid, null)
-          .filter((r) => ringSignedArea(r) > 0)
-          .map(convexHullRing),
-        cell,
-        CONTENTS_VERTEX_BUDGET,
-      )
+    ? capRingVertices(contentRingsKept, cell, CONTENTS_VERTEX_BUDGET)
     : [];
 
   // ── 4.5. Door-vs-data-gap classification (jamb evidence, centerline.ts):
@@ -480,6 +616,12 @@ export function extractFloorPlan(
   // FLOOR_VERTEX_BUDGET. The floor AREA is measured on the raw presence mask
   // BEFORE closing/simplification, so the printed figure describes scanned
   // floor, not the simplified decoration.
+  //
+  // WHY computed BEFORE room segmentation: the room detector's honesty guard
+  // (roomDetect.ts) compares the segmented room area against this scanned
+  // floor area — if the "rooms" cover only a sliver of the floor (a leaking
+  // open plan), it reports an honest open-space / unsegmented outcome instead
+  // of numbering micro-pockets. So the floor area must exist first.
   let floorRings: Ring[] = [];
   let floorAreaM2: number | null = null;
   if (slice.floorCount >= 64) {
@@ -508,6 +650,17 @@ export function extractFloorPlan(
     }
   }
 
+  // ── 4.6. Room segmentation (roomDetect.ts): flood fill of the free space
+  //         bounded by the plan walls + the classified doorways' closed
+  //         spans. Door-separated rooms stay distinct; unknown gaps are
+  //         never closed (an unscanned divider merges its regions — no
+  //         fabricated wall); a region leaking to the border is exterior.
+  //         The scanned floor area is passed so the detector can suppress a
+  //         fake room schedule when the segmented rooms cover only a sliver
+  //         of the floor (a leaking open plan → 'open-space' / 'unsegmented'). ──
+  const roomsDet = detectRooms(planGrid, doorways, floorAreaM2);
+  const rooms = roomsDet.rooms;
+
   // ── Extents from the wall geometry ──
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const ring of wallRings) {
@@ -523,11 +676,15 @@ export function extractFloorPlan(
   // Basis line: the band offsets ACTUALLY used (the widened retry shows its
   // real numbers), and an honest distinction between a detected floor plane
   // and a percentile-estimated anchor.
+  // The band wording also states when the slice was ADAPTED to the detected
+  // wall-evidence peak (vs the standard 0.7–1.8 m band) — an honest note that
+  // the slice height was chosen from the data, not assumed.
+  const bandAdapted = slice.bandBasis === 'adaptive';
   reasons.push(
     slice.usedWallBand
       ? slice.floorBasis === 'histogram'
-        ? `Walls traced from the point slice ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m above the detected floor.`
-        : `No dominant floor plane — floor level estimated from the lowest dense returns; walls traced from the ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m slice above it.`
+        ? `Walls traced from the point slice ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m above the detected floor${bandAdapted ? ' (band re-centred on the densest wall-return height)' : ''}.`
+        : `No dominant floor plane — floor level estimated from the lowest dense returns; walls traced from the ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m slice above it${bandAdapted ? ' (band re-centred on the densest wall-return height)' : ''}.`
       : 'No floor-anchored wall band could be cut — walls traced from the full-height point density instead.',
   );
   if (slice.clippedCount > 0) {
@@ -555,8 +712,36 @@ export function extractFloorPlan(
     );
   }
   if (contentsCount > 0) {
+    // Honest found-vs-drawn wording: when the speck filter + largest-N cap
+    // dropped some islands, say so rather than implying every island is drawn.
+    const undrawn = contentsCount - drawnContentsCount;
     reasons.push(
-      `${contentsCount} compact island(s) at wall height (likely furniture or room contents, not walls) were lifted out of the wall poché and drawn as light grey hints (simplified to their convex outline).`,
+      undrawn > 0
+        ? `${contentsCount} compact island(s) at wall height (likely furniture or room contents, not walls) were lifted out of the wall poché; the ${drawnContentsCount} largest are drawn as light grey hints (simplified to their convex outline), the ${undrawn} smallest omitted to keep the sheet legible.`
+        : `${contentsCount} compact island(s) at wall height (likely furniture or room contents, not walls) were lifted out of the wall poché and drawn as light grey hints (simplified to their convex outline).`,
+    );
+  }
+  if (fromWallGraph) {
+    reasons.push(
+      `Walls reconstructed from the centerline wall graph (${graph.nodes.length} node(s), ${graph.edges.length} edge(s)) — one measured thickness per wall run, corners joined at junctions; no run was added that the skeleton did not trace.`,
+    );
+  }
+  if (rooms.length > 0) {
+    reasons.push(
+      `${rooms.length} room(s) segmented by flood fill bounded by the walls${roomsDet.closedDoorways > 0 ? ` and ${roomsDet.closedDoorways} closed doorway span(s)` : ''}; unknown gaps are never closed, so an unscanned divider merges its regions instead of fabricating a wall. Room areas are measured on the region mask.`,
+    );
+  } else if (roomsDet.segmentation === 'open-space') {
+    // HONESTY: one connected interior region dominates the floor — present it
+    // as a single open space, NOT a numbered room schedule of flood pockets.
+    reasons.push(
+      `Open-plan interior: the free space floods into one connected region (~${roomsDet.dominantRegionAreaM2.toFixed(0)} m²) — no interior partitions were reliably segmented, so the plan is presented as a single open space rather than numbered rooms.`,
+    );
+  } else if (roomsDet.segmentation === 'unsegmented') {
+    // HONESTY: the flood found only micro-pockets between wall fragments that
+    // together cover a sliver of the floor (a leaking open plan). Numbering
+    // those as "rooms" would fabricate partitions the scan never saw.
+    reasons.push(
+      'Rooms could not be reliably segmented from the wall returns — the open floor leaks past unscanned boundary runs, leaving only wall-fragment pockets too small to be rooms. No room schedule is claimed; the wall poché, overall dimensions, and floor area still stand.',
     );
   }
   if (doorways.length > 0 || unknownGapsAll.length > 0) {
@@ -577,6 +762,12 @@ export function extractFloorPlan(
     contentsCount,
     doorways,
     unknownGaps,
+    rooms,
+    roomSegmentation: roomsDet.segmentation,
+    openSpaceAreaM2: roomsDet.segmentation === 'open-space' ? roomsDet.dominantRegionAreaM2 : 0,
+    fromWallGraph,
+    wallGraphNodeCount: fromWallGraph ? graph.nodes.length : 0,
+    wallGraphEdgeCount: fromWallGraph ? graph.edges.length : 0,
     wallThicknessM: norm.medianThicknessM,
     thicknessNormalized,
     widthM: Math.max(0, maxX - minX),
@@ -586,6 +777,9 @@ export function extractFloorPlan(
     floorAreaM2,
     usedWallBand: slice.usedWallBand,
     floorBasis: slice.floorBasis,
+    bandBasis: slice.bandBasis,
+    bandLowUsedM: slice.bandLowUsedM,
+    bandHighUsedM: slice.bandHighUsedM,
     clippedCount: slice.clippedCount,
     clipBbox: slice.clipBbox,
     snappedToAxes: axes != null,

@@ -4,7 +4,10 @@ import {
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
   CAMERA_PRESET_ORDER,
+  STANDARD_VIEW_ORDER,
+  STANDARD_VIEW_LABEL,
   type CameraPresetName,
+  type StandardView,
 } from '../render/camera/cameraPresets';
 
 export interface NavBarCallbacks {
@@ -24,6 +27,13 @@ export interface NavBarCallbacks {
    * shortcuts in main.ts.
    */
   onCameraPreset: (name: CameraPresetName) => void;
+  /**
+   * The user tapped one of the six standard axis-aligned views (Top / Bottom /
+   * Front / Back / Left / Right) — Viewer.setStandardView().
+   */
+  onStandardView: (view: StandardView) => void;
+  /** The user toggled the near-orthographic (parallel) projection. */
+  onOrthographic: (on: boolean) => void;
 }
 
 interface ModeDef {
@@ -281,6 +291,47 @@ export class NavBar {
     // HUD into a normal closable panel that users already understand,
     // and the same toggle still listens to the H key (and the Help
     // button in the dock surfaces the shortcut).
+    // Six standard axis-aligned views (Top / Bottom / Front / Back / Left /
+    // Right) + a near-orthographic toggle — the Polycam-style "look straight
+    // at a face to measure it flat" controls. Sits under the angled Camera
+    // presets (Gestalt proximity: both are "ways to aim the camera"), but in
+    // its own labelled row so the two intents stay distinct.
+    // Distinct row class (NOT `olv-cam-presets`) so the camera-preset specs'
+    // `.olv-cam-presets` locators keep resolving to the single "Camera" row.
+    const viewsRow = el('div', { className: 'olv-cam-views' });
+    for (const view of STANDARD_VIEW_ORDER) {
+      const label = STANDARD_VIEW_LABEL[view];
+      const btn = el('button', {
+        className: 'olv-cam-chip',
+        title: `${label} view — look straight at the ${label.toLowerCase()} face`,
+        ariaLabel: `${label} standard view`,
+      });
+      btn.append(el('span', { className: 'olv-cam-chip-label', text: label }));
+      btn.addEventListener('click', () => {
+        btn.blur();
+        callbacks.onStandardView(view);
+      });
+      viewsRow.append(btn);
+    }
+    // The orthographic toggle — a pressed-state chip (parallel projection on/
+    // off). Distinct shape vocabulary (the only toggle in the row) so it reads
+    // as a mode, not another one-shot snap.
+    const orthoToggle = el('button', {
+      className: 'olv-cam-chip olv-ortho-toggle',
+      title: 'Orthographic (parallel) projection — removes perspective so measurements read true',
+      ariaLabel: 'Toggle orthographic projection',
+    });
+    orthoToggle.setAttribute('aria-pressed', 'false');
+    orthoToggle.append(el('span', { className: 'olv-cam-chip-label', text: 'Ortho' }));
+    orthoToggle.addEventListener('click', () => {
+      orthoToggle.blur();
+      const on = orthoToggle.getAttribute('aria-pressed') !== 'true';
+      orthoToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+      orthoToggle.classList.toggle('is-on', on);
+      callbacks.onOrthographic(on);
+    });
+    viewsRow.append(orthoToggle);
+
     const hudDismiss = el('button', {
       className: 'olv-nav-hud-close',
       text: '×',
@@ -301,6 +352,10 @@ export class NavBar {
       el('div', { className: 'olv-cam-presets-row' }, [
         el('span', { className: 'olv-cam-presets-label', text: 'Camera' }),
         cameraPresetsRow,
+      ]),
+      el('div', { className: 'olv-cam-presets-row' }, [
+        el('span', { className: 'olv-cam-presets-label', text: 'Views' }),
+        viewsRow,
       ]),
     ]);
 

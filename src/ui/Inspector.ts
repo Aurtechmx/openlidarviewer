@@ -1,4 +1,5 @@
 import { el, formatCount } from './dom';
+import { openConfirm } from './Modal';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
 import type {
   DatasetIntelligence,
@@ -380,6 +381,14 @@ export class Inspector {
   private readonly _cb: InspectorCallbacks;
   private readonly _layers = el('div', { className: 'olv-layers' });
   private readonly _chips = el('div', { className: 'olv-chips' });
+  /**
+   * Visible reason shown below the colour-mode rail while the analysis-gated
+   * chips (Coverage / Confidence) are disabled. WHY visible (not just the
+   * chip's `title`): a `title` tooltip needs a hover, which touch devices
+   * don't have — so on a phone the only explanation for why those chips are
+   * greyed used to be invisible. This line carries the same reason in the flow.
+   */
+  private readonly _chipsNote = el('p', { className: 'olv-chips-note olv-hidden' });
   /** Visuals Studio — Visuals Studio chip rails. Stored so syncVisuals can re-flag active. */
   private readonly _visualsRgbRail = el('div', { className: 'olv-chips' });
   private readonly _visualsEdlRail = el('div', { className: 'olv-chips' });
@@ -783,6 +792,7 @@ export class Inspector {
     });
     const colorByBody = el('div', { className: 'olv-color-by-body' }, [
       this._chips,
+      this._chipsNote,
       this._heightTrimRow,
     ]);
     this._colorBySection = section('Color by', colorByBody);
@@ -1191,8 +1201,10 @@ export class Inspector {
   private _renderColorChips(): void {
     this._chips.replaceChildren();
     const descriptors = buildColorChipModel(this._modes, this._activeMode, this._coverageAvailable);
+    let anyGatedDisabled = false;
     for (const desc of descriptors) {
       const { mode, active, disabled } = desc;
+      if (disabled) anyGatedDisabled = true;
       const title = disabled ? COVERAGE_DISABLED_TITLE : MODE_TITLES[mode];
       const chip = el('button', { className: 'olv-chip', text: MODE_LABELS[mode], title });
       if (active) chip.classList.add('olv-chip-active');
@@ -1213,6 +1225,12 @@ export class Inspector {
       });
       this._chips.append(chip);
     }
+    // Surface the gate reason in the flow (visible on touch, where the chip's
+    // hover-only `title` never appears).
+    this._chipsNote.textContent = anyGatedDisabled
+      ? `${COVERAGE_DISABLED_TITLE} to enable Coverage and Confidence.`
+      : '';
+    this._chipsNote.classList.toggle('olv-hidden', !anyGatedDisabled);
     // Initial visibility for the trim row — track the active mode.
     this._heightTrimRow.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
   }
@@ -1775,8 +1793,9 @@ export class Inspector {
       );
     }
 
-    // Privacy footer + Reset link. Confirms with a native dialog so a
-    // misclick never wipes history.
+    // Privacy footer + Reset link. Confirms with the styled modal (not
+    // window.confirm, which embedded WebViews can suppress) so a misclick
+    // never wipes history.
     const reset = el('button', {
       className: 'olv-stats-reset',
       type: 'button',
@@ -1784,10 +1803,16 @@ export class Inspector {
       title: 'Clear every counter on this device. This cannot be undone.',
     });
     reset.addEventListener('click', () => {
-      if (window.confirm('Reset every session stat? This cannot be undone.')) {
+      void openConfirm({
+        title: 'Reset session stats?',
+        message: 'Reset every session stat? This cannot be undone.',
+        confirmLabel: 'Reset',
+        returnFocusTo: reset,
+      }).then((ok) => {
+        if (!ok) return;
         resetUsage();
         this._refreshSessionStats();
-      }
+      });
     });
     this._sessionStatsBody.append(
       el('div', { className: 'olv-stats-footer' }, [

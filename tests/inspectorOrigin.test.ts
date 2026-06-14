@@ -7,8 +7,9 @@
  * adding the origin a second time doubled every easting/northing and fed
  * the doubled values into the WGS-84 projection.
  */
-import { makePointInfo, splitPointCoords } from '../src/render/pointInfo';
+import { makePointInfo, splitPointCoords, worldCoordLabels } from '../src/render/pointInfo';
 import type { RawPointInfo } from '../src/render/pointInfo';
+import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 
 /** A georeferenced pick: large UTM origin, small local residual. */
 function georefRaw(): RawPointInfo {
@@ -62,4 +63,49 @@ test('splitPointCoords never doubles the origin (world stays < 2x origin)', () =
   // magnitude, not near twice it.
   expect(Math.abs(split.world.x - 412345)).toBeLessThan(10);
   expect(Math.abs(split.world.y - 4587234)).toBeLessThan(10);
+});
+
+// ── World-group label-vs-value drift (units) ───────────────────────────────
+// The inspector renders `worldCoordLabels(crs).{x,y,z}Unit` next to the World
+// coordinate values. A GEOGRAPHIC CRS's eastings/northings are DEGREES, not
+// metres — the card used to hardcode " m" for all three axes, so a lon/lat
+// scan printed "Longitude: -122.4 m". Pin the per-frame unit suffixes.
+
+function crs(kind: ResolvedCrs['kind'], name = 'test'): ResolvedCrs {
+  return {
+    kind,
+    name,
+    epsg: kind === 'geographic' ? 4326 : 32610,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: false,
+  };
+}
+
+test('worldCoordLabels: geographic CRS uses degrees on X/Y, metres on Z', () => {
+  const l = worldCoordLabels(crs('geographic', 'WGS 84'));
+  expect(l.heading).toBe('World (geographic)');
+  expect([l.x, l.y, l.z]).toEqual(['Longitude', 'Latitude', 'Elevation']);
+  // The drift fix: lon/lat are degrees, never " m".
+  expect(l.xUnit).toBe('°');
+  expect(l.yUnit).toBe('°');
+  expect(l.zUnit).toBe(' m');
+});
+
+test('worldCoordLabels: projected CRS uses metres on all three axes', () => {
+  const l = worldCoordLabels(crs('projected', 'UTM zone 10N'));
+  expect(l.heading).toBe('World (UTM zone 10N)');
+  expect([l.x, l.y, l.z]).toEqual(['Easting', 'Northing', 'Elevation']);
+  expect([l.xUnit, l.yUnit, l.zUnit]).toEqual([' m', ' m', ' m']);
+});
+
+test('worldCoordLabels: local / unknown / undefined fall back to plain metric X/Y/Z', () => {
+  for (const c of [undefined, crs('local'), crs('unknown')]) {
+    const l = worldCoordLabels(c);
+    expect(l.heading).toBe('World');
+    expect([l.x, l.y, l.z]).toEqual(['X', 'Y', 'Z']);
+    expect([l.xUnit, l.yUnit, l.zUnit]).toEqual([' m', ' m', ' m']);
+  }
 });

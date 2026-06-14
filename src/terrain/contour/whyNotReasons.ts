@@ -101,12 +101,19 @@ export function explainLimitations(result: AnalyseContoursResult): Limitations {
   }
 
   // ── high edge risk ────────────────────────────────────────────────────
+  // `q.edgeRiskRatio` is cellMetrics.edgeRiskRatio (analyseContours wires it
+  // through): the fraction of MEASURED cells that sit within a couple of cells
+  // of the data boundary. Those cells HAVE real returns — they are just least
+  // supported by neighbours. The old wording here ("a long interpolation from
+  // real returns") described the OTHER edge metric (the gate's tally of
+  // interpolated cells far from any measurement, dtmCellStatus 'edgeRisk') and
+  // was untrue for this one — the same mislabel terrainAssessment already fixed.
   const edgeFrac = finite(q.edgeRiskRatio);
   if (Number.isFinite(edgeFrac) && edgeFrac > HIGH_EDGE_FRACTION) {
     emit(
       'edge',
-      `${pct(edgeFrac)} of cells are a long interpolation from real returns.`,
-      'Extend capture past the area of interest so the edges sit on measured ground.',
+      `${pct(edgeFrac)} of measured cells sit at the edge of the data, where the surface is least supported.`,
+      'Extend capture past the area of interest so the edges sit on well-supported measured ground.',
     );
   }
 

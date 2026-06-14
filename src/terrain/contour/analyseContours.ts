@@ -57,12 +57,11 @@ import {
   type CanopyHeight,
 } from '../surface/buildDsm';
 import {
-  shadeFromSlopeAspect,
   slopeStats,
   type SlopeStats,
   type HillshadeResult,
 } from '../surface/hillshade';
-import { hornSlopeAspect } from '../ground/terrainDerivatives';
+import { getTerrainRasterEngine } from '../engine/TerrainRasterEngine';
 import { horizontalCellMetres, METRES_PER_DEGREE } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
@@ -149,6 +148,14 @@ export interface TerrainCoreParams {
    * measure the analysed points.
    */
   readonly samplePointScale?: number;
+  /**
+   * True when the analysed points are the currently-resident subset of a
+   * still-streaming cloud (COPC/EPT), not the whole scan. The grid coverage
+   * still reads 'full' (the resident nodes span the extent), but the DATA is
+   * partial, so the surface coverageMode is reported as 'resident-only' and the
+   * verdict reads "Preliminary" rather than a final 'Limited'. Default false.
+   */
+  readonly residentOnly?: boolean;
   /**
    * Per-cell aggregation for the LIVE DTM. Default `'median'` (see
    * {@link LIVE_DTM_AGGREGATION}): the 50th percentile is outlier-resistant, so
@@ -497,6 +504,17 @@ export function computeTerrainCore(
   if (confidenceCalibration.assessable) {
     dtm = applyConfidenceCalibration(dtm, confidenceCalibration);
   }
+  // A still-streaming cloud is analysed on only its resident nodes. The raster
+  // coverage reads 'full' (those nodes span the extent), but the DATA is a
+  // partial, coarse subsample — so stamp the surface coverage as 'resident-only'
+  // here, once, before the gate / quality / result / export model all read
+  // dtm.coverageMode. This is what lets the assessment render a "Preliminary"
+  // partial-stream verdict instead of a final 'Limited' on a scan that is still
+  // loading. (Re-running once fully streamed gathers a non-resident set, so the
+  // override no longer applies and the real grade shows.)
+  if (params.residentOnly && dtm.coverageMode === 'full') {
+    dtm = { ...dtm, coverageMode: 'resident-only' };
+  }
   const confidenceCalibrationApplied = confidenceCalibration.assessable;
   const confidenceToleranceM = confidenceCalibration.assessable
     ? confidenceCalibration.toleranceM
@@ -554,6 +572,24 @@ export function computeTerrainCore(
     Number.isFinite(validation.p95) ? validation.p95 : null,
     cellMetrics.meanDensity,
   );
+  // Stride honesty: when the gather strided the cloud, the ground density (and
+  // therefore the USGS 3DEP Quality Level graded from it) is a uniform-stride
+  // extrapolation from the analysed subsample up to the full scan, NOT a
+  // directly counted figure. Surface that the same way the space-scan path
+  // does, so the density-derived QL is never read as an exact, directly-counted
+  // grade. Only when striding actually happened (scale > 1) and a density-based
+  // grade was assigned.
+  const densityScale =
+    Number.isFinite(params.samplePointScale) && (params.samplePointScale as number) > 1
+      ? (params.samplePointScale as number)
+      : 1;
+  if (densityScale > 1 && cellMetrics.meanDensity > 0) {
+    warnings.push(
+      'Ground density is scaled from the analysed sample to the full scan ' +
+        '(uniform-stride assumption); the USGS 3DEP Quality Level is graded ' +
+        'from that scaled density, not a directly counted one.',
+    );
+  }
   const coveredCells =
     cellStatusTally.measured + cellStatusTally.interpolated +
     cellStatusTally.lowConfidence + cellStatusTally.edgeRisk;
@@ -592,7 +628,15 @@ export function computeTerrainCore(
   // Compute the Horn slope/aspect ONCE and reuse it for the slope stats, the
   // hillshade, and the exposed relief grids — re-lighting the surface at a new
   // sun angle in the UI is then a cheap per-cell pass with no Horn recompute.
-  const sa = hornSlopeAspect(dtm.z, dtm.cols, dtm.rows, horizCellM);
+  //
+  // The derivative stage routes through the TerrainRasterEngine seam. This
+  // synchronous pipeline uses the engine's SYNC entries — the CPU REFERENCE
+  // path, pure delegation to hornSlopeAspect / shadeFromSlopeAspect, so the
+  // output is byte-identical to calling them directly. The engine's async
+  // entries are the GPU-eligible ones (per-session equivalence probe,
+  // auto-fallback); the pipeline adopts them when this stage goes async.
+  const engine = getTerrainRasterEngine();
+  const sa = engine.derivativesSync(dtm.z, dtm.cols, dtm.rows, horizCellM);
   const slopeDegField = new Float32Array(sa.slope.length);
   for (let i = 0; i < sa.slope.length; i++) {
     slopeDegField[i] = (Math.atan(sa.slope[i]) * 180) / Math.PI;
@@ -601,7 +645,7 @@ export function computeTerrainCore(
     dsm: surfaceStats(dsm),
     canopy: heightAboveGround(dsm, dtm.z, dtm.coverage),
     slope: slopeStats(slopeDegField, dtm.coverage),
-    hillshade: shadeFromSlopeAspect(sa.slope, sa.aspect, dtm.coverage, dtm.cols, dtm.rows),
+    hillshade: engine.hillshadeSync(sa.slope, sa.aspect, dtm.coverage, dtm.cols, dtm.rows),
     // Cached gradient grids (slope tangent + aspect, radians) so the panel can
     // re-light a multi-directional or single-direction relief interactively.
     relief: { slope: sa.slope, aspect: sa.aspect },

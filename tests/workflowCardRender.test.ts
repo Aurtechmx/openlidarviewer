@@ -135,7 +135,7 @@ describe('renderTerrainProducts', () => {
     for (const g of glyphs) expect(g.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('two-line rows: a head line per product, a "Reason:" line only below Ready', async () => {
+  it('two-line rows: a head line per product, a collapsed "Reason" toggle only below Ready', async () => {
     const { renderTerrainProducts } = await load();
     const card = renderTerrainProducts(PRODUCTS) as unknown as FakeEl;
     // Every row has the head line (glyph + label + status word).
@@ -145,11 +145,27 @@ describe('renderTerrainProducts', () => {
     expect(reasons.length).toBe(2);
     const items = card.findTag('li');
     expect(items[0].find('olv-analyse-product-reason')).toBeNull();
-    // The line is labelled "Reason:" for sighted users …
-    expect(reasons[0].find('olv-analyse-product-reason-label')!.textContent).toBe('Reason:');
+    // The toggle is labelled "Reason" (a <summary>) for sighted users …
+    expect(reasons[0].find('olv-analyse-product-reason-label')!.textContent).toBe('Reason');
     // … and lives INSIDE the product's own <li>, so assistive tech reads
     // product, status and reason as one list item.
     expect(items[1].find('olv-analyse-product-reason')).not.toBeNull();
+    expect(items[2].find('olv-analyse-product-reason')).not.toBeNull();
+  });
+
+  it('de-dups: a reason equal to the verdict reason is NOT repeated on the row', async () => {
+    const { renderTerrainProducts } = await load();
+    // The DTM/DEM product's reason IS the shared verdict reason (LONG_REASON);
+    // Map sheet has its own. Passing the verdict reason suppresses the matching
+    // row's reason (already shown once above) but keeps the distinct one.
+    const card = renderTerrainProducts(PRODUCTS, LONG_REASON) as unknown as FakeEl;
+    const reasons = card.findAll('olv-analyse-product-reason');
+    expect(reasons.length).toBe(1); // only the Map sheet's distinct reason
+    expect(reasons[0].find('olv-analyse-product-reason-text')!.textContent).toBe(
+      'quality gate stopped this surface',
+    );
+    const items = card.findTag('li');
+    expect(items[1].find('olv-analyse-product-reason')).toBeNull(); // de-duped
     expect(items[2].find('olv-analyse-product-reason')).not.toBeNull();
   });
 

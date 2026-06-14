@@ -37,6 +37,22 @@ export class StreamingNodeStore {
   private _queuedCount = 0;
 
   /**
+   * Live sets of the nodes currently in the `resident` and `queued` states,
+   * maintained at every {@link setState} transition. The scheduler walks these
+   * every tick (~10 Hz) for a 28 k-node cloud; materialising them from a full
+   * `all().filter(...)` walk allocated two throwaway 28 k-element arrays per
+   * tick (one for `all()`, one for the filtered result) and re-scanned every
+   * node even when only a few hundred were resident — a per-tick GC + walk cost
+   * that scaled with the WHOLE hierarchy, not the working set. These maintained
+   * sets make the hot-path walks O(resident) / O(queued) with zero allocation.
+   * Iteration order follows Map/Set insertion order, matching the old
+   * `all().filter` ordering closely enough for the scheduler (which sorts its
+   * own candidates and is order-independent for eviction).
+   */
+  private readonly _resident = new Set<StreamingNode>();
+  private readonly _queued = new Set<StreamingNode>();
+
+  /**
    * Register a node record discovered in the hierarchy. Idempotent — a record
    * already present (by id) returns the existing runtime node unchanged.
    */
@@ -58,9 +74,19 @@ export class StreamingNodeStore {
     return this._nodes.has(id);
   }
 
-  /** Every known node. */
+  /** Every known node (allocates — prefer {@link iterate} on hot paths). */
   all(): StreamingNode[] {
     return [...this._nodes.values()];
+  }
+
+  /**
+   * Zero-allocation iterable over every known node — the hot-path alternative
+   * to {@link all}, which materialises a 28 k-element array. The scheduler's
+   * per-tick rescore uses this so a stable 28 k-node cloud no longer allocates
+   * a throwaway array ~10×/s.
+   */
+  iterate(): IterableIterator<StreamingNode> {
+    return this._nodes.values();
   }
 
   /** Count of known nodes. */
@@ -90,18 +116,22 @@ export class StreamingNodeStore {
   setState(node: StreamingNode, state: NodeState, residentPointCount = 0): void {
     if (node.state === 'resident') {
       this._residentPoints -= node.residentPointCount;
+      this._resident.delete(node);
     }
-    // Maintain the O(1) queued counter at the transition: decrement when
-    // a node leaves the queued state, increment when it enters. Every
-    // queued transition (enqueue, dequeue-to-load, cancel, evict-reset,
-    // stop) routes through here, so the counter tracks a ground-truth walk.
-    if (node.state === 'queued') this._queuedCount--;
+    // Maintain the O(1) queued counter + the resident/queued working sets at
+    // the transition: every state change (enqueue, dequeue-to-load, decode,
+    // cancel, evict-reset, stop) routes through here, so the counter and the
+    // sets track a ground-truth walk without one. The sets let the scheduler's
+    // per-tick eviction + queued-reset passes run O(resident)/O(queued) with
+    // zero allocation instead of `all().filter(...)` over the whole hierarchy.
+    if (node.state === 'queued') { this._queuedCount--; this._queued.delete(node); }
     node.state = state;
     node.residentPointCount = state === 'resident' ? residentPointCount : 0;
     if (state === 'resident') {
       this._residentPoints += residentPointCount;
+      this._resident.add(node);
     }
-    if (state === 'queued') this._queuedCount++;
+    if (state === 'queued') { this._queuedCount++; this._queued.add(node); }
     if (state !== 'error') node.error = undefined;
   }
 
@@ -111,9 +141,30 @@ export class StreamingNodeStore {
     node.error = reason;
   }
 
-  /** Every resident node — the candidate set for eviction. */
+  /**
+   * Every resident node — the candidate set for eviction. Served from the
+   * maintained resident set, so this is O(resident) with one small array
+   * allocation rather than `all().filter` over the whole 28 k-node hierarchy.
+   */
   resident(): StreamingNode[] {
-    return this.all().filter((n) => n.state === 'resident');
+    return [...this._resident];
+  }
+
+  /**
+   * Zero-allocation iterable over the resident nodes — the scheduler's
+   * per-tick eviction pass uses this to avoid materialising any array.
+   */
+  residentNodes(): IterableIterator<StreamingNode> {
+    return this._resident.values();
+  }
+
+  /**
+   * Zero-allocation iterable over the queued nodes — the scheduler's per-tick
+   * "reconsider queued" reset uses this so it touches only the (few) queued
+   * nodes, not all 28 k.
+   */
+  queuedNodes(): IterableIterator<StreamingNode> {
+    return this._queued.values();
   }
 
   /** Live counts by state — cheap enough for the ~4 Hz diagnostics poll. */

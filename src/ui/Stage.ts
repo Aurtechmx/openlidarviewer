@@ -1,4 +1,6 @@
 import { el } from './dom';
+import { openConfirm } from './Modal';
+import { FullscreenToggle } from './FullscreenToggle';
 
 /** A built-in sample scan offered on the empty state. */
 export interface Sample {
@@ -243,7 +245,16 @@ export class Stage {
     github.target = '_blank';
     github.rel = 'noreferrer';
 
-    const right = el('div', { className: 'olv-topbar-right' }, [privacy, github]);
+    // Full-screen toggle — lives in the header cluster (just left of the
+    // theme toggle, which inserts itself before GitHub). Self-contained:
+    // it drives the Fullscreen API on the whole app and tracks F11/Esc too.
+    const fullscreen = new FullscreenToggle();
+
+    const right = el('div', { className: 'olv-topbar-right' }, [
+      privacy,
+      fullscreen.element,
+      github,
+    ]);
     this._topBarRight = right;
     this._githubLink = github;
     return el('header', { className: 'olv-topbar' }, [wordmark, right]);
@@ -318,7 +329,8 @@ export class Stage {
     const fileInput = el('input', { className: 'olv-file-input', type: 'file' });
     fileInput.addEventListener('change', () => {
       const file = fileInput.files?.[0];
-      if (file && this._approveFile(file)) options.onOpenFile?.(file);
+      // The approval gate is now async (styled modal) — open only once approved.
+      if (file) void this._approveFile(file).then((ok) => { if (ok) options.onOpenFile?.(file); });
       fileInput.value = ''; // let the same file be re-picked
     });
     // Item 12: idle CTA pulse — a CSS-only animation class kicks in 4 s
@@ -425,7 +437,7 @@ export class Stage {
         el('span', { className: 'olv-sample-detail', text: detail }),
       ]);
       btn.addEventListener('click', () => {
-        if (this._approveSample(s)) options.onSample?.(s.url, s.name);
+        void this._approveSample(s).then((ok) => { if (ok) options.onSample?.(s.url, s.name); });
       });
       samples.append(btn);
     }
@@ -640,13 +652,15 @@ export class Stage {
    * crash mid-load. Returns true if the load should proceed.
    * Error-handling-UX item E2.
    */
-  private _approveFile(file: File): boolean {
-    if (!isMobileViewport()) return true;
-    if (file.size < MOBILE_MEMORY_WARN_BYTES) return true;
+  private _approveFile(file: File): Promise<boolean> {
+    if (!isMobileViewport()) return Promise.resolve(true);
+    if (file.size < MOBILE_MEMORY_WARN_BYTES) return Promise.resolve(true);
     const message =
       `This file is ${formatBytes(file.size)}. On phones it may exceed the ` +
       `tab's memory and crash. Open anyway?`;
-    return window.confirm(message);
+    // Styled confirm, not window.confirm(): the latter is suppressed in many
+    // embedded WebViews, which would silently block the load.
+    return openConfirm({ title: 'Open large file?', message, confirmLabel: 'Open anyway' });
   }
 
   /**
@@ -654,9 +668,9 @@ export class Stage {
    * warning) layer onto the same confirmation prompt so the user sees a
    * single, focused decision before a large download begins.
    */
-  private _approveSample(sample: Sample): boolean {
+  private _approveSample(sample: Sample): Promise<boolean> {
     const size = sample.sizeBytes ?? 0;
-    if (size === 0) return true;
+    if (size === 0) return Promise.resolve(true);
 
     const reasons: string[] = [];
     const cellular = isCellularConnection();
@@ -672,8 +686,13 @@ export class Stage {
         `tab's memory.`,
       );
     }
-    if (reasons.length === 0) return true;
-    return window.confirm(`${reasons.join('\n\n')}\n\nContinue?`);
+    if (reasons.length === 0) return Promise.resolve(true);
+    // Styled confirm, not window.confirm(): reliable inside embedded WebViews.
+    return openConfirm({
+      title: 'Download this sample?',
+      message: reasons.join('\n'),
+      confirmLabel: 'Continue',
+    });
   }
 
   /**

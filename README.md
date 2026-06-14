@@ -1,5 +1,6 @@
 # OpenLiDARViewer
 
+[![CI](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml)
 ![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
 ![Rendering](https://img.shields.io/badge/rendering-WebGL%20%2F%20WebGPU-blue)
 ![Privacy](https://img.shields.io/badge/privacy-local--first-green)
@@ -402,6 +403,18 @@ For real-world figures — a 9.6M-point drone LAZ survey and a 55K-point iPhone 
 COPC streaming — local and remote — ships in v0.3.0 and is hardened across v0.3.1 / v0.3.3 with a view-dependent scheduler, hierarchy-aware eviction, a dispatch-pressure gate that bounds residency under 1B-synthetic-point stress, and trustworthy picking against actively-refining clouds. EPT (Entwine Point Tile) joins COPC as a first-class peer in v0.3.3. See [`docs/performance.md`](docs/performance.md) and [`docs/streaming.md`](docs/streaming.md).
 
 ## What's in this release
+
+The current release is **v0.4.5**. The full, dated history is in
+[CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
+summary.
+
+### v0.4.0 – v0.4.5 — Terrain Intelligence + the honesty pipeline
+- Confidence-aware **DTM and contour pipeline** behind the **Analyse panel** — ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0–100 terrain quality score, surface models (DSM, canopy height, slope, multi-directional hillshade), and a single top-level Terrain Assessment verdict (0.4.0–0.4.4)
+- Evidence-graded **contour export** (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced **DEM package** (ASCII Grid + GeoTIFF), all gated behind a DTM quality check so a professional export is only offered when the surface earns it
+- One **readiness engine** behind every export verdict, a colourblind-safe **Confidence** colour overlay (twin of Coverage), and **profile intelligence** — summary, station table, CSV, sampler controls (0.4.5)
+- **True measurement units** on foot-CRS scans, **workflow presets** in the Visuals Studio, and an accessible **onboarding tour** (0.4.5)
+- Interior **floor plan** reconstruction — **experimental preview**: a wall-graph + room-segmentation sketch from interior scans, with claim-accurate "preview" labelling throughout; not a survey product
+- **Note:** the **workflow recorder** (`.olvworkflow` record/replay) is temporarily disabled in 0.4.5 while its shortcut and replay-file experience get a design pass — it returns in a later release
 
 ### v0.3.9 — Premium interaction surface + terrain foundation
 - Smart camera presets — Top, Iso, Oblique, Planar

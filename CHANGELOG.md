@@ -2,6 +2,548 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.6] - 2026-06-14
+
+Phase 1 of the design audit (visual-only; verdict-as-hero, two-tier surfaces,
+quieter typography, mobile reflow, surface-quality chip density reduction) lands
+alongside the GPU compute seam — the TerrainRasterEngine with equivalence-gated
+WebGPU derivative/scatter kernels where the CPU stays the reference and the GPU
+must prove per-session equivalence before it is trusted, falling back silently
+otherwise. The interior floor plan remains an experimental PREVIEW, now backed by
+an explicit wall-graph reconstruction and flood-fill room segmentation with
+claim-accurate labels throughout. Plus nine label-vs-value drift fixes (incl.
+foot-CRS / geographic-unit correctness and the edge-risk wording) and mobile
+touch-target / safe-area improvements. Three more high-visibility, low-risk wins
+round it out: the plumbed-but-headless floor-plan export knobs get a small
+UI (still an experimental PREVIEW), the last flagged capture-quality
+label-vs-value drift ("Coverage … % of footprint" → "Bounding area filled") is
+closed, and the streaming loader's indeterminate text becomes an honest
+determinate resident-node progress bar.
+
+### Navigation, tooling & hardening
+
+- **Standard views + parallel projection.** Six axis-aligned camera views
+  (Top / Bottom / Front / Back / Left / Right) snap the camera to look straight
+  at a face for distortion-free measuring, alongside an Orthographic toggle that
+  switches to a near-parallel projection (a long-lens approximation that leaves
+  the render pipeline, culling and picking untouched). The view geometry is pure
+  and unit-tested.
+- **Icon + label toolbars.** The bottom dock, the measurement toolbar, the
+  Layers "Solo" control and the Export header gain a consistent custom line-icon
+  set, each keeping its visible text label (icon-only toolbars measurably hurt
+  first-time users). Inspect and Probe are deliberately differentiated (target
+  vs eyedropper). On phones the measurement toolbar reflows into a vertical
+  rail; on desktop it is a top-centre bar that no longer overlaps the
+  left-docked panels.
+- **Full-screen toggle** in the header, with a glyph that tracks the real
+  Fullscreen state (so F11 / Esc are reflected too).
+- **Contour map sheet (PDF) fixes.** The title no longer overlaps the legend on
+  long filenames; the contour-interval unit now matches the scale bar (m / ft);
+  and an ungeoreferenced sheet drops the E/N graticule suffixes and the north
+  arrow rather than implying a compass frame it doesn't have.
+- **Security.** Parameter-derived button labels are escaped via `textContent`;
+  only trusted static icon SVG passes through the raw-markup path, each site
+  registered on the `unsafeHtml` review allowlist.
+- **Smaller polish.** "Solo" is disabled when only one class is present; the
+  `?debug` overlay clarifies the wall-clock load total, reports the CPU/GPU
+  terrain compute path, and stops printing a false "0 draw calls"; and the
+  Preview "not recommended for" wording reads "outputs requiring independent
+  validation".
+
+### Design
+
+Phase 1 of the v0.4.6 design audit — a visual-only pass (no logic, data, or
+component-behaviour changes; every selector preserved, all unit tests
+stay green) that evolves the existing `src/style.css` token system to make the
+honesty-first verdict the unmistakable hero and calm everything around it.
+Dark, Light, and High-contrast themes all verified WCAG AA on the new
+combinations (verdict-on-card ≥5.8:1 in every theme; primary action ≥4.9:1).
+
+- **Two-tier surfaces (audit 1.2).** New `--panel-raised` / `--panel-recessive`
+  / `--shadow-raised` / `--hairline-strong` tokens (defined in `:root` and
+  overridden per theme). The Analyse verdict card and the Inspector "Color by"
+  control rail now read RAISED (lift shadow, firmer edge); the secondary
+  stacked left panels (Measure / Annotation / ClassLegend / Export / Object)
+  drop to a RECESSIVE translucent fill and lift back to the full panel on
+  hover/focus-within — focal hierarchy at last, costing one token pair.
+- **Verdict as hero (audit 1.1).** `.olv-analyse-assess-verdict` jumps from a
+  hard-coded 19px to `--text-2xl`; the full-card rating tint (previously only
+  on `is-blocked`) now applies to ALL states (good / preview / limited /
+  blocked) at low alpha, so the card's background subtly carries the verdict
+  colour. The card rises + fades in last (reusing `olv-ready-in`) so the eye
+  lands on the truth first.
+- **Quieter typography (audit 2.1).** `text-transform: uppercase` + `var(--mono)`
+  are now reserved for top-level section labels and honest-status WORDS
+  (Ready/Preview/Blocked). Sub-group eyebrows and metric sublabels —
+  `.olv-visuals-group-label`, `.olv-render-sublabel`,
+  `.olv-analyse-assess-metric-label`, `.olv-analyse-workflow-head`,
+  `.olv-analyse-products-head`, `.olv-analyse-why-subhead`,
+  `.olv-object-subhead`, `.olv-getstarted-eyebrow`,
+  `.olv-analyse-product-reason-label` — move to calm sentence-case Manrope.
+  Tabular numeric/coordinate readouts stay monospace (untouched).
+- **Honesty as a visible system (audit 2.4).** A single reusable `.olv-caveat`
+  primitive (left-rule + tinted bg, modelled on `.olv-di-warning`) with
+  `--caveat-rule` / `--caveat-tint` tokens, applied uniformly to every honest
+  limit: Suitability caveats (`.olv-object-note`), Blocked/Preview reasons
+  (`.olv-analyse-reason`, `.olv-analyse-product-reason`), and export notes
+  (`.olv-analyse-dem-note`, `.olv-analyse-export-note`). The
+  "Private · on your device" trust pill (`.olv-badge`) is elevated to a
+  confident pill with a CSS-drawn lock glyph and a firmer accent edge.
+- **One primary action per state (audit 1.4).** A reusable `.olv-primary-action`
+  recipe (solid `--accent` fill, `--on-accent` ink, weight 600 — modelled on
+  the lasso toast) promoted in place onto the single primary of each state
+  (fresh Run analysis, the DEM/Report download, Convert) so it's unmistakable;
+  secondaries stay quiet outline/ghost.
+- **Mobile reflow (audit 1.3, CSS-achievable part).** Below 767px the
+  `.olv-left-panels` stack is capped to the top ~52vh with internal scroll and
+  a soft bottom fade, so panels no longer blanket the canvas or the bottom dock
+  and the verdict stays reachable. (A true single bottom-sheet with a
+  View · Analyse · Layers segmented control needs JS — flagged as a follow-up.)
+- **Surface-quality chip saturation (density reduction).** The Analyse verdict
+  showed nine supporting-metric chips as one flat pile under the verdict +
+  reason + export readiness + product rows — a lot to parse at once. The chips
+  are now TIERED without hiding anything a trust decision needs: an
+  always-visible PRIMARY row carries the three decisive chips (DTM quality, the
+  headline number; Coverage, the frame; and the single WORST-rated remaining
+  signal, so whatever is actually dragging the surface down is never buried),
+  and the full nine move into an "All metrics" `<details>` disclosure grouped
+  into meaningful clusters — **Coverage** (Coverage / Empty cells /
+  Interpolation), **Surface** (Ground density / DTM quality / Edge risk),
+  **Accuracy** (Vertical RMSE), **Georef** (CRS / Vertical datum) — instead of
+  a flat list. The disclosure defaults OPEN on desktop and COLLAPSED on mobile
+  (`_syncMetricsDisclosure`, a `matchMedia('(max-width: 640px)')` check; no chip
+  is ever removed from the DOM, only the default open-state differs). A Georef
+  cluster whose chips are all "unknown" is dimmed (`.is-uninformative`) since it
+  adds nothing beyond the export-readiness line already shown. Honesty-first:
+  the verdict, score, export readiness, reason, terrain-product rows and "Why?"
+  causes all stay always-visible above the disclosure — only the full numeric
+  breakdown is progressively disclosed. CSS + small-DOM grouping only
+  (`_renderAssessMetrics` in `AnalysePanel.ts`); no selector consumed by a test
+  changed. (A true single mobile bottom-sheet for the whole panel remains the
+  flagged JS follow-up from audit 1.3.)
+
+### Added
+
+- **Floor-plan export options control (ObjectPanel).** The `snapMode`
+  (`'auto' | 'strong' | 'off'`) and `adaptiveBand` settings — already plumbed
+  through `extractFloorPlan` as `FloorPlanParams` and into `main.ts`
+  `FLOORPLAN_OPTIONS`, but with no way to set them — now have a compact
+  "Floor plan options" control directly under the "Floor plan preview" button:
+  a 3-segment **Walls** picker (Auto · Square · As-is → snap `auto` / `strong` /
+  `off`) plus an **Adaptive height** toggle, defaulting to the existing headless
+  defaults. The selection flows through a single `ObjectPanel.floorPlanOptions()`
+  getter that BOTH export paths (standalone SVG sheet + report-embedded PDF plan)
+  spread into the same `extractFloorPlan` call, so the two artifacts can never
+  diverge on the chosen policy. The floor plan stays an experimental PREVIEW; the
+  control only chooses an extraction policy and does not imply survey-grade
+  output. a11y: the segments are a real radio group (`role="radiogroup"`, named
+  `<input type="radio">` + `<label>` chips, focus ring); the toggle is a labelled
+  `<input type="checkbox">`. The honesty footer on the sheet still states which
+  wall policy was used. Tests: `tests/floorPlanExportOptions.test.ts` (control
+  defaults match `FLOOR_PLAN_EXPORT_DEFAULTS` / `FLOORPLAN_OPTIONS`; selecting a
+  Walls segment or toggling Adaptive height flows into `floorPlanOptions()` — the
+  object spread into `FloorPlanParams`; the getter returns a copy).
+- **Determinate streaming-progress treatment (StreamingPanel).** The
+  "Refining visible detail…" phase now carries a thin brand-gradient progress
+  bar showing the RESIDENT-node fraction (loaded ÷ known nodes) over the faint
+  track, with a tabular `X / Y nodes resident` + `X.XM / Y.YM pts` readout. The
+  "Streaming ready" terminal state latches the bar full. When the total node
+  count is not yet known the bar falls back to the indeterminate brand shimmer
+  rather than fabricating a percentage. HONESTY: the bar reflects what is LOADED
+  into the scene (resident octree nodes), explicitly labelled "resident" — it is
+  not a download percentage (a streaming source has no fixed total bytes). New
+  pure `streamingProgress()` helper carries the fraction/label logic. Tests:
+  `tests/streamingProgress.test.ts` (hand-computed fraction incl. clamp to [0,1]
+  and the unknown-total → indeterminate fallback, and the same-unit millions
+  points readout).
+- **GPU compute phase 2 — DTM min/count scatter on the GPU**
+  (`src/terrain/engine/dtmScatter.ts`, `gpuBackend.ts`, `TerrainRasterEngine.ts`).
+  The TerrainRasterEngine gains a `scatterMinCount` entry: point→cell binning
+  for the INTEGER-STABLE DTM reductions — per-cell `min` elevation and per-cell
+  `count` (the density layer) — as WGSL compute. Float min has no
+  `atomic<f32>` in WebGPU, so the kernel mins in u32 space through an
+  ORDER-PRESERVING bit key (the radix-sort trick: flip the sign bit for
+  non-negative floats, all bits for negatives — u32 comparison then matches
+  f32 numeric comparison), with `atomicMin` on the keys and `atomicAdd` on the
+  counts; a finalize pass decodes the winning key back to f32 (or the canonical
+  NaN `Float32Array.fill(NaN)` stores, for empty cells). Because min and count
+  are order-INDEPENDENT, the equivalence is EXACT, not tolerance-bounded: the
+  once-per-session probe now also scatters a synthetic 24×24 grid (dense
+  contention cells, genuinely-empty cells, ±elevations, out-of-grid edge-clamp)
+  and asserts the GPU grid is BIT-equal to the CPU reference
+  (`scatterMinCountReference`, the exact transcription of `rasterizeDtm('min')`
+  — and byte-identical to it on the f32 point buffers the pipeline feeds). The
+  engine routes scatter to the GPU only when `probe.scatterExact === true`,
+  with the same auto-fallback + telemetry as the derivative kernels (a dispatch
+  throw demotes the session to CPU and the call is recomputed on the reference).
+  `mean` (a float sum that reassociates), `median`, `percentile`, and `robust`
+  are NOT atomics-tractable and stay on the CPU `rasterizeDtm` — only the
+  min/count/density paths move, per the tech evaluation; the synchronous
+  contour pipeline keeps calling the CPU `gridFromPoints` (the async
+  GPU-eligible scatter is wired and proven, adopted when that stage goes async
+  next phase, mirroring the phase-1 derivatives discipline). Tests:
+  `tests/terrainRasterEngine.test.ts` (ordered-key round-trip + monotonicity,
+  a hand-computed tiny-grid scatter, reference-vs-`rasterizeDtm` byte-equality,
+  exact scatter probe gating + diverging-scatter fallback) and
+  `tests/gpuBackendDispatch.test.ts` (mock-device scatter+finalize dispatch:
+  buffer sizes/usages, sentinel-seeded key buffer, uniform packing, two-pass
+  geometry, cleanup); `tests/e2e/gpuDerivatives.spec.ts` now also asserts the
+  real-device scatter is exact (a `false` is the same forbidden divergence as a
+  derivative mismatch).
+- **Floor plan: adaptive wall-slice height band**
+  (`src/terrain/space/floorplan/wallSlice.ts`). The hardcoded 0.7–1.8 m wall
+  band now ADAPTS: `detectWallBand` builds a z-histogram of returns above the
+  floor and finds the densest SUSTAINED vertical window (scored by its weakest
+  bin, so a broad wall slab beats a one-bin floor/ceiling/furniture spike), and
+  re-centres the band on it. Countertop / industrial scans whose walls sit
+  outside 0.7–1.8 m (high clerestory, racking, mezzanines) now slice their
+  actual walls instead of low clutter. It only MOVES the slice on genuinely
+  off-centre evidence — a normal full-height room (uniform wall density) keeps
+  the well-tested fixed band by a centre-preference tie-break — and falls back
+  to the fixed band, then the widened retry, then full height. `floorBasis`
+  gains a `bandBasis` companion ('fixed' | 'adaptive') and the sheet's honesty
+  footer says when the band was re-centred. Default on; `adaptiveBand: false`
+  pins the fixed band. Tests in `tests/floorPlan.test.ts` (the detector on
+  hand-built histograms: uniform→fixed, high-zone→re-centre, narrow
+  spike→reject, floor-clearance clamp) and an end-to-end high-clerestory room
+  that climbs onto the 2.0–3.2 m walls and excludes the 0.5–0.9 m clutter.
+- **Floor plan: furniture height-profile classifier feature**
+  (`regularize.ts`, `occupancyGrid.ts`, `wallSlice.ts`). The wall slice now
+  keeps per-band-point elevation (`zs`), and `extractFloorPlan` bins it into a
+  per-cell height profile (`buildCellHeightProfile`) passed to
+  `classifyIslands`. A component's vertical EXTENT now joins area / elongation /
+  distance-to-wall: a THIN, TALL component (small column footprint that spans
+  most of the band) is rescued to STRUCTURE instead of being demoted to
+  furniture, while a WIDE full-height blob (a wardrobe) stays furniture by its
+  footprint — height span alone is not enough, it is the thin-and-tall
+  combination that reads as a column. The feature only ever RESCUES a compact
+  component into walls on strong vertical evidence (never demotes a
+  footprint-wall, so door-jamb safety is untouched), and is a no-op when no
+  profile is supplied (pre-v0.4.6 behaviour). Tests in
+  `tests/floorPlanRealism.test.ts` (a tall thin column kept vs a low cabinet
+  lifted, a wide full-height wardrobe staying furniture, footprint-only when no
+  profile).
+- **Floor plan: plumbed extraction options (snap mode + adaptive band)**
+  (`extractFloorPlan.ts`, `main.ts`). `FloorPlanParams` gains `adaptiveBand`
+  and `snapMode`, threaded into the wall slice and the vectoriser's
+  `resolveSnapAxes` (the `SNAP_MODE` auto/off/strong policy). `main.ts` plumbs
+  a single documented `FLOORPLAN_OPTIONS` object (sane defaults — adaptive band
+  on, snap auto) into BOTH export paths (the PDF report's embedded plan and the
+  standalone SVG sheet), so the two can never extract with different settings.
+  A dedicated ObjectPanel control is deferred — the plumbed options object is
+  the seam a future control would set; the honesty footer already reports the
+  band basis and snap policy used. Test: the pipeline suite asserts
+  `bandBasis`, the adaptive re-centre note, and `snapMode: 'off'` are honoured.
+- **TerrainRasterEngine seam + WebGPU derivative kernels**
+  (`src/terrain/engine/`). One interface now owns terrain raster
+  construction — `groundFilterPass` (SMRF), `gridFromPoints` (DTM
+  rasterisation), and the grid-in → grid-out derivatives (Horn
+  slope/aspect, ESRI hillshade) — behind two backends. The `cpuBackend` is
+  PURE DELEGATION to the existing tested functions (`classifyGroundSmrf`,
+  `rasterizeDtm`, `hornSlopeAspect`, `shadeFromSlopeAspect`): no logic
+  moved, byte-identical outputs, and it remains the REFERENCE
+  implementation and the always-available fallback (WebGL2-only devices
+  run it unchanged). The `gpuBackend` ships the embarrassingly-parallel
+  DERIVATIVES kernels only this phase — Horn slope/aspect and hillshade as
+  WGSL compute, mirroring the CPU operation-for-operation (northing-up
+  aspect negation, edge clamp, non-finite→centre fallback via a CPU-built
+  validity mask since WGSL NaN tests are driver-unreliable, half-UP shade
+  rounding); point→grid scatter and the ground filter stay on the CPU
+  functions even when GPU is active (atomics-bound, deferred per the tech
+  evaluation). Honesty-first by construction: a once-per-session
+  EQUIVALENCE PROBE runs both backends on a synthetic 64×64 grid (hills +
+  ramp + NaN holes + an exactly-flat patch) and the GPU is only activated
+  if it agrees per-cell within 1e-4 (slope rise/run; aspect compared as an
+  angular distance, only above a 1e-6 slope floor where direction is
+  numerically meaningful) and ±1 grey level of shade — f64-vs-f32
+  float-order and driver FMA/atan2-precision caveats are documented at the
+  seam, and a GPU that diverges is a FAILURE, not a fast answer. Missing
+  `navigator.gpu`, a failed device request, a failed probe, or a later
+  dispatch throw each pin the session to CPU — silent to the user, but
+  recorded in compute-path telemetry (`getLastTerrainRasterComputePath`,
+  mirroring the worker-path telemetry), and a failed dispatch is recomputed
+  on CPU so callers always get the reference answer. The contour
+  pipeline's derivative stage now routes through the engine's synchronous
+  CPU-reference entries (byte-identical to before — the async entries are
+  the GPU-eligible ones the stage adopts when it goes async next phase).
+  Tests: `tests/terrainRasterEngine.test.ts` (delegation byte-equality,
+  the f32 kernel-transcription equivalence harness across synthetic grids,
+  every fallback reason, probe idempotence) and
+  `tests/gpuBackendDispatch.test.ts` (mock-device dispatch plumbing:
+  buffer sizes/usages, uniform packing, workgroup geometry, cleanup);
+  real-GPU verification is the self-skipping browser gate
+  `tests/e2e/gpuDerivatives.spec.ts`, which fails loudly on a probe
+  mismatch.
+- **Wall graph** (`src/terrain/space/floorplan/wallGraph.ts`). The centerline
+  skeleton (centerline.ts) is lifted into an explicit topological model:
+  junction cells (≥ 3 skeleton neighbours, clustered 8-connectedly) and free
+  endpoints become NODES; the skeleton paths between them become EDGES, each
+  carrying a straightened centerline polyline (Douglas-Peucker via the
+  vectorize machinery + an open-chain dominant-axis snap), ONE measured mean
+  thickness (chamfer transform of the wall mask the graph describes — an
+  echo-collapsed wall reports its collapsed thickness, not the echo's), and a
+  per-edge observed fraction against the raw pre-close mask. Junction-free
+  cycles get a synthetic loop node so every skeleton cell belongs to exactly
+  one edge. The wall mask is then RE-EXTRUDED FROM THE GRAPH — constant
+  thickness per wall run, join discs at junctions so corners close cleanly —
+  with sub-cell mass recentring of the path (the integer skeleton of an
+  even-width strip sits half a cell off the true medial axis) and a paint
+  radius of (meanDist − 0.5) cells, which together reproduce the measured
+  width exactly for both parities: the reconstruction never fattens a wall
+  beyond the evidence and never recedes its faces (sheet W × D keeps agreeing
+  with the Space panel). Falls back to the normalised mask (and drops the
+  graph claim) when the graph is degenerate. Truth-grid tests
+  (`tests/floorPlanWallGraph.test.ts`): T / + / L junction topologies, loop
+  self-edges, hand-computed edge thickness (3-cell strip → ≈ 0.2 m half),
+  half-observed runs reading ≈ 0.5, odd AND even strip widths round-tripping
+  exactly, L-corner closure with bounded mass growth, watertight loop
+  extrusion, and the open-chain snap's fixed/free end contracts.
+- **Room segmentation** (`src/terrain/space/floorplan/roomDetect.ts`). Flood
+  fill of the free space bounded by the graph-extruded walls PLUS the
+  classified doorways' jamb-to-jamb spans (painted as temporary barriers — a
+  door separates the rooms it connects). Chosen over planar graph faces
+  deliberately: faces need a closed embedding and collapse on gappy real
+  scans, while flood fill degrades gracefully. Honesty rules by construction:
+  door-separated rooms stay DISTINCT (merging through classified doorways
+  stays off); 'unknown' gaps are NEVER closed, so an unscanned divider merges
+  its regions instead of fabricating a wall; a region leaking to the grid
+  border is exterior, never claimed as a room. Per room: outer boundary
+  polygon (existing trace + simplify machinery), area measured on the REGION
+  MASK (not the simplified polygon), and a label anchor at the pole of
+  inaccessibility (chamfer maximum) so labels sit inside L-shaped rooms.
+  Regions under the architectural minimum room area (`ROOM_MIN_AREA_M2`, 4 m²
+  — see the same-day calibration fix below) are slivers and dropped; the room
+  list is also suppressed in favour of an honest "Open space" / "could not
+  segment" outcome when it would not faithfully describe the floor; at most 16
+  rooms are reported, largest first. Tests (`tests/floorPlanRooms.test.ts`):
+  hand-counted two-room grid
+  (320 / 324 cells exactly, including the provable 4-cell door-barrier bite),
+  open-plan merge, unknown-gap non-closure, exterior leak → no rooms,
+  sub-1 m² sliver rejection, exact L-enclosure area; end-to-end two-room scan
+  with a 0.9 m door → exactly 2 rooms within ±2% of the hand-computed
+  interiors (39.105 / 38.71 m²), a 2 m unknown gap → ONE merged room, and an
+  L-shaped scan → one room at the hand-counted 58.66 m².
+- **Rooms on the artifacts.** The SVG sheet labels each room
+  "Room N · 12.3 m²" (sq ft under the imperial unit system) at its pole of
+  inaccessibility when the text fits, prints a "Room schedule (flood-fill of
+  the wall graph, approx.)" footer line with every room either way, and the
+  Space Report PDF embed draws the same labels. The sheet subtitle and the
+  PDF caption now say "wall-graph reconstruction" — but ONLY when the walls
+  really were re-extruded from the graph (`fromWallGraph`); the fallback
+  keeps the old "approximate wall-trace sketch" wording, and all standing
+  "preview / experimental / not for construction" caveats remain. The old
+  "≈ area" scanned-floor region labels still render when no rooms were
+  segmented (and only then — no double labelling).
+- **Styled confirm dialog** (`openConfirm` in `src/ui/Modal.ts`). A
+  Promise-based replacement for `window.confirm()` built on the existing
+  accessible Modal chrome. WHY: `window.confirm()` is unreliable in embedded
+  WebViews — some suppress it entirely, returning `false` without ever showing
+  a prompt, which silently blocked a user inside an iframe/app shell from
+  approving a large-file or cellular download. The styled dialog renders
+  identically everywhere the app does, focuses Cancel as the safe default, and
+  treats any dismissal (Escape / backdrop / close-X) as "no". Wired into all
+  three former native prompts: the mobile large-file open gate and the sample
+  download gate (`Stage.ts`, now async), and the reset-session-stats gate
+  (`Inspector.ts`). Tests: `tests/modalConfirm.test.ts` (resolve semantics,
+  settle-once idempotence, Cancel-focus default, multi-line message split).
+- **Gated-control reasons are now visible, not hover-only.** Two disabled
+  controls whose "why" lived only in a `title` tooltip — invisible on touch,
+  which has no hover — now restate the reason as a visible line in the flow:
+  the Inspector's analysis-gated Coverage / Confidence colour chips ("Run
+  terrain analysis first to enable Coverage and Confidence"), and the batch
+  converter's disabled LAZ format pill (the in-browser-LAZ-not-yet note). The
+  `title` attributes stay for pointer users.
+
+### Changed
+
+- **Honest capture-quality coverage label (last drift fix).** The Capture
+  quality "Coverage … % of footprint" row (hint "Share of the footprint with
+  returns") implied a share of a traced room outline, but the value is computed
+  as occupied cells ÷ (cols × rows) over the scan's axis-aligned BOUNDING-BOX
+  grid — a fill ratio of the EXTENT. Relabelled to **"Bounding area filled"**
+  with a bare `%` value and a hint that says exactly that ("Share of the scan's
+  bounding-box footprint grid whose cells contain returns — a fill ratio of the
+  extent, not of a measured room outline"), in both the ObjectPanel row and the
+  report-PDF layout, so label == computation. The math is unchanged. Tests:
+  `tests/coverageLabelHonesty.test.ts` (pins the new "Bounding area filled" label
+  — bare `%`, fill-ratio hint — in both surfaces and guards the old
+  "% of footprint" / "Share of the footprint" phrasing from regressing).
+- **Mobile touch targets bumped to ≥ 44 px** (the long-deferred mobile audit
+  box from 0.4.4). On phones (`max-width: 767px`), the tool-dock chips
+  (`.olv-dock .olv-tool`, previously 32 px), the batch-converter format / CRS
+  pills (`.olv-bc-pill`), the measure-toolbar chain-operation chips
+  (`.olv-mp-chain-chip`), the camera-preset chips (`.olv-cam-chip`), and the
+  styled-confirm buttons now meet Apple's 44 px minimum tap height. Dock width
+  stays content-driven (with a 44 px floor) so the six-button row still fits
+  the narrowest iPhone — height carries the tap area in a dense horizontal
+  toolbar. All rules live inside the phone media query, so desktop density is
+  untouched.
+- **Notch-safe toasts.** The lasso-result toast and the load-progress toast now
+  subtract `env(safe-area-inset-left/right)` from their max-width so a
+  landscape side-notch (sensor housing / rounded corner) can never clip them.
+  `env()` is 0 on inset-free displays, so desktop width is unchanged. (The
+  vertical safe-area handling for the dock / nav / toasts was already in place.)
+
+### Fixed
+
+- **Streaming scheduler per-tick allocation storm — "computer got really slow
+  when I opened the project"** (`StreamingNodeStore.ts`, `StreamingScheduler.ts`).
+  On a large streamed COPC (the 125.5 M-pt interior: 28 319 known nodes, ~495
+  resident) the view-dependent scheduler runs ~10×/s for the whole session. Each
+  tick walked `octree.nodes()` — `[...map.values()]`, a throwaway **28 319-element
+  array** — THREE times: the "reconsider queued" reset pass, the full rescore,
+  and (via `store.resident()` = `all().filter(...)`) the eviction pass, which
+  allocated TWO such arrays. So every idle tick allocated ~3–4 full-hierarchy
+  arrays and re-scanned all 28 k nodes just to touch a few hundred — GC churn +
+  walk cost that scaled with the WHOLE octree, not the working set, and bogged
+  the main thread the entire time the cloud was open (the stable-camera fast
+  path skipped the *scoring* but NOT these walks). The store now maintains
+  `resident` / `queued` SETS at every `setState` transition and exposes
+  zero-allocation iterators (`iterate()`, `residentNodes()`, `queuedNodes()`);
+  the scheduler's per-tick passes are now O(resident)/O(queued) with no
+  per-tick array allocation. The dominant per-frame cost on scan-open is gone.
+  (Investigated and ruled OUT as the open-path regression: the WebGPU
+  equivalence probe — gated behind Analyse via `analyseContours.ts`, idempotent
+  one-shot, never on the open path — and the O(N) brute-force hover pick, which
+  only fires on pointer-move with the measure/probe tool armed, not at
+  scan-open.) Guard test in `tests/streamingOctree.test.ts` proves the
+  maintained sets stay bit-identical to a ground-truth `all().filter` walk
+  across every lifecycle transition.
+- **Big open interior misdetected as terrain — "Treat as" never auto-committed
+  to Interior** (`scanShape.ts`). On the real 125.5 M-pt 360 industrial-interior
+  scan the "Treat as" control would not commit to Interior automatically; the
+  user had to set it by hand. Root cause was DETECTION, not the commit mechanism:
+  `classifyScanShape` read this large open interior (≈11.8 × 15.0 m footprint,
+  ~4 m ceiling) as TERRAIN. A 360 scanner sees a HIGH ceiling only at grazing
+  angle, so full-height `wallCoverage` AND `ceilingCoverage` both landed ~12–22%
+  — under the strict `WALL_INTERIOR` (0.25) and `ENCLOSURE_COVER` (0.45) bars —
+  while the densely-sampled floor (≈100%) looked like a flat field. With the
+  verdict at terrain, the planner correctly REFUSED the mid-session terrain flip,
+  so no commit ever fired and the pill stayed on Auto past `SETTLE_RETRY_CAP`.
+  The fix adds an **open-interior path**: accept a much lower wall-OR-ceiling
+  presence (`WALL_OR_CEILING_OPEN_INTERIOR`, 0.10), safe because
+  `floorCoverage ≥ 0.5` AND `overhangFraction ≥ 0.15` each independently exclude
+  every terrain case (flat AND steep hilly terrain measure ~10–15% floor and ~0%
+  overhang in testing). The verdict now reads `interior` (own honest 0.7
+  confidence, "open interior space — high or sparsely-scanned ceiling"); the
+  settle one-shot then commits the pill on its own. New test in
+  `tests/scanShape.test.ts` reproduces the scan's exact shape signature
+  (sparse ceiling, partial walls, full floor) and pins interior, with the
+  terrain/forest controls verifying no regression.
+- **Floor-plan region areas exceeded the stated floor area — incoherent sheet**
+  (`floorPlanSvg.ts`). The sheet reported "Floor area 94.4 m²" yet "Approx.
+  region areas … 106.6 m²" — the per-region breakdown summed to MORE than the
+  headline floor area. The two figures measured different things: `floorAreaM2`
+  is the NET scanned presence mask (measured before closing), while the region
+  rings are vectorised from the CLOSED, hole-healed, outward-simplified mask, so
+  their polygon sum is a GROSS extent that overshot. A region sum larger than the
+  stated floor is incoherent on an honesty-first sheet, so a new
+  `regionAreaReconcileScale` proportionally scales the regions down (factor ≤ 1,
+  never up) so the breakdown sums to the floor area exactly — relative extents
+  stay honest, no figure ever exceeds the headline. Applied to BOTH the footer
+  sum and the in-plan per-region labels so the sheet never shows two areas for
+  one region. New test in `tests/floorPlanQuickWins.test.ts`.
+- **Floor-plan furniture-hint clutter — 37 grey specks stippled the sheet**
+  (`extractFloorPlan.ts`). The contents classifier on a cluttered 360 interior
+  lifted 37 compact islands and drew every one as a grey hint blob — noise, not
+  a layout aid. The drawn set is now capped at the `MAX_CONTENTS_HINTS` (12)
+  LARGEST by footprint after a sub-`MIN_CONTENTS_HINT_M2` (0.12 m²) speck filter
+  — same found-vs-drawn honesty pattern as `MAX_UNKNOWN_GAPS`. The footer states
+  the full found count, how many were drawn, and that the smallest were omitted
+  to keep the sheet legible. New test in `tests/floorPlanRealism.test.ts` (many
+  islands classified, ≤ 12 drawn, honest footer wording).
+- **Floor-plan room segmentation calibration — no fake room schedule on an
+  open plan** (`roomDetect.ts`, `extractFloorPlan.ts`, `floorPlanSvg.ts`).
+  On a real open industrial interior (96 m² floor) the open floor LEAKS to the
+  exterior boundary through unscanned boundary runs, so the flood fill
+  classified the whole interior as exterior and the only enclosed regions were
+  tiny sealed pockets between wall fragments — the sheet then printed "Room 1…5"
+  totalling 8.3 m² (pockets of 1.0–2.8 m²), which read as broken. Three changes
+  recalibrate it honestly: (a) the architectural **minimum room area** is raised
+  from 1.0 m² to **4.0 m²** (`ROOM_MIN_AREA_M2`, parameterised — a 1–3 m² flood
+  pocket is not a room; sub-threshold pockets are DROPPED, never numbered);
+  (b) a **"could not segment" / open-plan guard** — when the kept rooms cover
+  less than `ROOM_COVERAGE_MIN_FRAC` (35%) of the scanned floor area, the room
+  list is suppressed and the model reports an honest outcome instead: a single
+  **Open space · ~N m²** when one connected region dominates the floor
+  (`OPEN_SPACE_MIN_FRAC`, 55%), else **"Rooms could not be reliably segmented
+  from the wall returns"** — no fabricated schedule, while the wall poché,
+  overall dimensions, and floor area still render; (c) a single unpartitioned
+  region (no doorway split, not ≥2 rooms) that covers most of the floor is now
+  presented as one **Open space** rather than "Room 1" of a schedule. The
+  echo-collapse pass (`centerline.ts`) was re-verified — its output is a strict
+  subset of the input wall mask (it only removes excess double-scanned wall
+  mass, never erodes past raw returns), so the "25 m²-removed" figure is
+  legitimate double-wall collapse, NOT the cause of the leak; left as-is and
+  confirmed by the existing subset test. The room detector now takes the
+  scanned floor area so it can apply the guard. New tests in
+  `tests/floorPlanRooms.test.ts`: the raised min-area floor (9 m² enclosure is a
+  room, 3.24 m² is not), the leaking-open-plan pathology in miniature → NOT a
+  room schedule (`unsegmented`), one dominant region → `open-space`, threshold
+  ordering, and the end-to-end open-plan / L-shape scans now read as a single
+  open space; the genuine two-room partition still yields two distinct rooms.
+- **Caveat collapse in the Space/Object panel** (`ObjectPanel.ts`, `style.css`).
+  The interior scan panel stacked ~5 orange `.olv-object-note` caveats ("Based
+  on points currently loaded…", "N stray returns excluded…", "Density scaled
+  from sample…", "Ceilings sparsely captured…", "Wall and plane figures are
+  pragmatic estimates…") that ate the panel vertically. The single most
+  decision-critical line — **"pragmatic estimates, not a certified survey"** —
+  now stays visible as a lead note; the remaining secondary caveats fold into
+  ONE collapsed `<details>` disclosure ("About these figures (N) ▸") with native
+  `<summary>` keyboard + `aria-expanded` semantics, a rotating caret, and a
+  focus ring. Nothing is removed: the collapsed content stays in the DOM (the
+  `currently loaded / streamed` and other strings remain reachable by tests and
+  assistive tech, just hidden until expanded), and the floor-plan
+  "experimental — requires visual validation" note stays visible when the
+  preview button is present. The AnalysePanel was reviewed and left unchanged —
+  its quality `reasons` already live inside the collapsed "Details" disclosure,
+  so it had no surface-level pile-up. Pinned in `tests/objectPanelSpace.test.ts`
+  (one disclosure, lead kept visible, every secondary caveat still in the DOM).
+- **Edge-risk wording bug (Analyse "Why?" panel).** The surface-quality
+  "Why? / How to improve" engine (`whyNotReasons.ts`) still described the
+  high-edge-risk cause as "`N%` of cells are a long interpolation from real
+  returns" — the wording that belongs to the gate's *tally* metric
+  (`dtmCellStatus 'edgeRisk'`: interpolated cells far from any measurement).
+  But the value it prints, `quality.edgeRiskRatio`, is wired from
+  `cellMetrics.edgeRiskRatio` (`analyseContours.ts`) — the fraction of
+  *measured* cells that sit near the data boundary (real returns, just least
+  neighbour support). The same mislabel was fixed in `terrainAssessment.ts`
+  before, but this second copy — which renders in the SAME surface-quality
+  section, directly below the verdict — was missed, so a user could see the
+  EDGE RISK chip (e.g. 53%) and a contradictory "long interpolation" reason at
+  once. The cause now reads "`N%` of measured cells sit at the edge of the
+  data, where the surface is least supported", matching the chip and the
+  assessment reason verbatim. Pinned in `tests/whyNotReasons.test.ts` (the
+  metric is no longer called "long interpolation"; the gate's own tally metric
+  in `tests/dtmQuality.test.ts` legitimately keeps that phrasing).
+- Sparse-regime doorway-close cap (`closeRadiusCells`): the closing radius
+  was floored at 1 cell to heal hairline gaps, but in the sparse regime the
+  adaptive cell can GROW to 0.3 m, where radius 1 bridges up to
+  2·√2·0.3 ≈ 0.85 m diagonally — enough to seal a standard 0.6 m doorway.
+  The floor now applies only while radius 1 cannot bridge `keepOpenM` even
+  diagonally (2·√2·cell < keepOpen); past that, closing is disabled outright
+  (the grown rasterisation has already fused returns within each fat cell, so
+  the hairline-heal duty is moot). A door survives at EVERY cell size by
+  construction. Pinned in `tests/floorPlan.test.ts` (0.21 m → 1; 0.25 m and
+  0.30 m → 0; radius-0 closing is the identity).
+- The Space Report PDF's embedded floor-plan dimension line now honours the
+  caller's unit system (imperial prints feet first, metric metres first),
+  matching the standalone SVG sheet and the measurement panel —
+  `buildSpaceReportPdf` gains `unitSystem`, threaded from the live
+  measurement unit system in `main.ts`.
+- **Stride-scaled USGS QL presented as exact (terrain honesty asymmetry).**
+  When the gather strides a huge cloud (≤300k points), ground density is scaled
+  back to the full scan by a uniform-stride assumption (`samplePointScale`),
+  and that scaled density grades the USGS 3DEP Quality Level. The space-scan
+  path already disclosed "uniform-stride assumption" on its density/spacing, but
+  the terrain QL chip, its tooltip, and the Terrain Report presented the grade
+  as a directly-counted, exact figure. `analyseContours.ts` now emits a
+  uniform-stride caveat into `result.warnings` whenever the density was scaled
+  (`samplePointScale > 1`) — surfaced verbatim in the exported PDF report's
+  Warnings section — and the Analyse panel's QL hint carries the same note, so
+  the QL grade reads as the estimate it is. No caveat is emitted on an
+  un-strided (scale 1) run. Pinned in `tests/densitySampleScale.test.ts`.
+
 ## [0.4.5] - 2026-06-10
 
 The honesty-and-deliverables release: one readiness engine behind every export

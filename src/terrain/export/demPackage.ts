@@ -25,6 +25,34 @@ import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 
+/**
+ * Resolved linear unit of a projected CRS — the SAME vocabulary the DXF
+ * `$INSUNITS` seam uses. Drives the README's horizontal cell-size / bounds unit
+ * (and, on a foot CRS, the elevation unit) so a foot-based scan never reads "m".
+ */
+export type DemLinearUnit = 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
+
+/**
+ * Plain horizontal-unit label for a PROJECTED CRS (geographic frames label
+ * "degrees" separately). A foot CRS (international or US survey) reads "ft"; an
+ * omitted / metre / unknown unit keeps the standing metre default for
+ * back-compat (the terrain stack's `unitToMetres` defaults to 1).
+ */
+function projectedUnitLabel(unit: DemLinearUnit | undefined): string {
+  return unit === 'foot' || unit === 'us-survey-foot' ? 'ft' : 'm';
+}
+
+/**
+ * Plain vertical-unit label. The DTM grid stores elevations in the scan's
+ * SOURCE vertical units (only the validation RMSEz is converted to metres), so
+ * a foot-based CRS — whose vertical axis shares the linear unit family — carries
+ * elevations in feet, not metres. An omitted / metre / unknown unit keeps the
+ * standing metre default for back-compat.
+ */
+function verticalUnitLabel(unit: DemLinearUnit | undefined): string {
+  return unit === 'foot' || unit === 'us-survey-foot' ? 'feet' : 'metres';
+}
+
 export interface DemPackageOptions {
   /** Absolute world origin (cloud origin x/y) added to the grid frame. */
   readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
@@ -34,6 +62,12 @@ export interface DemPackageOptions {
   readonly wkt?: string | null;
   /** True when the horizontal CRS is geographic (lat/lon, degree cells). */
   readonly isGeographic?: boolean;
+  /**
+   * Resolved linear unit of a projected CRS. Drives the README's cell-size /
+   * bounds / elevation unit so a foot-based scan reads "ft" / "feet" instead of
+   * the metre default. Omitted ⇒ the standing metre assumption (back-compat).
+   */
+  readonly linearUnit?: DemLinearUnit;
   /** ISO generation timestamp. Default `new Date().toISOString()`. */
   readonly generationDateIso?: string;
   /** Producing software name. Default 'OpenLiDARViewer'. */
@@ -96,6 +130,11 @@ export interface DemReadmeOptions {
   readonly result: AnalyseContoursResult;
   readonly basename: string;
   readonly isGeographic: boolean;
+  /**
+   * Resolved linear unit of a projected CRS (ignored when `isGeographic`).
+   * Omitted ⇒ the standing metre assumption.
+   */
+  readonly linearUnit?: DemLinearUnit;
   /** Bounds extent in CRS units (lower-left + upper-right). null when unknown. */
   readonly boundsMinX: number | null;
   readonly boundsMinY: number | null;
@@ -149,7 +188,15 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     return { measured, interp, total };
   })();
   const pct = (n: number): string => (cov.total ? `${Math.round((100 * n) / cov.total)}%` : '—');
-  const hUnit = isGeographic ? 'degrees' : 'm';
+  // Horizontal cell/bounds unit: degrees for a geographic frame, else the
+  // resolved projected linear unit (m, or ft on a foot CRS) — the grid's
+  // cellSizeM is stored in SOURCE units, so a foot CRS must read "ft" not "m".
+  const hUnit = isGeographic ? 'degrees' : projectedUnitLabel(opts.linearUnit);
+  // Elevation unit: the DTM stores Z in SOURCE vertical units, so a PROJECTED
+  // foot-based CRS carries elevations in feet. A geographic frame keeps the
+  // standing metre assumption for heights (its horizontal unit is degrees; the
+  // vertical unit is conventionally metres and is not separately resolved here).
+  const zUnit = isGeographic ? 'metres' : verticalUnitLabel(opts.linearUnit);
   const reasons = quality?.reasons ?? [];
   const exportReasons = quality?.exportReasons ?? [];
   const warnings = result.warnings ?? [];
@@ -189,7 +236,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
-    `  Elevation unit metres`,
+    `  Elevation unit ${zUnit}`,
     ``,
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
@@ -309,6 +356,7 @@ export function buildDemPackage(
     result,
     basename,
     isGeographic,
+    linearUnit: options.linearUnit,
     boundsMinX, boundsMinY, boundsMaxX, boundsMaxY,
     generationDateIso: options.generationDateIso ?? new Date().toISOString(),
     softwareName: options.softwareName ?? 'OpenLiDARViewer',

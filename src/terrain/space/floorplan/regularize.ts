@@ -50,6 +50,44 @@ export const WALL_MIN_SIDE_M = 1.2;
 export const WALL_MIN_ELONGATION = 3;
 /** Compact fragments within this of the wall network stay walls (jambs). */
 export const NEAR_WALL_M = 0.3;
+/**
+ * Height-profile gate (only used when a per-cell z profile is supplied).
+ * A column-like component (both footprint sides ≤ {@link COLUMN_MAX_SIDE_M})
+ * whose vertical EXTENT fills at least this fraction of the wall band is
+ * STRUCTURE (a structural column returns across the whole band height), so it
+ * is NOT demoted to furniture. The column-footprint gate is what separates a
+ * thin tall column (rescued) from a WIDE full-height blob like a wardrobe
+ * (which stays furniture by its footprint) — height span alone is not enough,
+ * because furniture can also be full height; it is the THIN-AND-tall
+ * combination that reads as structure.
+ */
+export const STRUCTURE_MIN_Z_SPAN_FRAC = 0.6;
+/**
+ * A component both of whose footprint sides are at most this is column-like
+ * (a structural column / pillar is a small square in plan). Only such compact
+ * footprints are eligible for the tall-column structure rescue above — a wide
+ * blob is furniture regardless of height.
+ */
+export const COLUMN_MAX_SIDE_M = 0.4;
+
+/**
+ * Optional per-cell height profile aligned 1:1 with the occupancy grid cells:
+ * the min and max elevation (metres, slice frame) of the band returns that
+ * landed in each cell, and the wall band's vertical span. Lets
+ * {@link classifyIslands} weigh a component's z-EXTENT alongside its
+ * footprint — a tall thin column (spans the band) classifies as structure, a
+ * low wide blob (shallow slab) as furniture. `bandSpanM <= 0` or a null
+ * profile disables the height feature (footprint-only classification, the
+ * pre-v0.4.6 behaviour).
+ */
+export interface CellHeightProfile {
+  /** Per-cell minimum band-return elevation; NaN where the cell is empty. */
+  readonly zMin: Float32Array;
+  /** Per-cell maximum band-return elevation; NaN where the cell is empty. */
+  readonly zMax: Float32Array;
+  /** The wall band's vertical span (m) — the reference the z-extent is judged against. */
+  readonly bandSpanM: number;
+}
 /** Minimum believable wall segment — spurs under this (deep AND wide) die. */
 export const MIN_SPUR_M = 0.25;
 /** Sliver-ring filter: mean thickness below this fraction of a cell. */
@@ -75,13 +113,34 @@ export interface IslandClassification {
  * jamb returns into exactly such fragments. When NO component is wall-like
  * (degenerate tiny input) everything is kept: with no wall network there is
  * no basis for calling anything furniture.
+ *
+ * HEIGHT PROFILE (v0.4.6, optional). When a per-cell {@link CellHeightProfile}
+ * is supplied, a component's vertical EXTENT joins the footprint verdict: a
+ * compact-but-TALL component that spans ≥ {@link STRUCTURE_MIN_Z_SPAN_FRAC} of
+ * the wall band is promoted to structure (a thin column reads as a small blob
+ * by footprint but returns across the whole band — it must not be demoted to
+ * furniture), while a component that is footprint-furniture AND occupies only
+ * a shallow slab keeps its furniture verdict. The profile only ever RESCUES a
+ * compact component into walls on strong vertical evidence; it never demotes a
+ * footprint-wall, so the door-jamb safety is untouched.
  */
-export function classifyIslands(grid: OccupancyGrid): IslandClassification {
+export function classifyIslands(
+  grid: OccupancyGrid,
+  heightProfile?: CellHeightProfile | null,
+): IslandClassification {
   const { mask, cols, rows, cellX, cellY } = grid;
   const cellM = Math.max(cellX, cellY);
   const n = cols * rows;
+  const useHeight =
+    heightProfile != null &&
+    heightProfile.bandSpanM > 0 &&
+    heightProfile.zMin.length === n &&
+    heightProfile.zMax.length === n;
   const label = new Int32Array(n).fill(-1);
-  interface Comp { cells: number; minC: number; maxC: number; minR: number; maxR: number; wallLike: boolean }
+  interface Comp {
+    cells: number; minC: number; maxC: number; minR: number; maxR: number;
+    zLo: number; zHi: number; wallLike: boolean;
+  }
   const comps: Comp[] = [];
 
   // 8-connected components (matches the morphological closing's connectivity).
@@ -89,7 +148,10 @@ export function classifyIslands(grid: OccupancyGrid): IslandClassification {
   for (let start = 0; start < n; start++) {
     if (!mask[start] || label[start] >= 0) continue;
     const id = comps.length;
-    const comp: Comp = { cells: 0, minC: cols, maxC: -1, minR: rows, maxR: -1, wallLike: false };
+    const comp: Comp = {
+      cells: 0, minC: cols, maxC: -1, minR: rows, maxR: -1,
+      zLo: Infinity, zHi: -Infinity, wallLike: false,
+    };
     label[start] = id;
     stack.push(start);
     while (stack.length > 0) {
@@ -101,6 +163,12 @@ export function classifyIslands(grid: OccupancyGrid): IslandClassification {
       if (c > comp.maxC) comp.maxC = c;
       if (r < comp.minR) comp.minR = r;
       if (r > comp.maxR) comp.maxR = r;
+      if (useHeight) {
+        const zl = heightProfile.zMin[i];
+        const zh = heightProfile.zMax[i];
+        if (Number.isFinite(zl) && zl < comp.zLo) comp.zLo = zl;
+        if (Number.isFinite(zh) && zh > comp.zHi) comp.zHi = zh;
+      }
       for (let dr = -1; dr <= 1; dr++) {
         const rr = r + dr;
         if (rr < 0 || rr >= rows) continue;
@@ -117,10 +185,19 @@ export function classifyIslands(grid: OccupancyGrid): IslandClassification {
     const maxSide = Math.max(wM, hM);
     const minSide = Math.max(Math.min(wM, hM), cellM);
     const areaM2 = comp.cells * cellX * cellY;
-    comp.wallLike =
+    let wallLike =
       maxSide >= WALL_MIN_SIDE_M ||
       maxSide / minSide >= WALL_MIN_ELONGATION ||
       areaM2 >= FURNITURE_MAX_AREA_M2;
+    // Height feature: a THIN, TALL component — a small column footprint that
+    // nonetheless spans most of the band vertically — is a structural column,
+    // not furniture. Rescue ONLY this thin-and-tall combination; a wide
+    // full-height blob (a wardrobe) stays furniture by its footprint.
+    if (!wallLike && useHeight && comp.zHi > comp.zLo && maxSide <= COLUMN_MAX_SIDE_M) {
+      const zSpanFrac = (comp.zHi - comp.zLo) / heightProfile.bandSpanM;
+      if (zSpanFrac >= STRUCTURE_MIN_Z_SPAN_FRAC) wallLike = true;
+    }
+    comp.wallLike = wallLike;
     comps.push(comp);
   }
 

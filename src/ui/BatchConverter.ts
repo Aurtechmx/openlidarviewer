@@ -30,6 +30,13 @@ export class BatchConverter {
   private readonly _hint: HTMLElement;
   private readonly _results: HTMLElement;
   private readonly _formatRow: HTMLElement;
+  /**
+   * Visible footnote for any format pill that is shown but disabled. WHY
+   * visible: the pill's `title` carries the "why" (e.g. LAZ isn't available
+   * yet), but a `title` is hover-only — on touch the greyed pill had no
+   * explanation at all. This line restates it in the flow.
+   */
+  private readonly _formatNote: HTMLElement;
   private readonly _crsRow: HTMLElement;
 
   private _files: BatchInput[] = [];
@@ -62,6 +69,7 @@ export class BatchConverter {
 
     this._fileList = el('div', { className: 'olv-bc-files' });
     this._formatRow = el('div', { className: 'olv-bc-pills' });
+    this._formatNote = el('p', { className: 'olv-bc-format-note olv-bc-hidden' });
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
@@ -72,7 +80,11 @@ export class BatchConverter {
     this._dialog.append(
       head,
       this._section('Files', this._buildFilesSection()),
-      this._section('Output format', this._formatRow),
+      this._section('Output format', (() => {
+        const wrap = el('div');
+        wrap.append(this._formatRow, this._formatNote);
+        return wrap;
+      })()),
       this._section('Coordinate system', (() => {
         const wrap = el('div');
         wrap.append(this._crsRow, this._crsExtra);
@@ -172,6 +184,11 @@ export class BatchConverter {
   // ── format + CRS controls ────────────────────────────────────────────────
   private _renderFormatPills(): void {
     this._formatRow.replaceChildren();
+    // The reason an unavailable format is disabled — shared between the pill's
+    // (hover-only) title and the visible footnote so touch users see it too.
+    const unavailableReason =
+      'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
+    let anyUnavailable = false;
     (Object.keys(CONVERT_FORMATS) as ConvertFormat[]).forEach((fmt) => {
       const spec = CONVERT_FORMATS[fmt];
       const pill = el('button', {
@@ -180,8 +197,9 @@ export class BatchConverter {
         type: 'button',
       }) as HTMLButtonElement;
       if (!spec.available) {
+        anyUnavailable = true;
         pill.disabled = true;
-        pill.title = 'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
+        pill.title = unavailableReason;
       } else {
         pill.addEventListener('click', () => {
           this._format = fmt;
@@ -191,6 +209,9 @@ export class BatchConverter {
       }
       this._formatRow.append(pill);
     });
+    // Restate the gate reason visibly when a format is greyed out.
+    this._formatNote.textContent = anyUnavailable ? unavailableReason : '';
+    this._formatNote.classList.toggle('olv-bc-hidden', !anyUnavailable);
   }
 
   private _renderCrsPills(): void {

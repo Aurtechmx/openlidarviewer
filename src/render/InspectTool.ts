@@ -26,6 +26,7 @@ import {
   normalText,
   pointInfoCopyText,
   splitPointCoords,
+  worldCoordLabels,
 } from './pointInfo';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { latLonToUtm, utmConverter } from '../geo/UtmConverter';
@@ -122,31 +123,6 @@ const WGS84_GEOGRAPHIC: ResolvedCrs = {
   confidence: 'high',
   userConfirmed: false,
 };
-
-/**
- * Labels for the World coordinate group — Eastings/Northings when the
- * dataset is projected (UTM, state plane), Lat/Lon when it's geographic.
- * Drives only the row labels; the values come from `worldX/Y/Z` either way.
- */
-function labelsForCrs(crs: ResolvedCrs | undefined): {
-  readonly heading: string;
-  readonly x: string;
-  readonly y: string;
-  readonly z: string;
-} {
-  if (!crs || crs.kind === 'local' || crs.kind === 'unknown') {
-    return { heading: 'World', x: 'X', y: 'Y', z: 'Z' };
-  }
-  if (crs.kind === 'geographic') {
-    return { heading: 'World (geographic)', x: 'Longitude', y: 'Latitude', z: 'Elevation' };
-  }
-  return {
-    heading: `World (${crs.name})`,
-    x: 'Easting',
-    y: 'Northing',
-    z: 'Elevation',
-  };
-}
 
 /**
  * Copy text to the clipboard. Uses the async Clipboard API, falling back to a
@@ -435,11 +411,13 @@ export class InspectTool {
     // second time here, doubling every easting/northing and feeding the
     // doubled values into the geographic projection below.
     const split = splitPointCoords(info, this._coordContext.origin);
-    const worldLabels = labelsForCrs(this._coordContext.crs);
+    const worldLabels = worldCoordLabels(this._coordContext.crs);
     rows.push(coordGroupHeader(worldLabels.heading));
-    rows.push(infoRow(worldLabels.x, `${split.world.x} m`));
-    rows.push(infoRow(worldLabels.y, `${split.world.y} m`));
-    rows.push(infoRow(worldLabels.z, `${split.world.z} m`));
+    // Geographic eastings/northings are degrees, not metres — use the
+    // CRS-aware unit suffix so a lon/lat scan never reads "-122.4 m".
+    rows.push(infoRow(worldLabels.x, `${split.world.x}${worldLabels.xUnit}`));
+    rows.push(infoRow(worldLabels.y, `${split.world.y}${worldLabels.yUnit}`));
+    rows.push(infoRow(worldLabels.z, `${split.world.z}${worldLabels.zUnit}`));
 
     // Local group — only when an origin shift exists; otherwise local ==
     // world and a second identical group would be noise.

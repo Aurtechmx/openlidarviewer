@@ -20,7 +20,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractFloorPlan, type FloorPlanModel } from '../src/terrain/space/floorplan/extractFloorPlan';
+import {
+  extractFloorPlan,
+  MAX_CONTENTS_HINTS,
+  type FloorPlanModel,
+} from '../src/terrain/space/floorplan/extractFloorPlan';
 import { floorPlanSvg } from '../src/terrain/space/floorplan/floorPlanSvg';
 import type { OccupancyGrid } from '../src/terrain/space/floorplan/occupancyGrid';
 import {
@@ -30,6 +34,7 @@ import {
   ringMeanThicknessM,
   MIN_SPUR_M,
   FURNITURE_MAX_AREA_M2,
+  type CellHeightProfile,
 } from '../src/terrain/space/floorplan/regularize';
 import type { Ring } from '../src/terrain/space/floorplan/vectorize';
 import { spaceMetrics } from '../src/terrain/spaceMetrics';
@@ -164,6 +169,94 @@ describe('classifyIslands', () => {
     const res = classifyIslands(gridFromRows(['....', '.##.', '.##.', '....']));
     expect(res.contentsCount).toBe(0);
     expect(res.contents).toBeNull();
+  });
+});
+
+describe('classifyIslands — height-profile feature (column vs furniture)', () => {
+  // A 20×20-cell room (2×2 m, 0.1 m cells): a full perimeter wall network plus
+  // TWO compact 2×2 blobs mid-room — by footprint both are furniture
+  // candidates. Built directly in MASK coordinates (so the grid and the
+  // per-cell profile reference the SAME cells): the "column" blob gets a
+  // FULL-band z-span, the "cabinet" a SHALLOW one — the height feature must
+  // split them. `inCol`/`inCab` are the blob predicates in mask coordinates.
+  const inBorder = (r: number, c: number): boolean => r === 0 || r === 19 || c === 0 || c === 19;
+  const inCol = (r: number, c: number): boolean => r >= 5 && r <= 6 && c >= 5 && c <= 6;
+  const inCab = (r: number, c: number): boolean => r >= 13 && r <= 14 && c >= 13 && c <= 14;
+
+  function borderWithTwoBlobs(): OccupancyGrid {
+    const mask = new Uint8Array(20 * 20);
+    for (let r = 0; r < 20; r++)
+      for (let c = 0; c < 20; c++)
+        if (inBorder(r, c) || inCol(r, c) || inCab(r, c)) mask[r * 20 + c] = 1;
+    return { mask, cols: 20, rows: 20, cellX: 0.1, cellY: 0.1, originX: 0, originY: 0, threshold: 1 };
+  }
+
+  /** Profile in MASK coords: column gets colZ, cabinet lowZ, walls full band. */
+  function profileFor(
+    grid: OccupancyGrid,
+    colZ: readonly [number, number],
+    lowZ: readonly [number, number],
+  ): CellHeightProfile {
+    const n = grid.cols * grid.rows;
+    const zMin = new Float32Array(n).fill(NaN);
+    const zMax = new Float32Array(n).fill(NaN);
+    for (let r = 0; r < grid.rows; r++) {
+      for (let c = 0; c < grid.cols; c++) {
+        const i = r * grid.cols + c;
+        if (!grid.mask[i]) continue;
+        const z: readonly [number, number] = inCol(r, c) ? colZ : inCab(r, c) ? lowZ : [0, 1.1];
+        zMin[i] = z[0];
+        zMax[i] = z[1];
+      }
+    }
+    return { zMin, zMax, bandSpanM: 1.1 };
+  }
+
+  it('a tall thin column (full-band z-span) is kept as STRUCTURE, not furniture', () => {
+    const grid = borderWithTwoBlobs();
+    // Column spans the whole 1.1 m band; cabinet only a 0.2 m slab near the floor.
+    const hp = profileFor(grid, [0.0, 1.1], [0.0, 0.2]);
+    const res = classifyIslands(grid, hp);
+    // Only the LOW cabinet blob is lifted to contents; the column stays a wall.
+    expect(res.contentsCount).toBe(1);
+    // The column cells (4) are in the wall mask, the cabinet cells (4) in contents.
+    let columnInWalls = 0, cabinetInContents = 0;
+    for (let r = 0; r < grid.rows; r++)
+      for (let c = 0; c < grid.cols; c++) {
+        const i = r * grid.cols + c;
+        if (inCol(r, c)) columnInWalls += res.walls.mask[i];
+        if (inCab(r, c)) cabinetInContents += res.contents ? res.contents.mask[i] : 0;
+      }
+    expect(columnInWalls).toBe(4);
+    expect(cabinetInContents).toBe(4);
+  });
+
+  it('WITHOUT the height profile, both blobs are furniture (footprint only)', () => {
+    const grid = borderWithTwoBlobs();
+    const res = classifyIslands(grid); // no profile → pre-v0.4.6 behaviour
+    expect(res.contentsCount).toBe(2); // both compact blobs lifted out
+  });
+
+  it('a WIDE full-height blob (a wardrobe) stays furniture despite the z-span', () => {
+    // One 5×5-cell (0.5×0.5 m) blob that spans the full band: too WIDE to be a
+    // column, so the height feature does NOT rescue it — footprint wins.
+    const rows: string[] = [];
+    for (let r = 0; r < 20; r++) {
+      let line = '';
+      for (let c = 0; c < 20; c++) {
+        const border = r === 0 || r === 19 || c === 0 || c === 19;
+        const wide = r >= 8 && r <= 12 && c >= 8 && c <= 12;
+        line += border || wide ? '#' : '.';
+      }
+      rows.push(line);
+    }
+    const grid = gridFromRows(rows);
+    const n = grid.cols * grid.rows;
+    const zMin = new Float32Array(n).fill(NaN);
+    const zMax = new Float32Array(n).fill(NaN);
+    for (let i = 0; i < n; i++) if (grid.mask[i]) { zMin[i] = 0; zMax[i] = 1.1; }
+    const res = classifyIslands(grid, { zMin, zMax, bandSpanM: 1.1 });
+    expect(res.contentsCount).toBe(1); // the wide blob is still furniture
   });
 });
 
@@ -401,5 +494,49 @@ describe('extent reconciliation — plan, clip bbox, and the Space panel agree',
     expect(Math.abs(space.dims.widthM - planW)).toBeLessThan(1.5);
     expect(space.dims.lengthM / planL).toBeLessThan(1.2);
     expect(space.dims.widthM / planW).toBeLessThan(1.2);
+  });
+});
+
+describe('contents-hint cap — a cluttered interior is not stippled with specks (v0.4.6)', () => {
+  // Repro of the real 360 sheet that lifted 37 furniture islands and drew them
+  // all as grey blobs — noise, not a layout aid. A 6 × 6 m room (full perimeter
+  // walls + dense floor) with a 5 × 5 grid of 25 small mid-floor furniture
+  // columns. The extractor must classify many islands but DRAW at most
+  // MAX_CONTENTS_HINTS of them (the largest), and say so honestly.
+  function clutteredRoom(): Float32Array {
+    const W = 6, D = 6, H = 2.5, step = 0.05;
+    const t: number[] = [];
+    for (let x = 0; x <= W + 1e-9; x += step) for (let y = 0; y <= D + 1e-9; y += step) t.push(x, y, 0); // floor
+    for (let z = 0; z <= H + 1e-9; z += step) {
+      for (let x = 0; x <= W + 1e-9; x += step) { t.push(x, 0, z); t.push(x, D, z); }
+      for (let y = step; y < D - 1e-9; y += step) { t.push(0, y, z); t.push(W, y, z); }
+    }
+    // 25 compact furniture columns on a 5×5 interior grid (≈0.3 m square each,
+    // well clear of the walls so they classify as contents islands).
+    for (let i = 1; i <= 5; i++)
+      for (let j = 1; j <= 5; j++) {
+        const cx = i, cy = j;
+        for (let z = 0; z <= 1.0; z += step)
+          for (let dx = -0.15; dx <= 0.15 + 1e-9; dx += step)
+            for (let dy = -0.15; dy <= 0.15 + 1e-9; dy += step) t.push(cx + dx, cy + dy, z);
+      }
+    return Float32Array.from(t);
+  }
+
+  const model = extractFloorPlan(clutteredRoom(), { upAxis: 'z' });
+
+  it('classifies many islands but DRAWS at most MAX_CONTENTS_HINTS of them', () => {
+    expect(model.contentsCount).toBeGreaterThan(MAX_CONTENTS_HINTS); // many found
+    expect(model.contentRings.length).toBeLessThanOrEqual(MAX_CONTENTS_HINTS); // few drawn
+  });
+
+  it('says so honestly in the footer (found vs drawn, smallest omitted)', () => {
+    const svg = floorPlanSvg(model, { unitSystem: 'metric' });
+    // The footer line wraps across multiple <text> elements; strip the tags
+    // and collapse whitespace to recover the continuous sentence.
+    const flat = svg.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    expect(flat).toMatch(
+      /compact island\(s\) at wall height.*the \d+ largest are drawn.*the \d+ smallest omitted to keep the sheet legible/,
+    );
   });
 });

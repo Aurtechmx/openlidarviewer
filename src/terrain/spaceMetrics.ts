@@ -101,6 +101,12 @@ export interface SpaceMetricsParams {
   readonly hasRgb?: boolean;
   /** Honest source/resident count the sample was drawn from. */
   readonly sourcePointCount?: number;
+  /**
+   * True when the analysed points are the resident subset of a still-streaming
+   * cloud, not the whole scan. Leads the caveats with the stronger "Preliminary
+   * — partial stream" note so the figures are not read as final. Default false.
+   */
+  readonly residentOnly?: boolean;
   /** Max points to sample. Default 60000. */
   readonly maxSamples?: number;
   /** Footprint grid resolution (cells per axis). Default 48. */
@@ -114,6 +120,15 @@ const PLANE_COVER = 0.45;
 const STOREY_SEP_M = 2.2;
 const STREAM_CAVEAT =
   'Based on the points currently loaded / streamed — values may change as more data streams in.';
+/**
+ * Stronger caveat for a genuine PARTIAL stream (only the resident octree nodes
+ * were measured). The dimensions/areas/volumes are computed on a coarse, partial
+ * subsample, so they can shift a lot as the cloud fills in — say so plainly and
+ * lead with it (see ObjectPanel._caveats). Parallels the terrain assessment's
+ * "Preliminary" partial-stream verdict.
+ */
+const PARTIAL_STREAM_CAVEAT =
+  'Preliminary — only the streamed-in part of the scan has been measured so far; dimensions, areas and volumes will change as more loads. Let the full cloud stream in, then re-run.';
 
 const upOffsets = (a: Axis): { v: number; h1: number; h2: number } =>
   a === 'x' ? { v: 0, h1: 1, h2: 2 } : a === 'y' ? { v: 1, h1: 0, h2: 2 } : { v: 2, h1: 0, h2: 1 };
@@ -237,7 +252,7 @@ export function spaceMetrics(
   const n = Math.floor(positions.length / 3);
   const sourcePointCount = params.sourcePointCount ?? n;
 
-  const reasons: string[] = [STREAM_CAVEAT];
+  const reasons: string[] = [params.residentOnly ? PARTIAL_STREAM_CAVEAT : STREAM_CAVEAT];
   const blankQuality: CaptureQuality = {
     sampledPointCount: 0, sourcePointCount, densityPerM2: 0,
     meanSpacingM: 0, coveragePct: 0, hasRgb,

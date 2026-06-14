@@ -69,6 +69,36 @@ export interface DebugSample {
   stats: FrameStats | null;
   /** Streaming counters, or null/absent when no COPC scan is streaming. */
   streaming?: StreamingDebugStats | null;
+  /**
+   * Terrain raster compute path of the MAIN-thread engine (the once-per-session
+   * CPU/GPU equivalence-gate verdict), or null before any main-thread terrain
+   * run. Debug/details only — never surfaced in the main UI.
+   */
+  terrainCompute?: { path: 'cpu' | 'gpu'; reason: string } | null;
+}
+
+/**
+ * Human label for the terrain compute path — the CPU/GPU equivalence-gate
+ * verdict in plain words. Pure; exported for the overlay test.
+ */
+export function formatTerrainCompute(
+  tc: { path: 'cpu' | 'gpu'; reason: string } | null | undefined,
+): string {
+  if (!tc) return '— (no main-thread run)';
+  if (tc.path === 'gpu') return 'GPU validated';
+  switch (tc.reason) {
+    case 'gpu-dispatch-failed':
+      return 'GPU demoted to CPU';
+    case 'probe-mismatch':
+      return 'CPU reference (probe mismatch)';
+    case 'webgpu-unavailable':
+    case 'device-request-failed':
+      return 'CPU reference (no GPU)';
+    case 'not-initialised':
+      return 'CPU (idle)';
+    default:
+      return `CPU reference (${tc.reason})`;
+  }
 }
 
 /** Overlay refresh interval — about 4 Hz, deliberately never per frame. */
@@ -116,8 +146,22 @@ export class DebugOverlay {
     });
     this._benchmark = el('pre', { className: 'olv-debug-block olv-hidden' });
 
-    this.element = el('div', { className: 'olv-debug' }, [
-      el('div', { className: 'olv-debug-title', text: 'OpenLiDARViewer · debug' }),
+    // The title doubles as a collapse toggle: the overlay sits over the
+    // top-left Analyse panel, so a developer reading it needs to tuck it out of
+    // the way to reach the panel's verdict + "Re-run analysis". Collapsed, only
+    // this one-line bar remains (clearing the panel below); a caret shows state.
+    const caret = el('span', { className: 'olv-debug-caret', text: '▾' });
+    caret.setAttribute('aria-hidden', 'true');
+    const title = el('button', {
+      className: 'olv-debug-title',
+      type: 'button',
+      ariaLabel: 'Collapse debug overlay',
+    }, [el('span', { text: 'OpenLiDARViewer · debug' }), caret]);
+    title.setAttribute('aria-expanded', 'true');
+    title.addEventListener('click', () => this.toggleCollapsed());
+    this._title = title;
+
+    this._body = el('div', { className: 'olv-debug-body' }, [
       el('div', { className: 'olv-debug-label', text: 'rendering' }),
       this._live,
       this._streamingLabel,
@@ -126,6 +170,24 @@ export class DebugOverlay {
       this._telemetry,
       this._benchmark,
     ]);
+
+    this.element = el('div', { className: 'olv-debug' }, [title, this._body]);
+  }
+
+  private _title!: HTMLButtonElement;
+  private _body!: HTMLElement;
+  private _collapsed = false;
+
+  /** Collapse to just the title bar, or expand back. */
+  toggleCollapsed(): void {
+    this.setCollapsed(!this._collapsed);
+  }
+
+  setCollapsed(collapsed: boolean): void {
+    this._collapsed = collapsed;
+    this.element.classList.toggle('is-collapsed', collapsed);
+    this._title.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    this._title.setAttribute('aria-label', collapsed ? 'Expand debug overlay' : 'Collapse debug overlay');
   }
 
   /** Begin polling the sampler. Idempotent. */
@@ -156,7 +218,7 @@ export class DebugOverlay {
 
   /** Re-read the sampler and repaint the live block. */
   private _refresh(): void {
-    const { backend, stats, streaming } = this._sample();
+    const { backend, stats, streaming, terrainCompute } = this._sample();
     const backendLabel =
       backend === 'webgpu' ? 'WebGPU' : backend === 'webgl2' ? 'WebGL 2' : '—';
 
@@ -164,10 +226,16 @@ export class DebugOverlay {
       this._live.textContent = [
         `backend       ${backendLabel}`,
         `fps           ${stats.fps.toFixed(0)}  (${stats.frameMs.toFixed(1)} ms)`,
-        `draw calls    ${stats.drawCalls}`,
+        // A WebGPU backend can report 0 draw calls even while millions of
+        // points are clearly on screen (the EDL post-pipeline / streaming path
+        // doesn't always populate renderer.info). A bare "0" then reads as
+        // false; surface "—" (unmeasured) instead so the overlay never asserts
+        // an obviously-wrong count.
+        `draw calls    ${stats.drawCalls > 0 || stats.displayedPoints === 0 ? stats.drawCalls : '—'}`,
         `points        ${formatInt(stats.displayedPoints)} shown` +
           ` / ${formatInt(stats.totalPoints)} total`,
         `gpu estimate  ${formatBytes(stats.gpuBytesEstimate)}`,
+        `terrain comp  ${formatTerrainCompute(terrainCompute)}`,
       ].join('\n');
     } else {
       this._live.textContent = `backend       ${backendLabel}\n(initialising…)`;

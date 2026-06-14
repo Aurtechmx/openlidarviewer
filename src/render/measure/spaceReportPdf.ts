@@ -27,6 +27,7 @@ import {
   type SpaceReportContent,
 } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
+import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
 
 export interface SpaceReportPdfInput {
   readonly space: SpaceMetrics | null;
@@ -38,6 +39,12 @@ export interface SpaceReportPdfInput {
   readonly unitToMetres?: number;
   /** Interior-only: the extracted wall-plan model to embed on the page. */
   readonly floorPlan?: FloorPlanModel | null;
+  /**
+   * Display unit system for the embedded plan's dimensions (mirrors the
+   * measurement panel / the SVG sheet): metric prints metres first, imperial
+   * feet first. Default 'metric'.
+   */
+  readonly unitSystem?: PlanUnitSystem;
 }
 
 const INK = rgb(0.12, 0.14, 0.18);
@@ -103,7 +110,7 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
     y -= 8;
     const planTop = y;
     const planBox = { x: M, y: planTop - 180, w: PW - 2 * M, h: 176 };
-    drawFloorPlan(page, planBox, input.floorPlan, font, bold);
+    drawFloorPlan(page, planBox, input.floorPlan, font, bold, input.unitSystem ?? 'metric');
     y = planBox.y - 12;
   }
 
@@ -169,6 +176,7 @@ function drawFloorPlan(
   plan: FloorPlanModel,
   font: PDFFont,
   bold: PDFFont,
+  unitSystem: PlanUnitSystem,
 ): void {
   const PH = 792;
   const pad = 28;
@@ -225,14 +233,53 @@ function drawFloorPlan(
     });
   }
 
-  // Dimensions + caption.
+  // Room labels: "Room N 12.3 m2" at each segmented room's label anchor
+  // (roomDetect.ts pole of inaccessibility — inside the room by
+  // construction). Centred by the Helvetica width metric pdf-lib exposes.
+  if (plan.rooms.length > 0) {
+    plan.rooms.forEach((room, i) => {
+      const txt = safe(
+        unitSystem === 'imperial'
+          ? `Room ${i + 1} ${Math.round(room.areaM2 / 0.09290304)} sq ft`
+          : `Room ${i + 1} ${room.areaM2.toFixed(1)} m2`,
+      );
+      const sz = 6.5;
+      const w = bold.widthOfTextAtSize(txt, sz);
+      // Only label rooms the text actually fits inside (mirrors the SVG).
+      let rMinX = Infinity, rMaxX = -Infinity, rMinY = Infinity, rMaxY = -Infinity;
+      for (const [x, yy] of room.ring) {
+        if (x < rMinX) rMinX = x;
+        if (x > rMaxX) rMaxX = x;
+        if (yy < rMinY) rMinY = yy;
+        if (yy > rMaxY) rMaxY = yy;
+      }
+      if ((rMaxX - rMinX) * scale < w + 4 || (rMaxY - rMinY) * scale < 10) return;
+      page.drawText(txt, {
+        x: pageX(room.label[0]) - w / 2,
+        y: pageY(room.label[1]) - sz / 2,
+        size: sz,
+        font: bold,
+        color: INK,
+      });
+    });
+  }
+
+  // Dimensions + caption — units follow the caller's unit system, mirroring
+  // the SVG sheet and the measurement panel (metric: metres first; imperial:
+  // feet first), so the report never argues with the on-screen numbers.
   const wFt = plan.widthM / 0.3048;
   const dFt = plan.depthM / 0.3048;
-  page.drawText(
-    safe(`W ${plan.widthM.toFixed(1)} m (${wFt.toFixed(1)} ft) x D ${plan.depthM.toFixed(1)} m (${dFt.toFixed(1)} ft)`),
-    { x: box.x + 6, y: box.y + 6, size: 7.5, font, color: INK },
-  );
-  page.drawText(safe('Experimental preview - walls traced from the scan, not a measured floor plan; requires visual validation.'), {
+  const dimsTxt =
+    unitSystem === 'imperial'
+      ? `W ${wFt.toFixed(1)} ft (${plan.widthM.toFixed(1)} m) x D ${dFt.toFixed(1)} ft (${plan.depthM.toFixed(1)} m)`
+      : `W ${plan.widthM.toFixed(1)} m (${wFt.toFixed(1)} ft) x D ${plan.depthM.toFixed(1)} m (${dFt.toFixed(1)} ft)`;
+  page.drawText(safe(dimsTxt), { x: box.x + 6, y: box.y + 6, size: 7.5, font, color: INK });
+  // Claim-accurate caption: "wall-graph reconstruction" only when the model
+  // really came from the graph pass; either way still an experimental preview.
+  const caption = plan.fromWallGraph
+    ? 'Experimental preview - wall-graph reconstruction from the scan, not a measured floor plan; requires visual validation.'
+    : 'Experimental preview - walls traced from the scan, not a measured floor plan; requires visual validation.';
+  page.drawText(safe(caption), {
     x: box.x + 6,
     y: box.y + box.h - 11,
     size: 7,

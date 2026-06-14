@@ -71,4 +71,18 @@ describe('scaleBar + mapScaleRatio', () => {
     // 1 pt = 0.0254/72 m of paper → N = 72/0.0254 ≈ 2835
     expect(Math.round(n)).toBe(2835);
   });
+  it('keeps 1:N a TRUE dimensionless ratio on a foot CRS (label-vs-value)', () => {
+    // The map is drawn in SOURCE units. If 1 FOOT of ground is drawn as 1 page
+    // point, the dimensionless scale must compare metres-to-metres: 1 ft = 0.3048
+    // m of ground per (0.0254/72) m of paper → N = 0.3048 / (0.0254/72) ≈ 864.
+    const nFoot = mapScaleRatio(1, 0.3048);
+    expect(Math.round(nFoot)).toBe(864);
+    // It must NOT equal the metric reading (2835) — that was the drift: a foot
+    // map labelled "1:2835" was really ~3.28× off.
+    expect(Math.round(nFoot)).not.toBe(2835);
+    // Consistency: a foot CRS is exactly the metric ratio scaled by 0.3048.
+    expect(nFoot).toBeCloseTo(mapScaleRatio(1) * 0.3048, 6);
+    // Omitting the factor preserves the metric default (back-compat).
+    expect(mapScaleRatio(1)).toBe(mapScaleRatio(1, 1));
+  });
 });

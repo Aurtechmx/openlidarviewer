@@ -11,10 +11,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   cameraPresetPose,
+  standardViewPose,
+  STANDARD_VIEW_ORDER,
+  STANDARD_VIEW_LABEL,
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
   CAMERA_PRESET_ORDER,
   type CameraPresetName,
+  type StandardView,
   type PresetInput,
 } from '../src/render/camera/cameraPresets';
 
@@ -215,5 +219,59 @@ describe('Origin + axis independence', () => {
     expect(dir.y).toBeGreaterThan(0);
     const horizMag = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
     expect(Math.abs(dir.y)).toBeGreaterThan(horizMag * 10);
+  });
+});
+
+describe('standard views — six axis-aligned faces', () => {
+  const views: StandardView[] = ['top', 'bottom', 'front', 'back', 'left', 'right'];
+
+  it('ships exactly six views in stable order, each labelled', () => {
+    expect(STANDARD_VIEW_ORDER).toEqual(views);
+    for (const v of STANDARD_VIEW_ORDER) expect(STANDARD_VIEW_LABEL[v]).toBeTruthy();
+  });
+
+  it.each(views)('%s targets the centroid at the fit distance', (view) => {
+    const { position, target } = standardViewPose(view, baseInput);
+    expect(target).toEqual({ x: 0, y: 0, z: 0 });
+    const dist = len(sub(position, target));
+    const fovRad = (50 * Math.PI) / 180;
+    expect(dist).toBeCloseTo((10 / Math.sin(fovRad / 2)) * 1.2, 5);
+  });
+
+  it('Top and Bottom look along ±worldUp (dominantly vertical)', () => {
+    const top = standardViewPose('top', baseInput);
+    const bottom = standardViewPose('bottom', baseInput);
+    expect(top.position.z).toBeGreaterThan(0); // above
+    expect(bottom.position.z).toBeLessThan(0); // below
+    for (const p of [top.position, bottom.position]) {
+      const horizMag = Math.sqrt(p.x * p.x + p.y * p.y);
+      expect(Math.abs(p.z)).toBeGreaterThan(horizMag * 10);
+    }
+  });
+
+  it('Front/Back and Left/Right are horizontal and mutually opposed', () => {
+    const front = standardViewPose('front', baseInput);
+    const back = standardViewPose('back', baseInput);
+    const left = standardViewPose('left', baseInput);
+    const right = standardViewPose('right', baseInput);
+    // Horizontal: zero vertical component (worldUp = +Z).
+    for (const p of [front.position, back.position, left.position, right.position]) {
+      expect(p.z).toBeCloseTo(0, 6);
+    }
+    // Opposites point in opposite directions.
+    expect(front.position.x).toBeCloseTo(-back.position.x, 5);
+    expect(front.position.y).toBeCloseTo(-back.position.y, 5);
+    expect(left.position.x).toBeCloseTo(-right.position.x, 5);
+    expect(left.position.y).toBeCloseTo(-right.position.y, 5);
+    // Front (seed +X) and Right (up×seed) are perpendicular headings.
+    const dotFR = front.position.x * right.position.x + front.position.y * right.position.y;
+    expect(dotFR).toBeCloseTo(0, 4);
+  });
+
+  it('is deterministic and radius-linear', () => {
+    expect(standardViewPose('left', baseInput)).toEqual(standardViewPose('left', baseInput));
+    const a = standardViewPose('right', { ...baseInput, radius: 10 });
+    const b = standardViewPose('right', { ...baseInput, radius: 30 });
+    expect(len(sub(b.position, b.target)) / len(sub(a.position, a.target))).toBeCloseTo(3, 5);
   });
 });

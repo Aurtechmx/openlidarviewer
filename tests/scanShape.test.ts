@@ -69,6 +69,58 @@ describe('classifyScanShape', () => {
     expect(s.spaceKind).toBe('interior');
   });
 
+  it('a big open interior with a SPARSE high ceiling → non-terrain interior', () => {
+    // Reproduces the real 125.5 M-pt 360 industrial-interior streamed scan
+    // (360-for-you.small.copc, ~11.8 × 15.0 m footprint, ~4 m ceiling) that
+    // the "Treat as" control would NOT auto-commit to Interior. Root cause
+    // (pre-fix): a 360 scanner sees a HIGH ceiling only at grazing angle, so
+    // `ceilingCoverage` and full-height `wallCoverage` both sit ~12–22% — under
+    // the old WALL_INTERIOR (0.25) AND ENCLOSURE_COVER (0.45) bars — and the
+    // densely-sampled floor (≈100%) was read as flat TERRAIN. The planner
+    // then refused the mid-session terrain flip and the pill stayed on Auto.
+    //
+    // The fix accepts a much lower wall-OR-ceiling presence on the open-
+    // interior path, safe because floorCoverage ≥ 50% and overhang ≥ 15%
+    // BOTH independently exclude terrain (which reads ~10–15% floor, ~0%
+    // overhang — asserted in the terrain tests below).
+    const bigOpenInterior = (
+      W = 11.8, D = 15.0, H = 4.0, step = 0.25, ceilDensity = 0.15,
+    ): Float32Array => {
+      const t: Array<[number, number, number]> = [];
+      for (let x = 0; x <= W; x += step) for (let y = 0; y <= D; y += step) t.push([x, y, 0]); // dense floor
+      // Sparse, partial ceiling (deterministic hash so the test is stable).
+      let k = 0;
+      for (let x = 0; x <= W; x += step)
+        for (let y = 0; y <= D; y += step) {
+          k++;
+          if (((k * 2654435761) >>> 0) / 4294967296 < ceilDensity) t.push([x, y, H]);
+        }
+      // Full-height perimeter walls.
+      for (let z = 0; z <= H; z += step)
+        for (let x = 0; x <= W; x += step) { t.push([x, 0, z]); t.push([x, D, z]); }
+      for (let z = 0; z <= H; z += step)
+        for (let y = 0; y <= D; y += step) { t.push([0, y, z]); t.push([W, y, z]); }
+      // A few partial-height furniture columns mid-floor (some real overhang).
+      for (const [cx, cy] of [[3, 4], [7, 9], [9, 12], [2, 11]] as Array<[number, number]>)
+        for (let z = 0; z <= 1.0; z += step)
+          for (const dx of [-0.3, 0, 0.3]) for (const dy of [-0.3, 0, 0.3]) t.push([cx + dx, cy + dy, z]);
+      return pts(t);
+    };
+
+    const s = classifyScanShape(bigOpenInterior());
+    expect(s.up).toBe('z');
+    expect(s.aspect).toBeLessThan(0.65);
+    expect(s.floorCoverage).toBeGreaterThan(0.5);
+    // The defining hard case: ceiling + full-height walls are BOTH sparse
+    // (well under the strict 0.25 / 0.45 bars) — yet it must still route
+    // interior, not terrain.
+    expect(s.ceilingCoverage).toBeLessThan(0.25);
+    expect(s.wallCoverage).toBeLessThan(0.25);
+    expect(s.overhangFraction).toBeGreaterThan(0.15);
+    expect(s.nonTerrain).toBe(true);
+    expect(s.spaceKind).toBe('interior');
+  });
+
   it('detects a Y-up flat terrain (phone/glTF frame) without being told', () => {
     // Same flat field but with Y as the vertical axis — the up-axis must be
     // detected from geometry, not assumed to be Z.

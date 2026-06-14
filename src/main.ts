@@ -40,6 +40,7 @@ import {
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
+import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
 import {
@@ -53,6 +54,7 @@ import { countClasses } from './render/class/classHistogram';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
+import { MobileSheet } from './ui/MobileSheet';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
 import {
@@ -604,6 +606,8 @@ viewerLoaded.then((v) => {
     // input method for the Volume kind rather than a 10th
     // measurement kind.
     'volume',
+    ICON_LASSO,
+    'Lasso · freeform volume',
   );
 });
 
@@ -1643,6 +1647,16 @@ const navBar = new NavBar({
       );
     }
   },
+  onStandardView: (view) => {
+    const fired = viewer.setStandardView(view);
+    if (fired) {
+      showLassoToast(`View · ${view[0].toUpperCase() + view.slice(1)}.`);
+    }
+  },
+  onOrthographic: (on) => {
+    viewer.setOrthographic(on);
+    showLassoToast(on ? 'Orthographic (parallel) view on.' : 'Perspective view restored.');
+  },
 });
 
 const projectCard = new ProjectCard();
@@ -1924,6 +1938,29 @@ let lastSpaceExport: SpaceExportContext | null = null;
 // fresh gather fails (e.g. mid-stream).
 const FLOORPLAN_GATHER_POINTS = 300_000;
 
+/**
+ * Floor-plan extraction DEFAULTS plumbed into both export paths (PDF report +
+ * standalone SVG sheet) so the two NEVER diverge. These are the v0.4.6 knobs
+ * the pipeline exposes — the adaptive wall-band toggle and the axis-snap
+ * policy — pinned here at sane defaults:
+ *   - `adaptiveBand: true` — re-centre the wall slice on the detected
+ *     wall-evidence z-peak so countertop / industrial scans whose walls sit
+ *     outside the standard 0.7–1.8 m band still slice correctly; the fixed
+ *     band is kept when no clear peak is found (so normal rooms are unchanged).
+ *   - `snapMode` left at the module default ('auto' — snap only on a genuinely
+ *     bimodal ~90° direction histogram).
+ * v0.4.7: the ObjectPanel now exposes a compact "Floor plan options" control
+ * (Walls Auto/Square/As-is → snap auto/strong/off, plus an Adaptive-height
+ * toggle). Both callers spread this defaults object FIRST and then the panel's
+ * live `objectPanel.floorPlanOptions()` selection, so user choices win while
+ * the defaults still seed an export taken before any interaction. Because both
+ * paths spread the same panel object, the report PDF's embedded plan and the
+ * standalone sheet stay extracted with identical settings by construction.
+ */
+const FLOORPLAN_OPTIONS = {
+  adaptiveBand: true,
+} as const;
+
 /** Densest available positions for floor-plan extraction (fallback: ctx). */
 function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
   try {
@@ -1974,6 +2011,10 @@ const objectPanel = new ObjectPanel({
         upAxis: ctx.upAxis,
         unitToMetres: ctx.unitToMetres,
         maxSamples: FLOORPLAN_GATHER_POINTS,
+        ...FLOORPLAN_OPTIONS,
+        // User-tunable wall-snapping + adaptive-band selections from the panel
+        // (defaults mirror FLOORPLAN_OPTIONS); spread last so they win.
+        ...objectPanel.floorPlanOptions(),
       });
     }
     const bytes = await buildSpaceReportPdf({
@@ -1985,6 +2026,9 @@ const objectPanel = new ObjectPanel({
       generatedAt: new Date(),
       unitToMetres: ctx.unitToMetres,
       floorPlan,
+      // The embedded plan's dimension line follows the live measurement unit
+      // system, exactly like the standalone SVG sheet below.
+      unitSystem: viewer.measure.unitSystem,
     });
     downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf');
   },
@@ -2002,9 +2046,18 @@ const objectPanel = new ObjectPanel({
       upAxis: ctx.upAxis,
       unitToMetres: ctx.unitToMetres,
       maxSamples: FLOORPLAN_GATHER_POINTS,
+      ...FLOORPLAN_OPTIONS,
+      // User-tunable wall-snapping + adaptive-band selections from the panel
+      // (defaults mirror FLOORPLAN_OPTIONS); spread last so they win.
+      ...objectPanel.floorPlanOptions(),
     });
     const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem });
     downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');
+    // Surface a one-glance confidence read in the panel. Computed here, inside
+    // the already-loaded lazy floor-plan chunk, so the panel needs only the
+    // plain struct (no heavy floor-plan code in its bundle).
+    const { floorPlanConfidence } = await import('./terrain/space/floorplan/floorPlanConfidence');
+    objectPanel.showFloorPlanSummary(floorPlanConfidence(plan));
   },
 });
 
@@ -2268,7 +2321,15 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   const isNonTerrain = plan.showObjectPanel;
   if (isNonTerrain && shape && gathered) {
     const activeCloud = activeId ? viewer.getCloud(activeId) : null;
-    const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+    // RGB presence: a STREAMING COPC/EPT carries its colours in the streamed
+    // nodes, not the static `activeCloud.colors`, so checking the static buffer
+    // reports "No" for a PDRF 7/8 colour scan. Ask the streaming cloud's own
+    // colour capabilities (the same source the COLOUR rail uses), and only fall
+    // back to the static buffer for a non-streaming cloud.
+    const streamingCloud = viewer.streamingCloud;
+    const hasRgb = streamingCloud
+      ? streamingCloud.availableColorModes().includes('rgb')
+      : !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
     // Compute REAL metrics for the EFFECTIVE type — when forced, the report
     // reflects what's actually there for that interpretation; nothing fabricated.
     // Feed the active scan's linear-unit-to-metres factor so a foot-based CRS
@@ -2282,6 +2343,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       unitToMetres,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
+      // A still-streaming cloud is measured on its resident subset only — lead
+      // the caveats with the stronger "Preliminary — partial stream" note.
+      residentOnly: gathered.residentOnly,
     });
     const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
     // Same stride honesty as spaceMetrics above: the gather caps at 60 k, so
@@ -2363,6 +2427,11 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
  * anyway" affordance. Routing is on `nonTerrain`, not just the legacy `kind`,
  * and re-evaluates as a streaming cloud fills in (see `applyScanRoute`).
  */
+// Set once the mobile bottom-sheet is wired (full app only). Lets the scan
+// lifecycle (reveal / reset) re-evaluate whether the phone sheet should show,
+// without main.ts holding a direct reference to the sheet instance.
+let syncMobileSheet: (() => void) | null = null;
+
 function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name);
   exportPanel.setVisible(true);
@@ -2384,6 +2453,8 @@ function revealAnalysePanel(name: string, settled = true): void {
   // Streaming callers pass false: their open-time verdict runs on a sparse
   // coarse frame, so the "Treat as" commit waits for the settle one-shot.
   applyScanRoute(true, settled);
+  // A scan is now loaded — let the phone sheet show (no-op on desktop).
+  syncMobileSheet?.();
 }
 
 /**
@@ -2658,7 +2729,74 @@ void viewerLoaded.then(() => {
     // The live-probe readout follows the cursor above the panels.
     stage.overlay.append(viewer.probeElements.readout);
     // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
+    // On phones it is superseded by the unified bottom sheet below (CSS hides
+    // it under that breakpoint); on desktop it is unused (the Inspector is a
+    // normal panel there). Kept appended so the desktop/no-sheet path is intact.
     stage.overlay.append(inspector.sheetToggle);
+
+    // ── Phone bottom-sheet (design audit 1.3 follow-up) ───────────────────
+    // Below the mobile breakpoint the floating panels don't fit side-by-side,
+    // so one bottom sheet hosts them behind a View · Analyse · Layers tablist.
+    // The sheet owns only the chrome; here we RE-PARENT the existing panel
+    // elements into its slots on mobile and restore them to their desktop homes
+    // on a wider viewport. Re-parenting a live node keeps its listeners, so no
+    // panel is re-wired on a breakpoint flip. Desktop layout is untouched.
+    const mobileSheet = new MobileSheet();
+    stage.overlay.append(mobileSheet.element);
+
+    const toMobileLayout = (): void => {
+      mobileSheet.slot('view').append(inspector.element);
+      mobileSheet.slot('analyse').append(analysePanel.element, objectPanel.element);
+      mobileSheet
+        .slot('layers')
+        .append(
+          classLegendPanel.element,
+          measurePanel.element,
+          annotationPanel.element,
+          exportPanel.element,
+        );
+      // The now-empty left column would still capture touches over its band —
+      // hide it. The Inspector's standalone "Scan Info" launcher is superseded.
+      leftPanels.classList.add('olv-hidden');
+      inspector.sheetToggle.classList.add('olv-hidden');
+    };
+    const toDesktopLayout = (): void => {
+      leftPanels.classList.remove('olv-hidden');
+      inspector.sheetToggle.classList.remove('olv-hidden');
+      // Inspector returns to the overlay in its original slot (just before the
+      // streaming panel); the left column is rebuilt in its original order.
+      stage.overlay.insertBefore(inspector.element, streamingPanel.element);
+      leftPanels.append(
+        measurePanel.element,
+        annotationPanel.element,
+        objectPanel.element,
+        classLegendPanel.element,
+        analysePanel.element,
+        exportPanel.element,
+      );
+    };
+
+    const mobileMql =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(max-width: 767px)')
+        : null;
+    let mobileApplied = false;
+    const applyMobileSheet = (): void => {
+      const isMobile = mobileMql ? mobileMql.matches : false;
+      if (isMobile !== mobileApplied) {
+        if (isMobile) toMobileLayout();
+        else toDesktopLayout();
+        mobileApplied = isMobile;
+      }
+      // The sheet only shows on a phone WITH a scan loaded; otherwise the empty
+      // slots would float a chrome bar over the empty state.
+      mobileSheet.setVisible(isMobile && hasScan());
+    };
+    // Expose to the scan lifecycle so reveal / reset re-evaluate visibility.
+    syncMobileSheet = applyMobileSheet;
+    mobileMql?.addEventListener('change', applyMobileSheet);
+    applyMobileSheet();
+
     // The help overlay is a modal — appended last so it sits above everything.
     stage.overlay.append(helpOverlay.element);
 
@@ -2762,10 +2900,33 @@ if (debug || benchmark) {
       backend: viewerReady ? viewer.activeBackend() : null,
       stats: viewerReady ? viewer.frameStats() : null,
       streaming: streamingDebugSample(),
+      terrainCompute: readTerrainComputePath(),
     }));
     stage.overlay.append(debugOverlay.element);
     debugOverlay.start();
   });
+}
+
+/**
+ * Read the MAIN-thread terrain engine's CPU/GPU equivalence-gate verdict for
+ * the debug overlay, via the verification-only `window` hook the engine
+ * registers when it loads. Returns null before any main-thread terrain run (or
+ * when analysis ran in the worker, whose engine is not reachable from here).
+ * Reads through the hook deliberately — a static import would pull the terrain
+ * engine into the main bundle and break chunk isolation.
+ */
+function readTerrainComputePath(): { path: 'cpu' | 'gpu'; reason: string } | null {
+  const hook = (
+    window as unknown as {
+      __olvTerrainRasterEngine?: { getComputePath?: () => { path: 'cpu' | 'gpu'; reason: string } };
+    }
+  ).__olvTerrainRasterEngine;
+  try {
+    const s = hook?.getComputePath?.();
+    return s ? { path: s.path, reason: s.reason } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */
@@ -4677,6 +4838,8 @@ function resetToEmptyState(): void {
   // reset path and a closed 360 / object scan would otherwise leave its report
   // lingering over the empty state. v0.4.3.
   objectPanel.setVisible(false);
+  // No scan → hide the phone bottom-sheet (no-op on desktop).
+  syncMobileSheet?.();
   // Abort any in-flight terrain compute (worker job + its reply) so a result
   // for the now-closed scan can never land on the panel, and drop every cached
   // terrain core so a stale core can't be served for a different scan and

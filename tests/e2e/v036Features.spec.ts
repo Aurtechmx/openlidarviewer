@@ -158,10 +158,15 @@ test('Inspector exposes a Provenance section after a scan loads', async ({
 
 // ── 5. Mobile-collapsible side panels ──────────────────────────────────────
 
-test.describe('mobile-collapsible side panels', () => {
+test.describe('mobile bottom sheet', () => {
   test.use({ viewport: { width: 390, height: 844 } }); // iPhone-class viewport
 
-  test('the streaming, measure and annotation panels carry a chevron toggle on mobile', async ({
+  // v0.4.6 replaced the per-panel "chevron toggle on mobile" model with a single
+  // bottom sheet (MobileSheet) that re-parents every panel into one of three
+  // tabs — View / Analyse / Layers. This pins that new contract: the sheet
+  // mounts with its tablist, and selecting a tab expands the sheet and activates
+  // that tab's slot.
+  test('mounts a View / Analyse / Layers tab sheet that switches panels', async ({
     page,
   }) => {
     await page.goto('/');
@@ -169,18 +174,25 @@ test.describe('mobile-collapsible side panels', () => {
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await page.waitForTimeout(500);
 
-    // Open the Measure tool — its panel mounts with a chevron on phones.
-    await page.locator('.olv-tool', { hasText: 'Measure' }).click();
-    await expect(page.locator('.olv-measure-bar')).toBeVisible();
+    const sheet = page.locator('.olv-mobile-sheet');
+    await expect(sheet).toBeVisible({ timeout: 8_000 });
 
-    // The chevron toggle marker is the panel's collapsible head — the
-    // exact selector is the same across StreamingPanel, MeasurePanel,
-    // and AnnotationPanel by design (`.olv-collapse-toggle` wrapping an
-    // `.olv-chevron` glyph). Hidden on desktop, shown on phones via CSS.
-    const collapseToggles = page.locator('.olv-collapse-toggle');
-    const count = await collapseToggles.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-    // And the chevron glyph is present inside the toggle.
-    await expect(page.locator('.olv-chevron').first()).toBeAttached();
+    // The three tabs are present in order.
+    for (const id of ['view', 'analyse', 'layers'] as const) {
+      await expect(sheet.locator(`.olv-msheet-tab[data-tab="${id}"]`)).toBeVisible();
+    }
+
+    // Selecting a tab activates its slot (and expands the sheet).
+    await sheet.locator('.olv-msheet-tab[data-tab="layers"]').click();
+    await expect(page.locator('.olv-msheet-slot[data-tab="layers"].is-active')).toBeVisible({
+      timeout: 4_000,
+    });
+
+    // Switching to another tab moves the active slot.
+    await sheet.locator('.olv-msheet-tab[data-tab="view"]').click();
+    await expect(page.locator('.olv-msheet-slot[data-tab="view"].is-active')).toBeVisible({
+      timeout: 4_000,
+    });
+    await expect(page.locator('.olv-msheet-slot[data-tab="layers"].is-active')).toHaveCount(0);
   });
 });

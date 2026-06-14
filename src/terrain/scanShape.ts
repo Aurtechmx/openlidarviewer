@@ -126,6 +126,19 @@ export interface ScanShapeParams {
 // ── Object (compact 3-D) thresholds — unchanged, for `kind` back-compat. ─────
 const ASPECT_OBJECT = 0.65;
 const OVERHANG_OBJECT = 0.2;
+/**
+ * Compact 3-D SOLID gate — catches a scanned OBJECT that slips just under both
+ * single-signal bars above. Requires a moderate aspect AND any genuine overhang
+ * TOGETHER. A terrain height field is single-surface, so it reads ≈0% overhang
+ * on its true up however steep it gets (an 0.8-gradient slope still measures 0%
+ * stacking) — the AND can therefore never promote a slope. A scanned object
+ * (statue, sculpture) stacks a few percent from limbs / folds even viewed
+ * top-down. Tuned on a real iPhone statue scan (aspect 0.64, 5.9% stacked, up
+ * mis-picked as the flattest axis) against every terrain fixture (all 0%
+ * overhang; the steepest, slope-0.8, reaches aspect 0.80 but 0% stacking).
+ */
+const ASPECT_SOLID = 0.55;
+const OVERHANG_SOLID = 0.03;
 
 // ── Band / coverage geometry. ────────────────────────────────────────────────
 /** Vertical band (fraction of vertical extent) that counts as floor / ceiling. */
@@ -142,12 +155,40 @@ const ENCLOSURE_COVER = 0.45;
 const WALL_SPAN_FRAC = 0.6;
 
 // ── Interior routing thresholds. ─────────────────────────────────────────────
-/** Floor must cover this much of the footprint to read as an enclosed space. */
+/** Floor must cover this much of the footprint to read as an enclosed space.
+ *  This is the DECISIVE terrain/interior discriminator: a terrain height field
+ *  is one thin surface, so only a small band of footprint cells (~10–15%) ever
+ *  carry a return in the bottom PLANE_BAND, while an interior's floor IS the
+ *  bottom band and fills nearly the whole footprint (≈100%). Genuine flat AND
+ *  hilly terrain both measure ~10–13% here — far below this gate. */
 const FLOOR_INTERIOR = 0.5;
-/** Near-full-height columns must reach this share of the footprint (a partial
- *  ceiling alone won't, so the WALLS carry the multi-room house). */
+/** Near-full-height columns must reach this share of the footprint to read as
+ *  an interior on the WALL signal alone (a fully-enclosed box, a multi-room
+ *  house whose ceiling is partial — the walls carry it). */
 const WALL_INTERIOR = 0.25;
-/** Interiors stack surfaces; require at least this much overhang too. */
+/**
+ * Lower wall/ceiling-structure bar for the BIG-OPEN-INTERIOR path (v0.4.6).
+ *
+ * A large open industrial interior scanned with a 360 scanner has a densely
+ * sampled floor and full-height perimeter walls, but a HIGH, SPARSE ceiling:
+ * at grazing angle a 4 m ceiling returns only a fraction of its cells, so both
+ * `wallCoverage` (full-height columns) and `ceilingCoverage` land around
+ * 12–22% — under WALL_INTERIOR and far under ENCLOSURE_COVER. The strict
+ * gate then misread this real 125 M-pt interior as TERRAIN (floor 100 %, but
+ * wall 17 % < 25 %, ceiling 21 % < 45 %), so the "Treat as" pill never
+ * committed to Interior and the user had to set it by hand.
+ *
+ * Because `floorCoverage ≥ FLOOR_INTERIOR` (50 %) ALREADY excludes every
+ * terrain case decisively (terrain ≈ 10–15 % floor), and `overhangFraction ≥
+ * OVERHANG_INTERIOR` independently requires real stacked structure that a
+ * single-surface height field never has (terrain ≈ 0 %), it is safe to accept
+ * a much lower wall-OR-ceiling presence here: enough to prove an overhead /
+ * perimeter enclosure exists, not enough to be reached by bare ground. */
+const WALL_OR_CEILING_OPEN_INTERIOR = 0.1;
+/** Interiors stack surfaces; require at least this much overhang too. A
+ *  single-surface terrain height field measures ≈0% here (flat AND steep
+ *  hilly terrain both read 0% in testing), so this is the second independent
+ *  guard that keeps the relaxed open-interior path off genuine ground. */
 const OVERHANG_INTERIOR = 0.15;
 
 // ── Vegetation tiebreaker (classification only). ─────────────────────────────
@@ -466,6 +507,16 @@ export function classifyScanShape(
   let objectVotes = 0;
   if (m.aspect >= ASPECT_OBJECT) { objectVotes++; reasons.push(`Compact aspect (height/footprint ${m.aspect.toFixed(2)}).`); }
   if (m.overhangFraction >= OVERHANG_OBJECT) { objectVotes++; reasons.push(`${Math.round(m.overhangFraction * 100)}% of columns stack multiple surfaces (overhangs).`); }
+  // A compact 3-D solid (moderate aspect AND real overhang together) is an
+  // object even when neither single signal reaches its own bar — see the
+  // ASPECT_SOLID / OVERHANG_SOLID note. A terrain height field reads 0% overhang
+  // however steep, so this never fires on a slope.
+  if (objectVotes < 2 && m.aspect >= ASPECT_SOLID && m.overhangFraction >= OVERHANG_SOLID) {
+    objectVotes = 2;
+    reasons.push(
+      `Compact 3-D solid (aspect ${m.aspect.toFixed(2)}, ${Math.round(m.overhangFraction * 100)}% stacked) — a scanned object, not a height field.`,
+    );
+  }
 
   let kind: ScanKind;
   if (objectVotes === 2) kind = 'object';
@@ -484,11 +535,23 @@ export function classifyScanShape(
   const wide = m.aspect < ASPECT_OBJECT;
   const vegDominated = classification !== undefined && wide && m.topVegFraction >= VEG_DOMINANT;
   const flatCeiling = m.ceilingCoverage >= ENCLOSURE_COVER && m.floorCoverage >= ENCLOSURE_COVER;
+  // Wall/ceiling enclosure evidence. The strict bar — full-height walls or a
+  // clean flat ceiling — catches enclosed boxes and houses. The OPEN bar
+  // (v0.4.6) additionally catches a big open interior with full-height
+  // perimeter walls but a high, SPARSE ceiling, where both signals sit around
+  // 12–22%: accepted only because floorCoverage + overhang (below) already
+  // exclude terrain twice over. Either a partial ceiling OR partial
+  // full-height wall presence proves an overhead/perimeter enclosure exists.
+  const enclosureEvidence =
+    m.wallCoverage >= WALL_INTERIOR ||
+    flatCeiling ||
+    m.wallCoverage >= WALL_OR_CEILING_OPEN_INTERIOR ||
+    m.ceilingCoverage >= WALL_OR_CEILING_OPEN_INTERIOR;
   const interiorEvidence =
     wide &&
     !vegDominated &&
     m.floorCoverage >= FLOOR_INTERIOR &&
-    (m.wallCoverage >= WALL_INTERIOR || flatCeiling) &&
+    enclosureEvidence &&
     m.overhangFraction >= OVERHANG_INTERIOR;
 
   let nonTerrain: boolean;
@@ -502,11 +565,18 @@ export function classifyScanShape(
     reasons.unshift(`Top band is ${Math.round(m.topVegFraction * 100)}% vegetation over a wide footprint — natural canopy, not a ceiling.`);
   } else if (interiorEvidence) {
     nonTerrain = true; spaceKind = 'interior';
-    confidence = flatCeiling ? 0.9 : 0.8;
+    // Strong (flat ceiling) > walls > sparse open enclosure. The open path
+    // (neither full-height walls nor a flat ceiling, just partial overhead /
+    // perimeter structure over a full floor) is the least certain but still
+    // decisively non-terrain — it reports its own honest, lower confidence.
+    const strongWalls = m.wallCoverage >= WALL_INTERIOR;
+    confidence = flatCeiling ? 0.9 : strongWalls ? 0.8 : 0.7;
     reasons.unshift(
       flatCeiling
         ? `Floor + flat ceiling enclose ${Math.round(m.ceilingCoverage * 100)}% of the footprint — interior space.`
-        : `Floor + near-full-height walls (${Math.round(m.wallCoverage * 100)}% of cells) — interior space (ceiling partial).`,
+        : strongWalls
+          ? `Floor + near-full-height walls (${Math.round(m.wallCoverage * 100)}% of cells) — interior space (ceiling partial).`
+          : `Full floor + partial perimeter walls / sparse ceiling (${Math.round(m.wallCoverage * 100)}% full-height, ${Math.round(m.ceilingCoverage * 100)}% overhead, ${Math.round(m.overhangFraction * 100)}% stacked) — open interior space (high or sparsely-scanned ceiling).`,
     );
   } else {
     nonTerrain = false; spaceKind = 'terrain'; confidence = 0.85;

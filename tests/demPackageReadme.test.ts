@@ -160,6 +160,38 @@ describe('buildDemReadme — generation parameters derive from the run', () => {
   });
 });
 
+describe('buildDemReadme — unit labels follow the source CRS (label-vs-value)', () => {
+  it('labels cell size + elevation in metres for a metric CRS (default)', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS });
+    expect(txt).toMatch(/Cell size\s+1 m\b/);
+    expect(txt).toMatch(/Grid cell size 1 m\b/);
+    expect(txt).toMatch(/Elevation unit metres/);
+  });
+
+  it('labels cell size + elevation in FEET on a foot CRS — never "m"/"metres"', () => {
+    // The DTM grid stores cellSizeM and Z in SOURCE units; a foot CRS carries
+    // feet, so the README must read "ft" / "feet", not the metre default.
+    const txt = buildDemReadme({
+      result: readyResult(),
+      ...OPTS,
+      linearUnit: 'us-survey-foot',
+    });
+    expect(txt).toMatch(/Cell size\s+1 ft\b/);
+    expect(txt).toMatch(/Grid cell size 1 ft\b/);
+    expect(txt).toMatch(/Elevation unit feet/);
+    // The drift: a foot scan must NOT assert metres anywhere in the raster block.
+    expect(txt).not.toMatch(/Elevation unit metres/);
+    expect(txt).not.toMatch(/Cell size\s+1 m\b/);
+  });
+
+  it('labels degrees for a geographic CRS, with linear elevation', () => {
+    const txt = buildDemReadme({ result: readyResult(), ...OPTS, isGeographic: true });
+    expect(txt).toMatch(/Cell size\s+1 degrees/);
+    // Geographic heights are still linear metres by the standing default.
+    expect(txt).toMatch(/Elevation unit metres/);
+  });
+});
+
 describe('buildDemReadme — honest gating caveat', () => {
   it('carries a prominent PRELIMINARY caveat for a resident-only/preview result', () => {
     const txt = buildDemReadme({ result: previewResult(), ...OPTS });

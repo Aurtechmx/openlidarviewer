@@ -167,6 +167,39 @@ export function buildOccupancyMask(
   return { mask, cols, rows, cellX, cellY, originX: minX, originY: minY, threshold };
 }
 
+/**
+ * Per-cell elevation range over the SAME cell layout as `grid`: bin the band
+ * points (xs, ys, zs) into the grid's cells and record each cell's min / max
+ * elevation, NaN where no point landed. Used by the furniture classifier's
+ * height-profile feature (regularize.ts) — a tall thin column spans the band
+ * vertically; a low blob occupies only a shallow slab. Pure, deterministic.
+ */
+export function buildCellHeightProfile(
+  grid: OccupancyGrid,
+  xs: ArrayLike<number>,
+  ys: ArrayLike<number>,
+  zs: ArrayLike<number>,
+  count: number,
+): { zMin: Float32Array; zMax: Float32Array } {
+  const { cols, rows, cellX, cellY, originX, originY } = grid;
+  const n = cols * rows;
+  const zMin = new Float32Array(n).fill(NaN);
+  const zMax = new Float32Array(n).fill(NaN);
+  for (let i = 0; i < count; i++) {
+    let c = Math.floor((xs[i] - originX) / cellX);
+    if (c < 0) c = 0; else if (c >= cols) c = cols - 1;
+    let r = Math.floor((ys[i] - originY) / cellY);
+    if (r < 0) r = 0; else if (r >= rows) r = rows - 1;
+    const k = r * cols + c;
+    const z = zs[i];
+    // NaN-initialised cells: first hit seeds both bounds (NaN comparisons are
+    // false, so an explicit empty test is needed).
+    if (Number.isNaN(zMin[k])) { zMin[k] = z; zMax[k] = z; }
+    else { if (z < zMin[k]) zMin[k] = z; if (z > zMax[k]) zMax[k] = z; }
+  }
+  return { zMin, zMax };
+}
+
 /** Occupied area of the mask in m² (cells × exact cell area). */
 export function maskAreaM2(grid: OccupancyGrid): number {
   let occ = 0;
@@ -193,13 +226,24 @@ export function closeMask(grid: OccupancyGrid, radiusCells: number): OccupancyGr
  * The closing radius (cells) that bridges scan dropouts but can never seal an
  * opening of `keepOpenM` metres: largest bridged gap = 2 × radius × cell ≤
  * keepOpenM / 3 (margin 3× covers the diagonal worst case and threshold
- * jitter at the jambs). Always at least 1 so hairline gaps are healed.
+ * jitter at the jambs). At least 1 so hairline gaps are healed — EXCEPT in
+ * the sparse regime: when the adaptive cell has GROWN so far (up to
+ * cellHardMaxM, 0.3 m) that even radius 1 bridges 2·√2·cell ≥ keepOpenM
+ * diagonally, a doorway could be sealed by the very pass meant to spare it,
+ * so closing is disabled outright (radius 0). The grown rasterisation has
+ * already fused returns within each fat cell, so the hairline-heal duty the
+ * minimum radius existed for is moot there — a door must survive at every
+ * cell size, by construction, not by luck.
  */
 export function closeRadiusCells(cellM: number, keepOpenM: number): number {
   if (!(cellM > 0)) return 1;
   // The 1e-9 absorbs float noise (0.6 / 0.3 evaluating to 1.999…8) so the
   // radius is the intended integer, not one less.
-  return Math.max(1, Math.floor(keepOpenM / (6 * cellM) + 1e-9));
+  const r = Math.floor(keepOpenM / (6 * cellM) + 1e-9);
+  if (r >= 1) return r;
+  // Sparse-regime cap: radius 1 only when its diagonal worst case
+  // (2·√2·cell) still clears the keep-open width; otherwise no closing.
+  return 2 * Math.SQRT2 * cellM < keepOpenM - 1e-9 ? 1 : 0;
 }
 
 /**

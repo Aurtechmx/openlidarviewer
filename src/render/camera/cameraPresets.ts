@@ -251,3 +251,79 @@ export function cameraPresetPose(
   // narrowing can't always prove it through a Record-typed name.
   throw new Error(`Unknown camera preset: ${String(name)}`);
 }
+
+// ── Six standard (axis-aligned) views ──────────────────────────────
+//
+// The Polycam-style "look straight at a face" views: Top / Bottom along the
+// world-up axis, and Front / Back / Left / Right around the two horizontal
+// axes. Distinct from the angled presets above — these look straight down an
+// axis so a wall or floor reads flat and can be measured without skew. Pairing
+// them with the viewer's near-orthographic (very narrow FOV) projection gives
+// a parallel, distortion-free view.
+
+/** Names a standard axis-aligned view. */
+export type StandardView = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
+
+/** Every standard view in a stable display order (top row, then sides). */
+export const STANDARD_VIEW_ORDER: readonly StandardView[] = [
+  'top',
+  'bottom',
+  'front',
+  'back',
+  'left',
+  'right',
+] as const;
+
+/** Short display label for each standard view. */
+export const STANDARD_VIEW_LABEL: Readonly<Record<StandardView, string>> = {
+  top: 'Top',
+  bottom: 'Bottom',
+  front: 'Front',
+  back: 'Back',
+  left: 'Left',
+  right: 'Right',
+};
+
+/**
+ * Compute the (position, target) tuple for a standard axis-aligned view.
+ *
+ * Top / Bottom look along ±worldUp (with a 1° horizontal nudge so the
+ * spherical controls keep a well-defined "right" and never gimbal-lock).
+ * Front / Back look along ±the horizontal seed axis; Left / Right look along
+ * ±the second horizontal axis (worldUp × horizontal). Pure + deterministic.
+ */
+export function standardViewPose(view: StandardView, input: PresetInput): PresetPose {
+  const pad = input.pad ?? 1.2;
+  const dist = fitDistance(input.radius, input.fovDeg, pad);
+  const up = normalize(input.worldUp);
+  const horiz = normalize(input.horizontal);
+  // The second horizontal axis, perpendicular to both up and the seed.
+  const horiz2 = normalize(cross(up, horiz));
+  const target = input.center;
+
+  let dir: Vec3;
+  switch (view) {
+    case 'top':
+    case 'bottom': {
+      const sign = view === 'top' ? 1 : -1;
+      const tilt = Math.PI / 180; // 1° nudge off the pole
+      dir = normalize(
+        add(scale(up, sign * Math.cos(tilt)), scale(horiz, Math.sin(tilt))),
+      );
+      break;
+    }
+    case 'front':
+      dir = horiz;
+      break;
+    case 'back':
+      dir = scale(horiz, -1);
+      break;
+    case 'right':
+      dir = horiz2;
+      break;
+    case 'left':
+      dir = scale(horiz2, -1);
+      break;
+  }
+  return { position: add(target, scale(dir, dist)), target };
+}

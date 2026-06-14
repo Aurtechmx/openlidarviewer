@@ -26,6 +26,7 @@ import {
 import {
   floorPlanSvg,
   MIN_ROOM_LABEL_M2,
+  regionAreaReconcileScale,
 } from '../src/terrain/space/floorplan/floorPlanSvg';
 import {
   resolveSnapAxes,
@@ -59,6 +60,24 @@ function rectRoom(doors: ReadonlyArray<readonly [number, number]> = []): Float32
   return Float32Array.from(t);
 }
 
+/** A z-up 10 × 8 × 2.5 m two-room scan: divider plane at x = 5 with a door
+ * gap `gapY` (metres). floor + four outer walls + divider sampled at 5 cm —
+ * a genuinely PARTITIONED interior (FIX 1: yields two distinct rooms). */
+function twoRoomCloud(gapY: readonly [number, number]): Float32Array {
+  const W = 10, D = 8, H = 2.5;
+  const t: number[] = [];
+  for (let x = 0; x <= W + 1e-9; x += STEP)
+    for (let y = 0; y <= D + 1e-9; y += STEP) t.push(x, y, 0);
+  for (let z = 0; z <= H + 1e-9; z += STEP) {
+    for (let x = 0; x <= W + 1e-9; x += STEP) { t.push(x, 0, z); t.push(x, D, z); }
+    for (let y = STEP; y < D - 1e-9; y += STEP) {
+      t.push(0, y, z); t.push(W, y, z);
+      if (y < gapY[0] - 1e-9 || y > gapY[1] + 1e-9) t.push(5, y, z); // divider
+    }
+  }
+  return Float32Array.from(t);
+}
+
 /** Minimal model stub — only what floorPlanSvg reads. */
 function stubModel(overrides: Partial<FloorPlanModel>): FloorPlanModel {
   return {
@@ -69,6 +88,12 @@ function stubModel(overrides: Partial<FloorPlanModel>): FloorPlanModel {
     contentsCount: 0,
     doorways: [],
     unknownGaps: [],
+    rooms: [],
+    roomSegmentation: 'unsegmented',
+    openSpaceAreaM2: 0,
+    fromWallGraph: false,
+    wallGraphNodeCount: 0,
+    wallGraphEdgeCount: 0,
     wallThicknessM: 0.2,
     thicknessNormalized: false,
     widthM: 10,
@@ -78,6 +103,9 @@ function stubModel(overrides: Partial<FloorPlanModel>): FloorPlanModel {
     floorAreaM2: null,
     usedWallBand: true,
     floorBasis: 'histogram',
+    bandBasis: 'fixed',
+    bandLowUsedM: 0.7,
+    bandHighUsedM: 1.8,
     clippedCount: 0,
     clipBbox: null,
     snappedToAxes: true,
@@ -165,7 +193,15 @@ describe('door-leaf arcs — one swing symbol per classified doorway', () => {
 
 describe('region area labels — floor-fill polygon areas, honestly approximate', () => {
   const model = extractFloorPlan(rectRoom(), { upAxis: 'z' });
-  const svg = floorPlanSvg(model, { unitSystem: 'metric' });
+  // The v0.4.6 room segmentation supersedes the scanned-floor region labels
+  // whenever real rooms exist; the region-label path is the 'unsegmented'
+  // fallback (rooms could not be reliably separated). It is pinned via a model
+  // with the rooms stripped AND the segmentation forced to 'unsegmented' (the
+  // FIX-1 outcome that owns the approximate region-area labels). A single
+  // open room like rectRoom() is itself reported as 'open-space' now, so the
+  // stub must override the outcome to exercise the fallback path.
+  const noRooms: FloorPlanModel = { ...model, rooms: [], roomSegmentation: 'unsegmented' };
+  const svg = floorPlanSvg(noRooms, { unitSystem: 'metric' });
 
   it('labels each large floor region with its own polygon area (±2%)', () => {
     const big = model.floorRings.filter((r) => ringSignedArea(r) >= MIN_ROOM_LABEL_M2);
@@ -189,6 +225,22 @@ describe('region area labels — floor-fill polygon areas, honestly approximate'
     );
   });
 
+  it('room labels supersede the region labels when rooms were segmented', () => {
+    // FIX 1: a single open room like rectRoom() reads as 'open-space' now, so
+    // the multi-room schedule is exercised with a genuinely PARTITIONED scan
+    // (a divider + door → two distinct rooms). The room labels + schedule then
+    // supersede the approximate region labels exactly as before.
+    const twoRoom = extractFloorPlan(twoRoomCloud([3.5, 4.4]), { upAxis: 'z' });
+    expect(twoRoom.roomSegmentation).toBe('rooms');
+    expect(twoRoom.rooms.length).toBe(2); // the engine partitioned the space
+    const withRooms = floorPlanSvg(twoRoom, { unitSystem: 'metric' });
+    expect(withRooms).toContain('class="room-labels"');
+    expect(withRooms).toMatch(/Room 1 · [\d.]+ m²/);
+    expect(withRooms).not.toContain('≈ '); // no double labelling
+    expect(withRooms).not.toMatch(/Approx\. region areas/);
+    expect(withRooms).toMatch(/Room schedule \(flood-fill of the wall graph, approx\.\)/);
+  });
+
   it('skips the in-plan label for regions under the 3 m² floor', () => {
     const tiny = stubModel({
       wallRings: [[[0, 0], [10, 0], [10, 4], [0, 4]]],
@@ -201,10 +253,57 @@ describe('region area labels — floor-fill polygon areas, honestly approximate'
     expect(s).toMatch(/Approx\. region areas .*: 2\.3 m²/);
   });
 
+  it('the region-area sum is reconciled to never exceed the stated floor area (v0.4.6)', () => {
+    // Repro of the real 360 interior contradiction: the sheet said "Floor area
+    // 94.4 m²" yet "Approx. region areas … 106.6 m²" — the region rings (from
+    // the CLOSED, hole-healed, simplified floor mask) summed to MORE than the
+    // net scanned floor area (the OPEN presence mask). Incoherent. Two
+    // 60 m² floor rings (gross sum 120) reconciled against a 94.4 m² floor must
+    // scale down so the footer sum equals the floor area, never exceeds it.
+    const grossA = 60, grossB = 60, floor = 94.4;
+    const ring = (a: number): Ring => {
+      const s = Math.sqrt(a); // a square of the given area
+      return [[0, 0], [s, 0], [s, s], [0, s]];
+    };
+    const model = stubModel({
+      wallRings: [[[0, 0], [12, 0], [12, 12], [0, 12]]],
+      wallRingObservedFrac: [1],
+      floorRings: [ring(grossA), ring(grossB)],
+      floorAreaM2: floor,
+      roomSegmentation: 'unsegmented',
+    });
+    const svg = floorPlanSvg(model, { unitSystem: 'metric' });
+    // Flatten wrapped <text> spans, then take the region-areas clause up to the
+    // terminating ". " (a region value like "47.2 m²" contains a '.', so the
+    // clause must end at the period-then-space, not the first period).
+    const flat = svg.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    const footer = flat.match(/Approx\. region areas[^:]*: (.*?)\. /)?.[1] ?? '';
+    const sum = [...footer.matchAll(/([\d.]+) m²/g)].reduce((acc, m) => acc + Number(m[1]), 0);
+    expect(sum).toBeGreaterThan(0);
+    // The reconciled region sum must be ≤ the headline floor area (with a tiny
+    // rounding tolerance), not the un-reconciled 120 m².
+    expect(sum).toBeLessThanOrEqual(floor + 0.2);
+    // The reconcile is proportional (not a clamp-to-zero): both regions survive.
+    expect([...footer.matchAll(/m²/g)].length).toBe(2);
+
+    // Pure helper contract: scale ≤ 1, makes the sum equal the floor area, and
+    // never scales UP when the raw sum already fits.
+    expect(regionAreaReconcileScale([grossA, grossB], floor)).toBeCloseTo(floor / 120, 5);
+    expect(regionAreaReconcileScale([10, 20], 94.4)).toBe(1); // already fits → no scaling
+    expect(regionAreaReconcileScale([10], null)).toBe(1); // no floor area → no scaling
+  });
+
   it('uses sq ft labels under the imperial unit system', () => {
-    const imp = floorPlanSvg(model, { unitSystem: 'imperial' });
+    const imp = floorPlanSvg(noRooms, { unitSystem: 'imperial' });
     expect(imp).toMatch(/≈ \d+ sq ft</);
     expect(imp).toMatch(/Approx\. region areas .*: \d+ sq ft/);
+    // Room labels and the schedule follow the unit system too (partitioned
+    // scan — FIX 1: a single open room reads as 'open-space' instead).
+    const impRooms = floorPlanSvg(extractFloorPlan(twoRoomCloud([3.5, 4.4]), { upAxis: 'z' }), {
+      unitSystem: 'imperial',
+    });
+    expect(impRooms).toMatch(/Room 1 · \d+ sq ft/);
+    expect(impRooms).toMatch(/Room schedule .*Room 1 \d+ sq ft/);
   });
 });
 

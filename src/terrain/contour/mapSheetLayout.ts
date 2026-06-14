@@ -116,9 +116,19 @@ export function scaleBar(scalePtPerWorld: number, maxBarPt: number, segments = 4
   };
 }
 
-/** Map scale as a 1:N ratio: N ground units fit in 1 unit of paper. */
-export function mapScaleRatio(scalePtPerWorld: number): number {
+/**
+ * Map scale as a TRUE dimensionless 1:N ratio: N units of ground length per 1
+ * unit of paper length, in the SAME physical unit on both sides. Because the map
+ * is drawn in the CRS's source units, the page-points-per-world-unit must be
+ * converted to page-points-per-metre before comparing against the paper's metre
+ * length — otherwise a foot CRS yields feet-per-paper-metre (off by ~3.28×), not
+ * a dimensionless ratio. `worldUnitToMetres` is 1 for a metric CRS, ~0.3048 for
+ * a foot CRS; defaults to 1 (the standing metric assumption).
+ */
+export function mapScaleRatio(scalePtPerWorld: number, worldUnitToMetres = 1): number {
+  // Page points per ground-metre = (pt per world unit) / (metres per world unit).
+  const scalePtPerMetre = worldUnitToMetres > 0 ? scalePtPerWorld / worldUnitToMetres : scalePtPerWorld;
   // 1 page point = 1/72 inch = 0.0254/72 m of paper.
-  const paperMPerWorld = (scalePtPerWorld / 72) * 0.0254;
-  return paperMPerWorld > 0 ? 1 / paperMPerWorld : 0;
+  const paperMPerGroundM = (scalePtPerMetre / 72) * 0.0254;
+  return paperMPerGroundM > 0 ? 1 / paperMPerGroundM : 0;
 }

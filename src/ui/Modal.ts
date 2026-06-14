@@ -131,3 +131,87 @@ export function openModal(opts: ModalOptions): ModalHandle {
 
   return { element: backdrop, close };
 }
+
+export interface ConfirmOptions {
+  /** Dialog title — the question's headline (e.g. "Open large file?"). */
+  readonly title: string;
+  /**
+   * Body text. Newlines become separate paragraphs so multi-reason prompts
+   * (the cellular + memory sample gate) read as a list, not one run-on line.
+   */
+  readonly message: string;
+  /** Confirm-button label. Defaults to "Continue". */
+  readonly confirmLabel?: string;
+  /** Cancel-button label. Defaults to "Cancel". */
+  readonly cancelLabel?: string;
+  /** Element to restore focus to on close. */
+  readonly returnFocusTo?: HTMLElement | null;
+}
+
+/**
+ * Styled confirm dialog — a Promise-based replacement for `window.confirm()`.
+ *
+ * WHY this exists: native `confirm()` is unreliable in embedded WebViews (some
+ * suppress it entirely, returning `false` without ever showing a prompt), so a
+ * user inside an iframe/app shell could never approve a large-file or cellular
+ * download. This builds the same blocking yes/no decision on our own Modal
+ * chrome, which renders identically everywhere the app does.
+ *
+ * Resolves `true` on confirm, `false` on cancel / Escape / backdrop click /
+ * close-X — matching `confirm()`'s "anything-but-OK is no" semantics. The
+ * Cancel button takes initial focus so an accidental Enter is a safe no.
+ */
+export function openConfirm(opts: ConfirmOptions): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    let decided = false;
+    const settle = (value: boolean): void => {
+      if (decided) return;
+      decided = true;
+      resolve(value);
+    };
+
+    // One paragraph per line keeps multi-reason prompts legible.
+    const body = el(
+      'div',
+      { className: 'olv-confirm-body' },
+      opts.message
+        .split('\n')
+        .filter((line) => line.trim().length > 0)
+        .map((line) => el('p', { className: 'olv-confirm-line', text: line })),
+    );
+
+    const cancelBtn = el('button', {
+      className: 'olv-confirm-cancel',
+      text: opts.cancelLabel ?? 'Cancel',
+      type: 'button',
+    });
+    const confirmBtn = el('button', {
+      className: 'olv-confirm-ok',
+      text: opts.confirmLabel ?? 'Continue',
+      type: 'button',
+    });
+    const footer = el('div', { className: 'olv-confirm-actions' }, [cancelBtn, confirmBtn]);
+
+    const handle = openModal({
+      title: opts.title,
+      body,
+      footer,
+      returnFocusTo: opts.returnFocusTo,
+      // Backdrop click, Escape, and the close-X all route here — treat any
+      // dismissal that isn't an explicit confirm as a "no".
+      onClose: () => settle(false),
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      settle(false);
+      handle.close();
+    });
+    confirmBtn.addEventListener('click', () => {
+      settle(true);
+      handle.close();
+    });
+
+    // Cancel is the safe default — focus it so a reflexive Enter cancels.
+    cancelBtn.focus();
+  });
+}

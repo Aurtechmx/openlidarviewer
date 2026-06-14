@@ -138,19 +138,22 @@ test('Phone uses the flat fallback colour (no gradient bleed under chrome)', asy
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(800);
-  const sheetHead = page.locator('.olv-inspector .olv-panel-head');
-  await expect(sheetHead).toBeVisible({ timeout: 8_000 });
-  await sheetHead.click();
-  await expect(page.locator('.olv-inspector.olv-sheet-open')).toBeVisible({
+  // v0.4.6 — the Inspector lives in the bottom sheet's "View" tab.
+  const viewTab = page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="view"]');
+  await expect(viewTab).toBeVisible({ timeout: 8_000 });
+  await viewTab.click();
+  await expect(page.locator('.olv-msheet-slot[data-tab="view"].is-active')).toBeVisible({
     timeout: 4_000,
   });
   const visualsDetails = page.locator('details.olv-section-collapsible', {
     has: page.locator('summary', { hasText: 'Visuals Studio' }),
   });
-  const isOpen = await visualsDetails.evaluate(
-    (el) => (el as HTMLDetailsElement).open,
-  );
-  if (!isOpen) await visualsDetails.locator('summary').click();
+  if ((await visualsDetails.count()) > 0) {
+    const isOpen = await visualsDetails
+      .first()
+      .evaluate((el) => (el as HTMLDetailsElement).open);
+    if (!isOpen) await visualsDetails.locator('summary').first().click();
+  }
 
   const rails = page.locator('.olv-visuals-body .olv-chips');
   await rails.nth(3).locator('.olv-chip', { hasText: 'Studio Dark' }).click();

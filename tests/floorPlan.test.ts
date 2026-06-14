@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { wallSlice } from '../src/terrain/space/floorplan/wallSlice';
+import { wallSlice, detectWallBand } from '../src/terrain/space/floorplan/wallSlice';
 import {
   buildOccupancyMask,
   closeMask,
@@ -97,6 +97,117 @@ describe('wallSlice', () => {
     const slice = wallSlice(Float32Array.from([0, 0, 0, 1, 1, 1]), { upAxis: 'z' });
     expect(slice.count).toBe(0);
   });
+
+  it('exposes per-band-point z parallel to xs/ys', () => {
+    const slice = wallSlice(room(), { upAxis: 'z' });
+    expect(slice.zs.length).toBe(slice.count);
+    // Every kept z lies inside the band actually used [anchor+low, anchor+high].
+    for (let i = 0; i < slice.count; i++) {
+      expect(slice.zs[i]).toBeGreaterThanOrEqual(slice.bandLowUsedM - 1e-6);
+      expect(slice.zs[i]).toBeLessThanOrEqual(slice.bandHighUsedM + 1e-6);
+    }
+  });
+});
+
+describe('detectWallBand (adaptive wall-slice height band)', () => {
+  // Build a height-only profile: N returns at each listed height (m above 0).
+  function heightsAt(spec: ReadonlyArray<readonly [number, number]>): number[] {
+    const V: number[] = [];
+    for (const [h, n] of spec) for (let i = 0; i < n; i++) V.push(h);
+    return V;
+  }
+
+  it('keeps the fixed band when walls fill the whole height uniformly', () => {
+    // Uniform wall returns 0.2–2.4 m: the densest sustained window sits at the
+    // default centre, so detectWallBand declines (null) — fixed band stands.
+    const spec: Array<[number, number]> = [];
+    for (let h = 0.2; h <= 2.4 + 1e-9; h += 0.1) spec.push([+h.toFixed(2), 40]);
+    const band = detectWallBand(heightsAt(spec), 0, 1.1, (0.7 + 1.8) / 2);
+    expect(band).toBeNull();
+  });
+
+  it('re-centres on a HIGH wall zone the fixed 0.7–1.8 m band would miss', () => {
+    // Industrial racking: dense sustained returns 2.0–3.0 m, with only sparse
+    // low clutter at 0.5–0.9 m. The fixed band would slice the clutter and
+    // miss the walls; the adaptive band must climb onto the 2.0–3.0 m zone.
+    const spec: Array<[number, number]> = [];
+    for (let h = 0.5; h <= 0.9 + 1e-9; h += 0.1) spec.push([+h.toFixed(2), 6]); // clutter
+    for (let h = 2.0; h <= 3.0 + 1e-9; h += 0.1) spec.push([+h.toFixed(2), 50]); // walls
+    const band = detectWallBand(heightsAt(spec), 0, 1.1, (0.7 + 1.8) / 2);
+    expect(band).not.toBeNull();
+    // Band centre lands in the 2.0–3.0 m wall zone, well above the fixed band.
+    const centre = (band!.lowM + band!.highM) / 2;
+    expect(centre).toBeGreaterThan(2.0);
+    expect(centre).toBeLessThan(3.1);
+  });
+
+  it('rejects a single narrow furniture/ceiling spike (no broad wall zone)', () => {
+    // A floor-clearance smattering plus one huge spike at 2.5 m (a ceiling
+    // plane): the spike is one bin with empty neighbours, so its window
+    // minimum is near zero and no sustained wall zone is found.
+    const spec: Array<[number, number]> = [
+      [0.3, 8], [0.4, 8], [0.5, 8], [2.5, 4000],
+    ];
+    const band = detectWallBand(heightsAt(spec), 0, 1.1, (0.7 + 1.8) / 2);
+    expect(band).toBeNull();
+  });
+
+  it('a band re-centred near the floor never dips below the floor clearance', () => {
+    // A low-but-broad wall zone at 0.2–1.0 m: the band re-centres low, but the
+    // bottom is clamped to the floor clearance (0.15 m), not below it.
+    const spec: Array<[number, number]> = [];
+    for (let h = 0.2; h <= 1.0 + 1e-9; h += 0.1) spec.push([+h.toFixed(2), 50]);
+    const band = detectWallBand(heightsAt(spec), 0, 1.1, (0.7 + 1.8) / 2);
+    if (band) expect(band.lowM).toBeGreaterThanOrEqual(0.15 - 1e-9);
+  });
+});
+
+describe('wallSlice — adaptive band end to end', () => {
+  // A z-up 6×4 room whose WALLS only return between 2.0 and 3.2 m (a high
+  // clerestory / racking band), plus a dense floor at 0 and low clutter at
+  // 0.5–0.9 m. The fixed 0.7–1.8 m band would catch only clutter; the adaptive
+  // band must climb onto the 2.0–3.2 m wall returns.
+  function highWallRoom(): Float32Array {
+    const W = 6, D = 4, step = 0.1;
+    const t: number[] = [];
+    // Dense floor (anchors the histogram floor at ~0).
+    for (let x = 0; x <= W + 1e-9; x += step)
+      for (let y = 0; y <= D + 1e-9; y += step) t.push(x, y, 0);
+    // High wall band 2.0–3.2 m on all four sides.
+    for (let z = 2.0; z <= 3.2 + 1e-9; z += step) {
+      for (let x = 0; x <= W + 1e-9; x += step) { t.push(x, 0, z); t.push(x, D, z); }
+      for (let y = step; y < D - 1e-9; y += step) { t.push(0, y, z); t.push(W, y, z); }
+    }
+    // Sparse low clutter mid-room at 0.5–0.9 m (a table top).
+    for (let z = 0.5; z <= 0.9 + 1e-9; z += step)
+      for (let x = 2.5; x <= 3.5 + 1e-9; x += 0.2)
+        for (let y = 1.5; y <= 2.5 + 1e-9; y += 0.2) t.push(x, y, z);
+    return Float32Array.from(t);
+  }
+
+  it('adaptive ON climbs onto the high wall band; band points are the walls', () => {
+    const slice = wallSlice(highWallRoom(), { upAxis: 'z', adaptiveBand: true });
+    expect(slice.usedWallBand).toBe(true);
+    expect(slice.bandBasis).toBe('adaptive');
+    // The band climbed up toward the 2.0–3.2 m wall zone — its lower edge sits
+    // far above the standard 0.7 m, clearing the 0.5–0.9 m clutter entirely.
+    expect(slice.bandLowUsedM).toBeGreaterThanOrEqual(1.5);
+    expect(slice.bandHighUsedM).toBeGreaterThan(2.0);
+    // Band points are on the perimeter walls (the high band), not the mid-room
+    // clutter at x∈[2.5,3.5], y∈[1.5,2.5].
+    let onClutter = 0;
+    for (let i = 0; i < slice.count; i++) {
+      if (slice.xs[i] > 2.4 && slice.xs[i] < 3.6 && slice.ys[i] > 1.4 && slice.ys[i] < 2.6) onClutter++;
+    }
+    expect(onClutter).toBe(0);
+  });
+
+  it('adaptive OFF pins the fixed band (and then catches only the clutter)', () => {
+    const fixed = wallSlice(highWallRoom(), { upAxis: 'z', adaptiveBand: false });
+    expect(fixed.bandBasis).toBe('fixed');
+    // The fixed band sits at the standard offsets above the floor.
+    expect(fixed.bandLowUsedM).toBeLessThan(1.8);
+  });
 });
 
 describe('buildOccupancyMask', () => {
@@ -165,6 +276,21 @@ describe('closeMask', () => {
     expect(closeRadiusCells(0.05, 0.6)).toBe(2);
     expect(closeRadiusCells(0.02, 0.6)).toBe(5);
     expect(closeRadiusCells(0.2, 0.6)).toBe(1); // floored at 1 — heal hairlines
+  });
+
+  it('sparse-regime cap: a grown cell can never seal a ≥ keepOpen door', () => {
+    // The hairline-heal floor of 1 is allowed only while radius 1 cannot
+    // bridge keepOpen even diagonally (2·√2·cell < keepOpen):
+    //   0.20 m cell → 0.566 m diagonal bridge < 0.6  → radius 1 (as above);
+    //   0.21 m cell → 0.594 m                 < 0.6  → still 1;
+    //   0.25 m cell → 0.707 m                 ≥ 0.6  → closing disabled;
+    //   0.30 m cell → 0.849 m (the cellHardMaxM regime) → disabled.
+    expect(closeRadiusCells(0.21, 0.6)).toBe(1);
+    expect(closeRadiusCells(0.25, 0.6)).toBe(0);
+    expect(closeRadiusCells(0.3, 0.6)).toBe(0);
+    // Radius 0 closing is the identity — the mask passes through untouched.
+    const before = [1, 1, 0, 1, 1];
+    expect(Array.from(closeMask(rowGrid(before), 0).mask)).toEqual(before);
   });
 });
 

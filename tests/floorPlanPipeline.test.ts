@@ -288,6 +288,34 @@ describe('extractFloorPlan — robustness and fallbacks', () => {
     expect(model.widthM).toBe(0);
     expect(model.reasons[0]).toMatch(/Too few points/);
   });
+
+  it('plumbs the v0.4.6 options: bandBasis surfaced, snapMode off respected', () => {
+    // A high-clerestory room (walls only 2.0–3.2 m) extracted with the adaptive
+    // band ON exposes an adaptive bandBasis and the honest re-centre note; the
+    // same scan with snapMode 'off' must report axis snapping disabled.
+    const W = 6, D = 4;
+    const t: number[] = [];
+    for (let x = 0; x <= W + 1e-9; x += STEP)
+      for (let y = 0; y <= D + 1e-9; y += STEP) t.push(x, y, 0);
+    for (let z = 2.0; z <= 3.2 + 1e-9; z += STEP) {
+      for (let x = 0; x <= W + 1e-9; x += STEP) { t.push(x, 0, z); t.push(x, D, z); }
+      for (let y = STEP; y < D - 1e-9; y += STEP) { t.push(0, y, z); t.push(W, y, z); }
+    }
+    const cloud = Float32Array.from(t);
+    const adapt = extractFloorPlan(cloud, { upAxis: 'z', adaptiveBand: true });
+    expect(adapt.bandBasis).toBe('adaptive');
+    expect(adapt.bandLowUsedM).toBeGreaterThanOrEqual(1.5);
+    expect(adapt.reasons.join(' ')).toMatch(/re-centred on the densest wall-return height/);
+
+    const noSnap = extractFloorPlan(cloud, { upAxis: 'z', snapMode: 'off' });
+    expect(noSnap.snappedToAxes).toBe(false);
+    expect(noSnap.reasons.join(' ')).toMatch(/Axis snapping disabled \(SNAP_MODE off\)/);
+
+    // adaptiveBand:false pins the fixed band wording (no re-centre note).
+    const fixed = extractFloorPlan(cloud, { upAxis: 'z', adaptiveBand: false });
+    expect(fixed.bandBasis).toBe('fixed');
+    expect(fixed.reasons.join(' ')).not.toMatch(/re-centred on the densest/);
+  });
 });
 
 // ── v0.4.5 hardening: the real-scan failure modes (multi-room 360 interior,

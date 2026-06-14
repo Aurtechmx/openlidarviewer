@@ -34,17 +34,14 @@ async function loadOnPhoneAndOpenSheet(
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(800);
 
-  // v0.3.9 mobile UX — the Inspector is now a peek-and-expand bottom
-  // sheet on phones. The head bar (with "Scan Intelligence" title +
-  // chevron) is always visible at the bottom of the viewport and tap
-  // toggles the sheet open. The standalone floating "Scan Info"
-  // button (.olv-scaninfo-btn) was removed because it duplicated the
-  // peeked head; tests target the head directly.
-  const sheetHead = page.locator('.olv-inspector .olv-panel-head');
-  await expect(sheetHead).toBeVisible({ timeout: 8_000 });
-  await sheetHead.click();
-  // The Inspector slides up; wait for the sheet-open transform.
-  await expect(page.locator('.olv-inspector.olv-sheet-open')).toBeVisible({
+  // v0.4.6 mobile UX — panels live in a single bottom sheet with View /
+  // Analyse / Layers tabs (MobileSheet). The Inspector (Scan Intelligence +
+  // Visuals Studio) is re-parented into the "View" tab; selecting it expands
+  // the sheet and activates that tab's slot.
+  const viewTab = page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="view"]');
+  await expect(viewTab).toBeVisible({ timeout: 8_000 });
+  await viewTab.click();
+  await expect(page.locator('.olv-msheet-slot[data-tab="view"].is-active')).toBeVisible({
     timeout: 4_000,
   });
 
@@ -53,11 +50,13 @@ async function loadOnPhoneAndOpenSheet(
   const visualsDetails = page.locator('details.olv-section-collapsible', {
     has: page.locator('summary', { hasText: 'Visuals Studio' }),
   });
-  const isOpen = await visualsDetails.evaluate(
-    (el) => (el as HTMLDetailsElement).open,
-  );
-  if (!isOpen) {
-    await visualsDetails.locator('summary').click();
+  if ((await visualsDetails.count()) > 0) {
+    const isOpen = await visualsDetails
+      .first()
+      .evaluate((el) => (el as HTMLDetailsElement).open);
+    if (!isOpen) {
+      await visualsDetails.locator('summary').first().click();
+    }
   }
 }
 

@@ -75,6 +75,30 @@ describe('samplePointScale through the terrain pipeline', () => {
     expect(scaled.accuracyStandards.pointDensityPerM2).toBeGreaterThan(2);
   });
 
+  it('surfaces a uniform-stride caveat when the density (and QL) is scaled', () => {
+    // Numerical-honesty guard: a stride-scaled density feeds the USGS QL
+    // threshold, so the run MUST disclose that the grade rests on a uniform-
+    // stride extrapolation — the same honesty the space-scan path gives. The
+    // caveat rides result.warnings, which the exported PDF report surfaces.
+    const quarter = strided(full, 4);
+    const scaled = analyseContours(quarter, {
+      cellSizeM: CELL,
+      crs: 'EPSG:32611',
+      samplePointScale: 4,
+    });
+    expect(scaled.warnings.some((w) => w.includes('uniform-stride assumption'))).toBe(true);
+    expect(scaled.warnings.some((w) => /USGS 3DEP Quality Level/.test(w))).toBe(true);
+  });
+
+  it('does NOT add the stride caveat for an un-strided (scale 1) run', () => {
+    // No striding → the density is directly counted, so no caveat is warranted;
+    // emitting one anyway would cry wolf on a full-resolution scan.
+    const r = analyseContours(full, { cellSizeM: CELL, crs: 'EPSG:32611' });
+    expect(r.warnings.some((w) => w.includes('uniform-stride assumption'))).toBe(false);
+    const r1 = analyseContours(full, { cellSizeM: CELL, crs: 'EPSG:32611', samplePointScale: 1 });
+    expect(r1.warnings.some((w) => w.includes('uniform-stride assumption'))).toBe(false);
+  });
+
   it('determinism: the same strided input + scale twice → identical summaries', () => {
     const quarter = strided(full, 4);
     const a = analyseContours(quarter, { cellSizeM: CELL, crs: 'EPSG:32611', samplePointScale: 4 });
