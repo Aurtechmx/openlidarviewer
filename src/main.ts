@@ -2303,7 +2303,15 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   const isNonTerrain = plan.showObjectPanel;
   if (isNonTerrain && shape && gathered) {
     const activeCloud = activeId ? viewer.getCloud(activeId) : null;
-    const hasRgb = !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+    // RGB presence: a STREAMING COPC/EPT carries its colours in the streamed
+    // nodes, not the static `activeCloud.colors`, so checking the static buffer
+    // reports "No" for a PDRF 7/8 colour scan. Ask the streaming cloud's own
+    // colour capabilities (the same source the COLOUR rail uses), and only fall
+    // back to the static buffer for a non-streaming cloud.
+    const streamingCloud = viewer.streamingCloud;
+    const hasRgb = streamingCloud
+      ? streamingCloud.availableColorModes().includes('rgb')
+      : !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
     // Compute REAL metrics for the EFFECTIVE type — when forced, the report
     // reflects what's actually there for that interpretation; nothing fabricated.
     // Feed the active scan's linear-unit-to-metres factor so a foot-based CRS
