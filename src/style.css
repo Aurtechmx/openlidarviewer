@@ -1082,6 +1082,12 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-tool:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-tool:disabled { opacity: 0.4; }
+/* Icon + label dock buttons — a leading glyph, then the text (kept visible:
+ * icon-only toolbars measurably hurt first-time users). The glyph inherits
+ * the button's colour so active/hover/destructive states recolour for free. */
+.olv-tool-ico { display: inline-flex; align-items: center; gap: var(--space-sm); }
+.olv-tool-ico svg { width: 15px; height: 15px; flex: none; display: block; }
+.olv-tool-label { white-space: nowrap; }
 /* "More" disclosure surfaces secondary tools (Snapshot, Help) on phones
    where they're hidden by default. On desktop every tool is visible, so
    the More toggle has no role — keep it out of the way. */
@@ -2825,7 +2831,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border: 0.5px solid rgba(0, 178, 255, 0.22);
   border-radius: var(--radius-pill); padding: var(--space-md) var(--space-xs);
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
-  width: max-content; max-width: 52px;
+  width: max-content; max-width: 70px;
   /* Visible overflow so the right-side hover tooltips are never clipped. */
   max-height: calc(100vh - 96px); overflow: visible;
 }
@@ -2919,14 +2925,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * tech (aria-label). The action controls pair a glyph with a small label.
  * On phones these reflow into a vertical left rail (see the mobile block). */
 .olv-mkind-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; padding: 0;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; width: auto; min-width: 48px; padding: var(--space-2xs) var(--space-xs);
 }
 .olv-mkind-icon svg { width: 20px; height: 20px; display: block; }
+/* The kind name is a VISIBLE caption under the glyph (evidence: unlabeled icon
+ * tools fail first-time users, and hover tooltips don't work on touch). */
 .olv-mkind-icon .olv-mkind-name {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
-  border: 0;
+  font-size: 8px; line-height: 1; letter-spacing: 0.02em;
+  color: inherit; white-space: nowrap;
 }
 /* Action buttons (Undo / Metric / Done / Finish / Clear): glyph over label. */
 .olv-micon-btn {
@@ -3540,6 +3547,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-cl-solo:hover { color: var(--text); border-color: var(--accent); }
 .olv-cl-solo:focus-visible { outline: none; border-color: var(--accent); }
+/* Solo as a glyph + label (isolate "stacked layers" mark before the word). */
+.olv-cl-solo-ico { display: inline-flex; align-items: center; gap: 4px; }
+.olv-cl-solo-ico svg { width: 12px; height: 12px; flex: none; display: block; }
 .olv-cl-empty { font-size: 11.5px; color: var(--text-faint); }
 .olv-cl-footer {
   display: flex; gap: 6px;
@@ -4349,9 +4359,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     justify-content: center;            /* float the tools at the rail's middle */
     gap: var(--space-sm);
     width: max-content;
-    max-width: 60px;
+    max-width: 72px;
     padding: var(--space-sm) var(--space-2xs);
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-lg);
     /* Premium glass — translucent, blurred, hairline-bordered, soft-shadowed. */
     background: rgba(11, 17, 33, 0.72);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
@@ -4372,9 +4382,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     overflow: visible;
     -webkit-mask-image: none; mask-image: none;
   }
-  /* The square icon tools — 40px touch targets, glyph only. */
-  .olv-mkind-icon { width: 40px; height: 40px; border-radius: var(--radius-md); }
+  /* Icon-over-label tools — glyph + tiny caption, comfortable tap target. */
+  .olv-mkind-icon { min-width: 56px; padding: var(--space-xs) var(--space-2xs); border-radius: var(--radius-md); }
   .olv-mkind-icon svg { width: 22px; height: 22px; }
+  .olv-mkind-icon .olv-mkind-name { font-size: 9px; }
   /* On a phone the on-canvas pending-dot pulse carries the "tap next point"
      guidance, so the instruction pill is dropped to keep the rail uncluttered
      (touch has no hover tooltip to compete with anyway). */
@@ -4392,13 +4403,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     -webkit-mask-image: none; mask-image: none;
   }
   .olv-measure-done { margin-left: 0; }
-  /* Action icon buttons: compact icon-over-label, same 40px column width. */
+  /* Action icon buttons: compact icon-over-label, matching the tool width. */
   .olv-micon-btn {
-    width: 40px; padding: var(--space-2xs) 0;
+    min-width: 56px; padding: var(--space-2xs) var(--space-2xs);
     border-radius: var(--radius-md);
   }
   .olv-micon-btn svg { width: 18px; height: 18px; }
-  .olv-micon-btn .olv-mlabel { font-size: 8px; }
+  .olv-micon-btn .olv-mlabel { font-size: 9px; }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -4958,6 +4969,9 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-export-panel .olv-panel-title {
   font-size: var(--text-sm); font-weight: 600; color: var(--text); margin: 0;
 }
+/* Icon + label panel title — a download/export glyph before the words. */
+.olv-panel-title-ico { display: inline-flex; align-items: center; gap: var(--space-sm); }
+.olv-panel-title-ico svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
 /* The chevron sits in a small bordered chip — an unmistakable, button-like
    target that lifts to accent on hover/focus and never disappears on desktop
    (overrides the global `.olv-collapse-toggle { display: none }`). */

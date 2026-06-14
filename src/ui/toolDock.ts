@@ -1,4 +1,16 @@
 import { el } from './dom';
+import {
+  ICON_FRAME,
+  ICON_SNAPSHOT,
+  ICON_LINK,
+  ICON_HELP,
+  ICON_MEASURE,
+  ICON_INSPECT,
+  ICON_PROBE,
+  ICON_ANNOTATE,
+  ICON_ANALYSE,
+  ICON_CLOSE,
+} from './dockIcons';
 
 /**
  * The user-facing label for the "copy a link that reproduces the
@@ -57,6 +69,7 @@ export class ToolDock {
       'Frame',
       'Fit the whole scan back in view — also the R key',
       false,
+      ICON_FRAME,
     );
     frame.classList.add('olv-tool-frame');
     frame.addEventListener('click', callbacks.onFrameAll);
@@ -65,6 +78,7 @@ export class ToolDock {
       'Snapshot',
       'Save the current view as a PNG image — placed measurements and annotations included',
       false,
+      ICON_SNAPSHOT,
     );
     snapshot.classList.add('olv-tool-snapshot');
     snapshot.addEventListener('click', callbacks.onSnapshot);
@@ -83,6 +97,7 @@ export class ToolDock {
       'Copies the camera angle and view settings — not the scan itself. ' +
         'The recipient needs to open the same file first.',
       false,
+      ICON_LINK,
     );
     this._share.addEventListener('click', () => {
       this._share.blur();
@@ -90,7 +105,12 @@ export class ToolDock {
       this._flashShare();
     });
 
-    const help = this._tool('Help', 'Workflows, navigation and keyboard shortcuts — also the ? key', false);
+    const help = this._tool(
+      'Help',
+      'Workflows, navigation and keyboard shortcuts — also the ? key',
+      false,
+      ICON_HELP,
+    );
     help.classList.add('olv-tool-help');
     help.addEventListener('click', () => {
       help.blur();
@@ -98,7 +118,7 @@ export class ToolDock {
     });
 
     // Measure starts disabled — enabled by setMeasureEnabled once a scan loads.
-    this._measure = this._tool('Measure', 'Load a scan to enable measurement', true);
+    this._measure = this._tool('Measure', 'Load a scan to enable measurement', true, ICON_MEASURE);
     // Stable hook for the onboarding tour's spotlight (v0.4.5) — the tour's
     // only other selector keys off the tooltip text, which changes with
     // enablement, so the spotlight used to miss the disabled button.
@@ -109,7 +129,7 @@ export class ToolDock {
     });
 
     // Inspect starts disabled — enabled by setInspectEnabled once a scan loads.
-    this._inspect = this._tool('Inspect', 'Load a scan to enable inspection', true);
+    this._inspect = this._tool('Inspect', 'Load a scan to enable inspection', true, ICON_INSPECT);
     this._inspect.addEventListener('click', () => {
       this._inspect.blur();
       callbacks.onInspectToggle();
@@ -117,7 +137,7 @@ export class ToolDock {
 
     // Probe starts disabled — enabled by setProbeEnabled once a scan loads.
     // It is a desktop-only hover affordance; CSS hides the button on phones.
-    this._probe = this._tool('Probe', 'Load a scan to enable the live probe', true);
+    this._probe = this._tool('Probe', 'Load a scan to enable the live probe', true, ICON_PROBE);
     this._probe.classList.add('olv-tool-probe');
     this._probe.addEventListener('click', () => {
       this._probe.blur();
@@ -125,7 +145,7 @@ export class ToolDock {
     });
 
     // Annotate starts disabled — enabled by setAnnotateEnabled once a scan loads.
-    this._annotate = this._tool('Annotate', 'Load a scan to enable annotation', true);
+    this._annotate = this._tool('Annotate', 'Load a scan to enable annotation', true, ICON_ANNOTATE);
     this._annotate.addEventListener('click', () => {
       this._annotate.blur();
       callbacks.onAnnotateToggle();
@@ -134,7 +154,7 @@ export class ToolDock {
     // Analyse re-opens the Terrain analysis panel. The panel can be closed
     // (e.g. selecting the Profile measurement tucks it away to free the
     // canvas), so a dock toggle guarantees a one-click way back to it.
-    this._analyse = this._tool('Analyse', 'Load a scan to enable terrain analysis', true);
+    this._analyse = this._tool('Analyse', 'Load a scan to enable terrain analysis', true, ICON_ANALYSE);
     this._analyse.classList.add('olv-tool-analyse');
     this._analyse.addEventListener('click', () => {
       this._analyse.blur();
@@ -156,7 +176,7 @@ export class ToolDock {
 
     // Close starts disabled — enabled by setCloseEnabled once a scan loads.
     // It clears the current scan and returns to the empty state.
-    this._close = this._tool('Close', 'Load a scan to enable', true);
+    this._close = this._tool('Close', 'Load a scan to enable', true, ICON_CLOSE);
     this._close.classList.add('olv-tool-close');
     this._close.addEventListener('click', () => {
       this._close.blur();
@@ -323,15 +343,35 @@ export class ToolDock {
   /** Briefly confirm a share link was copied, then restore the label. */
   private _flashShare(): void {
     if (this._shareTimer !== undefined) window.clearTimeout(this._shareTimer);
-    this._share.textContent = 'Link copied';
+    this._setToolLabel(this._share, 'Link copied');
     this._shareTimer = window.setTimeout(() => {
-      this._share.textContent = COPY_VIEW_LINK_LABEL;
+      this._setToolLabel(this._share, COPY_VIEW_LINK_LABEL);
       this._shareTimer = undefined;
     }, 2000);
   }
 
-  private _tool(label: string, title: string, disabled: boolean): HTMLButtonElement {
-    const button = el('button', { className: 'olv-tool', text: label, title });
+  /** Update a tool's text without disturbing its leading icon glyph. */
+  private _setToolLabel(button: HTMLButtonElement, text: string): void {
+    const span = button.querySelector('.olv-tool-label');
+    if (span) span.textContent = text;
+    else button.textContent = text;
+  }
+
+  private _tool(
+    label: string,
+    title: string,
+    disabled: boolean,
+    icon?: string,
+  ): HTMLButtonElement {
+    // Icon + visible label (evidence: icon-only toolbars hurt first-time
+    // users). The label lives in its own span so transient text swaps (e.g.
+    // the share button's "Link copied") update the text without wiping the
+    // glyph.
+    const button = el('button', {
+      className: icon ? 'olv-tool olv-tool-ico' : 'olv-tool',
+      unsafeHtml: (icon ?? '') + `<span class="olv-tool-label">${label}</span>`,
+      title,
+    });
     button.disabled = disabled;
     return button;
   }

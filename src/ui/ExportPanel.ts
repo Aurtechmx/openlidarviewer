@@ -59,7 +59,15 @@ export class ExportPanel {
     this._cb = callbacks;
     this.element = el('section', { className: 'olv-export-panel' });
 
-    const title = el('div', { className: 'olv-panel-title', text: 'Export / Convert' });
+    const title = el('div', {
+      className: 'olv-panel-title olv-panel-title-ico',
+      unsafeHtml:
+        '<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" ' +
+        'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>' +
+        '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/></svg>' +
+        '<span>Export / Convert</span>',
+    });
     const chevron = el('span', { className: 'olv-chevron', text: '▾' });
     const collapseBtn = el('button', { className: 'olv-collapse-toggle', title: 'Collapse this panel' });
     collapseBtn.setAttribute('type', 'button');

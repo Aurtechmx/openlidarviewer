@@ -21,6 +21,20 @@
 
 import { el } from './dom';
 import { ClassVisibility } from '../render/class/classVisibility';
+
+/**
+ * "Solo" / isolate glyph — three stacked layers with the top one solid and the
+ * lower two faint, reading as "show only this layer". Paired with the visible
+ * word "Solo" (there is no universal icon for solo, so the label carries the
+ * meaning; the glyph just reinforces it and matches the app-wide icon+label
+ * vocabulary).
+ */
+const ICON_SOLO =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" ' +
+  'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M12 3 20 7 12 11 4 7Z" fill="currentColor" stroke="none"/>' +
+  '<path d="M4 11l8 4 8-4" stroke-opacity="0.4"/>' +
+  '<path d="M4 15l8 4 8-4" stroke-opacity="0.4"/></svg>';
 import { classColor } from '../render/colorModes';
 import { classificationLabel } from '../render/pointInfo';
 
@@ -247,8 +261,8 @@ export class ClassLegendPanel {
     // Solo — isolate this one class. ClassVisibility.isolate hides every other
     // code, so any later-arriving class stays hidden until the user shows all.
     const solo = el('button', {
-      className: 'olv-cl-solo',
-      text: 'Solo',
+      className: 'olv-cl-solo olv-cl-solo-ico',
+      unsafeHtml: ICON_SOLO + '<span class="olv-cl-solo-label">Solo</span>',
       title: `Show only ${name}`,
       ariaLabel: `Show only ${name}`,
     });
