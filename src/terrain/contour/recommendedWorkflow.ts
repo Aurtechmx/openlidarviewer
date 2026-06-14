@@ -57,21 +57,29 @@ export interface WorkflowItem {
  */
 export function recommendedWorkflows(
   assessment: TerrainAssessment,
-  _gate?: DtmQualityReport,
+  gate?: DtmQualityReport,
 ): WorkflowItem[] {
   const grades = productGradesFor(assessment.status, assessment.exportReadiness);
-  const surface = grades.inspection.status;
   const exportGrade = grades.deliverable.status;
   const note = grades.deliverable.note;
 
   const item = (label: string, status: WorkflowItem['status'], n?: string): WorkflowItem =>
     n != null ? { label, status, note: n } : { label, status };
 
+  // A resident-only analysis is a PARTIAL stream: only the streamed-in nodes
+  // were walked, so even the inspection-class workflows are provisional. Don't
+  // promote them to a confident ✓ — hold them at caution (⚠) with an honest
+  // qualifier. The deliverable rows are already gated by export readiness.
+  const partialStream = gate?.coverageMode === 'resident-only';
+  const surface: WorkflowItem['status'] =
+    partialStream && grades.inspection.status === 'good' ? 'caution' : grades.inspection.status;
+  const surfaceNote = partialStream && surface === 'caution' ? 'preliminary — partial stream' : undefined;
+
   return [
     // Inspection-class — keyed off Surface Quality.
-    item('Profile analysis', surface),
-    item('Measurement review', surface),
-    item('Surface sampling / inspection', surface),
+    item('Profile analysis', surface, surfaceNote),
+    item('Measurement review', surface, surfaceNote),
+    item('Surface sampling / inspection', surface, surfaceNote),
     // Deliverable-class — keyed off Export Readiness (+ the contour gate upstream).
     item('DEM export', exportGrade, note),
     item('Contour generation', exportGrade, note),

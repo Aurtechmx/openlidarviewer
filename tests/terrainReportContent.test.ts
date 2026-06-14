@@ -339,14 +339,15 @@ describe('buildTerrainReportContent — Good + Ready scan', () => {
 });
 
 describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
-  it('marks every product Preview, each row quoting the figure-bearing surface reason in full', () => {
-    // Hand-computed: this fixture grades the SURFACE 'Limited' (two poor
-    // supporting metrics — DTM quality 41/100 and ~50% interpolation), so the
-    // inspection-class rows are caution → Preview, and the deliverable-class
-    // rows key off export readiness (Preview). On a sub-Good surface the
-    // engine's productReasonFor selects the assessment's figure-quoting
-    // surface line for BOTH classes — more specific than the generic
-    // "preview only — additional validation recommended" workflow note.
+  it('marks every product Preview on a partial stream, each row quoting the verdict reason in full', () => {
+    // This fixture is a resident-only PARTIAL STREAM (high interpolation, datum
+    // unknown). A partial stream is preliminary, so the inspection-class rows
+    // are held at caution → Preview (not promoted to a confident Available) and
+    // the deliverable-class rows key off export readiness (Preview). The verdict
+    // reason leads with the honest "Preliminary — only the streamed-in part …"
+    // framing rather than the sparse streaming figures (which still live in the
+    // supporting metrics + Why details). Each product row quotes that same
+    // verdict reason, byte-identical.
     const result = previewResult();
     const c = buildTerrainReportContent(result, OPTS);
     expect(c.products.length).toBe(6);
@@ -355,9 +356,8 @@ describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
       expect(p.availability).toBe('Preview');
       // The SAME engine string the panel renders, byte-identical and whole.
       expect(p.note).toBe(a.reason);
-      expect(p.note).toMatch(/Insufficient quality/);
-      // The reason QUOTES the measured figure (50% interpolated here).
-      expect(p.note).toMatch(/50% of the surface is interpolated/);
+      expect(p.note).toMatch(/Preliminary/);
+      expect(p.note).toMatch(/stream/i);
     }
   });
 
