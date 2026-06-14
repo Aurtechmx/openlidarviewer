@@ -4212,15 +4212,46 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* Chevron rotates 180° when collapsed so it points down → up to read
      as "expand" affordance. */
   .olv-collapsed .olv-chevron { transform: rotate(180deg); }
-  /* When collapsed, the panel shrinks to just the head — tighter padding
-     so it reads as a pill-sized chip rather than a half-rendered panel. */
+  /* When collapsed, the panel shrinks to just the head — a slim pill sized to
+     its own label, not the full panel width, so it stops hogging the top of a
+     phone. Tighter padding + a smaller title read as a chip, not a card. */
   .olv-streaming-panel.olv-collapsed,
   .olv-measure-panel.olv-collapsed,
   .olv-class-panel.olv-collapsed,
   .olv-anno-panel.olv-collapsed {
-    padding: var(--space-sm) var(--space-xl);
+    padding: var(--space-2xs) var(--space-lg);
     max-height: none;
+    width: max-content;
+    max-width: calc(100vw - 28px);
   }
+  .olv-streaming-panel.olv-collapsed .olv-streaming-title,
+  .olv-streaming-panel.olv-collapsed .olv-panel-head { font-size: var(--text-xs); }
+  .olv-streaming-panel.olv-collapsed .olv-streaming-phase { display: none; }
+
+  /* Measure toolbar — on a phone the kind buttons used to wrap into a 3-row
+     grid that blanketed the upper half of the view the moment Measure was
+     active. Make them ONE swipeable row and tighten the bar so it stops
+     blocking the scan. */
+  .olv-measure-bar {
+    top: calc(52px + env(safe-area-inset-top));
+    /* Stays centred (base rule) — just tighter so it reads as a slim bar. */
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    max-width: calc(100vw - 16px);
+  }
+  .olv-mkinds {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: flex-start;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+  }
+  .olv-mkinds::-webkit-scrollbar { display: none; }
+  .olv-mkind { flex: 0 0 auto; }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
