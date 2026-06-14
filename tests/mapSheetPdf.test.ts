@@ -8,6 +8,7 @@ import {
   readinessNote,
   wrapTextToWidth,
   scaleBarUnit,
+  mapLinearUnitLabel,
 } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 import { demAccuracyStandards } from '../src/terrain/quality/demAccuracyStandards';
@@ -59,6 +60,18 @@ describe('scaleBarUnit — label follows the source CRS (label-vs-value)', () =>
   it('keeps the metre default for an unresolved (unknown) unit (back-compat)', () => {
     expect(scaleBarUnit(200, 'unknown')).toEqual({ unit: 'm', divisor: 1 });
     expect(scaleBarUnit(2000, 'unknown')).toEqual({ unit: 'km', divisor: 1000 });
+  });
+});
+
+describe('mapLinearUnitLabel — contour-interval unit matches the scale bar', () => {
+  it('reads "m" for metric, unknown, and undefined (the standing default)', () => {
+    expect(mapLinearUnitLabel('metre')).toBe('m');
+    expect(mapLinearUnitLabel('unknown')).toBe('m');
+    expect(mapLinearUnitLabel(undefined)).toBe('m');
+  });
+  it('reads "ft" for both foot variants', () => {
+    expect(mapLinearUnitLabel('foot')).toBe('ft');
+    expect(mapLinearUnitLabel('us-survey-foot')).toBe('ft');
   });
 });
 

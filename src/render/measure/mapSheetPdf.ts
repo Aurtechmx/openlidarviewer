@@ -173,6 +173,17 @@ export function scaleBarUnit(
   return { unit: groupKm ? 'km' : 'm', divisor: groupKm ? 1000 : 1 };
 }
 
+/**
+ * The plain linear-unit label (ft / m) for the SOURCE units the map is drawn
+ * in. Single-sourced so the contour-interval row, the scale bar and the notes
+ * never disagree about the unit. A non-georeferenced scan is still treated as
+ * metric (the app's standing default everywhere — measurements, scale bar), so
+ * the interval reads "0.5 m", not a hedged "(units)".
+ */
+export function mapLinearUnitLabel(linearUnit: MapSheetInput['linearUnit']): string {
+  return linearUnit === 'foot' || linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+}
+
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
 function safe(s: string): string {
   const map: Record<string, string> = {
@@ -251,13 +262,21 @@ function drawMap(
   const stepX = niceStep(worldMaxX - worldMinX, 5);
   const stepY = niceStep(worldMaxY - worldMinY, 5);
   const labelGrid = input.worldOrigin != null;
+  // Only a truly georeferenced scan has a real east/north + true north. When it
+  // isn't, the graticule labels drop the "E"/"N" compass suffix (the numbers
+  // are local-frame coordinates) and the north arrow is omitted — claiming a
+  // compass direction on ungeoreferenced data would be an overclaim.
+  const prov = input.provenance;
+  const georef = prov
+    ? prov.crsKnown
+    : input.crs != null && input.crs.trim() !== '' && !/not\s*georef/i.test(input.crs);
   for (const wx of gridTicks(worldMinX, worldMaxX, stepX)) {
     const px = pageX(wx - origin.x);
     if (px < inner.x || px > inner.x + inner.w) continue;
     page.drawLine({ start: { x: px, y: frame.y }, end: { x: px, y: frame.y + 6 }, thickness: 0.5, color: FRAME });
     page.drawLine({ start: { x: px, y: frame.y + frame.h }, end: { x: px, y: frame.y + frame.h - 6 }, thickness: 0.5, color: FRAME });
     if (labelGrid) {
-      const s = `${Math.round(wx)}E`;
+      const s = georef ? `${Math.round(wx)}E` : `${Math.round(wx)}`;
       page.drawText(safe(s), { x: px - font.widthOfTextAtSize(s, 6) / 2, y: frame.y + frame.h + 2, size: 6, font, color: DIM });
     }
   }
@@ -267,7 +286,7 @@ function drawMap(
     page.drawLine({ start: { x: frame.x, y: py }, end: { x: frame.x + 6, y: py }, thickness: 0.5, color: FRAME });
     page.drawLine({ start: { x: frame.x + frame.w, y: py }, end: { x: frame.x + frame.w - 6, y: py }, thickness: 0.5, color: FRAME });
     if (labelGrid) {
-      const s = `${Math.round(wy)}N`;
+      const s = georef ? `${Math.round(wy)}N` : `${Math.round(wy)}`;
       page.drawText(safe(s), { x: frame.x - 2 - font.widthOfTextAtSize(s, 6), y: py - 3, size: 6, font, color: DIM });
     }
   }
@@ -311,13 +330,15 @@ function drawMap(
     page.drawText(s, { x: px - w / 2, y: py - sz / 2 + 1, size: sz, font: bold, color: SEPIA_INDEX, rotate: degrees(deg) });
   }
 
-  // ── north arrow (top-right inside frame) ─────────────────────────────────
-  const nx = frame.x + frame.w - 22;
-  const ny = frame.y + frame.h - 30;
-  page.drawSvgPath(`M ${nx} ${PH - (ny + 14)} L ${nx - 5} ${PH - (ny - 6)} L ${nx} ${PH - (ny - 2)} L ${nx + 5} ${PH - (ny - 6)} Z`, {
-    x: 0, y: PH, color: INK, borderColor: INK, borderWidth: 0.5,
-  });
-  page.drawText('N', { x: nx - bold.widthOfTextAtSize('N', 8) / 2, y: ny - 18, size: 8, font: bold, color: INK });
+  // ── north arrow (top-right inside frame) — only when georeferenced ────────
+  if (georef) {
+    const nx = frame.x + frame.w - 22;
+    const ny = frame.y + frame.h - 30;
+    page.drawSvgPath(`M ${nx} ${PH - (ny + 14)} L ${nx - 5} ${PH - (ny - 6)} L ${nx} ${PH - (ny - 2)} L ${nx + 5} ${PH - (ny - 6)} Z`, {
+      x: 0, y: PH, color: INK, borderColor: INK, borderWidth: 0.5,
+    });
+    page.drawText('N', { x: nx - bold.widthOfTextAtSize('N', 8) / 2, y: ny - 18, size: 8, font: bold, color: INK });
+  }
 
   // ── scale bar (bottom-left inside frame) ─────────────────────────────────
   const bar = scaleBar(t.scale, 150);
@@ -372,7 +393,22 @@ function drawTitleBlock(
 
   // Left column — identity + reference frame.
   const lx = M + 4;
-  text(input.title ?? 'Contour Map', lx, topY - 16, 14, bold);
+  // The title must not collide with the Legend column (which starts at the
+  // 0.46 fraction). A long filename is shrunk to fit, then ellipsised at the
+  // floor size — so it degrades gracefully instead of running over the legend.
+  const titleStr = input.title ?? 'Contour Map';
+  const titleMaxW = M + (PW - 2 * M) * 0.46 - lx - 12;
+  let titleSize = 14;
+  while (titleSize > 9 && bold.widthOfTextAtSize(safe(titleStr), titleSize) > titleMaxW) {
+    titleSize -= 0.5;
+  }
+  let titleDraw = titleStr;
+  if (bold.widthOfTextAtSize(safe(titleDraw), titleSize) > titleMaxW) {
+    titleDraw =
+      wrapTextToWidth(titleStr, titleMaxW, titleSize, (s, sz) => bold.widthOfTextAtSize(safe(s), sz), 1)[0] ??
+      titleStr;
+  }
+  text(titleDraw, lx, topY - 16, titleSize, bold);
   const interval = prov?.contourIntervalM ?? input.model.intervalM;
   // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
   // on a foot CRS (the map is drawn in source units). 1 for metric / unknown.
@@ -394,7 +430,7 @@ function drawTitleBlock(
   const rows: Array<[string, string]> = [
     ['Horizontal CRS', crsStr],
     ['Vertical datum', datumStr],
-    ['Contour interval', interval != null && Number.isFinite(interval) ? `${interval} ${prov?.crsKnown ?? input.crs ? '' : '(units)'}`.trim() : '—'],
+    ['Contour interval', interval != null && Number.isFinite(interval) ? `${interval} ${mapLinearUnitLabel(input.linearUnit)}` : '—'],
     ['Approx. scale', scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—'],
     ['Generated', generatedStr],
     ['Prepared by', input.preparedBy ?? '—'],
