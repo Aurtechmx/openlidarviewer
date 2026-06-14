@@ -1113,17 +1113,36 @@ button:disabled { cursor: not-allowed; }
 
 /* Developer performance overlay (?debug=1) */
 .olv-debug {
-  position: absolute; top: 14px; left: 14px; z-index: 70;
-  max-width: 320px;
+  /* Bottom-RIGHT, clear of the top-left Analyse panel (the surface a developer
+     reads this overlay to debug) and the bottom-left tool dock. The body is
+     pointer-events:none so clicks fall through to whatever sits under it; only
+     the title bar is interactive (the collapse toggle). */
+  position: absolute; top: auto; left: auto; bottom: 14px; right: 14px;
+  z-index: 70;
+  max-width: 320px; max-height: 60vh; overflow-y: auto;
   background: rgba(10, 14, 26, 0.92);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-lg) var(--space-xl);
   pointer-events: none;
 }
 .olv-debug-title {
+  /* A real <button>: reset the chrome, keep it clickable while the rest of the
+     overlay ignores pointer events, and lay out the label + caret as a row. */
+  pointer-events: auto;
+  cursor: pointer;
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-md);
+  background: none; border: 0; padding: 0; margin: 0 0 var(--space-sm);
+  text-align: left;
   font-size: var(--text-xs); font-weight: 600; color: var(--accent);
-  margin-bottom: var(--space-sm);
+  -webkit-tap-highlight-color: transparent;
 }
+.olv-debug-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-debug-caret { transition: transform 160ms ease; font-size: 0.9em; }
+.olv-debug.is-collapsed .olv-debug-caret { transform: rotate(-90deg); }
+.olv-debug.is-collapsed { max-height: none; overflow: visible; }
+.olv-debug.is-collapsed .olv-debug-body { display: none; }
+.olv-debug.is-collapsed .olv-debug-title { margin-bottom: 0; }
 .olv-debug-label {
   font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase;
   color: var(--text-faint);

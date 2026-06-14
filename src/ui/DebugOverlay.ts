@@ -116,8 +116,22 @@ export class DebugOverlay {
     });
     this._benchmark = el('pre', { className: 'olv-debug-block olv-hidden' });
 
-    this.element = el('div', { className: 'olv-debug' }, [
-      el('div', { className: 'olv-debug-title', text: 'OpenLiDARViewer · debug' }),
+    // The title doubles as a collapse toggle: the overlay sits over the
+    // top-left Analyse panel, so a developer reading it needs to tuck it out of
+    // the way to reach the panel's verdict + "Re-run analysis". Collapsed, only
+    // this one-line bar remains (clearing the panel below); a caret shows state.
+    const caret = el('span', { className: 'olv-debug-caret', text: '▾' });
+    caret.setAttribute('aria-hidden', 'true');
+    const title = el('button', {
+      className: 'olv-debug-title',
+      type: 'button',
+      ariaLabel: 'Collapse debug overlay',
+    }, [el('span', { text: 'OpenLiDARViewer · debug' }), caret]);
+    title.setAttribute('aria-expanded', 'true');
+    title.addEventListener('click', () => this.toggleCollapsed());
+    this._title = title;
+
+    this._body = el('div', { className: 'olv-debug-body' }, [
       el('div', { className: 'olv-debug-label', text: 'rendering' }),
       this._live,
       this._streamingLabel,
@@ -126,6 +140,24 @@ export class DebugOverlay {
       this._telemetry,
       this._benchmark,
     ]);
+
+    this.element = el('div', { className: 'olv-debug' }, [title, this._body]);
+  }
+
+  private _title!: HTMLButtonElement;
+  private _body!: HTMLElement;
+  private _collapsed = false;
+
+  /** Collapse to just the title bar, or expand back. */
+  toggleCollapsed(): void {
+    this.setCollapsed(!this._collapsed);
+  }
+
+  setCollapsed(collapsed: boolean): void {
+    this._collapsed = collapsed;
+    this.element.classList.toggle('is-collapsed', collapsed);
+    this._title.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    this._title.setAttribute('aria-label', collapsed ? 'Expand debug overlay' : 'Collapse debug overlay');
   }
 
   /** Begin polling the sampler. Idempotent. */
