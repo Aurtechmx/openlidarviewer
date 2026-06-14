@@ -14,6 +14,14 @@
 
 import type * as THREE from 'three/webgpu';
 import { el } from '../../ui/dom';
+import {
+  KIND_ICON,
+  ICON_UNDO,
+  ICON_UNITS,
+  ICON_DONE,
+  ICON_FINISH,
+  ICON_CLEAR,
+} from './measureIcons';
 import type { Vec3 } from '../navMath';
 import type {
   Measurement,
@@ -359,9 +367,10 @@ export class MeasureController {
     const kindRow = el('div', { className: 'olv-mkinds' });
     for (const k of KIND_ORDER) {
       const btn = el('button', {
-        className: 'olv-mkind',
-        text: KIND_LABEL[k],
+        className: 'olv-mkind olv-mkind-icon',
+        unsafeHtml: KIND_ICON[k] + `<span class="olv-mkind-name">${KIND_LABEL[k]}</span>`,
         title: KIND_TITLE[k],
+        ariaLabel: KIND_LABEL[k],
       });
       btn.addEventListener('click', () => {
         btn.blur();
@@ -386,9 +395,10 @@ export class MeasureController {
     this._hintEl = el('span', { className: 'olv-measure-hint-text' });
 
     const undoBtn = el('button', {
-      className: 'olv-measure-undo',
-      text: 'Undo point',
+      className: 'olv-measure-undo olv-micon-btn',
+      unsafeHtml: ICON_UNDO + '<span class="olv-mlabel">Undo</span>',
       title: 'Remove the last point you placed (or press Backspace).',
+      ariaLabel: 'Undo last point',
     });
     undoBtn.addEventListener('click', () => {
       undoBtn.blur();
@@ -400,40 +410,44 @@ export class MeasureController {
     // discoverability surface — desktop users with no tooltip
     // reading habit still see how to close the shape.
     this._finishBtn = el('button', {
-      className: 'olv-measure-finish olv-hidden',
-      text: 'Finish polygon',
+      className: 'olv-measure-finish olv-micon-btn olv-hidden',
+      unsafeHtml: ICON_FINISH + '<span class="olv-mlabel">Finish</span>',
       title:
         'Close the in-progress polygon and compute the result.\n' +
         '• Same as double-clicking the cloud or pressing Enter.',
+      ariaLabel: 'Finish polygon',
     });
     this._finishBtn.addEventListener('click', () => {
       this._finishBtn?.blur();
       this.finishCurrent();
     });
     this._clearBtn = el('button', {
-      className: 'olv-measure-clear olv-hidden',
-      text: 'Clear all',
+      className: 'olv-measure-clear olv-micon-btn olv-hidden',
+      unsafeHtml: ICON_CLEAR + '<span class="olv-mlabel">Clear</span>',
       title: 'Delete every measurement on the scan',
+      ariaLabel: 'Clear all measurements',
     });
     this._clearBtn.addEventListener('click', () => {
       this._clearBtn.blur();
       this.clear();
     });
     this._unitsBtn = el('button', {
-      className: 'olv-units-toggle',
-      text: 'Metric',
+      className: 'olv-units-toggle olv-micon-btn',
+      unsafeHtml: ICON_UNITS + '<span class="olv-mlabel">Metric</span>',
       title: 'Switch all readouts between metric and imperial units',
+      ariaLabel: 'Units: Metric',
     });
     this._unitsBtn.addEventListener('click', () => {
       this._unitsBtn.blur();
       this.setUnitSystem(this._units === 'metric' ? 'imperial' : 'metric');
     });
     const doneBtn = el('button', {
-      className: 'olv-measure-done',
-      text: 'Done',
+      className: 'olv-measure-done olv-micon-btn',
+      unsafeHtml: ICON_DONE + '<span class="olv-mlabel">Done</span>',
       title:
         'Done — finish the current measurement and return to navigation.\n' +
         '• Same as pressing Esc, or clicking the active kind a second time.',
+      ariaLabel: 'Done measuring',
     });
     doneBtn.addEventListener('click', () => {
       doneBtn.blur();
@@ -568,11 +582,13 @@ export class MeasureController {
     title: string,
     onClick: () => void,
     anchorKind?: MeasurementKind,
+    icon?: string,
   ): HTMLButtonElement {
     const btn = el('button', {
-      className: 'olv-mkind olv-mkind-aux',
-      text: label,
+      className: 'olv-mkind olv-mkind-icon olv-mkind-aux',
+      unsafeHtml: (icon ?? '') + `<span class="olv-mkind-name">${label}</span>`,
       title,
+      ariaLabel: label,
     });
     btn.addEventListener('click', () => {
       btn.blur();
@@ -766,7 +782,13 @@ export class MeasureController {
   /** Switch the unit system; every label re-formats on the next frame. */
   setUnitSystem(units: UnitSystem): void {
     this._units = units;
-    this._unitsBtn.textContent = units === 'metric' ? 'Metric' : 'Imperial';
+    const unitLabel = units === 'metric' ? 'Metric' : 'Imperial';
+    // The button holds an icon + a label span — update only the label so the
+    // glyph survives (textContent would wipe the SVG).
+    const labelSpan = this._unitsBtn.querySelector('.olv-mlabel');
+    if (labelSpan) labelSpan.textContent = unitLabel;
+    else this._unitsBtn.textContent = unitLabel;
+    this._unitsBtn.setAttribute('aria-label', `Units: ${unitLabel}`);
     this._updateHint();
     this._emitChange();
     this._onUnitChange?.();

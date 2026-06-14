@@ -40,6 +40,7 @@ import {
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
+import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
 import {
@@ -605,6 +606,7 @@ viewerLoaded.then((v) => {
     // input method for the Volume kind rather than a 10th
     // measurement kind.
     'volume',
+    ICON_LASSO,
   );
 });
 

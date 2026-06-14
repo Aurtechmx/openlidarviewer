@@ -2877,6 +2877,30 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-measure-finish:hover { background: rgba(0, 178, 255, 0.24); }
 .olv-measure-finish:active { transform: scale(0.96); }
+
+/* ── Icon-first measurement controls (v0.4.6) ──────────────────────────────
+ * The kind picker is now glyph-driven: a custom futuristic line-icon per
+ * measurement kind, with the text label kept in the DOM (`.olv-mkind-name`)
+ * but visually hidden — the name surfaces on hover (title) and to assistive
+ * tech (aria-label). The action controls pair a glyph with a small label.
+ * On phones these reflow into a vertical left rail (see the mobile block). */
+.olv-mkind-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+}
+.olv-mkind-icon svg { width: 20px; height: 20px; display: block; }
+.olv-mkind-icon .olv-mkind-name {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  border: 0;
+}
+/* Action buttons (Undo / Metric / Done / Finish / Clear): glyph over label. */
+.olv-micon-btn {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; line-height: 1.05;
+}
+.olv-micon-btn svg { width: 16px; height: 16px; display: block; }
+.olv-micon-btn .olv-mlabel { font-size: var(--text-2xs); }
 .olv-measure-finish:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
@@ -4237,55 +4261,79 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* Small, dim chevron — premium restraint on a chip. */
   .olv-collapsed .olv-chevron { font-size: var(--text-sm); }
 
-  /* Measure toolbar — slim, LEFT-anchored single strip that deliberately
-     reserves the top-right column where the collapsed Streaming pill lives,
-     so the two never collide. The kind buttons sit in ONE swipeable row; the
-     hint + action rows stay on a single tight line each. */
+  /* ── Measure toolbar → vertical icon RAIL (Photoshop / Blender pattern) ──
+     The top-stacked strip blanketed the scan on a phone. Here the toolbar
+     becomes a slim glass rail pinned to the LEFT edge and centred vertically:
+     a column of futuristic icon tools, a hairline divider, then the action
+     icons. The entire top of the canvas — and the Streaming chip's corner —
+     is left clear. */
   .olv-measure-bar {
-    top: calc(50px + env(safe-area-inset-top));
-    left: 8px; right: auto; transform: none;          /* left-anchor, no centring */
-    align-items: stretch;
-    gap: var(--space-2xs);
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-md);
-    max-width: calc(100vw - 142px);                   /* clear the Streaming chip */
-  }
-  .olv-mkinds,
-  .olv-measure-actions {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    justify-content: flex-start;
-    width: 100%;
-    gap: var(--space-2xs);
-    -webkit-overflow-scrolling: touch;
+    top: 88px; bottom: 96px; left: 8px; right: auto; transform: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;            /* float the tools at the rail's middle */
+    gap: var(--space-sm);
+    width: max-content;
+    max-width: 60px;
+    padding: var(--space-sm) var(--space-2xs);
+    border-radius: var(--radius-pill);
+    /* Premium glass — translucent, blurred, hairline-bordered, soft-shadowed. */
+    background: rgba(11, 17, 33, 0.72);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    border: 0.5px solid rgba(0, 178, 255, 0.22);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+    overflow-y: auto; overflow-x: hidden;
     scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent 100%);
-    mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent 100%);
   }
-  .olv-mkinds::-webkit-scrollbar,
-  .olv-measure-actions::-webkit-scrollbar { display: none; }
-  /* Shorter, thinner controls so the strip reads as a hairline bar, not a
-     slab — every measure button shrinks to the same compact footprint. */
-  .olv-mkind,
-  .olv-measure-undo,
-  .olv-measure-finish,
-  .olv-measure-clear,
-  .olv-units-toggle,
-  .olv-measure-done {
-    flex: 0 0 auto;
-    font-size: var(--text-2xs);
-    padding: var(--space-2xs) var(--space-sm);
-    border-radius: var(--radius-sm);
+  .olv-measure-bar::-webkit-scrollbar { display: none; }
+  /* Kind icons stack vertically; the scroll mask + horizontal rules drop. */
+  .olv-mkinds {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-xs);
+    width: auto;
+    overflow: visible;
+    -webkit-mask-image: none; mask-image: none;
   }
-  .olv-units-toggle { min-width: 0; }
-  /* In the swipeable actions row, cluster Done with its siblings instead of
-     letting the desktop `margin-left:auto` shove it past the scroll edge. */
+  /* The square icon tools — 40px touch targets, glyph only. */
+  .olv-mkind-icon { width: 40px; height: 40px; border-radius: var(--radius-md); }
+  .olv-mkind-icon svg { width: 22px; height: 22px; }
+  /* The dynamic instruction rides ABOVE the rail as a compact pill so it
+     never widens the column. (DOM order keeps it first; we lift + centre it.) */
+  .olv-measure-hint-row {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2xs);
+    order: -1;
+    max-width: 44px;
+  }
+  .olv-measure-hint-text { display: none; }     /* on-canvas dot pulse carries it */
+  .olv-measure-badge {
+    font-size: 8px; letter-spacing: 0.04em;
+    padding: 2px var(--space-sm);
+  }
+  /* Actions stack vertically below a hairline divider. */
+  .olv-measure-actions {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    width: auto;
+    overflow: visible;
+    margin-top: var(--space-2xs);
+    padding-top: var(--space-sm);
+    border-top: 0.5px solid var(--hairline);
+    -webkit-mask-image: none; mask-image: none;
+  }
   .olv-measure-done { margin-left: 0; }
-  /* Hint row: one tight line, smaller badge + text. */
-  .olv-measure-hint-row { gap: var(--space-sm); }
-  .olv-measure-hint-text { font-size: var(--text-xs); }
-  .olv-measure-badge { padding: 1px var(--space-sm); }
+  /* Action icon buttons: compact icon-over-label, same 40px column width. */
+  .olv-micon-btn {
+    width: 40px; padding: var(--space-2xs) 0;
+    border-radius: var(--radius-md);
+  }
+  .olv-micon-btn svg { width: 18px; height: 18px; }
+  .olv-micon-btn .olv-mlabel { font-size: 8px; }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
