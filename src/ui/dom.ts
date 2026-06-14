@@ -19,6 +19,8 @@ interface ElProps {
    */
   unsafeHtml?: string;
   title?: string;
+  /** Short label surfaced by the custom CSS tooltip (`data-tip`). */
+  tip?: string;
   href?: string;
   type?: string;
   ariaLabel?: string;
@@ -35,6 +37,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (props.text !== undefined) node.textContent = props.text;
   if (props.unsafeHtml !== undefined) node.innerHTML = props.unsafeHtml;
   if (props.title) node.title = props.title;
+  if (props.tip) node.dataset.tip = props.tip;
   if (props.ariaLabel) node.setAttribute('aria-label', props.ariaLabel);
   if (props.href && node instanceof HTMLAnchorElement) node.href = props.href;
   if (props.type && node instanceof HTMLInputElement) node.type = props.type;

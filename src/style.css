@@ -2107,7 +2107,23 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border: 0.5px solid rgba(0, 178, 255, 0.34);
   border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
 }
-.olv-measure-hint-row { display: flex; align-items: center; gap: var(--space-lg); }
+/*
+ * The live instruction ("Tap the first point…") floats as a glass pill just
+ * to the RIGHT of the rail, vertically centred — a status readout beside the
+ * tools rather than a row that widens the column. Absolutely positioned, so
+ * it never affects the rail's width.
+ */
+.olv-measure-hint-row {
+  position: absolute; left: calc(100% + 12px); top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex; align-items: center; gap: var(--space-sm);
+  white-space: nowrap; pointer-events: none;
+  background: rgba(11, 17, 33, 0.82);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(0, 178, 255, 0.24);
+  border-radius: var(--radius-pill); padding: var(--space-xs) var(--space-md);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
+}
 .olv-measure-badge {
   font-size: var(--text-2xs); color: var(--accent);
   background: var(--accent-soft);
@@ -2116,7 +2132,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   letter-spacing: 0.05em; text-transform: uppercase;
 }
 .olv-measure-hint-text { font-size: var(--text-sm); color: var(--text); }
-.olv-measure-actions { display: flex; gap: var(--space-sm); }
+.olv-measure-actions {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
+  margin-top: var(--space-2xs); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
 .olv-measure-clear, .olv-measure-done {
   font-size: var(--text-xs);
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
@@ -2789,16 +2809,30 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* ───────────────────────────────────────────────────────────────────────────
    Measurement toolbar (kind picker + actions) and the Measurements panel
    ─────────────────────────────────────────────────────────────────────────── */
+/*
+ * The measurement toolbar is a vertical icon RAIL pinned to the left edge and
+ * centred vertically (Photoshop / Blender pattern). A column of futuristic
+ * glyph tools, a hairline divider, then the action icons — the canvas top
+ * stays clear and the rail never fights the top-right panels. The live
+ * instruction floats as a pill beside the rail (see .olv-measure-hint-row).
+ */
 .olv-measure-bar {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-md);
-  background: rgba(11, 17, 33, 0.9);
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
-  border-radius: 12px; padding: var(--space-lg) var(--space-xl);
-  max-width: calc(100vw - 24px);
+  position: absolute; top: 50%; left: 14px; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-sm); z-index: 36;
+  background: rgba(11, 17, 33, 0.72);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border: 0.5px solid rgba(0, 178, 255, 0.22);
+  border-radius: var(--radius-pill); padding: var(--space-md) var(--space-xs);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+  width: max-content; max-width: 52px;
+  /* Visible overflow so the right-side hover tooltips are never clipped. */
+  max-height: calc(100vh - 96px); overflow: visible;
 }
-.olv-mkinds { display: flex; flex-wrap: wrap; gap: var(--space-xs); justify-content: center; }
+.olv-mkinds {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-xs);
+}
 .olv-mkind {
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
@@ -2857,7 +2891,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * clear, units) cluster left of the free-space gap, exit anchors
  * right (Gestalt continuity + proximity).
  */
-.olv-measure-done { margin-left: auto; }
+.olv-measure-done { margin-left: 0; }
 
 /*
  * Finish-polygon button — shown only while a polygon-kind draft has
@@ -2901,6 +2935,47 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-micon-btn svg { width: 16px; height: 16px; display: block; }
 .olv-micon-btn .olv-mlabel { font-size: var(--text-2xs); }
+
+/* ── Futuristic hover tooltip (custom, replaces the native title bubble) ────
+ * A glass readout that slides out to the RIGHT of each rail control, with a
+ * cyan hairline, mono type, a faint glow and a small diamond connector. Shown
+ * on hover and keyboard focus; hidden from touch (no hover) and from reduced-
+ * motion users' transitions. The accessible name still rides on aria-label. */
+.olv-mkind, .olv-micon-btn { position: relative; }
+.olv-measure-bar [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; left: calc(100% + 12px); top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 4px 9px; border-radius: var(--radius-sm);
+  background: rgba(8, 13, 26, 0.94);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid rgba(0, 178, 255, 0.42);
+  color: var(--text); font-size: var(--text-2xs); font-family: var(--mono);
+  letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
+  opacity: 0; pointer-events: none; z-index: 60;
+  transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
+}
+.olv-measure-bar [data-tip]::before {
+  content: ''; position: absolute; left: calc(100% + 7px); top: 50%;
+  width: 7px; height: 7px; transform: translateY(-50%) rotate(45deg);
+  background: rgba(8, 13, 26, 0.94);
+  border-left: 0.5px solid rgba(0, 178, 255, 0.42);
+  border-bottom: 0.5px solid rgba(0, 178, 255, 0.42);
+  opacity: 0; pointer-events: none; z-index: 60;
+  transition: opacity 140ms var(--ease-standard);
+}
+.olv-measure-bar [data-tip]:hover::after,
+.olv-measure-bar [data-tip]:focus-visible::after {
+  opacity: 1; transform: translateY(-50%) translateX(0);
+}
+.olv-measure-bar [data-tip]:hover::before,
+.olv-measure-bar [data-tip]:focus-visible::before { opacity: 1; }
+@media (hover: none) {
+  /* Touch devices: no hover, so suppress the tooltip entirely. */
+  .olv-measure-bar [data-tip]::after,
+  .olv-measure-bar [data-tip]::before { display: none; }
+}
 .olv-measure-finish:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
@@ -4300,20 +4375,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* The square icon tools — 40px touch targets, glyph only. */
   .olv-mkind-icon { width: 40px; height: 40px; border-radius: var(--radius-md); }
   .olv-mkind-icon svg { width: 22px; height: 22px; }
-  /* The dynamic instruction rides ABOVE the rail as a compact pill so it
-     never widens the column. (DOM order keeps it first; we lift + centre it.) */
-  .olv-measure-hint-row {
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-2xs);
-    order: -1;
-    max-width: 44px;
-  }
-  .olv-measure-hint-text { display: none; }     /* on-canvas dot pulse carries it */
-  .olv-measure-badge {
-    font-size: 8px; letter-spacing: 0.04em;
-    padding: 2px var(--space-sm);
-  }
+  /* On a phone the on-canvas pending-dot pulse carries the "tap next point"
+     guidance, so the instruction pill is dropped to keep the rail uncluttered
+     (touch has no hover tooltip to compete with anyway). */
+  .olv-measure-hint-row { display: none; }
   /* Actions stack vertically below a hairline divider. */
   .olv-measure-actions {
     flex-direction: column;

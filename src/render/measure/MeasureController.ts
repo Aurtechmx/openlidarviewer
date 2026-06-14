@@ -151,6 +151,19 @@ const KIND_TITLE: Record<MeasurementKind, string> = {
     '• Click the kind again or press Esc to exit.',
 };
 
+/** Short, futuristic one-liners shown by the custom hover tooltip. */
+const KIND_TIP: Record<MeasurementKind, string> = {
+  distance: 'Distance · straight line',
+  polyline: 'Polyline · path length',
+  area: 'Area · polygon',
+  height: 'Height · vertical Δ',
+  angle: 'Angle · at vertex',
+  slope: 'Slope · rise ∕ run',
+  profile: 'Profile · cross-section',
+  box: 'Box · slice volume',
+  volume: 'Volume · cut & fill',
+};
+
 /** Kind order for the picker buttons. */
 const KIND_ORDER: MeasurementKind[] = [
   'distance',
@@ -370,6 +383,7 @@ export class MeasureController {
         className: 'olv-mkind olv-mkind-icon',
         unsafeHtml: KIND_ICON[k] + `<span class="olv-mkind-name">${KIND_LABEL[k]}</span>`,
         title: KIND_TITLE[k],
+        tip: KIND_TIP[k],
         ariaLabel: KIND_LABEL[k],
       });
       btn.addEventListener('click', () => {
@@ -398,6 +412,7 @@ export class MeasureController {
       className: 'olv-measure-undo olv-micon-btn',
       unsafeHtml: ICON_UNDO + '<span class="olv-mlabel">Undo</span>',
       title: 'Remove the last point you placed (or press Backspace).',
+      tip: 'Undo last point · ⌫',
       ariaLabel: 'Undo last point',
     });
     undoBtn.addEventListener('click', () => {
@@ -415,6 +430,7 @@ export class MeasureController {
       title:
         'Close the in-progress polygon and compute the result.\n' +
         '• Same as double-clicking the cloud or pressing Enter.',
+      tip: 'Finish polygon · ↵',
       ariaLabel: 'Finish polygon',
     });
     this._finishBtn.addEventListener('click', () => {
@@ -425,6 +441,7 @@ export class MeasureController {
       className: 'olv-measure-clear olv-micon-btn olv-hidden',
       unsafeHtml: ICON_CLEAR + '<span class="olv-mlabel">Clear</span>',
       title: 'Delete every measurement on the scan',
+      tip: 'Clear all measurements',
       ariaLabel: 'Clear all measurements',
     });
     this._clearBtn.addEventListener('click', () => {
@@ -435,6 +452,7 @@ export class MeasureController {
       className: 'olv-units-toggle olv-micon-btn',
       unsafeHtml: ICON_UNITS + '<span class="olv-mlabel">Metric</span>',
       title: 'Switch all readouts between metric and imperial units',
+      tip: 'Units · metric ⇄ imperial',
       ariaLabel: 'Units: Metric',
     });
     this._unitsBtn.addEventListener('click', () => {
@@ -447,6 +465,7 @@ export class MeasureController {
       title:
         'Done — finish the current measurement and return to navigation.\n' +
         '• Same as pressing Esc, or clicking the active kind a second time.',
+      tip: 'Done · exit to navigation · Esc',
       ariaLabel: 'Done measuring',
     });
     doneBtn.addEventListener('click', () => {
@@ -469,6 +488,34 @@ export class MeasureController {
         doneBtn,
       ]),
     ]);
+
+    // The toolbar uses a custom, styled hover tooltip (CSS `data-tip`). To stop
+    // the browser's native `title` bubble from doubling up, strip `title` while
+    // a control is hovered/focused and restore it on leave — the rich `title`
+    // text stays the canonical accessible/help string the rest of the time.
+    const stripNative = (e: Event): void => {
+      const btn = (e.target as HTMLElement | null)?.closest('button') as
+        | HTMLElement
+        | null;
+      if (btn && btn.title) {
+        btn.dataset.nativeTitle = btn.title;
+        btn.removeAttribute('title');
+      }
+    };
+    const restoreNative = (e: Event): void => {
+      const btn = (e.target as HTMLElement | null)?.closest('button') as
+        | HTMLElement
+        | null;
+      if (btn && btn.dataset.nativeTitle != null) {
+        btn.title = btn.dataset.nativeTitle;
+        delete btn.dataset.nativeTitle;
+      }
+    };
+    this.hint.addEventListener('pointerover', stripNative);
+    this.hint.addEventListener('pointerout', restoreNative);
+    this.hint.addEventListener('focusin', stripNative);
+    this.hint.addEventListener('focusout', restoreNative);
+
     this._renderKindButtons();
 
     // Handle dragging: a pointerdown on a vertex handle starts an edit drag.
@@ -583,11 +630,13 @@ export class MeasureController {
     onClick: () => void,
     anchorKind?: MeasurementKind,
     icon?: string,
+    tip?: string,
   ): HTMLButtonElement {
     const btn = el('button', {
       className: 'olv-mkind olv-mkind-icon olv-mkind-aux',
       unsafeHtml: (icon ?? '') + `<span class="olv-mkind-name">${label}</span>`,
       title,
+      tip: tip ?? label,
       ariaLabel: label,
     });
     btn.addEventListener('click', () => {

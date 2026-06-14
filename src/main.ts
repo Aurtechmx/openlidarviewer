@@ -607,6 +607,7 @@ viewerLoaded.then((v) => {
     // measurement kind.
     'volume',
     ICON_LASSO,
+    'Lasso · freeform volume',
   );
 });
 
