@@ -126,6 +126,19 @@ export interface ScanShapeParams {
 // ── Object (compact 3-D) thresholds — unchanged, for `kind` back-compat. ─────
 const ASPECT_OBJECT = 0.65;
 const OVERHANG_OBJECT = 0.2;
+/**
+ * Compact 3-D SOLID gate — catches a scanned OBJECT that slips just under both
+ * single-signal bars above. Requires a moderate aspect AND any genuine overhang
+ * TOGETHER. A terrain height field is single-surface, so it reads ≈0% overhang
+ * on its true up however steep it gets (an 0.8-gradient slope still measures 0%
+ * stacking) — the AND can therefore never promote a slope. A scanned object
+ * (statue, sculpture) stacks a few percent from limbs / folds even viewed
+ * top-down. Tuned on a real iPhone statue scan (aspect 0.64, 5.9% stacked, up
+ * mis-picked as the flattest axis) against every terrain fixture (all 0%
+ * overhang; the steepest, slope-0.8, reaches aspect 0.80 but 0% stacking).
+ */
+const ASPECT_SOLID = 0.55;
+const OVERHANG_SOLID = 0.03;
 
 // ── Band / coverage geometry. ────────────────────────────────────────────────
 /** Vertical band (fraction of vertical extent) that counts as floor / ceiling. */
@@ -494,6 +507,16 @@ export function classifyScanShape(
   let objectVotes = 0;
   if (m.aspect >= ASPECT_OBJECT) { objectVotes++; reasons.push(`Compact aspect (height/footprint ${m.aspect.toFixed(2)}).`); }
   if (m.overhangFraction >= OVERHANG_OBJECT) { objectVotes++; reasons.push(`${Math.round(m.overhangFraction * 100)}% of columns stack multiple surfaces (overhangs).`); }
+  // A compact 3-D solid (moderate aspect AND real overhang together) is an
+  // object even when neither single signal reaches its own bar — see the
+  // ASPECT_SOLID / OVERHANG_SOLID note. A terrain height field reads 0% overhang
+  // however steep, so this never fires on a slope.
+  if (objectVotes < 2 && m.aspect >= ASPECT_SOLID && m.overhangFraction >= OVERHANG_SOLID) {
+    objectVotes = 2;
+    reasons.push(
+      `Compact 3-D solid (aspect ${m.aspect.toFixed(2)}, ${Math.round(m.overhangFraction * 100)}% stacked) — a scanned object, not a height field.`,
+    );
+  }
 
   let kind: ScanKind;
   if (objectVotes === 2) kind = 'object';
