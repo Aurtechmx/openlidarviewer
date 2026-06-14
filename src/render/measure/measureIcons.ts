@@ -12,7 +12,8 @@
  *   • 1.6 px stroke, round caps + joins for a clean, technical feel.
  *   • aria-hidden — the accessible name lives on the host <button>.
  *
- * Icons are returned as full <svg> strings, assigned via `el({ unsafeHtml })`.
+ * Icons are returned as full <svg> strings (trusted static source markup),
+ * injected through the el() trusted-markup prop.
  */
 
 import type { MeasurementKind } from './types';

@@ -92,6 +92,24 @@ const ALLOWLIST: readonly string[] = [
   'src/ui/ThemeToggle.ts::ICON_SVG[name]',
   'src/ui/MeasurePanel.ts::svg + overlay',
   'src/ui/Stage.ts::olv-capture-chip-icon',
+  // v0.4.6 icon-system pass (hand-verified 2026-06-14). Every entry below
+  // injects a module-level literal SVG icon string; any accompanying label is
+  // either a hardcoded literal or a static `Record` of literals — never a
+  // parameter or user data. The two former parameter-label sites (toolDock
+  // `_tool`, MeasureController `addAuxKindButton`) were refactored so the label
+  // now goes through `text:` (escaped); only their trusted icon SVG remains on
+  // unsafeHtml, as the `olv-tool-ico-glyph` / `olv-mkind-glyph` entries.
+  'src/render/measure/MeasureController.ts::KIND_ICON[k]',
+  'src/render/measure/MeasureController.ts::ICON_UNDO',
+  'src/render/measure/MeasureController.ts::ICON_FINISH',
+  'src/render/measure/MeasureController.ts::ICON_CLEAR',
+  'src/render/measure/MeasureController.ts::ICON_UNITS',
+  'src/render/measure/MeasureController.ts::ICON_DONE',
+  'src/render/measure/MeasureController.ts::olv-mkind-glyph',
+  'src/ui/toolDock.ts::olv-tool-ico-glyph',
+  'src/ui/ClassLegendPanel.ts::ICON_SOLO',
+  'src/ui/ExportPanel.ts::Export / Convert',
+  'src/ui/FullscreenToggle.ts::ICON_ENTER',
 ];
 
 /**
@@ -108,6 +126,10 @@ const ALLOWLIST: readonly string[] = [
  */
 const RAW_INNERHTML_ALLOWLIST: readonly string[] = [
   'src/ui/NavBar.ts::resetBtn.innerHTML',
+  // src/ui/FullscreenToggle.ts — the enter/exit glyph swap in `_sync()` assigns
+  // one of two module-level literal SVG constants (ICON_ENTER / ICON_EXIT).
+  // Zero interpolation, no user data. (hand-verified 2026-06-14)
+  'src/ui/FullscreenToggle.ts::innerHTML = fs ?',
 ];
 
 const GUIDANCE =

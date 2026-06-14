@@ -364,14 +364,13 @@ export class ToolDock {
     icon?: string,
   ): HTMLButtonElement {
     // Icon + visible label (evidence: icon-only toolbars hurt first-time
-    // users). The label lives in its own span so transient text swaps (e.g.
-    // the share button's "Link copied") update the text without wiping the
-    // glyph.
-    const button = el('button', {
-      className: icon ? 'olv-tool olv-tool-ico' : 'olv-tool',
-      unsafeHtml: (icon ?? '') + `<span class="olv-tool-label">${label}</span>`,
-      title,
-    });
+    // users). The label is built via textContent (escaped) — only the trusted
+    // static icon SVG goes through unsafeHtml — so a label can never inject
+    // markup. The label rides in its own span so transient text swaps (e.g.
+    // the share button's "Link copied") update the text without wiping the glyph.
+    const button = el('button', { className: icon ? 'olv-tool olv-tool-ico' : 'olv-tool', title });
+    if (icon) button.append(el('span', { className: 'olv-tool-ico-glyph', unsafeHtml: icon }));
+    button.append(el('span', { className: 'olv-tool-label', text: label }));
     button.disabled = disabled;
     return button;
   }

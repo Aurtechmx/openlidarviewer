@@ -632,13 +632,16 @@ export class MeasureController {
     icon?: string,
     tip?: string,
   ): HTMLButtonElement {
+    // The label is built via textContent (escaped); only the trusted static
+    // icon SVG is injected as raw markup, so a label can never inject HTML.
     const btn = el('button', {
       className: 'olv-mkind olv-mkind-icon olv-mkind-aux',
-      unsafeHtml: (icon ?? '') + `<span class="olv-mkind-name">${label}</span>`,
       title,
       tip: tip ?? label,
       ariaLabel: label,
     });
+    if (icon) btn.append(el('span', { className: 'olv-mkind-glyph', unsafeHtml: icon }));
+    btn.append(el('span', { className: 'olv-mkind-name', text: label }));
     btn.addEventListener('click', () => {
       btn.blur();
       onClick();
