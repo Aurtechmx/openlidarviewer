@@ -2323,18 +2323,35 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      Frame, Measure, Inspect, Annotate, Share, Close — fits one row on
      every iPhone width. */
   .olv-dock {
-    left: 0; right: 0;
-    margin-left: auto; margin-right: auto;
-    width: max-content; max-width: calc(100vw - 16px);
-    /* Clear the peeked Inspector sheet head (64 px peek + 12 px gap)
-       plus the iOS home-indicator safe area. */
+    /* Span the width (minus safe-area insets) and let the row SCROLL sideways
+       rather than clip. Previously the dock was `width: max-content` capped at
+       the viewport and centred, so any overflow past the screen was hidden —
+       on a narrow phone that silently cut off the end buttons (Frame / Close)
+       at both edges. Anchoring left+right and scrolling keeps every tool
+       reachable with a swipe and nothing is ever clipped. */
+    left: calc(8px + env(safe-area-inset-left));
+    right: calc(8px + env(safe-area-inset-right));
+    width: auto; max-width: none;
+    margin: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    /* Clear the bottom sheet's collapsed bar + the iOS home-indicator. */
     bottom: calc(76px + env(safe-area-inset-bottom));
     flex-wrap: nowrap;
-    justify-content: center;
+    justify-content: flex-start;
     gap: var(--space-xs);
     padding: var(--space-xs);
     border-radius: var(--radius-md);
+    /* A soft fade at the right edge hints "more tools — swipe". */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
   }
+  .olv-dock::-webkit-scrollbar { display: none; }
+  /* Buttons must not shrink in a scrollable row, or they'd squash instead of
+     overflow. */
+  .olv-dock .olv-tool { flex: 0 0 auto; }
   .olv-dock > .olv-dock-gap { margin-left: var(--space-xs); }
   .olv-dock .olv-tool {
     font-size: var(--text-xs);
