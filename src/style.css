@@ -4219,39 +4219,73 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-measure-panel.olv-collapsed,
   .olv-class-panel.olv-collapsed,
   .olv-anno-panel.olv-collapsed {
-    padding: var(--space-2xs) var(--space-lg);
+    padding: var(--space-2xs) var(--space-md);
     max-height: none;
     width: max-content;
     max-width: calc(100vw - 28px);
+    /* Premium glass chip — translucent, blurred, hairline-bordered — instead
+       of an opaque black slab that read as oversized on a phone. */
+    background: rgba(11, 17, 33, 0.78);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 0.5px solid rgba(0, 178, 255, 0.22);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
   }
   .olv-streaming-panel.olv-collapsed .olv-streaming-title,
-  .olv-streaming-panel.olv-collapsed .olv-panel-head { font-size: var(--text-xs); }
+  .olv-streaming-panel.olv-collapsed .olv-panel-head { font-size: var(--text-2xs); }
+  .olv-streaming-panel.olv-collapsed .olv-panel-head { gap: var(--space-sm); }
   .olv-streaming-panel.olv-collapsed .olv-streaming-phase { display: none; }
+  /* Small, dim chevron — premium restraint on a chip. */
+  .olv-collapsed .olv-chevron { font-size: var(--text-sm); }
 
-  /* Measure toolbar — on a phone the kind buttons used to wrap into a 3-row
-     grid that blanketed the upper half of the view the moment Measure was
-     active. Make them ONE swipeable row and tighten the bar so it stops
-     blocking the scan. */
+  /* Measure toolbar — slim, LEFT-anchored single strip that deliberately
+     reserves the top-right column where the collapsed Streaming pill lives,
+     so the two never collide. The kind buttons sit in ONE swipeable row; the
+     hint + action rows stay on a single tight line each. */
   .olv-measure-bar {
-    top: calc(52px + env(safe-area-inset-top));
-    /* Stays centred (base rule) — just tighter so it reads as a slim bar. */
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    max-width: calc(100vw - 16px);
+    top: calc(50px + env(safe-area-inset-top));
+    left: 8px; right: auto; transform: none;          /* left-anchor, no centring */
+    align-items: stretch;
+    gap: var(--space-2xs);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-md);
+    max-width: calc(100vw - 142px);                   /* clear the Streaming chip */
   }
-  .olv-mkinds {
+  .olv-mkinds,
+  .olv-measure-actions {
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
     justify-content: flex-start;
     width: 100%;
+    gap: var(--space-2xs);
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
-    mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent 100%);
   }
-  .olv-mkinds::-webkit-scrollbar { display: none; }
-  .olv-mkind { flex: 0 0 auto; }
+  .olv-mkinds::-webkit-scrollbar,
+  .olv-measure-actions::-webkit-scrollbar { display: none; }
+  /* Shorter, thinner controls so the strip reads as a hairline bar, not a
+     slab — every measure button shrinks to the same compact footprint. */
+  .olv-mkind,
+  .olv-measure-undo,
+  .olv-measure-finish,
+  .olv-measure-clear,
+  .olv-units-toggle,
+  .olv-measure-done {
+    flex: 0 0 auto;
+    font-size: var(--text-2xs);
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+  }
+  .olv-units-toggle { min-width: 0; }
+  /* In the swipeable actions row, cluster Done with its siblings instead of
+     letting the desktop `margin-left:auto` shove it past the scroll edge. */
+  .olv-measure-done { margin-left: 0; }
+  /* Hint row: one tight line, smaller badge + text. */
+  .olv-measure-hint-row { gap: var(--space-sm); }
+  .olv-measure-hint-text { font-size: var(--text-xs); }
+  .olv-measure-badge { padding: 1px var(--space-sm); }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
