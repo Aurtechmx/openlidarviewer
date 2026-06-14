@@ -1647,6 +1647,16 @@ const navBar = new NavBar({
       );
     }
   },
+  onStandardView: (view) => {
+    const fired = viewer.setStandardView(view);
+    if (fired) {
+      showLassoToast(`View · ${view[0].toUpperCase() + view.slice(1)}.`);
+    }
+  },
+  onOrthographic: (on) => {
+    viewer.setOrthographic(on);
+    showLassoToast(on ? 'Orthographic (parallel) view on.' : 'Perspective view restored.');
+  },
 });
 
 const projectCard = new ProjectCard();

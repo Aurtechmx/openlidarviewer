@@ -75,8 +75,14 @@ import {
   selectByLasso,
   volumeFromLassoWithFootprint,
 } from './measure/lassoVolume';
-import { cameraPresetPose, type CameraPresetName } from './camera/cameraPresets';
+import {
+  cameraPresetPose,
+  standardViewPose,
+  type CameraPresetName,
+  type StandardView,
+} from './camera/cameraPresets';
 export type { CameraPresetName } from './camera/cameraPresets';
+export type { StandardView } from './camera/cameraPresets';
 import type { VolumeResult } from './measure/volume';
 import {
   decideVolumeBudget,
@@ -443,6 +449,14 @@ const IDLE_HEARTBEAT_FRAMES = 6;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
+/**
+ * Near-orthographic FOV. A very long "lens" — the camera pulls far back and
+ * the frustum becomes almost parallel, so walls/floors read flat for accurate
+ * measuring with no perspective skew. This keeps the existing perspective
+ * camera (and the whole WebGPU render graph, culling, LOD and picking tools)
+ * untouched, rather than swapping in a separate OrthographicCamera.
+ */
+const ORTHO_FOV = 2;
 
 /**
  * Absolute GPU-upload point ceiling. The device-aware load budget already
@@ -843,6 +857,11 @@ export class Viewer {
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
+
+  /** Near-orthographic (parallel) projection toggle — see ORTHO_FOV. */
+  private _orthographic = false;
+  /** The last axis-aligned standard view applied, so toggling ortho re-frames it. */
+  private _lastStandardView: StandardView | null = null;
   private _navListeners: NavListeners = {};
   private readonly _raycaster = new THREE.Raycaster();
   /**
@@ -3327,6 +3346,96 @@ export class Viewer {
     // discoverability surfaces, not micro-adjustments.
     this._nav.tweenTo(pos, target, 0.9);
     return true;
+  }
+
+  /** Whether the near-orthographic (parallel) projection is active. */
+  get orthographic(): boolean {
+    return this._orthographic;
+  }
+
+  /**
+   * Snap to one of the six standard axis-aligned views (Top / Bottom / Front /
+   * Back / Left / Right) — the Polycam-style "look straight at a face" framing
+   * that makes a wall or floor read flat for measuring. Honours the current
+   * projection (perspective or near-orthographic). Returns false when no scan
+   * is loaded.
+   */
+  setStandardView(view: StandardView): boolean {
+    const sphere = this._visibleBoundingSphere();
+    if (!sphere) return false;
+    this._lastStandardView = view;
+    // A standard view is an orbit pose — make sure we're in orbit mode so the
+    // controls own the camera (walk/fly would fight the snap).
+    this._nav.setMode('orbit');
+    const horiz = this._horizontalAxis();
+    const pose = standardViewPose(view, {
+      center: { x: sphere.center.x, y: sphere.center.y, z: sphere.center.z },
+      radius: sphere.radius,
+      worldUp: { x: this._worldUp.x, y: this._worldUp.y, z: this._worldUp.z },
+      horizontal: { x: horiz.x, y: horiz.y, z: horiz.z },
+      fovDeg: this._camera.fov,
+    });
+    const target = new THREE.Vector3(pose.target.x, pose.target.y, pose.target.z);
+    const pos = new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z);
+    // Keep depth range + dolly bounds consistent with the (possibly far)
+    // framing distance before the camera arrives there.
+    this._applyProjectionRanges(sphere.radius, pos.distanceTo(target));
+    this._nav.tweenTo(pos, target, 0.8);
+    return true;
+  }
+
+  /**
+   * Toggle the near-orthographic projection. Implemented as a very long lens
+   * (ORTHO_FOV) rather than a separate OrthographicCamera, so the WebGPU
+   * render graph, frustum culling, LOD streaming and the picking tools all
+   * keep working unchanged — only the FOV + framing distance change. Re-frames
+   * the current view so the scan stays the same apparent size.
+   */
+  setOrthographic(on: boolean): boolean {
+    this._orthographic = on;
+    this._camera.fov = on ? ORTHO_FOV : DEFAULT_FOV;
+    this._camera.updateProjectionMatrix();
+
+    const sphere = this._visibleBoundingSphere();
+    if (!sphere) return false;
+
+    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
+    const fitDist = (Math.max(sphere.radius, 1e-3) / Math.sin(fovRad / 2)) * 1.2;
+    this._applyProjectionRanges(sphere.radius, fitDist);
+
+    // Re-frame so the cloud keeps its apparent size at the new lens. If a
+    // standard view is active, re-apply it; otherwise pull along the current
+    // view direction to the new fit distance.
+    if (this._lastStandardView) {
+      this.setStandardView(this._lastStandardView);
+    } else {
+      const target = this._controls.target.clone();
+      const dir = this._camera.position.clone().sub(target);
+      if (dir.lengthSq() < 1e-9) dir.copy(this._horizontalAxis());
+      dir.normalize();
+      this._nav.tweenTo(target.clone().addScaledVector(dir, fitDist), target, 0.6);
+    }
+    return true;
+  }
+
+  /**
+   * Keep the camera's far plane, point-size attenuation reference and orbit
+   * dolly bounds consistent with a (possibly very large) framing distance —
+   * the near-orthographic lens pulls the camera back far beyond the normal
+   * 50×-radius dolly cap, so without this the controls would clamp it and the
+   * framing would collapse.
+   */
+  private _applyProjectionRanges(radius: number, fitDist: number): void {
+    const r = radius > 0 ? radius : 1;
+    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
+    this._camera.far = Math.max(fitDist * 2.5, r * 32, 1000);
+    this._camera.near = 0.01;
+    this._camera.updateProjectionMatrix();
+    this._edlNear.value = this._camera.near;
+    this._edlFar.value = this._camera.far;
+    this._attnRef.value = (r / Math.sin(fovRad / 2)) * 1.2;
+    this._controls.minDistance = 0.02;
+    this._controls.maxDistance = Math.max(fitDist * 3, r * 50);
   }
 
   /**

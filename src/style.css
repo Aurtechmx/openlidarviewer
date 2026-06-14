@@ -1677,6 +1677,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-xs); padding: 1px var(--space-xs); min-width: 14px; text-align: center;
 }
 .olv-cam-chip-label { font-size: var(--text-xs); }
+/* Orthographic toggle — a pressed-state chip. When on it fills with the brand
+   accent so the "parallel projection mode" reads as engaged at a glance. */
+.olv-ortho-toggle.is-on {
+  color: var(--accent);
+  border-color: rgba(0, 178, 255, 0.55);
+  background: rgba(0, 178, 255, 0.16);
+}
 
 /* Centred "click to look" prompt */
 .olv-nav-prompt {
