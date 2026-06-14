@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.4.6] - 2026-06-13
+## [0.4.6] - 2026-06-14
 
 Phase 1 of the design audit (visual-only; verdict-as-hero, two-tier surfaces,
 quieter typography, mobile reflow, surface-quality chip density reduction) lands
@@ -19,6 +19,36 @@ UI (still an experimental PREVIEW), the last flagged capture-quality
 label-vs-value drift ("Coverage … % of footprint" → "Bounding area filled") is
 closed, and the streaming loader's indeterminate text becomes an honest
 determinate resident-node progress bar.
+
+### Navigation, tooling & hardening
+
+- **Standard views + parallel projection.** Six axis-aligned camera views
+  (Top / Bottom / Front / Back / Left / Right) snap the camera to look straight
+  at a face for distortion-free measuring, alongside an Orthographic toggle that
+  switches to a near-parallel projection (a long-lens approximation that leaves
+  the render pipeline, culling and picking untouched). The view geometry is pure
+  and unit-tested.
+- **Icon + label toolbars.** The bottom dock, the measurement toolbar, the
+  Layers "Solo" control and the Export header gain a consistent custom line-icon
+  set, each keeping its visible text label (icon-only toolbars measurably hurt
+  first-time users). Inspect and Probe are deliberately differentiated (target
+  vs eyedropper). On phones the measurement toolbar reflows into a vertical
+  rail; on desktop it is a top-centre bar that no longer overlaps the
+  left-docked panels.
+- **Full-screen toggle** in the header, with a glyph that tracks the real
+  Fullscreen state (so F11 / Esc are reflected too).
+- **Contour map sheet (PDF) fixes.** The title no longer overlaps the legend on
+  long filenames; the contour-interval unit now matches the scale bar (m / ft);
+  and an ungeoreferenced sheet drops the E/N graticule suffixes and the north
+  arrow rather than implying a compass frame it doesn't have.
+- **Security.** Parameter-derived button labels are escaped via `textContent`;
+  only trusted static icon SVG passes through the raw-markup path, each site
+  registered on the `unsafeHtml` review allowlist.
+- **Smaller polish.** "Solo" is disabled when only one class is present; the
+  `?debug` overlay clarifies the wall-clock load total, reports the CPU/GPU
+  terrain compute path, and stops printing a false "0 draw calls"; and the
+  Preview "not recommended for" wording reads "outputs requiring independent
+  validation".
 
 ### Design
 

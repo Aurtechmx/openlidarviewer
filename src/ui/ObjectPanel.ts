@@ -24,6 +24,9 @@ import {
 import type { ScanShape, SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
 import type { SnapMode } from '../terrain/space/floorplan/vectorize';
+// Type-only — the runtime helper (and the heavy extractor it reads) stay in the
+// lazy floor-plan chunk; the panel only renders a struct the host computes there.
+import type { FloorPlanConfidence } from '../terrain/space/floorplan/floorPlanConfidence';
 import {
   createScanTypeControl,
   type ScanTypeControl,
@@ -134,6 +137,12 @@ export class ObjectPanel {
   // (showSpace re-renders the body each call). Seeded with the headless
   // defaults so an export before any interaction matches FLOORPLAN_OPTIONS.
   private _floorPlan: FloorPlanExportOptions = { ...FLOOR_PLAN_EXPORT_DEFAULTS };
+  /**
+   * The floor-plan confidence summary slot — empty until the host runs a
+   * "Floor plan preview" export and feeds back the computed figures. Recreated
+   * on each body rebuild, so a re-render clears a stale summary.
+   */
+  private _floorPlanSummaryEl: HTMLElement | null = null;
 
   constructor(cb: ObjectPanelCallbacks = {}) {
     this._cb = cb;
@@ -319,7 +328,44 @@ export class ObjectPanel {
         className: 'olv-object-note',
         text: 'Floor plan preview is experimental — requires visual validation.',
       }));
+      // Empty confidence slot — filled by showFloorPlanSummary() after the host
+      // builds the preview, so the user gets a one-glance trust read.
+      this._floorPlanSummaryEl = el('div', { className: 'olv-floorplan-confidence olv-hidden' });
+      this._body.append(this._floorPlanSummaryEl);
+    } else {
+      this._floorPlanSummaryEl = null;
     }
+  }
+
+  /**
+   * Render the floor-plan confidence summary after a "Floor plan preview" run.
+   * The host computes {@link FloorPlanConfidence} inside the lazy floor-plan
+   * chunk (where the extractor already lives) and hands the plain struct here,
+   * so the panel never pulls the heavy floor-plan code into its own bundle.
+   * Claim-accurate: rooms only when segmented, openings are classified doorways,
+   * "weak wall evidence" is a boundary-sample statistic — never survey-grade.
+   */
+  showFloorPlanSummary(c: FloorPlanConfidence): void {
+    const slot = this._floorPlanSummaryEl;
+    if (!slot) return;
+    const head = el('div', { className: 'olv-floorplan-confidence-head' }, [
+      el('span', { className: 'olv-floorplan-confidence-label', text: 'Floor plan confidence' }),
+      el('span', {
+        className: `olv-floorplan-confidence-band is-${c.band}`,
+        text: c.bandLabel,
+      }),
+    ]);
+    const stats = el('div', { className: 'olv-floorplan-confidence-stats' }, [
+      el('span', { text: `Rooms: ${c.roomsLabel}` }),
+      el('span', { text: `Walls: ${c.walls}` }),
+      el('span', { text: `Openings: ${c.openings}` }),
+    ]);
+    const weak = el('div', {
+      className: 'olv-floorplan-confidence-weak',
+      text: `Weak wall evidence: ${c.weakWallPct}%`,
+    });
+    slot.replaceChildren(head, stats, weak);
+    slot.classList.remove('olv-hidden');
   }
 
   /**

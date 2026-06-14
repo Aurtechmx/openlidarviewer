@@ -2053,6 +2053,11 @@ const objectPanel = new ObjectPanel({
     });
     const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem });
     downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');
+    // Surface a one-glance confidence read in the panel. Computed here, inside
+    // the already-loaded lazy floor-plan chunk, so the panel needs only the
+    // plain struct (no heavy floor-plan code in its bundle).
+    const { floorPlanConfidence } = await import('./terrain/space/floorplan/floorPlanConfidence');
+    objectPanel.showFloorPlanSummary(floorPlanConfidence(plan));
   },
 });
 

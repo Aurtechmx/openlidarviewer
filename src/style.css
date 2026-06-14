@@ -5935,6 +5935,33 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   border-radius: 2px;
 }
 .olv-object-note.is-warn { color: var(--text-dim); }
+
+/* Floor-plan confidence summary — a one-glance trust read shown after a
+   "Floor plan preview" run. Rooms / walls / openings on one line, a coloured
+   band chip, and the weak-wall-evidence share below. Honest, not survey-grade. */
+.olv-floorplan-confidence {
+  margin-top: var(--space-sm); padding: var(--space-sm) var(--space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+}
+.olv-floorplan-confidence-head { display: flex; align-items: center; gap: var(--space-sm); }
+.olv-floorplan-confidence-label {
+  font-size: var(--text-2xs); color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.olv-floorplan-confidence-band {
+  font-size: var(--text-2xs); font-weight: 600;
+  padding: 1px var(--space-sm); border-radius: var(--radius-xs);
+}
+.olv-floorplan-confidence-band.is-good { color: var(--rating-good); background: rgba(70, 200, 120, 0.12); }
+.olv-floorplan-confidence-band.is-moderate { color: var(--rating-fair, #d9a441); background: rgba(217, 164, 65, 0.14); }
+.olv-floorplan-confidence-band.is-low { color: var(--rating-weak); background: rgba(229, 115, 90, 0.14); }
+.olv-floorplan-confidence-stats {
+  display: flex; flex-wrap: wrap; gap: var(--space-md);
+  font-size: var(--text-xs); color: var(--text); font-variant-numeric: tabular-nums;
+}
+.olv-floorplan-confidence-weak { font-size: var(--text-2xs); color: var(--text-dim); }
 /* The decision-critical caveat that stays visible above the collapsed
    disclosure reads a touch firmer than the tucked-away secondary notes. */
 .olv-object-note.is-lead { color: var(--text); }
