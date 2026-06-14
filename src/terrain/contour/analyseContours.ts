@@ -149,6 +149,14 @@ export interface TerrainCoreParams {
    */
   readonly samplePointScale?: number;
   /**
+   * True when the analysed points are the currently-resident subset of a
+   * still-streaming cloud (COPC/EPT), not the whole scan. The grid coverage
+   * still reads 'full' (the resident nodes span the extent), but the DATA is
+   * partial, so the surface coverageMode is reported as 'resident-only' and the
+   * verdict reads "Preliminary" rather than a final 'Limited'. Default false.
+   */
+  readonly residentOnly?: boolean;
+  /**
    * Per-cell aggregation for the LIVE DTM. Default `'median'` (see
    * {@link LIVE_DTM_AGGREGATION}): the 50th percentile is outlier-resistant, so
    * a single high (vegetation) or low (multipath) ground return in a cell no
@@ -495,6 +503,17 @@ export function computeTerrainCore(
   });
   if (confidenceCalibration.assessable) {
     dtm = applyConfidenceCalibration(dtm, confidenceCalibration);
+  }
+  // A still-streaming cloud is analysed on only its resident nodes. The raster
+  // coverage reads 'full' (those nodes span the extent), but the DATA is a
+  // partial, coarse subsample — so stamp the surface coverage as 'resident-only'
+  // here, once, before the gate / quality / result / export model all read
+  // dtm.coverageMode. This is what lets the assessment render a "Preliminary"
+  // partial-stream verdict instead of a final 'Limited' on a scan that is still
+  // loading. (Re-running once fully streamed gathers a non-resident set, so the
+  // override no longer applies and the real grade shows.)
+  if (params.residentOnly && dtm.coverageMode === 'full') {
+    dtm = { ...dtm, coverageMode: 'resident-only' };
   }
   const confidenceCalibrationApplied = confidenceCalibration.assessable;
   const confidenceToleranceM = confidenceCalibration.assessable

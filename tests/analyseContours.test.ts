@@ -30,6 +30,23 @@ describe('analyseContours', () => {
     expect(r.elevationRangeM).toBeGreaterThan(0);
   });
 
+  it('defaults coverage to full, but reports resident-only when analysing a partial stream', () => {
+    // Without the flag, a complete gather reads as full coverage.
+    expect(r.dtm.coverageMode).toBe('full');
+    expect(r.quality.coverageMode).toBe('full');
+    // A still-streaming cloud analysed on its resident nodes: the surface
+    // coverage is stamped resident-only so the verdict reads "Preliminary",
+    // even though the resident nodes span the extent (grid coverage is full).
+    const streamed = analyseContours(pts, {
+      cellSizeM: 2,
+      crs: 'EPSG:32610',
+      verticalDatum: 'EPSG:5703',
+      residentOnly: true,
+    });
+    expect(streamed.dtm.coverageMode).toBe('resident-only');
+    expect(streamed.quality.coverageMode).toBe('resident-only');
+  });
+
   it('validates the surface and gates an interval against the RMSE', () => {
     expect(Number.isFinite(r.validation.rmse)).toBe(true);
     expect(r.intervalM).not.toBeNull();

@@ -42,6 +42,7 @@ function deriveCoreParams(
   classification: Uint8Array | undefined,
   crsService: CrsService,
   totalPoints?: number,
+  residentOnly = false,
 ): TerrainCoreParams {
   const n = positions.length / 3;
   let minX = Infinity;
@@ -79,6 +80,7 @@ function deriveCoreParams(
     verticalDatum: cur?.verticalDatum ?? null,
     classification,
     samplePointScale,
+    residentOnly,
   };
 }
 
@@ -219,6 +221,7 @@ export function createTerrainAnalysisRunner(
         gathered.classification,
         crsService,
         gathered.totalPoints,
+        gathered.residentOnly,
       );
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
@@ -282,6 +285,7 @@ export function createTerrainAnalysisRunner(
       gathered.classification,
       crsService,
       gathered.totalPoints,
+      gathered.residentOnly,
     );
     const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
       computeTerrainCoreAsync(
