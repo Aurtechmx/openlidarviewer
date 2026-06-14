@@ -2895,10 +2895,33 @@ if (debug || benchmark) {
       backend: viewerReady ? viewer.activeBackend() : null,
       stats: viewerReady ? viewer.frameStats() : null,
       streaming: streamingDebugSample(),
+      terrainCompute: readTerrainComputePath(),
     }));
     stage.overlay.append(debugOverlay.element);
     debugOverlay.start();
   });
+}
+
+/**
+ * Read the MAIN-thread terrain engine's CPU/GPU equivalence-gate verdict for
+ * the debug overlay, via the verification-only `window` hook the engine
+ * registers when it loads. Returns null before any main-thread terrain run (or
+ * when analysis ran in the worker, whose engine is not reachable from here).
+ * Reads through the hook deliberately — a static import would pull the terrain
+ * engine into the main bundle and break chunk isolation.
+ */
+function readTerrainComputePath(): { path: 'cpu' | 'gpu'; reason: string } | null {
+  const hook = (
+    window as unknown as {
+      __olvTerrainRasterEngine?: { getComputePath?: () => { path: 'cpu' | 'gpu'; reason: string } };
+    }
+  ).__olvTerrainRasterEngine;
+  try {
+    const s = hook?.getComputePath?.();
+    return s ? { path: s.path, reason: s.reason } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */

@@ -69,6 +69,36 @@ export interface DebugSample {
   stats: FrameStats | null;
   /** Streaming counters, or null/absent when no COPC scan is streaming. */
   streaming?: StreamingDebugStats | null;
+  /**
+   * Terrain raster compute path of the MAIN-thread engine (the once-per-session
+   * CPU/GPU equivalence-gate verdict), or null before any main-thread terrain
+   * run. Debug/details only — never surfaced in the main UI.
+   */
+  terrainCompute?: { path: 'cpu' | 'gpu'; reason: string } | null;
+}
+
+/**
+ * Human label for the terrain compute path — the CPU/GPU equivalence-gate
+ * verdict in plain words. Pure; exported for the overlay test.
+ */
+export function formatTerrainCompute(
+  tc: { path: 'cpu' | 'gpu'; reason: string } | null | undefined,
+): string {
+  if (!tc) return '— (no main-thread run)';
+  if (tc.path === 'gpu') return 'GPU validated';
+  switch (tc.reason) {
+    case 'gpu-dispatch-failed':
+      return 'GPU demoted to CPU';
+    case 'probe-mismatch':
+      return 'CPU reference (probe mismatch)';
+    case 'webgpu-unavailable':
+    case 'device-request-failed':
+      return 'CPU reference (no GPU)';
+    case 'not-initialised':
+      return 'CPU (idle)';
+    default:
+      return `CPU reference (${tc.reason})`;
+  }
 }
 
 /** Overlay refresh interval — about 4 Hz, deliberately never per frame. */
@@ -188,7 +218,7 @@ export class DebugOverlay {
 
   /** Re-read the sampler and repaint the live block. */
   private _refresh(): void {
-    const { backend, stats, streaming } = this._sample();
+    const { backend, stats, streaming, terrainCompute } = this._sample();
     const backendLabel =
       backend === 'webgpu' ? 'WebGPU' : backend === 'webgl2' ? 'WebGL 2' : '—';
 
@@ -205,6 +235,7 @@ export class DebugOverlay {
         `points        ${formatInt(stats.displayedPoints)} shown` +
           ` / ${formatInt(stats.totalPoints)} total`,
         `gpu estimate  ${formatBytes(stats.gpuBytesEstimate)}`,
+        `terrain comp  ${formatTerrainCompute(terrainCompute)}`,
       ].join('\n');
     } else {
       this._live.textContent = `backend       ${backendLabel}\n(initialising…)`;

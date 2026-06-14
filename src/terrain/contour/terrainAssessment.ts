@@ -405,7 +405,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     status === 'Good'
       ? 'uses that legally require certified survey data'
       : status === 'Preview'
-        ? 'final deliverables without independent validation'
+        ? 'outputs requiring independent validation'
         : 'terrain products, DEM export, contour generation';
 
   return {
