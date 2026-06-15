@@ -4831,6 +4831,21 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-di-row-value[data-tier="weak"]::before       { background: var(--rating-weak); }
 .olv-di-row-value[data-tier="neutral"]::before    { background: color-mix(in srgb, var(--text) 28%, transparent); }
 .olv-di-row-value[data-tier="unknown"]::before    { background: color-mix(in srgb, var(--text) 16%, transparent); }
+
+/*
+ * Colourblind-safe mode (body.olv-cvd, toggled with the class palette). The
+ * status dots default to a green/amber/red rating scale — the classic red/green
+ * trap. Under CVD mode swap to an Okabe-Ito blue / orange / vermillion scale,
+ * which separates "good" (cool blue) from "poor" (warm vermillion) under every
+ * common colour-vision deficiency. These dots are always paired with the tier
+ * word, so colour stays supplementary.
+ */
+body.olv-cvd .olv-di-row-value[data-tier="strong"]::before  { background: #0072b2; }
+body.olv-cvd .olv-di-row-value[data-tier="moderate"]::before { background: #e69f00; }
+body.olv-cvd .olv-di-row-value[data-tier="weak"]::before     { background: #d55e00; }
+body.olv-cvd .olv-di-confidence-chip[data-band="green"]   { background: #0072b2; }
+body.olv-cvd .olv-di-confidence-chip[data-band="yellow"]  { background: #e69f00; }
+body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00; }
 .olv-di-confidence-cell { display: inline-flex; align-items: center; gap: var(--space-sm); }
 .olv-di-confidence-chip {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
