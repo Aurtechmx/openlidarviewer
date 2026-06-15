@@ -57,10 +57,30 @@ export function reprojectGlobal(
     const y = new Float64Array(n);
     // Z passes through; clone so the result owns its buffers.
     const z = g.z.slice();
+    let nonFinite = 0;
     for (let i = 0; i < n; i++) {
       const out = fwd.forward([g.x[i], g.y[i]]);
       x[i] = out[0];
       y[i] = out[1];
+      if (!Number.isFinite(out[0]) || !Number.isFinite(out[1])) nonFinite++;
+    }
+    // proj4 does not throw for inputs outside a projection's valid domain — it
+    // returns Infinity or NaN. Shipping those as "reprojected ✓" would write a
+    // corrupt export (NaN coordinates) and poison every downstream bound. Treat
+    // any non-finite output as a failed transform and leave the source
+    // coordinates untouched, so the caller can downgrade or warn rather than
+    // emit corrupt data — the same contract the unresolved-CRS paths follow.
+    if (nonFinite > 0) {
+      return {
+        points: g,
+        transformed: false,
+        note:
+          `reprojection EPSG:${srcEpsg} → EPSG:${dstEpsg} produced non-finite ` +
+          `coordinates for ${nonFinite.toLocaleString('en-US')} of ` +
+          `${n.toLocaleString('en-US')} points (input likely outside the ` +
+          `target projection's valid area) — coordinates left unchanged`,
+        datumCaveat: null,
+      };
     }
     return {
       points: { ...g, x, y, z },

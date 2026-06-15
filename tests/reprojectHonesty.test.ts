@@ -93,6 +93,27 @@ describe('reprojectGlobal datum caveat', () => {
     expect(r.points.y[0]).toBeCloseTo(6000000, 3);
   });
 
+  it('rejects a transform that yields non-finite coordinates rather than ship NaN', () => {
+    // Web Mercator forward of latitude 90° is +Infinity. proj4 returns that
+    // without throwing; the converter must treat it as a failed transform and
+    // leave the source coordinates untouched, not stamp "reprojected ✓".
+    const g = {
+      count: 2,
+      x: Float64Array.from([0, 0]),
+      y: Float64Array.from([45, 90]), // second point is the singularity
+      z: Float64Array.from([0, 0]),
+    };
+    const r = reprojectGlobal(g, 4326, 3857); // WGS84 geographic → Web Mercator
+    expect(r.transformed).toBe(false);
+    expect(r.note).toMatch(/non-finite/i);
+    expect(r.note).toMatch(/1 of 2 points/);
+    // Source coordinates returned untouched (the known-good values).
+    expect(r.points.y[1]).toBe(90);
+    for (const v of [...r.points.x, ...r.points.y]) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
   it('keeps datumCaveat null on clean transforms and on failures', () => {
     const g = {
       count: 1,
