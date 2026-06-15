@@ -33,8 +33,20 @@ test('classificationLabel maps ASPRS codes to names', () => {
   expect(classificationLabel(0)).toBe('Created, never classified');
 });
 
-test('classificationLabel falls back for unknown codes', () => {
-  expect(classificationLabel(99)).toBe('Class 99');
+test('classificationLabel covers the LAS 1.4 R15 standard classes (8, 12, 19–22)', () => {
+  // The 1.4 additions and the reserved-but-real codes that were previously
+  // falling through to the generic "Class N" label.
+  expect(classificationLabel(8)).toBe('Reserved');
+  expect(classificationLabel(12)).toBe('Overlap');
+  expect(classificationLabel(19)).toBe('Overhead structure');
+  expect(classificationLabel(20)).toBe('Ignored ground');
+  expect(classificationLabel(21)).toBe('Snow');
+  expect(classificationLabel(22)).toBe('Temporal exclusion');
+});
+
+test('classificationLabel falls back for reserved / user-definable codes', () => {
+  expect(classificationLabel(99)).toBe('Class 99'); // user-definable (64–255)
+  expect(classificationLabel(40)).toBe('Class 40'); // reserved (23–63)
 });
 
 test('makePointInfo rounds coordinates to 3 decimals and distance to 2', () => {

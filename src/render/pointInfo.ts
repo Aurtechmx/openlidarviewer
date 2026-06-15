@@ -58,7 +58,16 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
   };
 }
 
-/** ASPRS standard point classification names (LAS 1.1–1.4, classes 0–18). */
+/**
+ * ASPRS standard point classification names, LAS 1.4 R15 (classes 0–22).
+ *
+ * Codes 8 and 12 are "Reserved" in LAS 1.4: in the legacy LAS 1.1–1.3 schema
+ * they were Model Key-point (8) and Overlap (12). Class 12 is still very widely
+ * populated as overlap in real deliveries, so it's labelled "Overlap" — the
+ * meaning a user actually encounters — while 8 keeps the 1.4 "Reserved" name.
+ * Codes 23–63 are reserved for future ASPRS use; 64–255 are user-definable and
+ * fall through to the generic "Class N" label.
+ */
 const ASPRS_CLASSES: Record<number, string> = {
   0: 'Created, never classified',
   1: 'Unclassified',
@@ -68,15 +77,21 @@ const ASPRS_CLASSES: Record<number, string> = {
   5: 'High vegetation',
   6: 'Building',
   7: 'Low point (noise)',
+  8: 'Reserved',
   9: 'Water',
   10: 'Rail',
   11: 'Road surface',
+  12: 'Overlap',
   13: 'Wire — guard',
   14: 'Wire — conductor',
   15: 'Transmission tower',
   16: 'Wire-structure connector',
   17: 'Bridge deck',
   18: 'High noise',
+  19: 'Overhead structure',
+  20: 'Ignored ground',
+  21: 'Snow',
+  22: 'Temporal exclusion',
 };
 
 /** Human-readable name for an ASPRS classification code. */
