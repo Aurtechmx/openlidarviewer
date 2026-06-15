@@ -24,7 +24,16 @@ alongside a few accessibility and workflow additions.
   never scan data.
 - **Signal-tier cue on the Dataset Intelligence card.** A quiet coloured dot
   marks each row's qualitative tier; terrain complexity stays neutral (it is
-  descriptive, not a quality) and a missing signal is muted.
+  descriptive, not a quality) and a missing signal is muted. The colourblind
+  toggle also re-themes these status dots and the confidence chip.
+- **Recommended-view chip.** After a scan loads, a small dismissible chip
+  suggests the best camera preset (top-down for a wide classified surface,
+  oblique for a colour scan, isometric otherwise); one click applies it.
+- **Profile stations on the cloud and in the report.** A cross-section profile
+  drops small station markers along the section line in 3D, and the PDF report
+  now draws the profile as a sharp vector chart, not just the station text.
+- **More accessible report PDFs.** The document title is announced instead of
+  the filename, and the document language is tagged for correct pronunciation.
 
 ### Fixed
 
