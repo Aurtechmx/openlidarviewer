@@ -19,6 +19,7 @@ import {
   classifyComplexity,
   classifyCoverage,
   classifyDensity,
+  densityLabel,
   classifyGroundVisibility,
   confidenceBand,
   coverageStreamingWarning,
@@ -29,11 +30,12 @@ import type { TerrainCoverageMeta } from '../src/terrain/TerrainContracts';
 // ── Density ──────────────────────────────────────────────────────
 
 describe('classifyDensity', () => {
-  it('reads as sparse when neither pointCount nor density is known', () => {
-    expect(classifyDensity({})).toBe('sparse');
+  it("reads as unknown when neither pointCount nor density is known (not a fabricated 'sparse')", () => {
+    expect(classifyDensity({})).toBe('unknown');
   });
 
   it('uses residentDensity when supplied', () => {
+    // 0.5 is a genuine measured low density — it stays 'sparse', not 'unknown'.
     expect(classifyDensity({ residentDensity: 0.5 })).toBe('sparse');
     expect(classifyDensity({ residentDensity: 10 })).toBe('moderate');
     expect(classifyDensity({ residentDensity: 100 })).toBe('dense');
@@ -47,10 +49,14 @@ describe('classifyDensity', () => {
     expect(classifyDensity({ pointCount: 1_000_000, bboxVolume: 1000 })).toBe('very-dense');
   });
 
-  it('returns sparse for non-finite or zero inputs', () => {
-    expect(classifyDensity({ pointCount: 1000, bboxVolume: 0 })).toBe('sparse');
-    expect(classifyDensity({ residentDensity: Number.NaN })).toBe('sparse');
-    expect(classifyDensity({ residentDensity: -1 })).toBe('sparse');
+  it('returns unknown (no signal) for non-finite or zero/negative inputs', () => {
+    expect(classifyDensity({ pointCount: 1000, bboxVolume: 0 })).toBe('unknown');
+    expect(classifyDensity({ residentDensity: Number.NaN })).toBe('unknown');
+    expect(classifyDensity({ residentDensity: -1 })).toBe('unknown');
+  });
+
+  it('labels the unknown bucket as "—"', () => {
+    expect(densityLabel('unknown')).toBe('—');
   });
 });
 
