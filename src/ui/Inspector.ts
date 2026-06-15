@@ -451,7 +451,6 @@ export class Inspector {
   // active and their streaming-equivalents in StreamingPanel take over.
   private _layersSection!: HTMLElement;
   private _colorBySection!: HTMLElement;
-  private _pointSizeSection!: HTMLElement;
   private _renderingSection!: HTMLElement;
   private _exportSection!: HTMLElement;
   private readonly _viewList = el('div', { className: 'olv-views' });
@@ -963,11 +962,10 @@ export class Inspector {
       open: true,
     });
     // Point size folded into Rendering as a sub-group — the visible
-    // section reference still exists so streaming-mode visibility
-    // toggling keeps working, but it now points at the same node as
-    // the Rendering section (one element, one slot in the panel).
+    // Point size, point-size mode, EDL and antialiasing share this one
+    // "Rendering" section; it stays visible during streaming so point
+    // thickness remains adjustable on a streaming COPC / EPT.
     this._renderingSection = collapsibleSection('Rendering', renderingBody);
-    this._pointSizeSection = this._renderingSection;
     this._exportSection = collapsibleSection('Export', exporter);
 
     // Dataset Intelligence — informational summary of the Terrain
@@ -1083,9 +1081,13 @@ export class Inspector {
     const hidden = streaming ? 'none' : '';
     this._layersSection.style.display = hidden;
     this._colorBySection.style.display = hidden;
-    this._pointSizeSection.style.display = hidden;
-    this._renderingSection.style.display = hidden;
     this._exportSection.style.display = hidden;
+    // The Render-quality section (point size, point-size mode, EDL,
+    // antialiasing) stays visible while streaming. Each control applies to the
+    // resident streaming node materials and every newly-decoded node inherits
+    // the current setting at build time, so they are fully functional — and
+    // none has a StreamingPanel equivalent, so hiding the section removed
+    // point-thickness control on a streaming COPC.
     this.element.classList.toggle('olv-inspector-streaming', streaming);
   }
 
