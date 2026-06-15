@@ -13,6 +13,7 @@ import { formatInfo } from './formatInfo';
 import type { SourceMetadata } from './PointCloudSource';
 import { buildPreloadSummary } from './preloadSummary';
 import { LoadError } from './loadErrors';
+import type { LoadErrorCategory } from './loadErrors';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
 export { POINT_BUDGET, MOBILE_POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
@@ -82,7 +83,7 @@ interface CloudPayload {
 
 type WorkerReply =
   | ({ type: 'progress' } & ProgressUpdate)
-  | { type: 'error'; error: string }
+  | { type: 'error'; error: string; category?: LoadErrorCategory }
   | {
       type: 'done';
       cloud: CloudPayload;
@@ -314,7 +315,12 @@ export async function loadFile(
       }
       detach();
       if (msg.type === 'error') {
-        reject(new Error(msg.error));
+        // Rebuild the typed LoadError when the worker carried a category, so
+        // the toast shows the precise message rather than a text-classified
+        // guess. Falls back to a plain Error for untyped worker failures.
+        reject(
+          msg.category ? new LoadError(msg.category, msg.error) : new Error(msg.error),
+        );
         return;
       }
       resolve({
