@@ -18,6 +18,7 @@
  */
 
 import type { CrsKind } from './CoordinateTypes';
+import type { CrsLinearUnit } from '../io/crs';
 
 /**
  * One registry entry. The picker shows `label`; the converter keys
@@ -39,6 +40,16 @@ export interface CrsRegistryEntry {
     | 'other';
   /** One-line note shown as the option's title attribute. */
   readonly note: string;
+  /**
+   * Linear unit of a projected entry, when it is NOT metres, with the metres
+   * per unit. Every projected entry in the registry today is metre-based (UTM,
+   * national grids), so these are omitted and consumers default to metre /
+   * factor 1. A future foot-based entry (a US State Plane ftUS zone) sets them
+   * so the measurement boundary scales by the true factor rather than assuming
+   * metres. Always omitted for geographic entries (their unit is angular).
+   */
+  readonly linearUnit?: CrsLinearUnit;
+  readonly linearUnitToMetres?: number;
 }
 
 const ENTRIES: readonly CrsRegistryEntry[] = [

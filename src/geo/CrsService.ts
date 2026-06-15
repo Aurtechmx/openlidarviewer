@@ -286,14 +286,20 @@ export class CrsService {
       kind: override.kind,
       name,
       epsg: override.epsg,
+      // Linear unit, in priority order: borrow the detector's when it described
+      // this exact EPSG; else read the registry entry's unit (set only for the
+      // non-metre entries); else fall back — geographic is angular ('unknown'),
+      // a projected entry defaults to metres (every registry projected entry is
+      // metre-based today). This replaces a hard-coded 'metre' that would have
+      // mislabelled a future foot-based CRS.
       linearUnit:
         detected?.epsg === override.epsg
           ? detected.linearUnit
-          : override.kind === 'geographic'
-            ? 'unknown'
-            : 'metre',
+          : (entry?.linearUnit ?? (override.kind === 'geographic' ? 'unknown' : 'metre')),
       linearUnitToMetres:
-        detected?.epsg === override.epsg ? detected.linearUnitToMetres : 1,
+        detected?.epsg === override.epsg
+          ? detected.linearUnitToMetres
+          : (entry?.linearUnitToMetres ?? 1),
       source: 'user-override',
       confidence: 'high',
       userConfirmed: true,
