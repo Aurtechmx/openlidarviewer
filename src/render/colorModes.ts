@@ -267,13 +267,17 @@ const CLASS_PALETTE: Readonly<Record<number, readonly [number, number, number]>>
   9:  [ 30, 100, 220],   // Water                      — blue
   10: [180, 220, 240],   // Rail                       — light blue
   11: [240, 240, 240],   // Road surface               — near-white
-  12: [200, 180, 120],   // Reserved                   — tan
+  12: [200, 180, 120],   // Overlap                    — tan
   13: [120,  50, 200],   // Wire guard / shield        — purple
   14: [ 80,  20, 160],   // Wire conductor / phase     — violet
   15: [ 50, 200, 230],   // Transmission tower         — cyan
   16: [230, 180, 255],   // Wire connector             — light violet
   17: [255, 255,   0],   // Bridge deck                — bright yellow
   18: [255,   0, 255],   // High noise                 — magenta
+  19: [120, 130, 150],   // Overhead structure         — slate
+  20: [110,  80,  50],   // Ignored ground             — dim brown (muted ground)
+  21: [235, 245, 255],   // Snow                       — near-white blue tint
+  22: [150, 120, 170],   // Temporal exclusion         — muted purple
 };
 
 /**
@@ -299,13 +303,17 @@ const CLASS_PALETTE_CVD: Readonly<Record<number, readonly [number, number, numbe
   9:  [  0, 114, 178],   // Water             — Okabe-Ito blue
   10: [ 86, 180, 233],   // Rail              — Okabe-Ito sky blue
   11: [225, 225, 225],   // Road surface      — near-white
-  12: [190, 160,  90],   // Reserved          — muted tan
+  12: [190, 160,  90],   // Overlap           — muted tan
   13: [150,  80, 120],   // Wire guard        — dark reddish purple
   14: [110,  60, 140],   // Wire conductor    — violet
   15: [ 40, 120, 170],   // Transmission tower— dark sky blue
   16: [220, 160, 200],   // Wire connector    — light reddish purple
   17: [240, 228,  66],   // Bridge deck       — yellow
   18: [240, 140,  90],   // High noise        — light vermillion
+  19: [100, 110, 130],   // Overhead structure— dark slate
+  20: [140, 100,  60],   // Ignored ground    — dim brown
+  21: [220, 235, 250],   // Snow              — pale blue-white
+  22: [170, 140, 190],   // Temporal exclusion— light purple
 };
 
 /**
