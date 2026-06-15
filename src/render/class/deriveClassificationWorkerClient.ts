@@ -24,6 +24,7 @@ interface PendingRequest {
   reject: (error: Error) => void;
   signal?: AbortSignal;
   onAbort?: () => void;
+  onProgress?: (phase: string) => void;
 }
 
 interface OkReply {
@@ -41,7 +42,12 @@ interface ErrorReply {
   ok: false;
   error: string;
 }
-type WorkerReply = OkReply | ErrorReply;
+/** A mid-run progress message — carries no `ok`, never settles the job. */
+interface ProgressReply {
+  jobId: number;
+  phase: string;
+}
+type WorkerReply = OkReply | ErrorReply | ProgressReply;
 
 /** The minimal client surface {@link deriveClassificationAsync} drives. */
 export interface DeriveClassificationClientLike {
@@ -50,6 +56,7 @@ export interface DeriveClassificationClientLike {
     n: number,
     options: DeriveClassificationOptions,
     signal?: AbortSignal,
+    onProgress?: (phase: string) => void,
   ): Promise<DeriveClassificationResult>;
 }
 
@@ -65,6 +72,7 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
     n: number,
     options: DeriveClassificationOptions,
     signal?: AbortSignal,
+    onProgress?: (phase: string) => void,
   ): Promise<DeriveClassificationResult> {
     const jobId = this._nextJobId++;
     return new Promise<DeriveClassificationResult>((resolve, reject) => {
@@ -78,7 +86,7 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
       }
       const worker = this._ensureWorker();
 
-      const pending: PendingRequest = { resolve, reject, signal };
+      const pending: PendingRequest = { resolve, reject, signal, onProgress };
       if (signal) {
         pending.onAbort = (): void => {
           if (!this._pending.delete(jobId)) return;
@@ -88,6 +96,10 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
       }
       this._pending.set(jobId, pending);
 
+      // Copy then TRANSFER: the caller's Float32Array must never be detached
+      // (it's the live cloud's positions), so we hand the worker a throwaway
+      // copy's buffer it can own zero-copy. The transient ~2× memory during the
+      // call is deliberate — correctness over saving one buffer.
       const copy = positions.slice();
       worker.postMessage(
         { jobId, positions: copy.buffer, n, options },
@@ -123,6 +135,11 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
   private _onMessage(reply: WorkerReply): void {
     const pending = this._pending.get(reply.jobId);
     if (!pending) return;
+    // Progress messages report a phase and do NOT settle the job.
+    if (!('ok' in reply)) {
+      pending.onProgress?.(reply.phase);
+      return;
+    }
     this._pending.delete(reply.jobId);
     if (pending.onAbort && pending.signal) {
       pending.signal.removeEventListener('abort', pending.onAbort);

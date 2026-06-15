@@ -2529,13 +2529,23 @@ export class Viewer {
    */
   private _attachClassAttribute(entry: CloudEntry, codes: Uint8Array): void {
     const instanceCount = entry.cloud.pointCount;
-    const classData = new Float32Array(instanceCount);
     const n = Math.min(instanceCount, codes.length);
-    for (let i = 0; i < n; i++) classData[i] = codes[i];
-    entry.mesh.geometry.setAttribute(
-      'aClass',
-      new THREE.InstancedBufferAttribute(classData, 1),
-    );
+    // Re-deriving a cloud reuses the existing aClass buffer in place rather
+    // than allocating a new InstancedBufferAttribute — so a re-classify never
+    // orphans the previous GPU buffer. Only the first derive (no attribute yet,
+    // or a length change) allocates.
+    const existing = entry.mesh.geometry.getAttribute('aClass') as
+      | THREE.InstancedBufferAttribute
+      | undefined;
+    if (existing && existing.array.length === instanceCount) {
+      const arr = existing.array as Float32Array;
+      for (let i = 0; i < n; i++) arr[i] = codes[i];
+      existing.needsUpdate = true;
+    } else {
+      const classData = new Float32Array(instanceCount);
+      for (let i = 0; i < n; i++) classData[i] = codes[i];
+      entry.mesh.geometry.setAttribute('aClass', new THREE.InstancedBufferAttribute(classData, 1));
+    }
     this._materialsWithClass.add(entry.material);
     this._applySizeMode(entry.material);
     entry.material.needsUpdate = true;

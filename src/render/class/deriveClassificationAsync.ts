@@ -96,13 +96,14 @@ export async function deriveClassificationAsync(
   options: DeriveClassificationOptions = {},
   signal?: AbortSignal,
   client?: DeriveClassificationClientLike,
+  onProgress?: (phase: string) => void,
 ): Promise<DeriveClassificationResult> {
   if (signal?.aborted) {
     throw new DOMException('Classification aborted', 'AbortError');
   }
   try {
     const c = client ?? (await getSharedClient());
-    const result = await c.classify(positions, n, options, signal);
+    const result = await c.classify(positions, n, options, signal, onProgress);
     lastComputePath = 'worker';
     if (debugEnabled()) console.info('[classify] derived via worker');
     return result;
@@ -119,7 +120,9 @@ export async function deriveClassificationAsync(
           `${MAX_FALLBACK_POINTS}). Reload to restore the worker.`,
       );
     }
-    const result = deriveClassification(positions, n, options);
+    // The synchronous fallback reports the same phases (best-effort, though it
+    // blocks the main thread so the UI won't repaint between them).
+    const result = deriveClassification(positions, n, options, onProgress);
     lastComputePath = 'fallback';
     if (debugEnabled()) console.info('[classify] derived via main thread (fallback)');
     return result;

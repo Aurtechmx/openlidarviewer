@@ -95,6 +95,27 @@ describe('deriveClassification — synthetic ground / building / tree', () => {
     expect(Array.from(again.codes)).toEqual(Array.from(res.codes));
   });
 
+  it('reports progress phases without changing the output', () => {
+    const phases: string[] = [];
+    const withPhases = deriveClassification(
+      scene.positions, scene.count, { cellSizeM: 1 }, (p) => phases.push(p),
+    );
+    // The four pipeline phases fire in order.
+    expect(phases).toEqual([
+      'Building ground surface', 'Filtering ground', 'Height above ground', 'Classifying',
+    ]);
+    // The callback is side-effect-only — codes are identical with or without it.
+    expect(Array.from(withPhases.codes)).toEqual(Array.from(res.codes));
+  });
+
+  it('survives a throwing onPhase callback (progress is best-effort)', () => {
+    expect(() =>
+      deriveClassification(scene.positions, scene.count, { cellSizeM: 1 }, () => {
+        throw new Error('listener blew up');
+      }),
+    ).not.toThrow();
+  });
+
   it('flags the result as derived with honest provenance', () => {
     expect(res.derived).toBe(true);
     expect(res.provenance).toMatch(/heuristic/i);

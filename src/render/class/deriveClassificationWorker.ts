@@ -35,7 +35,11 @@ ctx.onmessage = (event: MessageEvent<ClassifyMessage>): void => {
   const { jobId, positions, n, options } = event.data;
   try {
     const pos = new Float32Array(positions, 0, n * 3);
-    const res = deriveClassification(pos, n, options);
+    // Post each pipeline phase back as a `progress` message (distinct from the
+    // final ok/error reply) so the UI can show a live "deriving…" status.
+    const res = deriveClassification(pos, n, options, (phase) => {
+      ctx.postMessage({ jobId, phase });
+    });
     ctx.postMessage(
       {
         jobId,

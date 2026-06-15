@@ -152,86 +152,94 @@ function chooseCellSize(b: Bounds, count: number, opt: DeriveClassificationOptio
   return cell;
 }
 
-/** Separable square min filter (erosion) of `radius` cells, NaN-aware. */
-function erode(src: Float32Array, W: number, H: number, radius: number): Float32Array {
+/**
+ * Centred sliding-window extreme (min or max) over one logical line of `len`
+ * elements, where element k lives at `base + k*stride`. Uses a monotonic deque
+ * so the whole line is O(len), independent of the window radius — the input is
+ * already hole-free (see {@link fillHoles}), so no NaN handling is needed.
+ */
+function lineExtreme(
+  src: Float32Array,
+  dst: Float32Array,
+  base: number,
+  stride: number,
+  len: number,
+  r: number,
+  isMin: boolean,
+  dq: Int32Array,
+): void {
+  let head = 0, tail = 0, next = 0;
+  for (let i = 0; i < len; i++) {
+    const hi = i + r < len - 1 ? i + r : len - 1;
+    while (next <= hi) {
+      const v = src[base + next * stride];
+      while (tail > head) {
+        const tv = src[base + dq[tail - 1] * stride];
+        if (isMin ? tv < v : tv > v) break; // keep the deque monotonic
+        tail--;
+      }
+      dq[tail++] = next;
+      next++;
+    }
+    const lo = i - r;
+    while (dq[head] < lo) head++;
+    dst[base + i * stride] = src[base + dq[head] * stride];
+  }
+}
+
+/** Separable square min/max filter of `radius` cells via {@link lineExtreme}. */
+function morph(src: Float32Array, W: number, H: number, r: number, isMin: boolean): Float32Array {
+  const dq = new Int32Array(Math.max(W, H));
   const tmp = new Float32Array(W * H);
-  // Horizontal pass.
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      let m = Infinity;
-      for (let dx = -radius; dx <= radius; dx++) {
-        const xx = x + dx;
-        if (xx < 0 || xx >= W) continue;
-        const v = src[y * W + xx];
-        if (Number.isFinite(v) && v < m) m = v;
-      }
-      tmp[y * W + x] = m;
-    }
-  }
-  // Vertical pass.
+  for (let y = 0; y < H; y++) lineExtreme(src, tmp, y * W, 1, W, r, isMin, dq);
   const out = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      let m = Infinity;
-      for (let dy = -radius; dy <= radius; dy++) {
-        const yy = y + dy;
-        if (yy < 0 || yy >= H) continue;
-        const v = tmp[yy * W + x];
-        if (Number.isFinite(v) && v < m) m = v;
-      }
-      out[y * W + x] = m;
-    }
-  }
+  for (let x = 0; x < W; x++) lineExtreme(tmp, out, x, W, H, r, isMin, dq);
   return out;
 }
 
-/** Separable square max filter (dilation) of `radius` cells, NaN-aware. */
-function dilate(src: Float32Array, W: number, H: number, radius: number): Float32Array {
-  const tmp = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      let m = -Infinity;
-      for (let dx = -radius; dx <= radius; dx++) {
-        const xx = x + dx;
-        if (xx < 0 || xx >= W) continue;
-        const v = src[y * W + xx];
-        if (Number.isFinite(v) && v > m) m = v;
-      }
-      tmp[y * W + x] = m;
-    }
-  }
-  const out = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      let m = -Infinity;
-      for (let dy = -radius; dy <= radius; dy++) {
-        const yy = y + dy;
-        if (yy < 0 || yy >= H) continue;
-        const v = tmp[yy * W + x];
-        if (Number.isFinite(v) && v > m) m = v;
-      }
-      out[y * W + x] = Number.isFinite(m) ? m : src[y * W + x];
-    }
-  }
-  return out;
+/** Morphological opening (erosion then dilation) — removes positive features
+ *  smaller than the structuring element, the PMF object test. */
+function morphOpen(src: Float32Array, W: number, H: number, r: number): Float32Array {
+  return morph(morph(src, W, H, r, true), W, H, r, false);
 }
 
-/** Fill NaN cells (empty footprint cells) with the nearest finite value by a
- *  cheap two-pass forward/backward sweep, so interpolation has no holes. */
+/**
+ * Fill empty (NaN) footprint cells so the bare-earth grid has no holes. Each
+ * hole is filled with the mean of its finite 4-neighbours, propagating real
+ * ground inward from the footprint boundary over a bounded number of passes
+ * (snapshot per pass so the fill is order-independent / deterministic). Any
+ * cell still empty after the cap — a deeply enclosed void — takes the global
+ * mean. This is a true 2-D fill, not a 1-D streak.
+ */
 function fillHoles(grid: Float32Array, W: number, H: number): void {
-  // Forward sweep.
-  let last = NaN;
+  let holes = 0, sum = 0, finite = 0;
   for (let i = 0; i < grid.length; i++) {
-    if (Number.isFinite(grid[i])) last = grid[i];
-    else if (Number.isFinite(last)) grid[i] = last;
+    if (Number.isFinite(grid[i])) { sum += grid[i]; finite++; }
+    else holes++;
   }
-  // Backward sweep for the leading holes.
-  last = NaN;
-  for (let i = grid.length - 1; i >= 0; i--) {
-    if (Number.isFinite(grid[i])) last = grid[i];
-    else if (Number.isFinite(last)) grid[i] = last;
+  if (holes === 0) return;
+  if (finite === 0) { grid.fill(0); return; } // pathological; keep it finite
+  const mean = sum / finite;
+
+  const PASSES = 24;
+  for (let pass = 0; pass < PASSES && holes > 0; pass++) {
+    const snap = grid.slice();
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (Number.isFinite(snap[i])) continue;
+        let s = 0, c = 0;
+        if (x > 0     && Number.isFinite(snap[i - 1])) { s += snap[i - 1]; c++; }
+        if (x < W - 1 && Number.isFinite(snap[i + 1])) { s += snap[i + 1]; c++; }
+        if (y > 0     && Number.isFinite(snap[i - W])) { s += snap[i - W]; c++; }
+        if (y < H - 1 && Number.isFinite(snap[i + W])) { s += snap[i + W]; c++; }
+        if (c > 0) { grid[i] = s / c; holes--; }
+      }
+    }
   }
-  void W; void H;
+  if (holes > 0) {
+    for (let i = 0; i < grid.length; i++) if (!Number.isFinite(grid[i])) grid[i] = mean;
+  }
 }
 
 /**
@@ -242,7 +250,9 @@ export function deriveClassification(
   positions: Float32Array,
   count: number,
   options: DeriveClassificationOptions = {},
+  onPhase?: (phase: string) => void,
 ): DeriveClassificationResult {
+  const phase = (p: string): void => { try { onPhase?.(p); } catch { /* progress is best-effort */ } };
   const o = { ...DEFAULTS, ...options };
   const b = computeBounds(positions, count);
 
@@ -273,6 +283,7 @@ export function deriveClassification(
   };
 
   // 1. Grid-minimum surface.
+  phase('Building ground surface');
   const gridMin = new Float32Array(W * H).fill(NaN);
   for (let i = 0; i < count; i++) {
     const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
@@ -286,10 +297,11 @@ export function deriveClassification(
   // 2. Progressive morphological opening → bare-earth grid. Geometric window
   //    ladder 1,2,4,… up to maxObjectSize; the threshold grows with the window
   //    so larger structures need a larger drop to be carved out (slope-scaled).
+  phase('Filtering ground');
   const maxRadiusCells = Math.max(1, Math.round(o.maxObjectSizeM / cell));
   const ground = gridMin.slice();
   for (let r = 1; r <= maxRadiusCells; r *= 2) {
-    const opened = dilate(erode(ground, W, H, r), W, H, r);
+    const opened = morphOpen(ground, W, H, r);
     const dhT = o.elevThresholdM + o.slope * (r * cell);
     for (let i = 0; i < ground.length; i++) {
       // Carve down to the opened surface where the raw stands proud by > dhT
@@ -303,6 +315,7 @@ export function deriveClassification(
   }
 
   // 3 + 4. Bilinear DTM sample + per-point HAG.
+  phase('Height above ground');
   const dtmAt = (x: number, y: number): number => {
     const gx = (x - b.minX) / cell;
     const gy = (y - b.minY) / cell;
@@ -375,6 +388,7 @@ export function deriveClassification(
   };
 
   // 6. Rule classification.
+  phase('Classifying');
   const codes = new Uint8Array(count);
   const counts: Record<number, number> = {};
   const bump = (code: number): void => { counts[code] = (counts[code] ?? 0) + 1; };
