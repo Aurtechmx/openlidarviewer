@@ -14,6 +14,8 @@
  * renderer surface.
  */
 
+import type { ReportInspectionSummary } from './ReportFindings';
+
 /** The five built-in report templates. */
 export type ReportTemplateId =
   | 'engineering-inspection'
@@ -30,6 +32,7 @@ export type ReportTemplateId =
 /** Which sections a template wants, in render order. */
 export type ReportSectionId =
   | 'cover'
+  | 'inspection-summary'     // synthesised findings card (density tier, gaps, caveats)
   | 'dataset-summary'
   | 'provenance'             // v0.3.6 — auto-computed capture-type + literature bounds
   | 'visuals'
@@ -218,6 +221,14 @@ export interface ReportInputs {
    * inlined here so the report module stays diagnostics-blind.
    */
   readonly provenance?: ReportProvenanceFingerprint;
+  /**
+   * Synthesised inspection summary — a headline + scannable findings + the
+   * explicit list of what the report does not establish. Built by
+   * `buildInspectionSummary` in the composer from the dataset metadata and
+   * the provenance fingerprint. Rendered by templates that include the
+   * `inspection-summary` section; omitted otherwise.
+   */
+  readonly summary?: ReportInspectionSummary;
 }
 
 /**
