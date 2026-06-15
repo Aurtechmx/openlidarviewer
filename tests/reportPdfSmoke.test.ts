@@ -128,6 +128,33 @@ describe('PDF report smoke render', () => {
     });
   }
 
+  it('draws a vector profile chart for a profile measurement with samples', async () => {
+    const inputs = makeInputs(DEFAULT_TEMPLATE_ID);
+    const withProfile: ReportInputs = {
+      ...inputs,
+      measurements: [
+        {
+          name: 'Section A–B', kind: 'profile', value: '125.8 m', pointCount: 2,
+          profileExtras: {
+            summary: 'Horizontal 120 m · 3D 126 m · Δh 12 m · 10.00% grade',
+            stations: '0 m · 25 m · 50 m · 75 m · 100 m',
+            stationInterval: 'Station interval 25 m (5 stations)',
+            slopeSummary: 'Max +12%, Min -1%, Avg +5%',
+            chart: Array.from({ length: 20 }, (_, i) => ({
+              distance: i * 5,
+              height: Math.sin(i / 3) * 4 + 10,
+            })),
+          },
+        },
+      ],
+    };
+    const result = await generateReport(withProfile);
+    expect(result.mimeType).toBe('application/pdf');
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
+    expect(result.pages).toBeGreaterThan(0);
+  });
+
   it('renders the default template id', async () => {
     const result = await generateReport(makeInputs(DEFAULT_TEMPLATE_ID));
     expect(result.pages).toBeGreaterThan(0);
