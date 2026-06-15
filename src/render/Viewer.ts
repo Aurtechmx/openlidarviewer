@@ -2493,12 +2493,10 @@ export class Viewer {
    * switch it to classification colours. The codes come from the unsupervised
    * `deriveClassification` pipeline (run off-thread via `deriveClassificationAsync`).
    *
-   * Display, the legend histogram and export all read `cloud.classification`,
-   * so this immediately colours the cloud by class, lets the legend list the
-   * derived classes, and flows the codes into LAS export — all flagged DERIVED
-   * via `cloud.classificationIsDerived`. (GPU class-FILTER visibility toggling
-   * of derived classes needs the material's mask node, which is only built for
-   * clouds that loaded WITH classification; that remains a follow-up.)
+   * Display, the legend histogram, the GPU class FILTER, and export all read
+   * the derived codes, so this immediately colours the cloud by class, lets the
+   * legend list AND show/hide the derived classes, and flows the codes into LAS
+   * export — all flagged DERIVED via `cloud.classificationIsDerived`.
    *
    * Returns false when the id is unknown; throws on a code/point length
    * mismatch (a caller bug worth surfacing, not swallowing).
@@ -2507,6 +2505,11 @@ export class Viewer {
     const entry = this._clouds.get(id);
     if (!entry) return false;
     entry.cloud.attachDerivedClassification(codes);
+    // Give the mesh the same GPU class-filter wiring a cloud loaded WITH
+    // classification gets: an `aClass` per-instance attribute plus the
+    // class-mask multiply folded into the size node. Without this the legend
+    // could colour the derived classes but not hide them.
+    this._attachClassAttribute(entry, codes);
     if (entry.mode === 'classification') {
       this._refreshClassificationColours(id);
     } else {
@@ -2514,6 +2517,28 @@ export class Viewer {
     }
     this._bumpRenderActivity();
     return true;
+  }
+
+  /**
+   * Attach (or replace) the `aClass` instanced attribute on a cloud's mesh and
+   * fold the class-mask multiply into its size node — the same wiring
+   * `_buildPointsMesh` does at load for a classified cloud, applied after the
+   * fact for a derived classification. Idempotent: re-deriving rewrites the
+   * attribute and re-applies the size mode. `material.needsUpdate` forces the
+   * node graph + new attribute to recompile.
+   */
+  private _attachClassAttribute(entry: CloudEntry, codes: Uint8Array): void {
+    const instanceCount = entry.cloud.pointCount;
+    const classData = new Float32Array(instanceCount);
+    const n = Math.min(instanceCount, codes.length);
+    for (let i = 0; i < n; i++) classData[i] = codes[i];
+    entry.mesh.geometry.setAttribute(
+      'aClass',
+      new THREE.InstancedBufferAttribute(classData, 1),
+    );
+    this._materialsWithClass.add(entry.material);
+    this._applySizeMode(entry.material);
+    entry.material.needsUpdate = true;
   }
 
   /**

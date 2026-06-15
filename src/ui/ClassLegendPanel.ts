@@ -76,6 +76,9 @@ export class ClassLegendPanel {
   /** The "Filtered — showing N of M classes" banner (hidden when unfiltered). */
   private readonly _banner: HTMLElement;
 
+  /** The "Derived (heuristic)" provenance caption (hidden unless derived). */
+  private readonly _provenance: HTMLElement;
+
   /** The "Show all" reset button. */
   private readonly _showAllBtn: HTMLButtonElement;
 
@@ -106,6 +109,15 @@ export class ClassLegendPanel {
     head.addEventListener('click', (e) => {
       if (e.target === head || e.target === title) toggleCollapsed();
     });
+
+    // Honest "derived" caption — shown only when the classification was
+    // produced by the viewer's heuristic classifier, so the legend never
+    // reads as a producer's authoritative classification. Hidden by default.
+    this._provenance = el('div', {
+      className: 'olv-cl-derived olv-hidden',
+      text: 'Derived (heuristic) — not survey-grade. Validate before relying on it.',
+    });
+    this._provenance.setAttribute('role', 'note');
 
     this._banner = el('div', { className: 'olv-cl-banner olv-hidden' });
     this._banner.setAttribute('role', 'status');
@@ -151,6 +163,7 @@ export class ClassLegendPanel {
 
     this.element = el('aside', { className: 'olv-class-panel olv-hidden' }, [
       head,
+      this._provenance,
       this._banner,
       this._list,
       this._empty,
@@ -210,7 +223,20 @@ export class ClassLegendPanel {
     this._counts = new Map(counts);
     this._hasChannel = this._presentCodes().length > 0;
     this._visibility = new ClassVisibility();
+    // A fresh classification set is authoritative by default; the derive flow
+    // re-flags it after this call. Reset so a derived caption never lingers
+    // onto a subsequently-loaded file-classified scan.
+    this.setDerivedProvenance(false);
     this._render();
+  }
+
+  /**
+   * Show or hide the "Derived (heuristic) — not survey-grade" caption. The host
+   * calls this with `true` right after applying a derived classification, so
+   * the legend honestly reads as heuristic rather than authoritative.
+   */
+  setDerivedProvenance(on: boolean): void {
+    this._provenance.classList.toggle('olv-hidden', !on);
   }
 
   /**
