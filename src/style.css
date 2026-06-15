@@ -1082,6 +1082,9 @@ button:disabled { cursor: not-allowed; }
   margin-top: var(--space-lg);
 }
 .olv-render-sublabel:first-child { margin-top: 0; }
+/* Sublabel that carries a right-aligned value readout (e.g. "Point size · 1.0 px"). */
+.olv-render-sublabel-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.olv-render-value { font-family: var(--mono); font-weight: 500; color: var(--text-muted, #9aa0aa); font-variant-numeric: tabular-nums; }
 .olv-render-label { font-size: var(--text-xs); color: #8a909a; min-width: 52px; }
 .olv-detail-bar { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
 .olv-detail-fill { height: 100%; background: var(--brand-gradient); }
@@ -3561,7 +3564,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* ── Classification legend panel ─────────────────────────────────────────── */
 .olv-class-panel {
-  width: 218px; box-sizing: border-box;
+  /* 248px (was 218): the class name shares the row with a wide point count and
+     the Solo button, so 218 truncated common names ("Low vegetation") to a few
+     letters. The extra width lets the names read; the full name is still on the
+     row's hover title for anything that still clips. */
+  width: 248px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: 10px; padding: 12px;
 }
