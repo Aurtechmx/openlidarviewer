@@ -2,6 +2,46 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.7] - 2026-06-14
+
+A correctness and honesty pass across the load, export, and analysis paths,
+with no user-facing feature changes.
+
+### Fixed
+
+- **Empty files are rejected with a clear message.** A file that decodes to
+  zero points is no longer opened into a blank, unframable scene; it is
+  rejected at the parse stage with a message explaining there are no points to
+  display. A point cloud with no points now reports a finite bounding box
+  rather than an infinite one, so nothing downstream can target a degenerate
+  camera.
+- **Reprojection never ships non-finite coordinates.** A transform whose output
+  falls outside the target projection's valid area (proj4 returns Infinity or
+  NaN without raising an error) is now treated as a failed transform: the
+  coordinates are left in their source system and the converter reports how many
+  points were affected, instead of writing a file with NaN coordinates.
+- **Contour map sheet reports an unmeasured interpolation honestly.** When there
+  are no contours to measure, the legend reads "Interpolated fraction — not
+  measured" instead of a fabricated "0% interpolated".
+- **Measured areas read the same in the PDF report as on screen.** The report's
+  area formatting is single-sourced from the live measurement overlay, so a
+  polygon documents itself in the same units (m² / ft² / acre) the user saw
+  while measuring.
+- **Point density reads "—" when it is unknown.** With neither a measured
+  density nor the point count and bounds to derive one, the dataset card no
+  longer shows a confident "Sparse"; it shows "—", matching how terrain
+  complexity and ground visibility already report a missing signal.
+- **Disposal.** The colour-recompute throttle's trailing timer is cleared when a
+  viewer is torn down, so it can no longer fire against a disposed renderer.
+
+### Changed
+
+- **One byte-size formatter** is shared across the stage, batch converter, debug
+  overlay, and streaming panels, so a file size reads identically everywhere.
+- **The unit test suite is split into four buckets** (`test:unit`,
+  `test:terrain`, `test:ui`, `test:slow`) that together cover the whole suite,
+  so it can run in parallel.
+
 ## [0.4.6] - 2026-06-14
 
 Phase 1 of the design audit (visual-only; verdict-as-hero, two-tier surfaces,
