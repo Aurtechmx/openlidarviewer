@@ -79,7 +79,16 @@ export class PointCloud {
   readonly positions: Float32Array;
   readonly colors?: Uint8Array;
   readonly intensity?: Uint16Array;
-  readonly classification?: Uint8Array;
+  /**
+   * Per-point ASPRS classification, backed privately so the only way to set it
+   * after construction is {@link attachDerivedClassification} — which also
+   * records that the codes are DERIVED (a heuristic), never confusing them with
+   * a producer's classification. The public getter keeps the read API identical
+   * to the former public field. Array CONTENTS stay mutable for the in-place
+   * class editor (swap / polygon reclassify).
+   */
+  private _classification?: Uint8Array;
+  private _classificationDerived = false;
   readonly normals?: Float32Array;
   readonly returnNumber?: Uint8Array;
   readonly returnCount?: Uint8Array;
@@ -106,7 +115,7 @@ export class PointCloud {
     this.positions = options.positions;
     this.colors = options.colors;
     this.intensity = options.intensity;
-    this.classification = options.classification;
+    this._classification = options.classification;
     this.normals = options.normals;
     this.returnNumber = options.returnNumber;
     this.returnCount = options.returnCount;
@@ -123,6 +132,37 @@ export class PointCloud {
   /** Number of points: three position components per point. */
   get pointCount(): number {
     return this.positions.length / 3;
+  }
+
+  /** Per-point ASPRS classification (original from the file, or derived). */
+  get classification(): Uint8Array | undefined {
+    return this._classification;
+  }
+
+  /**
+   * Whether the classification was DERIVED by the viewer's heuristic
+   * classifier rather than read from the source file. Callers surface this so
+   * derived codes are never presented as a producer's authoritative
+   * classification (legend badge, export provenance).
+   */
+  get classificationIsDerived(): boolean {
+    return this._classificationDerived;
+  }
+
+  /**
+   * Attach a heuristic, derived classification to a cloud that had none (or
+   * replace a prior derived one). Marks the cloud as carrying DERIVED codes.
+   * Rejects a length mismatch rather than silently misaligning codes to points.
+   */
+  attachDerivedClassification(codes: Uint8Array): void {
+    if (codes.length !== this.pointCount) {
+      throw new Error(
+        `attachDerivedClassification: ${codes.length} codes for ` +
+          `${this.pointCount} points — length mismatch.`,
+      );
+    }
+    this._classification = codes;
+    this._classificationDerived = true;
   }
 
   /**
