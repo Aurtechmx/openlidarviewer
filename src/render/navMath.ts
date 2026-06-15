@@ -223,8 +223,14 @@ export function nearestPointAlongRay(
   dir: Vec3,
   accept?: (index: number) => boolean,
 ): RayHit | null {
-  let best: RayHit | null = null;
+  // Track the winner as scalars and build the RayHit once at the end. The old
+  // code allocated a fresh `{ point: [x,y,z], … }` object on every score
+  // improvement — on a multi-million-point cloud that is a burst of short-lived
+  // garbage per pick. Scalars keep the inner loop allocation-free.
   let bestScore = Infinity;
+  let bestIndex = -1;
+  let bestOffset = 0;
+  let bestAlong = 0;
   for (let i = 0; i < positions.length; i += 3) {
     if (accept !== undefined && !accept(i / 3)) continue;
     const vx = positions[i] - origin[0];
@@ -243,13 +249,16 @@ export function nearestPointAlongRay(
     const score = offset / along; // angular miss — fair across depth
     if (score < bestScore) {
       bestScore = score;
-      best = {
-        index: i / 3,
-        point: [positions[i], positions[i + 1], positions[i + 2]],
-        offset,
-        along,
-      };
+      bestIndex = i;
+      bestOffset = offset;
+      bestAlong = along;
     }
   }
-  return best;
+  if (bestIndex < 0) return null;
+  return {
+    index: bestIndex / 3,
+    point: [positions[bestIndex], positions[bestIndex + 1], positions[bestIndex + 2]],
+    offset: bestOffset,
+    along: bestAlong,
+  };
 }
