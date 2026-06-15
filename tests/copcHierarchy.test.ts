@@ -161,3 +161,24 @@ test('CopcSource.open rejects a non-COPC file', async () => {
     CopcSource.open(new ArrayBufferRangeSource(notCopc.buffer)),
   ).rejects.toThrow(LoadError);
 });
+
+test('CopcSource.close releases the underlying range source', async () => {
+  const fixture = buildSyntheticCopc({ nodes: [{ key: [0, 0, 0, 0], pointCount: 100 }] });
+  // Wrap the array-buffer range source so we can observe the close() call the
+  // Viewer's detach path now makes through StreamingPointCloud.close().
+  const inner = new ArrayBufferRangeSource(fixture.buffer);
+  let closed = 0;
+  const spyRange = {
+    id: () => inner.id(),
+    kind: () => inner.kind(),
+    size: () => inner.size(),
+    readRange: (offset: number, length: number, signal?: AbortSignal) =>
+      inner.readRange(offset, length, signal),
+    close: async () => {
+      closed++;
+    },
+  };
+  const source = await CopcSource.open(spyRange);
+  await source.close();
+  expect(closed).toBe(1);
+});

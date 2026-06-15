@@ -1739,6 +1739,11 @@ export class Viewer {
     if (!this._streaming) return;
     this._streaming.scheduler.stop();
     this._streaming.renderer.dispose();
+    // Release the source's underlying reader (COPC file handle / range source)
+    // so it doesn't outlive the detach. close() is async and may reject if the
+    // reader is already gone; detach is synchronous and best-effort, so fire it
+    // and swallow the rejection rather than block teardown.
+    void this._streaming.cloud.close?.().catch(() => {});
     this._streaming = null;
     this._lastStreamingCenter = null;
     // Recompute the orbit-clamp envelope from whatever static clouds remain

@@ -124,6 +124,13 @@ export interface StreamingSource {
    * the chunk bytes, and the worker uses it to produce a {@link DecodedChunk}.
    */
   decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata;
+  /**
+   * Release any resource the source holds open — a file handle, a range
+   * reader, a decode worker. Called by the Viewer when the streaming cloud is
+   * detached. Optional: a stateless source (a remote EPT over `fetch`) has
+   * nothing to release and omits it; a COPC source closes its range reader.
+   */
+  close?(): Promise<void>;
 }
 
 // Re-export `DecodedChunk` so consumers that import `StreamingSource` need
