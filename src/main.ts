@@ -1304,6 +1304,7 @@ async function runDeriveClassification(): Promise<void> {
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
     classLegendPanel.setClasses(countClasses(result.codes));
+    classLegendPanel.setDerivedProvenance(true);
     classLegendPanel.show();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
