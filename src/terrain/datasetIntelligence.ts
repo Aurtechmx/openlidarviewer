@@ -80,6 +80,43 @@ export type GroundVisibilityBucket = 'unknown' | 'poor' | 'fair' | 'good' | 'exc
 /** Streaming coverage bucket — mirrors TerrainCoverageMode. */
 export type CoverageBucket = TerrainCoverageMode;
 
+/** The Dataset Intelligence rows that carry a bucket. */
+export type IntelDimension = 'density' | 'complexity' | 'groundVisibility' | 'coverage';
+
+/**
+ * Qualitative signal tier for a Dataset Intelligence row, used to drive a
+ * quiet colour accent on the card. It maps the per-dimension buckets onto a
+ * single honest scale:
+ *   - `strong` / `moderate` / `weak` — the genuine quality axes (how much data,
+ *     how visible the ground, how complete the coverage).
+ *   - `neutral` — terrain complexity is DESCRIPTIVE, not a quality. A rugged
+ *     site is not "worse" than a flat one, so complexity never gets a
+ *     good/bad colour.
+ *   - `unknown` — no signal; rendered muted, mirroring the `—` label.
+ */
+export type SignalTier = 'strong' | 'moderate' | 'weak' | 'neutral' | 'unknown';
+
+/** Map a dimension's bucket onto its honest signal tier (see {@link SignalTier}). */
+export function signalTier(dimension: IntelDimension, bucket: string): SignalTier {
+  if (bucket === 'unknown') return 'unknown';
+  switch (dimension) {
+    case 'density':
+      if (bucket === 'sparse') return 'weak';
+      if (bucket === 'moderate') return 'moderate';
+      return 'strong'; // dense, very-dense
+    case 'groundVisibility':
+      if (bucket === 'poor') return 'weak';
+      if (bucket === 'fair') return 'moderate';
+      return 'strong'; // good, excellent
+    case 'coverage':
+      if (bucket === 'full') return 'strong';
+      if (bucket === 'resident-only') return 'moderate';
+      return 'weak'; // sampled — partial, carries the streaming caveat
+    case 'complexity':
+      return 'neutral'; // descriptive, never judged
+  }
+}
+
 /**
  * Confidence colour band — drives the chip colour, not the value.
  *

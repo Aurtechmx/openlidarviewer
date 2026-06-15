@@ -4729,6 +4729,30 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
+/*
+ * Quiet signal-tier accent (data-bucket phantom resolved). A small dot before
+ * the row value encodes the honest tier from `signalTier()`: the quality axes
+ * (density / ground visibility / coverage) read green / amber / red; terrain
+ * complexity is descriptive so it stays a neutral dot; a missing signal is
+ * muted. The bucket WORD is always shown alongside, so colour is never the
+ * sole carrier of meaning (WCAG 1.4.1). The dot is omitted on rows with no
+ * tier so legacy values render unchanged.
+ */
+.olv-di-row-value[data-tier]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: var(--space-xs);
+  vertical-align: 0.04em;
+  background: color-mix(in srgb, var(--text) 16%, transparent); /* unknown / fallback */
+}
+.olv-di-row-value[data-tier="strong"]::before   { background: var(--rating-excellent); }
+.olv-di-row-value[data-tier="moderate"]::before  { background: var(--rating-good); }
+.olv-di-row-value[data-tier="weak"]::before       { background: var(--rating-weak); }
+.olv-di-row-value[data-tier="neutral"]::before    { background: color-mix(in srgb, var(--text) 28%, transparent); }
+.olv-di-row-value[data-tier="unknown"]::before    { background: color-mix(in srgb, var(--text) 16%, transparent); }
 .olv-di-confidence-cell { display: inline-flex; align-items: center; gap: var(--space-sm); }
 .olv-di-confidence-chip {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
