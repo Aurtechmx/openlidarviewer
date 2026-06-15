@@ -5,7 +5,26 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 ## [0.4.7] - 2026-06-14
 
 A correctness and honesty pass across the load, export, and analysis paths,
-with no user-facing feature changes.
+alongside a few accessibility and workflow additions.
+
+### Added
+
+- **Colourblind-safe classification palette.** A checkbox in the Classes panel
+  recolours the classes with an Okabe-Ito categorical palette (ground orange,
+  vegetation as lightness steps of bluish-green, buildings vermillion, water
+  blue) that stays distinguishable under the common colour-vision deficiencies.
+  The class label and count stay on every row, so colour is never the only cue.
+- **Annotation grouping.** The Annotations panel and the PDF report now open
+  with a one-line summary of the notes — totals, the per-category breakdown, and
+  how many areas they fall across — so a dense set reads at a glance.
+- **Workflow recorder.** Record a sequence of camera moves and tool actions and
+  replay it (on the same scan), with a settings popup for the file format,
+  save destination, start/stop shortcut, replay speed, a pre-record countdown,
+  which action families are captured, and loop replay. Records actions only —
+  never scan data.
+- **Signal-tier cue on the Dataset Intelligence card.** A quiet coloured dot
+  marks each row's qualitative tier; terrain complexity stays neutral (it is
+  descriptive, not a quality) and a missing signal is muted.
 
 ### Fixed
 
