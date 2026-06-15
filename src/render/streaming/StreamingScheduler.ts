@@ -902,6 +902,11 @@ export class StreamingScheduler {
     }
     this._queue.length = 0;
     this._deferredEvictAt.clear();
+    // Free the compressed-chunk cache eagerly (tens of MB of ArrayBuffers)
+    // instead of waiting for the stopped scheduler to be GC'd — so detaching or
+    // replacing a streaming scan doesn't leave stale chunks resident exactly
+    // when the next scan is loading.
+    this._cache.clear();
     // a stopped scheduler must not resume into a cached
     // fast path — the wanted set and scored array are no longer valid once
     // queues are cleared. Drop them so the next `update` does a fresh full

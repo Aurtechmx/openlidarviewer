@@ -3934,6 +3934,12 @@ async function handleFile(file: File): Promise<void> {
     );
     await viewer.ready;
 
+    // The load succeeded — now free the previously-open scan (GPU buffers +
+    // retained file refs) BEFORE uploading the new one, so reopening scan after
+    // scan doesn't leak the old cloud's GPU memory. Done here (post-load) so a
+    // failed/cancelled load above never tears down the scan on screen.
+    clearOpenStaticLayers();
+
     dropZone.setProgress(formatProgress({ stage: 'uploading' }));
     stage.hideEmptyState();
     const uploadStartedAt = performance.now();
@@ -4211,10 +4217,7 @@ async function openStreamingCopc(
     : undefined;
 
   // A streaming scan is exclusive — clear any open static layers first.
-  for (const id of viewer.clouds()) {
-    viewer.removeCloud(id);
-    inspector.removeCloud(id);
-  }
+  clearOpenStaticLayers();
   stage.hideEmptyState();
   // Local-first counter — categorical only ('copc' or 'ept'); never the URL.
   recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
@@ -4489,10 +4492,7 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     if (controller.signal.aborted) throw new LoadCancelledError();
 
     // A streaming scan is exclusive — clear any open static layers first.
-    for (const id of viewer.clouds()) {
-      viewer.removeCloud(id);
-      inspector.removeCloud(id);
-    }
+    clearOpenStaticLayers();
     stage.hideEmptyState();
 
     const decoder = new EptChunkDecoder(cloud);
@@ -5073,6 +5073,25 @@ function removeCloud(id: string): void {
   reducedById.delete(id);
   if (activeId === id) activeId = null;
   if (viewer.clouds().length === 0) resetToEmptyState();
+}
+
+/**
+ * Free every currently-open static cloud before a new scan takes over — the
+ * mesh's GPU buffers (geometry + material + colour/class attributes) AND the
+ * retained source-file + reduced-flag map entries. A new open (static OR
+ * streaming) replaces the previous scan, so without this the prior cloud's GPU
+ * memory and File reference leak on every reopen (`activeId` is overwritten, so
+ * `removeCloud` could never reach the old id). Does NOT reset to the empty
+ * state — the caller adds the replacement immediately.
+ */
+function clearOpenStaticLayers(): void {
+  for (const id of viewer.clouds()) {
+    viewer.removeCloud(id);
+    inspector.removeCloud(id);
+    sourceFileById.delete(id);
+    reducedById.delete(id);
+    if (activeId === id) activeId = null;
+  }
 }
 
 /**

@@ -173,6 +173,13 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     }
   }
 
+  // Release the JS number[] accumulators now that the typed positions /
+  // intensity / colour outputs are built — the same memory-spike trim loadXyz
+  // does, so a large PTX scan doesn't hold the boxed-number arrays alongside
+  // the typed buffers (a transient 2–3× heap peak otherwise).
+  xs.length = 0; ys.length = 0; zs.length = 0;
+  intensityVals.length = 0; rgb.length = 0;
+
   const metadata: CloudMetadata | undefined = scannerOrigin ? { scannerOrigin } : undefined;
 
   return new PointCloud({
