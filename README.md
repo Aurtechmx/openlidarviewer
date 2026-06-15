@@ -404,13 +404,18 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.4.5**. The full, dated history is in
+The current release is **v0.4.6**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
 
+### v0.4.6 — Navigation, design audit & honesty hardening
+- Six axis-aligned **standard views** (Top / Bottom / Front / Back / Left / Right) plus an **Orthographic toggle** (a near-parallel long-lens projection) for distortion-free measuring; **icon + label toolbars** across the dock, measurement bar, Layers and Export; a header **full-screen toggle**; and a mobile bottom-sheet reflow
+- Phase 1 of the **design audit** (visual-only: verdict-as-hero, two-tier surfaces, quieter typography, all themes re-verified WCAG AA) and an equivalence-gated **WebGPU compute seam** where the CPU stays the reference and the GPU must prove per-session equivalence before it is trusted
+- Contour **map-sheet (PDF) fixes** (title/legend overlap, scale-bar unit match, ungeoreferenced sheets drop the graticule and north arrow) and label-vs-value drift fixes
+
 ### v0.4.0 – v0.4.5 — Terrain Intelligence + the honesty pipeline
 - Confidence-aware **DTM and contour pipeline** behind the **Analyse panel** — ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0–100 terrain quality score, surface models (DSM, canopy height, slope, multi-directional hillshade), and a single top-level Terrain Assessment verdict (0.4.0–0.4.4)
-- Evidence-graded **contour export** (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced **DEM package** (ASCII Grid + GeoTIFF), all gated behind a DTM quality check so a professional export is only offered when the surface earns it
+- Evidence-graded **contour export** (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced **DEM package** (ASCII Grid + GeoTIFF), all gated behind a DTM quality check so a terrain-product export is only offered when the surface passes the quality gate
 - One **readiness engine** behind every export verdict, a colourblind-safe **Confidence** colour overlay (twin of Coverage), and **profile intelligence** — summary, station table, CSV, sampler controls (0.4.5)
 - **True measurement units** on foot-CRS scans, **workflow presets** in the Visuals Studio, and an accessible **onboarding tour** (0.4.5)
 - Interior **floor plan** reconstruction — **experimental preview**: a wall-graph + room-segmentation sketch from interior scans, with claim-accurate "preview" labelling throughout; not a survey product
