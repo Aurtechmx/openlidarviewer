@@ -277,6 +277,12 @@ function buildProfileExtras(
           : 'no point-cloud samples attached to this profile.'
       }`;
 
+  // The renderer self-normalises, so pass the finite samples straight through
+  // (their absolute units are immaterial to the drawn shape).
+  const chart = samples
+    ? samples.filter((s) => Number.isFinite(s.distance) && Number.isFinite(s.height))
+    : undefined;
+
   return {
     summary: summaryLine,
     stations: stationsLine,
@@ -285,6 +291,7 @@ function buildProfileExtras(
     coverageCaveat: m.profileChartResidentOnly
       ? 'Resident-node analysis only — profile may refine as streaming loads.'
       : undefined,
+    chart: chart && chart.length >= 2 ? chart : undefined,
   };
 }
 

@@ -370,6 +370,59 @@ function drawBodyLine(
   return { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
 }
 
+/**
+ * Draw the cross-section profile as a small vector chart: a framed box with the
+ * elevation polyline, self-normalised to the box so the units are immaterial.
+ * Vector (not a rasterised image), so it stays sharp at any print zoom.
+ */
+function drawProfileChart(
+  cursor: PageCursor,
+  chart: ReadonlyArray<{ readonly distance: number; readonly height: number }>,
+  theme: ReportThemePalette,
+  accent: ParsedColor,
+  doc: PDFDocument,
+  organisation: string | undefined,
+): PageCursor {
+  const CHART_W = 240;
+  const CHART_H = 56;
+  const PAD = 5;
+  cursor = ensureSpace(cursor, CHART_H + 12, doc, accent, theme, organisation);
+  const x0 = MARGIN + 12;
+  const top = cursor.y;
+  const bottom = top - CHART_H;
+  const rule = rgb(theme.rule.r, theme.rule.g, theme.rule.b);
+
+  // Bounds of the samples (finite-only; the caller already filtered).
+  let dMin = Infinity, dMax = -Infinity, hMin = Infinity, hMax = -Infinity;
+  for (const s of chart) {
+    if (s.distance < dMin) dMin = s.distance;
+    if (s.distance > dMax) dMax = s.distance;
+    if (s.height < hMin) hMin = s.height;
+    if (s.height > hMax) hMax = s.height;
+  }
+  const dSpan = dMax - dMin || 1;
+  const hSpan = hMax - hMin || 1;
+
+  // Frame (left + bottom axes).
+  cursor.page.drawLine({ start: { x: x0, y: top }, end: { x: x0, y: bottom }, thickness: 0.5, color: rule });
+  cursor.page.drawLine({ start: { x: x0, y: bottom }, end: { x: x0 + CHART_W, y: bottom }, thickness: 0.5, color: rule });
+
+  const sx = (d: number): number => x0 + PAD + ((d - dMin) / dSpan) * (CHART_W - 2 * PAD);
+  const sy = (h: number): number => bottom + PAD + ((h - hMin) / hSpan) * (CHART_H - 2 * PAD);
+  let prev: { x: number; y: number } | null = null;
+  for (const s of chart) {
+    const pt = { x: sx(s.distance), y: sy(s.height) };
+    if (prev) {
+      cursor.page.drawLine({
+        start: prev, end: pt, thickness: 0.9,
+        color: rgb(accent.r, accent.g, accent.b),
+      });
+    }
+    prev = pt;
+  }
+  return { page: cursor.page, y: bottom - 8 };
+}
+
 function drawLabelValueRow(
   cursor: PageCursor,
   label: string,
@@ -724,7 +777,7 @@ async function renderMeasurements(
     // across a page boundary.
     const extras = m.profileExtras;
     const rowH = extras
-      ? 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0)
+      ? 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0) + (extras.chart ? 68 : 0)
       : 16;
     cursor = ensureSpace(cursor, rowH, doc, accent, theme, organisation);
     cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, theme);
@@ -735,6 +788,9 @@ async function renderMeasurements(
       cursor = drawLabelValueRow(cursor, '  slopes', extras.slopeSummary, body, bold, theme);
       if (extras.coverageCaveat) {
         cursor = drawLabelValueRow(cursor, '  coverage', extras.coverageCaveat, body, bold, theme);
+      }
+      if (extras.chart && extras.chart.length >= 2) {
+        cursor = drawProfileChart(cursor, extras.chart, theme, accent, doc, organisation);
       }
     }
   }

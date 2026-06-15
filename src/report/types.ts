@@ -139,6 +139,13 @@ export interface ReportProfileDeliverableExtras {
   readonly slopeSummary: string;
   /** Optional Δh refinement caveat — surfaces the streaming-resident warning. */
   readonly coverageCaveat?: string;
+  /**
+   * The cross-section samples (distance along the line, elevation) the renderer
+   * draws as a small vector profile chart beneath the text block. Present only
+   * when the profile carries at least two finite samples; the renderer
+   * self-normalises them, so the units are immaterial.
+   */
+  readonly chart?: ReadonlyArray<{ readonly distance: number; readonly height: number }>;
 }
 
 /** One measurement as the report section renders it. */
