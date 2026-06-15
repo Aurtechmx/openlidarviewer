@@ -405,7 +405,9 @@ describe('buildMeasurementRows', () => {
   it('formats imperial values correctly', () => {
     const rows = buildMeasurementRows(measurements, 'imperial');
     expect(rows[0].value).toMatch(/ft$/);
-    expect(rows[1].value).toMatch(/sq ft$/);
+    // Area is single-sourced from the live measurement formatter (ft² / acre),
+    // so the report reads the same units the overlay showed.
+    expect(rows[1].value).toMatch(/(ft²|acre)$/);
     expect(rows[2].value).toMatch(/ft$/);
   });
 

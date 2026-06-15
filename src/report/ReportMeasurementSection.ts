@@ -23,6 +23,11 @@ import {
   slopeGradesPerSegment,
   summariseSlopes,
 } from '../render/measure/profileStations';
+// Area formatting is single-sourced from the live measurement formatter so a
+// polygon reads the same units in the PDF report as on the overlay — the same
+// surface that produced it. Length and volume keep this module's own
+// cm/ha-free report conventions; only area was drifting (acre vs sq ft).
+import { formatArea } from '../render/measure/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline math
@@ -109,15 +114,6 @@ function formatLinear(metres: number, system: UnitSystem): string {
   if (metres >= 1000) return `${(metres / 1000).toFixed(2)} km`;
   if (metres >= 1) return `${metres.toFixed(2)} m`;
   return `${(metres * 100).toFixed(1)} cm`;
-}
-
-function formatArea(squareMetres: number, system: UnitSystem): string {
-  if (system === 'imperial') {
-    const sqFt = squareMetres * 10.7639;
-    return `${sqFt.toFixed(1)} sq ft`;
-  }
-  if (squareMetres >= 10_000) return `${(squareMetres / 10_000).toFixed(2)} ha`;
-  return `${squareMetres.toFixed(2)} m²`;
 }
 
 /**
