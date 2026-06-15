@@ -142,6 +142,20 @@ describe('buildMapSheetPdf', () => {
     expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
   });
 
+  it('tolerates an unmeasured (NaN) interpolated fraction without drawing "NaN%"', async () => {
+    // An empty contour set leaves interpolatedFraction = NaN (no length to
+    // measure against). The legend must report it as unmeasured, never collapse
+    // it to a fabricated 0% or stamp a literal "NaN%".
+    const unmeasured: ContourFeatureModel = {
+      ...model,
+      features: [],
+      bbox: null,
+      interpolatedFraction: Number.NaN,
+    };
+    const bytes = await buildMapSheetPdf({ model: unmeasured, labels: [], sheet: 'a4' });
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
+  });
+
   it('renders a landscape sheet with a Project / Notes block without throwing', async () => {
     const bytes = await buildMapSheetPdf({
       model,

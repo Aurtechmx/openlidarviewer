@@ -473,8 +473,14 @@ function drawTitleBlock(
   sample(topY - 45, 'Intermediate contour', null, 0.5);
   sample(topY - 58, 'Interpolated (uncertain)', [4, 3], 0.5);
   sample(topY - 71, 'Low-confidence gap', [2, 4], 0.5);
-  const interpPct = Math.round((input.model.interpolatedFraction || 0) * 100);
-  text(`${interpPct}% of contour length is interpolated`, mxx, topY - 88, 6.5, font, DIM);
+  // Interpolated fraction is NaN when there is no contour length to measure
+  // against (an empty contour set). Report that honestly rather than collapsing
+  // it to a fabricated 0%.
+  const interpFraction = input.model.interpolatedFraction;
+  const interpLine = Number.isFinite(interpFraction)
+    ? `${Math.round(interpFraction * 100)}% of contour length is interpolated`
+    : 'Interpolated fraction — not measured (no contours)';
+  text(interpLine, mxx, topY - 88, 6.5, font, DIM);
   // Honest stamp of the shape style applied to the plotted contours (sourced
   // from the unified provenance when present, so it matches every other export).
   const styleLabel = prov ? prov.contourStyleLabel : contourShapeStyleLabel(input.model.contourStyle);
