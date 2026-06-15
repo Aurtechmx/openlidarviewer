@@ -44,7 +44,7 @@ function row(label: string, value: string): HTMLElement {
 }
 
 /**
- * The "Project ready" card — a brief, premium summary of a freshly opened
+ * The "Project ready" card — a brief summary of a freshly opened
  * scan. It overlays the viewer (so the scan is visible underneath at once)
  * and fades out on its own after a few seconds, or when dismissed.
  */
