@@ -1889,7 +1889,10 @@ classLegendPanel.onChange((visibility) => {
     if (debug) console.warn('[class-legend] scoped report refresh threw', err);
   }
 });
-classLegendPanel.onPaletteChange(() => {
+classLegendPanel.onPaletteChange((on) => {
+  // The colourblind toggle also re-themes the categorical status dots (Dataset
+  // Intelligence tier dots + confidence chip) via a body class.
+  document.body.classList.toggle('olv-cvd', on);
   // Persist the choice and recolour any classification view in place. Only the
   // classification colour pass reads the class palette, so other modes need no
   // refresh; the legend repaints its own swatches.
@@ -3568,6 +3571,7 @@ function applyPrefs(): void {
   }
   if (p.colorblindSafeClasses !== undefined) {
     classLegendPanel.setColorblindSafe(p.colorblindSafeClasses);
+    document.body.classList.toggle('olv-cvd', p.colorblindSafeClasses);
   }
   if (p.workflow !== undefined) {
     workflowController.setConfig(p.workflow);
