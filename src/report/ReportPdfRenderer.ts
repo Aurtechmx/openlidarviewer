@@ -31,6 +31,8 @@ import {
   type ParsedColor,
   type ReportThemePalette,
 } from './ReportBranding';
+import { describeAnnotationGroups } from '../render/annotate/annotationClustering';
+import type { AnnotationType } from '../render/annotate/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants — letter portrait, 0.6 inch margins.
@@ -665,6 +667,12 @@ async function renderAnnotations(
     );
     return { page: cursor.page, y: cursor.y - 10 };
   }
+  // Grouping summary — same line the live Annotations panel shows, so the
+  // deliverable opens with the shape of the notes (totals, categories, areas).
+  const groupSummary = describeAnnotationGroups(
+    inputs.annotations.map((a) => ({ type: a.type as AnnotationType, localPosition: a.position })),
+  );
+  if (groupSummary) cursor = drawBodyLine(cursor, groupSummary, body, theme);
   for (const a of inputs.annotations) {
     cursor = ensureSpace(cursor, 36, doc, accent, theme, organisation);
     // Title + type badge.

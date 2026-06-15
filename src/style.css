@@ -3953,6 +3953,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-ap-search:focus-visible { outline: none; border-color: var(--accent); }
 .olv-ap-list { display: flex; flex-direction: column; gap: var(--space-xs); }
 .olv-ap-empty { font-size: var(--text-xs); color: var(--text-faint); }
+/* Annotation grouping summary — total · category breakdown · areas. */
+.olv-ap-summary {
+  font-size: var(--text-xs); color: var(--text-dim);
+  padding: var(--space-2xs) 0 var(--space-xs);
+}
 .olv-ap-row {
   display: flex; align-items: center; gap: var(--space-sm);
   border-radius: var(--radius-sm); padding: var(--space-xs);

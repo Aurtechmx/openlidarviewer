@@ -48,6 +48,8 @@ export interface AnnotationSummary {
   selected: boolean;
   /** Name of the linked measurement, when one is linked and still exists. */
   linkedMeasurement?: string;
+  /** Local-frame anchor — lets the panel spatially cluster without the model. */
+  localPosition: Vec3Object;
 }
 
 export class AnnotationController {
@@ -260,6 +262,7 @@ export class AnnotationController {
         createdAt: a.createdAt,
         updatedAt: a.updatedAt,
         selected: a.id === this._selectedId,
+        localPosition: { x: a.localPosition.x, y: a.localPosition.y, z: a.localPosition.z },
       };
       const linked = a.linkedMeasurementId ? names.get(a.linkedMeasurementId) : undefined;
       if (linked !== undefined) summary.linkedMeasurement = linked;
