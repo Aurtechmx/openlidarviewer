@@ -4,6 +4,7 @@ import { loaderFor } from './loaderRegistry';
 import type { LoaderFn } from './loaderRegistry';
 import { isRegisteredFormat } from './formatInfo';
 import { downsampleToBudget } from '../process/voxelDownsample';
+import { LoadError } from './loadErrors';
 import type { LoadPlan } from './loadPlan';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
@@ -45,6 +46,22 @@ export function pickLoader(format: DetectedFormat): LoaderFn {
 }
 
 /**
+ * Reject a cloud with no points. A zero-point file is well-formed on disk but
+ * has nothing to display, and an empty cloud poisons everything downstream:
+ * `bounds()` spans no points, the framing camera targets a degenerate box, and
+ * the canvas renders black with no explanation. Fail here, once, at the single
+ * funnel every static loader passes through, with a message the toast can show.
+ */
+function assertNonEmptyCloud(cloud: PointCloud): void {
+  if (cloud.pointCount === 0) {
+    throw new LoadError(
+      'malformed-file',
+      'This file is empty — it contains no points to display.',
+    );
+  }
+}
+
+/**
  * Parse a file buffer into a PointCloud, downsampling if it exceeds the point
  * budget. DOM-free — safe to run on the main thread or inside a Web Worker.
  *
@@ -71,6 +88,7 @@ export async function parseBuffer(
     // decoder is its own chunk, fetched only when a LAS/LAZ file is opened.
     const { loadLas } = await import('./loadLas');
     const cloud = await loadLas(buffer, format, name, stride, onProgress);
+    assertNonEmptyCloud(cloud);
 
     if (plan.mode === 'voxel') {
       // Decoded in full, then voxel-reduced to the plan's budget.
@@ -98,6 +116,7 @@ export async function parseBuffer(
   // The chunked text loaders (XYZ/CSV, PTS) report decode progress; binary
   // loaders ignore the callback.
   const cloud = await loader(buffer, name, onProgress);
+  assertNonEmptyCloud(cloud);
   const originalPointCount = cloud.pointCount;
 
   // Voxel-downsample if the cloud exceeds the budget. `downsampleToBudget`

@@ -133,6 +133,17 @@ export class PointCloud {
    */
   bounds(): { min: [number, number, number]; max: [number, number, number] } {
     if (this._bounds === null) {
+      // No points to span. A min/max reduction over zero elements would leave
+      // the seeds at ±Infinity, and the half-open box that produces yields a
+      // NaN centre and radius when a caller frames it. Return a finite,
+      // degenerate box at the origin so every downstream consumer (camera
+      // framing, bounding sphere) gets safe numbers. The parse pipeline already
+      // rejects empty clouds; this is the defence in depth for any that slip
+      // through (a streaming source, a programmatic construction).
+      if (this.positions.length === 0) {
+        this._bounds = { min: [0, 0, 0], max: [0, 0, 0] };
+        return { min: [0, 0, 0], max: [0, 0, 0] };
+      }
       const min: [number, number, number] = [Infinity, Infinity, Infinity];
       const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
       for (let i = 0; i < this.positions.length; i += 3) {
