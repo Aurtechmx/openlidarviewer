@@ -14,8 +14,8 @@
  *      reads as broken; pair every value with how sure we are, and every
  *      absence with why. `formatHonestValue` enforces that shape.
  *
- * Voice: plain English, no marketing filler (stop-slop / avoid-ai-
- * writing). A unit test guards against the usual offenders.
+ * Voice: plain English, no marketing filler. A unit test guards against the
+ * usual offenders.
  *
  * Pure data: no DOM, no three.js, no I/O.
  */

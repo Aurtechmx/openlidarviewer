@@ -13,7 +13,7 @@ otherwise. The interior floor plan remains an experimental PREVIEW, now backed b
 an explicit wall-graph reconstruction and flood-fill room segmentation with
 claim-accurate labels throughout. Plus nine label-vs-value drift fixes (incl.
 foot-CRS / geographic-unit correctness and the edge-risk wording) and mobile
-touch-target / safe-area improvements. Three more high-visibility, low-risk wins
+touch-target / safe-area improvements. Three more visible improvements
 round it out: the plumbed-but-headless floor-plan export knobs get a small
 UI (still an experimental PREVIEW), the last flagged capture-quality
 label-vs-value drift ("Coverage … % of footprint" → "Bounding area filled") is
@@ -964,7 +964,7 @@ onboarding tour.
 
 ### Added
 
-- (2026-06-12 amendment) Floor Plan Preview sheet quick wins — presentation
+- (2026-06-12 amendment) Floor Plan Preview sheet refinements — presentation
   and threading over data the pipeline already computes (the wall-graph /
   room-segmentation engine itself stays scheduled for 0.4.6; the export
   remains a labelled, experimental preview):

@@ -2947,7 +2947,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-measure-finish:active { transform: scale(0.96); }
 
 /* ── Icon-first measurement controls (v0.4.6) ──────────────────────────────
- * The kind picker is now glyph-driven: a custom futuristic line-icon per
+ * The kind picker is now glyph-driven: a custom line-icon per
  * measurement kind, with the text label kept in the DOM (`.olv-mkind-name`)
  * but visually hidden — the name surfaces on hover (title) and to assistive
  * tech (aria-label). The action controls pair a glyph with a small label.
@@ -2971,7 +2971,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-micon-btn svg { width: 16px; height: 16px; display: block; }
 .olv-micon-btn .olv-mlabel { font-size: var(--text-2xs); }
 
-/* ── Futuristic hover tooltip (custom, replaces the native title bubble) ────
+/* ── hover tooltip (custom, replaces the native title bubble) ────
  * A glass readout that slides out to the RIGHT of each rail control, with a
  * cyan hairline, mono type, a faint glow and a small diamond connector. Shown
  * on hover and keyboard focus; hidden from touch (no hover) and from reduced-
@@ -4360,7 +4360,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     max-height: none;
     width: max-content;
     max-width: calc(100vw - 28px);
-    /* Premium glass chip — translucent, blurred, hairline-bordered — instead
+    /* Glass chip — translucent, blurred, hairline-bordered — instead
        of an opaque black slab that read as oversized on a phone. */
     background: rgba(11, 17, 33, 0.78);
     -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
@@ -4371,13 +4371,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-streaming-panel.olv-collapsed .olv-panel-head { font-size: var(--text-2xs); }
   .olv-streaming-panel.olv-collapsed .olv-panel-head { gap: var(--space-sm); }
   .olv-streaming-panel.olv-collapsed .olv-streaming-phase { display: none; }
-  /* Small, dim chevron — premium restraint on a chip. */
+  /* Small, dim chevron — restraint on a chip. */
   .olv-collapsed .olv-chevron { font-size: var(--text-sm); }
 
   /* ── Measure toolbar → vertical icon RAIL (Photoshop / Blender pattern) ──
      The top-stacked strip blanketed the scan on a phone. Here the toolbar
      becomes a slim glass rail pinned to the LEFT edge and centred vertically:
-     a column of futuristic icon tools, a hairline divider, then the action
+     a column of icon tools, a hairline divider, then the action
      icons. The entire top of the canvas — and the Streaming chip's corner —
      is left clear. */
   .olv-measure-bar {
@@ -4390,7 +4390,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     max-width: 72px;
     padding: var(--space-sm) var(--space-2xs);
     border-radius: var(--radius-lg);
-    /* Premium glass — translucent, blurred, hairline-bordered, soft-shadowed. */
+    /* Glass — translucent, blurred, hairline-bordered, soft-shadowed. */
     background: rgba(11, 17, 33, 0.72);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border: 0.5px solid rgba(0, 178, 255, 0.22);

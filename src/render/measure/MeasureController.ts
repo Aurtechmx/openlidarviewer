@@ -151,7 +151,7 @@ const KIND_TITLE: Record<MeasurementKind, string> = {
     '• Click the kind again or press Esc to exit.',
 };
 
-/** Short, futuristic one-liners shown by the custom hover tooltip. */
+/** Short one-liners shown by the custom hover tooltip. */
 const KIND_TIP: Record<MeasurementKind, string> = {
   distance: 'Distance · straight line',
   polyline: 'Polyline · path length',
