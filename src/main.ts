@@ -32,6 +32,8 @@ import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
+import { RecommendedViewChip } from './ui/RecommendedViewChip';
+import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
 import {
@@ -1211,6 +1213,10 @@ function toggleWorkflowRecord(): void {
 // duplicate truth.
 const commandPalette = new CommandPalette();
 stage.overlay.append(commandPalette.element);
+
+// A dismissible "recommended view" chip surfaced after a scan loads.
+const recommendedViewChip = new RecommendedViewChip();
+stage.overlay.append(recommendedViewChip.element);
 
 // v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
 // action registry as the palette so adding a new action makes it
@@ -4849,6 +4855,14 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
   });
+  // Suggest the camera preset best suited to the scan — a dismissible chip the
+  // user can accept with one click or ignore (it auto-hides).
+  const rec = recommendCameraPreset({
+    hasRgb: cloud.colors !== undefined,
+    hasClassification: cloud.classification !== undefined,
+    flatness: flatnessFromBounds(b.min, b.max),
+  });
+  recommendedViewChip.show(rec, () => viewer.setCameraPreset(rec.preset));
 }
 
 /** Fetch a built-in sample (a local static file — no upload) and load it. */
