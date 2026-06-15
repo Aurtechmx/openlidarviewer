@@ -23,6 +23,7 @@ const engineeringInspection: ReportTemplate = {
     'Use for as-built reviews and structural-defect documentation.',
   sections: [
     'cover',
+    'inspection-summary',
     'dataset-summary',
     'provenance',
     'measurements',
@@ -40,7 +41,7 @@ const qaValidation: ReportTemplate = {
     'QA-focused: cover, dataset summary, capture-type provenance, ' +
     'classification/intensity visuals, annotations (flagged issues). ' +
     'Skips measurements + notes. Compact, ships in 2–3 pages typically.',
-  sections: ['cover', 'dataset-summary', 'provenance', 'visuals', 'annotations', 'footer'],
+  sections: ['cover', 'inspection-summary', 'dataset-summary', 'provenance', 'visuals', 'annotations', 'footer'],
 };
 
 const terrainReview: ReportTemplate = {
@@ -49,7 +50,7 @@ const terrainReview: ReportTemplate = {
   description:
     'Topographic review: cover, dataset summary, height map + contour ' +
     'visuals, measurements (slope/distance), footer. No annotations.',
-  sections: ['cover', 'dataset-summary', 'visuals', 'measurements', 'footer'],
+  sections: ['cover', 'inspection-summary', 'dataset-summary', 'visuals', 'measurements', 'footer'],
 };
 
 const surveySummary: ReportTemplate = {
@@ -59,7 +60,7 @@ const surveySummary: ReportTemplate = {
     'Cover, dataset metadata, capture-type provenance, all measurements, ' +
     'technical notes. Skips visuals + annotations — for handover documents ' +
     'where the source scan travels alongside.',
-  sections: ['cover', 'dataset-summary', 'provenance', 'measurements', 'technical-notes', 'footer'],
+  sections: ['cover', 'inspection-summary', 'dataset-summary', 'provenance', 'measurements', 'technical-notes', 'footer'],
 };
 
 const technicalDocumentation: ReportTemplate = {
@@ -71,6 +72,7 @@ const technicalDocumentation: ReportTemplate = {
     'the canonical archived record.',
   sections: [
     'cover',
+    'inspection-summary',
     'dataset-summary',
     'provenance',
     'visuals',
@@ -97,7 +99,7 @@ const scanAcceptance: ReportTemplate = {
     'reports what was measured; the thresholds are yours. Use it to sign ' +
     'off (or reject) an incoming scan delivery — every check carries a ' +
     'literature citation in the Methods appendix.',
-  sections: ['cover', 'dataset-summary', 'provenance', 'acceptance-checklist', 'footer'],
+  sections: ['cover', 'inspection-summary', 'dataset-summary', 'provenance', 'acceptance-checklist', 'footer'],
 };
 
 /** The full template catalogue, in display order. */
