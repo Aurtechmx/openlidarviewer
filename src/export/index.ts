@@ -15,7 +15,7 @@
  * modes" listing.
  */
 
-export { ExportRegistry, ImageExportRegistry } from './ExportRegistry';
+export { ExportRegistry } from './ExportRegistry';
 export {
   captureCanvasToBlob,
   topDownOrthoCameraForAabb,
@@ -51,11 +51,6 @@ export type {
   ExportWorldFile,
   HeightMapOptions,
   HeightMapRamp,
-  ImageExportContext,
-  ImageExportFactory,
-  ImageExportMode,
-  ImageExportOptions,
-  ImageExportResult,
   IntensityOptions,
   OrthographicRgbOptions,
 } from './types';
@@ -113,9 +108,6 @@ defaultExportRegistry.register(intensityExporter);
 defaultExportRegistry.register(classificationExporter);
 defaultExportRegistry.register(normalMapExporter);
 
-/** @deprecated Use {@link defaultExportRegistry}. */
-export const defaultImageExportRegistry = defaultExportRegistry;
-
 /**
  * Orchestrator: pick the factory, gate on availability, render. Throws a
  * clear error when the mode is unknown or unavailable on this device so the
@@ -138,6 +130,3 @@ export async function renderExport(
   }
   return factory.render(context, options);
 }
-
-/** @deprecated Use {@link renderExport}. */
-export const renderImageExport = renderExport;
