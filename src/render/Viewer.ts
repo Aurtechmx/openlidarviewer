@@ -2489,6 +2489,34 @@ export class Viewer {
   }
 
   /**
+   * Attach a DERIVED (heuristic) classification to a cloud that had none and
+   * switch it to classification colours. The codes come from the unsupervised
+   * `deriveClassification` pipeline (run off-thread via `deriveClassificationAsync`).
+   *
+   * Display, the legend histogram and export all read `cloud.classification`,
+   * so this immediately colours the cloud by class, lets the legend list the
+   * derived classes, and flows the codes into LAS export — all flagged DERIVED
+   * via `cloud.classificationIsDerived`. (GPU class-FILTER visibility toggling
+   * of derived classes needs the material's mask node, which is only built for
+   * clouds that loaded WITH classification; that remains a follow-up.)
+   *
+   * Returns false when the id is unknown; throws on a code/point length
+   * mismatch (a caller bug worth surfacing, not swallowing).
+   */
+  applyDerivedClassification(id: string, codes: Uint8Array): boolean {
+    const entry = this._clouds.get(id);
+    if (!entry) return false;
+    entry.cloud.attachDerivedClassification(codes);
+    if (entry.mode === 'classification') {
+      this._refreshClassificationColours(id);
+    } else {
+      this.setColorMode(id, 'classification');
+    }
+    this._bumpRenderActivity();
+    return true;
+  }
+
+  /**
    * Recompute and re-upload the colour attribute for a cloud whose
    * classification just changed. Cheap when the cloud isn't currently
    * showing classification colours — `setColorMode` short-circuits when
