@@ -7,6 +7,7 @@
  * No three.js dependency — safe to import in Node/Vitest tests.
  */
 
+import { clamp, clamp01 } from '../numeric';
 import type { PointCloud } from '../model/PointCloud';
 import { densityForChunk, defaultCellSizeForSpacing } from './densityColors';
 import { computeElevationRange } from './elevationRange';
@@ -219,7 +220,7 @@ function sampleRamp(
   palette: ElevationPalette = DEFAULT_ELEVATION_PALETTE,
 ): [number, number, number] {
   // Clamp to [0,1] to handle the degenerate single-point cloud case.
-  const tc = Math.max(0, Math.min(1, t));
+  const tc = clamp01(t);
   const ramp = PALETTES[palette];
 
   // Find the two bracketing control points.
@@ -521,7 +522,7 @@ export function colorForMode(
       // one colour stop. The 2nd / 98th percentile band keeps the
       // ramp meaningful on outlier-heavy clouds and matches what
       // CloudCompare / Potree / Entwine viewers do.
-      const trim = Math.max(0, Math.min(25, opts?.heightPercentileTrim ?? 5));
+      const trim = clamp(opts?.heightPercentileTrim ?? 5, 0, 25);
       const range = computeElevationRange({
         positions: cloud.positions,
         pointCount: n,

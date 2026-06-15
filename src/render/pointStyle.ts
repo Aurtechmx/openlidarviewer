@@ -8,6 +8,8 @@
  * size node (in `Viewer.ts`) mirrors `adaptivePointSize` exactly.
  */
 
+import { clamp } from '../numeric';
+
 /** How point size responds to camera distance. */
 export type PointSizeMode = 'adaptive' | 'fixed';
 
@@ -55,7 +57,7 @@ export function adaptivePointSize(
   // dividing by zero — a point on the camera plane is, in effect, very near.
   if (eyeDist <= 0 || referenceDist <= 0) return maxPx;
   const attenuated = baseSizePx * (referenceDist / eyeDist);
-  return Math.min(maxPx, Math.max(minPx, attenuated));
+  return clamp(attenuated, minPx, maxPx);
 }
 
 /**

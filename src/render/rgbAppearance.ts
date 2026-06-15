@@ -30,6 +30,8 @@
  * uses.
  */
 
+import { clamp } from '../numeric';
+
 /** RGB appearance settings, defaults are identity (no change). */
 export interface RgbAppearance {
   /** Multiplicative brightness scaler, ≥ 0. Default 1. */
@@ -222,8 +224,8 @@ export function applyRgbAppearance(
   const invGamma = 1 / gamma;
   // Clamp temperature + tint to [-1, +1] so a stray slider can't drive
   // the channels negative or push them past full saturation.
-  const temperature = Math.max(-1, Math.min(1, settings.temperature ?? 0));
-  const tint = Math.max(-1, Math.min(1, settings.tint ?? 0));
+  const temperature = clamp(settings.temperature ?? 0, -1, 1);
+  const tint = clamp(settings.tint ?? 0, -1, 1);
   // Convert the [-1, +1] WB inputs into per-channel gains. The mapping
   // keeps the green channel at unit gain in the temperature axis (the
   // pivot axis a colour-grading slider expects) and lifts/cuts the

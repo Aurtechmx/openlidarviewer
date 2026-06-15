@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { clamp01 } from '../numeric';
 
 /**
  * Full-window drag-and-drop. The whole document is a drop target; a slim
@@ -123,7 +124,7 @@ export class DropZone {
     if (fraction === undefined) {
       this._bar.classList.add('olv-hidden');
     } else {
-      const pct = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
+      const pct = Math.round(clamp01(fraction) * 100);
       this._barFill.style.width = `${pct}%`;
       this._bar.classList.remove('olv-hidden');
     }

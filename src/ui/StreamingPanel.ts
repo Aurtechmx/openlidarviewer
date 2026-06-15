@@ -10,6 +10,7 @@
  * counters belong to the `?debug=1` overlay, not here.
  */
 
+import { clamp01 } from '../numeric';
 import { el } from './dom';
 import { formatCount } from './dom';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
@@ -154,7 +155,7 @@ export function streamingProgress(status: StreamingStatus): StreamingProgress {
   // Clamp to [0,1]: resident can momentarily exceed a stale known count
   // between hierarchy refreshes, and we never want a >100% bar.
   const fraction = determinate
-    ? Math.min(1, Math.max(0, status.loadedNodes / known))
+    ? clamp01(status.loadedNodes / known)
     : null;
   return {
     fraction,
