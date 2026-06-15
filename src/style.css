@@ -3640,6 +3640,68 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
   color: var(--text);
 }
+/* ── Workflow recorder settings popup ──────────────────────────────── */
+.olv-wfc {
+  position: fixed; inset: 0; z-index: 91;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12vh; pointer-events: none;
+}
+.olv-wfc-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(11, 17, 33, 0.55);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+.olv-wfc-card {
+  position: relative;
+  width: min(440px, calc(100vw - 32px));
+  max-height: 78vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-lg);
+  pointer-events: auto;
+  padding: var(--space-2xl);
+  background: rgba(11, 17, 33, 0.96);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid var(--accent); border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+}
+.olv-wfc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-lg); }
+.olv-wfc-title { font-size: var(--text-md); font-weight: 600; }
+.olv-wfc-subtitle { font-size: var(--text-xs); color: var(--text-dim); margin-top: 2px; }
+.olv-wfc-close {
+  font-size: 20px; line-height: 1; color: var(--text-dim);
+  background: none; border: none; cursor: pointer; padding: 2px 6px;
+}
+.olv-wfc-close:hover { color: var(--text); }
+.olv-wfc-body { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-wfc-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.olv-wfc-label { font-size: var(--text-sm); color: var(--text-dim); }
+.olv-wfc-seg { display: inline-flex; gap: 2px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 2px; }
+.olv-wfc-seg-btn {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: none; border: none; border-radius: 6px;
+  padding: 4px 9px; cursor: pointer; transition: color 120ms ease, background 120ms ease;
+}
+.olv-wfc-seg-btn:hover { color: var(--text); }
+.olv-wfc-seg-btn.is-active { color: var(--text); background: var(--accent-soft); }
+.olv-wfc-shortcut-wrap { display: inline-flex; gap: 6px; align-items: center; }
+.olv-wfc-shortcut {
+  font-size: var(--text-xs); color: var(--text);
+  background: rgba(255,255,255,0.06); border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 4px 10px; min-width: 78px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.olv-wfc-shortcut.is-capturing { border-color: var(--accent); color: var(--accent); }
+.olv-wfc-shortcut-off { font-size: var(--text-xs); color: var(--text-dim); background: none; border: none; cursor: pointer; }
+.olv-wfc-shortcut-off:hover { color: var(--text); }
+.olv-wfc-capture { display: inline-flex; gap: var(--space-md); }
+.olv-wfc-capture-item { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--text-dim); cursor: pointer; }
+.olv-wfc-check { accent-color: var(--accent); margin: 0; cursor: pointer; }
+.olv-wfc-footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-sm); border-top: 0.5px solid var(--hairline); }
+.olv-wfc-hint { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-wfc-reset { font-size: var(--text-xs); color: var(--text-dim); background: none; border: 0.5px solid var(--hairline); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.olv-wfc-reset:hover { color: var(--text); border-color: var(--accent); }
+
 .olv-shortcuts-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: var(--space-xl);
