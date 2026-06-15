@@ -162,6 +162,12 @@ export async function loadPts(
     }
   }
 
+  // Release the JS number[] accumulators now the typed outputs are built —
+  // the same memory-spike trim loadXyz does (avoids holding the boxed-number
+  // arrays alongside the typed buffers on a large PTS scan).
+  xs.length = 0; ys.length = 0; zs.length = 0;
+  intensityVals.length = 0; rgb.length = 0;
+
   return new PointCloud({
     positions,
     colors,
