@@ -32,9 +32,20 @@ with no user-facing feature changes.
   longer shows a confident "Sparse"; it shows "—", matching how terrain
   complexity and ground visibility already report a missing signal.
 - **Disposal.** The colour-recompute throttle's trailing timer is cleared when a
-  viewer is torn down, so it can no longer fire against a disposed renderer.
+  viewer is torn down, and a streaming (COPC) cloud now closes its underlying
+  file/range reader when detached, so neither lingers after teardown.
+- **Load errors are described precisely.** A typed load failure now keeps its
+  category as it crosses from the decode worker to the main thread, so the
+  message shown is the exact one for the failure rather than a best-effort guess.
+- **Foot-based coordinate overrides.** When a coordinate system is assigned by
+  hand, its linear unit is resolved from the CRS registry rather than assumed to
+  be metres, so a foot-based system scales measurements correctly.
 
 ### Changed
+
+- **Large text scans load on tighter memory.** The XYZ/CSV loader releases its
+  intermediate buffers as it builds the final arrays, lowering peak memory by a
+  full copy of the cloud on the largest files.
 
 - **One byte-size formatter** is shared across the stage, batch converter, debug
   overlay, and streaming panels, so a file size reads identically everywhere.
