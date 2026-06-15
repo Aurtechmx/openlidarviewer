@@ -60,6 +60,7 @@ import {
 // metres in `getSummaries` by the same module the panel/CSV/PDF read, so
 // labels and raw numerals can never drift apart.
 import { scaleProfileSamples } from './profileSummary';
+import { stationsAlongLine } from './profileStations';
 // B7/B8 (v0.4.5) — pure clamp + unit conversion for the resample path, read
 // from the sampler module so panel inputs, clamp and tests share one rule.
 // The encode/decode pair is the persistence seam: the user's last-applied
@@ -1402,6 +1403,17 @@ export class MeasureController {
         text: this._fmtLen(pm.lengthHorizontal),
         primary: false,
       });
+      // Station markers on the cloud — small dim dots at evenly-spaced
+      // chainages along the section line, so the profile's stations are visible
+      // in 3D, not just on the chart. The endpoints already carry their own
+      // vertices, so only the intermediate stations are drawn.
+      const horizontal = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (horizontal > 0) {
+        const stations = stationsAlongLine({ a, b, intervalM: horizontal / 7 });
+        for (const s of stations.slice(1, -1)) {
+          V.push({ p: s.position, role: 'station' });
+        }
+      }
     }
     if (m.kind === 'volume' && pts.length >= MIN_POINTS.volume) {
       // Volume renders as the same closed polygon idiom as `area` — the
