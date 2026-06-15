@@ -1300,7 +1300,16 @@ async function runDeriveClassification(): Promise<void> {
   showLassoToast('Classify · deriving ground / vegetation / building…');
   try {
     const id = activeId;
-    const result = await deriveClassificationAsync(cloud.positions, cloud.pointCount, {});
+    const result = await deriveClassificationAsync(
+      cloud.positions,
+      cloud.pointCount,
+      {},
+      undefined,
+      undefined,
+      // Live phase in the toast so a multi-second derive reads as progress,
+      // not a hang. (Off-thread, so the UI repaints between phases.)
+      (phase) => showLassoToast(`Classify · ${phase}…`),
+    );
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
     classLegendPanel.setClasses(countClasses(result.codes));

@@ -36,6 +36,20 @@ describe('deriveClassificationAsync', () => {
     expect(getLastClassifyComputePath()).toBe('worker');
   });
 
+  it('forwards progress phases from the main-thread fallback', async () => {
+    const { positions, n } = smallScene();
+    const phases: string[] = [];
+    const failing: DeriveClassificationClientLike = {
+      classify: () => Promise.reject(new Error('worker unavailable')),
+    };
+    await deriveClassificationAsync(
+      positions, n, { cellSizeM: 1 }, undefined, failing, (p) => phases.push(p),
+    );
+    // The fallback runs the real pipeline, so the four phases fire.
+    expect(phases).toContain('Building ground surface');
+    expect(phases).toContain('Classifying');
+  });
+
   it('falls back to the main thread when the worker fails, and warns', async () => {
     const { positions, n } = smallScene();
     const failing: DeriveClassificationClientLike = {
