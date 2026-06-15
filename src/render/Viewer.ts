@@ -3367,7 +3367,10 @@ export class Viewer {
 
     const radius = sphere.radius === 0 ? 1 : sphere.radius;
     const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
-    const dist = (radius / Math.sin(fovRad / 2)) * 1.2;
+    // 1.1 padding (was 1.2) — open a scan a touch larger so it fills the
+    // viewport, centred on the bounding-sphere centre. Tight enough to read as
+    // "the project, front and centre", loose enough that the sphere never clips.
+    const dist = (radius / Math.sin(fovRad / 2)) * 1.1;
 
     // An oblique direction: a horizontal heading lifted ~35° toward world-up,
     // so a scan opens at a natural three-quarter angle, not flat top-down.

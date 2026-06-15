@@ -483,6 +483,7 @@ export class Inspector {
   private _reportSelect: HTMLSelectElement | null = null;
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
+  private readonly _pointSizeValue: HTMLElement;
   private readonly _edlChip: HTMLButtonElement;
   private readonly _edlStrengthSlider: HTMLInputElement;
   private readonly _edlStrengthRow: HTMLElement;
@@ -504,7 +505,13 @@ export class Inspector {
     slider.max = '8';
     slider.step = '0.5';
     slider.value = '1';
-    slider.addEventListener('input', () => this._cb.onPointSize(slider.valueAsNumber));
+    // Live numeric readout so the user knows the exact point size they're
+    // dragging (e.g. "1.0 px"), not just a slider position.
+    this._pointSizeValue = el('span', { className: 'olv-render-value', text: '1.0 px' });
+    slider.addEventListener('input', () => {
+      this._pointSizeValue.textContent = `${slider.valueAsNumber.toFixed(1)} px`;
+      this._cb.onPointSize(slider.valueAsNumber);
+    });
     this._pointSizeSlider = slider;
 
     this._sizeModeChips = (['adaptive', 'fixed'] as PointSizeMode[]).map((mode) => {
@@ -577,7 +584,10 @@ export class Inspector {
     // sub-group so first-paint density stays low and every raw
     // tunable is one place.
     const renderingBody = el('div', { className: 'olv-render-group' }, [
-      el('div', { className: 'olv-render-sublabel', text: 'Point size' }),
+      el('div', { className: 'olv-render-sublabel olv-render-sublabel-row' }, [
+        el('span', { text: 'Point size' }),
+        this._pointSizeValue,
+      ]),
       el('div', { className: 'olv-chips' }, this._sizeModeChips.map((c) => c.chip)),
       slider,
       el('div', { className: 'olv-render-sublabel', text: 'Splat mode' }),
@@ -1287,6 +1297,7 @@ export class Inspector {
   /** Reflect the viewer's current render-quality state in the controls. */
   syncRendering(state: RenderingState): void {
     this._pointSizeSlider.value = String(state.pointSize);
+    this._pointSizeValue.textContent = `${state.pointSize.toFixed(1)} px`;
     this._edlChip.classList.toggle('olv-chip-active', state.edlEnabled);
     this._edlStrengthRow.classList.toggle('olv-hidden', !state.edlEnabled);
     this._edlStrengthSlider.value = String(state.edlStrength);
