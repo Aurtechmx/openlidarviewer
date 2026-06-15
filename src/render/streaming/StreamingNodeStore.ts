@@ -37,6 +37,16 @@ export class StreamingNodeStore {
   private _queuedCount = 0;
 
   /**
+   * Live counts of nodes in the `loading` and `error` states, maintained at
+   * every {@link setState} transition alongside `_queuedCount`. With these,
+   * {@link counts} answers in O(1) instead of walking the whole hierarchy
+   * (28 k+ nodes) on the ~4 Hz diagnostics poll. `resident` is read from the
+   * `_resident` set's size, `known` from the `_nodes` map's size.
+   */
+  private _loadingCount = 0;
+  private _errorCount = 0;
+
+  /**
    * Live sets of the nodes currently in the `resident` and `queued` states,
    * maintained at every {@link setState} transition. The scheduler walks these
    * every tick (~10 Hz) for a 28 k-node cloud; materialising them from a full
@@ -125,6 +135,8 @@ export class StreamingNodeStore {
     // per-tick eviction + queued-reset passes run O(resident)/O(queued) with
     // zero allocation instead of `all().filter(...)` over the whole hierarchy.
     if (node.state === 'queued') { this._queuedCount--; this._queued.delete(node); }
+    if (node.state === 'loading') this._loadingCount--;
+    if (node.state === 'error') this._errorCount--;
     node.state = state;
     node.residentPointCount = state === 'resident' ? residentPointCount : 0;
     if (state === 'resident') {
@@ -132,6 +144,8 @@ export class StreamingNodeStore {
       this._resident.add(node);
     }
     if (state === 'queued') { this._queuedCount++; this._queued.add(node); }
+    if (state === 'loading') this._loadingCount++;
+    if (state === 'error') this._errorCount++;
     if (state !== 'error') node.error = undefined;
   }
 
@@ -167,18 +181,17 @@ export class StreamingNodeStore {
     return this._queued.values();
   }
 
-  /** Live counts by state — cheap enough for the ~4 Hz diagnostics poll. */
+  /**
+   * Live counts by state — O(1), served from the counters/sets maintained at
+   * every {@link setState} transition rather than walking the hierarchy.
+   */
   counts(): NodeCounts {
-    let queued = 0;
-    let loading = 0;
-    let resident = 0;
-    let error = 0;
-    for (const node of this._nodes.values()) {
-      if (node.state === 'queued') queued++;
-      else if (node.state === 'loading') loading++;
-      else if (node.state === 'resident') resident++;
-      else if (node.state === 'error') error++;
-    }
-    return { known: this._nodes.size, queued, loading, resident, error };
+    return {
+      known: this._nodes.size,
+      queued: this._queuedCount,
+      loading: this._loadingCount,
+      resident: this._resident.size,
+      error: this._errorCount,
+    };
   }
 }
