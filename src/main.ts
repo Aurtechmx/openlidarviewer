@@ -1382,7 +1382,7 @@ function buildActionRegistry(): Action[] {
         run: () => {
           const workflow = workflowController.stopRecording();
           if (workflow) {
-            workflowController.download(workflow);
+            void workflowController.save(workflow);
             showLassoToast(
               'Workflow saved. Replay needs the same scan open on the other end.',
             );
@@ -1526,7 +1526,7 @@ if (WORKFLOW_RECORDER_ENABLED) {
     if (workflowController.state === 'recording') {
       const workflow = workflowController.stopRecording();
       if (workflow) {
-        workflowController.download(workflow);
+        void workflowController.save(workflow);
         // v0.3.10 — match the toast wording from the
         // command-palette path so users see the same expectation either way.
         showLassoToast(
