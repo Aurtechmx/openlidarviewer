@@ -1,6 +1,7 @@
 import { el } from './dom';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
+import { formatByteSize as formatBytes } from '../io/formatByteSize';
 
 /** A built-in sample scan offered on the empty state. */
 export interface Sample {
@@ -117,13 +118,6 @@ function isCellularConnection(): boolean | null {
   } catch {
     return null;
   }
-}
-
-/** Format a byte count as the largest sensible unit (MB / GB), one decimal. */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(0)} MB`;
-  return `${(bytes / 1000).toFixed(0)} KB`;
 }
 
 /**

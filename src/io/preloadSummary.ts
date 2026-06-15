@@ -13,15 +13,11 @@
 
 import type { SourceMetadata } from './PointCloudSource';
 import { formatPointCount } from './loadPlan';
-
-/** Render a byte count compactly: 12_400_000 → "11.8 MB". */
-export function formatByteSize(bytes: number): string {
-  const v = Math.max(0, bytes);
-  if (v >= 1024 ** 3) return `${(v / 1024 ** 3).toFixed(1)} GB`;
-  if (v >= 1024 ** 2) return `${(v / 1024 ** 2).toFixed(1)} MB`;
-  if (v >= 1024) return `${(v / 1024).toFixed(1)} KB`;
-  return `${Math.round(v)} B`;
-}
+// Re-exported for back-compat: existing callers import formatByteSize from here.
+// The implementation now lives in its own leaf module so the UI panels can
+// share it without pulling in loadPlan.
+export { formatByteSize } from './formatByteSize';
+import { formatByteSize } from './formatByteSize';
 
 /**
  * The preload-summary lines for a source's metadata — what the viewer detected

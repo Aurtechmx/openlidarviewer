@@ -12,6 +12,7 @@
 
 import { el } from './dom';
 import { formatCount } from './dom';
+import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 
@@ -76,13 +77,6 @@ const MODE_LABEL: Record<ColorMode, string> = {
 };
 
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];
-
-/** Render a byte count compactly. */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 /** Render a world dimension — coarse for large extents, finer for small ones. */
 function formatDim(n: number): string {
