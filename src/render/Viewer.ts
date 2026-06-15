@@ -4178,6 +4178,13 @@ export class Viewer {
       cancelAnimationFrame(this._resizeRafId);
       this._resizeRafId = null;
     }
+    // Clear the recolour throttle's trailing timer so it can't fire a recolour
+    // on a torn-down renderer after dispose.
+    if (this._recolorThrottleHandle !== null) {
+      clearTimeout(this._recolorThrottleHandle);
+      this._recolorThrottleHandle = null;
+      this._recolorThrottlePending = false;
+    }
     for (const id of [...this._clouds.keys()]) {
       this.removeCloud(id);
     }
