@@ -6108,7 +6108,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-object-caveats[open] > .olv-object-note:first-of-type { margin-top: var(--space-2xs); }
 
 /* Non-terrain analysis export row — Report PDF (primary) + interior-only Floor
- * plan. Mirrors the Analyse panel's export-row look (premium buttons, busy state
+ * plan. Mirrors the Analyse panel's export-row look (buttons, busy state
  * handled in ObjectPanel). */
 .olv-object-export {
   display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-sm);

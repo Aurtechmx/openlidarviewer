@@ -16,7 +16,7 @@ export type RenderBackend = 'webgpu' | 'webgl2';
 /** Default EDL tuning, chosen for the bundled survey samples. */
 export const EDL_DEFAULTS = {
   /**
-   * Higher = more pronounced depth cueing. v0.3.6 premium-graphics pass:
+   * Higher = more pronounced depth cueing. v0.3.6 graphics pass:
    * 0.5 → 0.7 so the screen-space depth cueing actually carves visible
    * geometry into the cloud (buildings, terrain folds, vegetation
    * volumes) rather than just whispering at it. Still well clear of the

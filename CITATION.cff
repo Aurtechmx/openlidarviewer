@@ -12,8 +12,8 @@ authors:
   - name: "Aurtech"
 license: MIT
 repository-code: "https://github.com/aurtechmx/openlidarviewer"
-version: 0.4.6
-date-released: "2026-06-13"
+version: 0.4.7
+date-released: "2026-06-15"
 keywords:
   - lidar
   - point-cloud

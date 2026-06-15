@@ -266,7 +266,7 @@ export class ObjectPanel {
    * The analysis-export row. A primary "Report PDF" button is ALWAYS offered;
    * "Floor plan preview" is offered ONLY for interior scans (`withFloorPlan`),
    * with the standing experimental note underneath. Mirrors
-   * the AnalysePanel DEM/map buttons — premium button styles, a lazy-loaded
+   * the AnalysePanel DEM/map buttons — the shared button styles, a lazy-loaded
    * builder behind a busy state, and a graceful error state on failure. The
    * point-cloud format converter is unaffected (it lives in the Export panel).
    */

@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.4.7] - 2026-06-14
+## [0.4.7] - 2026-06-15
 
 A correctness and honesty pass across the load, export, and analysis paths,
 alongside a few accessibility and workflow additions.
@@ -83,8 +83,8 @@ otherwise. The interior floor plan remains an experimental PREVIEW, now backed b
 an explicit wall-graph reconstruction and flood-fill room segmentation with
 claim-accurate labels throughout. Plus nine label-vs-value drift fixes (incl.
 foot-CRS / geographic-unit correctness and the edge-risk wording) and mobile
-touch-target / safe-area improvements. Three more visible improvements
-round it out: the plumbed-but-headless floor-plan export knobs get a small
+touch-target / safe-area improvements. Three more visible improvements:
+the plumbed-but-headless floor-plan export knobs get a small
 UI (still an experimental PREVIEW), the last flagged capture-quality
 label-vs-value drift ("Coverage … % of footprint" → "Bounding area filled") is
 closed, and the streaming loader's indeterminate text becomes an honest

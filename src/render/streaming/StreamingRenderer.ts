@@ -38,7 +38,7 @@ import type { RgbAppearance } from '../rgbAppearance';
  * low-tier device profile — see `attachStreamingCloud`.
  *
  * FADE_MS bumped 180 → 220 ms (the middle of the
- * 150-250 ms range that reads as "premium" without dragging on long
+ * 150-250 ms range that reads as smooth without dragging on long
  * enough to feel sluggish), and the eviction path now triggers a
  * symmetric fade-OUT instead of a hard remove. The result is a true
  * cross-fade between a parent node fading out and its higher-resolution
