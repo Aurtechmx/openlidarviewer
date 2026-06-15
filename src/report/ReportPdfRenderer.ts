@@ -445,12 +445,14 @@ function drawProfileChart(
   theme: ReportThemePalette,
   accent: ParsedColor,
   doc: PDFDocument,
+  body: PDFFont,
   organisation: string | undefined,
 ): PageCursor {
   const CHART_W = 240;
   const CHART_H = 56;
   const PAD = 5;
-  cursor = ensureSpace(cursor, CHART_H + 12, doc, accent, theme, organisation);
+  // Reserve room for the chart box plus the not-to-scale disclosure beneath it.
+  cursor = ensureSpace(cursor, CHART_H + 26, doc, accent, theme, organisation);
   const x0 = MARGIN + 12;
   const top = cursor.y;
   const bottom = top - CHART_H;
@@ -484,7 +486,26 @@ function drawProfileChart(
     }
     prev = pt;
   }
-  return { page: cursor.page, y: bottom - 8 };
+  // Honesty disclosure — the box is vertically auto-fit, so its slope is an
+  // arbitrary vertical exaggeration. Without this, a reader could eyeball a
+  // grade off a distorted curve. The real horizontal length, Δh and grade are
+  // printed in the summary row above; the dedicated Profile sheet carries a
+  // scaled, measurable section. (Convention: an undisclosed VE is the single
+  // most common way a profile thumbnail misleads.)
+  const caption =
+    'Schematic section — vertical scale auto-fit (exaggerated), not to scale. ' +
+    'Read length and grade from the values above, not off the curve.';
+  const capY = bottom - 9;
+  let y = capY;
+  for (const line of wrapText(caption, body, BODY_FONT_SIZE - 2, PAGE_WIDTH - MARGIN - x0)) {
+    cursor.page.drawText(line, {
+      x: x0, y: y - (BODY_FONT_SIZE - 2),
+      size: BODY_FONT_SIZE - 2, font: body,
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+    });
+    y -= BODY_FONT_SIZE - 1;
+  }
+  return { page: cursor.page, y: y - 4 };
 }
 
 function drawLabelValueRow(
@@ -1066,7 +1087,7 @@ async function renderMeasurements(
         cursor = drawLabelValueRow(cursor, '  coverage', extras.coverageCaveat, body, bold, theme);
       }
       if (extras.chart && extras.chart.length >= 2) {
-        cursor = drawProfileChart(cursor, extras.chart, theme, accent, doc, organisation);
+        cursor = drawProfileChart(cursor, extras.chart, theme, accent, doc, body, organisation);
       }
     }
   }
