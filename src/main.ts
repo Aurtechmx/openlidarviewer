@@ -31,7 +31,9 @@ import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
+import { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
+import { matchesShortcut } from './render/workflow/workflowConfig';
 import {
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
@@ -1158,8 +1160,49 @@ const crsCoordinator = createCrsCoordinator({
 // mounted — and the shortcut / palette entries only registered —
 // when the flag is on.
 const workflowController = new WorkflowController();
+const workflowConfigPanel = new WorkflowConfigPanel();
 if (WORKFLOW_RECORDER_ENABLED) {
   stage.overlay.append(workflowController.badge);
+  stage.overlay.append(workflowConfigPanel.element);
+  // Edits in the settings popup take effect immediately and persist.
+  workflowConfigPanel.onChange((cfg) => {
+    workflowController.setConfig(cfg);
+    persistPrefs();
+  });
+}
+
+/** Save a finished workflow and confirm (or report a cancelled picker). */
+async function saveWorkflowWithToast(
+  workflow: import('./render/workflow/workflowRecorder').Workflow,
+): Promise<void> {
+  const name = await workflowController.save(workflow);
+  if (name === null) {
+    showLassoToast('Workflow · save cancelled.');
+    return;
+  }
+  showLassoToast('Workflow saved. Replay needs the same scan open on the other end.');
+}
+
+/** Start (with the configured countdown) the right toast. */
+function startWorkflowRecording(): void {
+  const startedNow = workflowController.requestStartRecording();
+  if (startedNow) {
+    showLassoToast('Workflow · recording started. Use the badge to stop.');
+  } else if (workflowController.config.countdownSeconds > 0) {
+    const secs = workflowController.config.countdownSeconds;
+    showLassoToast(`Workflow · recording starts in ${secs}s…`);
+  }
+}
+
+/** Toggle the recorder: idle → start, recording → stop + save. */
+function toggleWorkflowRecord(): void {
+  if (workflowController.state === 'recording') {
+    const workflow = workflowController.stopRecording();
+    if (workflow) void saveWorkflowWithToast(workflow);
+    else showLassoToast('Workflow · nothing recorded yet.');
+  } else {
+    startWorkflowRecording();
+  }
 }
 
 // v0.3.9 — command palette (Cmd-K / Ctrl-K). The host owns the
@@ -1364,12 +1407,7 @@ function buildActionRegistry(): Action[] {
           'Records camera moves and tool actions only — to replay later you ' +
           '(or the recipient) need the same scan open.',
         keywords: ['record', 'macro', 'demo'],
-        run: () => {
-          if (workflowController.state === 'idle') {
-            workflowController.startRecording();
-            showLassoToast('Workflow · recording started. Use the badge to stop.');
-          }
-        },
+        run: () => startWorkflowRecording(),
       },
       {
         id: 'workflow.stop-save',
@@ -1421,6 +1459,14 @@ function buildActionRegistry(): Action[] {
           document.body.append(input);
           input.click();
         },
+      },
+      {
+        id: 'workflow.settings',
+        title: 'Workflow recorder settings…',
+        section: 'Workflow',
+        hint: 'Format, save location, shortcut, replay speed, capture scope.',
+        keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
+        run: () => workflowConfigPanel.open(),
       },
     );
   }
@@ -1515,30 +1561,18 @@ window.addEventListener('keydown', (e) => {
 // is true (it currently is not; see WorkflowController.ts). With the flag
 // off the chord falls through untouched to the browser, exactly as if the
 // feature never existed.
+// The start/stop chord is user-configurable (default ⌘/Ctrl+Shift+U) via the
+// recorder settings popup; the handler reads the live config each press, so a
+// rebind takes effect with no re-binding. A text field with focus suppresses
+// it (so capturing a new chord in the settings popup never also toggles).
 if (WORKFLOW_RECORDER_ENABLED) {
   window.addEventListener('keydown', (e) => {
-    const isRecorder =
-      (e.code === 'KeyU' || e.key === 'u' || e.key === 'U') &&
-      e.shiftKey &&
-      (e.metaKey || e.ctrlKey);
-    if (!isRecorder) return;
+    if (e.defaultPrevented) return;
+    const active = document.activeElement;
+    if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+    if (!matchesShortcut(e, workflowController.config.shortcut)) return;
     e.preventDefault();
-    if (workflowController.state === 'recording') {
-      const workflow = workflowController.stopRecording();
-      if (workflow) {
-        void workflowController.save(workflow);
-        // v0.3.10 — match the toast wording from the
-        // command-palette path so users see the same expectation either way.
-        showLassoToast(
-          'Workflow saved. Replay needs the same scan open on the other end.',
-        );
-      } else {
-        showLassoToast('Workflow · nothing recorded yet.');
-      }
-    } else if (workflowController.state === 'idle') {
-      workflowController.startRecording();
-      showLassoToast('Workflow · recording started. Use the badge to stop.');
-    }
+    toggleWorkflowRecord();
   });
 }
 
@@ -3500,6 +3534,7 @@ function persistPrefs(): void {
     unitSystem: viewer.measure.unitSystem,
     touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
     colorblindSafeClasses: colorblindSafeClasses(),
+    workflow: workflowController.config,
   });
 }
 
@@ -3533,6 +3568,10 @@ function applyPrefs(): void {
   }
   if (p.colorblindSafeClasses !== undefined) {
     classLegendPanel.setColorblindSafe(p.colorblindSafeClasses);
+  }
+  if (p.workflow !== undefined) {
+    workflowController.setConfig(p.workflow);
+    workflowConfigPanel.setConfig(p.workflow);
   }
 }
 

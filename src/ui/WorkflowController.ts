@@ -44,7 +44,7 @@ function eventFamily(type: WorkflowEvent['type']): 'camera' | 'theme' | 'tools' 
  * and the on-screen badge in one place. Keep the mirror constant in
  * tests/e2e/workflowRecorder.spec.ts in sync when flipping.
  */
-export const WORKFLOW_RECORDER_ENABLED: boolean = false;
+export const WORKFLOW_RECORDER_ENABLED: boolean = true;
 
 /**
  * WorkflowController.ts
@@ -146,12 +146,12 @@ export class WorkflowController {
    * zero), so the user has a moment to frame the scan before capture starts.
    * `onTick` receives each remaining second for an optional host cue.
    */
-  requestStartRecording(onTick?: (secondsLeft: number) => void): void {
-    if (this._state !== 'idle' || this._countdownTimer !== null) return;
+  requestStartRecording(onTick?: (secondsLeft: number) => void): boolean {
+    if (this._state !== 'idle' || this._countdownTimer !== null) return false;
     const secs = this._config.countdownSeconds;
     if (secs <= 0) {
       this.startRecording();
-      return;
+      return true;
     }
     let n = secs;
     this._refreshBadge(`● Starting in ${n}…`);
@@ -166,6 +166,7 @@ export class WorkflowController {
         onTick?.(n);
       }
     }, 1000);
+    return false; // recording starts when the countdown elapses
   }
 
   /** Cancel a pending record countdown. No-op when none is running. */

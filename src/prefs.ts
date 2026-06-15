@@ -19,6 +19,10 @@
 
 import type { PointSizeMode } from './render/pointStyle';
 import type { UnitSystem } from './render/measure/types';
+import {
+  parseWorkflowConfig,
+  type WorkflowRecorderConfig,
+} from './render/workflow/workflowConfig';
 
 /**
  * The user's choice of mobile multi-touch model.
@@ -50,6 +54,8 @@ export interface ViewerPrefs {
   touchModel: TouchModel;
   /** Use the colourblind-safe (Okabe-Ito) categorical class palette. */
   colorblindSafeClasses: boolean;
+  /** Workflow-recorder settings (format, save mode, shortcut, replay, …). */
+  workflow: WorkflowRecorderConfig;
 }
 
 /** The `localStorage` key; the `.v1` suffix lets the schema evolve later. */
@@ -96,6 +102,9 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   }
   if (typeof o.colorblindSafeClasses === 'boolean') {
     out.colorblindSafeClasses = o.colorblindSafeClasses;
+  }
+  if (o.workflow !== undefined) {
+    out.workflow = parseWorkflowConfig(o.workflow);
   }
   return out;
 }

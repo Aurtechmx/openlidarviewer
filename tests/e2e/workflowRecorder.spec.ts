@@ -13,13 +13,11 @@ import { test, expect, type Page } from '@playwright/test';
  * file download via a programmatic <a download> click.
  */
 
-// v0.4.5 — mirrors WORKFLOW_RECORDER_ENABLED in src/ui/WorkflowController.ts
-// (kept as a local constant so this Playwright spec doesn't import app
-// source). The recorder is disabled for this release by product decision —
-// avoid shortcut-collision confusion from the mid-cycle R→U rebind, and the
-// replay-a-file UX needs a design pass — so every spec here is skipped, not
-// deleted. Flip BOTH constants to true together when the feature returns.
-const WORKFLOW_RECORDER_ENABLED = false;
+// Mirrors WORKFLOW_RECORDER_ENABLED in src/ui/WorkflowController.ts (kept as a
+// local constant so this Playwright spec doesn't import app source). The
+// recorder is enabled, configurable via its settings popup. Flip BOTH constants
+// together if the feature is ever gated again.
+const WORKFLOW_RECORDER_ENABLED = true;
 
 test.skip(
   !WORKFLOW_RECORDER_ENABLED,
