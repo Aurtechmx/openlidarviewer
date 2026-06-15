@@ -101,7 +101,13 @@ export async function renderReportPdf(
   template: ReportTemplate,
 ): Promise<ReportResult> {
   const doc = await PDFDocument.create();
-  doc.setTitle(inputs.cover.title);
+  // `showInWindowTitleBar` sets the ViewerPreferences DisplayDocTitle flag, so a
+  // screen reader / PDF viewer announces the report title rather than the raw
+  // filename. setLanguage tags the document language for correct pronunciation.
+  // (A full tagged-structure tree for section-level navigation is out of reach
+  // with this PDF library; these are the honest, supported accessibility hooks.)
+  doc.setTitle(inputs.cover.title, { showInWindowTitleBar: true });
+  doc.setLanguage('en-US');
   doc.setAuthor(inputs.branding.author ?? 'OpenLiDARViewer');
   doc.setCreator(`OpenLiDARViewer Report Engine v${__APP_VERSION__}`);
   doc.setProducer('pdf-lib (lazy chunk)');
