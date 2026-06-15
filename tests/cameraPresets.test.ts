@@ -66,6 +66,31 @@ describe('camera preset registry', () => {
   });
 });
 
+describe('degenerate (zero-radius) bounding sphere stays finite', () => {
+  // A cloud whose points are all at one location yields a zero-radius sphere.
+  // The pose math must treat radius 0 as 1 (via fitDistance) so a standard view
+  // or preset still produces a finite camera pose rather than collapsing onto
+  // the point — the regression guard for the empty/degenerate-cloud framing path.
+  const zero: PresetInput = { ...baseInput, radius: 0 };
+
+  it.each(CAMERA_PRESET_ORDER)('preset %s yields finite position + target at radius 0', (name) => {
+    const { position, target } = cameraPresetPose(name as CameraPresetName, zero);
+    for (const v of [position.x, position.y, position.z, target.x, target.y, target.z]) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+    // Camera is pulled back a real distance, not left sitting on the centroid.
+    expect(len(sub(position, target))).toBeGreaterThan(0);
+  });
+
+  it.each(STANDARD_VIEW_ORDER)('standard view %s yields finite position + target at radius 0', (view) => {
+    const { position, target } = standardViewPose(view as StandardView, zero);
+    for (const v of [position.x, position.y, position.z, target.x, target.y, target.z]) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+    expect(len(sub(position, target))).toBeGreaterThan(0);
+  });
+});
+
 describe('cameraPresetPose — invariants every preset must satisfy', () => {
   const names: CameraPresetName[] = ['top', 'iso', 'oblique', 'planar'];
 

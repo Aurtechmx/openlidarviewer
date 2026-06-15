@@ -289,9 +289,11 @@ export class CrsService {
       // Linear unit, in priority order: borrow the detector's when it described
       // this exact EPSG; else read the registry entry's unit (set only for the
       // non-metre entries); else fall back — geographic is angular ('unknown'),
-      // a projected entry defaults to metres (every registry projected entry is
-      // metre-based today). This replaces a hard-coded 'metre' that would have
-      // mislabelled a future foot-based CRS.
+      // a projected entry defaults to metres. Metres is the correct default
+      // here, not an assumption: every projected CRS this app can resolve
+      // (epsgToProj4) is metre-based, and `getCrsEntry` enumerates only the
+      // curated picker list (not parametric UTM), so a UTM override is
+      // legitimately absent from it yet still metres.
       linearUnit:
         detected?.epsg === override.epsg
           ? detected.linearUnit

@@ -149,6 +149,22 @@ export function epsgDatumFamily(epsg: number): DatumFamily | null {
  * pairs (WGS84↔ETRS89/NZGD2000/CGCS2000/GDA2020, sub-metre by definition at
  * their reference epochs) stay quiet so the warning keeps its signal.
  */
+/**
+ * The datum families our proj4 definitions realise as an IDENTITY shift to
+ * WGS84 and that geodetic convention treats as coincident at their reference
+ * epochs (sub-metre). A transform among these is intentionally quiet so the
+ * caveat keeps its signal. NAD83 is deliberately NOT in this set: it is also
+ * modelled as identity-to-WGS84 here, but it differs from this cluster by
+ * ≈ 1–2 m, so it earns its own caveat below.
+ */
+const WGS84_COINCIDENT: ReadonlySet<DatumFamily> = new Set([
+  'WGS84',
+  'ETRS89',
+  'NZGD2000',
+  'CGCS2000',
+  'GDA2020',
+]);
+
 export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | null {
   const a = epsgDatumFamily(srcEpsg);
   const b = epsgDatumFamily(dstEpsg);
@@ -163,6 +179,19 @@ export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | nul
     return (
       'GDA94 and GDA2020 are both defined as identity shifts to WGS84 here, so no real ' +
       'datum shift was applied — the true GDA94→GDA2020 difference is ≈ 1.8 m (plate motion)'
+    );
+  }
+  // NAD83 is realised here as an identity shift to WGS84, but it is offset from
+  // the WGS84-coincident cluster (modern WGS84 / ETRS89 / GDA2020) by ≈ 1–2 m
+  // in CONUS, and no NADCON/NTv2 grid is applied. Flag the identity so a
+  // NAD83 ↔ WGS84/ETRS89 transform is not read as exact.
+  if (
+    (a === 'NAD83' && WGS84_COINCIDENT.has(b)) ||
+    (b === 'NAD83' && WGS84_COINCIDENT.has(a))
+  ) {
+    return (
+      'NAD83 is applied here as an identity shift to the WGS84 datum family, but the two ' +
+      'differ by ≈ 1–2 m — no NAD83 datum grid was applied'
     );
   }
   return null;
