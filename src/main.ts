@@ -55,6 +55,7 @@ import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import { countClasses } from './render/class/classHistogram';
+import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
@@ -1273,6 +1274,54 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
   }
 }
 
+/**
+ * Derive a heuristic classification for the active cloud when it has none.
+ * Runs the unsupervised classifier OFF the main thread (with a safe fallback),
+ * applies the codes, colours the cloud by class, rebuilds the legend, and
+ * reports the result with the honest "derived, not survey-grade" caveat.
+ */
+let classifyRunning = false;
+async function runDeriveClassification(): Promise<void> {
+  if (classifyRunning) return;
+  if (!activeId) {
+    showLassoToast('Classify · open a scan first.');
+    return;
+  }
+  const cloud = viewer.getCloud(activeId);
+  if (!cloud) {
+    showLassoToast('Classify · this works on a loaded (non-streaming) scan.');
+    return;
+  }
+  if (cloud.classification && !cloud.classificationIsDerived) {
+    showLassoToast('Classify · this scan already carries a classification.');
+    return;
+  }
+  classifyRunning = true;
+  showLassoToast('Classify · deriving ground / vegetation / building…');
+  try {
+    const id = activeId;
+    const result = await deriveClassificationAsync(cloud.positions, cloud.pointCount, {});
+    if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    viewer.applyDerivedClassification(id, result.codes);
+    classLegendPanel.setClasses(countClasses(result.codes));
+    classLegendPanel.show();
+    // Honest one-line breakdown of the top classes derived.
+    const total = cloud.pointCount || 1;
+    const top = Object.entries(result.counts)
+      .map(([code, n]) => ({ code: Number(code), n }))
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 3)
+      .map((e) => `${classificationLabel(e.code)} ${Math.round((e.n / total) * 100)}%`)
+      .join(' · ');
+    showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/abort/i.test(msg)) showLassoToast(`Classify · failed: ${msg}`);
+  } finally {
+    classifyRunning = false;
+  }
+}
+
 function buildActionRegistry(): Action[] {
   const actions: Action[] = [];
 
@@ -1363,6 +1412,16 @@ function buildActionRegistry(): Action[] {
         const next = !viewer.annotateMode;
         viewer.setAnnotateMode(next);
         workflowController.capture({ type: 'tool', tool: 'annotate', on: next });
+      },
+    },
+    {
+      id: 'tool.classify',
+      title: 'Classify (derive)',
+      section: 'Tools',
+      hint: 'Derive a ground / vegetation / building classification for an unclassified scan (heuristic).',
+      keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],
+      run: () => {
+        void runDeriveClassification();
       },
     },
     {

@@ -66,8 +66,21 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
     ...(intensity ? ['intensity'] : []),
     ...(classification ? ['classification'] : []),
   ];
+  // Honest provenance: when the classification column was DERIVED by the
+  // viewer's heuristic classifier (not read from the source), stamp it so a
+  // downstream reader never mistakes derived codes for a producer's
+  // survey-grade classification. Kept to the XYZ path (a leading `#` comment),
+  // matching the column-header convention; CSV's first line must be the header.
+  const derivedNote =
+    classification && cloud.classificationIsDerived
+      ? '# classification: DERIVED (heuristic ground/vegetation/building — ' +
+        'not survey-grade; validate before relying on it)'
+      : null;
   if (csv) lines.push(columns.join(','));
-  else if (intensity || classification) lines.push(`# columns: ${columns.join(' ')}`);
+  else {
+    if (derivedNote) lines.push(derivedNote);
+    if (intensity || classification) lines.push(`# columns: ${columns.join(' ')}`);
+  }
 
   for (let i = 0; i < n; i++) {
     const row: Array<string | number> = [

@@ -163,6 +163,18 @@ describe('exportCloud + round-trip', () => {
     expect(exportCloud(cloud, 'obj').startsWith('#')).toBe(true);
   });
 
+  test('XYZ export stamps a DERIVED provenance comment for a derived classification', () => {
+    const cloud = makeCloud([0, 0, 0, 1, 1, 1], [0, 0, 0]);
+    cloud.attachDerivedClassification(new Uint8Array([2, 5]));
+    const text = toXyz(cloud);
+    expect(text).toMatch(/# classification: DERIVED/);
+    expect(text).toMatch(/not survey-grade/);
+    // A file-original classification carries no such stamp.
+    const original = makeCloud([0, 0, 0, 1, 1, 1], [0, 0, 0]);
+    // (no attachDerivedClassification → no classification at all → no stamp)
+    expect(toXyz(original)).not.toMatch(/DERIVED/);
+  });
+
   test('XYZ export re-imports to the same global coordinates', async () => {
     const cloud = makeCloud([0.5, 1.5, 2.5, 3, 4, 5], [500000, 4100000, 100], [10, 20, 30, 40, 50, 60]);
     const text = toXyz(cloud);
