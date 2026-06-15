@@ -277,6 +277,57 @@ const CLASS_PALETTE: Readonly<Record<number, readonly [number, number, number]>>
 };
 
 /**
+ * Colourblind-safe categorical palette, keyed by the same ASPRS class codes.
+ * Built on the Okabe-Ito qualitative palette (distinguishable under
+ * deuteranopia, protanopia, and tritanopia). The default palette above puts
+ * green vegetation next to red buildings and brown ground — the classic
+ * red/green confusion. Here ground reads ORANGE, the three vegetation classes
+ * are LIGHTNESS steps of bluish-green (separable even for monochromats),
+ * buildings read VERMILLION, and water reads BLUE — separations that survive
+ * every common CVD type. Greys for the unclassified codes are kept.
+ */
+const CLASS_PALETTE_CVD: Readonly<Record<number, readonly [number, number, number]>> = {
+  0:  [200, 200, 200],   // Created / never classified
+  1:  [150, 150, 150],   // Unclassified
+  2:  [230, 159,   0],   // Ground            — Okabe-Ito orange
+  3:  [120, 200, 170],   // Low vegetation    — bluish-green, light
+  4:  [  0, 158, 115],   // Medium vegetation — bluish-green
+  5:  [  0,  95,  70],   // High vegetation   — bluish-green, dark
+  6:  [213,  94,   0],   // Building          — Okabe-Ito vermillion
+  7:  [204, 121, 167],   // Low point / noise — reddish purple
+  8:  [240, 228,  66],   // Reserved          — Okabe-Ito yellow
+  9:  [  0, 114, 178],   // Water             — Okabe-Ito blue
+  10: [ 86, 180, 233],   // Rail              — Okabe-Ito sky blue
+  11: [225, 225, 225],   // Road surface      — near-white
+  12: [190, 160,  90],   // Reserved          — muted tan
+  13: [150,  80, 120],   // Wire guard        — dark reddish purple
+  14: [110,  60, 140],   // Wire conductor    — violet
+  15: [ 40, 120, 170],   // Transmission tower— dark sky blue
+  16: [220, 160, 200],   // Wire connector    — light reddish purple
+  17: [240, 228,  66],   // Bridge deck       — yellow
+  18: [240, 140,  90],   // High noise        — light vermillion
+};
+
+/**
+ * The active class palette. A module-level switch (rather than a parameter
+ * threaded through every recolour call site) so `classColor` and
+ * `colorByClassification` flip together when the user toggles colourblind-safe
+ * mode; the host re-triggers the recolour + legend rebuild after the switch.
+ */
+let activeClassPalette: Readonly<Record<number, readonly [number, number, number]>> =
+  CLASS_PALETTE;
+
+/** Switch the categorical class palette between default and colourblind-safe. */
+export function setColorblindSafeClasses(on: boolean): void {
+  activeClassPalette = on ? CLASS_PALETTE_CVD : CLASS_PALETTE;
+}
+
+/** Whether the colourblind-safe class palette is currently active. */
+export function colorblindSafeClasses(): boolean {
+  return activeClassPalette === CLASS_PALETTE_CVD;
+}
+
+/**
  * Generate a deterministic colour for an unmapped classification code
  * by spreading codes around the hue wheel.
  */
@@ -294,7 +345,7 @@ function fallbackClassColour(code: number): [number, number, number] {
  */
 export function classColor(code: number): [number, number, number] {
   const c = code & 0xff;
-  const mapped = CLASS_PALETTE[c];
+  const mapped = activeClassPalette[c];
   return mapped ? [mapped[0], mapped[1], mapped[2]] : fallbackClassColour(c);
 }
 
@@ -370,7 +421,7 @@ export function colorByClassification(
     const code = classification[i];
     let colour = cache.get(code);
     if (!colour) {
-      colour = CLASS_PALETTE[code] ?? fallbackClassColour(code);
+      colour = activeClassPalette[code] ?? fallbackClassColour(code);
       cache.set(code, colour);
     }
     out[i * 3] = colour[0];

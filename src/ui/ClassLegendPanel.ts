@@ -35,11 +35,18 @@ const ICON_SOLO =
   '<path d="M12 3 20 7 12 11 4 7Z" fill="currentColor" stroke="none"/>' +
   '<path d="M4 11l8 4 8-4" stroke-opacity="0.4"/>' +
   '<path d="M4 15l8 4 8-4" stroke-opacity="0.4"/></svg>';
-import { classColor } from '../render/colorModes';
+import {
+  classColor,
+  setColorblindSafeClasses,
+  colorblindSafeClasses,
+} from '../render/colorModes';
 import { classificationLabel } from '../render/pointInfo';
 
 /** A change the panel reports back to the host after a user interaction. */
 export type ClassLegendChange = (visibility: ClassVisibility) => void;
+
+/** Fired after the user toggles the colourblind-safe class palette. */
+export type ClassPaletteChange = (colorblindSafe: boolean) => void;
 
 export class ClassLegendPanel {
   /** The panel element — append to the left-panels column (see main.ts). */
@@ -56,6 +63,12 @@ export class ClassLegendPanel {
 
   /** Host callback fired after any user-driven visibility change. */
   private _onChange: ClassLegendChange | null = null;
+
+  /** Host callback fired after the colourblind-safe palette is toggled. */
+  private _onPaletteChange: ClassPaletteChange | null = null;
+
+  /** The colourblind-safe palette checkbox. */
+  private _cvToggle!: HTMLInputElement;
 
   /** The scrolling list of class rows. */
   private readonly _list: HTMLElement;
@@ -117,12 +130,31 @@ export class ClassLegendPanel {
       text: 'This scan has no classification data.',
     });
 
+    // Colourblind-safe palette toggle. The class WORD and the count stay on
+    // every row, so colour is supplementary — but the default ASPRS palette
+    // puts green vegetation beside red buildings, the classic red/green trap.
+    // This swaps to the Okabe-Ito categorical palette that survives every
+    // common colour-vision-deficiency type.
+    this._cvToggle = el('input', { type: 'checkbox', className: 'olv-cl-cvd-input' });
+    this._cvToggle.checked = colorblindSafeClasses();
+    this._cvToggle.addEventListener('change', () => {
+      const on = this._cvToggle.checked;
+      setColorblindSafeClasses(on);
+      this._render(); // repaint the legend swatches from the new palette
+      this._onPaletteChange?.(on);
+    });
+    const cvLabel = el('label', { className: 'olv-cl-cvd' }, [
+      this._cvToggle,
+      el('span', { text: 'Colourblind-safe colours' }),
+    ]);
+    cvLabel.title = 'Recolour the classes with a colourblind-safe (Okabe-Ito) palette';
+
     this.element = el('aside', { className: 'olv-class-panel olv-hidden' }, [
       head,
       this._banner,
       this._list,
       this._empty,
-      el('div', { className: 'olv-cl-footer' }, [this._showAllBtn]),
+      el('div', { className: 'olv-cl-footer' }, [this._showAllBtn, cvLabel]),
     ]);
   }
 
@@ -144,6 +176,22 @@ export class ClassLegendPanel {
   /** Register the host callback fired after every user-driven change. */
   onChange(cb: ClassLegendChange): void {
     this._onChange = cb;
+  }
+
+  /** Register the host callback fired after the palette toggle changes. */
+  onPaletteChange(cb: ClassPaletteChange): void {
+    this._onPaletteChange = cb;
+  }
+
+  /**
+   * Apply a persisted colourblind-safe preference on startup. Flips the shared
+   * palette, syncs the checkbox, and repaints the swatches — without firing
+   * `onPaletteChange` (the host applies the initial recolour itself on load).
+   */
+  setColorblindSafe(on: boolean): void {
+    setColorblindSafeClasses(on);
+    this._cvToggle.checked = on;
+    this._render();
   }
 
   /** The visibility state the host applies to the GPU mask. */

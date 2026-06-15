@@ -101,7 +101,11 @@ import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
 import { scanReport } from './analysis/modules/scanReport';
-import { availableModes, defaultMode } from './render/colorModes';
+import {
+  availableModes,
+  defaultMode,
+  colorblindSafeClasses,
+} from './render/colorModes';
 import type { ColorMode } from './render/colorModes';
 import type { PointCloud } from './model/PointCloud';
 // `detectCopc` is a tiny leaf — kept static so `handleFile` can branch on it
@@ -1851,6 +1855,16 @@ classLegendPanel.onChange((visibility) => {
     if (debug) console.warn('[class-legend] scoped report refresh threw', err);
   }
 });
+classLegendPanel.onPaletteChange(() => {
+  // Persist the choice and recolour any classification view in place. Only the
+  // classification colour pass reads the class palette, so other modes need no
+  // refresh; the legend repaints its own swatches.
+  persistPrefs();
+  if (currentColorMode === 'classification') {
+    if (activeId) viewer.setColorMode(activeId, 'classification');
+    if (viewer.hasStreamingCloud) viewer.setStreamingColorMode('classification');
+  }
+});
 
 /**
  * Re-render the Inspector's scan report under the current class filter. Routes
@@ -3485,6 +3499,7 @@ function persistPrefs(): void {
     antialiasing: viewer.antialiasing,
     unitSystem: viewer.measure.unitSystem,
     touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
+    colorblindSafeClasses: colorblindSafeClasses(),
   });
 }
 
@@ -3515,6 +3530,9 @@ function applyPrefs(): void {
   if (p.unitSystem !== undefined) viewer.measure.setUnitSystem(p.unitSystem);
   if (p.touchModel !== undefined) {
     viewer.setTwoFingerTwistEnabled(p.touchModel === 'standard');
+  }
+  if (p.colorblindSafeClasses !== undefined) {
+    classLegendPanel.setColorblindSafe(p.colorblindSafeClasses);
   }
 }
 

@@ -48,6 +48,8 @@ export interface ViewerPrefs {
   unitSystem: UnitSystem;
   /** Mobile multi-touch model — twist + pinch + pan, or 3-finger zoom. */
   touchModel: TouchModel;
+  /** Use the colourblind-safe (Okabe-Ito) categorical class palette. */
+  colorblindSafeClasses: boolean;
 }
 
 /** The `localStorage` key; the `.v1` suffix lets the schema evolve later. */
@@ -91,6 +93,9 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   }
   if (o.touchModel === 'standard' || o.touchModel === 'advanced') {
     out.touchModel = o.touchModel;
+  }
+  if (typeof o.colorblindSafeClasses === 'boolean') {
+    out.colorblindSafeClasses = o.colorblindSafeClasses;
   }
   return out;
 }
