@@ -168,13 +168,15 @@ export async function computeTerrainCoreAsync(
     // Any other worker failure is a REAL failure the developer must see — even
     // in production, because the fallback otherwise hides it (the app keeps
     // working, on the main thread, with no signal). Announce it unconditionally
-    // BEFORE falling back so "off-thread success" can't be mistaken for "silent
-    // main-thread fallback".
+    // so "off-thread success" can't be mistaken for "silent main-thread
+    // fallback" — but DON'T claim the fallback yet: the ceiling check below may
+    // refuse it and throw, so "fell back to main thread" here would be a lie on
+    // an over-limit dataset.
     // Include the point count: the fallback runs computeTerrainCore SYNCHRONOUSLY
     // on the main thread, so a large n here is the signal for a UI stall — the
     // one diagnostic a developer needs to tell "worker glitch on a small scan"
     // from "main-thread freeze on a big one".
-    console.warn(`[terrain] worker analysis failed; fell back to main thread (${n} pts):`, err);
+    console.warn(`[terrain] worker analysis failed (${n} pts):`, err);
     // SAFE main-thread fallback. The compute is synchronous; re-check the
     // signal first so a cancelled run does no work.
     if (signal?.aborted) {
@@ -194,6 +196,8 @@ export async function computeTerrainCoreAsync(
           `the analysis sample size.`,
       );
     }
+    // The ceiling passed — the fallback is actually happening now.
+    if (debugEnabled()) console.info(`[terrain] falling back to main thread (${n} pts)`);
     const core = computeTerrainCore(positions, fallbackParams);
     lastComputePath = 'fallback';
     if (debugEnabled()) console.info('[terrain] core computed via main thread (fallback)');
