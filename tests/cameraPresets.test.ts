@@ -18,6 +18,7 @@ import {
   CAMERA_PRESET_LABEL,
   CAMERA_PRESET_ORDER,
   CAMERA_FRAME_PAD,
+  fitBoxDistance,
   type CameraPresetName,
   type StandardView,
   type PresetInput,
@@ -262,6 +263,44 @@ describe('standard views — six axis-aligned faces', () => {
     const dist = len(sub(position, target));
     const fovRad = (50 * Math.PI) / 180;
     expect(dist).toBeCloseTo((10 / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD, 5);
+  });
+
+  it('fitBoxDistance: a corner lands at the frustum edge (exact fit at pad 1)', () => {
+    // A symmetric box viewed straight down the -X axis; the box half-extents on
+    // the screen axes are 4 (up/Z) and 3 (right/Y). At the fit distance the
+    // larger of |au|/tanV and |ar|/tanH must equal the depth, i.e. the corner
+    // sits exactly on the frustum boundary.
+    const fovDeg = 50;
+    const aspect = 1; // tanH == tanV
+    const d = fitBoxDistance({
+      boxMin: { x: -1, y: -3, z: -4 },
+      boxMax: { x: 1, y: 3, z: 4 },
+      look: { x: -1, y: 0, z: 0 },
+      worldUp: { x: 0, y: 0, z: 1 },
+      fovDeg,
+      aspect,
+      pad: 1,
+    });
+    const tanV = Math.tan((fovDeg * Math.PI) / 180 / 2);
+    // Binding axis is Z (screen-up half-extent 4). The binding corner is the
+    // NEAR face (x = +1), whose depth from the camera is d − 1 (the box's
+    // half-depth along the look axis). So 4 / tanV == d − 1  →  d == 4/tanV + 1.
+    expect(d).toBeCloseTo(4 / tanV + 1, 4);
+  });
+
+  it('fitBoxDistance: a flat wide box frames closer than a cube of the same diagonal', () => {
+    const common = {
+      look: { x: -1, y: -1, z: -1 },
+      worldUp: { x: 0, y: 0, z: 1 },
+      fovDeg: 50,
+      aspect: 1.6,
+      pad: 1,
+    };
+    const flat = fitBoxDistance({ ...common, boxMin: { x: -50, y: -50, z: -1 }, boxMax: { x: 50, y: 50, z: 1 } });
+    const cube = fitBoxDistance({ ...common, boxMin: { x: -50, y: -50, z: -50 }, boxMax: { x: 50, y: 50, z: 50 } });
+    // The flat slab needs less distance to fill the frame than the full cube
+    // (whose vertical extent is far larger) — the whole point of box-fit.
+    expect(flat).toBeLessThan(cube);
   });
 
   it('Top and Bottom look along ±worldUp (dominantly vertical)', () => {

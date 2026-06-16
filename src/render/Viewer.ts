@@ -78,7 +78,7 @@ import {
 import {
   cameraPresetPose,
   standardViewPose,
-  CAMERA_FRAME_PAD,
+  fitBoxDistance,
   type CameraPresetName,
   type StandardView,
 } from './camera/cameraPresets';
@@ -3363,17 +3363,9 @@ export class Viewer {
    * overview rather than snapping there.
    */
   frameAll(): void {
-    const sphere = this._visibleBoundingSphere();
-    if (!sphere) return;
-
-    const radius = sphere.radius === 0 ? 1 : sphere.radius;
-    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
-    // 0.85 padding — open a scan ~25% closer than the old 1.1 so it fills the
-    // viewport (a flat wide terrain's bounding sphere is mostly empty air, so a
-    // sub-1.0 pad just trims that air; the points stay in frame). Centred on the
-    // sphere centre. Shared with the camera presets so Frame All and the
-    // Top/Oblique/Planar views open at the same comfortable distance.
-    const dist = (radius / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD;
+    const box = this._visibleBoundingBox();
+    if (!box) return;
+    const target = box.getCenter(new THREE.Vector3());
 
     // An oblique direction: a horizontal heading lifted ~35° toward world-up,
     // so a scan opens at a natural three-quarter angle, not flat top-down.
@@ -3383,7 +3375,21 @@ export class Viewer {
       .addScaledVector(this._worldUp, Math.sin(0.61))
       .normalize();
 
-    const target = sphere.center.clone();
+    // Extent-aware fit: the distance at which the actual bounding BOX just fills
+    // the frustum (aspect + FOV aware), not its much-larger bounding sphere. So
+    // a flat wide scan fills the viewport and a tall scan isn't over-zoomed —
+    // the framing adapts to the scan's shape. 1.05 leaves a small margin so the
+    // edge points sit just inside the frame rather than on its border.
+    const dist = fitBoxDistance({
+      boxMin: { x: box.min.x, y: box.min.y, z: box.min.z },
+      boxMax: { x: box.max.x, y: box.max.y, z: box.max.z },
+      look: { x: -dir.x, y: -dir.y, z: -dir.z },
+      worldUp: { x: this._worldUp.x, y: this._worldUp.y, z: this._worldUp.z },
+      fovDeg: this._camera.fov,
+      aspect: this._camera.aspect,
+      pad: 1.05,
+    });
+
     const pos = target.clone().addScaledVector(dir, dist);
     // Slightly longer than the default tween — a Frame All sweep usually
     // covers a larger camera delta, so the extra ~100 ms makes the cubic
@@ -4420,7 +4426,8 @@ export class Viewer {
   }
 
   /** Combined bounding sphere of every visible cloud, or null if none. */
-  private _visibleBoundingSphere(): THREE.Sphere | null {
+  /** The AABB of every visible cloud (+ the streaming octree extent), or null. */
+  private _visibleBoundingBox(): THREE.Box3 | null {
     const box = new THREE.Box3();
     let any = false;
     for (const { mesh, cloud } of this._clouds.values()) {
@@ -4438,7 +4445,12 @@ export class Viewer {
       box.expandByPoint(new THREE.Vector3(lb[3], lb[4], lb[5]));
       any = true;
     }
-    if (!any || box.isEmpty()) return null;
+    return any && !box.isEmpty() ? box : null;
+  }
+
+  private _visibleBoundingSphere(): THREE.Sphere | null {
+    const box = this._visibleBoundingBox();
+    if (!box) return null;
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
     return sphere;
