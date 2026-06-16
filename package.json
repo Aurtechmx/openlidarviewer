@@ -21,6 +21,7 @@
     "build": "tsc --noEmit && vite build",
     "build:live": "tsc --noEmit && vite build --mode live",
     "package": "bash scripts/package.sh",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

@@ -161,10 +161,10 @@ score, surface models (DSM, canopy height, slope, multi-directional
 hillshade), a single top-level Terrain Assessment verdict, evidence-graded
 contour export (GeoJSON / SVG / DXF), a printable map sheet, and a
 georeferenced DEM package (ASCII Grid + GeoTIFF). A DTM quality gate
-governs whether a professional contour export is offered, and the panel is
+governs whether terrain-product export is enabled, and the panel is
 explicit that its products are for analysis — not survey certification. The
 per-cell confidence is calibrated against measured hold-out error, not
-asserted: treat terrain products and DEM exports as deliverable-ready only
+asserted: treat terrain products and DEM exports as export-ready only
 when the Terrain Assessment reads Good, and as preview otherwise.
 
 See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md)

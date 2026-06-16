@@ -55,6 +55,10 @@ verify_zip() {
 echo "→ Building production (live) bundle…"
 npm run build:live
 
+# Guard against silent bundle growth before we ship the artifact.
+echo "→ Checking bundle budget…"
+node "$ROOT/scripts/check-bundle-budget.mjs"
+
 # ── Deploy archive: dist contents at the zip root, web-safe modes ──────────
 echo "→ Normalising deploy modes (644 files / 755 dirs)…"
 cp -R dist "$TMP/deploy"

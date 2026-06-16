@@ -363,7 +363,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
           : 'Insufficient data quality for reliable terrain products.';
     } else {
       // Preview: the gate's own "Preview only: …" wording matches this tier.
-      reason = gateReason ?? (caps.length > 0 ? capitalise(joinReasons(caps)) + '.' : 'Usable for inspection, not for final terrain products.');
+      reason = gateReason ?? (caps.length > 0 ? capitalise(joinReasons(caps)) + '.' : 'Usable for inspection and measurement, not yet for terrain-product export.');
     }
   }
 
