@@ -79,6 +79,9 @@ export class ClassLegendPanel {
   /** The "Derived (heuristic)" provenance caption (hidden unless derived). */
   private readonly _provenance: HTMLElement;
 
+  /** "Counts accrue as the cloud streams" caption (hidden unless streaming). */
+  private readonly _streamingNote: HTMLElement;
+
   /** The "Show all" reset button. */
   private readonly _showAllBtn: HTMLButtonElement;
 
@@ -118,6 +121,17 @@ export class ClassLegendPanel {
       text: 'Derived (heuristic) — not survey-grade. Validate before relying on it.',
     });
     this._provenance.setAttribute('role', 'note');
+
+    // Streaming caption — for a COPC/EPT scan the per-class counts are a
+    // RUNNING TALLY over the nodes decoded so far (the legend folds new counts
+    // as nodes arrive), so they exceed the currently-resident point count and
+    // are not full-file totals. Shown only while streaming so a reviewer never
+    // reads "Building 7,833" as an authoritative whole-cloud figure.
+    this._streamingNote = el('div', {
+      className: 'olv-cl-derived olv-hidden',
+      text: 'Counts accrue as the cloud streams — points decoded so far, not full-file totals.',
+    });
+    this._streamingNote.setAttribute('role', 'note');
 
     this._banner = el('div', { className: 'olv-cl-banner olv-hidden' });
     this._banner.setAttribute('role', 'status');
@@ -164,6 +178,7 @@ export class ClassLegendPanel {
     this.element = el('aside', { className: 'olv-class-panel olv-hidden' }, [
       head,
       this._provenance,
+      this._streamingNote,
       this._banner,
       this._list,
       this._empty,
@@ -227,6 +242,7 @@ export class ClassLegendPanel {
     // re-flags it after this call. Reset so a derived caption never lingers
     // onto a subsequently-loaded file-classified scan.
     this.setDerivedProvenance(false);
+    this.setStreamingMode(false);
     this._render();
   }
 
@@ -237,6 +253,15 @@ export class ClassLegendPanel {
    */
   setDerivedProvenance(on: boolean): void {
     this._provenance.classList.toggle('olv-hidden', !on);
+  }
+
+  /**
+   * Show or hide the "Counts accrue as the cloud streams" caption. The host
+   * calls this with `true` for a streaming COPC/EPT scan, so the per-class
+   * counts (a running tally over decoded nodes) never read as full-file totals.
+   */
+  setStreamingMode(on: boolean): void {
+    this._streamingNote.classList.toggle('olv-hidden', !on);
   }
 
   /**

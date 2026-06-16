@@ -215,7 +215,7 @@ describe('terrainAssessment', () => {
   it('makes resident-only coverage visible and never reads as Good', () => {
     const a = terrainAssessment(fixture({ coverageMode: 'resident-only', score: 90 }));
     expect(a.status).not.toBe('Good');
-    const cov = findMetric(a.supportingMetrics, 'Coverage');
+    const cov = findMetric(a.supportingMetrics, 'Scan scope');
     expect(cov?.value).toMatch(/resident/i);
     expect(cov?.rating).not.toBe('good');
   });
@@ -223,7 +223,7 @@ describe('terrainAssessment', () => {
   it('makes sampled coverage visible and never reads as Good', () => {
     const a = terrainAssessment(fixture({ coverageMode: 'sampled', score: 90 }));
     expect(a.status).not.toBe('Good');
-    const cov = findMetric(a.supportingMetrics, 'Coverage');
+    const cov = findMetric(a.supportingMetrics, 'Scan scope');
     expect(cov?.value).toMatch(/sampled/i);
   });
 
@@ -265,7 +265,7 @@ describe('terrainAssessment', () => {
     const a = terrainAssessment(fixture());
     const labels = a.supportingMetrics.map((m) => m.label);
     for (const required of [
-      'Coverage',
+      'Scan scope',
       'Ground density',
       'DTM quality',
       'Interpolation',
@@ -450,7 +450,7 @@ describe('terrainAssessment', () => {
     });
 
     it('chips carry the field values with honest ratings', () => {
-      expect(findMetric(a.supportingMetrics, 'Coverage')?.value).toBe('full');
+      expect(findMetric(a.supportingMetrics, 'Scan scope')?.value).toBe('full');
       expect(findMetric(a.supportingMetrics, 'Ground density')?.value).toBe('1047.3 pts/m²');
       expect(findMetric(a.supportingMetrics, 'Ground density')?.rating).toBe('good');
       expect(findMetric(a.supportingMetrics, 'DTM quality')?.value).toBe('52/100');

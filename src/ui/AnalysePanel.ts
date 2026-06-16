@@ -570,14 +570,14 @@ export class AnalysePanel {
       unknown: 2,
       good: 3,
     };
-    const primaryLabels = new Set(['DTM quality', 'Coverage']);
+    const primaryLabels = new Set(['DTM quality', 'Scan scope']);
     const rest = metrics.filter((m) => !primaryLabels.has(m.label));
     const worst = rest
       .slice()
       .sort((x, y) => ratingRank[x.rating] - ratingRank[y.rating])[0];
     if (worst) primaryLabels.add(worst.label);
     const primary = el('div', { className: 'olv-analyse-assess-metrics is-primary' });
-    for (const label of ['DTM quality', 'Coverage', worst?.label]) {
+    for (const label of ['DTM quality', 'Scan scope', worst?.label]) {
       const m = label ? byLabel.get(label) : undefined;
       if (m) primary.append(pill(m));
     }
@@ -589,7 +589,7 @@ export class AnalysePanel {
     // the export-readiness line already shown above) — the chips still render,
     // just flagged so the always-"unknown" pair never masquerades as signal.
     const clusters: Array<{ name: string; labels: string[] }> = [
-      { name: 'Coverage', labels: ['Coverage', 'Empty cells', 'Interpolation'] },
+      { name: 'Coverage', labels: ['Scan scope', 'Empty cells', 'Interpolation'] },
       { name: 'Surface', labels: ['Ground density', 'DTM quality', 'Edge risk'] },
       { name: 'Accuracy', labels: ['Vertical RMSE'] },
       { name: 'Georef', labels: ['CRS', 'Vertical datum'] },
@@ -2000,7 +2000,7 @@ export class AnalysePanel {
     // jargon chips (CRS / Datum), reused from contourCopy so the wording
     // is single-sourced and consistent with the Details metrics above.
     const chips: Array<[string, string, Tone, string?]> = [
-      ['Coverage', coverage, tri(q.coverageMode === 'full', true)],
+      ['Scan scope', coverage, tri(q.coverageMode === 'full', true)],
       ['DTM', dtm, q.readiness === 'ready' ? 'good' : q.readiness === 'previewOnly' ? 'warn' : 'bad'],
       ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true), METRIC_TOOLTIPS.crs],
       ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true), METRIC_TOOLTIPS.verticalDatum],

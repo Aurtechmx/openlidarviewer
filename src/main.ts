@@ -2012,6 +2012,10 @@ void viewerLoaded.then(() => {
     if (!classLegendPanel.hasClasses()) {
       // First node to carry classification on this streaming scan — seed + show.
       classLegendPanel.setClasses(countClasses(classes));
+      // Streaming counts are a running tally over decoded nodes (folded below
+      // as more arrive), not full-file totals — disclose that in the legend.
+      // setClasses() resets the flag, so set it after seeding.
+      classLegendPanel.setStreamingMode(true);
       if (classLegendPanel.hasClasses()) classLegendPanel.show();
     } else {
       classLegendPanel.mergeClasses(countClasses(classes));

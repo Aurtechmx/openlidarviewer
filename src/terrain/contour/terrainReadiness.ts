@@ -137,7 +137,12 @@ export function computeTerrainReadiness(result: AnalyseContoursResult): TerrainR
   if (dtmRating !== 'unavailable' && !calibrated) dtmRating = demote(dtmRating);
   const rmseText = Number.isFinite(rmse) ? `${rmse.toFixed(2)} m` : 'not measurable';
   const dtmQuality: ReadinessIndicator = {
-    label: 'DTM quality',
+    // "Measured coverage" — not "DTM quality" — so this card (a % of the
+    // surface that is real measurement vs interpolated) can't be mistaken for
+    // the composite "DTM quality NN/100" score chip shown in the verdict
+    // metrics. They are different axes; sharing the name read as a contradiction
+    // (e.g. "DTM quality 54/100" beside "DTM quality 35% measured").
+    label: 'Measured coverage',
     rating: cov.covered === 0 ? 'unavailable' : dtmRating,
     value: cov.covered === 0 ? '—' : `${pct(measuredFrac)} measured`,
     detail:

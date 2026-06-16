@@ -222,7 +222,12 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   // ── supporting metrics (real values, each with a plain rating) ────────
   const cov = describeCoverage(coverageMode);
   const supportingMetrics: SupportingMetric[] = [
-    { label: 'Coverage', value: cov.value, rating: cov.rating },
+    // "Scan scope" — full / resident-only / sampled — is WHICH part of the
+    // cloud was analysed, not a coverage percentage. Naming it 'Coverage' put
+    // a non-numeric scope chip ("Coverage: resident-only") next to the measured
+    // coverage figure ("Coverage 35%") under the same word; "Scan scope" keeps
+    // the two distinct.
+    { label: 'Scan scope', value: cov.value, rating: cov.rating },
     {
       label: 'Ground density',
       value: density > 0 ? `${density.toFixed(1)} pts/m²` : 'unknown',
