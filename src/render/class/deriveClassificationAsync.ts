@@ -109,7 +109,11 @@ export async function deriveClassificationAsync(
     return result;
   } catch (err) {
     if (isAbortError(err)) throw err;
-    console.warn(`[classify] worker failed; fell back to main thread (${n} pts):`, err);
+    // Announce the worker failure unconditionally (a broken worker must never
+    // hide behind the still-working main-thread path) — but DON'T claim a
+    // fallback yet: the ceiling check below may refuse it. Saying "fell back"
+    // here would lie whenever the dataset is over the limit and we throw.
+    console.warn(`[classify] worker failed (${n} pts):`, err);
     if (signal?.aborted) {
       throw new DOMException('Classification aborted', 'AbortError');
     }
@@ -120,6 +124,8 @@ export async function deriveClassificationAsync(
           `${MAX_FALLBACK_POINTS}). Reload to restore the worker.`,
       );
     }
+    // The ceiling passed — the fallback is actually happening now.
+    if (debugEnabled()) console.info(`[classify] falling back to main thread (${n} pts)`);
     // The synchronous fallback reports the same phases (best-effort, though it
     // blocks the main thread so the UI won't repaint between them).
     const result = deriveClassification(positions, n, options, onProgress);
