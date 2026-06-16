@@ -1971,10 +1971,23 @@ export class Viewer {
       }
     }
     if (oi === 0) return null;
+    // `residentOnly` means a PARTIAL stream — only some octree nodes are
+    // resident, so the surface assessment must stay a "Preview". Previously
+    // this was hard-wired true for ANY streaming scan, so a fully-streamed COPC
+    // could NEVER earn a real grade. Now it reflects actual coverage: once every
+    // known octree node is resident (the working set spans the whole cloud), the
+    // sample is spatially complete and the analysis reports full coverage. A
+    // stride is still applied (`sampled`), but that's a representative subsample
+    // of the WHOLE extent, not a partial one.
+    let residentOnly = streamingPoints > 0 && staticPoints === 0;
+    if (residentOnly && this._streaming) {
+      const totalNodes = this._streaming.cloud.octree.nodes().length;
+      if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
+    }
     return {
       positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
       classification: classification ? (oi === cap ? classification : classification.subarray(0, oi)) : undefined,
-      residentOnly: streamingPoints > 0 && staticPoints === 0,
+      residentOnly,
       sampled: stride > 1,
       totalPoints,
       verticalAxisHint: verticalAxisHintForSources(staticFormats, streamingPoints > 0),
