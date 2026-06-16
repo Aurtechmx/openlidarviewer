@@ -453,7 +453,15 @@ export class AnalysePanel {
     // SURFACE QUALITY is the primary verdict. The score is folded in from the
     // assessment (single source of truth) so the hero is the one headline, e.g.
     // "Surface quality · Good · 84/100".
-    const headline = a.scoreKnown && Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
+    // A Preview score is computed on a PARTIAL / coarse sample (a streaming
+    // working set), so it's provisional — show it with a tilde ("~57/100") so a
+    // complete, perfectly good file doesn't read as if 57 were its real grade.
+    // A non-preview (Good/Limited/Blocked) score is over the full data and shows
+    // the exact number.
+    const approx = tier === 'preview' ? '~' : '';
+    const headline = a.scoreKnown && Number.isFinite(a.score)
+      ? `${a.status} · ${approx}${a.score}/100`
+      : a.status;
     top.append(
       el('span', { className: 'olv-analyse-assess-label', text: 'Surface quality' }),
       el('span', { className: 'olv-analyse-assess-verdict', text: headline }),
