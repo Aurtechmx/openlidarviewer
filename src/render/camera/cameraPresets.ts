@@ -42,6 +42,15 @@
  * Default `pad` is 1.2, matching `Viewer.frameAll()`.
  */
 
+/**
+ * Sphere-fit padding shared by `Viewer.frameAll()` and every camera preset.
+ * 0.85 (was 1.2) opens a scan ~25% closer so it fills the viewport and the
+ * Top / Oblique / Planar views read as distinctly different framings rather
+ * than near-identical far shots. Sub-1.0 only trims the empty volume of a flat
+ * scan's bounding sphere; the points stay in frame.
+ */
+export const CAMERA_FRAME_PAD = 0.85;
+
 /** Names a preset. Stable string — persisted in `.olvsession`. */
 export type CameraPresetName = 'top' | 'iso' | 'oblique' | 'planar';
 
@@ -189,7 +198,7 @@ export function cameraPresetPose(
   name: CameraPresetName,
   input: PresetInput,
 ): PresetPose {
-  const pad = input.pad ?? 1.2;
+  const pad = input.pad ?? CAMERA_FRAME_PAD;
   const dist = fitDistance(input.radius, input.fovDeg, pad);
   const up = normalize(input.worldUp);
   const horiz = normalize(input.horizontal);
@@ -293,7 +302,7 @@ export const STANDARD_VIEW_LABEL: Readonly<Record<StandardView, string>> = {
  * ±the second horizontal axis (worldUp × horizontal). Pure + deterministic.
  */
 export function standardViewPose(view: StandardView, input: PresetInput): PresetPose {
-  const pad = input.pad ?? 1.2;
+  const pad = input.pad ?? CAMERA_FRAME_PAD;
   const dist = fitDistance(input.radius, input.fovDeg, pad);
   const up = normalize(input.worldUp);
   const horiz = normalize(input.horizontal);

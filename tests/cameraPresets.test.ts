@@ -17,6 +17,7 @@ import {
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
   CAMERA_PRESET_ORDER,
+  CAMERA_FRAME_PAD,
   type CameraPresetName,
   type StandardView,
   type PresetInput,
@@ -110,9 +111,9 @@ describe('cameraPresetPose — invariants every preset must satisfy', () => {
   it.each(names)('%s respects the FOV-fit distance formula', (name) => {
     const { position, target } = cameraPresetPose(name, baseInput);
     const dist = len(sub(position, target));
-    // dist = r / sin(fov/2) * pad ; pad default 1.2
+    // dist = r / sin(fov/2) * pad ; pad default CAMERA_FRAME_PAD
     const fovRad = (50 * Math.PI) / 180;
-    const expected = (10 / Math.sin(fovRad / 2)) * 1.2;
+    const expected = (10 / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD;
     expect(dist).toBeCloseTo(expected, 5);
   });
 
@@ -228,7 +229,7 @@ describe('Origin + axis independence', () => {
     const dir = sub(moved.position, moved.target);
     const dist = len(dir);
     const fovRad = (50 * Math.PI) / 180;
-    const expected = (10 / Math.sin(fovRad / 2)) * 1.2;
+    const expected = (10 / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD;
     expect(dist).toBeCloseTo(expected, 5);
   });
 
@@ -260,7 +261,7 @@ describe('standard views — six axis-aligned faces', () => {
     expect(target).toEqual({ x: 0, y: 0, z: 0 });
     const dist = len(sub(position, target));
     const fovRad = (50 * Math.PI) / 180;
-    expect(dist).toBeCloseTo((10 / Math.sin(fovRad / 2)) * 1.2, 5);
+    expect(dist).toBeCloseTo((10 / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD, 5);
   });
 
   it('Top and Bottom look along ±worldUp (dominantly vertical)', () => {
