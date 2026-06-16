@@ -37,6 +37,21 @@ TS="$(date +%Y%m%d-%H%M)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# Fail loudly on a truncated / corrupt archive rather than shipping it. A zip
+# that lacks its end-of-central-directory record (e.g. the writing process was
+# interrupted) passes `cp` but is unusable to the recipient — this gate makes
+# packaging exit non-zero, and removes the bad file so it can't be mistaken for
+# a good artifact.
+verify_zip() {
+  local f="$1"
+  if ! unzip -tqq "$f" >/dev/null 2>&1; then
+    echo "✗ Archive failed integrity check (truncated/corrupt): $f" >&2
+    rm -f "$f"
+    exit 1
+  fi
+  echo "  ✓ verified $(basename "$f")"
+}
+
 echo "→ Building production (live) bundle…"
 npm run build:live
 
@@ -49,6 +64,7 @@ find "$TMP/deploy" -type f -exec chmod 644 {} +
 DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"
 ( cd "$TMP/deploy" && zip -rqX "$TMP/$DEPLOY" . )
 cp "$TMP/$DEPLOY" "$OUT_DIR/$DEPLOY"
+verify_zip "$OUT_DIR/$DEPLOY"
 
 # ── Source archive: working tree minus build/vcs/deps, web-safe modes ──────
 echo "→ Assembling source archive…"
@@ -66,6 +82,7 @@ find "$TMP/source" -type f -exec chmod 644 {} +
 SOURCE="openlidarviewer-v${VERSION}-source-${TS}.zip"
 ( cd "$TMP/source" && zip -rqX "$TMP/$SOURCE" . )
 cp "$TMP/$SOURCE" "$OUT_DIR/$SOURCE"
+verify_zip "$OUT_DIR/$SOURCE"
 
 echo
 echo "✓ Packaged v${VERSION}:"
