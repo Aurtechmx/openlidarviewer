@@ -618,17 +618,14 @@ export class AnalysePanel {
   }
 
   /**
-   * Open the "All metrics" disclosure on desktop, collapse it on mobile. Uses a
-   * matchMedia query (no resize listener churn — set once at render, the panel
-   * re-renders on every analysis). Honesty-first: nothing is removed from the
-   * DOM, only the default open-state differs, so every chip stays reachable.
+   * The deep "All metrics" disclosure (Coverage / Surface / Accuracy / Georef
+   * clusters) defaults COLLAPSED — the decisive chips above it (DTM quality,
+   * Coverage, Interpolation) carry the headline, so first-glance load stays low
+   * and the full breakdown is one click away. Honesty-first: nothing is removed
+   * from the DOM, only the default open-state, so every chip stays reachable.
    */
   private _syncMetricsDisclosure(details: HTMLDetailsElement): void {
-    const narrow =
-      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-        ? window.matchMedia('(max-width: 640px)').matches
-        : false;
-    details.open = !narrow;
+    details.open = false;
   }
 
   private _renderScore(): void {
