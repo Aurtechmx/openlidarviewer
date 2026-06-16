@@ -82,13 +82,15 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   // 0–100 score (e.g. "Preview · 64/100").
   const verdict = page.locator('.olv-analyse-assess-verdict');
   await expect(verdict).toBeVisible();
-  await expect(verdict).toContainText(/(Good|Preview|Limited)\s*·\s*\d{1,3}\/100/);
+  // A Preview-tier score is provisional and renders with a leading "~"
+  // (e.g. "Preview · ~83/100"); Good/Limited show the exact number.
+  await expect(verdict).toContainText(/(Good|Preview|Limited)\s*·\s*~?\d{1,3}\/100/);
 
   // Detailed metrics are behind the Details expander — open it, then assert.
   await page.locator('.olv-analyse-details-summary').click();
   // Composite terrain quality score: a 0–100 number + weighted bars.
   await expect(page.locator('.olv-analyse-score-num')).toBeVisible();
-  await expect(page.locator('.olv-analyse-score-num')).toHaveText(/^\d{1,3}$/);
+  await expect(page.locator('.olv-analyse-score-num')).toHaveText(/^~?\d{1,3}$/);
   expect(await page.locator('.olv-analyse-score-comp').count()).toBe(6);
   // Honesty status chips.
   await expect(page.locator('.olv-analyse-chip', { hasText: 'Coverage' })).toBeVisible();

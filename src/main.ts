@@ -3948,11 +3948,14 @@ async function handleFile(file: File): Promise<void> {
     );
     await viewer.ready;
 
-    // The load succeeded — now free the previously-open scan (GPU buffers +
-    // retained file refs) BEFORE uploading the new one, so reopening scan after
-    // scan doesn't leak the old cloud's GPU memory. Done here (post-load) so a
-    // failed/cancelled load above never tears down the scan on screen.
-    clearOpenStaticLayers();
+    // NB: static layers are ADDITIVE — dropping/opening a second scan keeps the
+    // first as a separate layer (the LAYERS panel lists each with its own ✕ to
+    // free it). We deliberately do NOT clear prior static clouds here: an
+    // earlier "free the previous scan on re-open" optimisation mistook the
+    // retained layer for a leak and silently broke multi-scan loading. GPU for
+    // multiple layers is intended; the user releases a layer via its ✕, which
+    // routes through removeCloud() and frees the same buffers. (Streaming opens
+    // remain exclusive and still call clearOpenStaticLayers below.)
 
     dropZone.setProgress(formatProgress({ stage: 'uploading' }));
     stage.hideEmptyState();

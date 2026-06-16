@@ -127,8 +127,11 @@ export class ClassLegendPanel {
     // as nodes arrive), so they exceed the currently-resident point count and
     // are not full-file totals. Shown only while streaming so a reviewer never
     // reads "Building 7,833" as an authoritative whole-cloud figure.
+    // Distinct class from the "Derived (heuristic)" caption (olv-cl-derived) —
+    // they're independent captions that can show at the same time, and tests /
+    // styling must be able to target each on its own. Shares the caption CSS.
     this._streamingNote = el('div', {
-      className: 'olv-cl-derived olv-hidden',
+      className: 'olv-cl-streamnote olv-hidden',
       text: 'Counts accrue as the cloud streams — points decoded so far, not full-file totals.',
     });
     this._streamingNote.setAttribute('role', 'note');
