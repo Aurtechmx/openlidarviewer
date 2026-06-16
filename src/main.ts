@@ -3427,6 +3427,11 @@ async function generateReportPdf(templateId: string): Promise<void> {
       : NaN;
     const crs = streamingCloud.crs();
     const modes = streamingCloud.availableColorModes();
+    // Streaming-preview accounting — how much of the cloud is resident at
+    // export time. Surfaced as a "Loaded" row so the PDF discloses that a
+    // mid-stream report describes the full cloud but inspected only the
+    // resident subset. counts().known is the total known node count.
+    const nodeCounts = streamingCloud.counts();
     metadata = {
       fileName: streamingCloud.name,
       format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
@@ -3435,6 +3440,11 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasRgb: modes.includes('rgb'),
       hasIntensity: modes.includes('intensity'),
       hasClassification: modes.includes('classification'),
+      streamingResident: {
+        points: streamingCloud.residentPointCount,
+        nodes: nodeCounts.resident,
+        totalNodes: nodeCounts.known,
+      },
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.

@@ -640,12 +640,25 @@ export class AnalysePanel {
     this._scoreRow.replaceChildren();
     const qs = this._result?.qualityScore;
     if (!qs) return;
+    // Honesty parity with the headline verdict: when the assessment tier is
+    // `preview` (score computed on a partial / coarse streaming sample), this
+    // DETAILS number is provisional too. Mark it with the same tilde the
+    // verdict uses and tag the band "· preview" so the expanded breakdown can
+    // never read as a settled, full-cloud grade while the hero above it says
+    // "Preview · ~54/100". A non-preview score keeps the exact number.
+    const isPreview = terrainAssessment(this._result!).status.toLowerCase() === 'preview';
+    const approx = isPreview ? '~' : '';
+    const bandText = isPreview ? `Terrain quality · ${qs.band} · preview` : `Terrain quality · ${qs.band}`;
     const head = el('div', { className: 'olv-analyse-score-head' });
     head.append(
-      el('span', { className: `olv-analyse-score-num is-${qs.band}`, text: String(qs.score) }),
+      el('span', { className: `olv-analyse-score-num is-${qs.band}`, text: `${approx}${qs.score}` }),
       el('span', { className: 'olv-analyse-score-of', text: '/ 100' }),
-      el('span', { className: `olv-analyse-score-band is-${qs.band}`, text: `Terrain quality · ${qs.band}` }),
+      el('span', { className: `olv-analyse-score-band is-${qs.band}`, text: bandText }),
     );
+    if (isPreview) {
+      head.title =
+        'Provisional — scored on the streamed-in sample so far. Let the full cloud stream in, then re-run for a settled grade.';
+    }
     this._scoreRow.append(head);
     const bars = el('div', { className: 'olv-analyse-score-bars' });
     for (const c of qs.components) {

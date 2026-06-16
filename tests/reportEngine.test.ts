@@ -298,6 +298,48 @@ describe('buildDatasetSummary', () => {
     expect(rows.find((r) => r.label === 'Density')).toBeUndefined();
   });
 
+  // ── Streaming-preview "Loaded" row (COPC / EPT mid-stream disclosure) ────────
+  it('adds a Loaded row directly after Points when streamingResident is present', () => {
+    const rows = buildDatasetSummary({
+      fileName: '2485_1109.copc.laz', format: 'COPC',
+      sourcePointCount: 15_700_000,
+      width: 1000, depth: 1000, height: 138,
+      density: 16,
+      hasRgb: false, hasIntensity: true, hasClassification: false,
+      streamingResident: { points: 4_200_000, nodes: 70, totalNodes: 485 },
+    });
+    const pointsIdx = rows.findIndex((r) => r.label === 'Points');
+    const loaded = rows[pointsIdx + 1];
+    expect(loaded.label).toBe('Loaded');
+    // Compact counts, percentage, node fraction, and the preview caveat.
+    expect(loaded.value).toContain('4.2M of 15.7M pts');
+    expect(loaded.value).toContain('27%');           // 4.2M / 15.7M ≈ 26.75% → 27%
+    expect(loaded.value).toContain('70/485 nodes');
+    expect(loaded.value).toContain('streaming preview');
+  });
+
+  it('omits the Loaded row for static scans (no streamingResident)', () => {
+    const rows = buildDatasetSummary({
+      fileName: 's.las', format: 'LAS', sourcePointCount: 1_000_000,
+      width: 10, depth: 10, height: 5, density: 100,
+      hasRgb: false, hasIntensity: true, hasClassification: true,
+    });
+    expect(rows.find((r) => r.label === 'Loaded')).toBeUndefined();
+    // Canonical order intact: Points → Width.
+    const pointsIdx = rows.findIndex((r) => r.label === 'Points');
+    expect(rows[pointsIdx + 1].label).toBe('Width');
+  });
+
+  it('omits the Loaded row when zero points are resident yet', () => {
+    const rows = buildDatasetSummary({
+      fileName: 's.copc.laz', format: 'COPC', sourcePointCount: 9_000_000,
+      width: 10, depth: 10, height: 5, density: 90,
+      hasRgb: false, hasIntensity: true, hasClassification: false,
+      streamingResident: { points: 0, nodes: 0, totalNodes: 485 },
+    });
+    expect(rows.find((r) => r.label === 'Loaded')).toBeUndefined();
+  });
+
   // ── Class-filter honesty row (escape-hatch closure) ────────────────────────
   const baseInputs = {
     fileName: 'scan.copc.laz',
