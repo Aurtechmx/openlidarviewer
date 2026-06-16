@@ -92,8 +92,9 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(page.locator('.olv-analyse-score-num')).toBeVisible();
   await expect(page.locator('.olv-analyse-score-num')).toHaveText(/^~?\d{1,3}$/);
   expect(await page.locator('.olv-analyse-score-comp').count()).toBe(6);
-  // Honesty status chips.
-  await expect(page.locator('.olv-analyse-chip', { hasText: 'Coverage' })).toBeVisible();
+  // Honesty status chips. (The scan-scope chip was renamed from "Coverage" to
+  // "Scan scope" so it no longer collides with the measured-coverage figure.)
+  await expect(page.locator('.olv-analyse-chip', { hasText: 'Scan scope' })).toBeVisible();
   await expect(page.locator('.olv-analyse-chip', { hasText: 'CRS' })).toBeVisible();
   await expect(page.locator('.olv-analyse-chip', { hasText: 'Export' })).toBeVisible();
 
