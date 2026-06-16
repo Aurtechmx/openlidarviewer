@@ -187,6 +187,60 @@ function fitDistance(radius: number, fovDeg: number, pad: number): number {
   return (r / Math.sin(fovRad / 2)) * pad;
 }
 
+/** Inputs to {@link fitBoxDistance}. */
+export interface BoxFitInput {
+  readonly boxMin: Vec3;
+  readonly boxMax: Vec3;
+  /** Unit vector from the camera toward the target (the look direction). */
+  readonly look: Vec3;
+  readonly worldUp: Vec3;
+  readonly fovDeg: number;
+  /** Viewport aspect = width / height. */
+  readonly aspect: number;
+  /** Small margin around the box; default 1.05. */
+  readonly pad?: number;
+}
+
+/**
+ * Distance from the box centre at which the WHOLE axis-aligned box just fits
+ * the camera frustum, honouring both the vertical FOV and the aspect-scaled
+ * horizontal FOV. Unlike a bounding-sphere fit this adapts to the box shape: a
+ * flat wide scan fills the frame instead of leaving the empty top/bottom of its
+ * (much larger) bounding sphere, and a tall scan isn't over-zoomed. Pure +
+ * deterministic, so it's unit-tested without a camera.
+ */
+export function fitBoxDistance(input: BoxFitInput): number {
+  const c: Vec3 = {
+    x: (input.boxMin.x + input.boxMax.x) / 2,
+    y: (input.boxMin.y + input.boxMax.y) / 2,
+    z: (input.boxMin.z + input.boxMax.z) / 2,
+  };
+  const look = normalize(input.look);
+  // Camera basis; guard the look ∥ worldUp (gimbal) degenerate case.
+  let right = cross(look, input.worldUp);
+  if (length(right) < 1e-6) right = cross(look, { x: 1, y: 0, z: 0 });
+  if (length(right) < 1e-6) right = cross(look, { x: 0, y: 1, z: 0 });
+  right = normalize(right);
+  const up = normalize(cross(right, look));
+  const tanV = Math.tan((input.fovDeg * Math.PI) / 180 / 2);
+  const tanH = tanV * Math.max(input.aspect, 1e-3);
+
+  let dist = 0;
+  for (let i = 0; i < 8; i++) {
+    const a: Vec3 = {
+      x: ((i & 1) ? input.boxMax.x : input.boxMin.x) - c.x,
+      y: ((i & 2) ? input.boxMax.y : input.boxMin.y) - c.y,
+      z: ((i & 4) ? input.boxMax.z : input.boxMin.z) - c.z,
+    };
+    const ar = Math.abs(dot(a, right));
+    const au = Math.abs(dot(a, up));
+    const af = dot(a, look);
+    // Need |au| <= (af + D)·tanV and |ar| <= (af + D)·tanH for every corner.
+    dist = Math.max(dist, au / tanV - af, ar / tanH - af);
+  }
+  return Math.max(dist, 1e-3) * (input.pad ?? 1.05);
+}
+
 // ── presets ───────────────────────────────────────────────────────
 
 /**
