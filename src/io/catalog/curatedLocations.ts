@@ -94,7 +94,7 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
     id: 'flai-si-clss-2023',
     label: 'Slovenia — GURS CLSS (2023)',
     sizeLabel: '202 MB',
-    hint: 'FLAI Open LiDAR Data · Slovenian GURS national classified · CC BY 4.0.',
+    hint: 'FLAI Open LiDAR Data · Slovenian GURS national classified.',
     bbox: [14.50, 46.00, 14.60, 46.10],
     displayName: 'Slovenia GURS CLSS 2023',
     streamUrl:
