@@ -60,6 +60,13 @@ import {
   classificationCoverage,
   type DeriveClassificationOptions,
 } from './render/class/deriveClassification';
+import {
+  buildScanStory,
+  buildExportHealth,
+  type ScanStoryInputs,
+} from './intelligence/scanStory';
+import { renderDatasetStoryCard, renderExportHealthPanel } from './ui/scanStoryViews';
+import { openModal } from './ui/Modal';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
@@ -1285,6 +1292,9 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
  * reports the result with the honest "derived, not survey-grade" caveat.
  */
 let classifyRunning = false;
+/** Confidence (0..1) of the most recent derive, for the Dataset Story / Export
+ *  Health synthesis. Null when the active scan carries no derived classification. */
+let lastDerivedConfidence: number | null = null;
 async function runDeriveClassification(): Promise<void> {
   if (classifyRunning) return;
   if (!activeId) {
@@ -1332,6 +1342,7 @@ async function runDeriveClassification(): Promise<void> {
     );
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
+    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
     classLegendPanel.setClasses(countClasses(result.codes));
     // Surface the run's honest confidence + caveats in the legend caption, not
     // just a flat "derived" tag — so the user sees WHEN to trust it.
@@ -1360,6 +1371,59 @@ async function runDeriveClassification(): Promise<void> {
   } finally {
     classifyRunning = false;
   }
+}
+
+/**
+ * Gather the facts the fitness-for-use synthesis ({@link buildScanStory} /
+ * {@link buildExportHealth}) reduces, from whatever the active scan already
+ * exposes. Defensive throughout: any missing piece simply yields a thinner —
+ * but never wrong — story, so the card/health surfaces work pre-analysis too.
+ */
+function buildCurrentStoryInputs(): ScanStoryInputs {
+  const cloud = activeId ? viewer.getCloud(activeId) : null;
+  const streaming = viewer.streamingCloud;
+  let facts: ReturnType<typeof analysePanel.storyFacts> = null;
+  try { facts = analysePanel.storyFacts(); } catch { /* not analysed */ }
+  let di: ReturnType<() => typeof inspector.datasetIntelligence> | null = null;
+  try { di = inspector.datasetIntelligence; } catch { /* no intelligence yet */ }
+
+  let pointCount: number | undefined;
+  let areaM2: number | undefined;
+  let crsKnown: boolean | undefined;
+  let datumKnown: boolean | undefined;
+  let classification: 'none' | 'source' | 'derived' | undefined;
+  try {
+    if (cloud) {
+      const b = cloud.bounds();
+      areaM2 = (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]);
+      pointCount = cloud.pointCount;
+      const crs = cloud.metadata?.crs as { name?: string; verticalDatum?: unknown } | undefined;
+      crsKnown = !!crs?.name;
+      datumKnown = !!crs?.verticalDatum;
+      classification = cloud.classificationIsDerived ? 'derived' : cloud.classification ? 'source' : 'none';
+    } else if (streaming) {
+      const lb = streaming.localBounds();
+      areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]);
+      pointCount = streaming.sourcePointCount;
+      crsKnown = !!streaming.crs()?.name;
+      datumKnown = false;
+      classification = 'source';
+    }
+  } catch { /* a partial story is fine */ }
+
+  return {
+    pointCount,
+    areaM2,
+    surfaceTier: facts?.surfaceTier,
+    products: facts?.products,
+    density: di?.density.bucket,
+    groundVisibility: di?.groundVisibility.bucket,
+    coverageMode: di?.coverage.bucket,
+    crsKnown,
+    datumKnown,
+    classification,
+    classConfidence: lastDerivedConfidence,
+  };
 }
 
 function buildActionRegistry(): Action[] {
@@ -1462,6 +1526,26 @@ function buildActionRegistry(): Action[] {
       keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],
       run: () => {
         void runDeriveClassification();
+      },
+    },
+    {
+      id: 'story.dataset',
+      title: 'Dataset Story',
+      section: 'Analyse',
+      hint: 'What this scan is, how good it is, what it is best for, and the next step.',
+      keywords: ['story', 'fitness', 'summary', 'overview', 'what is this', 'good for'],
+      run: () => {
+        openModal({ title: 'Dataset Story', body: renderDatasetStoryCard(buildScanStory(buildCurrentStoryInputs())) });
+      },
+    },
+    {
+      id: 'export.health',
+      title: 'Export health check',
+      section: 'Export',
+      hint: 'What is about to leave the app: scope, classification, CRS, datum, density, readiness.',
+      keywords: ['export', 'health', 'check', 'hand-off', 'ready', 'before export'],
+      run: () => {
+        openModal({ title: 'Export health check', body: renderExportHealthPanel(buildExportHealth(buildCurrentStoryInputs())) });
       },
     },
     {
@@ -5132,6 +5216,7 @@ function removeCloud(id: string): void {
  * state — the caller adds the replacement immediately.
  */
 function clearOpenStaticLayers(): void {
+  lastDerivedConfidence = null;
   for (const id of viewer.clouds()) {
     viewer.removeCloud(id);
     inspector.removeCloud(id);
