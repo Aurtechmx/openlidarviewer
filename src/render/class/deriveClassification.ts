@@ -381,12 +381,10 @@ export function deriveClassification(
   // is not trustworthy. This mask lets the classifier (a) downgrade points that
   // sit over filled-in voids and (b) report an honest confidence + void warning,
   // instead of silently presenting an interpolated surface as if it were real.
-  let measuredCells = 0;
   const measured = new Uint8Array(W * H);
   for (let c = 0; c < gridMin.length; c++) {
-    if (Number.isFinite(gridMin[c])) { measured[c] = 1; measuredCells++; }
+    if (Number.isFinite(gridMin[c])) measured[c] = 1;
   }
-  const filledFraction = gridMin.length > 0 ? 1 - measuredCells / gridMin.length : 1;
   fillHoles(gridMin, W, H);
 
   // 2. Progressive morphological opening → bare-earth grid. Geometric window
@@ -528,6 +526,7 @@ export function deriveClassification(
   const support = new Float32Array(count); // 0..1 per finite point; NaN-pts → 0
   let supportSum = 0;
   let supportN = 0;
+  let lowSupportN = 0; // points whose ground was mostly hole-filled
   let voidDowngraded = 0;
   for (let i = 0; i < count; i++) {
     const h = hag[i];
@@ -539,6 +538,7 @@ export function deriveClassification(
       const s = supportAt(x, y);
       support[i] = s;
       supportSum += s; supportN++;
+      if (s < 0.5) lowSupportN++;
       if (h <= o.groundBandM) {
         code = DERIVED_GROUND;
       } else if (s < o.minGroundSupport) {
@@ -607,11 +607,17 @@ export function deriveClassification(
   const coarseness = clamp01(2 / (2 + Math.max(0, cell - 1))); // 1 at ≤1 m, decays as cell grows
   const confidence = clamp01(meanSupport * (0.5 + 0.5 * densityFactor) * coarseness);
 
+  // Void measure is POINT-based (fraction of points sitting over interpolated
+  // ground), NOT grid-based — an irregular scan footprint leaves the bounding
+  // box full of out-of-footprint empty cells that say nothing about the data
+  // under the actual points, so a grid-fill ratio would cry "voids" on a clean
+  // diagonal scan. Support is measured only where points are.
+  const lowSupportFraction = supportN > 0 ? lowSupportN / supportN : 0;
   const warnings: string[] = [];
-  if (filledFraction > 0.4) {
+  if (lowSupportFraction > 0.25) {
     warnings.push(
-      `Large unsupported voids (${Math.round(filledFraction * 100)}% of the grid was ` +
-        `interpolated) — derived classification is unreliable in those areas.`,
+      `Large unsupported voids — ${Math.round(lowSupportFraction * 100)}% of points sit ` +
+        `over interpolated ground; derived classification is unreliable there.`,
     );
   }
   if (meanSupport < 0.6) {
