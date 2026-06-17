@@ -21,6 +21,8 @@ import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
 import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { BoxBounds } from '../render/measure/geometry';
+import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 
 /**
  * Current session-file schema version. Bumps to v3, adding:
@@ -37,10 +39,10 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
  * Older v1 + v2 files parse with no loss — the new optional fields just
  * read as undefined, and the Viewer falls back to its current state.
  */
-export const SESSION_VERSION = 4;
+export const SESSION_VERSION = 5;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4];
+const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
 
 /** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
@@ -122,6 +124,22 @@ export interface InspectionSession {
    * imports the parts that ARE valid.
    */
   crs?: ResolvedCrs;
+  /**
+   * v5 — the class-visibility filter at export time, as the list of ASPRS class
+   * codes that were HIDDEN (0..255). On import the Viewer re-applies the filter
+   * so a shared recipe reproduces "ground only" / "vegetation hidden" exactly as
+   * the author left it. Strictly additive: absent ⇒ no filter (all classes
+   * visible), the pre-v5 behaviour; an out-of-range or malformed entry is
+   * dropped rather than throwing.
+   */
+  classFilter?: number[];
+  /**
+   * v5 — the clipping box at export time (region + mode + enabled). On import
+   * the Viewer restores the clip so a shared recipe reproduces an isolation
+   * slice or cut-away exactly. Strictly additive and tolerantly parsed: a
+   * malformed box is dropped, not thrown.
+   */
+  clip?: ClipBox;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -160,6 +178,13 @@ export function serializeSession(
   if (session.colorMode) doc.colorMode = session.colorMode;
   if (session.scanSummary) doc.scanSummary = session.scanSummary;
   if (session.crs) doc.crs = session.crs;
+  // v5 — class-visibility filter. Only emitted when something is actually
+  // hidden, so an unfiltered session keeps the pre-v5 byte-shape.
+  const hidden = sanitizeClassFilter(session.classFilter);
+  if (hidden.length > 0) doc.classFilter = hidden;
+  // v5 — the clipping box, only when one is present (enabled or not, so a
+  // disabled-but-positioned clip round-trips its geometry).
+  if (session.clip) doc.clip = session.clip;
   return JSON.stringify(doc, null, 2);
 }
 
@@ -213,10 +238,54 @@ export function parseSession(text: string): InspectionSession {
   // session still imports.
   const crs = parseResolvedCrs(raw.crs);
   if (crs) out.crs = crs;
+  // v5 — class-visibility filter (hidden ASPRS codes). Tolerantly sanitised:
+  // non-array, or out-of-range / duplicate entries are dropped, never thrown.
+  const classFilter = sanitizeClassFilter(raw.classFilter);
+  if (classFilter.length > 0) out.classFilter = classFilter;
+  // v5 — the clipping box. Dropped (not thrown) if the box geometry is malformed.
+  const clip = parseClipBox(raw.clip);
+  if (clip) out.clip = clip;
   return out;
 }
 
 // --- validation helpers ----------------------------------------------------
+
+const CLIP_MODES: readonly ClipMode[] = ['keep-inside', 'keep-outside'];
+
+/**
+ * Parse a persisted clipping box, or `null` when malformed. Requires two finite
+ * Vec3 corners; an unknown mode falls back to `keep-inside` and a non-boolean
+ * `enabled` falls back to `false`, so a partly-broken clip still imports its
+ * geometry rather than failing the whole session.
+ */
+function parseClipBox(v: unknown): ClipBox | null {
+  if (!isRecord(v)) return null;
+  const b = v.box;
+  if (!isRecord(b) || !isVec3(b.min) || !isVec3(b.max)) return null;
+  const box: BoxBounds = {
+    min: [b.min[0], b.min[1], b.min[2]],
+    max: [b.max[0], b.max[1], b.max[2]],
+  };
+  const mode: ClipMode = CLIP_MODES.includes(v.mode as ClipMode)
+    ? (v.mode as ClipMode)
+    : 'keep-inside';
+  return { box, mode, enabled: v.enabled === true };
+}
+
+/**
+ * Normalise a class-filter list to sorted, de-duplicated integer ASPRS codes in
+ * 0..255. Anything that isn't an array of such codes collapses to `[]`, so a
+ * malformed field round-trips as "no filter" instead of throwing.
+ */
+function sanitizeClassFilter(v: unknown): number[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<number>();
+  for (const e of v) {
+    if (typeof e !== 'number' || !Number.isInteger(e) || e < 0 || e > 255) continue;
+    seen.add(e);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;

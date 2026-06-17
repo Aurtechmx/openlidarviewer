@@ -514,11 +514,11 @@ describe('parseSession / serializeSession — v4 CRS persistence', () => {
     expect(back.crs).toBeUndefined();
   });
 
-  it('serializes to v4 by default', () => {
+  it('serializes to the current version by default', () => {
     const json = serializeSession(sampleSession());
     const parsed = JSON.parse(json);
     expect(parsed.version).toBe(SESSION_VERSION);
-    expect(SESSION_VERSION).toBe(4);
+    expect(SESSION_VERSION).toBe(5);
   });
 
   it('a v4 file with a non-finite linearUnitToMetres rejects the crs', () => {
@@ -544,5 +544,130 @@ describe('parseSession / serializeSession — v4 CRS persistence', () => {
     };
     const back = parseSession(JSON.stringify(doc));
     expect(back.crs).toBeUndefined();
+  });
+});
+
+describe('parseSession / serializeSession — v5 class-filter persistence', () => {
+  it('round-trips the hidden-class list', () => {
+    const json = serializeSession({ ...sampleSession(), classFilter: [3, 4, 5] });
+    expect(parseSession(json).classFilter).toEqual([3, 4, 5]);
+  });
+
+  it('omits the field entirely when nothing is hidden', () => {
+    const json = serializeSession({ ...sampleSession(), classFilter: [] });
+    expect(JSON.parse(json).classFilter).toBeUndefined();
+    expect(parseSession(json).classFilter).toBeUndefined();
+  });
+
+  it('sorts and de-duplicates on the way out', () => {
+    const json = serializeSession({ ...sampleSession(), classFilter: [5, 2, 5, 2, 1] });
+    expect(parseSession(json).classFilter).toEqual([1, 2, 5]);
+  });
+
+  it('drops out-of-range and non-integer codes tolerantly', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      classFilter: [2, -1, 300, 4.5, 'six', 7],
+    };
+    expect(parseSession(JSON.stringify(doc)).classFilter).toEqual([2, 7]);
+  });
+
+  it('a malformed (non-array) classFilter is ignored, not thrown', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      classFilter: { hidden: [3] },
+    };
+    expect(parseSession(JSON.stringify(doc)).classFilter).toBeUndefined();
+  });
+
+  it('a pre-v5 file simply has no classFilter (additive)', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: 4,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.classFilter).toBeUndefined();
+    expect(back.version).toBe(SESSION_VERSION);
+  });
+});
+
+describe('parseSession / serializeSession — v5 clip-box persistence', () => {
+  const clip = {
+    box: { min: [0, 0, 0] as [number, number, number], max: [10, 10, 5] as [number, number, number] },
+    mode: 'keep-inside' as const,
+    enabled: true,
+  };
+
+  it('round-trips a clip box (region + mode + enabled)', () => {
+    const json = serializeSession({ ...sampleSession(), clip });
+    expect(parseSession(json).clip).toEqual(clip);
+  });
+
+  it('omits the clip when none is set', () => {
+    const json = serializeSession(sampleSession());
+    expect(JSON.parse(json).clip).toBeUndefined();
+    expect(parseSession(json).clip).toBeUndefined();
+  });
+
+  it('a disabled-but-positioned clip keeps its geometry', () => {
+    const json = serializeSession({ ...sampleSession(), clip: { ...clip, enabled: false } });
+    expect(parseSession(json).clip).toMatchObject({ enabled: false, box: clip.box });
+  });
+
+  it('an unknown mode falls back to keep-inside, enabled defaults false', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      clip: { box: clip.box, mode: 'sideways', enabled: 'yes' },
+    };
+    expect(parseSession(JSON.stringify(doc)).clip).toEqual({
+      box: clip.box, mode: 'keep-inside', enabled: false,
+    });
+  });
+
+  it('a clip with a malformed box is dropped, not thrown', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: SESSION_VERSION,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [],
+      measurements: [],
+      annotations: [],
+      clip: { box: { min: [0, 0], max: [10, 10, 5] }, mode: 'keep-inside', enabled: true },
+    };
+    expect(parseSession(JSON.stringify(doc)).clip).toBeUndefined();
   });
 });
