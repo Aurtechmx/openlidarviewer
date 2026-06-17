@@ -239,6 +239,18 @@ export class Stage {
     github.target = '_blank';
     github.rel = 'noreferrer';
 
+    // Data sources & credits — a quiet ghost link, same treatment as GitHub.
+    // Keeps attribution for the streamed public datasets one click away from
+    // every screen without crowding the trust signal.
+    const credits = el('a', {
+      className: 'olv-github',
+      text: 'Credits',
+      href: 'credits.html',
+      ariaLabel: 'Data sources and credits',
+    });
+    credits.target = '_blank';
+    credits.rel = 'noreferrer';
+
     // Full-screen toggle — lives in the header cluster (just left of the
     // theme toggle, which inserts itself before GitHub). Self-contained:
     // it drives the Fullscreen API on the whole app and tracks F11/Esc too.
@@ -247,6 +259,7 @@ export class Stage {
     const right = el('div', { className: 'olv-topbar-right' }, [
       privacy,
       fullscreen.element,
+      credits,
       github,
     ]);
     this._topBarRight = right;

@@ -292,15 +292,15 @@ const SAMPLES: Sample[] = [
   {
     id: 'stream',
     label: 'Public streaming demo',
-    detail: '84 MB COPC · streamed',
-    url: 'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz',
-    name: 'swisssurface3D_2485_1109.copc.laz',
+    detail: '1.8 GB COPC · streamed',
+    url: 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz',
+    name: 'millsite.copc.laz',
     // Approximate on-disk size — feeds Stage's cellular-data + mobile-
     // memory confirmation gates. The streaming pipeline only fetches
     // visible tiles in practice, but the gate uses the worst-case full-
     // file size because the user can't know how many tiles they'll
     // ultimately request.
-    sizeBytes: 83_800_000,
+    sizeBytes: 1_800_000_000,
   },
 ];
 
