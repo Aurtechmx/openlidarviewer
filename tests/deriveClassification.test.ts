@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveClassification,
+  classificationCoverage,
   DERIVED_GROUND,
   DERIVED_BUILDING,
   DERIVED_HIGH_VEG,
@@ -142,5 +143,146 @@ describe('deriveClassification — degenerate inputs', () => {
     const pos = new Float32Array([0, 0, 0, NaN, NaN, NaN, 10, 10, 0, 5, 5, 3]);
     const res = deriveClassification(pos, 4);
     expect(res.codes.length).toBe(4);
+  });
+});
+
+// ── v0.4.8: classifiability gate ───────────────────────────────────────────
+describe('classificationCoverage', () => {
+  it('no array → every point is unclassified (fully derivable)', () => {
+    expect(classificationCoverage(null, 100)).toEqual({ unclassified: 100, producer: 0 });
+    expect(classificationCoverage(undefined, 7)).toEqual({ unclassified: 7, producer: 0 });
+  });
+
+  it('all-zero ("Created, never classified") reads as fully unclassified', () => {
+    expect(classificationCoverage(new Uint8Array(50), 50)).toEqual({
+      unclassified: 50,
+      producer: 0,
+    });
+  });
+
+  it('counts 0/1 as unclassified and 2+ as producer classes', () => {
+    const c = new Uint8Array([0, 1, 2, 6, 1, 0]);
+    expect(classificationCoverage(c, 6)).toEqual({ unclassified: 4, producer: 2 });
+  });
+
+  it('points beyond a short classification array default to unclassified', () => {
+    expect(classificationCoverage(new Uint8Array([2, 2]), 5)).toEqual({
+      unclassified: 3,
+      producer: 2,
+    });
+  });
+});
+
+// ── v0.4.8: RGB greenness fusion ───────────────────────────────────────────
+describe('deriveClassification — RGB greenness fusion', () => {
+  const scene = buildScene();
+  // Neutral grey everywhere, then paint the SMOOTH building patch strongly green.
+  const green = new Uint8Array(scene.count * 3).fill(128);
+  for (const i of scene.buildingIdx) {
+    green[i * 3] = 50;
+    green[i * 3 + 1] = 200;
+    green[i * 3 + 2] = 50;
+  }
+  const vegFrac = (idx: number[], codes: Uint8Array) =>
+    frac(idx, codes, DERIVED_HIGH_VEG) +
+    frac(idx, codes, DERIVED_MED_VEG) +
+    frac(idx, codes, DERIVED_LOW_VEG);
+
+  it('keeps a tall, smooth, GREEN patch out of Building (reads as vegetation)', () => {
+    const grey = deriveClassification(scene.positions, scene.count, { cellSizeM: 1 });
+    const withRgb = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: green });
+    // Geometry-only: the smooth roof is Building.
+    expect(frac(scene.buildingIdx, grey.codes, DERIVED_BUILDING)).toBeGreaterThan(0.7);
+    // With green RGB: that same patch is no longer Building — it's vegetation.
+    expect(frac(scene.buildingIdx, withRgb.codes, DERIVED_BUILDING)).toBeLessThan(0.1);
+    expect(vegFrac(scene.buildingIdx, withRgb.codes)).toBeGreaterThan(0.7);
+  });
+
+  it('does NOT invent vegetation on the ground (green cue only breaks the building tie)', () => {
+    // Paint the GROUND green too — ground stays Ground (HAG governs ground).
+    const allGreen = new Uint8Array(scene.count * 3);
+    for (let i = 0; i < scene.count; i++) {
+      allGreen[i * 3] = 50;
+      allGreen[i * 3 + 1] = 200;
+      allGreen[i * 3 + 2] = 50;
+    }
+    const res = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: allGreen });
+    expect(frac(scene.groundIdx, res.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+  });
+
+  it('colours absent ⇒ byte-identical to geometry-only', () => {
+    const a = deriveClassification(scene.positions, scene.count, { cellSizeM: 1 });
+    const b = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: undefined });
+    expect(Array.from(b.codes)).toEqual(Array.from(a.codes));
+  });
+
+  it('accepts an RGBA (stride-4) buffer as well as RGB', () => {
+    const rgba = new Uint8Array(scene.count * 4).fill(128);
+    for (const i of scene.buildingIdx) {
+      rgba[i * 4] = 50;
+      rgba[i * 4 + 1] = 200;
+      rgba[i * 4 + 2] = 50;
+      rgba[i * 4 + 3] = 255;
+    }
+    const res = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: rgba });
+    expect(frac(scene.buildingIdx, res.codes, DERIVED_BUILDING)).toBeLessThan(0.1);
+  });
+
+  it('records the RGB mode in the provenance', () => {
+    const res = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: green });
+    expect(res.provenance).toMatch(/RGB vegetation index/i);
+  });
+});
+
+// ── v0.4.8: classify the gaps (preserve producer classes) ──────────────────
+describe('deriveClassification — classify the gaps', () => {
+  const scene = buildScene();
+  const vegFrac = (idx: number[], codes: Uint8Array) =>
+    frac(idx, codes, DERIVED_HIGH_VEG) +
+    frac(idx, codes, DERIVED_MED_VEG) +
+    frac(idx, codes, DERIVED_LOW_VEG);
+
+  it('keeps producer classes (codes ≠ 0/1) verbatim and derives only the gaps', () => {
+    // Producer Ground on the plane; the rest (building + trees) unclassified.
+    const existing = new Uint8Array(scene.count).fill(DERIVED_UNCLASSIFIED);
+    for (const i of scene.groundIdx) existing[i] = DERIVED_GROUND;
+    const res = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      existingClassification: existing,
+    });
+    // Every producer-Ground point keeps its code verbatim.
+    expect(scene.groundIdx.every((i) => res.codes[i] === DERIVED_GROUND)).toBe(true);
+    // The unclassified tree cluster was filled with vegetation.
+    expect(vegFrac(scene.treeIdx, res.codes)).toBeGreaterThan(0.7);
+  });
+
+  it('a producer class overrides what the geometry would have derived', () => {
+    // Tag a tree point as producer Building (6) — it must survive the derive.
+    const existing = new Uint8Array(scene.count).fill(DERIVED_UNCLASSIFIED);
+    const t = scene.treeIdx[0];
+    existing[t] = DERIVED_BUILDING;
+    const res = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      existingClassification: existing,
+    });
+    expect(res.codes[t]).toBe(DERIVED_BUILDING);
+  });
+
+  it('records the gaps mode in the provenance', () => {
+    const existing = new Uint8Array(scene.count).fill(DERIVED_GROUND);
+    const res = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      existingClassification: existing,
+    });
+    expect(res.provenance).toMatch(/producer classes preserved/i);
+  });
+
+  it('a length-mismatched existing array is ignored (no preserve)', () => {
+    const plain = deriveClassification(scene.positions, scene.count, { cellSizeM: 1 });
+    const res = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      existingClassification: new Uint8Array(3).fill(DERIVED_GROUND),
+    });
+    expect(Array.from(res.codes)).toEqual(Array.from(plain.codes));
   });
 });

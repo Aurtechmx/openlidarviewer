@@ -56,6 +56,10 @@ import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import { countClasses } from './render/class/classHistogram';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
+import {
+  classificationCoverage,
+  type DeriveClassificationOptions,
+} from './render/class/deriveClassification';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
@@ -1292,10 +1296,26 @@ async function runDeriveClassification(): Promise<void> {
     showLassoToast('Classify · this works on a loaded (non-streaming) scan.');
     return;
   }
-  if (cloud.classification && !cloud.classificationIsDerived) {
-    showLassoToast('Classify · this scan already carries a classification.');
+  // Only derive when there is no producer classification to disturb. A scan that
+  // is entirely Created(0)/Unclassified(1) — or carries no classification at all
+  // — is fully derivable (this is the v0.4.8 unblock: an all-class-0 file, like a
+  // raw photogrammetry export, is functionally unclassified and should classify).
+  // A previous DERIVE is also re-derivable (its heuristic codes aren't producer
+  // truth). But a real producer classification (any ASPRS code ≥ 2) is left
+  // intact — we never overwrite a surveyor's classes.
+  const isDerived = cloud.classificationIsDerived;
+  const cov = isDerived
+    ? { unclassified: cloud.pointCount, producer: 0 }
+    : classificationCoverage(cloud.classification, cloud.pointCount);
+  if (cov.producer > 0) {
+    showLassoToast('Classify · this scan already carries a producer classification — left untouched.');
     return;
   }
+  // RGB (when present) sharpens vegetation on photogrammetry, where geometry
+  // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
+  const deriveOptions: DeriveClassificationOptions =
+    cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {};
+
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
   try {
@@ -1303,7 +1323,7 @@ async function runDeriveClassification(): Promise<void> {
     const result = await deriveClassificationAsync(
       cloud.positions,
       cloud.pointCount,
-      {},
+      deriveOptions,
       undefined,
       undefined,
       // Live phase in the toast so a multi-second derive reads as progress,

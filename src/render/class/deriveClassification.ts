@@ -46,6 +46,31 @@ export const DERIVED_HIGH_VEG = 5;
 export const DERIVED_BUILDING = 6;
 export const DERIVED_UNCLASSIFIED = 1;
 
+/**
+ * How "classifiable" an existing classification is: how many points are still
+ * unclassified (ASPRS 0 Created / 1 Unclassified) vs already carry a producer
+ * class. Drives the Classify gate — a cloud with NO unclassified points has
+ * nothing to derive; an all-unclassified cloud (or no classification at all) is
+ * fully derivable; a partial one is a "classify the gaps" candidate. Pure.
+ */
+export function classificationCoverage(
+  classification: ArrayLike<number> | null | undefined,
+  count: number,
+): { readonly unclassified: number; readonly producer: number } {
+  if (!classification) return { unclassified: count, producer: 0 };
+  const n = Math.min(count, classification.length);
+  let unclassified = 0;
+  let producer = 0;
+  for (let i = 0; i < n; i++) {
+    const c = classification[i];
+    if (c === 0 || c === 1) unclassified++;
+    else producer++;
+  }
+  // Points past the (shorter) classification array are unclassified by default.
+  unclassified += Math.max(0, count - n);
+  return { unclassified, producer };
+}
+
 /** Tunable parameters; every field has a literature-anchored default. */
 export interface DeriveClassificationOptions {
   /**
@@ -83,6 +108,33 @@ export interface DeriveClassificationOptions {
   readonly buildingMinHagM?: number;
   /** Hard cap on either grid dimension; cellSize grows to respect it. */
   readonly maxGridDim?: number;
+  /**
+   * Optional per-point RGB(A) colours (uint8 or uint16; only ratios are used,
+   * so the scale is immaterial), in the SAME point order as `positions`. When
+   * present, a vegetation-greenness index (normalised Excess-Green) supplements
+   * the geometry: a tall, locally-smooth patch that is strongly green is read as
+   * canopy, not a building — the cue that matters on photogrammetry, where the
+   * surface is noisy and roughness alone is unreliable. Stride (3 = RGB,
+   * 4 = RGBA) is auto-detected from `colors.length / count`. Absent ⇒
+   * geometry-only and byte-identical to before.
+   */
+  readonly colors?: Uint8Array | Uint16Array;
+  /**
+   * Normalised Excess-Green `(2G − R − B) / (R + G + B)` at/above which a tall
+   * smooth patch is treated as vegetation rather than a building. Only consulted
+   * when `colors` is supplied. Default 0.06 (a mild green bias; bare soil,
+   * concrete and rooftops sit well below it).
+   */
+  readonly vegGreennessMin?: number;
+  /**
+   * Optional producer classification to PRESERVE (same point order). Any point
+   * whose existing code is a real producer class — anything other than
+   * 0 (Created, never classified) or 1 (Unclassified) — keeps that code
+   * verbatim; only the unclassified remainder is derived. This is the
+   * "classify the gaps" mode: a scan that already carries Ground keeps it and
+   * gets vegetation / building filled in around it. Absent ⇒ derive every point.
+   */
+  readonly existingClassification?: Uint8Array;
 }
 
 /** Per-class counts plus the run's honest provenance. */
@@ -103,6 +155,7 @@ export interface DeriveClassificationResult {
 }
 
 const DEFAULTS = {
+  vegGreennessMin: 0.06,
   maxObjectSizeM: 20,
   elevThresholdM: 0.3,
   slope: 0.15,
@@ -387,11 +440,31 @@ export function deriveClassification(
     return Math.sqrt(accM2 / (accN - 1)) <= o.buildingRoughnessMaxM;
   };
 
+  // Optional RGB greenness cue (normalised Excess-Green). Only consulted to keep
+  // a tall, locally-smooth GREEN patch from being mis-filed as a building —
+  // never to invent vegetation where the geometry says ground. `colorStride`
+  // (3 = RGB, 4 = RGBA) is inferred from the buffer length; an unusable buffer
+  // disables the cue rather than throwing.
+  const colors = options.colors;
+  const colorStride =
+    colors && count > 0 && colors.length >= count * 3
+      ? colors.length % count === 0 && colors.length / count === 4
+        ? 4
+        : colors.length / count >= 3
+          ? 3
+          : 0
+      : 0;
+  const greenAt = (i: number): number => {
+    const j = i * colorStride;
+    const r = colors![j], g = colors![j + 1], bl = colors![j + 2];
+    const sum = r + g + bl;
+    return sum > 0 ? (2 * g - r - bl) / sum : 0;
+  };
+  const useGreen = colorStride >= 3;
+
   // 6. Rule classification.
   phase('Classifying');
   const codes = new Uint8Array(count);
-  const counts: Record<number, number> = {};
-  const bump = (code: number): void => { counts[code] = (counts[code] ?? 0) + 1; };
   for (let i = 0; i < count; i++) {
     const h = hag[i];
     let code: number;
@@ -404,7 +477,11 @@ export function deriveClassification(
       let cx = Math.floor((x - b.minX) / cell); if (cx < 0) cx = 0; else if (cx >= W) cx = W - 1;
       let cy = Math.floor((y - b.minY) / cell); if (cy < 0) cy = 0; else if (cy >= H) cy = H - 1;
       const planar = neighbourhoodIsPlanar(cx, cy);
-      if (planar && h >= o.buildingMinHagM) {
+      // A smooth, tall patch is a building UNLESS it reads strongly green — on
+      // photogrammetry, canopy is often locally smooth and would otherwise be
+      // mistaken for a roof. Green ⇒ fall through to the vegetation bands.
+      const green = useGreen && greenAt(i) >= o.vegGreennessMin;
+      if (planar && h >= o.buildingMinHagM && !green) {
         code = DERIVED_BUILDING;
       } else if (h < o.lowVegBandM) {
         code = DERIVED_LOW_VEG;
@@ -415,8 +492,34 @@ export function deriveClassification(
       }
     }
     codes[i] = code;
-    bump(code);
   }
+
+  // Classify-the-gaps: keep every producer-assigned class (anything other than
+  // 0/1) verbatim, overwriting only the derived value. The derived pass still
+  // ran over ALL points (it needs them for the ground surface), but its output
+  // fills only the unclassified holes — a scan that arrived with Ground keeps
+  // it and gains vegetation / building around it.
+  const existing = options.existingClassification;
+  const preserved = !!(existing && existing.length === count);
+  if (preserved) {
+    for (let i = 0; i < count; i++) {
+      const ex = existing![i];
+      if (ex !== DERIVED_UNCLASSIFIED && ex !== 0) codes[i] = ex;
+    }
+  }
+
+  // Counts over the FINAL codes (after any preserve merge), so the legend totals
+  // match what is rendered.
+  const counts: Record<number, number> = {};
+  for (let i = 0; i < count; i++) {
+    const c = codes[i];
+    counts[c] = (counts[c] ?? 0) + 1;
+  }
+
+  const modeNotes: string[] = [];
+  if (useGreen) modeNotes.push('RGB vegetation index');
+  if (preserved) modeNotes.push('producer classes preserved (gaps only)');
+  const modeSuffix = modeNotes.length > 0 ? ` (${modeNotes.join('; ')})` : '';
 
   return {
     codes,
@@ -427,7 +530,7 @@ export function deriveClassification(
     derived: true,
     provenance:
       `Derived (heuristic) classification — progressive morphological ground ` +
-      `filter + height-above-ground at ${cell.toFixed(2)} m grid. Not a ` +
-      `survey-grade or producer classification; validate before relying on it.`,
+      `filter + height-above-ground at ${cell.toFixed(2)} m grid${modeSuffix}. ` +
+      `Not a survey-grade or producer classification; validate before relying on it.`,
   };
 }
