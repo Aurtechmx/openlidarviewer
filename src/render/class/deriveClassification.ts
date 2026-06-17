@@ -127,6 +127,14 @@ export interface DeriveClassificationOptions {
    */
   readonly vegGreennessMin?: number;
   /**
+   * Minimum ground support (fraction of a point's four DTM corner cells that
+   * were actually measured, not hole-filled) for a TALL point to be classified.
+   * Below it, the height was sampled mostly against fabricated void-fill, so the
+   * point is left Unclassified rather than guessed. Default 0.5 (≥ 2 of 4 corners
+   * measured). Set to 0 to disable the void downgrade.
+   */
+  readonly minGroundSupport?: number;
+  /**
    * Optional producer classification to PRESERVE (same point order). Any point
    * whose existing code is a real producer class — anything other than
    * 0 (Created, never classified) or 1 (Unclassified) — keeps that code
@@ -152,10 +160,26 @@ export interface DeriveClassificationResult {
   readonly derived: true;
   /** One-line honest provenance string for the legend / report. */
   readonly provenance: string;
+  /**
+   * Overall trust in the derived classification, 0..1. Blends how well the
+   * ground was actually MEASURED (vs hole-filled) under the points, the point
+   * density, and how coarse the grid had to become. Low when the scan is sparse,
+   * full of voids, or forced onto a coarse grid — exactly when a heuristic
+   * classification is least reliable. NaN only for a not-computed result.
+   */
+  readonly confidence: number;
+  /** Per-emitted-code mean support (0..1) — which classes rest on real ground. */
+  readonly classConfidence: Readonly<Record<number, number>>;
+  /**
+   * Honest, human-readable caveats raised during the run (large voids, sparse
+   * ground, coarse grid, …). Empty when the scan classified cleanly.
+   */
+  readonly warnings: readonly string[];
 }
 
 const DEFAULTS = {
   vegGreennessMin: 0.06,
+  minGroundSupport: 0.5,
   maxObjectSizeM: 20,
   elevThresholdM: 0.3,
   slope: 0.15,
@@ -166,6 +190,9 @@ const DEFAULTS = {
   buildingMinHagM: 2.5,
   maxGridDim: 768,
 } as const;
+
+/** Clamp to [0, 1]. */
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0);
 
 /** A finite-only min/max scan over the XY footprint and Z. */
 interface Bounds {
@@ -317,6 +344,9 @@ export function deriveClassification(
     gridHeight: 0,
     derived: true,
     provenance: `Derived classification not computed (${reason}).`,
+    confidence: NaN,
+    classConfidence: {},
+    warnings: [`Classification not computed (${reason}).`],
   });
 
   if (count <= 0 || b.finite < 3 || !(b.maxX > b.minX) || !(b.maxY > b.minY)) {
@@ -345,6 +375,18 @@ export function deriveClassification(
     const cur = gridMin[c];
     if (!Number.isFinite(cur) || z < cur) gridMin[c] = z;
   }
+  // MEASURED mask — which ground cells actually saw a point, captured BEFORE the
+  // holes are filled. fillHoles fabricates a plausible bare earth inside voids
+  // (so the math stays finite), but a height measured against fabricated ground
+  // is not trustworthy. This mask lets the classifier (a) downgrade points that
+  // sit over filled-in voids and (b) report an honest confidence + void warning,
+  // instead of silently presenting an interpolated surface as if it were real.
+  let measuredCells = 0;
+  const measured = new Uint8Array(W * H);
+  for (let c = 0; c < gridMin.length; c++) {
+    if (Number.isFinite(gridMin[c])) { measured[c] = 1; measuredCells++; }
+  }
+  const filledFraction = gridMin.length > 0 ? 1 - measuredCells / gridMin.length : 1;
   fillHoles(gridMin, W, H);
 
   // 2. Progressive morphological opening → bare-earth grid. Geometric window
@@ -383,6 +425,24 @@ export function deriveClassification(
     const a = v00 + (v10 - v00) * fx;
     const c2 = v01 + (v11 - v01) * fx;
     return a + (c2 - a) * fy;
+  };
+
+  // Ground support at a point: the fraction (0..1) of the four DTM bilinear
+  // corner cells that were actually MEASURED (not hole-filled). A point's own
+  // cell is always measured, so a real point scores ≥ 0.25; 1.0 means the local
+  // ground is fully observed, while a low value means the height was sampled
+  // mostly against fabricated void-fill and should not be trusted.
+  const supportAt = (x: number, y: number): number => {
+    const gx = (x - b.minX) / cell;
+    const gy = (y - b.minY) / cell;
+    let x0 = Math.floor(gx), y0 = Math.floor(gy);
+    if (x0 < 0) x0 = 0; if (x0 > W - 2) x0 = Math.max(0, W - 2);
+    if (y0 < 0) y0 = 0; if (y0 > H - 2) y0 = Math.max(0, H - 2);
+    const x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1);
+    return (
+      measured[y0 * W + x0] + measured[y0 * W + x1] +
+      measured[y1 * W + x0] + measured[y1 * W + x1]
+    ) / 4;
   };
 
   const hag = new Float32Array(count);
@@ -462,33 +522,47 @@ export function deriveClassification(
   };
   const useGreen = colorStride >= 3;
 
-  // 6. Rule classification.
+  // 6. Rule classification + per-point ground support.
   phase('Classifying');
   const codes = new Uint8Array(count);
+  const support = new Float32Array(count); // 0..1 per finite point; NaN-pts → 0
+  let supportSum = 0;
+  let supportN = 0;
+  let voidDowngraded = 0;
   for (let i = 0; i < count; i++) {
     const h = hag[i];
     let code: number;
     if (!Number.isFinite(h)) {
       code = DERIVED_UNCLASSIFIED;
-    } else if (h <= o.groundBandM) {
-      code = DERIVED_GROUND;
     } else {
       const x = positions[i * 3], y = positions[i * 3 + 1];
-      let cx = Math.floor((x - b.minX) / cell); if (cx < 0) cx = 0; else if (cx >= W) cx = W - 1;
-      let cy = Math.floor((y - b.minY) / cell); if (cy < 0) cy = 0; else if (cy >= H) cy = H - 1;
-      const planar = neighbourhoodIsPlanar(cx, cy);
-      // A smooth, tall patch is a building UNLESS it reads strongly green — on
-      // photogrammetry, canopy is often locally smooth and would otherwise be
-      // mistaken for a roof. Green ⇒ fall through to the vegetation bands.
-      const green = useGreen && greenAt(i) >= o.vegGreennessMin;
-      if (planar && h >= o.buildingMinHagM && !green) {
-        code = DERIVED_BUILDING;
-      } else if (h < o.lowVegBandM) {
-        code = DERIVED_LOW_VEG;
-      } else if (h < o.medVegBandM) {
-        code = DERIVED_MED_VEG;
+      const s = supportAt(x, y);
+      support[i] = s;
+      supportSum += s; supportN++;
+      if (h <= o.groundBandM) {
+        code = DERIVED_GROUND;
+      } else if (s < o.minGroundSupport) {
+        // Tall point, but its height was sampled mostly against hole-filled
+        // void — we cannot trust the HAG, so we refuse to guess a class here.
+        code = DERIVED_UNCLASSIFIED;
+        voidDowngraded++;
       } else {
-        code = DERIVED_HIGH_VEG;
+        let cx = Math.floor((x - b.minX) / cell); if (cx < 0) cx = 0; else if (cx >= W) cx = W - 1;
+        let cy = Math.floor((y - b.minY) / cell); if (cy < 0) cy = 0; else if (cy >= H) cy = H - 1;
+        const planar = neighbourhoodIsPlanar(cx, cy);
+        // A smooth, tall patch is a building UNLESS it reads strongly green — on
+        // photogrammetry, canopy is often locally smooth and would otherwise be
+        // mistaken for a roof. Green ⇒ fall through to the vegetation bands.
+        const green = useGreen && greenAt(i) >= o.vegGreennessMin;
+        if (planar && h >= o.buildingMinHagM && !green) {
+          code = DERIVED_BUILDING;
+        } else if (h < o.lowVegBandM) {
+          code = DERIVED_LOW_VEG;
+        } else if (h < o.medVegBandM) {
+          code = DERIVED_MED_VEG;
+        } else {
+          code = DERIVED_HIGH_VEG;
+        }
       }
     }
     codes[i] = code;
@@ -508,12 +582,51 @@ export function deriveClassification(
     }
   }
 
-  // Counts over the FINAL codes (after any preserve merge), so the legend totals
-  // match what is rendered.
+  // Counts + per-class support accumulation over the FINAL codes, so the legend
+  // totals and the per-class confidence both match what is rendered.
   const counts: Record<number, number> = {};
+  const classSupportSum: Record<number, number> = {};
   for (let i = 0; i < count; i++) {
     const c = codes[i];
     counts[c] = (counts[c] ?? 0) + 1;
+    classSupportSum[c] = (classSupportSum[c] ?? 0) + support[i];
+  }
+  const classConfidence: Record<number, number> = {};
+  for (const k of Object.keys(counts)) {
+    const c = Number(k);
+    classConfidence[c] = counts[c] > 0 ? classSupportSum[c] / counts[c] : 0;
+  }
+
+  // Overall confidence — the mean ground support, tempered by density (returns
+  // per ground cell) and grid coarseness (how far cellSize had to grow past the
+  // ~1 m the literature grids at). Each factor is a 0..1 multiplier so any one
+  // weak signal pulls the score down, and the score never overclaims.
+  const meanSupport = supportN > 0 ? supportSum / supportN : 0;
+  const ptsPerCell = (count / (W * H));
+  const densityFactor = clamp01(ptsPerCell / (ptsPerCell + 1)); // 0.5 at ~1 pt/cell
+  const coarseness = clamp01(2 / (2 + Math.max(0, cell - 1))); // 1 at ≤1 m, decays as cell grows
+  const confidence = clamp01(meanSupport * (0.5 + 0.5 * densityFactor) * coarseness);
+
+  const warnings: string[] = [];
+  if (filledFraction > 0.4) {
+    warnings.push(
+      `Large unsupported voids (${Math.round(filledFraction * 100)}% of the grid was ` +
+        `interpolated) — derived classification is unreliable in those areas.`,
+    );
+  }
+  if (meanSupport < 0.6) {
+    warnings.push('Sparse ground support — many heights rest on interpolated ground.');
+  }
+  if (voidDowngraded > 0) {
+    warnings.push(
+      `${voidDowngraded} point${voidDowngraded === 1 ? '' : 's'} over voids were left ` +
+        `Unclassified rather than guessed.`,
+    );
+  }
+  if (cell > 1.5) {
+    warnings.push(
+      `Coarse classification grid (${cell.toFixed(1)} m) — fine structure may be missed.`,
+    );
   }
 
   const modeNotes: string[] = [];
@@ -532,5 +645,8 @@ export function deriveClassification(
       `Derived (heuristic) classification — progressive morphological ground ` +
       `filter + height-above-ground at ${cell.toFixed(2)} m grid${modeSuffix}. ` +
       `Not a survey-grade or producer classification; validate before relying on it.`,
+    confidence,
+    classConfidence,
+    warnings,
   };
 }

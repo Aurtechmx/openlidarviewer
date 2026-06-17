@@ -286,3 +286,75 @@ describe('deriveClassification — classify the gaps', () => {
     expect(Array.from(res.codes)).toEqual(Array.from(plain.codes));
   });
 });
+
+// ── v0.4.8: void-aware confidence + warnings ───────────────────────────────
+describe('deriveClassification — void-aware confidence', () => {
+  /**
+   * A 40×40 ground plane. With `hole`, a 10×10 patch in the middle is removed
+   * (no returns there → the grid must hole-fill it), and a single column is
+   * dropped at the void centre: a ground return AND a tall return in the same
+   * cell, but with all NEIGHBOUR cells empty — so the tall point's height rests
+   * on fabricated ground.
+   */
+  function plane(hole: boolean): { positions: Float32Array; count: number; tallIdx: number } {
+    const pts: number[] = [];
+    for (let x = 0; x <= 40; x++) {
+      for (let y = 0; y <= 40; y++) {
+        if (hole && x >= 15 && x <= 25 && y >= 15 && y <= 25) continue;
+        pts.push(x, y, 0);
+      }
+    }
+    let tallIdx = -1;
+    if (hole) {
+      pts.push(20, 20, 0); // a lone ground return inside the void cell
+      tallIdx = pts.length / 3;
+      pts.push(20, 20, 8); // a tall return whose neighbours are all void
+    }
+    return { positions: new Float32Array(pts), count: pts.length / 3, tallIdx };
+  }
+
+  it('a fully-measured plane classifies with high confidence and no void warnings', () => {
+    const s = plane(false);
+    const res = deriveClassification(s.positions, s.count, { cellSizeM: 1 });
+    expect(res.confidence).toBeGreaterThan(0.6);
+    expect(res.confidence).toBeLessThanOrEqual(1);
+    expect(res.warnings.some((w) => /void/i.test(w))).toBe(false);
+  });
+
+  it('leaves a tall point over a filled-in void Unclassified rather than guessing', () => {
+    const s = plane(true);
+    const res = deriveClassification(s.positions, s.count, { cellSizeM: 1 });
+    expect(res.codes[s.tallIdx]).toBe(DERIVED_UNCLASSIFIED);
+    expect(res.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('a void scan scores lower confidence than the same plane fully measured', () => {
+    const f = plane(false);
+    const h = plane(true);
+    const full = deriveClassification(f.positions, f.count, { cellSizeM: 1 });
+    const holed = deriveClassification(h.positions, h.count, { cellSizeM: 1 });
+    expect(holed.confidence).toBeLessThan(full.confidence);
+  });
+
+  it('emits per-class confidence in [0,1] for every present class', () => {
+    const s = plane(false);
+    const res = deriveClassification(s.positions, s.count, { cellSizeM: 1 });
+    for (const code of Object.keys(res.counts)) {
+      const c = res.classConfidence[Number(code)];
+      expect(c).toBeGreaterThanOrEqual(0);
+      expect(c).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('minGroundSupport: 0 disables the void downgrade', () => {
+    const s = plane(true);
+    const res = deriveClassification(s.positions, s.count, { cellSizeM: 1, minGroundSupport: 0 });
+    expect(res.codes[s.tallIdx]).not.toBe(DERIVED_UNCLASSIFIED);
+  });
+
+  it('a degenerate cloud reports NaN confidence and a not-computed warning', () => {
+    const res = deriveClassification(new Float32Array([1, 1, 0, 1, 1, 1, 1, 1, 2]), 3);
+    expect(Number.isNaN(res.confidence)).toBe(true);
+    expect(res.warnings.length).toBeGreaterThan(0);
+  });
+});

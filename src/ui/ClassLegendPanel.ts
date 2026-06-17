@@ -253,9 +253,26 @@ export class ClassLegendPanel {
    * Show or hide the "Derived (heuristic) — not survey-grade" caption. The host
    * calls this with `true` right after applying a derived classification, so
    * the legend honestly reads as heuristic rather than authoritative.
+   *
+   * Optional `info` enriches the caption with the run's confidence and its top
+   * caveat, so the user sees not just THAT it is derived but how much to trust
+   * it. Omit `info` (or pass nothing) for the plain caption.
    */
-  setDerivedProvenance(on: boolean): void {
+  setDerivedProvenance(
+    on: boolean,
+    info?: { confidencePct?: number | null; warnings?: readonly string[] },
+  ): void {
     this._provenance.classList.toggle('olv-hidden', !on);
+    let text = 'Derived (heuristic) — not survey-grade. Validate before relying on it.';
+    if (on && info) {
+      if (typeof info.confidencePct === 'number') {
+        text += ` Confidence ${info.confidencePct}%.`;
+      }
+      if (info.warnings && info.warnings.length > 0) {
+        text += ` ⚠ ${info.warnings[0]}`;
+      }
+    }
+    this._provenance.textContent = text;
   }
 
   /**
