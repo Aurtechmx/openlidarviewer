@@ -39,7 +39,7 @@ import type {
   LegendPalette,
 } from './types';
 import { runStudioExport } from './BaseExportMode';
-import { formatMetres } from './ScanReportRenderer';
+import { formatLinear, linearUnitLabel, linearUnitOf } from './ScanReportRenderer';
 
 const DEFAULT_INTERVAL_M = 5;
 const DEFAULT_OVERLAY: ContourOptions['overlay'] = 'transparent';
@@ -84,12 +84,16 @@ export const contourMapExporter: ExportFactory = {
     // Sanity bound — too tight an interval at huge Z ranges produces
     // hundreds of thousands of line segments and bloats the PNG. Clamp
     // to keep render time bounded.
+    // Coordinates are native CRS units — a foot scan's interval and Z-range
+    // must read "ft", never a hardcoded "m". Unknown unit ⇒ metre default.
+    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
+    const uLabel = linearUnitLabel(unit);
     const zRange = aabb[5] - aabb[2];
     const expectedLines = Math.ceil(zRange / Math.max(interval, 0.01));
     if (expectedLines > 4096) {
       throw new Error(
-        `Contour interval ${interval} m produces ${expectedLines} ` +
-        `contour levels over the ${formatMetres(zRange)} elevation range ` +
+        `Contour interval ${interval} ${uLabel} produces ${expectedLines} ` +
+        `contour levels over the ${formatLinear(zRange, unit)} elevation range ` +
         `— too many to draw cleanly. Pick a larger interval.`,
       );
     }
@@ -107,12 +111,12 @@ export const contourMapExporter: ExportFactory = {
       'elevation',
       options,
       [
-        { label: 'Interval',  value: `${interval} m` },
+        { label: 'Interval',  value: `${interval} ${uLabel}` },
         { label: 'Levels',    value: String(expectedLines) },
         { label: 'Labels',    value: showLabels ? 'on' : 'off' },
         { label: 'Overlay',   value: overlay },
         { label: 'Palette',   value: palette },
-        { label: 'Z range',   value: `${formatMetres(aabb[2])} – ${formatMetres(aabb[5])}` },
+        { label: 'Z range',   value: `${formatLinear(aabb[2], unit)} – ${formatLinear(aabb[5], unit)}` },
       ],
       {
         interval,

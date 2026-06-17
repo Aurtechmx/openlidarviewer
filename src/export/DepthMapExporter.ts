@@ -34,7 +34,7 @@ import type {
   ExportResult,
 } from './types';
 import { runStudioExport } from './BaseExportMode';
-import { formatMetres } from './ScanReportRenderer';
+import { formatLinear, linearUnitOf } from './ScanReportRenderer';
 
 export const depthMapExporter: ExportFactory = {
   mode: 'depth',
@@ -66,6 +66,8 @@ export const depthMapExporter: ExportFactory = {
       throw new Error('Depth Map: no cloud loaded — cannot describe the export.');
     }
     const invert = options.invert === true;
+    // Native CRS units — Near/Far Z must carry the real unit (ft for foot CRSs).
+    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
     return runStudioExport(
       context,
       'depth',
@@ -77,8 +79,8 @@ export const depthMapExporter: ExportFactory = {
       options,
       [
         { label: 'Encoding', value: invert ? 'far → white' : 'near → white' },
-        { label: 'Near Z',   value: formatMetres(aabb[2]) },
-        { label: 'Far Z',    value: formatMetres(aabb[5]) },
+        { label: 'Near Z',   value: formatLinear(aabb[2], unit) },
+        { label: 'Far Z',    value: formatLinear(aabb[5], unit) },
         { label: 'Mode',     value: 'elevation proxy' },
       ],
       {
