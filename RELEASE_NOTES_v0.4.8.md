@@ -58,6 +58,24 @@ uploaded.
   "validate before relying on it" caveat, and the provenance line now records
   when the RGB cue was used.
 
+## Credits
+
+- **Data sources & credits.** A new credits page — reachable from a **Credits**
+  link in the header, with a mirror at `docs/credits.md` — names the providers
+  behind the public sample datasets (USGS 3DEP and the swisstopo / GURS / AHN
+  national programmes) and thanks the open-source projects the viewer is built on:
+  three.js, loaders.gl, proj4, pdf-lib, laz-perf, and the COPC / EPT formats. The
+  README gained an Acknowledgements section, and `THIRD_PARTY_NOTICES.md` is now
+  complete.
+
+## Fixes
+
+- **Export units.** The Studio raster exports (contour, depth, height) and the
+  shared Width / Depth / Height / Density rows now label values in the scan's real
+  linear unit — feet for foot-based CRSs, metres otherwise — instead of a
+  hardcoded "m". Coordinates are stored in native units, so this corrects feet
+  shown as metres on US-survey-foot scans.
+
 ## Under the hood
 
 - The classifier gained a "classify the gaps" capability — derive only the
