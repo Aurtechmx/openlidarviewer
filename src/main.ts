@@ -1389,8 +1389,11 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
 
   let pointCount: number | undefined;
   let areaM2: number | undefined;
-  let crsKnown: boolean | undefined;
-  let datumKnown: boolean | undefined;
+  // Metadata read is the FALLBACK for georef; when an analysis has run, the
+  // authoritative quality.crsKnown / quality.datumKnown from storyFacts wins, so
+  // the Story / Health never disagree with the panel's own CRS / Datum chips.
+  let metaCrsKnown: boolean | undefined;
+  let metaDatumKnown: boolean | undefined;
   let classification: 'none' | 'source' | 'derived' | undefined;
   try {
     if (cloud) {
@@ -1398,16 +1401,18 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       areaM2 = (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]);
       pointCount = cloud.pointCount;
       const crs = cloud.metadata?.crs as { name?: string; verticalDatum?: unknown } | undefined;
-      crsKnown = !!crs?.name;
-      datumKnown = !!crs?.verticalDatum;
+      metaCrsKnown = !!crs?.name;
+      metaDatumKnown = !!crs?.verticalDatum;
       classification = cloud.classificationIsDerived ? 'derived' : cloud.classification ? 'source' : 'none';
     } else if (streaming) {
       const lb = streaming.localBounds();
       areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]);
       pointCount = streaming.sourcePointCount;
-      crsKnown = !!streaming.crs()?.name;
-      datumKnown = false;
-      classification = 'source';
+      metaCrsKnown = !!streaming.crs()?.name;
+      metaDatumKnown = false;
+      // Don't claim producer classification a streaming scan may not carry —
+      // read the actual availability instead of hardcoding 'source'.
+      classification = streaming.availableColorModes().includes('classification') ? 'source' : 'none';
     }
   } catch { /* a partial story is fine */ }
 
@@ -1419,8 +1424,8 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
     density: di?.density.bucket,
     groundVisibility: di?.groundVisibility.bucket,
     coverageMode: di?.coverage.bucket,
-    crsKnown,
-    datumKnown,
+    crsKnown: facts?.crsKnown ?? metaCrsKnown,
+    datumKnown: facts?.datumKnown ?? metaDatumKnown,
     classification,
     classConfidence: lastDerivedConfidence,
   };
