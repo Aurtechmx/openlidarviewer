@@ -32,4 +32,4 @@ This viewer runs on open point-cloud formats and tools maintained by
 - **EPT / Entwine** — the hierarchical point-tile format and the Entwine tool that builds it
 
 With particular thanks to **Howard Butler** and **Hobu, Inc.**, and the wider
-PDAL / COPC community whose work this builds on.
+PDAL / COPC community.
