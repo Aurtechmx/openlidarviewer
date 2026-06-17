@@ -125,35 +125,41 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
   const gzip = input.gzip === true && (input.format === 'las' || input.format === 'las14');
 
   // ── size estimate ────────────────────────────────────────────────────────
+  // `sizeBytesEst` is the FILE estimate (compressed when applicable);
+  // `rawBytesEst` is the UNCOMPRESSED working size built in memory — the figure
+  // the memory/large-file warning keys on, since compression happens after the
+  // full buffer exists in RAM.
   let sizeBytesEst: number | null = null;
+  let rawBytesEst = 0;
   let sizeApproximate = false;
   let sizeLabel = '';
   if (n > 0) {
     if (input.format === 'las14' || input.format === 'las') {
       const header = input.format === 'las14' ? LAS14_HEADER : LAS12_HEADER;
-      const raw = header + n * lasBytesPerPoint(input.format, hasRgb, hasGps);
+      rawBytesEst = header + n * lasBytesPerPoint(input.format, hasRgb, hasGps);
       if (gzip) {
         // Compressed container — report a range, like LAZ.
-        sizeBytesEst = (raw * GZIP_RATIO_LO + raw * GZIP_RATIO_HI) / 2;
+        sizeBytesEst = (rawBytesEst * GZIP_RATIO_LO + rawBytesEst * GZIP_RATIO_HI) / 2;
         sizeApproximate = true;
-        sizeLabel = `~${formatByteSize(raw * GZIP_RATIO_LO)}–${formatByteSize(raw * GZIP_RATIO_HI)}`;
+        sizeLabel = `~${formatByteSize(rawBytesEst * GZIP_RATIO_LO)}–${formatByteSize(rawBytesEst * GZIP_RATIO_HI)}`;
       } else {
-        sizeBytesEst = raw;
-        sizeLabel = `~${formatByteSize(raw)}`;
+        sizeBytesEst = rawBytesEst;
+        sizeLabel = `~${formatByteSize(rawBytesEst)}`;
       }
     } else if (input.format === 'laz') {
       // Estimate from the LAS 1.4 raw size, then apply a compression RANGE.
-      const raw = LAS14_HEADER + n * lasBytesPerPoint('las14', hasRgb, hasGps);
-      const lo = raw * LAZ_RATIO_LO;
-      const hi = raw * LAZ_RATIO_HI;
+      rawBytesEst = LAS14_HEADER + n * lasBytesPerPoint('las14', hasRgb, hasGps);
+      const lo = rawBytesEst * LAZ_RATIO_LO;
+      const hi = rawBytesEst * LAZ_RATIO_HI;
       sizeBytesEst = (lo + hi) / 2;
       sizeApproximate = true;
       sizeLabel = `~${formatByteSize(lo)}–${formatByteSize(hi)}`;
     } else {
       // XYZ / ASC — ASCII, genuinely variable with coordinate magnitude.
-      sizeBytesEst = n * ASCII_BYTES_PER_POINT;
+      rawBytesEst = n * ASCII_BYTES_PER_POINT;
+      sizeBytesEst = rawBytesEst;
       sizeApproximate = true;
-      sizeLabel = `~${formatByteSize(sizeBytesEst)}`;
+      sizeLabel = `~${formatByteSize(rawBytesEst)}`;
     }
   }
 
@@ -215,10 +221,12 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
         'Tick "convert at full resolution" to write the whole scan.',
     });
   }
-  if (sizeBytesEst != null && sizeBytesEst > LARGE_FILE_BYTES) {
+  // Keyed on the UNCOMPRESSED size: even a small .gz/.laz output builds the full
+  // buffer in memory first, so that is the honest memory-pressure figure.
+  if (rawBytesEst > LARGE_FILE_BYTES) {
     warnings.push({
       level: 'warn',
-      message: `Large file (${sizeLabel.replace(/^~/, '~')}) — the download may take a while and use significant memory.`,
+      message: `Large scan (~${formatByteSize(rawBytesEst)} uncompressed) — the export may take a while and use significant memory.`,
     });
   }
 
