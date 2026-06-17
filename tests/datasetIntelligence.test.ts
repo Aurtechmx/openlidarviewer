@@ -19,6 +19,8 @@ import {
   classifyComplexity,
   classifyCoverage,
   classifyDensity,
+  densityLabel,
+  signalTier,
   classifyGroundVisibility,
   confidenceBand,
   coverageStreamingWarning,
@@ -29,11 +31,12 @@ import type { TerrainCoverageMeta } from '../src/terrain/TerrainContracts';
 // ── Density ──────────────────────────────────────────────────────
 
 describe('classifyDensity', () => {
-  it('reads as sparse when neither pointCount nor density is known', () => {
-    expect(classifyDensity({})).toBe('sparse');
+  it("reads as unknown when neither pointCount nor density is known (not a fabricated 'sparse')", () => {
+    expect(classifyDensity({})).toBe('unknown');
   });
 
   it('uses residentDensity when supplied', () => {
+    // 0.5 is a genuine measured low density — it stays 'sparse', not 'unknown'.
     expect(classifyDensity({ residentDensity: 0.5 })).toBe('sparse');
     expect(classifyDensity({ residentDensity: 10 })).toBe('moderate');
     expect(classifyDensity({ residentDensity: 100 })).toBe('dense');
@@ -47,10 +50,40 @@ describe('classifyDensity', () => {
     expect(classifyDensity({ pointCount: 1_000_000, bboxVolume: 1000 })).toBe('very-dense');
   });
 
-  it('returns sparse for non-finite or zero inputs', () => {
-    expect(classifyDensity({ pointCount: 1000, bboxVolume: 0 })).toBe('sparse');
-    expect(classifyDensity({ residentDensity: Number.NaN })).toBe('sparse');
-    expect(classifyDensity({ residentDensity: -1 })).toBe('sparse');
+  it('returns unknown (no signal) for non-finite or zero/negative inputs', () => {
+    expect(classifyDensity({ pointCount: 1000, bboxVolume: 0 })).toBe('unknown');
+    expect(classifyDensity({ residentDensity: Number.NaN })).toBe('unknown');
+    expect(classifyDensity({ residentDensity: -1 })).toBe('unknown');
+  });
+
+  it('labels the unknown bucket as "—"', () => {
+    expect(densityLabel('unknown')).toBe('—');
+  });
+});
+
+describe('signalTier — honest colour-accent mapping', () => {
+  it('maps the quality axes to strong/moderate/weak', () => {
+    expect(signalTier('density', 'sparse')).toBe('weak');
+    expect(signalTier('density', 'moderate')).toBe('moderate');
+    expect(signalTier('density', 'dense')).toBe('strong');
+    expect(signalTier('density', 'very-dense')).toBe('strong');
+    expect(signalTier('groundVisibility', 'poor')).toBe('weak');
+    expect(signalTier('groundVisibility', 'excellent')).toBe('strong');
+    expect(signalTier('coverage', 'full')).toBe('strong');
+    expect(signalTier('coverage', 'resident-only')).toBe('moderate');
+    expect(signalTier('coverage', 'sampled')).toBe('weak');
+  });
+
+  it('treats terrain complexity as neutral — never a quality colour', () => {
+    for (const b of ['low', 'moderate', 'high', 'very-high']) {
+      expect(signalTier('complexity', b)).toBe('neutral');
+    }
+  });
+
+  it('renders any unknown bucket as the muted unknown tier', () => {
+    expect(signalTier('density', 'unknown')).toBe('unknown');
+    expect(signalTier('complexity', 'unknown')).toBe('unknown');
+    expect(signalTier('groundVisibility', 'unknown')).toBe('unknown');
   });
 });
 

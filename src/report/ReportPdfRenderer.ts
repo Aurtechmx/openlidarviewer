@@ -31,6 +31,9 @@ import {
   type ParsedColor,
   type ReportThemePalette,
 } from './ReportBranding';
+import { describeAnnotationGroups } from '../render/annotate/annotationClustering';
+import type { AnnotationType } from '../render/annotate/types';
+import type { FindingTier, ReportFinding, ReportInspectionSummary } from './ReportFindings';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants — letter portrait, 0.6 inch margins.
@@ -99,7 +102,13 @@ export async function renderReportPdf(
   template: ReportTemplate,
 ): Promise<ReportResult> {
   const doc = await PDFDocument.create();
-  doc.setTitle(inputs.cover.title);
+  // `showInWindowTitleBar` sets the ViewerPreferences DisplayDocTitle flag, so a
+  // screen reader / PDF viewer announces the report title rather than the raw
+  // filename. setLanguage tags the document language for correct pronunciation.
+  // (A full tagged-structure tree for section-level navigation is out of reach
+  // with this PDF library; these are the honest, supported accessibility hooks.)
+  doc.setTitle(inputs.cover.title, { showInWindowTitleBar: true });
+  doc.setLanguage('en-US');
   doc.setAuthor(inputs.branding.author ?? 'OpenLiDARViewer');
   doc.setCreator(`OpenLiDARViewer Report Engine v${__APP_VERSION__}`);
   doc.setProducer('pdf-lib (lazy chunk)');
@@ -260,6 +269,8 @@ async function renderSection(
   switch (section) {
     case 'cover':
       return renderCover(cursor, inputs, accent, theme, body, bold, logo);
+    case 'inspection-summary':
+      return renderInspectionSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'dataset-summary':
       return renderDatasetSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'provenance':
@@ -335,6 +346,52 @@ function ensureSpace(
   return cursor;
 }
 
+/**
+ * Break `text` into lines no wider than `maxWidth` at `size`, measuring with
+ * the real font metrics. Words that are themselves wider than `maxWidth`
+ * (a long unbroken token / URL) are hard-broken character-by-character so the
+ * loop always terminates and nothing is silently clipped at the page edge.
+ *
+ * The input is run through `sanitiseForPdf` first so the width measurement
+ * matches what actually gets drawn (the WinAnsi substitutions change string
+ * length — e.g. "≥" → ">=").
+ */
+function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const clean = sanitiseForPdf(text);
+  if (clean.length === 0) return [''];
+  const lines: string[] = [];
+  let line = '';
+  for (const word of clean.split(/\s+/)) {
+    if (word.length === 0) continue;
+    const candidate = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      line = candidate;
+      continue;
+    }
+    if (line) {
+      lines.push(line);
+      line = '';
+    }
+    // The word alone may still overflow — hard-break it.
+    if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+      line = word;
+    } else {
+      let chunk = '';
+      for (const ch of word) {
+        if (chunk && font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
+          lines.push(chunk);
+          chunk = ch;
+        } else {
+          chunk += ch;
+        }
+      }
+      line = chunk;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length > 0 ? lines : [''];
+}
+
 function drawSectionHeader(
   cursor: PageCursor,
   text: string,
@@ -359,13 +416,96 @@ function drawBodyLine(
   text: string,
   body: PDFFont,
   theme: ReportThemePalette,
+  indent = 0,
 ): PageCursor {
-  cursor.page.drawText(sanitiseForPdf(text), {
-    x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
-    size: BODY_FONT_SIZE, font: body,
-    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
-  });
-  return { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+  // Wrap to the content width so long lines (the provenance disclaimer, free
+  // notes) flow onto further lines instead of running off the right margin.
+  const x = MARGIN + indent;
+  const maxWidth = PAGE_WIDTH - MARGIN - x;
+  let y = cursor.y;
+  for (const line of wrapText(text, body, BODY_FONT_SIZE, maxWidth)) {
+    cursor.page.drawText(line, {
+      x, y: y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: body,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    y -= BODY_FONT_SIZE + 4;
+  }
+  return { page: cursor.page, y };
+}
+
+/**
+ * Draw the cross-section profile as a small vector chart: a framed box with the
+ * elevation polyline, self-normalised to the box so the units are immaterial.
+ * Vector (not a rasterised image), so it stays sharp at any print zoom.
+ */
+function drawProfileChart(
+  cursor: PageCursor,
+  chart: ReadonlyArray<{ readonly distance: number; readonly height: number }>,
+  theme: ReportThemePalette,
+  accent: ParsedColor,
+  doc: PDFDocument,
+  body: PDFFont,
+  organisation: string | undefined,
+): PageCursor {
+  const CHART_W = 240;
+  const CHART_H = 56;
+  const PAD = 5;
+  // Reserve room for the chart box plus the not-to-scale disclosure beneath it.
+  cursor = ensureSpace(cursor, CHART_H + 26, doc, accent, theme, organisation);
+  const x0 = MARGIN + 12;
+  const top = cursor.y;
+  const bottom = top - CHART_H;
+  const rule = rgb(theme.rule.r, theme.rule.g, theme.rule.b);
+
+  // Bounds of the samples (finite-only; the caller already filtered).
+  let dMin = Infinity, dMax = -Infinity, hMin = Infinity, hMax = -Infinity;
+  for (const s of chart) {
+    if (s.distance < dMin) dMin = s.distance;
+    if (s.distance > dMax) dMax = s.distance;
+    if (s.height < hMin) hMin = s.height;
+    if (s.height > hMax) hMax = s.height;
+  }
+  const dSpan = dMax - dMin || 1;
+  const hSpan = hMax - hMin || 1;
+
+  // Frame (left + bottom axes).
+  cursor.page.drawLine({ start: { x: x0, y: top }, end: { x: x0, y: bottom }, thickness: 0.5, color: rule });
+  cursor.page.drawLine({ start: { x: x0, y: bottom }, end: { x: x0 + CHART_W, y: bottom }, thickness: 0.5, color: rule });
+
+  const sx = (d: number): number => x0 + PAD + ((d - dMin) / dSpan) * (CHART_W - 2 * PAD);
+  const sy = (h: number): number => bottom + PAD + ((h - hMin) / hSpan) * (CHART_H - 2 * PAD);
+  let prev: { x: number; y: number } | null = null;
+  for (const s of chart) {
+    const pt = { x: sx(s.distance), y: sy(s.height) };
+    if (prev) {
+      cursor.page.drawLine({
+        start: prev, end: pt, thickness: 0.9,
+        color: rgb(accent.r, accent.g, accent.b),
+      });
+    }
+    prev = pt;
+  }
+  // Honesty disclosure — the box is vertically auto-fit, so its slope is an
+  // arbitrary vertical exaggeration. Without this, a reader could eyeball a
+  // grade off a distorted curve. The real horizontal length, Δh and grade are
+  // printed in the summary row above; the dedicated Profile sheet carries a
+  // scaled, measurable section. (Convention: an undisclosed VE is the single
+  // most common way a profile thumbnail misleads.)
+  const caption =
+    'Schematic section — vertical scale auto-fit (exaggerated), not to scale. ' +
+    'Read length and grade from the values above, not off the curve.';
+  const capY = bottom - 9;
+  let y = capY;
+  for (const line of wrapText(caption, body, BODY_FONT_SIZE - 2, PAGE_WIDTH - MARGIN - x0)) {
+    cursor.page.drawText(line, {
+      x: x0, y: y - (BODY_FONT_SIZE - 2),
+      size: BODY_FONT_SIZE - 2, font: body,
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+    });
+    y -= BODY_FONT_SIZE - 1;
+  }
+  return { page: cursor.page, y: y - 4 };
 }
 
 function drawLabelValueRow(
@@ -376,17 +516,47 @@ function drawLabelValueRow(
   bold: PDFFont,
   theme: ReportThemePalette,
 ): PageCursor {
-  cursor.page.drawText(sanitiseForPdf(label), {
-    x: gridX(1), y: cursor.y - BODY_FONT_SIZE,
-    size: BODY_FONT_SIZE, font: bold,
-    color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+  const cleanLabel = sanitiseForPdf(label);
+  const labelX = gridX(1);
+  const muted = rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b);
+  const bodyColor = rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b);
+  // Does the bold label fit before the value column with a 6-pt gap? Wide
+  // labels (the provenance "Typical density (USGS QL2)" rows) used to overrun
+  // the value at LABEL_VALUE_GUTTER_X — the label and value collided. When the
+  // label is too wide, drop the value onto its own indented line below it.
+  const labelWidth = bold.widthOfTextAtSize(cleanLabel, BODY_FONT_SIZE);
+  const inlineFits = labelX + labelWidth + 6 <= LABEL_VALUE_GUTTER_X;
+
+  cursor.page.drawText(cleanLabel, {
+    x: labelX, y: cursor.y - BODY_FONT_SIZE,
+    size: BODY_FONT_SIZE, font: bold, color: muted,
   });
-  cursor.page.drawText(sanitiseForPdf(value), {
-    x: LABEL_VALUE_GUTTER_X, y: cursor.y - BODY_FONT_SIZE,
-    size: BODY_FONT_SIZE, font: body,
-    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
-  });
-  return { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+
+  if (inlineFits) {
+    // Value shares the row, wrapped within the column to the right margin.
+    const valueX = LABEL_VALUE_GUTTER_X;
+    const valueMax = PAGE_WIDTH - MARGIN - valueX;
+    let y = cursor.y;
+    for (const line of wrapText(value, body, BODY_FONT_SIZE, valueMax)) {
+      cursor.page.drawText(line, {
+        x: valueX, y: y - BODY_FONT_SIZE, size: BODY_FONT_SIZE, font: body, color: bodyColor,
+      });
+      y -= BODY_FONT_SIZE + 4;
+    }
+    return { page: cursor.page, y };
+  }
+
+  // Label too wide — value flows below it, indented one grid track, wrapped.
+  let y = cursor.y - BODY_FONT_SIZE - 4;
+  const valueX = gridX(2);
+  const valueMax = PAGE_WIDTH - MARGIN - valueX;
+  for (const line of wrapText(value, body, BODY_FONT_SIZE, valueMax)) {
+    cursor.page.drawText(line, {
+      x: valueX, y: y - BODY_FONT_SIZE, size: BODY_FONT_SIZE, font: body, color: bodyColor,
+    });
+    y -= BODY_FONT_SIZE + 4;
+  }
+  return { page: cursor.page, y };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -484,6 +654,188 @@ async function renderCover(
     if (pm.date)      cursor = drawLabelValueRow(cursor, 'Date',      pm.date,      body, bold, theme);
   }
   return cursor;
+}
+
+/** Status-dot colour for a finding tier. Paired ALWAYS with text, never the
+ * sole carrier of meaning — the value / detail line conveys the finding on its
+ * own, so the dot stays a scanning aid (colourblind-safe by construction). */
+function tierColor(tier: FindingTier): ParsedColor {
+  switch (tier) {
+    case 'met':     return { r: 0.16, g: 0.55, b: 0.30 }; // green
+    case 'caution': return { r: 0.85, g: 0.55, b: 0.10 }; // amber
+    case 'unknown': return { r: 0.55, g: 0.57, b: 0.60 }; // grey
+    case 'info':    return { r: 0.30, g: 0.50, b: 0.72 }; // muted blue
+  }
+}
+
+/** One finding: status dot + bold label, value, optional detail + source. */
+function drawFinding(
+  cursor: PageCursor,
+  finding: ReportFinding,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): PageCursor {
+  cursor = ensureSpace(cursor, 34, doc, accent, theme, organisation);
+  const dotX = MARGIN + 4;
+  const textX = MARGIN + 16;
+  const dot = tierColor(finding.tier);
+  // Status dot, vertically centred on the label line.
+  cursor.page.drawEllipse({
+    x: dotX, y: cursor.y - BODY_FONT_SIZE + 3, xScale: 3, yScale: 3,
+    color: rgb(dot.r, dot.g, dot.b),
+  });
+  // Label (bold) + value on the same line; value sits after the label.
+  const cleanLabel = sanitiseForPdf(finding.label);
+  cursor.page.drawText(cleanLabel, {
+    x: textX, y: cursor.y - BODY_FONT_SIZE,
+    size: BODY_FONT_SIZE, font: bold,
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+  });
+  const labelW = bold.widthOfTextAtSize(cleanLabel, BODY_FONT_SIZE);
+  const valueX = textX + labelW + 8;
+  cursor.page.drawText(sanitiseForPdf(finding.value), {
+    x: valueX, y: cursor.y - BODY_FONT_SIZE,
+    size: BODY_FONT_SIZE, font: body,
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+  });
+  let y = cursor.y - BODY_FONT_SIZE - 4;
+  // Detail line(s), wrapped + indented under the label.
+  if (finding.detail) {
+    for (const line of wrapText(finding.detail, body, BODY_FONT_SIZE - 1, PAGE_WIDTH - MARGIN - textX)) {
+      cursor.page.drawText(line, {
+        x: textX, y: y - (BODY_FONT_SIZE - 1),
+        size: BODY_FONT_SIZE - 1, font: body,
+        color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+      });
+      y -= BODY_FONT_SIZE + 2;
+    }
+  }
+  if (finding.source) {
+    cursor.page.drawText(`source: ${sanitiseForPdf(finding.source)}`, {
+      x: textX, y: y - (BODY_FONT_SIZE - 2),
+      size: BODY_FONT_SIZE - 2, font: body,
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+    });
+    y -= BODY_FONT_SIZE;
+  }
+  return { page: cursor.page, y: y - 4 };
+}
+
+/**
+ * Small horizontal density bar: measured density against the USGS QL
+ * thresholds, with labelled tick marks. Drawn only when the summary carries a
+ * `densityBar` (i.e. the QL comparison is applicable), so the graphic never
+ * implies a standard that doesn't apply to this capture type.
+ */
+function drawDensityBar(
+  cursor: PageCursor,
+  bar: NonNullable<ReportInspectionSummary['densityBar']>,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): PageCursor {
+  cursor = ensureSpace(cursor, 46, doc, accent, theme, organisation);
+  const x0 = MARGIN + 16;
+  const barW = 300;
+  const barH = 8;
+  const maxThresh = bar.thresholds.reduce((m, t) => Math.max(m, t.value), 0);
+  const scaleMax = Math.max(bar.measured, maxThresh) * 1.15 || 1;
+  const top = cursor.y - 4;
+  const rule = rgb(theme.rule.r, theme.rule.g, theme.rule.b);
+
+  // Caption.
+  cursor.page.drawText('Density vs USGS quality levels', {
+    x: x0, y: top - BODY_FONT_SIZE + 2, size: BODY_FONT_SIZE - 1, font: bold,
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+  });
+  const barTop = top - BODY_FONT_SIZE - 4;
+  const barBottom = barTop - barH;
+  // Track.
+  cursor.page.drawRectangle({
+    x: x0, y: barBottom, width: barW, height: barH,
+    color: rgb(theme.rowTint.r, theme.rowTint.g, theme.rowTint.b),
+    borderColor: rule, borderWidth: 0.5,
+  });
+  // Filled to measured.
+  const fillW = Math.max(0, Math.min(1, bar.measured / scaleMax)) * barW;
+  cursor.page.drawRectangle({
+    x: x0, y: barBottom, width: fillW, height: barH,
+    color: rgb(accent.r, accent.g, accent.b),
+  });
+  // Threshold ticks + labels.
+  for (const t of bar.thresholds) {
+    const tx = x0 + Math.min(1, t.value / scaleMax) * barW;
+    cursor.page.drawLine({
+      start: { x: tx, y: barBottom - 2 }, end: { x: tx, y: barTop + 2 },
+      thickness: 0.8, color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor.page.drawText(`${t.label} (${t.value})`, {
+      x: tx - 8, y: barBottom - 11, size: BODY_FONT_SIZE - 3, font: body,
+      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
+    });
+  }
+  // Measured readout at the bar end.
+  cursor.page.drawText(`${bar.measured.toFixed(0)} ${sanitiseForPdf(bar.unit)}`, {
+    x: x0 + barW + 8, y: barBottom - 1, size: BODY_FONT_SIZE - 1, font: bold,
+    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+  });
+  return { page: cursor.page, y: barBottom - 16 };
+}
+
+/**
+ * The Inspection summary — a scannable findings card synthesised from the
+ * dataset metadata + provenance. Leads the report with what the scan IS and
+ * what it does NOT establish, so a reviewer gets the verdict in a couple of
+ * seconds instead of reading the whole metadata table.
+ */
+async function renderInspectionSummary(
+  cursor: PageCursor,
+  inputs: ReportInputs,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): Promise<PageCursor> {
+  const summary = inputs.summary;
+  if (!summary) return cursor;
+  cursor = ensureSpace(cursor, 70, doc, accent, theme, organisation);
+  cursor = drawSectionHeader(cursor, 'Inspection summary', accent, bold);
+  // Headline — the one-line characterisation, wrapped.
+  for (const line of wrapText(summary.headline, bold, BODY_FONT_SIZE + 1, CONTENT_WIDTH)) {
+    cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+    cursor.page.drawText(line, {
+      x: MARGIN, y: cursor.y - (BODY_FONT_SIZE + 1),
+      size: BODY_FONT_SIZE + 1, font: bold,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor = { page: cursor.page, y: cursor.y - (BODY_FONT_SIZE + 1) - 6 };
+  }
+  cursor = { page: cursor.page, y: cursor.y - 4 };
+  // Findings.
+  for (const f of summary.findings) {
+    cursor = drawFinding(cursor, f, doc, accent, theme, body, bold, organisation);
+  }
+  // Density bar (only when QL applies).
+  if (summary.densityBar) {
+    cursor = { page: cursor.page, y: cursor.y - 4 };
+    cursor = drawDensityBar(cursor, summary.densityBar, doc, accent, theme, body, bold, organisation);
+  }
+  // Caveats — what the report does not establish.
+  cursor = { page: cursor.page, y: cursor.y - 2 };
+  for (const c of summary.caveats) {
+    cursor = ensureSpace(cursor, 24, doc, accent, theme, organisation);
+    cursor = drawBodyLine(cursor, `• ${c}`, body, theme, 4);
+  }
+  return { page: cursor.page, y: cursor.y - 12 };
 }
 
 async function renderDatasetSummary(
@@ -665,6 +1017,12 @@ async function renderAnnotations(
     );
     return { page: cursor.page, y: cursor.y - 10 };
   }
+  // Grouping summary — same line the live Annotations panel shows, so the
+  // deliverable opens with the shape of the notes (totals, categories, areas).
+  const groupSummary = describeAnnotationGroups(
+    inputs.annotations.map((a) => ({ type: a.type as AnnotationType, localPosition: a.position })),
+  );
+  if (groupSummary) cursor = drawBodyLine(cursor, groupSummary, body, theme);
   for (const a of inputs.annotations) {
     cursor = ensureSpace(cursor, 36, doc, accent, theme, organisation);
     // Title + type badge.
@@ -716,7 +1074,7 @@ async function renderMeasurements(
     // across a page boundary.
     const extras = m.profileExtras;
     const rowH = extras
-      ? 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0)
+      ? 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0) + (extras.chart ? 68 : 0)
       : 16;
     cursor = ensureSpace(cursor, rowH, doc, accent, theme, organisation);
     cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, theme);
@@ -727,6 +1085,9 @@ async function renderMeasurements(
       cursor = drawLabelValueRow(cursor, '  slopes', extras.slopeSummary, body, bold, theme);
       if (extras.coverageCaveat) {
         cursor = drawLabelValueRow(cursor, '  coverage', extras.coverageCaveat, body, bold, theme);
+      }
+      if (extras.chart && extras.chart.length >= 2) {
+        cursor = drawProfileChart(cursor, extras.chart, theme, accent, doc, body, organisation);
       }
     }
   }

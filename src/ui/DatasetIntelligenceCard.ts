@@ -24,6 +24,7 @@
 import { el } from './dom';
 import {
   summariseDataset,
+  signalTier,
   type DatasetIntelligence,
   type DatasetIntelligenceInput,
 } from '../terrain/datasetIntelligence';
@@ -253,17 +254,24 @@ export class DatasetIntelligenceCard {
     this.element.classList.remove('olv-hidden');
     this._empty.classList.add('olv-hidden');
 
+    // `data-bucket` keeps the exact bucket (semantics / tests); `data-tier`
+    // drives the quiet colour accent through the honest signal-tier mapping so
+    // a descriptive axis (complexity) is never coloured as good/bad.
     this._densityValue.textContent = intel.density.label;
     this._densityValue.dataset.bucket = intel.density.bucket;
+    this._densityValue.dataset.tier = signalTier('density', intel.density.bucket);
 
     this._complexityValue.textContent = intel.complexity.label;
     this._complexityValue.dataset.bucket = intel.complexity.bucket;
+    this._complexityValue.dataset.tier = signalTier('complexity', intel.complexity.bucket);
 
     this._groundValue.textContent = intel.groundVisibility.label;
     this._groundValue.dataset.bucket = intel.groundVisibility.bucket;
+    this._groundValue.dataset.tier = signalTier('groundVisibility', intel.groundVisibility.bucket);
 
     this._coverageValue.textContent = intel.coverage.label;
     this._coverageValue.dataset.bucket = intel.coverage.bucket;
+    this._coverageValue.dataset.tier = signalTier('coverage', intel.coverage.bucket);
 
     if (intel.coverage.streamingWarning) {
       this._coverageWarning.textContent = intel.coverage.streamingWarning;

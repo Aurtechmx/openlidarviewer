@@ -78,6 +78,7 @@ import {
 import {
   cameraPresetPose,
   standardViewPose,
+  fitBoxDistance,
   type CameraPresetName,
   type StandardView,
 } from './camera/cameraPresets';
@@ -1739,6 +1740,11 @@ export class Viewer {
     if (!this._streaming) return;
     this._streaming.scheduler.stop();
     this._streaming.renderer.dispose();
+    // Release the source's underlying reader (COPC file handle / range source)
+    // so it doesn't outlive the detach. close() is async and may reject if the
+    // reader is already gone; detach is synchronous and best-effort, so fire it
+    // and swallow the rejection rather than block teardown.
+    void this._streaming.cloud.close?.().catch(() => {});
     this._streaming = null;
     this._lastStreamingCenter = null;
     // Recompute the orbit-clamp envelope from whatever static clouds remain
@@ -1965,10 +1971,23 @@ export class Viewer {
       }
     }
     if (oi === 0) return null;
+    // `residentOnly` means a PARTIAL stream — only some octree nodes are
+    // resident, so the surface assessment must stay a "Preview". Previously
+    // this was hard-wired true for ANY streaming scan, so a fully-streamed COPC
+    // could NEVER earn a real grade. Now it reflects actual coverage: once every
+    // known octree node is resident (the working set spans the whole cloud), the
+    // sample is spatially complete and the analysis reports full coverage. A
+    // stride is still applied (`sampled`), but that's a representative subsample
+    // of the WHOLE extent, not a partial one.
+    let residentOnly = streamingPoints > 0 && staticPoints === 0;
+    if (residentOnly && this._streaming) {
+      const totalNodes = this._streaming.cloud.octree.nodes().length;
+      if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
+    }
     return {
       positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
       classification: classification ? (oi === cap ? classification : classification.subarray(0, oi)) : undefined,
-      residentOnly: streamingPoints > 0 && staticPoints === 0,
+      residentOnly,
       sampled: stride > 1,
       totalPoints,
       verticalAxisHint: verticalAxisHintForSources(staticFormats, streamingPoints > 0),
@@ -2481,6 +2500,69 @@ export class Viewer {
     this._classSnapshots.delete(id);
     this._refreshClassificationColours(id);
     return true;
+  }
+
+  /**
+   * Attach a DERIVED (heuristic) classification to a cloud that had none and
+   * switch it to classification colours. The codes come from the unsupervised
+   * `deriveClassification` pipeline (run off-thread via `deriveClassificationAsync`).
+   *
+   * Display, the legend histogram, the GPU class FILTER, and export all read
+   * the derived codes, so this immediately colours the cloud by class, lets the
+   * legend list AND show/hide the derived classes, and flows the codes into LAS
+   * export — all flagged DERIVED via `cloud.classificationIsDerived`.
+   *
+   * Returns false when the id is unknown; throws on a code/point length
+   * mismatch (a caller bug worth surfacing, not swallowing).
+   */
+  applyDerivedClassification(id: string, codes: Uint8Array): boolean {
+    const entry = this._clouds.get(id);
+    if (!entry) return false;
+    entry.cloud.attachDerivedClassification(codes);
+    // Give the mesh the same GPU class-filter wiring a cloud loaded WITH
+    // classification gets: an `aClass` per-instance attribute plus the
+    // class-mask multiply folded into the size node. Without this the legend
+    // could colour the derived classes but not hide them.
+    this._attachClassAttribute(entry, codes);
+    if (entry.mode === 'classification') {
+      this._refreshClassificationColours(id);
+    } else {
+      this.setColorMode(id, 'classification');
+    }
+    this._bumpRenderActivity();
+    return true;
+  }
+
+  /**
+   * Attach (or replace) the `aClass` instanced attribute on a cloud's mesh and
+   * fold the class-mask multiply into its size node — the same wiring
+   * `_buildPointsMesh` does at load for a classified cloud, applied after the
+   * fact for a derived classification. Idempotent: re-deriving rewrites the
+   * attribute and re-applies the size mode. `material.needsUpdate` forces the
+   * node graph + new attribute to recompile.
+   */
+  private _attachClassAttribute(entry: CloudEntry, codes: Uint8Array): void {
+    const instanceCount = entry.cloud.pointCount;
+    const n = Math.min(instanceCount, codes.length);
+    // Re-deriving a cloud reuses the existing aClass buffer in place rather
+    // than allocating a new InstancedBufferAttribute — so a re-classify never
+    // orphans the previous GPU buffer. Only the first derive (no attribute yet,
+    // or a length change) allocates.
+    const existing = entry.mesh.geometry.getAttribute('aClass') as
+      | THREE.InstancedBufferAttribute
+      | undefined;
+    if (existing && existing.array.length === instanceCount) {
+      const arr = existing.array as Float32Array;
+      for (let i = 0; i < n; i++) arr[i] = codes[i];
+      existing.needsUpdate = true;
+    } else {
+      const classData = new Float32Array(instanceCount);
+      for (let i = 0; i < n; i++) classData[i] = codes[i];
+      entry.mesh.geometry.setAttribute('aClass', new THREE.InstancedBufferAttribute(classData, 1));
+    }
+    this._materialsWithClass.add(entry.material);
+    this._applySizeMode(entry.material);
+    entry.material.needsUpdate = true;
   }
 
   /**
@@ -3294,12 +3376,9 @@ export class Viewer {
    * overview rather than snapping there.
    */
   frameAll(): void {
-    const sphere = this._visibleBoundingSphere();
-    if (!sphere) return;
-
-    const radius = sphere.radius === 0 ? 1 : sphere.radius;
-    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
-    const dist = (radius / Math.sin(fovRad / 2)) * 1.2;
+    const box = this._visibleBoundingBox();
+    if (!box) return;
+    const target = box.getCenter(new THREE.Vector3());
 
     // An oblique direction: a horizontal heading lifted ~35° toward world-up,
     // so a scan opens at a natural three-quarter angle, not flat top-down.
@@ -3309,7 +3388,21 @@ export class Viewer {
       .addScaledVector(this._worldUp, Math.sin(0.61))
       .normalize();
 
-    const target = sphere.center.clone();
+    // Extent-aware fit: the distance at which the actual bounding BOX just fills
+    // the frustum (aspect + FOV aware), not its much-larger bounding sphere. So
+    // a flat wide scan fills the viewport and a tall scan isn't over-zoomed —
+    // the framing adapts to the scan's shape. 1.05 leaves a small margin so the
+    // edge points sit just inside the frame rather than on its border.
+    const dist = fitBoxDistance({
+      boxMin: { x: box.min.x, y: box.min.y, z: box.min.z },
+      boxMax: { x: box.max.x, y: box.max.y, z: box.max.z },
+      look: { x: -dir.x, y: -dir.y, z: -dir.z },
+      worldUp: { x: this._worldUp.x, y: this._worldUp.y, z: this._worldUp.z },
+      fovDeg: this._camera.fov,
+      aspect: this._camera.aspect,
+      pad: 1.05,
+    });
+
     const pos = target.clone().addScaledVector(dir, dist);
     // Slightly longer than the default tween — a Frame All sweep usually
     // covers a larger camera delta, so the extra ~100 ms makes the cubic
@@ -4178,6 +4271,13 @@ export class Viewer {
       cancelAnimationFrame(this._resizeRafId);
       this._resizeRafId = null;
     }
+    // Clear the recolour throttle's trailing timer so it can't fire a recolour
+    // on a torn-down renderer after dispose.
+    if (this._recolorThrottleHandle !== null) {
+      clearTimeout(this._recolorThrottleHandle);
+      this._recolorThrottleHandle = null;
+      this._recolorThrottlePending = false;
+    }
     for (const id of [...this._clouds.keys()]) {
       this.removeCloud(id);
     }
@@ -4339,7 +4439,8 @@ export class Viewer {
   }
 
   /** Combined bounding sphere of every visible cloud, or null if none. */
-  private _visibleBoundingSphere(): THREE.Sphere | null {
+  /** The AABB of every visible cloud (+ the streaming octree extent), or null. */
+  private _visibleBoundingBox(): THREE.Box3 | null {
     const box = new THREE.Box3();
     let any = false;
     for (const { mesh, cloud } of this._clouds.values()) {
@@ -4357,7 +4458,12 @@ export class Viewer {
       box.expandByPoint(new THREE.Vector3(lb[3], lb[4], lb[5]));
       any = true;
     }
-    if (!any || box.isEmpty()) return null;
+    return any && !box.isEmpty() ? box : null;
+  }
+
+  private _visibleBoundingSphere(): THREE.Sphere | null {
+    const box = this._visibleBoundingBox();
+    if (!box) return null;
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
     return sphere;

@@ -14,6 +14,7 @@
  */
 
 import { el } from './dom';
+import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
 import { runBatch, summariseBatch, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
 import { buildZip } from '../convert/zipStore';
@@ -377,11 +378,6 @@ function parseEpsg(v: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function downloadBytes(filename: string, bytes: Uint8Array, mime: string): void {
   const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;

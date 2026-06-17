@@ -184,4 +184,12 @@ export class StreamingPointCloud implements StreamingSource {
       renderOrigin: this.renderOrigin,
     };
   }
+
+  /**
+   * {@link StreamingSource.close} — release the underlying COPC range reader
+   * (file handle or HTTP range source) when the cloud is detached.
+   */
+  async close(): Promise<void> {
+    await this.source.close();
+  }
 }

@@ -886,6 +886,36 @@ button:disabled { cursor: not-allowed; }
 /* Lasso volume toast — bottom-centred chip-style banner that surfaces
  * the result of a freehand volumetric pick. Press L to arm the tool;
  * draw a shape on the canvas; the result appears here for 6 seconds. */
+/* Recommended-view chip — top-centre, below the header, dismissible. */
+.olv-rvc {
+  position: fixed;
+  left: 50%;
+  top: calc(64px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  z-index: 80;
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  padding: 4px 6px 4px 10px;
+  background: rgba(11, 17, 33, 0.92);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid var(--accent);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: olv-rvc-in 200ms var(--ease-standard, ease);
+}
+@keyframes olv-rvc-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.olv-rvc-apply {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--text-sm); color: var(--text);
+  background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+}
+.olv-rvc-apply:hover { color: var(--accent); }
+.olv-rvc-spark { color: var(--accent); font-size: 0.85em; }
+.olv-rvc-dismiss {
+  font-size: 16px; line-height: 1; color: var(--text-dim);
+  background: none; border: none; cursor: pointer; padding: 2px 6px;
+}
+.olv-rvc-dismiss:hover { color: var(--text); }
+
 .olv-lasso-toast {
   position: fixed;
   left: 50%;
@@ -1052,6 +1082,9 @@ button:disabled { cursor: not-allowed; }
   margin-top: var(--space-lg);
 }
 .olv-render-sublabel:first-child { margin-top: 0; }
+/* Sublabel that carries a right-aligned value readout (e.g. "Point size · 1.0 px"). */
+.olv-render-sublabel-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.olv-render-value { font-family: var(--mono); font-weight: 500; color: var(--text-muted, #9aa0aa); font-variant-numeric: tabular-nums; }
 .olv-render-label { font-size: var(--text-xs); color: #8a909a; min-width: 52px; }
 .olv-detail-bar { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
 .olv-detail-fill { height: 100%; background: var(--brand-gradient); }
@@ -2947,7 +2980,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-measure-finish:active { transform: scale(0.96); }
 
 /* ── Icon-first measurement controls (v0.4.6) ──────────────────────────────
- * The kind picker is now glyph-driven: a custom futuristic line-icon per
+ * The kind picker is now glyph-driven: a custom line-icon per
  * measurement kind, with the text label kept in the DOM (`.olv-mkind-name`)
  * but visually hidden — the name surfaces on hover (title) and to assistive
  * tech (aria-label). The action controls pair a glyph with a small label.
@@ -2971,7 +3004,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-micon-btn svg { width: 16px; height: 16px; display: block; }
 .olv-micon-btn .olv-mlabel { font-size: var(--text-2xs); }
 
-/* ── Futuristic hover tooltip (custom, replaces the native title bubble) ────
+/* ── hover tooltip (custom, replaces the native title bubble) ────
  * A glass readout that slides out to the RIGHT of each rail control, with a
  * cyan hairline, mono type, a faint glow and a small diamond connector. Shown
  * on hover and keyboard focus; hidden from touch (no hover) and from reduced-
@@ -3531,7 +3564,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* ── Classification legend panel ─────────────────────────────────────────── */
 .olv-class-panel {
-  width: 218px; box-sizing: border-box;
+  /* 248px (was 218): the class name shares the row with a wide point count and
+     the Solo button, so 218 truncated common names ("Low vegetation") to a few
+     letters. The extra width lets the names read; the full name is still on the
+     row's hover title for anything that still clips. */
+  width: 248px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: 10px; padding: 12px;
 }
@@ -3541,6 +3578,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   font-size: 10.5px; font-family: var(--mono); color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
+}
+/* Derived-classification provenance caption — a quiet amber note so the
+   heuristic classes never read as an authoritative, file-supplied set. */
+.olv-cl-derived,
+.olv-cl-streamnote {
+  font-size: 10.5px; line-height: 1.35; color: var(--warn, #b8860b);
+  background: color-mix(in srgb, var(--warn, #b8860b) 12%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--warn, #b8860b) 35%, transparent);
   border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
 }
 .olv-cl-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -3580,10 +3626,21 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-cl-solo-ico svg { width: 12px; height: 12px; flex: none; display: block; }
 .olv-cl-empty { font-size: 11.5px; color: var(--text-faint); }
 .olv-cl-footer {
-  display: flex; gap: 6px;
+  display: flex; flex-wrap: wrap; gap: 6px;
   margin-top: 10px; padding-top: 10px;
   border-top: 0.5px solid var(--hairline);
 }
+/* Colourblind-safe palette toggle — drops to its own full-width line under the
+ * Show-all button. A quiet checkbox row; the class swatches recolour live. */
+.olv-cl-cvd {
+  flex: 1 0 100%;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-dim);
+  cursor: pointer;
+  transition: color 130ms ease;
+}
+.olv-cl-cvd:hover { color: var(--text); }
+.olv-cl-cvd-input { accent-color: var(--accent); margin: 0; cursor: pointer; }
 .olv-cl-showall {
   flex: 1; font-size: 11px; color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
@@ -3629,6 +3686,68 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
   color: var(--text);
 }
+/* ── Workflow recorder settings popup ──────────────────────────────── */
+.olv-wfc {
+  position: fixed; inset: 0; z-index: 91;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12vh; pointer-events: none;
+}
+.olv-wfc-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(11, 17, 33, 0.55);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+.olv-wfc-card {
+  position: relative;
+  width: min(440px, calc(100vw - 32px));
+  max-height: 78vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-lg);
+  pointer-events: auto;
+  padding: var(--space-2xl);
+  background: rgba(11, 17, 33, 0.96);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid var(--accent); border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+}
+.olv-wfc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-lg); }
+.olv-wfc-title { font-size: var(--text-md); font-weight: 600; }
+.olv-wfc-subtitle { font-size: var(--text-xs); color: var(--text-dim); margin-top: 2px; }
+.olv-wfc-close {
+  font-size: 20px; line-height: 1; color: var(--text-dim);
+  background: none; border: none; cursor: pointer; padding: 2px 6px;
+}
+.olv-wfc-close:hover { color: var(--text); }
+.olv-wfc-body { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-wfc-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.olv-wfc-label { font-size: var(--text-sm); color: var(--text-dim); }
+.olv-wfc-seg { display: inline-flex; gap: 2px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 2px; }
+.olv-wfc-seg-btn {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: none; border: none; border-radius: 6px;
+  padding: 4px 9px; cursor: pointer; transition: color 120ms ease, background 120ms ease;
+}
+.olv-wfc-seg-btn:hover { color: var(--text); }
+.olv-wfc-seg-btn.is-active { color: var(--text); background: var(--accent-soft); }
+.olv-wfc-shortcut-wrap { display: inline-flex; gap: 6px; align-items: center; }
+.olv-wfc-shortcut {
+  font-size: var(--text-xs); color: var(--text);
+  background: rgba(255,255,255,0.06); border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 4px 10px; min-width: 78px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.olv-wfc-shortcut.is-capturing { border-color: var(--accent); color: var(--accent); }
+.olv-wfc-shortcut-off { font-size: var(--text-xs); color: var(--text-dim); background: none; border: none; cursor: pointer; }
+.olv-wfc-shortcut-off:hover { color: var(--text); }
+.olv-wfc-capture { display: inline-flex; gap: var(--space-md); }
+.olv-wfc-capture-item { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--text-dim); cursor: pointer; }
+.olv-wfc-check { accent-color: var(--accent); margin: 0; cursor: pointer; }
+.olv-wfc-footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-sm); border-top: 0.5px solid var(--hairline); }
+.olv-wfc-hint { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-wfc-reset { font-size: var(--text-xs); color: var(--text-dim); background: none; border: 0.5px solid var(--hairline); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.olv-wfc-reset:hover { color: var(--text); border-color: var(--accent); }
+
 .olv-shortcuts-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: var(--space-xl);
@@ -3942,6 +4061,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-ap-search:focus-visible { outline: none; border-color: var(--accent); }
 .olv-ap-list { display: flex; flex-direction: column; gap: var(--space-xs); }
 .olv-ap-empty { font-size: var(--text-xs); color: var(--text-faint); }
+/* Annotation grouping summary — total · category breakdown · areas. */
+.olv-ap-summary {
+  font-size: var(--text-xs); color: var(--text-dim);
+  padding: var(--space-2xs) 0 var(--space-xs);
+}
 .olv-ap-row {
   display: flex; align-items: center; gap: var(--space-sm);
   border-radius: var(--radius-sm); padding: var(--space-xs);
@@ -4360,7 +4484,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     max-height: none;
     width: max-content;
     max-width: calc(100vw - 28px);
-    /* Premium glass chip — translucent, blurred, hairline-bordered — instead
+    /* Glass chip — translucent, blurred, hairline-bordered — instead
        of an opaque black slab that read as oversized on a phone. */
     background: rgba(11, 17, 33, 0.78);
     -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
@@ -4371,13 +4495,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-streaming-panel.olv-collapsed .olv-panel-head { font-size: var(--text-2xs); }
   .olv-streaming-panel.olv-collapsed .olv-panel-head { gap: var(--space-sm); }
   .olv-streaming-panel.olv-collapsed .olv-streaming-phase { display: none; }
-  /* Small, dim chevron — premium restraint on a chip. */
+  /* Small, dim chevron — restraint on a chip. */
   .olv-collapsed .olv-chevron { font-size: var(--text-sm); }
 
   /* ── Measure toolbar → vertical icon RAIL (Photoshop / Blender pattern) ──
      The top-stacked strip blanketed the scan on a phone. Here the toolbar
      becomes a slim glass rail pinned to the LEFT edge and centred vertically:
-     a column of futuristic icon tools, a hairline divider, then the action
+     a column of icon tools, a hairline divider, then the action
      icons. The entire top of the canvas — and the Streaming chip's corner —
      is left clear. */
   .olv-measure-bar {
@@ -4390,7 +4514,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     max-width: 72px;
     padding: var(--space-sm) var(--space-2xs);
     border-radius: var(--radius-lg);
-    /* Premium glass — translucent, blurred, hairline-bordered, soft-shadowed. */
+    /* Glass — translucent, blurred, hairline-bordered, soft-shadowed. */
     background: rgba(11, 17, 33, 0.72);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border: 0.5px solid rgba(0, 178, 255, 0.22);
@@ -4729,6 +4853,45 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
+/*
+ * Quiet signal-tier accent (data-bucket phantom resolved). A small dot before
+ * the row value encodes the honest tier from `signalTier()`: the quality axes
+ * (density / ground visibility / coverage) read green / amber / red; terrain
+ * complexity is descriptive so it stays a neutral dot; a missing signal is
+ * muted. The bucket WORD is always shown alongside, so colour is never the
+ * sole carrier of meaning (WCAG 1.4.1). The dot is omitted on rows with no
+ * tier so legacy values render unchanged.
+ */
+.olv-di-row-value[data-tier]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: var(--space-xs);
+  vertical-align: 0.04em;
+  background: color-mix(in srgb, var(--text) 16%, transparent); /* unknown / fallback */
+}
+.olv-di-row-value[data-tier="strong"]::before   { background: var(--rating-excellent); }
+.olv-di-row-value[data-tier="moderate"]::before  { background: var(--rating-good); }
+.olv-di-row-value[data-tier="weak"]::before       { background: var(--rating-weak); }
+.olv-di-row-value[data-tier="neutral"]::before    { background: color-mix(in srgb, var(--text) 28%, transparent); }
+.olv-di-row-value[data-tier="unknown"]::before    { background: color-mix(in srgb, var(--text) 16%, transparent); }
+
+/*
+ * Colourblind-safe mode (body.olv-cvd, toggled with the class palette). The
+ * status dots default to a green/amber/red rating scale — the classic red/green
+ * trap. Under CVD mode swap to an Okabe-Ito blue / orange / vermillion scale,
+ * which separates "good" (cool blue) from "poor" (warm vermillion) under every
+ * common colour-vision deficiency. These dots are always paired with the tier
+ * word, so colour stays supplementary.
+ */
+body.olv-cvd .olv-di-row-value[data-tier="strong"]::before  { background: #0072b2; }
+body.olv-cvd .olv-di-row-value[data-tier="moderate"]::before { background: #e69f00; }
+body.olv-cvd .olv-di-row-value[data-tier="weak"]::before     { background: #d55e00; }
+body.olv-cvd .olv-di-confidence-chip[data-band="green"]   { background: #0072b2; }
+body.olv-cvd .olv-di-confidence-chip[data-band="yellow"]  { background: #e69f00; }
+body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00; }
 .olv-di-confidence-cell { display: inline-flex; align-items: center; gap: var(--space-sm); }
 .olv-di-confidence-chip {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -6006,7 +6169,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-object-caveats[open] > .olv-object-note:first-of-type { margin-top: var(--space-2xs); }
 
 /* Non-terrain analysis export row — Report PDF (primary) + interior-only Floor
- * plan. Mirrors the Analyse panel's export-row look (premium buttons, busy state
+ * plan. Mirrors the Analyse panel's export-row look (buttons, busy state
  * handled in ObjectPanel). */
 .olv-object-export {
   display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-sm);

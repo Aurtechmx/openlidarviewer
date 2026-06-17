@@ -10,8 +10,10 @@
  * counters belong to the `?debug=1` overlay, not here.
  */
 
+import { clamp01 } from '../numeric';
 import { el } from './dom';
 import { formatCount } from './dom';
+import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 
@@ -76,13 +78,6 @@ const MODE_LABEL: Record<ColorMode, string> = {
 };
 
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];
-
-/** Render a byte count compactly. */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 /** Render a world dimension — coarse for large extents, finer for small ones. */
 function formatDim(n: number): string {
@@ -160,7 +155,7 @@ export function streamingProgress(status: StreamingStatus): StreamingProgress {
   // Clamp to [0,1]: resident can momentarily exceed a stale known count
   // between hierarchy refreshes, and we never want a >100% bar.
   const fraction = determinate
-    ? Math.min(1, Math.max(0, status.loadedNodes / known))
+    ? clamp01(status.loadedNodes / known)
     : null;
   return {
     fraction,

@@ -12,6 +12,7 @@
  */
 
 import { el } from './dom';
+import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { FrameStats } from '../render/Viewer';
 import type { LoadTelemetry } from '../io/loadTelemetry';
 import { formatTelemetry } from '../io/loadTelemetry';
@@ -104,12 +105,6 @@ export function formatTerrainCompute(
 /** Overlay refresh interval — about 4 Hz, deliberately never per frame. */
 const REFRESH_MS = 250;
 
-/** Render a byte count compactly: 25_000_000 → "23.8 MB". */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${bytes} B`;
-}
 
 /** Render an integer with thousands separators: 4200000 → "4,200,000". */
 function formatInt(n: number): string {

@@ -35,6 +35,7 @@ const SNAPSHOT_CSS = [
   '.olv-measure-dot{fill:#00b2ff;stroke:#0a0e1a;stroke-width:1.65}',
   '.olv-measure-dot-pending{fill:none;stroke:#00b2ff;stroke-width:2.2}',
   '.olv-measure-dot-snap{fill:#00f0ff;stroke:#0a0e1a;stroke-width:1.65}',
+  '.olv-measure-dot-station{fill:rgba(0,178,255,0.55);stroke:#0a0e1a;stroke-width:1}',
   '.olv-measure-snap-ring{fill:none;stroke:#00f0ff;stroke-width:1.4;stroke-dasharray:3 3;opacity:0.85}',
   '.olv-m-fill{fill:rgba(0,178,255,0.14);stroke:#00b2ff;stroke-width:1.45;stroke-dasharray:5 4}',
   '.olv-m-leader{stroke:rgba(0,178,255,0.5);stroke-width:1.1}',
@@ -55,7 +56,7 @@ export interface OverlayVertex {
    *   user sees the "click here to finish" affordance from across the
    *   canvas. Set by the controller; consumed by the renderer.
    */
-  role: 'normal' | 'pending' | 'snap-target';
+  role: 'normal' | 'pending' | 'snap-target' | 'station';
   /** When set, this vertex is a draggable edit handle. */
   handle?: { mid: string; vi: number };
 }
@@ -198,13 +199,17 @@ export class MeasureOverlay {
               ? 5
               : vx.role === 'snap-target'
                 ? 5.5
-                : 4.2,
+                : vx.role === 'station'
+                  ? 2.6
+                  : 4.2,
           class:
             vx.role === 'pending'
               ? 'olv-measure-dot olv-measure-dot-pending'
               : vx.role === 'snap-target'
                 ? 'olv-measure-dot olv-measure-dot-snap'
-                : 'olv-measure-dot',
+                : vx.role === 'station'
+                  ? 'olv-measure-dot olv-measure-dot-station'
+                  : 'olv-measure-dot',
         }),
       );
       if (vx.handle) {

@@ -80,6 +80,3 @@ export class ExportRegistry {
     return this._byMode.size;
   }
 }
-
-/** @deprecated Use {@link ExportRegistry}. */
-export { ExportRegistry as ImageExportRegistry };

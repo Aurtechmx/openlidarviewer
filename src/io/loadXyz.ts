@@ -102,6 +102,13 @@ export async function loadXyz(
     global[i * 3 + 1] = ys[i];
     global[i * 3 + 2] = zs[i];
   }
+  // The coordinates now live in `global`; release the JS accumulator arrays so
+  // they aren't held alongside the Float64 copy and the Float32 positions that
+  // `recenter` is about to allocate. On the largest text files this removes a
+  // full redundant copy from peak memory.
+  xs.length = 0;
+  ys.length = 0;
+  zs.length = 0;
   const origin = computeOrigin(min);
   const positions = recenter(global, origin);
 
@@ -115,6 +122,8 @@ export async function loadXyz(
       colors[i] = Math.max(0, Math.min(255, Math.round(v)));
     }
   }
+  // Colour now lives in the typed `colors` array; release the JS accumulator.
+  rgb.length = 0;
 
   return new PointCloud({
     positions,

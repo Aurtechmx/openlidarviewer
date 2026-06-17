@@ -54,8 +54,13 @@ import type { TerrainSuggestionResult } from '../render/terrainSuggestion';
 
 // ── Output buckets ─────────────────────────────────────────────────
 
-/** Point-density bucket. */
-export type DensityBucket = 'sparse' | 'moderate' | 'dense' | 'very-dense';
+/**
+ * Point-density bucket. `'unknown'` is the explicit "we have neither a
+ * measured density nor the point-count / bbox to derive one" reading; the
+ * UI renders it as "—" so a missing signal never displays a confident
+ * "Sparse" reading that would suggest the dataset was actually that thin.
+ */
+export type DensityBucket = 'unknown' | 'sparse' | 'moderate' | 'dense' | 'very-dense';
 
 /**
  * Terrain-complexity bucket. `'unknown'` is the explicit "we have no
@@ -74,6 +79,43 @@ export type GroundVisibilityBucket = 'unknown' | 'poor' | 'fair' | 'good' | 'exc
 
 /** Streaming coverage bucket — mirrors TerrainCoverageMode. */
 export type CoverageBucket = TerrainCoverageMode;
+
+/** The Dataset Intelligence rows that carry a bucket. */
+export type IntelDimension = 'density' | 'complexity' | 'groundVisibility' | 'coverage';
+
+/**
+ * Qualitative signal tier for a Dataset Intelligence row, used to drive a
+ * quiet colour accent on the card. It maps the per-dimension buckets onto a
+ * single honest scale:
+ *   - `strong` / `moderate` / `weak` — the genuine quality axes (how much data,
+ *     how visible the ground, how complete the coverage).
+ *   - `neutral` — terrain complexity is DESCRIPTIVE, not a quality. A rugged
+ *     site is not "worse" than a flat one, so complexity never gets a
+ *     good/bad colour.
+ *   - `unknown` — no signal; rendered muted, mirroring the `—` label.
+ */
+export type SignalTier = 'strong' | 'moderate' | 'weak' | 'neutral' | 'unknown';
+
+/** Map a dimension's bucket onto its honest signal tier (see {@link SignalTier}). */
+export function signalTier(dimension: IntelDimension, bucket: string): SignalTier {
+  if (bucket === 'unknown') return 'unknown';
+  switch (dimension) {
+    case 'density':
+      if (bucket === 'sparse') return 'weak';
+      if (bucket === 'moderate') return 'moderate';
+      return 'strong'; // dense, very-dense
+    case 'groundVisibility':
+      if (bucket === 'poor') return 'weak';
+      if (bucket === 'fair') return 'moderate';
+      return 'strong'; // good, excellent
+    case 'coverage':
+      if (bucket === 'full') return 'strong';
+      if (bucket === 'resident-only') return 'moderate';
+      return 'weak'; // sampled — partial, carries the streaming caveat
+    case 'complexity':
+      return 'neutral'; // descriptive, never judged
+  }
+}
 
 /**
  * Confidence colour band — drives the chip colour, not the value.
@@ -170,8 +212,8 @@ export interface DatasetIntelligence {
  *    typical airborne (low), drone (mid), terrestrial (high) scans.
  *  - Else fall back to `pointCount / bboxVolume` with the same scale.
  *
- * Returns 'sparse' when neither input is available — the card then
- * reads as "Sparse" rather than crashing, which is honest.
+ * Returns 'unknown' when neither input is available — the card then
+ * reads as "—" rather than a confident "Sparse" the data can't support.
  */
 export function classifyDensity(
   input: Pick<DatasetIntelligenceInput, 'pointCount' | 'bboxVolume' | 'residentDensity'>,
@@ -187,7 +229,7 @@ export function classifyDensity(
           input.bboxVolume > 0
         ? input.pointCount / input.bboxVolume
         : NaN;
-  if (!Number.isFinite(candidate) || candidate <= 0) return 'sparse';
+  if (!Number.isFinite(candidate) || candidate <= 0) return 'unknown';
   // Thresholds in points per cubic metre. The bands are deliberately
   // wide so a typical drone scan reads as Dense, a typical airborne
   // scan reads as Moderate, and an interior terrestrial scan reads as
@@ -201,6 +243,8 @@ export function classifyDensity(
 /** Human label for a density bucket. */
 export function densityLabel(b: DensityBucket): string {
   switch (b) {
+    case 'unknown':
+      return '—';
     case 'sparse':
       return 'Sparse';
     case 'moderate':

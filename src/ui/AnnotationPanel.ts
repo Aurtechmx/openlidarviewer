@@ -9,6 +9,7 @@
 import { el } from './dom';
 import type { AnnotationSummary } from '../render/annotate/AnnotationController';
 import type { AnnotationType } from '../render/annotate/types';
+import { describeAnnotationGroups } from '../render/annotate/annotationClustering';
 
 /** How the annotation list is ordered. */
 export type AnnotationSort = 'created' | 'updated' | 'type' | 'title';
@@ -64,6 +65,7 @@ export class AnnotationPanel {
 
   private readonly _cb: AnnotationPanelCallbacks;
   private readonly _list: HTMLElement;
+  private readonly _summary: HTMLElement;
   private readonly _clearBtn: HTMLButtonElement;
   private readonly _search: HTMLInputElement;
   private _summaries: AnnotationSummary[] = [];
@@ -76,6 +78,11 @@ export class AnnotationPanel {
   constructor(callbacks: AnnotationPanelCallbacks) {
     this._cb = callbacks;
     this._list = el('div', { className: 'olv-ap-list' });
+    // Compact grouping summary: total · category breakdown · areas. A status
+    // region so a screen reader hears the count change as annotations are added.
+    this._summary = el('div', { className: 'olv-ap-summary olv-hidden' });
+    this._summary.setAttribute('role', 'status');
+    this._summary.setAttribute('aria-live', 'polite');
 
     this._search = el('input', {
       className: 'olv-ap-search',
@@ -139,6 +146,7 @@ export class AnnotationPanel {
     this.element = el('aside', { className: 'olv-anno-panel olv-hidden' }, [
       head,
       this._search,
+      this._summary,
       this._list,
       el('div', { className: 'olv-ap-footer' }, [this._clearBtn]),
     ]);
@@ -160,6 +168,10 @@ export class AnnotationPanel {
     this._clearBtn.disabled = total === 0;
     // The search box is only meaningful once there is something to filter.
     this._search.classList.toggle('olv-hidden', total === 0);
+    // Grouping summary — shown only once there is a roster to summarise.
+    const summaryText = describeAnnotationGroups(this._summaries);
+    this._summary.textContent = summaryText;
+    this._summary.classList.toggle('olv-hidden', summaryText === '');
     if (total === 0) {
       this._disarmClear();
       this._list.replaceChildren(

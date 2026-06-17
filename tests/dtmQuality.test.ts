@@ -253,6 +253,19 @@ describe('recommendGrid', () => {
     const r = recommendGrid({ pointCount: 10_000_000, widthM: 5000, depthM: 5000, reliefM: 100, memoryBudgetCells: 1_000_000 });
     expect((5000 / r.cellSizeM) * (5000 / r.cellSizeM)).toBeLessThanOrEqual(1_000_000);
   });
+
+  it('reaches the 10/20 m rungs for a large regional extent where 5 m would not fit', () => {
+    // An 8 km x 8 km extent at a 1M-cell budget: 5 m gives (8000/5)^2 = 2.56M
+    // cells (over budget), so the recommendation must climb to a coarser rung
+    // that actually fits — which only exists now that the ladder reaches 10/20.
+    const r = recommendGrid({
+      pointCount: 20_000_000, widthM: 8000, depthM: 8000, reliefM: 120,
+      memoryBudgetCells: 1_000_000,
+    });
+    expect(r.cellSizeM).toBeGreaterThan(5);
+    expect((8000 / r.cellSizeM) * (8000 / r.cellSizeM)).toBeLessThanOrEqual(1_000_000);
+    expect(r.cellOptionsM).toContain(r.cellSizeM);
+  });
 });
 
 // ── Calibration pins ────────────────────────────────────────────────────────

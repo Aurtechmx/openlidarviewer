@@ -26,6 +26,7 @@
  * `<mark>` elements, not raw selection-blue text.
  */
 
+import { clamp } from '../../numeric';
 import { el } from '../dom';
 import {
   TourSession,
@@ -315,8 +316,8 @@ export class TourOverlay {
         break;
     }
     // Clamp into the viewport.
-    cx = Math.max(8, Math.min(vw - cardW - 8, cx));
-    cy = Math.max(8, Math.min(vh - cardH - 8, cy));
+    cx = clamp(cx, 8, vw - cardW - 8);
+    cy = clamp(cy, 8, vh - cardH - 8);
     this._card.style.left = `${cx}px`;
     this._card.style.top = `${cy}px`;
     this._card.classList.remove('olv-hidden');

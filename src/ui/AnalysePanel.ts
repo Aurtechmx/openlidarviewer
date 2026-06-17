@@ -453,7 +453,15 @@ export class AnalysePanel {
     // SURFACE QUALITY is the primary verdict. The score is folded in from the
     // assessment (single source of truth) so the hero is the one headline, e.g.
     // "Surface quality · Good · 84/100".
-    const headline = a.scoreKnown && Number.isFinite(a.score) ? `${a.status} · ${a.score}/100` : a.status;
+    // A Preview score is computed on a PARTIAL / coarse sample (a streaming
+    // working set), so it's provisional — show it with a tilde ("~57/100") so a
+    // complete, perfectly good file doesn't read as if 57 were its real grade.
+    // A non-preview (Good/Limited/Blocked) score is over the full data and shows
+    // the exact number.
+    const approx = tier === 'preview' ? '~' : '';
+    const headline = a.scoreKnown && Number.isFinite(a.score)
+      ? `${a.status} · ${approx}${a.score}/100`
+      : a.status;
     top.append(
       el('span', { className: 'olv-analyse-assess-label', text: 'Surface quality' }),
       el('span', { className: 'olv-analyse-assess-verdict', text: headline }),
@@ -562,14 +570,14 @@ export class AnalysePanel {
       unknown: 2,
       good: 3,
     };
-    const primaryLabels = new Set(['DTM quality', 'Coverage']);
+    const primaryLabels = new Set(['DTM quality', 'Scan scope']);
     const rest = metrics.filter((m) => !primaryLabels.has(m.label));
     const worst = rest
       .slice()
       .sort((x, y) => ratingRank[x.rating] - ratingRank[y.rating])[0];
     if (worst) primaryLabels.add(worst.label);
     const primary = el('div', { className: 'olv-analyse-assess-metrics is-primary' });
-    for (const label of ['DTM quality', 'Coverage', worst?.label]) {
+    for (const label of ['DTM quality', 'Scan scope', worst?.label]) {
       const m = label ? byLabel.get(label) : undefined;
       if (m) primary.append(pill(m));
     }
@@ -581,7 +589,7 @@ export class AnalysePanel {
     // the export-readiness line already shown above) — the chips still render,
     // just flagged so the always-"unknown" pair never masquerades as signal.
     const clusters: Array<{ name: string; labels: string[] }> = [
-      { name: 'Coverage', labels: ['Coverage', 'Empty cells', 'Interpolation'] },
+      { name: 'Coverage', labels: ['Scan scope', 'Empty cells', 'Interpolation'] },
       { name: 'Surface', labels: ['Ground density', 'DTM quality', 'Edge risk'] },
       { name: 'Accuracy', labels: ['Vertical RMSE'] },
       { name: 'Georef', labels: ['CRS', 'Vertical datum'] },
@@ -618,29 +626,39 @@ export class AnalysePanel {
   }
 
   /**
-   * Open the "All metrics" disclosure on desktop, collapse it on mobile. Uses a
-   * matchMedia query (no resize listener churn — set once at render, the panel
-   * re-renders on every analysis). Honesty-first: nothing is removed from the
-   * DOM, only the default open-state differs, so every chip stays reachable.
+   * The deep "All metrics" disclosure (Coverage / Surface / Accuracy / Georef
+   * clusters) defaults COLLAPSED — the decisive chips above it (DTM quality,
+   * Coverage, Interpolation) carry the headline, so first-glance load stays low
+   * and the full breakdown is one click away. Honesty-first: nothing is removed
+   * from the DOM, only the default open-state, so every chip stays reachable.
    */
   private _syncMetricsDisclosure(details: HTMLDetailsElement): void {
-    const narrow =
-      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-        ? window.matchMedia('(max-width: 640px)').matches
-        : false;
-    details.open = !narrow;
+    details.open = false;
   }
 
   private _renderScore(): void {
     this._scoreRow.replaceChildren();
     const qs = this._result?.qualityScore;
     if (!qs) return;
+    // Honesty parity with the headline verdict: when the assessment tier is
+    // `preview` (score computed on a partial / coarse streaming sample), this
+    // DETAILS number is provisional too. Mark it with the same tilde the
+    // verdict uses and tag the band "· preview" so the expanded breakdown can
+    // never read as a settled, full-cloud grade while the hero above it says
+    // "Preview · ~54/100". A non-preview score keeps the exact number.
+    const isPreview = terrainAssessment(this._result!).status.toLowerCase() === 'preview';
+    const approx = isPreview ? '~' : '';
+    const bandText = isPreview ? `Terrain quality · ${qs.band} · preview` : `Terrain quality · ${qs.band}`;
     const head = el('div', { className: 'olv-analyse-score-head' });
     head.append(
-      el('span', { className: `olv-analyse-score-num is-${qs.band}`, text: String(qs.score) }),
+      el('span', { className: `olv-analyse-score-num is-${qs.band}`, text: `${approx}${qs.score}` }),
       el('span', { className: 'olv-analyse-score-of', text: '/ 100' }),
-      el('span', { className: `olv-analyse-score-band is-${qs.band}`, text: `Terrain quality · ${qs.band}` }),
+      el('span', { className: `olv-analyse-score-band is-${qs.band}`, text: bandText }),
     );
+    if (isPreview) {
+      head.title =
+        'Provisional — scored on the streamed-in sample so far. Let the full cloud stream in, then re-run for a settled grade.';
+    }
     this._scoreRow.append(head);
     const bars = el('div', { className: 'olv-analyse-score-bars' });
     for (const c of qs.components) {
@@ -1982,7 +2000,7 @@ export class AnalysePanel {
     // jargon chips (CRS / Datum), reused from contourCopy so the wording
     // is single-sourced and consistent with the Details metrics above.
     const chips: Array<[string, string, Tone, string?]> = [
-      ['Coverage', coverage, tri(q.coverageMode === 'full', true)],
+      ['Scan scope', coverage, tri(q.coverageMode === 'full', true)],
       ['DTM', dtm, q.readiness === 'ready' ? 'good' : q.readiness === 'previewOnly' ? 'warn' : 'bad'],
       ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true), METRIC_TOOLTIPS.crs],
       ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true), METRIC_TOOLTIPS.verticalDatum],

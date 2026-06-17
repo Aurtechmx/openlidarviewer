@@ -10,6 +10,7 @@
  * inside the parse worker (driving the decode).
  */
 
+import { clamp } from '../numeric';
 import type { SourceFormat } from './sniffFormat';
 
 /** How a cloud is turned into the on-screen point set. */
@@ -332,7 +333,7 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     const room = ceiling - fixed;
     const denom = (mediumMultiplier + 1) * perPoint;
     const fittingBudget = room > 0 ? Math.floor(room / denom) : MIN_BUDGET_FLOOR;
-    budget = Math.max(MIN_BUDGET_FLOOR, Math.min(budget, fittingBudget));
+    budget = clamp(budget, MIN_BUDGET_FLOOR, fittingBudget);
     plan = build(budget, 'stride');
   }
 

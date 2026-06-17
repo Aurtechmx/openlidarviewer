@@ -18,8 +18,14 @@
  * already produced by the hold-out validation and the cell-metric rollup.
  */
 
-/** The 95%-confidence multiplier for a normally-distributed vertical error. */
-export const NVA_K = 1.96;
+import { NVA_95_MULTIPLIER } from '../validate/verticalAccuracy';
+
+/**
+ * The 95%-confidence multiplier for a normally-distributed vertical error.
+ * Single-sourced from {@link NVA_95_MULTIPLIER} so the two surfaces can never
+ * drift; kept under the local `NVA_K` name for existing callers and tests.
+ */
+export const NVA_K = NVA_95_MULTIPLIER;
 
 export type UsgsQualityLevel = 'QL0' | 'QL1' | 'QL2' | 'QL3' | 'below-QL3' | 'unknown';
 

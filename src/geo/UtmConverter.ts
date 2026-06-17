@@ -27,6 +27,7 @@
  * Pure of three.js, pdf-lib, DOM. Runs unchanged in Node tests.
  */
 
+import { clamp } from '../numeric';
 import type {
   Bounds3,
   GeographicPoint,
@@ -244,7 +245,7 @@ export function utmZoneFor(lat: number, lon: number): {
   // well-defined at the antimeridian.
   let normLon = ((lon + 180) % 360 + 360) % 360 - 180;
   if (normLon === 180) normLon = -180;
-  const zone = Math.min(60, Math.max(1, Math.floor((normLon + 180) / 6) + 1));
+  const zone = clamp(Math.floor((normLon + 180) / 6) + 1, 1, 60);
   const hemisphere: 'N' | 'S' = lat >= 0 ? 'N' : 'S';
   return { zone, hemisphere };
 }

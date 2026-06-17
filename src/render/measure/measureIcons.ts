@@ -1,7 +1,7 @@
 /**
  * measureIcons.ts
  *
- * A small set of hand-drawn, futuristic line-icons for the measurement
+ * A small set of hand-drawn line-icons for the measurement
  * toolbar — one per measurement kind, plus the auxiliary tools (Lasso) and
  * the action controls (Undo / Units / Done / Finish / Clear).
  *

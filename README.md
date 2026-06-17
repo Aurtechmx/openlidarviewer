@@ -115,15 +115,16 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - A "Project ready" summary card on load, with a suggested navigation mode
 
 ### Annotation, sessions & reporting
-- Annotations — drop categorised, titled markers with notes, browse and search them in a panel, capture the camera viewpoint with each, and undo/redo changes
+- Annotations — drop categorised, titled markers with notes, browse and search them in a panel, capture the camera viewpoint with each, and undo/redo changes; the panel and the PDF report open with a grouping summary (totals, per-category counts, and how many areas the notes fall across)
 - Inspection sessions — export measurements, annotations, and named views to one JSON file and reload them later
-- Workflow recorder — temporarily disabled in 0.4.5 while its shortcut and replay-file experience get a design pass (see the CHANGELOG); `.olvworkflow` recording/replay will return in a later release
+- Workflow recorder — record and replay `.olvworkflow` files of camera moves and tool actions, with a settings popup for file format, save destination, start/stop shortcut, replay speed, a pre-record countdown, captured action families, and loop replay; records actions only, never scan data, so a recipient needs the same scan open to replay
 - Multi-page PDF technical reports — six built-in templates with branding and unit-system awareness
 - Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, and contour map exports
 - Screenshot export that burns in placed measurements and annotations as inspection evidence
 
 ### Interface & accessibility
 - Theme system — Dark, Light, High-contrast — with a persisted preference
+- A colourblind-safe (Okabe-Ito) classification palette, toggled from the Classes panel, so ground, vegetation, buildings, and water stay distinguishable under the common colour-vision deficiencies; the class label and count stay on every row
 - Command palette (`Cmd-K` / `Ctrl-K`) for keyboard-first access to every tool, mode, theme, and export
 - Searchable shortcut sheet (`?`) listing every keybinding
 - An onboarding tour that walks new users through the empty state, tool dock, and Inspector
@@ -160,10 +161,10 @@ score, surface models (DSM, canopy height, slope, multi-directional
 hillshade), a single top-level Terrain Assessment verdict, evidence-graded
 contour export (GeoJSON / SVG / DXF), a printable map sheet, and a
 georeferenced DEM package (ASCII Grid + GeoTIFF). A DTM quality gate
-governs whether a professional contour export is offered, and the panel is
+governs whether terrain-product export is enabled, and the panel is
 explicit that its products are for analysis — not survey certification. The
 per-cell confidence is calibrated against measured hold-out error, not
-asserted: treat terrain products and DEM exports as deliverable-ready only
+asserted: treat terrain products and DEM exports as export-ready only
 when the Terrain Assessment reads Good, and as preview otherwise.
 
 See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md)
@@ -404,19 +405,28 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.4.5**. The full, dated history is in
+The current release is **v0.4.7**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
 
+### v0.4.7 — Accessibility, workflow & honesty fixes
+- A **colourblind-safe (Okabe-Ito) classification palette** toggle, an **annotation grouping** summary (totals, per-category counts, areas) in the panel and the PDF report, and a quiet **signal-tier cue** on the Dataset Intelligence card
+- The **workflow recorder** returns — record and replay `.olvworkflow` camera/tool sequences with a settings popup (file format, save destination, start/stop shortcut, replay speed, pre-record countdown, capture scope, loop)
+- Correctness and honesty fixes: empty files are rejected with a clear message instead of a blank scene; reprojection never ships non-finite coordinates; NAD83↔WGS84-family identity shifts are flagged; measured areas read the same in the report as on screen; unknown signals show "—" rather than a fabricated value
+
+### v0.4.6 — Navigation, design audit & honesty hardening
+- Six axis-aligned **standard views** (Top / Bottom / Front / Back / Left / Right) plus an **Orthographic toggle** (a near-parallel long-lens projection) for distortion-free measuring; **icon + label toolbars** across the dock, measurement bar, Layers and Export; a header **full-screen toggle**; and a mobile bottom-sheet reflow
+- Phase 1 of the **design audit** (visual-only: verdict-as-hero, two-tier surfaces, quieter typography, all themes re-verified WCAG AA) and an equivalence-gated **WebGPU compute seam** where the CPU stays the reference and the GPU must prove per-session equivalence before it is trusted
+- Contour **map-sheet (PDF) fixes** (title/legend overlap, scale-bar unit match, ungeoreferenced sheets drop the graticule and north arrow) and label-vs-value drift fixes
+
 ### v0.4.0 – v0.4.5 — Terrain Intelligence + the honesty pipeline
 - Confidence-aware **DTM and contour pipeline** behind the **Analyse panel** — ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0–100 terrain quality score, surface models (DSM, canopy height, slope, multi-directional hillshade), and a single top-level Terrain Assessment verdict (0.4.0–0.4.4)
-- Evidence-graded **contour export** (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced **DEM package** (ASCII Grid + GeoTIFF), all gated behind a DTM quality check so a professional export is only offered when the surface earns it
+- Evidence-graded **contour export** (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced **DEM package** (ASCII Grid + GeoTIFF), all gated behind a DTM quality check so a terrain-product export is only offered when the surface passes the quality gate
 - One **readiness engine** behind every export verdict, a colourblind-safe **Confidence** colour overlay (twin of Coverage), and **profile intelligence** — summary, station table, CSV, sampler controls (0.4.5)
 - **True measurement units** on foot-CRS scans, **workflow presets** in the Visuals Studio, and an accessible **onboarding tour** (0.4.5)
 - Interior **floor plan** reconstruction — **experimental preview**: a wall-graph + room-segmentation sketch from interior scans, with claim-accurate "preview" labelling throughout; not a survey product
-- **Note:** the **workflow recorder** (`.olvworkflow` record/replay) is temporarily disabled in 0.4.5 while its shortcut and replay-file experience get a design pass — it returns in a later release
 
-### v0.3.9 — Premium interaction surface + terrain foundation
+### v0.3.9 — Refined interaction surface + terrain foundation
 - Smart camera presets — Top, Iso, Oblique, Planar
 - Theme system — Dark, Light, High-contrast — with a persisted preference
 - Command palette (`Cmd-K` / `Ctrl-K`) for keyboard-first access to every tool, mode, theme, and export
@@ -424,7 +434,6 @@ summary.
 - Onboarding tour + searchable shortcut sheet (`?`)
 - Terrain Intelligence (`src/terrain/`) — honesty-contracted terrain type contracts and the informational Dataset Intelligence card
 - Dataset Intelligence card — Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence; honest `—` when no signal is available
-- Inspector mini-dashboards — sparklines and gauges for live scan telemetry
 - Mobile touch model — twist + pinch + pan decomposition with dead zones; opt-in 3-finger zoom for advanced users
 - Mobile Scan Intelligence bottom-sheet — peek + tap-to-toggle; tool-dock overflow "More" disclosure
 - A coordinate bridge with `CrsService`, UTM + lat/lon inspector readouts, and a streaming-aware Visuals Studio with white balance + auto-balance gated to streaming COPC
@@ -436,7 +445,7 @@ summary.
 - FLAI integration — additional curated COPC URLs verified through a CORS + LAS-header probe
 - Polygon completion workflow — click first vertex to close, with visual feedback
 
-### v0.3.7 — Premium graphics + new LiDAR capabilities
+### v0.3.7 — Rendering quality + new LiDAR capabilities
 - EDL + SSAO combined ambient occlusion
 - Hillshade overlay colour mode
 - Local-density adaptive point sizing

@@ -79,7 +79,13 @@ export function classifyLoadError(message: string): LoadErrorCategory {
   if (m.includes('memory') || m.includes('allocation') || m.includes('heap')) {
     return 'memory-constraint';
   }
-  if (m.includes('header') || m.includes('malformed') || m.includes('invalid')) {
+  if (
+    m.includes('header') ||
+    m.includes('malformed') ||
+    m.includes('invalid') ||
+    m.includes('empty') ||
+    m.includes('no points')
+  ) {
     return 'malformed-file';
   }
   return 'decode-failure';

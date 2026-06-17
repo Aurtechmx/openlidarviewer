@@ -40,6 +40,23 @@ export interface MetadataInputs {
    * the row list is byte-identical to the pre-feature output.
    */
   readonly classScopeNote?: string;
+  /**
+   * Streaming-preview accounting for COPC / EPT scans. When the report is
+   * generated mid-stream, every figure in the PDF describes the FULL source
+   * cloud, but only a resident subset has actually been decoded into memory.
+   * This optional block lets the dataset summary disclose how much of the
+   * cloud was loaded at export time — an honesty row so a reader does not
+   * assume the whole cloud was inspected. Absent for fully-static formats
+   * (LAS / PLY / E57 / …), where every point is resident by definition.
+   */
+  readonly streamingResident?: {
+    /** Points decoded + resident in the viewer at export time. */
+    readonly points: number;
+    /** Resident octree nodes at export time. */
+    readonly nodes: number;
+    /** Total known octree nodes in the hierarchy. */
+    readonly totalNodes: number;
+  };
 }
 
 /** Format a metre value: km / m / cm depending on magnitude. */
@@ -55,6 +72,14 @@ function formatMetres(m: number): string {
 function formatInt(n: number): string {
   if (!Number.isFinite(n)) return 'unknown';
   return n.toLocaleString('en-US');
+}
+
+/** Compact point count — "15.7M" / "4.2M" / "950K" / "420". Mirrors the live panel. */
+function formatCompactCount(n: number): string {
+  if (!Number.isFinite(n)) return 'unknown';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return `${Math.round(n)}`;
 }
 
 /**
@@ -78,6 +103,30 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     { label: 'File',   value: inputs.fileName },
     { label: 'Format', value: inputs.format },
     { label: 'Points', value: formatInt(inputs.sourcePointCount) },
+  );
+  // Streaming-preview disclosure — for a COPC / EPT scan exported mid-stream,
+  // surface how much of the cloud is actually resident. Reads directly below
+  // the full-cloud "Points" total so the relationship is unambiguous, and
+  // tells the reviewer the figures reflect a partial preview, not the full
+  // decode. Omitted entirely for static formats (every point resident).
+  const sr = inputs.streamingResident;
+  if (sr && Number.isFinite(sr.points) && sr.points > 0) {
+    const total = inputs.sourcePointCount;
+    const pct =
+      Number.isFinite(total) && total > 0
+        ? Math.min(100, Math.round((sr.points / total) * 100))
+        : NaN;
+    const nodePart =
+      Number.isFinite(sr.totalNodes) && sr.totalNodes > 0
+        ? ` · ${sr.nodes}/${sr.totalNodes} nodes`
+        : '';
+    const pctPart = Number.isFinite(pct) ? ` (${pct}%${nodePart})` : '';
+    rows.push({
+      label: 'Loaded',
+      value: `${formatCompactCount(sr.points)} of ${formatCompactCount(total)} pts${pctPart} — streaming preview`,
+    });
+  }
+  rows.push(
     { label: 'Width',  value: formatMetres(inputs.width) },
     { label: 'Depth',  value: formatMetres(inputs.depth) },
     { label: 'Height', value: formatMetres(inputs.height) },

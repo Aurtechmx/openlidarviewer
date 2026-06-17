@@ -451,7 +451,6 @@ export class Inspector {
   // active and their streaming-equivalents in StreamingPanel take over.
   private _layersSection!: HTMLElement;
   private _colorBySection!: HTMLElement;
-  private _pointSizeSection!: HTMLElement;
   private _renderingSection!: HTMLElement;
   private _exportSection!: HTMLElement;
   private readonly _viewList = el('div', { className: 'olv-views' });
@@ -484,6 +483,7 @@ export class Inspector {
   private _reportSelect: HTMLSelectElement | null = null;
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
+  private readonly _pointSizeValue: HTMLElement;
   private readonly _edlChip: HTMLButtonElement;
   private readonly _edlStrengthSlider: HTMLInputElement;
   private readonly _edlStrengthRow: HTMLElement;
@@ -505,7 +505,13 @@ export class Inspector {
     slider.max = '8';
     slider.step = '0.5';
     slider.value = '1';
-    slider.addEventListener('input', () => this._cb.onPointSize(slider.valueAsNumber));
+    // Live numeric readout so the user knows the exact point size they're
+    // dragging (e.g. "1.0 px"), not just a slider position.
+    this._pointSizeValue = el('span', { className: 'olv-render-value', text: '1.0 px' });
+    slider.addEventListener('input', () => {
+      this._pointSizeValue.textContent = `${slider.valueAsNumber.toFixed(1)} px`;
+      this._cb.onPointSize(slider.valueAsNumber);
+    });
     this._pointSizeSlider = slider;
 
     this._sizeModeChips = (['adaptive', 'fixed'] as PointSizeMode[]).map((mode) => {
@@ -578,7 +584,10 @@ export class Inspector {
     // sub-group so first-paint density stays low and every raw
     // tunable is one place.
     const renderingBody = el('div', { className: 'olv-render-group' }, [
-      el('div', { className: 'olv-render-sublabel', text: 'Point size' }),
+      el('div', { className: 'olv-render-sublabel olv-render-sublabel-row' }, [
+        el('span', { text: 'Point size' }),
+        this._pointSizeValue,
+      ]),
       el('div', { className: 'olv-chips' }, this._sizeModeChips.map((c) => c.chip)),
       slider,
       el('div', { className: 'olv-render-sublabel', text: 'Splat mode' }),
@@ -963,11 +972,10 @@ export class Inspector {
       open: true,
     });
     // Point size folded into Rendering as a sub-group — the visible
-    // section reference still exists so streaming-mode visibility
-    // toggling keeps working, but it now points at the same node as
-    // the Rendering section (one element, one slot in the panel).
+    // Point size, point-size mode, EDL and antialiasing share this one
+    // "Rendering" section; it stays visible during streaming so point
+    // thickness remains adjustable on a streaming COPC / EPT.
     this._renderingSection = collapsibleSection('Rendering', renderingBody);
-    this._pointSizeSection = this._renderingSection;
     this._exportSection = collapsibleSection('Export', exporter);
 
     // Dataset Intelligence — informational summary of the Terrain
@@ -1083,9 +1091,13 @@ export class Inspector {
     const hidden = streaming ? 'none' : '';
     this._layersSection.style.display = hidden;
     this._colorBySection.style.display = hidden;
-    this._pointSizeSection.style.display = hidden;
-    this._renderingSection.style.display = hidden;
     this._exportSection.style.display = hidden;
+    // The Render-quality section (point size, point-size mode, EDL,
+    // antialiasing) stays visible while streaming. Each control applies to the
+    // resident streaming node materials and every newly-decoded node inherits
+    // the current setting at build time, so they are fully functional — and
+    // none has a StreamingPanel equivalent, so hiding the section removed
+    // point-thickness control on a streaming COPC.
     this.element.classList.toggle('olv-inspector-streaming', streaming);
   }
 
@@ -1285,6 +1297,7 @@ export class Inspector {
   /** Reflect the viewer's current render-quality state in the controls. */
   syncRendering(state: RenderingState): void {
     this._pointSizeSlider.value = String(state.pointSize);
+    this._pointSizeValue.textContent = `${state.pointSize.toFixed(1)} px`;
     this._edlChip.classList.toggle('olv-chip-active', state.edlEnabled);
     this._edlStrengthRow.classList.toggle('olv-hidden', !state.edlEnabled);
     this._edlStrengthSlider.value = String(state.edlStrength);

@@ -317,4 +317,29 @@ describe('scheduleReplay — fake-clock scheduler', () => {
     scheduleReplay(empty, () => void 0, deps);
     expect(completedCount()).toBe(1);
   });
+
+  it('speed=2 halves every delay; speed=0 makes replay instant', () => {
+    const fast = makeFakeDeps();
+    scheduleReplay(exampleWorkflow(), () => void 0, { ...fast.deps, speed: 2 });
+    expect(fast.timers.map((t) => t.ms)).toEqual([0, 750, 1500]);
+
+    const instant = makeFakeDeps();
+    scheduleReplay(exampleWorkflow(), () => void 0, { ...instant.deps, speed: 0 });
+    expect(instant.timers.map((t) => t.ms)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('serializeWorkflow — compact option', () => {
+  it('minifies when compact, stays pretty by default', () => {
+    const w = buildWorkflow(
+      [{ type: 'frame-all', tMs: 0 }],
+      { recordedAt: '2026-06-01T00:00:00.000Z' },
+    );
+    expect(serializeWorkflow(w, { compact: true })).not.toContain('\n');
+    expect(serializeWorkflow(w)).toContain('\n');
+    // Both parse back to the same workflow.
+    expect(JSON.parse(serializeWorkflow(w, { compact: true }))).toEqual(
+      JSON.parse(serializeWorkflow(w)),
+    );
+  });
 });

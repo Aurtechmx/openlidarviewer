@@ -35,11 +35,18 @@ const ICON_SOLO =
   '<path d="M12 3 20 7 12 11 4 7Z" fill="currentColor" stroke="none"/>' +
   '<path d="M4 11l8 4 8-4" stroke-opacity="0.4"/>' +
   '<path d="M4 15l8 4 8-4" stroke-opacity="0.4"/></svg>';
-import { classColor } from '../render/colorModes';
+import {
+  classColor,
+  setColorblindSafeClasses,
+  colorblindSafeClasses,
+} from '../render/colorModes';
 import { classificationLabel } from '../render/pointInfo';
 
 /** A change the panel reports back to the host after a user interaction. */
 export type ClassLegendChange = (visibility: ClassVisibility) => void;
+
+/** Fired after the user toggles the colourblind-safe class palette. */
+export type ClassPaletteChange = (colorblindSafe: boolean) => void;
 
 export class ClassLegendPanel {
   /** The panel element — append to the left-panels column (see main.ts). */
@@ -57,11 +64,23 @@ export class ClassLegendPanel {
   /** Host callback fired after any user-driven visibility change. */
   private _onChange: ClassLegendChange | null = null;
 
+  /** Host callback fired after the colourblind-safe palette is toggled. */
+  private _onPaletteChange: ClassPaletteChange | null = null;
+
+  /** The colourblind-safe palette checkbox. */
+  private _cvToggle!: HTMLInputElement;
+
   /** The scrolling list of class rows. */
   private readonly _list: HTMLElement;
 
   /** The "Filtered — showing N of M classes" banner (hidden when unfiltered). */
   private readonly _banner: HTMLElement;
+
+  /** The "Derived (heuristic)" provenance caption (hidden unless derived). */
+  private readonly _provenance: HTMLElement;
+
+  /** "Counts accrue as the cloud streams" caption (hidden unless streaming). */
+  private readonly _streamingNote: HTMLElement;
 
   /** The "Show all" reset button. */
   private readonly _showAllBtn: HTMLButtonElement;
@@ -94,6 +113,29 @@ export class ClassLegendPanel {
       if (e.target === head || e.target === title) toggleCollapsed();
     });
 
+    // Honest "derived" caption — shown only when the classification was
+    // produced by the viewer's heuristic classifier, so the legend never
+    // reads as a producer's authoritative classification. Hidden by default.
+    this._provenance = el('div', {
+      className: 'olv-cl-derived olv-hidden',
+      text: 'Derived (heuristic) — not survey-grade. Validate before relying on it.',
+    });
+    this._provenance.setAttribute('role', 'note');
+
+    // Streaming caption — for a COPC/EPT scan the per-class counts are a
+    // RUNNING TALLY over the nodes decoded so far (the legend folds new counts
+    // as nodes arrive), so they exceed the currently-resident point count and
+    // are not full-file totals. Shown only while streaming so a reviewer never
+    // reads "Building 7,833" as an authoritative whole-cloud figure.
+    // Distinct class from the "Derived (heuristic)" caption (olv-cl-derived) —
+    // they're independent captions that can show at the same time, and tests /
+    // styling must be able to target each on its own. Shares the caption CSS.
+    this._streamingNote = el('div', {
+      className: 'olv-cl-streamnote olv-hidden',
+      text: 'Counts accrue as the cloud streams — points decoded so far, not full-file totals.',
+    });
+    this._streamingNote.setAttribute('role', 'note');
+
     this._banner = el('div', { className: 'olv-cl-banner olv-hidden' });
     this._banner.setAttribute('role', 'status');
     this._banner.setAttribute('aria-live', 'polite');
@@ -117,12 +159,33 @@ export class ClassLegendPanel {
       text: 'This scan has no classification data.',
     });
 
+    // Colourblind-safe palette toggle. The class WORD and the count stay on
+    // every row, so colour is supplementary — but the default ASPRS palette
+    // puts green vegetation beside red buildings, the classic red/green trap.
+    // This swaps to the Okabe-Ito categorical palette that survives every
+    // common colour-vision-deficiency type.
+    this._cvToggle = el('input', { type: 'checkbox', className: 'olv-cl-cvd-input' });
+    this._cvToggle.checked = colorblindSafeClasses();
+    this._cvToggle.addEventListener('change', () => {
+      const on = this._cvToggle.checked;
+      setColorblindSafeClasses(on);
+      this._render(); // repaint the legend swatches from the new palette
+      this._onPaletteChange?.(on);
+    });
+    const cvLabel = el('label', { className: 'olv-cl-cvd' }, [
+      this._cvToggle,
+      el('span', { text: 'Colourblind-safe colours' }),
+    ]);
+    cvLabel.title = 'Recolour the classes with a colourblind-safe (Okabe-Ito) palette';
+
     this.element = el('aside', { className: 'olv-class-panel olv-hidden' }, [
       head,
+      this._provenance,
+      this._streamingNote,
       this._banner,
       this._list,
       this._empty,
-      el('div', { className: 'olv-cl-footer' }, [this._showAllBtn]),
+      el('div', { className: 'olv-cl-footer' }, [this._showAllBtn, cvLabel]),
     ]);
   }
 
@@ -146,6 +209,22 @@ export class ClassLegendPanel {
     this._onChange = cb;
   }
 
+  /** Register the host callback fired after the palette toggle changes. */
+  onPaletteChange(cb: ClassPaletteChange): void {
+    this._onPaletteChange = cb;
+  }
+
+  /**
+   * Apply a persisted colourblind-safe preference on startup. Flips the shared
+   * palette, syncs the checkbox, and repaints the swatches — without firing
+   * `onPaletteChange` (the host applies the initial recolour itself on load).
+   */
+  setColorblindSafe(on: boolean): void {
+    setColorblindSafeClasses(on);
+    this._cvToggle.checked = on;
+    this._render();
+  }
+
   /** The visibility state the host applies to the GPU mask. */
   getVisibility(): ClassVisibility {
     return this._visibility;
@@ -162,7 +241,30 @@ export class ClassLegendPanel {
     this._counts = new Map(counts);
     this._hasChannel = this._presentCodes().length > 0;
     this._visibility = new ClassVisibility();
+    // A fresh classification set is authoritative by default; the derive flow
+    // re-flags it after this call. Reset so a derived caption never lingers
+    // onto a subsequently-loaded file-classified scan.
+    this.setDerivedProvenance(false);
+    this.setStreamingMode(false);
     this._render();
+  }
+
+  /**
+   * Show or hide the "Derived (heuristic) — not survey-grade" caption. The host
+   * calls this with `true` right after applying a derived classification, so
+   * the legend honestly reads as heuristic rather than authoritative.
+   */
+  setDerivedProvenance(on: boolean): void {
+    this._provenance.classList.toggle('olv-hidden', !on);
+  }
+
+  /**
+   * Show or hide the "Counts accrue as the cloud streams" caption. The host
+   * calls this with `true` for a streaming COPC/EPT scan, so the per-class
+   * counts (a running tally over decoded nodes) never read as full-file totals.
+   */
+  setStreamingMode(on: boolean): void {
+    this._streamingNote.classList.toggle('olv-hidden', !on);
   }
 
   /**

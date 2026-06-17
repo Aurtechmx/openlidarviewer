@@ -222,7 +222,12 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   // ── supporting metrics (real values, each with a plain rating) ────────
   const cov = describeCoverage(coverageMode);
   const supportingMetrics: SupportingMetric[] = [
-    { label: 'Coverage', value: cov.value, rating: cov.rating },
+    // "Scan scope" — full / resident-only / sampled — is WHICH part of the
+    // cloud was analysed, not a coverage percentage. Naming it 'Coverage' put
+    // a non-numeric scope chip ("Coverage: resident-only") next to the measured
+    // coverage figure ("Coverage 35%") under the same word; "Scan scope" keeps
+    // the two distinct.
+    { label: 'Scan scope', value: cov.value, rating: cov.rating },
     {
       label: 'Ground density',
       value: density > 0 ? `${density.toFixed(1)} pts/m²` : 'unknown',
@@ -358,7 +363,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
           : 'Insufficient data quality for reliable terrain products.';
     } else {
       // Preview: the gate's own "Preview only: …" wording matches this tier.
-      reason = gateReason ?? (caps.length > 0 ? capitalise(joinReasons(caps)) + '.' : 'Usable for inspection, not for final terrain products.');
+      reason = gateReason ?? (caps.length > 0 ? capitalise(joinReasons(caps)) + '.' : 'Usable for inspection and measurement, not yet for terrain-product export.');
     }
   }
 

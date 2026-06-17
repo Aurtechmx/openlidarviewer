@@ -83,7 +83,7 @@ describe('grade meanings', () => {
   });
 });
 
-describe('voice guard (stop-slop / avoid-ai-writing)', () => {
+describe('voice guard — plain language, no marketing filler', () => {
   it('contains no marketing filler', () => {
     const banned = [
       'leverage',

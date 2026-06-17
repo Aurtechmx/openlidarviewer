@@ -33,11 +33,6 @@ export type ExportMode =
   /** Topographic-style contour lines over the elevation raster. */
   | 'contour';
 
-// Legacy alias retained so any downstream import that still reaches for
-// `ImageExportMode` keeps compiling.
-/** @deprecated Use {@link ExportMode}. */
-export type ImageExportMode = ExportMode;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Scene adapter — what every exporter needs from the Viewer
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,12 +170,6 @@ export interface ExportContext {
   readonly classScopeStamp?: string;
 }
 
-/**
- * @deprecated Use {@link ExportContext}. The legacy alias remains so existing
- * downstream image-export consumers continue to type-check.
- */
-export type ImageExportContext = ExportContext;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Mode-specific options
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,11 +276,6 @@ export type ExportOptions =
   | ContourOptions
   | CommonExportOptions;
 
-/**
- * @deprecated Use {@link CommonExportOptions} or a mode-specific variant.
- */
-export type ImageExportOptions = CommonExportOptions;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Result + factory contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,11 +322,6 @@ export interface ExportResult {
   worldFile?: ExportWorldFile;
 }
 
-/**
- * @deprecated Use {@link ExportResult}.
- */
-export type ImageExportResult = ExportResult;
-
 /** Reason an exporter is unavailable on this device + cloud. */
 export interface ExportUnavailableReason {
   readonly mode: ExportMode;
@@ -366,6 +345,3 @@ export interface ExportFactory {
   /** Produce the exported image. */
   render(context: ExportContext, options: ExportOptions): Promise<ExportResult>;
 }
-
-/** @deprecated Use {@link ExportFactory}. */
-export type ImageExportFactory = ExportFactory;

@@ -31,7 +31,11 @@ import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
+import { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
+import { RecommendedViewChip } from './ui/RecommendedViewChip';
+import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
+import { matchesShortcut } from './render/workflow/workflowConfig';
 import {
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
@@ -51,6 +55,7 @@ import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import { countClasses } from './render/class/classHistogram';
+import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
@@ -101,7 +106,11 @@ import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
 import { scanReport } from './analysis/modules/scanReport';
-import { availableModes, defaultMode } from './render/colorModes';
+import {
+  availableModes,
+  defaultMode,
+  colorblindSafeClasses,
+} from './render/colorModes';
 import type { ColorMode } from './render/colorModes';
 import type { PointCloud } from './model/PointCloud';
 // `detectCopc` is a tiny leaf — kept static so `handleFile` can branch on it
@@ -1154,8 +1163,49 @@ const crsCoordinator = createCrsCoordinator({
 // mounted — and the shortcut / palette entries only registered —
 // when the flag is on.
 const workflowController = new WorkflowController();
+const workflowConfigPanel = new WorkflowConfigPanel();
 if (WORKFLOW_RECORDER_ENABLED) {
   stage.overlay.append(workflowController.badge);
+  stage.overlay.append(workflowConfigPanel.element);
+  // Edits in the settings popup take effect immediately and persist.
+  workflowConfigPanel.onChange((cfg) => {
+    workflowController.setConfig(cfg);
+    persistPrefs();
+  });
+}
+
+/** Save a finished workflow and confirm (or report a cancelled picker). */
+async function saveWorkflowWithToast(
+  workflow: import('./render/workflow/workflowRecorder').Workflow,
+): Promise<void> {
+  const name = await workflowController.save(workflow);
+  if (name === null) {
+    showLassoToast('Workflow · save cancelled.');
+    return;
+  }
+  showLassoToast('Workflow saved. Replay needs the same scan open on the other end.');
+}
+
+/** Start (with the configured countdown) the right toast. */
+function startWorkflowRecording(): void {
+  const startedNow = workflowController.requestStartRecording();
+  if (startedNow) {
+    showLassoToast('Workflow · recording started. Use the badge to stop.');
+  } else if (workflowController.config.countdownSeconds > 0) {
+    const secs = workflowController.config.countdownSeconds;
+    showLassoToast(`Workflow · recording starts in ${secs}s…`);
+  }
+}
+
+/** Toggle the recorder: idle → start, recording → stop + save. */
+function toggleWorkflowRecord(): void {
+  if (workflowController.state === 'recording') {
+    const workflow = workflowController.stopRecording();
+    if (workflow) void saveWorkflowWithToast(workflow);
+    else showLassoToast('Workflow · nothing recorded yet.');
+  } else {
+    startWorkflowRecording();
+  }
 }
 
 // v0.3.9 — command palette (Cmd-K / Ctrl-K). The host owns the
@@ -1164,6 +1214,10 @@ if (WORKFLOW_RECORDER_ENABLED) {
 // duplicate truth.
 const commandPalette = new CommandPalette();
 stage.overlay.append(commandPalette.element);
+
+// A dismissible "recommended view" chip surfaced after a scan loads.
+const recommendedViewChip = new RecommendedViewChip();
+stage.overlay.append(recommendedViewChip.element);
 
 // v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
 // action registry as the palette so adding a new action makes it
@@ -1217,6 +1271,64 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
       }
       break;
     }
+  }
+}
+
+/**
+ * Derive a heuristic classification for the active cloud when it has none.
+ * Runs the unsupervised classifier OFF the main thread (with a safe fallback),
+ * applies the codes, colours the cloud by class, rebuilds the legend, and
+ * reports the result with the honest "derived, not survey-grade" caveat.
+ */
+let classifyRunning = false;
+async function runDeriveClassification(): Promise<void> {
+  if (classifyRunning) return;
+  if (!activeId) {
+    showLassoToast('Classify · open a scan first.');
+    return;
+  }
+  const cloud = viewer.getCloud(activeId);
+  if (!cloud) {
+    showLassoToast('Classify · this works on a loaded (non-streaming) scan.');
+    return;
+  }
+  if (cloud.classification && !cloud.classificationIsDerived) {
+    showLassoToast('Classify · this scan already carries a classification.');
+    return;
+  }
+  classifyRunning = true;
+  showLassoToast('Classify · deriving ground / vegetation / building…');
+  try {
+    const id = activeId;
+    const result = await deriveClassificationAsync(
+      cloud.positions,
+      cloud.pointCount,
+      {},
+      undefined,
+      undefined,
+      // Live phase in the toast so a multi-second derive reads as progress,
+      // not a hang. (Off-thread, so the UI repaints between phases.)
+      (phase) => showLassoToast(`Classify · ${phase}…`),
+    );
+    if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    viewer.applyDerivedClassification(id, result.codes);
+    classLegendPanel.setClasses(countClasses(result.codes));
+    classLegendPanel.setDerivedProvenance(true);
+    classLegendPanel.show();
+    // Honest one-line breakdown of the top classes derived.
+    const total = cloud.pointCount || 1;
+    const top = Object.entries(result.counts)
+      .map(([code, n]) => ({ code: Number(code), n }))
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 3)
+      .map((e) => `${classificationLabel(e.code)} ${Math.round((e.n / total) * 100)}%`)
+      .join(' · ');
+    showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/abort/i.test(msg)) showLassoToast(`Classify · failed: ${msg}`);
+  } finally {
+    classifyRunning = false;
   }
 }
 
@@ -1313,6 +1425,16 @@ function buildActionRegistry(): Action[] {
       },
     },
     {
+      id: 'tool.classify',
+      title: 'Classify (derive)',
+      section: 'Tools',
+      hint: 'Derive a ground / vegetation / building classification for an unclassified scan (heuristic).',
+      keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],
+      run: () => {
+        void runDeriveClassification();
+      },
+    },
+    {
       id: 'tool.lasso-volume',
       title: 'Lasso volume',
       section: 'Tools',
@@ -1360,12 +1482,7 @@ function buildActionRegistry(): Action[] {
           'Records camera moves and tool actions only — to replay later you ' +
           '(or the recipient) need the same scan open.',
         keywords: ['record', 'macro', 'demo'],
-        run: () => {
-          if (workflowController.state === 'idle') {
-            workflowController.startRecording();
-            showLassoToast('Workflow · recording started. Use the badge to stop.');
-          }
-        },
+        run: () => startWorkflowRecording(),
       },
       {
         id: 'workflow.stop-save',
@@ -1378,7 +1495,7 @@ function buildActionRegistry(): Action[] {
         run: () => {
           const workflow = workflowController.stopRecording();
           if (workflow) {
-            workflowController.download(workflow);
+            void workflowController.save(workflow);
             showLassoToast(
               'Workflow saved. Replay needs the same scan open on the other end.',
             );
@@ -1417,6 +1534,14 @@ function buildActionRegistry(): Action[] {
           document.body.append(input);
           input.click();
         },
+      },
+      {
+        id: 'workflow.settings',
+        title: 'Workflow recorder settings…',
+        section: 'Workflow',
+        hint: 'Format, save location, shortcut, replay speed, capture scope.',
+        keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
+        run: () => workflowConfigPanel.open(),
       },
     );
   }
@@ -1511,30 +1636,18 @@ window.addEventListener('keydown', (e) => {
 // is true (it currently is not; see WorkflowController.ts). With the flag
 // off the chord falls through untouched to the browser, exactly as if the
 // feature never existed.
+// The start/stop chord is user-configurable (default ⌘/Ctrl+Shift+U) via the
+// recorder settings popup; the handler reads the live config each press, so a
+// rebind takes effect with no re-binding. A text field with focus suppresses
+// it (so capturing a new chord in the settings popup never also toggles).
 if (WORKFLOW_RECORDER_ENABLED) {
   window.addEventListener('keydown', (e) => {
-    const isRecorder =
-      (e.code === 'KeyU' || e.key === 'u' || e.key === 'U') &&
-      e.shiftKey &&
-      (e.metaKey || e.ctrlKey);
-    if (!isRecorder) return;
+    if (e.defaultPrevented) return;
+    const active = document.activeElement;
+    if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+    if (!matchesShortcut(e, workflowController.config.shortcut)) return;
     e.preventDefault();
-    if (workflowController.state === 'recording') {
-      const workflow = workflowController.stopRecording();
-      if (workflow) {
-        workflowController.download(workflow);
-        // v0.3.10 — match the toast wording from the
-        // command-palette path so users see the same expectation either way.
-        showLassoToast(
-          'Workflow saved. Replay needs the same scan open on the other end.',
-        );
-      } else {
-        showLassoToast('Workflow · nothing recorded yet.');
-      }
-    } else if (workflowController.state === 'idle') {
-      workflowController.startRecording();
-      showLassoToast('Workflow · recording started. Use the badge to stop.');
-    }
+    toggleWorkflowRecord();
   });
 }
 
@@ -1851,6 +1964,19 @@ classLegendPanel.onChange((visibility) => {
     if (debug) console.warn('[class-legend] scoped report refresh threw', err);
   }
 });
+classLegendPanel.onPaletteChange((on) => {
+  // The colourblind toggle also re-themes the categorical status dots (Dataset
+  // Intelligence tier dots + confidence chip) via a body class.
+  document.body.classList.toggle('olv-cvd', on);
+  // Persist the choice and recolour any classification view in place. Only the
+  // classification colour pass reads the class palette, so other modes need no
+  // refresh; the legend repaints its own swatches.
+  persistPrefs();
+  if (currentColorMode === 'classification') {
+    if (activeId) viewer.setColorMode(activeId, 'classification');
+    if (viewer.hasStreamingCloud) viewer.setStreamingColorMode('classification');
+  }
+});
 
 /**
  * Re-render the Inspector's scan report under the current class filter. Routes
@@ -1886,6 +2012,10 @@ void viewerLoaded.then(() => {
     if (!classLegendPanel.hasClasses()) {
       // First node to carry classification on this streaming scan — seed + show.
       classLegendPanel.setClasses(countClasses(classes));
+      // Streaming counts are a running tally over decoded nodes (folded below
+      // as more arrive), not full-file totals — disclose that in the legend.
+      // setClasses() resets the flag, so set it after seeding.
+      classLegendPanel.setStreamingMode(true);
       if (classLegendPanel.hasClasses()) classLegendPanel.show();
     } else {
       classLegendPanel.mergeClasses(countClasses(classes));
@@ -3301,6 +3431,11 @@ async function generateReportPdf(templateId: string): Promise<void> {
       : NaN;
     const crs = streamingCloud.crs();
     const modes = streamingCloud.availableColorModes();
+    // Streaming-preview accounting — how much of the cloud is resident at
+    // export time. Surfaced as a "Loaded" row so the PDF discloses that a
+    // mid-stream report describes the full cloud but inspected only the
+    // resident subset. counts().known is the total known node count.
+    const nodeCounts = streamingCloud.counts();
     metadata = {
       fileName: streamingCloud.name,
       format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
@@ -3309,6 +3444,11 @@ async function generateReportPdf(templateId: string): Promise<void> {
       hasRgb: modes.includes('rgb'),
       hasIntensity: modes.includes('intensity'),
       hasClassification: modes.includes('classification'),
+      streamingResident: {
+        points: streamingCloud.residentPointCount,
+        nodes: nodeCounts.resident,
+        totalNodes: nodeCounts.known,
+      },
       ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.
@@ -3485,6 +3625,8 @@ function persistPrefs(): void {
     antialiasing: viewer.antialiasing,
     unitSystem: viewer.measure.unitSystem,
     touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
+    colorblindSafeClasses: colorblindSafeClasses(),
+    workflow: workflowController.config,
   });
 }
 
@@ -3515,6 +3657,14 @@ function applyPrefs(): void {
   if (p.unitSystem !== undefined) viewer.measure.setUnitSystem(p.unitSystem);
   if (p.touchModel !== undefined) {
     viewer.setTwoFingerTwistEnabled(p.touchModel === 'standard');
+  }
+  if (p.colorblindSafeClasses !== undefined) {
+    classLegendPanel.setColorblindSafe(p.colorblindSafeClasses);
+    document.body.classList.toggle('olv-cvd', p.colorblindSafeClasses);
+  }
+  if (p.workflow !== undefined) {
+    workflowController.setConfig(p.workflow);
+    workflowConfigPanel.setConfig(p.workflow);
   }
 }
 
@@ -3798,6 +3948,15 @@ async function handleFile(file: File): Promise<void> {
     );
     await viewer.ready;
 
+    // NB: static layers are ADDITIVE — dropping/opening a second scan keeps the
+    // first as a separate layer (the LAYERS panel lists each with its own ✕ to
+    // free it). We deliberately do NOT clear prior static clouds here: an
+    // earlier "free the previous scan on re-open" optimisation mistook the
+    // retained layer for a leak and silently broke multi-scan loading. GPU for
+    // multiple layers is intended; the user releases a layer via its ✕, which
+    // routes through removeCloud() and frees the same buffers. (Streaming opens
+    // remain exclusive and still call clearOpenStaticLayers below.)
+
     dropZone.setProgress(formatProgress({ stage: 'uploading' }));
     stage.hideEmptyState();
     const uploadStartedAt = performance.now();
@@ -4075,10 +4234,7 @@ async function openStreamingCopc(
     : undefined;
 
   // A streaming scan is exclusive — clear any open static layers first.
-  for (const id of viewer.clouds()) {
-    viewer.removeCloud(id);
-    inspector.removeCloud(id);
-  }
+  clearOpenStaticLayers();
   stage.hideEmptyState();
   // Local-first counter — categorical only ('copc' or 'ept'); never the URL.
   recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
@@ -4353,10 +4509,7 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     if (controller.signal.aborted) throw new LoadCancelledError();
 
     // A streaming scan is exclusive — clear any open static layers first.
-    for (const id of viewer.clouds()) {
-      viewer.removeCloud(id);
-      inspector.removeCloud(id);
-    }
+    clearOpenStaticLayers();
     stage.hideEmptyState();
 
     const decoder = new EptChunkDecoder(cloud);
@@ -4788,6 +4941,14 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
   });
+  // Suggest the camera preset best suited to the scan — a dismissible chip the
+  // user can accept with one click or ignore (it auto-hides).
+  const rec = recommendCameraPreset({
+    hasRgb: cloud.colors !== undefined,
+    hasClassification: cloud.classification !== undefined,
+    flatness: flatnessFromBounds(b.min, b.max),
+  });
+  recommendedViewChip.show(rec, () => viewer.setCameraPreset(rec.preset));
 }
 
 /** Fetch a built-in sample (a local static file — no upload) and load it. */
@@ -4929,6 +5090,25 @@ function removeCloud(id: string): void {
   reducedById.delete(id);
   if (activeId === id) activeId = null;
   if (viewer.clouds().length === 0) resetToEmptyState();
+}
+
+/**
+ * Free every currently-open static cloud before a new scan takes over — the
+ * mesh's GPU buffers (geometry + material + colour/class attributes) AND the
+ * retained source-file + reduced-flag map entries. A new open (static OR
+ * streaming) replaces the previous scan, so without this the prior cloud's GPU
+ * memory and File reference leak on every reopen (`activeId` is overwritten, so
+ * `removeCloud` could never reach the old id). Does NOT reset to the empty
+ * state — the caller adds the replacement immediately.
+ */
+function clearOpenStaticLayers(): void {
+  for (const id of viewer.clouds()) {
+    viewer.removeCloud(id);
+    inspector.removeCloud(id);
+    sourceFileById.delete(id);
+    reducedById.delete(id);
+    if (activeId === id) activeId = null;
+  }
 }
 
 /**

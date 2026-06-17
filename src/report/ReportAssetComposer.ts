@@ -30,6 +30,7 @@ import {
 } from './ReportMetadataSection';
 import { buildAnnotationRows } from './ReportAnnotationSection';
 import { buildMeasurementRows } from './ReportMeasurementSection';
+import { buildInspectionSummary } from './ReportFindings';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, UnitSystem } from '../render/measure/types';
 import { DEFAULT_TEMPLATE_ID } from './ReportTemplates';
@@ -123,6 +124,10 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     technicalNotes: input.technicalNotes,
     acceptanceChecks,
     provenance: input.provenance,
+    // Synthesised once here so every template that includes the
+    // `inspection-summary` section renders the same findings. Pure of the
+    // renderer; the QL-tier gating lives in buildInspectionSummary.
+    summary: buildInspectionSummary(input.metadata, input.provenance),
   };
 }
 

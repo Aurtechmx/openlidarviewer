@@ -17,6 +17,8 @@ import {
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
   CAMERA_PRESET_ORDER,
+  CAMERA_FRAME_PAD,
+  fitBoxDistance,
   type CameraPresetName,
   type StandardView,
   type PresetInput,
@@ -66,6 +68,31 @@ describe('camera preset registry', () => {
   });
 });
 
+describe('degenerate (zero-radius) bounding sphere stays finite', () => {
+  // A cloud whose points are all at one location yields a zero-radius sphere.
+  // The pose math must treat radius 0 as 1 (via fitDistance) so a standard view
+  // or preset still produces a finite camera pose rather than collapsing onto
+  // the point — the regression guard for the empty/degenerate-cloud framing path.
+  const zero: PresetInput = { ...baseInput, radius: 0 };
+
+  it.each(CAMERA_PRESET_ORDER)('preset %s yields finite position + target at radius 0', (name) => {
+    const { position, target } = cameraPresetPose(name as CameraPresetName, zero);
+    for (const v of [position.x, position.y, position.z, target.x, target.y, target.z]) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+    // Camera is pulled back a real distance, not left sitting on the centroid.
+    expect(len(sub(position, target))).toBeGreaterThan(0);
+  });
+
+  it.each(STANDARD_VIEW_ORDER)('standard view %s yields finite position + target at radius 0', (view) => {
+    const { position, target } = standardViewPose(view as StandardView, zero);
+    for (const v of [position.x, position.y, position.z, target.x, target.y, target.z]) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+    expect(len(sub(position, target))).toBeGreaterThan(0);
+  });
+});
+
 describe('cameraPresetPose — invariants every preset must satisfy', () => {
   const names: CameraPresetName[] = ['top', 'iso', 'oblique', 'planar'];
 
@@ -85,9 +112,9 @@ describe('cameraPresetPose — invariants every preset must satisfy', () => {
   it.each(names)('%s respects the FOV-fit distance formula', (name) => {
     const { position, target } = cameraPresetPose(name, baseInput);
     const dist = len(sub(position, target));
-    // dist = r / sin(fov/2) * pad ; pad default 1.2
+    // dist = r / sin(fov/2) * pad ; pad default CAMERA_FRAME_PAD
     const fovRad = (50 * Math.PI) / 180;
-    const expected = (10 / Math.sin(fovRad / 2)) * 1.2;
+    const expected = (10 / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD;
     expect(dist).toBeCloseTo(expected, 5);
   });
 
@@ -203,7 +230,7 @@ describe('Origin + axis independence', () => {
     const dir = sub(moved.position, moved.target);
     const dist = len(dir);
     const fovRad = (50 * Math.PI) / 180;
-    const expected = (10 / Math.sin(fovRad / 2)) * 1.2;
+    const expected = (10 / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD;
     expect(dist).toBeCloseTo(expected, 5);
   });
 
@@ -235,7 +262,45 @@ describe('standard views — six axis-aligned faces', () => {
     expect(target).toEqual({ x: 0, y: 0, z: 0 });
     const dist = len(sub(position, target));
     const fovRad = (50 * Math.PI) / 180;
-    expect(dist).toBeCloseTo((10 / Math.sin(fovRad / 2)) * 1.2, 5);
+    expect(dist).toBeCloseTo((10 / Math.sin(fovRad / 2)) * CAMERA_FRAME_PAD, 5);
+  });
+
+  it('fitBoxDistance: a corner lands at the frustum edge (exact fit at pad 1)', () => {
+    // A symmetric box viewed straight down the -X axis; the box half-extents on
+    // the screen axes are 4 (up/Z) and 3 (right/Y). At the fit distance the
+    // larger of |au|/tanV and |ar|/tanH must equal the depth, i.e. the corner
+    // sits exactly on the frustum boundary.
+    const fovDeg = 50;
+    const aspect = 1; // tanH == tanV
+    const d = fitBoxDistance({
+      boxMin: { x: -1, y: -3, z: -4 },
+      boxMax: { x: 1, y: 3, z: 4 },
+      look: { x: -1, y: 0, z: 0 },
+      worldUp: { x: 0, y: 0, z: 1 },
+      fovDeg,
+      aspect,
+      pad: 1,
+    });
+    const tanV = Math.tan((fovDeg * Math.PI) / 180 / 2);
+    // Binding axis is Z (screen-up half-extent 4). The binding corner is the
+    // NEAR face (x = +1), whose depth from the camera is d − 1 (the box's
+    // half-depth along the look axis). So 4 / tanV == d − 1  →  d == 4/tanV + 1.
+    expect(d).toBeCloseTo(4 / tanV + 1, 4);
+  });
+
+  it('fitBoxDistance: a flat wide box frames closer than a cube of the same diagonal', () => {
+    const common = {
+      look: { x: -1, y: -1, z: -1 },
+      worldUp: { x: 0, y: 0, z: 1 },
+      fovDeg: 50,
+      aspect: 1.6,
+      pad: 1,
+    };
+    const flat = fitBoxDistance({ ...common, boxMin: { x: -50, y: -50, z: -1 }, boxMax: { x: 50, y: 50, z: 1 } });
+    const cube = fitBoxDistance({ ...common, boxMin: { x: -50, y: -50, z: -50 }, boxMax: { x: 50, y: 50, z: 50 } });
+    // The flat slab needs less distance to fill the frame than the full cube
+    // (whose vertical extent is far larger) — the whole point of box-fit.
+    expect(flat).toBeLessThan(cube);
   });
 
   it('Top and Bottom look along ±worldUp (dominantly vertical)', () => {

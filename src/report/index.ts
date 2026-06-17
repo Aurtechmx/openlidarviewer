@@ -43,6 +43,14 @@ export {
 export {
   buildMeasurementRows,
 } from './ReportMeasurementSection';
+export {
+  buildInspectionSummary,
+} from './ReportFindings';
+export type {
+  ReportFinding,
+  ReportInspectionSummary,
+  FindingTier,
+} from './ReportFindings';
 
 export {
   DEFAULT_ACCENT,

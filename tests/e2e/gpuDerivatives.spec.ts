@@ -48,6 +48,16 @@ test.describe('TerrainRasterEngine — real-WebGPU equivalence probe', () => {
   test('the per-session probe passes on a real device (or falls back for a recorded reason)', async ({
     page,
   }) => {
+    // This test is a SEQUENCE of bounded waits (scan load, hook load, probe
+    // init), each of which honestly skips when the environment can't satisfy
+    // it. The default 30 s per-test budget is smaller than the SUM of those
+    // internal timeouts, so on a headless build where the engine hook never
+    // initialises the test budget expired BEFORE the hook-wait's own
+    // `.catch(() => skip)` could fire — surfacing as a hard timeout instead of
+    // the intended skip. Give the test room for its own guards to run; a real
+    // device finishes in a few seconds and never approaches this ceiling.
+    test.setTimeout(60_000);
+
     await page.goto('/?test=1');
 
     const hasWebGpu = await page.evaluate(() => 'gpu' in navigator);
@@ -60,7 +70,7 @@ test.describe('TerrainRasterEngine — real-WebGPU equivalence probe', () => {
 
     const hookReady = await page
       .waitForFunction(() => window.__olvTerrainRasterEngine !== undefined, undefined, {
-        timeout: 30_000,
+        timeout: 15_000,
       })
       .then(() => true)
       .catch(() => false);
@@ -69,7 +79,25 @@ test.describe('TerrainRasterEngine — real-WebGPU equivalence probe', () => {
       'terrain engine module not loaded (analysis chunk did not initialise in time)',
     );
 
-    const info = await page.evaluate(() => window.__olvTerrainRasterEngine!.init());
+    // init() requests a real WebGPU adapter/device. In a headless build that
+    // exposes `navigator.gpu` but has no working adapter, that request can HANG
+    // rather than reject — which would blow the whole test's 30 s budget. Race
+    // it against an in-page deadline so a non-resolving probe becomes an honest
+    // skip (the same "environment can't run it" outcome the spec documents),
+    // not a failure. A real device resolves in well under a second, so this
+    // never masks a genuine probe result.
+    const raced = await page.evaluate(
+      () =>
+        Promise.race([
+          window.__olvTerrainRasterEngine!.init(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 12_000)),
+        ]),
+    );
+    test.skip(
+      raced === null,
+      'WebGPU adapter/device request did not resolve in this environment (headless probe hang)',
+    );
+    const info = raced!;
 
     // The one outcome the honesty contract forbids: a GPU that disagrees
     // with the CPU truth. Legitimate fallbacks remain acceptable — but they

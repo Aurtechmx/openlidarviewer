@@ -1,0 +1,89 @@
+#!/usr/bin/env node
+/**
+ * test-bucket.mjs — run one named slice of the unit suite.
+ *
+ * The unit suite (tests/*.test.ts) grew large enough that a single `vitest run`
+ * is slow and can time out on a busy machine. This splits it into four
+ * coverage-complete buckets so CI can run them in parallel and a developer can
+ * run just the relevant slice:
+ *
+ *   unit     — the core (io, model, convert, math, formatting, geometry, …)
+ *   terrain  — the analysis pipeline (DTM, contours, accuracy, CRS, coverage)
+ *   ui       — panels, toolbars, navigation, sheets, theming, overlays
+ *   slow     — heavy decode / streaming / integration / torture / benchmark
+ *
+ * The classification lives here, once. `unit` is the catch-all: every file
+ * that matches no other bucket lands in it, so the four buckets always union to
+ * the whole suite — a newly added test can never silently fall out of CI. Run
+ * `node scripts/test-bucket.mjs --verify` to assert that partition holds.
+ *
+ * Usage:
+ *   node scripts/test-bucket.mjs <unit|terrain|ui|slow> [extra vitest args]
+ *   node scripts/test-bucket.mjs --verify
+ *
+ * Playwright specs under tests/e2e/ are not touched here — they run via
+ * `npm run test:e2e`.
+ */
+
+import { readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const TESTS_DIR = resolve(ROOT, 'tests');
+
+// Heavy decode / large-data / integration — the genuinely slow files.
+const SLOW = /^(torture|benchmark)|integration|streaming|copc|ept|laz|octree|voxelDownsample|convertRoundTrip|convertBatch|moduleApi|preload/i;
+// The terrain-analysis pipeline.
+const TERRAIN = /^(analyse|analysis|contour|cell|ground|dem|hillshade|slope|calibrat|confidence|coverage|crs|datum|evidence|interval|civilProfile|profile|surface|quality|terrain|raster|gpuDeriv|scatter|aspect|canopy|dsm|dtm|seam|provenance|metricVersion|score|assessment|readiness|whyNot|recommend)/i;
+// The interface layer.
+const UI = /(panel|mobile|dock|toolbar|nav|button|sheet|inspector|theme|onboarding|tour|command|chip|legend|banner|overlayUi|visualsStudio|measureIcons|measureController|measureRail|fullscreen|standardViews|cameraPresets|annotation|export(Panel|Layout|Ui)|classScope|classVisibility|classLegend|colorMode|colorChip|colorProvenance)/i;
+
+/** Bucket a single test-file basename. `unit` is the catch-all. */
+function bucketOf(name) {
+  if (SLOW.test(name)) return 'slow';
+  if (TERRAIN.test(name)) return 'terrain';
+  if (UI.test(name)) return 'ui';
+  return 'unit';
+}
+
+const BUCKETS = ['unit', 'terrain', 'ui', 'slow'];
+
+function allTestFiles() {
+  return readdirSync(TESTS_DIR).filter((f) => /\.(test|spec)\.ts$/.test(f));
+}
+
+function filesFor(bucket) {
+  return allTestFiles().filter((f) => bucketOf(f) === bucket);
+}
+
+const [, , arg, ...rest] = process.argv;
+
+if (arg === '--verify') {
+  const files = allTestFiles();
+  const counts = Object.fromEntries(BUCKETS.map((b) => [b, 0]));
+  for (const f of files) counts[bucketOf(f)]++;
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const ok = total === files.length;
+  for (const b of BUCKETS) console.log(`${b}: ${counts[b]}`);
+  console.log(`total: ${total} / ${files.length} — partition ${ok ? 'OK' : 'BROKEN'}`);
+  process.exit(ok ? 0 : 1);
+}
+
+if (!BUCKETS.includes(arg)) {
+  console.error(`usage: test-bucket.mjs <${BUCKETS.join('|')}|--verify> [vitest args]`);
+  process.exit(2);
+}
+
+const files = filesFor(arg).map((f) => `tests/${f}`);
+if (files.length === 0) {
+  console.error(`no test files matched bucket "${arg}"`);
+  process.exit(1);
+}
+
+const result = spawnSync('npx', ['vitest', 'run', ...files, ...rest], {
+  cwd: ROOT,
+  stdio: 'inherit',
+});
+process.exit(result.status ?? 1);

@@ -13,6 +13,7 @@
  * Browser-bound (DOM + three.js camera) — not imported in Node tests.
  */
 
+import { clamp } from '../numeric';
 import * as THREE from 'three/webgpu';
 import { el } from '../ui/dom';
 import {
@@ -622,8 +623,8 @@ export class InspectTool {
     const ch = this.card.offsetHeight || 220;
     let left = px + 20;
     if (left + cw > w - 12) left = px - 20 - cw; // flip to the marker's left
-    left = Math.max(12, Math.min(left, w - cw - 12));
-    const top = Math.max(12, Math.min(py - ch / 2, h - ch - 12));
+    left = clamp(left, 12, w - cw - 12);
+    const top = clamp(py - ch / 2, 12, h - ch - 12);
     this.card.style.left = `${left}px`;
     this.card.style.top = `${top}px`;
   }

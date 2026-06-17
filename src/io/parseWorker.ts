@@ -6,6 +6,8 @@
  */
 import type { DetectedFormat } from './sniffFormat';
 import { parseBuffer } from './parseBuffer';
+import { LoadError } from './loadErrors';
+import type { LoadErrorCategory } from './loadErrors';
 import type { LoadPlan } from './loadPlan';
 import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
@@ -91,10 +93,15 @@ ctx.onmessage = (event: MessageEvent): void => {
         transfer,
       );
     } catch (err) {
-      ctx.postMessage({
+      // Carry the typed category across the thread boundary when the pipeline
+      // knew it, so the main thread shows the exact failure message instead of
+      // re-deriving the category from the message text (a lossy fallback).
+      const reply: { type: 'error'; error: string; category?: LoadErrorCategory } = {
         type: 'error',
         error: err instanceof Error ? err.message : String(err),
-      });
+      };
+      if (err instanceof LoadError) reply.category = err.category;
+      ctx.postMessage(reply);
     }
   })();
 };

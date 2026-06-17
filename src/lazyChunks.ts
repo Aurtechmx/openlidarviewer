@@ -81,12 +81,6 @@ export const loadExporters = () => import('./io/exporters');
 export const loadExportStudio = () => import('./export');
 
 /**
- * @deprecated Alias retained for one release while consumers migrate from the
- * name `loadImageExports` to {@link loadExportStudio}.
- */
-export const loadImageExports = loadExportStudio;
-
-/**
  * Load the confidence-aware terrain analysis pipeline (ground
  * classification → DTM → validation → contours). Heavy and only reached
  * when the user runs the Analyse panel, so it rides its own lazy chunk.

@@ -15,6 +15,7 @@
  * disposed by the Viewer; this module only orchestrates.
  */
 
+import { clamp01 } from '../../numeric';
 import type * as THREE from 'three/webgpu';
 import type { Viewer, PointMeshHandle } from '../Viewer';
 import type { StreamingSource } from './StreamingSource';
@@ -37,7 +38,7 @@ import type { RgbAppearance } from '../rgbAppearance';
  * low-tier device profile — see `attachStreamingCloud`.
  *
  * FADE_MS bumped 180 → 220 ms (the middle of the
- * 150-250 ms range that reads as "premium" without dragging on long
+ * 150-250 ms range that reads as smooth without dragging on long
  * enough to feel sluggish), and the eviction path now triggers a
  * symmetric fade-OUT instead of a hard remove. The result is a true
  * cross-fade between a parent node fading out and its higher-resolution
@@ -57,7 +58,7 @@ export function fadeOpacity(
   startOpacity: number,
 ): number {
   if (durationMs <= 0) return 1;
-  const t = Math.min(1, Math.max(0, elapsedMs / durationMs));
+  const t = clamp01(elapsedMs / durationMs);
   const eased = 1 - Math.pow(1 - t, 3);
   return startOpacity + (1 - startOpacity) * eased;
 }
@@ -71,7 +72,7 @@ export function fadeOpacity(
  */
 export function fadeOutOpacity(elapsedMs: number, durationMs: number): number {
   if (durationMs <= 0) return 0;
-  const t = Math.min(1, Math.max(0, elapsedMs / durationMs));
+  const t = clamp01(elapsedMs / durationMs);
   const eased = t * t * t;  // ease-in cubic
   return 1 - eased;
 }

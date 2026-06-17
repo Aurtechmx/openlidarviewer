@@ -131,8 +131,15 @@ export type ParseResult =
   | { readonly ok: true; readonly workflow: Workflow }
   | { readonly ok: false; readonly error: string };
 
-/** Serialise a workflow to deterministic JSON (stable key order). */
-export function serializeWorkflow(workflow: Workflow): string {
+/**
+ * Serialise a workflow to deterministic JSON (stable key order). `compact`
+ * minifies (no indentation) for a smaller file; the default is the readable,
+ * 2-space form used by the snapshot tests and content-hashing.
+ */
+export function serializeWorkflow(
+  workflow: Workflow,
+  options: { compact?: boolean } = {},
+): string {
   // Build a plain object in a fixed key order so the output is
   // byte-stable for snapshot tests and content-hashing.
   const out: Record<string, unknown> = {
@@ -142,7 +149,7 @@ export function serializeWorkflow(workflow: Workflow): string {
   };
   if (workflow.title !== undefined) out.title = workflow.title;
   out.events = workflow.events.map((e) => ({ ...e }));
-  return JSON.stringify(out, null, 2);
+  return options.compact ? JSON.stringify(out) : JSON.stringify(out, null, 2);
 }
 
 /**
@@ -258,6 +265,13 @@ export interface ReplayDeps {
   clearTimeout(handle: unknown): void;
   /** Fires after every event is scheduled (not after each fires). */
   onComplete?(): void;
+  /**
+   * Replay rate. Each event's `tMs` offset is divided by this factor, so 2
+   * plays at double speed and 0.5 at half. A value `<= 0` (or non-finite)
+   * means instant — every event fires on the next tick with no delay.
+   * Defaults to 1 (the recorded pace).
+   */
+  speed?: number;
 }
 
 /**
@@ -281,6 +295,11 @@ export function scheduleReplay(
     deps.onComplete?.();
     return { cancel: () => void 0 };
   }
+  // Scale each offset by the replay speed; `<= 0` / non-finite collapses every
+  // delay to 0 (instant replay).
+  const speed = deps.speed;
+  const instant = speed !== undefined && (!Number.isFinite(speed) || speed <= 0);
+  const scale = instant ? 0 : speed !== undefined && speed > 0 ? 1 / speed : 1;
   for (const event of workflow.events) {
     const h = deps.setTimeout(() => {
       if (cancelled) return;
@@ -290,7 +309,7 @@ export function scheduleReplay(
         remaining -= 1;
         if (remaining === 0) deps.onComplete?.();
       }
-    }, event.tMs);
+    }, event.tMs * scale);
     handles.push(h);
   }
   return {

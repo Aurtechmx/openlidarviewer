@@ -11,14 +11,17 @@
  *   - Terrain relief: drives a sensible default contour interval.
  *   - A requested interval, if the user already has one in mind.
  *
- * Cell sizes snap to a canonical ladder (0.25 / 0.5 / 1 / 2 / 5 m) so the
- * suggestion reads like something a survey crew would actually pick.
+ * Cell sizes snap to a canonical ladder (0.25 / 0.5 / 1 / 2 / 5 / 10 / 20 m) so
+ * the suggestion reads like something a survey crew would actually pick. The
+ * coarse 10 / 20 m rungs matter for large regional extents: without them a
+ * dataset whose finest fitting cell is coarser than 5 m would be recommended a
+ * 5 m grid that silently blows the memory budget.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
 /** Canonical DTM cell sizes, metres. */
-export const GRID_LADDER_M: ReadonlyArray<number> = [0.25, 0.5, 1, 2, 5];
+export const GRID_LADDER_M: ReadonlyArray<number> = [0.25, 0.5, 1, 2, 5, 10, 20];
 /** Canonical contour intervals, metres. */
 const INTERVAL_LADDER_M: ReadonlyArray<number> = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50];
 

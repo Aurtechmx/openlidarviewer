@@ -68,10 +68,17 @@ describe('epsgDatumFamily / datumShiftCaveat', () => {
     expect(datumShiftCaveat(4326, 4267)).toMatch(/grids/i); // WGS84→NAD27 geographic
   });
 
+  it('caveats NAD83 ↔ the WGS84-coincident cluster (identity applied, ~1–2 m offset)', () => {
+    expect(datumShiftCaveat(26915, 32615)).toMatch(/NAD83/); // NAD83 UTM 15 → WGS84 UTM 15
+    expect(datumShiftCaveat(4269, 4326)).toMatch(/1[–-]2 m/); // NAD83 geographic → WGS84
+    expect(datumShiftCaveat(4269, 4258)).toMatch(/NAD83/); // NAD83 → ETRS89 (both identity-to-WGS84)
+  });
+
   it('stays quiet within one datum and on conventionally-coincident pairs', () => {
     expect(datumShiftCaveat(26715, 4267)).toBeNull(); // NAD27 UTM → NAD27 geographic
     expect(datumShiftCaveat(32611, 4326)).toBeNull(); // WGS84 → WGS84
     expect(datumShiftCaveat(25831, 4326)).toBeNull(); // ETRS89 → WGS84 (sub-metre)
+    expect(datumShiftCaveat(4258, 7844)).toBeNull(); // ETRS89 → GDA2020 (both in cluster)
     expect(datumShiftCaveat(999999, 4326)).toBeNull(); // unknown → no claim
   });
 });
@@ -91,6 +98,44 @@ describe('reprojectGlobal datum caveat', () => {
     // the caveat exists (the true shift is ≈ 1.8 m, not 0).
     expect(r.points.x[0]).toBeCloseTo(500000, 3);
     expect(r.points.y[0]).toBeCloseTo(6000000, 3);
+  });
+
+  it('rejects a transform that yields non-finite coordinates rather than ship NaN', () => {
+    // Web Mercator forward of latitude 90° is +Infinity. proj4 returns that
+    // without throwing; the converter must treat it as a failed transform and
+    // leave the source coordinates untouched, not stamp "reprojected ✓".
+    const g = {
+      count: 2,
+      x: Float64Array.from([0, 0]),
+      y: Float64Array.from([45, 90]), // second point is the singularity
+      z: Float64Array.from([0, 0]),
+    };
+    const r = reprojectGlobal(g, 4326, 3857); // WGS84 geographic → Web Mercator
+    expect(r.transformed).toBe(false);
+    expect(r.note).toMatch(/non-finite/i);
+    expect(r.note).toMatch(/1 of 2 points/);
+    // Source coordinates returned untouched (the known-good values).
+    expect(r.points.y[1]).toBe(90);
+    for (const v of [...r.points.x, ...r.points.y]) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
+  it('rejects the transform when a carried-through elevation is non-finite', () => {
+    // x/y are valid (transform succeeds) but the second point's z is Infinity.
+    // Since reproject returns z in its output, it must not ship the non-finite
+    // elevation as "reprojected ✓".
+    const g = {
+      count: 2,
+      x: Float64Array.from([0, 0]),
+      y: Float64Array.from([45, 46]),
+      z: Float64Array.from([0, Number.POSITIVE_INFINITY]),
+    };
+    const r = reprojectGlobal(g, 4326, 3857); // WGS84 geographic → Web Mercator
+    expect(r.transformed).toBe(false);
+    expect(r.note).toMatch(/non-finite/i);
+    expect(r.note).toMatch(/1 of 2 points/);
+    expect(r.points.z[1]).toBe(Number.POSITIVE_INFINITY); // source returned untouched
   });
 
   it('keeps datumCaveat null on clean transforms and on failures', () => {

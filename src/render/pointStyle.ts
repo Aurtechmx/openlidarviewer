@@ -8,6 +8,8 @@
  * size node (in `Viewer.ts`) mirrors `adaptivePointSize` exactly.
  */
 
+import { clamp } from '../numeric';
+
 /** How point size responds to camera distance. */
 export type PointSizeMode = 'adaptive' | 'fixed';
 
@@ -18,13 +20,13 @@ export const POINT_STYLE_DEFAULTS = {
   /** Near points never exceed `base size × this`. */
   maxSizeFactor: 3,
   /**
-   * Sizing mode applied to a freshly loaded cloud. Defaults to `fixed`: a
-   * constant 1-pixel point is the most honest first view of a cloud — no
-   * distance-driven size gradient to read as banding on an oblique surface,
-   * no fat overlapping points to exaggerate density variation. Adaptive
-   * sizing stays one tap away and is remembered once chosen.
+   * Sizing mode applied to a freshly loaded cloud. Defaults to `adaptive`:
+   * points scale with camera distance so a scan reads as a continuous surface
+   * on first open (far points stay visible, near ones don't bloat) rather than
+   * the sparse single-pixel look of a fixed size on a large extent. `fixed`
+   * stays one tap away and is remembered once chosen.
    */
-  mode: 'fixed' as PointSizeMode,
+  mode: 'adaptive' as PointSizeMode,
 } as const;
 
 /**
@@ -55,7 +57,7 @@ export function adaptivePointSize(
   // dividing by zero — a point on the camera plane is, in effect, very near.
   if (eyeDist <= 0 || referenceDist <= 0) return maxPx;
   const attenuated = baseSizePx * (referenceDist / eyeDist);
-  return Math.min(maxPx, Math.max(minPx, attenuated));
+  return clamp(attenuated, minPx, maxPx);
 }
 
 /**

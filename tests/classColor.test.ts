@@ -18,6 +18,16 @@ describe('classColor', () => {
     expect(classColor(9)).toEqual([30, 100, 220]); // Water — blue
   });
 
+  it('maps the LAS 1.4 R15 standard classes 19–22 (not the hue fallback)', () => {
+    // These ASPRS 1.4 classes previously fell through to the deterministic
+    // hue; they now have dedicated palette entries so the legend reads the
+    // class name's colour, not a generated one.
+    expect(classColor(19)).toEqual([120, 130, 150]); // Overhead structure
+    expect(classColor(20)).toEqual([110, 80, 50]);   // Ignored ground
+    expect(classColor(21)).toEqual([235, 245, 255]); // Snow
+    expect(classColor(22)).toEqual([150, 120, 170]); // Temporal exclusion
+  });
+
   it('is deterministic for unmapped codes', () => {
     const a = classColor(200);
     const b = classColor(200);

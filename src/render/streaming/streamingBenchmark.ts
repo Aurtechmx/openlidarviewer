@@ -13,6 +13,8 @@
  * Pure — no DOM, no three.js — unit-tested in Node.
  */
 
+import { clamp01 } from '../../numeric';
+
 /** Aggregate stats over a sample buffer — what we care about for tick / decode / frame times. */
 export interface AggregateStats {
   /** Number of samples observed (may exceed retained buffer size). */
@@ -119,7 +121,7 @@ function percentile(sortedAscending: readonly number[], q: number): number {
   const n = sortedAscending.length;
   if (n === 0) return 0;
   if (n === 1) return sortedAscending[0];
-  const clamped = Math.min(1, Math.max(0, q));
+  const clamped = clamp01(q);
   const idx = clamped * (n - 1);
   const lo = Math.floor(idx);
   const hi = Math.ceil(idx);
