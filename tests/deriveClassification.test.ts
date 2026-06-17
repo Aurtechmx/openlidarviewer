@@ -357,4 +357,18 @@ describe('deriveClassification — void-aware confidence', () => {
     expect(Number.isNaN(res.confidence)).toBe(true);
     expect(res.warnings.length).toBeGreaterThan(0);
   });
+
+  it('does NOT cry "voids" for an irregular footprint (dense data, empty AABB corners)', () => {
+    // A solid lower-left TRIANGLE of dense ground: about half the bounding box is
+    // empty (the upper-right corner has no data), so a grid-fill ratio would
+    // false-alarm "large voids" — but every POINT sits on a densely-measured
+    // interior, so the point-based measure must stay quiet.
+    const pts: number[] = [];
+    for (let x = 0; x <= 60; x++) {
+      for (let y = 0; y <= x; y++) pts.push(x, y, 0);
+    }
+    const res = deriveClassification(new Float32Array(pts), pts.length / 3, { cellSizeM: 1 });
+    expect(res.warnings.some((m) => /void/i.test(m))).toBe(false);
+    expect(res.confidence).toBeGreaterThan(0.5);
+  });
 });
