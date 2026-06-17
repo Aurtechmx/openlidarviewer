@@ -18,7 +18,10 @@ end of the file.
 | @loaders.gl/ply | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
 | laz-perf | ^0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
+| proj4 | ^2.20.8 | MIT | https://github.com/proj4js/proj4js |
 | @fontsource-variable/inter | ^5.2.8 | OFL-1.1 | https://github.com/rsms/inter |
+| @fontsource/manrope | ^5.2.8 | OFL-1.1 | https://github.com/sharanda/manrope |
+| @fontsource/jetbrains-mono | ^5.2.8 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
 
 ## Development-only dependencies (not bundled into the shipped build)
 
@@ -38,7 +41,7 @@ here for transparency.
 
 ## License texts
 
-### MIT License (applies to: three, @loaders.gl/*, pdf-lib, vite, vitest, rollup-plugin-visualizer, @types/three)
+### MIT License (applies to: three, @loaders.gl/*, pdf-lib, proj4, vite, vitest, rollup-plugin-visualizer, @types/three)
 
 ```
 MIT License
@@ -75,14 +78,16 @@ Copyright holders for the Apache-2.0-licensed packages:
 - typescript: Microsoft Corporation
 - @playwright/test: Microsoft Corporation
 
-### SIL Open Font License 1.1 (applies to: Inter — @fontsource-variable/inter)
+### SIL Open Font License 1.1 (applies to: Inter, Manrope, JetBrains Mono)
 
-The Inter font family is distributed under the SIL Open Font License,
-Version 1.1 (OFL-1.1). The full license text is reproduced at:
-https://openfontlicense.org/open-font-license-official-text/
+The Inter, Manrope, and JetBrains Mono font families are each distributed under
+the SIL Open Font License, Version 1.1 (OFL-1.1). The full license text is
+reproduced at: https://openfontlicense.org/open-font-license-official-text/
 
-Copyright (c) 2016-2024 The Inter Project Authors
-(https://github.com/rsms/inter)
+Copyright (c) 2016-2024 The Inter Project Authors (https://github.com/rsms/inter)
+Copyright (c) 2018 Mikhail Sharanda (Manrope, https://github.com/sharanda/manrope)
+Copyright (c) 2020 The JetBrains Mono Project Authors
+(https://github.com/JetBrains/JetBrainsMono)
 
 ## How to refresh this notice
 

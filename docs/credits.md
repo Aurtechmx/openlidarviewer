@@ -33,3 +33,15 @@ This viewer runs on open point-cloud formats and tools maintained by
 
 With particular thanks to **Howard Butler** and **Hobu, Inc.**, and the wider
 PDAL / COPC community.
+
+## Built with
+
+The viewer itself is built on open-source work we're grateful for:
+
+- **three.js** — the WebGPU/WebGL rendering engine
+- **loaders.gl** — glTF / LAS / OBJ / PLY parsing
+- **proj4js** — coordinate-system transforms
+- **pdf-lib** — the PDF reports
+
+Full license details for every bundled dependency are in
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
