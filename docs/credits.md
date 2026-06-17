@@ -11,8 +11,6 @@ email **info@aurtech.mx** and we'll act on it.
 
 | Dataset | Provider | Terms |
 | --- | --- | --- |
-| Autzen · "360 for you" · Key Bridge · Puerto Rico (FEMA 2018) · Sofia · Cahokia Mounds | **Hobu, Inc.** | Public demo data |
-| Mill site | **Entwine** (Hobu, Inc.) | Public demo data |
 | SF Coast · Los Angeles · Denver · Golden Gate · Grand Canyon NP · San Francisco · Denver Metro (DRCOG) | **USGS 3DEP** | Public domain |
 | Switzerland — swisssurface3D (2022) | **swisstopo**, via FLAI | Swiss open data |
 | Slovenia — GURS CLSS (2023) | **GURS**, via FLAI | Open data — attribution |

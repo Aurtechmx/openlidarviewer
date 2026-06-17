@@ -288,21 +288,12 @@ const testApi = urlParams.has('test');
 // rather than a deliberate "single-pixel fixture" surface. They survive
 // in `samples/tiny.{las,ply}` for automated tests but are no longer
 // surfaced as user-facing entry points.
-const SAMPLES: Sample[] = [
-  {
-    id: 'stream',
-    label: 'Public streaming demo',
-    detail: '1.8 GB COPC · streamed',
-    url: 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz',
-    name: 'millsite.copc.laz',
-    // Approximate on-disk size — feeds Stage's cellular-data + mobile-
-    // memory confirmation gates. The streaming pipeline only fetches
-    // visible tiles in practice, but the gate uses the worst-case full-
-    // file size because the user can't know how many tiles they'll
-    // ultimately request.
-    sizeBytes: 1_800_000_000,
-  },
-];
+// No bundled "demo" sample. The start screen's only streaming entry points are
+// the curated public-LiDAR picker (CURATED_LOCATIONS) and the open-from-URL
+// field — both of which surface only datasets with a confirmed open licence.
+// The previous Entwine "Public streaming demo" pointed at a bucket whose data
+// carried no stated open licence, so it was removed.
+const SAMPLES: Sample[] = [];
 
 /**
  * Public-LiDAR picker for the empty-state. The picker is a curated
