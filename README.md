@@ -501,6 +501,18 @@ Full detail is in [`docs/limitations.md`](docs/limitations.md).
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), the [security policy](SECURITY.md), and the [code of conduct](CODE_OF_CONDUCT.md). The codebase is small, test-first (Vitest and Playwright), written in strict TypeScript, and deliberately modular.
 
+## Acknowledgements
+
+OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
+
+**Built on** — [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl](https://github.com/visgl/loaders.gl) (format parsing), [proj4js](https://github.com/proj4js/proj4js) (CRS transforms), [pdf-lib](https://github.com/Hopding/pdf-lib) (reports), and [laz-perf](https://github.com/hobuinc/laz-perf) (LAZ decoding). Full licenses in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+**Data** — the streamed sample datasets come from Hobu, Entwine, [USGS 3DEP](https://www.usgs.gov/3d-elevation-program), swisstopo, GURS, and AHN (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
+
+**Standards & formats** — ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems).
+
+Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-perf, COPC, and Entwine this viewer relies on.
+
 ## License
 
 MIT. See [LICENSE](LICENSE). If you use OpenLiDARViewer in research, a [CITATION.cff](CITATION.cff) is included.
