@@ -127,9 +127,16 @@ describe('buildExportSummary — warnings', () => {
     );
   });
 
-  it('a very large file gets a heads-up', () => {
+  it('a very large scan gets a heads-up', () => {
     expect(warns({ ...base, pointCount: 80_000_000 })).toEqual(
-      expect.arrayContaining([expect.stringMatching(/warn:.*Large file/i)]),
+      expect.arrayContaining([expect.stringMatching(/warn:.*Large scan/i)]),
+    );
+  });
+
+  it('gzip does NOT suppress the memory warning (raw buffer still built in RAM)', () => {
+    // 80M pts LAS 1.4 ≈ 2.4 GB raw; gzipped midpoint < 1.5 GB, but memory is raw.
+    expect(warns({ ...base, pointCount: 80_000_000, gzip: true })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/warn:.*Large scan.*uncompressed/i)]),
     );
   });
 });
