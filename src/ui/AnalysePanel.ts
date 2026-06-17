@@ -1320,12 +1320,20 @@ export class AnalysePanel {
   }
 
   /**
-   * Story-relevant facts from the CURRENT terrain assessment — the surface tier
-   * and the per-product Ready/Preview/Blocked grades — for the Dataset Story /
-   * Export Health synthesis. Returns null when no analysis has run, so the
-   * story degrades to "not yet analysed" rather than fabricating a verdict.
+   * Story-relevant facts from the CURRENT terrain assessment — the surface tier,
+   * the per-product Ready/Preview/Blocked grades, and the AUTHORITATIVE
+   * georeferencing knowledge (the same `quality.crsKnown` / `quality.datumKnown`
+   * the panel's own CRS / Datum chips render) — for the Dataset Story / Export
+   * Health synthesis. Returns null when no analysis has run, so the story
+   * degrades to "not yet analysed" rather than fabricating a verdict, and the
+   * caller falls back to a metadata read for georef.
    */
-  storyFacts(): { surfaceTier: FitnessTier; products: StoryProduct[] } | null {
+  storyFacts(): {
+    surfaceTier: FitnessTier;
+    products: StoryProduct[];
+    crsKnown: boolean;
+    datumKnown: boolean;
+  } | null {
     if (!this._result) return null;
     const a = terrainAssessment(this._result);
     const workflows = recommendedWorkflows(a, this._result.quality);
@@ -1337,7 +1345,12 @@ export class AnalysePanel {
       a.status === 'Good' || a.status === 'Preview' || a.status === 'Limited' || a.status === 'Blocked'
         ? a.status
         : 'Unknown';
-    return { surfaceTier: tier, products };
+    return {
+      surfaceTier: tier,
+      products,
+      crsKnown: !!this._result.quality.crsKnown,
+      datumKnown: !!this._result.quality.datumKnown,
+    };
   }
 
   /** Reflect the host's override + the effective route in the "Treat as"
