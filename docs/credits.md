@@ -1,9 +1,11 @@
 # Data sources & credits
 
 OpenLiDARViewer streams its sample datasets directly from public, openly-hosted
-buckets — we don't host or own them. Credit and thanks go to the providers
-below. To change or remove a dataset, email **info@aurtech.mx** and we'll act
-on it.
+buckets — we don't host or own them. A genuine thank-you to everyone who
+publishes LiDAR openly, and to the open-source projects that keep moving this
+field forward; it's what makes a free, in-browser viewer like this possible.
+Credit and thanks go to the providers below. To change or remove a dataset,
+email **info@aurtech.mx** and we'll act on it.
 
 ## Sample datasets
 
