@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>Data sources & credits — OpenLiDARViewer</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0a0e1a;
+      color: #e6e9f0;
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    main { max-width: 720px; margin: 0 auto; }
+    a { color: #6ea8ff; }
+    a.back { display: inline-block; margin-bottom: 1.75rem; text-decoration: none; font-size: 0.9rem; opacity: 0.85; }
+    a.back:hover { opacity: 1; }
+    h1 { font-size: 1.6rem; margin: 0 0 0.75rem; letter-spacing: -0.01em; }
+    h2 { font-size: 1.05rem; margin: 2rem 0 0.6rem; color: #aeb6c8; font-weight: 600; }
+    p { color: #c4cad8; }
+    table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 0.75rem; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #1c2436; vertical-align: top; }
+    th { color: #8b93a7; font-weight: 600; }
+    td strong { color: #e6e9f0; }
+    ul { padding-left: 1.1rem; color: #c4cad8; }
+    li { margin: 0.25rem 0; }
+    .note { font-size: 0.85rem; color: #8b93a7; }
+    code { background: #141a2b; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+    footer { margin-top: 2.5rem; font-size: 0.85rem; color: #8b93a7; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="./">← Back to OpenLiDARViewer</a>
+    <h1>Data sources &amp; credits</h1>
+    <p>
+      OpenLiDARViewer streams its sample datasets directly from public,
+      openly-hosted buckets — we don't host or own them. Credit and thanks go to
+      the providers below. To change or remove a dataset, email
+      <a href="mailto:info@aurtech.mx">info@aurtech.mx</a> and we'll act on it.
+    </p>
+
+    <h2>Sample datasets</h2>
+    <table>
+      <thead><tr><th>Dataset</th><th>Provider</th><th>Terms</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Autzen · "360 for you" · Key Bridge · Puerto Rico (FEMA 2018) · Sofia · Cahokia Mounds</td>
+          <td><strong>Hobu, Inc.</strong></td>
+          <td>Public demo data</td>
+        </tr>
+        <tr>
+          <td>Mill site</td>
+          <td><strong>Entwine</strong> (Hobu, Inc.)</td>
+          <td>Public demo data</td>
+        </tr>
+        <tr>
+          <td>SF Coast · Los Angeles · Denver · Golden Gate · Grand Canyon NP · San Francisco · Denver Metro (DRCOG)</td>
+          <td><strong>USGS 3DEP</strong></td>
+          <td>Public domain</td>
+        </tr>
+        <tr>
+          <td>Switzerland — swisssurface3D (2022)</td>
+          <td><strong>swisstopo</strong>, via FLAI</td>
+          <td>Swiss open data</td>
+        </tr>
+        <tr>
+          <td>Slovenia — GURS CLSS (2023)</td>
+          <td><strong>GURS</strong>, via FLAI</td>
+          <td>CC BY 4.0</td>
+        </tr>
+        <tr>
+          <td>Netherlands — AHN4 (2020–22)</td>
+          <td><strong>AHN</strong>, via FLAI</td>
+          <td>Public domain</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">
+      USGS 3DEP streams from the AWS Registry of Open Data bucket and asks for the
+      courtesy citation: "Data available from U.S. Geological Survey, National
+      Geospatial Program."
+    </p>
+
+    <h2>Formats &amp; tooling</h2>
+    <p>Built on the open point-cloud ecosystem from <strong>Howard Butler</strong> and <strong>Hobu, Inc.</strong>:</p>
+    <ul>
+      <li><strong>laz-perf</strong> (Apache-2.0) — the in-browser LAZ decoder</li>
+      <li><strong>COPC</strong> — the streaming format</li>
+      <li><strong>EPT / Entwine</strong> — the hierarchical tiling format and builder</li>
+    </ul>
+    <p>Thank you to Howard Butler, Hobu, and the PDAL / COPC community.</p>
+
+    <footer>OpenLiDARViewer · <a href="https://github.com/aurtechmx/openlidarviewer">GitHub</a></footer>
+  </main>
+</body>
+</html>
