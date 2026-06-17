@@ -1,8 +1,9 @@
 # OpenLiDARViewer v0.4.8
 
 A focused classification release: scans that ship without a usable classification
-can now derive one, and colour helps separate trees from structures. Still
-browser-native, local-first, nothing uploaded.
+can now derive one, colour helps separate trees from structures, and the result
+tells you how much to trust it. Still browser-native, local-first, nothing
+uploaded.
 
 ## Highlights
 
@@ -20,6 +21,16 @@ browser-native, local-first, nothing uploaded.
   is noisy and shape alone confuses tree crowns with roofs. Colour only breaks
   the tree-vs-structure tie; it never invents vegetation on the ground, and a
   scan without colour classifies exactly as before.
+- **Confidence on the derived classification** — every run now reports an overall
+  confidence and per-class confidence, surfaced in the Classes legend caption and
+  the result toast, so a derived classification reads as "trust this a lot" or
+  "rough visual aid" rather than landing unqualified. Confidence drops on sparse,
+  void-ridden, or coarse-grid scans — exactly when a heuristic is least reliable.
+- **Void-honest heights** — the classifier fabricates a bare-earth surface inside
+  data gaps to keep the math finite, but it no longer pretends that surface is
+  real: a tall point whose height rests mostly on hole-filled void is left
+  **Unclassified** rather than guessed, and the run raises a plain warning naming
+  the gap. You never get a confident class invented over empty space.
 
 ## Honesty
 
@@ -36,6 +47,9 @@ browser-native, local-first, nothing uploaded.
   producer class — with full unit coverage. It is not yet wired to a user action
   (so producer-classified scans are never silently modified); a deliberate
   "fill unclassified points" surface will follow.
+- `npm run test:release` runs the full browser-independent gate in one command:
+  typecheck, the main-deferral lint, the production build, the bundle-budget
+  check, the bucket partition check, and all four test buckets.
 
 Derived classification is a geometry-and-colour heuristic for visual inspection
 and research, not a survey-grade or producer classification. Treat any output as
