@@ -395,6 +395,42 @@ export function formatMetres(m: number): string {
   return `${(m * 100).toFixed(1)} cm`;
 }
 
+/** Coarse linear unit a scan's coordinates are expressed in. */
+export type LinearUnit = 'metre' | 'foot' | 'unknown';
+
+/**
+ * Resolve a CRS unit string (as returned by `adapter.crsLabel().unit` — e.g.
+ * "metre", "US survey foot", "ft") to a coarse {@link LinearUnit}. An absent or
+ * unrecognised unit collapses to `unknown`, which formats as metres (the
+ * standing default), matching the map-sheet PDF's behaviour.
+ */
+export function linearUnitOf(unit: string | null | undefined): LinearUnit {
+  if (!unit) return 'unknown';
+  const u = unit.toLowerCase();
+  if (u.includes('foot') || u.includes('feet') || u === 'ft') return 'foot';
+  if (u.includes('met') || u === 'm') return 'metre';
+  return 'unknown';
+}
+
+/** Short axis label: `ft` for foot scans, else `m`. */
+export function linearUnitLabel(unit: LinearUnit): 'm' | 'ft' {
+  return unit === 'foot' ? 'ft' : 'm';
+}
+
+/**
+ * Format a length given in the scan's NATIVE units, labelled with the correct
+ * unit. Coordinates are stored native (not pre-converted to metres), so a
+ * foot-CRS value must read "ft", never "m". Foot values stay in feet (no km/cm
+ * regrouping, which only makes sense for metres); metre and unknown units use
+ * the metre formatter.
+ */
+export function formatLinear(value: number, unit: LinearUnit): string {
+  if (unit === 'foot') {
+    return Math.abs(value) >= 10 ? `${value.toFixed(1)} ft` : `${value.toFixed(2)} ft`;
+  }
+  return formatMetres(value);
+}
+
 /**
  * Format a YYYY-MM-DD HH:MM timestamp in the user's local timezone — the
  * footer of every scan report. Pure function for testability.
