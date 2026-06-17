@@ -32,6 +32,19 @@ uploaded.
   **Unclassified** rather than guessed, and the run raises a plain warning naming
   the gap. You never get a confident class invented over empty space.
 
+## Trust you can act on
+
+- **Dataset Story** — a command-palette action ("Dataset Story") opens one compact
+  card that answers what the scan is, how good it is, the single biggest limiter,
+  what it's best for, what to use with caution, what isn't established, and the one
+  next step — synthesised from signals the app already computes, so nothing is
+  fabricated and nothing overclaims.
+- **Export Health check** — before a hand-off, the "Export health check" action
+  summarises exactly what is about to leave the app (scan scope, source-vs-derived
+  classification with its confidence, CRS, vertical datum, density, terrain-product
+  readiness) and gives a single ready / caution / blocked verdict with an
+  actionable "before you hand this off" list.
+
 ## Honesty
 
 - A scan that already carries a real producer classification (any ASPRS class ≥
