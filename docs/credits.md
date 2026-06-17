@@ -24,10 +24,12 @@ Geospatial Program."
 
 ## Formats & tooling
 
-Built on the open point-cloud ecosystem from **Howard Butler** and **Hobu, Inc.**:
+This viewer runs on open point-cloud formats and tools maintained by
+**Hobu, Inc.** and a broad community of contributors:
 
-- **laz-perf** (Apache-2.0) — the in-browser LAZ decoder
-- **COPC** — the streaming format
-- **EPT / Entwine** — the hierarchical tiling format and builder
+- **laz-perf** (Apache-2.0) — the in-browser LAZ decoder we use to read compressed point data
+- **COPC** (Cloud Optimized Point Cloud) — the open streaming format
+- **EPT / Entwine** — the hierarchical point-tile format and the Entwine tool that builds it
 
-Thank you to Howard Butler, Hobu, and the PDAL / COPC community.
+With particular thanks to **Howard Butler** and **Hobu, Inc.**, and the wider
+PDAL / COPC community whose work this builds on.
