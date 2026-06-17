@@ -44,6 +44,11 @@ uploaded.
   classification with its confidence, CRS, vertical datum, density, terrain-product
   readiness) and gives a single ready / caution / blocked verdict with an
   actionable "before you hand this off" list.
+- **Shared sessions remember your class filter** — when you hide classes in the
+  Classes panel (say, "ground only") and export an `.olvsession`, the saved file
+  now carries that filter, and re-importing restores exactly the classes you left
+  visible. The recipe stays purely additive: older sessions load unchanged, and a
+  session with no filter behaves as before.
 
 ## Honesty
 
@@ -63,6 +68,13 @@ uploaded.
 - `npm run test:release` runs the full browser-independent gate in one command:
   typecheck, the main-deferral lint, the production build, the bundle-budget
   check, the bucket partition check, and all four test buckets.
+- Open-format and analysis foundations landed as pure, fully-tested cores ahead
+  of their interactive surfaces: a measurement → GeoJSON/CSV serializer, a
+  two-epoch DTM change-detection engine (with Level-of-Detection thresholding and
+  co-registration honesty flags), an axis-aligned clipping-box region core, and a
+  breadth-first full-cloud sampling planner. Each is unit-tested in isolation; the
+  GPU/worker layers that drive them from the UI follow, so nothing ships
+  half-wired.
 
 Derived classification is a geometry-and-colour heuristic for visual inspection
 and research, not a survey-grade or producer classification. Treat any output as

@@ -90,4 +90,27 @@ describe('ClassVisibility', () => {
     v.setVisible(257, false); // -> index 1
     expect(v.isVisible(1)).toBe(false);
   });
+
+  it('hiddenCodes lists only the hidden codes, ascending', () => {
+    const v = new ClassVisibility();
+    expect(v.hiddenCodes()).toEqual([]);
+    v.setVisible(5, false);
+    v.setVisible(2, false);
+    expect(v.hiddenCodes()).toEqual([2, 5]);
+  });
+
+  it('setHidden reconstructs a filter from a saved list (round-trips hiddenCodes)', () => {
+    const v = new ClassVisibility();
+    v.setVisible(9, false); // pre-existing state that must be cleared first
+    v.setHidden([3, 4, 6]);
+    expect(v.hiddenCodes()).toEqual([3, 4, 6]);
+    expect(v.isVisible(9)).toBe(true); // showAll ran before re-hiding
+  });
+
+  it('setHidden([]) clears the filter', () => {
+    const v = new ClassVisibility();
+    v.setVisible(1, false);
+    v.setHidden([]);
+    expect(v.isFiltered()).toBe(false);
+  });
 });

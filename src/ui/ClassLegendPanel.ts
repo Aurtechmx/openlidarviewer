@@ -231,6 +231,18 @@ export class ClassLegendPanel {
   }
 
   /**
+   * Restore a saved class-filter (the hidden ASPRS codes) — used on session
+   * import so a shared `.olvsession` reproduces "ground only" / "vegetation
+   * hidden" exactly. Re-renders the per-class rows and emits `onChange` so the
+   * host re-applies the GPU mask. An empty list clears the filter.
+   */
+  applyFilter(hiddenCodes: readonly number[]): void {
+    this._visibility.setHidden(hiddenCodes);
+    this._render();
+    this._onChange?.(this._visibility);
+  }
+
+  /**
    * Reset the panel for a freshly loaded scan: a brand-new visibility state
    * (everything shown) and the given per-class "shown" counts. Pass an empty
    * map (or omit) when the cloud carries no classification channel — the panel

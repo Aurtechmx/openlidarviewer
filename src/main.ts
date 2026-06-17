@@ -3956,6 +3956,9 @@ function exportSession(): void {
     },
     colorMode: viewer.activeColorMode(),
     scanSummary,
+    // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
+    // filter is active; serializeSession drops an empty list.
+    classFilter: classLegendPanel.getVisibility().hiddenCodes(),
   });
   // `.olvsession` is the new canonical extension; the file is
   // still JSON internally (Mac/Linux's Open With dialog associates the
@@ -4007,6 +4010,12 @@ async function importSession(file: File): Promise<void> {
       // Fly the live camera to the saved viewpoint — the session capture's
       // "where I was looking when I saved" guarantee.
       viewer.applyCameraState(session.camera);
+    }
+    if (session.classFilter && session.classFilter.length > 0) {
+      // v5 — re-apply the saved class-visibility filter. The panel re-renders
+      // and emits onChange, which the host has wired to the GPU mask, so the
+      // restored scan shows the same classes the author left visible.
+      classLegendPanel.applyFilter(session.classFilter);
     }
   } catch (err) {
     dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
