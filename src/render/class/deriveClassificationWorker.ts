@@ -50,6 +50,9 @@ ctx.onmessage = (event: MessageEvent<ClassifyMessage>): void => {
         gridWidth: res.gridWidth,
         gridHeight: res.gridHeight,
         provenance: res.provenance,
+        confidence: res.confidence,
+        classConfidence: res.classConfidence,
+        warnings: res.warnings,
       },
       [res.codes.buffer],
     );

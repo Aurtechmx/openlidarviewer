@@ -56,6 +56,17 @@ import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import { countClasses } from './render/class/classHistogram';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
+import {
+  classificationCoverage,
+  type DeriveClassificationOptions,
+} from './render/class/deriveClassification';
+import {
+  buildScanStory,
+  buildExportHealth,
+  type ScanStoryInputs,
+} from './intelligence/scanStory';
+import { renderDatasetStoryCard, renderExportHealthPanel } from './ui/scanStoryViews';
+import { openModal } from './ui/Modal';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
@@ -277,21 +288,12 @@ const testApi = urlParams.has('test');
 // rather than a deliberate "single-pixel fixture" surface. They survive
 // in `samples/tiny.{las,ply}` for automated tests but are no longer
 // surfaced as user-facing entry points.
-const SAMPLES: Sample[] = [
-  {
-    id: 'stream',
-    label: 'Public streaming demo',
-    detail: '1.8 GB COPC · streamed',
-    url: 'https://s3.amazonaws.com/data.entwine.io/millsite.copc.laz',
-    name: 'millsite.copc.laz',
-    // Approximate on-disk size — feeds Stage's cellular-data + mobile-
-    // memory confirmation gates. The streaming pipeline only fetches
-    // visible tiles in practice, but the gate uses the worst-case full-
-    // file size because the user can't know how many tiles they'll
-    // ultimately request.
-    sizeBytes: 1_800_000_000,
-  },
-];
+// No bundled "demo" sample. The start screen's only streaming entry points are
+// the curated public-LiDAR picker (CURATED_LOCATIONS) and the open-from-URL
+// field — both of which surface only datasets with a confirmed open licence.
+// The previous Entwine "Public streaming demo" pointed at a bucket whose data
+// carried no stated open licence, so it was removed.
+const SAMPLES: Sample[] = [];
 
 /**
  * Public-LiDAR picker for the empty-state. The picker is a curated
@@ -1281,6 +1283,9 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
  * reports the result with the honest "derived, not survey-grade" caveat.
  */
 let classifyRunning = false;
+/** Confidence (0..1) of the most recent derive, for the Dataset Story / Export
+ *  Health synthesis. Null when the active scan carries no derived classification. */
+let lastDerivedConfidence: number | null = null;
 async function runDeriveClassification(): Promise<void> {
   if (classifyRunning) return;
   if (!activeId) {
@@ -1292,10 +1297,26 @@ async function runDeriveClassification(): Promise<void> {
     showLassoToast('Classify · this works on a loaded (non-streaming) scan.');
     return;
   }
-  if (cloud.classification && !cloud.classificationIsDerived) {
-    showLassoToast('Classify · this scan already carries a classification.');
+  // Only derive when there is no producer classification to disturb. A scan that
+  // is entirely Created(0)/Unclassified(1) — or carries no classification at all
+  // — is fully derivable (this is the v0.4.8 unblock: an all-class-0 file, like a
+  // raw photogrammetry export, is functionally unclassified and should classify).
+  // A previous DERIVE is also re-derivable (its heuristic codes aren't producer
+  // truth). But a real producer classification (any ASPRS code ≥ 2) is left
+  // intact — we never overwrite a surveyor's classes.
+  const isDerived = cloud.classificationIsDerived;
+  const cov = isDerived
+    ? { unclassified: cloud.pointCount, producer: 0 }
+    : classificationCoverage(cloud.classification, cloud.pointCount);
+  if (cov.producer > 0) {
+    showLassoToast('Classify · this scan already carries a producer classification — left untouched.');
     return;
   }
+  // RGB (when present) sharpens vegetation on photogrammetry, where geometry
+  // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
+  const deriveOptions: DeriveClassificationOptions =
+    cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {};
+
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
   try {
@@ -1303,7 +1324,7 @@ async function runDeriveClassification(): Promise<void> {
     const result = await deriveClassificationAsync(
       cloud.positions,
       cloud.pointCount,
-      {},
+      deriveOptions,
       undefined,
       undefined,
       // Live phase in the toast so a multi-second derive reads as progress,
@@ -1312,8 +1333,17 @@ async function runDeriveClassification(): Promise<void> {
     );
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
+    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
     classLegendPanel.setClasses(countClasses(result.codes));
-    classLegendPanel.setDerivedProvenance(true);
+    // Surface the run's honest confidence + caveats in the legend caption, not
+    // just a flat "derived" tag — so the user sees WHEN to trust it.
+    const confPct = Number.isFinite(result.confidence)
+      ? Math.round(result.confidence * 100)
+      : null;
+    classLegendPanel.setDerivedProvenance(true, {
+      confidencePct: confPct,
+      warnings: result.warnings,
+    });
     classLegendPanel.show();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
@@ -1323,13 +1353,73 @@ async function runDeriveClassification(): Promise<void> {
       .slice(0, 3)
       .map((e) => `${classificationLabel(e.code)} ${Math.round((e.n / total) * 100)}%`)
       .join(' · ');
-    showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.`);
+    const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
+    const warnText = result.warnings.length > 0 ? ` ⚠ ${result.warnings[0]}` : '';
+    showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText}${warnText}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!/abort/i.test(msg)) showLassoToast(`Classify · failed: ${msg}`);
   } finally {
     classifyRunning = false;
   }
+}
+
+/**
+ * Gather the facts the fitness-for-use synthesis ({@link buildScanStory} /
+ * {@link buildExportHealth}) reduces, from whatever the active scan already
+ * exposes. Defensive throughout: any missing piece simply yields a thinner —
+ * but never wrong — story, so the card/health surfaces work pre-analysis too.
+ */
+function buildCurrentStoryInputs(): ScanStoryInputs {
+  const cloud = activeId ? viewer.getCloud(activeId) : null;
+  const streaming = viewer.streamingCloud;
+  let facts: ReturnType<typeof analysePanel.storyFacts> = null;
+  try { facts = analysePanel.storyFacts(); } catch { /* not analysed */ }
+  let di: ReturnType<() => typeof inspector.datasetIntelligence> | null = null;
+  try { di = inspector.datasetIntelligence; } catch { /* no intelligence yet */ }
+
+  let pointCount: number | undefined;
+  let areaM2: number | undefined;
+  // Metadata read is the FALLBACK for georef; when an analysis has run, the
+  // authoritative quality.crsKnown / quality.datumKnown from storyFacts wins, so
+  // the Story / Health never disagree with the panel's own CRS / Datum chips.
+  let metaCrsKnown: boolean | undefined;
+  let metaDatumKnown: boolean | undefined;
+  let classification: 'none' | 'source' | 'derived' | undefined;
+  try {
+    if (cloud) {
+      const b = cloud.bounds();
+      areaM2 = (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]);
+      pointCount = cloud.pointCount;
+      const crs = cloud.metadata?.crs as { name?: string; verticalDatum?: unknown } | undefined;
+      metaCrsKnown = !!crs?.name;
+      metaDatumKnown = !!crs?.verticalDatum;
+      classification = cloud.classificationIsDerived ? 'derived' : cloud.classification ? 'source' : 'none';
+    } else if (streaming) {
+      const lb = streaming.localBounds();
+      areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]);
+      pointCount = streaming.sourcePointCount;
+      metaCrsKnown = !!streaming.crs()?.name;
+      metaDatumKnown = false;
+      // Don't claim producer classification a streaming scan may not carry —
+      // read the actual availability instead of hardcoding 'source'.
+      classification = streaming.availableColorModes().includes('classification') ? 'source' : 'none';
+    }
+  } catch { /* a partial story is fine */ }
+
+  return {
+    pointCount,
+    areaM2,
+    surfaceTier: facts?.surfaceTier,
+    products: facts?.products,
+    density: di?.density.bucket,
+    groundVisibility: di?.groundVisibility.bucket,
+    coverageMode: di?.coverage.bucket,
+    crsKnown: facts?.crsKnown ?? metaCrsKnown,
+    datumKnown: facts?.datumKnown ?? metaDatumKnown,
+    classification,
+    classConfidence: lastDerivedConfidence,
+  };
 }
 
 function buildActionRegistry(): Action[] {
@@ -1432,6 +1522,26 @@ function buildActionRegistry(): Action[] {
       keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],
       run: () => {
         void runDeriveClassification();
+      },
+    },
+    {
+      id: 'story.dataset',
+      title: 'Dataset Story',
+      section: 'Analyse',
+      hint: 'What this scan is, how good it is, what it is best for, and the next step.',
+      keywords: ['story', 'fitness', 'summary', 'overview', 'what is this', 'good for'],
+      run: () => {
+        openModal({ title: 'Dataset Story', body: renderDatasetStoryCard(buildScanStory(buildCurrentStoryInputs())) });
+      },
+    },
+    {
+      id: 'export.health',
+      title: 'Export health check',
+      section: 'Export',
+      hint: 'What is about to leave the app: scope, classification, CRS, datum, density, readiness.',
+      keywords: ['export', 'health', 'check', 'hand-off', 'ready', 'before export'],
+      run: () => {
+        openModal({ title: 'Export health check', body: renderExportHealthPanel(buildExportHealth(buildCurrentStoryInputs())) });
       },
     },
     {
@@ -3837,6 +3947,9 @@ function exportSession(): void {
     },
     colorMode: viewer.activeColorMode(),
     scanSummary,
+    // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
+    // filter is active; serializeSession drops an empty list.
+    classFilter: classLegendPanel.getVisibility().hiddenCodes(),
   });
   // `.olvsession` is the new canonical extension; the file is
   // still JSON internally (Mac/Linux's Open With dialog associates the
@@ -3888,6 +4001,12 @@ async function importSession(file: File): Promise<void> {
       // Fly the live camera to the saved viewpoint — the session capture's
       // "where I was looking when I saved" guarantee.
       viewer.applyCameraState(session.camera);
+    }
+    if (session.classFilter && session.classFilter.length > 0) {
+      // v5 — re-apply the saved class-visibility filter. The panel re-renders
+      // and emits onChange, which the host has wired to the GPU mask, so the
+      // restored scan shows the same classes the author left visible.
+      classLegendPanel.applyFilter(session.classFilter);
     }
   } catch (err) {
     dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
@@ -5102,6 +5221,7 @@ function removeCloud(id: string): void {
  * state — the caller adds the replacement immediately.
  */
 function clearOpenStaticLayers(): void {
+  lastDerivedConfidence = null;
   for (const id of viewer.clouds()) {
     viewer.removeCloud(id);
     inspector.removeCloud(id);

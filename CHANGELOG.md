@@ -2,6 +2,44 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.8] - 2026-06-17
+
+### Added
+
+- **Data sources & credits.** A new credits page (in-app `credits.html`, reachable
+  from a Credits link in the header, mirrored in `docs/credits.md`) attributes the
+  streamed sample datasets to their providers — USGS 3DEP, swisstopo, GURS, and AHN
+  — and thanks the open-source projects the viewer is built on (three.js, loaders.gl,
+  proj4, pdf-lib, laz-perf). The README gained an Acknowledgements section tying
+  these together.
+
+### Changed
+
+- **Curated datasets restricted to confirmed-open sources.** The public-LiDAR
+  picker now lists only datasets with a confirmed open licence — USGS 3DEP
+  (public domain) and the swisstopo / GURS / AHN national programmes. Sample
+  datasets whose licence could not be confirmed were removed, and the bundled
+  "Public streaming demo" button (which pointed at an unlicensed demo bucket) was
+  removed; the open-from-URL field still accepts any COPC/EPT URL.
+- **Sessions remember the class-visibility filter.** Hiding classes (e.g. "ground
+  only") and exporting an `.olvsession` now carries that filter; re-importing
+  restores it. Schema v5, strictly additive — older sessions load unchanged.
+
+### Fixed
+
+- **Third-party notices completeness.** `THIRD_PARTY_NOTICES.md` now lists `proj4`
+  (MIT) and the Manrope and JetBrains Mono fonts (OFL-1.1), which were bundled but
+  previously unlisted.
+- Corrected the Slovenia (GURS) dataset licence label, which had asserted a specific
+  CC version the sources don't agree on.
+
+### Under the hood
+
+- Tested, pure cores landed ahead of their interactive surfaces: measurement
+  GeoJSON/CSV export, two-epoch DTM change detection, an axis-aligned clipping-box
+  region core, a breadth-first full-cloud sampling planner, and a gzip (`.las.gz`)
+  export path. Each is unit-tested in isolation; the UI that drives them follows.
+
 ## [0.4.7] - 2026-06-15
 
 A correctness and honesty pass across the load, export, and analysis paths,

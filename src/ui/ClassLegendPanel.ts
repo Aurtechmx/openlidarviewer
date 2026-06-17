@@ -231,6 +231,18 @@ export class ClassLegendPanel {
   }
 
   /**
+   * Restore a saved class-filter (the hidden ASPRS codes) — used on session
+   * import so a shared `.olvsession` reproduces "ground only" / "vegetation
+   * hidden" exactly. Re-renders the per-class rows and emits `onChange` so the
+   * host re-applies the GPU mask. An empty list clears the filter.
+   */
+  applyFilter(hiddenCodes: readonly number[]): void {
+    this._visibility.setHidden(hiddenCodes);
+    this._render();
+    this._onChange?.(this._visibility);
+  }
+
+  /**
    * Reset the panel for a freshly loaded scan: a brand-new visibility state
    * (everything shown) and the given per-class "shown" counts. Pass an empty
    * map (or omit) when the cloud carries no classification channel — the panel
@@ -253,9 +265,26 @@ export class ClassLegendPanel {
    * Show or hide the "Derived (heuristic) — not survey-grade" caption. The host
    * calls this with `true` right after applying a derived classification, so
    * the legend honestly reads as heuristic rather than authoritative.
+   *
+   * Optional `info` enriches the caption with the run's confidence and its top
+   * caveat, so the user sees not just THAT it is derived but how much to trust
+   * it. Omit `info` (or pass nothing) for the plain caption.
    */
-  setDerivedProvenance(on: boolean): void {
+  setDerivedProvenance(
+    on: boolean,
+    info?: { confidencePct?: number | null; warnings?: readonly string[] },
+  ): void {
     this._provenance.classList.toggle('olv-hidden', !on);
+    let text = 'Derived (heuristic) — not survey-grade. Validate before relying on it.';
+    if (on && info) {
+      if (typeof info.confidencePct === 'number') {
+        text += ` Confidence ${info.confidencePct}%.`;
+      }
+      if (info.warnings && info.warnings.length > 0) {
+        text += ` ⚠ ${info.warnings[0]}`;
+      }
+    }
+    this._provenance.textContent = text;
   }
 
   /**

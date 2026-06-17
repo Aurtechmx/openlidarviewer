@@ -67,3 +67,22 @@ pw.sandbox.config.mjs
 
 # local-only scratch
 scratch/
+
+# ── Private R&D artifacts — keep public/private separation airtight ──────────
+# By convention these live OUTSIDE this published repo (in the parent project
+# folder). Ignoring the naming patterns is defence-in-depth: even a stray copy
+# dropped inside the repo can never be accidentally committed or shipped in the
+# git-archive source zip. (Public RELEASE_NOTES_*.md are intentionally NOT here.)
+_PRIVATE/
+RESEARCH DOCUMENTS/
+*WORKPLAN*.md
+*WHITEPAPER*.md
+*AUDIT*.md
+TECH_EVALUATION*.md
+QUALITYREVISION*.md
+GITHUB_RELEASE_*.md
+ELITE_*.md
+# Large / classified sample clouds are private test data, not shipped fixtures
+# (the tracked tiny.las / tiny.laz fixtures are bytes, not *.copc.laz).
+*.copc.laz
+*.copc.laz.*

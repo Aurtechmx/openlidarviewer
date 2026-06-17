@@ -66,6 +66,25 @@ export class ClassVisibility {
     return out;
   }
 
+  /** Returns the HIDDEN class codes in ascending order (the saved-filter shape). */
+  hiddenCodes(): number[] {
+    const out: number[] = [];
+    for (let code = 0; code < CLASS_COUNT; code++) {
+      if (!this.visible[code]) out.push(code);
+    }
+    return out;
+  }
+
+  /**
+   * Reconstructs the filter from a saved hidden-code list: shows everything,
+   * then hides exactly the given codes. Out-of-range codes wrap via `& 0xff`
+   * (matching {@link setVisible}); an empty list clears the filter.
+   */
+  setHidden(codes: readonly number[]): void {
+    this.visible.fill(true);
+    for (const code of codes) this.visible[code & 0xff] = false;
+  }
+
   /**
    * Returns a 256-entry mask for a GPU uniform: `1` where the class is
    * shown, `0` where hidden. A fresh array is returned each call.

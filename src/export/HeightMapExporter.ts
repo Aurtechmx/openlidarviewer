@@ -23,7 +23,7 @@ import type {
   HeightMapRamp,
 } from './types';
 import { runStudioExport } from './BaseExportMode';
-import { formatMetres } from './ScanReportRenderer';
+import { formatLinear, linearUnitOf } from './ScanReportRenderer';
 
 const DEFAULT_RAMP: HeightMapRamp = 'terrain';
 
@@ -68,6 +68,8 @@ export const heightMapExporter: ExportFactory = {
       throw new Error('HeightMap: no cloud loaded — cannot describe the export.');
     }
     const ramp: HeightMapRamp = options.ramp ?? DEFAULT_RAMP;
+    // Native CRS units — Min/Max Z must carry the real unit (ft for foot CRSs).
+    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
 
     return runStudioExport(
       context,
@@ -77,8 +79,8 @@ export const heightMapExporter: ExportFactory = {
       options,
       [
         { label: 'Ramp',  value: ramp },
-        { label: 'Min Z', value: formatMetres(aabb[2]) },
-        { label: 'Max Z', value: formatMetres(aabb[5]) },
+        { label: 'Min Z', value: formatLinear(aabb[2], unit) },
+        { label: 'Max Z', value: formatLinear(aabb[5], unit) },
       ],
       {
         ramp,

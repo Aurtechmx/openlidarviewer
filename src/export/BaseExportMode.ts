@@ -37,8 +37,10 @@ import {
   composeClassScopeBannerOntoBlob,
   composeScanReportOntoBlob,
   formatInt,
-  formatMetres,
+  formatLinear,
   formatTimestamp,
+  linearUnitLabel,
+  linearUnitOf,
 } from './ScanReportRenderer';
 import type { ScanReportData, ScanReportRow } from './ScanReportRenderer';
 
@@ -172,6 +174,11 @@ export function baseReportRows(
   adapter: ExportSceneAdapter,
   aabb: readonly [number, number, number, number, number, number] | null,
 ): ScanReportRow[] {
+  // Coordinates are stored in the scan's native CRS units, so footprint
+  // dimensions and density must carry the real unit (ft for foot CRSs), not a
+  // hardcoded metre. Unknown/absent unit ⇒ metre default.
+  const unit = linearUnitOf(adapter.crsLabel()?.unit);
+  const uLabel = linearUnitLabel(unit);
   const rows: ScanReportRow[] = [
     { label: 'Points', value: formatInt(adapter.sourcePointCount()) },
   ];
@@ -179,13 +186,13 @@ export function baseReportRows(
     const w = aabb[3] - aabb[0];
     const d = aabb[4] - aabb[1];
     const h = aabb[5] - aabb[2];
-    rows.push({ label: 'Width',  value: formatMetres(w) });
-    rows.push({ label: 'Depth',  value: formatMetres(d) });
-    rows.push({ label: 'Height', value: formatMetres(h) });
-    // Density — points per square metre on the XY footprint.
+    rows.push({ label: 'Width',  value: formatLinear(w, unit) });
+    rows.push({ label: 'Depth',  value: formatLinear(d, unit) });
+    rows.push({ label: 'Height', value: formatLinear(h, unit) });
+    // Density — points per square unit on the XY footprint.
     if (w > 0 && d > 0) {
       const density = adapter.sourcePointCount() / (w * d);
-      rows.push({ label: 'Density', value: `${density.toFixed(0)} pts/m²` });
+      rows.push({ label: 'Density', value: `${density.toFixed(0)} pts/${uLabel}²` });
     }
   }
   // Capability summary — which channels the export can honour. Matches the

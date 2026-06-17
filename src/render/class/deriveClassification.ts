@@ -46,6 +46,31 @@ export const DERIVED_HIGH_VEG = 5;
 export const DERIVED_BUILDING = 6;
 export const DERIVED_UNCLASSIFIED = 1;
 
+/**
+ * How "classifiable" an existing classification is: how many points are still
+ * unclassified (ASPRS 0 Created / 1 Unclassified) vs already carry a producer
+ * class. Drives the Classify gate — a cloud with NO unclassified points has
+ * nothing to derive; an all-unclassified cloud (or no classification at all) is
+ * fully derivable; a partial one is a "classify the gaps" candidate. Pure.
+ */
+export function classificationCoverage(
+  classification: ArrayLike<number> | null | undefined,
+  count: number,
+): { readonly unclassified: number; readonly producer: number } {
+  if (!classification) return { unclassified: count, producer: 0 };
+  const n = Math.min(count, classification.length);
+  let unclassified = 0;
+  let producer = 0;
+  for (let i = 0; i < n; i++) {
+    const c = classification[i];
+    if (c === 0 || c === 1) unclassified++;
+    else producer++;
+  }
+  // Points past the (shorter) classification array are unclassified by default.
+  unclassified += Math.max(0, count - n);
+  return { unclassified, producer };
+}
+
 /** Tunable parameters; every field has a literature-anchored default. */
 export interface DeriveClassificationOptions {
   /**
@@ -83,6 +108,41 @@ export interface DeriveClassificationOptions {
   readonly buildingMinHagM?: number;
   /** Hard cap on either grid dimension; cellSize grows to respect it. */
   readonly maxGridDim?: number;
+  /**
+   * Optional per-point RGB(A) colours (uint8 or uint16; only ratios are used,
+   * so the scale is immaterial), in the SAME point order as `positions`. When
+   * present, a vegetation-greenness index (normalised Excess-Green) supplements
+   * the geometry: a tall, locally-smooth patch that is strongly green is read as
+   * canopy, not a building — the cue that matters on photogrammetry, where the
+   * surface is noisy and roughness alone is unreliable. Stride (3 = RGB,
+   * 4 = RGBA) is auto-detected from `colors.length / count`. Absent ⇒
+   * geometry-only and byte-identical to before.
+   */
+  readonly colors?: Uint8Array | Uint16Array;
+  /**
+   * Normalised Excess-Green `(2G − R − B) / (R + G + B)` at/above which a tall
+   * smooth patch is treated as vegetation rather than a building. Only consulted
+   * when `colors` is supplied. Default 0.06 (a mild green bias; bare soil,
+   * concrete and rooftops sit well below it).
+   */
+  readonly vegGreennessMin?: number;
+  /**
+   * Minimum ground support (fraction of a point's four DTM corner cells that
+   * were actually measured, not hole-filled) for a TALL point to be classified.
+   * Below it, the height was sampled mostly against fabricated void-fill, so the
+   * point is left Unclassified rather than guessed. Default 0.5 (≥ 2 of 4 corners
+   * measured). Set to 0 to disable the void downgrade.
+   */
+  readonly minGroundSupport?: number;
+  /**
+   * Optional producer classification to PRESERVE (same point order). Any point
+   * whose existing code is a real producer class — anything other than
+   * 0 (Created, never classified) or 1 (Unclassified) — keeps that code
+   * verbatim; only the unclassified remainder is derived. This is the
+   * "classify the gaps" mode: a scan that already carries Ground keeps it and
+   * gets vegetation / building filled in around it. Absent ⇒ derive every point.
+   */
+  readonly existingClassification?: Uint8Array;
 }
 
 /** Per-class counts plus the run's honest provenance. */
@@ -100,9 +160,26 @@ export interface DeriveClassificationResult {
   readonly derived: true;
   /** One-line honest provenance string for the legend / report. */
   readonly provenance: string;
+  /**
+   * Overall trust in the derived classification, 0..1. Blends how well the
+   * ground was actually MEASURED (vs hole-filled) under the points, the point
+   * density, and how coarse the grid had to become. Low when the scan is sparse,
+   * full of voids, or forced onto a coarse grid — exactly when a heuristic
+   * classification is least reliable. NaN only for a not-computed result.
+   */
+  readonly confidence: number;
+  /** Per-emitted-code mean support (0..1) — which classes rest on real ground. */
+  readonly classConfidence: Readonly<Record<number, number>>;
+  /**
+   * Honest, human-readable caveats raised during the run (large voids, sparse
+   * ground, coarse grid, …). Empty when the scan classified cleanly.
+   */
+  readonly warnings: readonly string[];
 }
 
 const DEFAULTS = {
+  vegGreennessMin: 0.06,
+  minGroundSupport: 0.5,
   maxObjectSizeM: 20,
   elevThresholdM: 0.3,
   slope: 0.15,
@@ -113,6 +190,9 @@ const DEFAULTS = {
   buildingMinHagM: 2.5,
   maxGridDim: 768,
 } as const;
+
+/** Clamp to [0, 1]. */
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0);
 
 /** A finite-only min/max scan over the XY footprint and Z. */
 interface Bounds {
@@ -264,6 +344,9 @@ export function deriveClassification(
     gridHeight: 0,
     derived: true,
     provenance: `Derived classification not computed (${reason}).`,
+    confidence: NaN,
+    classConfidence: {},
+    warnings: [`Classification not computed (${reason}).`],
   });
 
   if (count <= 0 || b.finite < 3 || !(b.maxX > b.minX) || !(b.maxY > b.minY)) {
@@ -291,6 +374,16 @@ export function deriveClassification(
     const c = cellOf(x, y);
     const cur = gridMin[c];
     if (!Number.isFinite(cur) || z < cur) gridMin[c] = z;
+  }
+  // MEASURED mask — which ground cells actually saw a point, captured BEFORE the
+  // holes are filled. fillHoles fabricates a plausible bare earth inside voids
+  // (so the math stays finite), but a height measured against fabricated ground
+  // is not trustworthy. This mask lets the classifier (a) downgrade points that
+  // sit over filled-in voids and (b) report an honest confidence + void warning,
+  // instead of silently presenting an interpolated surface as if it were real.
+  const measured = new Uint8Array(W * H);
+  for (let c = 0; c < gridMin.length; c++) {
+    if (Number.isFinite(gridMin[c])) measured[c] = 1;
   }
   fillHoles(gridMin, W, H);
 
@@ -330,6 +423,24 @@ export function deriveClassification(
     const a = v00 + (v10 - v00) * fx;
     const c2 = v01 + (v11 - v01) * fx;
     return a + (c2 - a) * fy;
+  };
+
+  // Ground support at a point: the fraction (0..1) of the four DTM bilinear
+  // corner cells that were actually MEASURED (not hole-filled). A point's own
+  // cell is always measured, so a real point scores ≥ 0.25; 1.0 means the local
+  // ground is fully observed, while a low value means the height was sampled
+  // mostly against fabricated void-fill and should not be trusted.
+  const supportAt = (x: number, y: number): number => {
+    const gx = (x - b.minX) / cell;
+    const gy = (y - b.minY) / cell;
+    let x0 = Math.floor(gx), y0 = Math.floor(gy);
+    if (x0 < 0) x0 = 0; if (x0 > W - 2) x0 = Math.max(0, W - 2);
+    if (y0 < 0) y0 = 0; if (y0 > H - 2) y0 = Math.max(0, H - 2);
+    const x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1);
+    return (
+      measured[y0 * W + x0] + measured[y0 * W + x1] +
+      measured[y1 * W + x0] + measured[y1 * W + x1]
+    ) / 4;
   };
 
   const hag = new Float32Array(count);
@@ -387,36 +498,147 @@ export function deriveClassification(
     return Math.sqrt(accM2 / (accN - 1)) <= o.buildingRoughnessMaxM;
   };
 
-  // 6. Rule classification.
+  // Optional RGB greenness cue (normalised Excess-Green). Only consulted to keep
+  // a tall, locally-smooth GREEN patch from being mis-filed as a building —
+  // never to invent vegetation where the geometry says ground. `colorStride`
+  // (3 = RGB, 4 = RGBA) is inferred from the buffer length; an unusable buffer
+  // disables the cue rather than throwing.
+  const colors = options.colors;
+  const colorStride =
+    colors && count > 0 && colors.length >= count * 3
+      ? colors.length % count === 0 && colors.length / count === 4
+        ? 4
+        : colors.length / count >= 3
+          ? 3
+          : 0
+      : 0;
+  const greenAt = (i: number): number => {
+    const j = i * colorStride;
+    const r = colors![j], g = colors![j + 1], bl = colors![j + 2];
+    const sum = r + g + bl;
+    return sum > 0 ? (2 * g - r - bl) / sum : 0;
+  };
+  const useGreen = colorStride >= 3;
+
+  // 6. Rule classification + per-point ground support.
   phase('Classifying');
   const codes = new Uint8Array(count);
-  const counts: Record<number, number> = {};
-  const bump = (code: number): void => { counts[code] = (counts[code] ?? 0) + 1; };
+  const support = new Float32Array(count); // 0..1 per finite point; NaN-pts → 0
+  let supportSum = 0;
+  let supportN = 0;
+  let lowSupportN = 0; // points whose ground was mostly hole-filled
+  let voidDowngraded = 0;
   for (let i = 0; i < count; i++) {
     const h = hag[i];
     let code: number;
     if (!Number.isFinite(h)) {
       code = DERIVED_UNCLASSIFIED;
-    } else if (h <= o.groundBandM) {
-      code = DERIVED_GROUND;
     } else {
       const x = positions[i * 3], y = positions[i * 3 + 1];
-      let cx = Math.floor((x - b.minX) / cell); if (cx < 0) cx = 0; else if (cx >= W) cx = W - 1;
-      let cy = Math.floor((y - b.minY) / cell); if (cy < 0) cy = 0; else if (cy >= H) cy = H - 1;
-      const planar = neighbourhoodIsPlanar(cx, cy);
-      if (planar && h >= o.buildingMinHagM) {
-        code = DERIVED_BUILDING;
-      } else if (h < o.lowVegBandM) {
-        code = DERIVED_LOW_VEG;
-      } else if (h < o.medVegBandM) {
-        code = DERIVED_MED_VEG;
+      const s = supportAt(x, y);
+      support[i] = s;
+      supportSum += s; supportN++;
+      if (s < 0.5) lowSupportN++;
+      if (h <= o.groundBandM) {
+        code = DERIVED_GROUND;
+      } else if (s < o.minGroundSupport) {
+        // Tall point, but its height was sampled mostly against hole-filled
+        // void — we cannot trust the HAG, so we refuse to guess a class here.
+        code = DERIVED_UNCLASSIFIED;
+        voidDowngraded++;
       } else {
-        code = DERIVED_HIGH_VEG;
+        let cx = Math.floor((x - b.minX) / cell); if (cx < 0) cx = 0; else if (cx >= W) cx = W - 1;
+        let cy = Math.floor((y - b.minY) / cell); if (cy < 0) cy = 0; else if (cy >= H) cy = H - 1;
+        const planar = neighbourhoodIsPlanar(cx, cy);
+        // A smooth, tall patch is a building UNLESS it reads strongly green — on
+        // photogrammetry, canopy is often locally smooth and would otherwise be
+        // mistaken for a roof. Green ⇒ fall through to the vegetation bands.
+        const green = useGreen && greenAt(i) >= o.vegGreennessMin;
+        if (planar && h >= o.buildingMinHagM && !green) {
+          code = DERIVED_BUILDING;
+        } else if (h < o.lowVegBandM) {
+          code = DERIVED_LOW_VEG;
+        } else if (h < o.medVegBandM) {
+          code = DERIVED_MED_VEG;
+        } else {
+          code = DERIVED_HIGH_VEG;
+        }
       }
     }
     codes[i] = code;
-    bump(code);
   }
+
+  // Classify-the-gaps: keep every producer-assigned class (anything other than
+  // 0/1) verbatim, overwriting only the derived value. The derived pass still
+  // ran over ALL points (it needs them for the ground surface), but its output
+  // fills only the unclassified holes — a scan that arrived with Ground keeps
+  // it and gains vegetation / building around it.
+  const existing = options.existingClassification;
+  const preserved = !!(existing && existing.length === count);
+  if (preserved) {
+    for (let i = 0; i < count; i++) {
+      const ex = existing![i];
+      if (ex !== DERIVED_UNCLASSIFIED && ex !== 0) codes[i] = ex;
+    }
+  }
+
+  // Counts + per-class support accumulation over the FINAL codes, so the legend
+  // totals and the per-class confidence both match what is rendered.
+  const counts: Record<number, number> = {};
+  const classSupportSum: Record<number, number> = {};
+  for (let i = 0; i < count; i++) {
+    const c = codes[i];
+    counts[c] = (counts[c] ?? 0) + 1;
+    classSupportSum[c] = (classSupportSum[c] ?? 0) + support[i];
+  }
+  const classConfidence: Record<number, number> = {};
+  for (const k of Object.keys(counts)) {
+    const c = Number(k);
+    classConfidence[c] = counts[c] > 0 ? classSupportSum[c] / counts[c] : 0;
+  }
+
+  // Overall confidence — the mean ground support, tempered by density (returns
+  // per ground cell) and grid coarseness (how far cellSize had to grow past the
+  // ~1 m the literature grids at). Each factor is a 0..1 multiplier so any one
+  // weak signal pulls the score down, and the score never overclaims.
+  const meanSupport = supportN > 0 ? supportSum / supportN : 0;
+  const ptsPerCell = (count / (W * H));
+  const densityFactor = clamp01(ptsPerCell / (ptsPerCell + 1)); // 0.5 at ~1 pt/cell
+  const coarseness = clamp01(2 / (2 + Math.max(0, cell - 1))); // 1 at ≤1 m, decays as cell grows
+  const confidence = clamp01(meanSupport * (0.5 + 0.5 * densityFactor) * coarseness);
+
+  // Void measure is POINT-based (fraction of points sitting over interpolated
+  // ground), NOT grid-based — an irregular scan footprint leaves the bounding
+  // box full of out-of-footprint empty cells that say nothing about the data
+  // under the actual points, so a grid-fill ratio would cry "voids" on a clean
+  // diagonal scan. Support is measured only where points are.
+  const lowSupportFraction = supportN > 0 ? lowSupportN / supportN : 0;
+  const warnings: string[] = [];
+  if (lowSupportFraction > 0.25) {
+    warnings.push(
+      `Large unsupported voids — ${Math.round(lowSupportFraction * 100)}% of points sit ` +
+        `over interpolated ground; derived classification is unreliable there.`,
+    );
+  }
+  if (meanSupport < 0.6) {
+    warnings.push('Sparse ground support — many heights rest on interpolated ground.');
+  }
+  if (voidDowngraded > 0) {
+    warnings.push(
+      `${voidDowngraded} point${voidDowngraded === 1 ? '' : 's'} over voids were left ` +
+        `Unclassified rather than guessed.`,
+    );
+  }
+  if (cell > 1.5) {
+    warnings.push(
+      `Coarse classification grid (${cell.toFixed(1)} m) — fine structure may be missed.`,
+    );
+  }
+
+  const modeNotes: string[] = [];
+  if (useGreen) modeNotes.push('RGB vegetation index');
+  if (preserved) modeNotes.push('producer classes preserved (gaps only)');
+  const modeSuffix = modeNotes.length > 0 ? ` (${modeNotes.join('; ')})` : '';
 
   return {
     codes,
@@ -427,7 +649,10 @@ export function deriveClassification(
     derived: true,
     provenance:
       `Derived (heuristic) classification — progressive morphological ground ` +
-      `filter + height-above-ground at ${cell.toFixed(2)} m grid. Not a ` +
-      `survey-grade or producer classification; validate before relying on it.`,
+      `filter + height-above-ground at ${cell.toFixed(2)} m grid${modeSuffix}. ` +
+      `Not a survey-grade or producer classification; validate before relying on it.`,
+    confidence,
+    classConfidence,
+    warnings,
   };
 }
