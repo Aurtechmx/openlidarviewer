@@ -34,6 +34,7 @@
     "test:build": "npm run build && BUILD_CONTRACT=1 vitest run tests/chunkIsolation.test.ts tests/orbitSmoke.test.ts",
     "test:e2e": "playwright test",
     "test:smoke": "playwright test tests/e2e/smoke.spec.ts",
+    "test:release": "npm run typecheck && npm run lint:main-deferral && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:terrain && npm run test:ui && npm run test:slow",
     "lint:main-deferral": "node scripts/lint-main-deferral.mjs"
   },
   "dependencies": {

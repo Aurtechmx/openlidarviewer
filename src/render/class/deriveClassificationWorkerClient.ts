@@ -36,6 +36,9 @@ interface OkReply {
   gridWidth: number;
   gridHeight: number;
   provenance: string;
+  confidence: number;
+  classConfidence: Record<number, number>;
+  warnings: readonly string[];
 }
 interface ErrorReply {
   jobId: number;
@@ -153,6 +156,9 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
         gridHeight: reply.gridHeight,
         derived: true,
         provenance: reply.provenance,
+        confidence: reply.confidence,
+        classConfidence: reply.classConfidence,
+        warnings: reply.warnings,
       });
     } else {
       pending.reject(new Error(reply.error));

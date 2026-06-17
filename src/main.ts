@@ -1333,7 +1333,15 @@ async function runDeriveClassification(): Promise<void> {
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
     classLegendPanel.setClasses(countClasses(result.codes));
-    classLegendPanel.setDerivedProvenance(true);
+    // Surface the run's honest confidence + caveats in the legend caption, not
+    // just a flat "derived" tag — so the user sees WHEN to trust it.
+    const confPct = Number.isFinite(result.confidence)
+      ? Math.round(result.confidence * 100)
+      : null;
+    classLegendPanel.setDerivedProvenance(true, {
+      confidencePct: confPct,
+      warnings: result.warnings,
+    });
     classLegendPanel.show();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
@@ -1343,7 +1351,9 @@ async function runDeriveClassification(): Promise<void> {
       .slice(0, 3)
       .map((e) => `${classificationLabel(e.code)} ${Math.round((e.n / total) * 100)}%`)
       .join(' · ');
-    showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.`);
+    const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
+    const warnText = result.warnings.length > 0 ? ` ⚠ ${result.warnings[0]}` : '';
+    showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText}${warnText}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!/abort/i.test(msg)) showLassoToast(`Classify · failed: ${msg}`);
