@@ -86,6 +86,7 @@ import { sampleTerrain } from '../terrain/contour/sampleTerrain';
 import { terrainAssessment, type SupportingMetric } from '../terrain/contour/terrainAssessment';
 import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
 import { terrainProducts } from '../terrain/contour/terrainProducts';
+import type { FitnessTier, StoryProduct } from '../intelligence/scanStory';
 import { explainLimitations } from '../terrain/contour/whyNotReasons';
 import {
   renderTerrainProducts,
@@ -1316,6 +1317,27 @@ export class AnalysePanel {
    */
   expand(): void {
     this.element.classList.remove('olv-collapsed');
+  }
+
+  /**
+   * Story-relevant facts from the CURRENT terrain assessment — the surface tier
+   * and the per-product Ready/Preview/Blocked grades — for the Dataset Story /
+   * Export Health synthesis. Returns null when no analysis has run, so the
+   * story degrades to "not yet analysed" rather than fabricating a verdict.
+   */
+  storyFacts(): { surfaceTier: FitnessTier; products: StoryProduct[] } | null {
+    if (!this._result) return null;
+    const a = terrainAssessment(this._result);
+    const workflows = recommendedWorkflows(a, this._result.quality);
+    const products: StoryProduct[] = terrainProducts(a, workflows).map((p) => ({
+      label: p.label,
+      status: p.status === 'ready' ? 'Ready' : p.status === 'preview' ? 'Preview' : 'Blocked',
+    }));
+    const tier: FitnessTier =
+      a.status === 'Good' || a.status === 'Preview' || a.status === 'Limited' || a.status === 'Blocked'
+        ? a.status
+        : 'Unknown';
+    return { surfaceTier: tier, products };
   }
 
   /** Reflect the host's override + the effective route in the "Treat as"
