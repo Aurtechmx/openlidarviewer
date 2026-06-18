@@ -28,6 +28,7 @@ import type {
   EptHierarchyType,
   EptMetadata,
   EptSchemaField,
+  EptSrsCodes,
 } from './eptTypes';
 
 /** Quick URL test for the EPT entrypoint. */
@@ -178,13 +179,24 @@ export function parseEptMetadata(text: string): EptDetection {
     return { isEpt: false, reason: 'EPT manifest is missing a valid bounds array.' };
   }
 
-  // ── srs (optional WKT string) ────────────────────────────────────────────
+  // ── srs (optional WKT string + authority codes) ──────────────────────────
+  // The EPT spec's `srs` is an object with optional `wkt`, `authority`,
+  // `horizontal`, and `vertical`. We read the WKT (richest) AND the codes, so
+  // a dataset that names its CRS / vertical datum only by EPSG code is still
+  // georeferenced. A bare string `srs` is treated as a WKT for older writers.
   let srs: string | undefined;
+  let srsCodes: EptSrsCodes | undefined;
   const srsField = json['srs'];
   if (isPlainObject(srsField)) {
     const wkt = srsField['wkt'];
     if (typeof wkt === 'string' && wkt.trim().length > 0) {
       srs = wkt;
+    }
+    const authority = typeof srsField['authority'] === 'string' ? srsField['authority'] : undefined;
+    const horizontalEpsg = parseEpsgCode(srsField['horizontal']);
+    const verticalEpsg = parseEpsgCode(srsField['vertical']);
+    if (authority !== undefined || horizontalEpsg !== undefined || verticalEpsg !== undefined) {
+      srsCodes = { authority, horizontalEpsg, verticalEpsg };
     }
   } else if (typeof srsField === 'string' && srsField.trim().length > 0) {
     srs = srsField;
@@ -199,8 +211,19 @@ export function parseEptMetadata(text: string): EptDetection {
     schema: parsedSchema,
     bounds: { conforming, cubic },
     srs,
+    srsCodes,
   };
   return { isEpt: true, metadata };
+}
+
+/** Parse an EPT srs code, which the spec types as a STRING (e.g. "32612"). */
+function parseEpsgCode(v: unknown): number | undefined {
+  if (typeof v === 'number' && Number.isInteger(v) && v > 0) return v;
+  if (typeof v === 'string' && /^\d+$/.test(v.trim())) {
+    const n = Number.parseInt(v.trim(), 10);
+    return n > 0 ? n : undefined;
+  }
+  return undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

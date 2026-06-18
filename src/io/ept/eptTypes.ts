@@ -69,6 +69,23 @@ export interface EptMetadata {
   readonly bounds: EptBounds;
   /** OGC WKT string for the source CRS, when the dataset carries one. */
   readonly srs?: string;
+  /**
+   * Authority-code CRS from `ept.json`'s `srs` object, when present. EPT may
+   * declare its CRS by `horizontal` / `vertical` EPSG codes (with `authority`)
+   * INSTEAD OF, or in addition to, a `wkt` string — so a dataset that names its
+   * vertical datum only by code is still georeferenced and its datum surfaced.
+   */
+  readonly srsCodes?: EptSrsCodes;
+}
+
+/** Authority-code CRS fields parsed from an EPT `srs` object. */
+export interface EptSrsCodes {
+  /** CRS authority (typically "EPSG"). */
+  readonly authority?: string;
+  /** Horizontal CRS code (e.g. 32612). */
+  readonly horizontalEpsg?: number;
+  /** Vertical (height) datum code (e.g. 5703), when declared. */
+  readonly verticalEpsg?: number;
 }
 
 /** What `detectEpt` returns on success. */

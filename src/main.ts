@@ -1467,8 +1467,12 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       const lb = streaming.localBounds();
       areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]);
       pointCount = streaming.sourcePointCount;
-      metaCrsKnown = !!streaming.crs()?.name;
-      metaDatumKnown = false;
+      const sCrs = streaming.crs();
+      metaCrsKnown = !!sCrs?.name;
+      // Read the datum from the streamed source's own CRS (COPC VLRs / EPT srs)
+      // instead of assuming none — a streamed scan can carry a vertical datum
+      // exactly like an uploaded file.
+      metaDatumKnown = !!sCrs?.verticalDatum;
       // Don't claim producer classification a streaming scan may not carry —
       // read the actual availability instead of hardcoding 'source'.
       classification = streaming.availableColorModes().includes('classification') ? 'source' : 'none';

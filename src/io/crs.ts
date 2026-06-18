@@ -44,7 +44,7 @@ const GEOTIFF_LINEAR_UNITS: Readonly<Record<number, CrsLinearUnit>> = {
 /** What we extract from the VLRs. All fields optional — a header may carry one and not others. */
 export interface CrsInfo {
   /** Where the metadata came from — diagnostic, surfaced in the Scan Report. */
-  readonly source: 'wkt' | 'geotiff';
+  readonly source: 'wkt' | 'geotiff' | 'epsg';
   /** Raw WKT string (when source is `wkt`) — kept so the UI can show it on request. */
   readonly wkt?: string;
   /** Best-effort human label, e.g. "WGS 84 / UTM zone 12N" or "EPSG:32612". */
@@ -497,6 +497,47 @@ export function crsFromGeoTiff(
     epsg,
     linearUnit,
     linearUnitToMetres,
+    isGeographic,
+    verticalEpsg,
+    verticalDatum,
+  };
+}
+
+/** Parameters for {@link crsFromEpsg}. */
+export interface EpsgCrsParams {
+  /** Vertical (height) datum EPSG, when the source declares one separately. */
+  readonly verticalEpsg?: number;
+  /** Whether the horizontal CRS is geographic (degrees). Default false. */
+  readonly isGeographic?: boolean;
+  /** Display name override. Default `EPSG:<code>`. */
+  readonly name?: string;
+  /** Linear unit override. Default metre (projected) / unknown (geographic). */
+  readonly linearUnit?: CrsLinearUnit;
+}
+
+/**
+ * Build a {@link CrsInfo} from EPSG codes alone — for sources that georeference
+ * by authority code rather than by WKT or GeoTIFF tags (e.g. an EPT `ept.json`
+ * `srs` with `horizontal` / `vertical` codes and no `wkt`). The vertical datum
+ * is carried through identically to the GeoTIFF path (real code → known name or
+ * `EPSG:<code>`; 0 / 32767 rejected), so a streamed dataset that declares its
+ * datum by code surfaces it exactly like an uploaded file would.
+ */
+export function crsFromEpsg(horizontalEpsg: number, params: EpsgCrsParams = {}): CrsInfo {
+  const isGeographic = params.isGeographic ?? false;
+  const linearUnit: CrsLinearUnit = params.linearUnit ?? (isGeographic ? 'unknown' : 'metre');
+  let verticalEpsg: number | undefined;
+  let verticalDatum: string | undefined;
+  if (params.verticalEpsg && params.verticalEpsg > 0 && params.verticalEpsg !== 32767) {
+    verticalEpsg = params.verticalEpsg;
+    verticalDatum = verticalDatumLabel(params.verticalEpsg);
+  }
+  return {
+    source: 'epsg',
+    name: params.name ?? `EPSG:${horizontalEpsg}`,
+    epsg: horizontalEpsg,
+    linearUnit,
+    linearUnitToMetres: unitScaleForCode(linearUnit),
     isGeographic,
     verticalEpsg,
     verticalDatum,

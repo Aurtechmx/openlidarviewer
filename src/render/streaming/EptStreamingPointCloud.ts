@@ -49,8 +49,8 @@ import { eptStringToKey } from '../../io/ept/eptTypes';
 import { eptHierarchyUrl, eptTileUrl } from '../../io/ept/eptUrls';
 import { decodeEptBinaryTile } from '../../io/ept/eptBinaryDecode';
 import { EptOctree } from './EptOctree';
-import { crsFromWkt } from '../../io/crs';
 import type { CrsInfo } from '../../io/crs';
+import { resolveEptCrs } from './eptCrs';
 
 /** The injected HTTP layer — fetch a URL and return its bytes / text. */
 export interface EptTransport {
@@ -164,18 +164,16 @@ export class EptStreamingPointCloud implements StreamingSource {
   }
 
   /**
-   * the CRS extracted from `ept.json`'s `srs.wkt` field, when
-   * present. Parsed lazily on first access and cached. Returns `null`
-   * for EPTs without a recoverable SRS (raw drone exports often skip it).
+   * the CRS extracted from `ept.json`'s `srs` object. Prefers the WKT (richest),
+   * then falls back to the authority codes (`horizontal` / `vertical`). When the
+   * WKT carries no vertical datum but the codes name one, the vertical datum is
+   * merged in — so a streamed dataset surfaces its height datum exactly like an
+   * uploaded file. Parsed lazily and cached. Returns `null` for EPTs without a
+   * recoverable SRS (raw drone exports often skip it).
    */
   crs(): CrsInfo | null {
     if (this._crsCached !== undefined) return this._crsCached;
-    const wkt = this.metadata.srs;
-    if (!wkt || wkt.trim().length === 0) {
-      this._crsCached = null;
-      return null;
-    }
-    this._crsCached = crsFromWkt(wkt);
+    this._crsCached = resolveEptCrs(this.metadata);
     return this._crsCached;
   }
 

@@ -14,6 +14,7 @@
 import { test, expect } from 'vitest';
 import {
   crsFromWkt,
+  crsFromEpsg,
   linearUnitLabel,
   parseCrsFromVlrs,
   toMetres,
@@ -226,4 +227,42 @@ test('linearUnitLabel covers every variant with a short label', () => {
   expect(linearUnitLabel('foot')).toBe('international ft');
   expect(linearUnitLabel('us-survey-foot')).toBe('US survey ft');
   expect(linearUnitLabel('unknown')).toBe('unknown');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// crsFromEpsg — code-based CRS (EPT srs without WKT)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('crsFromEpsg — projected code defaults to metres, carries the EPSG', () => {
+  const c = crsFromEpsg(32612);
+  expect(c.source).toBe('epsg');
+  expect(c.epsg).toBe(32612);
+  expect(c.name).toBe('EPSG:32612');
+  expect(c.isGeographic).toBe(false);
+  expect(c.linearUnit).toBe('metre');
+  expect(c.linearUnitToMetres).toBe(1);
+  expect(c.verticalDatum).toBeUndefined();
+});
+
+test('crsFromEpsg — geographic code reports degrees (unit unknown)', () => {
+  const c = crsFromEpsg(4326, { isGeographic: true });
+  expect(c.isGeographic).toBe(true);
+  expect(c.linearUnit).toBe('unknown');
+});
+
+test('crsFromEpsg — a real vertical code resolves to a known datum name', () => {
+  const c = crsFromEpsg(32612, { verticalEpsg: 5703 });
+  expect(c.verticalEpsg).toBe(5703);
+  expect(c.verticalDatum).toBe('NAVD88');
+});
+
+test('crsFromEpsg — an unknown vertical code falls back to EPSG:<code>', () => {
+  const c = crsFromEpsg(32612, { verticalEpsg: 9999 });
+  expect(c.verticalEpsg).toBe(9999);
+  expect(c.verticalDatum).toBe('EPSG:9999');
+});
+
+test('crsFromEpsg — placeholder vertical codes (0 / 32767) are rejected', () => {
+  expect(crsFromEpsg(32612, { verticalEpsg: 0 }).verticalDatum).toBeUndefined();
+  expect(crsFromEpsg(32612, { verticalEpsg: 32767 }).verticalDatum).toBeUndefined();
 });

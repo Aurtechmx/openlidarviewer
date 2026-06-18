@@ -90,6 +90,43 @@ test('parseEptMetadata parses the synthetic fixture cleanly', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SRS — authority codes (horizontal / vertical), parsed alongside / instead of WKT
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The synthetic fixture manifest with its `srs` replaced. */
+function fixtureWithSrs(srs: unknown): string {
+  const json = JSON.parse(readFileSync(join(FIXTURE_DIR, 'ept.json'), 'utf8'));
+  json.srs = srs;
+  return JSON.stringify(json);
+}
+
+test('parseEptMetadata reads srs authority codes (horizontal + vertical, no WKT)', () => {
+  // EPT writes the codes as STRINGS per spec.
+  const result = parseEptMetadata(fixtureWithSrs({ authority: 'EPSG', horizontal: '32612', vertical: '5703' }));
+  expect(result.isEpt).toBe(true);
+  if (!result.isEpt) return;
+  expect(result.metadata.srs).toBeUndefined(); // no WKT in this manifest
+  expect(result.metadata.srsCodes).toEqual({ authority: 'EPSG', horizontalEpsg: 32612, verticalEpsg: 5703 });
+});
+
+test('parseEptMetadata reads codes ALONGSIDE a WKT when both are present', () => {
+  const result = parseEptMetadata(
+    fixtureWithSrs({ authority: 'EPSG', horizontal: '32612', vertical: '5703', wkt: 'PROJCS["WGS 84 / UTM zone 12N"...]' }),
+  );
+  expect(result.isEpt).toBe(true);
+  if (!result.isEpt) return;
+  expect(result.metadata.srs).toContain('UTM zone 12N');
+  expect(result.metadata.srsCodes?.verticalEpsg).toBe(5703);
+});
+
+test('parseEptMetadata leaves srsCodes undefined when the srs object carries no codes', () => {
+  const result = parseEptMetadata(fixtureWithSrs({ wkt: 'PROJCS["WGS 84 / UTM zone 12N"...]' }));
+  expect(result.isEpt).toBe(true);
+  if (!result.isEpt) return;
+  expect(result.metadata.srsCodes).toBeUndefined();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Manifest parsing — failure paths
 // ─────────────────────────────────────────────────────────────────────────────
 
