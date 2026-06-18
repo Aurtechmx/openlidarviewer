@@ -1,11 +1,19 @@
 /**
  * svgContours.ts
  *
- * print path for clients without GIS. Renders the contour
- * feature model as a standalone SVG, styling each run by its evidence
- * grade (solid line, dashed for interpolated, faint dashed for gap) and
- * weighting index contours heavier. World Y is flipped to SVG's
- * Y-down space so north stays up.
+ * Standalone print/GIS-less deliverable: renders the contour feature model as a
+ * proper topographic SHEET — a scaled map panel framed by the cartographic
+ * marginalia a field deliverable is expected to carry: a neat-line, a graphic
+ * scale bar (in real ground units), a north arrow, a line-grade legend, and a
+ * title block (source, interval, datum, CRS, vertical RMSEz, survey-grade
+ * caveat, date). Each contour run is styled by its evidence grade (solid /
+ * dashed for interpolated / faint dashed for gap) and index contours are
+ * weighted heavier. World +Y maps to up so north stays up.
+ *
+ * Earlier versions sized the canvas in raw source units (an 80 m field rendered
+ * as an 80 px postage stamp with no map furniture). This scales the map into a
+ * sensible pixel canvas and keeps stroke/label sizes in pixels, so the drawing
+ * is legible at its intrinsic size and reads as a real contour map.
  *
  * Pure data: no DOM, no three.js, no I/O. Returns an SVG string.
  */
@@ -17,52 +25,42 @@ import { provenanceLines, type ExportProvenance } from '../export/exportProvenan
 
 /** Options for {@link svgContours}. */
 export interface SvgContourParams {
-  /** Stroke width for index contours (user units). Default 1.4. */
+  /** Stroke width for index contours, in pixels. Default 1.3. */
   readonly indexWeight?: number;
-  /** Stroke width for intermediate contours. Default 0.6. */
+  /** Stroke width for intermediate contours, in pixels. Default 0.55. */
   readonly baseWeight?: number;
   /** Stroke colour. Default "#5a3a1e" (sepia topo). */
   readonly stroke?: string;
-  /** Padding around the bbox, in world units. Default 2. */
+  /** Margin around the map panel, in pixels. Default 28. */
   readonly padding?: number;
   /** Elevation labels to draw along index contours (with a halo). */
   readonly labels?: ReadonlyArray<ContourLabel>;
-  /** Label font size in world units. Default = 3×indexWeight. */
+  /** Label font size in pixels. Default 11. */
   readonly labelSize?: number;
   /**
    * Unified export provenance. When supplied, the full provenance block is
-   * emitted in a leading `<metadata>` element (with the lines as an XML comment)
-   * so the SVG carries the SAME provenance every other export does. Without it,
-   * the lone shape-style comment is kept for back-compat.
+   * emitted in a leading `<metadata>` element (the lines inside an XML comment)
+   * AND drives the visible title block. Without it, a minimal title block is
+   * built from the model and the lone shape-style comment is kept for back-compat.
    */
   readonly provenance?: ExportProvenance;
   /**
-   * Abbreviation of the drawing's linear unit ('m', 'ft', 'ftUS') for the
-   * visible scale note. Default 'm' — the terrain stack's standing metric
-   * assumption; callers that resolve a feet CRS pass theirs.
+   * Abbreviation of the drawing's linear unit ('m', 'ft', 'ftUS') for the scale
+   * bar and title block. Default 'm'.
    */
   readonly unitLabel?: string;
 }
 
-/** Escape the five XML-significant characters for safe `<metadata>` text. */
+/** Target pixel size for the map panel's longer dimension. */
+const MAP_TARGET_PX = 880;
+
+/** Escape the three XML-significant characters for safe text / `<metadata>`. */
 function xmlEscape(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** Resolved style values (all defaults applied). */
-interface ResolvedStyle {
-  indexWeight: number;
-  baseWeight: number;
-  stroke: string;
-  padding: number;
-  labelSize: number;
-}
-
-function strokeStyle(f: ContourFeature, p: ResolvedStyle): string {
-  const width = f.isIndex ? p.indexWeight : p.baseWeight;
+function strokeStyle(f: ContourFeature, stroke: string, indexW: number, baseW: number): string {
+  const width = f.isIndex ? indexW : baseW;
   let dash = '';
   let opacity = 1;
   if (f.grade === 'dashed') dash = ` stroke-dasharray="${(width * 6).toFixed(2)} ${(width * 4).toFixed(2)}"`;
@@ -70,89 +68,176 @@ function strokeStyle(f: ContourFeature, p: ResolvedStyle): string {
     dash = ` stroke-dasharray="${(width * 2).toFixed(2)} ${(width * 5).toFixed(2)}"`;
     opacity = 0.45;
   }
-  return `stroke="${p.stroke}" stroke-width="${width}" fill="none" stroke-opacity="${opacity}"${dash}`;
+  return `stroke="${stroke}" stroke-width="${width}" fill="none" stroke-opacity="${opacity}"${dash}`;
 }
 
-/** Render the model as an SVG document string. */
-export function svgContours(model: ContourFeatureModel, params: SvgContourParams = {}): string {
-  const indexWeight = params.indexWeight ?? 1.4;
-  const p: ResolvedStyle = {
-    indexWeight,
-    baseWeight: params.baseWeight ?? 0.6,
-    stroke: params.stroke ?? '#5a3a1e',
-    padding: params.padding ?? 2,
-    labelSize: params.labelSize ?? indexWeight * 3,
-  };
+/** Largest 1 / 2 / 5 × 10ⁿ that is ≤ v — for a round graphic-scale-bar length. */
+function niceRound(v: number): number {
+  if (!(v > 0)) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(v)));
+  const f = v / pow;
+  const n = f >= 5 ? 5 : f >= 2 ? 2 : 1;
+  return n * pow;
+}
 
-  // Self-describing stamp. With the unified provenance the full block is emitted
-  // in a <metadata> element (lines inside an XML comment so any reader can lift
-  // them); without it, the lone shape-style comment is kept for back-compat.
-  const styleComment = `<!-- contour style: ${contourShapeStyleLabel(model.contourStyle)} -->`;
-  const provStamp = params.provenance
-    ? `<metadata><!--\n${provenanceLines(params.provenance).map(xmlEscape).join('\n')}\n--></metadata>`
-    : styleComment;
+/** A graphic scale bar: 4 alternating segments over a round ground distance. */
+function scaleBar(x: number, y: number, scale: number, worldW: number, unit: string, stroke: string): string {
+  const D = niceRound(Math.max(worldW / 4, 1e-6));
+  const segs = 4;
+  const segPx = (D * scale) / segs;
+  const h = 6;
+  const parts: string[] = [];
+  for (let i = 0; i < segs; i++) {
+    const fill = i % 2 === 0 ? stroke : '#ffffff';
+    parts.push(
+      `<rect x="${(x + i * segPx).toFixed(2)}" y="${y.toFixed(2)}" width="${segPx.toFixed(2)}" height="${h}" ` +
+        `fill="${fill}" stroke="${stroke}" stroke-width="0.5"/>`,
+    );
+  }
+  const dec = D < 1 ? 1 : 0;
+  const tick = (px: number, label: string): string =>
+    `<text x="${px.toFixed(2)}" y="${(y - 3).toFixed(2)}" font-size="9" text-anchor="middle" ` +
+    `fill="${stroke}" font-family="sans-serif">${label}</text>`;
+  parts.push(tick(x, '0'));
+  parts.push(tick(x + (D * scale) / 2, (D / 2).toFixed(dec)));
+  parts.push(tick(x + D * scale, `${D.toFixed(dec)} ${unit}`));
+  return parts.join('');
+}
+
+/** A simple north arrow (north is up after the world-Y flip). */
+function northArrow(cx: number, top: number, stroke: string): string {
+  const bot = top + 26;
+  return (
+    `<polygon points="${cx.toFixed(1)},${top.toFixed(1)} ${(cx - 6).toFixed(1)},${bot.toFixed(1)} ` +
+    `${cx.toFixed(1)},${(bot - 7).toFixed(1)} ${(cx + 6).toFixed(1)},${bot.toFixed(1)}" fill="${stroke}"/>` +
+    `<text x="${cx.toFixed(1)}" y="${(bot + 11).toFixed(1)}" font-size="11" text-anchor="middle" ` +
+    `fill="${stroke}" font-family="sans-serif">N</text>`
+  );
+}
+
+/** Legend rows: one line sample per evidence grade + index weight. */
+function legend(x: number, y: number, stroke: string, indexW: number, baseW: number): string {
+  const rows: Array<[string, string]> = [
+    [`stroke="${stroke}" stroke-width="${indexW}"`, 'Index contour'],
+    [`stroke="${stroke}" stroke-width="${baseW}"`, 'Intermediate'],
+    [`stroke="${stroke}" stroke-width="${baseW}" stroke-dasharray="${(baseW * 6).toFixed(1)} ${(baseW * 4).toFixed(1)}"`, 'Interpolated'],
+    [`stroke="${stroke}" stroke-width="${baseW}" stroke-opacity="0.45" stroke-dasharray="${(baseW * 2).toFixed(1)} ${(baseW * 5).toFixed(1)}"`, 'Gap / uncertain'],
+  ];
+  return rows
+    .map(([attrs, label], i) => {
+      const ry = y + i * 16;
+      return (
+        `<line x1="${x.toFixed(1)}" y1="${ry.toFixed(1)}" x2="${(x + 34).toFixed(1)}" y2="${ry.toFixed(1)}" ${attrs}/>` +
+        `<text x="${(x + 42).toFixed(1)}" y="${(ry + 3.5).toFixed(1)}" font-size="10" fill="${stroke}" font-family="sans-serif">${label}</text>`
+      );
+    })
+    .join('');
+}
+
+/** The visible title-block lines (right-aligned). Includes the interval line. */
+function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefined, unit: string, intervalDec: number): string[] {
+  const lines: string[] = [];
+  const src = prov?.source ?? null;
+  if (src) lines.push(`Source: ${src}`);
+  if (Number.isFinite(model.intervalM) && model.intervalM > 0) {
+    lines.push(`Contour interval ${model.intervalM.toFixed(intervalDec)} ${unit}`);
+  }
+  if (prov) {
+    lines.push(`Vertical datum: ${prov.datumKnown ? prov.verticalDatum : 'unknown'}`);
+    lines.push(`Horizontal CRS: ${prov.crsKnown ? prov.horizontalCrs : 'not georeferenced'}`);
+    if (prov.accuracy && prov.accuracy.rmseZM != null) {
+      lines.push(`Vertical RMSEz: ${prov.accuracy.rmseZM.toFixed(2)} ${unit}`);
+    }
+    lines.push(`Surface quality: ${prov.surfaceQuality}`);
+    lines.push(prov.notSurveyGrade);
+    if (prov.generated) lines.push(`Generated: ${prov.generated.slice(0, 10)}`);
+  } else {
+    lines.push('Not survey-grade unless validated against ground-truth control.');
+  }
+  return lines;
+}
+
+/** Render the contour model as a topographic SVG sheet. */
+export function svgContours(model: ContourFeatureModel, params: SvgContourParams = {}): string {
+  const stroke = params.stroke ?? '#5a3a1e';
+  const indexW = params.indexWeight ?? 1.3;
+  const baseW = params.baseWeight ?? 0.55;
+  const labelSize = params.labelSize ?? 11;
+  const margin = params.padding ?? 28;
+  const unit = params.unitLabel ?? 'm';
+  const prov = params.provenance;
+
+  const provStamp = prov
+    ? `<metadata><!--\n${provenanceLines(prov).map(xmlEscape).join('\n')}\n--></metadata>`
+    : `<!-- contour style: ${contourShapeStyleLabel(model.contourStyle)} -->`;
 
   if (!model.bbox || model.features.length === 0) {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1">${provStamp}</svg>`;
   }
-  const { minX, minY, maxX, maxY } = model.bbox;
-  const w = maxX - minX + 2 * p.padding;
-  const h = maxY - minY + 2 * p.padding;
-  // Map world (x,y) → svg (x flipped-y). North up: svgY = (maxY - y).
-  const sx = (x: number) => x - minX + p.padding;
-  const sy = (y: number) => maxY - y + p.padding;
 
+  const { minX, minY, maxX, maxY } = model.bbox;
+  const worldW = Math.max(maxX - minX, 1e-6);
+  const worldH = Math.max(maxY - minY, 1e-6);
+  // Scale the map into a legible pixel canvas; stroke/label sizes stay in px.
+  const scale = MAP_TARGET_PX / Math.max(worldW, worldH);
+  const mapW = worldW * scale;
+  const mapH = worldH * scale;
+
+  // World → sheet. North up: svgY grows downward, world +Y is up.
+  const sx = (x: number): number => margin + (x - minX) * scale;
+  const sy = (y: number): number => margin + (maxY - y) * scale;
+
+  // ── contour paths ─────────────────────────────────────────────────────────
   const paths: string[] = [];
   for (const f of model.features) {
     let d = '';
     for (let i = 0; i < f.coordinates.length; i++) {
       const [x, y] = f.coordinates[i];
-      d += `${i === 0 ? 'M' : 'L'}${sx(x).toFixed(3)} ${sy(y).toFixed(3)}`;
+      d += `${i === 0 ? 'M' : 'L'}${sx(x).toFixed(2)} ${sy(y).toFixed(2)}`;
       if (i < f.coordinates.length - 1) d += ' ';
     }
     if (f.closed) d += ' Z';
-    paths.push(`  <path d="${d}" ${strokeStyle(f, p)} data-elevation="${f.value}" data-grade="${f.grade}"/>`);
+    paths.push(`  <path d="${d}" ${strokeStyle(f, stroke, indexW, baseW)} data-elevation="${f.value}" data-grade="${f.grade}"/>`);
   }
 
-  // Elevation labels with a halo: a white stroke painted BEHIND the
-  // glyph fill (paint-order: stroke) knocks the contour line out from
-  // under the text — the single biggest "real topo map" cue.
-  // Decimals derive from the contour interval so sub-metre levels stay
-  // distinguishable (whole-unit rounding collapsed a 0.25 interval's labels
-  // onto identical values — v0.4.4 defect).
+  // ── haloed elevation labels ───────────────────────────────────────────────
   const labelDecimals = decimalsForInterval(model.intervalM);
   const labels: string[] = [];
   for (const lab of params.labels ?? []) {
-    const lx = sx(lab.x).toFixed(3);
-    const ly = sy(lab.y).toFixed(3);
-    // World angle is CCW; SVG Y is flipped, so negate for display, and
-    // keep text upright (avoid upside-down labels).
-    let deg = (-lab.angleRad * 180) / Math.PI;
+    const lx = sx(lab.x).toFixed(2);
+    const ly = sy(lab.y).toFixed(2);
+    let deg = (-lab.angleRad * 180) / Math.PI; // world CCW → SVG flipped-Y
     if (deg > 90) deg -= 180;
     else if (deg < -90) deg += 180;
-    const halo = (p.labelSize * 0.3).toFixed(2);
+    const halo = (labelSize * 0.3).toFixed(2);
     labels.push(
       `  <text x="${lx}" y="${ly}" transform="rotate(${deg.toFixed(2)} ${lx} ${ly})" ` +
-        `font-size="${p.labelSize.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" ` +
-        `style="paint-order:stroke;stroke:#ffffff;stroke-width:${halo};fill:${p.stroke};` +
+        `font-size="${labelSize.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" ` +
+        `style="paint-order:stroke;stroke:#ffffff;stroke-width:${halo};fill:${stroke};` +
         `font-family:sans-serif">${lab.value.toFixed(labelDecimals)}</text>`,
     );
   }
 
-  // Visible scale note (bottom-left): the drawing has no physical scale — one
-  // SVG user unit IS one source linear unit — so say exactly that, plus the
-  // contour interval. Without this the deliverable carried no unit/scale cue
-  // anywhere in the visible drawing.
-  const unitLabel = params.unitLabel ?? 'm';
-  const noteSize = Math.max(p.labelSize, 1);
-  const intervalNote =
-    Number.isFinite(model.intervalM) && model.intervalM > 0
-      ? `Contour interval ${model.intervalM.toFixed(labelDecimals)} ${unitLabel} · `
-      : '';
-  const scaleNote =
-    `  <text x="${(p.padding * 0.5).toFixed(2)}" y="${(h - noteSize * 0.5).toFixed(2)}" ` +
-    `font-size="${noteSize.toFixed(2)}" fill="${p.stroke}" font-family="sans-serif">` +
-    `${intervalNote}1 SVG unit = 1 ${unitLabel} (source CRS units)</text>`;
+  // ── marginalia layout ─────────────────────────────────────────────────────
+  const tLines = titleLines(model, prov, unit, labelDecimals);
+  const footerTop = margin + mapH + 18;
+  const legendBottom = footerTop + 44 + 3 * 16 + 6;
+  const titleBottom = footerTop + 12 + tLines.length * 14;
+  const footerBottom = Math.max(legendBottom, titleBottom);
+  const W = mapW + margin * 2;
+  const H = footerBottom + margin;
+
+  const neatLine = `<rect x="${margin}" y="${margin}" width="${mapW.toFixed(2)}" height="${mapH.toFixed(2)}" fill="none" stroke="${stroke}" stroke-width="0.8"/>`;
+  const north = northArrow(margin + mapW - 22, margin + 10, stroke);
+  const bar = scaleBar(margin, footerTop + 24, scale, worldW, unit, stroke);
+  const leg = legend(margin, footerTop + 44, stroke, indexW, baseW);
+  const xRight = (W - margin).toFixed(1);
+  const title = tLines
+    .map((ln, i) => {
+      const weight = i === 0 && prov?.source ? ' font-weight="600"' : '';
+      return `<text x="${xRight}" y="${(footerTop + 12 + i * 14).toFixed(1)}" font-size="10" text-anchor="end" fill="${stroke}" font-family="sans-serif"${weight}>${xmlEscape(ln)}</text>`;
+    })
+    .join('');
 
   const caption =
     Number.isFinite(model.interpolatedFraction) && model.interpolatedFraction > 0
@@ -160,12 +245,17 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
       : '<!-- not survey-grade unless validated -->';
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(2)}" height="${h.toFixed(2)}" viewBox="0 0 ${w.toFixed(2)} ${h.toFixed(2)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(2)}" height="${H.toFixed(2)}" viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}">`,
     provStamp,
     caption,
+    `<rect x="0" y="0" width="${W.toFixed(2)}" height="${H.toFixed(2)}" fill="#ffffff"/>`,
     ...paths,
     ...labels,
-    scaleNote,
+    neatLine,
+    north,
+    bar,
+    leg,
+    title,
     '</svg>',
   ].join('\n');
 }
