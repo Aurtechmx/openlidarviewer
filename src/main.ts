@@ -1366,6 +1366,73 @@ async function runDeriveClassification(): Promise<void> {
 }
 
 /**
+ * Fill ONLY the unclassified points of a partially-classified cloud, preserving
+ * every producer class. Where {@link runDeriveClassification} declines a scan
+ * that already carries producer classes (≥ 2), this is the deliberate surface
+ * for them: it passes the existing classification to the deriver, which derives
+ * the class-0/1 gaps and leaves the surveyor's classes untouched. The result is
+ * tagged derived (heuristic) overall, because the filled points are guesses.
+ */
+async function runFillUnclassified(): Promise<void> {
+  if (classifyRunning) return;
+  if (!activeId) {
+    showLassoToast('Fill unclassified · open a scan first.');
+    return;
+  }
+  const cloud = viewer.getCloud(activeId);
+  if (!cloud) {
+    showLassoToast('Fill unclassified · this works on a loaded (non-streaming) scan.');
+    return;
+  }
+  if (cloud.classificationIsDerived || !cloud.classification) {
+    showLassoToast('Fill unclassified · no producer classification to preserve — use Classify (derive).');
+    return;
+  }
+  const cov = classificationCoverage(cloud.classification, cloud.pointCount);
+  if (cov.producer === 0) {
+    showLassoToast('Fill unclassified · no producer classes here — use Classify (derive) for the whole scan.');
+    return;
+  }
+  if (cov.unclassified === 0) {
+    showLassoToast('Fill unclassified · every point already carries a class — nothing to fill.');
+    return;
+  }
+  // Preserve the producer classes; RGB (when present) sharpens the filled gaps.
+  const deriveOptions: DeriveClassificationOptions = {
+    existingClassification: cloud.classification,
+    ...(cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {}),
+  };
+
+  classifyRunning = true;
+  showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
+  try {
+    const id = activeId;
+    const result = await deriveClassificationAsync(
+      cloud.positions,
+      cloud.pointCount,
+      deriveOptions,
+      undefined,
+      undefined,
+      (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
+    );
+    if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    viewer.applyDerivedClassification(id, result.codes);
+    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
+    classLegendPanel.setClasses(countClasses(result.codes));
+    const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
+    classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
+    classLegendPanel.show();
+    const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
+    showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/abort/i.test(msg)) showLassoToast(`Fill unclassified · failed: ${msg}`);
+  } finally {
+    classifyRunning = false;
+  }
+}
+
+/**
  * Gather the facts the fitness-for-use synthesis ({@link buildScanStory} /
  * {@link buildExportHealth}) reduces, from whatever the active scan already
  * exposes. Defensive throughout: any missing piece simply yields a thinner —
@@ -1523,6 +1590,16 @@ function buildActionRegistry(): Action[] {
       keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],
       run: () => {
         void runDeriveClassification();
+      },
+    },
+    {
+      id: 'tool.fillUnclassified',
+      title: 'Fill unclassified points (derive)',
+      section: 'Tools',
+      hint: 'Derive only the unclassified points of a partially-classified scan, preserving every producer class (heuristic).',
+      keywords: ['classification', 'fill', 'gaps', 'unclassified', 'producer', 'preserve'],
+      run: () => {
+        void runFillUnclassified();
       },
     },
     {
