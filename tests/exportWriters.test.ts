@@ -85,6 +85,10 @@ describe('toGeoJSON', () => {
     expect(gj.type).toBe('FeatureCollection');
     expect(gj.features.length).toBe(2);
     expect(gj.features[0].geometry.type).toBe('LineString');
+    // Elevation rides in the coordinate Z (3D position), not only the property,
+    // so 3D-aware GIS/CAD don't import the contours flat at Z=0.
+    expect(gj.features[0].geometry.coordinates[0]).toEqual([0, 0, 10]);
+    expect(gj.features[1].geometry.coordinates[0]).toEqual([1, 1, 11]);
     expect(gj.features[0].properties.elevation).toBe(10);
     expect(gj.features[0].properties.index).toBe(true);
     expect(gj.features[1].properties.grade).toBe('dashed');
@@ -162,15 +166,17 @@ describe('svgContours', () => {
   });
 
   it('flips Y so larger world-Y maps nearer the top (smaller svg-Y)', () => {
-    // Single horizontal line at world y=10 vs y=0; with padding the
-    // y=10 line should render at a smaller svg y than the y=0 line.
+    // Two horizontal lines at world y=0 and y=10. North-up means the y=10
+    // line renders at a SMALLER svg-Y (nearer the top) than the y=0 line.
     const svg = svgContours(
       model([feat('solid', [[0, 0], [10, 0]]), feat('solid', [[0, 10], [10, 10]])]),
       { padding: 0 },
     );
-    // y=10 → svg 0; y=0 → svg 10
-    expect(svg).toMatch(/M0\.000 0\.000/);
-    expect(svg).toMatch(/M0\.000 10\.000/);
+    // Collect the start-Y of each contour <path> M command (skip marginalia).
+    const ys = [...svg.matchAll(/<path d="M[\d.]+ ([\d.]+)/g)].map((m) => parseFloat(m[1]));
+    expect(ys.length).toBe(2);
+    const [yAtWorld0, yAtWorld10] = ys; // features emitted in input order
+    expect(yAtWorld10).toBeLessThan(yAtWorld0);
   });
 });
 
