@@ -111,6 +111,28 @@ test('crsFromWkt — COMPD_CS: horizontal survey-foot unit beats vertical metres
   expect(crs.linearUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
   // The vertical datum is still parsed from the vertical block.
   expect(crs.verticalDatum).toContain('NAVD88');
+  // …and the Z-axis unit is read from the vertical block (metres here) SEPARATELY
+  // from the horizontal foot unit — so elevation converts by its own unit.
+  expect(crs.verticalLinearUnit).toBe('metre');
+  expect(crs.verticalUnitToMetres).toBe(1);
+});
+
+// Reverse cross-unit case: metre grid + NAVD88 height in US survey feet.
+const COMPD_M_NAVD88_FTUS_WKT =
+  'COMPD_CS["WGS 84 / UTM 12N + NAVD88 height (ftUS)",' +
+  'PROJCS["WGS 84 / UTM zone 12N",GEOGCS["WGS 84",DATUM["WGS_1984"],' +
+  'UNIT["degree",0.0174532925199433]],UNIT["metre",1],AUTHORITY["EPSG","32612"]],' +
+  'VERT_CS["NAVD88 height (ftUS)",VERT_DATUM["NAVD88",2005],' +
+  'UNIT["US survey foot",0.3048006096012192,AUTHORITY["EPSG","9003"]],' +
+  'AUTHORITY["EPSG","6360"]]]';
+
+test('crsFromWkt — vertical UNIT in survey feet over a metre grid is read on its own', () => {
+  const crs = crsFromWkt(COMPD_M_NAVD88_FTUS_WKT);
+  expect(crs.linearUnit).toBe('metre'); // horizontal grid is metres
+  expect(crs.linearUnitToMetres).toBe(1);
+  expect(crs.verticalLinearUnit).toBe('us-survey-foot'); // Z is feet
+  expect(crs.verticalUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
+  expect(crs.verticalDatum).toContain('NAVD88');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

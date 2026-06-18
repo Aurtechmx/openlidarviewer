@@ -69,6 +69,16 @@ export interface CrsInfo {
    * surface that honestly rather than assuming one.
    */
   readonly verticalDatum?: string;
+  /**
+   * Linear unit of the Z (height) axis when the source declares one separately
+   * — e.g. NAVD88 height in US survey feet over a state-plane grid in feet, or a
+   * metre vertical CRS over a foot horizontal grid. Absent when the file gives
+   * no vertical unit; callers then fall back to the horizontal `linearUnit`
+   * (the GeoTIFF default: vertical units follow the model's linear units).
+   */
+  readonly verticalLinearUnit?: CrsLinearUnit;
+  /** Z-unit conversion to metres (1 metre, 0.3048 foot, …). Absent ⇒ unknown. */
+  readonly verticalUnitToMetres?: number;
 }
 
 /** Common vertical-datum EPSG codes → readable names. */
@@ -129,6 +139,7 @@ const GEOKEY_PROJECTED_CITATION = 3073;  // ASCII citation
 const GEOKEY_PROJ_LINEAR_UNITS = 3076;   // linear units of a projected CRS
 const GEOKEY_VERTICAL_CRS = 4096;        // EPSG of the vertical (height) CRS
 const GEOKEY_VERTICAL_CITATION = 4097;   // ASCII citation for the vertical CRS
+const GEOKEY_VERTICAL_UNITS = 4099;      // linear units of the vertical CRS
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parser entry point
@@ -260,7 +271,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
 
   // Vertical CRS — present in a COMPD_CS / COMPOUNDCRS or a standalone
   // VERT_CS. The name (e.g. "NAVD88") is the reliable signal; the EPSG is a
-  // best-effort reverse lookup for the writer.
+  // best-effort reverse lookup for the writer. The vertical block's own UNIT
+  // (when present) gives the Z-axis unit, which can differ from the horizontal.
   const vert = extractVerticalFromWkt(text);
 
   return {
@@ -273,11 +285,15 @@ export function crsFromWkt(wkt: string): CrsInfo {
     isGeographic,
     verticalDatum: vert.name,
     verticalEpsg: vert.epsg,
+    verticalLinearUnit: vert.unit,
+    verticalUnitToMetres: vert.unit ? unitScaleForCode(vert.unit) : undefined,
   };
 }
 
-/** Extract the vertical-CRS name + a best-effort EPSG from a WKT string. */
-function extractVerticalFromWkt(text: string): { epsg?: number; name?: string } {
+/** Extract the vertical-CRS name + best-effort EPSG + unit from a WKT string. */
+function extractVerticalFromWkt(
+  text: string,
+): { epsg?: number; name?: string; unit?: CrsLinearUnit } {
   const m = /\b(?:VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
   if (!m) return {};
   // Isolate the bracketed vertical block so a compound CRS's other authorities
@@ -290,7 +306,15 @@ function extractVerticalFromWkt(text: string): { epsg?: number; name?: string } 
   // fall back to an explicit EPSG authority inside the block (the LAST one is
   // the vertical CRS's own, after any VERT_DATUM authority).
   const epsg = (name ? verticalEpsgFromName(name) : undefined) ?? extractEpsgFromWkt(block);
-  return { name, epsg };
+  // The vertical block's UNIT clause names the Z-axis unit (LAS WKT puts at most
+  // one UNIT here). Mapped to our enum so elevation can convert by its own unit.
+  let unit: CrsLinearUnit | undefined;
+  const unitMatch = [...block.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)].at(-1);
+  if (unitMatch) {
+    const scale = Number(unitMatch[2]);
+    if (Number.isFinite(scale) && scale > 0) unit = linearUnitFromNameOrScale(unitMatch[1].toLowerCase(), scale);
+  }
+  return { name, epsg, unit };
 }
 
 /** Return the bracketed group that opens at/after `from` (matched depth-aware). */
@@ -420,6 +444,7 @@ export function crsFromGeoTiff(
   let geodeticCitationCount: number | undefined;
   let linearUnitCode: number | undefined;
   let verticalCrs: number | undefined;
+  let verticalUnitCode: number | undefined;
   let verticalCitationOffset: number | undefined;
   let verticalCitationCount: number | undefined;
 
@@ -452,6 +477,9 @@ export function crsFromGeoTiff(
         break;
       case GEOKEY_VERTICAL_CRS:
         verticalCrs = value;
+        break;
+      case GEOKEY_VERTICAL_UNITS:
+        verticalUnitCode = value;
         break;
       case GEOKEY_VERTICAL_CITATION:
         if (tiffTag === RECORD_ID_GEO_ASCII_PARAMS) {
@@ -491,6 +519,15 @@ export function crsFromGeoTiff(
     if (vCite) verticalDatum = vCite;
   }
 
+  // Vertical unit (VerticalUnitsGeoKey 4099). Only surfaced when the file states
+  // a recognised unit; otherwise left undefined so callers fall back to the
+  // horizontal linear unit (the GeoTIFF default — vertical units follow the
+  // model's linear units). Carrying it lets the terrain tools convert elevation
+  // by the Z axis's own unit — e.g. feet height over a metre grid.
+  const mappedVerticalUnit = verticalUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[verticalUnitCode] : undefined;
+  const verticalLinearUnit = mappedVerticalUnit;
+  const verticalUnitToMetres = mappedVerticalUnit ? unitScaleForCode(mappedVerticalUnit) : undefined;
+
   return {
     source: 'geotiff',
     name,
@@ -500,6 +537,8 @@ export function crsFromGeoTiff(
     isGeographic,
     verticalEpsg,
     verticalDatum,
+    verticalLinearUnit,
+    verticalUnitToMetres,
   };
 }
 
