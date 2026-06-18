@@ -5557,6 +5557,11 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-export-status { font-size: var(--text-xs); color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }
 .olv-export-status.is-warn { color: var(--rating-moderate); }
 .olv-export-status.is-error { color: var(--rating-weak); }
+/* Live "what you'll get" line — size · format · CRS · classification, before any write. */
+.olv-export-summary { font-size: var(--text-xs); color: var(--text-bright); margin: var(--space-sm) 0 var(--space-xs); line-height: 1.45; }
+.olv-export-summary:empty { display: none; }
+.olv-export-summary.is-warn { color: var(--rating-moderate); }
+.olv-export-summary.is-error { color: var(--rating-weak); }
 /* One-line note shown in place of the CRS step when the scan is ungeoreferenced. */
 .olv-export-crs-note { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; margin: var(--space-2xs) 0 0; }
 @media (max-width: 767px) { .olv-export-panel { width: auto; } }

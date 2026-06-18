@@ -15,6 +15,8 @@ import { el } from './dom';
 import { loadConvertEngine } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 import type { PointCloud } from '../model/PointCloud';
+import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
+import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
 
 export interface ExportPanelCallbacks {
   /** Return the loaded (display-resolution) cloud, or null when none is active. */
@@ -37,6 +39,8 @@ export class ExportPanel {
   private readonly _exportBtn: HTMLButtonElement;
   private readonly _status: HTMLElement;
   private readonly _fullResRow: HTMLElement;
+  private readonly _gzipRow: HTMLElement;
+  private readonly _summary: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
@@ -46,6 +50,8 @@ export class ExportPanel {
   private _targetEpsg = '';
   private _sourceEpsg = '';
   private _fullRes = false;
+  /** Gzip the output to `.las.gz` (binary LAS formats only). */
+  private _gzip = false;
   private _busy = false;
   /**
    * Whether the active scan carries a real-world CRS (projected / geographic).
@@ -96,19 +102,24 @@ export class ExportPanel {
     });
     this._crsLocalNote.style.display = 'none';
     this._fullResRow = el('div', { className: 'olv-export-fullres' });
+    this._gzipRow = el('div', { className: 'olv-export-fullres' });
+    // The live "what you'll get" line — size, CRS, classification, before any write.
+    this._summary = el('p', { className: 'olv-export-summary', text: '' });
     this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
     this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
 
     const body = el('div', { className: 'olv-export-body' });
     body.append(
-      this._label('Output format'),
+      this._label('Point cloud'),
       this._formatRow,
+      this._gzipRow,
       this._crsLabel,
       this._crsRow,
       this._crsExtra,
       this._crsLocalNote,
       this._fullResRow,
+      this._summary,
       this._exportBtn,
       this._status,
     );
@@ -121,6 +132,8 @@ export class ExportPanel {
     this._renderCrsPills();
     this._renderCrsExtra();
     this._renderFullResRow();
+    this._renderGzipRow();
+    this._renderSummary();
   }
 
   setVisible(on: boolean): void {
@@ -130,6 +143,8 @@ export class ExportPanel {
   /** Re-evaluate the full-resolution availability for the active cloud. */
   refresh(): void {
     this._renderFullResRow();
+    this._renderGzipRow();
+    this._renderSummary();
   }
 
   /**
@@ -151,6 +166,8 @@ export class ExportPanel {
       this._renderCrsExtra();
     }
     this._renderCrsStep();
+    this._renderGzipRow();
+    this._renderSummary();
   }
 
   /** Show or collapse the Coordinate-System step per the known-CRS signal. */
@@ -182,7 +199,7 @@ export class ExportPanel {
     const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
     box.checked = this._fullRes;
     box.disabled = !usable;
-    box.addEventListener('change', () => { this._fullRes = box.checked; });
+    box.addEventListener('change', () => { this._fullRes = box.checked; this._renderSummary(); });
     label.append(box, el('span', { text: 'Convert at full resolution' }));
 
     let hint: string;
@@ -191,6 +208,59 @@ export class ExportPanel {
     else hint = 'The loaded scan is already full resolution.';
 
     this._fullResRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  }
+
+  /**
+   * "Compress (.las.gz)" checkbox. Only meaningful for the binary LAS writers —
+   * XYZ/ASC are text and the LAZ pill is its own (disabled) format — and only
+   * when the platform provides `CompressionStream`. Gzip wraps the written LAS
+   * bytes into a `.las.gz` that PDAL / las2las read after gunzip.
+   */
+  private _renderGzipRow(): void {
+    this._gzipRow.replaceChildren();
+    const isLas = this._format === 'las' || this._format === 'las14';
+    const usable = isLas && gzipAvailable();
+    if (!usable) this._gzip = false;
+
+    const label = el('label', { className: 'olv-export-fullres-label' });
+    const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
+    box.checked = this._gzip;
+    box.disabled = !usable;
+    box.addEventListener('change', () => { this._gzip = box.checked; this._renderSummary(); });
+    label.append(box, el('span', { text: 'Compress (.las.gz)' }));
+
+    let hint: string;
+    if (!isLas) hint = 'Compression applies to LAS output — pick LAS 1.4 or LAS 1.2.';
+    else if (!gzipAvailable()) hint = 'Compression isn’t available in this browser.';
+    else hint = 'Gzip the LAS to a smaller .las.gz (read by PDAL / las2las after gunzip).';
+    this._gzipRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  }
+
+  /** Recompute the live "what you'll get" line from the active cloud + options. */
+  private _renderSummary(): void {
+    const cloud = this._cb.getCloud();
+    if (!cloud) {
+      this._summary.textContent = '';
+      return;
+    }
+    const crs = cloud.metadata?.crs ?? null;
+    const input: ExportSummaryInput = {
+      pointCount: cloud.pointCount,
+      format: this._format,
+      hasRgb: cloud.colors != null,
+      hasGpsTime: cloud.gpsTime != null,
+      crsMode: this._crsMode,
+      crsLabel: crs?.name ?? null,
+      targetEpsg: parseEpsg(this._targetEpsg),
+      hasWkt: crs?.wkt != null,
+      viewDecimated: this._cb.isReduced(),
+      fullRes: this._fullRes,
+      gzip: this._gzip,
+    };
+    const s = buildExportSummary(input);
+    const warn = s.warnings.find((w) => w.level === 'error') ?? s.warnings.find((w) => w.level === 'warn');
+    this._summary.textContent = warn ? `${s.line} — ${warn.message}` : s.line;
+    this._summary.className = `olv-export-summary${warn ? ` is-${warn.level}` : ''}`;
   }
 
   private _label(text: string): HTMLElement {
@@ -210,7 +280,12 @@ export class ExportPanel {
         pill.disabled = true;
         pill.title = 'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
       } else {
-        pill.addEventListener('click', () => { this._format = fmt; this._renderFormatPills(); });
+        pill.addEventListener('click', () => {
+          this._format = fmt;
+          this._renderFormatPills();
+          this._renderGzipRow();
+          this._renderSummary();
+        });
       }
       this._formatRow.append(pill);
     });
@@ -229,7 +304,12 @@ export class ExportPanel {
         text: label,
         type: 'button',
       });
-      pill.addEventListener('click', () => { this._crsMode = mode; this._renderCrsPills(); this._renderCrsExtra(); });
+      pill.addEventListener('click', () => {
+        this._crsMode = mode;
+        this._renderCrsPills();
+        this._renderCrsExtra();
+        this._renderSummary();
+      });
       this._crsRow.append(pill);
     });
   }
@@ -238,9 +318,9 @@ export class ExportPanel {
     this._crsExtra.replaceChildren();
     if (this._crsMode === 'keep') return;
     if (this._crsMode === 'reproject') {
-      this._crsExtra.append(this._field('Source EPSG (optional)', this._sourceEpsg, (v) => { this._sourceEpsg = v; }));
+      this._crsExtra.append(this._field('Source EPSG (optional)', this._sourceEpsg, (v) => { this._sourceEpsg = v; this._renderSummary(); }));
     }
-    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; }));
+    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; this._renderSummary(); }));
   }
 
   private _field(label: string, value: string, onInput: (v: string) => void): HTMLElement {
@@ -293,7 +373,10 @@ export class ExportPanel {
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {
-        downloadBytes(file.filename, file.bytes, file.mime);
+        // Gzip the written LAS to `.las.gz` when requested (binary LAS only).
+        const wantGzip = this._gzip && (this._format === 'las' || this._format === 'las14');
+        const out = wantGzip ? await gzipConvertedFile(file, true) : file;
+        downloadBytes(out.filename, out.bytes, out.mime);
         // ASCII keep-mode: also emit a `.prj` sidecar with the source WKT.
         const wkt = cloud.metadata?.crs?.wkt;
         if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && wkt) {
