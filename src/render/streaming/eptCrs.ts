@@ -13,7 +13,7 @@
  *   3. Neither → null (raw exports often skip the SRS entirely).
  */
 
-import { crsFromWkt, crsFromEpsg, type CrsInfo } from '../../io/crs';
+import { crsFromWkt, crsFromEpsg, verticalDatumLabel, type CrsInfo } from '../../io/crs';
 import { isGeographicEpsg } from '../../convert/epsg';
 import type { EptMetadata } from '../../io/ept/eptTypes';
 
@@ -26,11 +26,11 @@ export function resolveEptCrs(metadata: Pick<EptMetadata, 'srs' | 'srsCodes'>): 
     const fromWkt = crsFromWkt(wkt);
     // The WKT may be horizontal-only while the codes name a vertical datum;
     // attach the declared datum (keeping the WKT richness) rather than dropping
-    // it. crsFromEpsg here only validates + labels the vertical code.
+    // it. verticalDatumLabel rejects placeholder codes (0 / 32767).
     if (!fromWkt.verticalDatum && codes?.verticalEpsg) {
-      const v = crsFromEpsg(0, { verticalEpsg: codes.verticalEpsg });
-      if (v.verticalEpsg) {
-        return { ...fromWkt, verticalEpsg: v.verticalEpsg, verticalDatum: v.verticalDatum };
+      const datum = verticalDatumLabel(codes.verticalEpsg);
+      if (datum) {
+        return { ...fromWkt, verticalEpsg: codes.verticalEpsg, verticalDatum: datum };
       }
     }
     return fromWkt;

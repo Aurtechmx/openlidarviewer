@@ -94,8 +94,13 @@ const VERTICAL_DATUM_NAMES: Readonly<Record<number, string>> = {
   5612: 'EGM84 height',
 };
 
-/** Label a vertical-datum EPSG code (known name, or `EPSG:<code>`). */
-function verticalDatumLabel(epsg: number): string {
+/**
+ * Label a vertical-datum EPSG code (known name, or `EPSG:<code>`). Returns
+ * undefined for the placeholder codes that mean "no real datum" (0 / 32767),
+ * so callers don't surface a bogus `EPSG:0` as a datum.
+ */
+export function verticalDatumLabel(epsg: number): string | undefined {
+  if (!(epsg > 0) || epsg === 32767) return undefined;
   return VERTICAL_DATUM_NAMES[epsg] ?? `EPSG:${epsg}`;
 }
 
@@ -309,7 +314,8 @@ function extractVerticalFromWkt(
   // The vertical block's UNIT clause names the Z-axis unit (LAS WKT puts at most
   // one UNIT here). Mapped to our enum so elevation can convert by its own unit.
   let unit: CrsLinearUnit | undefined;
-  const unitMatch = [...block.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)].at(-1);
+  const unitMatches = [...block.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)];
+  const unitMatch = unitMatches[unitMatches.length - 1];
   if (unitMatch) {
     const scale = Number(unitMatch[2]);
     if (Number.isFinite(scale) && scale > 0) unit = linearUnitFromNameOrScale(unitMatch[1].toLowerCase(), scale);
@@ -507,13 +513,12 @@ export function crsFromGeoTiff(
     || 'Unknown CRS';
   const name = epsg && !citation ? `EPSG:${epsg}` : (epsg ? `${baseName} (EPSG:${epsg})` : baseName);
 
-  // Vertical datum: a real EPSG (not 0 / user-defined 32767), else fall back
-  // to the citation text when present.
+  // Vertical datum: a real EPSG (verticalDatumLabel rejects the 0 / 32767
+  // placeholders), else fall back to the citation text when present.
   let verticalEpsg: number | undefined;
-  let verticalDatum: string | undefined;
-  if (verticalCrs && verticalCrs > 0 && verticalCrs !== 32767) {
+  let verticalDatum = verticalCrs != null ? verticalDatumLabel(verticalCrs) : undefined;
+  if (verticalDatum) {
     verticalEpsg = verticalCrs;
-    verticalDatum = verticalDatumLabel(verticalCrs);
   } else {
     const vCite = readGeoTiffCitation(geoAsciiBytes, verticalCitationOffset, verticalCitationCount);
     if (vCite) verticalDatum = vCite;
@@ -565,12 +570,10 @@ export interface EpsgCrsParams {
 export function crsFromEpsg(horizontalEpsg: number, params: EpsgCrsParams = {}): CrsInfo {
   const isGeographic = params.isGeographic ?? false;
   const linearUnit: CrsLinearUnit = params.linearUnit ?? (isGeographic ? 'unknown' : 'metre');
-  let verticalEpsg: number | undefined;
-  let verticalDatum: string | undefined;
-  if (params.verticalEpsg && params.verticalEpsg > 0 && params.verticalEpsg !== 32767) {
-    verticalEpsg = params.verticalEpsg;
-    verticalDatum = verticalDatumLabel(params.verticalEpsg);
-  }
+  // verticalDatumLabel returns undefined for the placeholder codes (0 / 32767),
+  // so a bogus vertical code never produces a datum or a verticalEpsg.
+  const verticalDatum = params.verticalEpsg != null ? verticalDatumLabel(params.verticalEpsg) : undefined;
+  const verticalEpsg = verticalDatum ? params.verticalEpsg : undefined;
   return {
     source: 'epsg',
     name: params.name ?? `EPSG:${horizontalEpsg}`,
