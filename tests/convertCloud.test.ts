@@ -133,3 +133,44 @@ describe('convertCloud', () => {
     expect(report.log[0].message).toMatch(/not available/i);
   });
 });
+
+describe('convertCloud — omitClassification guard', () => {
+  /** Read the per-point classification bytes back out of a written LAS file. */
+  function classFromLas(bytes: Uint8Array): number[] {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const pdrf = dv.getUint8(104);
+    const recLen = dv.getUint16(105, true);
+    const dataOffset = dv.getUint32(96, true);
+    // PDRF 6+ (LAS 1.4) zeroes the legacy count and uses the extended uint64 at
+    // offset 247; the legacy formats use the uint32 at 107.
+    const count = pdrf >= 6 ? Number(dv.getBigUint64(247, true)) : dv.getUint32(107, true);
+    const classOff = pdrf >= 6 ? 16 : 15;
+    const mask = pdrf >= 6 ? 0xff : 0x1f;
+    const out: number[] = [];
+    for (let i = 0; i < count; i++) {
+      out.push(dv.getUint8(dataOffset + i * recLen + classOff) & mask);
+    }
+    return out;
+  }
+
+  function classifiedCloud(): PointCloud {
+    return new PointCloud({
+      positions: Float32Array.from([0, 0, 0, 10, 20, 1, 30, 40, 2]),
+      origin: [500000, 4000000, 100],
+      sourceFormat: 'las',
+      name: 'survey.las',
+      classification: Uint8Array.from([2, 5, 6]),
+    });
+  }
+
+  it('writes the real classes when the guard is off (default)', () => {
+    const { file } = convertCloud(classifiedCloud(), { format: 'las14' });
+    expect(classFromLas(file!.bytes)).toEqual([2, 5, 6]);
+  });
+
+  it('writes class 0 for every point when omitClassification is set', () => {
+    const { file, report } = convertCloud(classifiedCloud(), { format: 'las14', omitClassification: true });
+    expect(classFromLas(file!.bytes)).toEqual([0, 0, 0]);
+    expect(report.log.some((l) => /omitted/i.test(l.message))).toBe(true);
+  });
+});

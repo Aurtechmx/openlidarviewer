@@ -44,6 +44,7 @@ export class ExportPanel {
   private readonly _status: HTMLElement;
   private readonly _fullResRow: HTMLElement;
   private readonly _gzipRow: HTMLElement;
+  private readonly _classRow: HTMLElement;
   private readonly _summary: HTMLElement;
   private readonly _products: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
@@ -57,6 +58,8 @@ export class ExportPanel {
   private _fullRes = false;
   /** Gzip the output to `.las.gz` (binary LAS formats only). */
   private _gzip = false;
+  /** Write the classification channel (false ⇒ omitted as class 0). */
+  private _includeClass = true;
   private _busy = false;
   /**
    * Whether the active scan carries a real-world CRS (projected / geographic).
@@ -108,6 +111,7 @@ export class ExportPanel {
     this._crsLocalNote.style.display = 'none';
     this._fullResRow = el('div', { className: 'olv-export-fullres' });
     this._gzipRow = el('div', { className: 'olv-export-fullres' });
+    this._classRow = el('div', { className: 'olv-export-fullres' });
     // The live "what you'll get" line — size, CRS, classification, before any write.
     this._summary = el('p', { className: 'olv-export-summary', text: '' });
     this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
@@ -127,6 +131,7 @@ export class ExportPanel {
       this._crsExtra,
       this._crsLocalNote,
       this._fullResRow,
+      this._classRow,
       this._summary,
       this._exportBtn,
       this._status,
@@ -142,6 +147,7 @@ export class ExportPanel {
     this._renderCrsExtra();
     this._renderFullResRow();
     this._renderGzipRow();
+    this._renderClassRow();
     this._renderSummary();
     this._renderProducts();
   }
@@ -154,6 +160,7 @@ export class ExportPanel {
   refresh(): void {
     this._renderFullResRow();
     this._renderGzipRow();
+    this._renderClassRow();
     this._renderSummary();
     this._renderProducts();
   }
@@ -247,6 +254,39 @@ export class ExportPanel {
     this._gzipRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
   }
 
+  /** Where the active cloud's classification came from. */
+  private _classProvenance(): 'none' | 'source' | 'derived' {
+    const cloud = this._cb.getCloud();
+    if (!cloud) return 'none';
+    if (cloud.classificationIsDerived) return 'derived';
+    return cloud.classification != null ? 'source' : 'none';
+  }
+
+  /**
+   * Classification guard. Shown only when the cloud carries a classification.
+   * For a DERIVED (heuristic) classification the row reads honestly — "not
+   * survey-grade" — and the checkbox lets the user omit it from the written
+   * file rather than ship a guess as if it were a producer classification.
+   */
+  private _renderClassRow(): void {
+    this._classRow.replaceChildren();
+    const provenance = this._classProvenance();
+    if (provenance === 'none') {
+      this._includeClass = true; // no class to omit — never carry a stale opt-out
+      return;
+    }
+    const label = el('label', { className: 'olv-export-fullres-label' });
+    const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
+    box.checked = this._includeClass;
+    box.addEventListener('change', () => { this._includeClass = box.checked; this._renderSummary(); });
+    label.append(box, el('span', { text: 'Include classification' }));
+
+    const hint = provenance === 'derived'
+      ? 'Derived (heuristic) — not survey-grade. Untick to omit it from the file.'
+      : 'From the source file.';
+    this._classRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  }
+
   /** Recompute the live "what you'll get" line from the active cloud + options. */
   private _renderSummary(): void {
     const cloud = this._cb.getCloud();
@@ -264,6 +304,8 @@ export class ExportPanel {
       crsLabel: crs?.name ?? null,
       targetEpsg: parseEpsg(this._targetEpsg),
       hasWkt: crs?.wkt != null,
+      classification: this._classProvenance(),
+      includeClassification: this._includeClass,
       viewDecimated: this._cb.isReduced(),
       fullRes: this._fullRes,
       gzip: this._gzip,
@@ -420,6 +462,7 @@ export class ExportPanel {
         crsMode: this._crsMode,
         targetEpsg: target,
         sourceEpsg: parseEpsg(this._sourceEpsg),
+        omitClassification: !this._includeClass,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {

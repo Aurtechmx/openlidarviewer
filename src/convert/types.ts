@@ -54,6 +54,12 @@ export interface ConvertOptions {
    * ASCII precision (decimal places) for XYZ / ASC. Defaults to 3 (mm).
    */
   readonly asciiPrecision?: number;
+  /**
+   * When true, the classification channel is omitted from the output (written
+   * as class 0). The honesty guard for a derived/heuristic classification the
+   * user does not want to ship as if it were authoritative.
+   */
+  readonly omitClassification?: boolean;
 }
 
 /** A single produced output file, ready to download. */
