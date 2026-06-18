@@ -27,6 +27,10 @@ export interface ExportPanelCallbacks {
   isReduced: () => boolean;
   /** Re-decode the original file at full resolution. Only call when `hasFullSource()`. */
   getFullCloud: () => Promise<PointCloud | null>;
+  /** Count of placed measurements — drives the Products lane's enablement. */
+  measurementCount?: () => number;
+  /** Export the placed measurements to an open format (GeoJSON / CSV). */
+  exportMeasurements?: (format: 'geojson' | 'csv') => void;
 }
 
 export class ExportPanel {
@@ -41,6 +45,7 @@ export class ExportPanel {
   private readonly _fullResRow: HTMLElement;
   private readonly _gzipRow: HTMLElement;
   private readonly _summary: HTMLElement;
+  private readonly _products: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
@@ -108,6 +113,9 @@ export class ExportPanel {
     this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
     this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
+    // The collapsed "Products" lane — derived artifacts (measurements today;
+    // rasters / report / session to follow) kept out of the primary save flow.
+    this._products = el('div', { className: 'olv-export-products' });
 
     const body = el('div', { className: 'olv-export-body' });
     body.append(
@@ -122,6 +130,7 @@ export class ExportPanel {
       this._summary,
       this._exportBtn,
       this._status,
+      this._products,
     );
 
     this.element.append(head, body);
@@ -134,6 +143,7 @@ export class ExportPanel {
     this._renderFullResRow();
     this._renderGzipRow();
     this._renderSummary();
+    this._renderProducts();
   }
 
   setVisible(on: boolean): void {
@@ -145,6 +155,7 @@ export class ExportPanel {
     this._renderFullResRow();
     this._renderGzipRow();
     this._renderSummary();
+    this._renderProducts();
   }
 
   /**
@@ -261,6 +272,45 @@ export class ExportPanel {
     const warn = s.warnings.find((w) => w.level === 'error') ?? s.warnings.find((w) => w.level === 'warn');
     this._summary.textContent = warn ? `${s.line} — ${warn.message}` : s.line;
     this._summary.className = `olv-export-summary${warn ? ` is-${warn.level}` : ''}`;
+  }
+
+  /**
+   * The collapsed "Products" lane — derived artifacts kept out of the primary
+   * point-cloud save flow. Today it surfaces the measurement GeoJSON/CSV export;
+   * rasters / report / session will move here as they're wired. Renders nothing
+   * when the host wires no product callbacks.
+   */
+  private _renderProducts(): void {
+    this._products.replaceChildren();
+    if (!this._cb.exportMeasurements) return;
+    const count = this._cb.measurementCount?.() ?? 0;
+
+    const head = el('button', {
+      className: 'olv-export-products-head',
+      type: 'button',
+      text: 'Products ▾',
+    });
+    const content = el('div', { className: 'olv-export-products-body olv-hidden' });
+    head.addEventListener('click', () => content.classList.toggle('olv-hidden'));
+
+    const row = el('div', { className: 'olv-bc-pills' });
+    ([['geojson', 'GeoJSON'], ['csv', 'CSV']] as const).forEach(([fmt, label]) => {
+      const btn = el('button', { className: 'olv-bc-pill', type: 'button', text: label }) as HTMLButtonElement;
+      btn.disabled = count === 0;
+      btn.addEventListener('click', () => this._cb.exportMeasurements?.(fmt));
+      row.append(btn);
+    });
+
+    const hint =
+      count === 0
+        ? 'Place measurements, then export them as open vector formats.'
+        : `${count} measurement${count === 1 ? '' : 's'} ready to export.`;
+    content.append(
+      this._label('Measurements'),
+      row,
+      el('span', { className: 'olv-export-fullres-hint', text: hint }),
+    );
+    this._products.append(head, content);
   }
 
   private _label(text: string): HTMLElement {

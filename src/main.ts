@@ -83,6 +83,7 @@ import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
+import { measurementsToGeoJSON, measurementsToCsv, type MeasurementExportContext } from './export/measurementExport';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -2357,6 +2358,28 @@ const exportPanel = new ExportPanel({
     if (!f) return null;
     return decodeFull(await f.arrayBuffer(), f.name);
   },
+  measurementCount: () => viewer.measure.getMeasurements().length,
+  exportMeasurements: (format) => {
+    const measurements = viewer.measure.getMeasurements();
+    if (measurements.length === 0) return;
+    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    // Measurement points are LOCAL (recentered); add the origin back to land them
+    // in the source projected/local frame. Geographic reprojection (→ lon/lat) is
+    // a later option — for now we emit in the scan's own coordinates.
+    const origin = cloud?.origin ?? [0, 0, 0];
+    const ctx: MeasurementExportContext = {
+      toOutput: (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
+      up: viewer.measure.worldUp,
+      unitToMetres: viewer.measure.unitToMetres,
+      crsName: cloud?.metadata?.crs?.name,
+      geographic: false,
+    };
+    const text = format === 'geojson'
+      ? measurementsToGeoJSON(measurements, ctx)
+      : measurementsToCsv(measurements, ctx);
+    const stem = cloud ? baseName(cloud.name) : 'measurements';
+    downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
+  },
 });
 
 /** True when the resolved CRS is a real-world frame (projected / geographic). */
@@ -3800,6 +3823,9 @@ function refreshMeasurePanel(): void {
     if (newest) recordUsage('measurement', newest.kind);
   }
   _lastMeasurementCount = measurements.length;
+  // Keep the Export panel's Products lane (measurement GeoJSON/CSV) in sync with
+  // the live measurement count.
+  exportPanel.refresh();
 }
 
 /** Refresh the Annotations panel's contents and visibility. */
