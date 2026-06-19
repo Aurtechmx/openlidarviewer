@@ -325,7 +325,15 @@ export class ExportPanel {
   private _renderProducts(): void {
     this._products.replaceChildren();
     if (!this._cb.exportMeasurements) return;
-    const count = this._cb.measurementCount?.() ?? 0;
+    // Defensive: this runs during construction, before the host's lazy viewer
+    // resolves. A callback that throws (e.g. dereferencing a not-yet-ready
+    // viewer) must degrade to 0, never take down panel/app init.
+    let count = 0;
+    try {
+      count = this._cb.measurementCount?.() ?? 0;
+    } catch {
+      count = 0;
+    }
 
     const head = el('button', {
       className: 'olv-export-products-head',

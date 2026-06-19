@@ -2439,8 +2439,12 @@ const exportPanel = new ExportPanel({
     if (!f) return null;
     return decodeFull(await f.arrayBuffer(), f.name);
   },
-  measurementCount: () => viewer.measure.getMeasurements().length,
+  // Called synchronously while the ExportPanel builds its Products lane — which
+  // happens before the lazy `viewer` chunk resolves, so it must tolerate a null
+  // viewer (return 0) instead of dereferencing it and crashing app init.
+  measurementCount: () => (viewer ? viewer.measure.getMeasurements().length : 0),
   exportMeasurements: (format) => {
+    if (!viewer) return;
     const measurements = viewer.measure.getMeasurements();
     if (measurements.length === 0) return;
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;

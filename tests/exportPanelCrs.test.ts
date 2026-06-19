@@ -153,5 +153,43 @@ describe('ExportPanel — CRS step auto-collapse', () => {
   });
 });
 
+describe('ExportPanel — Products lane resilience (regression)', () => {
+  it('survives a measurementCount callback that throws (lazy viewer not ready)', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    // Reproduces the v0.4.9 init crash: the Products lane is built during
+    // construction, before the host's lazy `viewer` resolves, so a callback that
+    // dereferences it throws. The panel must degrade to a 0 count, not crash.
+    expect(() => {
+      const panel = new ExportPanel({
+        getCloud: () => null,
+        hasFullSource: () => false,
+        isReduced: () => false,
+        getFullCloud: async () => null,
+        measurementCount: () => { throw new TypeError("Cannot read properties of null (reading 'measure')"); },
+        exportMeasurements: () => { /* present so the Products lane renders */ },
+      });
+      // Re-rendering (the refresh path) must stay safe too.
+      panel.refresh();
+    }).not.toThrow();
+  });
+
+  it('disables the measurement export pills when the count is 0', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      getCloud: () => null,
+      hasFullSource: () => false,
+      isReduced: () => false,
+      getFullCloud: async () => null,
+      measurementCount: () => 0,
+      exportMeasurements: () => { /* no-op */ },
+    });
+    const root = panel.element as unknown as FakeEl;
+    for (const lbl of ['GeoJSON', 'CSV']) {
+      const hit = root.findOwnText(lbl)[0];
+      expect(hit, `products pill "${lbl}" missing`).toBeDefined();
+    }
+  });
+});
+
 // silence "unused" for the shared helper while keeping it available for edits.
 void makePanel;
