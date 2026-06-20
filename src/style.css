@@ -5343,6 +5343,29 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-analyse-chip.is-bad { border-color: color-mix(in srgb, var(--rating-weak) 45%, transparent); }
 .olv-analyse-chip.is-bad .olv-analyse-chip-v { color: var(--rating-weak); }
 
+/* Georeferencing status — the plain-language "anchored to the real world?"
+   element that replaces the jargon CRS/Datum chips. A small schematic glyph
+   (marker over a ground line) + a headline + the Position/Height facts. Muted
+   tones only — a missing CRS is a neutral fact, never an error red. */
+.olv-georef {
+  display: inline-flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-2xs) var(--space-sm); border-radius: var(--radius-md);
+  border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
+}
+.olv-georef-glyph { display: inline-flex; flex: 0 0 auto; color: var(--text-faint); }
+.olv-georef-glyph svg { display: block; }
+.olv-georef-text { display: flex; flex-direction: column; line-height: 1.25; }
+.olv-georef-headline { font-size: var(--text-2xs); font-weight: 600; color: var(--text); }
+.olv-georef-facts { font-size: var(--text-2xs); color: var(--text-faint); }
+/* Tone = consequence, not fault: anchored reads positive, partial cautions,
+   floating is a calm neutral (grey) — never the error red used for failures. */
+.olv-georef.is-anchored { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
+.olv-georef.is-anchored .olv-georef-glyph { color: var(--rating-excellent); }
+.olv-georef.is-partial { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
+.olv-georef.is-partial .olv-georef-glyph { color: var(--rating-good); }
+.olv-georef.is-floating { border-color: var(--hairline); }
+.olv-georef.is-floating .olv-georef-glyph { color: var(--text-faint); }
+
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
 .olv-analyse-reco { font-size: var(--text-xs); color: var(--text); font-family: var(--mono); }
