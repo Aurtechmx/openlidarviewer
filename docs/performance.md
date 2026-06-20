@@ -52,7 +52,7 @@ Real-world figures — a 9.6 M-point drone LAZ survey and a 55 K-point iPhone sc
 
 ## Privacy
 
-OpenLiDARViewer is built around local-first inspection. Files are read, parsed, and rendered in the browser, and there is no server to upload them to. That makes it suitable for sensitive survey data. See [SECURITY.md](../SECURITY.md).
+OpenLiDARViewer is built around local-first inspection. Files are read, parsed, and rendered in the browser, and there is no server to upload them to. See [SECURITY.md](../SECURITY.md).
 
 ## Mobile Performance
 

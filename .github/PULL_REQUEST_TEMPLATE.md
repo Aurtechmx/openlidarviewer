@@ -24,4 +24,3 @@ changes, note the browser and backend (WebGPU or WebGL 2) you tested in.
 - [ ] New behavior has unit tests where the logic is pure
 - [ ] Docs updated if behavior or formats changed
 - [ ] Commits follow Conventional Commits (`type(scope): description`)
-- [ ] No secrets, personal paths, or sensitive scan data included

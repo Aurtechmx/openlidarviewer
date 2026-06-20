@@ -28,7 +28,7 @@ project in public spaces.
 ## Enforcement
 
 Report unacceptable behavior to **info@aurtech.mx**. Reports are reviewed
-confidentially. Maintainers may remove, edit, or reject contributions, or take
+in private. Maintainers may remove, edit, or reject contributions, or take
 other appropriate action.
 
 This Code of Conduct is adapted from the

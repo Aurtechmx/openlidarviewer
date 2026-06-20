@@ -25,9 +25,7 @@ What you thought would happen instead.
 - Approximate point count and file size:
 - Where it came from (drone LiDAR, phone scan, exported from other software):
 
-Please do not attach confidential or sensitive scan data to a public issue.
-A tiny synthetic file that still shows the bug is ideal. See
-[SECURITY.md](../../SECURITY.md).
+A tiny synthetic file that still shows the bug is ideal.
 
 **Environment**
 

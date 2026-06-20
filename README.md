@@ -41,7 +41,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 ## Key Advantages
 
 - Inspect point-cloud datasets directly in a modern web interface, with nothing to install.
-- Local-first by design: files are read and rendered in your browser, with no upload, which suits sensitive survey data.
+- Local-first by design: files are read and rendered in your browser, with no upload.
 - Opens compatible iPhone and mobile scan exports when saved as PLY, OBJ, GLB/GLTF, XYZ, or CSV.
 - Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates precise.
 - Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
@@ -320,7 +320,7 @@ Full detail is in [`docs/mobile-browser-support.md`](docs/mobile-browser-support
 
 ## Research & Development Focus
 
-OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It looks at browser-native point-cloud rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, local-first workflows for sensitive data, and simpler interfaces for complex datasets.
+OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It looks at browser-native point-cloud rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, local-first workflows, and simpler interfaces for complex datasets.
 
 The aim is not to replace full GIS or survey-grade processing. It is to give people a fast, approachable way to open, inspect, navigate, measure, and present point clouds. See [`docs/research-notes.md`](docs/research-notes.md).
 

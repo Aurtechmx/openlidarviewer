@@ -301,8 +301,7 @@ matching `tests/myModule.test.ts`.
 ## 13. Security & privacy
 
 - **No data leaves the browser.** Files are read, parsed, and rendered
-  locally; there is no backend to send them to. Safe for confidential survey
-  data and proprietary sites.
+  locally; there is no backend to send them to. Your files stay on the device.
 - **No telemetry, no accounts, no third-party calls** at runtime — the only
   network requests are loading the app's own static assets and, if a user
   clicks one, a built-in sample file.
