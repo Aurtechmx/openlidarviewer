@@ -101,7 +101,7 @@ import {
   type ScanTypeControl,
   type ScanTypeDisabledReasons,
 } from './scanTypeControl';
-import { georefStatus, georefGlyphSvg } from './georefStatus';
+import { georefStatus, georefGlyphSvg } from '../geo/georefStatus';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {

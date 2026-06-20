@@ -20,7 +20,7 @@
  * DOM, no I/O, deterministic. Generic for ANY scan; nothing hard-coded.
  */
 
-import { georefStatus } from '../../ui/georefStatus';
+import { georefStatus } from '../../geo/georefStatus';
 
 /** The fitness gate verdict carried in from the existing assessment. */
 export type FitnessStatus = 'Good' | 'Preview' | 'Limited' | 'Blocked';
@@ -51,12 +51,18 @@ export interface FitnessInputs {
   readonly measuredFraction: number | null;
   // Ground-return density (points per m²) — the DTM-relevant density
   readonly groundDensityPerM2: number | null;
-  // Vertical accuracy (held-out RMSE, in display units) + whether it is
+  // Vertical accuracy (held-out RMSE, in DISPLAY units) + whether it is
   // self-consistency only (no independent checkpoints).
   readonly verticalRmse: number | null;
   readonly notSurveyGrade: boolean;
   /** Display unit for accuracy ('m' / 'ft' / …). Default 'm'. */
   readonly unit?: string;
+  /**
+   * Display-unit → metres factor (1 for metres, 0.3048 for feet). The accuracy
+   * THRESHOLDS are metric, so the tone buckets on `verticalRmse * unitToMetres`;
+   * without this a feet RMSE was graded against metre thresholds. Default 1.
+   */
+  readonly unitToMetres?: number;
   // Classification: fraction unclassified (null = no classification at all) and
   // whether a ground class is present.
   readonly unclassifiedFraction: number | null;
@@ -89,6 +95,12 @@ export interface ScanFitness {
   readonly dimensions: FitnessDimension[];
   /** Non-hideable honesty caveats. */
   readonly caveats: string[];
+  /**
+   * True when the grade is provisional — only part of the cloud was analysed
+   * (streaming / sampled). The hero should mark it "still streaming" rather than
+   * read as a settled verdict, and a tier badge is never earned while provisional.
+   */
+  readonly provisional: boolean;
 }
 
 const SEVERITY: Record<FitnessTone, number> = { ready: 0, okay: 1, review: 2 };
@@ -142,11 +154,14 @@ function densityDimension(d: number | null): FitnessDimension {
   return { key: 'density', label: 'Ground detail', tone, summary };
 }
 
-function accuracyDimension(rmse: number | null, unit: string): FitnessDimension {
+function accuracyDimension(rmse: number | null, unit: string, unitToMetres: number): FitnessDimension {
   if (rmse == null) {
     return { key: 'accuracy', label: 'Vertical accuracy', tone: 'review', summary: 'Not validated against any reference.' };
   }
-  const tone: FitnessTone = rmse <= RMSE_READY ? 'ready' : rmse <= RMSE_OKAY ? 'okay' : 'review';
+  // Bucket on the METRIC value; the thresholds are metres. The displayed value
+  // stays in the file's unit.
+  const rmseM = rmse * unitToMetres;
+  const tone: FitnessTone = rmseM <= RMSE_READY ? 'ready' : rmseM <= RMSE_OKAY ? 'okay' : 'review';
   const v = `±${rmse.toFixed(2)} ${unit}`;
   const summary =
     tone === 'ready'
@@ -188,23 +203,42 @@ function integrityDimension(inp: FitnessInputs): FitnessDimension {
   return { key: 'integrity', label: 'Integrity', tone: 'ready', summary: 'Graded on the full cloud.' };
 }
 
+/**
+ * Priority order for the verdict's "lead limitation" — most use-limiting first.
+ * Coverage (can a surface even be built) and georeferencing (can it be placed)
+ * outrank the finer axes. Used to pick which reviewed dimension the verdict
+ * names FIRST, instead of relying on dimension array order.
+ */
+const LIMITER_PRIORITY: readonly FitnessKey[] = [
+  'coverage',
+  'georeferencing',
+  'density',
+  'accuracy',
+  'classification',
+  'integrity',
+];
+
 /** Build the verdict-led fitness model from the analysis values. Generic. */
 export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const unit = inp.unit ?? 'm';
+  const unitToMetres = inp.unitToMetres ?? 1;
+  const provisional = inp.coverageMode !== 'full';
   const dimensions: FitnessDimension[] = [
     georefDimension(inp),
     coverageDimension(inp.measuredFraction),
     densityDimension(inp.groundDensityPerM2),
-    accuracyDimension(inp.verticalRmse, unit),
+    accuracyDimension(inp.verticalRmse, unit, unitToMetres),
     classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass),
     integrityDimension(inp),
   ];
   const overallTone = dimensions.reduce<FitnessTone>((t, d) => worst(t, d.tone), 'ready');
 
-  // The verdict leads with what the scan IS good for (the ready dimensions),
-  // then names the single biggest limitation (the first reviewed dimension) —
-  // and is willing to be negative, which the council called the real moat.
-  const reviews = dimensions.filter((d) => d.tone === 'review');
+  // The verdict leads with what the scan IS good for, then names the biggest
+  // limitation — ranked by LIMITER_PRIORITY (not array order), and willing to be
+  // negative, which the council called the real moat.
+  const reviews = dimensions
+    .filter((d) => d.tone === 'review')
+    .sort((a, b) => LIMITER_PRIORITY.indexOf(a.key) - LIMITER_PRIORITY.indexOf(b.key));
   const limiterPhrase: Record<FitnessKey, string> = {
     georeferencing: 'it isn’t placed in the real world (no map position or height datum)',
     coverage: 'ground coverage is sparse — most of the surface is interpolated',
@@ -225,13 +259,21 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     const more = reviews.length > 1 ? ` (+${reviews.length - 1} more to review)` : '';
     verdict = `Preview only — ${limiterPhrase[lead.key]}${more}.`;
   }
+  // A provisional grade (partial / streaming cloud) must never read as settled —
+  // prepend a "still streaming" lead so the user re-runs on the full cloud.
+  if (provisional && inp.status !== 'Blocked') {
+    verdict = `Still streaming — ${verdict.charAt(0).toLowerCase()}${verdict.slice(1)}`;
+  }
 
-  // A named tier is only earned when density AND accuracy both pass and the file
-  // is georeferenced — otherwise the QL label would overclaim.
+  // A named tier is only earned when density AND accuracy both pass, the file is
+  // georeferenced, AND the grade is on the full cloud — otherwise the QL label
+  // would overclaim (a partial/streaming sample can't earn a tier).
   const densTone = dimensions.find((d) => d.key === 'density')!.tone;
   const accTone = dimensions.find((d) => d.key === 'accuracy')!.tone;
   const tierBadge =
-    inp.qualityLevel && densTone !== 'review' && accTone !== 'review' && inp.crsKnown ? inp.qualityLevel : null;
+    inp.qualityLevel && !provisional && densTone !== 'review' && accTone !== 'review' && inp.crsKnown
+      ? inp.qualityLevel
+      : null;
 
   const headlineAccuracy = inp.verticalRmse != null ? `±${inp.verticalRmse.toFixed(2)} ${unit} vertical` : null;
 
@@ -242,5 +284,5 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   if (!inp.datumKnown) caveats.push('No vertical datum — heights are relative, not real-world elevations.');
   if (!inp.crsKnown) caveats.push('No map position (CRS) — the scan isn’t placed on Earth.');
 
-  return { verdict, overallTone, tierBadge, headlineAccuracy, dimensions, caveats };
+  return { verdict, overallTone, tierBadge, headlineAccuracy, dimensions, caveats, provisional };
 }

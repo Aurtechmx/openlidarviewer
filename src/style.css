@@ -5348,7 +5348,13 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
    (marker over a ground line) + a headline + the Position/Height facts. Muted
    tones only — a missing CRS is a neutral fact, never an error red. */
 .olv-georef {
-  display: inline-flex; align-items: center; gap: var(--space-sm);
+  display: flex; align-items: center; gap: var(--space-sm);
+  /* Own region: the georef status is a different CLASS of element than the small
+     status pills, so it takes its own full-width row above them (Gestalt
+     similarity/continuity — don't mix a 2-line glyph card into the pill row).
+     The extra bottom margin is the loose between-group whitespace. */
+  flex-basis: 100%;
+  margin-bottom: var(--space-2xs);
   padding: var(--space-2xs) var(--space-sm); border-radius: var(--radius-md);
   border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
 }

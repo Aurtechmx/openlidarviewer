@@ -21,6 +21,7 @@ function base(over: Partial<FitnessInputs> = {}): FitnessInputs {
     verticalRmse: 0.07,
     notSurveyGrade: false,
     unit: 'm',
+    unitToMetres: 1,
     unclassifiedFraction: 0.02,
     hasGroundClass: true,
     coverageMode: 'full',
@@ -72,6 +73,40 @@ describe('buildScanFitness — scorecard tones', () => {
   it('streamed / partial coverage → integrity okay, not ready', () => {
     expect(tone(buildScanFitness(base({ coverageMode: 'resident-only' })), 'integrity')).toBe('okay');
     expect(tone(buildScanFitness(base({ status: 'Blocked' })), 'integrity')).toBe('review');
+  });
+});
+
+describe('buildScanFitness — unit-correct accuracy bucketing', () => {
+  it('buckets a feet RMSE against metric thresholds, not raw feet', () => {
+    // 0.5 ft = 0.1524 m → "okay" (≤ 0.3 m). Bucketing on raw 0.5 would be "review".
+    const f = buildScanFitness(base({ verticalRmse: 0.5, unit: 'ft', unitToMetres: 0.3048 }));
+    expect(tone(f, 'accuracy')).toBe<FitnessTone>('okay');
+    expect(f.headlineAccuracy).toBe('±0.50 ft vertical'); // displayed in feet
+  });
+});
+
+describe('buildScanFitness — provisional (streaming / partial) state', () => {
+  it('partial coverage marks provisional, prefixes the verdict, and voids the badge', () => {
+    const f = buildScanFitness(base({ coverageMode: 'resident-only' }));
+    expect(f.provisional).toBe(true);
+    expect(f.verdict).toMatch(/^still streaming/i);
+    expect(f.tierBadge).toBeNull(); // a partial grade can't earn a tier
+  });
+  it('a full-cloud grade is not provisional and can earn its badge', () => {
+    const f = buildScanFitness(base());
+    expect(f.provisional).toBe(false);
+    expect(f.tierBadge).toBe('USGS QL1');
+  });
+});
+
+describe('buildScanFitness — verdict leads with the most use-limiting axis (not array order)', () => {
+  it('coverage outranks georeferencing as the lead limiter', () => {
+    // Both coverage and georeferencing are reviewed; coverage must lead.
+    const f = buildScanFitness(base({
+      status: 'Limited', crsKnown: false, datumKnown: false, crsName: null, datumName: null,
+      measuredFraction: 0.3,
+    }));
+    expect(f.verdict).toMatch(/ground coverage is sparse/i);
   });
 });
 

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { georefStatus, georefGlyphSvg, type GeorefTone } from '../src/ui/georefStatus';
+import { georefStatus, georefGlyphSvg, type GeorefTone } from '../src/geo/georefStatus';
 
 describe('georefStatus — four states', () => {
   it('both known → anchored, real-world position and elevation', () => {
