@@ -193,7 +193,7 @@ FAVICON_SVG_TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 6
   <!--
     OpenLiDARViewer favicon — the OFFICIAL brand mark on the brand-dark
     plate. GENERATED FILE: written by scripts/make-brand-rasters.py, which
-    crops the mark region out of public/brand-logo.svg's full-resolution
+    crops the mark region out of design/brand-logo.svg's full-resolution
     pixels and downscales it (Lanczos, {px} px) for embedding — the mark is
     the real asset's pixels, not redrawn artwork. The #0a0e1a rounded plate
     (matching theme-color / the app background) sits behind it for contrast

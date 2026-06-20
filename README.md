@@ -405,9 +405,19 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.4.7**. The full, dated history is in
+The current release is **v0.4.9**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.4.9 — Data Fitness scorecard, file-scale honesty & a leaner deploy
+- The **Data Fitness scorecard** leads the Analyse panel — one plain verdict plus a six-row traffic-light scorecard (Location & height, Coverage, Ground detail, Vertical accuracy, Classification, Integrity) with shape-distinct glyphs and a USGS Quality Level badge shown only when earned; the panel is de-duplicated so each fact has a single home
+- **File-scale honesty** across the Scan Report, the inspection PDF, the provenance density, and the Layers chip — the file's true point count and back-scaled density, not the strided display sample (with a "Loaded" row disclosing it); dense drone surveys identify as UAV LiDAR; georeferenced scans with an undeclared datum read "elevation datum not declared," not "relative"
+- A **leaner deploy** (~1.05 MB of brand assets trimmed), a portable `_headers` file and relative PWA manifest for any static host, and fixes for the zoom-out square-clip, contour-GeoJSON elevation, and vertical-unit handling
+
+### v0.4.8 — Derived classification & trust you can act on
+- **Derive a classification** for scans that ship functionally unclassified (every point ASPRS 0/1), with **RGB-assisted vegetation**, per-run **confidence**, and **void-honest heights** that leave hole-filled points unclassified rather than guessed
+- **Dataset Story** and **Export Health check** actions synthesise what a scan is, its biggest limiter, and a ready / caution / blocked hand-off verdict; shared `.olvsession` files remember the class-visibility filter
+- A new **Credits** page attributing the sample-data providers and the open-source dependencies; a producer's existing classification is never overwritten
 
 ### v0.4.7 — Accessibility, workflow & honesty fixes
 - A **colourblind-safe (Okabe-Ito) classification palette** toggle, an **annotation grouping** summary (totals, per-category counts, areas) in the panel and the PDF report, and a quiet **signal-tier cue** on the Dataset Intelligence card
