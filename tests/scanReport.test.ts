@@ -98,6 +98,59 @@ describe('scanReport module', () => {
     });
   });
 
+  describe('strided (display-sampled) cloud reports the FILE, not the subset', () => {
+    // 4 points loaded for display, but the file declared 40 — the loader strided
+    // it 10×. The report must headline the file's count and density, disclose the
+    // loaded subset, and NOT under-report a dense survey as sparse.
+    const cloud = new PointCloud({
+      positions: new Float32Array([0, 0, 0, 2, 0, 0, 0, 2, 0, 2, 2, 1]),
+      origin: [0, 0, 0],
+      sourceFormat: 'laz',
+      name: 'strided',
+      declaredPointCount: 40,
+    });
+
+    test('Point Count is the declared file total', () => {
+      expect(rowByLabel(scanReport.run(cloud), 'Point Count').value).toContain('40');
+    });
+
+    test('a Loaded row discloses the display sample', () => {
+      const row = rowByLabel(scanReport.run(cloud), 'Loaded');
+      expect(row.value).toContain('4');
+      expect(row.value.toLowerCase()).toContain('display sample');
+    });
+
+    test('Density is back-scaled to the file (40/4 = 10), not the sample (1.0)', () => {
+      expect(parseFloat(rowByLabel(scanReport.run(cloud), 'Density').value)).toBeCloseTo(10.0, 3);
+    });
+
+    test('a non-strided cloud (no declared total) adds no Loaded row', () => {
+      const plain = new PointCloud({
+        positions: new Float32Array([0, 0, 0, 2, 0, 0, 0, 2, 0, 2, 2, 1]),
+        origin: [0, 0, 0],
+        sourceFormat: 'las',
+        name: 'plain',
+      });
+      expect(scanReport.run(plain).rows.find((r) => r.label === 'Loaded')).toBeUndefined();
+    });
+  });
+
+  describe('classification dimension present but fully unassigned', () => {
+    // Every point class 0/1 (never classified / unclassified) — the field exists,
+    // but nothing is classified. "Yes" would overclaim; report the honest state.
+    const cloud = new PointCloud({
+      positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1]),
+      classification: new Uint8Array([0, 0, 1, 0]),
+      origin: [0, 0, 0],
+      sourceFormat: 'laz',
+      name: 'unclassified',
+    });
+
+    test('Classification → "Present, unclassified"', () => {
+      expect(rowByLabel(scanReport.run(cloud), 'Classification').value).toBe('Present, unclassified');
+    });
+  });
+
   describe('cloud without optional attributes', () => {
     const cloud = new PointCloud({
       positions: new Float32Array([0, 0, 0, 1, 1, 1]),

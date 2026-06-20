@@ -80,7 +80,22 @@ export const scanReport: AnalysisModule = {
       }
     }
 
-    rows.push(withScope(rowInfo('Point Count', n.toLocaleString('en-US')), scope));
+    // ── File-scale honesty ──────────────────────────────────────────────────
+    // The loader strides huge clouds for display, so `n` (the decoded/rendered
+    // count) under-represents the survey. For the unfiltered report the file's
+    // declared total is the honest headline, and density/spacing follow from
+    // it — the same back-scaling the terrain pipeline already applies. A class
+    // subset can only be counted over the points actually loaded, so it keeps
+    // the decoded basis.
+    const declaredN = cloud.declaredPointCount;
+    const strided = subset === null && declaredN !== undefined && declaredN > n;
+    const reportedN = strided ? (declaredN as number) : n;
+
+    rows.push(withScope(rowInfo('Point Count', reportedN.toLocaleString('en-US')), scope));
+    if (strided) {
+      // Don't hide the sampling: name the subset actually held in memory.
+      rows.push(rowInfo('Loaded', `${n.toLocaleString('en-US')} (display sample)`));
+    }
 
     // Extent — rounded to a tenth of a metre.
     const width = maxX - minX;
@@ -92,25 +107,35 @@ export const scanReport: AnalysisModule = {
 
     const footprintArea = width * depth;
 
-    // Point density.
-    if (footprintArea <= 0 || n === 0) {
+    // Point density — over the file's true count (back-scaled when strided).
+    if (footprintArea <= 0 || reportedN === 0) {
       rows.push(withScope(rowWarn('Density', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(withScope(rowInfo('Density', `${(n / footprintArea).toFixed(1)} pts/m²`), scope));
+      rows.push(withScope(rowInfo('Density', `${(reportedN / footprintArea).toFixed(1)} pts/m²`), scope));
     }
 
     // Estimated point spacing.
-    if (footprintArea <= 0 || n === 0) {
+    if (footprintArea <= 0 || reportedN === 0) {
       rows.push(withScope(rowWarn('Spacing', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(withScope(rowInfo('Spacing', formatLength(Math.sqrt(footprintArea / n))), scope));
+      rows.push(withScope(rowInfo('Spacing', formatLength(Math.sqrt(footprintArea / reportedN))), scope));
     }
 
     // Attribute coverage.
     rows.push(rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'));
     rows.push(rowInfo('Intensity', cloud.intensity !== undefined ? 'Yes' : 'No'));
-    const hasClassification = cloud.classification !== undefined;
-    rows.push(rowInfo('Classification', hasClassification ? 'Yes' : 'No'));
+    // A cloud can carry the classification dimension while every point is still
+    // unassigned (ASPRS 0 = never classified, 1 = unclassified). A bare "Yes"
+    // there implies a classified cloud that isn't — so report the honest state.
+    let classValue = 'No';
+    if (cls !== undefined) {
+      let anyAssigned = false;
+      for (let i = 0; i < totalN; i++) {
+        if ((cls[i] & 0xff) > 1) { anyAssigned = true; break; }
+      }
+      classValue = anyAssigned ? 'Yes' : 'Present, unclassified';
+    }
+    rows.push(rowInfo('Classification', classValue));
 
     // Capture provenance — shown only when the file header carried it.
     const meta = cloud.metadata;
@@ -144,7 +169,7 @@ export const scanReport: AnalysisModule = {
     // visible count `n` equals the buffer length); subset scope counts only
     // the visible points, against the visible count as the denominator.
     let coverage = 'N/A';
-    if (hasClassification && n > 0) {
+    if (cls !== undefined && n > 0) {
       const clsBuf = cloud.classification!;
       let nonZero = 0;
       for (let i = 0; i < totalN; i++) {
