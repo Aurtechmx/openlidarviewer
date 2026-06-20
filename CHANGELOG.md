@@ -11,7 +11,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   Ground detail, Vertical accuracy, Classification, Integrity — each with a
   metaphor icon and a shape-distinct tone glyph (check / dash / triangle, never
   colour alone). Caveats are non-hideable, and the USGS Quality Level badge is
-  shown only when it is actually earned (georeferenced, density above floor,
+  shown only when earned (georeferenced, density above floor,
   accuracy validated).
 - **Portable security headers.** A `_headers` file ships alongside `.htaccess`
   so the same deploy bundle is hardened on Netlify / Cloudflare Pages-style
@@ -47,7 +47,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Vertical units are honoured: `VerticalUnitsGeoKey` (4099) and the WKT vertical
   `UNIT` are parsed, and Z is scaled to metres for accuracy bucketing.
 - Honest height wording for georeferenced scans. A horizontally-georeferenced
-  scan with an undeclared vertical datum (very common for drone LiDAR — absolute
+  scan with an undeclared vertical datum (common for drone LiDAR — absolute
   Z, no `VerticalCRS`) now reads "elevation datum not declared" rather than
   "heights are relative." Its heights are absolute; only the datum is unverified.
   Truly floating scans (no CRS) still read "relative."

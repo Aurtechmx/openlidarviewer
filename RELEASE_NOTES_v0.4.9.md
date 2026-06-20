@@ -2,7 +2,7 @@
 
 An honesty-and-polish release. The Analyse panel now leads with one plain
 verdict, every surface reports the file's true scale instead of the display
-sample, and the deploy is meaningfully leaner. Still browser-native, local-first,
+sample, and the deploy is ~1 MB leaner. Still browser-native, local-first,
 nothing uploaded.
 
 ## Highlights
@@ -12,7 +12,7 @@ nothing uploaded.
   Ground detail, Vertical accuracy, Classification, Integrity. Each row pairs a
   metaphor icon with a shape-distinct tone glyph (check / dash / triangle, never
   colour alone), the caveats can't be hidden, and the USGS Quality Level badge
-  appears only when it's actually earned — georeferenced, density above the
+  appears only when earned — georeferenced, density above the
   floor, and accuracy validated.
 - **Panel de-duplication** — each fact now has exactly one home. The scorecard is
   the headline; the assessment block carries export readiness, terrain products,
@@ -26,7 +26,7 @@ nothing uploaded.
   the Engineering Inspection PDF, the Provenance density, and the Layers chip now
   report the file's true point count and areal density (back-scaled from the
   sample), with a "Loaded" row disclosing the subset — a dense survey no longer
-  reads as several times sparser than it really is.
+  reads as several times sparser than it is.
 - **Capture type** — dense drone surveys (UAV LiDAR, ~100–1000 pts/m² over an open
   mapping footprint) are identified as drone-mounted LiDAR rather than Terrestrial
   Laser Scan, matching the cited density literature.
