@@ -1,0 +1,23 @@
+# _headers — security + caching for static hosts that read this format
+# (Netlify, Cloudflare Pages, etc.). The Apache/LiteSpeed equivalent lives in
+# .htaccess; this file is the portable counterpart so the same deploy bundle is
+# hardened on any of the common static hosts, not only Apache-family ones.
+#
+# Mirrors .htaccess: long-cache the content-hashed assets, never cache the HTML
+# entry point (a stale index.html points at purged hashes — the classic
+# white-screen-after-deploy), and the same response-hardening headers. CSP is
+# intentionally left out here too, to match .htaccess — it needs live testing
+# against the worker / WASM / WebGPU / blob-URL surface before enforcement.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  X-Frame-Options: SAMEORIGIN
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/index.html
+  Cache-Control: no-cache
