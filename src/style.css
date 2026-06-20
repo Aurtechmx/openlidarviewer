@@ -5112,7 +5112,9 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* ── Analyse panel (terrain readiness + contours) — v0.4.0 ──────────────── */
 .olv-analyse-panel {
-  width: 248px; box-sizing: border-box;
+  /* Desktop column ~15% wider (was 248px) to fit the verdict + scorecard rows
+     without wrapping. Mobile overrides to width:auto in the 767px block. */
+  width: 285px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl); min-width: 0;
 }
@@ -5371,6 +5373,46 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-georef.is-partial .olv-georef-glyph { color: var(--rating-good); }
 .olv-georef.is-floating { border-color: var(--hairline); }
 .olv-georef.is-floating .olv-georef-glyph { color: var(--text-faint); }
+
+/* ── Data Fitness scorecard — verdict-led panel (one verdict + traffic-light
+   rows with friendly metaphor icons + shape-distinct tone glyphs). ─────────── */
+.olv-analyse-fitness { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); }
+.olv-fit-verdict {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-xs);
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+  padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03); border-left: 3px solid var(--hairline);
+}
+.olv-fit-verdict.is-ready { border-left-color: var(--rating-excellent); }
+.olv-fit-verdict.is-okay { border-left-color: var(--rating-good); }
+.olv-fit-verdict.is-review { border-left-color: var(--rating-weak); }
+.olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
+.olv-fit-badge {
+  flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 1px var(--space-xs); border-radius: var(--radius-sm);
+}
+.olv-fit-grid { display: flex; flex-direction: column; }
+.olv-fit-row {
+  display: grid; grid-template-columns: 18px 1fr auto; grid-template-rows: auto auto;
+  align-items: center; column-gap: var(--space-sm); row-gap: 1px;
+  padding: var(--space-xs) 0; border-top: 0.5px solid var(--hairline);
+}
+.olv-fit-ico { grid-row: 1 / 3; grid-column: 1; color: var(--text-faint); display: inline-flex; }
+.olv-fit-ico svg { width: 18px; height: 18px; display: block; }
+.olv-fit-label { grid-row: 1; grid-column: 2; font-size: var(--text-xs); font-weight: 600; color: var(--text); }
+/* Tone glyph (check / dash / triangle) — colour AND shape carry the state. */
+.olv-fit-tone { grid-row: 1; grid-column: 3; display: inline-flex; }
+.olv-fit-tone svg { width: 15px; height: 15px; display: block; }
+.olv-fit-row.is-ready .olv-fit-tone { color: var(--rating-excellent); }
+.olv-fit-row.is-okay .olv-fit-tone { color: var(--rating-good); }
+.olv-fit-row.is-review .olv-fit-tone { color: var(--rating-weak); }
+.olv-fit-sum { grid-row: 2; grid-column: 2 / 4; font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.35; }
+.olv-fit-caveat {
+  font-size: var(--text-2xs); color: var(--rating-good); line-height: 1.4;
+  padding-left: var(--space-md); position: relative;
+}
+.olv-fit-caveat::before { content: '⚠'; position: absolute; left: 0; }
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }

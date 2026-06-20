@@ -136,6 +136,12 @@ const RAW_INNERHTML_ALLOWLIST: readonly string[] = [
   // The panel's local `el()` has no unsafeHtml funnel, so the assignment is raw.
   // (hand-verified 2026-06-19)
   'src/ui/AnalysePanel.ts::glyph.innerHTML = georefGlyphSvg',
+  // src/ui/AnalysePanel.ts — the Data Fitness scorecard icons. Both arguments
+  // are pure functions of a closed enum key (`fitnessIcon(d.key)` /
+  // `fitnessToneGlyph(d.tone)`) returning a fixed inline SVG from a module-level
+  // Record of literals — no scan/file/user strings. (hand-verified 2026-06-20)
+  'src/ui/AnalysePanel.ts::ico.innerHTML = fitnessIcon',
+  'src/ui/AnalysePanel.ts::tone.innerHTML = fitnessToneGlyph',
 ];
 
 const GUIDANCE =

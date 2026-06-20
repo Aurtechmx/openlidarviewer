@@ -102,6 +102,8 @@ import {
   type ScanTypeDisabledReasons,
 } from './scanTypeControl';
 import { georefStatus, georefGlyphSvg } from '../geo/georefStatus';
+import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFitness';
+import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -223,6 +225,7 @@ export class AnalysePanel {
   readonly element: HTMLElement;
   private readonly _cb: AnalysePanelCallbacks;
   private readonly _chipsRow: HTMLElement;
+  private readonly _fitnessRow: HTMLElement;
   private readonly _readinessRow: HTMLElement;
   private readonly _recommendRow: HTMLElement;
   private readonly _qualityRow: HTMLElement;
@@ -319,6 +322,7 @@ export class AnalysePanel {
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
     this._surfaceRow = el('div', { className: 'olv-analyse-surface' });
     this._chipsRow = el('div', { className: 'olv-analyse-chips' });
+    this._fitnessRow = el('div', { className: 'olv-analyse-fitness' });
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
     this._qualityRow = el('div', { className: 'olv-analyse-quality' });
@@ -352,6 +356,7 @@ export class AnalysePanel {
     );
 
     this._resultsRegion.append(
+      this._fitnessRow,
       this._assessmentRow,
       details,
       section('Surface models'),
@@ -419,6 +424,7 @@ export class AnalysePanel {
     this._runBtn.textContent = this._runLabel();
     this._runBtn.classList.toggle('is-rerun', has);
     if (!has) return;
+    this._renderFitness();
     this._renderAssessment();
     this._renderScore();
     this._renderChips();
@@ -2025,6 +2031,72 @@ export class AnalysePanel {
     }
     wrap.append(tags);
     return wrap;
+  }
+
+  /**
+   * The verdict-led "Data Fitness" scorecard: ONE plain verdict + a six-row
+   * traffic-light scorecard (friendly metaphor icon + shape-distinct tone glyph
+   * + plain summary) + the non-hideable caveats. Sourced from the same result
+   * the panel already computes — no new analysis.
+   */
+  private _renderFitness(): void {
+    this._fitnessRow.replaceChildren();
+    const r = this._result;
+    if (!r) return;
+    const a = terrainAssessment(r);
+    const t = r.cellStatusTally;
+    const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
+    const ql = r.accuracyStandards.qualityLevel;
+    const hasClass = r.excludedByClassification > 0;
+    const inputs: FitnessInputs = {
+      status: a.status,
+      score: a.scoreKnown ? a.score : null,
+      crsKnown: !!r.quality.crsKnown,
+      datumKnown: !!r.quality.datumKnown,
+      crsName: r.dtm.crs,
+      datumName: r.dtm.verticalDatum,
+      measuredFraction: covered > 0 ? t.measured / covered : null,
+      groundDensityPerM2: Number.isFinite(r.cellMetrics.meanDensity) ? r.cellMetrics.meanDensity : null,
+      verticalRmse: Number.isFinite(r.validation.rmse) ? r.validation.rmse : null,
+      notSurveyGrade: true,
+      unit: 'm',
+      unitToMetres: 1,
+      // The contour result doesn't carry the full class histogram; the presence
+      // of classified returns dropped before ground filtering tells us the
+      // source WAS classified (else ground was derived).
+      unclassifiedFraction: hasClass ? 0 : null,
+      hasGroundClass: hasClass,
+      coverageMode: r.dtm.coverageMode,
+      qualityLevel: ql !== 'unknown' ? ql : null,
+    };
+    const f = buildScanFitness(inputs);
+
+    const hero = el('div', { className: `olv-fit-verdict is-${f.overallTone}${f.provisional ? ' is-provisional' : ''}` });
+    hero.append(el('span', { className: 'olv-fit-verdict-text', text: f.verdict }));
+    if (f.tierBadge) hero.append(el('span', { className: 'olv-fit-badge', text: f.tierBadge }));
+    this._fitnessRow.append(hero);
+
+    const grid = el('div', { className: 'olv-fit-grid' });
+    for (const d of f.dimensions) {
+      const row = el('div', { className: `olv-fit-row is-${d.tone}` });
+      const ico = el('span', { className: 'olv-fit-ico' });
+      ico.innerHTML = fitnessIcon(d.key);
+      const tone = el('span', { className: 'olv-fit-tone' });
+      tone.innerHTML = fitnessToneGlyph(d.tone);
+      row.append(
+        ico,
+        el('span', { className: 'olv-fit-label', text: d.label }),
+        tone,
+        el('span', { className: 'olv-fit-sum', text: d.summary }),
+      );
+      this._hint(row, d.summary);
+      grid.append(row);
+    }
+    this._fitnessRow.append(grid);
+
+    for (const c of f.caveats) {
+      this._fitnessRow.append(el('div', { className: 'olv-fit-caveat', text: c }));
+    }
   }
 
   /** Honesty status chips (Coverage / DTM / CRS / Datum / Export). */
