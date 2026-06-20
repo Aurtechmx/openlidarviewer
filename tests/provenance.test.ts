@@ -138,6 +138,30 @@ describe('provenance — numeric classification', () => {
     expect(f.captureType).toBe('aerial-als');
   });
 
+  it('classifies dense UAV density + hectare footprint as drone-LiDAR', () => {
+    // The FLEXIGROBOTS profile: ~979 pts/m² over a ~0.98 ha strip. Dense aerial
+    // mapping, not a TLS station — must read as drone, not terrestrial.
+    const f = classify({
+      sourceFormat: 'laz',
+      pointCount: 9_597_830,
+      extent: [78.8, 124.4, 18.9],
+      densityPerSqM: 979,
+    });
+    expect(f.captureType).toBe('drone-lidar');
+  });
+
+  it('keeps a dense SMALL-footprint scan as terrestrial, not drone', () => {
+    // A station-scale dense scan (< 2000 m²) stays TLS — the drone band only
+    // claims open mapping footprints, so this partition has no overlap.
+    const f = classify({
+      sourceFormat: 'e57',
+      pointCount: 3_000_000,
+      extent: [30, 40, 15], // 1200 m²
+      densityPerSqM: 400,
+    });
+    expect(f.captureType).toBe('terrestrial');
+  });
+
   it('returns unknown when no signal matches', () => {
     const f = classify({ ...blank(), sourceFormat: 'xyz', pointCount: 100 });
     expect(f.captureType).toBe('unknown');
