@@ -231,7 +231,6 @@ export class AnalysePanel {
   private readonly _assessmentRow: HTMLElement;
   private readonly _scoreRow: HTMLElement;
   private readonly _surfaceRow: HTMLElement;
-  private readonly _coverageRow: HTMLElement;
   private readonly _validationRow: HTMLElement;
   private readonly _body: HTMLElement;
   private _result: AnalyseContoursResult | null = null;
@@ -325,7 +324,6 @@ export class AnalysePanel {
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
     this._qualityRow = el('div', { className: 'olv-analyse-quality' });
-    this._coverageRow = el('div', { className: 'olv-analyse-coverage' });
     this._validationRow = el('div', { className: 'olv-analyse-validation' });
     this._body = el('div', { className: 'olv-analyse-body' });
     this._exportRow = this._buildExportRow();
@@ -349,8 +347,7 @@ export class AnalysePanel {
       this._readinessRow,
       this._recommendRow,
       this._qualityRow,
-      section('Coverage & confidence'),
-      this._coverageRow,
+      section('Validation detail'),
       this._validationRow,
     );
 
@@ -430,7 +427,6 @@ export class AnalysePanel {
     this._renderReadiness();
     this._renderRecommend();
     this._renderQualityReasons();
-    this._renderCoverage();
     this._renderValidation();
     this._renderSurface();
     this._renderBody();
@@ -661,24 +657,11 @@ export class AnalysePanel {
         'Provisional — scored on the streamed-in sample so far. Let the full cloud stream in, then re-run for a settled grade.';
     }
     this._scoreRow.append(head);
-    const bars = el('div', { className: 'olv-analyse-score-bars' });
-    for (const c of qs.components) {
-      const row = el('div', { className: 'olv-analyse-score-comp' });
-      const track = el('div', { className: 'olv-analyse-score-track' });
-      const fill = el('div', { className: 'olv-analyse-score-fill' });
-      fill.style.width = `${Math.round(c.score * 100)}%`;
-      track.append(fill);
-      row.append(
-        el('span', { className: 'olv-analyse-score-label', text: c.label }),
-        track,
-        el('span', {
-          className: `olv-analyse-score-pct${c.neutral ? ' is-neutral' : ''}`,
-          text: c.neutral ? 'n/a' : `${Math.round(c.score * 100)}%`,
-        }),
-      );
-      bars.append(row);
-    }
-    this._scoreRow.append(bars);
+    // The six weighted COMPONENTS (Coverage / Confidence / Validation / Density /
+    // Edge / Ground) are the same axes the Data Fitness scorecard above already
+    // shows as plain-language traffic-light rows — so the bar breakdown is no
+    // longer rendered here. This drill-down keeps only the single composite
+    // number; the scorecard owns the per-dimension view.
   }
 
   /**
@@ -2132,20 +2115,6 @@ export class AnalysePanel {
     }
   }
 
-  private _renderCoverage(): void {
-    this._coverageRow.replaceChildren();
-    const r = this._result!;
-    const t = r.cellStatusTally;
-    const total = t.total > 0 ? t.total : 1;
-    const p = (n: number) => `${Math.round((100 * n) / total)}%`;
-    const interp = t.interpolated + t.lowConfidence + t.edgeRisk;
-    const conf = Number.isFinite(r.dtm.meanConfidence) ? `${Math.round(r.dtm.meanConfidence)}%` : '—';
-    const rmse = Number.isFinite(r.validation.rmse) ? `${r.validation.rmse.toFixed(2)} m` : '—';
-    this._coverageRow.append(
-      el('div', { className: 'olv-analyse-cov', text: `Measured ${p(t.measured)} · Interpolated ${p(interp)} · Empty ${p(t.empty)}` }),
-      el('div', { className: 'olv-analyse-cov', text: `Mean confidence ${conf} · Vertical RMSE ${rmse}` }),
-    );
-  }
 
   /** Enable/disable export by the quality gate; set the note + legend. */
   private _renderExportGate(): void {

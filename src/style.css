@@ -5430,8 +5430,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   border-radius: 2px; line-height: 1.45;
 }
 /* Coverage & confidence. */
-.olv-analyse-coverage { display: flex; flex-direction: column; gap: var(--space-2xs); }
-.olv-analyse-cov { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); }
 /* Export gate note — honest limit, rides the caveat primitive (v0.4.6). */
 .olv-analyse-export-note {
   font-size: var(--text-2xs); color: var(--text-dim); margin: var(--space-xs) 0 0; overflow-wrap: anywhere;
@@ -6002,13 +6000,6 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-score-band.is-good { color: var(--rating-good); }
 .olv-analyse-score-band.is-fair { color: var(--rating-moderate); }
 .olv-analyse-score-band.is-poor { color: var(--rating-weak); }
-.olv-analyse-score-bars { display: flex; flex-direction: column; gap: var(--space-xs); }
-.olv-analyse-score-comp { display: flex; align-items: center; gap: var(--space-sm); }
-.olv-analyse-score-label { flex: 0 0 84px; font-size: var(--text-2xs); color: var(--text-dim); }
-.olv-analyse-score-track { flex: 1; height: 4px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.olv-analyse-score-fill { height: 100%; border-radius: var(--radius-pill); background: var(--brand-gradient); }
-.olv-analyse-score-pct { flex: 0 0 34px; text-align: right; font-size: var(--text-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.olv-analyse-score-pct.is-neutral { color: var(--text-faint); font-style: italic; }
 
 /* Surface models section in the Analyse panel (DSM / slope / hillshade). */
 .olv-analyse-surface { display: flex; flex-direction: column; gap: var(--space-sm); }

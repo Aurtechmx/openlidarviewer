@@ -90,11 +90,12 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
 
   // Detailed metrics are behind the Details expander — open it, then assert.
   await page.locator('.olv-analyse-details-summary').click();
-  // Composite terrain quality score: a 0–100 number + weighted bars (the exact
-  // score now lives here, demoted out of the hero).
+  // Composite terrain quality score: a single 0–100 number (the exact score now
+  // lives here, demoted out of the hero; the per-dimension breakdown is the
+  // scorecard above, so the old weighted bars are gone).
   await expect(page.locator('.olv-analyse-score-num')).toBeVisible();
   await expect(page.locator('.olv-analyse-score-num')).toHaveText(/^~?\d{1,3}$/);
-  expect(await page.locator('.olv-analyse-score-comp').count()).toBe(6);
+  expect(await page.locator('.olv-analyse-score-comp').count()).toBe(0);
   // Honesty status chips (scan scope + DTM + export gate; georeferencing moved
   // to the scorecard above).
   await expect(page.locator('.olv-analyse-chip', { hasText: 'Scan scope' })).toBeVisible();
