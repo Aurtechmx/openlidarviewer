@@ -3676,12 +3676,20 @@ async function generateReportPdf(templateId: string): Promise<void> {
   } else if (staticCloud) {
     const b = staticCloud.bounds();
     const w = b.max[0] - b.min[0], d = b.max[1] - b.min[1], h = b.max[2] - b.min[2];
-    const density = w > 0 && d > 0 ? staticCloud.pointCount / (w * d) : NaN;
+    // File-scale honesty: the loader strides huge clouds for display, so
+    // `pointCount` is the rendered subset. The client PDF must describe the
+    // FILE — use the declared total (and the density that follows from it) when
+    // striding reduced the in-memory count, matching the Scan Report panel.
+    const fileN =
+      staticCloud.declaredPointCount !== undefined && staticCloud.declaredPointCount > staticCloud.pointCount
+        ? staticCloud.declaredPointCount
+        : staticCloud.pointCount;
+    const density = w > 0 && d > 0 ? fileN / (w * d) : NaN;
     const crs = staticCloud.metadata?.crs;
     metadata = {
       fileName: staticCloud.name,
       format: staticCloud.sourceFormat.toUpperCase(),
-      sourcePointCount: staticCloud.pointCount,
+      sourcePointCount: fileN,
       width: w, depth: d, height: h, density,
       hasRgb: !!staticCloud.colors,
       hasIntensity: !!staticCloud.intensity,
