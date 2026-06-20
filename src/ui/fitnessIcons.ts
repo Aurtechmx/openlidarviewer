@@ -9,8 +9,8 @@
  * text label (icon-only toolbars hurt first-time users — labels stay).
  *
  * The tone glyphs (ready / okay / review) are deliberately SHAPE-distinct
- * (check / dash / warning-triangle), not colour-only — the accessibility fix the
- * design council flagged: a traffic-light dot must not rely on hue alone.
+ * (check / dash / warning-triangle), not colour-only — an accessibility
+ * requirement: a traffic-light dot must not rely on hue alone.
  *
  * Pure strings, no DOM. Keyed by the scanFitness vocabulary so the panel just
  * looks them up.

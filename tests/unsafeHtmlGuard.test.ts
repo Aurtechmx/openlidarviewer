@@ -130,6 +130,12 @@ const RAW_INNERHTML_ALLOWLIST: readonly string[] = [
   // one of two module-level literal SVG constants (ICON_ENTER / ICON_EXIT).
   // Zero interpolation, no user data. (hand-verified 2026-06-14)
   'src/ui/FullscreenToggle.ts::innerHTML = fs ?',
+  // src/ui/AnalysePanel.ts — the georeferencing-status glyph. The argument is
+  // `georefGlyphSvg(q.crsKnown, q.datumKnown)`: a pure function of two BOOLEANS
+  // that returns a fixed inline SVG (no CRS/datum names, no scan/file strings).
+  // The panel's local `el()` has no unsafeHtml funnel, so the assignment is raw.
+  // (hand-verified 2026-06-19)
+  'src/ui/AnalysePanel.ts::glyph.innerHTML = georefGlyphSvg',
 ];
 
 const GUIDANCE =

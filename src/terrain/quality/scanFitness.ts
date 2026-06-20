@@ -1,19 +1,18 @@
 /**
  * scanFitness.ts
  *
- * The single source of truth for the verdict-led "Data Fitness" panel — the
- * reorganisation the design council converged on: stop showing the same number
- * three times across two competing panels, and instead lead with ONE
- * plain-language verdict plus a traffic-light scorecard across the dimensions a
- * user actually needs to trust a scan.
+ * The single source of truth for the verdict-led "Data Fitness" panel: stop
+ * showing the same number three times across two competing panels, and instead
+ * lead with ONE plain-language verdict plus a traffic-light scorecard across the
+ * dimensions a user actually needs to trust a scan.
  *
  * Pure data: it takes the values the analysis already computes (a flat,
  * decoupled input — the panel maps the result into it, exactly as
  * `terrainQualityScore` takes a `TerrainQualityInput`) and returns a verdict, a
  * six-dimension scorecard, an optional named tier badge, the headline accuracy,
- * and the NON-HIDEABLE caveats the surveyor on the council insisted on (a
- * held-out RMSE is internal consistency, not independent checkpoint
- * verification; a missing datum means relative heights).
+ * and the NON-HIDEABLE survey-grade caveats (a held-out RMSE is internal
+ * consistency, not independent checkpoint verification; a missing datum means
+ * relative heights).
  *
  * Tones are deliberately warm — `ready` / `okay` / `review` — never an alarm
  * "error": a missing CRS or a sparse ground is a fitness fact, not a fault. No
@@ -235,7 +234,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
 
   // The verdict leads with what the scan IS good for, then names the biggest
   // limitation — ranked by LIMITER_PRIORITY (not array order), and willing to be
-  // negative, which the council called the real moat.
+  // negative: a verdict that is always positive is one users stop reading.
   const reviews = dimensions
     .filter((d) => d.tone === 'review')
     .sort((a, b) => LIMITER_PRIORITY.indexOf(a.key) - LIMITER_PRIORITY.indexOf(b.key));
