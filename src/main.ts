@@ -4270,7 +4270,14 @@ async function handleFile(file: File): Promise<void> {
     //    Each isolated block restores its own slice; the navigation
     //    above remains usable even if every block below fails.
     try {
-      inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
+      // The Layers chip names the FILE, so it shows the file total (the same
+      // count DETAIL renders as "loaded / total"), not the strided display
+      // subset — consistent with the Scan Report's file-scale Point Count.
+      const layerCount =
+        result.originalPointCount && result.originalPointCount > result.cloud.pointCount
+          ? result.originalPointCount
+          : result.cloud.pointCount;
+      inspector.addCloud(id, result.cloud.name, layerCount);
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(

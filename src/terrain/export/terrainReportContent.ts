@@ -223,8 +223,12 @@ export function buildTerrainReportContent(
     title: 'Dataset Statistics',
     rows: [
       { label: 'Scan', value: provenance.source ?? 'Untitled scan' },
-      { label: 'Source points', value: fmtInt(dtm?.sourcePointCount) },
-      { label: 'Analysed points', value: fmtInt(dtm?.analyzedPointCount) },
+      // These count the GROUND returns the bare-earth DTM was built from (from
+      // the analysis sample), not the file's total points — labelled plainly so
+      // the client never reads them as the scan's point count. The scan's
+      // file-scale density is the 'Ground density' row below.
+      { label: 'Ground points', value: fmtInt(dtm?.sourcePointCount) },
+      { label: 'Used in DTM', value: fmtInt(dtm?.analyzedPointCount) },
       { label: 'Footprint (extent)', value: footprint },
       {
         label: 'Ground density',
