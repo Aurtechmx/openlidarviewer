@@ -4,7 +4,7 @@ Binary share/icon assets — how they are generated
 EVERY identity asset in this directory derives from the OFFICIAL
 OpenLiDARViewer logo file:
 
-    public/brand-logo.svg     the logo as delivered (2026-06-10): an SVG
+    design/brand-logo.svg     the logo as delivered (2026-06-10): an SVG
                               wrapper around one full-resolution embedded
                               PNG — the point-cloud-orb mark plus the
                               raster wordmark band. Source of truth.
@@ -46,5 +46,5 @@ to the dist root):
 
 Requires Pillow (maintainer machine only — output is committed, so end
 users / CI never run this). If a new revision of the logo arrives,
-replace public/brand-logo.svg, re-derive public/brand-mark.svg's viewBox
+replace design/brand-logo.svg, re-derive public/brand-mark.svg's viewBox
 crop if the geometry moved, and re-run the script.
