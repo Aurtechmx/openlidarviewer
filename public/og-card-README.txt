@@ -8,8 +8,10 @@ OpenLiDARViewer logo file:
                               wrapper around one full-resolution embedded
                               PNG — the point-cloud-orb mark plus the
                               raster wordmark band. Source of truth.
-    public/brand-mark.svg     the same file with its root viewBox cropped
-                              to the mark-only region (nothing redrawn).
+    public/brand-mark.svg     the mark-only crop of the master, DOWNSCALED to
+                              256 px and re-embedded (~82 KB, not the full-res
+                              master) — it renders at the 28 px header / 104 px
+                              hero, so display resolution is all it needs.
                               Rendered in-app by src/ui/Stage.ts via
                               <img src> (top bar + empty-state hero).
 

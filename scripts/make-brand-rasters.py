@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 make-brand-rasters.py — rasterise every identity surface from the OFFICIAL
-OpenLiDARViewer logo file, public/brand-logo.svg.
+OpenLiDARViewer logo file, design/brand-logo.svg (kept out of public/ so the
+530 KB master is not shipped; only the small derived assets ship).
 
     public/favicon.svg          the official mark (downscaled crop of the
                                 logo's own pixels) on the #0a0e1a brand
@@ -29,7 +30,7 @@ background plates (#0a0e1a squares / rounded squares, needed for contrast on
 light UI and required without alpha by iOS) and the og-card tagline text —
 neither is logo artwork.
 
-HOW THE SOURCE IS READ. public/brand-logo.svg, as delivered, is an SVG
+HOW THE SOURCE IS READ. design/brand-logo.svg, as delivered, is an SVG
 wrapper around a single full-resolution embedded PNG (910x706, RGBA) — so
 "rasterising the SVG" reduces, losslessly, to decoding that embedded PNG and
 resampling it (Lanczos). If a future revision of the logo arrives as true
@@ -38,9 +39,10 @@ vector art, switch the `load_logo()` step to a real SVG rasteriser
 
 MARK CROP. The lockup carries the point-cloud-orb mark in its upper region
 and a raster wordmark in its lower band. Icon surfaces use the mark-only
-square crop — the SAME region public/brand-mark.svg exposes via its viewBox
-(SVG units 178,-12 / 634x634 == PNG pixels x 138..772, y -52..582, the
-negative rows padded transparent). Change one, change the other.
+square crop at PNG pixels x 138..772, y -52..582 (negative rows padded
+transparent). The shipped public/brand-mark.svg is this crop DOWNSCALED to
+256 px and re-embedded (it renders at the 28 px header / 104 px hero), so the
+deploy carries a ~82 KB mark, not the full-resolution master.
 
     python3 scripts/make-brand-rasters.py
 
@@ -61,7 +63,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "public"
-LOGO_SVG = OUT_DIR / "brand-logo.svg"
+# The 530 KB master lives in design/ (not public/) so it is never shipped.
+LOGO_SVG = ROOT / "design" / "brand-logo.svg"
 
 BRAND_DARK = (0x0A, 0x0E, 0x1A)
 CYAN = (0x00, 0xF0, 0xFF)
