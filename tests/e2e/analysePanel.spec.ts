@@ -96,10 +96,10 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(page.locator('.olv-analyse-score-num')).toBeVisible();
   await expect(page.locator('.olv-analyse-score-num')).toHaveText(/^~?\d{1,3}$/);
   expect(await page.locator('.olv-analyse-score-comp').count()).toBe(0);
-  // Honesty status chips (scan scope + DTM + export gate; georeferencing moved
-  // to the scorecard above).
-  await expect(page.locator('.olv-analyse-chip', { hasText: 'Scan scope' })).toBeVisible();
-  await expect(page.locator('.olv-analyse-chip', { hasText: 'Export' })).toBeVisible();
+  // The status-chip row was retired in the de-dup: scan scope is the scorecard's
+  // Integrity row, export is the always-visible Export-readiness line, and the
+  // DTM gate is the verdict tier — so the chips no longer duplicate them.
+  expect(await page.locator('.olv-analyse-chip').count()).toBe(0);
 
   // Surface models (outside Details): stats + raster preview tiles (canopy
   // height + relief), each with a click-to-sample readout and PNG export.

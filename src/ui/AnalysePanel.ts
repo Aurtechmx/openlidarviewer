@@ -223,7 +223,6 @@ export class AnalysePanel {
   /** The panel element — append to the stage overlay (see main.ts). */
   readonly element: HTMLElement;
   private readonly _cb: AnalysePanelCallbacks;
-  private readonly _chipsRow: HTMLElement;
   private readonly _fitnessRow: HTMLElement;
   private readonly _readinessRow: HTMLElement;
   private readonly _recommendRow: HTMLElement;
@@ -319,7 +318,6 @@ export class AnalysePanel {
     this._assessmentRow = el('div', { className: 'olv-analyse-assessment' });
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
     this._surfaceRow = el('div', { className: 'olv-analyse-surface' });
-    this._chipsRow = el('div', { className: 'olv-analyse-chips' });
     this._fitnessRow = el('div', { className: 'olv-analyse-fitness' });
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
@@ -342,7 +340,6 @@ export class AnalysePanel {
     details.append(
       summary,
       this._scoreRow,
-      this._chipsRow,
       section('DTM & contour readiness'),
       this._readinessRow,
       this._recommendRow,
@@ -423,7 +420,6 @@ export class AnalysePanel {
     this._renderFitness();
     this._renderAssessment();
     this._renderScore();
-    this._renderChips();
     this._renderReadiness();
     this._renderRecommend();
     this._renderQualityReasons();
@@ -2069,35 +2065,6 @@ export class AnalysePanel {
     }
   }
 
-  /** Honesty status chips (Coverage / DTM / CRS / Datum / Export). */
-  private _renderChips(): void {
-    this._chipsRow.replaceChildren();
-    const q = this._result!.quality;
-    type Tone = 'good' | 'warn' | 'bad';
-    const tri = (ok: boolean, warn = false): Tone => (ok ? 'good' : warn ? 'warn' : 'bad');
-    const coverage =
-      q.coverageMode === 'full' ? 'Full' : q.coverageMode === 'resident-only' ? 'Resident nodes' : 'Sampled';
-    const dtm = q.readiness === 'ready' ? 'Ready' : q.readiness === 'previewOnly' ? 'Preview' : 'Blocked';
-    const exp =
-      q.exportReadiness === 'available' ? 'Available' : q.exportReadiness === 'previewOnly' ? 'Preview only' : 'Blocked';
-    // Georeferencing now leads the Data Fitness scorecard ("Location & height"),
-    // so it's no longer repeated here — these chips carry only the axes the
-    // scorecard doesn't (scan scope / DTM gate / export gate).
-    const chips: Array<[string, string, Tone, string?]> = [
-      ['Scan scope', coverage, tri(q.coverageMode === 'full', true)],
-      ['DTM', dtm, q.readiness === 'ready' ? 'good' : q.readiness === 'previewOnly' ? 'warn' : 'bad'],
-      ['Export', exp, q.exportReadiness === 'available' ? 'good' : q.exportReadiness === 'previewOnly' ? 'warn' : 'bad'],
-    ];
-    for (const [k, v, tone, tip] of chips) {
-      const chip = el('span', { className: `olv-analyse-chip is-${tone}` });
-      if (tip) this._hint(chip, tip);
-      chip.append(
-        el('span', { className: 'olv-analyse-chip-k', text: k }),
-        el('span', { className: 'olv-analyse-chip-v', text: v }),
-      );
-      this._chipsRow.append(chip);
-    }
-  }
 
   private _renderRecommend(): void {
     this._recommendRow.replaceChildren();

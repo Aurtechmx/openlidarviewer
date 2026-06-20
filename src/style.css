@@ -5330,20 +5330,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   border-top: 0.5px solid var(--hairline); padding-top: var(--space-md);
 }
 /* Honesty status chips. */
-.olv-analyse-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-xs); }
-.olv-analyse-chip {
-  display: inline-flex; align-items: baseline; gap: var(--space-xs);
-  font-size: var(--text-2xs); padding: var(--space-2xs) var(--space-md); border-radius: var(--radius-pill);
-  border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
-}
-.olv-analyse-chip-k { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
-.olv-analyse-chip-v { color: var(--text); font-weight: 600; }
-.olv-analyse-chip.is-good { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
-.olv-analyse-chip.is-good .olv-analyse-chip-v { color: var(--rating-excellent); }
-.olv-analyse-chip.is-warn { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
-.olv-analyse-chip.is-warn .olv-analyse-chip-v { color: var(--rating-good); }
-.olv-analyse-chip.is-bad { border-color: color-mix(in srgb, var(--rating-weak) 45%, transparent); }
-.olv-analyse-chip.is-bad .olv-analyse-chip-v { color: var(--rating-weak); }
 
 /* Georeferencing status — the plain-language "anchored to the real world?"
    element that replaces the jargon CRS/Datum chips. A small schematic glyph
