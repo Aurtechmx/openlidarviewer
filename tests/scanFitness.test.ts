@@ -116,17 +116,28 @@ describe('buildScanFitness — verdict is willing to be negative', () => {
     expect(f.verdict).toMatch(/not usable/i);
   });
 
-  it('ungeoreferenced vineyard-like scan → preview verdict naming the lead limit', () => {
+  it('ungeoreferenced vineyard-like scan → the verdict word mirrors the Limited tier', () => {
     // dense surface, but no CRS/datum, sparse ground, derived classes.
     const f = buildScanFitness(base({
       status: 'Limited', crsKnown: false, datumKnown: false, crsName: null, datumName: null,
       measuredFraction: 0.34, groundDensityPerM2: 0.9, unclassifiedFraction: null, hasGroundClass: false,
       notSurveyGrade: true,
     }));
-    expect(f.verdict).toMatch(/preview only/i);
+    // Verdict leads with "Limited" (not "Preview only") to match the hero tier.
+    expect(f.verdict).toMatch(/^Limited —/);
+    expect(f.verdict).not.toMatch(/preview only/i);
     expect(f.overallTone).toBe<FitnessTone>('review');
-    // It should mention there are multiple things to review.
     expect(f.verdict).toMatch(/more to review/i);
+  });
+
+  it("the verdict's lead word tracks the status tier (Limited / Preview / Good)", () => {
+    const limited = buildScanFitness(base({ status: 'Limited', measuredFraction: 0.3 }));
+    expect(limited.verdict).toMatch(/^Limited —/);
+    const preview = buildScanFitness(base({ status: 'Preview', measuredFraction: 0.3 }));
+    expect(preview.verdict).toMatch(/^Preview only —/);
+    // A Good gate with a soft caveat reads positive, never "Preview only".
+    const goodCaveat = buildScanFitness(base({ status: 'Good', unclassifiedFraction: null, hasGroundClass: false }));
+    expect(goodCaveat.verdict).toMatch(/^Usable, with caveats/);
   });
 });
 

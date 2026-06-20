@@ -246,17 +246,24 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     classification: 'points aren’t classified to ground',
     integrity: 'only part of the cloud was analysed',
   };
+  // The verdict's LEAD WORD mirrors the authoritative fitness tier (the gate's
+  // status) so it never disagrees with the hero verdict — a 'Limited' scan must
+  // not read as "Preview only". The clause then names the biggest limitation.
+  const lead = reviews[0];
+  const more = reviews.length > 1 ? ` (+${reviews.length - 1} more to review)` : '';
+  const limiterClause = lead ? ` — ${limiterPhrase[lead.key]}${more}` : '';
   let verdict: string;
   if (inp.status === 'Blocked') {
     verdict = 'Not usable for terrain products as-is.';
-  } else if (reviews.length === 0 && inp.status === 'Good') {
-    verdict = 'Ready for terrain products — coverage, density and accuracy all pass.';
+  } else if (inp.status === 'Limited') {
+    verdict = lead ? `Limited${limiterClause}.` : 'Limited — not export-ready as-is.';
+  } else if (inp.status === 'Preview') {
+    verdict = lead ? `Preview only${limiterClause}.` : 'Preview — re-run on the full cloud for a settled grade.';
   } else if (reviews.length === 0) {
-    verdict = 'Usable for terrain products, with minor limits.';
+    verdict = 'Ready for terrain products — coverage, density and accuracy all pass.';
   } else {
-    const lead = reviews[0];
-    const more = reviews.length > 1 ? ` (+${reviews.length - 1} more to review)` : '';
-    verdict = `Preview only — ${limiterPhrase[lead.key]}${more}.`;
+    // A 'Good' gate with a soft caveat on one axis — positive, but honest.
+    verdict = `Usable, with caveats${limiterClause}.`;
   }
   // A provisional grade (partial / streaming cloud) must never read as settled —
   // prepend a "still streaming" lead so the user re-runs on the full cloud.
