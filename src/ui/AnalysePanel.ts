@@ -649,7 +649,13 @@ export class AnalysePanel {
     // "Preview · ~54/100". A non-preview score keeps the exact number.
     const isPreview = terrainAssessment(this._result!).status.toLowerCase() === 'preview';
     const approx = isPreview ? '~' : '';
-    const bandText = isPreview ? `Terrain quality · ${qs.band} · preview` : `Terrain quality · ${qs.band}`;
+    // The single fitness verdict (Good / Preview / Limited / Blocked) lives in the
+    // hero above. This breakdown must NOT assert a second, competing adjective:
+    // the 0–100 band ("good" ≥60) and the gate-driven fitness status judge
+    // different things, so stamping "good" next to a "Limited" hero reads as a
+    // contradiction on the same number. Label this neutrally as the composite
+    // score; the tier still drives the colour, and the preview tilde is kept.
+    const bandText = isPreview ? 'Composite score · preview' : 'Composite score';
     const head = el('div', { className: 'olv-analyse-score-head' });
     head.append(
       el('span', { className: `olv-analyse-score-num is-${qs.band}`, text: `${approx}${qs.score}` }),
