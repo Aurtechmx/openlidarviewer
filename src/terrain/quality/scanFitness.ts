@@ -287,7 +287,12 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   if (inp.notSurveyGrade && inp.verticalRmse != null) {
     caveats.push('Accuracy is internal consistency (held-out points), not independent checkpoint verification.');
   }
-  if (!inp.datumKnown) caveats.push('No vertical datum — heights are relative, not real-world elevations.');
+  if (!inp.datumKnown)
+    caveats.push(
+      inp.crsKnown
+        ? 'No vertical datum declared — heights aren’t tied to a known reference (NAVD88, EGM, ellipsoid).'
+        : 'No vertical datum — heights are relative, not real-world elevations.',
+    );
   if (!inp.crsKnown) caveats.push('No map position (CRS) — the scan isn’t placed on Earth.');
 
   return { verdict, overallTone, tierBadge, headlineAccuracy, dimensions, caveats, provisional };

@@ -163,6 +163,14 @@ describe('buildScanFitness — non-hideable caveats', () => {
     expect(f.caveats.some((c) => /no vertical datum/i.test(c))).toBe(true);
     expect(f.caveats.some((c) => /no map position/i.test(c))).toBe(true);
   });
+  it('georeferenced but datum-unknown: caveat says datum not declared, NOT "relative"', () => {
+    // A horizontally-georeferenced scan has absolute Z — the honest caveat is that
+    // the datum is undeclared, not that the heights are relative.
+    const f = buildScanFitness(base({ datumKnown: false }));
+    const datumCaveat = f.caveats.find((c) => /vertical datum/i.test(c))!;
+    expect(datumCaveat).toMatch(/tied to a known reference/i);
+    expect(datumCaveat).not.toMatch(/relative/i);
+  });
   it('a clean georeferenced survey-grade scan has no caveats', () => {
     expect(buildScanFitness(base()).caveats).toHaveLength(0);
   });

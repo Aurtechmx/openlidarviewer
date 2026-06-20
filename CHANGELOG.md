@@ -46,6 +46,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   evidence grades.
 - Vertical units are honoured: `VerticalUnitsGeoKey` (4099) and the WKT vertical
   `UNIT` are parsed, and Z is scaled to metres for accuracy bucketing.
+- Honest height wording for georeferenced scans. A horizontally-georeferenced
+  scan with an undeclared vertical datum (very common for drone LiDAR — absolute
+  Z, no `VerticalCRS`) now reads "elevation datum not declared" rather than
+  "heights are relative." Its heights are absolute; only the datum is unverified.
+  Truly floating scans (no CRS) still read "relative."
 
 ### Under the hood
 

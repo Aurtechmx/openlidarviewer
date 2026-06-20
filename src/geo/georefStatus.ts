@@ -56,7 +56,14 @@ export function georefStatus(
   names: GeorefStatusNames = {},
 ): GeorefStatus {
   const positionLabel = crsKnown ? 'On the map' : 'Not on a map';
-  const heightLabel = datumKnown ? 'Real-world elevation' : 'Relative heights';
+  // A horizontally-georeferenced scan usually carries ABSOLUTE Z (e.g. 65–85 m),
+  // so "relative" is wrong there — the datum is simply not declared. Reserve
+  // "Relative heights" for the truly floating case (no horizontal reference).
+  const heightLabel = datumKnown
+    ? 'Real-world elevation'
+    : crsKnown
+      ? 'Datum not declared'
+      : 'Relative heights';
 
   let tone: GeorefTone;
   let headline: string;
@@ -68,7 +75,7 @@ export function georefStatus(
     headline = 'Floating scan — not placed on Earth';
   } else if (crsKnown) {
     tone = 'partial';
-    headline = 'On the map · heights are relative';
+    headline = 'On the map · elevation datum not declared';
   } else {
     tone = 'partial';
     headline = 'Real elevations · not placed on a map';
@@ -84,7 +91,7 @@ export function georefStatus(
       : !crsKnown && !datumKnown
         ? 'The scan can’t be placed on a map and its heights are relative only.'
         : crsKnown
-          ? 'The scan is georeferenced horizontally, but heights are relative (no vertical datum).'
+          ? 'The scan is georeferenced horizontally, but its vertical datum isn’t declared — heights aren’t tied to a known reference.'
           : 'Heights are referenced, but the scan can’t be placed on a map (no CRS).';
   const tooltip = `${crsPart} · ${datumPart}. ${consequence}`;
 

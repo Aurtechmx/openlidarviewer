@@ -29,12 +29,15 @@ describe('georefStatus — four states', () => {
     expect(s.tooltip).toMatch(/no vertical datum/i);
   });
 
-  it('position only → partial, heights relative', () => {
+  it('position only → partial, datum not declared (heights are absolute, not "relative")', () => {
     const s = georefStatus(true, false, { crsName: 'EPSG:32612' });
     expect(s.tone).toBe<GeorefTone>('partial');
-    expect(s.headline).toMatch(/heights are relative/i);
+    // A georeferenced scan carries absolute Z — the datum is undeclared, not relative.
+    expect(s.headline).toMatch(/datum not declared/i);
+    expect(s.headline).not.toMatch(/relative/i);
     expect(s.positionLabel).toBe('On the map');
-    expect(s.heightLabel).toBe('Relative heights');
+    expect(s.heightLabel).toBe('Datum not declared');
+    expect(s.tooltip).toMatch(/isn’t declared/i);
   });
 
   it('height only → partial, not placed on a map', () => {
