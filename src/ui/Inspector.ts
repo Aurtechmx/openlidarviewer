@@ -85,6 +85,8 @@ export interface InspectorCallbacks {
   onToggleSolo?: (id: string) => void;
   /** Lock a layer out of picking / measuring (it stays drawn). */
   onToggleLock?: (id: string, locked: boolean) => void;
+  /** Compare the two loaded layers' elevations (two-epoch change detection). */
+  onCompareLayers?: () => void;
   /** Export the active cloud to a file format. */
   onExport: (format: ExportFormat) => void;
   /**
@@ -475,6 +477,9 @@ export class Inspector {
   private readonly _layerRows = new Map<string, HTMLElement>();
   /** Lazily-created one-line CRS-mismatch note under the layer list. */
   private _layerNote: HTMLElement | null = null;
+  /** Lazily-created two-epoch compare button + result, shown with exactly 2 layers. */
+  private _compareBtn: HTMLButtonElement | null = null;
+  private _compareResult: HTMLElement | null = null;
   /**
    * Visual Export Studio — the per-mode image-export buttons, kept
    * by mode so {@link setImageExportEnabled} can disable them as a group
@@ -1127,6 +1132,38 @@ export class Inspector {
     }
     this._layerNote.textContent = summary;
     this._layerNote.style.display = summary ? '' : 'none';
+  }
+
+  private _ensureCompareUi(): void {
+    if (this._compareBtn) return;
+    const btn = el('button', {
+      className: 'olv-bc-pill olv-layer-compare',
+      type: 'button',
+      text: 'Compare elevation',
+      title: 'Difference the two loaded layers as before → after (two-epoch change detection)',
+    }) as HTMLButtonElement;
+    btn.style.display = 'none';
+    btn.addEventListener('click', () => this._cb.onCompareLayers?.());
+    const result = el('pre', { className: 'olv-layer-compare-result' });
+    result.style.display = 'none';
+    this._compareBtn = btn;
+    this._compareResult = result;
+    this._layersSection.append(btn, result);
+  }
+
+  /** Show the "Compare elevation" action only when exactly two layers are loaded. */
+  setLayerCompareAvailable(on: boolean): void {
+    this._ensureCompareUi();
+    if (this._compareBtn) this._compareBtn.style.display = on ? '' : 'none';
+    if (!on && this._compareResult) this._compareResult.style.display = 'none';
+  }
+
+  /** Render the two-epoch comparison result (cut/fill + co-registration lines). */
+  setCompareResult(lines: readonly string[]): void {
+    this._ensureCompareUi();
+    if (!this._compareResult) return;
+    this._compareResult.textContent = lines.join('\n');
+    this._compareResult.style.display = lines.length ? '' : 'none';
   }
 
   /**

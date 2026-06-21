@@ -89,6 +89,8 @@ import { utmConverter } from './geo/UtmConverter';
 import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
+import { compareEpochClouds } from './terrain/change/compareEpochs';
+import { summarizeChange } from './terrain/change/compareDtms';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -908,6 +910,7 @@ const inspector = new Inspector({
     applyLayerVisibility();
   },
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
+  onCompareLayers: () => compareLoadedLayers(),
   onExport: (format) => {
     const cloud = activeId ? viewer.getCloud(activeId) : undefined;
     if (!cloud) return;
@@ -5496,6 +5499,40 @@ function applyLayerVisibility(): void {
 function refreshLayerCrsFlags(): void {
   const m = detectCrsMismatch(buildLayerInfos());
   inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
+  // The two-epoch compare needs exactly two loaded layers.
+  inspector.setLayerCompareAvailable(viewer.clouds().length === 2);
+}
+
+/**
+ * Two-epoch change detection over the two loaded layers (first = before,
+ * second = after). Runs the shared-grid DTM comparison and shows the cut/fill
+ * + co-registration summary. The work (two ground filters) runs on the main
+ * thread, so it's deferred a frame to let the "working" line paint; large
+ * clouds may take a moment.
+ */
+function compareLoadedLayers(): void {
+  const ids = viewer.clouds();
+  if (ids.length !== 2) return;
+  const a = viewer.getCloud(ids[0]) ?? null;
+  const b = viewer.getCloud(ids[1]) ?? null;
+  if (!a || !b) return;
+  inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
+  setTimeout(() => {
+    try {
+      const cmp = compareEpochClouds(
+        { positions: a.positions, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null },
+        { positions: b.positions, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null },
+      );
+      if (!cmp) {
+        inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
+        return;
+      }
+      const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
+      inspector.setCompareResult([header, ...summarizeChange(cmp)]);
+    } catch (err) {
+      inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
+    }
+  }, 16);
 }
 
 function removeCloud(id: string): void {
