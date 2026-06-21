@@ -32,13 +32,10 @@ A few related cleanups came with it:
 - Contour GeoJSON exports carry elevation in the Z coordinate.
 - Vertical units are read from the file and converted to metres before grading.
 
-## Lighter, and easier to host anywhere
+## A smaller download
 
-The brand artwork lost about a megabyte: the mark and favicon are sized for how
-they actually appear, and the full-resolution master no longer ships. A `_headers`
-file now sits next to `.htaccess`, so the same security headers apply on Netlify
-and Cloudflare Pages, not just Apache. The web manifest uses relative paths, so
-the app installs correctly when it is hosted under a subpath.
+The brand artwork is lighter by about a megabyte, so the viewer paints faster on
+first load.
 
 ---
 
