@@ -87,6 +87,8 @@ import { measurementsToGeoJSON, measurementsToCsv, type MeasurementExportContext
 import { buildKml, type KmlExportInput } from './export/kmlExport';
 import { utmConverter } from './geo/UtmConverter';
 import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
+import { ClipPanel } from './ui/ClipPanel';
+import type { ClipBox } from './render/clip/clipBox';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -2589,6 +2591,18 @@ crsService.subscribe((resolved) => {
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
+// Clip box — an axis-aligned slab the viewer renders through (GPU clipping
+// planes) with an exact CPU kept-count. The keep/cull math is the pure
+// `clipBox` core; this panel + the viewer wiring realise it.
+const clipPanel = new ClipPanel({
+  onApply: (clip: ClipBox | null) => viewer.setClip(clip),
+  fitBounds: () => {
+    const c = activeId ? viewer.getCloud(activeId) ?? null : null;
+    return c ? c.bounds() : null;
+  },
+  keptCount: () => (activeId ? viewer.clipKeptCount(activeId) : null),
+});
+
 // ── Scan-type routing state ─────────────────────────────────────────────────
 // `revealAnalysePanel` runs once at open, when a streaming cloud may have only
 // a sparse coarse level resident — a misread is likely. `applyScanRoute` is
@@ -2895,6 +2909,10 @@ function revealAnalysePanel(name: string, settled = true): void {
   // a streaming scan has no resident array, so snapping stays off and says so).
   const snapCloud = activeId ? viewer.getCloud(activeId) ?? null : null;
   viewer.measure.setSnapSource(snapCloud?.positions ?? null);
+  // Reveal the clip control and seed its box from this scan's bounds (disabled
+  // until the user enables it).
+  clipPanel.setVisible(true);
+  clipPanel.fitToScan();
   // Fresh scan → clear any prior override + verdict so the open-time route is
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
   // override is per-session-per-scan: a new scan returns to auto-detection,
@@ -3173,7 +3191,7 @@ void viewerLoaded.then(() => {
     // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
-    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element);
+    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
     // Push the column below the measure toolbar whenever it is visible —
     // see wireMeasureBarClearance for why this is measured, not static CSS.
@@ -5352,6 +5370,8 @@ function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
   viewer.setInspectMode(false);
   viewer.clearMeasurements();
+  // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
+  clipPanel.setVisible(false);
   // Hide + clear the Analyse panel so it doesn't linger with stale
   // terrain results after the scan is closed. v0.4.0.
   analysePanel.update(null);

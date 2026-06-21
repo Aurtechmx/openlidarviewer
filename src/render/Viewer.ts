@@ -63,6 +63,7 @@ import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
+import { type ClipBox, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
@@ -225,6 +226,27 @@ import type {
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data per loaded cloud
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Six three.js clipping planes for a clip box, in render-local/world space.
+ * keep-inside → inward-facing planes (a fragment survives only inside ALL of
+ * them, the default intersection). keep-outside → the same planes negated, used
+ * with `clipIntersection = true` so a fragment survives if it's outside ANY
+ * face (i.e. outside the box). A three.js plane clips where n·p + c < 0.
+ */
+function clipBoxPlanes(clip: ClipBox): THREE.Plane[] {
+  const { min, max } = clip.box;
+  const planes = [
+    new THREE.Plane(new THREE.Vector3(1, 0, 0), -min[0]), // keep x ≥ min.x
+    new THREE.Plane(new THREE.Vector3(-1, 0, 0), max[0]), // keep x ≤ max.x
+    new THREE.Plane(new THREE.Vector3(0, 1, 0), -min[1]),
+    new THREE.Plane(new THREE.Vector3(0, -1, 0), max[1]),
+    new THREE.Plane(new THREE.Vector3(0, 0, 1), -min[2]),
+    new THREE.Plane(new THREE.Vector3(0, 0, -1), max[2]),
+  ];
+  if (clip.mode === 'keep-outside') for (const p of planes) p.negate();
+  return planes;
+}
 
 interface CloudEntry {
   cloud: PointCloud;
@@ -727,6 +749,8 @@ export class Viewer {
 
   // ── Cloud registry ───────────────────────────────────────────────────────
   private readonly _clouds = new Map<string, CloudEntry>();
+  /** The active clip box (GPU clipping planes + CPU kept-count), or null. */
+  private _clip: ClipBox | null = null;
   private _nextId = 0;
 
   // ── Streaming COPC subsystem (set while a streaming cloud is open) ───────
@@ -1614,6 +1638,11 @@ export class Viewer {
     // setup, so `_applySizeMode` folds the class-mask multiply into its size
     // node. Class-less meshes are never registered and keep the prior graph.
     if (classAttr !== null) this._materialsWithClass.add(material);
+    // A cloud added while a clip is active inherits it from its first frame.
+    if (this._clip?.enabled) {
+      material.clippingPlanes = clipBoxPlanes(this._clip);
+      material.clipIntersection = this._clip.mode === 'keep-outside';
+    }
     this._applySizeMode(material);
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -2023,6 +2052,51 @@ export class Viewer {
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);
     if (entry) entry.mesh.visible = visible;
+  }
+
+  /**
+   * Apply (or clear) an axis-aligned clip box. The keep/cull decision is the
+   * pure {@link clipKeepsPoint} contract; here it is realised on the GPU via
+   * three.js clipping planes — six inward planes intersected for keep-inside,
+   * six outward planes unioned (`clipIntersection`) for keep-outside. The box is
+   * in render-local space, the same frame as the measurement geometry it reuses.
+   * Pass `null` or a disabled clip to render everything again.
+   *
+   * NOTE: the GPU result needs a device to verify; the kept-count
+   * ({@link clipKeptCount}) and clip state are exact and testable without one.
+   */
+  setClip(clip: ClipBox | null): void {
+    this._clip = clip;
+    const active = clip?.enabled === true;
+    // `localClippingEnabled` is a WebGLRenderer flag not yet typed on
+    // WebGPURenderer; set it through a guarded cast so it takes effect on the
+    // WebGL-2 fallback and on any WebGPU build that honours it. The in-viewport
+    // clip is the piece to confirm on a device; the kept-count is exact either way.
+    (this._renderer as unknown as { localClippingEnabled?: boolean }).localClippingEnabled = active;
+    const planes = active ? clipBoxPlanes(clip) : null;
+    const intersection = active && clip.mode === 'keep-outside';
+    const apply = (m: THREE.PointsNodeMaterial): void => {
+      m.clippingPlanes = planes;
+      m.clipIntersection = intersection;
+      m.needsUpdate = true;
+    };
+    for (const entry of this._clouds.values()) apply(entry.material);
+    for (const m of this._streamingMaterials()) apply(m);
+    this._bumpRenderActivity();
+  }
+
+  /** The active clip box, or null when none is set. */
+  getClip(): ClipBox | null {
+    return this._clip;
+  }
+
+  /** Live "kept of total" point count for the active clip against a cloud (CPU, exact). */
+  clipKeptCount(id: string): { kept: number; total: number } | null {
+    const entry = this._clouds.get(id);
+    if (!entry) return null;
+    const total = (entry.cloud.positions.length / 3) | 0;
+    const kept = this._clip ? countKept(this._clip, entry.cloud.positions) : total;
+    return { kept, total };
   }
 
   /** Exclude (or re-include) a cloud from picking / measuring / inspecting. */

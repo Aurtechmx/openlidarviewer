@@ -5622,6 +5622,23 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-export-panel.olv-collapsed .olv-panel-head { margin: 0; }
 .olv-export-panel.olv-collapsed .olv-chevron { transform: rotate(180deg); }
 .olv-export-body { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
+
+/* Clip box panel — same shell as the Export panel. */
+.olv-clip-panel {
+  width: 218px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg); padding: var(--space-xl);
+}
+.olv-clip-panel.olv-collapsed > :not(.olv-panel-head) { display: none; }
+.olv-clip-panel.olv-collapsed .olv-panel-head { margin: 0; }
+.olv-clip-panel.olv-collapsed .olv-chevron { transform: rotate(180deg); }
+.olv-clip-body { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
+.olv-clip-enable { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); }
+.olv-clip-grid-head { display: grid; grid-template-columns: 1.2rem 1fr 1fr; gap: var(--space-sm); font-size: var(--text-xs); color: var(--text-faint); }
+.olv-clip-grid { display: grid; grid-template-columns: 1.2rem 1fr 1fr; gap: var(--space-sm); align-items: center; }
+.olv-clip-axis { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); }
+.olv-clip-num { width: 100%; box-sizing: border-box; }
+@media (max-width: 767px) { .olv-clip-panel { width: auto; } }
 .olv-export-body .olv-bc-section-label { margin-bottom: var(--space-xs); margin-top: var(--space-sm); }
 .olv-export-btn { margin-top: var(--space-sm); padding: var(--space-md) var(--space-xl); width: 100%; }
 .olv-export-status { font-size: var(--text-xs); color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }
