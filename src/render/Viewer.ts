@@ -237,6 +237,12 @@ interface CloudEntry {
   /** Current colour mode applied to the colour attribute. */
   mode: ColorMode;
   /**
+   * Locked layers are excluded from picking / measuring / inspecting — the user
+   * can keep a reference cloud on screen without it stealing picks from the one
+   * they're working on. Visibility is independent (a locked layer stays drawn).
+   */
+  locked?: boolean;
+  /**
    * Persistent sRGB scratch buffer reused across RGB-appearance recolors
    * (white-balance drag). Allocated lazily on first recolor and reused
    * thereafter; only reallocated if the cloud's colour length grows. Avoids
@@ -2017,6 +2023,17 @@ export class Viewer {
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);
     if (entry) entry.mesh.visible = visible;
+  }
+
+  /** Exclude (or re-include) a cloud from picking / measuring / inspecting. */
+  setCloudLocked(id: string, locked: boolean): void {
+    const entry = this._clouds.get(id);
+    if (entry) entry.locked = locked;
+  }
+
+  /** Whether a cloud is currently locked out of picking. */
+  isCloudLocked(id: string): boolean {
+    return this._clouds.get(id)?.locked === true;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -5015,8 +5032,8 @@ export class Viewer {
 
     let best: { cloud: PointCloud; index: number; point: THREE.Vector3 } | null = null;
     let bestScore = Infinity;
-    for (const { mesh, cloud } of this._clouds.values()) {
-      if (!mesh.visible) continue;
+    for (const { mesh, cloud, locked } of this._clouds.values()) {
+      if (!mesh.visible || locked) continue;
       const hit = nearestPointAlongRay(
         cloud.positions,
         [o.x, o.y, o.z],

@@ -81,6 +81,10 @@ export interface InspectorCallbacks {
   onPointSize: (size: number) => void;
   onToggleVisible: (id: string, visible: boolean) => void;
   onRemove: (id: string) => void;
+  /** Isolate a layer (show only it); calling again on the active layer clears isolate. */
+  onToggleSolo?: (id: string) => void;
+  /** Lock a layer out of picking / measuring (it stays drawn). */
+  onToggleLock?: (id: string, locked: boolean) => void;
   /** Export the active cloud to a file format. */
   onExport: (format: ExportFormat) => void;
   /**
@@ -469,6 +473,8 @@ export class Inspector {
   /** Caller registers this to react to user CRS overrides. */
   private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void) | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
+  /** Lazily-created one-line CRS-mismatch note under the layer list. */
+  private _layerNote: HTMLElement | null = null;
   /**
    * Visual Export Studio — the per-mode image-export buttons, kept
    * by mode so {@link setImageExportEnabled} can disable them as a group
@@ -1036,12 +1042,39 @@ export class Inspector {
     this._sheetHead?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
-  /** Add a loaded cloud to the layer list. */
-  addCloud(id: string, name: string, pointCount: number): void {
+  /** Add a loaded cloud to the layer list. `crsLabel` shows the layer's CRS, when known. */
+  addCloud(id: string, name: string, pointCount: number, crsLabel?: string | null): void {
     const visible = el('input', { type: 'checkbox', title: 'Show or hide this scan' });
     visible.type = 'checkbox';
     visible.checked = true;
     visible.addEventListener('change', () => this._cb.onToggleVisible(id, visible.checked));
+
+    // Isolate (solo): show only this layer. A second click clears isolate.
+    const solo = el('button', {
+      className: 'olv-layer-solo',
+      text: '◉',
+      title: `Isolate ${name} — hide the other layers`,
+      ariaLabel: `Isolate ${name}`,
+    });
+    solo.addEventListener('click', () => this._cb.onToggleSolo?.(id));
+
+    // Lock: keep the layer drawn but exclude it from picking / measuring.
+    const lock = el('button', {
+      className: 'olv-layer-lock',
+      text: '○',
+      title: `Lock ${name} out of picking and measuring`,
+      ariaLabel: `Lock ${name} out of picking`,
+    });
+    let locked = false;
+    lock.addEventListener('click', () => {
+      locked = !locked;
+      lock.classList.toggle('is-active', locked);
+      lock.textContent = locked ? '●' : '○';
+      lock.title = locked
+        ? `${name} is locked — unlock to pick / measure it`
+        : `Lock ${name} out of picking and measuring`;
+      this._cb.onToggleLock?.(id, locked);
+    });
 
     const remove = el('button', {
       className: 'olv-layer-x',
@@ -1051,14 +1084,49 @@ export class Inspector {
     });
     remove.addEventListener('click', () => this._cb.onRemove(id));
 
+    const crs = el('span', {
+      className: 'olv-layer-crs',
+      text: crsLabel ?? '—',
+      title: crsLabel ? `Coordinate system: ${crsLabel}` : 'No coordinate system declared',
+    });
+
     const row = el('div', { className: 'olv-layer' }, [
       visible,
       el('span', { className: 'olv-layer-name', text: name }),
       el('span', { className: 'olv-layer-count', text: formatCount(pointCount) }),
+      crs,
+      solo,
+      lock,
       remove,
     ]);
     this._layerRows.set(id, row);
     this._layers.append(row);
+  }
+
+  /** Mark the isolated (soloed) layer's button as active; `null` clears all. */
+  setLayerSolo(soloId: string | null): void {
+    for (const [id, row] of this._layerRows) {
+      row.querySelector('.olv-layer-solo')?.classList.toggle('is-active', id === soloId);
+    }
+  }
+
+  /**
+   * Flag layers whose CRS doesn't match the others and show a one-line note.
+   * Honest overlay guard: a silently mismatched frame is called out, not trusted.
+   */
+  setLayerCrsFlags(mismatched: ReadonlySet<string>, summary: string): void {
+    for (const [id, row] of this._layerRows) {
+      const bad = mismatched.has(id);
+      row.classList.toggle('olv-layer-crs-mismatch', bad);
+      if (bad) row.title = 'This layer does not share the others’ coordinate system.';
+      else row.removeAttribute('title');
+    }
+    if (!this._layerNote) {
+      this._layerNote = el('p', { className: 'olv-layer-note' });
+      this._layersSection.append(this._layerNote);
+    }
+    this._layerNote.textContent = summary;
+    this._layerNote.style.display = summary ? '' : 'none';
   }
 
   /**

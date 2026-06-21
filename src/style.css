@@ -841,8 +841,23 @@ button:disabled { cursor: not-allowed; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .olv-layer-count { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); }
+/* Per-layer CRS badge: short, faint, truncates; turns warning-coloured when the
+ * layer's coordinate system doesn't match the others. */
+.olv-layer-crs {
+  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint);
+  max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-layer-solo, .olv-layer-lock {
+  background: none; border: none; color: var(--text-faint); font-size: var(--text-sm);
+  line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.olv-layer-solo:hover, .olv-layer-lock:hover { color: var(--text); }
+.olv-layer-solo.is-active, .olv-layer-lock.is-active { color: var(--accent); }
 .olv-layer-x { background: none; border: none; color: var(--text-faint); font-size: var(--text-lg); line-height: 1; }
 .olv-layer-x:hover { color: var(--text); }
+/* A layer whose CRS differs from the others — flag the row + badge. */
+.olv-layer-crs-mismatch .olv-layer-crs { color: var(--warn, #e0a030); }
+.olv-layer-note { margin: var(--space-sm) 0 0; font-size: var(--text-xs); color: var(--warn, #e0a030); }
 .olv-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 .olv-color-by-body { display: flex; flex-direction: column; gap: var(--space-md); }
 /* Gate reason for the disabled Coverage / Confidence chips — visible (not a

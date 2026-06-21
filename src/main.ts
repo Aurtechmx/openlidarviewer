@@ -86,6 +86,7 @@ import { ExportPanel } from './ui/ExportPanel';
 import { measurementsToGeoJSON, measurementsToCsv, type MeasurementExportContext } from './export/measurementExport';
 import { buildKml, type KmlExportInput } from './export/kmlExport';
 import { utmConverter } from './geo/UtmConverter';
+import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -805,6 +806,10 @@ registry.register(scanReport);
 
 /** Viewer id of the cloud the Inspector currently controls (the most recent). */
 let activeId: string | null = null;
+/** The isolated (soloed) layer id, or null when no layer is isolated. */
+let soloLayer: string | null = null;
+/** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
+const layerVisible = new Map<string, boolean>();
 /** Saved camera viewpoints for the current scan. */
 let savedViews: { name: string; pose: CameraPose }[] = [];
 let viewCounter = 0;
@@ -891,8 +896,16 @@ const inspector = new Inspector({
     syncInspectorVisuals();
     persistPrefs();
   },
-  onToggleVisible: (id, visible) => viewer.setCloudVisible(id, visible),
+  onToggleVisible: (id, visible) => {
+    layerVisible.set(id, visible);
+    applyLayerVisibility();
+  },
   onRemove: (id) => removeCloud(id),
+  onToggleSolo: (id) => {
+    soloLayer = nextSolo(soloLayer, id);
+    applyLayerVisibility();
+  },
+  onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onExport: (format) => {
     const cloud = activeId ? viewer.getCloud(activeId) : undefined;
     if (!cloud) return;
@@ -4378,7 +4391,9 @@ async function handleFile(file: File): Promise<void> {
         result.originalPointCount && result.originalPointCount > result.cloud.pointCount
           ? result.originalPointCount
           : result.cloud.pointCount;
-      inspector.addCloud(id, result.cloud.name, layerCount);
+      inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null);
+      layerVisible.set(id, true);
+      refreshLayerCrsFlags();
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
@@ -5431,13 +5446,51 @@ function resetToEmptyState(): void {
 }
 
 /** Remove a cloud from the scene and the Inspector. */
+/** Snapshot every loaded layer as a plain record for the pure layer model. */
+function buildLayerInfos(): LayerInfo[] {
+  return viewer.clouds().map((id) => {
+    const c = viewer.getCloud(id);
+    const crs = c?.metadata?.crs ?? null;
+    return {
+      id,
+      name: c?.name ?? id,
+      pointCount: c?.pointCount ?? 0,
+      visible: layerVisible.get(id) ?? true,
+      locked: viewer.isCloudLocked(id),
+      epsg: crs?.epsg,
+      crsName: crs?.name,
+      verticalDatum: crs?.verticalDatum,
+      isGeographic: crs?.isGeographic,
+    };
+  });
+}
+
+/** Push the model's effective visibility (intent + isolate) to the viewer + UI. */
+function applyLayerVisibility(): void {
+  const eff = resolveVisibility(buildLayerInfos(), soloLayer);
+  for (const [id, on] of eff) viewer.setCloudVisible(id, on);
+  inspector.setLayerSolo(soloLayer);
+}
+
+/** Recompute and surface cross-layer CRS mismatches (overlay alignment guard). */
+function refreshLayerCrsFlags(): void {
+  const m = detectCrsMismatch(buildLayerInfos());
+  inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
+}
+
 function removeCloud(id: string): void {
   viewer.removeCloud(id);
   inspector.removeCloud(id);
   sourceFileById.delete(id);
   reducedById.delete(id);
+  layerVisible.delete(id);
+  if (soloLayer === id) soloLayer = null;
   if (activeId === id) activeId = null;
   if (viewer.clouds().length === 0) resetToEmptyState();
+  else {
+    refreshLayerCrsFlags();
+    applyLayerVisibility();
+  }
 }
 
 /**
@@ -5458,6 +5511,8 @@ function clearOpenStaticLayers(): void {
     reducedById.delete(id);
     if (activeId === id) activeId = null;
   }
+  layerVisible.clear();
+  soloLayer = null;
 }
 
 /**
@@ -5470,6 +5525,8 @@ function closeScan(): void {
     viewer.removeCloud(id);
     inspector.removeCloud(id);
   }
+  layerVisible.clear();
+  soloLayer = null;
   resetToEmptyState();
 }
 
