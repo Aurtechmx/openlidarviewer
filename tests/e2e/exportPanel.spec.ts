@@ -23,9 +23,11 @@ test('after a scan loads, the Export panel offers formats and exports a file', a
   await expect(panel.locator('.olv-bc-pill', { hasText: 'LAZ' })).toBeDisabled();
 
   // Full-resolution toggle is present. The small test grid isn't reduced, so
-  // the box is disabled with an honest "already full resolution" note.
-  await expect(panel.locator('.olv-export-fullres-box')).toBeVisible();
-  await expect(panel.locator('.olv-export-fullres-hint')).toContainText(/full resolution/i);
+  // the box is disabled with an honest "already full resolution" note. Target it
+  // by accessible name — the export panel reuses the `olv-export-fullres-*`
+  // classes across the full-res / compress / classification option rows.
+  await expect(panel.getByRole('checkbox', { name: 'Convert at full resolution' })).toBeVisible();
+  await expect(panel.locator('.olv-export-fullres-hint', { hasText: /full resolution/i })).toBeVisible();
 
   // Pick XYZ (small text output) and export → a download fires.
   await panel.locator('.olv-bc-pill', { hasText: 'XYZ' }).click();
