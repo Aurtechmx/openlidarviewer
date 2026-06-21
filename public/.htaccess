@@ -59,6 +59,8 @@ AddType application/manifest+json .webmanifest
   # The viewer never uses these sensors; deny them outright so embedded
   # third-party content can't request them either.
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  # Clickjacking guard — the viewer is a standalone app, not an embeddable frame.
+  Header always set X-Frame-Options "SAMEORIGIN"
 
   # ── Content-Security-Policy (NOT YET ENFORCED) ────────────────────────────
   # Suggested starting policy, deliberately commented out. It MUST be

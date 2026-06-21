@@ -83,6 +83,7 @@ import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
+import { measurementsToGeoJSON, measurementsToCsv, type MeasurementExportContext } from './export/measurementExport';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -1365,6 +1366,73 @@ async function runDeriveClassification(): Promise<void> {
 }
 
 /**
+ * Fill ONLY the unclassified points of a partially-classified cloud, preserving
+ * every producer class. Where {@link runDeriveClassification} declines a scan
+ * that already carries producer classes (≥ 2), this is the deliberate surface
+ * for them: it passes the existing classification to the deriver, which derives
+ * the class-0/1 gaps and leaves the surveyor's classes untouched. The result is
+ * tagged derived (heuristic) overall, because the filled points are guesses.
+ */
+async function runFillUnclassified(): Promise<void> {
+  if (classifyRunning) return;
+  if (!activeId) {
+    showLassoToast('Fill unclassified · open a scan first.');
+    return;
+  }
+  const cloud = viewer.getCloud(activeId);
+  if (!cloud) {
+    showLassoToast('Fill unclassified · this works on a loaded (non-streaming) scan.');
+    return;
+  }
+  if (cloud.classificationIsDerived || !cloud.classification) {
+    showLassoToast('Fill unclassified · no producer classification to preserve — use Classify (derive).');
+    return;
+  }
+  const cov = classificationCoverage(cloud.classification, cloud.pointCount);
+  if (cov.producer === 0) {
+    showLassoToast('Fill unclassified · no producer classes here — use Classify (derive) for the whole scan.');
+    return;
+  }
+  if (cov.unclassified === 0) {
+    showLassoToast('Fill unclassified · every point already carries a class — nothing to fill.');
+    return;
+  }
+  // Preserve the producer classes; RGB (when present) sharpens the filled gaps.
+  const deriveOptions: DeriveClassificationOptions = {
+    existingClassification: cloud.classification,
+    ...(cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {}),
+  };
+
+  classifyRunning = true;
+  showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
+  try {
+    const id = activeId;
+    const result = await deriveClassificationAsync(
+      cloud.positions,
+      cloud.pointCount,
+      deriveOptions,
+      undefined,
+      undefined,
+      (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
+    );
+    if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    viewer.applyDerivedClassification(id, result.codes);
+    lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
+    classLegendPanel.setClasses(countClasses(result.codes));
+    const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
+    classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
+    classLegendPanel.show();
+    const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
+    showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/abort/i.test(msg)) showLassoToast(`Fill unclassified · failed: ${msg}`);
+  } finally {
+    classifyRunning = false;
+  }
+}
+
+/**
  * Gather the facts the fitness-for-use synthesis ({@link buildScanStory} /
  * {@link buildExportHealth}) reduces, from whatever the active scan already
  * exposes. Defensive throughout: any missing piece simply yields a thinner —
@@ -1399,8 +1467,12 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       const lb = streaming.localBounds();
       areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]);
       pointCount = streaming.sourcePointCount;
-      metaCrsKnown = !!streaming.crs()?.name;
-      metaDatumKnown = false;
+      const sCrs = streaming.crs();
+      metaCrsKnown = !!sCrs?.name;
+      // Read the datum from the streamed source's own CRS (COPC VLRs / EPT srs)
+      // instead of assuming none — a streamed scan can carry a vertical datum
+      // exactly like an uploaded file.
+      metaDatumKnown = !!sCrs?.verticalDatum;
       // Don't claim producer classification a streaming scan may not carry —
       // read the actual availability instead of hardcoding 'source'.
       classification = streaming.availableColorModes().includes('classification') ? 'source' : 'none';
@@ -1522,6 +1594,16 @@ function buildActionRegistry(): Action[] {
       keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],
       run: () => {
         void runDeriveClassification();
+      },
+    },
+    {
+      id: 'tool.fillUnclassified',
+      title: 'Fill unclassified points (derive)',
+      section: 'Tools',
+      hint: 'Derive only the unclassified points of a partially-classified scan, preserving every producer class (heuristic).',
+      keywords: ['classification', 'fill', 'gaps', 'unclassified', 'producer', 'preserve'],
+      run: () => {
+        void runFillUnclassified();
       },
     },
     {
@@ -2356,6 +2438,32 @@ const exportPanel = new ExportPanel({
     const f = activeId ? sourceFileById.get(activeId) : null;
     if (!f) return null;
     return decodeFull(await f.arrayBuffer(), f.name);
+  },
+  // Called synchronously while the ExportPanel builds its Products lane — which
+  // happens before the lazy `viewer` chunk resolves, so it must tolerate a null
+  // viewer (return 0) instead of dereferencing it and crashing app init.
+  measurementCount: () => (viewer ? viewer.measure.getMeasurements().length : 0),
+  exportMeasurements: (format) => {
+    if (!viewer) return;
+    const measurements = viewer.measure.getMeasurements();
+    if (measurements.length === 0) return;
+    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    // Measurement points are LOCAL (recentered); add the origin back to land them
+    // in the source projected/local frame. Geographic reprojection (→ lon/lat) is
+    // a later option — for now we emit in the scan's own coordinates.
+    const origin = cloud?.origin ?? [0, 0, 0];
+    const ctx: MeasurementExportContext = {
+      toOutput: (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
+      up: viewer.measure.worldUp,
+      unitToMetres: viewer.measure.unitToMetres,
+      crsName: cloud?.metadata?.crs?.name,
+      geographic: false,
+    };
+    const text = format === 'geojson'
+      ? measurementsToGeoJSON(measurements, ctx)
+      : measurementsToCsv(measurements, ctx);
+    const stem = cloud ? baseName(cloud.name) : 'measurements';
+    downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
 });
 
@@ -3568,12 +3676,20 @@ async function generateReportPdf(templateId: string): Promise<void> {
   } else if (staticCloud) {
     const b = staticCloud.bounds();
     const w = b.max[0] - b.min[0], d = b.max[1] - b.min[1], h = b.max[2] - b.min[2];
-    const density = w > 0 && d > 0 ? staticCloud.pointCount / (w * d) : NaN;
+    // File-scale honesty: the loader strides huge clouds for display, so
+    // `pointCount` is the rendered subset. The client PDF must describe the
+    // FILE — use the declared total (and the density that follows from it) when
+    // striding reduced the in-memory count, matching the Scan Report panel.
+    const fileN =
+      staticCloud.declaredPointCount !== undefined && staticCloud.declaredPointCount > staticCloud.pointCount
+        ? staticCloud.declaredPointCount
+        : staticCloud.pointCount;
+    const density = w > 0 && d > 0 ? fileN / (w * d) : NaN;
     const crs = staticCloud.metadata?.crs;
     metadata = {
       fileName: staticCloud.name,
       format: staticCloud.sourceFormat.toUpperCase(),
-      sourcePointCount: staticCloud.pointCount,
+      sourcePointCount: fileN,
       width: w, depth: d, height: h, density,
       hasRgb: !!staticCloud.colors,
       hasIntensity: !!staticCloud.intensity,
@@ -3800,6 +3916,9 @@ function refreshMeasurePanel(): void {
     if (newest) recordUsage('measurement', newest.kind);
   }
   _lastMeasurementCount = measurements.length;
+  // Keep the Export panel's Products lane (measurement GeoJSON/CSV) in sync with
+  // the live measurement count.
+  exportPanel.refresh();
 }
 
 /** Refresh the Annotations panel's contents and visibility. */
@@ -4151,7 +4270,14 @@ async function handleFile(file: File): Promise<void> {
     //    Each isolated block restores its own slice; the navigation
     //    above remains usable even if every block below fails.
     try {
-      inspector.addCloud(id, result.cloud.name, result.cloud.pointCount);
+      // The Layers chip names the FILE, so it shows the file total (the same
+      // count DETAIL renders as "loaded / total"), not the strided display
+      // subset — consistent with the Scan Report's file-scale Point Count.
+      const layerCount =
+        result.originalPointCount && result.originalPointCount > result.cloud.pointCount
+          ? result.originalPointCount
+          : result.cloud.pointCount;
+      inspector.addCloud(id, result.cloud.name, layerCount);
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(

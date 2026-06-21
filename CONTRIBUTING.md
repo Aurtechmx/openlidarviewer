@@ -21,8 +21,8 @@ Open a GitHub issue and include:
 - your browser, OS, and GPU if it is relevant
 - the file format involved
 
-Please do not attach confidential scan data. Use a small, non-sensitive sample
-instead, or describe the file's structure. See [SECURITY.md](SECURITY.md).
+A small sample file that reproduces the issue, or a description of the file's
+structure, is ideal.
 
 ## Suggesting features
 

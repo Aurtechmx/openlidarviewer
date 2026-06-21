@@ -49,4 +49,4 @@ Full GIS layers and analysis, photogrammetry, survey-grade measurement, CRS repr
 
 ## Reporting issues
 
-If something does not work as described, please open an issue. See [CONTRIBUTING.md](../CONTRIBUTING.md). Do not attach sensitive scan data to public issues. See [SECURITY.md](../SECURITY.md).
+If something does not work as described, please open an issue. See [CONTRIBUTING.md](../CONTRIBUTING.md).

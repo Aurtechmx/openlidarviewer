@@ -80,6 +80,23 @@ describe('crsFromGeoTiff — vertical key', () => {
     expect(crs.verticalEpsg).toBe(5703);
     expect(crs.verticalDatum).toBe('NAVD88');
   });
+
+  it('reads VerticalUnitsGeoKey (4099) as the Z-axis unit, distinct from horizontal', () => {
+    // Horizontal grid in metres (3076 = 9001), vertical height in US survey feet
+    // (4099 = 9003). Elevation must convert by the foot unit, not the metre one.
+    const bytes = geoKeyBytes([[1024, 1], [3072, 26911], [3076, 9001], [4096, 5703], [4099, 9003]]);
+    const crs = crsFromGeoTiff(bytes, null, null);
+    expect(crs.linearUnit).toBe('metre');
+    expect(crs.linearUnitToMetres).toBe(1);
+    expect(crs.verticalLinearUnit).toBe('us-survey-foot');
+    expect(crs.verticalUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
+  });
+
+  it('leaves the vertical unit undefined when no 4099 key is present', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703]]), null, null);
+    expect(crs.verticalLinearUnit).toBeUndefined();
+    expect(crs.verticalUnitToMetres).toBeUndefined();
+  });
 });
 
 function cloud(): PointCloud {

@@ -2,6 +2,64 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.4.9] - 2026-06-20
+
+### Added
+
+- **Data Fitness scorecard.** The Analyse panel now leads with one plain-language
+  verdict and a six-row traffic-light scorecard — Location & height, Coverage,
+  Ground detail, Vertical accuracy, Classification, Integrity — each with a
+  metaphor icon and a shape-distinct tone glyph (check / dash / triangle, never
+  colour alone). Caveats are non-hideable, and the USGS Quality Level badge is
+  shown only when earned (georeferenced, density above floor,
+  accuracy validated).
+- **Portable security headers.** A `_headers` file ships alongside `.htaccess`
+  so the same deploy bundle is hardened on Netlify / Cloudflare Pages-style
+  static hosts, not only Apache-family ones.
+
+### Changed
+
+- **File-scale honesty across every surface.** Large clouds are strided for
+  display, so the rendered count is a subset. The Scan Report, the Engineering
+  Inspection PDF, the Provenance density, and the Layers chip now report the
+  file's true point count and areal density (back-scaled from the sample), with
+  a "Loaded" row disclosing the in-memory subset — a dense survey no longer
+  reads as several times sparser than it is.
+- **Capture-type detection.** Dense drone surveys (UAV LiDAR, ~100–1000 pts/m²
+  over an open mapping footprint) classify as drone-mounted LiDAR rather than
+  Terrestrial Laser Scan, matching the cited density literature.
+- **Honest classification + terrain wording.** A classification dimension that
+  carries no assigned classes reads "Present, unclassified" instead of a bare
+  "Yes"; the Terrain Intelligence Report labels its ground-point counts "Ground
+  points / Used in DTM" rather than the misreadable "Source points".
+- **Analyse panel de-duplicated.** Each fact now has one home — the scorecard is
+  the headline, the assessment block carries export readiness + terrain products
+  + "Why?", and the collapsed Details holds the lone composite score and the
+  unique validation detail.
+- **Portable PWA manifest.** Relative `./` paths + `scope` so the app installs
+  correctly under subpath hosting; `X-Frame-Options: SAMEORIGIN` added.
+
+### Fixed
+
+- The point cloud no longer clips to a square on browser zoom-out.
+- Contour GeoJSON exports carry 3D coordinates (elevation) and per-feature
+  evidence grades.
+- Vertical units are honoured: `VerticalUnitsGeoKey` (4099) and the WKT vertical
+  `UNIT` are parsed, and Z is scaled to metres for accuracy bucketing.
+- Honest height wording for georeferenced scans. A horizontally-georeferenced
+  scan with an undeclared vertical datum (common for drone LiDAR — absolute
+  Z, no `VerticalCRS`) now reads "elevation datum not declared" rather than
+  "heights are relative." Its heights are absolute; only the datum is unverified.
+  Truly floating scans (no CRS) still read "relative."
+
+### Under the hood
+
+- A tested orchestration seam for the full-cloud grade (plan → coverage →
+  back-scaled grade) landed ahead of its streaming surface.
+- Brand assets trimmed ~1.05 MB from the deploy: the mark and favicon are
+  re-rastered to display size, and the unused full-resolution logo master moved
+  out of the shipped bundle (kept in the repo for regenerating share cards).
+
 ## [0.4.8] - 2026-06-17
 
 ### Added

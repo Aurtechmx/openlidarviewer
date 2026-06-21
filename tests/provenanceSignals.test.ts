@@ -58,6 +58,21 @@ describe('signalsForStaticCloud — bounds is a method', () => {
     expect(s.extent).toBeUndefined();
     expect(s.densityPerSqM).toBeUndefined();
   });
+
+  it('uses the declared file total for density + count when the cloud was strided', () => {
+    // Loader strided 9.6M → 3.7M for display; the capture-type density must
+    // describe the file (≈ 979 pts/m²), not the rendered subset (≈ 379).
+    const s = signalsForStaticCloud({
+      sourceFormat: 'laz',
+      pointCount: 3_714_345,
+      declaredPointCount: 9_597_830,
+      bounds: () => ({ min: [0, 0, 0], max: [78.8, 124.4, 18.9] }),
+    });
+    expect(s.pointCount).toBe(9_597_830);
+    // 9_597_830 / (78.8 * 124.4) ≈ 979, not the strided ≈ 379
+    expect(s.densityPerSqM!).toBeGreaterThan(900);
+    expect(s.densityPerSqM!).toBeLessThan(1050);
+  });
 });
 
 describe('signalsForStaticCloud — CloudMetadata field names', () => {

@@ -15,7 +15,12 @@
  * toolbars hurt first-time users); these glyphs ride to the left of the label.
  */
 
-function svg(inner: string): string {
+/**
+ * The house-style line-icon wrapper: 24×24, currentColor, 1.6 px stroke, round
+ * caps/joins. Exported so sibling icon sets (e.g. the fitness scorecard) stay in
+ * exactly the same visual family instead of re-deriving the conventions.
+ */
+export function svg(inner: string): string {
   return (
     '<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" ' +
     'fill="none" stroke="currentColor" stroke-width="1.6" ' +
@@ -25,7 +30,8 @@ function svg(inner: string): string {
   );
 }
 
-const dot = (cx: number, cy: number, r = 1.7): string =>
+/** A filled dot in the icon's stroke colour — the shared house-style accent. */
+export const dot = (cx: number, cy: number, r = 1.7): string =>
   `<circle cx="${cx}" cy="${cy}" r="${r}" fill="currentColor" stroke="none"/>`;
 
 /** Fit-to-view — frame corners around a centred object (CAD "zoom extents"). */

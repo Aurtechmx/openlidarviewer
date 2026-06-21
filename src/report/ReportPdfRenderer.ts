@@ -167,7 +167,7 @@ export async function renderReportPdf(
   }
 
   // Stamp page numbers in the footer of every page that was added. The
-  // optional footer note (confidentiality, project code, etc.) is appended
+  // optional footer note (e.g. a project code) is appended
   // above the standard line on each page.
   stampFooterPageNumbers(doc, helvetica, theme, branding.footerNote);
 
@@ -1389,7 +1389,7 @@ function formatTimestamp(iso: string): string {
  * accepts a theme so the footer text colour matches the page
  * palette (dark themes need light footer text), and an optional
  * `footerNote` that's rendered above the standard line for compliance /
- * confidentiality / project-code annotations.
+ * footer / project-code annotations.
  */
 function stampFooterPageNumbers(
   doc: PDFDocument,

@@ -119,6 +119,12 @@ export interface ResolvedCrs {
   readonly verticalEpsg?: number;
   /** Human label for the vertical datum (name or `EPSG:<code>`); undefined = unknown. */
   readonly verticalDatum?: string;
+  /**
+   * Z-axis unit conversion to metres, when the source declares a vertical unit
+   * distinct from the horizontal one. Absent ⇒ use {@link linearUnitToMetres}
+   * (the GeoTIFF default: vertical units follow the model's linear units).
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,6 +192,7 @@ export function resolvedFromCrsInfo(
     wkt: info.wkt,
     verticalEpsg: info.verticalEpsg,
     verticalDatum: info.verticalDatum,
+    verticalUnitToMetres: info.verticalUnitToMetres,
   };
 }
 

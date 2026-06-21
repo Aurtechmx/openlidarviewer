@@ -969,7 +969,13 @@ export class Viewer {
     } as ConstructorParameters<typeof THREE.WebGPURenderer>[0]);
 
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
-    this._renderer.setSize(canvas.clientWidth || 800, canvas.clientHeight || 600);
+    // updateStyle=false: the stylesheet owns the canvas display size
+    // (.olv-canvas is inset:0/100%×100%). Letting three.js write inline
+    // style.width/height in px would override the CSS and pin the canvas to a
+    // stale fixed box — under browser zoom the container grows but the canvas
+    // stays clamped, confining the scene to a sub-region. We size only the
+    // drawing buffer here and let CSS track the layout.
+    this._renderer.setSize(canvas.clientWidth || 800, canvas.clientHeight || 600, false);
     // v0.3.7 colour-fidelity pass: ACES Filmic tone-mapping (the v0.3.6
     // default) was designed for HDR cinema content — it deliberately
     // rolls off highlights and desaturates near-white values. Applied
@@ -5387,7 +5393,14 @@ export class Viewer {
     if (w === 0 || h === 0) return;
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
-    this._renderer.setSize(w, h);
+    // Re-apply the pixel ratio: browser zoom and monitor-DPI changes alter
+    // devicePixelRatio, and the backing-store resolution must follow or the
+    // scene renders soft/aliased after a zoom.
+    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    // updateStyle=false — CSS owns the display box (see the constructor note);
+    // we resize only the WebGPU drawing buffer so the canvas keeps tracking the
+    // container at any browser zoom instead of pinning to a stale pixel size.
+    this._renderer.setSize(w, h, false);
     // Re-apply the active sky preset only when the phone-breakpoint
     // state actually crosses. Rotating a phone or resizing across
     // 767 px flips the gradient vs flat-colour decision; resizing

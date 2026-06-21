@@ -64,7 +64,7 @@ export interface ReportBranding {
   readonly theme?: 'light-technical' | 'dark-inspection' | 'minimal-engineering';
   /**
    * optional custom footer line. Appended after the standard
-   * "OpenLiDARViewer · timestamp" line; useful for confidentiality notices,
+   * "OpenLiDARViewer · timestamp" line; useful for a footer notice,
    * project codes, or compliance references.
    */
   readonly footerNote?: string;

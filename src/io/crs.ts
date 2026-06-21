@@ -44,7 +44,7 @@ const GEOTIFF_LINEAR_UNITS: Readonly<Record<number, CrsLinearUnit>> = {
 /** What we extract from the VLRs. All fields optional — a header may carry one and not others. */
 export interface CrsInfo {
   /** Where the metadata came from — diagnostic, surfaced in the Scan Report. */
-  readonly source: 'wkt' | 'geotiff';
+  readonly source: 'wkt' | 'geotiff' | 'epsg';
   /** Raw WKT string (when source is `wkt`) — kept so the UI can show it on request. */
   readonly wkt?: string;
   /** Best-effort human label, e.g. "WGS 84 / UTM zone 12N" or "EPSG:32612". */
@@ -69,6 +69,16 @@ export interface CrsInfo {
    * surface that honestly rather than assuming one.
    */
   readonly verticalDatum?: string;
+  /**
+   * Linear unit of the Z (height) axis when the source declares one separately
+   * — e.g. NAVD88 height in US survey feet over a state-plane grid in feet, or a
+   * metre vertical CRS over a foot horizontal grid. Absent when the file gives
+   * no vertical unit; callers then fall back to the horizontal `linearUnit`
+   * (the GeoTIFF default: vertical units follow the model's linear units).
+   */
+  readonly verticalLinearUnit?: CrsLinearUnit;
+  /** Z-unit conversion to metres (1 metre, 0.3048 foot, …). Absent ⇒ unknown. */
+  readonly verticalUnitToMetres?: number;
 }
 
 /** Common vertical-datum EPSG codes → readable names. */
@@ -84,8 +94,13 @@ const VERTICAL_DATUM_NAMES: Readonly<Record<number, string>> = {
   5612: 'EGM84 height',
 };
 
-/** Label a vertical-datum EPSG code (known name, or `EPSG:<code>`). */
-function verticalDatumLabel(epsg: number): string {
+/**
+ * Label a vertical-datum EPSG code (known name, or `EPSG:<code>`). Returns
+ * undefined for the placeholder codes that mean "no real datum" (0 / 32767),
+ * so callers don't surface a bogus `EPSG:0` as a datum.
+ */
+export function verticalDatumLabel(epsg: number): string | undefined {
+  if (!(epsg > 0) || epsg === 32767) return undefined;
   return VERTICAL_DATUM_NAMES[epsg] ?? `EPSG:${epsg}`;
 }
 
@@ -129,6 +144,7 @@ const GEOKEY_PROJECTED_CITATION = 3073;  // ASCII citation
 const GEOKEY_PROJ_LINEAR_UNITS = 3076;   // linear units of a projected CRS
 const GEOKEY_VERTICAL_CRS = 4096;        // EPSG of the vertical (height) CRS
 const GEOKEY_VERTICAL_CITATION = 4097;   // ASCII citation for the vertical CRS
+const GEOKEY_VERTICAL_UNITS = 4099;      // linear units of the vertical CRS
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parser entry point
@@ -260,7 +276,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
 
   // Vertical CRS — present in a COMPD_CS / COMPOUNDCRS or a standalone
   // VERT_CS. The name (e.g. "NAVD88") is the reliable signal; the EPSG is a
-  // best-effort reverse lookup for the writer.
+  // best-effort reverse lookup for the writer. The vertical block's own UNIT
+  // (when present) gives the Z-axis unit, which can differ from the horizontal.
   const vert = extractVerticalFromWkt(text);
 
   return {
@@ -273,11 +290,15 @@ export function crsFromWkt(wkt: string): CrsInfo {
     isGeographic,
     verticalDatum: vert.name,
     verticalEpsg: vert.epsg,
+    verticalLinearUnit: vert.unit,
+    verticalUnitToMetres: vert.unit ? unitScaleForCode(vert.unit) : undefined,
   };
 }
 
-/** Extract the vertical-CRS name + a best-effort EPSG from a WKT string. */
-function extractVerticalFromWkt(text: string): { epsg?: number; name?: string } {
+/** Extract the vertical-CRS name + best-effort EPSG + unit from a WKT string. */
+function extractVerticalFromWkt(
+  text: string,
+): { epsg?: number; name?: string; unit?: CrsLinearUnit } {
   const m = /\b(?:VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
   if (!m) return {};
   // Isolate the bracketed vertical block so a compound CRS's other authorities
@@ -290,7 +311,16 @@ function extractVerticalFromWkt(text: string): { epsg?: number; name?: string } 
   // fall back to an explicit EPSG authority inside the block (the LAST one is
   // the vertical CRS's own, after any VERT_DATUM authority).
   const epsg = (name ? verticalEpsgFromName(name) : undefined) ?? extractEpsgFromWkt(block);
-  return { name, epsg };
+  // The vertical block's UNIT clause names the Z-axis unit (LAS WKT puts at most
+  // one UNIT here). Mapped to our enum so elevation can convert by its own unit.
+  let unit: CrsLinearUnit | undefined;
+  const unitMatches = [...block.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)];
+  const unitMatch = unitMatches[unitMatches.length - 1];
+  if (unitMatch) {
+    const scale = Number(unitMatch[2]);
+    if (Number.isFinite(scale) && scale > 0) unit = linearUnitFromNameOrScale(unitMatch[1].toLowerCase(), scale);
+  }
+  return { name, epsg, unit };
 }
 
 /** Return the bracketed group that opens at/after `from` (matched depth-aware). */
@@ -420,6 +450,7 @@ export function crsFromGeoTiff(
   let geodeticCitationCount: number | undefined;
   let linearUnitCode: number | undefined;
   let verticalCrs: number | undefined;
+  let verticalUnitCode: number | undefined;
   let verticalCitationOffset: number | undefined;
   let verticalCitationCount: number | undefined;
 
@@ -453,6 +484,9 @@ export function crsFromGeoTiff(
       case GEOKEY_VERTICAL_CRS:
         verticalCrs = value;
         break;
+      case GEOKEY_VERTICAL_UNITS:
+        verticalUnitCode = value;
+        break;
       case GEOKEY_VERTICAL_CITATION:
         if (tiffTag === RECORD_ID_GEO_ASCII_PARAMS) {
           verticalCitationOffset = value;
@@ -479,17 +513,25 @@ export function crsFromGeoTiff(
     || 'Unknown CRS';
   const name = epsg && !citation ? `EPSG:${epsg}` : (epsg ? `${baseName} (EPSG:${epsg})` : baseName);
 
-  // Vertical datum: a real EPSG (not 0 / user-defined 32767), else fall back
-  // to the citation text when present.
+  // Vertical datum: a real EPSG (verticalDatumLabel rejects the 0 / 32767
+  // placeholders), else fall back to the citation text when present.
   let verticalEpsg: number | undefined;
-  let verticalDatum: string | undefined;
-  if (verticalCrs && verticalCrs > 0 && verticalCrs !== 32767) {
+  let verticalDatum = verticalCrs != null ? verticalDatumLabel(verticalCrs) : undefined;
+  if (verticalDatum) {
     verticalEpsg = verticalCrs;
-    verticalDatum = verticalDatumLabel(verticalCrs);
   } else {
     const vCite = readGeoTiffCitation(geoAsciiBytes, verticalCitationOffset, verticalCitationCount);
     if (vCite) verticalDatum = vCite;
   }
+
+  // Vertical unit (VerticalUnitsGeoKey 4099). Only surfaced when the file states
+  // a recognised unit; otherwise left undefined so callers fall back to the
+  // horizontal linear unit (the GeoTIFF default — vertical units follow the
+  // model's linear units). Carrying it lets the terrain tools convert elevation
+  // by the Z axis's own unit — e.g. feet height over a metre grid.
+  const mappedVerticalUnit = verticalUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[verticalUnitCode] : undefined;
+  const verticalLinearUnit = mappedVerticalUnit;
+  const verticalUnitToMetres = mappedVerticalUnit ? unitScaleForCode(mappedVerticalUnit) : undefined;
 
   return {
     source: 'geotiff',
@@ -497,6 +539,47 @@ export function crsFromGeoTiff(
     epsg,
     linearUnit,
     linearUnitToMetres,
+    isGeographic,
+    verticalEpsg,
+    verticalDatum,
+    verticalLinearUnit,
+    verticalUnitToMetres,
+  };
+}
+
+/** Parameters for {@link crsFromEpsg}. */
+export interface EpsgCrsParams {
+  /** Vertical (height) datum EPSG, when the source declares one separately. */
+  readonly verticalEpsg?: number;
+  /** Whether the horizontal CRS is geographic (degrees). Default false. */
+  readonly isGeographic?: boolean;
+  /** Display name override. Default `EPSG:<code>`. */
+  readonly name?: string;
+  /** Linear unit override. Default metre (projected) / unknown (geographic). */
+  readonly linearUnit?: CrsLinearUnit;
+}
+
+/**
+ * Build a {@link CrsInfo} from EPSG codes alone — for sources that georeference
+ * by authority code rather than by WKT or GeoTIFF tags (e.g. an EPT `ept.json`
+ * `srs` with `horizontal` / `vertical` codes and no `wkt`). The vertical datum
+ * is carried through identically to the GeoTIFF path (real code → known name or
+ * `EPSG:<code>`; 0 / 32767 rejected), so a streamed dataset that declares its
+ * datum by code surfaces it exactly like an uploaded file would.
+ */
+export function crsFromEpsg(horizontalEpsg: number, params: EpsgCrsParams = {}): CrsInfo {
+  const isGeographic = params.isGeographic ?? false;
+  const linearUnit: CrsLinearUnit = params.linearUnit ?? (isGeographic ? 'unknown' : 'metre');
+  // verticalDatumLabel returns undefined for the placeholder codes (0 / 32767),
+  // so a bogus vertical code never produces a datum or a verticalEpsg.
+  const verticalDatum = params.verticalEpsg != null ? verticalDatumLabel(params.verticalEpsg) : undefined;
+  const verticalEpsg = verticalDatum ? params.verticalEpsg : undefined;
+  return {
+    source: 'epsg',
+    name: params.name ?? `EPSG:${horizontalEpsg}`,
+    epsg: horizontalEpsg,
+    linearUnit,
+    linearUnitToMetres: unitScaleForCode(linearUnit),
     isGeographic,
     verticalEpsg,
     verticalDatum,

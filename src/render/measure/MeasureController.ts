@@ -545,6 +545,11 @@ export class MeasureController {
     return this._unitToMetres;
   }
 
+  /** The world up vector measurements were placed against (for export derivations). */
+  get worldUp(): Vec3 {
+    return this._worldUp;
+  }
+
   /**
    * Inject the scan CRS's linear-unit → metres factor — the SAME seam the
    * terrain/space paths read (`crsService.current().linearUnitToMetres`).

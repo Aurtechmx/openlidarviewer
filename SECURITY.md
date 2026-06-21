@@ -17,14 +17,8 @@ plan.
 
 OpenLiDARViewer is designed around local-first inspection. Scan files are read,
 parsed, and rendered entirely in the browser — there is no server to upload
-them to. This makes it suitable for confidential survey data. The security of
+them to. The security of
 your data also depends on how and where you choose to deploy and run the app.
-
-## Do not post sensitive data publicly
-
-When reporting a bug, **do not attach confidential or proprietary scan data**
-to public GitHub issues. Provide a minimal, non-sensitive sample, or describe
-the file structure instead.
 
 ## Supported versions
 

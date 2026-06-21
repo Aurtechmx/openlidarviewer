@@ -15,6 +15,8 @@ import { el } from './dom';
 import { loadConvertEngine } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 import type { PointCloud } from '../model/PointCloud';
+import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
+import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
 
 export interface ExportPanelCallbacks {
   /** Return the loaded (display-resolution) cloud, or null when none is active. */
@@ -25,6 +27,10 @@ export interface ExportPanelCallbacks {
   isReduced: () => boolean;
   /** Re-decode the original file at full resolution. Only call when `hasFullSource()`. */
   getFullCloud: () => Promise<PointCloud | null>;
+  /** Count of placed measurements — drives the Products lane's enablement. */
+  measurementCount?: () => number;
+  /** Export the placed measurements to an open format (GeoJSON / CSV). */
+  exportMeasurements?: (format: 'geojson' | 'csv') => void;
 }
 
 export class ExportPanel {
@@ -37,6 +43,10 @@ export class ExportPanel {
   private readonly _exportBtn: HTMLButtonElement;
   private readonly _status: HTMLElement;
   private readonly _fullResRow: HTMLElement;
+  private readonly _gzipRow: HTMLElement;
+  private readonly _classRow: HTMLElement;
+  private readonly _summary: HTMLElement;
+  private readonly _products: HTMLElement;
   private readonly _cb: ExportPanelCallbacks;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
@@ -46,6 +56,10 @@ export class ExportPanel {
   private _targetEpsg = '';
   private _sourceEpsg = '';
   private _fullRes = false;
+  /** Gzip the output to `.las.gz` (binary LAS formats only). */
+  private _gzip = false;
+  /** Write the classification channel (false ⇒ omitted as class 0). */
+  private _includeClass = true;
   private _busy = false;
   /**
    * Whether the active scan carries a real-world CRS (projected / geographic).
@@ -96,21 +110,32 @@ export class ExportPanel {
     });
     this._crsLocalNote.style.display = 'none';
     this._fullResRow = el('div', { className: 'olv-export-fullres' });
+    this._gzipRow = el('div', { className: 'olv-export-fullres' });
+    this._classRow = el('div', { className: 'olv-export-fullres' });
+    // The live "what you'll get" line — size, CRS, classification, before any write.
+    this._summary = el('p', { className: 'olv-export-summary', text: '' });
     this._exportBtn = el('button', { className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export' }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
     this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
+    // The collapsed "Products" lane — derived artifacts (measurements today;
+    // rasters / report / session to follow) kept out of the primary save flow.
+    this._products = el('div', { className: 'olv-export-products' });
 
     const body = el('div', { className: 'olv-export-body' });
     body.append(
-      this._label('Output format'),
+      this._label('Point cloud'),
       this._formatRow,
+      this._gzipRow,
       this._crsLabel,
       this._crsRow,
       this._crsExtra,
       this._crsLocalNote,
       this._fullResRow,
+      this._classRow,
+      this._summary,
       this._exportBtn,
       this._status,
+      this._products,
     );
 
     this.element.append(head, body);
@@ -121,6 +146,10 @@ export class ExportPanel {
     this._renderCrsPills();
     this._renderCrsExtra();
     this._renderFullResRow();
+    this._renderGzipRow();
+    this._renderClassRow();
+    this._renderSummary();
+    this._renderProducts();
   }
 
   setVisible(on: boolean): void {
@@ -130,6 +159,10 @@ export class ExportPanel {
   /** Re-evaluate the full-resolution availability for the active cloud. */
   refresh(): void {
     this._renderFullResRow();
+    this._renderGzipRow();
+    this._renderClassRow();
+    this._renderSummary();
+    this._renderProducts();
   }
 
   /**
@@ -151,6 +184,8 @@ export class ExportPanel {
       this._renderCrsExtra();
     }
     this._renderCrsStep();
+    this._renderGzipRow();
+    this._renderSummary();
   }
 
   /** Show or collapse the Coordinate-System step per the known-CRS signal. */
@@ -182,7 +217,7 @@ export class ExportPanel {
     const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
     box.checked = this._fullRes;
     box.disabled = !usable;
-    box.addEventListener('change', () => { this._fullRes = box.checked; });
+    box.addEventListener('change', () => { this._fullRes = box.checked; this._renderSummary(); });
     label.append(box, el('span', { text: 'Convert at full resolution' }));
 
     let hint: string;
@@ -191,6 +226,141 @@ export class ExportPanel {
     else hint = 'The loaded scan is already full resolution.';
 
     this._fullResRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  }
+
+  /**
+   * "Compress (.las.gz)" checkbox. Only meaningful for the binary LAS writers —
+   * XYZ/ASC are text and the LAZ pill is its own (disabled) format — and only
+   * when the platform provides `CompressionStream`. Gzip wraps the written LAS
+   * bytes into a `.las.gz` that PDAL / las2las read after gunzip.
+   */
+  private _renderGzipRow(): void {
+    this._gzipRow.replaceChildren();
+    const isLas = this._format === 'las' || this._format === 'las14';
+    const usable = isLas && gzipAvailable();
+    if (!usable) this._gzip = false;
+
+    const label = el('label', { className: 'olv-export-fullres-label' });
+    const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
+    box.checked = this._gzip;
+    box.disabled = !usable;
+    box.addEventListener('change', () => { this._gzip = box.checked; this._renderSummary(); });
+    label.append(box, el('span', { text: 'Compress (.las.gz)' }));
+
+    let hint: string;
+    if (!isLas) hint = 'Compression applies to LAS output — pick LAS 1.4 or LAS 1.2.';
+    else if (!gzipAvailable()) hint = 'Compression isn’t available in this browser.';
+    else hint = 'Gzip the LAS to a smaller .las.gz (read by PDAL / las2las after gunzip).';
+    this._gzipRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  }
+
+  /** Where the active cloud's classification came from. */
+  private _classProvenance(): 'none' | 'source' | 'derived' {
+    const cloud = this._cb.getCloud();
+    if (!cloud) return 'none';
+    if (cloud.classificationIsDerived) return 'derived';
+    return cloud.classification != null ? 'source' : 'none';
+  }
+
+  /**
+   * Classification guard. Shown only when the cloud carries a classification.
+   * For a DERIVED (heuristic) classification the row reads honestly — "not
+   * survey-grade" — and the checkbox lets the user omit it from the written
+   * file rather than ship a guess as if it were a producer classification.
+   */
+  private _renderClassRow(): void {
+    this._classRow.replaceChildren();
+    const provenance = this._classProvenance();
+    if (provenance === 'none') {
+      this._includeClass = true; // no class to omit — never carry a stale opt-out
+      return;
+    }
+    const label = el('label', { className: 'olv-export-fullres-label' });
+    const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' }) as HTMLInputElement;
+    box.checked = this._includeClass;
+    box.addEventListener('change', () => { this._includeClass = box.checked; this._renderSummary(); });
+    label.append(box, el('span', { text: 'Include classification' }));
+
+    const hint = provenance === 'derived'
+      ? 'Derived (heuristic) — not survey-grade. Untick to omit it from the file.'
+      : 'From the source file.';
+    this._classRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  }
+
+  /** Recompute the live "what you'll get" line from the active cloud + options. */
+  private _renderSummary(): void {
+    const cloud = this._cb.getCloud();
+    if (!cloud) {
+      this._summary.textContent = '';
+      return;
+    }
+    const crs = cloud.metadata?.crs ?? null;
+    const input: ExportSummaryInput = {
+      pointCount: cloud.pointCount,
+      format: this._format,
+      hasRgb: cloud.colors != null,
+      hasGpsTime: cloud.gpsTime != null,
+      crsMode: this._crsMode,
+      crsLabel: crs?.name ?? null,
+      targetEpsg: parseEpsg(this._targetEpsg),
+      hasWkt: crs?.wkt != null,
+      classification: this._classProvenance(),
+      includeClassification: this._includeClass,
+      viewDecimated: this._cb.isReduced(),
+      fullRes: this._fullRes,
+      gzip: this._gzip,
+    };
+    const s = buildExportSummary(input);
+    const warn = s.warnings.find((w) => w.level === 'error') ?? s.warnings.find((w) => w.level === 'warn');
+    this._summary.textContent = warn ? `${s.line} — ${warn.message}` : s.line;
+    this._summary.className = `olv-export-summary${warn ? ` is-${warn.level}` : ''}`;
+  }
+
+  /**
+   * The collapsed "Products" lane — derived artifacts kept out of the primary
+   * point-cloud save flow. Today it surfaces the measurement GeoJSON/CSV export;
+   * rasters / report / session will move here as they're wired. Renders nothing
+   * when the host wires no product callbacks.
+   */
+  private _renderProducts(): void {
+    this._products.replaceChildren();
+    if (!this._cb.exportMeasurements) return;
+    // Defensive: this runs during construction, before the host's lazy viewer
+    // resolves. A callback that throws (e.g. dereferencing a not-yet-ready
+    // viewer) must degrade to 0, never take down panel/app init.
+    let count = 0;
+    try {
+      count = this._cb.measurementCount?.() ?? 0;
+    } catch {
+      count = 0;
+    }
+
+    const head = el('button', {
+      className: 'olv-export-products-head',
+      type: 'button',
+      text: 'Products ▾',
+    });
+    const content = el('div', { className: 'olv-export-products-body olv-hidden' });
+    head.addEventListener('click', () => content.classList.toggle('olv-hidden'));
+
+    const row = el('div', { className: 'olv-bc-pills' });
+    ([['geojson', 'GeoJSON'], ['csv', 'CSV']] as const).forEach(([fmt, label]) => {
+      const btn = el('button', { className: 'olv-bc-pill', type: 'button', text: label }) as HTMLButtonElement;
+      btn.disabled = count === 0;
+      btn.addEventListener('click', () => this._cb.exportMeasurements?.(fmt));
+      row.append(btn);
+    });
+
+    const hint =
+      count === 0
+        ? 'Place measurements, then export them as open vector formats.'
+        : `${count} measurement${count === 1 ? '' : 's'} ready to export.`;
+    content.append(
+      this._label('Measurements'),
+      row,
+      el('span', { className: 'olv-export-fullres-hint', text: hint }),
+    );
+    this._products.append(head, content);
   }
 
   private _label(text: string): HTMLElement {
@@ -210,7 +380,12 @@ export class ExportPanel {
         pill.disabled = true;
         pill.title = 'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
       } else {
-        pill.addEventListener('click', () => { this._format = fmt; this._renderFormatPills(); });
+        pill.addEventListener('click', () => {
+          this._format = fmt;
+          this._renderFormatPills();
+          this._renderGzipRow();
+          this._renderSummary();
+        });
       }
       this._formatRow.append(pill);
     });
@@ -229,7 +404,12 @@ export class ExportPanel {
         text: label,
         type: 'button',
       });
-      pill.addEventListener('click', () => { this._crsMode = mode; this._renderCrsPills(); this._renderCrsExtra(); });
+      pill.addEventListener('click', () => {
+        this._crsMode = mode;
+        this._renderCrsPills();
+        this._renderCrsExtra();
+        this._renderSummary();
+      });
       this._crsRow.append(pill);
     });
   }
@@ -238,9 +418,9 @@ export class ExportPanel {
     this._crsExtra.replaceChildren();
     if (this._crsMode === 'keep') return;
     if (this._crsMode === 'reproject') {
-      this._crsExtra.append(this._field('Source EPSG (optional)', this._sourceEpsg, (v) => { this._sourceEpsg = v; }));
+      this._crsExtra.append(this._field('Source EPSG (optional)', this._sourceEpsg, (v) => { this._sourceEpsg = v; this._renderSummary(); }));
     }
-    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; }));
+    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; this._renderSummary(); }));
   }
 
   private _field(label: string, value: string, onInput: (v: string) => void): HTMLElement {
@@ -290,10 +470,14 @@ export class ExportPanel {
         crsMode: this._crsMode,
         targetEpsg: target,
         sourceEpsg: parseEpsg(this._sourceEpsg),
+        omitClassification: !this._includeClass,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {
-        downloadBytes(file.filename, file.bytes, file.mime);
+        // Gzip the written LAS to `.las.gz` when requested (binary LAS only).
+        const wantGzip = this._gzip && (this._format === 'las' || this._format === 'las14');
+        const out = wantGzip ? await gzipConvertedFile(file, true) : file;
+        downloadBytes(out.filename, out.bytes, out.mime);
         // ASCII keep-mode: also emit a `.prj` sidecar with the source WKT.
         const wkt = cloud.metadata?.crs?.wkt;
         if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && wkt) {

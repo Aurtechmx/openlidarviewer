@@ -218,15 +218,20 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     expect(row('Best for').length).toBeGreaterThan(0);
   });
 
-  it('Dataset Statistics carries the scan name, source point count, software + date', () => {
+  it('Dataset Statistics carries the scan name, ground-point counts, software + date', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
     const ds = c.sections.find((s) => s.title === 'Dataset Statistics')!;
     const text = ds.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
     expect(text).toMatch(/site-42/);
-    expect(text).toMatch(/1,200,000/); // source point count, grouped
+    expect(text).toMatch(/1,200,000/); // ground returns the DTM was built from, grouped
     expect(text).toMatch(/EPSG:32610/); // horizontal CRS
     expect(text).toMatch(/OpenLiDARViewer 9\.9\.9/);
     expect(text).toMatch(/2026-06-05/);
+    // Honesty: these are the ground/DTM counts, labelled as such — never a bare
+    // "Source points" that a client would read as the file's total point count.
+    expect(ds.rows.some((r) => r.label === 'Ground points')).toBe(true);
+    expect(ds.rows.some((r) => r.label === 'Used in DTM')).toBe(true);
+    expect(ds.rows.some((r) => r.label === 'Source points')).toBe(false);
   });
 
   it('Dataset Statistics carries the intelligence bucket labels only when supplied', () => {

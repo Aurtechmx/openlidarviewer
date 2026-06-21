@@ -84,10 +84,11 @@ describe('serializeContours — world origin threading', () => {
       crs?: { properties: { name: string } };
       features: Array<{
         properties: { elevation: number };
-        geometry: { coordinates: Array<[number, number]> };
+        geometry: { coordinates: number[][] };
       }>;
     };
-    expect(gj.features[0].geometry.coordinates[0]).toEqual([600002, 4000003]);
+    // Coordinate Z carries the WORLD elevation (10 + origin.z 120 = 130).
+    expect(gj.features[0].geometry.coordinates[0]).toEqual([600002, 4000003, 130]);
     expect(gj.features[0].properties.elevation).toBe(130);
     // World coordinates are honestly georeferenced.
     expect(gj.crs?.properties.name).toBe('urn:ogc:def:crs:EPSG::32610');
@@ -98,10 +99,11 @@ describe('serializeContours — world origin threading', () => {
     const gj = JSON.parse(f.content) as {
       crs?: unknown;
       metadata: { warnings: string[] };
-      features: Array<{ geometry: { coordinates: Array<[number, number]> } }>;
+      features: Array<{ geometry: { coordinates: number[][] } }>;
     };
-    // Geometry falls back to the local frame (current behaviour)…
-    expect(gj.features[0].geometry.coordinates[0]).toEqual([2, 3]);
+    // Geometry falls back to the local frame (current behaviour); Z is the
+    // local elevation (10).
+    expect(gj.features[0].geometry.coordinates[0]).toEqual([2, 3, 10]);
     // …but local coordinates must never be stamped with a real EPSG code.
     expect(gj.crs).toBeUndefined();
     expect(gj.metadata.warnings).toContain(LOCAL_FRAME_WARNING);
@@ -127,9 +129,9 @@ describe('serializeContours — world origin threading', () => {
     const f = serializeContours(model(), 'geojson', { worldOrigin: { x: 0, y: 0 } });
     const gj = JSON.parse(f.content) as {
       crs?: { properties: { name: string } };
-      features: Array<{ geometry: { coordinates: Array<[number, number]> } }>;
+      features: Array<{ geometry: { coordinates: number[][] } }>;
     };
-    expect(gj.features[0].geometry.coordinates[0]).toEqual([2, 3]);
+    expect(gj.features[0].geometry.coordinates[0]).toEqual([2, 3, 10]);
     expect(gj.crs?.properties.name).toBe('urn:ogc:def:crs:EPSG::32610');
   });
 });

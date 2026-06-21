@@ -130,6 +130,14 @@ export function convertCloud(
     }
   }
 
+  // Honesty guard — drop the classification channel when the user opts out
+  // (e.g. a derived/heuristic classification they don't want to ship as if it
+  // were a producer classification). Written as class 0 by the LAS writers.
+  if (opts.omitClassification && g.classification) {
+    g = { ...g, classification: undefined };
+    log.push({ level: 'info', message: 'Classification omitted at the user’s request — written as class 0.' });
+  }
+
   const geo = outEpsg != null ? isGeographicEpsg(outEpsg) : false;
   const filename = `${baseName(cloud.name)}.${spec.ext}`;
 

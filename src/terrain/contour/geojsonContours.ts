@@ -7,6 +7,11 @@
  * evidence grade, index flag, and confidence, so the recipient can style
  * or filter the uncertain spans rather than trusting one flat line.
  *
+ * Elevation is written into the coordinate Z (3D positions, RFC 7946's
+ * optional third element) AS WELL AS the `elevation` property — a 2D
+ * LineString with attribute-only elevation imports flat (every contour at
+ * Z=0) in 3D-aware GIS/CAD, which reads as "contours have no elevation".
+ *
  * CRS note (honest, documented): RFC 7946 assumes WGS84 lon/lat, but
  * LiDAR contours are in a projected CRS (UTM etc.). We emit the
  * coordinates in their native projected CRS and include the legacy
@@ -54,7 +59,12 @@ export function toGeoJSON(
     },
     geometry: {
       type: 'LineString',
-      coordinates: f.coordinates,
+      // 3D positions: elevation rides in the coordinate Z (RFC 7946's optional
+      // third element), NOT only in the `elevation` property. A 2D LineString
+      // with attribute-only elevation imports flat (every contour at Z=0) in
+      // 3D-aware GIS/CAD — "contours have no elevation". The property is kept
+      // for attribute-driven styling/labelling; the Z carries the real height.
+      coordinates: f.coordinates.map(([x, y]) => [x, y, f.value]),
     },
   }));
 

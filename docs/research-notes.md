@@ -4,13 +4,13 @@ OpenLiDARViewer is an experiment in one question: how far can modern browser tec
 
 ## What the project investigates
 
-It looks at browser-native point-cloud rendering, and how far a pure-browser pipeline can go for real LiDAR datasets without desktop GIS software. It explores a lightweight WebGL/WebGPU rendering path that targets both backends from one code base, including the trade-offs of the WebGPU point primitive, and screen-space depth cueing (Eye Dome Lighting) written once as a node graph that compiles to both backends. It studies human-centered point-cloud interaction, making 3D spatial data approachable through game-inspired navigation rather than GIS conventions. It tests local-first workflows that keep sensitive geospatial data on-device, with nothing uploaded. And it works on simpler interfaces for complex datasets, compressing scan metadata, quality reporting, styling, and measurement into one understandable panel.
+It looks at browser-native point-cloud rendering, and how far a pure-browser pipeline can go for real LiDAR datasets without desktop GIS software. It explores a lightweight WebGL/WebGPU rendering path that targets both backends from one code base, including the trade-offs of the WebGPU point primitive, and screen-space depth cueing (Eye Dome Lighting) written once as a node graph that compiles to both backends. It studies human-centered point-cloud interaction, making 3D spatial data approachable through game-inspired navigation rather than GIS conventions. It tests local-first workflows that keep data on-device, with nothing uploaded. And it works on simpler interfaces for complex datasets, compressing scan metadata, quality reporting, styling, and measurement into one understandable panel.
 
 Two practical threads run through all of that: scan metadata and quality visualization (point count, extent, density, spacing, attribute coverage, and integrity diagnostics), and measurement inside point clouds for documentation and research.
 
 ## Why a browser
 
-A browser viewer removes installation, platform, and licensing friction. It makes a scan about as easy to open as an image. And because the data never leaves the device, it keeps confidential survey data private. The cost is working inside browser memory limits and GPU capabilities, and that constraint shapes the project's performance and format roadmap.
+A browser viewer removes installation, platform, and licensing friction. It makes a scan about as easy to open as an image. And because the data never leaves the device, nothing is sent anywhere. The cost is working inside browser memory limits and GPU capabilities, and that constraint shapes the project's performance and format roadmap.
 
 ## Scope
 

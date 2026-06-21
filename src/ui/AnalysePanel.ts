@@ -101,6 +101,8 @@ import {
   type ScanTypeControl,
   type ScanTypeDisabledReasons,
 } from './scanTypeControl';
+import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFitness';
+import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -221,14 +223,13 @@ export class AnalysePanel {
   /** The panel element — append to the stage overlay (see main.ts). */
   readonly element: HTMLElement;
   private readonly _cb: AnalysePanelCallbacks;
-  private readonly _chipsRow: HTMLElement;
+  private readonly _fitnessRow: HTMLElement;
   private readonly _readinessRow: HTMLElement;
   private readonly _recommendRow: HTMLElement;
   private readonly _qualityRow: HTMLElement;
   private readonly _assessmentRow: HTMLElement;
   private readonly _scoreRow: HTMLElement;
   private readonly _surfaceRow: HTMLElement;
-  private readonly _coverageRow: HTMLElement;
   private readonly _validationRow: HTMLElement;
   private readonly _body: HTMLElement;
   private _result: AnalyseContoursResult | null = null;
@@ -317,11 +318,10 @@ export class AnalysePanel {
     this._assessmentRow = el('div', { className: 'olv-analyse-assessment' });
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
     this._surfaceRow = el('div', { className: 'olv-analyse-surface' });
-    this._chipsRow = el('div', { className: 'olv-analyse-chips' });
+    this._fitnessRow = el('div', { className: 'olv-analyse-fitness' });
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
     this._qualityRow = el('div', { className: 'olv-analyse-quality' });
-    this._coverageRow = el('div', { className: 'olv-analyse-coverage' });
     this._validationRow = el('div', { className: 'olv-analyse-validation' });
     this._body = el('div', { className: 'olv-analyse-body' });
     this._exportRow = this._buildExportRow();
@@ -340,17 +340,16 @@ export class AnalysePanel {
     details.append(
       summary,
       this._scoreRow,
-      this._chipsRow,
       section('DTM & contour readiness'),
       this._readinessRow,
       this._recommendRow,
       this._qualityRow,
-      section('Coverage & confidence'),
-      this._coverageRow,
+      section('Validation detail'),
       this._validationRow,
     );
 
     this._resultsRegion.append(
+      this._fitnessRow,
       this._assessmentRow,
       details,
       section('Surface models'),
@@ -418,13 +417,12 @@ export class AnalysePanel {
     this._runBtn.textContent = this._runLabel();
     this._runBtn.classList.toggle('is-rerun', has);
     if (!has) return;
+    this._renderFitness();
     this._renderAssessment();
     this._renderScore();
-    this._renderChips();
     this._renderReadiness();
     this._renderRecommend();
     this._renderQualityReasons();
-    this._renderCoverage();
     this._renderValidation();
     this._renderSurface();
     this._renderBody();
@@ -450,25 +448,13 @@ export class AnalysePanel {
     const tier = a.status.toLowerCase(); // good | preview | limited | blocked
     this._assessmentRow.className = `olv-analyse-assessment is-${tier}`;
 
-    const top = el('div', { className: 'olv-analyse-assess-top' });
-    // SURFACE QUALITY is the primary verdict. The score is folded in from the
-    // assessment (single source of truth) so the hero is the one headline, e.g.
-    // "Surface quality · Good · 84/100".
-    // A Preview score is computed on a PARTIAL / coarse sample (a streaming
-    // working set), so it's provisional — show it with a tilde ("~57/100") so a
-    // complete, perfectly good file doesn't read as if 57 were its real grade.
-    // A non-preview (Good/Limited/Blocked) score is over the full data and shows
-    // the exact number.
-    const approx = tier === 'preview' ? '~' : '';
-    const headline = a.scoreKnown && Number.isFinite(a.score)
-      ? `${a.status} · ${approx}${a.score}/100`
-      : a.status;
-    top.append(
-      el('span', { className: 'olv-analyse-assess-label', text: 'Surface quality' }),
-      el('span', { className: 'olv-analyse-assess-verdict', text: headline }),
-    );
-    this._assessmentRow.append(top);
-    this._assessmentRow.append(el('div', { className: 'olv-analyse-assess-reason', text: a.reason }));
+    // The surface-quality verdict + score + per-dimension breakdown now lead the
+    // panel in the Data Fitness scorecard (_renderFitness) — the single
+    // authoritative headline. This assessment block no longer repeats that hero;
+    // it carries only the things the scorecard doesn't: the Export-readiness
+    // axis, the per-deliverable Terrain Products list, the "Why?" causes, and the
+    // full metric breakdown. (The exact 0–100 score stays reachable in the
+    // collapsed Details disclosure below.)
 
     // EXPORT READINESS is the SECOND, distinct axis — surface quality gated by
     // a known CRS + vertical datum. Rendered on its own line with its reason so
@@ -649,7 +635,13 @@ export class AnalysePanel {
     // "Preview · ~54/100". A non-preview score keeps the exact number.
     const isPreview = terrainAssessment(this._result!).status.toLowerCase() === 'preview';
     const approx = isPreview ? '~' : '';
-    const bandText = isPreview ? `Terrain quality · ${qs.band} · preview` : `Terrain quality · ${qs.band}`;
+    // The single fitness verdict (Good / Preview / Limited / Blocked) lives in the
+    // hero above. This breakdown must NOT assert a second, competing adjective:
+    // the 0–100 band ("good" ≥60) and the gate-driven fitness status judge
+    // different things, so stamping "good" next to a "Limited" hero reads as a
+    // contradiction on the same number. Label this neutrally as the composite
+    // score; the tier still drives the colour, and the preview tilde is kept.
+    const bandText = isPreview ? 'Composite score · preview' : 'Composite score';
     const head = el('div', { className: 'olv-analyse-score-head' });
     head.append(
       el('span', { className: `olv-analyse-score-num is-${qs.band}`, text: `${approx}${qs.score}` }),
@@ -661,24 +653,11 @@ export class AnalysePanel {
         'Provisional — scored on the streamed-in sample so far. Let the full cloud stream in, then re-run for a settled grade.';
     }
     this._scoreRow.append(head);
-    const bars = el('div', { className: 'olv-analyse-score-bars' });
-    for (const c of qs.components) {
-      const row = el('div', { className: 'olv-analyse-score-comp' });
-      const track = el('div', { className: 'olv-analyse-score-track' });
-      const fill = el('div', { className: 'olv-analyse-score-fill' });
-      fill.style.width = `${Math.round(c.score * 100)}%`;
-      track.append(fill);
-      row.append(
-        el('span', { className: 'olv-analyse-score-label', text: c.label }),
-        track,
-        el('span', {
-          className: `olv-analyse-score-pct${c.neutral ? ' is-neutral' : ''}`,
-          text: c.neutral ? 'n/a' : `${Math.round(c.score * 100)}%`,
-        }),
-      );
-      bars.append(row);
-    }
-    this._scoreRow.append(bars);
+    // The six weighted COMPONENTS (Coverage / Confidence / Validation / Density /
+    // Edge / Ground) are the same axes the Data Fitness scorecard above already
+    // shows as plain-language traffic-light rows — so the bar breakdown is no
+    // longer rendered here. This drill-down keeps only the single composite
+    // number; the scorecard owns the per-dimension view.
   }
 
   /**
@@ -2020,37 +1999,72 @@ export class AnalysePanel {
     return wrap;
   }
 
-  /** Honesty status chips (Coverage / DTM / CRS / Datum / Export). */
-  private _renderChips(): void {
-    this._chipsRow.replaceChildren();
-    const q = this._result!.quality;
-    type Tone = 'good' | 'warn' | 'bad';
-    const tri = (ok: boolean, warn = false): Tone => (ok ? 'good' : warn ? 'warn' : 'bad');
-    const coverage =
-      q.coverageMode === 'full' ? 'Full' : q.coverageMode === 'resident-only' ? 'Resident nodes' : 'Sampled';
-    const dtm = q.readiness === 'ready' ? 'Ready' : q.readiness === 'previewOnly' ? 'Preview' : 'Blocked';
-    const exp =
-      q.exportReadiness === 'available' ? 'Available' : q.exportReadiness === 'previewOnly' ? 'Preview only' : 'Blocked';
-    // Optional 4th tuple entry is a plain-language hover hint for the
-    // jargon chips (CRS / Datum), reused from contourCopy so the wording
-    // is single-sourced and consistent with the Details metrics above.
-    const chips: Array<[string, string, Tone, string?]> = [
-      ['Scan scope', coverage, tri(q.coverageMode === 'full', true)],
-      ['DTM', dtm, q.readiness === 'ready' ? 'good' : q.readiness === 'previewOnly' ? 'warn' : 'bad'],
-      ['CRS', q.crsKnown ? 'Known' : 'Unknown', tri(q.crsKnown, true), METRIC_TOOLTIPS.crs],
-      ['Datum', q.datumKnown ? 'Known' : 'Unknown', tri(q.datumKnown, true), METRIC_TOOLTIPS.verticalDatum],
-      ['Export', exp, q.exportReadiness === 'available' ? 'good' : q.exportReadiness === 'previewOnly' ? 'warn' : 'bad'],
-    ];
-    for (const [k, v, tone, tip] of chips) {
-      const chip = el('span', { className: `olv-analyse-chip is-${tone}` });
-      if (tip) this._hint(chip, tip);
-      chip.append(
-        el('span', { className: 'olv-analyse-chip-k', text: k }),
-        el('span', { className: 'olv-analyse-chip-v', text: v }),
+  /**
+   * The verdict-led "Data Fitness" scorecard: ONE plain verdict + a six-row
+   * traffic-light scorecard (friendly metaphor icon + shape-distinct tone glyph
+   * + plain summary) + the non-hideable caveats. Sourced from the same result
+   * the panel already computes — no new analysis.
+   */
+  private _renderFitness(): void {
+    this._fitnessRow.replaceChildren();
+    const r = this._result;
+    if (!r) return;
+    const a = terrainAssessment(r);
+    const t = r.cellStatusTally;
+    const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
+    const ql = r.accuracyStandards.qualityLevel;
+    const hasClass = r.excludedByClassification > 0;
+    const inputs: FitnessInputs = {
+      status: a.status,
+      score: a.scoreKnown ? a.score : null,
+      crsKnown: !!r.quality.crsKnown,
+      datumKnown: !!r.quality.datumKnown,
+      crsName: r.dtm.crs,
+      datumName: r.dtm.verticalDatum,
+      measuredFraction: covered > 0 ? t.measured / covered : null,
+      groundDensityPerM2: Number.isFinite(r.cellMetrics.meanDensity) ? r.cellMetrics.meanDensity : null,
+      verticalRmse: Number.isFinite(r.validation.rmse) ? r.validation.rmse : null,
+      notSurveyGrade: true,
+      unit: 'm',
+      unitToMetres: 1,
+      // The contour result doesn't carry the full class histogram; the presence
+      // of classified returns dropped before ground filtering tells us the
+      // source WAS classified (else ground was derived).
+      unclassifiedFraction: hasClass ? 0 : null,
+      hasGroundClass: hasClass,
+      coverageMode: r.dtm.coverageMode,
+      qualityLevel: ql !== 'unknown' ? ql : null,
+    };
+    const f = buildScanFitness(inputs);
+
+    const hero = el('div', { className: `olv-fit-verdict is-${f.overallTone}${f.provisional ? ' is-provisional' : ''}` });
+    hero.append(el('span', { className: 'olv-fit-verdict-text', text: f.verdict }));
+    if (f.tierBadge) hero.append(el('span', { className: 'olv-fit-badge', text: f.tierBadge }));
+    this._fitnessRow.append(hero);
+
+    const grid = el('div', { className: 'olv-fit-grid' });
+    for (const d of f.dimensions) {
+      const row = el('div', { className: `olv-fit-row is-${d.tone}` });
+      const ico = el('span', { className: 'olv-fit-ico' });
+      ico.innerHTML = fitnessIcon(d.key);
+      const tone = el('span', { className: 'olv-fit-tone' });
+      tone.innerHTML = fitnessToneGlyph(d.tone);
+      row.append(
+        ico,
+        el('span', { className: 'olv-fit-label', text: d.label }),
+        tone,
+        el('span', { className: 'olv-fit-sum', text: d.summary }),
       );
-      this._chipsRow.append(chip);
+      this._hint(row, d.summary);
+      grid.append(row);
+    }
+    this._fitnessRow.append(grid);
+
+    for (const c of f.caveats) {
+      this._fitnessRow.append(el('div', { className: 'olv-fit-caveat', text: c }));
     }
   }
+
 
   private _renderRecommend(): void {
     this._recommendRow.replaceChildren();
@@ -2068,20 +2082,6 @@ export class AnalysePanel {
     }
   }
 
-  private _renderCoverage(): void {
-    this._coverageRow.replaceChildren();
-    const r = this._result!;
-    const t = r.cellStatusTally;
-    const total = t.total > 0 ? t.total : 1;
-    const p = (n: number) => `${Math.round((100 * n) / total)}%`;
-    const interp = t.interpolated + t.lowConfidence + t.edgeRisk;
-    const conf = Number.isFinite(r.dtm.meanConfidence) ? `${Math.round(r.dtm.meanConfidence)}%` : '—';
-    const rmse = Number.isFinite(r.validation.rmse) ? `${r.validation.rmse.toFixed(2)} m` : '—';
-    this._coverageRow.append(
-      el('div', { className: 'olv-analyse-cov', text: `Measured ${p(t.measured)} · Interpolated ${p(interp)} · Empty ${p(t.empty)}` }),
-      el('div', { className: 'olv-analyse-cov', text: `Mean confidence ${conf} · Vertical RMSE ${rmse}` }),
-    );
-  }
 
   /** Enable/disable export by the quality gate; set the note + legend. */
   private _renderExportGate(): void {

@@ -28,6 +28,12 @@ import type { ScanSignals } from './provenance';
 export interface StaticCloudShape {
   readonly sourceFormat: string;
   readonly pointCount: number;
+  /**
+   * The file's declared total, when larger than `pointCount` (the loader strides
+   * huge clouds for display). Used so the capture-type density reflects the file,
+   * not the rendered subset — matching the Scan Report and inspection PDF.
+   */
+  readonly declaredPointCount?: number;
   /** PointCloud.bounds is a method — not an object. */
   readonly bounds?: () => {
     readonly min: readonly [number, number, number];
@@ -69,13 +75,19 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
       extent = undefined;
     }
   }
+  // File scale: prefer the declared total over the strided display count so the
+  // density (and the capture-type call it drives) describes the whole file.
+  const fileN =
+    cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount
+      ? cloud.declaredPointCount
+      : cloud.pointCount;
   const density =
     extent && extent[0] > 0 && extent[1] > 0
-      ? cloud.pointCount / (extent[0] * extent[1])
+      ? fileN / (extent[0] * extent[1])
       : undefined;
   return {
     sourceFormat: cloud.sourceFormat,
-    pointCount: cloud.pointCount,
+    pointCount: fileN,
     extent,
     densityPerSqM: density,
     sensorString: cloud.metadata?.captureSensor,

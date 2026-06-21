@@ -319,9 +319,27 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       ]);
     }
 
-    // TLS — dense, small to medium extent, often millions of points per
-    // scan station.
-    if (signals.densityPerSqM > 100 && footprintArea > 100 && signals.pointCount > 1_000_000) {
+    // UAV / drone ALS — modern low-altitude drone LiDAR (DJI Zenmuse L1/L2,
+    // RIEGL miniVUX) maps a site at 100–1000 pts/m²: far denser than manned ALS,
+    // yet spread over an open mapping footprint rather than a single TLS station.
+    // This band has to come before TLS, or a dense aerial strip falls through to
+    // it. Source: Ruzgienė 2025 (Frontiers in Remote Sensing) — drone-LiDAR
+    // "100–1000 pts/m² depending on altitude + flight pattern".
+    if (signals.densityPerSqM >= 50 && signals.densityPerSqM <= 2000 && footprintArea > 2000) {
+      return droneLidarFingerprint('medium', [
+        `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${(footprintArea / 10000).toFixed(2)} ha mapping footprint`,
+      ]);
+    }
+
+    // TLS — dense over a SMALL footprint (a single station / façade / outcrop),
+    // often millions of points. A dense *large* footprint is drone (above), so
+    // this stays bounded to station scale to avoid mislabelling aerial surveys.
+    if (
+      signals.densityPerSqM > 100 &&
+      footprintArea > 100 &&
+      footprintArea <= 2000 &&
+      signals.pointCount > 1_000_000
+    ) {
       return terrestrialFingerprint('medium', [
         `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² with ${signals.pointCount.toLocaleString()} points`,
       ]);

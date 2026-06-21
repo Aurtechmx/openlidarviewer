@@ -93,7 +93,7 @@ export interface EmbedBridgeOptions {
   /**
    * Target origin for the outbound `ready` ping. The default is `'*'`
    * (broadcast to any parent) because the message payload is just
-   * the source tag and version — non-sensitive. Stricter deployments
+   * the source tag and version only. Stricter deployments
    * should pass a configured parent origin (e.g.
    * `'https://embed.example.com'`) so the ping is only delivered to
    * the expected host.

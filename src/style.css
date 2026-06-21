@@ -5112,7 +5112,9 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* ── Analyse panel (terrain readiness + contours) — v0.4.0 ──────────────── */
 .olv-analyse-panel {
-  width: 248px; box-sizing: border-box;
+  /* Desktop column ~15% wider (was 248px) to fit the verdict + scorecard rows
+     without wrapping. Mobile overrides to width:auto in the 767px block. */
+  width: 285px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl); min-width: 0;
 }
@@ -5328,20 +5330,75 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   border-top: 0.5px solid var(--hairline); padding-top: var(--space-md);
 }
 /* Honesty status chips. */
-.olv-analyse-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-xs); }
-.olv-analyse-chip {
-  display: inline-flex; align-items: baseline; gap: var(--space-xs);
-  font-size: var(--text-2xs); padding: var(--space-2xs) var(--space-md); border-radius: var(--radius-pill);
+
+/* Georeferencing status — the plain-language "anchored to the real world?"
+   element that replaces the jargon CRS/Datum chips. A small schematic glyph
+   (marker over a ground line) + a headline + the Position/Height facts. Muted
+   tones only — a missing CRS is a neutral fact, never an error red. */
+.olv-georef {
+  display: flex; align-items: center; gap: var(--space-sm);
+  /* Own region: the georef status is a different CLASS of element than the small
+     status pills, so it takes its own full-width row above them (Gestalt
+     similarity/continuity — don't mix a 2-line glyph card into the pill row).
+     The extra bottom margin is the loose between-group whitespace. */
+  flex-basis: 100%;
+  margin-bottom: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-sm); border-radius: var(--radius-md);
   border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
 }
-.olv-analyse-chip-k { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
-.olv-analyse-chip-v { color: var(--text); font-weight: 600; }
-.olv-analyse-chip.is-good { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
-.olv-analyse-chip.is-good .olv-analyse-chip-v { color: var(--rating-excellent); }
-.olv-analyse-chip.is-warn { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
-.olv-analyse-chip.is-warn .olv-analyse-chip-v { color: var(--rating-good); }
-.olv-analyse-chip.is-bad { border-color: color-mix(in srgb, var(--rating-weak) 45%, transparent); }
-.olv-analyse-chip.is-bad .olv-analyse-chip-v { color: var(--rating-weak); }
+.olv-georef-glyph { display: inline-flex; flex: 0 0 auto; color: var(--text-faint); }
+.olv-georef-glyph svg { display: block; }
+.olv-georef-text { display: flex; flex-direction: column; line-height: 1.25; }
+.olv-georef-headline { font-size: var(--text-2xs); font-weight: 600; color: var(--text); }
+.olv-georef-facts { font-size: var(--text-2xs); color: var(--text-faint); }
+/* Tone = consequence, not fault: anchored reads positive, partial cautions,
+   floating is a calm neutral (grey) — never the error red used for failures. */
+.olv-georef.is-anchored { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
+.olv-georef.is-anchored .olv-georef-glyph { color: var(--rating-excellent); }
+.olv-georef.is-partial { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
+.olv-georef.is-partial .olv-georef-glyph { color: var(--rating-good); }
+.olv-georef.is-floating { border-color: var(--hairline); }
+.olv-georef.is-floating .olv-georef-glyph { color: var(--text-faint); }
+
+/* ── Data Fitness scorecard — verdict-led panel (one verdict + traffic-light
+   rows with friendly metaphor icons + shape-distinct tone glyphs). ─────────── */
+.olv-analyse-fitness { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); }
+.olv-fit-verdict {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-xs);
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+  padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03); border-left: 3px solid var(--hairline);
+}
+.olv-fit-verdict.is-ready { border-left-color: var(--rating-excellent); }
+.olv-fit-verdict.is-okay { border-left-color: var(--rating-good); }
+.olv-fit-verdict.is-review { border-left-color: var(--rating-weak); }
+.olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
+.olv-fit-badge {
+  flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 1px var(--space-xs); border-radius: var(--radius-sm);
+}
+.olv-fit-grid { display: flex; flex-direction: column; }
+.olv-fit-row {
+  display: grid; grid-template-columns: 18px 1fr auto; grid-template-rows: auto auto;
+  align-items: center; column-gap: var(--space-sm); row-gap: 1px;
+  padding: var(--space-xs) 0; border-top: 0.5px solid var(--hairline);
+}
+.olv-fit-ico { grid-row: 1 / 3; grid-column: 1; color: var(--text-faint); display: inline-flex; }
+.olv-fit-ico svg { width: 18px; height: 18px; display: block; }
+.olv-fit-label { grid-row: 1; grid-column: 2; font-size: var(--text-xs); font-weight: 600; color: var(--text); }
+/* Tone glyph (check / dash / triangle) — colour AND shape carry the state. */
+.olv-fit-tone { grid-row: 1; grid-column: 3; display: inline-flex; }
+.olv-fit-tone svg { width: 15px; height: 15px; display: block; }
+.olv-fit-row.is-ready .olv-fit-tone { color: var(--rating-excellent); }
+.olv-fit-row.is-okay .olv-fit-tone { color: var(--rating-good); }
+.olv-fit-row.is-review .olv-fit-tone { color: var(--rating-weak); }
+.olv-fit-sum { grid-row: 2; grid-column: 2 / 4; font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.35; }
+.olv-fit-caveat {
+  font-size: var(--text-2xs); color: var(--rating-good); line-height: 1.4;
+  padding-left: var(--space-md); position: relative;
+}
+.olv-fit-caveat::before { content: '⚠'; position: absolute; left: 0; }
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
@@ -5359,8 +5416,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   border-radius: 2px; line-height: 1.45;
 }
 /* Coverage & confidence. */
-.olv-analyse-coverage { display: flex; flex-direction: column; gap: var(--space-2xs); }
-.olv-analyse-cov { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); }
 /* Export gate note — honest limit, rides the caveat primitive (v0.4.6). */
 .olv-analyse-export-note {
   font-size: var(--text-2xs); color: var(--text-dim); margin: var(--space-xs) 0 0; overflow-wrap: anywhere;
@@ -5557,6 +5612,18 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-export-status { font-size: var(--text-xs); color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }
 .olv-export-status.is-warn { color: var(--rating-moderate); }
 .olv-export-status.is-error { color: var(--rating-weak); }
+/* Live "what you'll get" line — size · format · CRS · classification, before any write. */
+.olv-export-summary { font-size: var(--text-xs); color: var(--text-bright); margin: var(--space-sm) 0 var(--space-xs); line-height: 1.45; }
+.olv-export-summary:empty { display: none; }
+.olv-export-summary.is-warn { color: var(--rating-moderate); }
+.olv-export-summary.is-error { color: var(--rating-weak); }
+/* Collapsed "Products" lane — derived artifacts (measurement GeoJSON/CSV, …). */
+.olv-export-products { margin-top: var(--space-sm); border-top: 1px solid var(--border-subtle); padding-top: var(--space-sm); }
+.olv-export-products:empty { display: none; border: 0; padding: 0; margin: 0; }
+.olv-export-products-head { background: none; border: 0; color: var(--text-dim); font-size: var(--text-xs); font-weight: 600; cursor: pointer; padding: 0; }
+.olv-export-products-head:hover { color: var(--text-bright); }
+.olv-export-products-body { margin-top: var(--space-xs); }
+.olv-export-products-body.olv-hidden { display: none; }
 /* One-line note shown in place of the CRS step when the scan is ungeoreferenced. */
 .olv-export-crs-note { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; margin: var(--space-2xs) 0 0; }
 @media (max-width: 767px) { .olv-export-panel { width: auto; } }
@@ -5919,13 +5986,6 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-score-band.is-good { color: var(--rating-good); }
 .olv-analyse-score-band.is-fair { color: var(--rating-moderate); }
 .olv-analyse-score-band.is-poor { color: var(--rating-weak); }
-.olv-analyse-score-bars { display: flex; flex-direction: column; gap: var(--space-xs); }
-.olv-analyse-score-comp { display: flex; align-items: center; gap: var(--space-sm); }
-.olv-analyse-score-label { flex: 0 0 84px; font-size: var(--text-2xs); color: var(--text-dim); }
-.olv-analyse-score-track { flex: 1; height: 4px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.olv-analyse-score-fill { height: 100%; border-radius: var(--radius-pill); background: var(--brand-gradient); }
-.olv-analyse-score-pct { flex: 0 0 34px; text-align: right; font-size: var(--text-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.olv-analyse-score-pct.is-neutral { color: var(--text-faint); font-style: italic; }
 
 /* Surface models section in the Analyse panel (DSM / slope / hillshade). */
 .olv-analyse-surface { display: flex; flex-direction: column; gap: var(--space-sm); }

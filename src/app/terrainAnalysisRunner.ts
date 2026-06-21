@@ -75,7 +75,10 @@ function deriveCoreParams(
     cellSizeM,
     crs: crsName,
     isGeographic: cur?.kind === 'geographic',
-    verticalUnitToMetres: cur?.linearUnitToMetres ?? 1,
+    // Elevation converts by the Z-axis's OWN unit when the file declares one
+    // (e.g. feet height over a metre grid); otherwise it follows the horizontal
+    // unit — the GeoTIFF default that vertical units track the model's units.
+    verticalUnitToMetres: cur?.verticalUnitToMetres ?? cur?.linearUnitToMetres ?? 1,
     horizontalUnitToMetres: cur?.linearUnitToMetres ?? 1,
     verticalDatum: cur?.verticalDatum ?? null,
     classification,

@@ -130,6 +130,16 @@ const RAW_INNERHTML_ALLOWLIST: readonly string[] = [
   // one of two module-level literal SVG constants (ICON_ENTER / ICON_EXIT).
   // Zero interpolation, no user data. (hand-verified 2026-06-14)
   'src/ui/FullscreenToggle.ts::innerHTML = fs ?',
+  // src/ui/AnalysePanel.ts — the georeferencing-status glyph. The argument is
+  // `georefGlyphSvg(q.crsKnown, q.datumKnown)`: a pure function of two BOOLEANS
+  // that returns a fixed inline SVG (no CRS/datum names, no scan/file strings).
+  // The panel's local `el()` has no unsafeHtml funnel, so the assignment is raw.
+  // src/ui/AnalysePanel.ts — the Data Fitness scorecard icons. Both arguments
+  // are pure functions of a closed enum key (`fitnessIcon(d.key)` /
+  // `fitnessToneGlyph(d.tone)`) returning a fixed inline SVG from a module-level
+  // Record of literals — no scan/file/user strings. (hand-verified 2026-06-20)
+  'src/ui/AnalysePanel.ts::ico.innerHTML = fitnessIcon',
+  'src/ui/AnalysePanel.ts::tone.innerHTML = fitnessToneGlyph',
 ];
 
 const GUIDANCE =

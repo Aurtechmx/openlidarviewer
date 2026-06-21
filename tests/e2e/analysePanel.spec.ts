@@ -78,25 +78,28 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
     timeout: 20_000,
   });
 
-  // The top-level Terrain Assessment hero leads, with the verdict + folded
-  // 0–100 score (e.g. "Preview · 64/100").
-  const verdict = page.locator('.olv-analyse-assess-verdict');
+  // The Data Fitness scorecard leads: one plain-language verdict + the six
+  // traffic-light dimension rows (each a metaphor icon + label + tone glyph).
+  const verdict = page.locator('.olv-fit-verdict-text');
   await expect(verdict).toBeVisible();
-  // A Preview-tier score is provisional and renders with a leading "~"
-  // (e.g. "Preview · ~83/100"); Good/Limited show the exact number.
-  await expect(verdict).toContainText(/(Good|Preview|Limited)\s*·\s*~?\d{1,3}\/100/);
+  await expect(verdict).toContainText(/Ready|Usable|Limited|Preview|Not usable|streaming/i);
+  expect(await page.locator('.olv-fit-row').count()).toBe(6);
+  // Georeferencing is the scorecard's "Location & height" row (it replaced the
+  // old jargon CRS/Datum chips).
+  await expect(page.locator('.olv-fit-label', { hasText: 'Location & height' })).toBeVisible();
 
   // Detailed metrics are behind the Details expander — open it, then assert.
   await page.locator('.olv-analyse-details-summary').click();
-  // Composite terrain quality score: a 0–100 number + weighted bars.
+  // Composite terrain quality score: a single 0–100 number (the exact score now
+  // lives here, demoted out of the hero; the per-dimension breakdown is the
+  // scorecard above, so the old weighted bars are gone).
   await expect(page.locator('.olv-analyse-score-num')).toBeVisible();
   await expect(page.locator('.olv-analyse-score-num')).toHaveText(/^~?\d{1,3}$/);
-  expect(await page.locator('.olv-analyse-score-comp').count()).toBe(6);
-  // Honesty status chips. (The scan-scope chip was renamed from "Coverage" to
-  // "Scan scope" so it no longer collides with the measured-coverage figure.)
-  await expect(page.locator('.olv-analyse-chip', { hasText: 'Scan scope' })).toBeVisible();
-  await expect(page.locator('.olv-analyse-chip', { hasText: 'CRS' })).toBeVisible();
-  await expect(page.locator('.olv-analyse-chip', { hasText: 'Export' })).toBeVisible();
+  expect(await page.locator('.olv-analyse-score-comp').count()).toBe(0);
+  // The status-chip row was retired in the de-dup: scan scope is the scorecard's
+  // Integrity row, export is the always-visible Export-readiness line, and the
+  // DTM gate is the verdict tier — so the chips no longer duplicate them.
+  expect(await page.locator('.olv-analyse-chip').count()).toBe(0);
 
   // Surface models (outside Details): stats + raster preview tiles (canopy
   // height + relief), each with a click-to-sample readout and PNG export.

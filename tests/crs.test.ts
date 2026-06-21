@@ -14,6 +14,7 @@
 import { test, expect } from 'vitest';
 import {
   crsFromWkt,
+  crsFromEpsg,
   linearUnitLabel,
   parseCrsFromVlrs,
   toMetres,
@@ -109,6 +110,28 @@ test('crsFromWkt — COMPD_CS: horizontal survey-foot unit beats vertical metres
   expect(crs.linearUnit).toBe('us-survey-foot');
   expect(crs.linearUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
   // The vertical datum is still parsed from the vertical block.
+  expect(crs.verticalDatum).toContain('NAVD88');
+  // …and the Z-axis unit is read from the vertical block (metres here) SEPARATELY
+  // from the horizontal foot unit — so elevation converts by its own unit.
+  expect(crs.verticalLinearUnit).toBe('metre');
+  expect(crs.verticalUnitToMetres).toBe(1);
+});
+
+// Reverse cross-unit case: metre grid + NAVD88 height in US survey feet.
+const COMPD_M_NAVD88_FTUS_WKT =
+  'COMPD_CS["WGS 84 / UTM 12N + NAVD88 height (ftUS)",' +
+  'PROJCS["WGS 84 / UTM zone 12N",GEOGCS["WGS 84",DATUM["WGS_1984"],' +
+  'UNIT["degree",0.0174532925199433]],UNIT["metre",1],AUTHORITY["EPSG","32612"]],' +
+  'VERT_CS["NAVD88 height (ftUS)",VERT_DATUM["NAVD88",2005],' +
+  'UNIT["US survey foot",0.3048006096012192,AUTHORITY["EPSG","9003"]],' +
+  'AUTHORITY["EPSG","6360"]]]';
+
+test('crsFromWkt — vertical UNIT in survey feet over a metre grid is read on its own', () => {
+  const crs = crsFromWkt(COMPD_M_NAVD88_FTUS_WKT);
+  expect(crs.linearUnit).toBe('metre'); // horizontal grid is metres
+  expect(crs.linearUnitToMetres).toBe(1);
+  expect(crs.verticalLinearUnit).toBe('us-survey-foot'); // Z is feet
+  expect(crs.verticalUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
   expect(crs.verticalDatum).toContain('NAVD88');
 });
 
@@ -226,4 +249,42 @@ test('linearUnitLabel covers every variant with a short label', () => {
   expect(linearUnitLabel('foot')).toBe('international ft');
   expect(linearUnitLabel('us-survey-foot')).toBe('US survey ft');
   expect(linearUnitLabel('unknown')).toBe('unknown');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// crsFromEpsg — code-based CRS (EPT srs without WKT)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('crsFromEpsg — projected code defaults to metres, carries the EPSG', () => {
+  const c = crsFromEpsg(32612);
+  expect(c.source).toBe('epsg');
+  expect(c.epsg).toBe(32612);
+  expect(c.name).toBe('EPSG:32612');
+  expect(c.isGeographic).toBe(false);
+  expect(c.linearUnit).toBe('metre');
+  expect(c.linearUnitToMetres).toBe(1);
+  expect(c.verticalDatum).toBeUndefined();
+});
+
+test('crsFromEpsg — geographic code reports degrees (unit unknown)', () => {
+  const c = crsFromEpsg(4326, { isGeographic: true });
+  expect(c.isGeographic).toBe(true);
+  expect(c.linearUnit).toBe('unknown');
+});
+
+test('crsFromEpsg — a real vertical code resolves to a known datum name', () => {
+  const c = crsFromEpsg(32612, { verticalEpsg: 5703 });
+  expect(c.verticalEpsg).toBe(5703);
+  expect(c.verticalDatum).toBe('NAVD88');
+});
+
+test('crsFromEpsg — an unknown vertical code falls back to EPSG:<code>', () => {
+  const c = crsFromEpsg(32612, { verticalEpsg: 9999 });
+  expect(c.verticalEpsg).toBe(9999);
+  expect(c.verticalDatum).toBe('EPSG:9999');
+});
+
+test('crsFromEpsg — placeholder vertical codes (0 / 32767) are rejected', () => {
+  expect(crsFromEpsg(32612, { verticalEpsg: 0 }).verticalDatum).toBeUndefined();
+  expect(crsFromEpsg(32612, { verticalEpsg: 32767 }).verticalDatum).toBeUndefined();
 });
