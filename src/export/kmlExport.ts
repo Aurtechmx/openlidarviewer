@@ -50,8 +50,12 @@ export interface KmlExportInput {
   readonly viewpoints: readonly KmlViewpoint[];
   /** CRS label, surfaced in the document + every feature description. */
   readonly crsName: string | null;
-  /** Unit label for measured values (e.g. "m"), carried into descriptions. */
+  /** Unit label for the reported metric values (always metres here, "m"). */
   readonly unitLabel: string;
+  /** World up vector for the height / grade / slope derivations (parity with the GeoJSON/CSV path). */
+  readonly up: Vec3;
+  /** Render-units → metres, so measured values report true metres (1 for metric scans; e.g. 0.3048 for US-foot). */
+  readonly unitToMetres: number;
   /** Map a LOCAL render-space point to geographic [lon, lat, altMetres]. */
   readonly toLonLat: (local: readonly [number, number, number]) => [number, number, number];
   /** The "not survey-grade" caveat, embedded in every description. */
@@ -118,12 +122,16 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
   ].join('');
 }
 
-/** A human-readable line of the measurement's derived metrics, in metres. */
-function metricsLine(m: Measurement, unitLabel: string): string {
-  const metrics = measurementMetrics(m, [0, 0, 1], 1);
+/**
+ * A human-readable line of the measurement's derived metrics, in METRES.
+ * Uses the caller's world up + unit scale (parity with the GeoJSON/CSV path),
+ * so a foot-based scan reports true metres rather than raw render units.
+ */
+function metricsLine(m: Measurement, input: KmlExportInput): string {
+  const metrics = measurementMetrics(m, input.up, input.unitToMetres);
   const parts = Object.entries(metrics).map(([k, v]) => `${k}=${v}`);
   if (parts.length === 0) return '';
-  return `Measured (${unitLabel}): ${parts.join(', ')}`;
+  return `Measured (${input.unitLabel}): ${parts.join(', ')}`;
 }
 
 /** Area-like kinds become a closed <Polygon>; everything else a <LineString>. */
@@ -134,7 +142,7 @@ function isAreaKind(kind: Measurement['kind']): boolean {
 /** One measurement → a <LineString> or <Polygon> placemark, or null. */
 function measurementPlacemark(m: Measurement, input: KmlExportInput): string | null {
   if (!isComplete(m)) return null;
-  const lines = [metricsLine(m, input.unitLabel), `Kind: ${m.kind}`, caveatBlock(input)];
+  const lines = [metricsLine(m, input), `Kind: ${m.kind}`, caveatBlock(input)];
   const desc = description(lines);
 
   if (isAreaKind(m.kind)) {

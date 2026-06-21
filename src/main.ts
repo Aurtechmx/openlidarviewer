@@ -84,6 +84,8 @@ import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import { measurementsToGeoJSON, measurementsToCsv, type MeasurementExportContext } from './export/measurementExport';
+import { buildKml, type KmlExportInput } from './export/kmlExport';
+import { utmConverter } from './geo/UtmConverter';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -2465,11 +2467,103 @@ const exportPanel = new ExportPanel({
     const stem = cloud ? baseName(cloud.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
+  exportKml: () => {
+    if (!viewer) return;
+    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    const origin = cloud?.origin ?? [0, 0, 0];
+    const toLonLat = makeLocalToLonLat(crsService.current(), origin);
+    if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
+    const input: KmlExportInput = {
+      annotations: viewer.annotate.getAnnotations(),
+      measurements: viewer.measure.getMeasurements(),
+      // Saved views become <LookAt> placemarks — same LOCAL render frame as the
+      // measurements, so the injected transform places them correctly.
+      viewpoints: savedViews.map((v) => ({
+        name: v.name,
+        position: v.pose.position,
+        target: v.pose.target,
+      })),
+      crsName: cloud?.metadata?.crs?.name ?? crsService.current()?.name ?? null,
+      // The exporter reports metres (keys end in _m); unitToMetres scales render
+      // units, so the label is always metres.
+      unitLabel: 'm',
+      up: viewer.measure.worldUp,
+      unitToMetres: viewer.measure.unitToMetres,
+      toLonLat,
+      notSurveyGradeNote:
+        'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',
+    };
+    const stem = cloud ? baseName(cloud.name) : 'site';
+    downloadText(`${stem}.kml`, buildKml(input));
+  },
+  kmlStatus: () => {
+    if (!viewer) return { ready: false, reason: 'Open a scan first.' };
+    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    if (!cloud) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
+    const features =
+      viewer.measure.getMeasurements().length + viewer.annotate.getAnnotations().length;
+    if (features === 0) {
+      return { ready: false, reason: 'Add a measurement or annotation to place on the map.' };
+    }
+    const resolved = crsService.current();
+    if (!crsIsKnown(resolved)) {
+      return {
+        ready: false,
+        reason: 'KML needs a georeferenced scan (it places features on a lat/lon map).',
+      };
+    }
+    if (!makeLocalToLonLat(resolved, cloud.origin ?? [0, 0, 0])) {
+      return {
+        ready: false,
+        reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
+      };
+    }
+    return { ready: true, reason: '' };
+  },
 });
 
 /** True when the resolved CRS is a real-world frame (projected / geographic). */
 function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
   return resolved != null && (resolved.kind === 'projected' || resolved.kind === 'geographic');
+}
+
+/**
+ * Build a LOCAL render-space → geographic [lon, lat, altMetres] transform for
+ * the active scan, or null when the resolved CRS can't be taken to lat/lon —
+ * a local/unknown scan, or a projected CRS the vendored converter doesn't cover
+ * (no silent fallback; the KML option is declined honestly instead).
+ *
+ * Measurement / annotation points are LOCAL (recentered); adding the origin back
+ * lands them in the source frame — already lon/lat for a geographic CRS, or the
+ * projected easting/northing that the UTM converter takes to WGS84.
+ */
+function makeLocalToLonLat(
+  resolved: ReturnType<typeof crsService.current>,
+  origin: readonly number[],
+): ((p: readonly [number, number, number]) => [number, number, number]) | null {
+  if (!resolved) return null;
+  const ox = origin[0] ?? 0;
+  const oy = origin[1] ?? 0;
+  const oz = origin[2] ?? 0;
+  if (resolved.kind === 'geographic') {
+    return (p) => [p[0] + ox, p[1] + oy, p[2] + oz];
+  }
+  if (resolved.kind === 'projected') {
+    // Probe once: a non-UTM projected CRS returns a tagged failure here, so the
+    // caller can decline the export rather than emit wrong coordinates.
+    const probe = utmConverter.toGeographic({ x: ox, y: oy, z: oz }, resolved);
+    if (!probe.ok) return null;
+    return (p) => {
+      const r = utmConverter.toGeographic(
+        { x: p[0] + ox, y: p[1] + oy, z: p[2] + oz },
+        resolved,
+      );
+      return r.ok
+        ? [r.value.lon, r.value.lat, r.value.elevation ?? p[2] + oz]
+        : [p[0] + ox, p[1] + oy, p[2] + oz];
+    };
+  }
+  return null;
 }
 
 // Drive the Export panel's Coordinate-System auto-collapse from the CRS service:
@@ -2784,6 +2878,10 @@ function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name);
   exportPanel.setVisible(true);
   exportPanel.refresh();
+  // Build the measure snap index from the resident cloud (static scans only;
+  // a streaming scan has no resident array, so snapping stays off and says so).
+  const snapCloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+  viewer.measure.setSnapSource(snapCloud?.positions ?? null);
   // Fresh scan → clear any prior override + verdict so the open-time route is
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
   // override is per-session-per-scan: a new scan returns to auto-detection,
@@ -3926,6 +4024,9 @@ function refreshAnnotationPanel(): void {
   annotationPanel.update(viewer.annotate.getSummaries());
   const hasAnnotations = viewer.annotate.getAnnotations().length > 0;
   annotationPanel.setVisible(viewer.annotateMode || hasAnnotations);
+  // Keep the Export panel's Site-KML enablement in sync — annotations alone can
+  // make a KML worth exporting, not only measurements.
+  exportPanel.refresh();
 }
 
 /** Whether a scan is currently loaded — gates the tool keyboard shortcuts. */
@@ -5323,6 +5424,8 @@ function resetToEmptyState(): void {
   savedViews = [];
   viewCounter = 0;
   viewer.annotate.clear();
+  // Drop the snap index so a future scan can't snap to the previous cloud.
+  viewer.measure.setSnapSource(null);
   refreshMeasurePanel();
   refreshAnnotationPanel();
 }

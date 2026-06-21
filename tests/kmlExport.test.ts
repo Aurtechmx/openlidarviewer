@@ -71,6 +71,8 @@ function input(over: Partial<KmlExportInput> = {}): KmlExportInput {
     viewpoints: [viewpoint],
     crsName: 'WGS 84 / UTM zone 12N',
     unitLabel: 'm',
+    up: [0, 0, 1],
+    unitToMetres: 1,
     toLonLat,
     notSurveyGradeNote: CAVEAT,
     ...over,
@@ -147,6 +149,21 @@ describe('buildKml — coordinates', () => {
     expect(kml).toContain('<longitude>105</longitude>');
     expect(kml).toContain('<latitude>55</latitude>');
     expect(kml).toContain('<altitude>0</altitude>');
+  });
+});
+
+describe('buildKml — measured values', () => {
+  it('reports metres, scaling render units by unitToMetres (foot scan)', () => {
+    // polyline render-unit length = 10 + 10 = 20; at 0.3048 m/unit → 6.096 m.
+    const kml = buildKml(
+      input({ annotations: [], viewpoints: [], measurements: [polyline], unitToMetres: 0.3048 }),
+    );
+    expect(kml).toContain('length_m=6.096');
+  });
+
+  it('reports raw metres for a metric scan (unitToMetres = 1)', () => {
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline] }));
+    expect(kml).toContain('length_m=20');
   });
 });
 

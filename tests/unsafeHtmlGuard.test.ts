@@ -106,6 +106,10 @@ const ALLOWLIST: readonly string[] = [
   'src/render/measure/MeasureController.ts::ICON_UNITS',
   'src/render/measure/MeasureController.ts::ICON_DONE',
   'src/render/measure/MeasureController.ts::olv-mkind-glyph',
+  // Snap toggle (A1, hand-verified 2026-06-20). `SNAP_ICON` is a module-level
+  // literal SVG string; the label rides through a hardcoded literal span, never
+  // a parameter or user data.
+  'src/render/measure/MeasureController.ts::SNAP_ICON',
   'src/ui/toolDock.ts::olv-tool-ico-glyph',
   'src/ui/ClassLegendPanel.ts::ICON_SOLO',
   'src/ui/ExportPanel.ts::Export / Convert',

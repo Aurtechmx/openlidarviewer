@@ -47,6 +47,14 @@ import {
   BOX_EDGES,
 } from './geometry';
 import {
+  buildPointSnapIndex,
+  snapToNearestPoint,
+  snapBest,
+  type PointSnapIndex,
+  type SnapResult,
+  type Segments,
+} from './snap';
+import {
   formatLengthRender,
   formatAreaRender,
   formatVolumeRender,
@@ -91,6 +99,13 @@ const COARSE_POINTER =
   window.matchMedia('(pointer: coarse)').matches;
 const VERB = COARSE_POINTER ? 'Tap' : 'Click';
 const VERB_LOWER = VERB.toLowerCase();
+
+/** Inline crosshair glyph for the snap toggle (kept local to avoid touching the icon set). */
+const SNAP_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" ' +
+  'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+  '<circle cx="12" cy="12" r="6"/><path d="M12 2v3"/><path d="M12 19v3"/>' +
+  '<path d="M2 12h3"/><path d="M19 12h3"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>';
 
 /** Display name per kind, for default measurement names and the picker. */
 const KIND_LABEL: Record<MeasurementKind, string> = {
@@ -361,6 +376,18 @@ export class MeasureController {
    * pre-B2 behaviour).
    */
   private _unitToMetres = 1;
+  // ── Snap (A1) ──────────────────────────────────────────────────────────────
+  // Snapping a placed vertex to the nearest real return (honest default) or to
+  // existing measurement geometry. `_snapIndex` is built from the resident
+  // cloud on load; `_lastSnap` drives the disclosure in the hint. The camera +
+  // canvas are cached each frame so the place handler can size the snap radius.
+  private static readonly SNAP_RADIUS_PX = 14;
+  private _snapMode: 'off' | 'point' | 'geometry' = 'off';
+  private _snapIndex: PointSnapIndex | null = null;
+  private _lastSnap: SnapResult | null = null;
+  private _lastCamera: THREE.PerspectiveCamera | null = null;
+  private _lastCanvas: HTMLCanvasElement | null = null;
+  private _snapBtn: HTMLButtonElement | null = null;
   private readonly _counters: Record<MeasurementKind, number> = {
     distance: 0,
     polyline: 0,
@@ -460,6 +487,24 @@ export class MeasureController {
       this._unitsBtn.blur();
       this.setUnitSystem(this._units === 'metric' ? 'imperial' : 'metric');
     });
+    // Snap toggle — cycles Off → Point → Geometry. "Point" snaps a placed
+    // vertex to the nearest real return; "Geometry" also snaps to existing
+    // measurement vertices / midpoints / intersections. The hint discloses what
+    // each placement snapped to, so a snap never implies a return that isn't one.
+    const snapBtn = el('button', {
+      className: 'olv-measure-snap olv-micon-btn',
+      unsafeHtml: SNAP_ICON + '<span class="olv-mlabel">Snap: Off</span>',
+      title:
+        'Snap placed points to the nearest scan return (Point) or also to ' +
+        'existing measurement geometry (Geometry).',
+      tip: 'Snap · off ⇄ point ⇄ geometry',
+      ariaLabel: 'Snap: off',
+    }) as HTMLButtonElement;
+    snapBtn.addEventListener('click', () => {
+      snapBtn.blur();
+      this._cycleSnapMode();
+    });
+    this._snapBtn = snapBtn;
     const doneBtn = el('button', {
       className: 'olv-measure-done olv-micon-btn',
       unsafeHtml: ICON_DONE + '<span class="olv-mlabel">Done</span>',
@@ -485,6 +530,7 @@ export class MeasureController {
         undoBtn,
         this._finishBtn,
         this._clearBtn,
+        snapBtn,
         this._unitsBtn,
         doneBtn,
       ]),
@@ -860,9 +906,117 @@ export class MeasureController {
       return;
     }
     if (!this._draft) this._draft = this._newDraft();
-    this._draft.points.push([point[0], point[1], point[2]]);
+    // Snap the placed vertex to a real return or to existing measurement
+    // geometry before committing it. `_lastSnap` records what it landed on so
+    // the hint can disclose it (a snap never implies a return that isn't one).
+    const snap = this._resolveSnap(point);
+    this._lastSnap = snap;
+    const placed = snap ? snap.position : point;
+    this._draft.points.push([placed[0], placed[1], placed[2]]);
     if (isFull(this._draft)) this._commitDraft();
     this._updateHint();
+  }
+
+  /**
+   * Provide (or clear) the resident cloud positions the point-snap index is
+   * built from. Called on load with the display cloud's xyz array, and with
+   * `null` on reset / for a streaming scan that has no resident array to snap to.
+   */
+  setSnapSource(positions: Float32Array | null): void {
+    this._snapIndex =
+      positions && positions.length >= 3 ? buildPointSnapIndex(positions) : null;
+  }
+
+  /** The active snap mode. */
+  get snapMode(): 'off' | 'point' | 'geometry' {
+    return this._snapMode;
+  }
+
+  /** Set the snap mode and re-label the toggle. */
+  setSnapMode(mode: 'off' | 'point' | 'geometry'): void {
+    this._snapMode = mode;
+    if (mode === 'off') this._lastSnap = null;
+    this._syncSnapBtn();
+    this._updateHint();
+  }
+
+  private _cycleSnapMode(): void {
+    const next: 'off' | 'point' | 'geometry' =
+      this._snapMode === 'off' ? 'point' : this._snapMode === 'point' ? 'geometry' : 'off';
+    this.setSnapMode(next);
+  }
+
+  private _syncSnapBtn(): void {
+    if (!this._snapBtn) return;
+    const label =
+      this._snapMode === 'off' ? 'Snap: Off' : this._snapMode === 'point' ? 'Snap: Point' : 'Snap: Geom';
+    const span = this._snapBtn.querySelector('.olv-mlabel');
+    if (span) span.textContent = label;
+    else this._snapBtn.textContent = label;
+    this._snapBtn.setAttribute('aria-label', label.toLowerCase());
+    this._snapBtn.classList.toggle('is-active', this._snapMode !== 'off');
+  }
+
+  /**
+   * Resolve where a raw picked point should actually land. Returns null (free
+   * placement) when snapping is off, no cloud index is available, or nothing is
+   * within the screen-space radius. Point mode snaps to the nearest real return;
+   * geometry mode also considers measurement vertices / midpoints / crossings.
+   */
+  private _resolveSnap(query: Vec3): SnapResult | null {
+    if (this._snapMode === 'off' || !this._snapIndex) return null;
+    const cam = this._lastCamera;
+    const canvas = this._lastCanvas;
+    if (!cam || !canvas) return null;
+    const maxDistance = this._snapWorldRadius(query, cam, canvas);
+    if (!(maxDistance > 0)) return null;
+    if (this._snapMode === 'point') {
+      return snapToNearestPoint(this._snapIndex, query, maxDistance);
+    }
+    return snapBest(this._snapIndex, this._snapSegments(), query, maxDistance);
+  }
+
+  /** Existing measurement polylines (committed + in-progress draft) for geometry snaps. */
+  private _snapSegments(): Segments {
+    const segs: Vec3[][] = this._measurements.map((m) => m.points);
+    if (this._draft && this._draft.points.length > 0) segs.push(this._draft.points);
+    return segs;
+  }
+
+  /**
+   * Convert the fixed screen-space snap radius (px) to a world distance at the
+   * query point's depth. Perspective only — returns 0 (no snap) under an
+   * orthographic camera, where `fov` is undefined.
+   */
+  private _snapWorldRadius(
+    query: Vec3,
+    cam: THREE.PerspectiveCamera,
+    canvas: HTMLCanvasElement,
+  ): number {
+    if (!cam.isPerspectiveCamera) return 0;
+    const dx = query[0] - cam.position.x;
+    const dy = query[1] - cam.position.y;
+    const dz = query[2] - cam.position.z;
+    const depth = Math.hypot(dx, dy, dz);
+    const h = canvas.clientHeight || canvas.height || 1;
+    const fov = (cam.fov * Math.PI) / 180;
+    const worldPerPx = (2 * depth * Math.tan(fov / 2)) / h;
+    return MeasureController.SNAP_RADIUS_PX * worldPerPx;
+  }
+
+  /** A disclosure of the last snap, prefixed onto the hint (never implies a return that isn't one). */
+  private _snapHintPrefix(): string {
+    if (this._snapMode === 'off' || !this._lastSnap) return '';
+    const k = this._lastSnap.kind;
+    const where =
+      k === 'point'
+        ? 'nearest point (measured return)'
+        : k === 'endpoint'
+          ? 'measurement vertex'
+          : k === 'midpoint'
+            ? 'segment midpoint'
+            : 'segment intersection';
+    return `Snapped to ${where} · `;
   }
 
   /** Update the live-preview cursor point (`null` = pointer off the cloud). */
@@ -925,6 +1079,10 @@ export class MeasureController {
 
   /** Project all measurements and redraw. Called once per frame by the Viewer. */
   render(camera: THREE.PerspectiveCamera, canvas: HTMLCanvasElement): void {
+    // Cache the live camera + canvas so the place handler can size the snap
+    // radius (a screen-space pixel radius → world distance at the hit's depth).
+    this._lastCamera = camera;
+    this._lastCanvas = canvas;
     this._applyDrag();
     this._draw.render(this._buildModel(), camera, canvas);
   }
@@ -1196,7 +1354,7 @@ export class MeasureController {
   }
 
   private _updateHint(): void {
-    if (this._active) this._setHintText(this._composeHint());
+    if (this._active) this._setHintText(this._snapHintPrefix() + this._composeHint());
     this._updateFinishBtnVisibility();
   }
 

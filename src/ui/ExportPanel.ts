@@ -31,6 +31,17 @@ export interface ExportPanelCallbacks {
   measurementCount?: () => number;
   /** Export the placed measurements to an open format (GeoJSON / CSV). */
   exportMeasurements?: (format: 'geojson' | 'csv') => void;
+  /**
+   * Export a site KML (annotations + measurements + viewpoints) for Google
+   * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
+   */
+  exportKml?: () => void;
+  /**
+   * Whether a KML export is possible right now, with a reason when not.
+   * KML needs a georeferenced scan (it places features on a lat/lon map) and
+   * at least one annotation or measurement to carry.
+   */
+  kmlStatus?: () => { ready: boolean; reason: string };
 }
 
 export class ExportPanel {
@@ -360,6 +371,33 @@ export class ExportPanel {
       row,
       el('span', { className: 'olv-export-fullres-hint', text: hint }),
     );
+
+    // Site KML — annotations + measurements + viewpoints for Google Earth / QGIS.
+    // Offered only when the host wires the export AND the scan is georeferenced
+    // with something to carry (the status callback owns that judgement).
+    if (this._cb.exportKml) {
+      let status = { ready: false, reason: '' };
+      try {
+        status = this._cb.kmlStatus?.() ?? status;
+      } catch {
+        status = { ready: false, reason: '' };
+      }
+      const kmlRow = el('div', { className: 'olv-bc-pills' });
+      const kmlBtn = el('button', { className: 'olv-bc-pill', type: 'button', text: 'KML' }) as HTMLButtonElement;
+      kmlBtn.disabled = !status.ready;
+      kmlBtn.addEventListener('click', () => this._cb.exportKml?.());
+      kmlRow.append(kmlBtn);
+      content.append(
+        this._label('Site KML (Google Earth)'),
+        kmlRow,
+        el('span', {
+          className: 'olv-export-fullres-hint',
+          text: status.ready
+            ? 'Annotations, measurements, and views as a georeferenced .kml.'
+            : status.reason || 'Needs a georeferenced scan with a measurement or annotation.',
+        }),
+      );
+    }
     this._products.append(head, content);
   }
 
