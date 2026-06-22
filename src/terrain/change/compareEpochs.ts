@@ -27,6 +27,13 @@ import { compareDtms, type EpochComparison } from './compareDtms';
 export interface EpochCloud {
   /** Interleaved x/y/z, length 3N, in render-local space (z is vertical). */
   readonly positions: Float32Array;
+  /**
+   * The cloud's world-space origin shift (positions are local = world − origin).
+   * REQUIRED for a correct comparison: two clouds are recentered by their own
+   * origins, so they are only comparable once both are returned to a common
+   * world frame. Defaults to [0,0,0] for an already-world input.
+   */
+  readonly origin?: readonly [number, number, number];
   readonly crs?: string | null;
   readonly verticalDatum?: string | null;
 }
@@ -49,28 +56,36 @@ export interface EpochDtms {
   readonly rows: number;
 }
 
-/** Box an interleaved xyz buffer into the `TerrainPoint[]` the leaves consume. */
-function boxPoints(positions: Float32Array): TerrainPoint[] {
+const ZERO: readonly [number, number, number] = [0, 0, 0];
+
+/** Box an interleaved xyz buffer into WORLD-frame `TerrainPoint[]` (local + origin). */
+function boxPoints(positions: Float32Array, origin: readonly [number, number, number]): TerrainPoint[] {
   const n = (positions.length / 3) | 0;
+  const ox = origin[0];
+  const oy = origin[1];
+  const oz = origin[2];
   const points: TerrainPoint[] = new Array(n);
   for (let i = 0; i < n; i++) {
-    points[i] = { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] };
+    points[i] = { x: positions[i * 3] + ox, y: positions[i * 3 + 1] + oy, z: positions[i * 3 + 2] + oz };
   }
   return points;
 }
 
-/** Horizontal (x,y) bounds of an xyz buffer, or null when it has no finite points. */
+/** World-frame (x,y) bounds of an xyz buffer (local + origin), or null when empty. */
 function boundsXY(
   positions: Float32Array,
+  origin: readonly [number, number, number],
 ): { minX: number; minY: number; maxX: number; maxY: number } | null {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  const ox = origin[0];
+  const oy = origin[1];
   const n = (positions.length / 3) | 0;
   for (let i = 0; i < n; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
+    const x = positions[i * 3] + ox;
+    const y = positions[i * 3 + 1] + oy;
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
@@ -80,10 +95,15 @@ function boundsXY(
   return minX <= maxX && minY <= maxY ? { minX, minY, maxX, maxY } : null;
 }
 
-/** A shared grid spanning both clouds (~256 cells across the larger span). */
-function sharedGrid(before: Float32Array, after: Float32Array): SharedGrid | null {
-  const a = boundsXY(before);
-  const b = boundsXY(after);
+/**
+ * A shared grid spanning both clouds in a COMMON WORLD frame. Each cloud is
+ * recentred by its own origin, so the two are returned to world coordinates
+ * (local + origin) before the grid is computed — gridding raw local coordinates
+ * would difference mismatched locations. ~256 cells across the larger span.
+ */
+function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
+  const a = boundsXY(before.positions, before.origin ?? ZERO);
+  const b = boundsXY(after.positions, after.origin ?? ZERO);
   if (!a || !b) return null;
   const minX = Math.min(a.minX, b.minX);
   const minY = Math.min(a.minY, b.minY);
@@ -100,9 +120,9 @@ function sharedGrid(before: Float32Array, after: Float32Array): SharedGrid | nul
   };
 }
 
-/** Build one cloud's DTM on the shared grid, matching the live analysis surface. */
+/** Build one cloud's DTM on the shared world grid, matching the live analysis surface. */
 function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
-  const points = boxPoints(cloud.positions);
+  const points = boxPoints(cloud.positions, cloud.origin ?? ZERO);
   const gf = classifyGroundSmrf(points, {
     cellSizeM: grid.cellSizeM,
     maxWindowCells: 8,
@@ -124,7 +144,7 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
 
 /** Rasterise both epochs onto one shared grid, or null when either is empty. */
 export function buildSharedEpochDtms(before: EpochCloud, after: EpochCloud): EpochDtms | null {
-  const grid = sharedGrid(before.positions, after.positions);
+  const grid = sharedGrid(before, after);
   if (!grid) return null;
   return {
     before: dtmOnGrid(before, grid),

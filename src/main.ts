@@ -5534,9 +5534,11 @@ function compareLoadedLayers(): void {
   lastDifference = null;
   setTimeout(() => {
     try {
+      // Pass each cloud's origin: the two are recentred by their own origins, so
+      // the comparison must align them in a common world frame, not raw local.
       const dtms = buildSharedEpochDtms(
-        { positions: a.positions, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null },
-        { positions: b.positions, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null },
+        { positions: a.positions, origin: a.origin, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null },
+        { positions: b.positions, origin: b.origin, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null },
       );
       if (!dtms) {
         inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
@@ -5545,8 +5547,8 @@ function compareLoadedLayers(): void {
       const cmp = compareDtms(dtms.before, dtms.after);
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, ...summarizeChange(cmp)]);
-      // A georeferenced .asc of the signed difference (DTM origin + cloud origin
-      // ⇒ the scan's projected coordinates), ready for QGIS / ArcGIS.
+      // A georeferenced .asc of the signed difference. The shared grid is built
+      // in the common world frame, so its origin IS the scan's projected corner.
       lastDifference = {
         stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
         asc: () =>
@@ -5555,8 +5557,8 @@ function compareLoadedLayers(): void {
             ncols: dtms.cols,
             nrows: dtms.rows,
             cellSizeM: dtms.cellSizeM,
-            xllCorner: dtms.before.originH1 + a.origin[0],
-            yllCorner: dtms.before.originH2 + a.origin[1],
+            xllCorner: dtms.before.originH1,
+            yllCorner: dtms.before.originH2,
           }),
       };
       inspector.setDifferenceAvailable(true);

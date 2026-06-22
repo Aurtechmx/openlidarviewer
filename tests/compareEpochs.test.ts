@@ -56,6 +56,22 @@ describe('compareEpochClouds', () => {
     expect(Math.abs(cmp!.result.stats.netVolumeM3)).toBeLessThan(1e-3);
   });
 
+  it('aligns two clouds by their origins (different origins, same world footprint)', () => {
+    // A is recentred by origin (1000,2000): its local 0..30 is world 1000..1030.
+    // B already sits at world 1000..1030 with origin 0. Differencing raw LOCAL
+    // coordinates would find zero overlap (all NaN); aligning by origin makes the
+    // two epochs fully comparable. This guards the world-frame fix.
+    const a = plane(30, 0);
+    const b = plane(30, 1, 1000, 2000); // local already at world 1000..1030, +1 m
+    const cmp = compareEpochClouds(
+      { positions: a, origin: [1000, 2000, 0] },
+      { positions: b, origin: [0, 0, 0] },
+    );
+    expect(cmp).not.toBeNull();
+    expect(cmp!.result.stats.comparable).toBeGreaterThan(0);
+    expect(cmp!.result.stats.netVolumeM3).toBeGreaterThan(0);
+  });
+
   it('flags a CRS mismatch between the two epochs', () => {
     const a = plane(20, 0);
     const cmp = compareEpochClouds(
