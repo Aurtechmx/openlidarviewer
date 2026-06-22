@@ -38,6 +38,19 @@ export function srgbToLinearScalar(v: number): number {
 }
 
 /**
+ * Piecewise linear → sRGB OETF for ONE channel value in [0, 1] — the exact
+ * inverse of {@link srgbToLinearScalar} (IEC 61966-2-1, matches three.js's
+ * `Color.LinearToSRGB`). Input is clamped to [0, 1]. Exported so the encode
+ * call sites (patchView's neighbourhood splat, the Inspector's colour-
+ * provenance card) share the one curve instead of carrying byte-identical
+ * inline copies that could drift from this seam.
+ */
+export function linearToSrgbScalar(v: number): number {
+  const x = v < 0 ? 0 : v > 1 ? 1 : v;
+  return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+}
+
+/**
  * Decode interleaved sRGB-encoded Uint8 [0-255] channels into linear-light
  * Float32 [0-1], writing IN PLACE into `dst`. `dst` must be at least as
  * long as `srcU8`; exactly `srcU8.length` elements are written (matching

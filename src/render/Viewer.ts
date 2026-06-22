@@ -1263,10 +1263,17 @@ export class Viewer {
           positions.set(b, off);
           off += b.length;
         }
+        // `up` is the configured world up, not a hardcoded [0,0,1]. The
+        // profile sampler above already reads `this._worldUp` (v0.4.4 audit,
+        // B1); the cut/fill path was missed. On a Y-up phone scan (PLY/OBJ/
+        // GLB) the controller derives the reference plane along `_worldUp`
+        // (`autoReferenceZ`), so integrating height along Z here disagreed
+        // with the reference and produced a wrong cut/fill volume.
+        const up: Vec3 = [this._worldUp.x, this._worldUp.y, this._worldUp.z];
         const result = volumeCutFill({
           polygon,
           referenceZ,
-          up: [0, 0, 1],
+          up,
           positions,
         });
         const confidence: 'high' | 'medium' | 'low' =

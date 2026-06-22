@@ -29,6 +29,20 @@ export type DecodeNodeFn = (nodeId: string, signal?: AbortSignal) => Promise<Flo
 /** Grade an assembled sample; `samplePointScale` back-scales sample density → whole cloud. */
 export type GradeFn<G> = (positions: Float32Array, samplePointScale: number) => G;
 
+/**
+ * Running progress of a full-cloud grade, emitted after each node decodes — for
+ * a "decoding N of M nodes" readout. Shared by {@link runFullCloudGrade} and the
+ * adapter's `gradeFullCloud` so the two can't drift.
+ */
+export interface GradeProgress {
+  /** Nodes decoded and assembled so far. */
+  readonly decodedNodes: number;
+  /** Total nodes the plan will decode. */
+  readonly totalNodes: number;
+  /** XYZ points (triples) assembled so far. */
+  readonly decodedPoints: number;
+}
+
 export interface FullCloudGradeRun<G> {
   /** The honesty + scaling facts (scope, coverage %, label, note). */
   readonly coverage: FullCloudGradeCoverage;
@@ -55,8 +69,14 @@ export async function runFullCloudGrade<G>(args: {
   readonly grade: GradeFn<G>;
   readonly options?: SamplingPlanOptions;
   readonly signal?: AbortSignal;
+  /**
+   * Called after each node decodes, with the running {@link GradeProgress} —
+   * for a "decoding N of M nodes" readout. Not called for a node whose decode
+   * is skipped by an abort.
+   */
+  readonly onProgress?: (progress: GradeProgress) => void;
 }): Promise<FullCloudGradeRun<G>> {
-  const { nodes, decodeNode, grade, options, signal } = args;
+  const { nodes, decodeNode, grade, options, signal, onProgress } = args;
 
   const plan = buildSamplingPlan(nodes, options);
   const coverage = fullCloudGradeCoverage(plan);
@@ -70,6 +90,11 @@ export async function runFullCloudGrade<G>(args: {
     const chunk = await decodeNode(id, signal);
     chunks.push(chunk);
     totalLen += chunk.length;
+    onProgress?.({
+      decodedNodes: chunks.length,
+      totalNodes: plan.nodeIds.length,
+      decodedPoints: totalLen / 3,
+    });
   }
 
   const positions = new Float32Array(totalLen);

@@ -86,3 +86,6 @@ ELITE_*.md
 # (the tracked tiny.las / tiny.laz fixtures are bytes, not *.copc.laz).
 *.copc.laz
 *.copc.laz.*
+
+# Serena project metadata (local tooling)
+.serena/

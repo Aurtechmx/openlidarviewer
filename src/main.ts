@@ -2598,7 +2598,11 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // planes) with an exact CPU kept-count. The keep/cull math is the pure
 // `clipBox` core; this panel + the viewer wiring realise it.
 const clipPanel = new ClipPanel({
-  onApply: (clip: ClipBox | null) => viewer.setClip(clip),
+  // `viewer?.` — ClipPanel's constructor calls setVisible(false) → onApply(null)
+  // synchronously, which fires before the deferred Viewer is assigned (it's
+  // `null` until the first scan loads). Clearing a clip on a non-existent viewer
+  // is a no-op, so guard like every other boot-reachable viewer callback here.
+  onApply: (clip: ClipBox | null) => viewer?.setClip(clip),
   fitBounds: () => {
     const c = activeId ? viewer.getCloud(activeId) ?? null : null;
     return c ? c.bounds() : null;

@@ -202,6 +202,61 @@ describe('volumeCutFill — mixed cut + fill', () => {
   });
 });
 
+describe('volumeCutFill — Y-up clouds (phone-scan axis)', () => {
+  const Y_UP: [number, number, number] = [0, 1, 0];
+
+  // A Y-up fill mound: footprint spans x∈[0,1], z∈[0,1] (horizontal plane
+  // for up=[0,1,0] projects to (x, −z)); the "height" is the Y coordinate.
+  // 11×11 grid at y = 2 over a 1m × 1m footprint at y = 0 ⇒ fill = 1 × 2 = 2 m³.
+  function packYUpGrid(n: number, y: number): Float32Array {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const x = i / (n - 1);
+        const z = j / (n - 1);
+        pts.push([x, y, z]);
+      }
+    }
+    return pack(pts);
+  }
+
+  const yUpPolygon: ReadonlyArray<[number, number, number]> = [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 0, 1],
+    [0, 0, 1],
+  ];
+
+  it('computes the fill mound correctly when given the Y up-axis', () => {
+    const result = volumeCutFill({
+      polygon: yUpPolygon,
+      referenceZ: 0,
+      up: Y_UP,
+      positions: packYUpGrid(11, 2),
+    });
+    expect(result.footprintArea).toBeCloseTo(1, 9);
+    expect(result.fill).toBeCloseTo(2, 5);
+    expect(result.cut).toBe(0);
+    expect(result.net).toBeCloseTo(2, 5);
+    expect(result.pointsInPolygon).toBeGreaterThanOrEqual(100);
+  });
+
+  // Guards the wiring contract: the caller MUST pass the cloud's real up
+  // axis. If the Viewer's volume sampler regresses to a hardcoded Z_UP
+  // (the v0.4.4 audit B1 bug), the same Y-up cloud collapses to a
+  // degenerate (collinear) footprint and the volume silently vanishes —
+  // a confidently-wrong 0 m³. This pins that the up-axis is load-bearing.
+  it('mis-computes the same Y-up cloud if forced to Z-up (regression guard)', () => {
+    const result = volumeCutFill({
+      polygon: yUpPolygon,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: packYUpGrid(11, 2),
+    });
+    expect(result.fill).not.toBeCloseTo(2, 1);
+  });
+});
+
 describe('volumeCutFill — degenerate inputs', () => {
   it('returns zeros for an under-defined polygon', () => {
     const r = volumeCutFill({

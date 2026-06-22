@@ -23,7 +23,7 @@
  * of the math.
  */
 
-import { srgbToLinearScalar } from './colorEncode';
+import { srgbToLinearScalar, linearToSrgbScalar } from './colorEncode';
 
 /** A formatted colour provenance row — every channel as a string. */
 export interface ColorProvenance {
@@ -45,9 +45,7 @@ function srgb8ToLinearFloat(v: number): number {
 }
 
 function linearFloatToSrgb8(v: number): number {
-  const x = v < 0 ? 0 : v > 1 ? 1 : v;
-  const s = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
-  return Math.round(s * 255);
+  return Math.round(linearToSrgbScalar(v) * 255);
 }
 
 function clamp255(v: number): number {

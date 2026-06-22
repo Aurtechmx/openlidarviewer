@@ -2,6 +2,38 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.0] - 2026-06-21
+
+Opens the v0.5 line (Measure · Place · Compare · Share), much of which landed
+incrementally across 0.4.x — point snapping, KML export, the Layers panel
+(isolate / lock / CRS-mismatch flagging), two-epoch change detection, and the
+clip box. This release also carries the fixes below.
+
+### Fixed
+
+- **Cut/fill volume on Y-up scans.** The Volume measurement integrated point
+  heights along a hardcoded Z axis even on Y-up clouds (iPhone / mobile PLY,
+  OBJ, GLB/GLTF exports), while the reference plane was already derived along
+  the cloud's real up-axis — so the height axis and the reference disagreed and
+  the reported cut/fill volume was wrong. The volume sampler now reads the
+  configured world up (`_worldUp`), matching the profile sampler's earlier B1
+  fix. Z-up surveys (LAS/LAZ/E57) and the streaming COPC/EPT path — Z-up by
+  spec — are unaffected.
+- **Clip control no longer throws on a fresh page.** The clip panel cleared its
+  state during construction, which fired before the deferred 3D viewer existed
+  and raised an uncaught error on every page load. The clear is now a no-op
+  until a scan is open, matching every other startup-reachable viewer action.
+
+### Changed
+
+- **One sRGB colour seam.** The linear→sRGB OETF, previously carried as two
+  byte-identical inline copies in `patchView.ts` and `colorProvenance.ts`,
+  now lives once in `colorEncode.ts` as `linearToSrgbScalar` (the exact
+  inverse of the existing `srgbToLinearScalar`). Both leaf modules already
+  shared the decode direction; the encode direction is now converged too, so
+  the provenance card and the neighbourhood splat can no longer drift from
+  the curve the GPU upload uses (QualityRevision v0.4.4 item 5).
+
 ## [0.4.9] - 2026-06-20
 
 ### Added

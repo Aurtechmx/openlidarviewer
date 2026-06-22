@@ -24,7 +24,7 @@
  * ships through the same module-graph seam every Stream A leaf uses.
  */
 
-import { srgbToLinearScalar } from './colorEncode';
+import { srgbToLinearScalar, linearToSrgbScalar } from './colorEncode';
 
 /** A 3D vector — `[x, y, z]`. */
 export type Vec3 = readonly [number, number, number];
@@ -448,7 +448,5 @@ export function buildPatchView(input: PatchViewInput): PatchView | null {
 
 /** Linear [0, 1] → sRGB-encoded Uint8 [0, 255]. Inverse of `srgb8ToLinearFloat`. */
 function linearFloatToSrgb8(v: number): number {
-  const x = v < 0 ? 0 : v > 1 ? 1 : v;
-  const s = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
-  return Math.round(s * 255);
+  return Math.round(linearToSrgbScalar(v) * 255);
 }
