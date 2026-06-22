@@ -17,6 +17,8 @@ import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions 
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
+import { clipCloud } from '../render/clip/clipCloud';
+import type { ClipBox } from '../render/clip/clipBox';
 
 export interface ExportPanelCallbacks {
   /** Return the loaded (display-resolution) cloud, or null when none is active. */
@@ -42,6 +44,8 @@ export interface ExportPanelCallbacks {
    * at least one annotation or measurement to carry.
    */
   kmlStatus?: () => { ready: boolean; reason: string };
+  /** The active clip box, if any — when enabled, the cloud export is restricted to it. */
+  getActiveClip?: () => ClipBox | null;
 }
 
 export class ExportPanel {
@@ -496,11 +500,15 @@ export class ExportPanel {
     try {
       // Full resolution re-decodes the original file; otherwise convert the
       // loaded (display-resolution) cloud.
-      const cloud = useFull ? await this._cb.getFullCloud() : this._cb.getCloud();
-      if (!cloud) {
+      const sourceCloud = useFull ? await this._cb.getFullCloud() : this._cb.getCloud();
+      if (!sourceCloud) {
         this._setStatus('Could not read the source at full resolution.', 'error');
         return;
       }
+      // Respect an active clip: export only the points inside (or outside) the box.
+      const clip = this._cb.getActiveClip?.() ?? null;
+      const clipped = clip != null && clip.enabled;
+      const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
       this._exportBtn.textContent = 'Exporting…';
       const { convertCloud } = await loadConvertEngine();
       const options: ConvertOptions = {
@@ -523,8 +531,9 @@ export class ExportPanel {
         }
         const warn = report.log.find((l) => l.level === 'warn');
         const reducedNote = !useFull && this._cb.isReduced() ? ' · reduced view' : '';
+        const clipNote = clipped ? ' · clipped to box' : '';
         this._setStatus(
-          warn ? warn.message : `Exported ${report.pointCount.toLocaleString()} points${reducedNote} · ${report.crsNote}`,
+          warn ? warn.message : `Exported ${report.pointCount.toLocaleString()} points${reducedNote}${clipNote} · ${report.crsNote}`,
           warn || reducedNote ? 'warn' : 'info',
         );
       } else {

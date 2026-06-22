@@ -92,8 +92,9 @@ import { utmConverter } from './geo/UtmConverter';
 import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
-import { compareEpochClouds } from './terrain/change/compareEpochs';
-import { summarizeChange } from './terrain/change/compareDtms';
+import { buildSharedEpochDtms } from './terrain/change/compareEpochs';
+import { compareDtms, summarizeChange } from './terrain/change/compareDtms';
+import { changeToEsriAscii } from './terrain/change/changeRaster';
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -914,6 +915,7 @@ const inspector = new Inspector({
   },
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: () => compareLoadedLayers(),
+  onExportDifference: () => exportDifferenceRaster(),
   onExport: (format) => {
     const cloud = activeId ? viewer.getCloud(activeId) : undefined;
     if (!cloud) return;
@@ -2455,6 +2457,7 @@ const reducedById = new Map<string, boolean>();
 // (proj4) is imported lazily on Export, so this panel adds nothing heavy.
 const exportPanel = new ExportPanel({
   getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : null),
+  getActiveClip: () => viewer.getClip(),
   hasFullSource: () => activeId != null && sourceFileById.has(activeId),
   isReduced: () => activeId != null && reducedById.get(activeId) === true,
   getFullCloud: async () => {
@@ -5517,6 +5520,9 @@ function refreshLayerCrsFlags(): void {
  * thread, so it's deferred a frame to let the "working" line paint; large
  * clouds may take a moment.
  */
+/** A georeferenced .asc of the most recent comparison, ready to download. */
+let lastDifference: { stem: string; asc: () => string } | null = null;
+
 function compareLoadedLayers(): void {
   const ids = viewer.clouds();
   if (ids.length !== 2) return;
@@ -5524,22 +5530,45 @@ function compareLoadedLayers(): void {
   const b = viewer.getCloud(ids[1]) ?? null;
   if (!a || !b) return;
   inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
+  inspector.setDifferenceAvailable(false);
+  lastDifference = null;
   setTimeout(() => {
     try {
-      const cmp = compareEpochClouds(
+      const dtms = buildSharedEpochDtms(
         { positions: a.positions, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null },
         { positions: b.positions, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null },
       );
-      if (!cmp) {
+      if (!dtms) {
         inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
         return;
       }
+      const cmp = compareDtms(dtms.before, dtms.after);
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, ...summarizeChange(cmp)]);
+      // A georeferenced .asc of the signed difference (DTM origin + cloud origin
+      // ⇒ the scan's projected coordinates), ready for QGIS / ArcGIS.
+      lastDifference = {
+        stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
+        asc: () =>
+          changeToEsriAscii({
+            diff: cmp.result.diff,
+            ncols: dtms.cols,
+            nrows: dtms.rows,
+            cellSizeM: dtms.cellSizeM,
+            xllCorner: dtms.before.originH1 + a.origin[0],
+            yllCorner: dtms.before.originH2 + a.origin[1],
+          }),
+      };
+      inspector.setDifferenceAvailable(true);
     } catch (err) {
       inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
     }
   }, 16);
+}
+
+/** Download the most recent elevation difference as an ESRI ASCII grid. */
+function exportDifferenceRaster(): void {
+  if (lastDifference) downloadText(`${lastDifference.stem}.asc`, lastDifference.asc());
 }
 
 function removeCloud(id: string): void {

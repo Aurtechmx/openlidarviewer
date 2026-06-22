@@ -87,6 +87,8 @@ export interface InspectorCallbacks {
   onToggleLock?: (id: string, locked: boolean) => void;
   /** Compare the two loaded layers' elevations (two-epoch change detection). */
   onCompareLayers?: () => void;
+  /** Download the most recent comparison's signed difference as a georeferenced raster. */
+  onExportDifference?: () => void;
   /** Export the active cloud to a file format. */
   onExport: (format: ExportFormat) => void;
   /**
@@ -480,6 +482,7 @@ export class Inspector {
   /** Lazily-created two-epoch compare button + result, shown with exactly 2 layers. */
   private _compareBtn: HTMLButtonElement | null = null;
   private _compareResult: HTMLElement | null = null;
+  private _diffBtn: HTMLButtonElement | null = null;
   /**
    * Visual Export Studio — the per-mode image-export buttons, kept
    * by mode so {@link setImageExportEnabled} can disable them as a group
@@ -1146,16 +1149,34 @@ export class Inspector {
     btn.addEventListener('click', () => this._cb.onCompareLayers?.());
     const result = el('pre', { className: 'olv-layer-compare-result' });
     result.style.display = 'none';
+    const diff = el('button', {
+      className: 'olv-bc-pill olv-layer-compare',
+      type: 'button',
+      text: 'Download difference (.asc)',
+      title: 'Save the signed elevation difference as a georeferenced ESRI ASCII grid for QGIS / ArcGIS',
+    }) as HTMLButtonElement;
+    diff.style.display = 'none';
+    diff.addEventListener('click', () => this._cb.onExportDifference?.());
     this._compareBtn = btn;
     this._compareResult = result;
-    this._layersSection.append(btn, result);
+    this._diffBtn = diff;
+    this._layersSection.append(btn, result, diff);
   }
 
   /** Show the "Compare elevation" action only when exactly two layers are loaded. */
   setLayerCompareAvailable(on: boolean): void {
     this._ensureCompareUi();
     if (this._compareBtn) this._compareBtn.style.display = on ? '' : 'none';
-    if (!on && this._compareResult) this._compareResult.style.display = 'none';
+    if (!on) {
+      if (this._compareResult) this._compareResult.style.display = 'none';
+      if (this._diffBtn) this._diffBtn.style.display = 'none';
+    }
+  }
+
+  /** Show the "Download difference" action once a comparison has produced a grid. */
+  setDifferenceAvailable(on: boolean): void {
+    this._ensureCompareUi();
+    if (this._diffBtn) this._diffBtn.style.display = on ? '' : 'none';
   }
 
   /** Render the two-epoch comparison result (cut/fill + co-registration lines). */
