@@ -62,9 +62,12 @@ AddType application/manifest+json .webmanifest
   # Clickjacking guard — the viewer is a standalone app, not an embeddable frame.
   Header always set X-Frame-Options "SAMEORIGIN"
 
-  # ── Content-Security-Policy (NOT YET ENFORCED) ────────────────────────────
-  # Suggested starting policy, deliberately commented out. It MUST be
-  # tested in Report-Only mode against a real deploy before enforcing:
+  # ── Content-Security-Policy (REPORT-ONLY — observing, not yet enforcing) ──
+  # Enabled in Report-Only mode: the browser reports violations to the console
+  # but blocks nothing, so it cannot break the app. Watch the report-only
+  # warnings across a release cycle against the real worker / WASM / WebGPU /
+  # blob surface, resolve them (notably style-src and connect-src), then switch
+  # the header name to Content-Security-Policy to enforce. Notes:
   #   - 'wasm-unsafe-eval' is required for the embedded laz-perf WASM
   #     (compiled from a base64 blob, not fetched), but exact browser
   #     behaviour should be verified.
@@ -74,8 +77,7 @@ AddType application/manifest+json .webmanifest
   #   - style-src is the open question: any inline style="" attributes in
   #     the DOM (the UI sets element.style from JS, which is fine, but
   #     audit for literal style attributes) would need 'unsafe-inline'.
-  # Watch the report-only console warnings for a release cycle, then
-  # rename the header to Content-Security-Policy.
-  #
-  # Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self'; base-uri 'self'; form-action 'self'"
+  # When the report-only console stays clean for a release cycle, rename the
+  # header below to Content-Security-Policy to enforce.
+  Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self'; base-uri 'self'; form-action 'self'"
 </IfModule>

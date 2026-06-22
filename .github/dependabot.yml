@@ -1,0 +1,25 @@
+# Dependabot — automated dependency update PRs.
+# Keeps three / loaders.gl / pdf-lib / proj4 / laz-perf and the toolchain current
+# so security fixes land as reviewable PRs rather than silent drift.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    # Group the noisy dev-tooling bumps into one PR; keep runtime deps separate
+    # so a three/loaders.gl bump gets its own focused review.
+    groups:
+      dev-tooling:
+        dependency-type: "development"
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"

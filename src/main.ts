@@ -6,6 +6,9 @@ import '@fontsource/manrope/latin-600.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './style.css';
+// Local-first hardening: disable loaders.gl CDN workers before any parse runs,
+// so OBJ/PLY/glTF never fetch executable code from a third-party CDN.
+import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import type { CameraPose } from './render/NavController';
 import { Stage } from './ui/Stage';

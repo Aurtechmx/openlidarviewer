@@ -1,0 +1,45 @@
+# Security CI — dependency vulnerabilities + secret scanning.
+# Complements ci.yml (typecheck / build / tests, which already run the
+# unsafeHtml + bundle guards). Kept as a separate workflow so it can run on a
+# schedule and surface independently of the build matrix.
+name: security
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    # Weekly, so newly-disclosed CVEs in pinned deps surface even without a push.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm audit (runtime deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Fail the job only on high/critical advisories in shipped (non-dev) deps;
+      # lower-severity transitive dev noise is reported but not blocking.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  secret-scan:
+    name: gitleaks (working tree + full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so a secret committed-then-removed is still caught.
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

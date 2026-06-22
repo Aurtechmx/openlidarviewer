@@ -5,9 +5,11 @@
 #
 # Mirrors .htaccess: long-cache the content-hashed assets, never cache the HTML
 # entry point (a stale index.html points at purged hashes — the classic
-# white-screen-after-deploy), and the same response-hardening headers. CSP is
-# intentionally left out here too, to match .htaccess — it needs live testing
-# against the worker / WASM / WebGPU / blob-URL surface before enforcement.
+# white-screen-after-deploy), and the same response-hardening headers, including
+# the Content-Security-Policy in REPORT-ONLY mode (matches .htaccess): the
+# browser reports violations but blocks nothing, so the worker / WASM / WebGPU /
+# blob-URL surface can be observed for a release cycle before the header is
+# renamed to Content-Security-Policy to enforce.
 
 /*
   X-Content-Type-Options: nosniff
@@ -15,6 +17,7 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   X-Frame-Options: SAMEORIGIN
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self'; base-uri 'self'; form-action 'self'
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
