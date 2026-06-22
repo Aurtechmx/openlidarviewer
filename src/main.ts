@@ -92,9 +92,8 @@ import { utmConverter } from './geo/UtmConverter';
 import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
-import { buildSharedEpochDtms } from './terrain/change/compareEpochs';
-import { compareDtms, summarizeChange } from './terrain/change/compareDtms';
-import { changeToEsriAscii } from './terrain/change/changeRaster';
+// Two-epoch change detection is loaded on demand (it pulls the terrain
+// ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -5532,7 +5531,16 @@ function compareLoadedLayers(): void {
   inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
   inspector.setDifferenceAvailable(false);
   lastDifference = null;
-  setTimeout(() => {
+  void (async () => {
+    // Load the change-detection code on demand, then yield a frame so the
+    // "working" line paints before the synchronous ground-filter compute.
+    const [{ buildSharedEpochDtms }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
+      await Promise.all([
+        import('./terrain/change/compareEpochs'),
+        import('./terrain/change/compareDtms'),
+        import('./terrain/change/changeRaster'),
+      ]);
+    await new Promise((resolve) => setTimeout(resolve, 16));
     try {
       // Pass each cloud's origin: the two are recentred by their own origins, so
       // the comparison must align them in a common world frame, not raw local.
@@ -5565,7 +5573,7 @@ function compareLoadedLayers(): void {
     } catch (err) {
       inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
     }
-  }, 16);
+  })();
 }
 
 /** Download the most recent elevation difference as an ESRI ASCII grid. */
