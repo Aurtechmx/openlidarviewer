@@ -32,7 +32,7 @@ clip box. This release also carries the fixes below.
   inverse of the existing `srgbToLinearScalar`). Both leaf modules already
   shared the decode direction; the encode direction is now converged too, so
   the provenance card and the neighbourhood splat can no longer drift from
-  the curve the GPU upload uses (QualityRevision v0.4.4 item 5).
+  the curve the GPU upload uses.
 
 ## [0.4.9] - 2026-06-20
 
