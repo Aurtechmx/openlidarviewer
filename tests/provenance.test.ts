@@ -150,6 +150,21 @@ describe('provenance — numeric classification', () => {
     expect(f.captureType).toBe('drone-lidar');
   });
 
+  it('classifies a very dense low-altitude flight (>2000 pts/m²) as drone, not unknown', () => {
+    // A slow, low-AGL DJI L2 pass can exceed 2000 pts/m² over an open mapping
+    // footprint. A TLS station cannot lay down uniform density over thousands of
+    // m², so this must read as drone-LiDAR (and at high confidence), not fall
+    // through every band to unknown.
+    const f = classify({
+      sourceFormat: 'laz',
+      pointCount: 30_000_000,
+      extent: [120, 90, 25], // ~1.08 ha footprint
+      densityPerSqM: 3200,
+    });
+    expect(f.captureType).toBe('drone-lidar');
+    expect(f.confidence).toBe('high');
+  });
+
   it('keeps a dense SMALL-footprint scan as terrestrial, not drone', () => {
     // A station-scale dense scan (< 2000 m²) stays TLS — the drone band only
     // claims open mapping footprints, so this partition has no overlap.

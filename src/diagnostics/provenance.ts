@@ -325,8 +325,15 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
     // This band has to come before TLS, or a dense aerial strip falls through to
     // it. Source: Ruzgienė 2025 (Frontiers in Remote Sensing) — drone-LiDAR
     // "100–1000 pts/m² depending on altitude + flight pattern".
-    if (signals.densityPerSqM >= 50 && signals.densityPerSqM <= 2000 && footprintArea > 2000) {
-      return droneLidarFingerprint('medium', [
+    // No upper density cap over a mapping-scale footprint: a very dense
+    // low-altitude flight (>2000 pts/m², DJI L2 at low AGL / slow speed) is
+    // still drone, not TLS — a terrestrial station cannot lay down uniform
+    // high density across thousands of square metres. Very high density over an
+    // open footprint is the strongest low-altitude-UAV signature, so it reads
+    // 'high'; the literature band (100–1000) stays 'medium'.
+    if (signals.densityPerSqM >= 50 && footprintArea > 2000) {
+      const veryDense = signals.densityPerSqM > 1000;
+      return droneLidarFingerprint(veryDense ? 'high' : 'medium', [
         `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${(footprintArea / 10000).toFixed(2)} ha mapping footprint`,
       ]);
     }
