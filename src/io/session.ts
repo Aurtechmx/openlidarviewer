@@ -159,6 +159,19 @@ const KINDS: readonly MeasurementKind[] = [
  * keep the v1/v2 baseline byte-shape unchanged for files that don't use
  * the new surface.
  */
+/** The canonical inspection-session file extension (JSON content inside). */
+export const SESSION_EXTENSION = '.olvsession';
+
+/**
+ * True when a file is an inspection session (a saved analysis) rather than a
+ * point-cloud scan. The single detector every entry point uses to route a
+ * dropped/opened file to the session loader vs the cloud loader, so there's one
+ * answer to "is this a session?" instead of three.
+ */
+export function isSessionFile(name: string): boolean {
+  return name.toLowerCase().endsWith(SESSION_EXTENSION);
+}
+
 export function serializeSession(
   session: Omit<InspectionSession, 'app' | 'kind' | 'version'>,
 ): string {

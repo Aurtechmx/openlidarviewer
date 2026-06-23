@@ -307,8 +307,9 @@ export class MeasurePanel {
       // extract value. The tooltip below sets that expectation so users
       // don't conflate the two export paths.
       title:
-        'Save measurements, annotations, named views, and render settings ' +
-        'as a JSON file — readable standalone; re-import re-applies the views.',
+        'Save this analysis as an .olvsession — measurements, annotations, ' +
+        'named views, camera, render + colour settings, and the class filter. ' +
+        'Readable JSON; nothing leaves your device.',
     });
     exportBtn.addEventListener('click', () => {
       exportBtn.blur();
@@ -316,8 +317,11 @@ export class MeasurePanel {
     });
     const importBtn = el('button', {
       className: 'olv-mp-action',
-      text: 'Import',
-      title: 'Load measurements and saved views from a JSON session file',
+      text: 'Open session',
+      title:
+        'Open a saved .olvsession — restores measurements, annotations, views, ' +
+        'camera, render + colour settings. You can also just drag the ' +
+        '.olvsession onto the viewer, or use Open.',
     });
     importBtn.addEventListener('click', () => {
       importBtn.blur();

@@ -1,10 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { serializeSession, parseSession, SESSION_VERSION } from '../src/io/session';
+import { serializeSession, parseSession, SESSION_VERSION, isSessionFile, SESSION_EXTENSION } from '../src/io/session';
 import type { InspectionSession, SavedView } from '../src/io/session';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import type { Annotation } from '../src/render/annotate/types';
 
 const p = (x: number, y: number, z: number): Vec3 => [x, y, z];
+
+describe('isSessionFile — the single session-vs-scan router predicate', () => {
+  it('recognises the canonical .olvsession extension, case-insensitively', () => {
+    expect(isSessionFile('survey.olvsession')).toBe(true);
+    expect(isSessionFile('SURVEY.OLVSESSION')).toBe(true);
+    expect(isSessionFile(`a.b.c${SESSION_EXTENSION}`)).toBe(true);
+  });
+
+  it('rejects point-cloud scans and other files', () => {
+    for (const n of ['scan.las', 'scan.laz', 'cloud.copc.laz', 'model.glb', 'a.json', 'olvsession', 'notes.txt']) {
+      expect(isSessionFile(n)).toBe(false);
+    }
+  });
+});
 
 function sampleSession(): Omit<InspectionSession, 'app' | 'kind' | 'version'> {
   const measurements: Measurement[] = [

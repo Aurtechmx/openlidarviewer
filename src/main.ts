@@ -124,7 +124,7 @@ import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
 // callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
 // weigh on the initial payload of a session that never exports.
-import { serializeSession, parseSession } from './io/session';
+import { serializeSession, parseSession, isSessionFile } from './io/session';
 import { loadPrefs, savePrefs } from './prefs';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
@@ -2056,7 +2056,10 @@ const measurePanel = new MeasurePanel({
   onDelete: (id) => viewer.measure.removeMeasurement(id),
   onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
   onExport: () => exportSession(),
-  onImport: (file) => void importSession(file),
+  // Route through the single file router so the Import button, the Open picker,
+  // and a drag-drop all open a session identically (and a scan picked here
+  // still loads as a scan).
+  onImport: (file) => void handleFile(file),
   onChainAggregate: (ids, dimension, operation) => {
     // Filter the controller's measurements to the panel-selected set
     // and aggregate via the pure-data module. The panel owns the
@@ -4327,6 +4330,24 @@ async function importSession(file: File): Promise<void> {
       // restored scan shows the same classes the author left visible.
       classLegendPanel.applyFilter(session.classFilter);
     }
+
+    // Honest disclosure: the session carries the saved analysis, not the scan
+    // itself (a point cloud can't travel in the file). If its scan isn't
+    // loaded, the restored measurements/annotations have nothing to sit on —
+    // say so and point the user at the file to drop, rather than restoring onto
+    // an empty scene silently.
+    const restored =
+      session.measurements.length + session.annotations.length + session.views.length;
+    const wantFile = session.scanSummary?.fileName;
+    const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    if (wantFile && !haveCloud) {
+      showLassoToast(`Session restored — drop “${wantFile}” to view its scan.`);
+    } else {
+      showLassoToast(
+        `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
+          `(measurements, annotations, views).`,
+      );
+    }
   } catch (err) {
     dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
   }
@@ -4334,6 +4355,16 @@ async function importSession(file: File): Promise<void> {
 
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
 async function handleFile(file: File): Promise<void> {
+  // SINGLE ROUTER for every file that enters the app (drop zone, Open picker,
+  // Measurements Import). An `.olvsession` is a saved analysis, not a scan, so
+  // it goes to the one session loader — never the cloud worker — and every
+  // entry point therefore opens sessions the same way. A session restore is
+  // cheap (read + apply state) and safe to run even mid-load, so it routes
+  // ahead of the cloud-loading guard.
+  if (isSessionFile(file.name)) {
+    await importSession(file);
+    return;
+  }
   // One load at a time. The shared parse worker decodes a single file; a
   // second load started mid-flight would hijack the first one's worker. The
   // in-progress load carries a Cancel control if the user wants to switch.
