@@ -22,6 +22,7 @@ import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
 import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
 import { compareDtms, type EpochComparison } from './compareDtms';
+import type { ChangeDetectionOptions } from './changeDetection';
 
 /** One epoch: its render-local xyz positions (z up) and declared CRS / datum. */
 export interface EpochCloud {
@@ -159,8 +160,12 @@ export function buildSharedEpochDtms(before: EpochCloud, after: EpochCloud): Epo
  * Compare two epochs end-to-end: build co-registered DTMs on a shared grid,
  * then diff them. Returns null only when a cloud has no finite points.
  */
-export function compareEpochClouds(before: EpochCloud, after: EpochCloud): EpochComparison | null {
+export function compareEpochClouds(
+  before: EpochCloud,
+  after: EpochCloud,
+  options: ChangeDetectionOptions = {},
+): EpochComparison | null {
   const dtms = buildSharedEpochDtms(before, after);
   if (!dtms) return null;
-  return compareDtms(dtms.before, dtms.after);
+  return compareDtms(dtms.before, dtms.after, options);
 }

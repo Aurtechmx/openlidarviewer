@@ -137,6 +137,10 @@ export const SIZE_TERM_SCALE = 1000;
 export function nodeScore(input: NodeScoreInput): number {
   if (input.depth > input.depthCap) return 0;
   const ps = projectedSize(input.bounds, input.cameraPos);
+  // A degenerate / zero-extent / non-finite node box makes `ps` NaN; `NaN <= 0`
+  // is false, so a `score > 0` budget selector would admit the garbage node.
+  // Reject it explicitly.
+  if (!Number.isFinite(ps)) return 0;
   const sizeTerm = Math.min(Math.round(ps * SIZE_TERM_SCALE), SIZE_TERM_MAX);
   const depthContribution =
     (input.depthCap - input.depth + 1) * DEPTH_WEIGHT;

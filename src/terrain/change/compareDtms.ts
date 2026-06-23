@@ -17,6 +17,7 @@
 import type { DtmGrid } from '../ground/cellConfidence';
 import {
   detectChange,
+  DEFAULT_LOD_M,
   type ChangeGrid,
   type ChangeResult,
   type ChangeDetectionOptions,
@@ -48,6 +49,8 @@ export interface EpochComparison {
   readonly coregistered: boolean;
   /** Plain-language co-registration caveats (empty when fully aligned). */
   readonly coregistrationNotes: readonly string[];
+  /** The Level-of-Detection (m) applied: |Δ| ≤ this read as no change (noise floor). */
+  readonly levelOfDetectionM: number;
 }
 
 /**
@@ -91,7 +94,8 @@ export function compareDtms(
   // The raster mismatch (cell size / dims) is already in result.warnings; the
   // overall co-registration verdict folds those in too.
   const coregistered = result.aligned && notes.length === 0;
-  return { result, coregistered, coregistrationNotes: notes };
+  const levelOfDetectionM = Math.max(0, options.levelOfDetectionM ?? DEFAULT_LOD_M);
+  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM };
 }
 
 /**
@@ -113,7 +117,8 @@ export function summarizeChange(comparison: EpochComparison): string[] {
   );
   lines.push(
     `${(s.significantFraction * 100).toFixed(1)}% of comparable cells changed beyond the ` +
-      `detection floor (${s.gained} gained, ${s.lost} lost, ${s.unchanged} unchanged).`,
+      `detection floor of ${comparison.levelOfDetectionM} m ` +
+      `(${s.gained} gained, ${s.lost} lost, ${s.unchanged} unchanged).`,
   );
   lines.push(
     `Largest gain ${s.maxGainM.toFixed(2)} m, largest loss ${s.maxLossM.toFixed(2)} m; ` +

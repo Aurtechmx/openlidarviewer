@@ -195,11 +195,14 @@ test('availableModes + unavailableModes — capability gating round-trip', () =>
 // OrthographicRgbExporter — isAvailable + math
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('orthographicRgbExporter is universally available — every context', () => {
+test('orthographicRgbExporter is available only with a real scene AABB', () => {
   expect(orthographicRgbExporter.mode).toBe('orthographic-rgb');
   expect(orthographicRgbExporter.label).toBe('Orthographic RGB');
-  // isAvailable doesn't reach `adapter`, so any context will do.
-  expect(orthographicRgbExporter.isAvailable({} as unknown as ExportContext)).toBe(true);
+  // Gated like the other image exporters: a real AABB → available; no scene
+  // (e.g. a not-yet-decoded streaming cloud) → unavailable, so it can't snapshot
+  // an empty frame and ship a blank PNG.
+  expect(orthographicRgbExporter.isAvailable(stubContext(stubAdapter({})))).toBe(true);
+  expect(orthographicRgbExporter.isAvailable(stubContext(stubAdapter({ aabb: null })))).toBe(false);
 });
 
 test('orthoCameraForPerspective produces a parallel-projection camera at the same pose', () => {

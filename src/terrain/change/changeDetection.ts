@@ -81,7 +81,8 @@ export interface ChangeResult {
   readonly warnings: readonly string[];
 }
 
-const DEFAULT_LOD_M = 0.1;
+/** Default Level-of-Detection (m): changes with |Δ| ≤ this read as no change. */
+export const DEFAULT_LOD_M = 0.1;
 
 /**
  * Compare two DTM grids (epoch `a` = before, `b` = after). Both should be on the

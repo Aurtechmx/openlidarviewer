@@ -94,8 +94,11 @@ export const orthographicRgbExporter: ExportFactory = {
   mode: 'orthographic-rgb',
   label: 'Orthographic RGB',
 
-  isAvailable(): boolean {
-    return true;
+  isAvailable(context: ExportContext): boolean {
+    // Gate on a real scene AABB, like the other image exporters — otherwise a
+    // not-yet-decoded streaming cloud (or no scan) snapshots an empty frame and
+    // ships a blank PNG.
+    return context.adapter.localBoundsAabb() !== null;
   },
 
   async render(
