@@ -93,6 +93,7 @@ describe('fitConfidenceCalibration', () => {
     expect(cal.remap(30)).toBeLessThanOrEqual(cal.remap(60) + 1e-6);
     expect(cal.remap(60)).toBeLessThanOrEqual(cal.remap(90) + 1e-6);
   });
+
 });
 
 describe('applyConfidenceCalibration', () => {
@@ -131,5 +132,24 @@ describe('applyConfidenceCalibration', () => {
     const g0 = grid([90, 20], [2, 2]);
     const g1 = applyConfidenceCalibration(g0, cal);
     expect(g1).toBe(g0);
+  });
+
+  it('calibrates MEASURED cells but leaves INTERPOLATED cells at raw geometric confidence', () => {
+    // The "all yellow" bug. On a dense scan the held-out points all land in
+    // measured cells (high raw confidence), so the calibration curve's lowest
+    // knot is high and maps near 100%. If that calibration were applied to an
+    // interpolated cell with LOW raw confidence, the remap would flat-extrapolate
+    // the high knot down and paint FAR interpolation as "strong". Calibration is
+    // a calibration of the MEASURED surface (its samples are measured ground), so
+    // it must touch only coverage==2; interpolated cells (coverage==1) keep their
+    // honest geometric confidence, which already falls off with distance.
+    const tight: ConfidenceSample[] = [];
+    for (let i = 0; i < 120; i++) tight.push({ confidence: 85 + (i % 15), absError: 0.02 });
+    const cal = fitConfidenceCalibration(tight, { toleranceM: 0.08 });
+    expect(cal.assessable).toBe(true);
+    // A measured high-raw cell (95) and an interpolated far cell (raw 15).
+    const g = applyConfidenceCalibration(grid([95, 15], [2, 1]), cal);
+    expect(g.confidence[0]).toBeGreaterThan(66); // measured → still strong (calibrated)
+    expect(g.confidence[1]).toBe(15); // interpolated → untouched, NOT lifted to strong
   });
 });

@@ -2184,6 +2184,21 @@ const analysePanel = new AnalysePanel({
     viewer.setColorMode(activeId, 'confidence');
     inspector.setColorModes(availableModes(cloud), 'confidence');
     syncInspectorVisuals();
+    // The 3D overlay tints each point by the trust of the ground beneath it.
+    // Points cluster over MEASURED ground, so a surface that is largely
+    // interpolated still paints mostly "strong" in 3D — the interpolated share
+    // sits in point-sparse voids that have little to colour. Say so, and point
+    // the user at the 2D Coverage tile, which shows every cell. Only caption
+    // when interpolation is a meaningful share, so a clean scan stays quiet.
+    const summary = viewer.coverageGridCellSummary();
+    if (summary && summary.interpFrac >= 0.2) {
+      const pct = Math.round(summary.interpFrac * 100);
+      showLassoToast(
+        `Confidence colour tints each point by the trust of the ground under it. ` +
+          `${pct}% of this surface is interpolated — those areas hold few points, so 3D still reads mostly strong. ` +
+          `The 2D Coverage tile shows the full per-cell trust map.`,
+      );
+    }
   },
   getMapContext: () => {
     const cloud = activeId ? viewer.getCloud(activeId) : null;

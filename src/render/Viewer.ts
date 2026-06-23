@@ -2168,6 +2168,31 @@ export class Viewer {
   }
 
   /**
+   * Cheap per-CELL summary of the confidence grid (fraction of covered cells
+   * that are interpolated, and that fall in the low-confidence 'gap' band). The
+   * 3D confidence overlay tints POINTS, which cluster over measured ground, so
+   * it always skews high — this cell-level view is what makes the interpolated
+   * share visible, and lets the UI caption the overlay honestly. Null when no
+   * grid or no covered cells.
+   */
+  coverageGridCellSummary(): { interpFrac: number; gapFrac: number } | null {
+    const g = this._coverageGrid;
+    if (!g) return null;
+    let covered = 0;
+    let interp = 0;
+    let gap = 0;
+    const n = g.confidence.length;
+    for (let i = 0; i < n; i++) {
+      const cov = g.coverage[i];
+      if (cov === 0) continue;
+      covered++;
+      if (cov === 1) interp++;
+      if (g.confidence[i] < 33) gap++;
+    }
+    return covered > 0 ? { interpFrac: interp / covered, gapFrac: gap / covered } : null;
+  }
+
+  /**
    * Set the symmetric percentile trim used by the elevation colour
    * mode and reseed every cloud currently rendering in elevation
    * mode. The streaming renderer reads the trim through the same

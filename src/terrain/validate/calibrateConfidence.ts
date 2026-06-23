@@ -172,8 +172,20 @@ export function applyConfidenceCalibration(
   let sum = 0;
   let cells = 0;
   for (let i = 0; i < n; i++) {
-    if (grid.coverage[i] > 0) {
+    if (grid.coverage[i] === 2) {
+      // MEASURED cell. The held-out samples are measured ground truth, so the
+      // calibration is a calibration of the MEASURED surface — apply it here.
       confidence[i] = Math.round(clamp(calibration.remap(grid.confidence[i]), 0, 100));
+      sum += confidence[i];
+      cells++;
+    } else if (grid.coverage[i] === 1) {
+      // INTERPOLATED cell. No held-out ground truth backs an invented value, and
+      // on a dense scan every sample lands in a measured (high-raw) cell, so the
+      // curve's lowest knot is high — remapping an interpolated cell would
+      // flat-extrapolate that high value down and read FAR interpolation as
+      // "strong" (the all-yellow bug). Keep the honest geometric confidence,
+      // which already falls off with interpolation distance.
+      confidence[i] = grid.confidence[i];
       sum += confidence[i];
       cells++;
     } else {
