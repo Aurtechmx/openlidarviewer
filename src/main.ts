@@ -95,6 +95,7 @@ import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
+import { footprintMetres } from './report/reportFootprint';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
@@ -3784,11 +3785,16 @@ async function generateReportPdf(templateId: string): Promise<void> {
   let exportFileStem: string;
   if (streamingCloud) {
     const b = streamingCloud.localBounds();
-    const w = b[3] - b[0], d = b[4] - b[1], h = b[5] - b[2];
-    const density = w > 0 && d > 0
-      ? streamingCloud.sourcePointCount / (w * d)
-      : NaN;
     const crs = streamingCloud.crs();
+    // Footprint + density in metres / pts·m⁻², not raw CRS units (see
+    // reportFootprint): a foot-CRS scan would otherwise overstate the headline
+    // area ~10.76× and be graded against the wrong USGS Quality Level.
+    const { width: wM, depth: dM, height: hM, density } = footprintMetres({
+      extentX: b[3] - b[0], extentY: b[4] - b[1], extentZ: b[5] - b[2],
+      pointCount: streamingCloud.sourcePointCount,
+      linearUnitToMetres: crs?.linearUnitToMetres,
+      verticalUnitToMetres: crs?.verticalUnitToMetres,
+    });
     const modes = streamingCloud.availableColorModes();
     // Streaming-preview accounting — how much of the cloud is resident at
     // export time. Surfaced as a "Loaded" row so the PDF discloses that a
@@ -3799,7 +3805,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
       fileName: streamingCloud.name,
       format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
       sourcePointCount: streamingCloud.sourcePointCount,
-      width: w, depth: d, height: h, density,
+      width: wM, depth: dM, height: hM, density,
       hasRgb: modes.includes('rgb'),
       hasIntensity: modes.includes('intensity'),
       hasClassification: modes.includes('classification'),
@@ -3816,7 +3822,6 @@ async function generateReportPdf(templateId: string): Promise<void> {
     exportFileStem = baseName(streamingCloud.name);
   } else if (staticCloud) {
     const b = staticCloud.bounds();
-    const w = b.max[0] - b.min[0], d = b.max[1] - b.min[1], h = b.max[2] - b.min[2];
     // File-scale honesty: the loader strides huge clouds for display, so
     // `pointCount` is the rendered subset. The client PDF must describe the
     // FILE — use the declared total (and the density that follows from it) when
@@ -3825,13 +3830,21 @@ async function generateReportPdf(templateId: string): Promise<void> {
       staticCloud.declaredPointCount !== undefined && staticCloud.declaredPointCount > staticCloud.pointCount
         ? staticCloud.declaredPointCount
         : staticCloud.pointCount;
-    const density = w > 0 && d > 0 ? fileN / (w * d) : NaN;
     const crs = staticCloud.metadata?.crs;
+    // Footprint + density in metres / pts·m⁻² (see reportFootprint): a foot-CRS
+    // scan would otherwise overstate area ~10.76× and be graded against the
+    // wrong USGS Quality Level.
+    const { width: wM, depth: dM, height: hM, density } = footprintMetres({
+      extentX: b.max[0] - b.min[0], extentY: b.max[1] - b.min[1], extentZ: b.max[2] - b.min[2],
+      pointCount: fileN,
+      linearUnitToMetres: crs?.linearUnitToMetres,
+      verticalUnitToMetres: crs?.verticalUnitToMetres,
+    });
     metadata = {
       fileName: staticCloud.name,
       format: staticCloud.sourceFormat.toUpperCase(),
       sourcePointCount: fileN,
-      width: w, depth: d, height: h, density,
+      width: wM, depth: dM, height: hM, density,
       hasRgb: !!staticCloud.colors,
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
