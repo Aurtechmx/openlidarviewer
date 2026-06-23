@@ -87,8 +87,8 @@ import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
-import { measurementsToGeoJSON, measurementsToCsv, type MeasurementExportContext } from './export/measurementExport';
-import { buildKml, type KmlExportInput } from './export/kmlExport';
+import type { MeasurementExportContext } from './export/measurementExport';
+import type { KmlExportInput } from './export/kmlExport';
 import { utmConverter } from './geo/UtmConverter';
 import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
 import { ClipPanel } from './ui/ClipPanel';
@@ -125,7 +125,10 @@ import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
 // callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
 // weigh on the initial payload of a session that never exports.
-import { serializeSession, parseSession, isSessionFile } from './io/session';
+// Only the tiny file-router predicate is eager; the (large) serializer/parser
+// is dynamically imported in exportSession/importSession so it stays off the
+// initial bundle.
+import { isSessionFile } from './io/sessionFile';
 import { loadPrefs, savePrefs } from './prefs';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
@@ -2056,7 +2059,7 @@ const streamingPanel = new StreamingPanel({
 const measurePanel = new MeasurePanel({
   onDelete: (id) => viewer.measure.removeMeasurement(id),
   onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
-  onExport: () => exportSession(),
+  onExport: () => void exportSession(),
   // Route through the single file router so the Import button, the Open picker,
   // and a drag-drop all open a session identically (and a scan picked here
   // still loads as a scan).
@@ -2520,10 +2523,11 @@ const exportPanel = new ExportPanel({
   // happens before the lazy `viewer` chunk resolves, so it must tolerate a null
   // viewer (return 0) instead of dereferencing it and crashing app init.
   measurementCount: () => (viewer ? viewer.measure.getMeasurements().length : 0),
-  exportMeasurements: (format) => {
+  exportMeasurements: async (format) => {
     if (!viewer) return;
     const measurements = viewer.measure.getMeasurements();
     if (measurements.length === 0) return;
+    const { measurementsToGeoJSON, measurementsToCsv } = await import('./export/measurementExport');
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
     // Measurement points are LOCAL (recentered); add the origin back to land them
     // in the source projected/local frame. Geographic reprojection (→ lon/lat) is
@@ -2542,12 +2546,13 @@ const exportPanel = new ExportPanel({
     const stem = cloud ? baseName(cloud.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
-  exportKml: () => {
+  exportKml: async () => {
     if (!viewer) return;
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
     const origin = cloud?.origin ?? [0, 0, 0];
     const toLonLat = makeLocalToLonLat(crsService.current(), origin);
     if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
+    const { buildKml } = await import('./export/kmlExport');
     const input: KmlExportInput = {
       annotations: viewer.annotate.getAnnotations(),
       measurements: viewer.measure.getMeasurements(),
@@ -4217,7 +4222,8 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * as JSON. The whole inspection state round-trips, so a review can be closed
  * and reopened without loss.
  */
-function exportSession(): void {
+async function exportSession(): Promise<void> {
+  const { serializeSession } = await import('./io/session');
   const cloud = activeId ? viewer.getCloud(activeId) : undefined;
   const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
 
@@ -4289,6 +4295,7 @@ function exportSession(): void {
 /** Import an inspection session: restore measurements, annotations and views. */
 async function importSession(file: File): Promise<void> {
   try {
+    const { parseSession } = await import('./io/session');
     const session = parseSession(await file.text());
     viewer.measure.loadMeasurements(session.measurements);
     viewer.annotate.loadAnnotations(session.annotations);
