@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { gradeMeasurement } from '../src/render/measure/measurementTrust';
+import { gradeMeasurement, summarizeMeasurementTrust } from '../src/render/measure/measurementTrust';
 
 const strong = { snappedToPoint: true, pointsWithinRadius: 50 };
 const weakSparse = { snappedToPoint: true, pointsWithinRadius: 6 };
@@ -59,5 +59,27 @@ describe('gradeMeasurement', () => {
     for (const v of [[strong, strong], [strong, weakSparse], [strong, voidPt]]) {
       expect(gradeMeasurement({ vertices: v, crsKnown: true }).reasons.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('summarizeMeasurementTrust (Evidence Capsule roll-up)', () => {
+  const g = gradeMeasurement({ vertices: [strong, strong], crsKnown: true }); // green
+  const y = gradeMeasurement({ vertices: [strong, weakSparse], crsKnown: true }); // yellow
+  const r = gradeMeasurement({ vertices: [strong, voidPt], crsKnown: true }); // red
+
+  it('counts grades and writes a one-line breakdown', () => {
+    const s = summarizeMeasurementTrust([g, y, r, undefined]);
+    expect(s).toMatchObject({ total: 3, green: 1, yellow: 1, red: 1 });
+    expect(s.line).toBe('3 measurements — 1 verified, 1 caution, 1 unverified');
+  });
+
+  it('ignores ungraded (undefined) entries and handles an all-empty input', () => {
+    expect(summarizeMeasurementTrust([undefined, undefined]).total).toBe(0);
+    expect(summarizeMeasurementTrust([]).line).toBe('No graded measurements');
+  });
+
+  it('singular phrasing for one measurement, omits empty buckets', () => {
+    const s = summarizeMeasurementTrust([g]);
+    expect(s.line).toBe('1 measurement — 1 verified');
   });
 });

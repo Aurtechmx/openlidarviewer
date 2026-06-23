@@ -133,3 +133,43 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
 
   return { grade, caption, reasons, presentable };
 }
+
+/** A capsule-level roll-up of measurement trust, for the Evidence Capsule. */
+export interface EvidenceSummary {
+  /** Number of measurements that carry a trust grade. */
+  readonly total: number;
+  readonly green: number;
+  readonly yellow: number;
+  readonly red: number;
+  /** One-line breakdown, e.g. "5 measurements — 3 verified, 1 caution, 1 unverified". */
+  readonly line: string;
+}
+
+/**
+ * Roll up the per-measurement grades into one honest evidence headline — what
+ * an Evidence Capsule announces when it opens, so the recipient sees the trust
+ * picture at a glance, not just a pile of numbers.
+ */
+export function summarizeMeasurementTrust(
+  trusts: readonly (MeasurementTrust | undefined)[],
+): EvidenceSummary {
+  let green = 0;
+  let yellow = 0;
+  let red = 0;
+  for (const t of trusts) {
+    if (!t) continue;
+    if (t.grade === 'green') green++;
+    else if (t.grade === 'yellow') yellow++;
+    else red++;
+  }
+  const total = green + yellow + red;
+  const parts: string[] = [];
+  if (green) parts.push(`${green} verified`);
+  if (yellow) parts.push(`${yellow} caution`);
+  if (red) parts.push(`${red} unverified`);
+  const line =
+    total === 0
+      ? 'No graded measurements'
+      : `${total} measurement${total === 1 ? '' : 's'} — ${parts.join(', ')}`;
+  return { total, green, yellow, red, line };
+}

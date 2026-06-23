@@ -47,6 +47,7 @@ import {
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
+import { summarizeMeasurementTrust } from './render/measure/measurementTrust';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
@@ -4340,8 +4341,16 @@ async function importSession(file: File): Promise<void> {
       session.measurements.length + session.annotations.length + session.views.length;
     const wantFile = session.scanSummary?.fileName;
     const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // Evidence Capsule: lead with the honesty roll-up when the shared session
+    // carries graded measurements — the recipient sees the trust picture, not
+    // just a count.
+    const evidence = summarizeMeasurementTrust(session.measurements.map((m) => m.trust));
+    const lead = evidence.total > 0 ? `Evidence restored — ${evidence.line}.` : null;
     if (wantFile && !haveCloud) {
-      showLassoToast(`Session restored — drop “${wantFile}” to view its scan.`);
+      showLassoToast(lead ?? `Session restored — drop “${wantFile}” to view its scan.`,
+        lead ? { label: 'Need the scan', onClick: () => showLassoToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
+    } else if (lead) {
+      showLassoToast(lead);
     } else {
       showLassoToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +

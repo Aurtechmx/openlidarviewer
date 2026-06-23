@@ -532,7 +532,7 @@ describe('parseSession / serializeSession — v4 CRS persistence', () => {
     const json = serializeSession(sampleSession());
     const parsed = JSON.parse(json);
     expect(parsed.version).toBe(SESSION_VERSION);
-    expect(SESSION_VERSION).toBe(5);
+    expect(SESSION_VERSION).toBe(6);
   });
 
   it('a v4 file with a non-finite linearUnitToMetres rejects the crs', () => {
@@ -683,5 +683,36 @@ describe('parseSession / serializeSession — v5 clip-box persistence', () => {
       clip: { box: { min: [0, 0], max: [10, 10, 5] }, mode: 'keep-inside', enabled: true },
     };
     expect(parseSession(JSON.stringify(doc)).clip).toBeUndefined();
+  });
+});
+
+describe('Evidence Capsule — per-measurement trust round-trips (v6)', () => {
+  it('preserves a measurement trust grade across serialize → parse', () => {
+    const withTrust: Omit<InspectionSession, 'app' | 'kind' | 'version'> = {
+      ...sampleSession(),
+      measurements: [
+        {
+          id: 'd1', kind: 'distance', name: 'D1', points: [p(0, 0, 0), p(1, 0, 0)],
+          trust: { grade: 'yellow', caption: 'Caution', reasons: ['sparse area'], presentable: true },
+        },
+      ],
+    };
+    const back = parseSession(serializeSession(withTrust));
+    expect(back.measurements[0].trust).toEqual({
+      grade: 'yellow', caption: 'Caution', reasons: ['sparse area'], presentable: true,
+    });
+  });
+
+  it('drops a malformed trust block rather than restoring garbage', () => {
+    const doc = {
+      app: 'OpenLiDARViewer', kind: 'measurement-session', version: 6,
+      upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric', views: [], annotations: [],
+      measurements: [
+        { id: 'd', kind: 'distance', name: 'D', points: [[0, 0, 0], [1, 0, 0]], trust: { grade: 'purple' } },
+      ],
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.measurements).toHaveLength(1);
+    expect(back.measurements[0].trust).toBeUndefined();
   });
 });

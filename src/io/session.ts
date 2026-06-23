@@ -16,6 +16,7 @@
 
 import type { Measurement, MeasurementKind, UnitSystem, Vec3 } from '../render/measure/types';
 import { MIN_POINTS } from '../render/measure/types';
+import type { MeasurementTrust, TrustGrade } from '../render/measure/measurementTrust';
 import type { Annotation, SavedCameraState, Vec3Object } from '../render/annotate/types';
 import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
 import type { ColorMode } from '../render/colorModes';
@@ -39,10 +40,10 @@ import type { ClipBox, ClipMode } from '../render/clip/clipBox';
  * Older v1 + v2 files parse with no loss — the new optional fields just
  * read as undefined, and the Viewer falls back to its current state.
  */
-export const SESSION_VERSION = 5;
+export const SESSION_VERSION = 6;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
+const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
 
 /** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
@@ -370,15 +371,41 @@ function parseMeasurements(v: unknown): Measurement[] {
       ? item.points.filter(isVec3).map((p): Vec3 => [p[0], p[1], p[2]])
       : [];
     if (points.length < MIN_POINTS[k]) continue;
-    out.push({
+    const m: Measurement = {
       id: typeof item.id === 'string' ? item.id : freshMeasurementId(),
       kind: k,
       name: typeof item.name === 'string' ? item.name : k,
       points,
       closed: item.closed === true ? true : undefined,
-    });
+    };
+    // v6 — the per-measurement honesty grade travels with the measurement so a
+    // shared Evidence Capsule keeps its red/yellow/green verdict + reasons, not
+    // just the number. The recipient sees the AUTHOR's trust assessment (what
+    // was actually found), which is the point of evidence.
+    const trust = parseMeasurementTrust(item.trust);
+    if (trust) m.trust = trust;
+    out.push(m);
   }
   return out;
+}
+
+const TRUST_GRADES: readonly TrustGrade[] = ['green', 'yellow', 'red'];
+
+/** Defensively parse a persisted measurement trust grade; null if malformed. */
+function parseMeasurementTrust(v: unknown): MeasurementTrust | undefined {
+  if (!isRecord(v)) return undefined;
+  if (typeof v.grade !== 'string' || !TRUST_GRADES.includes(v.grade as TrustGrade)) return undefined;
+  if (typeof v.caption !== 'string') return undefined;
+  if (typeof v.presentable !== 'boolean') return undefined;
+  const reasons = Array.isArray(v.reasons)
+    ? v.reasons.filter((r): r is string => typeof r === 'string')
+    : [];
+  return {
+    grade: v.grade as TrustGrade,
+    caption: v.caption,
+    reasons,
+    presentable: v.presentable,
+  };
 }
 
 function parseAnnotations(v: unknown): Annotation[] {
