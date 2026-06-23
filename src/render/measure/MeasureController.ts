@@ -398,6 +398,9 @@ export class MeasureController {
   // progress (snap kind 'point'), index-aligned with `_draft.points`. Drives the
   // per-measurement trust grade at commit; reset when a new draft starts.
   private _draftSnapped: boolean[] = [];
+  // Whether the active scan has a known CRS with real-world units. Separate from
+  // `_unitToMetres` (which is 1 for a metric CRS AND a CRS-less cloud).
+  private _crsKnown = false;
   private _lastCamera: THREE.PerspectiveCamera | null = null;
   private _lastCanvas: HTMLCanvasElement | null = null;
   private _snapBtn: HTMLButtonElement | null = null;
@@ -627,6 +630,16 @@ export class MeasureController {
     // re-emit so every label and the panel re-derive through the new factor.
     this._updateHint();
     this._emitChange();
+  }
+
+  /**
+   * Whether the active scan has a known CRS with real-world units. Drives the
+   * trust grade's "scale verified" signal — distinct from `unitToMetres`, which
+   * is 1 for BOTH a metric CRS and a CRS-less cloud, so the factor alone can't
+   * tell a georeferenced metre survey from an ungeoreferenced one.
+   */
+  setCrsKnown(known: boolean): void {
+    this._crsKnown = known;
   }
 
   /** A snapshot of all completed measurements. */
@@ -1245,7 +1258,7 @@ export class MeasureController {
     }));
     return gradeMeasurement({
       vertices,
-      crsKnown: this._unitToMetres !== 1,
+      crsKnown: this._crsKnown,
       residentOnly: m.volumeResidentOnly === true || m.profileChartResidentOnly === true,
     });
   }

@@ -49,7 +49,9 @@ export interface InstantAnswer {
  * intent); otherwise route by detected shape, defaulting to terrain.
  */
 export function planInstantAnswer(input: InstantAnswerInput): InstantAnswer {
-  if (input.cloudCount >= 2) {
+  // Exactly two scans is the before/after case the comparison runs on; with a
+  // third loaded, the new scan routes by its own shape instead.
+  if (input.cloudCount === 2) {
     const pair = input.priorScanLabel
       ? `“${input.priorScanLabel}” vs “${input.scanLabel ?? 'this scan'}”`
       : 'the two scans';

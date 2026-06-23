@@ -298,6 +298,9 @@ export async function loadFile(
       settled = true;
       worker.onmessage = null;
       worker.onerror = null;
+      // Remove ourselves from the signal so an aborted load leaves no listener
+      // attached (symmetry with `detach`).
+      signal?.removeEventListener('abort', onAbort);
       // Terminate the worker mid-decode — no orphan, no leak — and drop it so
       // the next load lazily spawns a fresh one.
       dropWorker(worker);

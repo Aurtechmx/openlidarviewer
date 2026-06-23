@@ -2124,6 +2124,10 @@ const measurePanel = new MeasurePanel({
 void viewerLoaded.then(() => {
   crsService.subscribe((resolved) => {
     viewer.measure.setUnitToMetres(resolved?.linearUnitToMetres ?? 1);
+    // A CRS is "known" for the measurement trust grade when one resolved with a
+    // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
+    // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
+    viewer.measure.setCrsKnown(resolved != null && resolved.linearUnit !== 'unknown');
   });
 });
 // The Annotations panel lists placed annotations; the controller drives it.
