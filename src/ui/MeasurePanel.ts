@@ -834,6 +834,31 @@ export class MeasurePanel {
       });
       children.unshift(check);
     }
+    // Per-measurement honesty badge (#2): a red/yellow/green trust dot whose
+    // tooltip is the "show me why" — the caption plus every reason that shaped
+    // the grade. A non-presentable (void-endpoint) measurement also de-emphasises
+    // its number so the figure is never presented as an authoritative survey
+    // value the data can't support.
+    if (s.trust) {
+      const t = s.trust;
+      const colour = t.grade === 'green' ? '#38b058' : t.grade === 'yellow' ? '#e8c440' : '#d64c40';
+      const badge = el('span', {
+        className: `olv-mp-trust olv-mp-trust-${t.grade}`,
+        text: '●',
+        title: [t.caption, ...t.reasons.map((r) => `• ${r}`)].join('\n'),
+        ariaLabel: `Trust ${t.grade}: ${t.caption}`,
+      });
+      badge.style.color = colour;
+      badge.style.cursor = 'help';
+      if (!t.presentable) {
+        value.style.opacity = '0.55';
+        value.style.textDecoration = 'underline dotted';
+        value.title = t.caption;
+      }
+      // Insert just after the value so the dot reads as the number's verdict.
+      children.splice(children.indexOf(value) + 1, 0, badge);
+    }
+
     const headRow = el('div', { className: 'olv-mp-row' }, children);
 
     // Profile-only: render a compact height-vs-distance chart strip

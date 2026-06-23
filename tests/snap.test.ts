@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildPointSnapIndex,
   snapToNearestPoint,
+  countPointsWithinRadius,
   snapToVertices,
   snapToMidpoints,
   snapToIntersections,
@@ -220,5 +221,27 @@ describe('edge cases — maxDistance 0, single point, zero-length segment', () =
       [[-1, 0, 0], [1, 0, 0]],
     ];
     expect(snapToIntersections(segments, [0, 0, 0], 100)).toBeNull();
+  });
+});
+
+describe('countPointsWithinRadius', () => {
+  it('counts the measured returns inside the radius (and excludes those outside)', () => {
+    // A 3x3 grid of points spaced 1 unit apart, centred on origin.
+    const pts: Array<readonly [number, number, number]> = [];
+    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) pts.push([x, y, 0]);
+    const index = buildPointSnapIndex(cloud(pts));
+
+    // radius 0.5 around origin → only the centre point.
+    expect(countPointsWithinRadius(index, [0, 0, 0], 0.5)).toBe(1);
+    // radius 1.01 → centre + 4 axis neighbours (the 4 diagonals are ~1.414 away).
+    expect(countPointsWithinRadius(index, [0, 0, 0], 1.01)).toBe(5);
+    // radius spanning the whole grid → all 9.
+    expect(countPointsWithinRadius(index, [0, 0, 0], 5)).toBe(9);
+  });
+
+  it('returns 0 in an empty neighbourhood (a void) and on a 0 radius', () => {
+    const index = buildPointSnapIndex(cloud([[0, 0, 0], [1, 0, 0]]));
+    expect(countPointsWithinRadius(index, [100, 100, 100], 1)).toBe(0);
+    expect(countPointsWithinRadius(index, [0, 0, 0], 0)).toBe(0);
   });
 });

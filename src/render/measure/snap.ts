@@ -267,6 +267,47 @@ export function snapToNearestPoint(
       };
 }
 
+/**
+ * Count measured returns within `radius` of `query` — the local-support signal
+ * for the per-measurement trust grade. Reuses the snap index's uniform grid:
+ * scans only the cells the radius can reach, so it stays cheap even on millions
+ * of points. (Called a few times per placed measurement, not in a hot loop.)
+ */
+export function countPointsWithinRadius(
+  index: PointSnapIndex,
+  query: Vec3,
+  radius: number,
+): number {
+  if (index.count === 0 || !(radius > 0)) return 0;
+  const { positions, cellSize, min, dims, cells } = index;
+  const r2 = radius * radius;
+  let count = 0;
+  const consider = (i: number): void => {
+    if (dist2(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2], query) <= r2) count++;
+  };
+
+  if (!isFinite(cellSize)) {
+    for (let i = 0; i < index.count; i++) consider(i);
+    return count;
+  }
+
+  const cx = Math.floor((query[0] - min[0]) / cellSize);
+  const cy = Math.floor((query[1] - min[1]) / cellSize);
+  const cz = Math.floor((query[2] - min[2]) / cellSize);
+  const span = Math.ceil(radius / cellSize) + 1;
+  for (let dx = -span; dx <= span; dx++) {
+    for (let dy = -span; dy <= span; dy++) {
+      for (let dz = -span; dz <= span; dz++) {
+        const ix = cx + dx, iy = cy + dy, iz = cz + dz;
+        if (ix < 0 || iy < 0 || iz < 0 || ix >= dims[0] || iy >= dims[1] || iz >= dims[2]) continue;
+        const bucket = cells.get(cellKey(ix, iy, iz, dims));
+        if (bucket !== undefined) for (const i of bucket) consider(i);
+      }
+    }
+  }
+  return count;
+}
+
 // -- measurement-geometry snaps ----------------------------------------------
 
 /**

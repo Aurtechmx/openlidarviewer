@@ -12,8 +12,10 @@
  */
 
 import type { Vec3 } from '../navMath';
+import type { MeasurementTrust } from './measurementTrust';
 
 export type { Vec3 };
+export type { MeasurementTrust };
 
 /** The measurement kinds the toolkit supports. */
 export type MeasurementKind =
@@ -165,6 +167,14 @@ export interface Measurement {
    * the cubic-metres figure can refine as more nodes stream in.
    */
   volumeResidentOnly?: boolean;
+  /**
+   * The per-measurement honesty grade — red/yellow/green plus the reasons
+   * behind it and a `presentable` refusal flag. Stamped at commit from the
+   * support under each endpoint (snapped-to-a-return? returns nearby?) and the
+   * cloud's caveats (CRS known? streaming subset?). Optional: a measurement
+   * placed with no cloud loaded, or one from a pre-grade session file, omits it.
+   */
+  trust?: MeasurementTrust;
 }
 
 /** Minimum vertex count for a measurement of each kind to be meaningful. */

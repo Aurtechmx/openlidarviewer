@@ -50,10 +50,12 @@ import {
   buildPointSnapIndex,
   snapToNearestPoint,
   snapBest,
+  countPointsWithinRadius,
   type PointSnapIndex,
   type SnapResult,
   type Segments,
 } from './snap';
+import { gradeMeasurement, type MeasurementTrust } from './measurementTrust';
 import {
   formatLengthRender,
   formatAreaRender,
@@ -246,6 +248,13 @@ export interface MeasurementSummary {
   name: string;
   value: string;
   /**
+   * The per-measurement honesty grade (red/yellow/green + reasons + refusal
+   * flag). The Measurements panel renders it as a trust dot, a "why?" detail,
+   * and — when not presentable — de-emphasises the number. Absent when no cloud
+   * was loaded to grade against.
+   */
+  trust?: MeasurementTrust;
+  /**
    * Profile only — height-vs-distance samples, used by the Measurements
    * panel to render a chart strip beneath the headline row. Optional; a
    * profile measurement loaded from a pre-chart session file omits this
@@ -385,6 +394,10 @@ export class MeasureController {
   private _snapMode: 'off' | 'point' | 'geometry' = 'off';
   private _snapIndex: PointSnapIndex | null = null;
   private _lastSnap: SnapResult | null = null;
+  // Per-vertex "did it land on a real measured return?" for the draft in
+  // progress (snap kind 'point'), index-aligned with `_draft.points`. Drives the
+  // per-measurement trust grade at commit; reset when a new draft starts.
+  private _draftSnapped: boolean[] = [];
   private _lastCamera: THREE.PerspectiveCamera | null = null;
   private _lastCanvas: HTMLCanvasElement | null = null;
   private _snapBtn: HTMLButtonElement | null = null;
@@ -649,6 +662,7 @@ export class MeasureController {
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
       profileGroundPercentile: m.profileGroundPercentile,
       volumeResidentOnly: m.volumeResidentOnly,
+      trust: m.trust,
     }));
   }
 
@@ -905,7 +919,10 @@ export class MeasureController {
       this._setHintText(`No point there — ${VERB_LOWER} directly on the scan`);
       return;
     }
-    if (!this._draft) this._draft = this._newDraft();
+    if (!this._draft) {
+      this._draft = this._newDraft();
+      this._draftSnapped = [];
+    }
     // Snap the placed vertex to a real return or to existing measurement
     // geometry before committing it. `_lastSnap` records what it landed on so
     // the hint can disclose it (a snap never implies a return that isn't one).
@@ -913,6 +930,10 @@ export class MeasureController {
     this._lastSnap = snap;
     const placed = snap ? snap.position : point;
     this._draft.points.push([placed[0], placed[1], placed[2]]);
+    // Trust signal: a kind 'point' snap landed on a real measured return;
+    // 'endpoint'/'midpoint'/'intersection' snap to constructed geometry, and a
+    // null snap floated free — both count as "not on a return".
+    this._draftSnapped.push(snap?.kind === 'point');
     if (isFull(this._draft)) this._commitDraft();
     this._updateHint();
   }
@@ -1200,9 +1221,33 @@ export class MeasureController {
         // poison the commit; the polygon still appears as a measurement.
       }
     }
+    m.trust = this._gradeMeasurement(m);
     this._measurements.push(m);
     this._draft = null;
     this._emitChange();
+  }
+
+  /**
+   * Stamp the per-measurement honesty grade from the support under each
+   * endpoint. Only graded when a snap index exists (no cloud → no grade). The
+   * trust radius is a few nominal point spacings (the index's cell size ≈ one
+   * point per cell), so a dense neighbourhood reads as well-supported and a
+   * void reads as unsupported.
+   */
+  private _gradeMeasurement(m: Measurement): MeasurementTrust | undefined {
+    const idx = this._snapIndex;
+    if (!idx) return undefined;
+    const useGrid = Number.isFinite(idx.cellSize) && idx.cellSize > 0;
+    const radius = useGrid ? idx.cellSize * 4 : 0;
+    const vertices = m.points.map((p, i) => ({
+      snappedToPoint: this._draftSnapped[i] ?? false,
+      pointsWithinRadius: useGrid ? countPointsWithinRadius(idx, p, radius) : idx.count,
+    }));
+    return gradeMeasurement({
+      vertices,
+      crsKnown: this._unitToMetres !== 1,
+      residentOnly: m.volumeResidentOnly === true || m.profileChartResidentOnly === true,
+    });
   }
 
   private _setHintText(text: string): void {
