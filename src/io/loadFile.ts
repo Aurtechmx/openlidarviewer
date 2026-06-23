@@ -233,14 +233,12 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
   // the user sees it before the expensive parse, not after a silent OOM.
   if (preflight.largeNonLasFormat || plan?.largeNonLasFormat) {
     meta.warning =
-      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — this format ` +
-      `decodes fully in memory before downsampling, so the load may spike RAM. ` +
-      `LAS/LAZ stream more gently.`;
+      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — decodes fully in ` +
+      `memory, so loading may spike RAM.`;
   } else if (preflight.largeStaticLas) {
     meta.warning =
-      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — the whole file is ` +
-      `read into memory before display. For multi-GB datasets, convert to COPC or EPT for ` +
-      `progressive, bounded-memory streaming.`;
+      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — read fully into ` +
+      `memory. For multi-GB data, convert to COPC/EPT.`;
   }
   return meta;
 }

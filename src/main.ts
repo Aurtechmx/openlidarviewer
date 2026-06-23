@@ -70,9 +70,7 @@ import {
   type ScanStoryInputs,
 } from './intelligence/scanStory';
 import { renderDatasetStoryCard, renderExportHealthPanel } from './ui/scanStoryViews';
-import { openModal, openConfirm } from './ui/Modal';
-import { formatByteSize } from './io/formatByteSize';
-import { assessFullExportMemory } from './convert/exportMemoryGuard';
+import { openModal } from './ui/Modal';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
@@ -2196,9 +2194,9 @@ const analysePanel = new AnalysePanel({
     if (summary && summary.interpFrac >= 0.2) {
       const pct = Math.round(summary.interpFrac * 100);
       showLassoToast(
-        `Confidence colour tints each point by the trust of the ground under it. ` +
-          `${pct}% of this surface is interpolated — those areas hold few points, so 3D still reads mostly strong. ` +
-          `The 2D Coverage tile shows the full per-cell trust map.`,
+        `Confidence colour shows ground-survey trust under each point. ${pct}% of the ` +
+          `surface is interpolated and point-sparse, so 3D reads mostly strong — see the ` +
+          `2D Coverage tile for the full per-cell map.`,
       );
     }
   },
@@ -2537,20 +2535,11 @@ const exportPanel = new ExportPanel({
     // Full-resolution re-decode reads the whole file into memory and expands it
     // into typed attribute arrays — several × the file size at peak. A user can
     // preview a multi-GB scan fine, then crash the tab on full-res export, so
-    // confirm before decoding a large source. Declining aborts the export.
-    const mem = assessFullExportMemory(f.size);
-    if (mem.needsConfirm) {
-      const ok = await openConfirm({
-        title: 'Large full-resolution export',
-        message:
-          `Re-decoding ${f.name} at full resolution reads the whole ${formatByteSize(f.size)} ` +
-          `file into memory (roughly ${formatByteSize(mem.estimatedPeakBytes)} at peak) and may ` +
-          `crash the tab. For multi-GB datasets, convert to COPC or EPT for progressive loading. ` +
-          `Export anyway?`,
-        confirmLabel: 'Export anyway',
-      });
-      if (!ok) return null;
-    }
+    // confirm before decoding a large source. The confirm pulls the dialog +
+    // byte formatter, so it's lazy-loaded here (full-res export is a deliberate
+    // action) to keep it out of the eager startup chunk. Declining aborts.
+    const { confirmFullExport } = await import('./convert/confirmFullExport');
+    if (!(await confirmFullExport(f))) return null;
     return decodeFull(await f.arrayBuffer(), f.name);
   },
   // Called synchronously while the ExportPanel builds its Products lane — which
