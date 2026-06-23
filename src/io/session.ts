@@ -26,7 +26,7 @@ import type { BoxBounds } from '../render/measure/geometry';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 
 /**
- * Current session-file schema version. Bumps to v3, adding:
+ * Current session-file schema version (v6). The history, oldest first: v3 added
  *   • the live camera state (not just saved views) so a re-import lands
  *     the viewer on the exact viewpoint the user saved;
  *   • render settings (point size, EDL, antialiasing, size mode) so the
@@ -359,10 +359,13 @@ function parseViews(v: unknown): SavedView[] {
   return out;
 }
 
+/** Hard cap on parsed list lengths — a hostile/corrupt file can't hang the tab. */
+const MAX_SESSION_ITEMS = 100_000;
+
 function parseMeasurements(v: unknown): Measurement[] {
   if (!Array.isArray(v)) return [];
   const out: Measurement[] = [];
-  for (const item of v) {
+  for (const item of v.slice(0, MAX_SESSION_ITEMS)) {
     if (!isRecord(item)) continue;
     const kind = item.kind;
     if (typeof kind !== 'string' || !KINDS.includes(kind as MeasurementKind)) continue;
@@ -411,7 +414,7 @@ function parseMeasurementTrust(v: unknown): MeasurementTrust | undefined {
 function parseAnnotations(v: unknown): Annotation[] {
   if (!Array.isArray(v)) return [];
   const out: Annotation[] = [];
-  for (const item of v) {
+  for (const item of v.slice(0, MAX_SESSION_ITEMS)) {
     if (!isRecord(item)) continue;
     // An annotation with no valid position is meaningless — drop it.
     const local = parseVec3Object(item.localPosition);

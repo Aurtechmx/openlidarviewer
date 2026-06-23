@@ -105,9 +105,9 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     reasons.push('An endpoint sits in empty space — no measured returns nearby. The position is interpolated, not observed.');
   } else if (worst === 'weak') {
     if (snappedCount < input.vertices.length) {
-      reasons.push('An endpoint did not snap to a measured return — it was placed in a sparse area.');
+      reasons.push('An endpoint did not land on a measured return.');
     } else {
-      reasons.push('Endpoints snapped to real returns, but the neighbourhood is sparse, so the position is loosely constrained.');
+      reasons.push('Endpoints landed on measured returns, but the surrounding data is sparse, so the position is loosely constrained.');
     }
   } else {
     reasons.push('Every endpoint snapped to a measured return in a dense neighbourhood.');

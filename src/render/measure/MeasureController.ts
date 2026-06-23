@@ -394,10 +394,6 @@ export class MeasureController {
   private _snapMode: 'off' | 'point' | 'geometry' = 'off';
   private _snapIndex: PointSnapIndex | null = null;
   private _lastSnap: SnapResult | null = null;
-  // Per-vertex "did it land on a real measured return?" for the draft in
-  // progress (snap kind 'point'), index-aligned with `_draft.points`. Drives the
-  // per-measurement trust grade at commit; reset when a new draft starts.
-  private _draftSnapped: boolean[] = [];
   // Whether the active scan has a known CRS with real-world units. Separate from
   // `_unitToMetres` (which is 1 for a metric CRS AND a CRS-less cloud).
   private _crsKnown = false;
@@ -932,10 +928,7 @@ export class MeasureController {
       this._setHintText(`No point there — ${VERB_LOWER} directly on the scan`);
       return;
     }
-    if (!this._draft) {
-      this._draft = this._newDraft();
-      this._draftSnapped = [];
-    }
+    if (!this._draft) this._draft = this._newDraft();
     // Snap the placed vertex to a real return or to existing measurement
     // geometry before committing it. `_lastSnap` records what it landed on so
     // the hint can disclose it (a snap never implies a return that isn't one).
@@ -943,10 +936,6 @@ export class MeasureController {
     this._lastSnap = snap;
     const placed = snap ? snap.position : point;
     this._draft.points.push([placed[0], placed[1], placed[2]]);
-    // Trust signal: a kind 'point' snap landed on a real measured return;
-    // 'endpoint'/'midpoint'/'intersection' snap to constructed geometry, and a
-    // null snap floated free — both count as "not on a return".
-    this._draftSnapped.push(snap?.kind === 'point');
     if (isFull(this._draft)) this._commitDraft();
     this._updateHint();
   }
@@ -1252,8 +1241,12 @@ export class MeasureController {
     if (!idx) return undefined;
     const useGrid = Number.isFinite(idx.cellSize) && idx.cellSize > 0;
     const radius = useGrid ? idx.cellSize * 4 : 0;
-    const vertices = m.points.map((p, i) => ({
-      snappedToPoint: this._draftSnapped[i] ?? false,
+    // "On a real return" = a measured point within half a cell of the vertex.
+    // Derived from the cloud, not a placement-time flag, so the grade stays
+    // correct after a vertex is dragged (re-graded on drag-end).
+    const onPointEps = useGrid ? idx.cellSize * 0.5 : 1e-6;
+    const vertices = m.points.map((p) => ({
+      snappedToPoint: snapToNearestPoint(idx, p, onPointEps) !== null,
       pointsWithinRadius: useGrid ? countPointsWithinRadius(idx, p, radius) : idx.count,
     }));
     return gradeMeasurement({
@@ -1318,10 +1311,15 @@ export class MeasureController {
   /** End a handle drag, detaching the window listeners. */
   private _endDrag(): void {
     if (!this._drag) return;
+    const draggedId = this._drag.id;
     this._drag = null;
     this._dragDirty = false;
     window.removeEventListener('pointermove', this._onDragMove);
     window.removeEventListener('pointerup', this._onDragUp);
+    // A dragged endpoint changes the support under it — re-grade so the trust
+    // badge can't keep claiming "well supported" after a vertex moved into a void.
+    const m = this._measurements.find((x) => x.id === draggedId);
+    if (m) m.trust = this._gradeMeasurement(m);
     this._emitChange();
   }
 

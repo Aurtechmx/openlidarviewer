@@ -4335,6 +4335,27 @@ async function importSession(file: File): Promise<void> {
       // restored scan shows the same classes the author left visible.
       classLegendPanel.applyFilter(session.classFilter);
     }
+    if (session.clip) {
+      // Restore the saved clip box so a shared capsule reproduces the author's
+      // isolation/cut-away, not an unclipped scene. (The serialized clip was
+      // being parsed but never re-applied.)
+      viewer.setClip(session.clip);
+      clipPanel.setVisible(true);
+    }
+    if (
+      session.crs &&
+      session.crs.epsg != null &&
+      (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
+    ) {
+      // Restore the author's CRS override so a capsule round-trips without
+      // re-prompting. Best-effort: applies only when a scan is loaded (the
+      // service needs an active dataset); a clean re-resolve from the EPSG.
+      crsService.setOverride({
+        override: { epsg: session.crs.epsg, kind: session.crs.kind },
+        detected: undefined,
+        source: 'user-override',
+      });
+    }
 
     // Honest disclosure: the session carries the saved analysis, not the scan
     // itself (a point cloud can't travel in the file). If its scan isn't
