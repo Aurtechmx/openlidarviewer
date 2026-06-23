@@ -96,6 +96,7 @@ import type { ClipBox } from './render/clip/clipBox';
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { footprintMetres } from './report/reportFootprint';
+import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
 import { bindShortcuts } from './ui/shortcuts';
@@ -789,6 +790,48 @@ function showLassoToast(
 /** True on phone-width viewports — drives the touch hint and point budget. */
 function isPhone(): boolean {
   return window.matchMedia('(max-width: 767px)').matches;
+}
+
+// The previously-loaded scan's label, so a 2nd drop's instant answer can name
+// both epochs in its before/after offer.
+let _lastInstantScanLabel: string | undefined;
+
+/**
+ * Instant analysis-on-drop: the moment a scan lands, surface the single most
+ * relevant analysis one click away — terrain grade, volume, floor plan, or
+ * (with a second scan) a before/after difference — all without an upload. The
+ * routing is the pure `planInstantAnswer`; this only wires the chosen action to
+ * the existing analysis cores. (Object/interior scans are already auto-analysed
+ * by `applyScanRoute`; this still announces them and offers the next step.)
+ */
+function showInstantAnswer(scanLabel: string): void {
+  const answer = planInstantAnswer({
+    cloudCount: viewer.clouds().length,
+    scanShape: lastScanVerdict,
+    scanLabel,
+    priorScanLabel: _lastInstantScanLabel,
+  });
+  _lastInstantScanLabel = scanLabel;
+  showLassoToast(answer.message, {
+    label: answer.actionLabel,
+    onClick: () => {
+      switch (answer.action) {
+        case 'terrain':
+          analysePanel.expand();
+          void terrainRunner.run();
+          break;
+        case 'compare':
+          void compareLoadedLayers();
+          break;
+        case 'volume':
+          lassoVolumeTool.enable();
+          break;
+        case 'floorplan':
+          objectPanel.setVisible(true);
+          break;
+      }
+    },
+  });
 }
 
 /** `navigator.deviceMemory` in GB, when the browser reports it. */
@@ -4501,6 +4544,11 @@ async function handleFile(file: File): Promise<void> {
 
     // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
     revealAnalysePanel(result.cloud.name);
+
+    // Instant analysis-on-drop — surface the most relevant analysis one click
+    // away (terrain / volume / floor plan / before-after), nothing uploaded.
+    // Skipped in bare/embedded mode, which has no panels to drive.
+    if (!bareMode) showInstantAnswer(result.cloud.name);
 
     // Classification legend (v0.4.1) — populate from the cloud's per-point
     // class buffer when present, then show. A scan with no classification
