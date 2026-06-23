@@ -6,7 +6,12 @@ import type { CloudMetadata } from '../model/PointCloud';
 import type { LoadResult } from './parseBuffer';
 import { POINT_BUDGET } from './parseBuffer';
 import { parseLasHeader, LAS_DECODED_ATTRIBUTES } from './lasHeader';
-import { planLoad, NON_STREAMING_FORMATS, LARGE_NON_LAS_THRESHOLD_BYTES } from './loadPlan';
+import {
+  planLoad,
+  NON_STREAMING_FORMATS,
+  LARGE_NON_LAS_THRESHOLD_BYTES,
+  LARGE_STATIC_LAS_THRESHOLD_BYTES,
+} from './loadPlan';
 import type { LoadPlan } from './loadPlan';
 import { formatByteSize } from './formatByteSize';
 import type { ProgressUpdate } from './loadProgress';
@@ -142,6 +147,13 @@ interface FilePreflight {
    * has no plan, so the warning reaches the user for the formats it is about.
    */
   largeNonLasFormat?: boolean;
+  /**
+   * True for a large NON-COPC static LAS/LAZ. It strides at decode (bounded
+   * display) but the whole file is still read into one ArrayBuffer first, so a
+   * multi-GB file is a real RAM risk worth a pre-read caution. COPC is routed to
+   * the streaming reader upstream and never reaches this preflight.
+   */
+  largeStaticLas?: boolean;
 }
 
 /**
@@ -189,6 +201,11 @@ async function preflightFile(
   if (NON_STREAMING_FORMATS.has(format) && file.size > LARGE_NON_LAS_THRESHOLD_BYTES) {
     preflight.largeNonLasFormat = true;
   }
+  // A multi-GB non-COPC LAS/LAZ strides at decode but is still materialised in
+  // full first — caution the user toward COPC/EPT before the read.
+  if ((format === 'las' || format === 'laz') && file.size > LARGE_STATIC_LAS_THRESHOLD_BYTES) {
+    preflight.largeStaticLas = true;
+  }
   return preflight;
 }
 
@@ -219,6 +236,11 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
       `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — this format ` +
       `decodes fully in memory before downsampling, so the load may spike RAM. ` +
       `LAS/LAZ stream more gently.`;
+  } else if (preflight.largeStaticLas) {
+    meta.warning =
+      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — the whole file is ` +
+      `read into memory before display. For multi-GB datasets, convert to COPC or EPT for ` +
+      `progressive, bounded-memory streaming.`;
   }
   return meta;
 }

@@ -100,6 +100,17 @@ export interface LoadPlan {
  */
 export const LARGE_NON_LAS_THRESHOLD_BYTES = 300 * 1024 * 1024;
 
+/**
+ * Threshold above which a NON-COPC static LAS/LAZ triggers a "read fully into
+ * memory" caution. LAS/LAZ strides at decode so the DISPLAY stays bounded, but
+ * the whole file is still materialised as one ArrayBuffer first — so a multi-GB
+ * file is a real RAM risk the user should know about before the read. COPC is
+ * routed to the streaming range-reader and never reaches this path. 1 GiB is
+ * high enough to skip routine survey tiles, low enough to catch the genuinely
+ * huge files that belong in COPC/EPT.
+ */
+export const LARGE_STATIC_LAS_THRESHOLD_BYTES = 1024 * 1024 * 1024;
+
 /** Non-LAS/LAZ formats that decode the whole point set up front. */
 export const NON_STREAMING_FORMATS: ReadonlySet<SourceFormat> = new Set<SourceFormat>([
   'e57',

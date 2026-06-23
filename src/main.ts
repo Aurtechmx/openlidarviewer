@@ -70,7 +70,9 @@ import {
   type ScanStoryInputs,
 } from './intelligence/scanStory';
 import { renderDatasetStoryCard, renderExportHealthPanel } from './ui/scanStoryViews';
-import { openModal } from './ui/Modal';
+import { openModal, openConfirm } from './ui/Modal';
+import { formatByteSize } from './io/formatByteSize';
+import { assessFullExportMemory } from './convert/exportMemoryGuard';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 import { ObjectPanel } from './ui/ObjectPanel';
@@ -2532,6 +2534,23 @@ const exportPanel = new ExportPanel({
   getFullCloud: async () => {
     const f = activeId ? sourceFileById.get(activeId) : null;
     if (!f) return null;
+    // Full-resolution re-decode reads the whole file into memory and expands it
+    // into typed attribute arrays — several × the file size at peak. A user can
+    // preview a multi-GB scan fine, then crash the tab on full-res export, so
+    // confirm before decoding a large source. Declining aborts the export.
+    const mem = assessFullExportMemory(f.size);
+    if (mem.needsConfirm) {
+      const ok = await openConfirm({
+        title: 'Large full-resolution export',
+        message:
+          `Re-decoding ${f.name} at full resolution reads the whole ${formatByteSize(f.size)} ` +
+          `file into memory (roughly ${formatByteSize(mem.estimatedPeakBytes)} at peak) and may ` +
+          `crash the tab. For multi-GB datasets, convert to COPC or EPT for progressive loading. ` +
+          `Export anyway?`,
+        confirmLabel: 'Export anyway',
+      });
+      if (!ok) return null;
+    }
     return decodeFull(await f.arrayBuffer(), f.name);
   },
   // Called synchronously while the ExportPanel builds its Products lane — which

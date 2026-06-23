@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { fileMetadata } from '../src/io/loadFile';
 import { buildPreloadSummary } from '../src/io/preloadSummary';
-import { LARGE_NON_LAS_THRESHOLD_BYTES } from '../src/io/loadPlan';
+import { LARGE_NON_LAS_THRESHOLD_BYTES, LARGE_STATIC_LAS_THRESHOLD_BYTES } from '../src/io/loadPlan';
 
 /** A minimal File stand-in: only `name`, `size`, and a head `slice()` are read
  *  by the preflight, so we never allocate the pretend gigabytes. */
@@ -30,6 +30,9 @@ function fakeFile(name: string, size: number, head: string): File {
 }
 
 const PLY_HEADER = 'ply\nformat ascii 1.0\nelement vertex 1\n';
+// 'LASF' magic sniffs as LAS; the rest of the header is unreadable, so there's
+// no load plan — but the size-based caution fires independently of the plan.
+const LAS_HEAD = 'LASF' + '\0'.repeat(60);
 
 describe('large non-LAS pre-decode warning reaches the preload summary', () => {
   it('warns for a large PLY and the warning is in the summary the user sees', async () => {
@@ -48,5 +51,21 @@ describe('large non-LAS pre-decode warning reaches the preload summary', () => {
     const meta = await fileMetadata(small);
     expect(meta.warning).toBeUndefined();
     expect(buildPreloadSummary(meta).some((l) => /⚠/.test(l))).toBe(false);
+  });
+});
+
+describe('large static LAS/LAZ memory caution', () => {
+  it('warns a multi-GB LAS is read fully into memory and points to COPC/EPT', async () => {
+    const big = fakeFile('huge.las', LARGE_STATIC_LAS_THRESHOLD_BYTES + 1, LAS_HEAD);
+    const meta = await fileMetadata(big);
+    expect(meta.warning).toBeDefined();
+    expect(meta.warning).toMatch(/COPC|EPT/i);
+    expect(buildPreloadSummary(meta).some((l) => /⚠/.test(l))).toBe(true);
+  });
+
+  it('does NOT warn for a routine-size LAS tile', async () => {
+    const tile = fakeFile('tile.las', 200 * 1024 * 1024, LAS_HEAD);
+    const meta = await fileMetadata(tile);
+    expect(meta.warning).toBeUndefined();
   });
 });
