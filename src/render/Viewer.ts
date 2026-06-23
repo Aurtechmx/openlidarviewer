@@ -1560,7 +1560,9 @@ export class Viewer {
 
     const { mesh, material, colorAttr } = this.buildPointMesh(
       cloud.positions,
-      colorForMode(mode, cloud),
+      // upAxis from the source format so a Y-up phone scan's elevation ramp
+      // follows true height, not a horizontal axis.
+      colorForMode(mode, cloud, { upAxis: isZUpFormat(cloud.sourceFormat) ? 2 : 1 }),
       // Feed the DOWNSAMPLED classification (carried in lockstep with the
       // downsampled positions by `downsampleToBudget`), never the original
       // input — the attribute must align 1:1 with the uploaded points.
@@ -2179,6 +2181,7 @@ export class Viewer {
       if (entry.mode !== 'elevation') continue;
       const raw = colorForMode('elevation', entry.cloud, {
         heightPercentileTrim: next,
+        upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1,
       });
       const arr = entry.colorAttr.array as Float32Array;
       // sRGB → linear via the shared EOTF seam (see colorEncode.ts).
@@ -2499,6 +2502,7 @@ export class Viewer {
     const raw = colorForMode(mode, entry.cloud, {
       heightPercentileTrim: this._heightPercentileTrim,
       coverageGrid: this._coverageGrid ?? undefined,
+      upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1,
     });
     const arr = entry.colorAttr.array as Float32Array;
     // sRGB → linear via the shared EOTF seam — keeps a mode switch

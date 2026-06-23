@@ -185,9 +185,14 @@ export function computeCellMetrics(
     if (edgeDistanceCells[i] <= edgeThreshold) edgeRisk++;
   }
   densities.sort((a, b) => a - b);
-  const median = densities.length
-    ? densities[(densities.length - 1) >> 1]
-    : 0;
+  // True median: for an even count, average the two central values rather than
+  // taking the lower-middle element (which biases the reported density low).
+  const dn = densities.length;
+  const median = dn === 0
+    ? 0
+    : dn % 2 === 1
+      ? densities[(dn - 1) >> 1]
+      : (densities[dn / 2 - 1] + densities[dn / 2]) / 2;
 
   return {
     metrics: { pointDensity, localCompleteness, edgeDistanceCells },

@@ -141,4 +141,17 @@ describe('computeCellMetrics', () => {
     expect(summary.meanDensity).toBeCloseTo(20, 6); // (10+20+30)/3
     expect(summary.medianDensity).toBeCloseTo(20, 6);
   });
+
+  it('even-count median averages the two central values (not the lower-middle)', () => {
+    // 4 measured cells, densities sorted [10,20,30,40]. The true median is the
+    // mean of the two middles = 25; the old lower-middle pick returned 20.
+    const g = grid({
+      cols: 2, rows: 2, cellSizeM: 1,
+      coverage: [2, 2, 2, 2],
+      counts: [10, 20, 30, 40],
+    });
+    const { summary } = computeCellMetrics(g);
+    expect(summary.measuredCellCount).toBe(4);
+    expect(summary.medianDensity).toBeCloseTo(25, 6);
+  });
 });

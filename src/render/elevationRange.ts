@@ -63,6 +63,12 @@ export interface ElevationRangeInput {
    * 10 M-point cloud, statistically stable on smaller ones.
    */
   stride?: number;
+  /**
+   * Which interleaved component is "up": 2 = Z (LAS/LAZ/E57 surveys), 1 = Y
+   * (phone-scan PLY/OBJ/GLB). Defaults to Z. The `minZ`/`maxZ` field names are
+   * historical — they hold the range of whichever axis is up.
+   */
+  upAxis?: 0 | 1 | 2;
 }
 
 /**
@@ -87,8 +93,9 @@ export function computeElevationRange(
   const upperPct = Math.max(50, Math.min(100, input.upperPercentile ?? 95));
   const targetSamples = 50_000;
   const stride = Math.max(1, input.stride ?? Math.max(1, Math.floor(total / targetSamples)));
+  const upAxis = input.upAxis ?? 2;
 
-  // First pass — track true min/max and copy the Z samples into a
+  // First pass — track true min/max and copy the up-axis samples into a
   // typed array we can sort. The strided walk keeps the allocation
   // bounded even on 100 M-point streaming chunks.
   const sampleCap = Math.min(targetSamples, Math.ceil(total / stride));
@@ -97,7 +104,7 @@ export function computeElevationRange(
   let trueMax = Number.NEGATIVE_INFINITY;
   let idx = 0;
   for (let i = 0; i < total && idx < sampleCap; i += stride) {
-    const z = input.positions[i * 3 + 2];
+    const z = input.positions[i * 3 + upAxis];
     sample[idx++] = z;
     if (z < trueMin) trueMin = z;
     if (z > trueMax) trueMax = z;

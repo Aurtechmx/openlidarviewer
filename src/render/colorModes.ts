@@ -387,11 +387,17 @@ export function colorByElevation(
   minZ: number,
   maxZ: number,
   palette: ElevationPalette = DEFAULT_ELEVATION_PALETTE,
+  /**
+   * Which interleaved component is "up": 2 = Z (LAS/LAZ/E57 surveys), 1 = Y
+   * (phone-scan PLY/OBJ/GLB). Defaults to Z. Without this a Y-up scan would be
+   * coloured along a horizontal axis instead of by height.
+   */
+  upAxis: 0 | 1 | 2 = 2,
 ): Uint8Array {
   const out = new Uint8Array(count * 3);
   const range = maxZ - minZ;
   for (let i = 0; i < count; i++) {
-    const t = range === 0 ? 0 : (positions[i * 3 + 2] - minZ) / range;
+    const t = range === 0 ? 0 : (positions[i * 3 + upAxis] - minZ) / range;
     const [r, g, b] = sampleRamp(t, palette);
     out[i * 3] = r;
     out[i * 3 + 1] = g;
@@ -533,6 +539,13 @@ export interface ColorForModeOptions {
    */
   heightPercentileTrim?: number;
   /**
+   * Which interleaved component is "up" for the `'elevation'` mode: 2 = Z
+   * (LAS/LAZ/E57 surveys), 1 = Y (phone-scan PLY/OBJ/GLB). Defaults to Z. The
+   * Viewer derives it from the cloud's source format so Y-up scans colour by
+   * true height, not a horizontal axis.
+   */
+  upAxis?: 0 | 1 | 2;
+  /**
    * The DTM-confidence grid the `'coverage'` and `'confidence'` modes sample.
    * Supplied by the Viewer after a terrain analysis runs. When absent in
    * either mode every point reads the neutral dim grey (no crash) — the UI
@@ -582,13 +595,15 @@ export function colorForMode(
       // ramp meaningful on outlier-heavy clouds and matches what
       // CloudCompare / Potree / Entwine viewers do.
       const trim = clamp(opts?.heightPercentileTrim ?? 5, 0, 25);
+      const upAxis = opts?.upAxis ?? 2;
       const range = computeElevationRange({
         positions: cloud.positions,
         pointCount: n,
         lowerPercentile: trim,
         upperPercentile: 100 - trim,
+        upAxis,
       });
-      return colorByElevation(cloud.positions, n, range.minZ, range.maxZ);
+      return colorByElevation(cloud.positions, n, range.minZ, range.maxZ, undefined, upAxis);
     }
 
     // ── normal ──────────────────────────────────────────────────────────────

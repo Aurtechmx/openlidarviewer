@@ -200,6 +200,27 @@ describe('colorForMode — elevation', () => {
     });
     expect(() => colorForMode('elevation', cloud)).not.toThrow();
   });
+
+  test('upAxis=1 colours a Y-up scan by Y, not Z', () => {
+    // Y rises 0→3; Z held constant. With upAxis=1 (Y-up phone scan) height is
+    // Y, so the four points get four distinct ramp colours. With the default
+    // Z-up the constant-Z cloud collapses to a single colour — proving the bug
+    // (a Y-up scan coloured along a flat axis) and the fix.
+    const positions = new Float32Array([0, 0, 9, 1, 1, 9, 2, 2, 9, 3, 3, 9]);
+    const cloud = new PointCloud({
+      positions,
+      origin: [0, 0, 0],
+      sourceFormat: 'ply',
+      name: 'yup.ply',
+    });
+    const colourOf = (arr: Uint8Array, i: number) => `${arr[i * 3]},${arr[i * 3 + 1]},${arr[i * 3 + 2]}`;
+
+    const yUp = colorForMode('elevation', cloud, { upAxis: 1 });
+    expect(new Set([0, 1, 2, 3].map((i) => colourOf(yUp, i))).size).toBe(4);
+
+    const zUpDefault = colorForMode('elevation', cloud);
+    expect(new Set([0, 1, 2, 3].map((i) => colourOf(zUpDefault, i))).size).toBe(1);
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
