@@ -78,15 +78,37 @@ export function compareDtms(
     );
   }
 
-  if (a.crs && b.crs && a.crs !== b.crs) {
+  // Horizontal CRS: a known mismatch is the worst case, but an UNKNOWN CRS on
+  // either side is also a caution — without it we can't confirm the two epochs
+  // share a frame, so the difference is unverified rather than measured.
+  if (a.crs && b.crs) {
+    if (a.crs !== b.crs) {
+      notes.push(
+        `Horizontal CRS differs (${a.crs} vs ${b.crs}) — the grids aren't in the same frame.`,
+      );
+    }
+  } else {
+    const which = !a.crs && !b.crs ? 'both epochs' : 'one epoch';
     notes.push(
-      `Horizontal CRS differs (${a.crs} vs ${b.crs}) — the grids aren't in the same frame.`,
+      `Horizontal CRS is unknown for ${which} — the grids can't be confirmed to share a ` +
+        `frame, so treat the difference as unverified, not measured.`,
     );
   }
-  if (a.verticalDatum && b.verticalDatum && a.verticalDatum !== b.verticalDatum) {
+
+  // Vertical datum: same logic. A known mismatch means heights sit on different
+  // references; an unknown datum means we can't confirm they share one.
+  if (a.verticalDatum && b.verticalDatum) {
+    if (a.verticalDatum !== b.verticalDatum) {
+      notes.push(
+        `Vertical datum differs (${a.verticalDatum} vs ${b.verticalDatum}) — ` +
+          `heights aren't on a common reference, so the elevation difference is unreliable.`,
+      );
+    }
+  } else {
+    const which = !a.verticalDatum && !b.verticalDatum ? 'both epochs' : 'one epoch';
     notes.push(
-      `Vertical datum differs (${a.verticalDatum} vs ${b.verticalDatum}) — ` +
-        `heights aren't on a common reference, so the elevation difference is unreliable.`,
+      `Vertical datum is unknown for ${which} — heights can't be confirmed on a common ` +
+        `reference, so the elevation difference is unverified.`,
     );
   }
 

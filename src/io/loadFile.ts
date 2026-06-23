@@ -6,8 +6,9 @@ import type { CloudMetadata } from '../model/PointCloud';
 import type { LoadResult } from './parseBuffer';
 import { POINT_BUDGET } from './parseBuffer';
 import { parseLasHeader, LAS_DECODED_ATTRIBUTES } from './lasHeader';
-import { planLoad } from './loadPlan';
+import { planLoad, NON_STREAMING_FORMATS, LARGE_NON_LAS_THRESHOLD_BYTES } from './loadPlan';
 import type { LoadPlan } from './loadPlan';
+import { formatByteSize } from './formatByteSize';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
 import { formatInfo } from './formatInfo';
@@ -133,6 +134,14 @@ interface FilePreflight {
   plan?: LoadPlan;
   /** Point count from a header that exposes one without a plan (PTS). */
   headerPointCount?: number;
+  /**
+   * True for a large non-LAS/LAZ file (E57/PLY/PTS/PTX/OBJ/GLB/XYZ…). Those
+   * loaders decode the whole point set in memory before downsampling, so a big
+   * file means a real RAM spike at decode. LAS/LAZ carries the same signal on
+   * its `plan`; this field carries it for the non-LAS formats whose preflight
+   * has no plan, so the warning reaches the user for the formats it is about.
+   */
+  largeNonLasFormat?: boolean;
 }
 
 /**
@@ -174,6 +183,12 @@ async function preflightFile(
   } else if (format === 'pts') {
     preflight.headerPointCount = readPtsHeaderCount(headSlice);
   }
+  // Non-LAS formats have no budget plan, so they never reach `planLoad`'s
+  // large-file check. Compute the same signal here so the pre-decode RAM
+  // warning actually fires for the formats it describes (E57/PLY/PTS/…).
+  if (NON_STREAMING_FORMATS.has(format) && file.size > LARGE_NON_LAS_THRESHOLD_BYTES) {
+    preflight.largeNonLasFormat = true;
+  }
   return preflight;
 }
 
@@ -195,6 +210,15 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
       plan.mode === 'all' ? 'Standard load' : 'Large-file optimization enabled';
   } else if (headerPointCount !== undefined) {
     meta.estimatedPointCount = headerPointCount;
+  }
+  // Surface the pre-decode RAM caution. LAS/LAZ carries it on the plan; non-LAS
+  // formats carry it on `preflight.largeNonLasFormat` (set above). Either way
+  // the user sees it before the expensive parse, not after a silent OOM.
+  if (preflight.largeNonLasFormat || plan?.largeNonLasFormat) {
+    meta.warning =
+      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — this format ` +
+      `decodes fully in memory before downsampling, so the load may spike RAM. ` +
+      `LAS/LAZ stream more gently.`;
   }
   return meta;
 }

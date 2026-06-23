@@ -32,5 +32,9 @@ export function buildPreloadSummary(meta: SourceMetadata): string[] {
   }
   lines.push(formatByteSize(meta.byteSize));
   if (meta.loadModeSummary) lines.push(meta.loadModeSummary);
+  // A pre-decode caution (e.g. large non-LAS RAM spike) belongs in the summary
+  // the user reads before committing to the parse — prefixed so it reads as a
+  // warning, not another neutral fact.
+  if (meta.warning) lines.push(`⚠ ${meta.warning}`);
   return lines;
 }

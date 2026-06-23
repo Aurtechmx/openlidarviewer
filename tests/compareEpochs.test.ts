@@ -37,16 +37,19 @@ describe('buildSharedEpochDtms', () => {
 });
 
 describe('compareEpochClouds', () => {
-  it('a +1 m raised surface reads as accretion, co-registered', () => {
+  it('a +1 m raised surface reads as accretion; unverified without CRS/datum', () => {
     const a = plane(30, 0);
     const b = plane(30, 1); // same footprint, lifted 1 m
     const cmp = compareEpochClouds({ positions: a }, { positions: b });
     expect(cmp).not.toBeNull();
-    expect(cmp!.coregistered).toBe(true);
-    // b − a ≈ +1 m everywhere → net volume strongly positive, gain >> loss.
+    // The difference math is correct and the rasters align cell-for-cell…
     expect(cmp!.result.stats.netVolumeM3).toBeGreaterThan(0);
     expect(cmp!.result.stats.gainVolumeM3).toBeGreaterThan(cmp!.result.stats.lossVolumeM3);
     expect(cmp!.result.aligned).toBe(true);
+    // …but with no CRS or vertical datum we cannot VERIFY co-registration, so it
+    // is honestly flagged unverified rather than asserted co-registered.
+    expect(cmp!.coregistered).toBe(false);
+    expect(cmp!.coregistrationNotes.join(' ')).toMatch(/unknown/i);
   });
 
   it('identical epochs read as no net change', () => {

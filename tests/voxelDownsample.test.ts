@@ -36,6 +36,18 @@ test('points spread across 8 voxels stay as 8 points', () => {
   expect(out.pointCount).toBe(8);
 });
 
+test('out-of-range voxel indices use a collision-free key (no silent merge)', () => {
+  // Voxel indices (0, 65536, 0) and (1, -65536, 0) pack to the SAME numeric key
+  // under the old (gx*S + gy)*S + gz scheme (both = 65536*S). With voxelSize 1
+  // these are points ~131 km apart that must NOT collapse into one voxel — a
+  // silent collision would corrupt the spatial representation. The string-key
+  // fallback for out-of-range indices keeps them distinct.
+  const a = [0.5, 65536.5, 0.5];
+  const b = [1.5, -65535.5, 0.5];
+  const out = voxelDownsample(makeCloud([...a, ...b]), 1.0);
+  expect(out.pointCount).toBe(2);
+});
+
 test('colours are averaged within a voxel', () => {
   const out = voxelDownsample(
     makeCloud([0.1, 0.1, 0.1, 0.2, 0.2, 0.2], [0, 0, 0, 100, 100, 100]),

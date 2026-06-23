@@ -227,12 +227,22 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
   let fillSum = 0;
   let cutSum = 0;
   let inCount = 0;
-  // We collect the inside Δz magnitudes for the median; cap the buffer
-  // at 10 000 entries to bound the worst-case allocation on a 100 M-
-  // point streaming chunk. A 10 000-sample median is statistically
-  // stable; the cap rarely fires on real surveys.
+  // We collect inside Δz magnitudes for the median; cap the buffer at 10 000 to
+  // bound allocation on a 100 M-point chunk. Filling it with the FIRST 10 000
+  // inside points biases the median when the cloud is ordered by scanline,
+  // tile, or strip (the first 10 000 cover only one corner of the polygon).
+  // Reservoir sampling (Algorithm R) keeps a uniform sample across ALL inside
+  // points instead, so the median describes the whole footprint. A fixed-seed
+  // xorshift keeps it deterministic — same input, same median.
   const MAX_DELTAS = 10_000;
   const deltas = new Float64Array(MAX_DELTAS);
+  let rngState = 0x9e3779b9 | 0; // fixed seed → reproducible sample
+  const nextUnit = (): number => {
+    rngState ^= rngState << 13;
+    rngState ^= rngState >>> 17;
+    rngState ^= rngState << 5;
+    return (rngState >>> 0) / 4294967296;
+  };
 
   for (let i = 0; i < sampleCount; i++) {
     const px = input.positions[i * 3];
@@ -255,7 +265,17 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
     const dz = height - refZ;
     if (dz >= 0) fillSum += dz;
     else cutSum += -dz;
-    if (inCount < MAX_DELTAS) deltas[inCount] = Math.abs(dz);
+    // Reservoir sampling for the median buffer: fill directly until full, then
+    // replace a uniformly-chosen slot so every inside point has an equal chance
+    // of being in the final sample. (The fill/cut SUMS above already use every
+    // point — only the median needs de-biasing.)
+    const absDz = Math.abs(dz);
+    if (inCount < MAX_DELTAS) {
+      deltas[inCount] = absDz;
+    } else {
+      const j = Math.floor(nextUnit() * (inCount + 1));
+      if (j < MAX_DELTAS) deltas[j] = absDz;
+    }
     inCount++;
   }
 

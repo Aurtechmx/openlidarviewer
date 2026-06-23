@@ -4,10 +4,23 @@ import { PointCloud } from '../model/PointCloud';
  * Voxel-grid stride for packing a 3-D voxel index into one numeric Map key.
  * A numeric key avoids building a string for every point — the dominant cost
  * when downsampling a multi-million-point cloud. Packing as `(gx*S + gy)*S + gz`
- * stays collision-free while each grid index is within ±(S / 2), i.e. ±65536
- * voxels per axis, which every realistic scan extent and voxel size satisfies.
+ * stays collision-free while each grid index is within [-S/2, S/2), i.e. the
+ * ±65536-voxel-per-axis window every realistic recentred scan satisfies.
  */
 const GRID_STRIDE = 131072;
+
+/**
+ * Half the stride — the inclusive lower / exclusive upper bound a voxel index
+ * may take before the numeric pack can alias a neighbouring bucket. Outside it
+ * (huge un-recentred projected coordinates with a tiny voxel size) we fall back
+ * to a string key, which can't collide — a silent spatial collision would
+ * corrupt the downsample without ever throwing.
+ */
+const GRID_INDEX_BOUND = GRID_STRIDE / 2;
+
+function voxelIndexInRange(g: number): boolean {
+  return g >= -GRID_INDEX_BOUND && g < GRID_INDEX_BOUND;
+}
 
 /**
  * Voxel-grid downsample.
@@ -41,7 +54,7 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
   // Per-voxel running sums, kept in flat arrays indexed by a first-seen slot.
   // Avoiding a per-voxel object keeps allocation out of this hot loop, which
   // runs once for every point in the cloud.
-  const slotOf = new Map<number, number>();
+  const slotOf = new Map<number | string, number>();
   const sumX: number[] = [];
   const sumY: number[] = [];
   const sumZ: number[] = [];
@@ -66,7 +79,14 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     const gx = Math.floor(x / voxelSize);
     const gy = Math.floor(y / voxelSize);
     const gz = Math.floor(z / voxelSize);
-    const key = (gx * GRID_STRIDE + gy) * GRID_STRIDE + gz;
+    // Fast numeric pack when every index sits inside the safe window; otherwise
+    // a string key, which is slower but cannot alias another voxel. Mixed
+    // number/string Map keys never collide (5 ≠ "5"), and the string form only
+    // appears for the rare out-of-range point, so the hot path stays numeric.
+    const key =
+      voxelIndexInRange(gx) && voxelIndexInRange(gy) && voxelIndexInRange(gz)
+        ? (gx * GRID_STRIDE + gy) * GRID_STRIDE + gz
+        : `${gx},${gy},${gz}`;
 
     let slot = slotOf.get(key);
     if (slot === undefined) {

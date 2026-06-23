@@ -33,6 +33,12 @@ export interface SourceMetadata {
   estimatedPointCount?: number;
   /** One-line description of the chosen load strategy, when known. */
   loadModeSummary?: string;
+  /**
+   * A pre-decode caution shown before the (expensive) parse — e.g. a large
+   * non-LAS file that decodes fully in memory and may spike RAM. Undefined when
+   * there is nothing to warn about.
+   */
+  warning?: string;
 }
 
 /**

@@ -343,6 +343,29 @@ describe('volumeCutFill — confidence + density fields', () => {
     // All points at z = 3 → all |Δz| = 3.
     expect(r.medianAbsDelta).toBeCloseTo(3, 5);
   });
+
+  it('median samples the whole polygon, not just the first inside points', () => {
+    // Spatially-ordered cloud: the FIRST 10 000 inside points have |Δz| = 1,
+    // the next 30 000 have |Δz| = 9. The population is 75% nines, so the true
+    // median is 9. A first-10 000 buffer would see only the ones and report a
+    // biased median of 1. Reservoir sampling across all inside points must
+    // recover ~9.
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < 10_000; i++) pts.push([500, 500, 1]);
+    for (let i = 0; i < 30_000; i++) pts.push([500, 500, 9]);
+    const square: ReadonlyArray<[number, number, number]> = [
+      [0, 0, 0],
+      [1000, 0, 0],
+      [1000, 1000, 0],
+      [0, 1000, 0],
+    ];
+    const input = { polygon: square, referenceZ: 0, up: Z_UP, positions: pack(pts) };
+    const r = volumeCutFill(input);
+    expect(r.pointsInPolygon).toBe(40_000);
+    expect(r.medianAbsDelta).toBeGreaterThan(8); // ≈ 9, the true median — not the biased 1
+    // Deterministic: the seeded reservoir gives the same median every run.
+    expect(volumeCutFill(input).medianAbsDelta).toBe(r.medianAbsDelta);
+  });
 });
 
 describe('autoReferenceZ — median-height suggestion', () => {

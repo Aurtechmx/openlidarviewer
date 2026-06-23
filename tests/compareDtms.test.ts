@@ -96,6 +96,22 @@ describe('compareDtms', () => {
     expect(cmp.coregistrationNotes.join(' ')).toContain('Vertical datum differs');
   });
 
+  it('cautions when a horizontal CRS is unknown (cannot verify a shared frame)', () => {
+    const a = grid([1, 1], 2, 1, { crs: null });
+    const b = grid([2, 2], 2, 1); // default known CRS
+    const cmp = compareDtms(a, b);
+    expect(cmp.coregistered).toBe(false);
+    expect(cmp.coregistrationNotes.join(' ')).toMatch(/CRS is unknown/i);
+  });
+
+  it('cautions when a vertical datum is unknown', () => {
+    const a = grid([1, 1], 2, 1, { verticalDatum: null });
+    const b = grid([2, 2], 2, 1); // default known datum
+    const cmp = compareDtms(a, b);
+    expect(cmp.coregistered).toBe(false);
+    expect(cmp.coregistrationNotes.join(' ')).toMatch(/datum is unknown/i);
+  });
+
   it('a mismatched raster is not co-registered (different cell size)', () => {
     const a = grid([1, 1, 1, 1], 2, 2, { cellSizeM: 1 });
     const b = grid([2, 2, 2, 2], 2, 2, { cellSizeM: 2 });
