@@ -28,3 +28,43 @@ export function horizontalCellMetres(
       : 1;
   return isGeographic ? cellSizeM * METRES_PER_DEGREE : cellSizeM * scale;
 }
+
+/** Per-axis horizontal cell size in metres (east/west X, north/south Y). */
+export interface CellMetresXY {
+  /** East–west (longitude / column) cell size in metres. */
+  readonly x: number;
+  /** North–south (latitude / row) cell size in metres. */
+  readonly y: number;
+}
+
+/**
+ * Per-axis cell size in metres. A geographic (lat/lon) raster has square cells
+ * in DEGREES but NOT in metres: 1° of latitude is ~{@link METRES_PER_DEGREE} m
+ * everywhere, but 1° of longitude is that × `cos(latitude)`. Feeding one scalar
+ * to a slope estimator therefore overstates the east–west run by `1/cos φ` and
+ * skews slope/aspect off the equator. This returns both axes so the estimator
+ * can scale dz/dx and dz/dy independently.
+ *
+ * Projected frames are isotropic: both axes are `cellSizeM × horizontalUnitToMetres`.
+ *
+ * @param latitudeDeg Representative latitude of the grid (e.g. its centre), in
+ *   degrees. Only consulted for geographic frames.
+ */
+export function horizontalCellMetresXY(
+  cellSizeM: number,
+  isGeographic: boolean | undefined,
+  latitudeDeg = 0,
+  horizontalUnitToMetres = 1,
+): CellMetresXY {
+  if (isGeographic) {
+    const y = cellSizeM * METRES_PER_DEGREE;
+    const cosLat = Math.max(0, Math.cos((latitudeDeg * Math.PI) / 180));
+    return { x: y * cosLat, y };
+  }
+  const scale =
+    Number.isFinite(horizontalUnitToMetres) && horizontalUnitToMetres > 0
+      ? horizontalUnitToMetres
+      : 1;
+  const m = cellSizeM * scale;
+  return { x: m, y: m };
+}

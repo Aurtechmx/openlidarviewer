@@ -41,7 +41,7 @@ import { inpaintNearest } from './groundFilter';
 import { idwFill } from './idwFill';
 import { geodesicFill } from './geodesicFill';
 import { hornSlope } from './terrainDerivatives';
-import { horizontalCellMetres } from './horizontalScale';
+import { horizontalCellMetresXY } from './horizontalScale';
 
 /** Per-cell provenance: how the elevation in this cell came to be. */
 export type CellCoverage =
@@ -249,13 +249,15 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   // Horn 3x3 slope — isotropic, the same estimator GDAL/ArcGIS use —
   // drives the interpolation roughness penalty. (v0.4.0 — was a crude
   // max-neighbour difference.) For a geographic frame the cell is in degrees,
-  // so convert it to metres or every cell reads as near-vertical.
-  const slope = hornSlope(
-    z,
-    cols,
-    rows,
-    horizontalCellMetres(cellSizeM, params.isGeographic, params.horizontalUnitToMetres),
+  // so convert to metres per axis — longitude shrinks by cos(latitude) — or
+  // every cell reads as near-vertical and the E–W run is overstated off-equator.
+  const cellM = horizontalCellMetresXY(
+    cellSizeM,
+    params.isGeographic,
+    originH2 + (rows / 2) * cellSizeM, // grid-centre latitude (geographic only)
+    params.horizontalUnitToMetres,
   );
+  const slope = hornSlope(z, cols, rows, cellM.x, cellM.y);
 
   const confidence = new Float32Array(nCells);
   const coverage = new Uint8Array(nCells);

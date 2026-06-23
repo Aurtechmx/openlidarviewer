@@ -8,7 +8,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { horizontalCellMetres, METRES_PER_DEGREE } from '../src/terrain/ground/horizontalScale';
+import {
+  horizontalCellMetres,
+  horizontalCellMetresXY,
+  METRES_PER_DEGREE,
+} from '../src/terrain/ground/horizontalScale';
 
 describe('horizontalCellMetres', () => {
   it('projected metre data passes through unchanged (default scale)', () => {
@@ -31,5 +35,29 @@ describe('horizontalCellMetres', () => {
     expect(horizontalCellMetres(5, false, 0)).toBe(5);
     expect(horizontalCellMetres(5, false, Number.NaN)).toBe(5);
     expect(horizontalCellMetres(5, false, -2)).toBe(5);
+  });
+});
+
+describe('horizontalCellMetresXY', () => {
+  it('projected frames are isotropic (x === y === cellSizeM × scale)', () => {
+    expect(horizontalCellMetresXY(2, false)).toEqual({ x: 2, y: 2 });
+    const ft = horizontalCellMetresXY(10, false, 0, 0.3048);
+    expect(ft.x).toBeCloseTo(3.048, 6);
+    expect(ft.y).toBeCloseTo(3.048, 6);
+  });
+
+  it('geographic: Y uses metres-per-degree, X shrinks by cos(latitude)', () => {
+    const atEq = horizontalCellMetresXY(0.001, true, 0);
+    expect(atEq.y).toBeCloseTo(0.001 * METRES_PER_DEGREE, 6);
+    expect(atEq.x).toBeCloseTo(atEq.y, 6); // cos 0 = 1
+
+    const at60 = horizontalCellMetresXY(0.001, true, 60);
+    expect(at60.y).toBeCloseTo(0.001 * METRES_PER_DEGREE, 6);
+    expect(at60.x).toBeCloseTo(at60.y * 0.5, 4); // cos 60° = 0.5 → east–west run halves
+  });
+
+  it('clamps a degenerate (≥90°) latitude to a non-negative X', () => {
+    const polar = horizontalCellMetresXY(0.001, true, 95);
+    expect(polar.x).toBeGreaterThanOrEqual(0);
   });
 });

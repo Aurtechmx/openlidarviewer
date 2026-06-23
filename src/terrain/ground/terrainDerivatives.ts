@@ -47,18 +47,26 @@ export interface TerrainDerivatives {
 /**
  * Compute Horn slope + aspect over a row-major elevation grid. Cells
  * whose centre is non-finite yield slope 0 / aspect 0 (no surface to
- * differentiate). `cellSizeM` must be > 0; otherwise slope is 0 grid-wide.
+ * differentiate). `cellMetresX` must be > 0; otherwise slope is 0 grid-wide.
+ *
+ * `cellMetresY` defaults to `cellMetresX` (square cells). Pass a distinct value
+ * for an anisotropic grid — notably a geographic (lat/lon) raster, where a
+ * square degree cell is NOT square in metres: 1° of longitude spans
+ * `cos(latitude)` × the metres of 1° of latitude. Without separate east/west
+ * (X) and north/south (Y) metres the east–west gradient is mis-scaled and
+ * slope/aspect come out anisotropically wrong off the equator.
  */
 export function hornSlopeAspect(
   z: Float32Array,
   cols: number,
   rows: number,
-  cellSizeM: number,
+  cellMetresX: number,
+  cellMetresY: number = cellMetresX,
 ): TerrainDerivatives {
   const n = cols * rows;
   const slope = new Float32Array(n);
   const aspect = new Float32Array(n);
-  if (n === 0 || !(cellSizeM > 0)) return { slope, aspect };
+  if (n === 0 || !(cellMetresX > 0) || !(cellMetresY > 0)) return { slope, aspect };
 
   const at = (r: number, c: number, fallback: number): number => {
     const rr = r < 0 ? 0 : r >= rows ? rows - 1 : r;
@@ -88,8 +96,8 @@ export function hornSlopeAspect(
 
       // Northing-up grid: row+1 (g, h, ii) is NORTH, row−1 (a, b, c) is
       // south, so dzdy is +∂z/∂northing.
-      const dzdx = (c + 2 * f + ii - (a + 2 * d + g)) / (8 * cellSizeM);
-      const dzdy = (g + 2 * h + ii - (a + 2 * b + c)) / (8 * cellSizeM);
+      const dzdx = (c + 2 * f + ii - (a + 2 * d + g)) / (8 * cellMetresX);
+      const dzdy = (g + 2 * h + ii - (a + 2 * b + c)) / (8 * cellMetresY);
       slope[i] = Math.hypot(dzdx, dzdy);
       // Aspect = downslope direction −∇z in the math frame: negate BOTH
       // gradient components. atan2(+dzdy, −dzdx) (the image-row ESRI form)
@@ -100,12 +108,13 @@ export function hornSlopeAspect(
   return { slope, aspect };
 }
 
-/** Convenience: just the slope grid (rise/run). */
+/** Convenience: just the slope grid (rise/run). `cellMetresY` defaults to X. */
 export function hornSlope(
   z: Float32Array,
   cols: number,
   rows: number,
-  cellSizeM: number,
+  cellMetresX: number,
+  cellMetresY: number = cellMetresX,
 ): Float32Array {
-  return hornSlopeAspect(z, cols, rows, cellSizeM).slope;
+  return hornSlopeAspect(z, cols, rows, cellMetresX, cellMetresY).slope;
 }

@@ -27,7 +27,7 @@ import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence
 import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
 import type { VerticalAxis } from '../ground/groundFilter';
 import { axisGetters } from '../ground/axisGetters';
-import { horizontalCellMetres } from '../ground/horizontalScale';
+import { horizontalCellMetresXY } from '../ground/horizontalScale';
 import { hornSlope } from '../ground/terrainDerivatives';
 import type {
   BandError,
@@ -187,13 +187,15 @@ export function holdoutValidateDtm(
       ? (params.verticalUnitToMetres as number)
       : 1;
   // Local slope field for slope-band stratification of the residuals; convert
-  // the cell to metres for a geographic frame so the bands aren't all "steep".
-  const slopeField = hornSlope(
-    dtm.z,
-    cols,
-    rows,
-    horizontalCellMetres(cellSizeM, params.isGeographic, params.horizontalUnitToMetres),
+  // the cell to metres per axis for a geographic frame (longitude shrinks by
+  // cos(latitude)) so the bands aren't all "steep" and aren't E–W biased.
+  const cellM = horizontalCellMetresXY(
+    cellSizeM,
+    params.isGeographic,
+    minH2 + (rows / 2) * cellSizeM, // grid-centre latitude (geographic only)
+    params.horizontalUnitToMetres,
   );
+  const slopeField = hornSlope(dtm.z, cols, rows, cellM.x, cellM.y);
 
   // Residuals at held-out points.
   const allAbs: number[] = [];
