@@ -1,3 +1,4 @@
+import { createSerialGate } from './serialGate';
 import { sniffFormat } from './sniffFormat';
 import type { SourceFormat } from './sniffFormat';
 import { PointCloud } from '../model/PointCloud';
@@ -219,6 +220,13 @@ export async function fileMetadata(
 // or a cancellation.
 let sharedWorker: Worker | undefined;
 
+// Serialises shared-worker use across concurrent loadFile() calls. The parse
+// worker is single-threaded and its `onmessage` handler is assigned per-load,
+// so two overlapping loads on the same worker would clobber each other's
+// handler — one would hang and the other resolve with the wrong cloud. Each
+// load waits its turn before touching the worker.
+const workerGate = createSerialGate();
+
 function parseWorkerInstance(): Worker {
   if (!sharedWorker) {
     sharedWorker = new Worker(new URL('./parseWorker.ts', import.meta.url), { type: 'module' });
@@ -273,7 +281,13 @@ export async function loadFile(
   const fileReadMs = performance.now() - readStartedAt;
   throwIfCancelled();
 
-  return new Promise<LoadResult>((resolve, reject) => {
+  // Acquire the worker gate so this load has exclusive use of the shared parse
+  // worker; release it in `finally` so a throw anywhere below can't stall the
+  // queue. (See `workerGate`.)
+  const releaseGate = await workerGate.acquire();
+  try {
+    throwIfCancelled();
+    return await new Promise<LoadResult>((resolve, reject) => {
     const worker = parseWorkerInstance();
     let settled = false;
     let postedAt = 0;
@@ -350,5 +364,8 @@ export async function loadFile(
     // The ArrayBuffer is transferred (not copied) into the worker.
     postedAt = performance.now();
     worker.postMessage({ buffer, format, name: file.name, budget, plan }, [buffer]);
-  });
+    });
+  } finally {
+    releaseGate();
+  }
 }
