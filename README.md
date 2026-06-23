@@ -14,6 +14,8 @@ Local-first. Cited. Honest about what it can't tell you.
 
 **Live version: [https://lidar.aurtech.mx/](https://lidar.aurtech.mx/)**
 
+**New here? Read the [User Guide](docs/USER_GUIDE.md)** — open a scan, measure, analyse terrain, compare two scans, and share your work, with nothing uploaded.
+
 ---
 
 ## Overview
