@@ -59,6 +59,31 @@ describe('signalsForStaticCloud — bounds is a method', () => {
     expect(s.densityPerSqM).toBeUndefined();
   });
 
+  it('converts a foot-CRS extent + density to metres / pts·m⁻² for the classifier', () => {
+    const FT = 0.3048;
+    const s = signalsForStaticCloud({
+      sourceFormat: 'laz',
+      pointCount: 1_000_000,
+      bounds: () => ({ min: [0, 0, 0], max: [100, 200, 30] }), // feet
+      metadata: { crs: { linearUnitToMetres: FT } },
+    });
+    // Extent → metres; density graded against pts/m² thresholds, not pts/ft².
+    expect(s.extent![0]).toBeCloseTo(100 * FT, 6);
+    expect(s.extent![1]).toBeCloseTo(200 * FT, 6);
+    expect(s.densityPerSqM).toBeCloseTo(1_000_000 / (100 * FT * (200 * FT)), 4);
+  });
+
+  it('leaves a metre-CRS (or unit-less) extent unchanged', () => {
+    const s = signalsForStaticCloud({
+      sourceFormat: 'laz',
+      pointCount: 1_000_000,
+      bounds: () => ({ min: [0, 0, 0], max: [100, 200, 30] }),
+      metadata: { crs: { linearUnitToMetres: 1 } },
+    });
+    expect(s.extent).toEqual([100, 200, 30]);
+    expect(s.densityPerSqM).toBe(50);
+  });
+
   it('uses the declared file total for density + count when the cloud was strided', () => {
     // Loader strided 9.6M → 3.7M for display; the capture-type density must
     // describe the file (≈ 979 pts/m²), not the rendered subset (≈ 379).

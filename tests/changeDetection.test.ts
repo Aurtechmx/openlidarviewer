@@ -50,6 +50,29 @@ describe('detectChange — basics', () => {
     expect(r.stats.lossVolumeM3).toBe(1);
     expect(r.stats.netVolumeM3).toBe(1);
   });
+
+  it('foot CRS: cut/fill is metres³ and Δz is metres, not source units', () => {
+    // Same accretion as the basic test but the grid is in FEET: cellSizeM and
+    // values are source units. Without the unit factor a foot scan over-reports
+    // ~35.3× (0.3048³). With it, volume = (cells × Δz_m × cellArea_m²).
+    const FT = 0.3048;
+    const r = detectChange(grid(3, 3, 2, 0), grid(3, 3, 2, 1), {
+      horizontalUnitToMetres: FT,
+      verticalUnitToMetres: FT,
+    });
+    // 9 cells, Δz = 1 ft = 0.3048 m, cell area = (2 ft·0.3048)² = 0.6096² m².
+    const expected = 9 * (1 * FT) * (2 * FT) * (2 * FT);
+    expect(r.stats.gainVolumeM3).toBeCloseTo(expected, 6);
+    expect(r.stats.maxGainM).toBeCloseTo(FT, 6); // largest gain in metres, not 1
+    // The metre-factor (default 1) result is exactly 35.3× larger.
+    const metric = detectChange(grid(3, 3, 2, 0), grid(3, 3, 2, 1));
+    expect(metric.stats.gainVolumeM3 / r.stats.gainVolumeM3).toBeCloseTo(1 / (FT * FT * FT), 4);
+  });
+
+  it('defaults to metre behaviour when no unit factor is given (backward compatible)', () => {
+    const r = detectChange(grid(2, 2, 1, 0), grid(2, 2, 1, 1));
+    expect(r.stats.gainVolumeM3).toBe(4); // unchanged from before the unit-factor change
+  });
 });
 
 describe('detectChange — Level of Detection', () => {

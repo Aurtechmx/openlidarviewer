@@ -635,7 +635,14 @@ export class MeasureController {
    * tell a georeferenced metre survey from an ungeoreferenced one.
    */
   setCrsKnown(known: boolean): void {
+    if (known === this._crsKnown) return;
     this._crsKnown = known;
+    // Re-grade existing measurements: the CRS-known signal feeds the trust
+    // grade, so a measurement placed before the CRS resolved must not keep a
+    // stale "no CRS — scale unverified" caption once it becomes known (or
+    // gain one if a known CRS is later cleared). Mirrors the drag-end re-grade.
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._emitChange();
   }
 
   /** A snapshot of all completed measurements. */

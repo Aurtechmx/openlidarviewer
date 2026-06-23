@@ -5678,7 +5678,13 @@ function compareLoadedLayers(): void {
         inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
         return;
       }
-      const cmp = compareDtms(dtms.before, dtms.after);
+      // CRS unit factors (from epoch a — a unit mismatch between epochs is
+      // already flagged) so cut/fill is m³ and Δz/LoD are metres, not source
+      // units. A metre CRS resolves to 1 (no change); a foot CRS to ~0.3048.
+      const cmp = compareDtms(dtms.before, dtms.after, {
+        horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
+        verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
+      });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, ...summarizeChange(cmp)]);
       // A georeferenced .asc of the signed difference. The shared grid is built

@@ -42,6 +42,8 @@ export interface StaticCloudShape {
   readonly metadata?: {
     readonly captureSensor?: string;
     readonly sourceSoftware?: string;
+    /** Horizontal CRS unit → metres, for converting raw-unit extent/density. */
+    readonly crs?: { readonly linearUnitToMetres?: number };
   };
 }
 
@@ -51,6 +53,13 @@ export interface StreamingCloudShape {
   readonly sourcePointCount?: number;
   /** Streaming clouds expose extent through `localBounds(): Box6`. */
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
+  /** Horizontal CRS, for converting raw-unit extent/density to metres / pts·m⁻². */
+  readonly crs?: () => { readonly linearUnitToMetres?: number } | null | undefined;
+}
+
+/** A valid linear-unit → metres factor, or 1 (treat the source as metres). */
+function unitFactor(v: number | undefined): number {
+  return Number.isFinite(v) && (v as number) > 0 ? (v as number) : 1;
 }
 
 /**
@@ -75,6 +84,11 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
       extent = undefined;
     }
   }
+  // Convert raw CRS-unit extent → metres so the capture-type / USGS-QL
+  // classifier sees metres (its contract), matching the report path. A foot CRS
+  // would otherwise be graded against pts/ft² density and ft² footprint.
+  const f = unitFactor(cloud.metadata?.crs?.linearUnitToMetres);
+  if (extent) extent = [extent[0] * f, extent[1] * f, extent[2] * f] as const;
   // File scale: prefer the declared total over the strided display count so the
   // density (and the capture-type call it drives) describes the whole file.
   const fileN =
@@ -108,7 +122,10 @@ export function signalsForStreamingCloud(cloud: StreamingCloudShape): ScanSignal
   if (typeof cloud.localBounds === 'function') {
     try {
       const b = cloud.localBounds();
-      extent = [b[3] - b[0], b[4] - b[1], b[5] - b[2]];
+      // Convert raw CRS-unit extent → metres (see the static path) so the
+      // classifier and its USGS-QL density tier are graded in metres.
+      const f = unitFactor(cloud.crs?.()?.linearUnitToMetres);
+      extent = [(b[3] - b[0]) * f, (b[4] - b[1]) * f, (b[5] - b[2]) * f];
       if (extent[0] > 0 && extent[1] > 0 && cloud.sourcePointCount) {
         density = cloud.sourcePointCount / (extent[0] * extent[1]);
       }

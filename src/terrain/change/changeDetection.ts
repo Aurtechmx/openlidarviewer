@@ -39,6 +39,21 @@ export interface ChangeDetectionOptions {
    * (below the noise floor). Default 0.1 m.
    */
   readonly levelOfDetectionM?: number;
+  /**
+   * Horizontal CRS unit → metres (1 for a metre CRS, ~0.3048 for feet). The
+   * grids' `cellSizeM` is in the source CRS's units, so without this the cell
+   * AREA — and therefore every cut/fill volume — is in source-unit², not m².
+   * Default 1. Geographic (degree) grids can't be volumed and should not be
+   * passed here.
+   */
+  readonly horizontalUnitToMetres?: number;
+  /**
+   * Vertical unit → metres for the elevation difference (defaults to the
+   * horizontal factor). Without it the Level-of-Detection (in metres) is
+   * compared against a source-unit Δz, and the extremes/mean are in source
+   * units. Default = horizontal factor.
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 /** Per-cell change class. 0 = no change / incomparable, +1 = gain, −1 = loss. */
@@ -118,7 +133,16 @@ export function detectChange(
   const W = Math.min(a.width, b.width);
   const H = Math.min(a.height, b.height);
   const cellSizeM = a.cellSizeM; // report in epoch-a units (warned if they differ)
-  const cellArea = cellSizeM * cellSizeM;
+  // CRS-unit → metres so cut/fill is m³ and the elevation difference is metres
+  // (the LoD is in metres). `cellSizeM` is in the source CRS's units; for a
+  // foot CRS, hM ≈ 0.3048 makes the cell area m² and vM scales Δz to metres.
+  const hM = Number.isFinite(options.horizontalUnitToMetres) && (options.horizontalUnitToMetres as number) > 0
+    ? (options.horizontalUnitToMetres as number)
+    : 1;
+  const vM = Number.isFinite(options.verticalUnitToMetres) && (options.verticalUnitToMetres as number) > 0
+    ? (options.verticalUnitToMetres as number)
+    : hM;
+  const cellArea = (cellSizeM * hM) * (cellSizeM * hM);
 
   const diff = new Float32Array(W * H);
   const classes = new Int8Array(W * H);
@@ -142,7 +166,7 @@ export function detectChange(
         classes[oi] = 0;
         continue;
       }
-      const d = bv - av;
+      const d = (bv - av) * vM; // elevation difference in metres
       diff[oi] = d;
       comparable++;
       absSum += Math.abs(d);
