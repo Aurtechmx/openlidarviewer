@@ -89,3 +89,4 @@ ELITE_*.md
 
 # Serena project metadata (local tooling)
 .serena/
+.claude/
