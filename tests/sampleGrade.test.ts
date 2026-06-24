@@ -1,5 +1,5 @@
 /**
- * sampleGrade.test.ts — the GradeFn the full-cloud B-trigger runs over a decoded
+ * sampleGrade.test.ts — the GradeFn the full-cloud grade runs over a decoded
  * octree sample. Pins: density tier reuses classifyDensity (per-m³); the
  * back-scale lifts a sample's density to the whole cloud; occupancy distinguishes
  * a filled box from a hollow footprint; vertical span is real; and degenerate

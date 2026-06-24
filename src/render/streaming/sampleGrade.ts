@@ -1,7 +1,7 @@
 /**
  * sampleGrade.ts
  *
- * The {@link GradeFn} the full-cloud B-trigger runs over the decoded octree
+ * The {@link GradeFn} the full-cloud grade runs over the decoded octree
  * sample. The runner ({@link runFullCloudGrade}) decodes a breadth-first
  * sampling plan into one local-space XYZ buffer and a `samplePointScale`; this
  * module turns that buffer into a representative, HONEST grade of the WHOLE

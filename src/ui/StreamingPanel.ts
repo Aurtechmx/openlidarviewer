@@ -193,7 +193,7 @@ export class StreamingPanel {
   private readonly _qualityRow: HTMLElement;
   private readonly _views: HTMLElement;
   private readonly _pause: HTMLButtonElement;
-  // Full-cloud grade (B-trigger): a button that decodes a representative octree
+  // Full-cloud grade: a button that decodes a representative octree
   // sample across the whole cloud and grades it, plus a result/status area.
   private readonly _gradeBtn: HTMLButtonElement;
   private readonly _gradeResult: HTMLElement;
@@ -263,7 +263,7 @@ export class StreamingPanel {
     });
     clearCache.addEventListener('click', () => this._callbacks.onClearCache());
 
-    // ── Full-cloud grade (B-trigger) ──
+    // ── Full-cloud grade ──
     // The resident view only shows the nodes the camera pulled in; this button
     // decodes a representative breadth-first sample across the WHOLE octree and
     // grades its density, vertical extent, and footprint coverage — with an

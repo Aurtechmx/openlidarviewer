@@ -421,7 +421,7 @@ interface StreamingSession {
   renderer: StreamingRenderer;
   /**
    * The chunk decoder driving this session. Retained so the full-cloud grade
-   * (the B-trigger) can re-decode a breadth-first octree sample through the
+   * can re-decode a breadth-first octree sample through the
    * SAME decoder the scheduler uses, without standing up a second worker pool.
    */
   decoder: ChunkDecoder;

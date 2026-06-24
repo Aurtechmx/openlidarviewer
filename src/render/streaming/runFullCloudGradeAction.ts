@@ -1,7 +1,7 @@
 /**
  * runFullCloudGradeAction.ts
  *
- * The orchestration for the full-cloud grade (the B-trigger), pulled out of
+ * The orchestration for the full-cloud grade, pulled out of
  * `main.ts` into its own module so it loads ONLY when the user clicks "Grade
  * full cloud". Keeping it lazy (with the adapter + grade it imports) holds the
  * live index bundle under its size budget — the same pattern the command

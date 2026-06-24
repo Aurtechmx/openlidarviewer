@@ -3541,7 +3541,7 @@ function readTerrainComputePath(): { path: 'cpu' | 'gpu'; reason: string } | nul
 let fullCloudGradeRunning = false;
 
 /**
- * Run the full-cloud grade (the B-trigger). The orchestration — sampling plan,
+ * Run the full-cloud grade. The orchestration — sampling plan,
  * decode through the session decoder, grade, and panel updates — lives in a
  * lazily-imported module so it (and the adapter + grade it pulls in) never
  * weighs on the live index bundle; this stub only owns the re-entry guard.
