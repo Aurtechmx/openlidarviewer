@@ -153,4 +153,21 @@ describe('metresPerUnit conversion', () => {
     expect(feet.bboxVolumeM3).toBeLessThan(metres.bboxVolumeM3);
     expect(feet.verticalSpanM).toBeLessThan(metres.verticalSpanM);
   });
+
+  it('applies a distinct vertical unit to Z only (foot height over a metre grid)', () => {
+    const box = filledBox(20, 10); // 10×10×10 in source units
+    // Horizontal metres, vertical feet: X/Y spans stay 10 m, Z span → 3.048 m.
+    const mixed = gradeSampleDensity(box, 1, 1, 0.3048);
+    expect(mixed.verticalSpanM).toBeCloseTo(3.048, 3);
+    // Volume = 10 m × 10 m × 3.048 m = 304.8 m³ (not 1000).
+    expect(mixed.bboxVolumeM3).toBeCloseTo(304.8, 1);
+  });
+
+  it('defaults the vertical factor to the horizontal one when omitted', () => {
+    const box = filledBox(20, 10);
+    const horizOnly = gradeSampleDensity(box, 1, 0.3048);
+    const explicit = gradeSampleDensity(box, 1, 0.3048, 0.3048);
+    expect(horizOnly.verticalSpanM).toBeCloseTo(explicit.verticalSpanM, 6);
+    expect(horizOnly.bboxVolumeM3).toBeCloseTo(explicit.bboxVolumeM3, 6);
+  });
 });

@@ -82,10 +82,19 @@ export function gradeSampleDensity(
   positions: Float32Array,
   samplePointScale: number,
   metresPerUnit = 1,
+  verticalMetresPerUnit = metresPerUnit,
 ): SampleGrade {
   const n = Math.floor(positions.length / 3);
   const scale = Number.isFinite(samplePointScale) && samplePointScale >= 1 ? samplePointScale : 1;
   const mpu = Number.isFinite(metresPerUnit) && metresPerUnit > 0 ? metresPerUnit : 1;
+  // Z gets its own factor: a CRS can declare a vertical unit (feet height over a
+  // metre grid, or vice-versa) distinct from the horizontal one. Falls back to
+  // the horizontal factor — the GeoTIFF default where vertical follows model
+  // units — when no separate vertical unit is known.
+  const vmpu =
+    Number.isFinite(verticalMetresPerUnit) && verticalMetresPerUnit > 0
+      ? verticalMetresPerUnit
+      : mpu;
 
   const empty: SampleGrade = {
     sampledPoints: n,
@@ -113,7 +122,7 @@ export function gradeSampleDensity(
 
   const spanX = Math.max(0, (maxX - minX)) * mpu;
   const spanY = Math.max(0, (maxY - minY)) * mpu;
-  const spanZ = Math.max(0, (maxZ - minZ)) * mpu;
+  const spanZ = Math.max(0, (maxZ - minZ)) * vmpu;
   const bboxVolumeM3 = spanX * spanY * spanZ;
   const estimatedTotalPoints = Math.round(n * scale);
 
