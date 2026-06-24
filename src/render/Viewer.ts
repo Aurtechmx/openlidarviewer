@@ -65,6 +65,7 @@ import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
 import { type ClipBox, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
+import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
 import {
@@ -823,6 +824,13 @@ export class Viewer {
   private readonly _scenePass: ReturnType<typeof pass>;
   /** Whether EDL is on; defaulted by the capability gate once the backend is known. */
   private _edlEnabled = false;
+  /**
+   * Tracks whether the last paint applied EDL at rest. EDL is suspended while
+   * the camera moves (its per-frame post-process is what makes motion judder);
+   * this flag lets the loop force exactly ONE EDL repaint the moment motion
+   * settles, so the depth cue snaps back without flickering every idle frame.
+   */
+  private _edlPaintedAtRest = false;
   /** EDL strength, and the camera near/far, as live uniforms. */
   private readonly _edlStrength = uniform(EDL_DEFAULTS.strength);
   private readonly _edlNear = uniform(0.1);
@@ -5452,12 +5460,28 @@ export class Viewer {
       // streaming keeps its cadence; only the GPU `render()` call is
       // gated. See `_shouldRenderFrame` for the full predicate.
       const rendered = this._shouldRenderFrame();
+      // Suspend EDL while the camera is moving: its full-screen post-process is
+      // the dominant per-frame cost during orbit/pan/fly. The depth cue returns
+      // the instant the view parks. `moving` reuses the same motion signal the
+      // frame-rate throttle uses, so the two never disagree.
+      const nowMs = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now()
+        : Date.now();
+      const moving = cameraIsMoving(this._nav.isTweening, nowMs, this._renderActivityUntilMs);
+      const wantEdl = edlActiveThisFrame(this._edlEnabled, moving);
       if (rendered) {
         this._idleRenderHeartbeat = 0;
-        // EDL on → render through the post-processing pipeline; off → render
-        // the scene directly, the v0.2 path, for zero post-processing overhead.
-        if (this._edlEnabled) this._post.render();
+        // EDL when parked → render through the post-processing pipeline; moving
+        // or EDL off → render the scene directly for zero post-processing cost.
+        if (wantEdl) this._post.render();
         else this._renderer.render(this._scene, this._camera);
+        this._edlPaintedAtRest = wantEdl;
+      } else if (wantEdl && !this._edlPaintedAtRest) {
+        // Motion just settled and the last paint had EDL off — force one EDL
+        // repaint so the depth cue snaps back, then resume idle throttling.
+        this._idleRenderHeartbeat = 0;
+        this._post.render();
+        this._edlPaintedAtRest = true;
       } else {
         this._idleRenderHeartbeat++;
       }
