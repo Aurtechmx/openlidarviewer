@@ -45,6 +45,7 @@ import {
   decodeContext,
   decodeRecord,
   decodingUpdate,
+  finalizeRawColors,
   type RawPoints,
 } from './lasDecodeShared';
 
@@ -88,6 +89,7 @@ function decodeLas(
     decodeRecord(view, pointsOffset + i * recordLength, b, ctx, out);
     if (onProgress && (b + 1) % reportEvery === 0) onProgress(decodingUpdate(b + 1, total));
   }
+  finalizeRawColors(out); // narrow staged 16-bit RGB once, per-file
   return out;
 }
 

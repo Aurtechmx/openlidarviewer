@@ -105,6 +105,11 @@ export function computeElevationRange(
   let idx = 0;
   for (let i = 0; i < total && idx < sampleCap; i += stride) {
     const z = input.positions[i * 3 + upAxis];
+    // Skip non-finite up-axis values: a malformed binary loader can hand us
+    // NaN/Infinity coordinates, and letting them into the sorted sample lets a
+    // NaN land on the percentile index, making maxZ NaN and rendering the whole
+    // elevation-coloured cloud solid black (range = NaN → every t = NaN → 0).
+    if (!Number.isFinite(z)) continue;
     sample[idx++] = z;
     if (z < trueMin) trueMin = z;
     if (z > trueMax) trueMax = z;

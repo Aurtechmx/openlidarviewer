@@ -4391,6 +4391,12 @@ async function exportSession(): Promise<void> {
 /** Import an inspection session: restore measurements, annotations and views. */
 async function importSession(file: File): Promise<void> {
   try {
+    // The session path's imports are light (no three.js), so a session restore
+    // can finish before the lazily-imported Viewer chunk resolves — leaving
+    // `viewer` as its null sentinel. Await viewerLoaded so every `viewer.*`
+    // access below is safe (measure/annotate are built in the Viewer ctor, so
+    // no GPU backend is needed — just a non-null instance).
+    await viewerLoaded;
     const { parseSession } = await import('./io/session');
     const session = parseSession(await file.text());
     viewer.measure.loadMeasurements(session.measurements);

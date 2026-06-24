@@ -87,8 +87,13 @@ export interface RawPoints {
   returnCount: Uint8Array;
   pointSourceId: Uint16Array;
   gpsTime: Float64Array | null;
-  /** Interleaved rgb (0–255), or null when the point format carries no colour. */
+  /** Interleaved rgb (0–255), or null when the point format carries no colour.
+   *  Filled by {@link finalizeRawColors} after decode — null until then. */
   colors: Uint8Array | null;
+  /** Raw interleaved 16-bit rgb staging buffer the decode loop writes into, so
+   *  the 8-bit-vs-16-bit narrowing decision is made ONCE per file (not per
+   *  record). Cleared by {@link finalizeRawColors}. Null when no colour. */
+  colors16: Uint16Array | null;
 }
 
 /** Per-file constants reused across every record of one decode. */
@@ -160,14 +165,15 @@ export function decodeRecord(
   if (ctx.gpsTimeOffset !== null && out.gpsTime !== null) {
     out.gpsTime[i] = view.getFloat64(base + ctx.gpsTimeOffset, true);
   }
-  if (ctx.rgbOffset !== null && out.colors !== null) {
+  if (ctx.rgbOffset !== null && out.colors16 !== null) {
     const o = base + ctx.rgbOffset;
-    // LAS RGB is 16-bit per channel; narrow to the renderer's 8-bit buffer by
-    // taking the high byte (the LAS-standard full-range encoding, which our
-    // own writer also uses — value × 257 → high byte recovers the original).
-    out.colors[i * 3 + 0] = view.getUint16(o, true) >> 8;
-    out.colors[i * 3 + 1] = view.getUint16(o + 2, true) >> 8;
-    out.colors[i * 3 + 2] = view.getUint16(o + 4, true) >> 8;
+    // Stage the raw 16-bit channels; finalizeRawColors decides 8-bit vs 16-bit
+    // narrowing once per file. Files this app writes use ×257 (value << 8); some
+    // third-party files store 8-bit values in the low byte — both round-trip
+    // correctly through the file-level scan in finalizeRawColors.
+    out.colors16[i * 3 + 0] = view.getUint16(o, true);
+    out.colors16[i * 3 + 1] = view.getUint16(o + 2, true);
+    out.colors16[i * 3 + 2] = view.getUint16(o + 4, true);
   }
 }
 
@@ -184,8 +190,39 @@ export function allocRawPoints(
     returnCount: new Uint8Array(count),
     pointSourceId: new Uint16Array(count),
     gpsTime: hasGpsTime ? new Float64Array(count) : null,
-    colors: hasColor ? new Uint8Array(count * 3) : null,
+    // Colour is staged as raw 16-bit and narrowed once in finalizeRawColors;
+    // `colors` (the 8-bit render buffer) is allocated there.
+    colors: null,
+    colors16: hasColor ? new Uint16Array(count * 3) : null,
   };
+}
+
+/**
+ * Narrow the staged 16-bit RGB into the renderer's 8-bit `colors` buffer with a
+ * SINGLE per-file bit-depth decision, then release the staging buffer. Some
+ * writers store 8-bit values directly in the low byte of the 16-bit field
+ * (values 0–255); narrowing those with `>> 8` would yield 0 and render the
+ * whole cloud black. So we scan the file's max channel value: ≤ 255 ⇒ the file
+ * is 8-bit-in-low-byte (copy verbatim), else it is full-range 16-bit (high
+ * byte). This mirrors the COPC decoder's per-chunk detection, lifted to the
+ * file level so it is deterministic across the whole cloud.
+ */
+export function finalizeRawColors(raw: RawPoints): void {
+  const src = raw.colors16;
+  if (!src) return;
+  let maxRgb = 0;
+  for (let i = 0; i < src.length; i++) {
+    if (src[i] > maxRgb) maxRgb = src[i];
+  }
+  const eightBit = maxRgb <= 255;
+  const out = new Uint8Array(src.length);
+  if (eightBit) {
+    out.set(src); // values already 0–255
+  } else {
+    for (let i = 0; i < src.length; i++) out[i] = src[i] >> 8;
+  }
+  raw.colors = out;
+  raw.colors16 = null;
 }
 
 export function decodingUpdate(done: number, total: number): ProgressUpdate {

@@ -69,6 +69,12 @@ export function geodesicFill(
   // pay an O(n) clear: a cell is "seen this void" when `seen[c] === iter`.
   const dist = new Float64Array(n);
   const seen = new Int32Array(n).fill(-1);
+  // A measured cell can be pushed several times (a cheaper geodesic path found
+  // after the first push), and the pop reads `dist[c]` rather than the popped
+  // entry's cost, so without a guard the same measured cell is absorbed into the
+  // blend more than once — double-counting its weight and over-incrementing the
+  // kNearest tally. `absorbed[c] === iter` marks it consumed for this void.
+  const absorbed = new Int32Array(n).fill(-1);
   // Binary min-heap over (cost, node) as parallel arrays.
   const heapCost = new Float64Array(n);
   const heapNode = new Int32Array(n);
@@ -124,7 +130,10 @@ export function geodesicFill(
         const cost = dist[c];
         if (hadData[c] === 1) {
           // Nearest measured cell by geodesic cost — absorb into the blend and
-          // do not expand through it.
+          // do not expand through it. Skip a stale duplicate pop so each measured
+          // cell contributes exactly once (its first, lowest-cost pop).
+          if (absorbed[c] === iter) continue;
+          absorbed[c] = iter;
           const w = 1 / Math.pow(cost, power);
           wSum += w; vSum += w * z[c];
           collected++;

@@ -37,6 +37,33 @@ const VOLUME = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
   },
 });
 
+describe('measurementsToCsv — formula-injection neutralisation', () => {
+  it('neutralises a name that begins with a spreadsheet formula trigger', () => {
+    const evil = mk('distance', [[0, 0, 0], [3, 4, 0]], { name: '=HYPERLINK("http://evil","x")' });
+    const csv = measurementsToCsv([evil], CTX);
+    // Prefixed with a literal apostrophe and force-quoted (quotes doubled).
+    expect(csv).toContain('"\'=HYPERLINK(""http://evil"",""x"")"');
+    // The raw, un-neutralised formula must NOT appear at a cell boundary.
+    expect(csv).not.toMatch(/,=HYPERLINK/);
+  });
+
+  it('neutralises @, +, and - leading names too', () => {
+    for (const name of ['@SUM(1+1)', '+1+2', '-2+3']) {
+      const csv = measurementsToCsv([mk('distance', [[0, 0, 0], [1, 0, 0]], { name })], CTX);
+      expect(csv).toContain(`"'${name}"`);
+    }
+  });
+
+  it('leaves a benign name and negative numeric cells untouched', () => {
+    const csv = measurementsToCsv([mk('distance', [[0, 0, 0], [3, 4, 0]], { name: 'Polyline 2' })], CTX);
+    const row = csv.split('\n')[1];
+    expect(row.split(',')).toContain('Polyline 2');
+    // A negative numeric value (downhill vertical) must NOT be apostrophe-prefixed.
+    const slopeCsv = measurementsToCsv([mk('distance', [[0, 0, 0], [3, 0, -4]])], CTX);
+    expect(slopeCsv).not.toContain("'-");
+  });
+});
+
 describe('measurementMetrics', () => {
   it('distance → length in metres', () => {
     expect(measurementMetrics(DISTANCE, UP, 1)).toEqual({ length_m: 5 });

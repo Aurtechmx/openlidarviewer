@@ -346,6 +346,12 @@ export class StreamingScheduler {
   private _lastSigDepthCap = -1;
   private _lastSigBudget = -1;
   private _lastSigPressureReduction = -1;
+  // The FPS pressure factor scales the effective point budget (fpsAdjustedBudget),
+  // so it MUST be part of the stable-camera signature — otherwise a stutter that
+  // ratchets the factor down doesn't trim the resident set until the next camera
+  // move or the 60-tick forced rescore (~seconds of lag under exactly the
+  // GPU-bound case the back-off targets).
+  private _lastSigFpsFactor = -1;
   /** Last full rescore's wanted set (reused while the signature stays equal). */
   private _lastWanted: ReadonlySet<string> | null = null;
   /** Last full rescore's scored list (same lifecycle as `_lastWanted`). */
@@ -661,7 +667,8 @@ export class StreamingScheduler {
       view.cameraPosition[2] === this._lastSigCameraPos[2] &&
       depthCap === this._lastSigDepthCap &&
       this._pointBudget === this._lastSigBudget &&
-      this._pressureDepthReduction === this._lastSigPressureReduction;
+      this._pressureDepthReduction === this._lastSigPressureReduction &&
+      this._fpsBudgetFactor === this._lastSigFpsFactor;
     const forceRescore =
       this._tick - this._lastFullRescoreTick >= FORCED_RESCORE_INTERVAL_TICKS;
 
@@ -734,6 +741,7 @@ export class StreamingScheduler {
       this._lastSigDepthCap = depthCap;
       this._lastSigBudget = this._pointBudget;
       this._lastSigPressureReduction = this._pressureDepthReduction;
+      this._lastSigFpsFactor = this._fpsBudgetFactor;
       this._lastScored = freshScored;
       this._lastWanted = freshWanted;
       this._lastFullRescoreTick = this._tick;

@@ -38,6 +38,7 @@ import {
   decodeContext,
   decodeRecord,
   decodingUpdate,
+  finalizeRawColors,
   type RawPoints,
 } from './lasDecodeShared';
 
@@ -152,6 +153,7 @@ export async function decodeLaz(
       }
       if (onProgress && i % reportEvery === 0) onProgress(decodingUpdate(bucket, total));
     }
+    finalizeRawColors(out); // narrow staged 16-bit RGB once, per-file
     return out;
   } finally {
     reader.delete();

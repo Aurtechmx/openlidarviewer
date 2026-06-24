@@ -28,6 +28,22 @@ describe('computeElevationRange', () => {
     expect(r.sampleCount).toBe(0);
   });
 
+  it('ignores non-finite up-axis samples so a NaN cannot blow out the range', () => {
+    // 90% clean ramp + 10% NaN (well over the 100-95=5% that lands on hiIdx).
+    const zs: number[] = [];
+    for (let i = 0; i < 900; i++) zs.push(i);
+    for (let i = 0; i < 100; i++) zs.push(Number.NaN);
+    const r = computeElevationRange({ positions: pack(zs), lowerPercentile: 5, upperPercentile: 95 });
+    expect(Number.isFinite(r.minZ)).toBe(true);
+    expect(Number.isFinite(r.maxZ)).toBe(true);
+    expect(r.maxZ).toBeGreaterThan(r.minZ);
+  });
+
+  it('returns a finite zero-span when every sample is non-finite', () => {
+    const r = computeElevationRange({ positions: pack([NaN, Infinity, -Infinity, NaN]) });
+    expect(Number.isFinite(r.minZ) && Number.isFinite(r.maxZ)).toBe(true);
+  });
+
   it('returns the single value for a one-point cloud', () => {
     const r = computeElevationRange({ positions: pack([42.5]) });
     expect(r.minZ).toBeCloseTo(42.5, 4);

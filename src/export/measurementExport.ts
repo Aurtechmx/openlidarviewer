@@ -201,10 +201,20 @@ const CSV_COLUMNS = [
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
 ] as const;
 
-/** Escape a CSV cell per RFC 4180 (quote when it contains , " or newline). */
+/**
+ * Escape a CSV cell per RFC 4180 (quote when it contains , " or newline), and
+ * neutralise spreadsheet formula injection. A string cell that begins with
+ * `= + - @` or a tab/CR is interpreted as a formula by Excel/Sheets; a
+ * measurement name like `=HYPERLINK(...)` round-tripped through a shared
+ * `.olvsession` is attacker-controlled, so we prefix a literal `'` (the
+ * conventional neutraliser) and force-quote to keep it. Numeric cells are never
+ * neutralised, so a negative value like `-1.5` stays a plain number.
+ */
 function csvCell(v: string | number): string {
   const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const neutralise = typeof v === 'string' && /^[=+\-@\t\r]/.test(s);
+  const cell = neutralise ? `'${s}` : s;
+  return neutralise || /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
 }
 
 /** Serialise measurements to a CSV — one row per measurement, metres throughout. */
