@@ -22,6 +22,8 @@ jobs:
         run: npm run typecheck
       - name: Main-deferral lint (no top-level viewer.* deref outside viewerLoaded)
         run: npm run lint:main-deferral
+      - name: unsafeHtml lint (no user-derived string reaches an innerHTML sink)
+        run: npm run lint:unsafe-html
       - name: Bucket partition integrity (every test file in exactly one bucket)
         run: npm run test:buckets:verify
       # Two DISTINCT size contracts, both enforced:

@@ -62,22 +62,20 @@ AddType application/manifest+json .webmanifest
   # Clickjacking guard — the viewer is a standalone app, not an embeddable frame.
   Header always set X-Frame-Options "SAMEORIGIN"
 
-  # ── Content-Security-Policy (REPORT-ONLY — observing, not yet enforcing) ──
-  # Enabled in Report-Only mode: the browser reports violations to the console
-  # but blocks nothing, so it cannot break the app. Watch the report-only
-  # warnings across a release cycle against the real worker / WASM / WebGPU /
-  # blob surface, resolve them (notably style-src and connect-src), then switch
-  # the header name to Content-Security-Policy to enforce. Notes:
-  #   - 'wasm-unsafe-eval' is required for the embedded laz-perf WASM
-  #     (compiled from a base64 blob, not fetched), but exact browser
-  #     behaviour should be verified.
-  #   - worker-src needs blob: — Vite can emit module workers via blob URLs.
-  #   - connect-src needs https: for remote dataset streaming (COPC/EPT
-  #     range requests to arbitrary user-supplied hosts).
-  #   - style-src is the open question: any inline style="" attributes in
-  #     the DOM (the UI sets element.style from JS, which is fine, but
-  #     audit for literal style attributes) would need 'unsafe-inline'.
-  # When the report-only console stays clean for a release cycle, rename the
-  # header below to Content-Security-Policy to enforce.
-  Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self'; base-uri 'self'; form-action 'self'"
+  # ── Content-Security-Policy (ENFORCING) ──
+  # script-src is strict: 'self' + 'wasm-unsafe-eval' for the embedded laz-perf
+  # WASM only. The live (obfuscated) bundle carries no eval/Function and there
+  # are no inline scripts, so no 'unsafe-eval' is needed — script injection is
+  # blocked. Notes:
+  #   - 'wasm-unsafe-eval' is required for the laz-perf WASM (compiled from a
+  #     base64 blob, not fetched).
+  #   - worker-src needs blob: — Vite emits module workers via blob URLs.
+  #   - connect-src needs https: for remote dataset streaming (COPC/EPT range
+  #     requests to arbitrary user-supplied hosts; the SSRF host blocklist in
+  #     RangeSource.ts is the in-app complement).
+  #   - style-src carries 'unsafe-inline': the profile chart positions its axis
+  #     labels with inline style="" attributes. Style injection is low-risk and
+  #     no user-derived string reaches the unsafeHtml/innerHTML sinks (guarded by
+  #     `npm run lint:unsafe-html`), so this does not open an XSS path.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'"
 </IfModule>
