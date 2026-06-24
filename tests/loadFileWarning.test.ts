@@ -69,3 +69,15 @@ describe('large static LAS/LAZ memory caution', () => {
     expect(meta.warning).toBeUndefined();
   });
 });
+
+describe('3D Tiles / PNTS — honest "on the roadmap" rejection', () => {
+  it('rejects a tileset.json with a roadmap message, not a generic error', async () => {
+    const f = fakeFile('tileset.json', 1024, '{"asset":{"version":"1.0"}}');
+    await expect(fileMetadata(f)).rejects.toThrow(/3D Tiles|PNTS|roadmap/i);
+  });
+
+  it('rejects a .pnts the same way', async () => {
+    const f = fakeFile('points.pnts', 4096, 'pnts');
+    await expect(fileMetadata(f)).rejects.toThrow(/3D Tiles|PNTS|roadmap/i);
+  });
+});

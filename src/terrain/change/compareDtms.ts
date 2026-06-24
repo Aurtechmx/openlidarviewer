@@ -148,5 +148,14 @@ export function summarizeChange(comparison: EpochComparison): string[] {
   );
   for (const w of result.warnings) lines.push(`• ${w}`);
   for (const note of coregistrationNotes) lines.push(`• ${note}`);
+  // Co-registration checklist — spell out what a MEASURED (not indicative)
+  // change comparison needs, so the user knows exactly what to fix. Shown only
+  // when the result isn't co-registered, where it's actionable.
+  if (!coregistered) {
+    lines.push(
+      'Needs for a measured result: shared CRS · shared vertical datum · ' +
+        'matching units · common ground control.',
+    );
+  }
   return lines;
 }

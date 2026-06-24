@@ -1,5 +1,5 @@
 import { createSerialGate } from './serialGate';
-import { sniffFormat } from './sniffFormat';
+import { sniffFormat, is3dTilesName } from './sniffFormat';
 import type { SourceFormat } from './sniffFormat';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
@@ -184,6 +184,14 @@ async function preflightFile(
   const headSlice = await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
   const format = sniffFormat(headSlice, file.name);
   if (format === 'unknown') {
+    if (is3dTilesName(file.name)) {
+      throw new LoadError(
+        'unsupported-format',
+        `3D Tiles / PNTS isn't openable yet — the parser foundations exist but ` +
+          `user-facing loading is on the roadmap, not shipped. For now use COPC, ` +
+          `EPT, or a LAS/LAZ/PLY export.`,
+      );
+    }
     throw new LoadError(
       'unsupported-format',
       `Unrecognised file format: ${file.name}`,
@@ -238,7 +246,7 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
   } else if (preflight.largeStaticLas) {
     meta.warning =
       `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — read fully into ` +
-      `memory. For multi-GB data, convert to COPC/EPT.`;
+      `memory. For multi-GB data, convert to COPC/EPT (PDAL or untwine) for streaming.`;
   }
   return meta;
 }

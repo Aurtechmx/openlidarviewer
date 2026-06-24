@@ -135,5 +135,19 @@ describe('summarizeChange', () => {
     const b = grid([2, 2, 2, 2], 2, 2);
     const lines = summarizeChange(compareDtms(a, b));
     expect(lines[0]).toContain('Net volume change');
+    // No co-registration checklist when the comparison IS co-registered.
+    expect(lines.some((l) => /Needs for a measured result/.test(l))).toBe(false);
+  });
+
+  it('spells out the co-registration checklist when not co-registered', () => {
+    const a = grid([1, 1], 2, 1, { crs: 'EPSG:32612' });
+    const b = grid([2, 2], 2, 1, { crs: 'EPSG:32613' });
+    const lines = summarizeChange(compareDtms(a, b));
+    const checklist = lines.find((l) => /Needs for a measured result/.test(l));
+    expect(checklist).toBeDefined();
+    expect(checklist).toMatch(/CRS/);
+    expect(checklist).toMatch(/datum/);
+    expect(checklist).toMatch(/units/);
+    expect(checklist).toMatch(/ground control/);
   });
 });

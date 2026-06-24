@@ -162,3 +162,16 @@ export function sniffFormat(buffer: ArrayBuffer, filename: string): DetectedForm
       return 'unknown';
   }
 }
+
+/**
+ * True when a filename is a 3D Tiles / PNTS asset (`*.pnts` or a `tileset.json`).
+ * These sniff as `unknown` today — the parser foundations exist but user-facing
+ * loading is not enabled (see docs/supported-formats.md). The loader uses this
+ * to give an honest "on the roadmap" message instead of a generic "unrecognised
+ * format" dead-end.
+ */
+export function is3dTilesName(filename: string): boolean {
+  const lower = filename.toLowerCase().split(/[?#]/)[0]; // drop any query/hash
+  const base = lower.split('/').pop() ?? lower;
+  return base.endsWith('.pnts') || base === 'tileset.json';
+}

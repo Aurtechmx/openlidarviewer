@@ -1,4 +1,19 @@
-import { sniffFormat, verticalAxisHintForSources } from '../src/io/sniffFormat';
+import { sniffFormat, verticalAxisHintForSources, is3dTilesName } from '../src/io/sniffFormat';
+
+describe('is3dTilesName — 3D Tiles / PNTS detection', () => {
+  test('matches .pnts and tileset.json (any case, with path / query)', () => {
+    expect(is3dTilesName('points.pnts')).toBe(true);
+    expect(is3dTilesName('TILESET.JSON')).toBe(true);
+    expect(is3dTilesName('https://host/tiles/tileset.json?v=2')).toBe(true);
+    expect(is3dTilesName('/a/b/c.PNTS')).toBe(true);
+  });
+  test('does not match other JSON or point formats', () => {
+    expect(is3dTilesName('scan.las')).toBe(false);
+    expect(is3dTilesName('session.olvsession')).toBe(false);
+    expect(is3dTilesName('metadata.json')).toBe(false);
+    expect(is3dTilesName('cloud.ply')).toBe(false);
+  });
+});
 
 /** Build an ArrayBuffer whose leading bytes are the given ASCII string. */
 function bufWithMagic(magic: string, totalLen = 64): ArrayBuffer {
