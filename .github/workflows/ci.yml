@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege: every job only needs to read the checked-out code. Matches
+# the security workflow; tighten here so a compromised action can't write to the
+# repo or mint tokens.
+permissions:
+  contents: read
+
 jobs:
   # Static checks + both build contracts. Cheap and fast; everything else
   # depends on it so a typecheck or bundle regression fails before the heavier
@@ -44,6 +50,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: verify
+    # Bound a hung bucket so it fails fast instead of burning the default 360 min.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -55,8 +63,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Cap workers: GitHub-hosted runners have ~2 cores, so an uncapped vitest
+      # oversubscribes and the large unit bucket can stall/OOM. --reporter=dot
+      # keeps the log small so a failure is easy to locate.
       - name: Test bucket — ${{ matrix.bucket }}
-        run: npm run test:${{ matrix.bucket }}
+        run: npm run test:${{ matrix.bucket }} -- --maxWorkers=2 --reporter=dot
 
   smoke:
     runs-on: ubuntu-latest
