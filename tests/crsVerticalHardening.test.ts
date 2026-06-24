@@ -151,7 +151,7 @@ describe('runBatch — .prj sidecar for kept ASCII with WKT', () => {
         metadata: { crs: crsFromWkt('PROJCS["NAD83 / UTM zone 11N",AUTHORITY["EPSG","26911"]]') },
       });
     const results = await runBatch(
-      [{ name: 'survey.las', buffer: new ArrayBuffer(8) }],
+      [{ name: 'survey.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }],
       { format: 'xyz', crsMode: 'keep' },
       decode,
     );
@@ -170,9 +170,9 @@ describe('runBatch — .prj sidecar for kept ASCII with WKT', () => {
         name: 's.las',
         metadata: { crs: crsFromWkt('PROJCS["NAD83 / UTM zone 11N",AUTHORITY["EPSG","26911"]]') },
       });
-    const r1 = await runBatch([{ name: 's.las', buffer: new ArrayBuffer(8) }], { format: 'las', crsMode: 'keep' }, decode);
+    const r1 = await runBatch([{ name: 's.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }], { format: 'las', crsMode: 'keep' }, decode);
     expect(r1[0].sidecar).toBeUndefined();
-    const r2 = await runBatch([{ name: 's.las', buffer: new ArrayBuffer(8) }], { format: 'xyz', crsMode: 'reproject', targetEpsg: 4326 }, decode);
+    const r2 = await runBatch([{ name: 's.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }], { format: 'xyz', crsMode: 'reproject', targetEpsg: 4326 }, decode);
     expect(r2[0].sidecar).toBeUndefined();
   });
 });

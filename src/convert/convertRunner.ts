@@ -15,10 +15,18 @@ import type { PointCloud } from '../model/PointCloud';
 import { convertCloud } from './convertCloud';
 import type { ConvertOptions, ConvertedFile, ConvertReport } from './types';
 
-/** One file to convert: a name and its bytes. */
+/**
+ * One file to convert: a name, its size (for display without a read), and a
+ * LAZY byte provider. The provider is awaited one file at a time inside
+ * {@link runBatch} so the batch never holds every file's ArrayBuffer in memory
+ * at once — selecting ten 2 GB files no longer materialises 20 GB up front.
+ */
 export interface BatchInput {
   readonly name: string;
-  readonly buffer: ArrayBuffer;
+  /** Source size in bytes — shown in the list without reading the file. */
+  readonly sizeBytes: number;
+  /** Read the file's bytes. Called once, only when this file's turn comes. */
+  readonly bytes: () => Promise<ArrayBuffer>;
 }
 
 /** Decode a file's bytes into a full-resolution PointCloud. */
@@ -83,7 +91,10 @@ export async function runBatch(
 
     try {
       emit('decoding');
-      const cloud = await decode(input.buffer, input.name);
+      // Read this file's bytes only now, and let `buffer` fall out of scope at
+      // the end of the iteration so it's collected before the next file is read.
+      const buffer = await input.bytes();
+      const cloud = await decode(buffer, input.name);
       emit('converting');
       const { file, report } = convertCloud(cloud, options);
       const finalFile = file

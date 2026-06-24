@@ -6,7 +6,10 @@ on:
   pull_request:
 
 jobs:
-  build-and-test:
+  # Static checks + both build contracts. Cheap and fast; everything else
+  # depends on it so a typecheck or bundle regression fails before the heavier
+  # test shards and the browser jobs run.
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -19,23 +22,43 @@ jobs:
         run: npm run typecheck
       - name: Main-deferral lint (no top-level viewer.* deref outside viewerLoaded)
         run: npm run lint:main-deferral
-      # Build BEFORE tests so the chunk-isolation suite (which scans
-      # dist/ for the expected lazy chunks) actually exercises its
-      # assertions. With the previous order (test → build), those
-      # tests auto-skipped when `dist/` didn't exist, hiding any
-      # regression in the chunking contract.
-      - name: Production build
-        run: npm run build
-      # BUILD_CONTRACT=1 opts the post-build contract tests (chunk isolation,
-      # orbit smoke) in — they read the dist/ just built above. A plain
-      # `npm test` (local dev) leaves the flag unset and self-skips them, so a
-      # stale or missing dist/ can never make the default command fail.
-      - name: Unit tests
-        run: BUILD_CONTRACT=1 npm test
+      - name: Bucket partition integrity (every test file in exactly one bucket)
+        run: npm run test:buckets:verify
+      # Two DISTINCT size contracts, both enforced:
+      #  • test:build  → PLAIN build + chunk-isolation (only vendor-three-webgpu
+      #    may exceed the 500 KiB isolation threshold).
+      #  • build:live + check:bundle → the OBFUSCATED build that actually ships,
+      #    gated against its own (larger) per-chunk budget.
+      # The live index is legitimately larger than the plain one; gating each
+      # build against its own rule keeps both honest instead of running the
+      # plain-build isolation rule against the shipped artifact.
+      - name: Chunk-isolation contract (plain build)
+        run: npm run test:build
+      - name: Live-shell bundle budget (obfuscated build that ships)
+        run: npm run build:live && npm run check:bundle
+
+  # Test buckets as a matrix: a failure points at one bucket, output stays
+  # small, and the four shards run in parallel instead of one monolithic run.
+  test:
+    runs-on: ubuntu-latest
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        bucket: [unit, terrain, ui, slow]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test bucket — ${{ matrix.bucket }}
+        run: npm run test:${{ matrix.bucket }}
 
   smoke:
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: verify
     # Blocking gate: the smoke spec catches the class of bug where the bundle
     # builds and the unit tests pass but the page throws on load in a real
     # browser. Two specs, ~10 s; failure here means the artifact should not
@@ -54,7 +77,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: verify
     # Advisory: the broader end-to-end suite drives a headless browser
     # through real rendering flows, and GPU-backed paths vary across CI
     # runners. A failure here is reported but does not block the build —
@@ -72,3 +95,10 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: End-to-end tests
         run: npm run test:e2e
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

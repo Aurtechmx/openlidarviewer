@@ -112,6 +112,37 @@ export class PointCloud {
   } | null = null;
 
   constructor(options: PointCloudOptions) {
+    // Validate attribute lengths up front. A misaligned attribute array does
+    // not crash — it silently maps the wrong colour / class / return / intensity
+    // to each point and corrupts everything downstream (render, export, volume).
+    // Reject it at the boundary instead, the same contract
+    // `attachDerivedClassification` already enforces post-construction.
+    const posLen = options.positions.length;
+    if (posLen % 3 !== 0) {
+      throw new Error(`PointCloud: positions length ${posLen} is not divisible by 3`);
+    }
+    const count = posLen / 3;
+    const expectLength = (
+      attr: string,
+      value: ArrayLike<number> | undefined,
+      expected: number,
+    ): void => {
+      if (value && value.length !== expected) {
+        throw new Error(
+          `PointCloud: ${attr} length ${value.length} does not match ${expected} ` +
+            `(${count} points) — attribute arrays would misalign to points.`,
+        );
+      }
+    };
+    expectLength('colors', options.colors, count * 3);
+    expectLength('normals', options.normals, count * 3);
+    expectLength('intensity', options.intensity, count);
+    expectLength('classification', options.classification, count);
+    expectLength('returnNumber', options.returnNumber, count);
+    expectLength('returnCount', options.returnCount, count);
+    expectLength('pointSourceId', options.pointSourceId, count);
+    expectLength('gpsTime', options.gpsTime, count);
+
     this.positions = options.positions;
     this.colors = options.colors;
     this.intensity = options.intensity;

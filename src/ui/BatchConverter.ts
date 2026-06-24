@@ -149,14 +149,15 @@ export class BatchConverter {
     return wrap;
   }
 
-  private async _addFiles(files: FileList): Promise<void> {
+  private _addFiles(files: FileList): void {
     for (const f of Array.from(files)) {
-      try {
-        const buffer = await f.arrayBuffer();
-        this._files.push({ name: f.name, buffer });
-      } catch {
-        /* unreadable file — skip; the row simply never appears */
-      }
+      // Store a File reference + a LAZY byte reader, never the bytes. A File is a
+      // cheap handle to the on-disk blob; its ArrayBuffer is materialised only
+      // when this file's turn comes in `runBatch`, then released — so adding ten
+      // multi-GB files no longer loads them all into memory at once. An
+      // unreadable file now surfaces a per-file error at convert time instead of
+      // silently vanishing here.
+      this._files.push({ name: f.name, sizeBytes: f.size, bytes: () => f.arrayBuffer() });
     }
     this._renderFileList();
     this._refresh();
@@ -175,7 +176,7 @@ export class BatchConverter {
       });
       row.append(
         el('span', { className: 'olv-bc-file-name', text: f.name }),
-        el('span', { className: 'olv-bc-file-size', text: formatBytes(f.buffer.byteLength) }),
+        el('span', { className: 'olv-bc-file-size', text: formatBytes(f.sizeBytes) }),
         remove,
       );
       this._fileList.append(row);
@@ -273,7 +274,14 @@ export class BatchConverter {
     if (this._crsMode === 'reproject' && target == null) {
       return { ok: false, reason: 'Enter the target EPSG to reproject to.' };
     }
-    return { ok: true, reason: `${this._files.length} file${this._files.length > 1 ? 's' : ''} ready · ${CONVERT_FORMATS[this._format].label} output` };
+    // Files convert one at a time (bounded memory), but a very large total is
+    // still worth surfacing so the user isn't surprised by a long run.
+    const totalBytes = this._files.reduce((sum, f) => sum + f.sizeBytes, 0);
+    const n = this._files.length;
+    return {
+      ok: true,
+      reason: `${n} file${n > 1 ? 's' : ''} (${formatBytes(totalBytes)}) ready · ${CONVERT_FORMATS[this._format].label} output`,
+    };
   }
 
   private _refresh(): void {

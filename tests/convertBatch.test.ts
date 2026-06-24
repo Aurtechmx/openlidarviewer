@@ -71,8 +71,8 @@ describe('runBatch', () => {
     const phases: string[] = [];
     const results = await runBatch(
       [
-        { name: 'a.las', buffer: new ArrayBuffer(8) },
-        { name: 'a.las', buffer: new ArrayBuffer(8) }, // same output stem
+        { name: 'a.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) },
+        { name: 'a.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }, // same output stem
       ],
       { format: 'xyz' },
       decodeOk,
@@ -94,8 +94,8 @@ describe('runBatch', () => {
     };
     const results = await runBatch(
       [
-        { name: 'bad.las', buffer: new ArrayBuffer(8) },
-        { name: 'good.las', buffer: new ArrayBuffer(8) },
+        { name: 'bad.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) },
+        { name: 'good.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) },
       ],
       { format: 'las' },
       decode,
@@ -104,5 +104,35 @@ describe('runBatch', () => {
     expect(results[0].report.log[0].message).toMatch(/corrupt header/);
     expect(results[1].report.ok).toBe(true);
     expect(summariseBatch(results)).toEqual({ ok: 1, failed: 1, points: 2 });
+  });
+
+  it('reads each input lazily — one bytes() call per file, in order (bounded memory)', async () => {
+    const reads: string[] = [];
+    const input = (name: string) => ({
+      name,
+      sizeBytes: 8,
+      bytes: async () => {
+        reads.push(name);
+        return new ArrayBuffer(8);
+      },
+    });
+    await runBatch([input('a.las'), input('b.las'), input('c.las')], { format: 'las' }, decodeOk);
+    // Each file's bytes are materialised exactly once, in order — never all up
+    // front. This is what keeps a big multi-file batch from holding every buffer.
+    expect(reads).toEqual(['a.las', 'b.las', 'c.las']);
+  });
+
+  it('isolates a file whose bytes() read fails', async () => {
+    const results = await runBatch(
+      [
+        { name: 'unreadable.las', sizeBytes: 8, bytes: async () => { throw new Error('read error'); } },
+        { name: 'ok.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) },
+      ],
+      { format: 'las' },
+      decodeOk,
+    );
+    expect(results[0].report.ok).toBe(false);
+    expect(results[0].report.log[0].message).toMatch(/read error/);
+    expect(results[1].report.ok).toBe(true);
   });
 });

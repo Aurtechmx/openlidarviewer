@@ -20,10 +20,10 @@ jobs:
     name: npm audit (runtime deps)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       # Fail the job only on high/critical advisories in shipped (non-dev) deps;
@@ -35,7 +35,7 @@ jobs:
     name: gitleaks (working tree + full history)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Full history so a secret committed-then-removed is still caught.
           fetch-depth: 0

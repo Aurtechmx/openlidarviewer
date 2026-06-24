@@ -21,6 +21,13 @@
  * Pairs with the in-Vite `chunkEmissionGuard` plugin in `vite.config.ts`
  * — the plugin fails the build, this test fails the suite. Two guards,
  * one contract.
+ *
+ * SCOPE: this gates the PLAIN `npm run build` only. The OBFUSCATED `build:live`
+ * (what actually ships) inflates the startup shell well past 500 KB, so it is
+ * gated separately against its own, larger per-chunk budget by
+ * `npm run check:bundle`. Running THIS isolation rule against the live build is
+ * expected to fail and is not the contract — the two builds answer to two
+ * different size rules, and CI enforces both.
  */
 
 import { describe, it, expect } from 'vitest';
