@@ -5621,6 +5621,9 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   background: var(--accent-soft); border: 0.5px solid var(--accent);
   border-radius: var(--radius-md); padding: var(--space-sm) var(--space-xl); cursor: pointer;
 }
+/* Shown in place of the Download-all button when the batch is too large to zip
+ * in one in-memory buffer — steers the user to the per-file Download buttons. */
+.olv-bc-dlall-note { font-size: var(--text-xs); color: var(--text-faint); max-width: 32ch; }
 .olv-bc-row { border: 0.5px solid var(--hairline); border-radius: var(--radius-md); padding: var(--space-md); }
 .olv-bc-row.is-error { border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.06); }
 .olv-bc-row-top { display: flex; align-items: center; gap: var(--space-md); }

@@ -15,6 +15,69 @@ export interface ZipEntry {
   readonly bytes: Uint8Array;
 }
 
+// ── Format limits of the classic (no-ZIP64) store format ──────────────────────
+// Every size / offset field below is 32-bit and the entry count is 16-bit;
+// exceeding any of these would silently wrap and corrupt the archive, so we
+// refuse rather than emit a broken ZIP.
+/** Max bytes in a single entry (32-bit compressed/uncompressed size field). */
+export const ZIP_MAX_ENTRY_BYTES = 0xffffffff;
+/** Max number of entries (16-bit count in the end-of-central-directory record). */
+export const ZIP_MAX_ENTRIES = 0xffff;
+/** Max total archive size (32-bit central-directory offset + EOCD fields). */
+export const ZIP_MAX_TOTAL_BYTES = 0xffffffff;
+/**
+ * Memory-safety ceiling for OFFERING a single in-memory ZIP. The whole archive
+ * is assembled into one `Uint8Array` while the source outputs are still held, so
+ * the peak is ~2× this — kept well under both the 4 GiB format limit and the
+ * engine's typed-array maximum. Past this, the caller falls back to per-file
+ * downloads instead of building one giant buffer.
+ */
+export const ZIP_SAFE_TOTAL_BYTES = 1.5 * 1024 * 1024 * 1024;
+
+/** The size + safety verdict for a would-be archive of `entries`. */
+export interface ZipAssessment {
+  /** True when a single in-memory ZIP is safe to build and offer. */
+  readonly ok: boolean;
+  readonly entryCount: number;
+  /** Estimated built-archive size in bytes. */
+  readonly totalBytes: number;
+  /** Plain-language reason the ZIP isn't offered (present only when `ok` is false). */
+  readonly reason?: string;
+}
+
+/** Estimated built size of one store entry (header + name + data + central record). */
+function entrySize(e: ZipEntry): number {
+  // Name byte length ≈ its UTF-8 length; for the threshold (GiB-scale) the
+  // exact figure is immaterial, so the cheap char count is fine.
+  return 30 + e.name.length + e.bytes.length + 46 + e.name.length;
+}
+
+/**
+ * Decide whether a single in-memory ZIP of `entries` is safe to build, and why
+ * not when it isn't. Pure and allocation-free — reads only lengths — so it is
+ * cheap to call before assembling anything. When `ok` is false the caller should
+ * offer the files individually instead of one archive.
+ */
+export function assessZipDownload(entries: ReadonlyArray<ZipEntry>): ZipAssessment {
+  const entryCount = entries.length;
+  let totalBytes = 22; // end-of-central-directory record
+  let maxEntryBytes = 0;
+  for (const e of entries) {
+    totalBytes += entrySize(e);
+    if (e.bytes.length > maxEntryBytes) maxEntryBytes = e.bytes.length;
+  }
+  if (entryCount > ZIP_MAX_ENTRIES) {
+    return { ok: false, entryCount, totalBytes, reason: `${entryCount.toLocaleString('en-US')} files exceeds the ${ZIP_MAX_ENTRIES.toLocaleString('en-US')}-file ZIP limit` };
+  }
+  if (maxEntryBytes > ZIP_MAX_ENTRY_BYTES) {
+    return { ok: false, entryCount, totalBytes, reason: 'a single file exceeds the 4 GiB ZIP limit' };
+  }
+  if (totalBytes > ZIP_SAFE_TOTAL_BYTES) {
+    return { ok: false, entryCount, totalBytes, reason: `the combined ${(totalBytes / (1024 ** 3)).toFixed(1)} GiB is too large to zip in memory` };
+  }
+  return { ok: true, entryCount, totalBytes };
+}
+
 // CRC-32 (IEEE 802.3) — table built once at module load.
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -36,13 +99,29 @@ function crc32(bytes: Uint8Array): number {
 
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
 
-/** Build a store-only ZIP archive from `entries`. Returns the archive bytes. */
+/**
+ * Build a store-only ZIP archive from `entries`. Returns the archive bytes.
+ *
+ * @throws if the inputs would overflow a 32-bit size/offset field or the 16-bit
+ *   entry count — emitting a silently-corrupt archive is worse than failing, so
+ *   the limits are enforced here. Callers that face large batches should call
+ *   {@link assessZipDownload} first and fall back to per-file downloads.
+ */
 export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
   const LFH = 30; // local file header fixed size
   const CDH = 46; // central directory header fixed size
 
+  if (entries.length > ZIP_MAX_ENTRIES) {
+    throw new Error(
+      `Cannot build a ZIP of ${entries.length.toLocaleString('en-US')} files — the format allows at most ${ZIP_MAX_ENTRIES.toLocaleString('en-US')}.`,
+    );
+  }
+
   let size = 0;
   const meta = entries.map((e) => {
+    if (e.bytes.length > ZIP_MAX_ENTRY_BYTES) {
+      throw new Error(`Cannot ZIP "${e.name}": it exceeds the 4 GiB per-file ZIP limit.`);
+    }
     const nameBytes = utf8(e.name);
     const crc = crc32(e.bytes);
     const offset = size;
@@ -55,6 +134,9 @@ export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
   for (const m of meta) centralSize += CDH + m.nameBytes.length;
 
   const total = size + centralSize + 22; // + EOCD
+  if (total > ZIP_MAX_TOTAL_BYTES) {
+    throw new Error('Cannot build the ZIP: the combined archive would exceed the 4 GiB ZIP limit.');
+  }
   const out = new Uint8Array(total);
   const view = new DataView(out.buffer);
   let p = 0;

@@ -17,7 +17,7 @@ import { el } from './dom';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
 import { runBatch, summariseBatch, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
-import { buildZip } from '../convert/zipStore';
+import { buildZip, assessZipDownload } from '../convert/zipStore';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 
 const ACCEPT = '.las,.laz,.xyz,.asc,.txt,.csv,.pts,.ptx,.ply,.pcd,.e57';
@@ -340,9 +340,22 @@ export class BatchConverter {
       }),
     );
     if (this._produced.length > 1) {
-      const all = el('button', { className: 'olv-bc-dlall', text: `Download all (.zip)`, type: 'button' });
-      all.addEventListener('click', () => this._downloadZip());
-      header.append(all);
+      // The .zip is assembled whole in memory with classic 32-bit ZIP fields, so
+      // a very large batch can't be zipped (it would overflow or exhaust memory).
+      // In that case steer to the per-file Download buttons below instead.
+      const z = assessZipDownload(this._produced.map((p) => ({ name: p.filename, bytes: p.bytes })));
+      if (z.ok) {
+        const all = el('button', { className: 'olv-bc-dlall', text: `Download all (.zip)`, type: 'button' });
+        all.addEventListener('click', () => this._downloadZip());
+        header.append(all);
+      } else {
+        header.append(
+          el('span', {
+            className: 'olv-bc-dlall-note',
+            text: `Too large for one .zip (${z.reason}) — download files individually below.`,
+          }),
+        );
+      }
     }
     this._results.append(header);
 
