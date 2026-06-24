@@ -79,32 +79,41 @@ export async function runFullCloudGrade<G>(args: {
   const plan = buildSamplingPlan(nodes, options);
   const coverage = fullCloudGradeCoverage(plan);
 
-  // Decode each selected node in plan order, accumulating chunks first so the
-  // final buffer is allocated exactly once.
-  const chunks: Float32Array[] = [];
-  let totalLen = 0;
+  // Decode each selected node in plan order, copying its points STRAIGHT into one
+  // pre-sized buffer and dropping the chunk reference immediately — so the sample
+  // is never held twice (the old path kept every chunk in an array AND a second
+  // merged copy, ~2× the sample's bytes at peak; this feature exists for large
+  // streaming clouds, so that transient matters). The buffer is sized from the
+  // plan's sampledPoints — the sum of the selected nodes' exact header counts —
+  // so it normally fits without reallocation.
+  let positions = new Float32Array(plan.sampledPoints * 3);
+  let offset = 0;
+  let decodedNodes = 0;
   for (const id of plan.nodeIds) {
     if (signal?.aborted) throw new DOMException('Full-cloud grade aborted', 'AbortError');
     const chunk = await decodeNode(id, signal);
-    chunks.push(chunk);
-    totalLen += chunk.length;
+    if (offset + chunk.length > positions.length) {
+      // A node decoded more points than its header advertised — grow once and
+      // keep going rather than truncate (correctness over the rare extra copy).
+      const grown = new Float32Array(Math.max(offset + chunk.length, positions.length * 2));
+      grown.set(positions.subarray(0, offset));
+      positions = grown;
+    }
+    positions.set(chunk, offset);
+    offset += chunk.length;
+    decodedNodes++;
     onProgress?.({
-      decodedNodes: chunks.length,
+      decodedNodes,
       totalNodes: plan.nodeIds.length,
-      decodedPoints: totalLen / 3,
+      decodedPoints: offset / 3,
     });
   }
 
-  // Assemble the decoded chunks into one buffer purely to grade them, then let
-  // it go — the result carries only the (small) grade + coverage, never the
-  // multi-MB positions, so a large sample isn't retained past the grade call.
-  const positions = new Float32Array(totalLen);
-  let offset = 0;
-  for (const chunk of chunks) {
-    positions.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  const grade_ = grade(positions, coverage.samplePointScale);
+  // Grade exactly the decoded span (offset ≤ capacity when a node decodes fewer
+  // points than its header count). `subarray` is a view — no extra copy — and the
+  // result carries only the small grade + coverage, never the positions, so the
+  // sample isn't retained past the grade call.
+  const sample = offset === positions.length ? positions : positions.subarray(0, offset);
+  const grade_ = grade(sample, coverage.samplePointScale);
   return { coverage, grade: grade_ };
 }
