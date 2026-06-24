@@ -2014,12 +2014,17 @@ export class AnalysePanel {
     const wrap = el('div', { className: 'olv-analyse-roadmap' });
     wrap.append(section('Planned'));
     const tags = el('div', { className: 'olv-analyse-plan' });
+    // Genuinely-future capabilities only. The earlier list (ground
+    // classification, DSM, slope/hillshade, 3D overlay, terrain report) has all
+    // shipped — leaving them here advertised done work as "planned", which
+    // contradicts the buttons in this very panel. These three are the real,
+    // not-yet-shipped roadmap (3D Tiles is documented as planned in
+    // supported-formats.md; out-of-core loading and co-registered change
+    // detection are the open engineering items).
     for (const item of [
-      'Ground classification',
-      'Surface model (DSM)',
-      'Slope & hillshade',
-      '3D terrain & contour overlay',
-      'Terrain report',
+      '3D Tiles / PNTS streaming',
+      'Out-of-core large-file loading',
+      'Co-registered change detection',
     ]) {
       tags.append(el('span', { className: 'olv-analyse-plan-tag', text: item }));
     }
