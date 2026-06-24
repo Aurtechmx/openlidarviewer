@@ -39,11 +39,16 @@ export async function runFullCloudGrade(deps: {
     return;
   }
   panel.setGradeBusy('Planning octree sample…');
+  // The decoded positions are in the source CRS's linear unit; convert spans to
+  // metres so the density (pts/m²) and vertical extent read in SI rather than
+  // in feet for a state-plane-feet cloud. Unknown CRS ⇒ factor 1 (treated as
+  // metres), matching the rest of the streaming readouts.
+  const metresPerUnit = source.crs()?.linearUnitToMetres ?? 1;
   try {
     const run = await gradeFullCloud({
       source,
       decoder,
-      grade: (positions, scale) => gradeSampleDensity(positions, scale),
+      grade: (positions, scale) => gradeSampleDensity(positions, scale, metresPerUnit),
       onProgress: (p) => {
         panel.setGradeBusy(
           `Decoding ${p.decodedNodes} / ${p.totalNodes} nodes · ` +

@@ -3490,7 +3490,12 @@ if (embedConfig.autoloadSample) {
 // thus a shareable, bookmarkable deep link — the format's core use case. The
 // streaming pipeline reads it progressively over HTTP range requests.
 const copcUrlParam = urlParams.get('copc');
-if (copcUrlParam) void handleRemoteUrl(copcUrlParam);
+// Defer the deep-link open one microtask so module evaluation finishes first.
+// `handleRemoteUrl` reaches the prewarm path, which reads module-level state
+// (`_loadersPrewarmed`, the decoder singleton) declared further down this file;
+// calling it synchronously here — above those declarations — tripped a
+// temporal-dead-zone in strict ESM (dev), masked only by production bundling.
+if (copcUrlParam) queueMicrotask(() => void handleRemoteUrl(copcUrlParam));
 
 // The developer performance overlay — surfaced only by `?debug=1` or
 // `?benchmark=1`. It polls the viewer for live frame stats on a throttled
