@@ -233,6 +233,10 @@ export class AnalysePanel {
   private readonly _validationRow: HTMLElement;
   private readonly _body: HTMLElement;
   private _result: AnalyseContoursResult | null = null;
+  /** The "Colour 3D by confidence" toggle button + its current on/off state, so
+   *  its label always shows the way back to the original colour. */
+  private _confidenceColorBtn?: HTMLButtonElement;
+  private _confidenceColorActive = false;
   /** Status line shown while no analysis has run / while computing. */
   private readonly _status: HTMLElement;
   /** The run/re-run button. */
@@ -772,15 +776,39 @@ export class AnalysePanel {
     if (this._cb.onColorByConfidence) {
       const link = el('button', {
         className: 'olv-analyse-surface-dl',
-        text: 'Colour 3D by confidence',
         title:
           'Colour the 3D point cloud by this per-cell confidence — same ' +
-          'strong/moderate/weak buckets, colourblind-safe (Cividis) ramp',
+          'strong/moderate/weak buckets, colourblind-safe (Cividis) ramp. ' +
+          'Click again to restore the original colour.',
       });
+      // The button is a TOGGLE: its label and pressed state reflect whether the
+      // confidence overlay is currently on, so there is always an obvious way
+      // back to the original colour (the COLOR BY rail on the right is the other
+      // route, but the user clicked HERE so the way out belongs here too).
+      this._confidenceColorBtn = link;
+      this._applyConfidenceColorLabel();
       link.addEventListener('click', () => this._cb.onColorByConfidence?.());
       tile.append(link);
     }
     return tile;
+  }
+
+  /** Reflect whether the confidence overlay is currently active on the toggle
+   *  button — label flips to "Show original colour" and a pressed state shows.
+   *  Called by the host when the overlay is toggled (here or via COLOR BY). */
+  setConfidenceColorActive(active: boolean): void {
+    this._confidenceColorActive = active;
+    this._applyConfidenceColorLabel();
+  }
+
+  private _applyConfidenceColorLabel(): void {
+    const btn = this._confidenceColorBtn;
+    if (!btn) return;
+    btn.textContent = this._confidenceColorActive
+      ? 'Show original colour'
+      : 'Colour 3D by confidence';
+    btn.classList.toggle('olv-chip-active', this._confidenceColorActive);
+    btn.setAttribute('aria-pressed', this._confidenceColorActive ? 'true' : 'false');
   }
 
   /** A discrete 3-stop coverage legend: green / yellow / red = strong / moderate / weak. */

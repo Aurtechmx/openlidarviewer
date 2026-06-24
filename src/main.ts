@@ -28,7 +28,7 @@ import {
   THEME_ORDER,
   type ThemeName,
 } from './ui/themes';
-import { CommandPalette } from './ui/CommandPalette';
+import type { CommandPalette } from './ui/CommandPalette';
 import { ShortcutSheet } from './ui/ShortcutSheet';
 import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
@@ -873,6 +873,9 @@ let loading = false;
 
 /** The active colour mode — tracked so a share link can record it. */
 let currentColorMode: ColorMode | undefined;
+/** The colour mode active just before the confidence overlay was turned on, so
+ *  toggling the overlay off returns to exactly where the user was. */
+let confidenceColorPrev: ColorMode | undefined;
 
 /** True once the renderer backend has finished initialising. */
 let viewerReady = false;
@@ -939,6 +942,9 @@ const inspector = new Inspector({
   onColorMode: (mode) => {
     currentColorMode = mode;
     if (activeId) viewer.setColorMode(activeId, mode);
+    // Keep the analyse-panel confidence toggle in sync when the user changes
+    // colour from the COLOR BY rail instead of the toggle button.
+    analysePanel.setConfidenceColorActive(mode === 'confidence');
     // Workflow rail (v0.4.5): a colour-mode change can enter/leave a preset.
     syncInspectorVisuals();
   },
@@ -1287,8 +1293,20 @@ function toggleWorkflowRecord(): void {
 // registry so every action stays close to the handler that powers
 // the corresponding tool dock / Inspector / keyboard surface — no
 // duplicate truth.
-const commandPalette = new CommandPalette();
-stage.overlay.append(commandPalette.element);
+// The command palette opens only on Cmd/Ctrl-K, so it's lazy-loaded on first
+// use — its module stays out of the startup chunk. `ACTION_REGISTRY` is built
+// later in this file but is in module scope by the time the user can press the
+// shortcut, so the deferred init reads it safely.
+let commandPalette: CommandPalette | null = null;
+async function openCommandPalette(): Promise<void> {
+  if (!commandPalette) {
+    const { CommandPalette } = await import('./ui/CommandPalette');
+    commandPalette = new CommandPalette();
+    stage.overlay.append(commandPalette.element);
+    commandPalette.setActions(ACTION_REGISTRY);
+  }
+  commandPalette.toggle();
+}
 
 // A dismissible "recommended view" chip surfaced after a scan loads.
 const recommendedViewChip = new RecommendedViewChip();
@@ -1850,7 +1868,8 @@ if (duplicateActionIds.length > 0) {
     `Command palette: duplicate action ids: ${duplicateActionIds.join(', ')}`,
   );
 }
-commandPalette.setActions(ACTION_REGISTRY);
+// commandPalette.setActions runs in its lazy init (openCommandPalette); the
+// shortcut sheet is eager so it keeps its action list at startup.
 shortcutSheet.setActions(ACTION_REGISTRY);
 
 // Cmd-K / Ctrl-K toggles the palette. Esc inside the palette closes
@@ -1860,7 +1879,7 @@ window.addEventListener('keydown', (e) => {
   const isToggle = (e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey);
   if (!isToggle) return;
   e.preventDefault();
-  commandPalette.toggle();
+  void openCommandPalette();
 });
 
 // `?` toggles the keyboard shortcut sheet. Skipped when the user is
@@ -2180,10 +2199,24 @@ const analysePanel = new AnalysePanel({
     if (!activeId || !viewer.hasCoverageGrid()) return;
     const cloud = viewer.getCloud(activeId);
     if (!cloud) return;
+    // Toggle: if the confidence overlay is already on, clicking again restores
+    // the colour mode that was active before it (RGB on a coloured scan), so the
+    // button is always a round trip — the user is never stranded in yellow.
+    if (currentColorMode === 'confidence') {
+      const restore = confidenceColorPrev ?? defaultMode(cloud);
+      currentColorMode = restore;
+      viewer.setColorMode(activeId, restore);
+      inspector.setColorModes(availableModes(cloud), restore);
+      syncInspectorVisuals();
+      analysePanel.setConfidenceColorActive(false);
+      return;
+    }
+    confidenceColorPrev = currentColorMode ?? defaultMode(cloud);
     currentColorMode = 'confidence';
     viewer.setColorMode(activeId, 'confidence');
     inspector.setColorModes(availableModes(cloud), 'confidence');
     syncInspectorVisuals();
+    analysePanel.setConfidenceColorActive(true);
     // The 3D overlay tints each point by the trust of the ground beneath it.
     // Points cluster over MEASURED ground, so a surface that is largely
     // interpolated still paints mostly "strong" in 3D — the interpolated share
