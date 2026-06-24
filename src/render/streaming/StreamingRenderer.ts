@@ -84,6 +84,22 @@ type FadeableMaterial = THREE.Material & {
   depthWrite: boolean;
 };
 
+/**
+ * Should this decoded node (re)seed the cloud-global colour ranges? Only a
+ * non-empty node strictly shallower than the last seed qualifies, so the ramp
+ * converges to the depth-0 root's whole-cloud percentile band instead of
+ * locking onto whichever node won the concurrent decode race. Pure so the
+ * race-correctness can be unit-tested without a GPU/Viewer (the stateful
+ * bookkeeping lives in StreamingRenderer, mirroring edlMotionGate).
+ */
+export function shouldReseedColorRange(
+  currentSeedDepth: number,
+  nodeDepth: number,
+  pointCount: number,
+): boolean {
+  return pointCount > 0 && nodeDepth < currentSeedDepth;
+}
+
 /** One resident node's GPU mesh plus the decoded chunk kept for recolouring. */
 interface NodeMesh {
   mesh: THREE.Mesh;
@@ -109,16 +125,20 @@ export class StreamingRenderer {
   private readonly _meshes = new Map<string, NodeMesh>();
   private _mode: ColorMode;
   private _ranges: StreamingColorRanges;
-  private _intensitySeeded = false;
   /**
-   * v0.3.7 final-polish — when false, the elevation colour ramp uses
-   * the COPC bounding-box min/max (which includes tall-tree outliers
-   * that compress the field elevation into a single colour stop).
-   * The first non-empty decoded node reseeds the range from a 2nd /
-   * 98th percentile of its own Z values, then flips this true so all
-   * subsequent nodes inherit the same stable percentile-clipped range.
+   * Depth of the coarsest node that has seeded the intensity + elevation colour
+   * ranges so far (Infinity = not yet seeded). Concurrent decode means the first
+   * node to *arrive* may be a deep node covering a small spatial extent, whose
+   * 2nd/98th-percentile band is a poor estimate of the whole cloud — seeding
+   * from it tints the entire stream off a sliver. So we (re)seed only from a
+   * node strictly shallower than the last seed, converging to the depth-0 root
+   * (which spans the full extent); once the root seeds, the ramp is final.
+   *
+   * Before any seed the ranges use the COPC bounding-box min/max, which tall
+   * outliers (a tree, a flag-mast, a power line) would otherwise compress into
+   * a single colour stop — the percentile reseed is what fixes that.
    */
-  private _elevationSeeded = false;
+  private _rangeSeedDepth = Number.POSITIVE_INFINITY;
   /**
    * Active RGB appearance bundle. Pushed in by the Viewer whenever the
    * user picks an RGB preset or moves the white-balance sliders; every
@@ -181,36 +201,26 @@ export class StreamingRenderer {
   /** A decoded node is ready — build its mesh and add it to the scene. */
   onNodeReady(node: StreamingNode, decoded: DecodedChunk): void {
     if (this._meshes.has(node.record.id)) return; // already resident
-    // Seed the global intensity range from the first (coarsest) node decoded.
-    if (!this._intensitySeeded && decoded.pointCount > 0) {
-      const range = intensityRangeOf(decoded);
-      this._ranges = {
-        ...this._ranges,
-        minIntensity: range.min,
-        maxIntensity: range.max,
-      };
-      this._intensitySeeded = true;
-      if (this._mode === 'intensity') this._recolorAll();
-    }
-    // v0.3.7 final-polish — reseed the elevation range from the first
-    // node's 2nd / 98th percentile band. The COPC header-derived
-    // bounding-box min/max we started with would otherwise let a single
-    // tree (or a flag-mast, or a power line) compress the entire
-    // field of points into one colour stop. The coarse root node
-    // covers the whole cloud's spatial extent, so its sample is a
-    // statistically reasonable global percentile estimator.
-    if (!this._elevationSeeded && decoded.pointCount > 0) {
-      const range = computeElevationRange({
+    // Seed the global intensity + elevation ranges from the COARSEST node seen
+    // so far — see _rangeSeedDepth. Re-seeding from a strictly shallower node
+    // converges the ramp to the depth-0 root's whole-cloud percentile band
+    // instead of locking onto whichever node won the decode race.
+    const seedDepth = node.record.key.depth;
+    if (shouldReseedColorRange(this._rangeSeedDepth, seedDepth, decoded.pointCount)) {
+      const intensity = intensityRangeOf(decoded);
+      const elevation = computeElevationRange({
         positions: decoded.positions,
         pointCount: decoded.pointCount,
       });
       this._ranges = {
         ...this._ranges,
-        minZ: range.minZ,
-        maxZ: range.maxZ,
+        minIntensity: intensity.min,
+        maxIntensity: intensity.max,
+        minZ: elevation.minZ,
+        maxZ: elevation.maxZ,
       };
-      this._elevationSeeded = true;
-      if (this._mode === 'elevation') this._recolorAll();
+      this._rangeSeedDepth = seedDepth;
+      if (this._mode === 'intensity' || this._mode === 'elevation') this._recolorAll();
     }
     const colors = streamingNodeColors(this._mode, decoded, this._ranges, this._rgbAppearance);
     // Pass the node's decoded per-point classification so the shared class
