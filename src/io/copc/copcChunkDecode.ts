@@ -29,6 +29,14 @@ export interface ChunkDecodeMetadata {
   offset: [number, number, number];
   /** Render origin, subtracted in float64 before the float32 store. */
   renderOrigin: [number, number, number];
+  /**
+   * File-level RGB bit-depth decision. When set, every chunk narrows colour the
+   * SAME way (8-bit-in-low-byte copied verbatim vs 16-bit high-byte) instead of
+   * each chunk deciding from its own max — so a cloud can't show two nodes in
+   * different colour depths. The source captures it from the first decoded RGB
+   * chunk (see {@link DecodedChunk.rgbEightBit}) and feeds it back here.
+   */
+  rgbEightBit?: boolean;
 }
 
 /** A decoded COPC node chunk — local-space attributes ready for the GPU. */
@@ -51,6 +59,13 @@ export interface DecodedChunk {
   pointSourceId?: Uint16Array;
   /** Per-point RGB (0-255), length `3 · pointCount` — only for PDRF 7/8. */
   rgb?: Uint8Array;
+  /**
+   * The RGB bit-depth decision this chunk used (true = 8-bit-in-low-byte copied
+   * verbatim, false = 16-bit high-byte). Undefined when the chunk carries no
+   * RGB. The source reads it off the first RGB chunk and feeds it back as
+   * {@link ChunkDecodeMetadata.rgbEightBit} so all later chunks match.
+   */
+  rgbEightBit?: boolean;
 }
 
 /** Decodes a compressed COPC node chunk into local-space attributes. */
@@ -127,14 +142,16 @@ export function decodeRecords(
   }
 
   let rgb: Uint8Array | undefined;
+  let rgbEightBit: boolean | undefined;
   if (rgb16) {
     rgb = new Uint8Array(n * 3);
     // LAS RGB is nominally 16-bit; some writers store 8-bit values in the low
-    // byte. A chunk whose max channel is ≤ 255 is taken as 8-bit and copied
-    // directly; otherwise the 16-bit values are scaled down to 8-bit.
-    const eightBit = maxRgb <= 255;
+    // byte. Prefer the file-level decision the source passed (so every node of a
+    // cloud narrows identically); otherwise fall back to this chunk's own max —
+    // ≤ 255 ⇒ 8-bit-in-low-byte (copied verbatim), else 16-bit (high byte).
+    rgbEightBit = meta.rgbEightBit ?? (maxRgb <= 255);
     for (let i = 0; i < rgb16.length; i++) {
-      rgb[i] = eightBit ? rgb16[i] : rgb16[i] >> 8;
+      rgb[i] = rgbEightBit ? rgb16[i] : rgb16[i] >> 8;
     }
   }
 
@@ -148,6 +165,7 @@ export function decodeRecords(
     gpsTime,
     pointSourceId,
     rgb,
+    rgbEightBit,
   };
 }
 

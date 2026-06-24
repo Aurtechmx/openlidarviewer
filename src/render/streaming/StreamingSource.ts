@@ -125,6 +125,13 @@ export interface StreamingSource {
    */
   decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata;
   /**
+   * Record the RGB bit-depth decision the first decoded chunk made, so the
+   * source can hand it back through {@link ChunkDecodeMetadata.rgbEightBit} and
+   * every later node narrows colour the same way. Optional: a source whose
+   * decoder doesn't carry the ambiguity (EPT's typed schema) omits it.
+   */
+  noteDecodedRgbDepth?(eightBit: boolean | undefined): void;
+  /**
    * Release any resource the source holds open — a file handle, a range
    * reader, a decode worker. Called by the Viewer when the streaming cloud is
    * detached. Optional: a stateless source (a remote EPT over `fetch`) has

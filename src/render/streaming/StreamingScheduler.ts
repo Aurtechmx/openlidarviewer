@@ -994,6 +994,9 @@ export class StreamingScheduler {
         if (controller.signal.aborted) {
           store.setState(node, 'unloaded');
         } else {
+          // Capture the file-level RGB bit-depth from the first colour chunk so
+          // every later node narrows colour the same way (see decodeMeta).
+          this._cloud.noteDecodedRgbDepth?.(decoded.rgbEightBit);
           store.setState(node, 'resident', decoded.pointCount);
           this._callbacks.onNodeReady(node, decoded);
         }

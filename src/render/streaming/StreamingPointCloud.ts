@@ -48,6 +48,9 @@ export class StreamingPointCloud implements StreamingSource {
   readonly renderOrigin: [number, number, number];
   /** The display name — the file name. */
   readonly name: string;
+  /** File-level RGB bit-depth, captured from the first decoded RGB chunk; see
+   *  {@link noteDecodedRgbDepth}. Undefined until the first colour chunk lands. */
+  private _rgbEightBit: boolean | undefined;
 
   private constructor(
     source: CopcSource,
@@ -182,7 +185,21 @@ export class StreamingPointCloud implements StreamingSource {
       scale: header.scale,
       offset: header.offset,
       renderOrigin: this.renderOrigin,
+      // File-level RGB bit-depth, captured from the first decoded RGB chunk
+      // (noteDecodedRgbDepth) so every later node narrows colour identically.
+      rgbEightBit: this._rgbEightBit,
     };
+  }
+
+  /**
+   * Capture the RGB bit-depth from the first decoded RGB chunk. Once set it is
+   * sticky, so a later all-dark chunk (whose own max would read as 8-bit) can't
+   * flip the cloud's colour depth mid-stream.
+   */
+  noteDecodedRgbDepth(eightBit: boolean | undefined): void {
+    if (this._rgbEightBit === undefined && eightBit !== undefined) {
+      this._rgbEightBit = eightBit;
+    }
   }
 
   /**

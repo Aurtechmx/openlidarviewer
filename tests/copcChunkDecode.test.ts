@@ -98,6 +98,49 @@ test('decodeRecords treats an all-low-byte RGB chunk as 8-bit', () => {
   expect([...(d.rgb as Uint8Array)]).toEqual([200, 100, 50]);
 });
 
+const META7 = {
+  pointDataRecordFormat: 7,
+  pointRecordLength: 36,
+  pointCount: 1,
+  scale: [1, 1, 1] as [number, number, number],
+  offset: [0, 0, 0] as [number, number, number],
+  renderOrigin: [0, 0, 0] as [number, number, number],
+};
+
+test('decodeRecords reports the per-chunk RGB bit-depth (so the source can capture it)', () => {
+  const dark = decodeRecords(
+    buildRecords(36, [{ x: 0, y: 0, z: 0, intensity: 0, returnNum: 1, returnCount: 1, classification: 0, gps: 0, rgb: [200, 100, 50] }]),
+    META7,
+  );
+  const bright = decodeRecords(
+    buildRecords(36, [{ x: 0, y: 0, z: 0, intensity: 0, returnNum: 1, returnCount: 1, classification: 0, gps: 0, rgb: [65535, 32768, 256] }]),
+    META7,
+  );
+  // Left to their own chunk max, two nodes of one cloud disagree — exactly the
+  // inconsistency the file-level decision exists to remove.
+  expect(dark.rgbEightBit).toBe(true);
+  expect(bright.rgbEightBit).toBe(false);
+});
+
+test('a file-level rgbEightBit override forces every chunk to narrow the same way', () => {
+  // Force 16-bit narrowing on an all-≤255 chunk its own max would call 8-bit:
+  // high-byte of values < 256 is 0, so the verbatim [200,100,50] becomes [0,0,0].
+  const forced16 = decodeRecords(
+    buildRecords(36, [{ x: 0, y: 0, z: 0, intensity: 0, returnNum: 1, returnCount: 1, classification: 0, gps: 0, rgb: [200, 100, 50] }]),
+    { ...META7, rgbEightBit: false },
+  );
+  expect([...(forced16.rgb as Uint8Array)]).toEqual([0, 0, 0]);
+  expect(forced16.rgbEightBit).toBe(false);
+
+  // Force 8-bit (verbatim low byte) on a >255 chunk its own max would call 16-bit.
+  const forced8 = decodeRecords(
+    buildRecords(36, [{ x: 0, y: 0, z: 0, intensity: 0, returnNum: 1, returnCount: 1, classification: 0, gps: 0, rgb: [65535, 32768, 256] }]),
+    { ...META7, rgbEightBit: true },
+  );
+  expect([...(forced8.rgb as Uint8Array)]).toEqual([255, 0, 0]); // low byte, not high
+  expect(forced8.rgbEightBit).toBe(true);
+});
+
 test('decodeRecords clamps the point count when the buffer is short', () => {
   const raw = buildRecords(30, [
     { x: 0, y: 0, z: 0, intensity: 0, returnNum: 1, returnCount: 1, classification: 0, gps: 0 },
