@@ -8,7 +8,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { gradeSampleDensity, summarizeSampleGrade } from '../src/render/streaming/sampleGrade';
+import {
+  gradeSampleDensity,
+  summarizeSampleGrade,
+  classifyArealDensity,
+} from '../src/render/streaming/sampleGrade';
 
 /** Build a filled box of `perAxis³` points spanning [0,size] on each axis.
  *  A regular lattice — exact count/volume — used by the density-tier tests. */
@@ -38,6 +42,19 @@ function filledCloud(n: number, size: number, seed = 12345): Float32Array {
   const r = rng(seed);
   const out = new Float32Array(n * 3);
   for (let i = 0; i < n * 3; i++) out[i] = r() * size;
+  return out;
+}
+
+/** A FLAT cloud: `n` points spread over a `w × w` footprint but only `hZ` tall —
+ *  models an aerial swath, where the vertical span is tiny next to the footprint. */
+function filledFlatCloud(n: number, w: number, hZ: number, seed = 9): Float32Array {
+  const r = rng(seed);
+  const out = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    out[i * 3] = r() * w;
+    out[i * 3 + 1] = r() * w;
+    out[i * 3 + 2] = r() * hZ;
+  }
   return out;
 }
 
@@ -85,6 +102,59 @@ describe('gradeSampleDensity — occupancy honesty', () => {
     expect(filled.occupancyRatio).not.toBeNull();
     expect(hollow.occupancyRatio as number).toBeLessThan(filled.occupancyRatio as number);
     expect(hollow.occupancyRatio as number).toBeLessThan(0.5);
+  });
+});
+
+describe('gradeSampleDensity — areal-primary tier for flat data', () => {
+  it('grades a flat aerial swath by AREA, not by a misleading per-volume reading', () => {
+    // 50k points over 100×100 m (= 10 000 m²), only 2 m tall.
+    //   areal  ≈ 50000 / 10000 = 5 pts/m²  → moderate (QL2–QL1 band)
+    //   volume ≈ 50000 / (100·100·2) = 2.5 pts/m³ → classifyDensity → 'sparse'
+    // The honest tier is the areal one.
+    const g = gradeSampleDensity(filledFlatCloud(50_000, 100, 2), 1);
+    expect(g.bucketBasis).toBe('areal');
+    expect(g.bucket).toBe('moderate');
+    expect(g.arealDensityPerM2 as number).toBeGreaterThan(4);
+    expect(g.arealDensityPerM2 as number).toBeLessThan(6);
+    // The per-volume figure is still available as secondary context.
+    expect(g.volumetricDensityPerM3 as number).toBeLessThan(4);
+  });
+
+  it('grades a tall structure by VOLUME (vertical span comparable to footprint)', () => {
+    // A 10×10×10 cube reads as a vertical structure, so volume drives the tier.
+    const g = gradeSampleDensity(filledCloud(20_000, 10), 1);
+    expect(g.bucketBasis).toBe('volumetric');
+    expect(g.volumetricDensityPerM3 as number).toBeGreaterThan(0);
+  });
+
+  it('classifyArealDensity bands align with the USGS quality levels', () => {
+    expect(classifyArealDensity(1)).toBe('sparse');     // below QL2
+    expect(classifyArealDensity(5)).toBe('moderate');   // QL2–QL1
+    expect(classifyArealDensity(20)).toBe('dense');     // above QL1
+    expect(classifyArealDensity(200)).toBe('very-dense'); // terrestrial / low-AGL drone
+    expect(classifyArealDensity(0)).toBe('unknown');
+    expect(classifyArealDensity(Number.NaN)).toBe('unknown');
+  });
+});
+
+describe('gradeSampleDensity — valid vs invalid points', () => {
+  it('counts non-finite points as invalid and excludes them from density', () => {
+    const flat = filledFlatCloud(1000, 50, 1);
+    // Poison 100 points with a NaN coordinate.
+    for (let i = 0; i < 100; i++) flat[i * 3 + 2] = Number.NaN;
+    const g = gradeSampleDensity(flat, 1);
+    expect(g.sampledPoints).toBe(1000);
+    expect(g.invalidPoints).toBe(100);
+    expect(g.validPoints).toBe(900);
+    // Estimate is built from valid points only.
+    expect(g.estimatedTotalPoints).toBe(900);
+  });
+
+  it('surfaces an excluded-points note in the summary', () => {
+    const flat = filledFlatCloud(1000, 50, 1);
+    flat[0] = Number.NaN;
+    const lines = summarizeSampleGrade(gradeSampleDensity(flat, 1));
+    expect(lines.some((l) => /invalid coordinates and were excluded/.test(l))).toBe(true);
   });
 });
 

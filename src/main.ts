@@ -2073,6 +2073,7 @@ const streamingPanel = new StreamingPanel({
   onApplyView: (index) => applyView(index),
   onDeleteView: (index) => deleteView(index),
   onGradeFullCloud: () => void runFullCloudGradeAction(),
+  onCancelGrade: () => cancelFullCloudGrade(),
 });
 
 // The Measurements panel lists placed measurements; the controller drives it.
@@ -3546,15 +3547,28 @@ let fullCloudGradeRunning = false;
  * lazily-imported module so it (and the adapter + grade it pulls in) never
  * weighs on the live index bundle; this stub only owns the re-entry guard.
  */
+let fullCloudGradeController: AbortController | null = null;
 async function runFullCloudGradeAction(): Promise<void> {
   if (fullCloudGradeRunning) return;
   fullCloudGradeRunning = true;
+  fullCloudGradeController = new AbortController();
   try {
     const { runFullCloudGrade } = await import('./render/streaming/runFullCloudGradeAction');
-    await runFullCloudGrade({ viewer, panel: streamingPanel, debug });
+    await runFullCloudGrade({
+      viewer,
+      panel: streamingPanel,
+      signal: fullCloudGradeController.signal,
+      debug,
+    });
   } finally {
     fullCloudGradeRunning = false;
+    fullCloudGradeController = null;
   }
+}
+
+/** Abort an in-flight full-cloud grade — the streaming panel's Cancel control. */
+function cancelFullCloudGrade(): void {
+  fullCloudGradeController?.abort();
 }
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */

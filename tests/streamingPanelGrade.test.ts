@@ -75,6 +75,7 @@ function noopCallbacks() {
   return {
     onColorMode() {}, onQuality() {}, onPauseToggle() {}, onClearCache() {},
     onSaveView() {}, onApplyView() {}, onDeleteView() {}, onGradeFullCloud() {},
+    onCancelGrade() {},
   };
 }
 
@@ -87,15 +88,33 @@ describe('StreamingPanel — full-cloud grade surface', () => {
     expect(root.findByText('Full-cloud grade').length).toBe(1);
   });
 
-  it('setGradeBusy disables the button and shows the progress line', async () => {
+  it('setGradeBusy turns the button into an enabled Cancel control and shows progress', async () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
     const panel = new StreamingPanel(noopCallbacks());
     const root = panel.element as unknown as FakeEl;
     const btn = root.findByText('Grade full cloud')[0];
 
     panel.setGradeBusy('Decoding 3 / 10 nodes…');
-    expect(btn.disabled).toBe(true);
+    // Stays clickable (so the user can cancel) and relabels to Cancel.
+    expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toContain('Cancel');
     expect(root.findContaining('Decoding 3 / 10 nodes…')).toBeDefined();
+  });
+
+  it('setGradeCancelled resets the button label and shows a neutral note (no error)', async () => {
+    const { StreamingPanel } = await import('../src/ui/StreamingPanel');
+    const panel = new StreamingPanel(noopCallbacks());
+    const root = panel.element as unknown as FakeEl;
+    const btn = root.findByText('Grade full cloud')[0];
+
+    panel.setGradeBusy('Decoding…');
+    panel.setGradeCancelled();
+    expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toBe('Grade full cloud');
+    expect(root.findContaining('Grade cancelled.')).toBeDefined();
+    // Not an error state.
+    const result = root.findContaining('Grade cancelled.');
+    expect(result).toBeDefined();
   });
 
   it('setGradeResult renders scope + lines + note and re-enables the button', async () => {

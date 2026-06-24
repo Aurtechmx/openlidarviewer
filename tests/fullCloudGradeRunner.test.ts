@@ -69,8 +69,8 @@ describe('runFullCloudGrade — orchestration', () => {
       options: { maxPoints: 10_000 },
     });
     // each node contributed one [v,v,v] triple, in shallow→deep, id-sorted order
+    // (the grade is `Array.from(pos)`, so it proves both order AND length).
     expect(out.grade).toEqual([10, 10, 10, 20, 20, 20, 30, 30, 30]);
-    expect(out.positions.length).toBe(9);
   });
 
   it('empty octree: no decode, scale 1, "no points" coverage', async () => {
@@ -78,10 +78,10 @@ describe('runFullCloudGrade — orchestration', () => {
     const out = await runFullCloudGrade({
       nodes: [],
       decodeNode: decode,
-      grade: (_pos, scale) => scale,
+      grade: (pos) => pos.length,
     });
     expect(decode).not.toHaveBeenCalled();
-    expect(out.positions.length).toBe(0);
+    expect(out.grade).toBe(0); // empty assembled buffer
     expect(out.coverage.samplePointScale).toBe(1);
     expect(out.coverage.label).toMatch(/no points/i);
   });

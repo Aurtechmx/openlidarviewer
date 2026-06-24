@@ -62,6 +62,8 @@ export interface StreamingPanelCallbacks {
   onDeleteView(index: number): void;
   /** Run the full-cloud grade (decode a representative octree sample + grade it). */
   onGradeFullCloud(): void;
+  /** Cancel a full-cloud grade that is currently running. */
+  onCancelGrade(): void;
 }
 
 /** Friendly labels for each colour mode. */
@@ -80,6 +82,10 @@ const MODE_LABEL: Record<ColorMode, string> = {
 };
 
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];
+
+/** Grade button labels — it toggles between starting and cancelling a run. */
+const GRADE_LABEL = 'Grade full cloud';
+const GRADE_CANCEL_LABEL = 'Cancel grade';
 
 /** Render a world dimension — coarse for large extents, finer for small ones. */
 function formatDim(n: number): string {
@@ -197,6 +203,8 @@ export class StreamingPanel {
   // sample across the whole cloud and grades it, plus a result/status area.
   private readonly _gradeBtn: HTMLButtonElement;
   private readonly _gradeResult: HTMLElement;
+  /** True while a grade is running — flips the grade button into a Cancel control. */
+  private _gradeRunning = false;
   private _modeButtons = new Map<ColorMode, HTMLButtonElement>();
   private _paused = false;
 
@@ -269,11 +277,14 @@ export class StreamingPanel {
     // grades its density, vertical extent, and footprint coverage — with an
     // honest "exact vs sampled at N%" label so the figure never implies a
     // completeness it doesn't have.
-    this._gradeBtn = el('button', { className: 'olv-streaming-btn', text: 'Grade full cloud' });
-    this._gradeBtn.title =
-      'Decode a representative sample across the whole cloud and grade its density, ' +
-      'vertical extent, and footprint coverage — beyond what the resident view shows.';
-    this._gradeBtn.addEventListener('click', () => this._callbacks.onGradeFullCloud());
+    this._gradeBtn = el('button', { className: 'olv-streaming-btn', text: GRADE_LABEL });
+    // One button, two roles: it starts the grade, and while a grade runs it
+    // becomes a Cancel control. Branch on the running flag so a single click
+    // handler serves both without a second button.
+    this._gradeBtn.addEventListener('click', () => {
+      if (this._gradeRunning) this._callbacks.onCancelGrade();
+      else this._callbacks.onGradeFullCloud();
+    });
     this._gradeResult = el('div', { className: 'olv-streaming-grade-result' });
     this._gradeResult.style.display = 'none';
 
@@ -357,7 +368,9 @@ export class StreamingPanel {
     this._progressTrack.classList.remove('olv-stream-prog-shimmer');
     this._progressFill.style.width = '0%';
     // Reset the full-cloud grade affordance for the next scan.
+    this._gradeRunning = false;
     this._gradeBtn.disabled = false;
+    this._gradeBtn.textContent = GRADE_LABEL;
     this._gradeResult.style.display = 'none';
     this._gradeResult.replaceChildren();
     this._gradeResult.classList.remove('olv-streaming-grade-error');
@@ -441,45 +454,61 @@ export class StreamingPanel {
     this._selectQuality(quality);
   }
 
-  /** Mark the grade action busy with a progress line; disables re-entry. */
+  /**
+   * Mark the grade busy with a progress line. The button stays ENABLED and
+   * becomes a Cancel control (re-entry is guarded by the caller's running flag,
+   * so the button's job while busy is to let the user cancel a slow decode).
+   */
   setGradeBusy(text: string): void {
-    this._gradeBtn.disabled = true;
-    this._gradeResult.style.display = '';
-    this._gradeResult.classList.remove('olv-streaming-grade-error');
-    this._gradeResult.replaceChildren(
-      el('div', { className: 'olv-streaming-grade-line', text }),
-    );
+    this._gradeBtn.textContent = GRADE_CANCEL_LABEL;
+    this._gradeRunning = true;
+    this._showGrade(false, this._gradeLine(text));
   }
 
   /**
    * Render the finished full-cloud grade: the honest coverage scope label
    * (exact vs sampled at N%), the summary lines, and an optional honesty note.
-   * Re-enables the button so the grade can be re-run after the view changes.
+   * Resets the button to "Grade" so it can be re-run after the view changes.
    */
   setGradeResult(coverageLabel: string, lines: readonly string[], note: string): void {
-    this._gradeBtn.disabled = false;
-    this._gradeResult.style.display = '';
-    this._gradeResult.classList.remove('olv-streaming-grade-error');
-    const children: HTMLElement[] = [
+    const kids: HTMLElement[] = [
       el('div', { className: 'olv-streaming-grade-scope', text: coverageLabel }),
     ];
-    for (const l of lines) {
-      children.push(el('div', { className: 'olv-streaming-grade-line', text: l }));
-    }
-    if (note) {
-      children.push(el('div', { className: 'olv-streaming-grade-note', text: note }));
-    }
-    this._gradeResult.replaceChildren(...children);
+    for (const l of lines) kids.push(this._gradeLine(l));
+    if (note) kids.push(el('div', { className: 'olv-streaming-grade-note', text: note }));
+    this._endGradeRun();
+    this._showGrade(false, ...kids);
   }
 
-  /** Show an error against the grade action and re-enable it. */
+  /** Show an error against the grade action and reset the button to "Grade". */
   setGradeError(text: string): void {
-    this._gradeBtn.disabled = false;
+    this._endGradeRun();
+    this._showGrade(true, this._gradeLine(text));
+  }
+
+  /** Neutral end state for a user-cancelled grade (not an error). */
+  setGradeCancelled(): void {
+    this._endGradeRun();
+    this._showGrade(false, this._gradeLine('Grade cancelled.'));
+  }
+
+  /** One grade-result line. */
+  private _gradeLine(text: string): HTMLElement {
+    return el('div', { className: 'olv-streaming-grade-line', text });
+  }
+
+  /** Reveal the result box with `kids`, toggling the error styling. */
+  private _showGrade(isError: boolean, ...kids: HTMLElement[]): void {
     this._gradeResult.style.display = '';
-    this._gradeResult.classList.add('olv-streaming-grade-error');
-    this._gradeResult.replaceChildren(
-      el('div', { className: 'olv-streaming-grade-line', text }),
-    );
+    this._gradeResult.classList.toggle('olv-streaming-grade-error', isError);
+    this._gradeResult.replaceChildren(...kids);
+  }
+
+  /** Shared reset: clear the running flag and restore the "Grade" label. */
+  private _endGradeRun(): void {
+    this._gradeRunning = false;
+    this._gradeBtn.disabled = false;
+    this._gradeBtn.textContent = GRADE_LABEL;
   }
 
   /** Update the live status numbers + the determinate progress treatment. */

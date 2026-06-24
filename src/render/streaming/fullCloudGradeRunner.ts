@@ -46,8 +46,6 @@ export interface GradeProgress {
 export interface FullCloudGradeRun<G> {
   /** The honesty + scaling facts (scope, coverage %, label, note). */
   readonly coverage: FullCloudGradeCoverage;
-  /** Points actually decoded and graded (assembled in plan order). */
-  readonly positions: Float32Array;
   /** The caller's grade over the assembled sample. */
   readonly grade: G;
 }
@@ -97,6 +95,9 @@ export async function runFullCloudGrade<G>(args: {
     });
   }
 
+  // Assemble the decoded chunks into one buffer purely to grade them, then let
+  // it go — the result carries only the (small) grade + coverage, never the
+  // multi-MB positions, so a large sample isn't retained past the grade call.
   const positions = new Float32Array(totalLen);
   let offset = 0;
   for (const chunk of chunks) {
@@ -105,5 +106,5 @@ export async function runFullCloudGrade<G>(args: {
   }
 
   const grade_ = grade(positions, coverage.samplePointScale);
-  return { coverage, positions, grade: grade_ };
+  return { coverage, grade: grade_ };
 }

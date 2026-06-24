@@ -29,9 +29,10 @@ import { gradeSampleDensity, summarizeSampleGrade } from './sampleGrade';
 export async function runFullCloudGrade(deps: {
   readonly viewer: Viewer;
   readonly panel: StreamingPanel;
+  readonly signal?: AbortSignal;
   readonly debug?: boolean;
 }): Promise<void> {
-  const { viewer, panel, debug } = deps;
+  const { viewer, panel, signal, debug } = deps;
   const source = viewer.streamingCloud;
   const decoder = viewer.streamingDecoder;
   if (!source || !decoder) {
@@ -52,6 +53,7 @@ export async function runFullCloudGrade(deps: {
     const run = await gradeFullCloud({
       source,
       decoder,
+      signal,
       grade: (positions, scale) =>
         gradeSampleDensity(positions, scale, metresPerUnit, verticalMetresPerUnit),
       onProgress: (p) => {
@@ -63,6 +65,12 @@ export async function runFullCloudGrade(deps: {
     });
     panel.setGradeResult(run.coverage.label, summarizeSampleGrade(run.grade), run.coverage.note);
   } catch (err) {
+    // A user-initiated cancel is not a failure — show a neutral note, not the
+    // red error state.
+    if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+      panel.setGradeCancelled();
+      return;
+    }
     if (debug) console.warn('[full-cloud grade] failed', err);
     panel.setGradeError(
       err instanceof Error ? `Grade failed: ${err.message}` : 'Grade failed.',
