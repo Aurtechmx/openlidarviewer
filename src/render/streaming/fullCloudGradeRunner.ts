@@ -1,7 +1,7 @@
 /**
  * fullCloudGradeRunner.ts
  *
- * The orchestration seam for the full-cloud grade (the "B-trigger"). It joins
+ * The orchestration seam for the full-cloud grade. It joins
  * the two tested cores — {@link buildSamplingPlan} (which octree nodes to
  * decode) and {@link fullCloudGradeCoverage} (the honesty + density back-scale)
  * — to a caller-supplied decode and grade step, and assembles the decoded

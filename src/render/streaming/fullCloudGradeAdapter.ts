@@ -5,7 +5,7 @@
  * does NOT import — turned into something concrete. {@link runFullCloudGrade}
  * takes an injected `decodeNode` (range read + worker decompress) and a list of
  * {@link SampleNode}; this module derives both from a live {@link StreamingSource}
- * (COPC or EPT) so the B-trigger can grade the WHOLE cloud, not just the
+ * (COPC or EPT) so it can grade the WHOLE cloud, not just the
  * view-driven nodes that happen to be resident.
  *
  * Why this is a thin adapter, not new machinery: a streaming source already

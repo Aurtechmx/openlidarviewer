@@ -2,7 +2,7 @@
  * samplingPlan.ts
  *
  * The pure decision core behind "analyse the FULL cloud, not just the preview"
- * (the B-trigger). A COPC/EPT octree is too large to decode whole on demand, so
+ *. A COPC/EPT octree is too large to decode whole on demand, so
  * to compute an honest full-cloud grade we decode a REPRESENTATIVE SAMPLE: a
  * breadth-first slice of the hierarchy within a point/byte budget. This module
  * decides WHICH nodes to decode; the actual range-fetch + LAZ decode is a

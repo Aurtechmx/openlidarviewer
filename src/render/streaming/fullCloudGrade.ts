@@ -1,7 +1,7 @@
 /**
  * fullCloudGrade.ts
  *
- * The honesty layer for the full-cloud grade (the B-trigger). {@link
+ * The honesty layer for the full-cloud grade. {@link
  * buildSamplingPlan} decides which octree nodes to decode; this module turns the
  * resulting {@link SamplingPlan} into the two things a grade computed from that
  * sample needs to stay honest:
