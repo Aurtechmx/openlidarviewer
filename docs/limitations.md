@@ -4,7 +4,7 @@ OpenLiDARViewer is an active R&D-stage project focused on lightweight visualizat
 
 ## Known limitations
 
-Large files are limited by browser memory and GPU performance. A cloud above the point budget is loaded at reduced density — voxel-downsampled, or, when it is far over budget, stride-decoded so it is never fully held in memory. If a load would still risk exhausting memory, it automatically falls back to a sparser one and says so in the status toast.
+Large files are limited by browser memory and GPU performance. A cloud above the point budget is loaded at reduced density — voxel-downsampled, or, when it is far over budget, stride-decoded so it is never fully *decoded* into memory — though the source file is still read in once, so this is not out-of-core; COPC/EPT are the true streaming paths. If a load would still risk exhausting memory, it automatically falls back to a sparser one and says so in the status toast.
 
 Fast loading of compressed LAZ is bounded by the decoder. A very large LAZ file loads with a lower memory peak under fast load, but not proportionally faster: the `laz-perf` decoder decompresses records strictly in sequence, so stride loading still decompresses every record — it only skips the coordinate transform and storage for the records it drops. Uncompressed LAS, whose records are randomly addressable, does get the proportional speed-up.
 

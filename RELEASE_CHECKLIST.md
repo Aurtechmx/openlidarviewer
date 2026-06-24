@@ -21,6 +21,7 @@ hardening steps are deliberately staged and easy to forget.
 - [ ] `npm run build`
 - [ ] `npm run build:live` (the obfuscated bundle the deploy ships)
 - [ ] `npm run check:bundle` (bundle budget)
+- [ ] `npm run test:build` (plain-build chunk-isolation contract + orbit smoke)
 - [ ] `npm run test:buckets:verify`
 - [ ] `npm run test:unit && npm run test:terrain && npm run test:ui && npm run test:slow`
 - [ ] `npm run test:smoke` and `npm run test:e2e` (need a browser/GPU; run where available)
@@ -35,10 +36,10 @@ hardening steps are deliberately staged and easy to forget.
       off — keep it passing.
 - [ ] No secrets added: `gitleaks detect` (the `security` workflow runs this in
       CI over full history).
-- [ ] CSP: the deploy ships `Content-Security-Policy-Report-Only` (`.htaccess`
-      and `_headers`). Once the report-only console has stayed clean against a
-      real deploy for a release cycle, rename the header to
-      `Content-Security-Policy` to enforce, and note it here.
+- [ ] CSP: the deploy ships an ENFORCING `Content-Security-Policy` (`.htaccess`
+      and `_headers`): `script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self'
+      'unsafe-inline'`, `connect-src 'self' https:`. Confirm the headers are at the
+      deploy-zip root and the console stays clean on a real deploy.
 
 ## 4. Package + verify the artifact
 

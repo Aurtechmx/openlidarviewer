@@ -191,7 +191,7 @@ Three load-bearing decisions:
    local frame — the float64 arithmetic precedes the float32 store — so both
    keep full precision with no intermediate global-coordinate pass.
 2. **Preflight, then parse in a worker.** The format and, for LAS/LAZ, a
-   budget-aware load plan are decided on the main thread from a 4 KB head
+   budget-aware load plan are decided on the main thread from a 16 KB head
    slice — so an unsupported file fails before any large read. Parsing and
    downsampling then run in a long-lived worker, reused across loads, so the
    UI stays responsive on large surveys.

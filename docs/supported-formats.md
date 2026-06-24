@@ -12,8 +12,8 @@ Format support is still evolving. This page separates what works today from what
 | `PLY` | iPhone / mobile scans | Point clouds and meshes; RGB supported |
 | `OBJ` | Mesh scans, 3D tools | Mesh vertices used as points |
 | `GLB` / `GLTF` | AR tools, mobile scans | Mesh vertices used as points |
-| `XYZ` | Survey / generic export | Whitespace-delimited text; optional RGB; chunked, bounded-memory reading |
-| `CSV` | Survey / generic export | Comma-delimited text; optional RGB; chunked, bounded-memory reading |
+| `XYZ` | Survey / generic export | Whitespace-delimited text; optional RGB; chunked decoding over the in-memory file |
+| `CSV` | Survey / generic export | Comma-delimited text; optional RGB; chunked decoding over the in-memory file |
 | `PCD` | Point Cloud Library | ASCII, binary, and binary-compressed; position, RGB, intensity, normals, labels |
 | `PTX` | Terrestrial laser scanners | Multi-scan text; per-scan pose applied; scanner origin recorded |
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
@@ -42,7 +42,7 @@ Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large
 
 `PCD` — the Point Cloud Library format — is read directly in the browser in its ASCII, binary, and binary-compressed variants, with position, RGB colour, intensity, surface normals, and labels decoded where the file carries them.
 
-`PTX` and `PTS`, the terrestrial laser-scanner text formats, are also read in the browser. PTX multi-scan files apply each scan's recorded pose matrix, merge every scan into one cloud, and record the scanner origin (shown in the Scan Report). PTS files read the optional leading point-count line and the standard 3-, 4-, 6-, and 7-column layouts; like XYZ and CSV they are read in bounded chunks so a very large text scan loads without exhausting memory.
+`PTX` and `PTS`, the terrestrial laser-scanner text formats, are also read in the browser. PTX multi-scan files apply each scan's recorded pose matrix, merge every scan into one cloud, and record the scanner origin (shown in the Scan Report). PTS files read the optional leading point-count line and the standard 3-, 4-, 6-, and 7-column layouts; like XYZ and CSV they are decoded in bounded chunks over the already-loaded file, which avoids a second whole-file copy as strings (the source file itself is read in once; COPC/EPT are the true streaming paths).
 
 ## Large-scale and web formats
 
