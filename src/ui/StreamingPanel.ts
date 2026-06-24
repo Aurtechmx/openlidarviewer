@@ -60,6 +60,8 @@ export interface StreamingPanelCallbacks {
   onSaveView(): void;
   onApplyView(index: number): void;
   onDeleteView(index: number): void;
+  /** Run the full-cloud grade (decode a representative octree sample + grade it). */
+  onGradeFullCloud(): void;
 }
 
 /** Friendly labels for each colour mode. */
@@ -191,6 +193,10 @@ export class StreamingPanel {
   private readonly _qualityRow: HTMLElement;
   private readonly _views: HTMLElement;
   private readonly _pause: HTMLButtonElement;
+  // Full-cloud grade (B-trigger): a button that decodes a representative octree
+  // sample across the whole cloud and grades it, plus a result/status area.
+  private readonly _gradeBtn: HTMLButtonElement;
+  private readonly _gradeResult: HTMLElement;
   private _modeButtons = new Map<ColorMode, HTMLButtonElement>();
   private _paused = false;
 
@@ -257,6 +263,20 @@ export class StreamingPanel {
     });
     clearCache.addEventListener('click', () => this._callbacks.onClearCache());
 
+    // ── Full-cloud grade (B-trigger) ──
+    // The resident view only shows the nodes the camera pulled in; this button
+    // decodes a representative breadth-first sample across the WHOLE octree and
+    // grades its density, vertical extent, and footprint coverage — with an
+    // honest "exact vs sampled at N%" label so the figure never implies a
+    // completeness it doesn't have.
+    this._gradeBtn = el('button', { className: 'olv-streaming-btn', text: 'Grade full cloud' });
+    this._gradeBtn.title =
+      'Decode a representative sample across the whole cloud and grade its density, ' +
+      'vertical extent, and footprint coverage — beyond what the resident view shows.';
+    this._gradeBtn.addEventListener('click', () => this._callbacks.onGradeFullCloud());
+    this._gradeResult = el('div', { className: 'olv-streaming-grade-result' });
+    this._gradeResult.style.display = 'none';
+
     // The title's text is rebuilt from setSummary's `format` field so it
     // tracks the actual streaming source (COPC vs. EPT) rather than the
     // initial hardcoded label.
@@ -304,6 +324,9 @@ export class StreamingPanel {
       this._modeRow,
       el('div', { className: 'olv-streaming-label', text: 'Quality' }),
       this._qualityRow,
+      el('div', { className: 'olv-streaming-label', text: 'Full-cloud grade' }),
+      el('div', { className: 'olv-streaming-actions' }, [this._gradeBtn]),
+      this._gradeResult,
       el('div', { className: 'olv-streaming-label', text: 'Saved views' }),
       this._views,
       el('div', { className: 'olv-streaming-actions' }, [saveView, this._pause]),
@@ -333,6 +356,11 @@ export class StreamingPanel {
     this._progress.classList.add('olv-hidden');
     this._progressTrack.classList.remove('olv-stream-prog-shimmer');
     this._progressFill.style.width = '0%';
+    // Reset the full-cloud grade affordance for the next scan.
+    this._gradeBtn.disabled = false;
+    this._gradeResult.style.display = 'none';
+    this._gradeResult.replaceChildren();
+    this._gradeResult.classList.remove('olv-streaming-grade-error');
   }
 
   /**
@@ -411,6 +439,47 @@ export class StreamingPanel {
   /** Reflect the active quality preset. */
   setQuality(quality: StreamingQuality): void {
     this._selectQuality(quality);
+  }
+
+  /** Mark the grade action busy with a progress line; disables re-entry. */
+  setGradeBusy(text: string): void {
+    this._gradeBtn.disabled = true;
+    this._gradeResult.style.display = '';
+    this._gradeResult.classList.remove('olv-streaming-grade-error');
+    this._gradeResult.replaceChildren(
+      el('div', { className: 'olv-streaming-grade-line', text }),
+    );
+  }
+
+  /**
+   * Render the finished full-cloud grade: the honest coverage scope label
+   * (exact vs sampled at N%), the summary lines, and an optional honesty note.
+   * Re-enables the button so the grade can be re-run after the view changes.
+   */
+  setGradeResult(coverageLabel: string, lines: readonly string[], note: string): void {
+    this._gradeBtn.disabled = false;
+    this._gradeResult.style.display = '';
+    this._gradeResult.classList.remove('olv-streaming-grade-error');
+    const children: HTMLElement[] = [
+      el('div', { className: 'olv-streaming-grade-scope', text: coverageLabel }),
+    ];
+    for (const l of lines) {
+      children.push(el('div', { className: 'olv-streaming-grade-line', text: l }));
+    }
+    if (note) {
+      children.push(el('div', { className: 'olv-streaming-grade-note', text: note }));
+    }
+    this._gradeResult.replaceChildren(...children);
+  }
+
+  /** Show an error against the grade action and re-enable it. */
+  setGradeError(text: string): void {
+    this._gradeBtn.disabled = false;
+    this._gradeResult.style.display = '';
+    this._gradeResult.classList.add('olv-streaming-grade-error');
+    this._gradeResult.replaceChildren(
+      el('div', { className: 'olv-streaming-grade-line', text }),
+    );
   }
 
   /** Update the live status numbers + the determinate progress treatment. */

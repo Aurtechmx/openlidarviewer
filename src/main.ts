@@ -2072,6 +2072,7 @@ const streamingPanel = new StreamingPanel({
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
   onDeleteView: (index) => deleteView(index),
+  onGradeFullCloud: () => void runFullCloudGradeAction(),
 });
 
 // The Measurements panel lists placed measurements; the controller drives it.
@@ -3528,6 +3529,26 @@ function readTerrainComputePath(): { path: 'cpu' | 'gpu'; reason: string } | nul
     return s ? { path: s.path, reason: s.reason } : null;
   } catch {
     return null;
+  }
+}
+
+/** Re-entry guard for the full-cloud grade — one run at a time per session. */
+let fullCloudGradeRunning = false;
+
+/**
+ * Run the full-cloud grade (the B-trigger). The orchestration — sampling plan,
+ * decode through the session decoder, grade, and panel updates — lives in a
+ * lazily-imported module so it (and the adapter + grade it pulls in) never
+ * weighs on the live index bundle; this stub only owns the re-entry guard.
+ */
+async function runFullCloudGradeAction(): Promise<void> {
+  if (fullCloudGradeRunning) return;
+  fullCloudGradeRunning = true;
+  try {
+    const { runFullCloudGrade } = await import('./render/streaming/runFullCloudGradeAction');
+    await runFullCloudGrade({ viewer, panel: streamingPanel, debug });
+  } finally {
+    fullCloudGradeRunning = false;
   }
 }
 

@@ -1362,6 +1362,34 @@ button:disabled { cursor: not-allowed; }
   background: rgba(255, 100, 100, 0.12);
   border-color: rgba(255, 120, 120, 0.7);
 }
+.olv-streaming-btn:disabled { opacity: 0.55; cursor: default; }
+.olv-streaming-btn:disabled:hover { color: #aab0b8; border-color: var(--hairline); }
+
+/*
+ * Full-cloud grade result — the honest scope label (exact vs sampled at N%),
+ * the density / vertical / coverage lines, and the sampled-grade caveat. Boxed
+ * so it reads as a distinct readout, not another control.
+ */
+.olv-streaming-grade-result {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  display: flex; flex-direction: column; gap: var(--space-xs);
+}
+.olv-streaming-grade-scope {
+  font-size: var(--text-xs); font-weight: 600; color: var(--text);
+}
+.olv-streaming-grade-line { font-size: var(--text-xs); color: #aab0b8; }
+.olv-streaming-grade-note {
+  font-size: var(--text-xs); color: var(--text-faint); font-style: italic;
+  margin-top: var(--space-xs);
+}
+.olv-streaming-grade-result.olv-streaming-grade-error {
+  border-color: rgba(255, 120, 120, 0.4);
+  background: rgba(255, 100, 100, 0.05);
+}
+.olv-streaming-grade-error .olv-streaming-grade-line { color: #ffb3b3; }
 
 /* Progress toast */
 .olv-toast {

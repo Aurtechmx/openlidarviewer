@@ -419,6 +419,12 @@ interface StreamingSession {
   cloud: StreamingSource;
   scheduler: StreamingScheduler;
   renderer: StreamingRenderer;
+  /**
+   * The chunk decoder driving this session. Retained so the full-cloud grade
+   * (the B-trigger) can re-decode a breadth-first octree sample through the
+   * SAME decoder the scheduler uses, without standing up a second worker pool.
+   */
+  decoder: ChunkDecoder;
   /** The streaming benchmark, when one is collecting — null in normal sessions. */
   benchmark: StreamingBenchmark | null;
 }
@@ -1780,7 +1786,7 @@ export class Viewer {
       },
       streamingBudgets(quality, isMobile),
     );
-    this._streaming = { cloud, scheduler, renderer, benchmark: benchmark ?? null };
+    this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null };
     this._streamingFrame = 0;
     this._configureForStreaming(cloud);
   }
@@ -1824,6 +1830,15 @@ export class Viewer {
   /** The streaming scheduler, or null — for the streaming panel and diagnostics. */
   get streamingScheduler(): StreamingScheduler | null {
     return this._streaming?.scheduler ?? null;
+  }
+
+  /**
+   * The chunk decoder for the active streaming session, or null. Exposed so the
+   * full-cloud grade can re-decode a sampling plan through the same decoder the
+   * scheduler drives (one worker pool, not two).
+   */
+  get streamingDecoder(): ChunkDecoder | null {
+    return this._streaming?.decoder ?? null;
   }
 
   /** Switch the streaming cloud's colour mode. */
