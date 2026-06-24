@@ -23,7 +23,11 @@ export interface StreamingBudgets {
 /** Desktop resident-point budgets per quality preset. */
 const DESKTOP_POINT_BUDGET: Record<StreamingQuality, number> = {
   low: 1_500_000,
-  balanced: 4_000_000,
+  // Trimmed from 4M: every resident point is drawn as an instanced quad, so the
+  // default budget is the dominant steady-state navigation cost. 2.5M keeps a
+  // dense default while cutting ~40% of the per-frame draw work; "high" (8M)
+  // stays one click away for full density.
+  balanced: 2_500_000,
   high: 8_000_000,
 };
 
