@@ -220,8 +220,22 @@ export class PointCloud {
       for (let i = 0; i < this.positions.length; i += 3) {
         for (let axis = 0; axis < 3; axis++) {
           const v = this.positions[i + axis];
+          // Skip non-finite coordinates. A malformed binary file (PLY/PCD/E57)
+          // or a bad reprojection can leave a ±Infinity: NaN is already ignored
+          // by the comparisons below, but +Infinity > max sets max = Infinity and
+          // blows the box out to infinity, making the camera frame to nothing.
+          if (!Number.isFinite(v)) continue;
           if (v < min[axis]) min[axis] = v;
           if (v > max[axis]) max[axis] = v;
+        }
+      }
+      // If an axis had no finite coordinate at all, its seed survives (±Infinity).
+      // Collapse such an axis to a finite degenerate span so every downstream
+      // consumer (framing, bounding sphere) still gets safe numbers.
+      for (let axis = 0; axis < 3; axis++) {
+        if (!Number.isFinite(min[axis]) || !Number.isFinite(max[axis])) {
+          min[axis] = 0;
+          max[axis] = 0;
         }
       }
       this._bounds = { min, max };

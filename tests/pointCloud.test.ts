@@ -133,4 +133,29 @@ describe('PointCloud — bounds()', () => {
     });
     expect(pc.bounds()).toEqual({ min: [7, 8, 9], max: [7, 8, 9] });
   });
+
+  test('a non-finite coordinate cannot blow the box out to infinity', () => {
+    // One good point plus a malformed point with +Infinity and NaN — the box
+    // must span only the finite point, never reach Infinity (which would make
+    // the camera frame to nothing).
+    const pc = new PointCloud({
+      positions: new Float32Array([2, 3, 4, Infinity, NaN, -Infinity]),
+      origin: [0, 0, 0],
+      sourceFormat: 'ply',
+      name: 'bad.ply',
+    });
+    const b = pc.bounds();
+    expect(b).toEqual({ min: [2, 3, 4], max: [2, 3, 4] });
+    expect(b.min.every(Number.isFinite) && b.max.every(Number.isFinite)).toBe(true);
+  });
+
+  test('an all-non-finite cloud collapses to a finite degenerate box', () => {
+    const pc = new PointCloud({
+      positions: new Float32Array([Infinity, NaN, -Infinity]),
+      origin: [0, 0, 0],
+      sourceFormat: 'ply',
+      name: 'worse.ply',
+    });
+    expect(pc.bounds()).toEqual({ min: [0, 0, 0], max: [0, 0, 0] });
+  });
 });
