@@ -58,6 +58,7 @@ const REQUIRED_CHUNK_PREFIXES = [
   'export',
   'lazDecode',
   'copcWorker',
+  'eptLaszipWorker',
   'EptStreamingPointCloud',
   'EptChunkDecoder',
   'DebugOverlay',

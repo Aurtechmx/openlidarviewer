@@ -25,13 +25,26 @@ import type {
   DecodedChunk,
 } from '../copc/copcChunkDecode';
 import type { EptStreamingPointCloud } from '../../render/streaming/EptStreamingPointCloud';
+import type { EptLaszipWorkerClient } from './worker/eptLaszipWorkerClient';
 import { decodeEptLaszipTile } from './eptLaszipDecode';
 
 export class EptChunkDecoder implements ChunkDecoder {
   private readonly _cloud: EptStreamingPointCloud;
+  /**
+   * Optional decode worker for the `laszip` path. When supplied, full-tile
+   * laz-perf decode runs off the main thread; when absent (the binary path,
+   * and Node unit tests), decode runs in-process via `decodeEptLaszipTile`.
+   * Injected rather than self-created so the worker's lifetime is owned by
+   * `main.ts` — one per session, like the COPC decode worker.
+   */
+  private readonly _laszipWorker: EptLaszipWorkerClient | null;
 
-  constructor(cloud: EptStreamingPointCloud) {
+  constructor(
+    cloud: EptStreamingPointCloud,
+    laszipWorker: EptLaszipWorkerClient | null = null,
+  ) {
     this._cloud = cloud;
+    this._laszipWorker = laszipWorker;
   }
 
   async decode(
@@ -47,12 +60,15 @@ export class EptChunkDecoder implements ChunkDecoder {
         // points and decoding is a few hundred microseconds.
         return this._cloud.decodeBinary(chunk, meta.pointCount);
       case 'laszip':
-        // Full-tile laz-perf decode on the main thread.
-        // EPT laszip tiles are complete LAZ files (each with its own LAS
-        // header); the decoder reuses the cached laz-perf WASM module
-        // and applies the per-tile scale/offset PLUS the EPT cloud's
-        // render origin in Float64 before narrowing to Float32.
-        return decodeEptLaszipTile(chunk, this._cloud.renderOrigin);
+        // Full-tile laz-perf decode. EPT laszip tiles are complete LAZ files
+        // (each with its own LAS header); the decoder applies the per-tile
+        // scale/offset PLUS the EPT cloud's render origin in Float64 before
+        // narrowing to Float32. When a worker is wired, the decode runs off
+        // the main thread (the tile buffer is transferred zero-copy); the
+        // in-process path is the fallback for environments without a worker.
+        return this._laszipWorker
+          ? this._laszipWorker.decodeTile(chunk, this._cloud.renderOrigin, signal)
+          : decodeEptLaszipTile(chunk, this._cloud.renderOrigin);
       case 'zstandard':
         throw new Error(
           'EPT zstandard tile decode is not supported in this build. ' +

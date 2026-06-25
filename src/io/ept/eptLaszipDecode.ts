@@ -21,11 +21,15 @@
  *      cloud's render origin in Float64 BEFORE narrowing to Float32.
  *      Preserves the precision contract from `docs/coordinate-precision.md`.
  *
- * **Threading note:** the runs on the main thread (laz-perf
- * is fast on small EPT tiles — typical tile sizes are 10k–50k points,
- * decode <30 ms). For high-tile-rate streaming a worker dispatcher
- * lands in a follow-up session; the EPT chunk-decoder's seam already
- * supports the swap (`EptChunkDecoder.decode` is async).
+ * **Threading note:** the decode loop is CPU-bound (laz-perf decompress +
+ * the per-record coordinate transform). It is split into a sync core
+ * (`decodeEptLaszipTileWith`, which takes an already-instantiated laz-perf
+ * module) and the async `decodeEptLaszipTile` wrapper that acquires the
+ * cached module. The dedicated EPT laszip worker
+ * (`worker/eptLaszipWorker.ts`) runs the sync core off the main thread; the
+ * in-process `decodeEptLaszipTile` is the fallback the binary path and the
+ * Node tests use. Both share this one decode core, so there is a single
+ * source of truth for the LAS record layout.
  *
  * **Supported point formats:** PDRF 0-3 (legacy, no GPS time / GPS time)
  * and PDRF 6-8 (extended). Other formats throw a typed error so the
@@ -156,6 +160,27 @@ export async function decodeEptLaszipTile(
   buffer: ArrayBuffer,
   renderOrigin: readonly [number, number, number],
 ): Promise<DecodedChunk> {
+  const lazPerf = await getLazPerf();
+  return decodeEptLaszipTileWith(lazPerf, buffer, renderOrigin);
+}
+
+/** The instantiated laz-perf WASM module (type-only — no runtime import). */
+type LazPerfModule = Awaited<ReturnType<typeof import('laz-perf').createLazPerf>>;
+
+/**
+ * Synchronous decode core: identical work to {@link decodeEptLaszipTile}, but
+ * takes an already-instantiated laz-perf module instead of acquiring one. This
+ * is the single source of truth for the per-tile decode — the in-process
+ * wrapper above and the dedicated EPT laszip worker both call it, so the LAS
+ * record layout lives in exactly one place. Pure of three.js and of any
+ * module-acquisition I/O, so it runs unchanged on the main thread or inside a
+ * `DedicatedWorkerGlobalScope`.
+ */
+export function decodeEptLaszipTileWith(
+  lazPerf: LazPerfModule,
+  buffer: ArrayBuffer,
+  renderOrigin: readonly [number, number, number],
+): DecodedChunk {
   const ctx = buildContext(buffer);
   // Bound the per-tile declared count by the tile's own bytes BEFORE the
   // seven typed-array allocations below. EPT tiles arrive from remote
@@ -167,7 +192,6 @@ export async function decodeEptLaszipTile(
     1,
     'EPT laszip tile',
   );
-  const lazPerf = await getLazPerf();
   const fileBytes = new Uint8Array(buffer);
 
   const positions = new Float32Array(n * 3);

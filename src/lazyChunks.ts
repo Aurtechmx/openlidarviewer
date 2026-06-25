@@ -47,6 +47,10 @@ export const loadStreamingPointCloud = () =>
 export const loadCopcWorkerClient = () =>
   import('./io/copc/worker/copcWorkerClient');
 
+/** Load the EPT laszip decode worker client. */
+export const loadEptLaszipWorkerClient = () =>
+  import('./io/ept/worker/eptLaszipWorkerClient');
+
 /** Load the streaming colour helpers. */
 export const loadStreamingColors = () => import('./render/streaming/streamingColors');
 

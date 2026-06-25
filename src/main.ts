@@ -153,6 +153,7 @@ import {
 } from './io/range/RangeSource';
 import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
+import type { EptLaszipWorkerClient } from './io/ept/worker/eptLaszipWorkerClient';
 import { StreamingPanel } from './ui/StreamingPanel';
 import type { StreamingQuality } from './render/streaming/streamingBudget';
 // The COPC/streaming `import()` split points live in `lazyChunks.ts` — a
@@ -161,6 +162,7 @@ import type { StreamingQuality } from './render/streaming/streamingBudget';
 import {
   loadStreamingPointCloud,
   loadCopcWorkerClient,
+  loadEptLaszipWorkerClient,
   loadStreamingColors,
   loadLocalFileRangeSource,
   loadHttpRangeSource,
@@ -892,6 +894,8 @@ let debugOverlay: DebugOverlay | null = null;
 
 /** The COPC decode worker client — created lazily on the first COPC open. */
 let copcDecoder: CopcWorkerClient | null = null;
+/** The EPT laszip decode worker client — created lazily on the first EPT laszip open. */
+let eptLaszipDecoder: EptLaszipWorkerClient | null = null;
 /** The active streaming quality preset. */
 let streamingQuality: StreamingQuality = 'balanced';
 /** Interval handle for the streaming-status poll, while a COPC is open. */
@@ -5151,7 +5155,18 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     clearOpenStaticLayers();
     stage.hideEmptyState();
 
-    const decoder = new EptChunkDecoder(cloud);
+    // Laszip tiles are CPU-heavy (laz-perf decompress + coordinate transform);
+    // decode them off the main thread in a dedicated worker, created lazily and
+    // reused for the session like the COPC decode worker. The binary path stays
+    // in-process (microsecond decodes) so it never pays the worker round-trip.
+    if (cloud.dataType === 'laszip' && !eptLaszipDecoder) {
+      const { EptLaszipWorkerClient } = await loadEptLaszipWorkerClient();
+      eptLaszipDecoder = new EptLaszipWorkerClient();
+    }
+    const decoder = new EptChunkDecoder(
+      cloud,
+      cloud.dataType === 'laszip' ? eptLaszipDecoder : null,
+    );
     await viewer.attachStreamingCloud(
       cloud,
       decoder,
