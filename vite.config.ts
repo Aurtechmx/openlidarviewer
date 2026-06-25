@@ -40,6 +40,8 @@ function liveSourceTransformPlugin() {
     // Vite must read *statically* to split a chunk or bundle a worker:
     //   - `loadFile.ts`        — `new Worker(new URL('./parseWorker.ts', …))`
     //   - `copcWorkerClient.ts`— `new Worker(new URL('./copcWorker.ts', …))`
+    //   - `eptLaszipWorkerClient.ts`
+    //                          — `new Worker(new URL('./eptLaszipWorker.ts', …))`
     //   - `terrainCoreWorkerClient.ts`
     //                          — `new Worker(new URL('./terrainCoreWorker.ts', …))`
     //   - `computeTerrainCoreAsync.ts`
@@ -61,6 +63,7 @@ function liveSourceTransformPlugin() {
       /node_modules/,
       /loadFile\.ts/,
       /copcWorkerClient\.ts/,
+      /eptLaszipWorkerClient\.ts/,
       /terrainCoreWorkerClient\.ts/,
       /computeTerrainCoreAsync\.ts/,
       /lazyChunks\.ts/,
@@ -114,6 +117,15 @@ function chunkEmissionGuard() {
     'streamingColors',
     'copcWorker',
     'copcWorkerClient',
+    // EPT laszip decode worker offload — `eptLaszipWorkerClient.ts` spins up
+    // `eptLaszipWorker.ts` via `new Worker(new URL(...))`. Same hazard as the
+    // COPC and terrain workers: the live transform's stringArray pass would
+    // scramble the worker-URL literal, so both files are in the obfuscator
+    // `exclude` list above and both chunks are pinned here. Losing either chunk
+    // means `new Worker(...)` 404s at runtime and every EPT laszip tile decode
+    // rejects — so a regression that drops them must fail the build loudly.
+    'eptLaszipWorker',
+    'eptLaszipWorkerClient',
     // Terrain core worker offload — `terrainCoreWorkerClient.ts` spins up
     // `terrainCoreWorker.ts` via `new Worker(new URL(...))`. The live
     // transform's stringArray pass scrambles that worker-URL literal, so
