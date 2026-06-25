@@ -97,10 +97,16 @@ export const scanReport: AnalysisModule = {
       rows.push(rowInfo('Loaded', `${n.toLocaleString('en-US')} (display sample)`));
     }
 
-    // Extent — rounded to a tenth of a metre.
-    const width = maxX - minX;
-    const depth = maxY - minY;
-    const height = maxZ - minZ;
+    // Extent — bounds are in the source CRS's native linear units (feet for a
+    // state-plane-feet cloud), so convert to metres before reporting "m" /
+    // "pts/m²" / spacing. Horizontal spans use linearUnitToMetres; height uses
+    // the vertical unit when the CRS declares one separately. metre / CRS-less
+    // clouds resolve to factor 1 — byte-identical to before.
+    const mpu = cloud.metadata?.crs?.linearUnitToMetres ?? 1;
+    const vmpu = cloud.metadata?.crs?.verticalUnitToMetres ?? mpu;
+    const width = (maxX - minX) * mpu;
+    const depth = (maxY - minY) * mpu;
+    const height = (maxZ - minZ) * vmpu;
     rows.push(withScope(rowInfo('Width', `${width.toFixed(1)} m`), scope));
     rows.push(withScope(rowInfo('Depth', `${depth.toFixed(1)} m`), scope));
     rows.push(withScope(rowInfo('Height', `${height.toFixed(1)} m`), scope));

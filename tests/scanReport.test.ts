@@ -194,4 +194,46 @@ describe('scanReport module', () => {
       expect(['warn', 'info']).toContain(row.status);
     });
   });
+
+  describe('foot-CRS extent + density convert native units to metres (#2)', () => {
+    // 4 points spanning 2×2×1 in the source unit. With a foot CRS the report
+    // must read those spans as metres (×0.3048), so density / spacing come out
+    // in true pts/m² and m — not the ~10.76× understated pts/ft² they were.
+    const cloud = new PointCloud({
+      positions: new Float32Array([0, 0, 0, 2, 0, 0, 0, 2, 0, 2, 2, 1]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'sp-feet',
+      metadata: {
+        crs: {
+          source: 'wkt',
+          name: 'NAD83 / State Plane (ftUS)',
+          linearUnit: 'foot',
+          linearUnitToMetres: 0.3048,
+          isGeographic: false,
+        },
+      },
+    });
+
+    test('extent rows convert feet → metres (rounded to a tenth of a metre)', () => {
+      const r = scanReport.run(cloud);
+      // 2 ft → 0.6096 m → "0.6 m"; 1 ft → 0.3048 m → "0.3 m".
+      expect(parseFloat(rowByLabel(r, 'Width').value)).toBeCloseTo(0.6, 1);
+      expect(parseFloat(rowByLabel(r, 'Depth').value)).toBeCloseTo(0.6, 1);
+      expect(parseFloat(rowByLabel(r, 'Height').value)).toBeCloseTo(0.3, 1);
+    });
+
+    test('density is pts per true m² (not pts/ft² mislabelled)', () => {
+      // 4 pts / (0.6096 m)² ≈ 10.76 pts/m².
+      expect(parseFloat(rowByLabel(scanReport.run(cloud), 'Density').value)).toBeCloseTo(10.76, 1);
+    });
+
+    test('spacing reads in metres (sub-metre ⇒ cm), not the unconverted 1.0 m', () => {
+      // sqrt(0.6096² / 4) = 0.3048 m → formatted "30.5 cm". The buggy native
+      // path gave sqrt(4/4) = 1.0 m, so the cm unit alone proves the conversion.
+      const v = rowByLabel(scanReport.run(cloud), 'Spacing').value;
+      expect(v).toMatch(/cm/);
+      expect(parseFloat(v)).toBeCloseTo(30.5, 0);
+    });
+  });
 });

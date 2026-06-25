@@ -481,10 +481,18 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     lassoVolumeTool.disable();
     viewer.setLassoMode(false);
     syncLassoButton();
-    const fillM3 = out.result.fill.toFixed(2);
-    const cutM3 = out.result.cut.toFixed(2);
-    const netM3 = out.result.net.toFixed(2);
-    const areaM2 = out.result.footprintArea.toFixed(1);
+    // The lasso result is in the source CRS's native linear units (feet for a
+    // state-plane-feet cloud). Convert to metres before stamping m³ / m² —
+    // areas by lin², volumes by lin³ — the same factor the measure tool uses.
+    // (The CRS gate below still blocks geographic / unknown; this corrects the
+    // remaining projected-feet case the gate lets through.)
+    const lin = crsService.current()?.linearUnitToMetres ?? 1;
+    const lin2 = lin * lin;
+    const lin3 = lin2 * lin;
+    const fillM3 = (out.result.fill * lin3).toFixed(2);
+    const cutM3 = (out.result.cut * lin3).toFixed(2);
+    const netM3 = (out.result.net * lin3).toFixed(2);
+    const areaM2 = (out.result.footprintArea * lin2).toFixed(1);
     // Stage the result for the toast's Save button. The polygon3D
     // is the convex-hull footprint at the integration reference
     // plane — saving promotes it to a regular Volume measurement.
