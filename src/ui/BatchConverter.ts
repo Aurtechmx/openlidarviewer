@@ -401,7 +401,12 @@ function parseEpsg(v: string): number | null {
 
 
 function downloadBytes(filename: string, bytes: Uint8Array, mime: string): void {
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  // Only copy when `bytes` is a partial view (see ExportPanel.downloadBytes):
+  // a full-buffer typed array passes through without copying the payload.
+  const ab =
+    bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+      ? (bytes.buffer as ArrayBuffer)
+      : (bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   const url = URL.createObjectURL(new Blob([ab], { type: mime }));
   const a = document.createElement('a');
   a.href = url;
