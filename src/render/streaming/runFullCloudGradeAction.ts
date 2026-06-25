@@ -57,12 +57,21 @@ export async function runFullCloudGrade(deps: {
       grade: (positions, scale) =>
         gradeSampleDensity(positions, scale, metresPerUnit, verticalMetresPerUnit),
       onProgress: (p) => {
+        // Don't paint progress for a scan that's no longer the active one — a
+        // detach/replace mid-decode must not write into the new cloud's panel.
+        if (viewer.streamingCloud !== source) return;
         panel.setGradeBusy(
           `Decoding ${p.decodedNodes} / ${p.totalNodes} nodes · ` +
             `${Math.round(p.decodedPoints).toLocaleString('en-US')} pts…`,
         );
       },
     });
+    // Stale-result guard: the grade decodes a multi-million-point sample over
+    // several seconds. If the streaming cloud was detached or swapped for another
+    // while it ran, this result describes a scan that's no longer shown — discard
+    // it silently rather than paint a stale grade over a different (or absent)
+    // cloud's panel.
+    if (viewer.streamingCloud !== source) return;
     panel.setGradeResult(run.coverage.label, summarizeSampleGrade(run.grade), run.coverage.note);
   } catch (err) {
     // A user-initiated cancel is not a failure — show a neutral note, not the

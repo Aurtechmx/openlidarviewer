@@ -5405,6 +5405,10 @@ function closeStreaming(): void {
   }
   if (copcDecoder) copcDecoder.onDecodeMs = undefined;
   stopStreamingStatusPolling();
+  // Abort an in-flight full-cloud grade — the scan it was decoding is going away,
+  // so its decode is now orphaned work (its result is discarded by the grade's
+  // own stale-cloud guard regardless; this just stops it early).
+  cancelFullCloudGrade();
   viewer.detachStreamingCloud();
   streamingPanel.hide();
   // Return the Inspector to its static layout — un-hide every section
