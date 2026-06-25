@@ -50,6 +50,13 @@ export interface CrsRegistryEntry {
    */
   readonly linearUnit?: CrsLinearUnit;
   readonly linearUnitToMetres?: number;
+  /**
+   * Horizontal geodetic datum name for this EPSG (e.g. 'NAD83', 'WGS 84',
+   * 'ETRS89'). The curated, generic fallback used ONLY when the file carried no
+   * WKT datum of its own — a WKT's realization-specific name (e.g. NAD83(2011))
+   * always takes precedence, so this is never allowed to downgrade it.
+   */
+  readonly datum?: string;
 }
 
 const ENTRIES: readonly CrsRegistryEntry[] = [
@@ -61,6 +68,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     worldwide: true,
     region: 'global',
     note: 'World Geodetic System 1984 — the standard lat/lon CRS.',
+    datum: 'WGS 84',
   },
   {
     epsg: 4979,
@@ -69,6 +77,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     worldwide: true,
     region: 'global',
     note: 'WGS 84 with ellipsoidal height — used by GNSS receivers.',
+    datum: 'WGS 84',
   },
   {
     epsg: 3857,
@@ -79,6 +88,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     note:
       'Web Mercator / Google / Bing / OSM tile projection. ' +
       'Distances are unreliable away from the equator.',
+    datum: 'WGS 84',
   },
 
   // ── United States — UTM zones (3DEP coverage) ────────────────────────────
@@ -104,6 +114,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
       worldwide: false,
       region: 'united-states',
       note: `Standard U.S. UTM zone ${z.zone}N — ${z.where}.`,
+      datum: 'NAD83',
     }),
   ),
 
@@ -128,6 +139,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
       region: 'united-states',
       note:
         `WGS84-datum UTM zone ${z.zone}N — common on USGS 3DEP COPC tiles.`,
+      datum: 'WGS 84',
     }),
   ),
 
@@ -139,6 +151,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     worldwide: false,
     region: 'mexico',
     note: 'INEGI standard for nationwide Mexico products.',
+    datum: 'ITRF2008',
   },
 
   // ── Europe — ETRS89 and major UTM zones ─────────────────────────────────
@@ -149,6 +162,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     worldwide: false,
     region: 'europe',
     note: 'European Terrestrial Reference System 1989.',
+    datum: 'ETRS89',
   },
   {
     epsg: 25832,
@@ -157,6 +171,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     worldwide: false,
     region: 'europe',
     note: 'Germany, Denmark, parts of Italy and Austria.',
+    datum: 'ETRS89',
   },
   {
     epsg: 25833,
@@ -165,6 +180,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     worldwide: false,
     region: 'europe',
     note: 'Norway, Sweden, eastern Germany, Poland west.',
+    datum: 'ETRS89',
   },
 
   // ── Netherlands — RD New (AHN national LiDAR uses this) ─────────────────
@@ -183,6 +199,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     note:
       'Dutch national projection used by the AHN airborne LiDAR ' +
       'programme. Combines with NAP (EPSG:5709) for vertical reference.',
+    datum: 'Amersfoort',
   },
 
   // ── European national LiDAR programmes surfaced by the curated catalog ──
@@ -265,6 +282,32 @@ export function listCrsEntries(): readonly CrsRegistryEntry[] {
 /** Look up an entry by EPSG code, or `undefined` if not registered. */
 export function getCrsEntry(epsg: number): CrsRegistryEntry | undefined {
   return ENTRIES.find((e) => e.epsg === epsg);
+}
+
+/**
+ * The curated horizontal datum for an EPSG, or `undefined` when the code isn't
+ * registered or carries no curated datum. This is the GENERIC fallback used only
+ * when a file declared no WKT datum of its own — see {@link resolveHorizontalDatum},
+ * which never lets it override a more specific WKT-declared realization.
+ */
+export function registryDatumFor(epsg: number | undefined): string | undefined {
+  return epsg == null ? undefined : getCrsEntry(epsg)?.datum;
+}
+
+/**
+ * Resolve a single horizontal datum name from the two available sources, with a
+ * strict NEVER-DOWNGRADE rule: a WKT-declared datum always wins, because it may
+ * carry the realization the registry's generic name drops (e.g. "NAD83(2011)"
+ * vs "NAD83", ~1–2 m apart). The registry only fills the gap when the file
+ * declared no WKT datum at all. Returns `undefined` when neither source knows —
+ * an honest "unknown" rather than a guessed datum.
+ */
+export function resolveHorizontalDatum(
+  wktDatum: string | undefined,
+  epsg: number | undefined,
+): string | undefined {
+  const wkt = wktDatum?.trim();
+  return wkt ? wkt : registryDatumFor(epsg);
 }
 
 /**

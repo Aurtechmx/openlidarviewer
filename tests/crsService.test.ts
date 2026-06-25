@@ -431,3 +431,52 @@ describe('CrsService.displayLabel', () => {
     expect(svc.displayLabel()).toBe('CRS unknown');
   });
 });
+
+describe('CrsService — horizontal datum (single source of truth)', () => {
+  // A file whose WKT preserves the NAD83(2011) realization, EPSG 26918.
+  const NAD83_2011_18N: CrsInfo = {
+    source: 'wkt',
+    name: 'NAD83(2011) / UTM zone 18N',
+    epsg: 26918,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    isGeographic: false,
+    horizontalDatum: 'NAD83(2011)',
+  };
+
+  it('resolves the WKT datum, preserving the realization', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'a.copc.laz', detected: NAD83_2011_18N, source: 'copc-meta' });
+    expect(svc.horizontalDatum()).toBe('NAD83(2011)');
+  });
+
+  it('fills the registry datum when the file declared none', () => {
+    const svc = new CrsService(makePort());
+    // NAD83_UTM_18N has no horizontalDatum; EPSG 26918 ⇒ registry NAD83.
+    svc.resolveForScan({ name: 'b.copc.laz', detected: NAD83_UTM_18N, source: 'copc-meta' });
+    expect(svc.horizontalDatum()).toBe('NAD83');
+  });
+
+  it('keeps the WKT datum when an override picks the SAME EPSG (never downgrade)', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'c.copc.laz', detected: NAD83_2011_18N, source: 'copc-meta' });
+    const r = svc.setOverride({
+      override: { epsg: 26918, kind: 'projected' },
+      detected: NAD83_2011_18N,
+      source: 'copc-meta',
+    });
+    expect(r?.horizontalDatum).toBe('NAD83(2011)'); // not collapsed to registry 'NAD83'
+  });
+
+  it('uses the registry datum when the override switches to a DIFFERENT EPSG', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'd.copc.laz', detected: NAD83_2011_18N, source: 'copc-meta' });
+    // Reassigned to WGS84 / UTM 18N (32618) — the NAD83(2011) WKT no longer applies.
+    const r = svc.setOverride({
+      override: { epsg: 32618, kind: 'projected' },
+      detected: NAD83_2011_18N,
+      source: 'copc-meta',
+    });
+    expect(r?.horizontalDatum).toBe('WGS 84');
+  });
+});

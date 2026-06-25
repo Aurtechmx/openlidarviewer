@@ -79,6 +79,14 @@ export interface CrsInfo {
   readonly verticalLinearUnit?: CrsLinearUnit;
   /** Z-unit conversion to metres (1 metre, 0.3048 foot, …). Absent ⇒ unknown. */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Horizontal geodetic datum name as the WKT declares it — the GEOGCS/GEOGCRS
+   * (geographic base) name, e.g. "NAD83", "NAD83(2011)", "WGS 84", "ETRS89".
+   * This is the realization-PRESERVING name (NAD83(2011) ≠ NAD83 by ~1–2 m), so
+   * it is the authoritative source for the resolved datum and must never be
+   * downgraded to a registry generic. Absent when the source carried no WKT.
+   */
+  readonly horizontalDatum?: string;
 }
 
 /** Common vertical-datum EPSG codes → readable names. */
@@ -237,6 +245,15 @@ export function crsFromWkt(wkt: string): CrsInfo {
     ?? /^(?:COMPD_CS|COMPOUNDCRS)\s*\[\s*"([^"]+)"/i.exec(text);
   const rawName = nameMatch ? nameMatch[1] : 'Unknown CRS';
 
+  // Horizontal datum = the geographic base CRS's name (the GEOGCS / GEOGCRS /
+  // BASEGEOGCRS node). For a projected CRS this is the nested base (e.g.
+  // "NAD83"); for a geographic CRS it is the CRS itself. It preserves the datum
+  // realization — "NAD83(2011)" stays distinct from "NAD83" (~1–2 m apart) — so
+  // it is the precision-preserving source the resolver prefers over the generic
+  // registry name.
+  const datumMatch = /\b(?:GEOGCS|GEOGCRS|BASEGEOGCRS)\s*\[\s*"([^"]+)"/i.exec(horizText);
+  const horizontalDatum = datumMatch ? datumMatch[1] : undefined;
+
   // EPSG via the standard AUTHORITY clause. LAS WKT is permissive — we look
   // for both AUTHORITY["EPSG","32612"] (WKT1) and ID["EPSG",32612] (WKT2).
   // Restricted to the horizontal slice so a compound's vertical code can't win.
@@ -292,6 +309,7 @@ export function crsFromWkt(wkt: string): CrsInfo {
     verticalEpsg: vert.epsg,
     verticalLinearUnit: vert.unit,
     verticalUnitToMetres: vert.unit ? unitScaleForCode(vert.unit) : undefined,
+    horizontalDatum,
   };
 }
 

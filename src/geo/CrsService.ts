@@ -45,7 +45,7 @@ import {
   utmZoneFor,
   type UtmGridPoint,
 } from './UtmConverter';
-import { getCrsEntry } from './CrsRegistry';
+import { getCrsEntry, resolveHorizontalDatum } from './CrsRegistry';
 import {
   clearOverride as defaultClearOverride,
   getOverride as defaultGetOverride,
@@ -128,9 +128,9 @@ export class CrsService {
     const datasetKey = keyForDataset(input.name);
     this._currentDatasetKey = datasetKey;
     const override = this._port.get(datasetKey);
-    const resolved = override
+    const resolved = this._resolveDatum(override
       ? this._fromOverride(override, input.detected)
-      : (resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs());
+      : (resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs()));
     this._setCurrent(resolved);
     return resolved;
   }
@@ -160,8 +160,9 @@ export class CrsService {
     if (!this._currentDatasetKey) return null;
     if (args.override.epsg === null && args.override.kind === 'local') {
       this._port.clear(this._currentDatasetKey);
-      const resolved =
-        resolvedFromCrsInfo(args.detected, args.source) ?? unknownCrs();
+      const resolved = this._resolveDatum(
+        resolvedFromCrsInfo(args.detected, args.source) ?? unknownCrs(),
+      );
       this._setCurrent(resolved);
       return resolved;
     }
@@ -171,7 +172,7 @@ export class CrsService {
     });
     const override = this._port.get(this._currentDatasetKey);
     if (!override) return this._current;
-    const resolved = this._fromOverride(override, args.detected);
+    const resolved = this._resolveDatum(this._fromOverride(override, args.detected));
     this._setCurrent(resolved);
     return resolved;
   }
@@ -185,6 +186,15 @@ export class CrsService {
   /** The validation verdict for the current CRS — `null` when no scan is open. */
   validation(): CrsValidationResult {
     return validateCrsForMeasurement(this._current);
+  }
+
+  /**
+   * The active scan's resolved horizontal datum (e.g. "NAD83(2011)", "WGS 84"),
+   * or undefined when unknown. Single source of truth — consumers read this
+   * instead of re-inferring the datum from the CRS name or EPSG ranges.
+   */
+  horizontalDatum(): string | undefined {
+    return this._current?.horizontalDatum;
   }
 
   /** Compute UTM grid coords for a lat/lon point using the canonical helper. */
@@ -302,10 +312,26 @@ export class CrsService {
         detected?.epsg === override.epsg
           ? detected.linearUnitToMetres
           : (entry?.linearUnitToMetres ?? 1),
+      // Horizontal datum: borrow the detector's WKT datum only when it described
+      // this exact EPSG (so an override to a DIFFERENT EPSG drops the now-wrong
+      // WKT datum); the registry fallback for the chosen EPSG is then applied
+      // uniformly by `_resolveDatum`. Mirrors the name / unit precedence above.
+      horizontalDatum:
+        detected?.epsg === override.epsg ? detected?.horizontalDatum : undefined,
       source: 'user-override',
       confidence: 'high',
       userConfirmed: true,
       wkt: detected?.wkt,
     };
+  }
+
+  /**
+   * Fill the registry datum fallback so every resolution path ends with ONE
+   * consistent horizontal datum (a WKT datum already present is preserved —
+   * never downgraded; see {@link resolveHorizontalDatum}). Idempotent.
+   */
+  private _resolveDatum(crs: ResolvedCrs): ResolvedCrs {
+    const datum = resolveHorizontalDatum(crs.horizontalDatum, crs.epsg);
+    return datum === crs.horizontalDatum ? crs : { ...crs, horizontalDatum: datum };
   }
 }

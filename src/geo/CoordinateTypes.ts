@@ -120,6 +120,14 @@ export interface ResolvedCrs {
   /** Human label for the vertical datum (name or `EPSG:<code>`); undefined = unknown. */
   readonly verticalDatum?: string;
   /**
+   * Horizontal geodetic datum name (e.g. "NAD83(2011)", "WGS 84", "ETRS89"),
+   * resolved consistently across every path: a WKT-declared datum always wins,
+   * the curated registry fills the gap by EPSG, and `undefined` is an honest
+   * "unknown". The single source of truth so the inspector, reports, and
+   * epoch-comparison never infer the datum three different ways.
+   */
+  readonly horizontalDatum?: string;
+  /**
    * Z-axis unit conversion to metres, when the source declares a vertical unit
    * distinct from the horizontal one. Absent ⇒ use {@link linearUnitToMetres}
    * (the GeoTIFF default: vertical units follow the model's linear units).
@@ -193,6 +201,10 @@ export function resolvedFromCrsInfo(
     verticalEpsg: info.verticalEpsg,
     verticalDatum: info.verticalDatum,
     verticalUnitToMetres: info.verticalUnitToMetres,
+    // The WKT-declared datum (realization-preserving). CrsService fills the
+    // registry fallback by EPSG when this is absent — kept out of here to avoid
+    // a CoordinateTypes → CrsRegistry import cycle.
+    horizontalDatum: info.horizontalDatum,
   };
 }
 
