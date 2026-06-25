@@ -27,6 +27,26 @@ describe('healthCheck module', () => {
     expect(healthCheck.label).toBe('Health Check');
   });
 
+  describe('per-cloud result memo (#5)', () => {
+    test('re-running on the same cloud returns the cached result (no recompute)', () => {
+      const cloud = makeCloud([0, 0, 0, 1, 1, 1, 2, 2, 2]);
+      const a = healthCheck.run(cloud);
+      const b = healthCheck.run(cloud);
+      // Same object reference ⇒ the median-sort + dup-scan did not run again.
+      expect(b).toBe(a);
+    });
+
+    test('a different cloud is not served the wrong cloud cache', () => {
+      const clean = makeCloud([0, 0, 0, 5, 5, 5, 9, 9, 9]);
+      const dup = makeCloud([0, 0, 0, 0, 0, 0, 1, 1, 1]);
+      const cleanRes = healthCheck.run(clean);
+      const dupRes = healthCheck.run(dup);
+      expect(cleanRes).not.toBe(dupRes);
+      expect(rowByLabel(cleanRes, 'Duplicate Points').status).toBe('pass');
+      expect(rowByLabel(dupRes, 'Duplicate Points').status).toBe('warn');
+    });
+  });
+
   describe('clean cloud — all pass', () => {
     const cloud = makeCloud([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 

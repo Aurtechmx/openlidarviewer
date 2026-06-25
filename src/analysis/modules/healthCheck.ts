@@ -183,11 +183,25 @@ function checkStrayOutliers(cloud: PointCloud): AnalysisRow {
   };
 }
 
+/**
+ * Per-cloud result memo. Every check reads only the cloud's IMMUTABLE fields
+ * (positions, point counts) — no scope, no classification — so the result is a
+ * pure function of the cloud and is identical on every re-run. The two heavy
+ * checks (the median/MAD sort + the duplicate-scan's N-string Set) re-ran on
+ * every Inspector refresh — a class toggle, a tab switch — stalling the main
+ * thread on a multi-million-point scan. Keyed by the cloud via a WeakMap so the
+ * entry is collected with the cloud; nothing to invalidate because nothing the
+ * checks read can change without a new cloud.
+ */
+const _resultCache = new WeakMap<PointCloud, AnalysisResult>();
+
 export const healthCheck: AnalysisModule = {
   id: 'health-check',
   label: 'Health Check',
 
   run(cloud: PointCloud): AnalysisResult {
+    const cached = _resultCache.get(cloud);
+    if (cached) return cached;
     // Every health-check row is a diagnostic — surfaced under "Advanced report".
     const rows = [
       checkInvalidCoordinates(cloud),
@@ -196,6 +210,8 @@ export const healthCheck: AnalysisModule = {
       checkDuplicatePoints(cloud),
       checkStrayOutliers(cloud),
     ];
-    return { rows: rows.map((row) => ({ ...row, advanced: true })) };
+    const result: AnalysisResult = { rows: rows.map((row) => ({ ...row, advanced: true })) };
+    _resultCache.set(cloud, result);
+    return result;
   },
 };

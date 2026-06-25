@@ -36,6 +36,8 @@ export class ClipPanel {
   private _mode: ClipMode = 'keep-inside';
   private _min: [number, number, number] = [0, 0, 0];
   private _max: [number, number, number] = [1, 1, 1];
+  /** Trailing timer for number-input edits — see _applyDebounced. */
+  private _applyTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly _minInputs: HTMLInputElement[] = [];
   private readonly _maxInputs: HTMLInputElement[] = [];
   private readonly _enableBox: HTMLInputElement;
@@ -84,8 +86,8 @@ export class ClipPanel {
     // Extents grid
     const grid = el('div', { className: 'olv-clip-grid' });
     for (const { axis, label } of AXES) {
-      const mn = this._numInput((v) => { this._min[axis] = v; this._apply(); });
-      const mx = this._numInput((v) => { this._max[axis] = v; this._apply(); });
+      const mn = this._numInput((v) => { this._min[axis] = v; this._applyDebounced(); });
+      const mx = this._numInput((v) => { this._max[axis] = v; this._applyDebounced(); });
       this._minInputs[axis] = mn;
       this._maxInputs[axis] = mx;
       grid.append(
@@ -121,6 +123,7 @@ export class ClipPanel {
     this.element.style.display = on ? '' : 'none';
     if (!on) {
       // Hiding the panel (scan closed) clears the clip so it can't persist.
+      if (this._applyTimer !== null) { clearTimeout(this._applyTimer); this._applyTimer = null; }
       this._enabled = false;
       this._enableBox.checked = false;
       this._cb.onApply(null);
@@ -162,6 +165,21 @@ export class ClipPanel {
 
   private _current(): ClipBox {
     return { box: { min: [...this._min], max: [...this._max] }, mode: this._mode, enabled: this._enabled };
+  }
+
+  /**
+   * Coalesce per-keystroke number-input edits into one _apply. The expensive
+   * part of _apply is keptCount, an O(N) pass over the whole cloud; firing it on
+   * every `input` event froze the UI while typing or holding a spinner on a big
+   * scan. A 120 ms trailing timer keeps the readout responsive without the
+   * per-character stall. Mode / fit / checkbox changes still apply immediately.
+   */
+  private _applyDebounced(): void {
+    if (this._applyTimer !== null) clearTimeout(this._applyTimer);
+    this._applyTimer = setTimeout(() => {
+      this._applyTimer = null;
+      this._apply();
+    }, 120);
   }
 
   private _apply(): void {
