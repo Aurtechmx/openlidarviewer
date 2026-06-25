@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
 import type { GlobalPoints } from '../src/convert/globalPoints';
-import { writeLas14, pickPointFormat14 } from '../src/convert/writeLas';
+import { writeLas, writeLas14, pickPointFormat14 } from '../src/convert/writeLas';
 import { parseLasHeader } from '../src/io/lasHeader';
 import { loadLas } from '../src/io/loadLas';
 import { convertCloud } from '../src/convert/convertCloud';
@@ -25,6 +25,33 @@ function sampleGlobal(over: Partial<GlobalPoints> = {}): GlobalPoints {
     ...over,
   };
 }
+
+describe('global-encoding GPS Time Type bit (convert-1)', () => {
+  const enc = (las: Uint8Array): number =>
+    new DataView(las.buffer, las.byteOffset, las.byteLength).getUint16(6, true);
+
+  it('LAS 1.4 declares Adjusted Standard GPS Time (bit 0) by default', () => {
+    // PDRF 6/7 always carry GPS time, so the bit must be set, not left clear.
+    expect(enc(writeLas14(sampleGlobal(), { epsg: 32611 })) & 0x1).toBe(1);
+  });
+
+  it('LAS 1.4 clears bit 0 when the caller opts into legacy GPS Week Time', () => {
+    expect(enc(writeLas14(sampleGlobal(), { epsg: 32611, gpsStandardTime: false })) & 0x1).toBe(0);
+  });
+
+  it('LAS 1.2 sets bit 0 only when the chosen format carries GPS time', () => {
+    // With gpsTime → format 1, bit 0 set; without → format 0, bit 0 clear.
+    const withGps = writeLas(sampleGlobal({ gpsTime: Float64Array.from([1, 2, 3]) }));
+    const noGps = writeLas(sampleGlobal());
+    expect(enc(withGps) & 0x1).toBe(1);
+    expect(enc(noGps) & 0x1).toBe(0);
+  });
+
+  it('LAS 1.2 honours gpsStandardTime: false even with GPS time present', () => {
+    const las = writeLas(sampleGlobal({ gpsTime: Float64Array.from([1, 2, 3]) }), { gpsStandardTime: false });
+    expect(enc(las) & 0x1).toBe(0);
+  });
+});
 
 describe('writeLas14 header', () => {
   it('writes a LAS 1.4 header: version, 375-byte size, zero legacy counts, uint64 extended counts', () => {

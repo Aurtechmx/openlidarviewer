@@ -35,6 +35,13 @@ const RECORD_LEN: Record<number, number> = { 0: 20, 1: 28, 2: 26, 3: 34 };
 const RECORD_LEN_14: Record<number, number> = { 6: 30, 7: 36 };
 /** Global-encoding bit 4 — declares the CRS VLR is OGC WKT (LAS 1.4 §2.2). */
 const GLOBAL_ENCODING_WKT = 0x10;
+/**
+ * Global-encoding bit 0 — GPS Time Type. Set ⇒ the `gpsTime` field is Adjusted
+ * Standard GPS Time; clear ⇒ GPS Week Time (the obsolete pre-2011 convention).
+ * Every COPC / 3DEP / modern LAS source this app reads uses Adjusted Standard,
+ * so writing the bit clear (the old default) mislabelled the time semantics.
+ */
+const GLOBAL_ENCODING_GPS_STANDARD = 0x1;
 
 export interface WriteLasOptions {
   /** EPSG to record in a GeoKeyDirectory VLR. Omitted → no CRS VLR. */
@@ -51,6 +58,13 @@ export interface WriteLasOptions {
   readonly verticalEpsg?: number | null;
   /** Quantisation scale per axis. Defaults: projected 0.001, geographic 1e-7. */
   readonly scale?: [number, number, number];
+  /**
+   * Whether the written `gpsTime` is Adjusted Standard GPS Time (sets
+   * global-encoding bit 0). Defaults to `true` — the convention of every modern
+   * source this app reads. Set `false` only for genuine legacy GPS Week Time.
+   * No effect when the chosen point format carries no GPS time.
+   */
+  readonly gpsStandardTime?: boolean;
 }
 
 /** LAS 1.4 options: everything LAS 1.2 takes, plus the OGC WKT CRS payload. */
@@ -257,7 +271,11 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   // ── Public Header Block ────────────────────────────────────────────────
   writeFixedString(bytes, 0, 4, 'LASF');
   view.setUint16(4, 0, true); // file source id
-  view.setUint16(6, 0, true); // global encoding (GPS week time)
+  // Global encoding bit 0 = GPS Time Type: set ⇒ Adjusted Standard GPS Time
+  // (the modern default), clear ⇒ GPS Week Time. Only meaningful when this
+  // format actually carries GPS time (1 / 3).
+  const gpsStd12 = g.gpsTime != null && (opts.gpsStandardTime ?? true);
+  view.setUint16(6, gpsStd12 ? GLOBAL_ENCODING_GPS_STANDARD : 0, true);
   // 8..23 Project ID GUID — left zero.
   view.setUint8(24, 1); // version major
   view.setUint8(25, 2); // version minor (LAS 1.2)
@@ -359,7 +377,10 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   view.setUint16(4, 0, true); // file source id
   // Global encoding: bit 4 declares the CRS VLR is OGC WKT — required by the
   // spec for point formats 6+, but only settable when we actually have WKT.
-  view.setUint16(6, wkt != null ? GLOBAL_ENCODING_WKT : 0, true);
+  // Bit 0 = GPS Time Type: formats 6+ always carry GPS time, so declare Adjusted
+  // Standard GPS Time (the modern convention) unless a caller opts out.
+  const gpsBit14 = (opts.gpsStandardTime ?? true) ? GLOBAL_ENCODING_GPS_STANDARD : 0;
+  view.setUint16(6, (wkt != null ? GLOBAL_ENCODING_WKT : 0) | gpsBit14, true);
   // 8..23 Project ID GUID — left zero.
   view.setUint8(24, 1); // version major
   view.setUint8(25, 4); // version minor (LAS 1.4)
