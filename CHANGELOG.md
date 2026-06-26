@@ -2,12 +2,51 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.5.0] - 2026-06-21
+## [0.5.0] - 2026-06-26
 
-Opens the v0.5 line (Measure · Place · Compare · Share), much of which landed
-incrementally across 0.4.x — point snapping, KML export, the Layers panel
-(isolate / lock / CRS-mismatch flagging), two-epoch change detection, and the
-clip box. This release also carries the fixes below.
+Opens the v0.5 line (Measure · Place · Compare · Share): point snapping, KML
+export, the Layers panel (isolate / lock / CRS-mismatch flagging), two-epoch
+change detection, and the clip box. The line also gained a full-cloud quality
+grade for streaming scans, an Evidence Capsule that carries trust grades inside
+the shared session, per-measurement honesty grading, and a substantial
+correctness, units, performance, and security hardening pass.
+
+### Added
+
+- **Full-cloud grade for streaming scans.** Streaming COPC/EPT scans can be
+  graded against a deep octree sample rather than the preview tile — an
+  areal-primary density tier, valid-point tracking, cancel support, and a Z
+  graded in true metres via the vertical CRS unit. The grade is discarded if the
+  scan is detached or replaced mid-decode.
+- **Evidence Capsule.** Trust grades and provenance travel inside the shared
+  `.olvsession`, so a re-opened session shows the same honesty assessment it was
+  saved with.
+- **Per-measurement honesty grade.** Each measurement carries a red/yellow/green
+  grade with a "show why" breakdown and a refusal gate when the data can't
+  support the claim.
+- **Instant analysis-on-drop.** Dropping a scan surfaces the most relevant
+  analysis one click away, before any upload.
+- **Unified `.olvsession` open.** One router handles drop-to-open and the
+  open-from-URL path consistently.
+- **Drone capture-type classification** for dense low-altitude UAV flights, with
+  capture-type confidence surfaced.
+- **Elevation-difference export** (`.asc`) that honours the active clip box, plus
+  three roadmap on-ramps (3D Tiles guidance, COPC conversion, co-registration
+  checklist).
+
+### Performance
+
+- **EPT laszip tiles decode in a dedicated worker**, off the main thread —
+  mirroring the COPC decode worker (request-id multiplexing, abort, stale-reply
+  drop), with an in-process fallback and a browser round-trip e2e.
+- **ClipPanel edits are debounced** and the **per-cloud health check is
+  memoised**, so editing the clip extents or refreshing the Inspector no longer
+  re-runs O(N) work on every keystroke.
+- **Full-cloud grade streams into one buffer** instead of chunks plus a merged
+  copy; the session parser, the measurement/KML exporters, and two-epoch change
+  detection are lazy-loaded off the initial bundle; export downloads copy the
+  payload only when it is a partial view; the default streaming point budget is
+  trimmed to 2.5M and EDL is suspended while the camera moves.
 
 ### Fixed
 
@@ -23,6 +62,21 @@ clip box. This release also carries the fixes below.
   state during construction, which fired before the deferred 3D viewer existed
   and raised an uncaught error on every page load. The clear is now a no-op
   until a scan is open, matching every other startup-reachable viewer action.
+- **Units reported in true metres.** Lasso volume, the scan report, scan-story
+  footprint area, and change-detection cut/fill now convert from the source
+  CRS's native units to metres (and m²/m³) instead of reporting raw projected
+  units; per-axis slope on geographic grids applies the cos φ longitude factor.
+- **Horizontal datum resolved once, never downgrading.** The datum is derived a
+  single time and a known datum is never replaced by a coarser guess.
+- **COPC RGB bit-depth decided once per file**, not per chunk, so colour can't
+  shift between octree nodes; the EPT laszip path unifies the same way.
+- **EPT laszip worker URL stays readable in the shipped build.** The obfuscated
+  bundle's string transform could scramble the worker URL into a 404; the worker
+  client is now excluded from that transform and both chunks are pinned.
+- **A non-finite coordinate can no longer blow `PointCloud` bounds to infinity**;
+  GPS Standard Time is declared in converted LAS global encoding; the streaming
+  colour ramp seeds from the coarsest node; the shared parse-worker is serialised
+  across concurrent loads; two epochs are aligned by origin before differencing.
 
 ### Changed
 
@@ -33,6 +87,15 @@ clip box. This release also carries the fixes below.
   shared the decode direction; the encode direction is now converged too, so
   the provenance card and the neighbourhood splat can no longer drift from
   the curve the GPU upload uses.
+
+### Security
+
+- **Enforcing Content-Security-Policy** (`script-src 'self' 'wasm-unsafe-eval'`,
+  `style-src 'self' 'unsafe-inline'`) shipped in both `.htaccess` and `_headers`,
+  backed by an `unsafeHtml` injection-sink lint guard wired into CI.
+- **Supply-chain hardening.** loaders.gl is pinned to local workers (no CDN
+  fetch), and the CI workflows run with least-privilege permissions and bounded,
+  capped test buckets.
 
 ## [0.4.9] - 2026-06-20
 
