@@ -3267,6 +3267,24 @@ if (testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
+      // EPT laszip decode-worker round-trip — the one path no other e2e
+      // exercises end-to-end in a real browser: the lazy worker-client chunk
+      // load, `new Worker(new URL(...))` URL resolution (the seam the live
+      // source-transform can scramble), laz-perf WASM init inside the worker,
+      // decode of a complete LAZ tile, and the zero-copy transfer back.
+      // Returns the decoded point count so the spec can assert against the
+      // known fixture. Owns and disposes its own worker — never touches
+      // viewer state.
+      decodeEptLaszipTileInWorker: async (tile: ArrayBuffer): Promise<number> => {
+        const { EptLaszipWorkerClient } = await loadEptLaszipWorkerClient();
+        const client = new EptLaszipWorkerClient();
+        try {
+          const decoded = await client.decodeTile(tile, [0, 0, 0]);
+          return decoded.pointCount;
+        } finally {
+          client.dispose();
+        }
+      },
     };
     // Diagnostic so a stray production page with the flag still shows
     // up in the console — discourages anyone from depending on it
