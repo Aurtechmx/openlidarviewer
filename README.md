@@ -407,9 +407,14 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.4.9**. The full, dated history is in
+The current release is **v0.5.0**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.5.0 — Measure · Place · Compare · Share
+- The **v0.5 line**: measure tools that **snap** to real returns or to placed geometry, **KML export** of annotations/measurements/views for georeferenced scans, a **Layers** panel (show/hide, isolate, lock, CRS-mismatch flagging), **two-epoch change detection** (cut/fill with co-registration honesty), and a **clip box**
+- A **full-cloud quality grade** for streaming scans (deep octree sample, areal-primary density tier, cancel, vertical-unit-aware Z), an **Evidence Capsule** that carries trust grades inside the shared `.olvsession`, **per-measurement honesty grading** (red/yellow/green + show-why + refusal), and **instant analysis-on-drop**
+- A broad hardening pass: **EPT laszip tiles decode in a dedicated worker**, units reported in **true metres** (lasso volume, scan report, change detection, geographic-grid slope), **horizontal datum resolved once and never downgraded**, **COPC RGB bit-depth decided once per file**, an **enforcing Content-Security-Policy** + injection-sink lint guard, and lazy-loading of the session parser, exporters, and change-detection off the initial bundle
 
 ### v0.4.9 — Data Fitness scorecard, file-scale honesty & a leaner deploy
 - The **Data Fitness scorecard** leads the Analyse panel — one plain verdict plus a six-row traffic-light scorecard (Location & height, Coverage, Ground detail, Vertical accuracy, Classification, Integrity) with shape-distinct glyphs and a USGS Quality Level badge shown only when earned; the panel is de-duplicated so each fact has a single home
