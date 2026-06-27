@@ -153,6 +153,7 @@ import {
   type ClassEditResult,
 } from './measure/classificationEditor';
 import { ClassEditHistory, recordEdit } from './measure/classEditHistory';
+import { ClassificationEpochs } from './measure/classificationEpoch';
 import {
   getPreset,
   type PresetId,
@@ -1953,6 +1954,7 @@ export class Viewer {
     // Drop the per-cloud undo / highlight snapshots too — without this the
     // maps retain full-size buffers for every cloud ever removed (leak).
     this._classHistory.delete(id);
+    this._classEpochs.forget(id);
     this._selectionSnapshots.delete(id);
     // Refresh the orbit-clamp envelope so removing the last static cloud
     // doesn't leave the camera clamping to its ghost bounds.
@@ -2593,6 +2595,17 @@ export class Viewer {
   /** Per-cloud multi-step classification undo/redo history (delta-based). */
   private readonly _classHistory = new Map<string, ClassEditHistory>();
 
+  /** Per-cloud edit epochs so stale analysis/grade/exports can be detected. */
+  private readonly _classEpochs = new ClassificationEpochs();
+
+  /**
+   * Fires after any classification edit (swap / reclassify / undo / redo) that
+   * actually changed points, with the cloud id. The analysis runner subscribes
+   * to invalidate its terrain-core cache and re-grade, so a manual edit never
+   * leaves a stale bare-earth surface or grade on screen.
+   */
+  onClassificationEdited?: (id: string) => void;
+
   private _historyFor(id: string): ClassEditHistory {
     let h = this._classHistory.get(id);
     if (!h) {
@@ -2600,6 +2613,21 @@ export class Viewer {
       this._classHistory.set(id, h);
     }
     return h;
+  }
+
+  private _markClassificationEdited(id: string): void {
+    this._classEpochs.bump(id);
+    this.onClassificationEdited?.(id);
+  }
+
+  /** The cloud's classification edit epoch (0 = never edited). */
+  classificationEpoch(id: string): number {
+    return this._classEpochs.current(id);
+  }
+
+  /** Whether a result stamped at `epoch` was invalidated by a later edit. */
+  isClassificationStale(id: string, epoch: number): boolean {
+    return this._classEpochs.isStale(id, epoch);
   }
 
   /**
@@ -2620,7 +2648,10 @@ export class Viewer {
     recordEdit(this._historyFor(id), buf, () => {
       result = applyClassSwap(buf, fromClass, toClass);
     });
-    if (result.changedCount > 0) this._refreshClassificationColours(id);
+    if (result.changedCount > 0) {
+      this._refreshClassificationColours(id);
+      this._markClassificationEdited(id);
+    }
     return result;
   }
 
@@ -2660,7 +2691,10 @@ export class Viewer {
         includeIf,
       });
     });
-    if (result.changedCount > 0) this._refreshClassificationColours(id);
+    if (result.changedCount > 0) {
+      this._refreshClassificationColours(id);
+      this._markClassificationEdited(id);
+    }
     return result;
   }
 
@@ -2675,6 +2709,7 @@ export class Viewer {
     if (!entry || !entry.cloud.classification || !h || !h.canUndo) return false;
     h.undo(entry.cloud.classification);
     this._refreshClassificationColours(id);
+    this._markClassificationEdited(id);
     return true;
   }
 
@@ -2689,6 +2724,7 @@ export class Viewer {
     if (!entry || !entry.cloud.classification || !h || !h.canRedo) return false;
     h.redo(entry.cloud.classification);
     this._refreshClassificationColours(id);
+    this._markClassificationEdited(id);
     return true;
   }
 
@@ -4493,6 +4529,7 @@ export class Viewer {
     // `removeCloud` drops each cloud's snapshots, but clear both maps
     // outright in case a snapshot ever outlived its cloud entry.
     this._classHistory.clear();
+    this._classEpochs.clear();
     this._selectionSnapshots.clear();
     this.detachStreamingCloud();
     this._nav.dispose();

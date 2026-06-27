@@ -2574,6 +2574,15 @@ const terrainRunner = createTerrainAnalysisRunner({
   },
 });
 
+// Honesty guard: a manual classification edit changes the bare-earth surface, so
+// any cached terrain core / on-screen grade computed from the old classes is now
+// stale. Drop the cache (and abort any in-flight compute) the moment an edit
+// lands, so the next Analyse recomputes against the edited classes instead of
+// serving a number that silently no longer matches what's on screen.
+void viewerLoaded.then((v) => {
+  v.onClassificationEdited = () => terrainRunner.abortAndClearCache();
+});
+
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
 // local file at full resolution (the viewer keeps only the display-reduced
 // cloud for large scans). Streamed/remote scans have no entry here.
