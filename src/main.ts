@@ -2637,6 +2637,23 @@ const exportPanel = new ExportPanel({
     const stem = cloud ? baseName(cloud.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
+  exportSignedReport: async () => {
+    if (!viewer) return;
+    const ms = viewer.measure.getMeasurements();
+    if (ms.length === 0) return;
+    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    const { signedReportFile } = await import('./export/measurementReport');
+    const f = signedReportFile(
+      ms,
+      viewer.measure.worldUp,
+      viewer.measure.unitToMetres,
+      cloud ? baseName(cloud.name) : 'scan',
+      cloud?.metadata?.crs?.name,
+      new Date().toISOString(),
+      activeId ? viewer.classificationEpoch(activeId) : 0,
+    );
+    downloadText(f.filename, f.text);
+  },
   exportKml: async () => {
     if (!viewer) return;
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;

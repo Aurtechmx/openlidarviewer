@@ -34,6 +34,12 @@ export interface ExportPanelCallbacks {
   /** Export the placed measurements to an open format (GeoJSON / CSV). */
   exportMeasurements?: (format: 'geojson' | 'csv') => void;
   /**
+   * Export a signed, tamper-evident report (JSON) — the placed measurements as
+   * findings, stamped with dataset provenance + the classification epoch + a
+   * verifiable signature. Wired alongside {@link exportMeasurements}.
+   */
+  exportSignedReport?: () => void;
+  /**
    * Export a site KML (annotations + measurements + viewpoints) for Google
    * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
    */
@@ -365,6 +371,19 @@ export class ExportPanel {
       btn.addEventListener('click', () => this._cb.exportMeasurements?.(fmt));
       row.append(btn);
     });
+    // Signed, tamper-evident report (JSON) — the same measurements, but stamped
+    // with provenance + a verifiable signature. The honest deliverable.
+    if (this._cb.exportSignedReport) {
+      const btn = el('button', {
+        className: 'olv-bc-pill',
+        type: 'button',
+        text: 'Signed report',
+      }) as HTMLButtonElement;
+      btn.disabled = count === 0;
+      btn.setAttribute('data-testid', 'export-signed-report');
+      btn.addEventListener('click', () => this._cb.exportSignedReport?.());
+      row.append(btn);
+    }
 
     const hint =
       count === 0
