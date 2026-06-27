@@ -1,10 +1,13 @@
 # OpenLiDARViewer
 
 [![CI](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/aurtechmx/openlidarviewer/releases/latest)
+[![Live demo](https://img.shields.io/badge/live%20demo-lidar.aurtech.mx-19C2D8)](https://lidar.aurtech.mx/)
 ![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
 ![Rendering](https://img.shields.io/badge/rendering-WebGL%20%2F%20WebGPU-blue)
 ![Privacy](https://img.shields.io/badge/privacy-local--first-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+[![Stars](https://img.shields.io/github/stars/aurtechmx/openlidarviewer?style=flat&color=f5c518)](https://github.com/aurtechmx/openlidarviewer/stargazers)
 
 ![OpenLiDARViewer — point-cloud exploration without the desktop overhead](docs/screenshots/openlidarviewer-promo.jpg)
 
@@ -15,6 +18,10 @@ Local-first. Cited. Honest about what it can't tell you.
 **Live version: [https://lidar.aurtech.mx/](https://lidar.aurtech.mx/)**
 
 **New here? Read the [User Guide](docs/USER_GUIDE.md)** — open a scan, measure, analyse terrain, compare two scans, and share your work, with nothing uploaded.
+
+### Try it in 10 seconds
+
+No install, no account, no upload. Open **[lidar.aurtech.mx](https://lidar.aurtech.mx/)**, then drag a `.las`, `.laz`, or `.copc.laz` file (or paste a remote COPC / `ept.json` URL) onto the page. You're navigating the cloud in your browser, and the file never leaves your device.
 
 ---
 
@@ -513,6 +520,26 @@ OpenLiDARViewer is an active R&D-stage project focused on lightweight visualizat
 - Eye Dome Lighting is a screen-space depth cue, not physically-based lighting; it is off by default on the WebGL 2 fallback and on mobile.
 
 Full detail is in [`docs/limitations.md`](docs/limitations.md).
+
+## FAQ
+
+**Can I view LAS / LAZ / COPC files in the browser?**
+Yes. Drag a `.las`, `.laz`, or `.copc.laz` onto [lidar.aurtech.mx](https://lidar.aurtech.mx/), or paste a remote COPC / `ept.json` URL. No install, no plugin.
+
+**Is my data uploaded anywhere?**
+No. Files are read and rendered locally in your browser. The only network calls are for remote datasets you choose to open; your local files never leave your device.
+
+**What's the largest scan it can open?**
+Local files are bounded by browser memory and GPU. For very large datasets, stream them as COPC (local or remote) or convert with PDAL / Entwine — streaming only loads the resident set the camera needs.
+
+**Which formats are supported?**
+LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; COPC and EPT for streaming. See [Supported / Target Formats](#supported--target-formats).
+
+**Is it survey-grade?**
+No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Validate against ground control where accuracy matters.
+
+**Does it need WebGPU?**
+No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 ## Contributing
 
