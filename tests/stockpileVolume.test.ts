@@ -99,6 +99,33 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(r.caveats.join(' ')).toMatch(/indicative, not measured/i);
   });
 
+  test('a sloped ground apron widens the band vs a flat apron (systematic base mis-fit)', () => {
+    const size = 10;
+    const step = 0.25;
+    const pile = (x: number, y: number): number => (Math.hypot(x - 5, y - 5) < 3 ? 3 : 0);
+    const flat = stockpileVolume({
+      polygon: squareFootprint(size),
+      positions: grid(size, step, (x, y) => pile(x, y)), // flat z=0 apron + pile
+      base: { mode: 'lowest-percentile', percentile: 0.05 },
+    });
+    const sloped = stockpileVolume({
+      polygon: squareFootprint(size),
+      // Same pile, but the apron ramps 0→2 m across x — a single horizontal base
+      // is now systematically wrong, biasing every thickness the same way.
+      positions: grid(size, step, (x, y) => (x / size) * 2 + pile(x, y)),
+      base: { mode: 'lowest-percentile', percentile: 0.05 },
+    });
+    expect(flat.validity).toBe('ok');
+    expect(sloped.validity).toBe('ok');
+    // Flat apron ⇒ clean base ⇒ near-zero base-plane error. Sloped apron ⇒ the
+    // systematic mis-fit term kicks in ⇒ strictly larger base error and band.
+    expect(sloped.breakdown.baseUncertainty).toBeGreaterThan(
+      flat.breakdown.baseUncertainty + 0.1,
+    );
+    expect(sloped.breakdown.basePlaneError).toBeGreaterThan(flat.breakdown.basePlaneError);
+    expect(sloped.sigma).toBeGreaterThan(flat.sigma);
+  });
+
   test('a degenerate (collinear) footprint returns zeros, not a fake number', () => {
     const r = stockpileVolume({
       polygon: [

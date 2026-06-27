@@ -173,12 +173,32 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     } else {
       const sorted = Float64Array.from(insideHeights).sort();
       baseZ = percentileSorted(sorted, basePct);
-      // Base-height noise: spread of the "ground band" — the lowest 25% of
-      // inside heights, the points that actually sit on the surrounding
-      // ground. Its std is how flat/clean the base we're resting the pile
-      // on really is. A noisy or sloped apron widens the band honestly.
+      // Base-plane uncertainty has TWO parts, and the band is only honest if it
+      // carries both:
+      //
+      //   1. Random scatter — the std of the "ground band" (lowest 25% of inside
+      //      heights, the points sitting on the surrounding ground). How noisy
+      //      the apron is.
+      //   2. Systematic mis-fit — a single HORIZONTAL base under sloped or
+      //      uneven ground biases EVERY thickness the same direction, so it
+      //      cannot be averaged away by more points (a Type-B systematic term in
+      //      GUM language). Point scatter alone misses it. We bound it by how far
+      //      the representative ground level — the ground band's MEAN — sits
+      //      above the chosen low-percentile base: the amount the flat base is
+      //      systematically too low across the footprint. Flat ground ⇒ this gap
+      //      ≈ 0 and scatter governs; a sloped apron ⇒ it dominates, widening the
+      //      band honestly instead of reporting a confidently-narrow number.
+      //
+      // Take the larger of the two so the systematic term sets a floor the
+      // random term can never shrink below.
       const groundCount = Math.max(1, Math.floor(sorted.length * 0.25));
-      baseUncertainty = stdDev(sorted.subarray(0, groundCount));
+      const groundBand = sorted.subarray(0, groundCount);
+      const groundScatter = stdDev(groundBand);
+      let groundSum = 0;
+      for (let i = 0; i < groundBand.length; i++) groundSum += groundBand[i];
+      const groundMean = groundSum / groundBand.length;
+      const baseBias = Math.max(0, groundMean - baseZ);
+      baseUncertainty = Math.max(groundScatter, baseBias);
     }
   }
 
