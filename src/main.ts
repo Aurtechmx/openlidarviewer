@@ -468,7 +468,11 @@ let pendingLassoSave: {
 const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
   onCommit: (lasso) => {
     if (!viewer) return;
-    const out = viewer.computeLassoVolume(lasso, 0.05);
+    // Native→metre factor for the source CRS (feet for a state-plane-feet
+    // cloud). Handed to computeLassoVolume so the stockpile band it returns is
+    // already converted to metres, and reused below for the m³/m² readout.
+    const lin = crsService.current()?.linearUnitToMetres ?? 1;
+    const out = viewer.computeLassoVolume(lasso, 0.05, lin);
     if (out === null) {
       pendingLassoSave = null;
       showLassoToast('Lasso volume — no points selected. Draw around a denser region.');
@@ -483,12 +487,11 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     lassoVolumeTool.disable();
     viewer.setLassoMode(false);
     syncLassoButton();
-    // The lasso result is in the source CRS's native linear units (feet for a
-    // state-plane-feet cloud). Convert to metres before stamping m³ / m² —
-    // areas by lin², volumes by lin³ — the same factor the measure tool uses.
-    // (The CRS gate below still blocks geographic / unknown; this corrects the
-    // remaining projected-feet case the gate lets through.)
-    const lin = crsService.current()?.linearUnitToMetres ?? 1;
+    // The lasso result is in the source CRS's native linear units. Convert to
+    // metres before stamping m³ / m² — areas by lin², volumes by lin³ — the
+    // same factor the measure tool uses. (The CRS gate below still blocks
+    // geographic / unknown; this corrects the projected-feet case it lets
+    // through.)
     const lin2 = lin * lin;
     const lin3 = lin2 * lin;
     const fillM3 = (out.result.fill * lin3).toFixed(2);
@@ -527,9 +530,13 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       crsVerdict.validity === 'safe-explicit-local'
         ? ' · units assumed metres'
         : '';
+    // `out.stockpileSuffix` is the ` · Stockpile: … ± … (±%) · confidence`
+    // band the Viewer computed over the same sample with a "lowest ground"
+    // base plane — the honest figure cloud viewers report without. Empty when
+    // there's nothing trustworthy to claim (too few points / degenerate).
     showLassoToast(
       `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat}.`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat}.${out.stockpileSuffix}`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,

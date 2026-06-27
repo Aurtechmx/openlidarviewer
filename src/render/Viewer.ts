@@ -77,6 +77,7 @@ import {
   selectByLasso,
   volumeFromLassoWithFootprint,
 } from './measure/lassoVolume';
+import { stockpileToastSuffix } from './measure/stockpilePresenter';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -96,6 +97,14 @@ import {
 export interface LassoVolumeReturn {
   /** Cut / fill / footprint computed against the selected 3D points. */
   readonly result: VolumeResult;
+  /**
+   * The stockpile band suffix for the toast: ` · Stockpile: V ± σ (±%) ·
+   * confidence`, re-graded over the same selected sample with a "lowest
+   * ground" base plane and converted to metres via the `lin` factor passed to
+   * {@link Viewer.computeLassoVolume}. Empty when there's nothing trustworthy
+   * to claim (too few points / degenerate footprint).
+   */
+  readonly stockpileSuffix: string;
   /** Number of cloud points that fell inside the lasso. */
   readonly selectedCount: number;
   /** The lasso path the user drew (echoed back for the report card). */
@@ -3095,10 +3104,14 @@ export class Viewer {
    *   0..clientHeight). At least 3 vertices required.
    * @param percentile - Reference-plane percentile in `[0, 1]`.
    *   Defaults to 0.05 — bottom 5 % of selected Z values is "ground".
+   * @param lin - `linearUnitToMetres` for the source CRS, used to convert the
+   *   returned {@link LassoVolumeReturn.stockpileSuffix} band into metres.
+   *   Defaults to 1 (native units already metres).
    */
   computeLassoVolume(
     lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>,
     percentile: number = 0.05,
+    lin: number = 1,
   ): LassoVolumeReturn | null {
     if (lasso.length < 3) return null;
 
@@ -3230,6 +3243,11 @@ export class Viewer {
     });
     return {
       result: lassoOut.result,
+      stockpileSuffix: stockpileToastSuffix(
+        lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
+        selectedPositions,
+        lin,
+      ),
       selectedCount: totalSelected,
       lasso,
       selectionByCloudId,
