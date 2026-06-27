@@ -150,10 +150,9 @@ import { volumeCutFill } from './measure/volume';
 import {
   applyClassSwap,
   applyPolygonReclassify,
-  snapshotClassification,
-  restoreClassification,
   type ClassEditResult,
 } from './measure/classificationEditor';
+import { ClassEditHistory, recordEdit } from './measure/classEditHistory';
 import {
   getPreset,
   type PresetId,
@@ -1953,7 +1952,7 @@ export class Viewer {
     this._clouds.delete(id);
     // Drop the per-cloud undo / highlight snapshots too — without this the
     // maps retain full-size buffers for every cloud ever removed (leak).
-    this._classSnapshots.delete(id);
+    this._classHistory.delete(id);
     this._selectionSnapshots.delete(id);
     // Refresh the orbit-clamp envelope so removing the last static cloud
     // doesn't leave the camera clamping to its ghost bounds.
@@ -2591,7 +2590,17 @@ export class Viewer {
    * to the state before the FIRST unconfirmed edit, which matches the
    * undo semantics for the measurement tools.
    */
-  private readonly _classSnapshots = new Map<string, Uint8Array>();
+  /** Per-cloud multi-step classification undo/redo history (delta-based). */
+  private readonly _classHistory = new Map<string, ClassEditHistory>();
+
+  private _historyFor(id: string): ClassEditHistory {
+    let h = this._classHistory.get(id);
+    if (!h) {
+      h = new ClassEditHistory();
+      this._classHistory.set(id, h);
+    }
+    return h;
+  }
 
   /**
    * Globally rewrite every point whose classification is `fromClass` to
@@ -2604,11 +2613,13 @@ export class Viewer {
     if (!entry || !entry.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
-    // Snapshot once before the FIRST mutation; subsequent edits coalesce.
-    if (!this._classSnapshots.has(id)) {
-      this._classSnapshots.set(id, snapshotClassification(entry.cloud.classification));
-    }
-    const result = applyClassSwap(entry.cloud.classification, fromClass, toClass);
+    const buf = entry.cloud.classification;
+    // Record the edit as a delta so it can be undone independently of any
+    // prior edit (real multi-step history, not a single coalesced snapshot).
+    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
+    recordEdit(this._historyFor(id), buf, () => {
+      result = applyClassSwap(buf, fromClass, toClass);
+    });
     if (result.changedCount > 0) this._refreshClassificationColours(id);
     return result;
   }
@@ -2638,33 +2649,57 @@ export class Viewer {
     if (!entry || !entry.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
-    if (!this._classSnapshots.has(id)) {
-      this._classSnapshots.set(id, snapshotClassification(entry.cloud.classification));
-    }
-    const result = applyPolygonReclassify({
-      classification: entry.cloud.classification,
-      positions: entry.cloud.positions,
-      polygon,
-      newClass,
-      includeIf,
+    const buf = entry.cloud.classification;
+    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
+    recordEdit(this._historyFor(id), buf, () => {
+      result = applyPolygonReclassify({
+        classification: buf,
+        positions: entry.cloud.positions,
+        polygon,
+        newClass,
+        includeIf,
+      });
     });
     if (result.changedCount > 0) this._refreshClassificationColours(id);
     return result;
   }
 
   /**
-   * Revert the cloud's classification buffer to the pre-edit snapshot, if
-   * one exists. Returns true on success, false when there's nothing to
-   * undo. Clears the snapshot so a subsequent edit takes a new one.
+   * Undo the most recent classification edit on this cloud. Returns true on
+   * success, false when there's nothing to undo. Steps back one edit at a
+   * time; a subsequent {@link redoClassification} re-applies it.
    */
   undoClassification(id: string): boolean {
     const entry = this._clouds.get(id);
-    const snap = this._classSnapshots.get(id);
-    if (!entry || !entry.cloud.classification || !snap) return false;
-    restoreClassification(entry.cloud.classification, snap);
-    this._classSnapshots.delete(id);
+    const h = this._classHistory.get(id);
+    if (!entry || !entry.cloud.classification || !h || !h.canUndo) return false;
+    h.undo(entry.cloud.classification);
     this._refreshClassificationColours(id);
     return true;
+  }
+
+  /**
+   * Redo the most recently undone classification edit. Returns true on
+   * success, false when the redo branch is empty (nothing undone, or a fresh
+   * edit cleared it).
+   */
+  redoClassification(id: string): boolean {
+    const entry = this._clouds.get(id);
+    const h = this._classHistory.get(id);
+    if (!entry || !entry.cloud.classification || !h || !h.canRedo) return false;
+    h.redo(entry.cloud.classification);
+    this._refreshClassificationColours(id);
+    return true;
+  }
+
+  /** Whether the cloud has a classification edit that can be undone. */
+  canUndoClassification(id: string): boolean {
+    return this._classHistory.get(id)?.canUndo ?? false;
+  }
+
+  /** Whether the cloud has an undone classification edit that can be redone. */
+  canRedoClassification(id: string): boolean {
+    return this._classHistory.get(id)?.canRedo ?? false;
   }
 
   /**
@@ -4457,7 +4492,7 @@ export class Viewer {
     }
     // `removeCloud` drops each cloud's snapshots, but clear both maps
     // outright in case a snapshot ever outlived its cloud entry.
-    this._classSnapshots.clear();
+    this._classHistory.clear();
     this._selectionSnapshots.clear();
     this.detachStreamingCloud();
     this._nav.dispose();
