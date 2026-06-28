@@ -56,13 +56,13 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   }
   select.value = '2'; // default to Ground
 
-  const mkBtn = (text: string, testid: string): HTMLButtonElement => {
-    const b = el('button', { className: 'olv-bc-pill', text }) as HTMLButtonElement;
+  const mkBtn = (text: string, testid: string, extra = ''): HTMLButtonElement => {
+    const b = el('button', { className: `olv-bc-pill${extra ? ' ' + extra : ''}`, text }) as HTMLButtonElement;
     b.type = 'button';
     b.setAttribute('data-testid', testid);
     return b;
   };
-  const armBtn = mkBtn('Reclassify (lasso)', 'reclass-arm');
+  const armBtn = mkBtn('Reclassify (lasso)', 'reclass-arm', 'olv-reclass-go');
   const undoBtn = mkBtn('Undo', 'reclass-undo');
   const redoBtn = mkBtn('Redo', 'reclass-redo');
 
@@ -123,10 +123,14 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     redoBtn.disabled = !(v && id && v.canRedoClassification(id));
   }
 
+  // Full-width rows: header, the target-class select, the primary reclassify
+  // action, then an undo/redo pair — so the action label never shares a row
+  // with the wide select (which clipped it in the cramped left dock).
   const element = el('div', { className: 'olv-reclass-panel' }, [
     el('div', { className: 'olv-reclass-head', text: 'Edit classes' }),
-    el('div', { className: 'olv-bc-pills' }, [select, armBtn]),
-    el('div', { className: 'olv-bc-pills' }, [undoBtn, redoBtn]),
+    select,
+    armBtn,
+    el('div', { className: 'olv-reclass-actions' }, [undoBtn, redoBtn]),
   ]);
   refresh();
 
