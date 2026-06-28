@@ -2,6 +2,51 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.1] - 2026-06-28
+
+Deepens the honesty moat. Stockpile/earthworks volume now reports an auditable
+confidence band, manual classification editing lands end-to-end (class picker,
+lasso reclassify, multi-step undo/redo), and measurements export as a
+tamper-evident signed report. Adds two-epoch change-detection uncertainty and
+edit-aware provenance so an edited classification can never silently outlive the
+numbers computed from it.
+
+### Added
+
+- **Stockpile / earthworks volume with a confidence band.** The lasso volume
+  readout carries a ± band that states its own uncertainty — a sampling-error
+  term (area·σ/√N) and a systematic base-plane term (a single horizontal base
+  under sloped ground biases every thickness the same direction) combined in
+  quadrature — plus a show-the-math breakdown and honest caveats.
+- **Manual classification editing.** A class picker and a lasso-reclassify tool
+  with real multi-step undo/redo, lazy-loaded beside the classification legend.
+  Edits mutate the live class channel, so they round-trip straight into LAS
+  export.
+- **Tamper-evident signed report.** Placed measurements export as a JSON report
+  whose findings, dataset provenance, and classification edit-epoch are folded
+  into a verifiable signature (deterministic canonical hashing; FNV-1a built in,
+  SHA-256 injectable). Altering any figure breaks verification.
+- **Two-epoch change-detection uncertainty.** A volume-change ± band (random
+  cell noise that averages as √N plus a systematic co-registration term) that
+  also reports whether the net change exceeds its own error — never presenting
+  noise as a confident gain or loss.
+
+### Changed
+
+- **Classification edits invalidate stale analysis.** Each edit (swap,
+  reclassify, undo, redo) bumps a per-cloud edit epoch and drops the
+  terrain-core cache, so the next Analyse recomputes against the edited classes
+  instead of serving a grade that no longer matches the cloud.
+
+### Fixed
+
+- **Stockpile base-plane honesty.** Base uncertainty now models the systematic
+  mis-fit of a flat base under sloped ground, not just point scatter — a sloped
+  apron honestly widens the band instead of reporting a confidently-narrow
+  number.
+- **Sampling-error self-consistency.** The √N in the stockpile sampling error is
+  taken over the same finite inside-height population its σ is computed on.
+
 ## [0.5.0] - 2026-06-26
 
 Opens the v0.5 line (Measure · Place · Compare · Share): point snapping, KML

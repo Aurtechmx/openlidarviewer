@@ -414,9 +414,14 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.0**. The full, dated history is in
+The current release is **v0.5.1**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.5.1 — Auditable volume · classification editing · signed reports
+- **Stockpile / earthworks volume with a confidence band** — the lasso volume readout states its own uncertainty (sampling error + a systematic base-plane term, combined in quadrature) with a show-the-math breakdown and honest caveats
+- **Manual classification editing** end-to-end: a class picker + **lasso-reclassify** tool with real **multi-step undo/redo**; edits mutate the live class channel and round-trip straight into LAS export, and they bump a per-cloud **edit epoch** that invalidates any stale analysis/grade
+- **Tamper-evident signed report** — measurements export as a JSON report whose findings, provenance, and classification edit-epoch are hashed into a verifiable signature, plus a **two-epoch change-detection band** that reports whether a change even exceeds its own error
 
 ### v0.5.0 — Measure · Place · Compare · Share
 - The **v0.5 line**: measure tools that **snap** to real returns or to placed geometry, **KML export** of annotations/measurements/views for georeferenced scans, a **Layers** panel (show/hide, isolate, lock, CRS-mismatch flagging), **two-epoch change detection** (cut/fill with co-registration honesty), and a **clip box**
