@@ -34,7 +34,7 @@ import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
-import { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
+import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
@@ -1314,14 +1314,21 @@ const crsCoordinator = createCrsCoordinator({
 // mounted — and the shortcut / palette entries only registered —
 // when the flag is on.
 const workflowController = new WorkflowController();
-const workflowConfigPanel = new WorkflowConfigPanel();
+// The settings popup is only reachable when the recorder flag is on, so its
+// ~290 lines are lazy-loaded inside that branch instead of shipping in the
+// startup shell (the flag is OFF by default, so it never loads at all).
+let workflowConfigPanel: WorkflowConfigPanel | null = null;
 if (WORKFLOW_RECORDER_ENABLED) {
   stage.overlay.append(workflowController.badge);
-  stage.overlay.append(workflowConfigPanel.element);
-  // Edits in the settings popup take effect immediately and persist.
-  workflowConfigPanel.onChange((cfg) => {
-    workflowController.setConfig(cfg);
-    persistPrefs();
+  void import('./ui/WorkflowConfigPanel').then(({ WorkflowConfigPanel }) => {
+    const panel = new WorkflowConfigPanel();
+    workflowConfigPanel = panel;
+    stage.overlay.append(panel.element);
+    // Edits in the settings popup take effect immediately and persist.
+    panel.onChange((cfg) => {
+      workflowController.setConfig(cfg);
+      persistPrefs();
+    });
   });
 }
 
@@ -1919,7 +1926,7 @@ function buildActionRegistry(): Action[] {
         section: 'Workflow',
         hint: 'Format, save location, shortcut, replay speed, capture scope.',
         keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
-        run: () => workflowConfigPanel.open(),
+        run: () => workflowConfigPanel?.open(),
       },
     );
   }
@@ -4391,7 +4398,7 @@ function applyPrefs(): void {
   }
   if (p.workflow !== undefined) {
     workflowController.setConfig(p.workflow);
-    workflowConfigPanel.setConfig(p.workflow);
+    workflowConfigPanel?.setConfig(p.workflow);
   }
 }
 
