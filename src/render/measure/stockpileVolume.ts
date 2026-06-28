@@ -230,7 +230,12 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   const stdThk = Math.sqrt(varThk);
 
   const area = v.footprintArea;
-  const samplingError = inN > 0 ? (area * stdThk) / Math.sqrt(inN) : 0;
+  // Standard error of the mean thickness × area. The √N must be taken over the
+  // SAME population the thickness σ was computed on — the `m` finite inside
+  // heights — not `inN` (volumeCutFill's count, which would also include any
+  // non-finite-z inside points). They coincide for finite clouds, but using `m`
+  // keeps σ and √N self-consistent regardless of how volumeCutFill counts.
+  const samplingError = m > 0 ? (area * stdThk) / Math.sqrt(m) : 0;
   const basePlaneError = area * baseUncertainty;
   const sigma = Math.hypot(samplingError, basePlaneError);
 
