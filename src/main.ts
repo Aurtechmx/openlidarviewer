@@ -29,7 +29,7 @@ import {
   type ThemeName,
 } from './ui/themes';
 import type { CommandPalette } from './ui/CommandPalette';
-import { ShortcutSheet } from './ui/ShortcutSheet';
+import type { ShortcutSheet } from './ui/ShortcutSheet';
 import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
@@ -50,6 +50,7 @@ import {
   downloadBytes as downloadFileBytes,
   downloadText,
 } from './io/download';
+import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { summarizeMeasurementTrust } from './render/measure/measurementTrust';
@@ -1338,8 +1339,25 @@ stage.overlay.append(recommendedViewChip.element);
 // v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
 // action registry as the palette so adding a new action makes it
 // discoverable in both surfaces without a second touch.
-const shortcutSheet = new ShortcutSheet();
-stage.overlay.append(shortcutSheet.element);
+// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard
+// shortcuts" action), so it is lazy-loaded on first use to keep its ~250 lines
+// out of the startup shell. Same direct-dynamic-import pattern as the command
+// palette below.
+let shortcutSheet: ShortcutSheet | null = null;
+let shortcutSheetLoading: Promise<ShortcutSheet> | null = null;
+function loadShortcutSheet(): Promise<ShortcutSheet> {
+  if (shortcutSheet) return Promise.resolve(shortcutSheet);
+  if (!shortcutSheetLoading) {
+    shortcutSheetLoading = import('./ui/ShortcutSheet').then(({ ShortcutSheet }) => {
+      const sheet = new ShortcutSheet();
+      stage.overlay.append(sheet.element);
+      sheet.setActions(ACTION_REGISTRY);
+      shortcutSheet = sheet;
+      return sheet;
+    });
+  }
+  return shortcutSheetLoading;
+}
 
 // v0.3.9 — onboarding tour. Mounts the overlay immediately so the
 // SVG / card DOM exists; auto-starts on the first session per
@@ -1447,6 +1465,7 @@ async function runDeriveClassification(): Promise<void> {
     );
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
+    noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
     classLegendPanel.setClasses(countClasses(result.codes));
     // Surface the run's honest confidence + caveats in the legend caption, not
@@ -1531,6 +1550,7 @@ async function runFillUnclassified(): Promise<void> {
     );
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
+    noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
     classLegendPanel.setClasses(countClasses(result.codes));
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
@@ -1883,7 +1903,7 @@ function buildActionRegistry(): Action[] {
     keys: '?',
     hint: 'Every action and key, grouped by section.',
     keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
-    run: () => shortcutSheet.open(),
+    run: () => void loadShortcutSheet().then((sheet) => sheet.open()),
   });
 
   return actions;
@@ -1898,9 +1918,8 @@ if (duplicateActionIds.length > 0) {
     `Command palette: duplicate action ids: ${duplicateActionIds.join(', ')}`,
   );
 }
-// commandPalette.setActions runs in its lazy init (openCommandPalette); the
-// shortcut sheet is eager so it keeps its action list at startup.
-shortcutSheet.setActions(ACTION_REGISTRY);
+// Both the command palette and the shortcut sheet are lazy: each wires
+// ACTION_REGISTRY into its instance during its own first-use init.
 
 // Cmd-K / Ctrl-K toggles the palette. Esc inside the palette closes
 // it (handled internally), so the universal Esc handler below
@@ -1924,7 +1943,7 @@ window.addEventListener('keydown', (e) => {
   // Don't fight a chord — only the bare `?` (Shift+/ on most layouts).
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   e.preventDefault();
-  shortcutSheet.toggle();
+  void loadShortcutSheet().then((sheet) => sheet.toggle());
 });
 
 // Cmd-Shift-U / Ctrl-Shift-U toggles workflow recording. When idle,
@@ -3230,7 +3249,12 @@ void viewerLoaded.then(() => {
   });
   // Persist the unit choice whenever it changes.
   viewer.measure.setOnUnitChange(persistPrefs);
-  viewer.annotate.setOnChange(refreshAnnotationPanel);
+  viewer.annotate.setOnChange(() => {
+    refreshAnnotationPanel();
+    // Mark the annotation stack as most-recently-edited so a global Undo
+    // targets it (suppressed while the router itself replays an undo/redo).
+    noteEdit('annotation');
+  });
 
   // Provenance override — when the user picks a capture type from the
   // dropdown in the Inspector's Provenance section, rebuild the
@@ -3552,10 +3576,28 @@ void viewerLoaded.then(() => {
       },
       onToggleHelp: () => helpOverlay.toggle(),
       onUndo: () => {
-        if (!helpOverlay.isOpen) viewer.annotate.undo();
+        if (helpOverlay.isOpen) return;
+        const id = activeId;
+        const canClass = !!id && viewer.canUndoClassification(id);
+        const pick = pickUndo(viewer.annotate.canUndo, canClass);
+        if (!pick) return;
+        withSuppressed(() => {
+          if (pick === 'classification' && id) viewer.undoClassification(id);
+          else viewer.annotate.undo();
+        });
+        if (pick === 'classification') reclassifyUi?.refresh();
       },
       onRedo: () => {
-        if (!helpOverlay.isOpen) viewer.annotate.redo();
+        if (helpOverlay.isOpen) return;
+        const id = activeId;
+        const canClass = !!id && viewer.canRedoClassification(id);
+        const pick = pickRedo(viewer.annotate.canRedo, canClass);
+        if (!pick) return;
+        withSuppressed(() => {
+          if (pick === 'classification' && id) viewer.redoClassification(id);
+          else viewer.annotate.redo();
+        });
+        if (pick === 'classification') reclassifyUi?.refresh();
       },
     });
   } else {

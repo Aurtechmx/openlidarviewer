@@ -15,6 +15,7 @@
 
 import { el } from './dom';
 import { LassoVolumeTool } from './LassoVolumeTool';
+import { noteEdit } from './undoRouter';
 import type { Viewer } from '../render/Viewer';
 
 /** Common ASPRS classes offered as reclassify targets. */
@@ -78,6 +79,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       if (!v || !id) return;
       const cls = Number(select.value);
       const r = v.reclassifyLasso(id, lasso, cls);
+      if (r.changedCount > 0) noteEdit('classification');
       toast(
         r.changedCount > 0
           ? `Reclassified ${r.changedCount.toLocaleString()} points → class ${cls}.`
