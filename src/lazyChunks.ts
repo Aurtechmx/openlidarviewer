@@ -185,6 +185,14 @@ export const loadFloorPlan = () =>
     floorPlanSvg: svg.floorPlanSvg,
   }));
 
+/**
+ * Load the manual classification-edit panel (class picker + lasso-arm +
+ * undo/redo). Only mounted once a classification exists, so the controls + their
+ * lasso tool ride this lazy chunk and never enter the startup shell. Routed here
+ * so the live source-transform never sees the import literal.
+ */
+export const loadReclassifyUi = () => import('./ui/reclassifyUi');
+
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 

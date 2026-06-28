@@ -58,6 +58,7 @@ import {
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
+import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import {
@@ -182,6 +183,7 @@ import {
   loadRgbAutoNormalize,
   loadEmbedBridge,
   loadLasLoader,
+  loadReclassifyUi,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -1455,6 +1457,7 @@ async function runDeriveClassification(): Promise<void> {
       warnings: result.warnings,
     });
     classLegendPanel.show();
+    void showReclassifyUi();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
     const top = Object.entries(result.counts)
@@ -1531,6 +1534,7 @@ async function runFillUnclassified(): Promise<void> {
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
+    void showReclassifyUi();
     const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
     showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
   } catch (err) {
@@ -2298,6 +2302,42 @@ const analysePanel = new AnalysePanel({
 let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null = null;
 
 const classLegendPanel = new ClassLegendPanel();
+
+// Manual classification-edit panel — lazy-loaded and mounted just below the
+// legend the first time a classification appears, so its controls + lasso tool
+// stay out of the startup shell. `showReclassifyUi()` is called wherever a
+// classification becomes available; `hideReclassifyUi()` on detach.
+let reclassifyUi: ReclassifyUi | null = null;
+let reclassifyUiLoading: Promise<void> | null = null;
+async function showReclassifyUi(): Promise<void> {
+  if (reclassifyUi) {
+    reclassifyUi.setVisible(true);
+    reclassifyUi.refresh();
+    return;
+  }
+  // Dedupe concurrent first-mounts (a classification-load show racing an
+  // explicit one) so the panel is only ever created once.
+  if (!reclassifyUiLoading) {
+    reclassifyUiLoading = (async () => {
+      const { createReclassifyUi } = await loadReclassifyUi();
+      const ui = createReclassifyUi({
+        canvas: stage.canvas,
+        getViewer: () => viewer,
+        getActiveId: () => activeId,
+        onToast: showLassoToast,
+      });
+      classLegendPanel.element.after(ui.element);
+      reclassifyUi = ui;
+    })();
+  }
+  await reclassifyUiLoading;
+  // Cast: TS can't see the async IIFE reassign the outer `let` across the await.
+  (reclassifyUi as ReclassifyUi | null)?.setVisible(true);
+}
+function hideReclassifyUi(): void {
+  reclassifyUi?.setVisible(false);
+}
+
 classLegendPanel.onChange((visibility) => {
   viewer.applyClassVisibility(visibility);
   // Re-run the scan report so its class-dependent figures (count, density,
@@ -3128,6 +3168,7 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());
   classLegendPanel.show();
+  void showReclassifyUi();
   // Reset the inspector's copy/JSON scope stamp — the fresh legend is
   // all-visible, so this clears any stamp left by a prior filtered scan.
   syncInspectClassScope();
@@ -3319,6 +3360,11 @@ if (testApi) {
         const c = activeId ? v.getCloud(activeId)?.classification : undefined;
         return c ? c[i] : -1;
       },
+      // Mount/show the reclassify panel (normally triggered when a
+      // classification appears) and re-sync its undo/redo enabled state, so the
+      // visible controls are e2e-drivable without running the full classifier.
+      showReclassify: () => showReclassifyUi(),
+      refreshReclassify: () => reclassifyUi?.refresh(),
       // EPT laszip decode-worker round-trip — the one path no other e2e
       // exercises end-to-end in a real browser: the lazy worker-client chunk
       // load, `new Worker(new URL(...))` URL resolution (the seam the live
@@ -4991,6 +5037,7 @@ async function openStreamingCopc(
   // never seeds the legend, so it stays hidden.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
+  hideReclassifyUi();
   // Clear any prior filtered scan's inspector copy/JSON scope stamp.
   syncInspectClassScope();
   // Visual Export Studio — a streaming COPC cloud is now attached;
@@ -5747,6 +5794,7 @@ function resetToEmptyState(): void {
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
+  hideReclassifyUi();
   // Clear the inspector's copy/JSON scope stamp now there's no active filter.
   syncInspectClassScope();
   lastStreamingReportCloud = null;
