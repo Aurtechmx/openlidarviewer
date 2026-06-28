@@ -3699,6 +3699,18 @@ export class Viewer {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Pick the point under a screen-NDC position and glide the orbit pivot to it
+   * (the right-click "Focus here" gesture, shared with double-click). Returns
+   * false when nothing is under the cursor so the caller can fall back.
+   */
+  focusOnScreen(ndcX: number, ndcY: number): boolean {
+    const point = this._pickPoint(ndcX, ndcY);
+    if (!point) return false;
+    this._nav.focusOn(point);
+    return true;
+  }
+
+  /**
    * Fit the camera to encompass all visible clouds, gliding to an oblique
    * overview rather than snapping there.
    */

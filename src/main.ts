@@ -731,6 +731,32 @@ window.addEventListener('keyup', (e) => {
 // would stay stuck in the paused/navigation state.
 window.addEventListener('blur', () => viewer?.setToolPaused(false));
 
+// Right-click the 3-D canvas for a small navigation context menu. The menu UI
+// is lazy-loaded on first use, so it stays out of the startup shell. Only armed
+// once a scan is loaded — otherwise the browser's native menu is left alone.
+stage.canvas.addEventListener('contextmenu', (e) => {
+  if (!viewer || !activeId) return;
+  e.preventDefault();
+  const rect = stage.canvas.getBoundingClientRect();
+  const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  const v = viewer;
+  void import('./ui/contextMenu').then(({ showContextMenu }) => {
+    showContextMenu(e.clientX, e.clientY, [
+      {
+        label: 'Focus here',
+        run: () => {
+          if (!v.focusOnScreen(ndcX, ndcY)) v.frameAll();
+        },
+      },
+      { label: 'Frame scan', run: () => v.frameAll() },
+      { label: 'Top view', run: () => void v.setStandardView('top') },
+      { label: 'Front view', run: () => void v.setStandardView('front') },
+      { label: 'Oblique view', run: () => void v.setCameraPreset('oblique') },
+    ]);
+  });
+});
+
 window.addEventListener('keydown', (e) => {
   // Another bare-key handler (e.g. `bindShortcuts`) already consumed this
   // keystroke — never double-fire on the same key press.
