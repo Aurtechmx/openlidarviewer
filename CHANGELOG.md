@@ -33,6 +33,20 @@ numbers computed from it.
 
 ### Changed
 
+- **Undo now reaches every edit.** Ctrl/Cmd+Z (and Shift+Z / Ctrl+Y to redo)
+  undoes whichever history you touched last — annotations or classification —
+  and falls through to the other once one empties. Classification edits were
+  previously reversible only from the reclassify panel's own buttons, so a
+  keyboard undo did nothing after a lasso reclassify.
+- **Hold Space to re-orient mid-tool.** While Measure, Inspect, or Annotate is
+  active, holding Space hands the mouse back to camera navigation so you can
+  rotate, pan, and zoom without leaving the tool, then release to resume.
+- **Right-click menu on the scan.** Right-clicking a loaded cloud offers focus
+  the pivot on the point under the cursor, frame the whole scan, or snap to the
+  top / front / oblique view.
+- **Accurate keyboard help.** The Help overlay now documents the up/down and
+  sprint navigation keys, the measure-mode Enter/Backspace keys, and the
+  broadened undo, matching what the viewer actually does.
 - **Classification edits invalidate stale analysis.** Each edit (swap,
   reclassify, undo, redo) bumps a per-cloud edit epoch and drops the
   terrain-core cache, so the next Analyse recomputes against the edited classes
