@@ -3300,6 +3300,25 @@ if (testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
+      // Classification edit seam — seed a uniform class, reclassify a screen
+      // lasso, undo/redo, and read a point's class, so the reclassify tool's
+      // full flow is e2e-verifiable without running the heavy classifier.
+      seedUniformClass: (cls: number): number => {
+        if (!activeId) return 0;
+        const cloud = v.getCloud(activeId);
+        if (!cloud) return 0;
+        const n = cloud.positions.length / 3;
+        v.applyDerivedClassification(activeId, new Uint8Array(n).fill(cls));
+        return n;
+      },
+      reclassifyLasso: (lasso: ReadonlyArray<{ x: number; y: number }>, newClass: number): number =>
+        activeId ? v.reclassifyLasso(activeId, lasso, newClass).changedCount : 0,
+      undoClass: (): boolean => (activeId ? v.undoClassification(activeId) : false),
+      redoClass: (): boolean => (activeId ? v.redoClassification(activeId) : false),
+      classAt: (i: number): number => {
+        const c = activeId ? v.getCloud(activeId)?.classification : undefined;
+        return c ? c[i] : -1;
+      },
       // EPT laszip decode-worker round-trip — the one path no other e2e
       // exercises end-to-end in a real browser: the lazy worker-client chunk
       // load, `new Worker(new URL(...))` URL resolution (the seam the live

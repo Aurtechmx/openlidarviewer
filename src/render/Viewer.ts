@@ -150,6 +150,7 @@ import { volumeCutFill } from './measure/volume';
 import {
   applyClassSwap,
   applyPolygonReclassify,
+  applyIndexReclassify,
   type ClassEditResult,
 } from './measure/classificationEditor';
 import { ClassEditHistory, recordEdit } from './measure/classEditHistory';
@@ -2690,6 +2691,49 @@ export class Viewer {
         newClass,
         includeIf,
       });
+    });
+    if (result.changedCount > 0) {
+      this._refreshClassificationColours(id);
+      this._markClassificationEdited(id);
+    }
+    return result;
+  }
+
+  /**
+   * Reclassify every point inside the screen-space lasso to `newClass`,
+   * recording the edit for undo/redo and bumping the edit epoch. Mirrors the
+   * lasso volume selection (same projector + {@link selectByLasso}) but sets
+   * classes instead of integrating volume. No-op without classification, a
+   * degenerate lasso, or a zero-size canvas. `lasso` is in CSS pixels.
+   */
+  reclassifyLasso(
+    id: string,
+    lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>,
+    newClass: number,
+  ): ClassEditResult {
+    const entry = this._clouds.get(id);
+    if (!entry || !entry.cloud.classification || lasso.length < 3) {
+      return { changedCount: 0, pointCount: 0 };
+    }
+    const canvas = this._canvas;
+    if (!canvas) return { changedCount: 0, pointCount: 0 };
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return { changedCount: 0, pointCount: 0 };
+    this._camera.updateMatrixWorld(true);
+    const projMatrix = this._camera.projectionMatrix;
+    const viewMatrix = this._camera.matrixWorldInverse;
+    const tmp = new THREE.Vector3();
+    const project = (x: number, y: number, z: number): { x: number; y: number } | null => {
+      tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
+      if (tmp.z < -1 || tmp.z > 1) return null;
+      return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
+    };
+    const indices = selectByLasso({ lasso, positions: entry.cloud.positions, project });
+    const buf = entry.cloud.classification;
+    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
+    recordEdit(this._historyFor(id), buf, () => {
+      result = applyIndexReclassify(buf, indices, newClass);
     });
     if (result.changedCount > 0) {
       this._refreshClassificationColours(id);
