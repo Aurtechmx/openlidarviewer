@@ -676,6 +676,17 @@ window.addEventListener('keydown', (e) => {
   // Never hijack key events from form inputs.
   if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
 
+  // Hold-Space re-orient: while a modal tool (measure / inspect / annotate) is
+  // armed, holding Space hands pointer input back to camera navigation so the
+  // user can rotate / pan / zoom mid-draw; releasing it (keyup, below) resumes
+  // the tool. Outside a tool, Space keeps its walk/fly "move up" meaning, so we
+  // only intercept it when a tool is active.
+  if (e.code === 'Space' && viewer?.toolActive) {
+    if (!e.repeat) viewer.setToolPaused(true);
+    e.preventDefault();
+    return;
+  }
+
   // Polygon-completion keyboard shortcuts — Enter commits the
   // in-progress polygon (area/volume/polyline/profile), Backspace
   // pops the most recent vertex. Both only fire while measure mode
@@ -710,6 +721,15 @@ window.addEventListener('keydown', (e) => {
     showLassoToast('Back to navigation.');
   }
 });
+
+// Releasing Space resumes the modal tool after a hold-Space re-orient.
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space' && viewer?.toolActive) viewer.setToolPaused(false);
+});
+
+// Blur (Cmd-Tab away while holding Space, etc.) must also resume the tool, or it
+// would stay stuck in the paused/navigation state.
+window.addEventListener('blur', () => viewer?.setToolPaused(false));
 
 window.addEventListener('keydown', (e) => {
   // Another bare-key handler (e.g. `bindShortcuts`) already consumed this

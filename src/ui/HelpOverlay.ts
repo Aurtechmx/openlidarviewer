@@ -74,6 +74,7 @@ export class HelpOverlay {
           ['Look', 'Drag to rotate, or orbit with the arrow keys; scroll to zoom.'],
           ['Move', 'WASD in walk and fly; Space / C raise and lower; hold Shift to sprint.'],
           ['Frame', 'R frames the whole scan; F focuses the centre; double-click a point to focus there.'],
+          ['Re-orient', 'Hold Space while a tool is active to rotate / pan, then release to resume.'],
         ]),
         section('Keyboard shortcuts', [
           ['A', 'Toggle the Annotate tool.'],

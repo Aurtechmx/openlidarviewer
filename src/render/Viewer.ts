@@ -983,6 +983,9 @@ export class Viewer {
   private _resizeObserver: ResizeObserver | null = null;
   /** Which picking tool currently owns canvas clicks. */
   private _toolMode: ToolMode = 'none';
+  // Hold-Space "re-orient" pause: a modal tool stays armed but navigation gets
+  // input back so the user can rotate / pan mid-draw, then resume on release.
+  private _toolPaused = false;
   private _measureListeners: MeasureListeners = {};
   private _inspectListeners: InspectListeners = {};
   private _annotateListeners: AnnotateListeners = {};
@@ -1390,6 +1393,9 @@ export class Viewer {
     //    across the 50-scan open/close cycle.
     this._onCanvasDblClick = (e) => this._handleDoubleClick(e, canvas);
     this._onCanvasClick = (e) => {
+      // While paused (hold-Space to re-orient), the click belongs to camera
+      // navigation, not the tool — don't place a point / pick / annotation.
+      if (this._toolPaused) return;
       if (this._toolMode === 'measure') this._handleMeasureClick(e, canvas);
       else if (this._toolMode === 'inspect') this._handleInspectClick(e, canvas);
       else if (this._toolMode === 'annotate') this._handleAnnotateClick(e, canvas);
@@ -3641,8 +3647,33 @@ export class Viewer {
    * while a click-driven tool is active; the live probe is the exception — it
    * is a passive hover readout, so navigation stays live during it.
    */
+  /** True while a modal click-to-act tool (measure / inspect / annotate) is
+   *  armed. Probe keeps navigation live, so it does not count. */
+  get toolActive(): boolean {
+    return this._toolMode === 'measure' || this._toolMode === 'inspect' || this._toolMode === 'annotate';
+  }
+
+  /**
+   * Hold-Space "re-orient" pause. While paused, a modal tool stays armed but
+   * camera navigation gets pointer input back (orbit / pan / zoom) and canvas
+   * clicks no longer act on the tool — so the user can reposition the view
+   * mid-draw, then release to resume. No-op unless a modal tool is active.
+   */
+  setToolPaused(paused: boolean): void {
+    if (!this.toolActive || this._toolPaused === paused) return;
+    this._toolPaused = paused;
+    this._nav.setInputEnabled(paused);
+    // Inspect owns its own cursor; measure / annotate use the crosshair.
+    this._canvas.style.cursor = paused
+      ? 'grab'
+      : this._toolMode === 'inspect'
+        ? ''
+        : 'crosshair';
+  }
+
   private _setToolMode(mode: ToolMode): void {
     if (mode === this._toolMode) return;
+    this._toolPaused = false;
     this._toolMode = mode;
     this._measure.setActive(mode === 'measure');
     this._inspect.setActive(mode === 'inspect');
