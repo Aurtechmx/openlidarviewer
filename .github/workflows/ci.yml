@@ -85,8 +85,14 @@ jobs:
       - run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Smoke tests
+      - name: Smoke tests (normal build)
         run: npm run test:smoke
+      - name: Smoke tests (live / obfuscated artifact)
+        # Boots the build users actually get: the obfuscator scrambles dynamic
+        # import() / worker-URL string literals, so a chunk that loads fine in
+        # the plain build can 404 only on the live build. This is the gate that
+        # catches that class of live-only breakage.
+        run: npm run test:smoke:live
 
   e2e:
     runs-on: ubuntu-latest

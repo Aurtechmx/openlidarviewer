@@ -24,7 +24,7 @@ hardening steps are deliberately staged and easy to forget.
 - [ ] `npm run test:build` (plain-build chunk-isolation contract + orbit smoke)
 - [ ] `npm run test:buckets:verify`
 - [ ] `npm run test:unit && npm run test:terrain && npm run test:ui && npm run test:slow`
-- [ ] `npm run test:smoke` and `npm run test:e2e` (need a browser/GPU; run where available)
+- [ ] `npm run test:smoke`, then `npm run test:smoke:live` (boots the obfuscated artifact users actually get), and `npm run test:e2e` (need a browser/GPU; run where available)
 - [ ] `npm audit --omit=dev --audit-level=high` clean
 
 ## 3. Local-first / security gates

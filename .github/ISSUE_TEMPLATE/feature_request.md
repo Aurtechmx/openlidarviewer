@@ -21,9 +21,8 @@ Other approaches you considered, or how you work around this now.
 
 OpenLiDARViewer is a lightweight, local-first viewer, not a full GIS or
 survey-grade processing suite. Requests that fit that scope are easiest to
-land. See the [roadmap](../../docs/roadmap.md) and
-[limitations](../../docs/limitations.md) for what is already planned or
-deliberately out of scope.
+land. See the [CHANGELOG](../../CHANGELOG.md) for what has shipped and
+[limitations](../../docs/limitations.md) for what is deliberately out of scope.
 
 **Anything else**
 

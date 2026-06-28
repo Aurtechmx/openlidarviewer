@@ -189,8 +189,6 @@ for how each terrain product is validated.
 | A 9.6M-point drone survey, height-colored, with the Scan Intelligence panel and the Orbit / Walk / Fly navigation. | The measurement toolkit — here a distance between two picked points; it also measures polyline, area, height, angle, slope, and cross-section profile. |
 | ![Inspecting a point](docs/screenshots/inspect-tool.jpg) | ![Scan Intelligence panel](docs/screenshots/scan-intelligence-panel.jpg) |
 | Inspecting a point: a glowing marker and a card with its real-world coordinates and attributes. | The Scan Intelligence panel — point count, dimensions, density, spacing, attributes, and the Advanced report. |
-| ![Dataset Intelligence card](docs/screenshots/dataset-intelligence-card.jpg) | |
-| The Dataset Intelligence card — informational summary of the loaded scan: Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, and Terrain Confidence. Rows for which no signal is available render as `—`. | |
 
 More in [`docs/screenshots.md`](docs/screenshots.md).
 

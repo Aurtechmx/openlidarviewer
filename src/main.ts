@@ -6111,12 +6111,7 @@ async function saveSnapshot(): Promise<void> {
     // app undisclosed. With an empty stamp (nothing hidden) the helper returns
     // the input Blob unchanged, keeping the snapshot byte-identical to before.
     const stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
-    const url = URL.createObjectURL(stamped);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'openlidarviewer.png';
-    link.click();
-    URL.revokeObjectURL(url);
+    triggerDownload(stamped, 'openlidarviewer.png');
   } catch {
     dropZone.setError('Could not save the view');
   }
