@@ -8,6 +8,7 @@
  */
 
 import { el } from './dom';
+import { triggerDownload } from '../io/download';
 // Guarded localStorage access — bare getItem/setItem throws in sandboxed
 // iframes (the embed path) and some privacy modes; see safeStorage.ts.
 import { storageGet, storageSet } from './safeStorage';
@@ -573,15 +574,10 @@ export class MeasurePanel {
         // metric regardless of the toggle. Same source the chart/CSV read.
         unitSystem: this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
       });
-      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${safeFileName(s.name)}-profile.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
+      triggerDownload(
+        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
+        `${safeFileName(s.name)}-profile.pdf`,
+      );
     } catch (err) {
       console.error('OpenLiDARViewer: profile PDF export failed.', err);
       btn.textContent = 'Export failed';
@@ -606,15 +602,7 @@ export class MeasurePanel {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
     const csv = buildProfileCsv(s.profileChart, system);
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeFileName(s.name)}-profile.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
   }
 
   /**

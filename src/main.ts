@@ -45,6 +45,11 @@ import {
   CAMERA_PRESET_ORDER,
 } from './render/camera/cameraPresets';
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
+import {
+  triggerDownload,
+  downloadBytes as downloadFileBytes,
+  downloadText,
+} from './io/download';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { summarizeMeasurementTrust } from './render/measure/measurementTrust';
@@ -1046,10 +1051,7 @@ const inspector = new Inspector({
               wkt: wf.wkt,
             });
             if (pkg) {
-              downloadBlob(
-                pkg.filename,
-                new Blob([pkg.zip as BlobPart], { type: 'application/zip' }),
-              );
+              triggerDownload(new Blob([pkg.zip as BlobPart], { type: 'application/zip' }), pkg.filename);
               recordUsage('export', mode);
               dropZone.setProgress(null);
               return;
@@ -1058,7 +1060,7 @@ const inspector = new Inspector({
             console.warn('[image-export] world-file packaging failed — shipping bare PNG:', err);
           }
         }
-        downloadBlob(`${base}-${mode}.png`, result.blob);
+        triggerDownload(result.blob, `${base}-${mode}.png`);
         recordUsage('export', mode);
         dropZone.setProgress(null);
       })
@@ -2487,16 +2489,6 @@ function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
   return ctx.positions;
 }
 
-/** Download bytes as a file (Blob → anchor click). */
-function downloadFileBytes(filename: string, bytes: Uint8Array, mime: string): void {
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
@@ -4211,7 +4203,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
   // The download filename now mirrors the template choice so the
   // user's Downloads folder distinguishes a Survey Summary from an
   // Engineering Inspection at a glance.
-  downloadBlob(`${exportFileStem}-${validatedTemplateId}.pdf`, result.blob);
+  triggerDownload(result.blob, `${exportFileStem}-${validatedTemplateId}.pdf`);
   // Per-section render failures are caught by the engine's isolation pass
   // and surfaced as a `failedSections` list — the PDF still ships but
   // misses those sections. Tell the user so they're not surprised by a
@@ -4227,24 +4219,6 @@ async function generateReportPdf(templateId: string): Promise<void> {
   }
 }
 
-/** Trigger a client-side download of text content. */
-function downloadText(filename: string, text: string): void {
-  const blob = new Blob([text], { type: 'text/plain' });
-  downloadBlob(filename, blob);
-}
-
-/**
- * Trigger a client-side download of a `Blob`. Used by the Visual Export
- * Studio for PNG downloads where the exporter has already produced a Blob.
- */
-function downloadBlob(filename: string, blob: Blob): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 /**
  * Push the Viewer's current render-quality state into the Inspector chips.

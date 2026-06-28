@@ -46,6 +46,20 @@ numbers computed from it.
   number.
 - **Sampling-error self-consistency.** The √N in the stockpile sampling error is
   taken over the same finite inside-height population its σ is computed on.
+- **Reliable file downloads on Safari / iOS and for large exports.** Every export
+  now funnels through one helper that releases the temporary blob URL only after
+  the download has had a moment to start, instead of immediately — an immediate
+  release could cancel large PDF / DEM / batch-ZIP / signed-report downloads
+  mid-transfer on some browsers.
+- **Imported render state is range-checked.** A point size or field-of-view read
+  back from a saved session is now clamped to a sane range, so a hand-edited or
+  corrupted session file can't load the viewer into an unusable display state.
+
+### Internal
+
+- The browser smoke test can now optionally run against the production
+  (minified) build, catching build-only breakage that the development build
+  never surfaces.
 
 ## [0.5.0] - 2026-06-26
 

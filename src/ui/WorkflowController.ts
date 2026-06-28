@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { triggerDownload } from '../io/download';
 import {
   buildWorkflow,
   parseWorkflow,
@@ -335,15 +336,7 @@ export class WorkflowController {
 
   /** The plain-download fallback. */
   private _downloadBlob(json: string, fname: string): void {
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = el('a', { className: 'olv-hidden', href: url });
-    a.setAttribute('download', fname);
-    document.body.append(a);
-    a.click();
-    a.remove();
-    // Defer revoke so the click has a tick to start the download.
-    queueMicrotask(() => URL.revokeObjectURL(url));
+    triggerDownload(new Blob([json], { type: 'application/json' }), fname);
   }
 
   /**

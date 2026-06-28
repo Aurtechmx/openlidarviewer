@@ -472,7 +472,10 @@ function parseRenderSettings(v: unknown): SessionRenderSettings | null {
     typeof v.antialiasing === 'boolean';
   if (!hasAny) return null;
   return {
-    pointSize: isFiniteNumber(v.pointSize) ? v.pointSize : 1.5,
+    // Defense in depth: clamp on parse to the same [1, 8] range the Viewer and
+    // preferences enforce, so a hand-edited / corrupt session can't carry a
+    // pathological size even before it reaches setPointSize.
+    pointSize: isFiniteNumber(v.pointSize) ? Math.min(8, Math.max(1, v.pointSize)) : 1.5,
     edlEnabled: typeof v.edlEnabled === 'boolean' ? v.edlEnabled : false,
     edlStrength: isFiniteNumber(v.edlStrength) ? v.edlStrength : 0.4,
     pointSizeMode: isPointSizeMode(v.pointSizeMode) ? v.pointSizeMode : 'adaptive',

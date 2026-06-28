@@ -38,6 +38,7 @@ import {
   formatHonestValue,
 } from '../terrain/contour/contourCopy';
 import { gradeForConfidence } from '../terrain/ground/cellConfidence';
+import { triggerDownload } from '../io/download';
 import {
   coverageHeatmapImage,
   COVERAGE_LEGEND,
@@ -1190,12 +1191,7 @@ export class AnalysePanel {
     }
     (octx ? out : source).toBlob((blob) => {
       if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${this._cb.getExportBasename?.() ?? 'terrain'}-${filename}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, `${this._cb.getExportBasename?.() ?? 'terrain'}-${filename}.png`);
     });
   }
 
@@ -1646,13 +1642,7 @@ export class AnalysePanel {
         softwareVersion: __APP_VERSION__,
         metricVersion: TERRAIN_METRIC_VERSION,
       });
-      const blob = new Blob([bytes as BlobPart], { type: 'application/zip' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${basename}-dem.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(new Blob([bytes as BlobPart], { type: 'application/zip' }), `${basename}-dem.zip`);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: DEM export failed.', err);
@@ -1692,13 +1682,7 @@ export class AnalysePanel {
         // re-derivation that could disagree with what the user saw on screen.
         intelligence: this._cb.getDatasetIntelligence?.() ?? null,
       });
-      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${basename}-terrain-report.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${basename}-terrain-report.pdf`);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: terrain report export failed.', err);
@@ -1996,13 +1980,10 @@ export class AnalysePanel {
       orientation: opts.orientation,
       generatedAt: opts.generatedAt,
     });
-    const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = ensurePdfExtension(sanitizeMapFilename(opts.filename));
-    link.click();
-    URL.revokeObjectURL(url);
+    triggerDownload(
+      new Blob([bytes as BlobPart], { type: 'application/pdf' }),
+      ensurePdfExtension(sanitizeMapFilename(opts.filename)),
+    );
   }
 
   /**

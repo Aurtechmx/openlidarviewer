@@ -14,6 +14,7 @@
  */
 
 import { el } from './dom';
+import { downloadBytes } from '../io/download';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
 import { runBatch, summariseBatch, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
@@ -400,17 +401,3 @@ function parseEpsg(v: string): number | null {
 }
 
 
-function downloadBytes(filename: string, bytes: Uint8Array, mime: string): void {
-  // Only copy when `bytes` is a partial view (see ExportPanel.downloadBytes):
-  // a full-buffer typed array passes through without copying the payload.
-  const ab =
-    bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
-      ? (bytes.buffer as ArrayBuffer)
-      : (bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
-  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}

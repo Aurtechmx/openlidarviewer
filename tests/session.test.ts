@@ -262,6 +262,19 @@ describe('parseSession — tolerance', () => {
     expect(back.scanSummary?.crsUnit).toBe('metre');
   });
 
+  it('clamps a pathological pointSize on parse (defense in depth)', () => {
+    const huge = parseSession(serializeSession({
+      ...sampleSession(),
+      render: { pointSize: 1e9, edlEnabled: false, edlStrength: 0.4, pointSizeMode: 'adaptive', antialiasing: true },
+    }));
+    expect(huge.render?.pointSize).toBe(8);
+    const tiny = parseSession(serializeSession({
+      ...sampleSession(),
+      render: { pointSize: 0.01, edlEnabled: false, edlStrength: 0.4, pointSizeMode: 'adaptive', antialiasing: true },
+    }));
+    expect(tiny.render?.pointSize).toBe(1);
+  });
+
   it('v3+ — a session without optional fields parses cleanly with them undefined', () => {
     const back = parseSession(serializeSession(sampleSession()));
     expect(back.version).toBe(SESSION_VERSION);

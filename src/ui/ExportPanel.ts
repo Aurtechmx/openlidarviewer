@@ -12,6 +12,7 @@
  */
 
 import { el } from './dom';
+import { downloadBytes } from '../io/download';
 import { loadConvertEngine } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 import type { PointCloud } from '../model/PointCloud';
@@ -574,19 +575,3 @@ function parseEpsg(v: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function downloadBytes(filename: string, bytes: Uint8Array, mime: string): void {
-  // Only copy the backing buffer when `bytes` is a partial view: `new Blob([ta])`
-  // serialises the WHOLE ArrayBuffer, so a subarray (non-zero offset or shorter
-  // length) must be sliced to its own bytes. A typed array that owns its whole
-  // buffer is passed straight through — no copy of a multi-MB export payload.
-  const ab =
-    bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
-      ? (bytes.buffer as ArrayBuffer)
-      : (bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
-  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}

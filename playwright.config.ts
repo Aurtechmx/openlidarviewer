@@ -33,9 +33,16 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run build && npm run preview',
+    // SMOKE_LIVE boots the OBFUSCATED live artifact (the build users actually
+    // get) so the smoke gate catches live-only breakage — scrambled
+    // dynamic-import / worker-URL string literals, chunk-isolation regressions —
+    // that the plain build can never surface. Default stays the plain build for
+    // the fast e2e loop.
+    command: process.env.SMOKE_LIVE
+      ? 'npm run build:live && npm run preview'
+      : 'npm run build && npm run preview',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });

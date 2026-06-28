@@ -2872,12 +2872,16 @@ export class Viewer {
    * Applies to every loaded cloud's material.
    */
   setPointSize(size: number): void {
-    this._pointSize = size;
+    // Clamp at the source of truth: imported share/session/preset state can hand
+    // in a non-finite or pathological value (a hand-edited `.olvsession` with
+    // `pointSize: 1e9` would push a giant sprite to the GPU). Bound to the same
+    // [1, 8] range the preferences clamp uses; non-finite falls back to 2.
+    this._pointSize = Math.min(8, Math.max(1, Number.isFinite(size) ? size : 2));
     // Splat mode applies a constant per-mode multiplier on the way to
-    // the GPU. The user-displayed size stays `size`; the rendered
+    // the GPU. The user-displayed size stays `this._pointSize`; the rendered
     // sprite is multiplied so neighbouring samples kiss in Soft /
     // Inspection mode without changing the "5 px" the user typed in.
-    const effective = size * splatRadiusMultiplier(this._splatMode);
+    const effective = this._pointSize * splatRadiusMultiplier(this._splatMode);
     this._pointSizeUniform.value = effective;
     for (const { material } of this._clouds.values()) {
       material.size = effective;
@@ -3162,7 +3166,10 @@ export class Viewer {
    */
   applyCameraState(state: SavedCameraState): void {
     if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
-    const fov = state.fov ?? DEFAULT_FOV;
+    // Clamp imported FOV to a sane perspective range — a share/session file
+    // could carry a non-finite or extreme value that breaks the projection.
+    const rawFov = state.fov ?? DEFAULT_FOV;
+    const fov = Math.min(120, Math.max(10, Number.isFinite(rawFov) ? rawFov : DEFAULT_FOV));
     if (this._camera.fov !== fov) {
       this._camera.fov = fov;
       this._camera.updateProjectionMatrix();
