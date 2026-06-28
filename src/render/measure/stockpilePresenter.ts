@@ -106,12 +106,14 @@ export function stockpileToastSuffix(
   polygon: ReadonlyArray<Vec3>,
   positions: Float32Array,
   lin?: number,
+  sourceReduced?: boolean,
 ): string {
   if (polygon.length < 3 || positions.length < 9) return '';
   const stock = stockpileVolume({
     polygon,
     positions,
     base: { mode: 'lowest-percentile', percentile: 0.05 },
+    sourceReduced,
   });
   if (stock.validity !== 'ok' || stock.volume <= 0) return '';
   return ` · ${stockpileToastLine(presentStockpile(stock, { lin }))}`;

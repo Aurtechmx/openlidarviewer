@@ -47,6 +47,14 @@ numbers computed from it.
 - **Accurate keyboard help.** The Help overlay now documents the up/down and
   sprint navigation keys, the measure-mode Enter/Backspace keys, and the
   broadened undo, matching what the viewer actually does.
+- **More detail on capable desktops.** The high-end desktop tier (ample RAM and
+  cores) now keeps more of a dense survey resident before automatic point
+  reduction kicks in; mid and low tiers and mobile are unchanged, and the GPU
+  safety ceiling still bounds every path.
+- **Stockpile volumes flag a reduced cloud.** When a cloud was automatically
+  reduced to fit the device, a lasso/stockpile volume now adds a caveat that the
+  inside points are a representative sample of a denser survey — the ± band
+  already widens with the thinner sample, and now the reason is stated.
 - **Classification edits invalidate stale analysis.** Each edit (swap,
   reclassify, undo, redo) bumps a per-cloud edit epoch and drops the
   terrain-core cache, so the next Analyse recomputes against the edited classes

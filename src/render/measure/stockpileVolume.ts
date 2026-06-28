@@ -64,6 +64,12 @@ export interface StockpileInput {
     /** For `explicit`: the reference height in render-space metres. */
     readonly z?: number;
   };
+  /**
+   * True when the loaded cloud was voxel-reduced to fit the device budget, so
+   * the inside points are a representative sample of a denser survey. Adds an
+   * honesty caveat; the ± band already widens with the smaller resident N.
+   */
+  readonly sourceReduced?: boolean;
 }
 
 /** The "show the math" breakdown — every input behind the number and band. */
@@ -242,7 +248,14 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   const volume = v.fill;
   const relativeError = volume > 0 ? sigma / volume : 0;
   const confidence = gradeConfidence(relativeError, inN, v.density);
-  const caveats = buildCaveats(confidence, inN, relativeError, baseMode, baseUncertainty);
+  const caveats = buildCaveats(
+    confidence,
+    inN,
+    relativeError,
+    baseMode,
+    baseUncertainty,
+    input.sourceReduced ?? false,
+  );
 
   return {
     volume,
@@ -306,11 +319,17 @@ function buildCaveats(
   relErr: number,
   baseMode: BasePlaneMode,
   baseUncertainty: number,
+  sourceReduced: boolean,
 ): string[] {
   const out: string[] = [];
   if (pointsInPolygon < MIN_RELIABLE_POINTS) {
     out.push(
       `Only ${pointsInPolygon} points fell inside the footprint — the volume is indicative, not measured.`,
+    );
+  }
+  if (sourceReduced) {
+    out.push(
+      'This cloud was reduced to fit your device, so the inside points are a representative sample of a denser survey — the ± band reflects that thinner sample.',
     );
   }
   if (relErr > 0.15) {

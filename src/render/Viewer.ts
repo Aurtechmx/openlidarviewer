@@ -509,9 +509,10 @@ const ORTHO_FOV = 2;
  * sizes a cloud to the machine; this is the last-resort guard so that no path
  * — a future session restore, a streaming source — can ever upload a cloud
  * large enough to risk a GPU out-of-memory crash. It sits above every load
- * budget, so a normally-loaded cloud is never touched.
+ * budget (incl. the desktop `high` budget of 6 M in deviceProfile.ts), so a
+ * normally-loaded cloud is never touched — only a pathological bypass path is.
  */
-const GPU_HARD_POINT_CEILING = 5_000_000;
+const GPU_HARD_POINT_CEILING = 8_000_000;
 
 /**
  * Frame-time history length for {@link Viewer.frameStats}. Sixty samples is
@@ -3292,6 +3293,10 @@ export class Viewer {
     const selectionByCloudId = new Map<string, ReadonlyArray<number>>();
     const subsetParts: Float32Array[] = [];
     let totalSelected = 0;
+    // True once any cloud that contributes selected points was voxel-reduced to
+    // fit the device budget — the volume's honesty caveat reflects the thinner
+    // sample. (See `_cloudWasReduced`.)
+    let anySourceReduced = false;
     for (const [id, entry] of this._clouds) {
       const positions =
         stride === 1
@@ -3311,6 +3316,7 @@ export class Viewer {
           ? localIndices
           : localIndices.map((i) => i * stride);
       selectionByCloudId.set(id, sourceIndices);
+      if (this._cloudWasReduced(entry.cloud)) anySourceReduced = true;
       totalSelected += localIndices.length;
       // Pack the selected points' xyz into a contiguous buffer for
       // the volume math.
@@ -3375,6 +3381,7 @@ export class Viewer {
         lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
         selectedPositions,
         lin,
+        anySourceReduced,
       ),
       selectedCount: totalSelected,
       lasso,
@@ -3708,6 +3715,17 @@ export class Viewer {
     if (!point) return false;
     this._nav.focusOn(point);
     return true;
+  }
+
+  /**
+   * Whether a cloud's resident points are a device-budget reduction of a
+   * denser source — true when the declared source count meaningfully exceeds
+   * the resident count (voxel/stride downsample kicked in at load). Used to add
+   * an honesty caveat to volumes measured on the thinner sample.
+   */
+  private _cloudWasReduced(cloud: PointCloud): boolean {
+    const declared = cloud.declaredPointCount;
+    return declared != null && cloud.pointCount < declared * 0.95;
   }
 
   /**

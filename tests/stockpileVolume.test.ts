@@ -42,6 +42,21 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(r.confidence).toBe('high');
   });
 
+  test('a device-reduced cloud adds a representative-sample caveat', () => {
+    const base = {
+      polygon: squareFootprint(10),
+      positions: grid(10, 0.25, () => 2),
+      base: { mode: 'explicit', z: 0 } as const,
+    };
+    const full = stockpileVolume({ ...base, sourceReduced: false });
+    const reduced = stockpileVolume({ ...base, sourceReduced: true });
+    // Same geometry → same volume; only the caveat set differs.
+    expect(reduced.volume).toBeCloseTo(full.volume, 6);
+    expect(full.caveats.join(' ')).not.toMatch(/reduced to fit your device/i);
+    expect(reduced.caveats.join(' ')).toMatch(/reduced to fit your device/i);
+    expect(reduced.caveats.join(' ')).toMatch(/representative sample/i);
+  });
+
   test('sigma is the quadrature of the sampling and base-plane errors', () => {
     const r = stockpileVolume({
       polygon: squareFootprint(10),
