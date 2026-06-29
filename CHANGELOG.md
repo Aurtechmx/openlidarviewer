@@ -30,6 +30,10 @@ for good.
   check fails the build if a runtime `import('./…')` reappears in `main.ts`,
   where the obfuscator could scramble the specifier into a deploy-only 404. Wired
   into the release gate and CI.
+- **Release-sync guard.** A new `lint:release-sync` check fails the build unless
+  the version in `package.json`, the lockfile, the README's current-release line,
+  the changelog section, and the release-notes file all agree. Wired into the
+  release gate and CI.
 - **The integrity report records the version that produced it.** The exported
   report manifest now carries the app version, so a reader can tell whether a
   newer build would grade or label the scan differently. The field is covered by

@@ -28,8 +28,12 @@ jobs:
         run: npm run typecheck
       - name: Main-deferral lint (no top-level viewer.* deref outside viewerLoaded)
         run: npm run lint:main-deferral
+      - name: Inline dynamic import lint (no raw import('./…') in main.ts — obfuscator-scramble guard)
+        run: npm run lint:inline-imports
       - name: unsafeHtml lint (no user-derived string reaches an innerHTML sink)
         run: npm run lint:unsafe-html
+      - name: Release sync (version/lock/README/CHANGELOG/notes consistent)
+        run: npm run lint:release-sync
       - name: Bucket partition integrity (every test file in exactly one bucket)
         run: npm run test:buckets:verify
       # Two DISTINCT size contracts, both enforced:
@@ -55,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bucket: [unit, terrain, ui, slow]
+        bucket: [unit, export, terrain, ui, slow]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

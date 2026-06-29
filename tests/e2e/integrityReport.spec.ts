@@ -51,10 +51,14 @@ test('the Products lane exports an integrity report after a measurement is place
   const path = await download.path();
   const manifest = JSON.parse(readFileSync(path, 'utf8'));
   expect(manifest.digest).toBeTruthy();
-  expect(manifest.digestAlgorithm).toBe('FNV-1a-32');
+  // v0.5.2 — SHA-256 default (manifest v3); 64 hex chars.
+  expect(manifest.digestAlgorithm).toBe('SHA-256');
+  expect(manifest.digest).toHaveLength(64);
   expect(Array.isArray(manifest.findings)).toBe(true);
   expect(manifest.findings.length).toBeGreaterThanOrEqual(1);
   // Provenance the report carries forward.
   expect(typeof manifest.classificationEpoch).toBe('number');
-  expect(manifest.version).toBe(2);
+  expect(manifest.version).toBe(3);
+  // v0.5.2 — the producing app version is stamped (and digest-covered).
+  expect(typeof manifest.software).toBe('string');
 });
