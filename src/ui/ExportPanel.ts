@@ -12,6 +12,7 @@
  */
 
 import { el } from './dom';
+import { downloadBytes } from '../io/download';
 import { loadConvertEngine } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
 import type { PointCloud } from '../model/PointCloud';
@@ -33,6 +34,12 @@ export interface ExportPanelCallbacks {
   measurementCount?: () => number;
   /** Export the placed measurements to an open format (GeoJSON / CSV). */
   exportMeasurements?: (format: 'geojson' | 'csv') => void;
+  /**
+   * Export a tamper-evident integrity report (JSON) — the placed measurements as
+   * findings, stamped with dataset provenance + the classification epoch + a
+   * verifiable content digest. Wired alongside {@link exportMeasurements}.
+   */
+  exportSignedReport?: () => void;
   /**
    * Export a site KML (annotations + measurements + viewpoints) for Google
    * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
@@ -365,6 +372,20 @@ export class ExportPanel {
       btn.addEventListener('click', () => this._cb.exportMeasurements?.(fmt));
       row.append(btn);
     });
+    // Tamper-evident integrity report (JSON) — the same measurements, stamped
+    // with provenance + a verifiable content digest (catches accidental/casual
+    // edits; not a cryptographic signature). The honest deliverable.
+    if (this._cb.exportSignedReport) {
+      const btn = el('button', {
+        className: 'olv-bc-pill',
+        type: 'button',
+        text: 'Integrity report',
+      }) as HTMLButtonElement;
+      btn.disabled = count === 0;
+      btn.setAttribute('data-testid', 'export-signed-report');
+      btn.addEventListener('click', () => this._cb.exportSignedReport?.());
+      row.append(btn);
+    }
 
     const hint =
       count === 0
@@ -555,19 +576,3 @@ function parseEpsg(v: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function downloadBytes(filename: string, bytes: Uint8Array, mime: string): void {
-  // Only copy the backing buffer when `bytes` is a partial view: `new Blob([ta])`
-  // serialises the WHOLE ArrayBuffer, so a subarray (non-zero offset or shorter
-  // length) must be sliced to its own bytes. A typed array that owns its whole
-  // buffer is passed straight through — no copy of a multi-MB export payload.
-  const ab =
-    bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
-      ? (bytes.buffer as ArrayBuffer)
-      : (bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
-  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}

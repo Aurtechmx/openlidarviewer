@@ -2,6 +2,90 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.1] - 2026-06-28
+
+Deepens the honesty moat. Stockpile/earthworks volume now reports an auditable
+confidence band, manual classification editing lands end-to-end (class picker,
+lasso reclassify, multi-step undo/redo), and measurements export as a
+tamper-evident integrity report. Adds two-epoch change-detection uncertainty and
+edit-aware provenance so an edited classification can never silently outlive the
+numbers computed from it.
+
+### Added
+
+- **Stockpile / earthworks volume with a confidence band.** The lasso volume
+  readout carries a ± band that states its own uncertainty — a sampling-error
+  term (area·σ/√N) and a systematic base-plane term (a single horizontal base
+  under sloped ground biases every thickness the same direction) combined in
+  quadrature — plus a show-the-math breakdown and honest caveats.
+- **Manual classification editing.** A class picker and a lasso-reclassify tool
+  with real multi-step undo/redo, lazy-loaded beside the classification legend.
+  Edits mutate the live class channel, so they round-trip straight into LAS
+  export.
+- **Tamper-evident integrity report.** Placed measurements export as a JSON
+  report whose findings, dataset provenance, and classification edit-epoch are
+  folded into a verifiable content digest (deterministic canonical hashing;
+  default FNV-1a, named in the manifest as `digestAlgorithm`). Changing any
+  figure without recomputing the digest breaks verification — a guard against
+  accidental or casual edits, not a secret-keyed cryptographic signature
+  (SHA-256 hashFn is injectable for that).
+- **Two-epoch change-detection uncertainty.** A volume-change ± band (random
+  cell noise that averages as √N plus a systematic co-registration term) that
+  also reports whether the net change exceeds its own error — never presenting
+  noise as a confident gain or loss.
+
+### Changed
+
+- **Undo now reaches every edit.** Ctrl/Cmd+Z (and Shift+Z / Ctrl+Y to redo)
+  undoes whichever history you touched last — annotations or classification —
+  and falls through to the other once one empties. Classification edits were
+  previously reversible only from the reclassify panel's own buttons, so a
+  keyboard undo did nothing after a lasso reclassify.
+- **Hold Space to re-orient mid-tool.** While Measure, Inspect, or Annotate is
+  active, holding Space hands the mouse back to camera navigation so you can
+  rotate, pan, and zoom without leaving the tool, then release to resume.
+- **Right-click menu on the scan.** Right-clicking a loaded cloud offers focus
+  the pivot on the point under the cursor, frame the whole scan, or snap to the
+  top / front / oblique view.
+- **Accurate keyboard help.** The Help overlay now documents the up/down and
+  sprint navigation keys, the measure-mode Enter/Backspace keys, and the
+  broadened undo, matching what the viewer actually does.
+- **More detail on capable desktops.** The high-end desktop tier (ample RAM and
+  cores) now keeps more of a dense survey resident before automatic point
+  reduction kicks in; mid and low tiers and mobile are unchanged, and the GPU
+  safety ceiling still bounds every path.
+- **Stockpile volumes flag a reduced cloud.** When a cloud was automatically
+  reduced to fit the device, a lasso/stockpile volume now adds a caveat that the
+  inside points are a representative sample of a denser survey — the ± band
+  already widens with the thinner sample, and now the reason is stated.
+- **Classification edits invalidate stale analysis.** Each edit (swap,
+  reclassify, undo, redo) bumps a per-cloud edit epoch and drops the
+  terrain-core cache, so the next Analyse recomputes against the edited classes
+  instead of serving a grade that no longer matches the cloud.
+
+### Fixed
+
+- **Stockpile base-plane honesty.** Base uncertainty now models the systematic
+  mis-fit of a flat base under sloped ground, not just point scatter — a sloped
+  apron honestly widens the band instead of reporting a confidently-narrow
+  number.
+- **Sampling-error self-consistency.** The √N in the stockpile sampling error is
+  taken over the same finite inside-height population its σ is computed on.
+- **Reliable file downloads on Safari / iOS and for large exports.** Every export
+  now funnels through one helper that releases the temporary blob URL only after
+  the download has had a moment to start, instead of immediately — an immediate
+  release could cancel large PDF / DEM / batch-ZIP / integrity-report downloads
+  mid-transfer on some browsers.
+- **Imported render state is range-checked.** A point size or field-of-view read
+  back from a saved session is now clamped to a sane range, so a hand-edited or
+  corrupted session file can't load the viewer into an unusable display state.
+
+### Tooling
+
+- The browser smoke test can now optionally run against the production
+  (minified) build, catching build-only breakage that the development build
+  never surfaces.
+
 ## [0.5.0] - 2026-06-26
 
 Opens the v0.5 line (Measure · Place · Compare · Share): point snapping, KML

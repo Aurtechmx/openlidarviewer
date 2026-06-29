@@ -52,9 +52,15 @@ describe('deviceTier — mobile', () => {
 });
 
 describe('deviceCaps — render budget', () => {
-  test('a capable desktop keeps the full 4M budget', () => {
+  test('a capable desktop gets the high-tier 6M budget', () => {
     expect(deviceCaps({ deviceMemoryGB: 16, hardwareConcurrency: 16, isMobile: false }))
-      .toEqual({ tier: 'high', renderBudget: 4_000_000 });
+      .toEqual({ tier: 'high', renderBudget: 6_000_000 });
+  });
+
+  test('a mid desktop keeps the conservative 4M budget', () => {
+    // medium tier (capable RAM but fewer cores) stays at the canonical cap.
+    expect(deviceCaps({ deviceMemoryGB: 8, hardwareConcurrency: 4, isMobile: false }))
+      .toEqual({ tier: 'medium', renderBudget: 4_000_000 });
   });
 
   test('a low desktop is degraded to 2M', () => {

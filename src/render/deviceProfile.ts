@@ -33,9 +33,16 @@ export interface DeviceCaps {
   renderBudget: number;
 }
 
-/** Per-tier point budgets — desktop. `high` and `medium` use the canonical cap. */
+/**
+ * Per-tier point budgets — desktop. The `high` tier (≥6–8 GB RAM *and* ≥6–8
+ * cores) gets a larger budget so capable desktops show more of a dense survey
+ * before voxel reduction kicks in; `medium`/`low` stay conservative for broad
+ * safety. The `high` value tracks `GPU_HARD_POINT_CEILING` in Viewer.ts — raise
+ * them together. Verify the `high` budget on real high-end hardware (watch the
+ * frame rate on a >6 M-point cloud) before raising it further.
+ */
 const DESKTOP_BUDGET: Record<DeviceTier, number> = {
-  high: 4_000_000,
+  high: 6_000_000,
   medium: 4_000_000,
   low: 2_000_000,
 };

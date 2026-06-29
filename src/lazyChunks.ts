@@ -185,6 +185,14 @@ export const loadFloorPlan = () =>
     floorPlanSvg: svg.floorPlanSvg,
   }));
 
+/**
+ * Load the manual classification-edit panel (class picker + lasso-arm +
+ * undo/redo). Only mounted once a classification exists, so the controls + their
+ * lasso tool ride this lazy chunk and never enter the startup shell. Routed here
+ * so the live source-transform never sees the import literal.
+ */
+export const loadReclassifyUi = () => import('./ui/reclassifyUi');
+
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 
@@ -281,3 +289,27 @@ export const loadEmbedBridge = () => import('./ui/embedBridge');
  * fetch — a 404 console.error on every boot of the deployed site.
  */
 export const loadLasLoader = () => import('./io/loadLas');
+
+/**
+ * v0.5.1 — runtime dynamic-import seams that previously lived inline in main.ts
+ * (a transformed module). The live stringArray pass scrambles a fraction of
+ * inline `import()` specifiers each build, so an inline seam works in dev and on
+ * most builds, then silently 404s on the one where it gets scrambled (this is
+ * how the workflow-config panel crashed on the deployed build). Routing every
+ * runtime seam through this excluded module makes them deterministically safe.
+ */
+export const loadContextMenu = () => import('./ui/contextMenu');
+export const loadCommandPalette = () => import('./ui/CommandPalette');
+export const loadShortcutSheet = () => import('./ui/ShortcutSheet');
+export const loadMeasurementExport = () => import('./export/measurementExport');
+export const loadMeasurementReport = () => import('./export/measurementReport');
+export const loadKmlExport = () => import('./export/kmlExport');
+export const loadConfirmFullExport = () => import('./convert/confirmFullExport');
+export const loadFloorPlanConfidence = () =>
+  import('./terrain/space/floorplan/floorPlanConfidence');
+export const loadFullCloudGradeAction = () =>
+  import('./render/streaming/runFullCloudGradeAction');
+export const loadSession = () => import('./io/session');
+export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
+export const loadCompareDtms = () => import('./terrain/change/compareDtms');
+export const loadChangeRaster = () => import('./terrain/change/changeRaster');

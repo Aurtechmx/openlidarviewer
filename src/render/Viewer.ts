@@ -77,6 +77,7 @@ import {
   selectByLasso,
   volumeFromLassoWithFootprint,
 } from './measure/lassoVolume';
+import { stockpileToastSuffix } from './measure/stockpilePresenter';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -96,6 +97,14 @@ import {
 export interface LassoVolumeReturn {
   /** Cut / fill / footprint computed against the selected 3D points. */
   readonly result: VolumeResult;
+  /**
+   * The stockpile band suffix for the toast: ` · Stockpile: V ± σ (±%) ·
+   * confidence`, re-graded over the same selected sample with a "lowest
+   * ground" base plane and converted to metres via the `lin` factor passed to
+   * {@link Viewer.computeLassoVolume}. Empty when there's nothing trustworthy
+   * to claim (too few points / degenerate footprint).
+   */
+  readonly stockpileSuffix: string;
   /** Number of cloud points that fell inside the lasso. */
   readonly selectedCount: number;
   /** The lasso path the user drew (echoed back for the report card). */
@@ -141,10 +150,11 @@ import { volumeCutFill } from './measure/volume';
 import {
   applyClassSwap,
   applyPolygonReclassify,
-  snapshotClassification,
-  restoreClassification,
+  applyIndexReclassify,
   type ClassEditResult,
 } from './measure/classificationEditor';
+import { ClassEditHistory, recordEdit } from './measure/classEditHistory';
+import { ClassificationEpochs } from './measure/classificationEpoch';
 import {
   getPreset,
   type PresetId,
@@ -499,9 +509,10 @@ const ORTHO_FOV = 2;
  * sizes a cloud to the machine; this is the last-resort guard so that no path
  * — a future session restore, a streaming source — can ever upload a cloud
  * large enough to risk a GPU out-of-memory crash. It sits above every load
- * budget, so a normally-loaded cloud is never touched.
+ * budget (incl. the desktop `high` budget of 6 M in deviceProfile.ts), so a
+ * normally-loaded cloud is never touched — only a pathological bypass path is.
  */
-const GPU_HARD_POINT_CEILING = 5_000_000;
+const GPU_HARD_POINT_CEILING = 8_000_000;
 
 /**
  * Frame-time history length for {@link Viewer.frameStats}. Sixty samples is
@@ -973,6 +984,9 @@ export class Viewer {
   private _resizeObserver: ResizeObserver | null = null;
   /** Which picking tool currently owns canvas clicks. */
   private _toolMode: ToolMode = 'none';
+  // Hold-Space "re-orient" pause: a modal tool stays armed but navigation gets
+  // input back so the user can rotate / pan mid-draw, then resume on release.
+  private _toolPaused = false;
   private _measureListeners: MeasureListeners = {};
   private _inspectListeners: InspectListeners = {};
   private _annotateListeners: AnnotateListeners = {};
@@ -1380,6 +1394,9 @@ export class Viewer {
     //    across the 50-scan open/close cycle.
     this._onCanvasDblClick = (e) => this._handleDoubleClick(e, canvas);
     this._onCanvasClick = (e) => {
+      // While paused (hold-Space to re-orient), the click belongs to camera
+      // navigation, not the tool — don't place a point / pick / annotation.
+      if (this._toolPaused) return;
       if (this._toolMode === 'measure') this._handleMeasureClick(e, canvas);
       else if (this._toolMode === 'inspect') this._handleInspectClick(e, canvas);
       else if (this._toolMode === 'annotate') this._handleAnnotateClick(e, canvas);
@@ -1944,7 +1961,8 @@ export class Viewer {
     this._clouds.delete(id);
     // Drop the per-cloud undo / highlight snapshots too — without this the
     // maps retain full-size buffers for every cloud ever removed (leak).
-    this._classSnapshots.delete(id);
+    this._classHistory.delete(id);
+    this._classEpochs.forget(id);
     this._selectionSnapshots.delete(id);
     // Refresh the orbit-clamp envelope so removing the last static cloud
     // doesn't leave the camera clamping to its ghost bounds.
@@ -2582,7 +2600,43 @@ export class Viewer {
    * to the state before the FIRST unconfirmed edit, which matches the
    * undo semantics for the measurement tools.
    */
-  private readonly _classSnapshots = new Map<string, Uint8Array>();
+  /** Per-cloud multi-step classification undo/redo history (delta-based). */
+  private readonly _classHistory = new Map<string, ClassEditHistory>();
+
+  /** Per-cloud edit epochs so stale analysis/grade/exports can be detected. */
+  private readonly _classEpochs = new ClassificationEpochs();
+
+  /**
+   * Fires after any classification edit (swap / reclassify / undo / redo) that
+   * actually changed points, with the cloud id. The analysis runner subscribes
+   * to invalidate its terrain-core cache and re-grade, so a manual edit never
+   * leaves a stale bare-earth surface or grade on screen.
+   */
+  onClassificationEdited?: (id: string) => void;
+
+  private _historyFor(id: string): ClassEditHistory {
+    let h = this._classHistory.get(id);
+    if (!h) {
+      h = new ClassEditHistory();
+      this._classHistory.set(id, h);
+    }
+    return h;
+  }
+
+  private _markClassificationEdited(id: string): void {
+    this._classEpochs.bump(id);
+    this.onClassificationEdited?.(id);
+  }
+
+  /** The cloud's classification edit epoch (0 = never edited). */
+  classificationEpoch(id: string): number {
+    return this._classEpochs.current(id);
+  }
+
+  /** Whether a result stamped at `epoch` was invalidated by a later edit. */
+  isClassificationStale(id: string, epoch: number): boolean {
+    return this._classEpochs.isStale(id, epoch);
+  }
 
   /**
    * Globally rewrite every point whose classification is `fromClass` to
@@ -2595,12 +2649,17 @@ export class Viewer {
     if (!entry || !entry.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
-    // Snapshot once before the FIRST mutation; subsequent edits coalesce.
-    if (!this._classSnapshots.has(id)) {
-      this._classSnapshots.set(id, snapshotClassification(entry.cloud.classification));
+    const buf = entry.cloud.classification;
+    // Record the edit as a delta so it can be undone independently of any
+    // prior edit (real multi-step history, not a single coalesced snapshot).
+    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
+    recordEdit(this._historyFor(id), buf, () => {
+      result = applyClassSwap(buf, fromClass, toClass);
+    });
+    if (result.changedCount > 0) {
+      this._refreshClassificationColours(id);
+      this._markClassificationEdited(id);
     }
-    const result = applyClassSwap(entry.cloud.classification, fromClass, toClass);
-    if (result.changedCount > 0) this._refreshClassificationColours(id);
     return result;
   }
 
@@ -2629,33 +2688,105 @@ export class Viewer {
     if (!entry || !entry.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
-    if (!this._classSnapshots.has(id)) {
-      this._classSnapshots.set(id, snapshotClassification(entry.cloud.classification));
-    }
-    const result = applyPolygonReclassify({
-      classification: entry.cloud.classification,
-      positions: entry.cloud.positions,
-      polygon,
-      newClass,
-      includeIf,
+    const buf = entry.cloud.classification;
+    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
+    recordEdit(this._historyFor(id), buf, () => {
+      result = applyPolygonReclassify({
+        classification: buf,
+        positions: entry.cloud.positions,
+        polygon,
+        newClass,
+        includeIf,
+      });
     });
-    if (result.changedCount > 0) this._refreshClassificationColours(id);
+    if (result.changedCount > 0) {
+      this._refreshClassificationColours(id);
+      this._markClassificationEdited(id);
+    }
     return result;
   }
 
   /**
-   * Revert the cloud's classification buffer to the pre-edit snapshot, if
-   * one exists. Returns true on success, false when there's nothing to
-   * undo. Clears the snapshot so a subsequent edit takes a new one.
+   * Reclassify every point inside the screen-space lasso to `newClass`,
+   * recording the edit for undo/redo and bumping the edit epoch. Mirrors the
+   * lasso volume selection (same projector + {@link selectByLasso}) but sets
+   * classes instead of integrating volume. No-op without classification, a
+   * degenerate lasso, or a zero-size canvas. `lasso` is in CSS pixels.
+   */
+  reclassifyLasso(
+    id: string,
+    lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>,
+    newClass: number,
+  ): ClassEditResult {
+    const entry = this._clouds.get(id);
+    if (!entry || !entry.cloud.classification || lasso.length < 3) {
+      return { changedCount: 0, pointCount: 0 };
+    }
+    const canvas = this._canvas;
+    if (!canvas) return { changedCount: 0, pointCount: 0 };
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return { changedCount: 0, pointCount: 0 };
+    this._camera.updateMatrixWorld(true);
+    const projMatrix = this._camera.projectionMatrix;
+    const viewMatrix = this._camera.matrixWorldInverse;
+    const tmp = new THREE.Vector3();
+    const project = (x: number, y: number, z: number): { x: number; y: number } | null => {
+      tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
+      if (tmp.z < -1 || tmp.z > 1) return null;
+      return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
+    };
+    const indices = selectByLasso({ lasso, positions: entry.cloud.positions, project });
+    const buf = entry.cloud.classification;
+    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
+    recordEdit(this._historyFor(id), buf, () => {
+      result = applyIndexReclassify(buf, indices, newClass);
+    });
+    if (result.changedCount > 0) {
+      this._refreshClassificationColours(id);
+      this._markClassificationEdited(id);
+    }
+    return result;
+  }
+
+  /**
+   * Undo the most recent classification edit on this cloud. Returns true on
+   * success, false when there's nothing to undo. Steps back one edit at a
+   * time; a subsequent {@link redoClassification} re-applies it.
    */
   undoClassification(id: string): boolean {
     const entry = this._clouds.get(id);
-    const snap = this._classSnapshots.get(id);
-    if (!entry || !entry.cloud.classification || !snap) return false;
-    restoreClassification(entry.cloud.classification, snap);
-    this._classSnapshots.delete(id);
+    const h = this._classHistory.get(id);
+    if (!entry || !entry.cloud.classification || !h || !h.canUndo) return false;
+    h.undo(entry.cloud.classification);
     this._refreshClassificationColours(id);
+    this._markClassificationEdited(id);
     return true;
+  }
+
+  /**
+   * Redo the most recently undone classification edit. Returns true on
+   * success, false when the redo branch is empty (nothing undone, or a fresh
+   * edit cleared it).
+   */
+  redoClassification(id: string): boolean {
+    const entry = this._clouds.get(id);
+    const h = this._classHistory.get(id);
+    if (!entry || !entry.cloud.classification || !h || !h.canRedo) return false;
+    h.redo(entry.cloud.classification);
+    this._refreshClassificationColours(id);
+    this._markClassificationEdited(id);
+    return true;
+  }
+
+  /** Whether the cloud has a classification edit that can be undone. */
+  canUndoClassification(id: string): boolean {
+    return this._classHistory.get(id)?.canUndo ?? false;
+  }
+
+  /** Whether the cloud has an undone classification edit that can be redone. */
+  canRedoClassification(id: string): boolean {
+    return this._classHistory.get(id)?.canRedo ?? false;
   }
 
   /**
@@ -2748,12 +2879,16 @@ export class Viewer {
    * Applies to every loaded cloud's material.
    */
   setPointSize(size: number): void {
-    this._pointSize = size;
+    // Clamp at the source of truth: imported share/session/preset state can hand
+    // in a non-finite or pathological value (a hand-edited `.olvsession` with
+    // `pointSize: 1e9` would push a giant sprite to the GPU). Bound to the same
+    // [1, 8] range the preferences clamp uses; non-finite falls back to 2.
+    this._pointSize = Math.min(8, Math.max(1, Number.isFinite(size) ? size : 2));
     // Splat mode applies a constant per-mode multiplier on the way to
-    // the GPU. The user-displayed size stays `size`; the rendered
+    // the GPU. The user-displayed size stays `this._pointSize`; the rendered
     // sprite is multiplied so neighbouring samples kiss in Soft /
     // Inspection mode without changing the "5 px" the user typed in.
-    const effective = size * splatRadiusMultiplier(this._splatMode);
+    const effective = this._pointSize * splatRadiusMultiplier(this._splatMode);
     this._pointSizeUniform.value = effective;
     for (const { material } of this._clouds.values()) {
       material.size = effective;
@@ -3038,7 +3173,10 @@ export class Viewer {
    */
   applyCameraState(state: SavedCameraState): void {
     if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
-    const fov = state.fov ?? DEFAULT_FOV;
+    // Clamp imported FOV to a sane perspective range — a share/session file
+    // could carry a non-finite or extreme value that breaks the projection.
+    const rawFov = state.fov ?? DEFAULT_FOV;
+    const fov = Math.min(120, Math.max(10, Number.isFinite(rawFov) ? rawFov : DEFAULT_FOV));
     if (this._camera.fov !== fov) {
       this._camera.fov = fov;
       this._camera.updateProjectionMatrix();
@@ -3095,10 +3233,14 @@ export class Viewer {
    *   0..clientHeight). At least 3 vertices required.
    * @param percentile - Reference-plane percentile in `[0, 1]`.
    *   Defaults to 0.05 — bottom 5 % of selected Z values is "ground".
+   * @param lin - `linearUnitToMetres` for the source CRS, used to convert the
+   *   returned {@link LassoVolumeReturn.stockpileSuffix} band into metres.
+   *   Defaults to 1 (native units already metres).
    */
   computeLassoVolume(
     lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>,
     percentile: number = 0.05,
+    lin: number = 1,
   ): LassoVolumeReturn | null {
     if (lasso.length < 3) return null;
 
@@ -3151,6 +3293,10 @@ export class Viewer {
     const selectionByCloudId = new Map<string, ReadonlyArray<number>>();
     const subsetParts: Float32Array[] = [];
     let totalSelected = 0;
+    // True once any cloud that contributes selected points was voxel-reduced to
+    // fit the device budget — the volume's honesty caveat reflects the thinner
+    // sample. (See `_cloudWasReduced`.)
+    let anySourceReduced = false;
     for (const [id, entry] of this._clouds) {
       const positions =
         stride === 1
@@ -3170,6 +3316,7 @@ export class Viewer {
           ? localIndices
           : localIndices.map((i) => i * stride);
       selectionByCloudId.set(id, sourceIndices);
+      if (this._cloudWasReduced(entry.cloud)) anySourceReduced = true;
       totalSelected += localIndices.length;
       // Pack the selected points' xyz into a contiguous buffer for
       // the volume math.
@@ -3230,6 +3377,12 @@ export class Viewer {
     });
     return {
       result: lassoOut.result,
+      stockpileSuffix: stockpileToastSuffix(
+        lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
+        selectedPositions,
+        lin,
+        anySourceReduced,
+      ),
       selectedCount: totalSelected,
       lasso,
       selectionByCloudId,
@@ -3501,8 +3654,33 @@ export class Viewer {
    * while a click-driven tool is active; the live probe is the exception — it
    * is a passive hover readout, so navigation stays live during it.
    */
+  /** True while a modal click-to-act tool (measure / inspect / annotate) is
+   *  armed. Probe keeps navigation live, so it does not count. */
+  get toolActive(): boolean {
+    return this._toolMode === 'measure' || this._toolMode === 'inspect' || this._toolMode === 'annotate';
+  }
+
+  /**
+   * Hold-Space "re-orient" pause. While paused, a modal tool stays armed but
+   * camera navigation gets pointer input back (orbit / pan / zoom) and canvas
+   * clicks no longer act on the tool — so the user can reposition the view
+   * mid-draw, then release to resume. No-op unless a modal tool is active.
+   */
+  setToolPaused(paused: boolean): void {
+    if (!this.toolActive || this._toolPaused === paused) return;
+    this._toolPaused = paused;
+    this._nav.setInputEnabled(paused);
+    // Inspect owns its own cursor; measure / annotate use the crosshair.
+    this._canvas.style.cursor = paused
+      ? 'grab'
+      : this._toolMode === 'inspect'
+        ? ''
+        : 'crosshair';
+  }
+
   private _setToolMode(mode: ToolMode): void {
     if (mode === this._toolMode) return;
+    this._toolPaused = false;
     this._toolMode = mode;
     this._measure.setActive(mode === 'measure');
     this._inspect.setActive(mode === 'inspect');
@@ -3526,6 +3704,29 @@ export class Viewer {
   // ─────────────────────────────────────────────────────────────────────────
   // Camera
   // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Pick the point under a screen-NDC position and glide the orbit pivot to it
+   * (the right-click "Focus here" gesture, shared with double-click). Returns
+   * false when nothing is under the cursor so the caller can fall back.
+   */
+  focusOnScreen(ndcX: number, ndcY: number): boolean {
+    const point = this._pickPoint(ndcX, ndcY);
+    if (!point) return false;
+    this._nav.focusOn(point);
+    return true;
+  }
+
+  /**
+   * Whether a cloud's resident points are a device-budget reduction of a
+   * denser source — true when the declared source count meaningfully exceeds
+   * the resident count (voxel/stride downsample kicked in at load). Used to add
+   * an honesty caveat to volumes measured on the thinner sample.
+   */
+  private _cloudWasReduced(cloud: PointCloud): boolean {
+    const declared = cloud.declaredPointCount;
+    return declared != null && cloud.pointCount < declared * 0.95;
+  }
 
   /**
    * Fit the camera to encompass all visible clouds, gliding to an oblique
@@ -4439,7 +4640,8 @@ export class Viewer {
     }
     // `removeCloud` drops each cloud's snapshots, but clear both maps
     // outright in case a snapshot ever outlived its cloud entry.
-    this._classSnapshots.clear();
+    this._classHistory.clear();
+    this._classEpochs.clear();
     this._selectionSnapshots.clear();
     this.detachStreamingCloud();
     this._nav.dispose();

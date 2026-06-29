@@ -82,16 +82,24 @@ export interface ProfileChartSample {
  * Persisted so the headline can read its cut / fill / net without
  * re-sampling and so the PDF report has a stable record to include.
  */
+/**
+ * UNIT CONTRACT: a VolumeRecord stores volumes in the cloud's NATIVE (render /
+ * source) linear units cubed — NOT cubic metres — exactly like every other
+ * measurement. Display and export convert with `unitToMetres³`
+ * (`formatVolumeRender`, the chain aggregator, and `measurementExport`'s volume
+ * branch all do this). For a metre-based CRS native³ == m³; for a foot CRS it is
+ * ft³. Storing native keeps one conversion seam at the boundary.
+ */
 export interface VolumeRecord {
-  /** Cubic metres above the reference plane. */
+  /** Fill above the reference plane, native render units³ (×unitToMetres³ → m³). */
   fill: number;
-  /** Cubic metres below the reference plane. */
+  /** Cut below the reference plane, native render units³ (×unitToMetres³ → m³). */
   cut: number;
-  /** Net = fill − cut, m³. */
+  /** Net = fill − cut, native render units³ (×unitToMetres³ → m³). */
   net: number;
-  /** Reference Z used (local render-space), m. */
+  /** Reference Z used (local render-space), native units. */
   referenceZ: number;
-  /** Polygon footprint area on the horizontal plane, m². */
+  /** Polygon footprint area on the horizontal plane, native units² (×unitToMetres² → m²). */
   footprintArea: number;
   /** Cloud points whose XY projection lay inside the polygon. */
   pointsInPolygon: number;

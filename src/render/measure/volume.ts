@@ -72,7 +72,7 @@ function normalize(v: Vec3): Vec3 {
  * world coordinates, just with the height stripped to zero relative to
  * the reference point. Use `pointInPolygon2D` for the actual inside test.
  */
-function horizontalProjection(p: Vec3, up: Vec3): { x: number; y: number } {
+export function horizontalProjection(p: Vec3, up: Vec3): { x: number; y: number } {
   // For Z-up world (the OpenLiDARViewer convention), this is just (px, py).
   // The general form below works for any `up` axis by picking the two
   // basis vectors that span the horizontal plane.

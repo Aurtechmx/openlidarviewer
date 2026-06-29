@@ -3623,6 +3623,27 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: 10px; padding: 12px;
 }
 .olv-cl-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
+
+/* Manual classification-edit panel — mounts directly beneath .olv-class-panel,
+   so it borrows the same 248px dock chrome to read as a first-class sibling.
+   Controls stack in full-width rows; the primary "Reclassify (lasso)" action is
+   full width so its label can never clip in the cramped left dock. */
+.olv-reclass-panel {
+  width: 248px; box-sizing: border-box; margin-top: var(--space-md);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.olv-reclass-head { font-size: 12px; font-weight: 500; margin-bottom: var(--space-2xs); }
+.olv-reclass-select {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: var(--text-sm);
+  color: var(--text); background: transparent; border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); cursor: pointer;
+}
+.olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
+.olv-reclass-go { width: 100%; text-align: center; }
+.olv-reclass-actions { display: flex; gap: var(--space-sm); }
+.olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
 .olv-cl-banner {
   font-size: 10.5px; font-family: var(--mono); color: var(--accent);

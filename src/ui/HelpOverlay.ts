@@ -72,7 +72,10 @@ export class HelpOverlay {
         section('Navigation', [
           ['Orbit / Walk / Fly', 'Switch mode with 1, 2 and 3.'],
           ['Look', 'Drag to rotate, or orbit with the arrow keys; scroll to zoom.'],
-          ['Move', 'WASD in walk and fly; R frames the scan, F focuses the centre.'],
+          ['Move', 'WASD in walk and fly; Space / C raise and lower; hold Shift to sprint.'],
+          ['Frame', 'R frames the whole scan; F focuses the centre; double-click a point to focus there.'],
+          ['Re-orient', 'Hold Space while a tool is active to rotate / pan, then release to resume.'],
+          ['Right-click', 'A quick menu — focus here, frame the scan, or snap to a view.'],
         ]),
         section('Keyboard shortcuts', [
           ['A', 'Toggle the Annotate tool.'],
@@ -83,7 +86,8 @@ export class HelpOverlay {
           ['H', 'Show or hide the controls HUD.'],
           ['V', 'Save the current camera view.'],
           ['Delete', 'Remove the selected annotation.'],
-          ['Ctrl+Z', 'Undo an annotation change; add Shift to redo.'],
+          ['Enter / Backspace', 'While measuring: finish a shape / undo the last point.'],
+          ['Ctrl+Z', 'Undo your last edit — annotation or classification; add Shift to redo.'],
           ['Cmd/Ctrl+K', 'Open the command palette.'],
           ['Esc', 'Cancel the active tool or draft.'],
           // `?` is owned by the ShortcutSheet (main.ts binds it before the

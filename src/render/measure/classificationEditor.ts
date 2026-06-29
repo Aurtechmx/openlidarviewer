@@ -73,6 +73,31 @@ export function applyClassSwap(
 }
 
 /**
+ * Reclassify an explicit set of point indices to `newClass`. Used by the
+ * screen-lasso reclassify tool, where the selection is computed in screen space
+ * (which points fell inside the drawn lasso) rather than from a horizontal
+ * polygon. Out-of-range indices are skipped defensively. Edited in place; the
+ * caller snapshots for undo (see `classEditHistory`).
+ */
+export function applyIndexReclassify(
+  classification: Uint8Array,
+  indices: readonly number[],
+  newClass: number,
+): ClassEditResult {
+  const n = classification.length;
+  let changed = 0;
+  for (let k = 0; k < indices.length; k++) {
+    const i = indices[k];
+    if (i < 0 || i >= n) continue;
+    if (classification[i] !== newClass) {
+      classification[i] = newClass;
+      changed++;
+    }
+  }
+  return { changedCount: changed, pointCount: n };
+}
+
+/**
  * Apply a polygon-based re-classification. Every point whose horizontal
  * projection falls inside the polygon gets its class set to `newClass`
  * (regardless of its current class). The horizontal projection uses Z as

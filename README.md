@@ -1,10 +1,13 @@
 # OpenLiDARViewer
 
 [![CI](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/aurtechmx/openlidarviewer/releases/latest)
+[![Live demo](https://img.shields.io/badge/live%20demo-lidar.aurtech.mx-19C2D8)](https://lidar.aurtech.mx/)
 ![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
 ![Rendering](https://img.shields.io/badge/rendering-WebGL%20%2F%20WebGPU-blue)
 ![Privacy](https://img.shields.io/badge/privacy-local--first-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+[![Stars](https://img.shields.io/github/stars/aurtechmx/openlidarviewer?style=flat&color=f5c518)](https://github.com/aurtechmx/openlidarviewer/stargazers)
 
 ![OpenLiDARViewer — point-cloud exploration without the desktop overhead](docs/screenshots/openlidarviewer-promo.jpg)
 
@@ -15,6 +18,10 @@ Local-first. Cited. Honest about what it can't tell you.
 **Live version: [https://lidar.aurtech.mx/](https://lidar.aurtech.mx/)**
 
 **New here? Read the [User Guide](docs/USER_GUIDE.md)** — open a scan, measure, analyse terrain, compare two scans, and share your work, with nothing uploaded.
+
+### Try it in 10 seconds
+
+No install, no account, no upload. Open **[lidar.aurtech.mx](https://lidar.aurtech.mx/)**, then drag a `.las`, `.laz`, or `.copc.laz` file (or paste a remote COPC / `ept.json` URL) onto the page. You're navigating the cloud in your browser, and the file never leaves your device.
 
 ---
 
@@ -182,8 +189,6 @@ for how each terrain product is validated.
 | A 9.6M-point drone survey, height-colored, with the Scan Intelligence panel and the Orbit / Walk / Fly navigation. | The measurement toolkit — here a distance between two picked points; it also measures polyline, area, height, angle, slope, and cross-section profile. |
 | ![Inspecting a point](docs/screenshots/inspect-tool.jpg) | ![Scan Intelligence panel](docs/screenshots/scan-intelligence-panel.jpg) |
 | Inspecting a point: a glowing marker and a card with its real-world coordinates and attributes. | The Scan Intelligence panel — point count, dimensions, density, spacing, attributes, and the Advanced report. |
-| ![Dataset Intelligence card](docs/screenshots/dataset-intelligence-card.jpg) | |
-| The Dataset Intelligence card — informational summary of the loaded scan: Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, and Terrain Confidence. Rows for which no signal is available render as `—`. | |
 
 More in [`docs/screenshots.md`](docs/screenshots.md).
 
@@ -407,9 +412,14 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.0**. The full, dated history is in
+The current release is **v0.5.1**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.5.1 — Auditable volume · classification editing · integrity reports
+- **Stockpile / earthworks volume with a confidence band** — the lasso volume readout states its own uncertainty (sampling error + a systematic base-plane term, combined in quadrature) with a show-the-math breakdown and honest caveats
+- **Manual classification editing** end-to-end: a class picker + **lasso-reclassify** tool with real **multi-step undo/redo**; edits mutate the live class channel and round-trip straight into LAS export, and they bump a per-cloud **edit epoch** that invalidates any stale analysis/grade
+- **Tamper-evident integrity report** — measurements export as a JSON report whose findings, provenance, and classification edit-epoch are hashed into a verifiable content digest (catches accidental/casual edits; not a cryptographic signature), plus a **two-epoch change-detection band** that reports whether a change even exceeds its own error
 
 ### v0.5.0 — Measure · Place · Compare · Share
 - The **v0.5 line**: measure tools that **snap** to real returns or to placed geometry, **KML export** of annotations/measurements/views for georeferenced scans, a **Layers** panel (show/hide, isolate, lock, CRS-mismatch flagging), **two-epoch change detection** (cut/fill with co-registration honesty), and a **clip box**
@@ -513,6 +523,26 @@ OpenLiDARViewer is an active R&D-stage project focused on lightweight visualizat
 - Eye Dome Lighting is a screen-space depth cue, not physically-based lighting; it is off by default on the WebGL 2 fallback and on mobile.
 
 Full detail is in [`docs/limitations.md`](docs/limitations.md).
+
+## FAQ
+
+**Can I view LAS / LAZ / COPC files in the browser?**
+Yes. Drag a `.las`, `.laz`, or `.copc.laz` onto [lidar.aurtech.mx](https://lidar.aurtech.mx/), or paste a remote COPC / `ept.json` URL. No install, no plugin.
+
+**Is my data uploaded anywhere?**
+No. Files are read and rendered locally in your browser. The only network calls are for remote datasets you choose to open; your local files never leave your device.
+
+**What's the largest scan it can open?**
+Local files are bounded by browser memory and GPU. For very large datasets, stream them as COPC (local or remote) or convert with PDAL / Entwine — streaming only loads the resident set the camera needs.
+
+**Which formats are supported?**
+LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; COPC and EPT for streaming. See [Supported / Target Formats](#supported--target-formats).
+
+**Is it survey-grade?**
+No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Validate against ground control where accuracy matters.
+
+**Does it need WebGPU?**
+No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 ## Contributing
 

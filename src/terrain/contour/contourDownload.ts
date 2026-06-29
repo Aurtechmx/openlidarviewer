@@ -20,6 +20,7 @@ import { geojsonString } from './geojsonContours';
 import { svgContours } from './svgContours';
 import { dxfContours, type DxfLinearUnit } from './dxfContours';
 import type { ExportProvenance } from '../export/exportProvenance';
+import { triggerDownload } from '../../io/download';
 
 /** Supported pure-data export formats. */
 export type ContourFormat = 'geojson' | 'svg' | 'dxf';
@@ -140,14 +141,7 @@ export function triggerBrowserDownload(file: ContourFile): boolean {
   if (typeof document === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) {
     return false;
   }
-  const blob = new Blob([file.content], { type: file.mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = file.filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  // Shared helper defers the object-URL revoke (Safari / iOS / large-blob safe).
+  triggerDownload(new Blob([file.content], { type: file.mime }), file.filename);
   return true;
 }

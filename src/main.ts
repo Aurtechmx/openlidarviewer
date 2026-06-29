@@ -29,7 +29,7 @@ import {
   type ThemeName,
 } from './ui/themes';
 import type { CommandPalette } from './ui/CommandPalette';
-import { ShortcutSheet } from './ui/ShortcutSheet';
+import type { ShortcutSheet } from './ui/ShortcutSheet';
 import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
@@ -45,6 +45,12 @@ import {
   CAMERA_PRESET_ORDER,
 } from './render/camera/cameraPresets';
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
+import {
+  triggerDownload,
+  downloadBytes as downloadFileBytes,
+  downloadText,
+} from './io/download';
+import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { summarizeMeasurementTrust } from './render/measure/measurementTrust';
@@ -58,6 +64,7 @@ import {
 import { AnnotationPanel } from './ui/AnnotationPanel';
 import { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
+import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import {
@@ -182,6 +189,20 @@ import {
   loadRgbAutoNormalize,
   loadEmbedBridge,
   loadLasLoader,
+  loadReclassifyUi,
+  loadContextMenu,
+  loadCommandPalette,
+  loadShortcutSheet,
+  loadMeasurementExport,
+  loadMeasurementReport,
+  loadKmlExport,
+  loadConfirmFullExport,
+  loadFloorPlanConfidence,
+  loadFullCloudGradeAction,
+  loadSession,
+  loadCompareEpochs,
+  loadCompareDtms,
+  loadChangeRaster,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -468,7 +489,11 @@ let pendingLassoSave: {
 const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
   onCommit: (lasso) => {
     if (!viewer) return;
-    const out = viewer.computeLassoVolume(lasso, 0.05);
+    // Native→metre factor for the source CRS (feet for a state-plane-feet
+    // cloud). Handed to computeLassoVolume so the stockpile band it returns is
+    // already converted to metres, and reused below for the m³/m² readout.
+    const lin = crsService.current()?.linearUnitToMetres ?? 1;
+    const out = viewer.computeLassoVolume(lasso, 0.05, lin);
     if (out === null) {
       pendingLassoSave = null;
       showLassoToast('Lasso volume — no points selected. Draw around a denser region.');
@@ -483,12 +508,11 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     lassoVolumeTool.disable();
     viewer.setLassoMode(false);
     syncLassoButton();
-    // The lasso result is in the source CRS's native linear units (feet for a
-    // state-plane-feet cloud). Convert to metres before stamping m³ / m² —
-    // areas by lin², volumes by lin³ — the same factor the measure tool uses.
-    // (The CRS gate below still blocks geographic / unknown; this corrects the
-    // remaining projected-feet case the gate lets through.)
-    const lin = crsService.current()?.linearUnitToMetres ?? 1;
+    // The lasso result is in the source CRS's native linear units. Convert to
+    // metres before stamping m³ / m² — areas by lin², volumes by lin³ — the
+    // same factor the measure tool uses. (The CRS gate below still blocks
+    // geographic / unknown; this corrects the projected-feet case it lets
+    // through.)
     const lin2 = lin * lin;
     const lin3 = lin2 * lin;
     const fillM3 = (out.result.fill * lin3).toFixed(2);
@@ -527,9 +551,13 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       crsVerdict.validity === 'safe-explicit-local'
         ? ' · units assumed metres'
         : '';
+    // `out.stockpileSuffix` is the ` · Stockpile: … ± … (±%) · confidence`
+    // band the Viewer computed over the same sample with a "lowest ground"
+    // base plane — the honest figure cloud viewers report without. Empty when
+    // there's nothing trustworthy to claim (too few points / degenerate).
     showLassoToast(
       `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat}.`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat}.${out.stockpileSuffix}`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,
@@ -661,6 +689,17 @@ window.addEventListener('keydown', (e) => {
   // Never hijack key events from form inputs.
   if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
 
+  // Hold-Space re-orient: while a modal tool (measure / inspect / annotate) is
+  // armed, holding Space hands pointer input back to camera navigation so the
+  // user can rotate / pan / zoom mid-draw; releasing it (keyup, below) resumes
+  // the tool. Outside a tool, Space keeps its walk/fly "move up" meaning, so we
+  // only intercept it when a tool is active.
+  if (e.code === 'Space' && viewer?.toolActive) {
+    if (!e.repeat) viewer.setToolPaused(true);
+    e.preventDefault();
+    return;
+  }
+
   // Polygon-completion keyboard shortcuts — Enter commits the
   // in-progress polygon (area/volume/polyline/profile), Backspace
   // pops the most recent vertex. Both only fire while measure mode
@@ -694,6 +733,41 @@ window.addEventListener('keydown', (e) => {
   if (handled) {
     showLassoToast('Back to navigation.');
   }
+});
+
+// Releasing Space resumes the modal tool after a hold-Space re-orient.
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space' && viewer?.toolActive) viewer.setToolPaused(false);
+});
+
+// Blur (Cmd-Tab away while holding Space, etc.) must also resume the tool, or it
+// would stay stuck in the paused/navigation state.
+window.addEventListener('blur', () => viewer?.setToolPaused(false));
+
+// Right-click the 3-D canvas for a small navigation context menu. The menu UI
+// is lazy-loaded on first use, so it stays out of the startup shell. Only armed
+// once a scan is loaded — otherwise the browser's native menu is left alone.
+stage.canvas.addEventListener('contextmenu', (e) => {
+  if (!viewer || !activeId) return;
+  e.preventDefault();
+  const rect = stage.canvas.getBoundingClientRect();
+  const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  const v = viewer;
+  void loadContextMenu().then(({ showContextMenu }) => {
+    showContextMenu(e.clientX, e.clientY, [
+      {
+        label: 'Focus here',
+        run: () => {
+          if (!v.focusOnScreen(ndcX, ndcY)) v.frameAll();
+        },
+      },
+      { label: 'Frame scan', run: () => v.frameAll() },
+      { label: 'Top view', run: () => void v.setStandardView('top') },
+      { label: 'Front view', run: () => void v.setStandardView('front') },
+      { label: 'Oblique view', run: () => void v.setCameraPreset('oblique') },
+    ]);
+  });
 });
 
 window.addEventListener('keydown', (e) => {
@@ -1037,10 +1111,7 @@ const inspector = new Inspector({
               wkt: wf.wkt,
             });
             if (pkg) {
-              downloadBlob(
-                pkg.filename,
-                new Blob([pkg.zip as BlobPart], { type: 'application/zip' }),
-              );
+              triggerDownload(new Blob([pkg.zip as BlobPart], { type: 'application/zip' }), pkg.filename);
               recordUsage('export', mode);
               dropZone.setProgress(null);
               return;
@@ -1049,7 +1120,7 @@ const inspector = new Inspector({
             console.warn('[image-export] world-file packaging failed — shipping bare PNG:', err);
           }
         }
-        downloadBlob(`${base}-${mode}.png`, result.blob);
+        triggerDownload(result.blob, `${base}-${mode}.png`);
         recordUsage('export', mode);
         dropZone.setProgress(null);
       })
@@ -1256,6 +1327,10 @@ const crsCoordinator = createCrsCoordinator({
 // mounted — and the shortcut / palette entries only registered —
 // when the flag is on.
 const workflowController = new WorkflowController();
+// Eager on purpose. A flag-gated *dynamic* import gets its chunk tree-shaken
+// away (the only caller sits behind `if (WORKFLOW_RECORDER_ENABLED)`, false by
+// default) while the import() statement survives — a dangling specifier that
+// 404s only on the obfuscated live build. The static import keeps it whole.
 const workflowConfigPanel = new WorkflowConfigPanel();
 if (WORKFLOW_RECORDER_ENABLED) {
   stage.overlay.append(workflowController.badge);
@@ -1312,7 +1387,7 @@ function toggleWorkflowRecord(): void {
 let commandPalette: CommandPalette | null = null;
 async function openCommandPalette(): Promise<void> {
   if (!commandPalette) {
-    const { CommandPalette } = await import('./ui/CommandPalette');
+    const { CommandPalette } = await loadCommandPalette();
     commandPalette = new CommandPalette();
     stage.overlay.append(commandPalette.element);
     commandPalette.setActions(ACTION_REGISTRY);
@@ -1327,8 +1402,25 @@ stage.overlay.append(recommendedViewChip.element);
 // v0.3.9 — keyboard shortcut sheet (open via `?`). Reads the same
 // action registry as the palette so adding a new action makes it
 // discoverable in both surfaces without a second touch.
-const shortcutSheet = new ShortcutSheet();
-stage.overlay.append(shortcutSheet.element);
+// The shortcut sheet is only ever shown on a `?` press (or the "Show keyboard
+// shortcuts" action), so it is lazy-loaded on first use to keep its ~250 lines
+// out of the startup shell. Same direct-dynamic-import pattern as the command
+// palette below.
+let shortcutSheet: ShortcutSheet | null = null;
+let shortcutSheetLoading: Promise<ShortcutSheet> | null = null;
+function ensureShortcutSheet(): Promise<ShortcutSheet> {
+  if (shortcutSheet) return Promise.resolve(shortcutSheet);
+  if (!shortcutSheetLoading) {
+    shortcutSheetLoading = loadShortcutSheet().then(({ ShortcutSheet }) => {
+      const sheet = new ShortcutSheet();
+      stage.overlay.append(sheet.element);
+      sheet.setActions(ACTION_REGISTRY);
+      shortcutSheet = sheet;
+      return sheet;
+    });
+  }
+  return shortcutSheetLoading;
+}
 
 // v0.3.9 — onboarding tour. Mounts the overlay immediately so the
 // SVG / card DOM exists; auto-starts on the first session per
@@ -1436,6 +1528,7 @@ async function runDeriveClassification(): Promise<void> {
     );
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
+    noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
     classLegendPanel.setClasses(countClasses(result.codes));
     // Surface the run's honest confidence + caveats in the legend caption, not
@@ -1448,6 +1541,7 @@ async function runDeriveClassification(): Promise<void> {
       warnings: result.warnings,
     });
     classLegendPanel.show();
+    void showReclassifyUi();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
     const top = Object.entries(result.counts)
@@ -1519,11 +1613,13 @@ async function runFillUnclassified(): Promise<void> {
     );
     if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
+    noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
     classLegendPanel.setClasses(countClasses(result.codes));
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
+    void showReclassifyUi();
     const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
     showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
   } catch (err) {
@@ -1870,7 +1966,7 @@ function buildActionRegistry(): Action[] {
     keys: '?',
     hint: 'Every action and key, grouped by section.',
     keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
-    run: () => shortcutSheet.open(),
+    run: () => void ensureShortcutSheet().then((sheet) => sheet.open()),
   });
 
   return actions;
@@ -1885,9 +1981,8 @@ if (duplicateActionIds.length > 0) {
     `Command palette: duplicate action ids: ${duplicateActionIds.join(', ')}`,
   );
 }
-// commandPalette.setActions runs in its lazy init (openCommandPalette); the
-// shortcut sheet is eager so it keeps its action list at startup.
-shortcutSheet.setActions(ACTION_REGISTRY);
+// Both the command palette and the shortcut sheet are lazy: each wires
+// ACTION_REGISTRY into its instance during its own first-use init.
 
 // Cmd-K / Ctrl-K toggles the palette. Esc inside the palette closes
 // it (handled internally), so the universal Esc handler below
@@ -1911,7 +2006,7 @@ window.addEventListener('keydown', (e) => {
   // Don't fight a chord — only the bare `?` (Shift+/ on most layouts).
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   e.preventDefault();
-  shortcutSheet.toggle();
+  void ensureShortcutSheet().then((sheet) => sheet.toggle());
 });
 
 // Cmd-Shift-U / Ctrl-Shift-U toggles workflow recording. When idle,
@@ -2291,6 +2386,42 @@ const analysePanel = new AnalysePanel({
 let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null = null;
 
 const classLegendPanel = new ClassLegendPanel();
+
+// Manual classification-edit panel — lazy-loaded and mounted just below the
+// legend the first time a classification appears, so its controls + lasso tool
+// stay out of the startup shell. `showReclassifyUi()` is called wherever a
+// classification becomes available; `hideReclassifyUi()` on detach.
+let reclassifyUi: ReclassifyUi | null = null;
+let reclassifyUiLoading: Promise<void> | null = null;
+async function showReclassifyUi(): Promise<void> {
+  if (reclassifyUi) {
+    reclassifyUi.setVisible(true);
+    reclassifyUi.refresh();
+    return;
+  }
+  // Dedupe concurrent first-mounts (a classification-load show racing an
+  // explicit one) so the panel is only ever created once.
+  if (!reclassifyUiLoading) {
+    reclassifyUiLoading = (async () => {
+      const { createReclassifyUi } = await loadReclassifyUi();
+      const ui = createReclassifyUi({
+        canvas: stage.canvas,
+        getViewer: () => viewer,
+        getActiveId: () => activeId,
+        onToast: showLassoToast,
+      });
+      classLegendPanel.element.after(ui.element);
+      reclassifyUi = ui;
+    })();
+  }
+  await reclassifyUiLoading;
+  // Cast: TS can't see the async IIFE reassign the outer `let` across the await.
+  (reclassifyUi as ReclassifyUi | null)?.setVisible(true);
+}
+function hideReclassifyUi(): void {
+  reclassifyUi?.setVisible(false);
+}
+
 classLegendPanel.onChange((visibility) => {
   viewer.applyClassVisibility(visibility);
   // Re-run the scan report so its class-dependent figures (count, density,
@@ -2440,16 +2571,6 @@ function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
   return ctx.positions;
 }
 
-/** Download bytes as a file (Blob → anchor click). */
-function downloadFileBytes(filename: string, bytes: Uint8Array, mime: string): void {
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const url = URL.createObjectURL(new Blob([ab], { type: mime }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
@@ -2524,7 +2645,7 @@ const objectPanel = new ObjectPanel({
     // Surface a one-glance confidence read in the panel. Computed here, inside
     // the already-loaded lazy floor-plan chunk, so the panel needs only the
     // plain struct (no heavy floor-plan code in its bundle).
-    const { floorPlanConfidence } = await import('./terrain/space/floorplan/floorPlanConfidence');
+    const { floorPlanConfidence } = await loadFloorPlanConfidence();
     objectPanel.showFloorPlanSummary(floorPlanConfidence(plan));
   },
 });
@@ -2567,6 +2688,15 @@ const terrainRunner = createTerrainAnalysisRunner({
   },
 });
 
+// Honesty guard: a manual classification edit changes the bare-earth surface, so
+// any cached terrain core / on-screen grade computed from the old classes is now
+// stale. Drop the cache (and abort any in-flight compute) the moment an edit
+// lands, so the next Analyse recomputes against the edited classes instead of
+// serving a number that silently no longer matches what's on screen.
+void viewerLoaded.then((v) => {
+  v.onClassificationEdited = () => terrainRunner.abortAndClearCache();
+});
+
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
 // local file at full resolution (the viewer keeps only the display-reduced
 // cloud for large scans). Streamed/remote scans have no entry here.
@@ -2590,7 +2720,7 @@ const exportPanel = new ExportPanel({
     // confirm before decoding a large source. The confirm pulls the dialog +
     // byte formatter, so it's lazy-loaded here (full-res export is a deliberate
     // action) to keep it out of the eager startup chunk. Declining aborts.
-    const { confirmFullExport } = await import('./convert/confirmFullExport');
+    const { confirmFullExport } = await loadConfirmFullExport();
     if (!(await confirmFullExport(f))) return null;
     return decodeFull(await f.arrayBuffer(), f.name);
   },
@@ -2602,7 +2732,7 @@ const exportPanel = new ExportPanel({
     if (!viewer) return;
     const measurements = viewer.measure.getMeasurements();
     if (measurements.length === 0) return;
-    const { measurementsToGeoJSON, measurementsToCsv } = await import('./export/measurementExport');
+    const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
     // Measurement points are LOCAL (recentered); add the origin back to land them
     // in the source projected/local frame. Geographic reprojection (→ lon/lat) is
@@ -2621,13 +2751,30 @@ const exportPanel = new ExportPanel({
     const stem = cloud ? baseName(cloud.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
+  exportSignedReport: async () => {
+    if (!viewer) return;
+    const ms = viewer.measure.getMeasurements();
+    if (ms.length === 0) return;
+    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    const { signedReportFile } = await loadMeasurementReport();
+    const f = signedReportFile(
+      ms,
+      viewer.measure.worldUp,
+      viewer.measure.unitToMetres,
+      cloud ? baseName(cloud.name) : 'scan',
+      cloud?.metadata?.crs?.name,
+      new Date().toISOString(),
+      activeId ? viewer.classificationEpoch(activeId) : 0,
+    );
+    downloadText(f.filename, f.text);
+  },
   exportKml: async () => {
     if (!viewer) return;
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
     const origin = cloud?.origin ?? [0, 0, 0];
     const toLonLat = makeLocalToLonLat(crsService.current(), origin);
     if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
-    const { buildKml } = await import('./export/kmlExport');
+    const { buildKml } = await loadKmlExport();
     const input: KmlExportInput = {
       annotations: viewer.annotate.getAnnotations(),
       measurements: viewer.measure.getMeasurements(),
@@ -3095,6 +3242,7 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());
   classLegendPanel.show();
+  void showReclassifyUi();
   // Reset the inspector's copy/JSON scope stamp — the fresh legend is
   // all-visible, so this clears any stamp left by a prior filtered scan.
   syncInspectClassScope();
@@ -3164,7 +3312,12 @@ void viewerLoaded.then(() => {
   });
   // Persist the unit choice whenever it changes.
   viewer.measure.setOnUnitChange(persistPrefs);
-  viewer.annotate.setOnChange(refreshAnnotationPanel);
+  viewer.annotate.setOnChange(() => {
+    refreshAnnotationPanel();
+    // Mark the annotation stack as most-recently-edited so a global Undo
+    // targets it (suppressed while the router itself replays an undo/redo).
+    noteEdit('annotation');
+  });
 
   // Provenance override — when the user picks a capture type from the
   // dropdown in the Inspector's Provenance section, rebuild the
@@ -3267,6 +3420,30 @@ if (testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
+      // Classification edit seam — seed a uniform class, reclassify a screen
+      // lasso, undo/redo, and read a point's class, so the reclassify tool's
+      // full flow is e2e-verifiable without running the heavy classifier.
+      seedUniformClass: (cls: number): number => {
+        if (!activeId) return 0;
+        const cloud = v.getCloud(activeId);
+        if (!cloud) return 0;
+        const n = cloud.positions.length / 3;
+        v.applyDerivedClassification(activeId, new Uint8Array(n).fill(cls));
+        return n;
+      },
+      reclassifyLasso: (lasso: ReadonlyArray<{ x: number; y: number }>, newClass: number): number =>
+        activeId ? v.reclassifyLasso(activeId, lasso, newClass).changedCount : 0,
+      undoClass: (): boolean => (activeId ? v.undoClassification(activeId) : false),
+      redoClass: (): boolean => (activeId ? v.redoClassification(activeId) : false),
+      classAt: (i: number): number => {
+        const c = activeId ? v.getCloud(activeId)?.classification : undefined;
+        return c ? c[i] : -1;
+      },
+      // Mount/show the reclassify panel (normally triggered when a
+      // classification appears) and re-sync its undo/redo enabled state, so the
+      // visible controls are e2e-drivable without running the full classifier.
+      showReclassify: () => showReclassifyUi(),
+      refreshReclassify: () => reclassifyUi?.refresh(),
       // EPT laszip decode-worker round-trip — the one path no other e2e
       // exercises end-to-end in a real browser: the lazy worker-client chunk
       // load, `new Worker(new URL(...))` URL resolution (the seam the live
@@ -3462,10 +3639,28 @@ void viewerLoaded.then(() => {
       },
       onToggleHelp: () => helpOverlay.toggle(),
       onUndo: () => {
-        if (!helpOverlay.isOpen) viewer.annotate.undo();
+        if (helpOverlay.isOpen) return;
+        const id = activeId;
+        const canClass = !!id && viewer.canUndoClassification(id);
+        const pick = pickUndo(viewer.annotate.canUndo, canClass);
+        if (!pick) return;
+        withSuppressed(() => {
+          if (pick === 'classification' && id) viewer.undoClassification(id);
+          else viewer.annotate.undo();
+        });
+        if (pick === 'classification') reclassifyUi?.refresh();
       },
       onRedo: () => {
-        if (!helpOverlay.isOpen) viewer.annotate.redo();
+        if (helpOverlay.isOpen) return;
+        const id = activeId;
+        const canClass = !!id && viewer.canRedoClassification(id);
+        const pick = pickRedo(viewer.annotate.canRedo, canClass);
+        if (!pick) return;
+        withSuppressed(() => {
+          if (pick === 'classification' && id) viewer.redoClassification(id);
+          else viewer.annotate.redo();
+        });
+        if (pick === 'classification') reclassifyUi?.refresh();
       },
     });
   } else {
@@ -3588,7 +3783,7 @@ async function runFullCloudGradeAction(): Promise<void> {
   fullCloudGradeRunning = true;
   fullCloudGradeController = new AbortController();
   try {
-    const { runFullCloudGrade } = await import('./render/streaming/runFullCloudGradeAction');
+    const { runFullCloudGrade } = await loadFullCloudGradeAction();
     await runFullCloudGrade({
       viewer,
       panel: streamingPanel,
@@ -4113,7 +4308,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
   // The download filename now mirrors the template choice so the
   // user's Downloads folder distinguishes a Survey Summary from an
   // Engineering Inspection at a glance.
-  downloadBlob(`${exportFileStem}-${validatedTemplateId}.pdf`, result.blob);
+  triggerDownload(result.blob, `${exportFileStem}-${validatedTemplateId}.pdf`);
   // Per-section render failures are caught by the engine's isolation pass
   // and surfaced as a `failedSections` list — the PDF still ships but
   // misses those sections. Tell the user so they're not surprised by a
@@ -4129,24 +4324,6 @@ async function generateReportPdf(templateId: string): Promise<void> {
   }
 }
 
-/** Trigger a client-side download of text content. */
-function downloadText(filename: string, text: string): void {
-  const blob = new Blob([text], { type: 'text/plain' });
-  downloadBlob(filename, blob);
-}
-
-/**
- * Trigger a client-side download of a `Blob`. Used by the Visual Export
- * Studio for PNG downloads where the exporter has already produced a Blob.
- */
-function downloadBlob(filename: string, blob: Blob): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 /**
  * Push the Viewer's current render-quality state into the Inspector chips.
@@ -4354,7 +4531,7 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * and reopened without loss.
  */
 async function exportSession(): Promise<void> {
-  const { serializeSession } = await import('./io/session');
+  const { serializeSession } = await loadSession();
   const cloud = activeId ? viewer.getCloud(activeId) : undefined;
   const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
 
@@ -4432,7 +4609,7 @@ async function importSession(file: File): Promise<void> {
     // access below is safe (measure/annotate are built in the Viewer ctor, so
     // no GPU backend is needed — just a non-null instance).
     await viewerLoaded;
-    const { parseSession } = await import('./io/session');
+    const { parseSession } = await loadSession();
     const session = parseSession(await file.text());
     viewer.measure.loadMeasurements(session.measurements);
     viewer.annotate.loadAnnotations(session.annotations);
@@ -4939,6 +5116,7 @@ async function openStreamingCopc(
   // never seeds the legend, so it stays hidden.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
+  hideReclassifyUi();
   // Clear any prior filtered scan's inspector copy/JSON scope stamp.
   syncInspectClassScope();
   // Visual Export Studio — a streaming COPC cloud is now attached;
@@ -5695,6 +5873,7 @@ function resetToEmptyState(): void {
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
+  hideReclassifyUi();
   // Clear the inspector's copy/JSON scope stamp now there's no active filter.
   syncInspectClassScope();
   lastStreamingReportCloud = null;
@@ -5821,9 +6000,9 @@ function compareLoadedLayers(): void {
     // "working" line paints before the synchronous ground-filter compute.
     const [{ buildSharedEpochDtms }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
       await Promise.all([
-        import('./terrain/change/compareEpochs'),
-        import('./terrain/change/compareDtms'),
-        import('./terrain/change/changeRaster'),
+        loadCompareEpochs(),
+        loadCompareDtms(),
+        loadChangeRaster(),
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {
@@ -5942,12 +6121,7 @@ async function saveSnapshot(): Promise<void> {
     // app undisclosed. With an empty stamp (nothing hidden) the helper returns
     // the input Blob unchanged, keeping the snapshot byte-identical to before.
     const stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
-    const url = URL.createObjectURL(stamped);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'openlidarviewer.png';
-    link.click();
-    URL.revokeObjectURL(url);
+    triggerDownload(stamped, 'openlidarviewer.png');
   } catch {
     dropZone.setError('Could not save the view');
   }

@@ -119,10 +119,15 @@ export function measurementMetrics(
     case 'volume':
       set('area_m2', num(polygonAreaHorizontal(pts, up) * A));
       if (m.volume) {
-        // The cut/fill record is already in cubic metres (see VolumeRecord).
-        set('cut_m3', num(m.volume.cut));
-        set('fill_m3', num(m.volume.fill));
-        set('net_m3', num(m.volume.net));
+        // cut/fill/net are stored in the cloud's native (render) linear units,
+        // exactly like every other measurement and like `formatVolumeRender` /
+        // the chain aggregator expect — so convert to cubic metres here, ×L·A
+        // (= unitToMetres³), the same factor the box-volume branch applies. For
+        // metric data L=A=1 so this is a no-op; for a foot-CRS it is the fix.
+        const V = L * A;
+        set('cut_m3', num(m.volume.cut * V));
+        set('fill_m3', num(m.volume.fill * V));
+        set('net_m3', num(m.volume.net * V));
       }
       break;
   }

@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   applyClassSwap,
   applyPolygonReclassify,
+  applyIndexReclassify,
   snapshotClassification,
   restoreClassification,
 } from '../src/render/measure/classificationEditor';
@@ -166,5 +167,33 @@ describe('snapshotClassification / restoreClassification — undo helpers', () =
     const target = new Uint8Array(3);
     const snap = new Uint8Array(5);
     expect(() => restoreClassification(target, snap)).toThrow();
+  });
+});
+
+describe('applyIndexReclassify', () => {
+  it('sets only the listed indices and counts real changes', () => {
+    const cls = Uint8Array.from([1, 1, 1, 1, 1]);
+    const r = applyIndexReclassify(cls, [1, 3], 6);
+    expect(Array.from(cls)).toEqual([1, 6, 1, 6, 1]);
+    expect(r.changedCount).toBe(2);
+    expect(r.pointCount).toBe(5);
+  });
+
+  it('does not count an index already at the target class', () => {
+    const cls = Uint8Array.from([6, 1]);
+    expect(applyIndexReclassify(cls, [0, 1], 6).changedCount).toBe(1);
+  });
+
+  it('skips out-of-range indices defensively', () => {
+    const cls = Uint8Array.from([1, 1]);
+    const r = applyIndexReclassify(cls, [-1, 0, 99], 2);
+    expect(Array.from(cls)).toEqual([2, 1]);
+    expect(r.changedCount).toBe(1);
+  });
+
+  it('an empty selection is a no-op', () => {
+    const cls = Uint8Array.from([1, 2, 3]);
+    expect(applyIndexReclassify(cls, [], 9).changedCount).toBe(0);
+    expect(Array.from(cls)).toEqual([1, 2, 3]);
   });
 });
