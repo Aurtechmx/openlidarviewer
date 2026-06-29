@@ -29,6 +29,26 @@ Orbit is the default. Drag to rotate, right-drag to pan, scroll to zoom, and dou
 | 1 / 2 / 3 | Orbit / Walk / Fly mode |
 | Double-click | Fly to the clicked point |
 
+## Tools, panels, and shortcuts
+
+Beyond movement, a small set of global keys reach the tools and panels. Press `?` at any time for the in-app shortcut sheet, which is generated from the live key bindings and always matches the build you are running.
+
+| Input | Action |
+|---|---|
+| `?` | Open the searchable keyboard-shortcut sheet |
+| Cmd-K / Ctrl-K | Open the command palette — every tool, mode, theme, and export |
+| `M` | Measure tool |
+| `I` | Inspect tool |
+| `A` | Annotate tool |
+| `V` | Save the current camera view |
+| Ctrl/Cmd-Z | Undo the last edit (annotation or classification) |
+| Ctrl/Cmd-Shift-Z, Ctrl/Cmd-Y | Redo |
+| Delete / Backspace | Delete the current selection |
+| Hold Space (while a tool is active) | Temporarily hand the mouse back to camera navigation — rotate, pan, and zoom, then release to resume the tool |
+| Right-click the scan | Context menu: focus the pivot on the point under the cursor, frame the scan, or jump to a standard view |
+
+Bare-key shortcuts are ignored while you are typing in a text field, so naming a measurement or an annotation never also fires a tool.
+
 ## Mouse-look (pointer lock)
 
 In Walk and Fly modes, click the scan to capture the cursor. The mouse then steers the view like a first-person game. A "click to look around" prompt stays up until the cursor is captured. Press `Esc` to release it, and the cursor returns so you can use the panels again.

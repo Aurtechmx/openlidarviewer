@@ -78,3 +78,18 @@ describe('AuditLog hash chain', () => {
     expect(verifyAuditChain(log.entries, fnv1a)).toBe(0);
   });
 });
+
+import { sha256 as _sha256 } from '../src/render/measure/auditLog';
+describe('sha256 (FIPS-180-4 vectors)', () => {
+  test('empty string', () => {
+    expect(_sha256('')).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  });
+  test('"abc"', () => {
+    expect(_sha256('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
+  test('multi-block message', () => {
+    expect(_sha256('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq')).toBe(
+      '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1',
+    );
+  });
+});

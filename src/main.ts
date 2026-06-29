@@ -191,6 +191,7 @@ import {
   loadLasLoader,
   loadReclassifyUi,
   loadContextMenu,
+  loadViewCube,
   loadCommandPalette,
   loadShortcutSheet,
   loadMeasurementExport,
@@ -769,6 +770,28 @@ stage.canvas.addEventListener('contextmenu', (e) => {
     ]);
   });
 });
+
+// v0.5.2 — on-canvas compass / ViewCube gizmo. Opt-in behind `?viewcube=1` while
+// it gets on-device verification; the pure heading/face math is unit-tested
+// (viewCubeMath) and the widget routes through lazyChunks so its specifier can't
+// be scrambled by the live obfuscator. Mounts into the overlay once the Viewer
+// is ready and spins the rose from the camera heading each frame.
+if (urlParams.has('viewcube')) {
+  void viewerLoaded.then((v) => {
+    void loadViewCube().then(({ mountViewCube }) => {
+      const cube = mountViewCube({
+        host: stage.overlay,
+        getHeading: () => v.cameraHeadingDeg(),
+        onView: (view) => void v.setStandardView(view),
+      });
+      const tick = (): void => {
+        cube.update();
+        window.requestAnimationFrame(tick);
+      };
+      window.requestAnimationFrame(tick);
+    });
+  });
+}
 
 window.addEventListener('keydown', (e) => {
   // Another bare-key handler (e.g. `bindShortcuts`) already consumed this
@@ -2751,13 +2774,13 @@ const exportPanel = new ExportPanel({
     const stem = cloud ? baseName(cloud.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
-  exportSignedReport: async () => {
+  exportIntegrityReport: async () => {
     if (!viewer) return;
     const ms = viewer.measure.getMeasurements();
     if (ms.length === 0) return;
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
-    const { signedReportFile } = await loadMeasurementReport();
-    const f = signedReportFile(
+    const { integrityReportFile } = await loadMeasurementReport();
+    const f = integrityReportFile(
       ms,
       viewer.measure.worldUp,
       viewer.measure.unitToMetres,

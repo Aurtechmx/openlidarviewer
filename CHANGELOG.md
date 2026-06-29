@@ -2,9 +2,50 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.2] - 2026-06-29
+
+A polish release: a stronger integrity digest, a richer earthwork report, an
+opt-in on-canvas compass, and a build guard that closes the live-only 404 class
+for good.
+
+### Changed
+
+- **The integrity report now uses SHA-256 by default.** The content digest that
+  makes a measurement report tamper-evident is now a cryptographic-strength
+  SHA-256 (manifest v3), computed synchronously so the core stays pure and
+  deterministic. It is still an integrity digest, not a secret-keyed signature.
+  A caller can inject the older FNV-1a checksum where speed matters more.
+- **Volume findings carry the whole earthwork.** A volume measurement in the
+  integrity report now reports the net as its headline with the cut and fill,
+  the footprint area, the confidence tier, and any streaming-resident caveat
+  riding along, instead of the fill alone.
+
+### Added
+
+- **On-canvas compass / ViewCube (opt-in).** A small compass gizmo shows which
+  way the camera faces and snaps to a standard view on click. Behind `?viewcube=1`
+  while it gets on-device verification; the heading/face math is unit-tested and
+  the widget loads lazily.
+- **Build guard against inline dynamic imports.** A new `lint:inline-imports`
+  check fails the build if a runtime `import('./…')` reappears in `main.ts`,
+  where the obfuscator could scramble the specifier into a deploy-only 404. Wired
+  into the release gate and CI.
+
+### Documentation
+
+- The navigation guide and the User Guide now list the keyboard and mouse
+  shortcuts (command palette, the `?` sheet, undo, right-click menu, hold-Space),
+  sourced from the live key bindings.
+
+### Maintenance
+
+- The native-unit contract is documented on `StockpileBreakdown`, and the report
+  export's `signed*` names were renamed to `integrity*` to match what the file
+  actually is.
+
 ## [0.5.1] - 2026-06-28
 
-Deepens the honesty moat. Stockpile/earthworks volume now reports an auditable
+Deepens the honest-uncertainty work. Stockpile/earthworks volume now reports an auditable
 confidence band, manual classification editing lands end-to-end (class picker,
 lasso reclassify, multi-step undo/redo), and measurements export as a
 tamper-evident integrity report. Adds two-epoch change-detection uncertainty and

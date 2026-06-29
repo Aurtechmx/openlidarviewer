@@ -70,7 +70,26 @@ export function measurementsToFindings(
       }
     }
     if (value === null) return; // an incomplete measurement contributes nothing
-    findings.push({ label: m.name?.trim() || `${m.kind} ${i + 1}`, value, unit });
+    const label = m.name?.trim() || `${m.kind} ${i + 1}`;
+    // Volume measurements carry the cut/fill split, a confidence tier, and the
+    // streaming-resident caveat. The headline value is the NET (fill − cut); the
+    // cut and fill components and any coverage caveat ride along so the report
+    // shows the whole earthwork, not just the fill, and reads its own honesty.
+    if (m.kind === 'volume' && m.volume) {
+      const L = unitToMetres;
+      const V = L * L * L; // native render units³ → m³ (see VolumeRecord contract)
+      const net = m.volume.net * V;
+      const caveats = [
+        `Cut ${(m.volume.cut * V).toFixed(2)} m³ / fill ${(m.volume.fill * V).toFixed(2)} m³ over ${(m.volume.footprintArea * L * L).toFixed(2)} m² footprint.`,
+        'Point-sample integration assumes uniform coverage inside the polygon.',
+      ];
+      if (m.volumeResidentOnly) {
+        caveats.push('Sampled from streaming resident points only — may refine as more nodes load.');
+      }
+      findings.push({ label, value: net, unit: 'm³', confidence: m.volume.confidence, caveats });
+      return;
+    }
+    findings.push({ label, value, unit });
   });
   return findings;
 }
@@ -81,7 +100,7 @@ export function measurementsToFindings(
  * site byte-cheap; the manifest assembly and serialization stay in this lazy
  * chunk. Verification re-canonicalizes, so pretty-printing the file is safe.
  */
-export function signedReportFile(
+export function integrityReportFile(
   measurements: readonly Measurement[],
   up: Vec3,
   unitToMetres: number,

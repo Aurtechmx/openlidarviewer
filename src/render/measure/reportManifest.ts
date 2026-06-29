@@ -11,12 +11,14 @@
  * the report can {@link verifyReportManifest} it and detect a figure — a value,
  * a ± band, a caveat — that was changed without recomputing the digest.
  *
- * Honesty note: the default digest (FNV-1a) is a fast, NON-cryptographic content
- * hash. It is tamper-EVIDENT against accidental or casual edits (change a number
- * but not the digest and verification fails), but it is NOT a secret-keyed
- * signature — a determined forger can recompute it. The `digestAlgorithm` field
- * names the algorithm so the output is self-describing; inject a SHA-256 hashFn
- * for a cryptographic-strength digest.
+ * Honesty note: the default digest is SHA-256 (v3) — a cryptographic-strength
+ * content hash, computed synchronously (see `sha256` in auditLog.ts). It is
+ * tamper-EVIDENT: change a number but not the digest and verification fails, and
+ * forging a matching digest for altered content is computationally infeasible.
+ * It is still NOT a secret-keyed signature — it proves integrity, not identity,
+ * so it can't tell you WHO produced the report. The `digestAlgorithm` field
+ * names the algorithm so the output is self-describing; a caller may inject the
+ * older `fnv1a` checksum for a fast, non-cryptographic digest.
  *
  * Deterministic by construction (canonical, key-sorted serialization), so the
  * same inputs always produce the same digest; two parties can confirm they hold
@@ -24,12 +26,19 @@
  * from the clock, so the core stays pure and testable.
  */
 
-import { canonicalize, fnv1a, type HashFn } from './auditLog';
+import { canonicalize, sha256, type HashFn } from './auditLog';
 
-export const REPORT_MANIFEST_VERSION = 2;
+export const REPORT_MANIFEST_VERSION = 3;
 
-/** Default digest algorithm name stamped into the manifest (self-describing). */
-export const DEFAULT_DIGEST_ALGORITHM = 'FNV-1a-32';
+/**
+ * Default digest algorithm name stamped into the manifest (self-describing).
+ * v3 promotes the default from FNV-1a to SHA-256 — a cryptographic-strength
+ * content hash, still synchronous (see `sha256` in auditLog.ts). The digest is
+ * deterministic, so verification is unchanged in shape; only the algorithm name
+ * and the hash width differ. A caller may still inject `fnv1a` for the old
+ * fast checksum.
+ */
+export const DEFAULT_DIGEST_ALGORITHM = 'SHA-256';
 
 export interface ReportFinding {
   /** Human label, e.g. "Stockpile volume". */
@@ -80,7 +89,7 @@ export interface ReportManifest extends ReportManifestInput {
 /** Assemble a report manifest and stamp it with a content digest. */
 export function buildReportManifest(
   input: ReportManifestInput,
-  hashFn: HashFn = fnv1a,
+  hashFn: HashFn = sha256,
   digestAlgorithm: string = DEFAULT_DIGEST_ALGORITHM,
 ): ReportManifest {
   // `digestAlgorithm` is inside the hashed body, so the named algorithm can't be
@@ -102,7 +111,7 @@ export function serializeReportManifest(manifest: ReportManifest): string {
  */
 export function verifyReportManifest(
   manifest: ReportManifest,
-  hashFn: HashFn = fnv1a,
+  hashFn: HashFn = sha256,
 ): boolean {
   const { digest, ...body } = manifest;
   return hashFn(canonicalize(body)) === digest;

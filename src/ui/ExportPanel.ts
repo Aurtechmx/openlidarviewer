@@ -39,7 +39,7 @@ export interface ExportPanelCallbacks {
    * findings, stamped with dataset provenance + the classification epoch + a
    * verifiable content digest. Wired alongside {@link exportMeasurements}.
    */
-  exportSignedReport?: () => void;
+  exportIntegrityReport?: () => void;
   /**
    * Export a site KML (annotations + measurements + viewpoints) for Google
    * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
@@ -375,15 +375,15 @@ export class ExportPanel {
     // Tamper-evident integrity report (JSON) — the same measurements, stamped
     // with provenance + a verifiable content digest (catches accidental/casual
     // edits; not a cryptographic signature). The honest deliverable.
-    if (this._cb.exportSignedReport) {
+    if (this._cb.exportIntegrityReport) {
       const btn = el('button', {
         className: 'olv-bc-pill',
         type: 'button',
         text: 'Integrity report',
       }) as HTMLButtonElement;
       btn.disabled = count === 0;
-      btn.setAttribute('data-testid', 'export-signed-report');
-      btn.addEventListener('click', () => this._cb.exportSignedReport?.());
+      btn.setAttribute('data-testid', 'export-integrity-report');
+      btn.addEventListener('click', () => this._cb.exportIntegrityReport?.());
       row.append(btn);
     }
 

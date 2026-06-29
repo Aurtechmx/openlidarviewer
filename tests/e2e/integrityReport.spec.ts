@@ -40,7 +40,7 @@ test('the Products lane exports an integrity report after a measurement is place
   }
   // Open the Products lane and confirm the signed-report action is enabled.
   await panel.locator('.olv-export-products-head').click();
-  const reportBtn = panel.locator('[data-testid="export-signed-report"]');
+  const reportBtn = panel.locator('[data-testid="export-integrity-report"]');
   await expect(reportBtn).toBeEnabled();
 
   const downloadPromise = page.waitForEvent('download');

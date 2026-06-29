@@ -30,13 +30,15 @@ describe('reportManifest', () => {
   test('a freshly built manifest verifies and names its digest algorithm', () => {
     const m = buildReportManifest(input());
     expect(m.digest).toBeTruthy();
-    expect(m.digestAlgorithm).toBe('FNV-1a-32');
+    expect(m.digestAlgorithm).toBe('SHA-256');
+    expect(m.digest).toHaveLength(64); // SHA-256 hex
     expect(verifyReportManifest(m)).toBe(true);
   });
 
   test('the named digest algorithm is covered by the digest (cannot be forged)', () => {
     const m = buildReportManifest(input());
-    expect(verifyReportManifest({ ...m, digestAlgorithm: 'SHA-256' })).toBe(false);
+    // Re-label the algorithm without recomputing the digest → verification fails.
+    expect(verifyReportManifest({ ...m, digestAlgorithm: 'FNV-1a-32' })).toBe(false);
   });
 
   test('altering a finding value (or its band) breaks verification', () => {

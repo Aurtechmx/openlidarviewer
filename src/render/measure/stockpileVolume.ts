@@ -72,7 +72,15 @@ export interface StockpileInput {
   readonly sourceReduced?: boolean;
 }
 
-/** The "show the math" breakdown — every input behind the number and band. */
+/**
+ * The "show the math" breakdown — every input behind the number and band.
+ *
+ * UNIT CONTRACT: like the parent {@link StockpileVolumeResult}, every magnitude
+ * here is in the cloud's NATIVE render/source linear units (areas ×lin², volumes
+ * ×lin³, lengths ×lin). The presenter converts at the display/export boundary.
+ * The `m²` / `m³` / `m` in the per-field comments below name the DIMENSION, not a
+ * pre-converted metre value — for a foot-CRS these are ft², ft³, ft.
+ */
 export interface StockpileBreakdown {
   /** Footprint area on the horizontal plane, m². */
   readonly footprintArea: number;
