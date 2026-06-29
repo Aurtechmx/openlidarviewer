@@ -80,7 +80,7 @@ numbers computed from it.
   back from a saved session is now clamped to a sane range, so a hand-edited or
   corrupted session file can't load the viewer into an unusable display state.
 
-### Internal
+### Tooling
 
 - The browser smoke test can now optionally run against the production
   (minified) build, catching build-only breakage that the development build
