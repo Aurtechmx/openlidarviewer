@@ -7,7 +7,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 Deepens the honesty moat. Stockpile/earthworks volume now reports an auditable
 confidence band, manual classification editing lands end-to-end (class picker,
 lasso reclassify, multi-step undo/redo), and measurements export as a
-tamper-evident signed report. Adds two-epoch change-detection uncertainty and
+tamper-evident integrity report. Adds two-epoch change-detection uncertainty and
 edit-aware provenance so an edited classification can never silently outlive the
 numbers computed from it.
 
@@ -22,10 +22,13 @@ numbers computed from it.
   with real multi-step undo/redo, lazy-loaded beside the classification legend.
   Edits mutate the live class channel, so they round-trip straight into LAS
   export.
-- **Tamper-evident signed report.** Placed measurements export as a JSON report
-  whose findings, dataset provenance, and classification edit-epoch are folded
-  into a verifiable signature (deterministic canonical hashing; FNV-1a built in,
-  SHA-256 injectable). Altering any figure breaks verification.
+- **Tamper-evident integrity report.** Placed measurements export as a JSON
+  report whose findings, dataset provenance, and classification edit-epoch are
+  folded into a verifiable content digest (deterministic canonical hashing;
+  default FNV-1a, named in the manifest as `digestAlgorithm`). Changing any
+  figure without recomputing the digest breaks verification — a guard against
+  accidental or casual edits, not a secret-keyed cryptographic signature
+  (SHA-256 hashFn is injectable for that).
 - **Two-epoch change-detection uncertainty.** A volume-change ± band (random
   cell noise that averages as √N plus a systematic co-registration term) that
   also reports whether the net change exceeds its own error — never presenting
@@ -71,7 +74,7 @@ numbers computed from it.
 - **Reliable file downloads on Safari / iOS and for large exports.** Every export
   now funnels through one helper that releases the temporary blob URL only after
   the download has had a moment to start, instead of immediately — an immediate
-  release could cancel large PDF / DEM / batch-ZIP / signed-report downloads
+  release could cancel large PDF / DEM / batch-ZIP / integrity-report downloads
   mid-transfer on some browsers.
 - **Imported render state is range-checked.** A point size or field-of-view read
   back from a saved session is now clamped to a sane range, so a hand-edited or

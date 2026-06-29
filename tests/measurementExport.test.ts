@@ -81,17 +81,23 @@ describe('measurementMetrics', () => {
     });
   });
 
-  it('volume → cut / fill / net read straight from the m³ record', () => {
+  it('volume → cut / fill / net, no scaling at metric scale (×1)', () => {
     const m = measurementMetrics(VOLUME, UP, 1);
     expect(m.cut_m3).toBe(30);
     expect(m.fill_m3).toBe(120);
     expect(m.net_m3).toBe(90);
   });
 
-  it('applies unitToMetres to lengths (×) and areas (×²)', () => {
+  it('applies unitToMetres to lengths (×), areas (×²), and volumes (×³)', () => {
     expect(measurementMetrics(DISTANCE, UP, 0.3048).length_m).toBeCloseTo(5 * 0.3048, 3);
     // Export rounds to 3 decimals, so compare at that precision.
     expect(measurementMetrics(AREA, UP, 0.3048).area_m2).toBeCloseTo(100 * 0.3048 ** 2, 3);
+    // Regression: a foot-CRS stockpile volume must export in cubic metres, not
+    // native ft³ mislabelled as m³. cut/fill/net are stored native → ×0.3048³.
+    const v = measurementMetrics(VOLUME, UP, 0.3048);
+    expect(v.cut_m3).toBeCloseTo(30 * 0.3048 ** 3, 3);
+    expect(v.fill_m3).toBeCloseTo(120 * 0.3048 ** 3, 3);
+    expect(v.net_m3).toBeCloseTo(90 * 0.3048 ** 3, 3);
   });
 
   it('an INCOMPLETE measurement emits no metrics (never zero-filled)', () => {

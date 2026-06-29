@@ -74,7 +74,7 @@ describe('converters preserve band + caveats', () => {
   });
 });
 
-describe('ledger feeds a signed report end-to-end', () => {
+describe('ledger feeds an integrity report end-to-end', () => {
   test('findings assembled into a manifest verify, and tampering one breaks it', () => {
     const f = new SessionFindings();
     f.add(stockpileFinding(stock()));

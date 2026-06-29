@@ -43,7 +43,7 @@ describe('measurementReport', () => {
     expect(verifyReportManifest(manifest)).toBe(true);
     expect(manifest.classificationEpoch).toBe(1);
     expect(manifest.findings[0].unit).toBe('m');
-    // Tampering a finding after signing must break the signature.
+    // Tampering a finding after the digest is stamped must break verification.
     expect(verifyReportManifest({ ...manifest, findings: [{ ...manifest.findings[0], value: 0 }] })).toBe(
       false,
     );

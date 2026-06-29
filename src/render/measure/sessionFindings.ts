@@ -1,7 +1,7 @@
 /**
  * sessionFindings.ts
  *
- * The session ledger that the signed report is built from.
+ * The session ledger that the integrity report is built from.
  *
  * Measurements are computed ad-hoc and shown in toasts; nothing collected them
  * into something a report could assemble. This is that collector — an ordered

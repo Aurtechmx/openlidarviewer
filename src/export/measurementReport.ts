@@ -1,14 +1,15 @@
 /**
  * measurementReport.ts
  *
- * Turns the placed measurements into a signed, tamper-evident report manifest —
- * the "Signed report (JSON)" product, a sibling of the GeoJSON / CSV export.
+ * Turns the placed measurements into a tamper-evident integrity report manifest
+ * — the "Integrity report (JSON)" product, a sibling of the GeoJSON / CSV export.
  *
  * Each measurement becomes a {@link ReportFinding} carrying its primary metric
  * in metres / m² / m³, and the whole document is stamped with dataset
- * provenance, the classification edit epoch, and a signature (so a recipient can
- * prove no figure was altered after signing). Lengths are reported in metres via
- * the same `unitToMetres` factor the other exports use.
+ * provenance, the classification edit epoch, and a content digest (so a recipient
+ * can detect a figure changed without recomputing the digest — a casual-edit
+ * guard, not a cryptographic signature). Lengths are reported in metres via the
+ * same `unitToMetres` factor the other exports use.
  *
  * Pure and unit-testable; the call site supplies the live measurements,
  * up-axis, unit factor, and provenance.

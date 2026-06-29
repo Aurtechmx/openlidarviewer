@@ -1,28 +1,35 @@
 /**
  * reportManifest.ts
  *
- * The offline, signed report — the artifact a surveyor stakes their name on.
+ * The offline integrity report — the artifact a surveyor hands over.
  *
- * "Story Mode" in a cloud viewer is a slideshow. Here it is a deterministic,
- * tamper-evident document that carries the things that actually matter forward:
- * every finding WITH its uncertainty band and caveats, the dataset provenance,
- * the classification edit epoch the numbers were computed at, and the edit audit
- * trail. The whole body is hashed into a signature, so anyone who receives the
- * report can {@link verifyReportManifest} it and prove no figure — no value, no
- * ± band, no caveat — was altered after it was signed.
+ * "Story Mode" in a cloud viewer is a slideshow. Here it is a deterministic
+ * document that carries the things that actually matter forward: every finding
+ * WITH its uncertainty band and caveats, the dataset provenance, the
+ * classification edit epoch the numbers were computed at, and the edit audit
+ * trail. The whole body is hashed into a content DIGEST, so anyone who receives
+ * the report can {@link verifyReportManifest} it and detect a figure — a value,
+ * a ± band, a caveat — that was changed without recomputing the digest.
+ *
+ * Honesty note: the default digest (FNV-1a) is a fast, NON-cryptographic content
+ * hash. It is tamper-EVIDENT against accidental or casual edits (change a number
+ * but not the digest and verification fails), but it is NOT a secret-keyed
+ * signature — a determined forger can recompute it. The `digestAlgorithm` field
+ * names the algorithm so the output is self-describing; inject a SHA-256 hashFn
+ * for a cryptographic-strength digest.
  *
  * Deterministic by construction (canonical, key-sorted serialization), so the
- * same inputs always produce the same signature; two parties can confirm they
- * hold the identical report. The timestamp is supplied by the caller rather than
- * read from the clock, so the core stays pure and testable.
- *
- * Reuses the audit log's canonical hashing; the hash function is injectable
- * (FNV-1a default; inject SHA-256 for cryptographic signatures).
+ * same inputs always produce the same digest; two parties can confirm they hold
+ * the identical report. The timestamp is supplied by the caller rather than read
+ * from the clock, so the core stays pure and testable.
  */
 
 import { canonicalize, fnv1a, type HashFn } from './auditLog';
 
-export const REPORT_MANIFEST_VERSION = 1;
+export const REPORT_MANIFEST_VERSION = 2;
+
+/** Default digest algorithm name stamped into the manifest (self-describing). */
+export const DEFAULT_DIGEST_ALGORITHM = 'FNV-1a-32';
 
 export interface ReportFinding {
   /** Human label, e.g. "Stockpile volume". */
@@ -60,18 +67,27 @@ export interface ReportManifestInput {
 
 export interface ReportManifest extends ReportManifestInput {
   readonly version: number;
-  /** Tamper-evident signature over the canonical manifest body. */
-  readonly signature: string;
+  /** Name of the digest algorithm (e.g. "FNV-1a-32"). Covered by the digest. */
+  readonly digestAlgorithm: string;
+  /**
+   * Content digest over the canonical manifest body. Catches a figure changed
+   * without recomputing the digest (accidental or casual edits). NOT a
+   * secret-keyed signature — see the file header.
+   */
+  readonly digest: string;
 }
 
-/** Assemble and sign a report manifest. */
+/** Assemble a report manifest and stamp it with a content digest. */
 export function buildReportManifest(
   input: ReportManifestInput,
   hashFn: HashFn = fnv1a,
+  digestAlgorithm: string = DEFAULT_DIGEST_ALGORITHM,
 ): ReportManifest {
-  const body = { version: REPORT_MANIFEST_VERSION, ...input };
-  const signature = hashFn(canonicalize(body));
-  return { ...body, signature };
+  // `digestAlgorithm` is inside the hashed body, so the named algorithm can't be
+  // swapped without breaking verification.
+  const body = { version: REPORT_MANIFEST_VERSION, digestAlgorithm, ...input };
+  const digest = hashFn(canonicalize(body));
+  return { ...body, digest };
 }
 
 /** Deterministic, canonical serialization for export / transmission. */
@@ -80,13 +96,14 @@ export function serializeReportManifest(manifest: ReportManifest): string {
 }
 
 /**
- * Recompute the signature from the manifest body and confirm it matches —
- * returns false if any field was altered after signing.
+ * Recompute the digest from the manifest body and confirm it matches — returns
+ * false if any field was altered after the digest was stamped. Pass the same
+ * hashFn that built the manifest (the default matches `DEFAULT_DIGEST_ALGORITHM`).
  */
 export function verifyReportManifest(
   manifest: ReportManifest,
   hashFn: HashFn = fnv1a,
 ): boolean {
-  const { signature, ...body } = manifest;
-  return hashFn(canonicalize(body)) === signature;
+  const { digest, ...body } = manifest;
+  return hashFn(canonicalize(body)) === digest;
 }

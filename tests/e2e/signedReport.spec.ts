@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import { dropDenseGridPly } from './helpers';
 
 /**
- * Products lane → "Signed report" — places a measurement via the test seam,
- * exports the signed JSON report, and asserts the download is a real, signed
- * manifest (signature + findings + provenance). The signature's cryptographic
- * correctness is covered by the reportManifest unit tests; this proves the UI
- * wiring assembles and downloads a genuine manifest end-to-end.
+ * Products lane → "Integrity report" — places a measurement via the test seam,
+ * exports the JSON report, and asserts the download is a real manifest
+ * (content digest + findings + provenance). The digest's verification is
+ * covered by the reportManifest unit tests; this proves the UI wiring assembles
+ * and downloads a genuine manifest end-to-end.
  */
-test('the Products lane exports a signed report after a measurement is placed', async ({ page }) => {
+test('the Products lane exports an integrity report after a measurement is placed', async ({ page }) => {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
@@ -50,10 +50,11 @@ test('the Products lane exports a signed report after a measurement is placed', 
 
   const path = await download.path();
   const manifest = JSON.parse(readFileSync(path, 'utf8'));
-  expect(manifest.signature).toBeTruthy();
+  expect(manifest.digest).toBeTruthy();
+  expect(manifest.digestAlgorithm).toBe('FNV-1a-32');
   expect(Array.isArray(manifest.findings)).toBe(true);
   expect(manifest.findings.length).toBeGreaterThanOrEqual(1);
   // Provenance the report carries forward.
   expect(typeof manifest.classificationEpoch).toBe('number');
-  expect(manifest.version).toBe(1);
+  expect(manifest.version).toBe(2);
 });

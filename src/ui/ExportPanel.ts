@@ -35,9 +35,9 @@ export interface ExportPanelCallbacks {
   /** Export the placed measurements to an open format (GeoJSON / CSV). */
   exportMeasurements?: (format: 'geojson' | 'csv') => void;
   /**
-   * Export a signed, tamper-evident report (JSON) — the placed measurements as
+   * Export a tamper-evident integrity report (JSON) — the placed measurements as
    * findings, stamped with dataset provenance + the classification epoch + a
-   * verifiable signature. Wired alongside {@link exportMeasurements}.
+   * verifiable content digest. Wired alongside {@link exportMeasurements}.
    */
   exportSignedReport?: () => void;
   /**
@@ -372,13 +372,14 @@ export class ExportPanel {
       btn.addEventListener('click', () => this._cb.exportMeasurements?.(fmt));
       row.append(btn);
     });
-    // Signed, tamper-evident report (JSON) — the same measurements, but stamped
-    // with provenance + a verifiable signature. The honest deliverable.
+    // Tamper-evident integrity report (JSON) — the same measurements, stamped
+    // with provenance + a verifiable content digest (catches accidental/casual
+    // edits; not a cryptographic signature). The honest deliverable.
     if (this._cb.exportSignedReport) {
       const btn = el('button', {
         className: 'olv-bc-pill',
         type: 'button',
-        text: 'Signed report',
+        text: 'Integrity report',
       }) as HTMLButtonElement;
       btn.disabled = count === 0;
       btn.setAttribute('data-testid', 'export-signed-report');

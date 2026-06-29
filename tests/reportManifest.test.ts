@@ -27,10 +27,16 @@ function input(over: Partial<ReportManifestInput> = {}): ReportManifestInput {
 }
 
 describe('reportManifest', () => {
-  test('a freshly built manifest verifies', () => {
+  test('a freshly built manifest verifies and names its digest algorithm', () => {
     const m = buildReportManifest(input());
-    expect(m.signature).toBeTruthy();
+    expect(m.digest).toBeTruthy();
+    expect(m.digestAlgorithm).toBe('FNV-1a-32');
     expect(verifyReportManifest(m)).toBe(true);
+  });
+
+  test('the named digest algorithm is covered by the digest (cannot be forged)', () => {
+    const m = buildReportManifest(input());
+    expect(verifyReportManifest({ ...m, digestAlgorithm: 'SHA-256' })).toBe(false);
   });
 
   test('altering a finding value (or its band) breaks verification', () => {
@@ -41,8 +47,8 @@ describe('reportManifest', () => {
     expect(verifyReportManifest(tamperedBand)).toBe(false);
   });
 
-  test('the signature is deterministic for identical input', () => {
-    expect(buildReportManifest(input()).signature).toBe(buildReportManifest(input()).signature);
+  test('the digest is deterministic for identical input', () => {
+    expect(buildReportManifest(input()).digest).toBe(buildReportManifest(input()).digest);
   });
 
   test('findings carry their uncertainty band and caveats through', () => {
@@ -51,7 +57,7 @@ describe('reportManifest', () => {
     expect(m.findings[0].caveats?.[0]).toMatch(/base plane/i);
   });
 
-  test('provenance (edit epoch + audit trail) is part of the signed body', () => {
+  test('provenance (edit epoch + audit trail) is part of the digested body', () => {
     const m = buildReportManifest(input({ edits: [{ seq: 0, type: 'reclassify', hash: 'abc' }] }));
     // Forging the epoch after signing must fail verification.
     expect(verifyReportManifest({ ...m, classificationEpoch: 0 })).toBe(false);
@@ -60,7 +66,7 @@ describe('reportManifest', () => {
   test('serialize is canonical / stable and an injected hash is honoured', () => {
     const tag: typeof fnv1a = (s) => `H${s.length}`;
     const m = buildReportManifest(input(), tag);
-    expect(m.signature.startsWith('H')).toBe(true);
+    expect(m.digest.startsWith('H')).toBe(true);
     expect(verifyReportManifest(m, tag)).toBe(true);
     expect(verifyReportManifest(m, fnv1a)).toBe(false); // wrong hash fn
     expect(serializeReportManifest(m)).toBe(serializeReportManifest(buildReportManifest(input(), tag)));

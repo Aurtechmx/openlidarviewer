@@ -24,9 +24,11 @@ classes you actually see rather than serving a grade that no longer matches.
 
 ## Hand over something verifiable
 
-Placed measurements export as a tamper-evident signed report: the findings,
+Placed measurements export as a tamper-evident integrity report: the findings,
 dataset provenance, and classification edit-epoch are folded into a verifiable
-signature. Alter any figure and verification breaks. Two-epoch change detection
+content digest (named in the file). Change any figure without recomputing the
+digest and verification breaks — a guard against accidental or casual edits, not
+a cryptographic signature. Two-epoch change detection
 now also reports a volume-change ± band and whether the net change exceeds its
 own error, so noise is never presented as a confident gain or loss.
 
@@ -46,7 +48,7 @@ own error, so noise is never presented as a confident gain or loss.
 
 - **Reliable downloads.** Every export now funnels through one helper that
   releases the temporary blob URL only after the download has had a moment to
-  start, fixing cancelled PDF / DEM / batch-ZIP / signed-report downloads on
+  start, fixing cancelled PDF / DEM / batch-ZIP / integrity-report downloads on
   Safari, iOS, and for large generated files.
 - **Imported render state is range-checked.** A point size or field-of-view read
   from a saved session is clamped to a sane range, so a corrupted session file
