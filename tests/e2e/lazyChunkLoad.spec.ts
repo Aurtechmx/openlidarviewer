@@ -76,9 +76,20 @@ test.describe('runtime lazy chunks resolve on the served build', () => {
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await page.waitForTimeout(800);
 
-    await page.locator('.olv-stage canvas').click({
-      button: 'right',
-      position: { x: 60, y: 60 },
+    // Dispatch `contextmenu` straight to the canvas element rather than a
+    // pointer click. A real right-click can be swallowed by a floating panel
+    // (e.g. the class legend) that overlaps part of the canvas; dispatching to
+    // the element is exactly how the host handler consumes the event (it reads
+    // clientX/clientY off it) and is immune to that interception. Aim at the
+    // canvas centre so the raycast has the loaded cloud under it.
+    const canvas = page.locator('.olv-canvas');
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('canvas has no bounding box — did the scan load?');
+    await canvas.dispatchEvent('contextmenu', {
+      clientX: Math.round(box.x + box.width / 2),
+      clientY: Math.round(box.y + box.height / 2),
+      bubbles: true,
+      cancelable: true,
     });
     await expect(page.locator('.olv-ctxmenu')).toBeVisible({ timeout: 10_000 });
 
