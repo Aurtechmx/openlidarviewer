@@ -190,6 +190,19 @@ import {
   loadEmbedBridge,
   loadLasLoader,
   loadReclassifyUi,
+  loadContextMenu,
+  loadCommandPalette,
+  loadShortcutSheet,
+  loadMeasurementExport,
+  loadMeasurementReport,
+  loadKmlExport,
+  loadConfirmFullExport,
+  loadFloorPlanConfidence,
+  loadFullCloudGradeAction,
+  loadSession,
+  loadCompareEpochs,
+  loadCompareDtms,
+  loadChangeRaster,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -741,7 +754,7 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   const v = viewer;
-  void import('./ui/contextMenu').then(({ showContextMenu }) => {
+  void loadContextMenu().then(({ showContextMenu }) => {
     showContextMenu(e.clientX, e.clientY, [
       {
         label: 'Focus here',
@@ -1374,7 +1387,7 @@ function toggleWorkflowRecord(): void {
 let commandPalette: CommandPalette | null = null;
 async function openCommandPalette(): Promise<void> {
   if (!commandPalette) {
-    const { CommandPalette } = await import('./ui/CommandPalette');
+    const { CommandPalette } = await loadCommandPalette();
     commandPalette = new CommandPalette();
     stage.overlay.append(commandPalette.element);
     commandPalette.setActions(ACTION_REGISTRY);
@@ -1395,10 +1408,10 @@ stage.overlay.append(recommendedViewChip.element);
 // palette below.
 let shortcutSheet: ShortcutSheet | null = null;
 let shortcutSheetLoading: Promise<ShortcutSheet> | null = null;
-function loadShortcutSheet(): Promise<ShortcutSheet> {
+function ensureShortcutSheet(): Promise<ShortcutSheet> {
   if (shortcutSheet) return Promise.resolve(shortcutSheet);
   if (!shortcutSheetLoading) {
-    shortcutSheetLoading = import('./ui/ShortcutSheet').then(({ ShortcutSheet }) => {
+    shortcutSheetLoading = loadShortcutSheet().then(({ ShortcutSheet }) => {
       const sheet = new ShortcutSheet();
       stage.overlay.append(sheet.element);
       sheet.setActions(ACTION_REGISTRY);
@@ -1953,7 +1966,7 @@ function buildActionRegistry(): Action[] {
     keys: '?',
     hint: 'Every action and key, grouped by section.',
     keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
-    run: () => void loadShortcutSheet().then((sheet) => sheet.open()),
+    run: () => void ensureShortcutSheet().then((sheet) => sheet.open()),
   });
 
   return actions;
@@ -1993,7 +2006,7 @@ window.addEventListener('keydown', (e) => {
   // Don't fight a chord — only the bare `?` (Shift+/ on most layouts).
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   e.preventDefault();
-  void loadShortcutSheet().then((sheet) => sheet.toggle());
+  void ensureShortcutSheet().then((sheet) => sheet.toggle());
 });
 
 // Cmd-Shift-U / Ctrl-Shift-U toggles workflow recording. When idle,
@@ -2632,7 +2645,7 @@ const objectPanel = new ObjectPanel({
     // Surface a one-glance confidence read in the panel. Computed here, inside
     // the already-loaded lazy floor-plan chunk, so the panel needs only the
     // plain struct (no heavy floor-plan code in its bundle).
-    const { floorPlanConfidence } = await import('./terrain/space/floorplan/floorPlanConfidence');
+    const { floorPlanConfidence } = await loadFloorPlanConfidence();
     objectPanel.showFloorPlanSummary(floorPlanConfidence(plan));
   },
 });
@@ -2707,7 +2720,7 @@ const exportPanel = new ExportPanel({
     // confirm before decoding a large source. The confirm pulls the dialog +
     // byte formatter, so it's lazy-loaded here (full-res export is a deliberate
     // action) to keep it out of the eager startup chunk. Declining aborts.
-    const { confirmFullExport } = await import('./convert/confirmFullExport');
+    const { confirmFullExport } = await loadConfirmFullExport();
     if (!(await confirmFullExport(f))) return null;
     return decodeFull(await f.arrayBuffer(), f.name);
   },
@@ -2719,7 +2732,7 @@ const exportPanel = new ExportPanel({
     if (!viewer) return;
     const measurements = viewer.measure.getMeasurements();
     if (measurements.length === 0) return;
-    const { measurementsToGeoJSON, measurementsToCsv } = await import('./export/measurementExport');
+    const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
     // Measurement points are LOCAL (recentered); add the origin back to land them
     // in the source projected/local frame. Geographic reprojection (→ lon/lat) is
@@ -2743,7 +2756,7 @@ const exportPanel = new ExportPanel({
     const ms = viewer.measure.getMeasurements();
     if (ms.length === 0) return;
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
-    const { signedReportFile } = await import('./export/measurementReport');
+    const { signedReportFile } = await loadMeasurementReport();
     const f = signedReportFile(
       ms,
       viewer.measure.worldUp,
@@ -2761,7 +2774,7 @@ const exportPanel = new ExportPanel({
     const origin = cloud?.origin ?? [0, 0, 0];
     const toLonLat = makeLocalToLonLat(crsService.current(), origin);
     if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
-    const { buildKml } = await import('./export/kmlExport');
+    const { buildKml } = await loadKmlExport();
     const input: KmlExportInput = {
       annotations: viewer.annotate.getAnnotations(),
       measurements: viewer.measure.getMeasurements(),
@@ -3770,7 +3783,7 @@ async function runFullCloudGradeAction(): Promise<void> {
   fullCloudGradeRunning = true;
   fullCloudGradeController = new AbortController();
   try {
-    const { runFullCloudGrade } = await import('./render/streaming/runFullCloudGradeAction');
+    const { runFullCloudGrade } = await loadFullCloudGradeAction();
     await runFullCloudGrade({
       viewer,
       panel: streamingPanel,
@@ -4518,7 +4531,7 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * and reopened without loss.
  */
 async function exportSession(): Promise<void> {
-  const { serializeSession } = await import('./io/session');
+  const { serializeSession } = await loadSession();
   const cloud = activeId ? viewer.getCloud(activeId) : undefined;
   const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
 
@@ -4596,7 +4609,7 @@ async function importSession(file: File): Promise<void> {
     // access below is safe (measure/annotate are built in the Viewer ctor, so
     // no GPU backend is needed — just a non-null instance).
     await viewerLoaded;
-    const { parseSession } = await import('./io/session');
+    const { parseSession } = await loadSession();
     const session = parseSession(await file.text());
     viewer.measure.loadMeasurements(session.measurements);
     viewer.annotate.loadAnnotations(session.annotations);
@@ -5987,9 +6000,9 @@ function compareLoadedLayers(): void {
     // "working" line paints before the synchronous ground-filter compute.
     const [{ buildSharedEpochDtms }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
       await Promise.all([
-        import('./terrain/change/compareEpochs'),
-        import('./terrain/change/compareDtms'),
-        import('./terrain/change/changeRaster'),
+        loadCompareEpochs(),
+        loadCompareDtms(),
+        loadChangeRaster(),
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {

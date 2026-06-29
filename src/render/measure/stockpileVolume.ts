@@ -96,16 +96,23 @@ export interface StockpileBreakdown {
   readonly basePlaneError: number;
 }
 
+/**
+ * UNIT CONTRACT: every magnitude here is in the cloud's NATIVE (render / source)
+ * linear units — volumes in native³, areas in native², lengths in native — NOT
+ * metres. `stockpilePresenter` converts to metres at display/export by ×lin,
+ * ×lin², ×lin³ (lin = linearUnitToMetres). For a metre-based CRS native == m;
+ * for a state-plane-feet cloud native == feet. Do not treat these as m³.
+ */
 export interface StockpileVolumeResult {
-  /** Stockpile volume above the base (fill), m³. ≥ 0. */
+  /** Stockpile volume above the base (fill), native units³ (×lin³ → m³). ≥ 0. */
   readonly volume: number;
-  /** Material below the base inside the footprint (cut), m³. ≥ 0. */
+  /** Material below the base inside the footprint (cut), native units³. ≥ 0. */
   readonly cut: number;
-  /** Combined 1σ uncertainty on `volume`, m³. */
+  /** Combined 1σ uncertainty on `volume`, native units³. */
   readonly sigma: number;
-  /** Volume − 1σ, m³ (clamped at 0). */
+  /** Volume − 1σ, native units³ (clamped at 0). */
   readonly low: number;
-  /** Volume + 1σ, m³. */
+  /** Volume + 1σ, native units³. */
   readonly high: number;
   /** sigma / volume (0 when volume is 0). */
   readonly relativeError: number;
