@@ -31,6 +31,8 @@ export interface ReportProvenance {
   /** ISO timestamp, supplied by the caller (keeps the build deterministic). */
   readonly generatedAt: string;
   readonly classificationEpoch?: number;
+  /** Producing app version (e.g. "0.5.2"); lets a reader spot a stale report. */
+  readonly software?: string;
 }
 
 /** The headline metric + unit for each measurement kind. */
@@ -108,12 +110,14 @@ export function integrityReportFile(
   crsName: string | undefined,
   generatedAt: string,
   classificationEpoch: number,
+  software?: string,
 ): { readonly filename: string; readonly text: string } {
   const manifest = measurementsToReportManifest(measurements, up, unitToMetres, {
     datasetId,
     crsName,
     generatedAt,
     classificationEpoch,
+    software,
   });
   return { filename: `${datasetId}-report.json`, text: JSON.stringify(manifest, null, 2) };
 }
@@ -134,6 +138,7 @@ export function measurementsToReportManifest(
         pointCount: provenance.pointCount,
       },
       generatedAt: provenance.generatedAt,
+      software: provenance.software,
       classificationEpoch: provenance.classificationEpoch,
       findings: measurementsToFindings(measurements, up, unitToMetres),
     },

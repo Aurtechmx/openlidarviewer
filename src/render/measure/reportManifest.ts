@@ -63,6 +63,13 @@ export interface ReportManifestInput {
   };
   /** ISO timestamp, supplied by the caller (keeps the core deterministic). */
   readonly generatedAt: string;
+  /**
+   * The producing app version (e.g. "0.5.2"), so a later reader can tell whether
+   * a newer build would regenerate the report differently (see
+   * `exportStaleness.ts`). Optional + additive: a manifest built without it
+   * still verifies against its own digest. Covered by the digest once present.
+   */
+  readonly software?: string;
   /** Every reported number, with its band and caveats. */
   readonly findings: readonly ReportFinding[];
   /**

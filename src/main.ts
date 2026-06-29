@@ -2788,6 +2788,7 @@ const exportPanel = new ExportPanel({
       cloud?.metadata?.crs?.name,
       new Date().toISOString(),
       activeId ? viewer.classificationEpoch(activeId) : 0,
+      __APP_VERSION__,
     );
     downloadText(f.filename, f.text);
   },

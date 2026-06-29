@@ -65,6 +65,13 @@ describe('reportManifest', () => {
     expect(verifyReportManifest({ ...m, classificationEpoch: 0 })).toBe(false);
   });
 
+  test('the producing app version is stamped and covered by the digest', () => {
+    const m = buildReportManifest(input({ software: '0.5.2' }));
+    expect(m.software).toBe('0.5.2');
+    // Re-labelling the version without recomputing the digest must fail verify.
+    expect(verifyReportManifest({ ...m, software: '9.9.9' })).toBe(false);
+  });
+
   test('serialize is canonical / stable and an injected hash is honoured', () => {
     const tag: typeof fnv1a = (s) => `H${s.length}`;
     const m = buildReportManifest(input(), tag);
