@@ -42,6 +42,11 @@ for good.
   the app version that wrote it; opening one written by an earlier build shows a
   short notice that the current build may read the scan differently, so you can
   re-save. A session with no stamp reads as "an earlier version".
+- **Verify an integrity report.** A new command-palette action ("Verify
+  integrity report…") opens a report JSON, recomputes its digest against the
+  algorithm the file names, and shows whether it is intact or has been modified,
+  along with the producing version, classification epoch, and finding count. The
+  handed-over report becomes a checkable artifact, not just a JSON dump.
 
 ### Foundations
 

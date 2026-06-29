@@ -42,7 +42,7 @@ const UI = /(panel|mobile|dock|toolbar|nav|button|sheet|inspector|theme|onboardi
 // The export / report / measurement-document layer — carved out of the old
 // `unit` catch-all so neither bucket grows large enough to stall a single
 // Vitest process in CI. Checked AFTER UI, so an export *panel* stays in `ui`.
-const EXPORT = /(^export|exporter|^measurement|^report|^audit|^stockpile|^sessionFindings|^kml|^gzip|^zip|^scanReport|^spaceReport|^floorPlanExport|^download)/i;
+const EXPORT = /(^export|exporter|^measurement|^report|^verify|^audit|^stockpile|^sessionFindings|^kml|^gzip|^zip|^scanReport|^spaceReport|^floorPlanExport|^download)/i;
 
 /** Bucket a single test-file basename. `unit` is the catch-all. */
 function bucketOf(name) {

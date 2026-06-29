@@ -193,6 +193,7 @@ import {
   loadReclassifyUi,
   loadContextMenu,
   loadViewCube,
+  loadReportVerifier,
   loadWorkflowConfigPanel,
   loadCommandPalette,
   loadShortcutSheet,
@@ -1994,6 +1995,30 @@ function buildActionRegistry(): Action[] {
       },
     );
   }
+
+  // v0.5.2 — verify a handed-over integrity report. Opens a file picker, reads
+  // the JSON, recomputes its digest (the algorithm is self-described in the
+  // file), and shows intact / modified. Ungated; the verifier loads on demand.
+  actions.push({
+    id: 'report.verify',
+    title: 'Verify integrity report…',
+    section: 'Export',
+    hint: 'Check a report JSON — confirm its digest still matches its contents.',
+    keywords: ['integrity', 'digest', 'tamper', 'check', 'sha', 'validate', 'verify'],
+    run: () => {
+      const input = el('input', { className: 'olv-hidden' });
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.addEventListener('change', () => {
+        const file = input.files?.[0];
+        input.remove();
+        if (!file) return;
+        void loadReportVerifier().then(({ verifyAndShow }) => verifyAndShow(file));
+      });
+      document.body.append(input);
+      input.click();
+    },
+  });
 
   // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
   // command palette so users who skipped or dismissed can re-trigger
