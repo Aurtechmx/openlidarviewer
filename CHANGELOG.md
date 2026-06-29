@@ -34,6 +34,10 @@ for good.
   report manifest now carries the app version, so a reader can tell whether a
   newer build would grade or label the scan differently. The field is covered by
   the report digest.
+- **Re-opening an old session flags a version gap.** A saved session now stamps
+  the app version that wrote it; opening one written by an earlier build shows a
+  short notice that the current build may read the scan differently, so you can
+  re-save. A session with no stamp reads as "an earlier version".
 
 ### Foundations
 
