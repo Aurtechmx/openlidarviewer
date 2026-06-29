@@ -48,6 +48,15 @@ project's usual pattern:
   version against the running one, so an export from an older build can be
   flagged for regeneration.
 
+### Performance
+
+- **Lighter startup.** The workflow-recorder settings popup now loads on first
+  open instead of riding in the eager startup bundle, trimming the live index
+  chunk (757 → 750 KiB) and shaving a little off first paint. The bundle ceiling
+  was lowered to match, so the saved room can't silently creep back.
+- The opt-in on-canvas compass animation loop pauses while the browser tab is
+  hidden rather than running every frame in the background.
+
 ### Documentation
 
 - The navigation guide and the User Guide now list the keyboard and mouse
