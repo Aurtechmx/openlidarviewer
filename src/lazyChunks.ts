@@ -314,3 +314,4 @@ export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
 export const loadCompareDtms = () => import('./terrain/change/compareDtms');
 export const loadChangeRaster = () => import('./terrain/change/changeRaster');
 export const loadViewCube = () => import('./ui/viewCube');
+export const loadWorkflowConfigPanel = () => import('./ui/WorkflowConfigPanel');

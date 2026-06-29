@@ -34,7 +34,7 @@ import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
-import { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
+import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
@@ -192,6 +192,7 @@ import {
   loadReclassifyUi,
   loadContextMenu,
   loadViewCube,
+  loadWorkflowConfigPanel,
   loadCommandPalette,
   loadShortcutSheet,
   loadMeasurementExport,
@@ -784,11 +785,22 @@ if (urlParams.has('viewcube')) {
         getHeading: () => v.cameraHeadingDeg(),
         onView: (view) => void v.setStandardView(view),
       });
+      // Spin the rose each frame, but pause the loop while the tab is hidden so
+      // it isn't burning frames in the background, and keep the handle so it can
+      // be cancelled. (Bounded loop — addresses the v0.5.2 review note.)
+      let rafId = 0;
       const tick = (): void => {
         cube.update();
-        window.requestAnimationFrame(tick);
+        rafId = window.requestAnimationFrame(tick);
       };
-      window.requestAnimationFrame(tick);
+      const resume = (): void => {
+        if (rafId === 0 && !document.hidden) rafId = window.requestAnimationFrame(tick);
+      };
+      const pause = (): void => {
+        if (rafId !== 0) { window.cancelAnimationFrame(rafId); rafId = 0; }
+      };
+      document.addEventListener('visibilitychange', () => (document.hidden ? pause() : resume()));
+      resume();
     });
   });
 }
@@ -1350,19 +1362,37 @@ const crsCoordinator = createCrsCoordinator({
 // mounted — and the shortcut / palette entries only registered —
 // when the flag is on.
 const workflowController = new WorkflowController();
-// Eager on purpose. A flag-gated *dynamic* import gets its chunk tree-shaken
-// away (the only caller sits behind `if (WORKFLOW_RECORDER_ENABLED)`, false by
-// default) while the import() statement survives — a dangling specifier that
-// 404s only on the obfuscated live build. The static import keeps it whole.
-const workflowConfigPanel = new WorkflowConfigPanel();
 if (WORKFLOW_RECORDER_ENABLED) {
+  // The recorder badge is always present when enabled; the heavier settings
+  // popup is lazy-loaded on first open (v0.5.2 — keeps it out of the eager
+  // index bundle). The dynamic import is routed through `lazyChunks` so the
+  // obfuscator can't scramble the specifier into a live-only 404, the failure
+  // mode that previously forced this panel eager.
   stage.overlay.append(workflowController.badge);
-  stage.overlay.append(workflowConfigPanel.element);
-  // Edits in the settings popup take effect immediately and persist.
-  workflowConfigPanel.onChange((cfg) => {
-    workflowController.setConfig(cfg);
-    persistPrefs();
-  });
+}
+// Lazy holder for the settings popup. Its `setConfig` only syncs the popup's
+// own form fields, so a session restored before the popup is ever opened keeps
+// `pendingWorkflowConfig` and applies it when (if) the popup first loads; the
+// functional config goes to `workflowController.setConfig` eagerly regardless.
+let workflowConfigPanel: WorkflowConfigPanel | null = null;
+let workflowConfigPanelLoading: Promise<WorkflowConfigPanel> | null = null;
+let pendingWorkflowConfig: Parameters<typeof workflowController.setConfig>[0] | undefined;
+function ensureWorkflowConfigPanel(): Promise<WorkflowConfigPanel> {
+  if (workflowConfigPanel) return Promise.resolve(workflowConfigPanel);
+  if (!workflowConfigPanelLoading) {
+    workflowConfigPanelLoading = loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
+      const panel = new WorkflowConfigPanel();
+      stage.overlay.append(panel.element);
+      panel.onChange((cfg) => {
+        workflowController.setConfig(cfg);
+        persistPrefs();
+      });
+      if (pendingWorkflowConfig !== undefined) panel.setConfig(pendingWorkflowConfig);
+      workflowConfigPanel = panel;
+      return panel;
+    });
+  }
+  return workflowConfigPanelLoading;
 }
 
 /** Save a finished workflow and confirm (or report a cancelled picker). */
@@ -1959,7 +1989,7 @@ function buildActionRegistry(): Action[] {
         section: 'Workflow',
         hint: 'Format, save location, shortcut, replay speed, capture scope.',
         keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
-        run: () => workflowConfigPanel.open(),
+        run: () => void ensureWorkflowConfigPanel().then((p) => p.open()),
       },
     );
   }
@@ -4432,7 +4462,10 @@ function applyPrefs(): void {
   }
   if (p.workflow !== undefined) {
     workflowController.setConfig(p.workflow);
-    workflowConfigPanel.setConfig(p.workflow);
+    // Remember the popup's display config; apply it now if the popup is already
+    // loaded, otherwise `ensureWorkflowConfigPanel` applies it on first open.
+    pendingWorkflowConfig = p.workflow;
+    if (workflowConfigPanel) workflowConfigPanel.setConfig(p.workflow);
   }
 }
 
