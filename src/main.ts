@@ -103,6 +103,7 @@ import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
+import { isExportStale, staleExportReason } from './export/exportStaleness';
 import { footprintMetres } from './report/reportFootprint';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
@@ -4648,6 +4649,9 @@ async function exportSession(): Promise<void> {
     // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
     // filter is active; serializeSession drops an empty list.
     classFilter: classLegendPanel.getVisibility().hiddenCodes(),
+    // v6 — stamp the producing app version so a later re-open can tell whether a
+    // newer build would read the scan differently (see exportStaleness).
+    software: __APP_VERSION__,
   });
   // `.olvsession` is the new canonical extension; the file is
   // still JSON internally (Mac/Linux's Open With dialog associates the
@@ -4668,6 +4672,13 @@ async function importSession(file: File): Promise<void> {
     await viewerLoaded;
     const { parseSession } = await loadSession();
     const session = parseSession(await file.text());
+    // If an older build wrote this session, a newer one may grade or label the
+    // scan differently — surface that so the user can re-save. Absent stamp
+    // (pre-v6 file) reads as "an earlier version".
+    if (isExportStale(session.software, __APP_VERSION__)) {
+      const note = staleExportReason(session.software, __APP_VERSION__);
+      if (note) showLassoToast(note);
+    }
     viewer.measure.loadMeasurements(session.measurements);
     viewer.annotate.loadAnnotations(session.annotations);
     savedViews = session.views.map((v) => ({ name: v.name, pose: v.camera }));

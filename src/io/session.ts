@@ -141,6 +141,13 @@ export interface InspectionSession {
    * malformed box is dropped, not thrown.
    */
   clip?: ClipBox;
+  /**
+   * v6 — the app version that wrote the file (e.g. "0.5.2"). On import the
+   * Viewer can tell whether a newer build would interpret the scan differently
+   * and prompt the user to re-save. Strictly additive: a pre-v6 file omits it
+   * and is treated as "an earlier version" (see `exportStaleness.ts`).
+   */
+  software?: string;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -191,6 +198,10 @@ export function serializeSession(
   // v5 — the clipping box, only when one is present (enabled or not, so a
   // disabled-but-positioned clip round-trips its geometry).
   if (session.clip) doc.clip = session.clip;
+  // v6 — the producing app version, only when the caller supplies it.
+  if (typeof session.software === 'string' && session.software !== '') {
+    doc.software = session.software;
+  }
   return JSON.stringify(doc, null, 2);
 }
 
@@ -251,6 +262,8 @@ export function parseSession(text: string): InspectionSession {
   // v5 — the clipping box. Dropped (not thrown) if the box geometry is malformed.
   const clip = parseClipBox(raw.clip);
   if (clip) out.clip = clip;
+  // v6 — the producing app version. A non-string is ignored (treated as absent).
+  if (typeof raw.software === 'string' && raw.software !== '') out.software = raw.software;
   return out;
 }
 

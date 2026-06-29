@@ -729,3 +729,19 @@ describe('Evidence Capsule — per-measurement trust round-trips (v6)', () => {
     expect(back.measurements[0].trust).toBeUndefined();
   });
 });
+
+describe('v6 software stamp', () => {
+  test('round-trips the producing app version', () => {
+    const back = parseSession(serializeSession({ ...sampleSession(), software: '0.5.2' }));
+    expect(back.software).toBe('0.5.2');
+  });
+  test('omitted when not supplied (pre-v6 byte shape preserved)', () => {
+    const doc = JSON.parse(serializeSession(sampleSession())) as Record<string, unknown>;
+    expect('software' in doc).toBe(false);
+  });
+  test('a non-string software field is ignored on parse', () => {
+    const raw = JSON.parse(serializeSession(sampleSession())) as Record<string, unknown>;
+    raw.software = 42;
+    expect(parseSession(JSON.stringify(raw)).software).toBeUndefined();
+  });
+});
