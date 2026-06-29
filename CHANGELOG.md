@@ -30,6 +30,23 @@ for good.
   check fails the build if a runtime `import('./…')` reappears in `main.ts`,
   where the obfuscator could scramble the specifier into a deploy-only 404. Wired
   into the release gate and CI.
+- **The integrity report records the version that produced it.** The exported
+  report manifest now carries the app version, so a reader can tell whether a
+  newer build would grade or label the scan differently. The field is covered by
+  the report digest.
+
+### Foundations
+
+These tested cores ship in source ahead of the interface that will use them, the
+project's usual pattern:
+
+- **Planar ICP alignment** (`icpRegister`) — coarse rigid alignment of one cloud
+  onto another (3-D translation + yaw) with a reported RMS residual that refuses
+  a fit it can't trust. The honest prerequisite for aligning two epochs before a
+  change comparison.
+- **Export-staleness helper** (`exportStaleness`) — compares a stamped producing
+  version against the running one, so an export from an older build can be
+  flagged for regeneration.
 
 ### Documentation
 
