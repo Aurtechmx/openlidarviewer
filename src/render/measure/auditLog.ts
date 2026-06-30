@@ -29,6 +29,12 @@ export type HashFn = (input: string) => string;
  * Stable, key-sorted serialization so a record's hash never depends on the
  * order its fields happened to be written in. Arrays keep their order
  * (it's meaningful); object keys are sorted.
+ *
+ * Keys whose value is `undefined` are skipped, matching `JSON.stringify`, which
+ * omits them when the manifest is written to a file. Without this, a manifest
+ * built with an optional field left undefined (e.g. a dataset with no CRS) would
+ * hash that field as `null` here, but the exported-then-reparsed file would have
+ * the key absent — and the digest would fail to verify on a round trip.
  */
 export function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -38,7 +44,7 @@ export function canonicalize(value: unknown): string {
     return '[' + value.map(canonicalize).join(',') + ']';
   }
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
   return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalize(obj[k])).join(',') + '}';
 }
 

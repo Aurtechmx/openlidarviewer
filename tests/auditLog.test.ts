@@ -19,6 +19,14 @@ describe('canonicalize', () => {
   test('handles nesting, null, and strings', () => {
     expect(canonicalize({ x: [{ b: null, a: 'hi' }] })).toBe('{"x":[{"a":"hi","b":null}]}');
   });
+
+  test('skips undefined-valued keys, matching JSON.stringify', () => {
+    // A key set to undefined is dropped by JSON.stringify when written to a file,
+    // so canonicalize must ignore it too — otherwise a digest computed before the
+    // write would not verify after a read.
+    expect(canonicalize({ a: 1, b: undefined })).toBe(canonicalize({ a: 1 }));
+    expect(canonicalize({ a: 1, b: undefined })).toBe('{"a":1}');
+  });
 });
 
 describe('AuditLog hash chain', () => {
