@@ -34,8 +34,8 @@ hardening steps are deliberately staged and easy to forget.
       `analytics`); the only outbound calls should be user-initiated dataset/
       catalog fetches. The `loaderConfig.test.ts` guard keeps loaders.gl workers
       off — keep it passing.
-- [ ] No secrets added: `gitleaks detect` (the `security` workflow runs this in
-      CI over full history).
+- [ ] No secrets added: skim the diff for credentials/tokens before pushing
+      (the repo ships local-first, with no keys or backend).
 - [ ] CSP: the deploy ships an ENFORCING `Content-Security-Policy` (`.htaccess`
       and `_headers`): `script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self'
       'unsafe-inline'`, `connect-src 'self' https:`. Confirm the headers are at the
