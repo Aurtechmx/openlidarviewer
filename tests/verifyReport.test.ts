@@ -32,6 +32,20 @@ describe('verifyReportFile', () => {
     expect(verifyReportFile(json).valid).toBe(true);
   });
 
+  test('a report with undefined optional fields verifies after a file round trip', () => {
+    // The export path for a dataset with no CRS / point count: those keys are
+    // undefined. JSON.stringify drops them, so the digest must be computed over
+    // the same body the reader sees. Regression for the round-trip verify bug.
+    const m = buildReportManifest({
+      dataset: { id: 'site-a' }, // crs + pointCount undefined
+      generatedAt: '2026-06-29T00:00:00Z',
+      classificationEpoch: 0,
+      software: '0.5.2',
+      findings: [{ label: 'distance 1', value: 1, unit: 'm' }],
+    });
+    expect(verifyReportFile(JSON.stringify(m, null, 2)).valid).toBe(true);
+  });
+
   test('a legacy FNV-1a report verifies via its self-described algorithm', () => {
     const json = JSON.stringify(buildReportManifest(reportInput(), fnv1a, 'FNV-1a-32'));
     const r = verifyReportFile(json);
