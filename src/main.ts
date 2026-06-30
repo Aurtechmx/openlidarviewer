@@ -804,7 +804,11 @@ function startCompass(): void {
   if (compassViewer.clouds().length === 0) return;
   const v = compassViewer;
   void loadViewCube().then(({ mountViewCube }) => {
-    if (!compassEnabled || compassHandle) return; // toggled off while loading
+    // Re-validate at mount time: the lazy chunk load is async, so the scan may
+    // have been closed (or the compass toggled off, or one already mounted)
+    // while it loaded. Without the clouds() recheck the compass would mount over
+    // the empty state after a fast open-then-close.
+    if (!compassEnabled || compassHandle || v.clouds().length === 0) return;
     const cube = mountViewCube({
       host: stage.overlay,
       getHeading: () => v.cameraHeadingDeg(),
@@ -862,6 +866,7 @@ void viewerLoaded.then((v) => {
 if (
   import.meta.env.PROD &&
   !urlParams.has('test') &&
+  !navigator.webdriver && // never register under automation (Playwright/Selenium e2e)
   'serviceWorker' in navigator &&
   window.isSecureContext
 ) {
