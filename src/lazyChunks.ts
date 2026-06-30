@@ -311,6 +311,7 @@ export const loadFullCloudGradeAction = () =>
   import('./render/streaming/runFullCloudGradeAction');
 export const loadSession = () => import('./io/session');
 export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
+export const loadAlignEpochs = () => import('./terrain/change/alignEpochs');
 export const loadCompareDtms = () => import('./terrain/change/compareDtms');
 export const loadChangeRaster = () => import('./terrain/change/changeRaster');
 export const loadViewCube = () => import('./ui/viewCube');

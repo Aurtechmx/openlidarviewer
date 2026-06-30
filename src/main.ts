@@ -205,6 +205,7 @@ import {
   loadFullCloudGradeAction,
   loadSession,
   loadCompareEpochs,
+  loadAlignEpochs,
   loadCompareDtms,
   loadChangeRaster,
 } from './lazyChunks';
@@ -6091,9 +6092,10 @@ function compareLoadedLayers(): void {
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
+    const [{ buildSharedEpochDtms }, { alignEpochClouds, summarizeAlignment }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
       await Promise.all([
         loadCompareEpochs(),
+        loadAlignEpochs(),
         loadCompareDtms(),
         loadChangeRaster(),
       ]);
@@ -6101,10 +6103,13 @@ function compareLoadedLayers(): void {
     try {
       // Pass each cloud's origin: the two are recentred by their own origins, so
       // the comparison must align them in a common world frame, not raw local.
-      const dtms = buildSharedEpochDtms(
-        { positions: a.positions, origin: a.origin, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null },
-        { positions: b.positions, origin: b.origin, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null },
-      );
+      const beforeCloud = { positions: a.positions, origin: a.origin, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null };
+      const afterCloud = { positions: b.positions, origin: b.origin, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null };
+      // Coarse-register the after cloud onto the before cloud first (yaw + x/y
+      // only — a real vertical change is the signal, so z is preserved), so a
+      // small horizontal misregistration between epochs is not read as movement.
+      const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud);
+      const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
         inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
         return;
@@ -6117,7 +6122,7 @@ function compareLoadedLayers(): void {
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, ...summarizeChange(cmp)]);
+      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
       lastDifference = {

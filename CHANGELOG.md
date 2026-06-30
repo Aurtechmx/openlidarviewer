@@ -9,8 +9,13 @@ A patch line on v0.5. Work in progress.
 ### Added
 
 - **Two-cloud alignment in change detection.** The planar ICP core shipped in
-  v0.5.2 is now wired into the two-epoch change-detection flow, so two clouds can
-  be coarse-aligned (with a reported residual) before they are compared.
+  v0.5.2 is now wired into the two-epoch change-detection flow. Before two epochs
+  are compared, the after cloud is coarse-registered onto the before cloud
+  (yaw + horizontal shift only — a real vertical change is the signal, so z is
+  preserved), and the fit is reported: the shift, the yaw, and the RMS residual
+  appear in the compare result. A fit whose residual exceeds the gate is refused
+  and the clouds are compared as-is, so alignment never invents a shift it can't
+  stand behind. The pure core (`alignEpochClouds`) is unit-tested.
 
 ## [0.5.2] - 2026-06-29
 
