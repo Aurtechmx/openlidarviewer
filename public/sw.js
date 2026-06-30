@@ -69,6 +69,10 @@ self.addEventListener('fetch', (event) => {
   // cached — the user's data stays between them and its source.
   if (url.origin !== self.location.origin) return;
 
+  // Bundled demo datasets are large and optional — let them hit the network
+  // rather than filling the cache with sample point clouds.
+  if (url.pathname.startsWith('/samples/')) return;
+
   // App navigations: network-first with an offline shell fallback.
   if (req.mode === 'navigate') {
     event.respondWith(

@@ -799,6 +799,9 @@ let compassVisHandler: (() => void) | null = null;
 
 function startCompass(): void {
   if (!compassEnabled || compassHandle || !compassViewer) return;
+  // Nothing to orient until a scan is open — don't float the compass over the
+  // empty drop state.
+  if (compassViewer.clouds().length === 0) return;
   const v = compassViewer;
   void loadViewCube().then(({ mountViewCube }) => {
     if (!compassEnabled || compassHandle) return; // toggled off while loading
@@ -830,6 +833,12 @@ function stopCompass(): void {
   if (compassHandle) { compassHandle.dispose(); compassHandle = null; }
 }
 
+/** Start or stop the compass to match the preference AND scan presence. */
+function refreshCompass(): void {
+  if (compassEnabled && compassViewer && compassViewer.clouds().length > 0) startCompass();
+  else stopCompass();
+}
+
 /** Show or hide the compass and persist the choice. */
 function setCompassEnabled(on: boolean): void {
   compassEnabled = on;
@@ -838,13 +847,12 @@ function setCompassEnabled(on: boolean): void {
   } catch {
     /* private mode — honour for this session only */
   }
-  if (on) startCompass();
-  else stopCompass();
+  refreshCompass();
 }
 
 void viewerLoaded.then((v) => {
   compassViewer = v;
-  startCompass();
+  refreshCompass();
 });
 
 // v0.5.3 — PWA: register the offline service worker. Production + secure-context
@@ -6006,6 +6014,8 @@ function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
   viewer.setInspectMode(false);
   viewer.clearMeasurements();
+  // No scan open → take the compass down (nothing to orient).
+  refreshCompass();
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
   clipPanel.setVisible(false);
   // Hide + clear the Analyse panel so it doesn't linger with stale
@@ -6135,6 +6145,8 @@ function refreshLayerCrsFlags(): void {
   inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
   // The two-epoch compare needs exactly two loaded layers.
   inspector.setLayerCompareAvailable(viewer.clouds().length === 2);
+  // Show the compass once a scan is open; hide it again when the last layer goes.
+  refreshCompass();
 }
 
 /**
@@ -6146,6 +6158,30 @@ function refreshLayerCrsFlags(): void {
  */
 /** A georeferenced .asc of the most recent comparison, ready to download. */
 let lastDifference: { stem: string; asc: () => string } | null = null;
+
+/**
+ * The larger of a cloud's X/Y world-frame spans, from a strided sample — a cheap
+ * scale for the epoch-alignment refuse gate (residual ≫ a fraction of the scene
+ * span means the fit never registered). Unit-agnostic (metres or feet).
+ */
+function horizontalSpanXY(positions: Float32Array, origin?: readonly [number, number, number]): number {
+  const n = (positions.length / 3) | 0;
+  if (n === 0) return 0;
+  const ox = origin?.[0] ?? 0;
+  const oy = origin?.[1] ?? 0;
+  const stride = Math.max(1, Math.floor(n / 2000));
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let i = 0; i < n; i += stride) {
+    const x = positions[i * 3] + ox;
+    const y = positions[i * 3 + 1] + oy;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return minX <= maxX ? Math.max(maxX - minX, maxY - minY) : 0;
+}
 
 function compareLoadedLayers(): void {
   const ids = viewer.clouds();
@@ -6175,7 +6211,12 @@ function compareLoadedLayers(): void {
       // Coarse-register the after cloud onto the before cloud first (yaw + x/y
       // only — a real vertical change is the signal, so z is preserved), so a
       // small horizontal misregistration between epochs is not read as movement.
-      const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud);
+      // Refuse a fit whose residual exceeds 10% of the scene span: that means the
+      // two clouds never registered, so it's compared as-is rather than shifted.
+      const span = horizontalSpanXY(a.positions, a.origin);
+      const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
+        maxResidualM: span > 0 ? span * 0.1 : undefined,
+      });
       const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
         inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
