@@ -1,8 +1,8 @@
 # OpenLiDARViewer v0.5.2
 
-A polish release on the v0.5 line: a stronger integrity digest, a fuller
-earthwork report, version-aware exports, and a lighter, better-guarded build.
-Still browser-native and local-first. Nothing is uploaded.
+A polish release on the v0.5 line: a stronger integrity digest you can verify on
+receipt, a fuller earthwork report, version-aware exports, and a lighter,
+better-guarded build. Still browser-native and local-first. Nothing is uploaded.
 
 ## A stronger integrity digest
 
@@ -12,6 +12,14 @@ deterministic and verifiable. It is still an integrity digest, not a
 secret-keyed signature: it proves the figures were not altered after the fact, it
 does not prove who produced them. A reader can still verify an older report by
 naming its algorithm, which the file carries.
+
+## Verify a report you were handed
+
+Open an integrity report in the viewer and it recomputes the digest, then says
+whether the figures are intact or were changed after export. It reads the
+algorithm the file names, so an older report still verifies. Someone who never
+opened the scan can check a report on its own, from the command palette. v0.5.1
+added the report you can hand over; v0.5.2 adds the check the recipient runs.
 
 ## The volume report shows the whole earthwork
 
