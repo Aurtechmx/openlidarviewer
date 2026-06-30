@@ -74,12 +74,18 @@ export function showReportVerification(result: VerifyReportResult): void {
   close.style.cssText =
     'align-self:flex-end;margin-top:6px;padding:6px 14px;border:0;border-radius:8px;cursor:pointer;' +
     'font:600 12px system-ui,sans-serif;color:#0b0e13;background:var(--olv-accent,#5ab0ff);';
-  const dismiss = (): void => backdrop.remove();
+  const esc = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') dismiss();
+  };
+  // dismiss tears down BOTH the node and the document-level key listener, so
+  // closing via Close / backdrop / Escape never leaves a stale handler attached.
+  const dismiss = (): void => {
+    backdrop.remove();
+    document.removeEventListener('keydown', esc);
+  };
   close.addEventListener('click', dismiss);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) dismiss(); });
-  document.addEventListener('keydown', function esc(e) {
-    if (e.key === 'Escape') { dismiss(); document.removeEventListener('keydown', esc); }
-  });
+  document.addEventListener('keydown', esc);
   card.append(close);
 
   backdrop.append(card);
