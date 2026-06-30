@@ -2,6 +2,16 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.3] - Unreleased
+
+A patch line on v0.5. Work in progress.
+
+### Added
+
+- **Two-cloud alignment in change detection.** The planar ICP core shipped in
+  v0.5.2 is now wired into the two-epoch change-detection flow, so two clouds can
+  be coarse-aligned (with a reported residual) before they are compared.
+
 ## [0.5.2] - 2026-06-29
 
 A polish release: a stronger integrity digest, a richer earthwork report, an
