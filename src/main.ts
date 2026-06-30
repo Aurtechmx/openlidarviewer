@@ -775,35 +775,91 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   });
 });
 
-// v0.5.2 — on-canvas compass / ViewCube gizmo. Opt-in behind `?viewcube=1` while
-// it gets on-device verification; the pure heading/face math is unit-tested
+// v0.5.3 — on-canvas compass / ViewCube, promoted from the v0.5.2 opt-in to a
+// default control. It shows unless the user hid it (persisted) or `?viewcube=0`
+// forces it off; `?viewcube=1` still forces it on. Toggle from the command
+// palette ("Toggle compass"). The pure heading/face math is unit-tested
 // (viewCubeMath) and the widget routes through lazyChunks so its specifier can't
-// be scrambled by the live obfuscator. Mounts into the overlay once the Viewer
-// is ready and spins the rose from the camera heading each frame.
-if (urlParams.has('viewcube')) {
-  void viewerLoaded.then((v) => {
-    void loadViewCube().then(({ mountViewCube }) => {
-      const cube = mountViewCube({
-        host: stage.overlay,
-        getHeading: () => v.cameraHeadingDeg(),
-        onView: (view) => void v.setStandardView(view),
-      });
-      // Spin the rose each frame, but pause the loop while the tab is hidden so
-      // it isn't burning frames in the background, and keep the handle so it can
-      // be cancelled. (Bounded loop — addresses the v0.5.2 review note.)
-      let rafId = 0;
-      const tick = (): void => {
-        cube.update();
-        rafId = window.requestAnimationFrame(tick);
-      };
-      const resume = (): void => {
-        if (rafId === 0 && !document.hidden) rafId = window.requestAnimationFrame(tick);
-      };
-      const pause = (): void => {
-        if (rafId !== 0) { window.cancelAnimationFrame(rafId); rafId = 0; }
-      };
-      document.addEventListener('visibilitychange', () => (document.hidden ? pause() : resume()));
-      resume();
+// be scrambled by the live obfuscator. A bounded rAF loop spins the rose and
+// pauses while the tab is hidden.
+const COMPASS_PREF_KEY = 'olv.compass';
+let compassEnabled = ((): boolean => {
+  if (urlParams.get('viewcube') === '0') return false;
+  if (urlParams.has('viewcube')) return true;
+  try {
+    return localStorage.getItem(COMPASS_PREF_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+})();
+let compassViewer: typeof viewer | null = null;
+let compassHandle: { readonly update: () => void; readonly dispose: () => void } | null = null;
+let compassRaf = 0;
+let compassVisHandler: (() => void) | null = null;
+
+function startCompass(): void {
+  if (!compassEnabled || compassHandle || !compassViewer) return;
+  const v = compassViewer;
+  void loadViewCube().then(({ mountViewCube }) => {
+    if (!compassEnabled || compassHandle) return; // toggled off while loading
+    const cube = mountViewCube({
+      host: stage.overlay,
+      getHeading: () => v.cameraHeadingDeg(),
+      onView: (view) => void v.setStandardView(view),
+    });
+    compassHandle = cube;
+    const tick = (): void => {
+      cube.update();
+      compassRaf = window.requestAnimationFrame(tick);
+    };
+    const resume = (): void => {
+      if (compassRaf === 0 && !document.hidden) compassRaf = window.requestAnimationFrame(tick);
+    };
+    const pause = (): void => {
+      if (compassRaf !== 0) { window.cancelAnimationFrame(compassRaf); compassRaf = 0; }
+    };
+    compassVisHandler = (): void => (document.hidden ? pause() : resume());
+    document.addEventListener('visibilitychange', compassVisHandler);
+    resume();
+  });
+}
+
+function stopCompass(): void {
+  if (compassRaf !== 0) { window.cancelAnimationFrame(compassRaf); compassRaf = 0; }
+  if (compassVisHandler) { document.removeEventListener('visibilitychange', compassVisHandler); compassVisHandler = null; }
+  if (compassHandle) { compassHandle.dispose(); compassHandle = null; }
+}
+
+/** Show or hide the compass and persist the choice. */
+function setCompassEnabled(on: boolean): void {
+  compassEnabled = on;
+  try {
+    localStorage.setItem(COMPASS_PREF_KEY, on ? 'on' : 'off');
+  } catch {
+    /* private mode — honour for this session only */
+  }
+  if (on) startCompass();
+  else stopCompass();
+}
+
+void viewerLoaded.then((v) => {
+  compassViewer = v;
+  startCompass();
+});
+
+// v0.5.3 — PWA: register the offline service worker. Production + secure-context
+// only, and skipped under `?test=1` so it never interferes with e2e or dev. The
+// worker (public/sw.js) caches only the same-origin app shell; it leaves every
+// cross-origin dataset fetch alone, so the local-first, no-upload model holds.
+if (
+  import.meta.env.PROD &&
+  !urlParams.has('test') &&
+  'serviceWorker' in navigator &&
+  window.isSecureContext
+) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* offline support is best-effort — a registration failure must not break the app */
     });
   });
 }
@@ -2019,6 +2075,17 @@ function buildActionRegistry(): Action[] {
       document.body.append(input);
       input.click();
     },
+  });
+
+  // v0.5.3 — toggle the on-canvas compass (promoted to a default control). The
+  // choice persists; the widget loads lazily the first time it is shown.
+  actions.push({
+    id: 'view.compass',
+    title: 'Toggle compass',
+    section: 'View',
+    hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
+    keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
+    run: () => setCompassEnabled(!compassEnabled),
   });
 
   // v0.3.9 — Onboarding tour replay. Surfaces the tour from the

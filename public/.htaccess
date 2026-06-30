@@ -38,6 +38,12 @@ AddType application/manifest+json .webmanifest
     Header set Cache-Control "no-cache"
   </FilesMatch>
 
+  # The service worker: always revalidate so a new deploy's worker is picked up
+  # promptly rather than served stale for up to a day.
+  <FilesMatch "^sw\.js$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+
   # Root icons/share images look hash-like to the rule above
   # (`apple-touch-icon.png` matches the `-…8+ chars…` pattern) but are NOT
   # content-hashed — they must stay refreshable. Later FilesMatch wins, so

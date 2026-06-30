@@ -28,3 +28,8 @@
 
 /index.html
   Cache-Control: no-cache
+
+# The service worker must revalidate so a new deploy's worker is picked up
+# promptly rather than served stale for up to a day.
+/sw.js
+  Cache-Control: no-cache

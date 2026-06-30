@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 A patch line on v0.5. Work in progress.
 
+### Changed
+
+- **The on-canvas compass is now a default control.** The compass / ViewCube
+  gizmo that arrived opt-in (`?viewcube=1`) in v0.5.2 now shows by default once a
+  scan is open. Hide or show it from the command palette ("Toggle compass"); the
+  choice is remembered. `?viewcube=0` forces it off. The bounded animation loop
+  still pauses while the tab is hidden.
+
 ### Added
 
 - **Two-cloud alignment in change detection.** The planar ICP core shipped in
@@ -16,6 +24,12 @@ A patch line on v0.5. Work in progress.
   appear in the compare result. A fit whose residual exceeds the gate is refused
   and the clouds are compared as-is, so alignment never invents a shift it can't
   stand behind. The pure core (`alignEpochClouds`) is unit-tested.
+- **Installable and offline (PWA).** A service worker caches the app shell, so
+  the viewer opens and runs with no network after the first visit, and it can be
+  installed as a standalone app. The worker is local-first by construction: it
+  caches only the same-origin app shell and never touches a cross-origin dataset
+  request, so opening a remote scan still goes straight to its source and nothing
+  the user loads is stored. Registered on production secure origins only.
 
 ## [0.5.2] - 2026-06-29
 
