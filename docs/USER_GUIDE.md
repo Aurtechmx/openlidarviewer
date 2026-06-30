@@ -41,6 +41,8 @@ Three movement styles cover most jobs. **Orbit** circles a target and is best fo
 
 There are also six standard views (top, front, side, and so on) and a toggle between perspective and a flat orthographic view, which is the one you want for reading measurements off a face straight-on.
 
+**Keyboard and mouse.** Press `?` any time for the full shortcut sheet. The ones worth knowing up front: `1` / `2` / `3` switch Orbit / Walk / Fly, `Cmd-K` (or `Ctrl-K`) opens a command palette that searches every tool and action, `Ctrl/Cmd-Z` undoes your last edit, right-clicking the scan opens a quick menu (focus here, frame, standard views), and holding `Space` while a tool is active lets you move the camera without putting the tool down. The full list is in [docs/navigation.md](navigation.md).
+
 ---
 
 ## See the data

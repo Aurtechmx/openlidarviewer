@@ -1,6 +1,6 @@
 {
   "name": "openlidarviewer",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
   "license": "MIT",
   "type": "module",
@@ -27,6 +27,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "node scripts/test-bucket.mjs unit",
+    "test:export": "node scripts/test-bucket.mjs export",
     "test:terrain": "node scripts/test-bucket.mjs terrain",
     "test:ui": "node scripts/test-bucket.mjs ui",
     "test:slow": "node scripts/test-bucket.mjs slow",
@@ -35,9 +36,11 @@
     "test:e2e": "playwright test",
     "test:smoke": "playwright test tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:live": "SMOKE_LIVE=1 playwright test tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
-    "test:release": "npm run typecheck && npm run lint:main-deferral && npm run lint:unsafe-html && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke:live",
+    "test:release": "npm run typecheck && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke:live",
     "lint:main-deferral": "node scripts/lint-main-deferral.mjs",
-    "lint:unsafe-html": "node scripts/lint-unsafe-html.mjs"
+    "lint:inline-imports": "node scripts/lint-inline-imports.mjs",
+    "lint:unsafe-html": "node scripts/lint-unsafe-html.mjs",
+    "lint:release-sync": "node scripts/lint-release-sync.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

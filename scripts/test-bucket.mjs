@@ -39,16 +39,21 @@ const SLOW = /^(torture|benchmark)|integration|streaming|copc|ept|laz|octree|vox
 const TERRAIN = /^(analyse|analysis|contour|cell|ground|dem|hillshade|slope|calibrat|confidence|coverage|crs|datum|evidence|interval|civilProfile|profile|surface|quality|terrain|raster|gpuDeriv|scatter|aspect|canopy|dsm|dtm|seam|provenance|metricVersion|score|assessment|readiness|whyNot|recommend)/i;
 // The interface layer.
 const UI = /(panel|mobile|dock|toolbar|nav|button|sheet|inspector|theme|onboarding|tour|command|chip|legend|banner|overlayUi|visualsStudio|measureIcons|measureController|measureRail|fullscreen|standardViews|cameraPresets|annotation|export(Panel|Layout|Ui)|classScope|classVisibility|classLegend|colorMode|colorChip|colorProvenance)/i;
+// The export / report / measurement-document layer — carved out of the old
+// `unit` catch-all so neither bucket grows large enough to stall a single
+// Vitest process in CI. Checked AFTER UI, so an export *panel* stays in `ui`.
+const EXPORT = /(^export|exporter|^measurement|^report|^verify|^audit|^stockpile|^sessionFindings|^kml|^gzip|^zip|^scanReport|^spaceReport|^floorPlanExport|^download)/i;
 
 /** Bucket a single test-file basename. `unit` is the catch-all. */
 function bucketOf(name) {
   if (SLOW.test(name)) return 'slow';
   if (TERRAIN.test(name)) return 'terrain';
   if (UI.test(name)) return 'ui';
+  if (EXPORT.test(name)) return 'export';
   return 'unit';
 }
 
-const BUCKETS = ['unit', 'terrain', 'ui', 'slow'];
+const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 
 function allTestFiles() {
   return readdirSync(TESTS_DIR).filter((f) => /\.(test|spec)\.ts$/.test(f));

@@ -34,7 +34,7 @@ import { TourOverlay } from './ui/onboarding/TourOverlay';
 import { TourSession } from './ui/onboarding/tourSteps';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
-import { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
+import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
@@ -103,6 +103,7 @@ import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
+import { isExportStale, staleExportReason } from './export/exportStaleness';
 import { footprintMetres } from './report/reportFootprint';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
@@ -191,6 +192,9 @@ import {
   loadLasLoader,
   loadReclassifyUi,
   loadContextMenu,
+  loadViewCube,
+  loadReportVerifier,
+  loadWorkflowConfigPanel,
   loadCommandPalette,
   loadShortcutSheet,
   loadMeasurementExport,
@@ -770,6 +774,39 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   });
 });
 
+// v0.5.2 — on-canvas compass / ViewCube gizmo. Opt-in behind `?viewcube=1` while
+// it gets on-device verification; the pure heading/face math is unit-tested
+// (viewCubeMath) and the widget routes through lazyChunks so its specifier can't
+// be scrambled by the live obfuscator. Mounts into the overlay once the Viewer
+// is ready and spins the rose from the camera heading each frame.
+if (urlParams.has('viewcube')) {
+  void viewerLoaded.then((v) => {
+    void loadViewCube().then(({ mountViewCube }) => {
+      const cube = mountViewCube({
+        host: stage.overlay,
+        getHeading: () => v.cameraHeadingDeg(),
+        onView: (view) => void v.setStandardView(view),
+      });
+      // Spin the rose each frame, but pause the loop while the tab is hidden so
+      // it isn't burning frames in the background, and keep the handle so it can
+      // be cancelled. (Bounded loop — addresses the v0.5.2 review note.)
+      let rafId = 0;
+      const tick = (): void => {
+        cube.update();
+        rafId = window.requestAnimationFrame(tick);
+      };
+      const resume = (): void => {
+        if (rafId === 0 && !document.hidden) rafId = window.requestAnimationFrame(tick);
+      };
+      const pause = (): void => {
+        if (rafId !== 0) { window.cancelAnimationFrame(rafId); rafId = 0; }
+      };
+      document.addEventListener('visibilitychange', () => (document.hidden ? pause() : resume()));
+      resume();
+    });
+  });
+}
+
 window.addEventListener('keydown', (e) => {
   // Another bare-key handler (e.g. `bindShortcuts`) already consumed this
   // keystroke — never double-fire on the same key press.
@@ -1327,19 +1364,37 @@ const crsCoordinator = createCrsCoordinator({
 // mounted — and the shortcut / palette entries only registered —
 // when the flag is on.
 const workflowController = new WorkflowController();
-// Eager on purpose. A flag-gated *dynamic* import gets its chunk tree-shaken
-// away (the only caller sits behind `if (WORKFLOW_RECORDER_ENABLED)`, false by
-// default) while the import() statement survives — a dangling specifier that
-// 404s only on the obfuscated live build. The static import keeps it whole.
-const workflowConfigPanel = new WorkflowConfigPanel();
 if (WORKFLOW_RECORDER_ENABLED) {
+  // The recorder badge is always present when enabled; the heavier settings
+  // popup is lazy-loaded on first open (v0.5.2 — keeps it out of the eager
+  // index bundle). The dynamic import is routed through `lazyChunks` so the
+  // obfuscator can't scramble the specifier into a live-only 404, the failure
+  // mode that previously forced this panel eager.
   stage.overlay.append(workflowController.badge);
-  stage.overlay.append(workflowConfigPanel.element);
-  // Edits in the settings popup take effect immediately and persist.
-  workflowConfigPanel.onChange((cfg) => {
-    workflowController.setConfig(cfg);
-    persistPrefs();
-  });
+}
+// Lazy holder for the settings popup. Its `setConfig` only syncs the popup's
+// own form fields, so a session restored before the popup is ever opened keeps
+// `pendingWorkflowConfig` and applies it when (if) the popup first loads; the
+// functional config goes to `workflowController.setConfig` eagerly regardless.
+let workflowConfigPanel: WorkflowConfigPanel | null = null;
+let workflowConfigPanelLoading: Promise<WorkflowConfigPanel> | null = null;
+let pendingWorkflowConfig: Parameters<typeof workflowController.setConfig>[0] | undefined;
+function ensureWorkflowConfigPanel(): Promise<WorkflowConfigPanel> {
+  if (workflowConfigPanel) return Promise.resolve(workflowConfigPanel);
+  if (!workflowConfigPanelLoading) {
+    workflowConfigPanelLoading = loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
+      const panel = new WorkflowConfigPanel();
+      stage.overlay.append(panel.element);
+      panel.onChange((cfg) => {
+        workflowController.setConfig(cfg);
+        persistPrefs();
+      });
+      if (pendingWorkflowConfig !== undefined) panel.setConfig(pendingWorkflowConfig);
+      workflowConfigPanel = panel;
+      return panel;
+    });
+  }
+  return workflowConfigPanelLoading;
 }
 
 /** Save a finished workflow and confirm (or report a cancelled picker). */
@@ -1936,10 +1991,34 @@ function buildActionRegistry(): Action[] {
         section: 'Workflow',
         hint: 'Format, save location, shortcut, replay speed, capture scope.',
         keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
-        run: () => workflowConfigPanel.open(),
+        run: () => void ensureWorkflowConfigPanel().then((p) => p.open()),
       },
     );
   }
+
+  // v0.5.2 — verify a handed-over integrity report. Opens a file picker, reads
+  // the JSON, recomputes its digest (the algorithm is self-described in the
+  // file), and shows intact / modified. Ungated; the verifier loads on demand.
+  actions.push({
+    id: 'report.verify',
+    title: 'Verify integrity report…',
+    section: 'Export',
+    hint: 'Check a report JSON — confirm its digest still matches its contents.',
+    keywords: ['integrity', 'digest', 'tamper', 'check', 'sha', 'validate', 'verify'],
+    run: () => {
+      const input = el('input', { className: 'olv-hidden' });
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.addEventListener('change', () => {
+        const file = input.files?.[0];
+        input.remove();
+        if (!file) return;
+        void loadReportVerifier().then(({ verifyAndShow }) => verifyAndShow(file));
+      });
+      document.body.append(input);
+      input.click();
+    },
+  });
 
   // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
   // command palette so users who skipped or dismissed can re-trigger
@@ -2751,13 +2830,13 @@ const exportPanel = new ExportPanel({
     const stem = cloud ? baseName(cloud.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
-  exportSignedReport: async () => {
+  exportIntegrityReport: async () => {
     if (!viewer) return;
     const ms = viewer.measure.getMeasurements();
     if (ms.length === 0) return;
     const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
-    const { signedReportFile } = await loadMeasurementReport();
-    const f = signedReportFile(
+    const { integrityReportFile } = await loadMeasurementReport();
+    const f = integrityReportFile(
       ms,
       viewer.measure.worldUp,
       viewer.measure.unitToMetres,
@@ -2765,6 +2844,7 @@ const exportPanel = new ExportPanel({
       cloud?.metadata?.crs?.name,
       new Date().toISOString(),
       activeId ? viewer.classificationEpoch(activeId) : 0,
+      __APP_VERSION__,
     );
     downloadText(f.filename, f.text);
   },
@@ -4408,7 +4488,10 @@ function applyPrefs(): void {
   }
   if (p.workflow !== undefined) {
     workflowController.setConfig(p.workflow);
-    workflowConfigPanel.setConfig(p.workflow);
+    // Remember the popup's display config; apply it now if the popup is already
+    // loaded, otherwise `ensureWorkflowConfigPanel` applies it on first open.
+    pendingWorkflowConfig = p.workflow;
+    if (workflowConfigPanel) workflowConfigPanel.setConfig(p.workflow);
   }
 }
 
@@ -4591,6 +4674,9 @@ async function exportSession(): Promise<void> {
     // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
     // filter is active; serializeSession drops an empty list.
     classFilter: classLegendPanel.getVisibility().hiddenCodes(),
+    // v6 — stamp the producing app version so a later re-open can tell whether a
+    // newer build would read the scan differently (see exportStaleness).
+    software: __APP_VERSION__,
   });
   // `.olvsession` is the new canonical extension; the file is
   // still JSON internally (Mac/Linux's Open With dialog associates the
@@ -4611,6 +4697,13 @@ async function importSession(file: File): Promise<void> {
     await viewerLoaded;
     const { parseSession } = await loadSession();
     const session = parseSession(await file.text());
+    // If an older build wrote this session, a newer one may grade or label the
+    // scan differently — surface that so the user can re-save. Absent stamp
+    // (pre-v6 file) reads as "an earlier version".
+    if (isExportStale(session.software, __APP_VERSION__)) {
+      const note = staleExportReason(session.software, __APP_VERSION__);
+      if (note) showLassoToast(note);
+    }
     viewer.measure.loadMeasurements(session.measurements);
     viewer.annotate.loadAnnotations(session.annotations);
     savedViews = session.views.map((v) => ({ name: v.name, pose: v.camera }));

@@ -87,6 +87,7 @@ import {
 } from './camera/cameraPresets';
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
+import { compassHeadingDeg } from './viewCubeMath';
 import type { VolumeResult } from './measure/volume';
 import {
   decideVolumeBudget,
@@ -3810,6 +3811,19 @@ export class Viewer {
    * projection (perspective or near-orthographic). Returns false when no scan
    * is loaded.
    */
+  /**
+   * The camera's heading around the world up axis, in degrees [0, 360), for the
+   * on-canvas compass gizmo. Projects the camera forward vector onto the ground
+   * plane (the two non-up axes) and measures its bearing. Pure-math lives in
+   * `viewCubeMath.ts`; this only feeds it the camera/up geometry.
+   */
+  cameraHeadingDeg(): number {
+    const fwd = this._camera.getWorldDirection(new THREE.Vector3());
+    const east = this._horizontalAxis();
+    const north = new THREE.Vector3().crossVectors(this._worldUp, east).normalize();
+    return compassHeadingDeg(fwd.dot(east), fwd.dot(north));
+  }
+
   setStandardView(view: StandardView): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
