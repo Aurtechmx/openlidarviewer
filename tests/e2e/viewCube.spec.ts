@@ -19,8 +19,9 @@ test('the compass mounts by default and exposes the view snaps', async ({ page }
   // North marker plus the centre Top snap are present and clickable.
   await expect(cube.locator('[data-testid="viewcube-n"]')).toBeVisible();
   await expect(cube.locator('[data-testid="viewcube-top"]')).toBeVisible();
-  // Snapping to a standard view must not raise a page error.
-  await cube.locator('[data-testid="viewcube-top"]').click();
+  // Snapping to a standard view must not raise a page error. Click the North
+  // cardinal (top edge of the gizmo, clear of the dock/panels).
+  await cube.locator('[data-testid="viewcube-n"]').click();
 });
 
 test('?viewcube=0 keeps the compass hidden', async ({ page }) => {
