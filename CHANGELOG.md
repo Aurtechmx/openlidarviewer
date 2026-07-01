@@ -8,11 +8,13 @@ A patch line on v0.5. Work in progress.
 
 ### Changed
 
-- **The on-canvas compass is now a default control.** The compass / ViewCube
-  gizmo that arrived opt-in (`?viewcube=1`) in v0.5.2 now shows by default once a
-  scan is open. Hide or show it from the command palette ("Toggle compass"); the
-  choice is remembered. `?viewcube=0` forces it off. The bounded animation loop
-  still pauses while the tab is hidden.
+- **The on-canvas compass is now a discoverable, remembered control.** The
+  compass / ViewCube gizmo from v0.5.2, previously reachable only through the
+  `?viewcube=1` URL flag, can now be toggled from the command palette ("Toggle
+  compass"), and the choice persists. It stays off by default: the app's left and
+  right edges are full-height panel columns, so a persistent gizmo has no free
+  corner without overlapping them. `?viewcube=1` and `?viewcube=0` still force it
+  on or off. The animation loop pauses while the tab is hidden.
 
 ### Added
 

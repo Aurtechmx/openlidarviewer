@@ -775,21 +775,24 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   });
 });
 
-// v0.5.3 — on-canvas compass / ViewCube, promoted from the v0.5.2 opt-in to a
-// default control. It shows unless the user hid it (persisted) or `?viewcube=0`
-// forces it off; `?viewcube=1` still forces it on. Toggle from the command
-// palette ("Toggle compass"). The pure heading/face math is unit-tested
-// (viewCubeMath) and the widget routes through lazyChunks so its specifier can't
-// be scrambled by the live obfuscator. A bounded rAF loop spins the rose and
-// pauses while the tab is hidden.
+// v0.5.3 — on-canvas compass / ViewCube. Promoted from the v0.5.2 URL-only flag
+// to a discoverable, persisted control: toggle it from the command palette
+// ("Toggle compass"), and the choice is remembered. It stays OFF by default —
+// the app's left and right edges are full-height panel columns (left panels and
+// the Inspector), so a persistent gizmo has no free corner to occupy without
+// overlapping them; the user opts in when they want it. `?viewcube=1` forces it
+// on, `?viewcube=0` off. The pure heading/face math is unit-tested (viewCubeMath)
+// and the widget routes through lazyChunks so its specifier can't be scrambled by
+// the live obfuscator. A bounded rAF loop spins the rose and pauses while the tab
+// is hidden.
 const COMPASS_PREF_KEY = 'olv.compass';
 let compassEnabled = ((): boolean => {
   if (urlParams.get('viewcube') === '0') return false;
   if (urlParams.has('viewcube')) return true;
   try {
-    return localStorage.getItem(COMPASS_PREF_KEY) !== 'off';
+    return localStorage.getItem(COMPASS_PREF_KEY) === 'on';
   } catch {
-    return true;
+    return false;
   }
 })();
 let compassViewer: typeof viewer | null = null;
