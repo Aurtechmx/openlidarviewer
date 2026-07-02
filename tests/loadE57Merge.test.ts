@@ -132,3 +132,61 @@ describe('loadE57 — merging a Cartesian scan with a spherical-only scan', () =
     expect(cloud.metadata?.loadWarnings).toBeUndefined();
   });
 });
+
+describe('loadE57 — pose rotation of normals', () => {
+  // 90° yaw about +Z: q = [w, x, y, z] = [√2/2, 0, 0, √2/2] maps +X → +Y.
+  // Hand-derivation for p = (1, 0, 0):
+  //   t = 2 · (q.xyz × p) = 2 · ((0,0,√2/2) × (1,0,0)) = (0, √2, 0)
+  //   p + w·t + q.xyz × t = (1,0,0) + (0,1,0) + (−1,0,0) = (0, 1, 0).
+  const YAW_90: [number, number, number, number] = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+
+  it('rotates normals with the geometry (rotation only, no translation)', async () => {
+    mockedParse.mockReturnValue(
+      parseResult([
+        scan(
+          'posed',
+          1,
+          {
+            cartesianX: Float64Array.from([1]),
+            cartesianY: Float64Array.from([0]),
+            cartesianZ: Float64Array.from([0]),
+            normalX: Float64Array.from([1]),
+            normalY: Float64Array.from([0]),
+            normalZ: Float64Array.from([0]),
+          },
+          { rotation: YAW_90, translation: [100, 200, 300] },
+        ),
+      ]),
+    );
+    const cloud = await loadE57(new ArrayBuffer(0), 'posed.e57');
+
+    // Geometry: (1,0,0) rotated to (0,1,0), then translated → (100, 201, 300).
+    // The floored origin is (100, 201, 300), so the local position is ~0.
+    expect(cloud.origin).toEqual([100, 201, 300]);
+    // Normal: rotated to (0,1,0) — and NOT shifted by the translation, which
+    // would have produced the nonsense direction (100, 201, 300).
+    expect(cloud.normals).toBeDefined();
+    expect(cloud.normals![0]).toBeCloseTo(0, 6);
+    expect(cloud.normals![1]).toBeCloseTo(1, 6);
+    expect(cloud.normals![2]).toBeCloseTo(0, 6);
+  });
+
+  it('leaves normals untouched when the scan has no pose', async () => {
+    mockedParse.mockReturnValue(
+      parseResult([
+        scan('unposed', 1, {
+          cartesianX: Float64Array.from([1.5]),
+          cartesianY: Float64Array.from([2.5]),
+          cartesianZ: Float64Array.from([3.5]),
+          normalX: Float64Array.from([0.6]),
+          normalY: Float64Array.from([0.8]),
+          normalZ: Float64Array.from([0]),
+        }),
+      ]),
+    );
+    const cloud = await loadE57(new ArrayBuffer(0), 'unposed.e57');
+    expect(cloud.normals![0]).toBeCloseTo(0.6, 6);
+    expect(cloud.normals![1]).toBeCloseTo(0.8, 6);
+    expect(cloud.normals![2]).toBeCloseTo(0, 6);
+  });
+});

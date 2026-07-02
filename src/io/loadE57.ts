@@ -162,9 +162,23 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
         classification[w] = clampByte(col.classification[i]);
       }
       if (normals && col.normalX && col.normalY && col.normalZ) {
-        normals[w * 3] = col.normalX[i];
-        normals[w * 3 + 1] = col.normalY[i];
-        normals[w * 3 + 2] = col.normalZ[i];
+        let nx = col.normalX[i];
+        let ny = col.normalY[i];
+        let nz = col.normalZ[i];
+        // Normals are DIRECTIONS: they transform by the pose ROTATION only,
+        // never the translation. Copying them verbatim (the pre-v0.5.4
+        // behaviour) left every rotated scan's normals pointing where the
+        // scanner saw them, not where the merged geometry now faces —
+        // silently wrong lighting/orientation for any posed multi-scan file.
+        if (pose) {
+          const r = rotate(nx, ny, nz, pose.rotation);
+          nx = r[0];
+          ny = r[1];
+          nz = r[2];
+        }
+        normals[w * 3] = nx;
+        normals[w * 3 + 1] = ny;
+        normals[w * 3 + 2] = nz;
       }
       w++;
     }
