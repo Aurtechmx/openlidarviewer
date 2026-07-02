@@ -168,7 +168,7 @@ describe('contoursAt', () => {
   });
 });
 
-describe('contoursAt — marching-squares saddle disambiguation (cell-average rule)', () => {
+describe('contoursAt — marching-squares saddle disambiguation (exact bilinear rule)', () => {
   // One marching square (2×2 grid of cell values, 1 m cells, origin 0), so
   // the four corners sit at world (0.5,0.5) BL, (1.5,0.5) BR, (1.5,1.5) TR,
   // (0.5,1.5) TL. grid()'s zfn is indexed (col,row): v0=z(0,0), v1=z(1,0),
@@ -195,11 +195,16 @@ describe('contoursAt — marching-squares saddle disambiguation (cell-average ru
   const isolatedCorners = (segs: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }>) =>
     segs.map((s) => nearest((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, CORNERS)).sort();
 
-  it('case 5, centre ABOVE the level: the LOW corners are cut off', () => {
-    // v0=v2=1 (high), v1=v3=0.5 (low), level 0.6. Cell average 0.75 ≥ 0.6 →
-    // the high corners connect through the middle; each segment isolates a
-    // LOW corner (v1 BR, v3 TL). Hand-computed crossings: bottom (1.3,0.5),
-    // right (1.5,0.7), top (0.7,1.5), left (0.5,1.3).
+  // NOTE on the symmetric fixtures below: for v0=v2=a, v1=v3=b the exact
+  // bilinear saddle value z* = (a²−b²)/(2a−2b) = (a+b)/2 equals the cell
+  // average, so the v0.5.3 cell-average expectations carry over UNCHANGED —
+  // the rule change only shows on asymmetric saddles (tested further down).
+
+  it('case 5, saddle ABOVE the level: the LOW corners are cut off', () => {
+    // v0=v2=1 (high), v1=v3=0.5 (low), level 0.6. z* = (1−0.25)/1 = 0.75
+    // ≥ 0.6 → the high corners connect through the middle; each segment
+    // isolates a LOW corner (v1 BR, v3 TL). Hand-computed crossings: bottom
+    // (1.3,0.5), right (1.5,0.7), top (0.7,1.5), left (0.5,1.3).
     const set = contoursAt(grid((x, y) => (x === y ? 1 : 0.5), 2, 2), {
       intervalM: 1,
       levels: [0.6],
@@ -217,9 +222,9 @@ describe('contoursAt — marching-squares saddle disambiguation (cell-average ru
     expect(ys[1]).toBeCloseTo(0.7, 6);
   });
 
-  it('case 5, centre BELOW the level: the HIGH corners are cut off', () => {
-    // v0=v2=1 (high), v1=v3=0.1 (low), level 0.9. Cell average 0.55 < 0.9 →
-    // the high corners are isolated peaks (v0 BL, v2 TR).
+  it('case 5, saddle BELOW the level: the HIGH corners are cut off', () => {
+    // v0=v2=1 (high), v1=v3=0.1 (low), level 0.9. z* = (1−0.01)/1.8 = 0.55
+    // < 0.9 → the high corners are isolated peaks (v0 BL, v2 TR).
     const set = contoursAt(grid((x, y) => (x === y ? 1 : 0.1), 2, 2), {
       intervalM: 1,
       levels: [0.9],
@@ -229,9 +234,9 @@ describe('contoursAt — marching-squares saddle disambiguation (cell-average ru
     expect(isolatedCorners(segs)).toEqual([0, 2]);
   });
 
-  it('case 10, centre ABOVE the level: mirrors case 5 (low corners v0/v2 cut off)', () => {
-    // v1=v3=1 (high), v0=v2=0.5 (low), level 0.6. Average 0.75 ≥ 0.6 → the
-    // segments isolate the LOW corners v0 (BL) and v2 (TR).
+  it('case 10, saddle ABOVE the level: mirrors case 5 (low corners v0/v2 cut off)', () => {
+    // v1=v3=1 (high), v0=v2=0.5 (low), level 0.6. z* = (0.25−1)/(−1) = 0.75
+    // ≥ 0.6 → the segments isolate the LOW corners v0 (BL) and v2 (TR).
     const set = contoursAt(grid((x, y) => (x === y ? 0.5 : 1), 2, 2), {
       intervalM: 1,
       levels: [0.6],
@@ -239,5 +244,48 @@ describe('contoursAt — marching-squares saddle disambiguation (cell-average ru
     const segs = set.levels[0].segments;
     expect(segs.length).toBe(2);
     expect(isolatedCorners(segs)).toEqual([0, 2]);
+  });
+
+  it('ASYMMETRIC case 5: the exact rule isolates where the cell average mislinked', () => {
+    // v0=10 (BL), v1=0 (BR), v2=1.2 (TR), v3=0 (TL), level 1.1 — mask 5
+    // (v0, v2 ≥ 1.1 > v1, v3). Hand computation:
+    //   z* = (v0·v2 − v1·v3)/(v0+v2−v1−v3) = 12/11.2 = 1.0714… < 1.1
+    //     → the high corners do NOT connect: v0 and v2 are isolated.
+    //   cell average = 11.2/4 = 2.8 ≥ 1.1 → the OLD rule would have
+    //     connected them ([1, 3] isolated) — the rules genuinely disagree.
+    // The dominant v0 corner drags the mean far above the true saddle.
+    const values: Record<string, number> = { '0,0': 10, '1,0': 0, '1,1': 1.2, '0,1': 0 };
+    const set = contoursAt(grid((x, y) => values[`${x},${y}`], 2, 2), {
+      intervalM: 1,
+      levels: [1.1],
+    });
+    const segs = set.levels[0].segments;
+    expect(segs.length).toBe(2);
+    expect(isolatedCorners(segs)).toEqual([0, 2]);
+    // Pin the v0 (BL) segment exactly. Crossings at level 1.1:
+    //   left  edge v3→v0 (0→10): t = 0.11 → (0.5, 1.39)
+    //   bottom edge v0→v1 (10→0): t = 0.89 → (1.39, 0.5)
+    const blSeg = segs.find((s) => nearest((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, CORNERS) === 0)!;
+    const xs = [blSeg.x1, blSeg.x2].sort((a, b) => a - b);
+    const ys = [blSeg.y1, blSeg.y2].sort((a, b) => a - b);
+    expect(xs[0]).toBeCloseTo(0.5, 6);
+    expect(xs[1]).toBeCloseTo(1.39, 6);
+    expect(ys[0]).toBeCloseTo(0.5, 6);
+    expect(ys[1]).toBeCloseTo(1.39, 6);
+  });
+
+  it('ASYMMETRIC case 10: mirror disagreement — high corners v1/v3 isolated', () => {
+    // v1=10 (BR), v3=1.2 (TL), v0=v2=0, level 1.1 — mask 10. Hand computation:
+    //   z* = (0 − 10·1.2)/(0+0−10−1.2) = −12/−11.2 = 1.0714… < 1.1 → isolated
+    //   high corners v1 (BR) and v3 (TL): expect [1, 3].
+    //   cell average 2.8 ≥ 1.1 → the OLD rule would have cut off v0/v2 ([0, 2]).
+    const values: Record<string, number> = { '0,0': 0, '1,0': 10, '1,1': 0, '0,1': 1.2 };
+    const set = contoursAt(grid((x, y) => values[`${x},${y}`], 2, 2), {
+      intervalM: 1,
+      levels: [1.1],
+    });
+    const segs = set.levels[0].segments;
+    expect(segs.length).toBe(2);
+    expect(isolatedCorners(segs)).toEqual([1, 3]);
   });
 });

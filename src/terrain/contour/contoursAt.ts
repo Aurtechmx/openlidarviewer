@@ -80,9 +80,9 @@ export interface ContoursAtParams {
  * `b0|b1<<1|b2<<2|b3<<3` where corners are CCW from bottom-left
  * (v0 BL, v1 BR, v2 TR, v3 TL). Each entry lists edge pairs to connect;
  * edges are 0=bottom(v0-v1) 1=right(v1-v2) 2=top(v2-v3) 3=left(v3-v0).
- * Saddle cases 5 and 10 are resolved at runtime with the cell-average
- * rule — see {@link saddlePairs}; the table entries for 5/10 hold the
- * centre-BELOW-level pairing (high corners isolated).
+ * Saddle cases 5 and 10 are resolved at runtime with the exact bilinear
+ * saddle rule — see {@link saddlePairs}; the table entries for 5/10 hold
+ * the saddle-BELOW-level pairing (high corners isolated).
  */
 const SEGMENT_TABLE: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
   [], // 0
@@ -124,22 +124,35 @@ const SADDLE10_CENTRE_HIGH: ReadonlyArray<readonly [number, number]> = [
 ];
 
 /**
- * Resolve a marching-squares saddle (mask 5 or 10) with the standard
- * cell-average rule: sample the cell centre as the mean of the four corner
- * values; a centre at/above the level means the two HIGH corners are
- * connected through the middle (each low corner gets cut off), a centre
- * below means the high corners are isolated. The previous fixed pairing
- * silently assumed centre-below for BOTH cases, which mislinks basins on
- * ridge/col terrain (the acknowledged v0.4.3 audit gap). Ties (centre
- * exactly on the level) resolve as "high", matching the `>=` corner rule.
+ * Resolve a marching-squares saddle (mask 5 or 10) with the EXACT bilinear
+ * decider. Inside the cell the surface is the bilinear interpolant of the
+ * four corners; its level sets are hyperbolas whose asymptotes cross at the
+ * saddle point, where the surface value is
+ *
+ *   z* = (v0·v2 − v1·v3) / (v0 + v2 − v1 − v3).
+ *
+ * The two HIGH corners are connected through the cell exactly when the
+ * level does not exceed z* (the {z ≥ level} region contains the saddle
+ * point), and isolated when it does. The previous cell-average rule used
+ * the corner MEAN as a stand-in for z*; the two agree on symmetric saddles
+ * but disagree on asymmetric ones (e.g. one dominant corner), where the
+ * mean overstates the saddle height and mislinks the contour topology.
+ * Ties (level exactly z*) resolve as "connected", matching the `>=` corner
+ * rule. A degenerate denominator cannot arise for a true saddle mask
+ * (v0+v2 ≥ 2·level > v1+v3 forces it non-zero) but is guarded anyway —
+ * non-finite input falls back to the old cell-average rule.
  */
 function saddlePairs(
   mask: number,
   zc: readonly [number, number, number, number],
   level: number,
 ): ReadonlyArray<readonly [number, number]> {
-  const centre = (zc[0] + zc[1] + zc[2] + zc[3]) / 4;
-  if (centre >= level) {
+  const denom = zc[0] + zc[2] - zc[1] - zc[3];
+  const zSaddle =
+    Math.abs(denom) > 1e-12
+      ? (zc[0] * zc[2] - zc[1] * zc[3]) / denom
+      : (zc[0] + zc[1] + zc[2] + zc[3]) / 4; // degenerate → cell-average fallback
+  if (zSaddle >= level) {
     return mask === 5 ? SADDLE5_CENTRE_HIGH : SADDLE10_CENTRE_HIGH;
   }
   return SEGMENT_TABLE[mask];
