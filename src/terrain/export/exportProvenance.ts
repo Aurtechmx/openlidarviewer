@@ -355,23 +355,9 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
           usgsQualityLevel: p.accuracy.usgsQualityLevel,
         }
       : null,
-    complexity: p.complexity
-      ? {
-          vrmMedian: p.complexity.vrmMedian,
-          vrmIqr: p.complexity.vrmIqr,
-          vrmWindowCells: p.complexity.vrmWindowCells,
-          vrmWindowGroundM: p.complexity.vrmWindowGroundM,
-          vrmText: p.complexity.vrmText,
-          tpiRadiusCells: p.complexity.tpiRadiusCells,
-          tpiRadiusGroundM: p.complexity.tpiRadiusGroundM,
-          tpiDominantClass: p.complexity.tpiDominantClass,
-          tpiText: p.complexity.tpiText,
-          zUnit: p.complexity.zUnit,
-          convention: p.complexity.convention,
-          confidence: p.complexity.confidence,
-          caveats: [...p.complexity.caveats],
-        }
-      : null,
+    // The record is already plain data — copy it wholesale (fresh caveats
+    // array so the JSON owns its own copy).
+    complexity: p.complexity ? { ...p.complexity, caveats: [...p.complexity.caveats] } : null,
     pointDensityPerM2: p.pointDensityPerM2,
     measuredCells: p.measuredCells,
     totalCells: p.totalCells,

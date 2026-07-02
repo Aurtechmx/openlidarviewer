@@ -49,19 +49,24 @@ import {
   computeTerrainReadiness,
   type ReadinessIndicator,
 } from '../terrain/contour/terrainReadiness';
-import {
-  serializeContours,
-  triggerBrowserDownload,
-  type ContourFormat,
-} from '../terrain/contour/contourDownload';
+// Contour serialisers + the unified provenance builder are LAZY (v0.5.4):
+// only export/report actions (already async) reach them, so they ride their
+// own chunk via lazyChunks instead of the eager index. Type-only imports
+// below are erased at compile time and pull nothing in.
+import type { ContourFormat } from '../terrain/contour/contourDownload';
 import type { DxfLinearUnit } from '../terrain/contour/dxfContours';
 import {
   CONTOUR_SHAPE_STYLES,
   defaultContourShapeStyle,
   type ContourShapeStyle,
 } from '../terrain/contour/contourShapeStyle';
-import { buildExportProvenance } from '../terrain/export/exportProvenance';
-import { loadMapSheetPdf, loadDemPackage, loadTerrainReportPdf } from '../lazyChunks';
+import {
+  loadMapSheetPdf,
+  loadDemPackage,
+  loadTerrainReportPdf,
+  loadContourDownload,
+  loadExportProvenance,
+} from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
 import {
@@ -1596,6 +1601,8 @@ export class AnalysePanel {
             // on-screen result when the style already matches), then serialize
             // with the unified provenance derived from that SAME result.
             const result = await this._resultForExport();
+            const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance }] =
+              await Promise.all([loadContourDownload(), loadExportProvenance()]);
             const provenance = buildExportProvenance(result, {
               basename,
               generatedAt: new Date(),
@@ -2007,6 +2014,7 @@ export class AnalysePanel {
     },
   ): Promise<void> {
     const { buildMapSheetPdf } = await loadMapSheetPdf();
+    const { buildExportProvenance } = await loadExportProvenance();
     // Resolved linear unit so the sheet's scale bar + 1:N ratio honour a foot
     // CRS (the map is drawn in source units) instead of the metre default.
     const linearUnit = this._cb.getMapContext?.()?.linearUnit;
