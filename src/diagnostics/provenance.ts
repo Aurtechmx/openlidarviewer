@@ -96,6 +96,21 @@ export interface ScanSignals {
   readonly softwareString?: string;
   /** Whether the scan was loaded via a streaming source (COPC/EPT). */
   readonly streamingSource?: boolean;
+  /**
+   * The file's own capture declaration, when its declared source metadata
+   * (sensorModel / description / name / datasetType / accuracyClass) states a
+   * synthetic / procedural / reconstruction / reference origin. When present,
+   * the declaration BECOMES the verdict and the heuristic guess is demoted to
+   * a secondary, low-confidence line — the classifier must never assert a
+   * physical capture type the file itself contradicts. Quoted verbatim;
+   * declared by the file, not verified by OpenLiDARViewer.
+   */
+  readonly declaredCapture?: {
+    /** Which declared field the quoted value comes from, e.g. "sensorModel". */
+    readonly field: string;
+    /** The declared value, verbatim. */
+    readonly value: string;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,6 +132,19 @@ const DISCLAIMER =
  * streaming sources; numeric signatures are the fallback.
  */
 export function classify(signals: ScanSignals): ProvenanceFingerprint {
+  // 0. The file's own declaration outranks every heuristic. When the loader
+  //    found a declared synthetic / procedural / reconstruction / reference
+  //    statement in the source metadata, the verdict quotes it verbatim and
+  //    the heuristic guess is demoted to a secondary, low-confidence signal
+  //    line — never asserted as the primary capture type.
+  if (signals.declaredCapture) {
+    return declaredFingerprint(signals.declaredCapture, classifyHeuristic(signals));
+  }
+  return classifyHeuristic(signals);
+}
+
+/** The pre-declaration heuristic chain — unchanged when no metadata declares. */
+function classifyHeuristic(signals: ScanSignals): ProvenanceFingerprint {
   // 1. Software-string fingerprints — strongest signal when present.
   const swMatch = matchSoftwareString(signals.softwareString);
   if (swMatch) return swMatch;
@@ -150,6 +178,41 @@ export function classify(signals: ScanSignals): ProvenanceFingerprint {
     disclaimer:
       'No capture-type signature recognised. The viewer is showing the ' +
       'data as-is; no accuracy ribbon is available without further metadata.',
+  };
+}
+
+/**
+ * The declared-source verdict: the file's own metadata statement, quoted
+ * verbatim, with the heuristic guess demoted to a secondary line at reduced
+ * confidence. No literature accuracy ribbon is attached — the cited physical
+ * capture-type bounds do not describe a declared synthetic / reference
+ * reconstruction, and quoting them would overclaim.
+ */
+function declaredFingerprint(
+  declared: { readonly field: string; readonly value: string },
+  heuristic: ProvenanceFingerprint,
+): ProvenanceFingerprint {
+  const signalLines = [
+    `Declared ${declared.field}: "${declared.value}" — declared by the file, ` +
+      `not verified by OpenLiDARViewer`,
+  ];
+  if (heuristic.captureType !== 'unknown') {
+    signalLines.push(
+      `Heuristic guess (secondary, low confidence): ${heuristic.label} — ` +
+        `demoted because the file's declared metadata contradicts it`,
+    );
+  }
+  return {
+    captureType: 'unknown',
+    confidence: 'high',
+    label: `Declared: ${declared.value} (from file metadata)`,
+    signals: signalLines,
+    bounds: [],
+    disclaimer:
+      'The capture type above is quoted verbatim from the file\'s own ' +
+      'metadata — declared by the file, not verified by OpenLiDARViewer. ' +
+      'No literature accuracy ranges are shown: the cited capture-type ' +
+      'bounds do not apply to a declared synthetic / reference source.',
   };
 }
 

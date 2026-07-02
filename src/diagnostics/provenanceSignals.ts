@@ -44,7 +44,61 @@ export interface StaticCloudShape {
     readonly sourceSoftware?: string;
     /** Horizontal CRS unit → metres, for converting raw-unit extent/density. */
     readonly crs?: { readonly linearUnitToMetres?: number };
+    /** Declared-only source metadata (see `CloudMetadata.sourceMetadata`). */
+    readonly sourceMetadata?: {
+      readonly standard: readonly { readonly name: string; readonly value: string }[];
+      readonly extensions: readonly { readonly name: string; readonly value: string }[];
+    };
   };
+}
+
+/**
+ * Declared fields that may state what the scan IS, and the keyword set that
+ * marks a non-physical (synthetic / procedural / reconstruction / reference)
+ * origin. Case-insensitive substring match — deliberately broad, because
+ * asserting a physical capture type over a file that declares itself
+ * synthetic is the worse failure mode.
+ */
+const DECLARED_CAPTURE_FIELDS = [
+  'sensorModel',
+  'datasetType',
+  'accuracyClass',
+  'description',
+  'name',
+] as const;
+const SYNTHETIC_KEYWORDS = /synthetic|procedural|reconstruction|reference/i;
+
+/**
+ * Scan the declared source metadata for a capture statement the classifier
+ * must honour. Returns the preferred field to QUOTE (sensorModel, then
+ * datasetType, then whichever field matched) when any of the candidate
+ * fields carries a synthetic/procedural/reconstruction/reference keyword.
+ * Returns undefined otherwise — absence leaves the classifier unchanged.
+ */
+export function declaredCaptureFromSourceMetadata(
+  sourceMetadata:
+    | {
+        readonly standard: readonly { readonly name: string; readonly value: string }[];
+        readonly extensions: readonly { readonly name: string; readonly value: string }[];
+      }
+    | undefined,
+): { field: string; value: string } | undefined {
+  if (!sourceMetadata) return undefined;
+  const all = [...sourceMetadata.standard, ...sourceMetadata.extensions];
+  const valueOf = (name: string): string | undefined =>
+    all.find((f) => f.name === name && f.value.trim().length > 0)?.value;
+  const matched = DECLARED_CAPTURE_FIELDS.find((name) => {
+    const v = valueOf(name);
+    return v !== undefined && SYNTHETIC_KEYWORDS.test(v);
+  });
+  if (!matched) return undefined;
+  // Quote the most specific declaration: sensorModel, then datasetType,
+  // then the field that actually matched.
+  for (const preferred of ['sensorModel', 'datasetType'] as const) {
+    const v = valueOf(preferred);
+    if (v !== undefined) return { field: preferred, value: v };
+  }
+  return { field: matched, value: valueOf(matched) as string };
 }
 
 /** The subset of a streaming cloud the streaming-cloud signal helper uses. */
@@ -106,6 +160,7 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
     densityPerSqM: density,
     sensorString: cloud.metadata?.captureSensor,
     softwareString: cloud.metadata?.sourceSoftware,
+    declaredCapture: declaredCaptureFromSourceMetadata(cloud.metadata?.sourceMetadata),
   };
 }
 
