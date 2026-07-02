@@ -7,8 +7,9 @@
  *
  * Both consume the existing `hornSlopeAspect` conventions where slope
  * enters (rise/run tangent; math-frame downslope aspect) — nothing here
- * recomputes derivatives. Not imported by the app shell yet: lazy-loadable
- * later without touching the index bundle.
+ * recomputes derivatives. Imported ONLY by the lazily-loaded analysis
+ * pipeline (`analyseContours` chunk), never by the app shell, so the
+ * index bundle carries none of this weight.
  */
 
 export {
@@ -35,3 +36,19 @@ export {
   type ComplexityMetaInput,
   type ComplexitySupport,
 } from './complexityEnvelope';
+
+export {
+  summariseTerrainComplexity,
+  vrmBand,
+  complexityBandLabel,
+  densityReliabilityCaveat,
+  pickTpiRadiusCells,
+  tpiClassLabel,
+  COMPLEXITY_DENSITY_THRESHOLD_PTS_M2,
+  SLOPE_ASPECT_CONVENTION_NOTE,
+  TPI_TARGET_RADIUS_M,
+  VRM_BAND_THRESHOLDS,
+  type ComplexityBand,
+  type ComplexitySummaryInput,
+  type TerrainComplexitySummary,
+} from './complexitySummary';

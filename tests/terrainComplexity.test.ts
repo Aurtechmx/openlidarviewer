@@ -498,3 +498,135 @@ describe('unit fixtures — US survey feet (EPSG:2286-style) vs metres', () => {
     }
   });
 });
+
+// ── summary stage — the compact view the pipeline / UI / provenance consume ──
+
+import {
+  summariseTerrainComplexity,
+  densityReliabilityCaveat,
+  vrmBand,
+  complexityBandLabel,
+  pickTpiRadiusCells,
+  COMPLEXITY_DENSITY_THRESHOLD_PTS_M2,
+  SLOPE_ASPECT_CONVENTION_NOTE,
+} from '../src/terrain/complexity/complexitySummary';
+
+describe('summariseTerrainComplexity — windows, units, and derived confidence', () => {
+  const cols = 16;
+  const rows = 12;
+  // Gently rugged deterministic surface (metres), 1 m cells.
+  const z = grid(cols, rows, (r, c) => 2 * Math.sin(0.6 * r) + 3 * Math.cos(0.4 * c));
+  const d = hornSlopeAspect(z, cols, rows, 1);
+  const coverage = new Uint8Array(cols * rows).fill(2);
+  const base = {
+    z, coverage, cols, rows,
+    slope: d.slope, aspect: d.aspect,
+    cellMetresX: 1, cellMetresY: 1,
+    verticalUnitToMetres: 1,
+    meta: { coverage: 'full' as const, sourcePointCount: 1000, analyzedPointCount: 1000 },
+  };
+
+  test('states the VRM window and the TPI radius in cells AND ground metres', () => {
+    const s = summariseTerrainComplexity(base)!;
+    expect(s).not.toBeNull();
+    expect(s.vrmWindowCells).toBe(3);
+    expect(s.vrmWindowGroundM).toBeCloseTo(3, 9); // 3 cells × 1 m
+    expect(s.tpiRadiusCells).toBe(10); // target 10 m at 1 m cells
+    expect(s.tpiRadiusGroundM).toBeCloseTo(10, 9);
+    expect(s.vrmText).toContain('3×3-cell window');
+    expect(s.vrmText).toContain('dimensionless');
+    expect(s.tpiText).toContain('radius 10 cells');
+    expect(s.tpiText).toContain(' m,'); // TPI carries its Z unit
+    expect(s.detail).toContain('derived, confidence');
+    expect(s.slopeAspectConvention).toBe(SLOPE_ASPECT_CONVENTION_NOTE);
+  });
+
+  test('band label follows the VRM median and the numbers always accompany it', () => {
+    const s = summariseTerrainComplexity(base)!;
+    expect(s.band).toBe(vrmBand(s.vrmMedian));
+    expect(s.bandLabel).toBe(complexityBandLabel(s.band));
+    expect(Number.isFinite(s.vrmMedian)).toBe(true);
+    expect(Number.isFinite(s.vrmIqr)).toBe(true);
+    expect(s.detail).toContain(s.vrmMedian.toFixed(4));
+  });
+
+  test('dominant Weiss class is reported with its share of valid cells', () => {
+    const s = summariseTerrainComplexity(base)!;
+    expect(s.tpiDominantClass).not.toBeNull();
+    expect(s.tpiDominantFraction).toBeGreaterThan(0);
+    expect(s.tpiDominantFraction).toBeLessThanOrEqual(1);
+  });
+
+  test('confidence is the conservative minimum of the two derived envelopes', () => {
+    const s = summariseTerrainComplexity(base)!;
+    expect(s.confidence).toBeGreaterThan(0);
+    expect(s.confidence).toBeLessThan(100); // border truncation ⇒ support < 1
+  });
+
+  test('nothing measurable → null (an honest "—" downstream, never a band)', () => {
+    const none = new Uint8Array(cols * rows); // coverage 0 everywhere
+    expect(summariseTerrainComplexity({ ...base, coverage: none })).toBeNull();
+    expect(summariseTerrainComplexity({ ...base, cols: 0, rows: 0 })).toBeNull();
+  });
+
+  test('feet Z units are labelled ft (TPI scales with Z; the label says so)', () => {
+    const s = summariseTerrainComplexity({ ...base, verticalUnitToMetres: 0.3048 })!;
+    expect(s.zUnitLabel).toBe('ft');
+    expect(s.tpiText).toContain(' ft,');
+  });
+
+  test('TPI radius clamps to [2, 10] cells around the 10 m target', () => {
+    expect(pickTpiRadiusCells(1)).toBe(10);
+    expect(pickTpiRadiusCells(5)).toBe(2);
+    expect(pickTpiRadiusCells(0.25)).toBe(10); // capped
+    expect(pickTpiRadiusCells(100)).toBe(2); // floored
+    expect(pickTpiRadiusCells(Number.NaN)).toBe(2);
+  });
+});
+
+describe('density-reliability caveat — Münzinger et al. (2022), ≥4 pts/m²', () => {
+  const cols = 16;
+  const rows = 12;
+  const z = grid(cols, rows, (r, c) => 2 * Math.sin(0.6 * r) + 3 * Math.cos(0.4 * c));
+  const d = hornSlopeAspect(z, cols, rows, 1);
+  const coverage = new Uint8Array(cols * rows).fill(2);
+  const mk = (density: number | null) =>
+    summariseTerrainComplexity({
+      z, coverage, cols, rows,
+      slope: d.slope, aspect: d.aspect,
+      cellMetresX: 1, cellMetresY: 1,
+      groundDensityPerM2: density,
+    })!;
+
+  test('present at 2 pts/m² — cited, warning not block', () => {
+    const s = mk(2);
+    const caveat = s.warnings.find((w) => w.includes('reliability threshold'));
+    expect(caveat).toBeDefined();
+    expect(caveat).toContain('2.0 pts/m²');
+    expect(caveat).toContain('≥4 pts/m²');
+    expect(caveat).toContain('Münzinger et al. 2022');
+    expect(caveat).toContain('10.1016/j.ufug.2022.127637');
+    expect(caveat).toContain('indicative');
+    // Warning, not block: the metrics still computed and banded.
+    expect(s.band).not.toBeNull();
+    expect(Number.isFinite(s.vrmMedian)).toBe(true);
+  });
+
+  test('absent at 6 pts/m² (and at exactly the 4 pts/m² threshold)', () => {
+    expect(mk(6).warnings.some((w) => w.includes('reliability threshold'))).toBe(false);
+    expect(mk(COMPLEXITY_DENSITY_THRESHOLD_PTS_M2).warnings.some((w) => w.includes('reliability threshold'))).toBe(false);
+  });
+
+  test('unknown density earns no confident caveat', () => {
+    expect(mk(null).warnings.some((w) => w.includes('reliability threshold'))).toBe(false);
+    expect(densityReliabilityCaveat(undefined)).toBeNull();
+    expect(densityReliabilityCaveat(Number.NaN)).toBeNull();
+    expect(densityReliabilityCaveat(0)).toBeNull(); // zero = no measurement
+  });
+
+  test('caveat text is ordered AFTER the cores’ own warnings', () => {
+    const s = mk(2);
+    const i = s.warnings.findIndex((w) => w.includes('reliability threshold'));
+    expect(i).toBe(s.warnings.length - 1);
+  });
+});

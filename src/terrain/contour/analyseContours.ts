@@ -95,6 +95,10 @@ import {
 } from './contourShapeStyle';
 import { placeLabels, type ContourLabel } from './labelPlacement';
 import { computeVerticalAccuracy, type VerticalAccuracy } from '../validate/verticalAccuracy';
+import {
+  summariseTerrainComplexity,
+  type TerrainComplexitySummary,
+} from '../complexity/complexitySummary';
 
 /**
  * Core (interval-independent) options for {@link computeTerrainCore}. These
@@ -279,6 +283,15 @@ export interface TerrainCore {
   };
   /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
   readonly cellStatusTally: CellStatusTally;
+  /**
+   * Literature-defined terrain-complexity summary — VRM (Sappington et al.
+   * 2007) median + IQR with its window, TPI (Weiss 2001) dominant slope-
+   * position class with its radius, both with stated units and a derived
+   * confidence. Null when nothing was measurable (no valid cells) — the UI
+   * then renders an honest "—". Computed here, in the interval-independent
+   * core (worker path), so it never runs on the interactive path.
+   */
+  readonly complexity: TerrainComplexitySummary | null;
   /** Interval gate (options + recommendation). Interval-independent: it is a
    *  function of cell size, relief and the measured RMSE only. */
   readonly gate: IntervalGateResult;
@@ -345,6 +358,12 @@ export interface AnalyseContoursResult {
   };
   /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
   readonly cellStatusTally: CellStatusTally;
+  /**
+   * Terrain-complexity summary (VRM median + IQR, TPI dominant class — with
+   * windows, units, derived confidence, and caveats), or null when nothing
+   * was measurable. Carried unchanged from the core (interval-independent).
+   */
+  readonly complexity: TerrainComplexitySummary | null;
   /** Recommended DTM grid + contour interval for this dataset. */
   readonly gridRecommendation: GridRecommendation;
   readonly gate: IntervalGateResult;
@@ -682,6 +701,33 @@ export function computeTerrainCore(
     relief: { slope: sa.slope, aspect: sa.aspect },
   };
 
+  // Terrain-complexity summary (VRM per Sappington et al. 2007, TPI per
+  // Weiss 2001) over the SAME Horn grids and coverage mask the surface
+  // models use — nothing is recomputed, and the summary rides the core so
+  // it is computed off the interactive path (worker or fallback), never
+  // eagerly at attach. The scan-scaled ground density feeds the cited
+  // ≥4 pts/m² reliability caveat (Münzinger et al. 2022); null when the
+  // grid had nothing measurable, which downstream renders as "—".
+  const complexity = dtmHasCoverage
+    ? summariseTerrainComplexity({
+        z: dtm.z,
+        coverage: dtm.coverage,
+        cols: dtm.cols,
+        rows: dtm.rows,
+        slope: sa.slope,
+        aspect: sa.aspect,
+        cellMetresX: horizCellEwM,
+        cellMetresY: horizCellNsM,
+        verticalUnitToMetres: params.verticalUnitToMetres,
+        meta: {
+          coverage: dtm.coverageMode,
+          sourcePointCount: dtm.sourcePointCount,
+          analyzedPointCount: dtm.analyzedPointCount,
+        },
+        groundDensityPerM2: cellMetrics.meanDensity,
+      })
+    : null;
+
   return {
     dtm,
     validation,
@@ -695,6 +741,7 @@ export function computeTerrainCore(
     accuracyStandards,
     surface,
     cellStatusTally,
+    complexity,
     gate,
     accuracy,
     elevationRangeM,
@@ -793,6 +840,7 @@ export function contoursFromCore(
       excludedByClassification: core.excludedByClassification,
       accuracyStandards: core.accuracyStandards,
       cellStatusTally: core.cellStatusTally,
+      complexity: core.complexity,
       gridRecommendation,
       gate,
       intervalM: null,
@@ -867,6 +915,7 @@ export function contoursFromCore(
     excludedByClassification: core.excludedByClassification,
     accuracyStandards: core.accuracyStandards,
     cellStatusTally: core.cellStatusTally,
+    complexity: core.complexity,
     gridRecommendation,
     gate,
     intervalM,
