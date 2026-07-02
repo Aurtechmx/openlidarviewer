@@ -159,7 +159,9 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(text).toMatch(/Contour style\s+Smooth/);
     expect(text).toMatch(/Surface quality\s+Good/);
     expect(text).toMatch(/Export readiness\s+Ready/);
-    expect(text).toMatch(/USGS 3DEP\s+QL2/);
+    // "(estimated)" is load-bearing: the QL's RMSEz leg is hold-out-based,
+    // so the stamped grade must carry the same qualifier the panel chip does.
+    expect(text).toMatch(/USGS 3DEP\s+QL2 \(estimated\)/);
     expect(text).toMatch(/not survey-grade/i);
   });
 

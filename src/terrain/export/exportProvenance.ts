@@ -302,7 +302,15 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Vertical RMSEz', p.accuracy ? fmtM(p.accuracy.rmseZM) : 'unknown'),
     kv('NVA (95%)', p.accuracy ? fmtM(p.accuracy.nvaM) : 'unknown'),
     kv('VVA (95th pct)', p.accuracy ? fmtM(p.accuracy.vvaM) : 'unknown'),
-    kv('USGS 3DEP', p.accuracy ? p.accuracy.usgsQualityLevel : 'unknown'),
+    // "(estimated)" mirrors the panel chip: the QL's RMSEz leg is hold-out-
+    // based (withheld points, not independent checkpoints), so the stamped
+    // grade must carry the same qualifier the screen does.
+    kv(
+      'USGS 3DEP',
+      p.accuracy && p.accuracy.usgsQualityLevel !== 'unknown'
+        ? `${p.accuracy.usgsQualityLevel} (estimated)`
+        : 'unknown',
+    ),
     kv(
       'Point density',
       p.pointDensityPerM2 != null ? `${p.pointDensityPerM2.toFixed(1)} pts/m²` : 'unknown',

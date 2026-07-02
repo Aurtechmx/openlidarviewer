@@ -73,7 +73,9 @@ export const METRIC_TOOLTIPS = {
     'vegetated-class checkpoints.',
   qualityLevel:
     'USGS 3DEP Quality Level — the level the surface meets on point ' +
-    'density and vertical accuracy together.',
+    'density and vertical accuracy together. Estimated: the RMSEz leg is ' +
+    'measured on internally withheld points (hold-out), not the independent ' +
+    'checkpoints a 3DEP assessment requires.',
   crs:
     'CRS — coordinate reference system; exports are not georeferenced ' +
     'without it.',

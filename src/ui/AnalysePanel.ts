@@ -1505,10 +1505,13 @@ export class AnalysePanel {
           (qlReason
             ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
             : METRIC_TOOLTIPS.qualityLevel) + strideNote;
+        // "(estimated)": the QL's vertical-accuracy leg is hold-out-based
+        // (and the density leg may be stride-scaled) — never a measured,
+        // checkpoint-verified 3DEP grade. The tooltip spells out why.
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-ql',
-            text: `USGS 3DEP ${std.qualityLevel}`,
+            text: `USGS 3DEP ${std.qualityLevel} (estimated)`,
           }),
           qlTooltip,
         ));
