@@ -63,8 +63,14 @@ export const METRIC_TOOLTIPS = {
   rmse:
     'RMSE — the typical vertical error of the surface, measured against ' +
     'withheld ground checks.',
-  nva: 'NVA — non-vegetated vertical accuracy, at 95% confidence.',
-  vva: 'VVA — vegetated vertical accuracy, at the 95th percentile.',
+  nva:
+    'NVA-style (hold-out) — the ASPRS 2014 non-vegetated vertical accuracy ' +
+    'FORMULA (1.96 × RMSEz) applied to internally withheld ground points, ' +
+    'NOT independent survey checkpoints.',
+  vva:
+    'VVA-style (hold-out) — the ASPRS vegetated vertical accuracy FORMULA ' +
+    '(95th percentile), computed over ALL hold-out residuals, NOT ' +
+    'vegetated-class checkpoints.',
   qualityLevel:
     'USGS 3DEP Quality Level — the level the surface meets on point ' +
     'density and vertical accuracy together.',

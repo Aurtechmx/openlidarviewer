@@ -512,7 +512,10 @@ function aerialAlsFingerprint(
       },
       {
         label: 'NVA formula',
-        value: 'NVA = 1.96 × RMSEz (non-vegetated, normal distribution)',
+        value:
+          'NVA = 1.96 × RMSEz (non-vegetated, normal distribution). This ' +
+          'viewer reports an NVA-STYLE figure from internally withheld ' +
+          'points (hold-out), not independent checkpoints.',
         source: 'Lohani & Ghosh 2017 §6',
       },
     ],

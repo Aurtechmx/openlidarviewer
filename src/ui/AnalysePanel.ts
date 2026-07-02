@@ -1477,10 +1477,13 @@ export class AnalysePanel {
       const fmtM = (n: number | null): string =>
         n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
       if (std.nvaM != null || std.vvaM != null) {
+        // "-style (hold-out)": the figures use the ASPRS 2014 FORMULAS on
+        // internally withheld points, not independent checkpoints — the
+        // label must not claim a checkpoint assessment (see the tooltips).
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-strata',
-            text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
+            text: `NVA-style ${fmtM(std.nvaM)} · VVA-style ${fmtM(std.vvaM)} (95%, hold-out)`,
           }),
           `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
         ));
@@ -1898,8 +1901,8 @@ export class AnalysePanel {
     const lockedRows: Array<[string, string]> = [
       ['Horizontal CRS', r.model.crs ?? '— not georeferenced'],
       ['Vertical datum', r.model.verticalDatum ?? '—'],
-      ['NVA (95%)', fmtM(a?.nvaM)],
-      ['VVA (95th pct)', fmtM(a?.vvaM)],
+      ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
+      ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
       ['RMSEz', fmtM(a?.rmseZM)],
       ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
       ['Approx. scale', 'auto — fits sheet'],

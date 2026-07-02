@@ -14,6 +14,14 @@
  *        national elevation program collects against. QL2 ("≥2 pts/m² and
  *        ≤0.10 m RMSEz") is the 3DEP baseline.
  *
+ * HONESTY BOUNDARY: the RMSEz/p95 fed in here come from HOLD-OUT validation
+ * (internally withheld ground points), not from the independent survey
+ * checkpoints ASPRS 2014 defines NVA/VVA against — and the VVA-analog is the
+ * p95 of ALL residuals, not vegetated-class checkpoints. The FORMULAS are
+ * ASPRS's; the CLAIM is an estimate. Every user-facing surface must qualify
+ * the figures as "-style (hold-out)" and the QL as "(estimated)"; see
+ * `verticalAccuracy.ts` for the full statement of this boundary.
+ *
  * Pure data: no DOM, no I/O. Deterministic. Arithmetic only — the inputs are
  * already produced by the hold-out validation and the cell-metric rollup.
  */

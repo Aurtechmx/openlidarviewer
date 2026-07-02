@@ -2,9 +2,19 @@
  * verticalAccuracy.ts
  *
  * Reports the hold-out validation result in the form surveyors actually
- * recognise: the ASPRS 2014 vertical accuracy statistics. Bare RMSE is
+ * recognise: the ASPRS 2014 vertical accuracy FORMULAS. Bare RMSE is
  * fine internally; "NVA / VVA at 95% confidence" is what surveyors
  * recognise on a deliverable.
+ *
+ * HONESTY BOUNDARY (why every user-facing label says "-style (hold-out)"):
+ * ASPRS 2014 defines NVA/VVA against INDEPENDENT survey checkpoints — GCPs
+ * measured by a higher-accuracy method, stratified by land cover. This
+ * module applies the same FORMULAS to internally WITHHELD ground points
+ * (hold-out cross-validation), which is a genuinely useful accuracy
+ * estimate but NOT an ASPRS checkpoint assessment. In particular the
+ * VVA-analog here is the 95th percentile of ALL hold-out residuals, not of
+ * vegetated-class checkpoints. The math is identical; the CLAIM is weaker,
+ * and the labels must say so.
  *
  * Definitions (ASPRS Positional Accuracy Standards for Digital Geospatial
  * Data, 2014):
@@ -62,8 +72,10 @@ export function formatVerticalAccuracy(report: ValidationReport, units = 'm'): s
   }
   const u = ` ${units}`;
   return [
-    `Vertical RMSEz: ${a.rmseZ.toFixed(2)}${u} (n=${a.sampleSize})`,
-    `NVA @ 95% (${a.standard}): ${a.nva95.toFixed(2)}${u} — assumes normally distributed error`,
-    `VVA @ 95% (percentile): ${a.vva95.toFixed(2)}${u} — no distribution assumption`,
+    `Vertical RMSEz: ${a.rmseZ.toFixed(2)}${u} (n=${a.sampleSize}, hold-out)`,
+    `NVA-style @ 95% (${a.standard} formula, hold-out): ${a.nva95.toFixed(2)}${u} — ` +
+      `assumes normally distributed error; withheld points, not independent checkpoints`,
+    `VVA-style @ 95% (percentile, hold-out): ${a.vva95.toFixed(2)}${u} — ` +
+      `p95 of ALL residuals, not vegetated-class checkpoints`,
   ];
 }
