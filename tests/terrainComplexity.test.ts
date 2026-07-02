@@ -435,3 +435,66 @@ describe('honesty envelope — confidence derived from data support, never asser
     }
   });
 });
+
+// ── Unit fixtures — the SAME surface in US survey feet vs metres ────────────
+//
+// EPSG:2286-style fixture: horizontal AND vertical coordinates in US survey
+// feet (1 ft = 1200/3937 m exactly), against the identical surface in metres.
+// VRM is dimensionless (slope tangents cancel units when Z and XY share one),
+// so it must be IDENTICAL across units; TPI is in Z units, so it must scale
+// EXACTLY by the foot→metre factor.
+
+describe('unit fixtures — US survey feet (EPSG:2286-style) vs metres', () => {
+  const M_PER_USFT = 1200 / 3937; // exact US survey foot
+  const cols = 15;
+  const rows = 12;
+  const cellM = 1; // metres
+  const cellFt = cellM / M_PER_USFT; // the same physical cell, in feet
+
+  // A deterministic, gently rugged surface defined in METRES.
+  const surfM = (r: number, c: number): number =>
+    2 * Math.sin(0.6 * r) + 3 * Math.cos(0.4 * c) + 0.02 * r * c;
+  const zM = grid(cols, rows, surfM);
+  const zFt = grid(cols, rows, (r, c) => surfM(r, c) / M_PER_USFT);
+
+  const dM = hornSlopeAspect(zM, cols, rows, cellM);
+  const dFt = hornSlopeAspect(zFt, cols, rows, cellFt);
+
+  test('Horn slope tangents are unit-free when Z and XY share the unit', () => {
+    for (let i = 0; i < cols * rows; i++) {
+      expect(Math.abs(dFt.slope[i] - dM.slope[i])).toBeLessThan(1e-5);
+    }
+  });
+
+  test('VRM is identical across units (dimensionless)', () => {
+    const vM = computeVRM(dM.slope, dM.aspect, cols, rows, { windowCells: 3 });
+    const vFt = computeVRM(dFt.slope, dFt.aspect, cols, rows, { windowCells: 3 });
+    for (let i = 0; i < cols * rows; i++) {
+      expect(Math.abs(vFt.vrm[i] - vM.vrm[i])).toBeLessThan(1e-6);
+    }
+    expect(Math.abs(vFt.summary.median - vM.summary.median)).toBeLessThan(1e-7);
+    expect(Math.abs(vFt.summary.iqr - vM.summary.iqr)).toBeLessThan(1e-7);
+    expect(vFt.confidence).toBe(vM.confidence);
+  });
+
+  test('TPI scales exactly with the Z unit; SI-normalised values agree', () => {
+    const tM = computeTPI(zM, cols, rows, { radiusCells: 2, slope: dM.slope });
+    const tFt = computeTPI(zFt, cols, rows, { radiusCells: 2, slope: dFt.slope });
+    for (let i = 0; i < cols * rows; i++) {
+      const siFromFt = tFt.tpi[i] * M_PER_USFT; // normalise feet → metres
+      expect(Math.abs(siFromFt - tM.tpi[i])).toBeLessThan(1e-6);
+    }
+    expect(Math.abs(tFt.summary.median * M_PER_USFT - tM.summary.median)).toBeLessThan(1e-7);
+    expect(Math.abs(tFt.mean * M_PER_USFT - tM.mean)).toBeLessThan(1e-7);
+    expect(Math.abs(tFt.stdev * M_PER_USFT - tM.stdev)).toBeLessThan(1e-7);
+  });
+
+  test('standardised TPI and slope-position classes are unit-free', () => {
+    const tM = computeTPI(zM, cols, rows, { radiusCells: 2, slope: dM.slope });
+    const tFt = computeTPI(zFt, cols, rows, { radiusCells: 2, slope: dFt.slope });
+    for (let i = 0; i < cols * rows; i++) {
+      expect(Math.abs(tFt.stdTpi[i] - tM.stdTpi[i])).toBeLessThan(1e-4);
+      expect(tFt.classes![i]).toBe(tM.classes![i]);
+    }
+  });
+});
