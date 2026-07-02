@@ -2,6 +2,56 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.4] - 2026-07-02
+
+Terrain science hardening. The "Terrain Complexity" reading is no longer a
+heuristic: it is now backed by two literature-defined metrics computed from
+the analysed DTM, with windows, units, derived confidence, and a cited
+density caveat carried everywhere the number appears.
+
+### Added
+
+- **Real terrain-complexity metrics.** The terrain core now computes the
+  Vector Ruggedness Measure (VRM, Sappington et al. 2007, doi:10.2193/2005-723)
+  and the Topographic Position Index with Weiss (2001) six-class slope
+  position — implemented from the primary literature, riding the existing
+  Horn slope/aspect grids, and computed alongside the heavy core in the
+  worker (never on the interactive path). VRM was chosen deliberately
+  because it is slope-decoupled: a smooth 45° plane scores ~0 ruggedness,
+  so steepness is never mistaken for complexity. Both metrics report
+  median + IQR, state their window/radius in cells AND ground metres,
+  state TPI's Z units, and carry a confidence derived from data support
+  (valid fraction × window support) — never asserted.
+- **The Dataset Intelligence "Terrain Complexity" row is engine-fed.**
+  After a terrain run the row shows the band of the real VRM median
+  (Low / Moderate / High / Very High) with the numeric median + IQR,
+  window, and units one hover away (and in the Details panel). Until a run
+  measures something it still reads "—" — nothing is fabricated.
+- **A derived-metrics line on the Analyse panel** under the Terrain
+  Assessment: VRM median [IQR] with its window, the dominant TPI landform
+  class with its radius, units always stated, with the standard caveat
+  treatment.
+- **A cited density-reliability caveat.** When the scan-scaled ground
+  density is below 4 pts/m², the complexity outputs carry: "point density
+  N pts/m² is below the ≥4 pts/m² reliability threshold reported for
+  detailed terrain/vegetation complexity (Münzinger et al. 2022,
+  doi:10.1016/j.ufug.2022.127637); treat complexity as indicative." A
+  warning, never a block; tested present at 2 pts/m² and absent at 6.
+- **Complexity in reports and export provenance.** The terrain report and
+  every export's provenance now record the metric names, window/radius in
+  cells and ground units, Z units, the Horn slope/aspect convention note,
+  the derived confidence, and the caveats — reproducible parameters,
+  stamped word-for-word identically across README/DXF/SVG/GeoJSON/report
+  (the provenance-consistency suite pins the new fields).
+
+### Reproducibility
+
+- `npm run repro` gains metric M5: VRM slope-independence on an analytic
+  constant-45° plane vs. an equally steep rough surface, and a
+  hand-computed TPI ridge-crest value with its class — CI-guarded, not
+  asserted. Unit fixtures prove VRM is identical across feet/metre CRSs
+  (dimensionless) and that TPI scales exactly with the Z unit.
+
 ## [0.5.3] - 2026-07-01
 
 A hardening patch on v0.5. Change detection gains real epoch alignment, the
