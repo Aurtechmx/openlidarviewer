@@ -17,6 +17,11 @@
  *      1σ volume error is  area · σ(thickness) / √N. Sparse footprints have
  *      a larger band; this is the "density" honesty the Scan Intelligence
  *      panel already preaches, made quantitative.
+ *      INDEPENDENCE ASSUMPTION: the √N reduction treats per-point thickness
+ *      residuals as spatially INDEPENDENT. Real scan noise is correlated
+ *      (scan lines, registration drift, surface texture), so the true
+ *      sampling error can exceed this term — a caveat states so on every
+ *      result, mirroring the change-detection module's wording.
  *
  *   2. BASE-PLANE error — the whole pile sits on a reference height. If that
  *      base is uncertain by σ_base metres (how noisy/sloped the surrounding
@@ -24,7 +29,8 @@
  *      pile on bumpy ground this is usually the DOMINANT term — exactly the
  *      assumption a black-box number hides.
  *
- * Combined in quadrature (independent sources):  σ_V = √(σ_sample² + σ_base²).
+ * Combined in quadrature (assumes the two sources are independent):
+ *   σ_V = √(σ_sample² + σ_base²).
  *
  * Pure of three.js and the DOM — unit-testable in Node. Built on the existing
  * `volumeCutFill` estimator (reused for fill / cut / footprint / density) plus
@@ -358,6 +364,12 @@ function buildCaveats(
     );
   }
   out.push('Point-sample estimate over a horizontal base plane; not a triangulated surface-to-surface volume.');
+  // Mirrors changeUncertainty's spatial-correlation caveat: the √N in the
+  // sampling-error term assumes independent residuals, which scan noise
+  // (scan lines, registration drift) routinely violates.
+  out.push(
+    'Point-sampling noise is assumed spatially independent; the true error is larger if it is correlated.',
+  );
   if (confidence === 'high') {
     out.unshift('Dense, even coverage with a clean base — suitable for a documented stockpile figure once validated.');
   }

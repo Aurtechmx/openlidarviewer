@@ -42,6 +42,19 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(r.confidence).toBe('high');
   });
 
+  test('every result carries the spatial-correlation caveat (√N assumes independence)', () => {
+    // The sampling-error term divides by √N under an independence assumption
+    // scan noise routinely violates — the caveat must say so, mirroring
+    // changeUncertainty's wording.
+    const r = stockpileVolume({
+      polygon: squareFootprint(10),
+      positions: grid(10, 0.25, () => 2),
+      base: { mode: 'explicit', z: 0 },
+    });
+    expect(r.caveats.join(' ')).toMatch(/assumed spatially independent/i);
+    expect(r.caveats.join(' ')).toMatch(/larger if it is correlated/i);
+  });
+
   test('a device-reduced cloud adds a representative-sample caveat', () => {
     const base = {
       polygon: squareFootprint(10),

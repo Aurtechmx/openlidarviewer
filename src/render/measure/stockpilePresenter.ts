@@ -23,7 +23,11 @@ export interface StockpileViewRow {
 }
 
 export interface StockpileView {
-  /** "1,254 m³ ± 41" — the volume and its 1σ band, already in metres. */
+  /**
+   * "1,254 m³ ± 41 m³ (1σ)" — the volume and its band, already in metres.
+   * The band's confidence level is printed explicitly: a bare "± N" invites
+   * reading it as a hard bound, when it is one standard deviation (~68%).
+   */
   readonly headline: string;
   /** "±3.3%" — relative band. */
   readonly relative: string;
@@ -61,7 +65,7 @@ export function presentStockpile(
   const lin3 = lin2 * lin;
   const b = r.breakdown;
 
-  const headline = `${int(r.volume * lin3)} m³ ± ${int(r.sigma * lin3)}`;
+  const headline = `${int(r.volume * lin3)} m³ ± ${int(r.sigma * lin3)} m³ (1σ)`;
   const relative = `±${(r.relativeError * 100).toFixed(1)}%`;
 
   const baseLabel =
@@ -89,7 +93,7 @@ export function presentStockpile(
   };
 }
 
-/** One-line summary for a toast: "Stockpile: 1,254 m³ ± 41 (±3.3%) · Medium confidence". */
+/** One-line summary for a toast: "Stockpile: 1,254 m³ ± 41 m³ (1σ) (±3.3%) · Medium confidence". */
 export function stockpileToastLine(view: StockpileView): string {
   return `Stockpile: ${view.headline} (${view.relative}) · ${view.confidenceLabel} confidence`;
 }
