@@ -133,6 +133,36 @@ fallbacks where WinAnsi has the real glyph (m² / — / 1.96 × now print as
 themselves); and a pagination rule that could orphan a heading or leave a
 near-empty trailing page (small sections now keep-with-next).
 
+## The intensity channel survives export now
+
+A user exported a 1.56-million-point E57 to CSV and got an intensity column
+containing only 0 and 1. The file itself declares a continuous float
+intensity (limits 0.2800009–0.7380647); the loader was rounding those
+floats straight into a 16-bit integer store, so the entire channel collapsed
+to two values the moment the file was opened — the CSV writer merely
+exported the wreckage, and the intensity colour ramp saw the same two-tone
+channel. This is a data-destroying bug and the headline fix of this build:
+
+- **Unit-range float intensity now rescales ×65535 into the 16-bit store**
+  (the same rule the PTS and PCD loaders already followed), using the file's
+  declared intensity limits when present and the observed range when not.
+  Wider-than-unit ranges are stored raw, as before. Against the user's
+  actual file the channel now spans 18,350–48,369 — continuous — and the
+  CSV/XYZ exports carry those 0–65535 integers.
+- **PLY and OBJ respect geographic coordinates** — the v0.4.5 fix that gave
+  lat/lon exports 7 decimal places (3 dp of a degree is ~110 m of error)
+  had only reached XYZ/CSV; PLY and OBJ now use the same formatter.
+- **Exports carry the file's declared provenance.** XYZ, PLY and OBJ
+  headers now state the exporter + version, the source file name, and the
+  file's declared source, license, and limitations when it declares them —
+  verbatim, and always under the disclosure *declared by the file, not
+  verified by OpenLiDARViewer*. Files that declare nothing export
+  byte-identically to before. CSV stays pure data on purpose: no comment
+  lines a naive parser would choke on.
+- **Dropped channels are disclosed.** OBJ cannot carry intensity or
+  classification — its header now says so instead of dropping them
+  silently; PLY and XYZ name their unwritten channels the same way.
+
 ## Known limitations
 
 - The display bands (Low / Moderate / High / Very High) are a coarse banding
@@ -161,9 +191,10 @@ feet/metre CRSs and that TPI scales exactly with the Z unit.
 
 The release gate for this build ran the type check, the lint guards, both
 builds, the bundle budget, the post-build chunk-isolation contract, and all
-five test buckets green — 4,162 tests passed (30 skipped) across 360 test
+five test buckets green — 4,184 tests passed (30 skipped) across 361 test
 files, with the index bundle at 755 KiB against its 760 KiB ceiling (the
 declared-metadata keyword scan and its wording live in the lazy loader
+chunk, and the new provenance/disclosure headers live in the lazy exporters
 chunk, so the startup shell stayed flat). The figure step of `npm run
 repro` needs Python + matplotlib; the metrics table is written without it.
 

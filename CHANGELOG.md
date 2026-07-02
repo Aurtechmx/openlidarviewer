@@ -188,6 +188,52 @@ Fixed (Engineering Inspection PDF):
   and breaks as one unit when it doesn't — no orphaned headings, no
   near-empty trailing page holding a two-line block.
 
+### Point-cloud export correctness and provenance (verified against real user exports)
+
+A user's actual CSV/OBJ exports of a metadata-rich E57 exposed one
+data-destroying defect and two disclosure gaps, all fixed here:
+
+Data correctness:
+
+- **E57 unit-range float intensity no longer binarizes to {0, 1}.** The
+  loader stored intensity with a bare `Math.round` into the Uint16 store, so
+  a file declaring continuous float intensity (the sample declares
+  intensityLimits 0.2800009–0.7380647 over 1,564,029 points) collapsed to
+  two values — the user's CSV export contained only 0 (551,801 rows) and
+  1 (1,012,228 rows), and the intensity ramp and inspector saw the same
+  wreckage. The E57 path now follows the PTS/PCD rule it missed: a
+  unit-range channel (declared intensityMaximum ≤ 1, or an observed maximum
+  ≤ 1 when the file declares no limits) rescales ×65535 into the 16-bit
+  store — absolute scaling, never min–max stretching — while wider ranges
+  stay raw. Exports carry the stored 0–65535 integers; against the real
+  sample the channel now spans 18350–48369, continuous. Red-green pinned:
+  the pre-fix fixture read `[0, 1, 1]`.
+- **PLY and OBJ write geographic coordinates at 7 dp.** The v0.4.5 lat/lon
+  precision fix (3 dp of a degree is ~110 m) reached only XYZ/CSV; the PLY
+  and OBJ writers kept millimetre-style 3 dp on degrees. Both now use the
+  same geographic-aware formatter; Z stays 3 dp, projected/local exports are
+  byte-identical.
+
+Honest disclosure:
+
+- **Declared provenance rides the export headers.** XYZ (`#`), PLY
+  (`comment`) and OBJ (`#`) exports of a cloud with declared source metadata
+  now open with: exporter + version, source file name, declared source
+  (sensorModel, else the declared scan name), declared license and declared
+  limitations when present — verbatim values, single-line-flattened and
+  length-capped so file text can never break the format — closed by the
+  standing "declared by the file, not verified by OpenLiDARViewer"
+  disclosure. Only declared fields print; a cloud that declares nothing gets
+  no section, and metadata-less exports stay byte-identical to earlier
+  releases. CSV deliberately stays pure data (no comment convention naive
+  parsers survive): header row first, always.
+- **Dropped channels are named, not silently vanished.** OBJ discloses
+  intensity/classification as "not representable in OBJ — omitted" and
+  normals as "not written by this exporter — omitted" (OBJ could carry
+  `vn`; the wording claims no more than what happens); PLY discloses
+  intensity/classification/normals; XYZ discloses normals (its intensity and
+  classification ride as columns).
+
 ## [0.5.3] - 2026-07-01
 
 A hardening patch on v0.5. Change detection gains real epoch alignment, the
