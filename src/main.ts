@@ -4496,6 +4496,11 @@ async function generateReportPdf(templateId: string): Promise<void> {
     // panel to the digit on foot-based CRSs.
     unitToMetres: viewer.measure.unitToMetres,
     provenance: provenanceFp,
+    // The file's own declared source metadata (E57 today) — verbatim,
+    // rendered by the report's "Declared source metadata" section under the
+    // "declared by the file, not verified" disclosure. Undefined (streaming
+    // sources, metadata-less files) omits the section entirely.
+    sourceMetadata: staticCloud?.metadata?.sourceMetadata,
   });
 
   const result = await report.generateReport(inputs);

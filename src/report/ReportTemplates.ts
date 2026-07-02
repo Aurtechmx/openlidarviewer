@@ -19,13 +19,18 @@ const engineeringInspection: ReportTemplate = {
   label: 'Engineering Inspection',
   description:
     'Full inspection record: cover + dataset metadata + capture-type ' +
-    'provenance + measurements + annotations + visuals + technical notes. ' +
-    'Use for as-built reviews and structural-defect documentation.',
+    'provenance + declared source metadata + measurements + annotations + ' +
+    'visuals + technical notes. Use for as-built reviews and ' +
+    'structural-defect documentation.',
   sections: [
     'cover',
     'inspection-summary',
     'dataset-summary',
     'provenance',
+    // The file's own declared metadata (verbatim, "declared, not verified")
+    // reads directly after the heuristic provenance so the two provenance
+    // sources sit side by side. Omitted entirely when nothing is declared.
+    'source-metadata',
     'measurements',
     'annotations',
     'visuals',

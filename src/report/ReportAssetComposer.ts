@@ -21,6 +21,7 @@ import type {
   ReportCoverInputs,
   ReportInputs,
   ReportProvenanceFingerprint,
+  ReportSourceMetadata,
   ReportTemplateId,
   ReportVisualAsset,
 } from './types';
@@ -78,6 +79,15 @@ export interface ComposeReportInputs {
    */
   readonly provenance?: ReportProvenanceFingerprint;
   /**
+   * v0.5.4 — the file's own declared source metadata (standard + extension
+   * fields, verbatim), lifted from `cloud.metadata.sourceMetadata`. When
+   * supplied AND the template includes the `source-metadata` section, the
+   * PDF renders a "Declared source metadata" section under the explicit
+   * "declared by the file, not verified" disclosure. Omitted → the section
+   * is omitted entirely.
+   */
+  readonly sourceMetadata?: ReportSourceMetadata;
+  /**
    * QA reports default to sorting annotations by type so issues group
    * together at the top. Engineering / survey reports default to
    * chronological. Mirrors the live AnnotationPanel's two sort modes.
@@ -124,6 +134,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     technicalNotes: input.technicalNotes,
     acceptanceChecks,
     provenance: input.provenance,
+    sourceMetadata: input.sourceMetadata,
     // Synthesised once here so every template that includes the
     // `inspection-summary` section renders the same findings. Pure of the
     // renderer; the QL-tier gating lives in buildInspectionSummary.

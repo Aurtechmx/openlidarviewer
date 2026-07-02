@@ -163,6 +163,13 @@ export async function renderReportPdf(
       console.warn(
         `[report] section "${section}" failed to render and was skipped: ${reason}`,
       );
+      // A failed section may have already drawn part of itself below the
+      // pre-section cursor (that content cannot be recalled), and the
+      // reverted cursor would let the NEXT section draw over it — the
+      // page-1 overlap bug this catch used to cause. Resuming on a fresh
+      // page guarantees no subsequent text can land on partially-drawn
+      // content, at the cost of one extra page in this failure-only path.
+      cursor = startNewPage(doc, accent, theme, branding.organisation);
     }
   }
 
@@ -275,6 +282,8 @@ async function renderSection(
       return renderDatasetSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'provenance':
       return renderProvenance(cursor, inputs, doc, accent, theme, body, bold, organisation);
+    case 'source-metadata':
+      return renderSourceMetadata(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'visuals':
       return renderVisuals(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'annotations':
@@ -392,20 +401,43 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
   return lines.length > 0 ? lines : [''];
 }
 
+/**
+ * Keep-with-next space for a small section: the heading band plus every
+ * wrapped line of a short body block. Sections that render only a
+ * placeholder ask for exactly this much, so they stay on the current page
+ * whenever they genuinely fit and break as ONE unit when they don't —
+ * never an orphaned heading at a page bottom, and never a near-empty page
+ * holding a two-line block that had room on its predecessor.
+ */
+function sectionKeepTogetherSpace(text: string, body: PDFFont): number {
+  const lines = wrapText(text, body, BODY_FONT_SIZE, CONTENT_WIDTH).length;
+  return (
+    HEADER_FONT_SIZE + 18 +                 // heading + its underline band
+    lines * (BODY_FONT_SIZE + 4) +          // each wrapped body line
+    10                                      // trailing section gap
+  );
+}
+
 function drawSectionHeader(
   cursor: PageCursor,
   text: string,
   accent: ParsedColor,
   bold: PDFFont,
 ): PageCursor {
-  cursor.page.drawText(sanitiseForPdf(text), {
+  const clean = sanitiseForPdf(text);
+  cursor.page.drawText(clean, {
     x: MARGIN, y: cursor.y - HEADER_FONT_SIZE,
     size: HEADER_FONT_SIZE, font: bold,
     color: rgb(accent.r, accent.g, accent.b),
   });
+  // The underline spans the heading's measured text width (it used to be a
+  // fixed 40 pt — an underline under only the first few characters),
+  // clamped to the content width so a pathological heading cannot cross
+  // the right margin.
   cursor.page.drawRectangle({
     x: MARGIN, y: cursor.y - HEADER_FONT_SIZE - 4,
-    width: 40, height: 1.5,
+    width: Math.min(bold.widthOfTextAtSize(clean, HEADER_FONT_SIZE), CONTENT_WIDTH),
+    height: 1.5,
     color: rgb(accent.r, accent.g, accent.b),
   });
   return { page: cursor.page, y: cursor.y - HEADER_FONT_SIZE - 14 };
@@ -932,7 +964,11 @@ async function renderProvenance(
     for (const b of p.bounds) {
       cursor = ensureSpace(cursor, 30, doc, accent, theme, organisation);
       cursor = drawLabelValueRow(cursor, b.label, b.value, body, bold, theme);
-      cursor.page.drawText(`source: ${b.source}`, {
+      // Sanitised like every other drawn string. A citation glyph outside
+      // WinAnsi ("Ruzgienė") used to throw HERE, aborting the section after
+      // its heading + signals were already drawn — and the reverted cursor
+      // let the next section draw over them (the page-1 overlap bug).
+      cursor.page.drawText(sanitiseForPdf(`source: ${b.source}`), {
         x: MARGIN + 12, y: cursor.y - BODY_FONT_SIZE,
         size: BODY_FONT_SIZE - 1, font: body,
         color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
@@ -946,6 +982,62 @@ async function renderProvenance(
   return { page: cursor.page, y: cursor.y - 10 };
 }
 
+/**
+ * v0.5.4 — "Declared source metadata": the file's own metadata declarations,
+ * verbatim. Standard-schema fields first, then the extension-namespace
+ * fields under their own sub-heading. The section leads with the honesty
+ * disclosure (declared by the file, not verified by OpenLiDARViewer) and is
+ * OMITTED ENTIRELY when the file declares nothing — an empty shell would
+ * imply the viewer looked for metadata and vouches for its absence.
+ */
+async function renderSourceMetadata(
+  cursor: PageCursor,
+  inputs: ReportInputs,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): Promise<PageCursor> {
+  const sm = inputs.sourceMetadata;
+  if (!sm || (sm.standard.length === 0 && sm.extensions.length === 0)) return cursor;
+  cursor = ensureSpace(cursor, 72, doc, accent, theme, organisation);
+  cursor = drawSectionHeader(cursor, 'Declared source metadata', accent, bold);
+  cursor = drawBodyLine(
+    cursor,
+    'The fields below are quoted verbatim from the source file\'s own ' +
+      'metadata — declared by the file, not verified by OpenLiDARViewer.',
+    body,
+    theme,
+  );
+  cursor = { page: cursor.page, y: cursor.y - 4 };
+  for (const f of sm.standard) {
+    cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+    cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, theme);
+  }
+  if (sm.extensions.length > 0) {
+    cursor = ensureSpace(cursor, 30, doc, accent, theme, organisation);
+    cursor = { page: cursor.page, y: cursor.y - 4 };
+    cursor.page.drawText('Extension fields (file-declared)', {
+      x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: bold,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+    // Extension namespaces disclosed once, compactly, rather than per row.
+    const uris = [...new Set(sm.extensions.map((f) => f.namespaceUri).filter(Boolean))];
+    if (uris.length > 0) {
+      cursor = drawBodyLine(cursor, `Namespace: ${uris.join(', ')}`, body, theme, 4);
+    }
+    for (const f of sm.extensions) {
+      cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+      cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, theme);
+    }
+  }
+  return { page: cursor.page, y: cursor.y - 14 };
+}
+
 async function renderVisuals(
   cursor: PageCursor,
   inputs: ReportInputs,
@@ -956,20 +1048,19 @@ async function renderVisuals(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
+  // Section appears even when empty so the template's intended structure is
+  // visible — the placeholder tells the user what to do to fill it. Keep-
+  // with-next: the empty block reserves exactly heading + placeholder.
+  const vPlaceholder =
+    'No visuals captured. Use Image export in the Inspector to add height / intensity / classification rasters.';
+  cursor = ensureSpace(
+    cursor,
+    inputs.visuals.length === 0 ? sectionKeepTogetherSpace(vPlaceholder, body) : 60,
+    doc, accent, theme, organisation,
+  );
   cursor = drawSectionHeader(cursor, 'Visuals', accent, bold);
   if (inputs.visuals.length === 0) {
-    // Section appears even when empty so the template's intended
-    // structure is visible — a 7-section Engineering Inspection no
-    // longer collapses to the same single-page output as a 5-section
-    // QA Validation when both lack captured visuals. The placeholder
-    // tells the user what to do to fill it.
-    cursor = drawBodyLine(
-      cursor,
-      'No visuals captured. Use Image export in the Inspector to add height / intensity / classification rasters.',
-      body,
-      theme,
-    );
+    cursor = drawBodyLine(cursor, vPlaceholder, body, theme);
     return { page: cursor.page, y: cursor.y - 10 };
   }
   for (const v of inputs.visuals) {
@@ -1006,15 +1097,17 @@ async function renderAnnotations(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
+  // Keep-with-next (see renderMeasurements).
+  const aPlaceholder =
+    'No annotations on this scan. Use the Annotate tool on the tool dock to flag issues, name features, or attach notes.';
+  cursor = ensureSpace(
+    cursor,
+    inputs.annotations.length === 0 ? sectionKeepTogetherSpace(aPlaceholder, body) : 60,
+    doc, accent, theme, organisation,
+  );
   cursor = drawSectionHeader(cursor, `Annotations (${inputs.annotations.length})`, accent, bold);
   if (inputs.annotations.length === 0) {
-    cursor = drawBodyLine(
-      cursor,
-      'No annotations on this scan. Use the Annotate tool on the tool dock to flag issues, name features, or attach notes.',
-      body,
-      theme,
-    );
+    cursor = drawBodyLine(cursor, aPlaceholder, body, theme);
     return { page: cursor.page, y: cursor.y - 10 };
   }
   // Grouping summary — same line the live Annotations panel shows, so the
@@ -1056,15 +1149,19 @@ async function renderMeasurements(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
+  // Keep-with-next: an empty section is a heading + a short placeholder —
+  // reserve exactly that, so the block stays with its predecessor whenever
+  // it fits and never splits across the break.
+  const mPlaceholder =
+    'No measurements taken. Use the Measure tool on the tool dock to record distances, areas, or volumes before exporting.';
+  cursor = ensureSpace(
+    cursor,
+    inputs.measurements.length === 0 ? sectionKeepTogetherSpace(mPlaceholder, body) : 60,
+    doc, accent, theme, organisation,
+  );
   cursor = drawSectionHeader(cursor, `Measurements (${inputs.measurements.length})`, accent, bold);
   if (inputs.measurements.length === 0) {
-    cursor = drawBodyLine(
-      cursor,
-      'No measurements taken. Use the Measure tool on the tool dock to record distances, areas, or volumes before exporting.',
-      body,
-      theme,
-    );
+    cursor = drawBodyLine(cursor, mPlaceholder, body, theme);
     return { page: cursor.page, y: cursor.y - 10 };
   }
   for (const m of inputs.measurements) {
@@ -1108,50 +1205,56 @@ async function renderMeasurements(
 }
 
 /**
- * Map Unicode glyphs the user might paste into a threshold input to
- * WinAnsi-safe equivalents. pdf-lib's StandardFonts.Helvetica is
- * WinAnsi-encoded; characters outside its repertoire (e.g. >=, <=)
- * throw "WinAnsi cannot encode" at draw time. Replacing them up-front
- * keeps the per-section error path for genuine bugs.
+ * Keep every drawn string WinAnsi-encodable. pdf-lib's
+ * StandardFonts.Helvetica is WinAnsi (CP1252)-encoded; characters outside
+ * its repertoire throw "WinAnsi cannot encode" at draw time, and the
+ * per-section error path would then drop the whole section. Sanitising
+ * up-front keeps that path for genuine bugs.
+ *
+ * WinAnsi genuinely COVERS the typographic glyphs an engineering report
+ * needs — ×, ÷, ±, ², ³, °, ·, §, µ, em/en dashes, ellipsis, curly quotes,
+ * bullets — so those pass through untouched and print as themselves (the
+ * pre-v0.5.4 ASCII fallbacks "m^2", "--", "1.96 x" are gone). Only glyphs
+ * WinAnsi truly lacks are mapped: comparison operators to ASCII, Greek to
+ * names, and Latin-Extended letters from cited author names to their base
+ * letters. Anything else becomes '?' so the substitution stays visible.
+ *
+ * Exported for the glyph-substitution unit tests.
  */
-function sanitiseForPdf(input: string): string {
+export function sanitiseForPdf(input: string): string {
   return (
     input
-      // Mathematical operators that show up in thresholds + measurement values.
+      // Operators WinAnsi genuinely lacks.
       .replaceAll('≥', '>=')
       .replaceAll('≤', '<=')
       .replaceAll('≠', '!=')
-      .replaceAll('×', 'x')
-      .replaceAll('÷', '/')
       .replaceAll('√', 'sqrt')
       .replaceAll('Δ', 'd')
       .replaceAll('σ', 'sigma')
-      .replaceAll('±', '+/-')
-      .replaceAll('²', '^2')
-      .replaceAll('³', '^3')
-      // Em / en dashes and ellipsis — these are the highest-frequency offenders.
-      // ReportMeasurementSection emits U+2014 (em-dash) for degenerate
-      // measurements; without this mapping the entire Measurements section
-      // would silently disappear from the PDF.
-      .replaceAll('—', '--')
-      .replaceAll('–', '-')
-      .replaceAll('…', '...')
-      // Curly quotes — Helvetica's WinAnsi range covers most but not all
-      // variants depending on pdf-lib version, and consistency reads cleaner
-      // against the ASCII Methods appendix anyway.
-      .replaceAll(/[‘’‚‛]/g, "'")
-      .replaceAll(/[“”„‟]/g, '"')
-      // Common degree / ordinal markers that survive in most fonts but are
-      // explicit here so the mapping is documented.
-      .replaceAll('°', ' deg ')
-      .replaceAll('·', '.')
-      .replaceAll('•', '*')
-      // Fallback: any remaining codepoint outside the WinAnsi range
-      // (U+0020-U+007E plus a handful of Latin-1 supplements pdf-lib's
-      // Helvetica safely renders) is replaced with '?'. This keeps the
-      // section rendering instead of silently disappearing — the user sees
-      // the substitution and can clean up their source text.
-      .replace(/[^\x20-\x7E -ÿ]/g, '?')
+      // Latin-Extended letters that appear in cited author names
+      // (e.g. "Ruzgienė") — transliterated to their base letter rather
+      // than degraded to '?'. This list covers the Latin-Extended-A
+      // letters realistically seen in survey/remote-sensing citations.
+      .replaceAll(/[ĀĄ]/g, 'A').replaceAll(/[āą]/g, 'a')
+      .replaceAll(/[ĆĈĊČ]/g, 'C').replaceAll(/[ćĉċč]/g, 'c')
+      .replaceAll(/[ĒĖĘĚ]/g, 'E').replaceAll(/[ēėęě]/g, 'e')
+      .replaceAll(/[ĜĞĠĢ]/g, 'G').replaceAll(/[ĝğġģ]/g, 'g')
+      .replaceAll(/[ĨĪĮİ]/g, 'I').replaceAll(/[ĩīįı]/g, 'i')
+      .replaceAll(/[ĹĻĽŁ]/g, 'L').replaceAll(/[ĺļľł]/g, 'l')
+      .replaceAll(/[ŃŅŇ]/g, 'N').replaceAll(/[ńņň]/g, 'n')
+      .replaceAll(/[ŌŐ]/g, 'O').replaceAll(/[ōő]/g, 'o')
+      .replaceAll(/[ŔŖŘ]/g, 'R').replaceAll(/[ŕŗř]/g, 'r')
+      .replaceAll(/[ŚŜŞ]/g, 'S').replaceAll(/[śŝş]/g, 's')
+      .replaceAll(/[ŢŤ]/g, 'T').replaceAll(/[ţť]/g, 't')
+      .replaceAll(/[ŨŪŬŮŰŲ]/g, 'U').replaceAll(/[ũūŭůűų]/g, 'u')
+      .replaceAll(/[ŹŻ]/g, 'Z').replaceAll(/[źż]/g, 'z')
+      // Fallback: any remaining codepoint outside pdf-lib Helvetica's
+      // WinAnsi repertoire — printable ASCII, the Latin-1 supplement, and
+      // the CP1252 punctuation block (dashes, ellipsis, quotes, bullet,
+      // €, ‰, ™, Š/š, Ž/ž, Œ/œ, Ÿ, ƒ, †, ‡, ‹›, ‚„, ˆ, ˜) — is
+      // replaced with '?'. The section keeps rendering and the
+      // substitution stays visible so the user can clean up the source.
+      .replace(/[^\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, '?')
   );
 }
 
@@ -1284,24 +1387,27 @@ async function renderAcceptanceChecklist(
     '    when present.',
     '',
     'Cloud-sampled methodology (out of scope for this report):',
-    '  - Density / NPS heatmap / void test: Lohani & Ghosh 2017 section 6',
-    '    (Springer NASI A, peer-reviewed). Void area threshold = (4 x NPS)^2;',
-    '    spatial distribution test = >= 90 % of (2 x NPS)^2 cells contain',
-    '    >= 1 first return.',
-    '  - NVA / VVA from GCPs: NVA = 1.96 x RMSEz (open ground, normal',
-    '    distribution); VVA = 95th percentile of |dZ| (vegetated).',
-    '    Lohani & Ghosh 2017 section 6.',
-    '  - Civil tolerance bands: planimetric <= 1.0 / 1.6 x GSD,',
-    '    elevation <= 1.6 / 2.5 x GSD. Ruzgiene 2025 section 4.',
+    '  - Density / NPS heatmap / void test: Lohani & Ghosh 2017 §6',
+    '    (Springer NASI A, peer-reviewed). Void area threshold = (4 × NPS)²;',
+    '    spatial distribution test = ≥ 90 % of (2 × NPS)² cells contain',
+    '    ≥ 1 first return.',
+    '  - NVA / VVA from GCPs: NVA = 1.96 × RMSEz (open ground, normal',
+    '    distribution); VVA = 95th percentile of |ΔZ| (vegetated).',
+    '    Lohani & Ghosh 2017 §6.',
+    '  - Civil tolerance bands: planimetric ≤ 1.0 / 1.6 × GSD,',
+    '    elevation ≤ 1.6 / 2.5 × GSD. Ruzgienė 2025 §4.',
     '  - iPhone-LiDAR empirical envelope: 0.115 m H-RMSE with re-anchoring,',
-    '    0.16 m V-RMSE at 20 m GCP spacing. Krauskova 2025 (Sensors).',
+    '    0.16 m V-RMSE at 20 m GCP spacing. Krausková 2025 (Sensors).',
     '',
     'None of the above implies survey-grade accuracy without independent',
     'GCP validation. See OpenLiDARViewer\'s positioning notes in the docs.',
   ];
   for (const line of methodsLines) {
     cursor = ensureSpace(cursor, 13, doc, accent, theme, organisation);
-    cursor.page.drawText(line, {
+    // Sanitised so the diacritics in the cited author names (Ruzgienė,
+    // Krausková) transliterate instead of throwing at draw time; the ≥ / ≤ /
+    // × / ² glyphs above are WinAnsi-native and pass through as themselves.
+    cursor.page.drawText(sanitiseForPdf(line), {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE + 1,
       size: BODY_FONT_SIZE - 1.5, font: body,
       color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
@@ -1322,15 +1428,19 @@ async function renderTechnicalNotes(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
-  cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
+  // Keep-with-next (see renderMeasurements): the empty block reserves
+  // exactly heading + placeholder, and a short notes body reserves its
+  // first line with the heading.
+  const nPlaceholder =
+    'No technical notes provided. Pass a notes string when generating the report to fill this section.';
+  cursor = ensureSpace(
+    cursor,
+    inputs.technicalNotes ? 60 : sectionKeepTogetherSpace(nPlaceholder, body),
+    doc, accent, theme, organisation,
+  );
   cursor = drawSectionHeader(cursor, 'Technical notes', accent, bold);
   if (!inputs.technicalNotes) {
-    cursor = drawBodyLine(
-      cursor,
-      'No technical notes provided. Pass a notes string when generating the report to fill this section.',
-      body,
-      theme,
-    );
+    cursor = drawBodyLine(cursor, nPlaceholder, body, theme);
     return { page: cursor.page, y: cursor.y - 10 };
   }
   // no full paragraph reflow; we split on newlines and

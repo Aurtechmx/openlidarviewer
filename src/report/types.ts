@@ -35,6 +35,7 @@ export type ReportSectionId =
   | 'inspection-summary'     // synthesised findings card (density tier, gaps, caveats)
   | 'dataset-summary'
   | 'provenance'             // v0.3.6 — auto-computed capture-type + literature bounds
+  | 'source-metadata'        // v0.5.4 — the file's own declared metadata, verbatim
   | 'visuals'
   | 'annotations'
   | 'measurements'
@@ -109,6 +110,33 @@ export interface ReportVisualAsset {
 export interface ReportDatasetRow {
   readonly label: string;
   readonly value: string;
+}
+
+/**
+ * One source-metadata field exactly as the source file declared it.
+ * Verbatim values — nothing inferred, normalised, or verified.
+ * Shape mirrors `DeclaredMetadataField` in `model/PointCloud.ts` (inlined
+ * here so the report module stays model-blind).
+ */
+export interface ReportSourceMetadataField {
+  /** Local field name as declared, e.g. "sensorModel" or "datasetType". */
+  readonly name: string;
+  /** The declared value, verbatim. */
+  readonly value: string;
+  /** Namespace URI for extension-namespace fields. */
+  readonly namespaceUri?: string;
+}
+
+/**
+ * v0.5.4 — the file's own declared source metadata, rendered by the
+ * `source-metadata` section: the format's standard provenance fields plus
+ * any extension-namespace fields the writer added, each verbatim, under an
+ * explicit "declared by the file, not verified" disclosure. The section is
+ * omitted entirely when nothing is declared.
+ */
+export interface ReportSourceMetadata {
+  readonly standard: readonly ReportSourceMetadataField[];
+  readonly extensions: readonly ReportSourceMetadataField[];
 }
 
 /** One annotation as the report section renders it (denormalised view). */
@@ -221,6 +249,13 @@ export interface ReportInputs {
    * inlined here so the report module stays diagnostics-blind.
    */
   readonly provenance?: ReportProvenanceFingerprint;
+  /**
+   * v0.5.4 — the file's own declared source metadata (standard + extension
+   * fields, verbatim). Rendered by templates that include the
+   * `source-metadata` section; the section is omitted entirely when this is
+   * absent or empty. Declared by the file, not verified by the viewer.
+   */
+  readonly sourceMetadata?: ReportSourceMetadata;
   /**
    * Synthesised inspection summary — a headline + scannable findings + the
    * explicit list of what the report does not establish. Built by
