@@ -93,6 +93,46 @@ Honest labels:
   area** rather than "true surface area", and geographic scans analysed
   without a known latitude now warn that east–west scaling is uncorrected.
 
+## Declared source metadata, and an honest inspection PDF
+
+Some files say what they are. A metadata-rich E57 can declare its creator,
+licence, coordinate conventions, sensor fields, and even a custom
+extension-namespace block — and until now the viewer surfaced almost none of
+it, while the Engineering Inspection PDF confidently labelled such a scan
+"Drone-mounted LiDAR (UAV ALS)" from density heuristics alone. This release
+makes the file's own voice the primary source:
+
+- **E57 declared metadata is captured end to end** — the standard root and
+  per-scan provenance fields (guid, library version, creation time,
+  coordinate metadata, sensor vendor / model / serial, acquisition times,
+  environment readings, intensity/colour limits) plus any
+  extension-namespace String/Integer/Float fields (any prefix), in document
+  order with their namespace URI. Only *declared* values appear: the E57
+  empty-element defaults (zero timestamps, blank strings) are omitted, never
+  displayed as fabricated zeros, and malformed metadata degrades to omission
+  with a load warning rather than a failed load.
+- **The Inspector shows it** in a collapsible "Source metadata" section
+  (with an "Extended metadata (file-declared)" subsection), and **the
+  Engineering Inspection PDF gains a "Declared source metadata" section** —
+  both verbatim, both under the disclosure *declared by the file, not
+  verified by OpenLiDARViewer*, both absent when nothing is declared.
+- **The capture-type verdict yields to the file.** When the declared
+  metadata states a synthetic / procedural / reconstruction / reference
+  origin, the verdict becomes "Declared: <value> (from file metadata)" and
+  the density heuristic is demoted to a secondary, low-confidence line — no
+  literature accuracy ribbon is attached to a source those citations do not
+  describe. Files that declare nothing classify exactly as before.
+
+The inspection PDF also had four rendering defects, all fixed and pinned by
+a content-stream-parsing layout test: a page-1 overlap where a failed
+provenance section let later headings draw over already-rendered text (a
+citation glyph outside WinAnsi was the trigger; failed sections now also
+resume on a fresh page as defence in depth); section-heading underlines that
+stopped after the first few characters (now the measured text width); ASCII
+fallbacks where WinAnsi has the real glyph (m² / — / 1.96 × now print as
+themselves); and a pagination rule that could orphan a heading or leave a
+near-empty trailing page (small sections now keep-with-next).
+
 ## Known limitations
 
 - The display bands (Low / Moderate / High / Very High) are a coarse banding
@@ -121,11 +161,11 @@ feet/metre CRSs and that TPI scales exactly with the Z unit.
 
 The release gate for this build ran the type check, the lint guards, both
 builds, the bundle budget, the post-build chunk-isolation contract, and all
-five test buckets green — 4,116 tests passed (30 skipped) across 357 test
-files, with the index bundle at 755 KiB against its 760 KiB ceiling (smaller
-than v0.5.3: the contour serialisers and provenance builder moved to a lazy
-chunk). The figure step of `npm run repro` needs Python + matplotlib; the
-metrics table is written without it.
+five test buckets green — 4,162 tests passed (30 skipped) across 360 test
+files, with the index bundle at 755 KiB against its 760 KiB ceiling (the
+declared-metadata keyword scan and its wording live in the lazy loader
+chunk, so the startup shell stayed flat). The figure step of `npm run
+repro` needs Python + matplotlib; the metrics table is written without it.
 
 See [CHANGELOG.md](./CHANGELOG.md) for the full list.
 

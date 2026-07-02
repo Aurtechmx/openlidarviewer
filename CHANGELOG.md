@@ -120,6 +120,74 @@ Honesty (labels fixed, math unchanged):
   east–west scale is uncorrected (cos φ = 1) and derivatives are approximate,
   instead of degrading silently.
 
+### Declared source metadata (E57) and inspection-PDF fixes
+
+A metadata-rich E57 probe file exposed two gaps: the viewer surfaced almost
+none of what the file declared about itself, and the Engineering Inspection
+PDF asserted a density-derived capture type ("Drone-mounted LiDAR") over a
+file whose own metadata declares a synthetic origin. Both are provenance
+problems; both now honour the same rule — the viewer reports what the file
+DECLARES, labelled as declared and never as verified.
+
+Added:
+
+- **E57 declared source metadata is captured end to end.** The schema reader
+  now extracts the root-level provenance fields (guid, e57LibraryVersion,
+  creationDateTime, coordinateMetadata) and per-scan fields (name, guid,
+  description, sensorVendor / sensorModel / sensorSerialNumber, acquisition
+  times, temperature / humidity / pressure, intensity + colour limits) —
+  plus, generically, any extension-namespace String/Integer/Float leaf
+  fields (e.g. an `olv:` block) at root or scan level, in document order,
+  each with its namespace URI. Everything rides `CloudMetadata.
+  sourceMetadata` as declared-only data: the E57 empty-element default
+  (Integer/Float 0, String "") is treated as NOT declared, so a zero
+  acquisition time or blank string is omitted rather than displayed as a
+  fabricated value, and malformed metadata degrades to omission with a load
+  warning, never a failed load.
+- **The Inspector's Scan report gains a collapsible "Source metadata"
+  section** listing the declared standard fields, with an "Extended metadata
+  (file-declared)" subsection for extension-namespace fields — verbatim
+  values (long ones truncated with the full text in the tooltip) under the
+  disclosure "Declared by the file, not verified by OpenLiDARViewer". Only
+  declared rows render; a metadata-less file shows nothing new.
+- **The Engineering Inspection PDF gains a "Declared source metadata"
+  section** with the same fields and the same not-verified disclosure,
+  omitted entirely when the file declares nothing.
+- **The capture-type classifier now consumes declarations as a signal.**
+  When sensorModel / description / name / datasetType / accuracyClass
+  declare a synthetic / procedural / reconstruction / reference origin, the
+  verdict becomes "Declared: <value> (from file metadata)" — quoted
+  verbatim, with the density heuristic demoted to a secondary
+  low-confidence line and no literature accuracy ribbon attached (the cited
+  physical capture-type bounds do not describe a declared synthetic
+  source). Files without declared metadata classify exactly as before.
+
+Fixed (Engineering Inspection PDF):
+
+- **The page-1 text overlap.** A provenance citation containing a glyph
+  outside WinAnsi ("Ruzgienė") threw mid-section; the per-section error
+  isolation reverted the layout cursor, and the Measurements / Annotations
+  headings drew OVER the already-rendered Provenance + Signals block. The
+  citation line is now sanitised like every other drawn string, and — as
+  defence in depth — a failed section resumes on a fresh page so no later
+  text can ever land on partially-drawn content. A layout regression test
+  parses the rendered content streams and pins the no-overlap rule.
+- **Section-heading underlines span the heading text.** The rule under each
+  section heading was a fixed 40 pt stub; it now spans the measured text
+  width.
+- **WinAnsi glyphs print as themselves.** The sanitiser replaced ², ³, ×,
+  ÷, ±, °, —, – and friends with ASCII fallbacks ("m^2", "--", "1.96 x")
+  even though Helvetica's WinAnsi encoding covers them; those glyphs now
+  pass through verbatim (the Methods appendix follows suit), and only
+  genuinely unencodable characters are mapped (≥ ≤ → ASCII, Greek → names,
+  Latin-Extended letters in author names → base letters, anything else →
+  a visible "?").
+- **Keep-with-next pagination.** Placeholder-only sections ("No
+  measurements taken…") reserve exactly their heading + body instead of a
+  flat 60 pt, so a small section stays with its predecessor when it fits
+  and breaks as one unit when it doesn't — no orphaned headings, no
+  near-empty trailing page holding a two-line block.
+
 ## [0.5.3] - 2026-07-01
 
 A hardening patch on v0.5. Change detection gains real epoch alignment, the
