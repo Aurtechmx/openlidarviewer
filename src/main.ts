@@ -239,6 +239,7 @@ import type { CrsInfo } from './io/crs';
 import { CrsService } from './geo/CrsService';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { createCrsCoordinator } from './app/crsCoordinator';
+import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 
 /**
@@ -874,7 +875,9 @@ if (
   window.isSecureContext
 ) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
+    // Resolved against the page URL, not the origin root — the app deploys
+    // under sub-paths (GitHub Pages) where '/sw.js' would 404. See swUrl.ts.
+    navigator.serviceWorker.register(serviceWorkerUrl(window.location.href)).catch(() => {
       /* offline support is best-effort — a registration failure must not break the app */
     });
   });

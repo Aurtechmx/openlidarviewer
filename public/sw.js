@@ -64,9 +64,13 @@ self.addEventListener('activate', (event) => {
  * shell and the next offline load rendered the wrong document (navigation
  * cache-poisoning finding, Critical).
  */
-function isShellNavigation(url) {
+function scopeRoot() {
   const scope = new URL(self.registration && self.registration.scope ? self.registration.scope : './', self.location.href);
-  const root = scope.pathname.endsWith('/') ? scope.pathname : scope.pathname + '/';
+  return scope.pathname.endsWith('/') ? scope.pathname : scope.pathname + '/';
+}
+
+function isShellNavigation(url) {
+  const root = scopeRoot();
   return url.pathname === root || url.pathname === root + 'index.html';
 }
 
@@ -86,8 +90,10 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Bundled demo datasets are large and optional — let them hit the network
-  // rather than filling the cache with sample point clouds.
-  if (url.pathname.startsWith('/samples/')) return;
+  // rather than filling the cache with sample point clouds. Resolved against
+  // the registration scope, not the origin root, so a sub-path deploy
+  // (…/repo/samples/…) is excluded exactly like a root deploy.
+  if (url.pathname.startsWith(scopeRoot() + 'samples/')) return;
 
   // App navigations: network-first with an offline shell fallback.
   if (req.mode === 'navigate') {
