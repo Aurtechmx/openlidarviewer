@@ -14,7 +14,8 @@ import {
   TPI_CLASS,
   TPI_FLAT_SLOPE_TAN,
 } from '../src/terrain/complexity/terrainPositionIndex';
-import { hornSlope } from '../src/terrain/ground/terrainDerivatives';
+import { computeVRM } from '../src/terrain/complexity/vectorRuggedness';
+import { hornSlope, hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
 
 /** Row-major grid builder: z(row, col). */
 function grid(cols: number, rows: number, f: (row: number, col: number) => number): Float32Array {
@@ -201,5 +202,155 @@ describe('computeTPI — edges, NoData, and degenerate inputs stay honest', () =
     expect(res.warnings.some((w) => w.includes('radiusCells invalid'))).toBe(true);
     expect(res.classes).toBeNull();
     expect(res.warnings.some((w) => w.includes('no slope grid'))).toBe(true);
+  });
+});
+
+// ── VRM — Sappington et al. (2007), doi:10.2193/2005-723 ────────────────────
+
+describe('computeVRM — flat plane', () => {
+  const cols = 9;
+  const rows = 9;
+  const z = grid(cols, rows, () => 5);
+  const { slope, aspect } = hornSlopeAspect(z, cols, rows, 1);
+  const res = computeVRM(slope, aspect, cols, rows, { windowCells: 3 });
+
+  test('VRM is exactly 0 everywhere (all normals (0,0,1)), edges included', () => {
+    for (let i = 0; i < cols * rows; i++) expect(res.vrm[i]).toBeCloseTo(0, 12);
+    expect(res.summary.median).toBeCloseTo(0, 12);
+    expect(res.summary.iqr).toBeCloseTo(0, 12);
+    expect(res.validCellCount).toBe(cols * rows);
+  });
+});
+
+describe('computeVRM — constant planar slope (THE slope-independence assertion)', () => {
+  // z = x on a 20×20 grid, cell 1 ⇒ interior Horn tangent m = 1 (θ = 45°),
+  // downslope aspect = π (west). Identical normals ⇒ VRM must be 0 even
+  // though θ > 0 — the property that separates ruggedness from steepness.
+  const cols = 20;
+  const rows = 20;
+  const z = grid(cols, rows, (_r, c) => c);
+  const { slope, aspect } = hornSlopeAspect(z, cols, rows, 1);
+  const idx = at(cols);
+  const res = computeVRM(slope, aspect, cols, rows, { windowCells: 3 });
+
+  test('the surface really is steep (θ = 45°) and west-facing', () => {
+    expect(slope[idx(10, 10)]).toBeCloseTo(1, 12);
+    // atan2(−0, −1) is −π: same downslope direction as +π (west). Float32
+    // storage bounds the comparison at ~1e-7.
+    expect(Math.abs(aspect[idx(10, 10)])).toBeCloseTo(Math.PI, 6);
+  });
+
+  test('deep-interior VRM ≈ 0 despite θ > 0 — tight tolerance', () => {
+    // Cells ≥ 2 from the border: their 3×3 windows contain only interior
+    // Horn cells, whose normals are bit-identical.
+    for (let r = 2; r < rows - 2; r++)
+      for (let c = 2; c < cols - 2; c++) expect(res.vrm[idx(r, c)]).toBeLessThan(1e-12);
+  });
+
+  test('median VRM over the grid is 0 (interior dominates the border ring)', () => {
+    expect(res.summary.median).toBeLessThan(1e-12);
+  });
+});
+
+describe('computeVRM — alternating rough surface (triangle wave, period 4)', () => {
+  // z(col) = [0, 1, 0, −1][col mod 4], every row identical, cell 1.
+  // Interior Horn: dzdx cycles (1, 0, −1, 0), dzdy = 0 ⇒ face tangent m = 1
+  // (θ = 45°, cosθ = √2/2), aspect alternates west/east; ridge/valley lines flat.
+  // Hand-computed window resultants (3×3, all rows identical):
+  //   centre on a ridge/valley line (m = 0), window m = (±1, 0, ∓1):
+  //     Σ per row = (0, 0, 1 + 2cosθ) ⇒ VRM_a = 1 − (1+2cosθ)/3
+  //               = (2/3)(1 − √2/2) = 0.19526215…
+  //   centre on a face (m = ±1), window m = (0, ±1, 0):
+  //     |Σ| per row = √(sin²θ + (2+cosθ)²) = √(5 + 4cosθ)
+  //     ⇒ VRM_b = 1 − √(5 + 2√2)/3 = 0.06735647…
+  const cols = 16;
+  const rows = 9;
+  const wave = [0, 1, 0, -1];
+  const z = grid(cols, rows, (_r, c) => wave[c % 4]);
+  const { slope, aspect } = hornSlopeAspect(z, cols, rows, 1);
+  const idx = at(cols);
+  const res = computeVRM(slope, aspect, cols, rows, { windowCells: 3 });
+
+  const cosT = Math.SQRT1_2;
+  const vrmA = (2 / 3) * (1 - cosT);
+  const vrmB = 1 - Math.sqrt(5 + 4 * cosT) / 3;
+
+  test('per-cell VRM matches the analytic window resultants', () => {
+    for (let c = 2; c <= cols - 3; c++) {
+      const expected = c % 2 === 1 ? vrmA : vrmB; // odd cols are ridge/valley lines
+      expect(res.vrm[idx(4, c)]).toBeCloseTo(expected, 6);
+    }
+  });
+
+  test('rough VRM is clearly above the constant-slope case and inside [0, 1]', () => {
+    expect(res.summary.median).toBeGreaterThan(0.05); // slope case: 0
+    for (let i = 0; i < cols * rows; i++) {
+      if (!Number.isFinite(res.vrm[i])) continue;
+      expect(res.vrm[i]).toBeGreaterThanOrEqual(0);
+      expect(res.vrm[i]).toBeLessThanOrEqual(1);
+    }
+    expect(res.summary.iqr).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('computeVRM — edges, NoData, and degenerate inputs stay honest', () => {
+  test('non-finite slope/aspect cells are NaN centres and skipped window members', () => {
+    const cols = 5;
+    const rows = 5;
+    const z = grid(cols, rows, () => 2);
+    const { slope, aspect } = hornSlopeAspect(z, cols, rows, 1);
+    slope[12] = NaN;
+    const res = computeVRM(slope, aspect, cols, rows, { windowCells: 3 });
+    expect(Number.isNaN(res.vrm[12])).toBe(true);
+    expect(res.vrm[11]).toBeCloseTo(0, 12); // void never enters a resultant
+    expect(res.validCellCount).toBe(24);
+    expect(res.warnings.some((w) => w.includes('truncated'))).toBe(true);
+  });
+
+  test('a validity mask (DtmGrid.coverage-style) overrides finite inputs', () => {
+    const slope = new Float32Array(9);
+    const aspect = new Float32Array(9);
+    const valid = Uint8Array.from([1, 1, 1, 1, 0, 1, 1, 1, 1]);
+    const res = computeVRM(slope, aspect, 3, 3, { windowCells: 3, valid });
+    expect(Number.isNaN(res.vrm[4])).toBe(true);
+    expect(res.validCellCount).toBe(8);
+  });
+
+  test('empty and all-invalid grids return NaN summaries and say why', () => {
+    const empty = computeVRM(new Float32Array(0), new Float32Array(0), 0, 0, { windowCells: 3 });
+    expect(empty.validCellCount).toBe(0);
+    expect(Number.isNaN(empty.summary.median)).toBe(true);
+    expect(empty.warnings.some((w) => w.includes('empty grid'))).toBe(true);
+
+    const allBad = computeVRM(
+      Float32Array.from([NaN, Infinity, NaN, 0.5]),
+      Float32Array.from([0, 0, NaN, 0]),
+      2,
+      2,
+      { windowCells: 3 },
+    );
+    expect(allBad.validCellCount).toBe(1); // only index 3 is fully finite
+    const res = computeVRM(Float32Array.from([NaN]), Float32Array.from([NaN]), 1, 1, {
+      windowCells: 3,
+    });
+    expect(res.validCellCount).toBe(0);
+    expect(res.warnings.some((w) => w.includes('no valid cells'))).toBe(true);
+  });
+
+  test('invalid windowCells (even / zero / NaN) falls back to 3 with a warning', () => {
+    const slope = new Float32Array(9);
+    const aspect = new Float32Array(9);
+    for (const bad of [0, 2, NaN, 2.5]) {
+      const res = computeVRM(slope, aspect, 3, 3, { windowCells: bad });
+      expect(res.warnings.some((w) => w.includes('windowCells invalid'))).toBe(true);
+      expect(res.vrm[4]).toBeCloseTo(0, 12);
+    }
+  });
+
+  test('windowCells 1 is a single-normal window: VRM 0 by definition', () => {
+    const z = grid(4, 4, (r, c) => Math.sin(r) * Math.cos(c));
+    const { slope, aspect } = hornSlopeAspect(z, 4, 4, 1);
+    const res = computeVRM(slope, aspect, 4, 4, { windowCells: 1 });
+    for (let i = 0; i < 16; i++) expect(res.vrm[i]).toBeCloseTo(0, 12);
   });
 });
