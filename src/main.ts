@@ -5079,10 +5079,28 @@ async function handleFile(file: File): Promise<void> {
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
     }
-    try {
-      inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
-    } catch (err) {
-      if (debug) console.warn('[inspector] runModules + setReport threw', err);
+    // Scan Report — deferred off the attach path (v0.5.3). The health-check
+    // module walks EVERY point several times (duplicate-point set, median/MAD
+    // sorts, outlier + finite scans): ~3 s of the attach long-task on a
+    // multi-million-point cloud, blocking first paint and first input after
+    // "rendering…" clears. Run it when the main thread goes idle instead —
+    // the report card fills in a beat later, navigation is live immediately.
+    // The cloud-id guard drops the stale result if the user swapped scans
+    // before idle arrived (the memoised module re-runs cheaply on re-open).
+    {
+      const reportForId = id;
+      const fillReport = (): void => {
+        if (activeId !== reportForId) return; // scan changed while we waited
+        try {
+          inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
+        } catch (err) {
+          if (debug) console.warn('[inspector] runModules + setReport threw', err);
+        }
+      };
+      type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
+      const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
+      if (typeof rIC === 'function') rIC(fillReport, { timeout: 1500 });
+      else setTimeout(fillReport, 200);
     }
     try {
       inspector.setViews([]);
