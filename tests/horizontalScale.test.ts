@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import {
   horizontalCellMetres,
   horizontalCellMetresXY,
+  cosLatitude,
   METRES_PER_DEGREE,
 } from '../src/terrain/ground/horizontalScale';
 
@@ -38,6 +39,28 @@ describe('horizontalCellMetres', () => {
   });
 });
 
+describe('cosLatitude', () => {
+  it('hand-computed values: cos 0° = 1, cos 60° = 0.5, sign-symmetric', () => {
+    expect(cosLatitude(0)).toBeCloseTo(1, 12);
+    expect(cosLatitude(60)).toBeCloseTo(0.5, 12);
+    expect(cosLatitude(-60)).toBeCloseTo(0.5, 12);
+  });
+
+  it('unknown latitude (null / NaN) means no correction, not a guess', () => {
+    expect(cosLatitude(null)).toBe(1);
+    expect(cosLatitude(undefined)).toBe(1);
+    expect(cosLatitude(Number.NaN)).toBe(1);
+  });
+
+  it('clamps beyond ±89° so the E–W scale never collapses to 0', () => {
+    // cos(89°) ≈ 0.017452 — the floor for any |lat| ≥ 89, including the pole.
+    const floor = Math.cos((89 * Math.PI) / 180);
+    expect(cosLatitude(89)).toBeCloseTo(floor, 12);
+    expect(cosLatitude(90)).toBeCloseTo(floor, 12);
+    expect(cosLatitude(-90)).toBeCloseTo(floor, 12);
+  });
+});
+
 describe('horizontalCellMetresXY', () => {
   it('projected frames are isotropic (x === y === cellSizeM × scale)', () => {
     expect(horizontalCellMetresXY(2, false)).toEqual({ x: 2, y: 2 });
@@ -56,8 +79,21 @@ describe('horizontalCellMetresXY', () => {
     expect(at60.x).toBeCloseTo(at60.y * 0.5, 4); // cos 60° = 0.5 → east–west run halves
   });
 
-  it('clamps a degenerate (≥90°) latitude to a non-negative X', () => {
+  it('clamps a degenerate (≥90°) latitude to a POSITIVE X (cos-89° floor)', () => {
+    // The shared cosLatitude clamp: a pole-crossing latitude keeps the E–W
+    // scale finite and non-zero instead of dividing derivatives by ~0.
     const polar = horizontalCellMetresXY(0.001, true, 95);
-    expect(polar.x).toBeGreaterThanOrEqual(0);
+    expect(polar.x).toBeGreaterThan(0);
+    expect(polar.x).toBeCloseTo(polar.y * Math.cos((89 * Math.PI) / 180), 9);
+  });
+
+  it('an UNKNOWN latitude (null) keeps the isotropic estimate, never NaN', () => {
+    // A NaN latitude used to poison the X scale (max(0, cos NaN) = NaN);
+    // the shared cosLatitude falls back to cos φ = 1 for both.
+    const unknown = horizontalCellMetresXY(0.001, true, null);
+    expect(unknown.x).toBeCloseTo(unknown.y, 9);
+    const nan = horizontalCellMetresXY(0.001, true, Number.NaN);
+    expect(nan.x).toBeCloseTo(nan.y, 9);
+    expect(Number.isFinite(nan.x)).toBe(true);
   });
 });

@@ -29,6 +29,7 @@ import type { VerticalAxis } from '../ground/groundFilter';
 import { axisGetters } from '../ground/axisGetters';
 import { horizontalCellMetresXY } from '../ground/horizontalScale';
 import { hornSlope } from '../ground/terrainDerivatives';
+import { quantileSorted } from '../quantile';
 import type {
   BandError,
   ConfidenceSample,
@@ -70,6 +71,15 @@ export interface HoldoutParams {
   readonly collectSamples?: boolean;
   /** True when the horizontal frame is geographic (degrees). Default false. */
   readonly isGeographic?: boolean;
+  /**
+   * WORLD grid-centre latitude (degrees) for the geographic cos φ E–W scale,
+   * so the slope-band stratification uses the SAME slope definition as the
+   * live derivative stage. The points fed here are render-recentred (local
+   * Y ≈ 0), so only the caller can supply the real latitude. Null / omitted
+   * falls back to the local-bbox estimate (correct only for un-recentred
+   * data).
+   */
+  readonly latitudeDeg?: number | null;
   /**
    * Metres per source vertical unit (1 for metre data, ~0.3048 for feet). The
    * residuals are scaled by this so the reported RMSE/MAE/p95 are in metres
@@ -179,6 +189,7 @@ export function holdoutValidateDtm(
   const { dtm } = buildSurfaceFromRaster(raster, {
     targetCount: params.targetCount,
     isGeographic: params.isGeographic,
+    latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
   });
   // Residuals are reported in metres regardless of the source vertical unit.
@@ -192,7 +203,10 @@ export function holdoutValidateDtm(
   const cellM = horizontalCellMetresXY(
     cellSizeM,
     params.isGeographic,
-    minH2 + (rows / 2) * cellSizeM, // grid-centre latitude (geographic only)
+    // Prefer the caller's WORLD latitude: the held-out points are render-
+    // recentred (local Y ≈ 0 → cos φ silently 1). The local-bbox fallback
+    // stays correct for data in absolute coordinates.
+    params.latitudeDeg ?? minH2 + (rows / 2) * cellSizeM,
     params.horizontalUnitToMetres,
   );
   const slopeField = hornSlope(dtm.z, cols, rows, cellM.x, cellM.y);
@@ -289,7 +303,9 @@ export function holdoutValidateDtm(
   const rmse = Math.sqrt(sumSq / covered);
   const mae = sumAbs / covered;
   allAbs.sort((a, b) => a - b);
-  const p95 = percentile(allAbs, 0.95);
+  // Project-wide type-7 quantile (was nearest-rank — one of the three
+  // conventions the v0.4.3 audit flagged; see src/terrain/quantile.ts).
+  const p95 = quantileSorted(allAbs, 0.95);
 
   const perBand: BandError[] = GRADE_ORDER.map((grade) => {
     const n = bandCount[grade];
@@ -336,13 +352,6 @@ export function holdoutValidateDtm(
     ...(samples ? { samples } : {}),
     warnings: [...warnings, ...dtm.warnings],
   };
-}
-
-/** Nearest-rank percentile of a pre-sorted ascending array. */
-function percentile(sortedAsc: number[], q: number): number {
-  if (sortedAsc.length === 0) return Number.NaN;
-  const idx = Math.min(sortedAsc.length - 1, Math.max(0, Math.ceil(q * sortedAsc.length) - 1));
-  return sortedAsc[idx];
 }
 
 function emptyReport(holdoutFraction: number, warnings: string[]): ValidationReport {

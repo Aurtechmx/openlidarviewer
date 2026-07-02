@@ -190,11 +190,14 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     expect(staging).toHaveLength(2);
     expect(log.copies.map((c) => c.size)).toEqual([bytes, bytes]);
 
-    // The uniform packs cols, rows then the f32 cell size.
+    // The uniform packs cols, rows then the PER-AXIS f32 cell sizes; an
+    // omitted Y cell defaults to the X cell (square cells, historical call).
     const uniData = uniform[0].written as Uint8Array;
     const u32 = new Uint32Array(uniData.buffer, 0, 2);
     expect(Array.from(u32)).toEqual([cols, rows]);
-    expect(new Float32Array(uniData.buffer, 8, 1)[0]).toBeCloseTo(0.5, 6);
+    const cellsXY = new Float32Array(uniData.buffer, 8, 2);
+    expect(cellsXY[0]).toBeCloseTo(0.5, 6);
+    expect(cellsXY[1]).toBeCloseTo(0.5, 6);
 
     // The uploaded grid is the NaN-FREE copy plus the validity mask.
     const zUpload = storage[0].written as Float32Array;
@@ -207,6 +210,24 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     for (const b of log.buffers) expect(b.destroyed).toBe(true);
   });
 
+  it('packs a DISTINCT anisotropic cell pair into the uniform (cellX ≠ cellY)', async () => {
+    // The cos φ geographic case: E–W (X) cell half the N–S (Y) cell. The
+    // kernel divides dz/dx by cellX and dz/dy by cellY, so the pair must
+    // reach the shader distinct — byte 8 = X, byte 12 = Y.
+    const { device, log } = makeMockDevice();
+    const backend = createGpuBackend(device);
+    const z = new Float32Array(16).fill(2);
+    await backend.derivatives(z, 4, 4, 0.5, 1);
+    const uniform = log.buffers.filter((b) => (b.usage & GPU_USAGE.UNIFORM) !== 0);
+    const uniData = uniform[0].written as Uint8Array;
+    const cellsXY = new Float32Array(uniData.buffer, 8, 2);
+    expect(cellsXY[0]).toBeCloseTo(0.5, 6);
+    expect(cellsXY[1]).toBeCloseTo(1, 6);
+    // The WGSL itself must consume both axes (belt-and-braces text check).
+    expect(HORN_DERIVATIVES_WGSL).toContain('8.0 * p.cellX');
+    expect(HORN_DERIVATIVES_WGSL).toContain('8.0 * p.cellY');
+  });
+
   it('mirrors the CPU guards without touching the device (n=0, bad cell size)', async () => {
     const { device, log } = makeMockDevice();
     const backend = createGpuBackend(device);
@@ -214,6 +235,9 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     expect(empty.slope.length).toBe(0);
     const badCell = await backend.derivatives(new Float32Array(4), 2, 2, 0);
     expect(Array.from(badCell.slope)).toEqual([0, 0, 0, 0]);
+    // A non-positive Y cell is guarded exactly like the X cell.
+    const badCellY = await backend.derivatives(new Float32Array(4), 2, 2, 1, 0);
+    expect(Array.from(badCellY.slope)).toEqual([0, 0, 0, 0]);
     expect(log.dispatches).toHaveLength(0);
     expect(log.buffers).toHaveLength(0);
   });

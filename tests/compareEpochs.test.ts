@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildSharedEpochDtms, compareEpochClouds } from '../src/terrain/change/compareEpochs';
+import { METRES_PER_DEGREE } from '../src/terrain/ground/horizontalScale';
 
 /** A flat-ish ground plane of points at height `z` over an `n×n` metre grid. */
 function plane(n: number, z: number, x0 = 0, y0 = 0): Float32Array {
@@ -33,6 +34,47 @@ describe('buildSharedEpochDtms', () => {
 
   it('returns null when an epoch has no points', () => {
     expect(buildSharedEpochDtms({ positions: new Float32Array() }, { positions: plane(10, 0) })).toBeNull();
+  });
+
+  it('unit-aware cell floor: a geographic site no longer collapses to 0.25° cells', () => {
+    // Two co-located 1e-4°-square epochs (an ~11 m site at the equator).
+    // Old floor: max(0.25, 1e-4/256) = 0.25° ≈ 28 km cells → a 1-cell grid
+    // (cols = floor(1e-4/0.25) + 1 = 1). New floor: 0.25 m in degrees =
+    // 0.25/111320 ≈ 2.24578e-6°, which beats the resolution target
+    // 1e-4/256 = 3.90625e-7° → cols = floor(1e-4/2.24578e-6) + 1 =
+    // floor(44.53) + 1 = 45 (hand-computed; the grid stays small enough
+    // for the surface build to be test-fast).
+    const step = 1e-4 / 30;
+    const geo = (z: number): Float32Array => {
+      const pts: number[] = [];
+      for (let i = 0; i <= 30; i++)
+        for (let j = 0; j <= 30; j++) pts.push(i * step, j * step, z);
+      return new Float32Array(pts);
+    };
+    const dtms = buildSharedEpochDtms(
+      { positions: geo(0), isGeographic: true },
+      { positions: geo(1), isGeographic: true },
+    );
+    expect(dtms).not.toBeNull();
+    expect(dtms!.cellSizeM).toBeCloseTo(0.25 / METRES_PER_DEGREE, 12);
+    expect(dtms!.cols).toBe(45);
+  });
+
+  it('unit-aware cell floor: a US-feet site floors at 0.25 m worth of feet', () => {
+    // A 30 ft site: resolution target 30/256 ≈ 0.1172 ft < the floor
+    // 0.25/0.3048 ≈ 0.8202 ft — the floor wins, expressed in FEET.
+    const dtms = buildSharedEpochDtms(
+      { positions: plane(30, 0), linearUnitToMetres: 0.3048 },
+      { positions: plane(30, 1), linearUnitToMetres: 0.3048 },
+    );
+    expect(dtms).not.toBeNull();
+    expect(dtms!.cellSizeM).toBeCloseTo(0.25 / 0.3048, 9);
+  });
+
+  it('projected metres keep the historical 0.25 m floor (no unit info = factor 1)', () => {
+    const dtms = buildSharedEpochDtms({ positions: plane(30, 0) }, { positions: plane(30, 1) });
+    expect(dtms).not.toBeNull();
+    expect(dtms!.cellSizeM).toBeCloseTo(0.25, 9);
   });
 });
 

@@ -44,6 +44,14 @@ export interface SurfaceFromRasterParams {
   readonly verticalDatum?: string | null;
   /** True when the horizontal frame is geographic (degree cells). */
   readonly isGeographic?: boolean;
+  /**
+   * WORLD grid-centre latitude (degrees) for the geographic cos φ E–W scale.
+   * The raster's own origin is render-recentred (≈ 0), so only the caller —
+   * who knows the cloud's world origin — can supply the real latitude.
+   * Null / omitted falls back to the raster-origin estimate (correct only
+   * for un-recentred grids).
+   */
+  readonly latitudeDeg?: number | null;
   /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
   readonly horizontalUnitToMetres?: number;
   /** Density (returns/cell) earning full confidence; default = scene median. */
@@ -108,6 +116,7 @@ export function buildSurfaceFromRaster(
     verticalDatum: params.verticalDatum,
     targetCount: params.targetCount,
     isGeographic: params.isGeographic,
+    latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     interpolation: LIVE_INTERPOLATION,
     extrapolationGuard: LIVE_EXTRAPOLATION_GUARD,

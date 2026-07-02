@@ -172,8 +172,8 @@ export const HORN_DERIVATIVES_WGSL = /* wgsl */ `
 struct Params {
   cols : u32,
   rows : u32,
-  cell : f32,
-  _pad : f32,
+  cellX : f32,
+  cellY : f32,
 };
 
 @group(0) @binding(0) var<storage, read> zin : array<f32>;
@@ -213,8 +213,10 @@ fn horn_main(@builtin(global_invocation_id) gid : vec3<u32>) {
   let g  = sample(row + 1, col - 1, e);
   let h  = sample(row + 1, col,     e);
   let i2 = sample(row + 1, col + 1, e);
-  let dzdx = (c + 2.0 * f + i2 - (a + 2.0 * d + g)) / (8.0 * p.cell);
-  let dzdy = (g + 2.0 * h + i2 - (a + 2.0 * b + c)) / (8.0 * p.cell);
+  // Per-axis cell sizes: a geographic grid's E–W (column) spacing is
+  // cos φ × the N–S (row) spacing, so each gradient divides by ITS axis.
+  let dzdx = (c + 2.0 * f + i2 - (a + 2.0 * d + g)) / (8.0 * p.cellX);
+  let dzdy = (g + 2.0 * h + i2 - (a + 2.0 * b + c)) / (8.0 * p.cellY);
   slopeOut[idx] = sqrt(dzdx * dzdx + dzdy * dzdy);
   if (dzdx == 0.0 && dzdy == 0.0) {
     aspectOut[idx] = 0.0;
@@ -387,14 +389,17 @@ export function hornDerivativesF32Reference(
   cols: number,
   rows: number,
   cellSizeM: number,
+  cellSizeYM: number = cellSizeM,
 ): TerrainDerivatives {
   const n = cols * rows;
   const slope = new Float32Array(n);
   const aspect = new Float32Array(n);
-  if (n === 0 || !(cellSizeM > 0)) return { slope, aspect };
+  if (n === 0 || !(cellSizeM > 0) || !(cellSizeYM > 0)) return { slope, aspect };
   const { zClean, valid } = buildValidityMask(z);
   const fr = Math.fround;
-  const denom = fr(8 * fr(cellSizeM));
+  // Per-axis denominators, mirroring the kernel's cellX / cellY uniforms.
+  const denomX = fr(8 * fr(cellSizeM));
+  const denomY = fr(8 * fr(cellSizeYM));
   const sample = (r: number, c: number, fallback: number): number => {
     const rr = r < 0 ? 0 : r >= rows ? rows - 1 : r;
     const cc = c < 0 ? 0 : c >= cols ? cols - 1 : c;
@@ -414,9 +419,9 @@ export function hornDerivativesF32Reference(
       const zG = sample(row + 1, col - 1, e);
       const zH = sample(row + 1, col, e);
       const zI = sample(row + 1, col + 1, e);
-      // (c + 2f + i2 − (a + 2d + g)) / (8·cell), f32 at every step.
-      const dzdx = fr(fr(fr(fr(zC + fr(2 * zF)) + zI) - fr(fr(zA + fr(2 * zD)) + zG)) / denom);
-      const dzdy = fr(fr(fr(fr(zG + fr(2 * zH)) + zI) - fr(fr(zA + fr(2 * zB)) + zC)) / denom);
+      // (c + 2f + i2 − (a + 2d + g)) / (8·cell), f32 at every step, per axis.
+      const dzdx = fr(fr(fr(fr(zC + fr(2 * zF)) + zI) - fr(fr(zA + fr(2 * zD)) + zG)) / denomX);
+      const dzdy = fr(fr(fr(fr(zG + fr(2 * zH)) + zI) - fr(fr(zA + fr(2 * zB)) + zC)) / denomY);
       slope[idx] = fr(Math.sqrt(fr(fr(dzdx * dzdx) + fr(dzdy * dzdy))));
       aspect[idx] = dzdx === 0 && dzdy === 0 ? 0 : fr(Math.atan2(-dzdy, -dzdx));
     }
@@ -636,10 +641,12 @@ export function createGpuBackend(device: GpuDeviceLike): TerrainRasterBackend {
       return { z, counts };
     },
 
-    async derivatives(z, cols, rows, cellSizeM): Promise<TerrainDerivatives> {
+    async derivatives(z, cols, rows, cellSizeM, cellSizeYM): Promise<TerrainDerivatives> {
       const n = cols * rows;
+      // Omitted Y cell = square cells (identical to the historical call).
+      const cellY = cellSizeYM ?? cellSizeM;
       // Mirror the CPU guards exactly: empty / non-positive cell → zeros.
-      if (n === 0 || !(cellSizeM > 0)) {
+      if (n === 0 || !(cellSizeM > 0) || !(cellY > 0)) {
         return { slope: new Float32Array(n), aspect: new Float32Array(n) };
       }
       const { zClean, valid } = buildValidityMask(z);
@@ -668,7 +675,10 @@ export function createGpuBackend(device: GpuDeviceLike): TerrainRasterBackend {
       device.queue.writeBuffer(validBuf, 0, valid);
       const uni = new ArrayBuffer(16);
       new Uint32Array(uni, 0, 2).set([cols, rows]);
-      new Float32Array(uni, 8, 1)[0] = cellSizeM;
+      // Per-axis cell sizes (cellX at byte 8, cellY at byte 12) — the WGSL
+      // Params struct; the probe's anisotropic pass verifies the kernel
+      // actually divides each gradient by its own axis.
+      new Float32Array(uni, 8, 2).set([cellSizeM, cellY]);
       device.queue.writeBuffer(uniBuf, 0, new Uint8Array(uni));
 
       const pipeline = horn();

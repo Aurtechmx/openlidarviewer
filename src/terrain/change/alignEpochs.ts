@@ -176,6 +176,10 @@ export function alignEpochClouds(
     origin: ZERO,
     crs: after.crs,
     verticalDatum: after.verticalDatum,
+    // Unit info must survive alignment — the shared-grid cell floor and the
+    // confidence roughness slope read it downstream.
+    isGeographic: after.isGeographic,
+    linearUnitToMetres: after.linearUnitToMetres,
   };
   return {
     after: aligned,

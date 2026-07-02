@@ -10,8 +10,10 @@
  *
  * Adjacent marching-squares cells produce the crossing on their shared
  * edge from identical corner data, so shared endpoints match exactly;
- * a millimetre quantisation key makes the join robust to any float
- * residue. A shared vertex inherits the MIN confidence of the segments
+ * a cell-size-scaled quantisation key (cell/1000; metric 1 mm default
+ * when no cell size is supplied) makes the join robust to any float
+ * residue in ANY source unit — a fixed millimetre key was ≈111 m in
+ * degrees. A shared vertex inherits the MIN confidence of the segments
  * meeting there — a junction is only as trustworthy as its weakest side.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic (segments are
@@ -43,13 +45,41 @@ export interface StitchedLevel {
   readonly polylines: ContourPolyline[];
 }
 
-const Q = 1e-3; // 1 mm quantisation for endpoint matching
-const keyOf = (x: number, y: number): string => `${Math.round(x / Q)}:${Math.round(y / Q)}`;
+/**
+ * Default endpoint-matching quantum: 1 mm in METRE source units — right for
+ * projected metric CRSs, the overwhelmingly common case, and the historical
+ * behaviour. It is NOT right for other units: 1e-3 DEGREES is ≈ 111 m, which
+ * would weld every endpoint of a fine geographic grid into one blob. Callers
+ * with a known cell size should pass `quantum` (see {@link stitchLevel}).
+ */
+const DEFAULT_Q = 1e-3;
 
-/** Join one level's segments into ordered polylines. */
-export function stitchLevel(value: number, segments: ReadonlyArray<ContourSegment>): ContourPolyline[] {
+/**
+ * Endpoint quantum from a grid cell size: one thousandth of a cell. Scale-
+ * free — segments live inside single cells, so endpoints of adjacent
+ * segments differ by ≥ the edge-crossing spacing (≫ cell/1000) while float
+ * residue from identical corner arithmetic is many orders below it. Works
+ * identically for metre, foot and degree grids.
+ */
+export function quantumForCellSize(cellSizeM: number): number {
+  return Number.isFinite(cellSizeM) && cellSizeM > 0 ? cellSizeM * 1e-3 : DEFAULT_Q;
+}
+
+/**
+ * Join one level's segments into ordered polylines. `quantum` is the
+ * endpoint-matching quantisation in source units; pass
+ * {@link quantumForCellSize} of the grid's cell size so the join is
+ * unit-aware (the fixed 1 mm default mis-scales on degree grids).
+ */
+export function stitchLevel(
+  value: number,
+  segments: ReadonlyArray<ContourSegment>,
+  quantum: number = DEFAULT_Q,
+): ContourPolyline[] {
   const n = segments.length;
   if (n === 0) return [];
+  const Q = Number.isFinite(quantum) && quantum > 0 ? quantum : DEFAULT_Q;
+  const keyOf = (x: number, y: number): string => `${Math.round(x / Q)}:${Math.round(y / Q)}`;
 
   const used = new Uint8Array(n);
   const segKeys: Array<[string, string]> = new Array(n);
@@ -149,7 +179,15 @@ function mergeShared(v: ContourVertex, segConfidence: number): void {
   (v as { confidence: number; grade: EvidenceGrade }).grade = gradeForConfidence(mc);
 }
 
-/** Stitch an entire contour set. */
-export function stitchContourSet(set: ContourSet): StitchedLevel[] {
-  return set.levels.map((l) => ({ value: l.value, polylines: stitchLevel(l.value, l.segments) }));
+/**
+ * Stitch an entire contour set. `cellSizeM` (source units) makes the
+ * endpoint quantum unit-aware via {@link quantumForCellSize}; omitted keeps
+ * the metric 1 mm default.
+ */
+export function stitchContourSet(set: ContourSet, cellSizeM?: number): StitchedLevel[] {
+  const quantum = cellSizeM != null ? quantumForCellSize(cellSizeM) : DEFAULT_Q;
+  return set.levels.map((l) => ({
+    value: l.value,
+    polylines: stitchLevel(l.value, l.segments, quantum),
+  }));
 }

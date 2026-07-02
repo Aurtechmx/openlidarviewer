@@ -19,6 +19,9 @@
 import { classifyGroundSmrf } from '../ground/groundFilter';
 import { rasterizeDtm } from '../ground/rasterizeDtm';
 import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
+// Tiny pure constant — the unit-aware cell floor must agree with the
+// metres-per-degree scale the rest of the terrain pipeline uses.
+import { METRES_PER_DEGREE } from '../ground/horizontalScale';
 import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
 import { compareDtms, type EpochComparison } from './compareDtms';
@@ -37,6 +40,17 @@ export interface EpochCloud {
   readonly origin?: readonly [number, number, number];
   readonly crs?: string | null;
   readonly verticalDatum?: string | null;
+  /**
+   * True when the horizontal frame is geographic (degrees). The shared grid
+   * lives in world SOURCE-CRS units, so the ~0.25 m cell floor must be
+   * expressed in those units — a raw 0.25 on a degree grid is ≈ 28 km cells
+   * (the same unit-blind floor the analysis runner had). Also threads into
+   * the surface build so the confidence roughness slope reads degree cells
+   * as metres-per-degree, not metres. Default false (projected).
+   */
+  readonly isGeographic?: boolean | null;
+  /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
+  readonly linearUnitToMetres?: number | null;
 }
 
 /** The shared grid spec both epochs are rasterised onto. */
@@ -110,8 +124,17 @@ function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
   const minY = Math.min(a.minY, b.minY);
   const maxX = Math.max(a.maxX, b.maxX);
   const maxY = Math.max(a.maxY, b.maxY);
-  const extent = Math.max(maxX - minX, maxY - minY, 1);
-  const cellSizeM = Math.max(0.25, extent / 256);
+  // The ~0.25 m cell floor expressed in SOURCE units (the grid's units) —
+  // the same unit-aware rule as the analysis runner's deriveCoreParams. The
+  // BEFORE epoch's units are the reference, matching compareDtms (an
+  // inter-epoch unit mismatch is flagged by the comparison itself).
+  const metresPerUnit = before.isGeographic
+    ? METRES_PER_DEGREE
+    : before.linearUnitToMetres && before.linearUnitToMetres > 0
+      ? before.linearUnitToMetres
+      : 1;
+  const extent = Math.max(maxX - minX, maxY - minY, 1 / metresPerUnit);
+  const cellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
   return {
     originH1: minX,
     originH2: minY,
@@ -140,6 +163,15 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
   return buildSurfaceFromRaster(raster, {
     crs: cloud.crs ?? null,
     verticalDatum: cloud.verticalDatum ?? null,
+    // Degree cells must read as metres-per-degree in the confidence
+    // roughness slope. No explicit latitudeDeg: this grid lives in the
+    // WORLD frame (points are local + origin), so cellConfidence's
+    // grid-origin latitude fallback is genuinely the world latitude here.
+    isGeographic: cloud.isGeographic ?? false,
+    horizontalUnitToMetres:
+      cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
+        ? cloud.linearUnitToMetres
+        : 1,
   }).dtm;
 }
 
