@@ -2864,7 +2864,15 @@ const terrainRunner = createTerrainAnalysisRunner({
 // lands, so the next Analyse recomputes against the edited classes instead of
 // serving a number that silently no longer matches what's on screen.
 void viewerLoaded.then((v) => {
-  v.onClassificationEdited = () => terrainRunner.abortAndClearCache();
+  v.onClassificationEdited = () => {
+    terrainRunner.abortAndClearCache();
+    // The cache is gone but the RENDERED result/contours are not — without a
+    // caveat they read as current while reflecting the previous classes. The
+    // panel no-ops when nothing is on screen; a completed re-run clears it.
+    analysePanel.setStaleNotice(
+      'Classification edited — results reflect the previous classification. Re-run Analyse to refresh.',
+    );
+  };
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a

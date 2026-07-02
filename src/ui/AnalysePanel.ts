@@ -240,6 +240,13 @@ export class AnalysePanel {
   private _confidenceColorActive = false;
   /** Status line shown while no analysis has run / while computing. */
   private readonly _status: HTMLElement;
+  /**
+   * Classification-edit staleness caveat over the rendered result — see
+   * {@link setStaleNotice}. Same `.olv-caveat` honesty primitive as the
+   * MeasurePanel's geographic-CRS notice, so "trust this less" reads the
+   * same everywhere.
+   */
+  private readonly _staleNotice: HTMLElement;
   /** The run/re-run button. */
   private readonly _runBtn: HTMLButtonElement;
   /** Everything that only makes sense once an analysis result exists. */
@@ -353,7 +360,14 @@ export class AnalysePanel {
       this._validationRow,
     );
 
+    // Sits at the TOP of the results region so a stale verdict can never be
+    // read as current before the caveat is seen (see setStaleNotice).
+    this._staleNotice = el('div', {
+      className: 'olv-caveat olv-analyse-stale-notice olv-hidden',
+    });
+
     this._resultsRegion.append(
+      this._staleNotice,
       this._fitnessRow,
       this._assessmentRow,
       details,
@@ -411,9 +425,29 @@ export class AnalysePanel {
     }
   }
 
+  /**
+   * Show (or clear, with `null`) a staleness caveat over the currently
+   * rendered result. Wired from the host's `onClassificationEdited` hook: an
+   * in-place class edit invalidates the terrain-core cache (the runner
+   * handles that), but the rendered result/contours stay on screen — without
+   * this line they read as current when they reflect the PREVIOUS
+   * classification (stale-analysis honesty finding, Critical). No-op while
+   * no result is shown (nothing on screen to be stale); a fresh
+   * {@link update} clears it, because the new run reflects the edit.
+   */
+  setStaleNotice(text: string | null): void {
+    const show = text != null && this._result != null;
+    this._staleNotice.textContent = show ? text : '';
+    this._staleNotice.classList.toggle('olv-hidden', !show);
+  }
+
   /** Re-render from a fresh analysis result (or clear when null). */
   update(result: AnalyseContoursResult | null): void {
     this._result = result;
+    // Any update supersedes a pending staleness caveat: a fresh result was
+    // computed against the edited classes, and a clear removes the result
+    // the caveat was about.
+    this.setStaleNotice(null);
     const has = !!result;
     this._status.style.display = has ? 'none' : '';
     this._resultsRegion.style.display = has ? '' : 'none';

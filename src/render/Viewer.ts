@@ -2610,9 +2610,10 @@ export class Viewer {
 
   /**
    * Fires after any classification edit (swap / reclassify / undo / redo) that
-   * actually changed points, with the cloud id. The analysis runner subscribes
-   * to invalidate its terrain-core cache and re-grade, so a manual edit never
-   * leaves a stale bare-earth surface or grade on screen.
+   * actually changed points, with the cloud id. The host subscribes to
+   * invalidate the terrain-core cache AND flag any on-screen analysis result
+   * as stale (it reflects the previous classification until the user re-runs
+   * Analyse) — so a manual edit is never silently presented as current.
    */
   onClassificationEdited?: (id: string) => void;
 
