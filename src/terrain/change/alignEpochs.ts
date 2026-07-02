@@ -175,12 +175,28 @@ export function alignEpochClouds(
     return { after, alignment: NO_ALIGNMENT };
   }
 
+  // icpRegister works in the clouds' OWN units; EpochAlignment promises
+  // metres (and the UI prints "N m"). Convert at this seam, both ways: the
+  // metre-denominated gate becomes source units going in, and the residual /
+  // translation become metres coming out — a foot-CRS survey shifted 10 ft
+  // must report ≈3.05 m, never "10 m" (the wrong-units failure mode the
+  // measurement trust system refuses). Geographic frames never reach here
+  // (refused above), so a plain linear factor is always sufficient. The
+  // BEFORE epoch's factor is the reference, matching sharedGrid; an
+  // inter-epoch unit mismatch surfaces through compareDtms' CRS check.
+  const metresPerUnit =
+    before.linearUnitToMetres && before.linearUnitToMetres > 0 ? before.linearUnitToMetres : 1;
+
   const fit = icpRegister(afterSample, beforeSample, {
     maxIterations: options.maxIterations,
-    maxResidual: options.maxResidualM,
+    maxResidual:
+      options.maxResidualM != null ? options.maxResidualM / metresPerUnit : undefined,
   });
   const sampleCount = Math.min(beforeSample.length, afterSample.length);
   const yawDeg = (fit.yawRad * 180) / Math.PI;
+  const rmsResidualM = fit.rmsResidual * metresPerUnit;
+  /** A source-unit translation reported in metres (the applied one stays in source units). */
+  const toMetres = (t: Vec3): Vec3 => [t[0] * metresPerUnit, t[1] * metresPerUnit, t[2] * metresPerUnit];
 
   if (fit.degenerate || fit.refused) {
     return {
@@ -190,9 +206,9 @@ export function alignEpochClouds(
         applied: false,
         refused: fit.refused,
         degenerate: fit.degenerate,
-        rmsResidualM: fit.rmsResidual,
+        rmsResidualM,
         yawDeg,
-        translation: fit.translation,
+        translation: toMetres(fit.translation),
         sampleCount,
       },
     };
@@ -225,9 +241,11 @@ export function alignEpochClouds(
       applied: true,
       refused: false,
       degenerate: false,
-      rmsResidualM: fit.rmsResidual,
+      rmsResidualM,
       yawDeg,
-      translation: applied.translation,
+      // Reported in metres; `applied.translation` (source units) is what
+      // actually moved the points.
+      translation: toMetres(applied.translation),
       sampleCount,
     },
   };

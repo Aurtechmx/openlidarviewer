@@ -153,6 +153,49 @@ describe('alignEpochClouds', () => {
     expect(summarizeAlignment(r.alignment).toLowerCase()).toContain('geographic');
   });
 
+  test('a foot-CRS cloud reports its shift and residual in METRES, not feet', () => {
+    // EpochAlignment promises metres (rmsResidualM / translation docs) and the
+    // UI prints "N m". icpRegister works in the clouds' own units, so a
+    // foot-CRS survey shifted 10 ft must report ≈3.05 m — printing "10 m"
+    // is the wrong-units failure mode the trust system exists to prevent.
+    const base = scatter(200);
+    const ftToM = 0.3048;
+    const before: EpochCloud = { ...cloudFrom(base), linearUnitToMetres: ftToM };
+    const after: EpochCloud = {
+      ...cloudFrom(base.map(([x, y, z]) => [x + 10, y, z] as P)),
+      linearUnitToMetres: ftToM,
+    };
+    const r = alignEpochClouds(before, after);
+    expect(r.alignment.applied).toBe(true);
+    const shiftM = Math.hypot(r.alignment.translation[0], r.alignment.translation[1]);
+    expect(shiftM).toBeGreaterThan(2.9); // 10 ft ≈ 3.048 m …
+    expect(shiftM).toBeLessThan(3.2); // … NOT 10
+    expect(r.alignment.rmsResidualM).toBeLessThan(0.05); // metres, near-exact fit
+  });
+
+  test('the residual gate is honoured in metres on a foot-CRS cloud', () => {
+    // Same-geometry clouds jittered by ±0.25 ft: the RMS residual is ≈0.15 ft
+    // ≈ 0.05 m. A 0.1 m (metre-denominated) gate must therefore ACCEPT the
+    // fit — comparing the raw foot residual (≈0.15) against 0.1 would refuse.
+    const base = scatter(200);
+    let s = 424242 >>> 0;
+    const rnd = (): number => {
+      s = (Math.imul(s, 1103515245) + 12345) & 0x7fffffff;
+      return s / 0x7fffffff;
+    };
+    const jittered = base.map(
+      ([x, y, z]) => [x + (rnd() - 0.5) * 0.5, y + (rnd() - 0.5) * 0.5, z] as P,
+    );
+    const ftToM = 0.3048;
+    const before: EpochCloud = { ...cloudFrom(base), linearUnitToMetres: ftToM };
+    const after: EpochCloud = { ...cloudFrom(jittered), linearUnitToMetres: ftToM };
+    const r = alignEpochClouds(before, after, { maxResidualM: 0.1 });
+    expect(r.alignment.rmsResidualM).toBeGreaterThan(0.02); // sanity: real jitter…
+    expect(r.alignment.rmsResidualM).toBeLessThan(0.1); // …but under the gate in METRES
+    expect(r.alignment.refused).toBe(false);
+    expect(r.alignment.applied).toBe(true);
+  });
+
   test('origins are honoured: a shift expressed via origin still aligns', () => {
     const base = scatter(150);
     const before = cloudFrom(base);

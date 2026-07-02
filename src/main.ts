@@ -6265,9 +6265,13 @@ function compareLoadedLayers(): void {
       // small horizontal misregistration between epochs is not read as movement.
       // Refuse a fit whose residual exceeds 10% of the scene span: that means the
       // two clouds never registered, so it's compared as-is rather than shifted.
+      // The span is measured in SOURCE units (horizontalSpanXY is unit-agnostic)
+      // while the gate option is metres, so convert by the CRS's linear factor —
+      // geographic frames don't have one, but alignment refuses those outright.
       const span = horizontalSpanXY(a.positions, a.origin);
+      const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
-        maxResidualM: span > 0 ? span * 0.1 : undefined,
+        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined,
       });
       const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
