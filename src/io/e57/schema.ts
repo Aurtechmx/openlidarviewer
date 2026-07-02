@@ -62,6 +62,12 @@ export interface E57Metadata {
 export interface E57DocumentSchema {
   scans: E57Scan[];
   metadata: E57Metadata;
+  /**
+   * Non-fatal anomalies found while interpreting the XML (e.g. a pose
+   * quaternion that had to be normalised or replaced with the identity).
+   * The loader carries these to the user as load warnings.
+   */
+  warnings: string[];
 }
 
 /** Number of bits needed to pack integers in the range `[0, max - min]`. */
@@ -123,19 +129,61 @@ function readField(node: XmlNode): E57Field {
   );
 }
 
-/** Read an optional pose (rotation quaternion + translation). */
-function readPose(scan: XmlNode): E57Pose | null {
+/**
+ * Norm deviation from 1 beyond which a pose quaternion is normalised (with a
+ * warning). Tighter than any plausible decimal-text roundoff, looser than
+ * float noise — a norm off by more than this is a writer bug, not printing.
+ */
+const QUAT_NORM_TOLERANCE = 1e-6;
+
+/** Norm below which a quaternion carries no usable direction at all. */
+const QUAT_DEGENERATE_NORM = 1e-6;
+
+/**
+ * Read an optional pose (rotation quaternion + translation).
+ *
+ * Quaternion policy (documented so it can be argued with): the rotation
+ * formula downstream assumes a UNIT quaternion — a non-unit one silently
+ * SCALES the geometry, and a zero / non-finite one collapses it. So:
+ *   - near-unit (within {@link QUAT_NORM_TOLERANCE}) → used as-is;
+ *   - finite but non-unit → normalised, with a warning recording the norm;
+ *   - degenerate (non-finite norm, or norm ≈ 0) → the identity rotation,
+ *     with a warning — a possibly-misplaced but finite scan beats NaN
+ *     geometry, and the warning keeps the substitution honest.
+ */
+function readPose(scan: XmlNode, scanName: string, warnings: string[]): E57Pose | null {
   const pose = child(scan, 'pose');
   if (!pose) return null;
   const rot = child(pose, 'rotation');
   const tr = child(pose, 'translation');
+  let rotation: [number, number, number, number] = [
+    rot ? numText(child(rot, 'w'), 1) : 1,
+    rot ? numText(child(rot, 'x')) : 0,
+    rot ? numText(child(rot, 'y')) : 0,
+    rot ? numText(child(rot, 'z')) : 0,
+  ];
+  const norm = Math.hypot(rotation[0], rotation[1], rotation[2], rotation[3]);
+  if (!Number.isFinite(norm) || norm < QUAT_DEGENERATE_NORM) {
+    warnings.push(
+      `Scan "${scanName}": pose rotation quaternion is degenerate (zero or ` +
+        `non-finite) — using the identity rotation; this scan's placement ` +
+        `may be wrong.`,
+    );
+    rotation = [1, 0, 0, 0];
+  } else if (Math.abs(norm - 1) > QUAT_NORM_TOLERANCE) {
+    warnings.push(
+      `Scan "${scanName}": pose rotation quaternion has norm ` +
+        `${norm.toFixed(6)} (expected 1) — normalised before use.`,
+    );
+    rotation = [
+      rotation[0] / norm,
+      rotation[1] / norm,
+      rotation[2] / norm,
+      rotation[3] / norm,
+    ];
+  }
   return {
-    rotation: [
-      rot ? numText(child(rot, 'w'), 1) : 1,
-      rot ? numText(child(rot, 'x')) : 0,
-      rot ? numText(child(rot, 'y')) : 0,
-      rot ? numText(child(rot, 'z')) : 0,
-    ],
+    rotation,
     translation: [
       tr ? numText(child(tr, 'x')) : 0,
       tr ? numText(child(tr, 'y')) : 0,
@@ -161,11 +209,13 @@ function readRecordCount(points: XmlNode): number {
 }
 
 /** Interpret one `data3D` scan structure. */
-function readScan(scan: XmlNode): E57Scan {
+function readScan(scan: XmlNode, warnings: string[]): E57Scan {
   const points = child(scan, 'points');
   if (!points) throw new Error('E57: a scan has no point data.');
   const proto = child(points, 'prototype');
   if (!proto) throw new Error('E57: a scan has no point prototype.');
+  // Resolved before the pose so pose warnings can name the scan.
+  const name = child(scan, 'name')?.text ?? 'Scan';
 
   const colorLimits = child(scan, 'colorLimits');
   const colorMax = colorLimits
@@ -178,12 +228,12 @@ function readScan(scan: XmlNode): E57Scan {
   const intensityLimits = child(scan, 'intensityLimits');
 
   return {
-    name: child(scan, 'name')?.text ?? 'Scan',
+    name,
     guid: child(scan, 'guid')?.text ?? '',
     recordCount: readRecordCount(points),
     fileOffset: attrNum(points, 'fileOffset', 0),
     prototype: proto.children.map(readField),
-    pose: readPose(scan),
+    pose: readPose(scan, name, warnings),
     colorMax: colorMax && colorMax > 0 ? colorMax : null,
     intensityMax: intensityLimits
       ? numText(child(intensityLimits, 'intensityMaximum')) || null
@@ -193,11 +243,15 @@ function readScan(scan: XmlNode): E57Scan {
 
 /** Interpret a parsed E57 XML root into the scan list and metadata. */
 export function readE57Document(root: XmlNode): E57DocumentSchema {
+  const warnings: string[] = [];
   const data3D = child(root, 'data3D');
-  const scans = data3D ? childrenNamed(data3D, 'vectorChild').map(readScan) : [];
+  const scans = data3D
+    ? childrenNamed(data3D, 'vectorChild').map((s) => readScan(s, warnings))
+    : [];
   const created = child(root, 'creationDateTime');
   return {
     scans,
+    warnings,
     metadata: {
       formatName: child(root, 'formatName')?.text ?? '',
       guid: child(root, 'guid')?.text ?? '',

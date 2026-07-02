@@ -91,8 +91,9 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
   // skipping its points left `total − written` phantom points frozen at the
   // local origin (the pre-v0.5.4 behaviour) — silent data corruption. The
   // skipped scan is named in a load warning so the user knows the merged
-  // cloud is a subset of the file.
-  const warnings: string[] = [];
+  // cloud is a subset of the file. Parser-level anomalies (a normalised or
+  // degenerate pose quaternion) ride the same channel.
+  const warnings: string[] = [...parsed.warnings];
   const scans: E57ScanData[] = [];
   for (const scan of parsed.scans) {
     const col = scan.columns;

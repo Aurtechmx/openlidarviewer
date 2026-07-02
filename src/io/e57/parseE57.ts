@@ -41,6 +41,12 @@ export interface E57ScanData {
 export interface E57ParseResult {
   scans: E57ScanData[];
   metadata: E57Metadata;
+  /**
+   * Non-fatal anomalies found while interpreting the file (a normalised or
+   * degenerate pose quaternion, for example). The loader surfaces these as
+   * user-visible load warnings.
+   */
+  warnings: string[];
 }
 
 /** Parse an E57 file into decoded scans and file metadata. */
@@ -73,5 +79,5 @@ export function parseE57(buffer: ArrayBuffer): E57ParseResult {
     ),
   }));
 
-  return { scans, metadata: document.metadata };
+  return { scans, metadata: document.metadata, warnings: document.warnings };
 }

@@ -44,6 +44,7 @@ function parseResult(scans: E57ScanData[]): E57ParseResult {
   return {
     scans,
     metadata: { formatName: 'ASTM E57 3D Imaging Data File', guid: 'g', library: 'test-lib', creationDateTime: null },
+    warnings: [],
   };
 }
 
@@ -169,6 +170,22 @@ describe('loadE57 — pose rotation of normals', () => {
     expect(cloud.normals![0]).toBeCloseTo(0, 6);
     expect(cloud.normals![1]).toBeCloseTo(1, 6);
     expect(cloud.normals![2]).toBeCloseTo(0, 6);
+  });
+
+  it('threads parser warnings (pose anomalies) into the cloud load warnings', async () => {
+    const result = parseResult([
+      scan('solo', 1, {
+        cartesianX: Float64Array.from([1.5]),
+        cartesianY: Float64Array.from([2.5]),
+        cartesianZ: Float64Array.from([3.5]),
+      }),
+    ]);
+    result.warnings.push('Scan "solo": pose rotation quaternion has norm 2.000000 (expected 1) — normalised before use.');
+    mockedParse.mockReturnValue(result);
+    const cloud = await loadE57(new ArrayBuffer(0), 'solo.e57');
+    expect(cloud.metadata?.loadWarnings).toEqual([
+      'Scan "solo": pose rotation quaternion has norm 2.000000 (expected 1) — normalised before use.',
+    ]);
   });
 
   it('leaves normals untouched when the scan has no pose', async () => {
