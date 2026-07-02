@@ -47,6 +47,11 @@ function fakeWorker(decodeTile = vi.fn(async () => fakeChunk())): {
 }
 
 const META: ChunkDecodeMetadata = { pointCount: 5 } as unknown as ChunkDecodeMetadata;
+/** Metadata carrying a pinned dataset-level RGB bit-depth decision. */
+const META_RGB: ChunkDecodeMetadata = {
+  pointCount: 5,
+  rgbEightBit: true,
+} as unknown as ChunkDecodeMetadata;
 
 beforeEach(() => {
   decodeEptLaszipTile.mockReset();
@@ -61,9 +66,18 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(new ArrayBuffer(16), META);
 
-    expect(decodeBinary).toHaveBeenCalledWith(expect.any(ArrayBuffer), 5);
+    expect(decodeBinary).toHaveBeenCalledWith(expect.any(ArrayBuffer), 5, undefined);
     expect(decodeTile).not.toHaveBeenCalled();
     expect(decodeEptLaszipTile).not.toHaveBeenCalled();
+  });
+
+  test('binary path forwards the pinned dataset RGB bit-depth to the decoder', async () => {
+    const decodeBinary = vi.fn(() => fakeChunk());
+    const decoder = new EptChunkDecoder(fakeCloud('binary', decodeBinary), null);
+
+    await decoder.decode(new ArrayBuffer(16), META_RGB);
+
+    expect(decodeBinary).toHaveBeenCalledWith(expect.any(ArrayBuffer), 5, true);
   });
 
   test('laszip + worker routes to the worker, off the main thread', async () => {
@@ -74,8 +88,18 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(chunk, META, signal);
 
-    expect(decodeTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, signal);
+    expect(decodeTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, signal, undefined);
     expect(decodeEptLaszipTile).not.toHaveBeenCalled();
+  });
+
+  test('laszip + worker forwards the pinned dataset RGB bit-depth', async () => {
+    const { client, decodeTile } = fakeWorker();
+    const decoder = new EptChunkDecoder(fakeCloud('laszip'), client);
+    const chunk = new ArrayBuffer(16);
+
+    await decoder.decode(chunk, META_RGB);
+
+    expect(decodeTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, undefined, true);
   });
 
   test('laszip with no worker falls back to in-process decode', async () => {
@@ -84,7 +108,16 @@ describe('EptChunkDecoder dispatch', () => {
 
     await decoder.decode(chunk, META);
 
-    expect(decodeEptLaszipTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN);
+    expect(decodeEptLaszipTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, undefined);
+  });
+
+  test('laszip in-process fallback forwards the pinned dataset RGB bit-depth', async () => {
+    const decoder = new EptChunkDecoder(fakeCloud('laszip'), null);
+    const chunk = new ArrayBuffer(16);
+
+    await decoder.decode(chunk, META_RGB);
+
+    expect(decodeEptLaszipTile).toHaveBeenCalledWith(chunk, RENDER_ORIGIN, true);
   });
 
   test('an already-aborted signal throws before any decode runs', async () => {

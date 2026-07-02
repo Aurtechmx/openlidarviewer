@@ -98,6 +98,71 @@ test('a uint64 value beyond 2^53 − 1 throws; one within range converts exactly
   expect(decoded.gpsTime[0]).toBe(9007199254740991);
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RGB bit-depth: ONE dataset-level decision (the scientific-audit A2 fix).
+// LAS-heritage 16-bit RGB is ambiguous — some writers stuff 8-bit values into
+// the low byte; the old unconditional >> 8 rendered those clouds black.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const XYZ_RGB16: EptSchemaField[] = [
+  { name: 'X', size: 4, type: 'signed', scale: 1 },
+  { name: 'Y', size: 4, type: 'signed', scale: 1 },
+  { name: 'Z', size: 4, type: 'signed', scale: 1 },
+  { name: 'Red', size: 2, type: 'unsigned' },
+  { name: 'Green', size: 2, type: 'unsigned' },
+  { name: 'Blue', size: 2, type: 'unsigned' },
+];
+
+function rgbTile(r: number, g: number, b: number): ArrayBuffer {
+  return tileFor(XYZ_RGB16, (view, off) => {
+    view.setUint16(off('Red'), r, true);
+    view.setUint16(off('Green'), g, true);
+    view.setUint16(off('Blue'), b, true);
+  });
+}
+
+test('8-bit-stuffed 16-bit RGB (max ≤ 255) copies verbatim, and reports the decision', () => {
+  // Hand-computed: (200, 100, 50) with tile max 200 ≤ 255 ⇒ 8-bit-in-low-byte.
+  // The old >> 8 produced (0, 0, 0) — a black cloud.
+  const decoded = decodeEptBinaryTile(rgbTile(200, 100, 50), 1, XYZ_RGB16, [0, 0, 0]);
+  expect([...decoded.rgb!]).toEqual([200, 100, 50]);
+  expect(decoded.rgbEightBit).toBe(true);
+});
+
+test('true 16-bit RGB (max > 255) narrows with >> 8', () => {
+  // Hand-computed: 51400 >> 8 = 200, 25700 >> 8 = 100, 12850 >> 8 = 50
+  // (the ×257 encoding this app writes).
+  const decoded = decodeEptBinaryTile(rgbTile(51400, 25700, 12850), 1, XYZ_RGB16, [0, 0, 0]);
+  expect([...decoded.rgb!]).toEqual([200, 100, 50]);
+  expect(decoded.rgbEightBit).toBe(false);
+});
+
+test('a pinned dataset decision overrides a later tile\'s own max (cross-tile consistency)', () => {
+  // Tile 1 is true 16-bit (max > 255) → decision false. Tile 2 is all-dark
+  // (its own max 180 ≤ 255 would read 8-bit) — but the pinned decision keeps
+  // it on the SAME >> 8 narrowing: 180 >> 8 = 0. Without the pin the two
+  // tiles of one cloud would render in different colour depths.
+  const first = decodeEptBinaryTile(rgbTile(51400, 25700, 12850), 1, XYZ_RGB16, [0, 0, 0]);
+  expect(first.rgbEightBit).toBe(false);
+  const second = decodeEptBinaryTile(
+    rgbTile(180, 90, 45), 1, XYZ_RGB16, [0, 0, 0], first.rgbEightBit,
+  );
+  expect([...second.rgb!]).toEqual([0, 0, 0]);
+  expect(second.rgbEightBit).toBe(false);
+});
+
+test('a tile without RGB reports no bit-depth decision (nothing to pin)', () => {
+  const schema: EptSchemaField[] = XYZ_INT64;
+  const tile = tileFor(schema, (view, off) => {
+    view.setBigInt64(off('X'), 0n, true);
+    view.setBigInt64(off('Y'), 0n, true);
+    view.setBigInt64(off('Z'), 0n, true);
+  });
+  const decoded = decodeEptBinaryTile(tile, 1, schema, [0, 0, 0]);
+  expect(decoded.rgb).toBeUndefined();
+  expect(decoded.rgbEightBit).toBeUndefined();
+});
+
 test('a declared float64 attribute still reads as Float64 (unchanged path)', () => {
   const schema: EptSchemaField[] = [
     { name: 'X', size: 4, type: 'signed', scale: 1 },

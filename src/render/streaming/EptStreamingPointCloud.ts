@@ -79,6 +79,10 @@ export class EptStreamingPointCloud implements StreamingSource {
   /** Dataset base URL — every tile + hierarchy URL builds from this. */
   readonly baseUrl: string;
   private readonly _transport: EptTransport;
+  /** Dataset-level RGB bit-depth, captured from the first decoded RGB tile;
+   *  see {@link noteDecodedRgbDepth}. Undefined until the first colour tile
+   *  lands. */
+  private _rgbEightBit: boolean | undefined;
 
   private constructor(
     metadata: EptMetadata,
@@ -239,7 +243,24 @@ export class EptStreamingPointCloud implements StreamingSource {
       scale: [1, 1, 1],
       offset: [0, 0, 0],
       renderOrigin: this.renderOrigin,
+      // Dataset-level RGB bit-depth, captured from the first decoded RGB
+      // tile (noteDecodedRgbDepth) so every later tile narrows colour
+      // identically — the same seam the COPC source uses.
+      rgbEightBit: this._rgbEightBit,
     };
+  }
+
+  /**
+   * Capture the RGB bit-depth from the first decoded RGB tile. Once set it is
+   * sticky, so a later all-dark tile (whose own max would read as 8-bit)
+   * can't flip the cloud's colour depth mid-stream. Same contract as the
+   * COPC {@link StreamingSource.noteDecodedRgbDepth} implementation — the
+   * scheduler already calls this after every decode.
+   */
+  noteDecodedRgbDepth(eightBit: boolean | undefined): void {
+    if (this._rgbEightBit === undefined && eightBit !== undefined) {
+      this._rgbEightBit = eightBit;
+    }
   }
 
   // ── EPT-specific helpers ────────────────────────────────────────────────
@@ -247,14 +268,21 @@ export class EptStreamingPointCloud implements StreamingSource {
   /**
    * Synchronously decode an EPT binary tile against this cloud's schema +
    * render origin. Exposed so the scheduler / tests can decode without
-   * the laz-perf worker round-trip on the binary path.
+   * the laz-perf worker round-trip on the binary path. `rgbEightBit` is the
+   * dataset-level colour bit-depth decision from {@link decodeMeta} —
+   * callers routing through `EptChunkDecoder` pass `meta.rgbEightBit`.
    */
-  decodeBinary(buffer: ArrayBuffer, pointCount: number): DecodedChunk {
+  decodeBinary(
+    buffer: ArrayBuffer,
+    pointCount: number,
+    rgbEightBit?: boolean,
+  ): DecodedChunk {
     return decodeEptBinaryTile(
       buffer,
       pointCount,
       this.metadata.schema,
       this.renderOrigin,
+      rgbEightBit,
     );
   }
 
