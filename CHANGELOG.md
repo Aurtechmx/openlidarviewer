@@ -2,9 +2,12 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.5.3] - Unreleased
+## [0.5.3] - 2026-07-01
 
-A patch line on v0.5. Work in progress.
+A hardening patch on v0.5. Change detection gains real epoch alignment, the
+viewer installs and runs offline (PWA), and a one-command harness reproduces
+the evaluation — on top of seventeen defect fixes from two audit passes: nine
+terrain/profile hardenings and eight Phase 0 Criticals.
 
 ### Changed
 
@@ -108,6 +111,79 @@ new expectation hand-computed):
   unit-free angles keep their ordinary grade), the measure-bar hint carries
   the caveat, and the Measurements panel shows a persistent notice while the
   frame is geographic. Symmetric on a user override to a projected CRS.
+
+Eight Critical-severity fixes from the Phase 0 baseline audit of the v0.5.x
+line (each reproduced with a failing test before the fix wherever the surface
+allows):
+
+- **Applying epoch alignment no longer degrades a georeferenced survey.** The
+  aligned after cloud was stored as ABSOLUTE world coordinates in a
+  `Float32Array` with its origin collapsed to zero — at georeferenced
+  magnitudes (UTM northing ~4,000,000) the float32 quantum is ~0.25–0.5 m,
+  larger than the centimetre-level misalignment ICP corrects, so applying the
+  alignment injected up to half a metre of horizontal jitter into the after
+  cloud before rasterisation, on the most common real case (two georeferenced
+  surveys). The transform is now computed in float64 world space and stored
+  back LOCAL to the cloud's preserved origin; only the small residual rounds
+  to float32.
+- **Planar ICP is refused on geographic (degree) frames.** `alignEpochClouds`
+  received the geographic flag on both clouds but never read it: the planar
+  rigid model was fit in raw lon/lat, where 1° of longitude ≠ 1° of latitude
+  (cos φ) — a solved yaw is a SHEAR in metres, the convergence tolerance was
+  ~1.1 m expressed in degrees (declaring convergence long before a meaningful
+  fit), and the residual gate compared degree numbers against a metre
+  threshold. The transform could worsen registration off the equator while
+  reporting success. Measurements already refuse geographic frames through
+  the trust system; alignment now refuses them too — clouds untouched, with a
+  distinct summary line pointing at reprojection.
+- **Alignment reports metres, not source units.** The alignment result
+  documents its shift and residual in metres and the UI prints "N m", but the
+  values came out of the fit in the clouds' own units — a foot-CRS survey
+  shifted 10 ft displayed as a "10.00 m shift", and the metre-denominated
+  residual gate compared against feet. The unit seam now lives in one place:
+  the gate converts to source units going into the fit, the reported shift
+  and residual convert to metres coming out, and the applied transform stays
+  in source units, as it must. Geographic frames never reach this seam — they
+  are refused earlier.
+- **Geographic epochs refuse cut/fill volumes instead of printing degrees² as
+  m³.** The epoch-compare path passed geographic DTMs straight into volume
+  integration, where a degree-sized cell area underreports volumes by ~10
+  orders of magnitude, and the summary printed the result as "N m³" — worst
+  case flagged MEASURED, because two epochs declaring the same geographic CRS
+  and vertical datum pass every co-registration check. Volumes on a degree
+  grid are now refused with the shared geographic-refusal reason; the Δz
+  statistics remain valid and are still reported (z is a linear unit).
+- **Lasso reclassify can no longer edit points you cannot see.** The lasso
+  selection culled only points outside the view frustum, so a reclassify
+  permanently rewrote points hidden by the active clip box or by a hidden
+  ASPRS class — an edit to invisible data, contradicting the click-pick
+  contract, which already refuses hidden points. The selection now runs
+  through the same clip predicate the GPU clipping planes realise and the
+  same class-visibility mask picking uses; in-place compaction, no allocation
+  on the edit path.
+- **A classification edit flags the on-screen analysis stale.** The edit hook
+  promised cache invalidation AND a re-grade, but only cleared the
+  terrain-core cache — the rendered verdict, contours, and coverage stayed on
+  screen presented as current while reflecting the previous classification.
+  The Analyse panel now shows a staleness caveat at the top of the results
+  ("results reflect the previous classification — re-run Analyse"), cleared
+  by the next run, and the contract now states what actually happens: a
+  staleness disclosure, not a silent auto re-grade.
+- **The clip box survives a session round-trip.** The v5 session schema
+  documents a clip round-trip and the import side has restored it since v5,
+  but export never emitted the clip — no session written by this app could
+  carry one. Emitting it exposed two more gaps, fixed together: the
+  reveal-time auto-frame destroyed a clip restored before the scan appeared
+  (now skipped when the viewer already holds one), and the Clip panel never
+  reflected a restored box (it now adopts the state — inputs, mode pills,
+  enable box, readout — without re-firing the apply).
+- **Visiting another page can no longer poison the offline app shell.** The
+  service worker cached EVERY same-origin navigation response under the
+  app-shell key, so opening the credits page (or landing on a 404/500 or a
+  redirect tail) replaced the cached shell and the next offline launch served
+  the wrong document as the app. The shell now refreshes only from an ok,
+  non-redirected response to the registration-scope root (or its
+  `/index.html`).
 
 ## [0.5.2] - 2026-06-29
 
