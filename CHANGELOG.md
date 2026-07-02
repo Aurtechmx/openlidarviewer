@@ -52,6 +52,74 @@ density caveat carried everywhere the number appears.
   asserted. Unit fixtures prove VRM is identical across feet/metre CRSs
   (dimensionless) and that TPI scales exactly with the Z unit.
 
+### Scientific-audit response
+
+A scientific audit of this release was answered in two groups: data-
+correctness defects, each landed with a hand-computed regression test, and
+honesty corrections — places where a formula was right but its label
+claimed more than it measured. Formulas in the second group are unchanged;
+the claims now state their true strength.
+
+Data correctness:
+
+- **EPT size-8 attributes decode by their declared type.** The binary tile
+  decoder read every 8-byte dimension as Float64; `int64`/`uint64` now decode
+  via BigInt and convert to Number only when exactly representable, so
+  X/Y/Z-as-int64 layouts decode correctly and values beyond ±(2⁵³−1) throw
+  the same typed malformed-file error the count validator uses.
+- **EPT RGB bit depth is one dataset-level decision.** 8-bit-stuffed 16-bit
+  colour (the same real-world wrinkle the COPC path already handles) is now
+  detected once, pinned on the first decoded RGB tile, and shared through the
+  decode-metadata seam — the old unconditional `>> 8` rendered such clouds
+  black, and a per-tile decision could have split one cloud into two colour
+  depths.
+- **E57 scans without Cartesian X/Y/Z are skipped honestly.** A spherical-
+  only scan used to inflate the merged allocation and leave phantom
+  zero-coordinate points parked at the local origin; it now contributes
+  nothing to counts, bounds, or attribute decisions, and a load warning
+  (surfaced in the Scan Report) names the skipped scan.
+- **E57 normals rotate with the scan pose** (rotation only, never the
+  translation) instead of keeping the scanner's frame.
+- **E57 pose quaternions are validated**: finite non-unit quaternions are
+  normalised with a warning recording the norm; degenerate ones fall back to
+  the identity with a warning — never silently scaled or NaN geometry.
+- **Over-cap contour levels are thinned evenly, not truncated from the top.**
+  The old cap deleted every level above it — summits vanished. Every k-th
+  level is now kept with the top level forced in, so the minimum and maximum
+  survive at an honestly-stated effective interval of k× the requested one.
+- **Marching-squares saddles use the exact bilinear decider.** Connectivity
+  now flips at the bilinear saddle value z* = (v0·v2 − v1·v3)/(v0+v2−v1−v3)
+  rather than the corner mean — identical on symmetric saddles, correct on
+  asymmetric ones where a dominant corner dragged the mean above the true
+  saddle and mislinked the contour topology.
+
+Honesty (labels fixed, math unchanged):
+
+- **NVA/VVA are labelled "NVA-style / VVA-style (hold-out)"** everywhere they
+  face the user, with tooltips disclosing that the figures apply the ASPRS
+  2014 formulas to internally withheld points — not the independent survey
+  checkpoints the standard defines them against — and that the VVA-analog is
+  the p95 of ALL residuals, not vegetated-class checkpoints.
+- **The USGS 3DEP Quality Level reads "(estimated)"** on the panel chip and
+  the export-provenance stamp, and its tooltip discloses that the RMSEz leg
+  is hold-out-based (the stride-scaled-density note already existed).
+- **`checkCalibration` is now `checkConfidenceOrdering`** (result field
+  `orderingConsistent`): a monotone confidence→error band ordering is a
+  necessary condition for calibration, not calibration itself. The genuine
+  PAV isotonic calibration in `calibrateConfidence` keeps its name.
+- **Stockpile bands say what they are**: the headline prints "± N m³ (1σ)"
+  explicitly, and every result carries a spatial-correlation caveat (the √N
+  sampling term assumes independent residuals, which scan noise violates).
+- **Change detection's "detectable" now means the ~95% level of detection**
+  (|net| > 1.96σ) — the module's own documented LoD convention — instead of
+  a bare 1σ bar that called a ~68% wiggle detectable.
+- **The measured polygon area is described as the vector (Newell) area** —
+  equal to the own-plane area for planar rings, a lower bound for non-planar
+  ones — instead of "the true surface area".
+- **A geographic frame analysed with an unknown latitude now warns** that the
+  east–west scale is uncorrected (cos φ = 1) and derivatives are approximate,
+  instead of degrading silently.
+
 ## [0.5.3] - 2026-07-01
 
 A hardening patch on v0.5. Change detection gains real epoch alignment, the

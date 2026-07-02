@@ -51,6 +51,48 @@ threshold reported for detailed terrain/vegetation complexity (Münzinger et
 al. 2022, doi:10.1016/j.ufug.2022.127637); treat complexity as indicative."*
 It is a warning, never a block — tested present at 2 pts/m² and absent at 6.
 
+## Correctness and honesty fixes
+
+This release also lands a set of data-correctness fixes, each pinned by a
+hand-computed regression test, and a set of labelling corrections where a
+number was computed correctly but described too strongly. The math behind
+the second group is unchanged — the labels now say exactly what is measured.
+
+Data correctness:
+
+- **EPT decoding** — 8-byte dimensions decode by their declared type
+  (int64/uint64 included) instead of being read as Float64, and 16-bit RGB
+  channels that actually carry 8-bit values are detected once per dataset
+  (the same handling COPC already had), so those clouds no longer render
+  black or split colour depth across tiles.
+- **E57 multi-scan merges** — a scan without Cartesian X/Y/Z (for example a
+  spherical-only scan) is now skipped cleanly: no phantom points at the
+  origin, honest point counts and bounds, and a load warning in the Scan
+  Report that names the skipped scan. Normals now rotate with each scan's
+  pose, and malformed pose quaternions are normalised (or replaced by the
+  identity) with a warning instead of silently distorting geometry.
+- **Contours** — when an interval produces more levels than the cap, the
+  levels are thinned evenly so the lowest AND highest contours survive
+  (previously everything above the cap was dropped — summits vanished), and
+  saddle cells are resolved with the exact bilinear rule, fixing mislinked
+  contour topology around asymmetric ridges and cols.
+
+Honest labels:
+
+- Vertical-accuracy figures are labelled **NVA-style / VVA-style (hold-out)**
+  with tooltips stating they come from internally withheld points via the
+  ASPRS 2014 formulas — not independent survey checkpoints — and the USGS
+  3DEP Quality Level chip and provenance stamp now read **"(estimated)"**.
+- The stockpile volume band prints **"± N m³ (1σ)"** explicitly and carries a
+  spatial-correlation caveat; the change-detection **"detectable"** verdict
+  now requires the ~95% level of detection (1.96σ), matching the module's own
+  LoD convention.
+- The confidence check formerly called "calibration" is now the
+  **confidence-ordering check** (the genuine isotonic calibration keeps its
+  name), the measured polygon area is described as the **vector (Newell)
+  area** rather than "true surface area", and geographic scans analysed
+  without a known latitude now warn that east–west scaling is uncorrected.
+
 ## Known limitations
 
 - The display bands (Low / Moderate / High / Very High) are a coarse banding
@@ -79,7 +121,7 @@ feet/metre CRSs and that TPI scales exactly with the Z unit.
 
 The release gate for this build ran the type check, the lint guards, both
 builds, the bundle budget, the post-build chunk-isolation contract, and all
-five test buckets green — 4,081 tests passed (30 skipped) across 354 test
+five test buckets green — 4,116 tests passed (30 skipped) across 357 test
 files, with the index bundle at 755 KiB against its 760 KiB ceiling (smaller
 than v0.5.3: the contour serialisers and provenance builder moved to a lazy
 chunk). The figure step of `npm run repro` needs Python + matplotlib; the
