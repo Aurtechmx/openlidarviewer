@@ -22,10 +22,11 @@ function coord(v: number): string {
 }
 
 /**
- * Horizontal-coordinate formatter for XYZ/CSV (v0.4.5, workplan C5).
- * Projected/local frames keep the millimetre 3 dp; a GEOGRAPHIC CRS gets
- * 7 dp, because 3 dp of a degree is ~110 m of position — the old fixed
- * precision silently destroyed lat/lon exports. 1e-7° ≈ 1.1 cm at the
+ * Horizontal-coordinate formatter (v0.4.5, workplan C5 — extended to PLY/OBJ
+ * in v0.5.4; those writers kept the fixed 3 dp the C5 fix removed from
+ * XYZ/CSV). Projected/local frames keep the millimetre 3 dp; a GEOGRAPHIC
+ * CRS gets 7 dp, because 3 dp of a degree is ~110 m of position — the old
+ * fixed precision silently destroyed lat/lon exports. 1e-7° ≈ 1.1 cm at the
  * equator, matching the survey convention for degree output. Z stays 3 dp
  * in both cases (heights are linear units even in a geographic CRS).
  */
@@ -105,6 +106,7 @@ export function toCsv(cloud: PointCloud): string {
 export function toPly(cloud: PointCloud): string {
   const { positions, colors, origin } = cloud;
   const n = cloud.pointCount;
+  const hcoord = horizontalCoordFormatter(cloud);
 
   const header = [
     'ply',
@@ -122,8 +124,8 @@ export function toPly(cloud: PointCloud): string {
 
   const lines: string[] = [header.join('\n')];
   for (let i = 0; i < n; i++) {
-    const x = coord(positions[i * 3] + origin[0]);
-    const y = coord(positions[i * 3 + 1] + origin[1]);
+    const x = hcoord(positions[i * 3] + origin[0]);
+    const y = hcoord(positions[i * 3 + 1] + origin[1]);
     const z = coord(positions[i * 3 + 2] + origin[2]);
     if (colors) {
       lines.push(`${x} ${y} ${z} ${colors[i * 3]} ${colors[i * 3 + 1]} ${colors[i * 3 + 2]}`);
@@ -141,14 +143,15 @@ export function toPly(cloud: PointCloud): string {
 export function toObj(cloud: PointCloud): string {
   const { positions, colors, origin } = cloud;
   const n = cloud.pointCount;
+  const hcoord = horizontalCoordFormatter(cloud);
 
   const lines: string[] = [
     '# OpenLiDARViewer point-cloud export',
     `# ${n} points`,
   ];
   for (let i = 0; i < n; i++) {
-    const x = coord(positions[i * 3] + origin[0]);
-    const y = coord(positions[i * 3 + 1] + origin[1]);
+    const x = hcoord(positions[i * 3] + origin[0]);
+    const y = hcoord(positions[i * 3 + 1] + origin[1]);
     const z = coord(positions[i * 3 + 2] + origin[2]);
     if (colors) {
       const r = (colors[i * 3] / 255).toFixed(4);

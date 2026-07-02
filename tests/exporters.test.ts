@@ -186,3 +186,35 @@ describe('exportCloud + round-trip', () => {
     expect(reloaded.colors?.[0]).toBe(10);
   });
 });
+
+describe('geographic precision in PLY/OBJ (same defect class as the v0.4.5 XYZ/CSV fix)', () => {
+  test('OBJ writes lat/lon at 7 dp under a geographic CRS; z stays 3 dp', () => {
+    const cloud = makeRichCloud({
+      positions: [0.5, 0.5, 0.25],
+      origin: [12.3456789, -34.1456789, 100],
+      geographic: true,
+    });
+    const v = toObj(cloud).split('\n').find((l) => l.startsWith('v '));
+    expect(v).toBe('v 12.8456789 -33.6456789 100.250');
+  });
+
+  test('PLY writes lat/lon at 7 dp under a geographic CRS; z stays 3 dp', () => {
+    const cloud = makeRichCloud({
+      positions: [0.5, 0.5, 0.25],
+      origin: [12.3456789, -34.1456789, 100],
+      geographic: true,
+    });
+    const body = toPly(cloud).split('end_header\n')[1].trim();
+    expect(body).toBe('12.8456789 -33.6456789 100.250');
+  });
+
+  test('a projected CRS keeps the millimetre 3 dp in PLY/OBJ', () => {
+    const cloud = makeRichCloud({
+      positions: [0.5, 0.5, 0.25],
+      origin: [500000, 4100000, 100],
+      geographic: false,
+    });
+    expect(toObj(cloud)).toContain('v 500000.500 4100000.500 100.250');
+    expect(toPly(cloud)).toContain('500000.500 4100000.500 100.250');
+  });
+});
