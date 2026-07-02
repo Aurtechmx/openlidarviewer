@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.5.4] - 2026-07-02
+## [0.5.4] - 2026-07-03
 
 Terrain science hardening. The "Terrain Complexity" reading is no longer a
 heuristic: it is now backed by two literature-defined metrics computed from
