@@ -158,6 +158,11 @@ export const scanReport: AnalysisModule = {
       );
     }
 
+    // Non-fatal anomalies the loader worked around (a skipped E57 scan, a
+    // normalised pose quaternion). Shown as warn rows so a partially-loaded
+    // file is never presented as a cleanly-loaded one.
+    for (const w of meta?.loadWarnings ?? []) rows.push(rowWarn('Load Warning', w));
+
     // Georeferenced bounding box — the scan's extent in real-world
     // coordinates (local bounds plus the origin subtracted on load). Shown
     // under the Advanced report; survey and topographic work needs absolute

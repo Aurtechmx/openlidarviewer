@@ -26,6 +26,14 @@ export interface CloudMetadata {
    * rely on this for distance-in-true-metres and CRS provenance display.
    */
   crs?: CrsInfo | null;
+  /**
+   * Non-fatal anomalies the loader worked around rather than failing on —
+   * e.g. an E57 scan skipped because it carries no Cartesian X/Y/Z, or a
+   * pose quaternion that had to be normalised. Recorded here (and surfaced
+   * in the Scan Report) so a partially-loaded file is never presented as a
+   * cleanly-loaded one.
+   */
+  loadWarnings?: readonly string[];
 }
 
 /** Options accepted by the `PointCloud` constructor. */
