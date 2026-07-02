@@ -6,7 +6,7 @@
  * fallback on worker failure, and the compute-path instrumentation.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   deriveClassificationAsync,
   getLastClassifyComputePath,
@@ -25,6 +25,15 @@ function smallScene(): { positions: Float32Array; n: number } {
 beforeEach(() => setDeriveClassificationClientFactory(null));
 
 describe('deriveClassificationAsync', () => {
+  // The failing-client fixtures make the bridge announce the worker failure
+  // on console.warn before falling back — expected behaviour (none of these
+  // tests assert on the console). Silence it so a green run stays clean.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   it('uses the worker client when it succeeds and records the path', async () => {
     const { positions, n } = smallScene();
     const client: DeriveClassificationClientLike = {

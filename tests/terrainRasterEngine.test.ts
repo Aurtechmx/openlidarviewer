@@ -21,7 +21,7 @@
  *      always receives the CPU-correct answer.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   TerrainRasterEngine,
   getTerrainRasterEngine,
@@ -304,6 +304,16 @@ describe('equivalence harness — f32 kernel arithmetic vs the f64 CPU reference
 });
 
 describe('the equivalence gate + auto-fallback (probe at init)', () => {
+  // These fixtures EXPECT the engine to announce probe failures / init
+  // errors on console.warn — that is the honesty contract under test, and
+  // the assertions read the returned ComputePathInfo, not the console.
+  // Silence the expected announcements so a green run stays clean.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   it('a faithful gpu backend passes the probe and serves async calls', async () => {
     const calls = { derivatives: 0, hillshade: 0 };
     const engine = new TerrainRasterEngine({ gpuFactory: okFactory(faithfulFakeGpu(calls)) });
@@ -479,6 +489,14 @@ describe('the equivalence gate + auto-fallback (probe at init)', () => {
 });
 
 describe('DTM min/count scatter (phase 2) — ordered-key + CPU reference', () => {
+  // Same expected-announcement noise as the probe suite above — the
+  // scatter-divergence fixtures make the engine warn by design.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   it('the ordered-u32 key round-trips every finite float and preserves order', () => {
     // Round-trip: ordered key -> back to the same f32 value.
     const vals = [-1e30, -1000.5, -3.25, -1, -0.0, 0, 0.5, 3.25, 1000.5, 1e30];

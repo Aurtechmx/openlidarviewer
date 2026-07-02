@@ -80,6 +80,16 @@ const rejectingClient: TerrainCoreClientLike = {
 };
 
 describe('computeTerrainCoreAsync — fallback', () => {
+  // The fallback fixtures make the bridge announce the worker failure on
+  // console.warn BEFORE recovering — expected behaviour, asserted separately
+  // in the "failure visibility" suite below. Silence it here so a green run
+  // stays clean.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   it('returns the worker result verbatim when the worker succeeds', async () => {
     const pos = hillScene();
     const sentinel = { __fromWorker: true } as unknown as TerrainCore;
@@ -415,7 +425,15 @@ describe('computeTerrainCoreAsync — fallback stale-result race + oversize guar
 });
 
 describe('getOrComputeCoreAsync — cache + async path', () => {
-  beforeEach(() => clearTerrainCoreCache());
+  // The integration test below routes a worker failure through the cache —
+  // the announcement is expected fixture behaviour, silenced like the
+  // fallback suite above.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    clearTerrainCoreCache();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
 
   it('computes once, reuses the result on the second call', async () => {
     const pos = hillScene();
