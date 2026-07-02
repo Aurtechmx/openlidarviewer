@@ -2427,6 +2427,13 @@ void viewerLoaded.then(() => {
     // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
     // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
     viewer.measure.setCrsKnown(resolved != null && resolved.linearUnit !== 'unknown');
+    // A GEOGRAPHIC (degree) CRS can't be repaired by any scalar factor —
+    // X/Y are degrees, Z is linear. The controller refuses the affected
+    // trust grades + captions the hint; the panel shows the persistent
+    // caveat. One boolean, one seam, so the two can never disagree.
+    const isGeo = resolved?.kind === 'geographic';
+    viewer.measure.setGeographicCrs(isGeo);
+    measurePanel.setGeographicNotice(isGeo);
   });
 });
 // The Annotations panel lists placed annotations; the controller drives it.
@@ -6214,8 +6221,24 @@ function compareLoadedLayers(): void {
     try {
       // Pass each cloud's origin: the two are recentred by their own origins, so
       // the comparison must align them in a common world frame, not raw local.
-      const beforeCloud = { positions: a.positions, origin: a.origin, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null };
-      const afterCloud = { positions: b.positions, origin: b.origin, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null };
+      // Unit info rides along so the shared grid's ~0.25 m cell floor is
+      // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25.
+      const beforeCloud = {
+        positions: a.positions,
+        origin: a.origin,
+        crs: a.metadata?.crs?.name ?? null,
+        verticalDatum: a.metadata?.crs?.verticalDatum ?? null,
+        isGeographic: a.metadata?.crs?.isGeographic ?? null,
+        linearUnitToMetres: a.metadata?.crs?.linearUnitToMetres ?? null,
+      };
+      const afterCloud = {
+        positions: b.positions,
+        origin: b.origin,
+        crs: b.metadata?.crs?.name ?? null,
+        verticalDatum: b.metadata?.crs?.verticalDatum ?? null,
+        isGeographic: b.metadata?.crs?.isGeographic ?? null,
+        linearUnitToMetres: b.metadata?.crs?.linearUnitToMetres ?? null,
+      };
       // Coarse-register the after cloud onto the before cloud first (yaw + x/y
       // only — a real vertical change is the signal, so z is preserved), so a
       // small horizontal misregistration between epochs is not read as movement.

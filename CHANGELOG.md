@@ -45,6 +45,70 @@ A patch line on v0.5. Work in progress.
   tested rather than asserted. A `REVIEWER_QUICKSTART.md` gives the
   clone → test → repro → verify path.
 
+### Fixed
+
+Nine correctness hardenings from the v0.4.x terrain/profile audit, ported onto
+the 0.5 pipeline (each verified at its current location before fixing, every
+new expectation hand-computed):
+
+- **Geographic (lat/lon) scans no longer collapse to a 1-cell grid.** The
+  analysis runner's cell-size floor was a raw `0.25` in SOURCE units — on a
+  degree CRS that forced 0.25° ≈ 28 km cells, flattening any scan under ~64° of
+  extent to 1–2 cells. The floor is now 0.25 metres expressed in the source
+  unit (degrees ÷ metres-per-degree, feet ÷ metres-per-foot; metres unchanged).
+  Two-epoch change detection's shared grid had the same unit-blind floor and
+  gets the same fix, with each cloud's CRS units threaded honestly from the
+  loaded metadata (and surviving epoch alignment).
+- **cos φ everywhere derivatives run, from the WORLD latitude.** v0.5.0 made
+  the hold-out and cell-confidence slope fields per-axis, but both derived the
+  "grid-centre latitude" from render-RECENTRED local Y — which is ≈ 0, so
+  cos φ silently degraded to 1. The runner now recovers the true world latitude
+  (cloud origin + local bbox centre) and threads it through the pipeline; the
+  main derivative stage (slope/aspect/hillshade) is per-axis too, through the
+  whole TerrainRasterEngine — CPU reference, the WGSL Horn kernel's uniform,
+  and the per-session equivalence probe, which now runs an anisotropic pass so
+  a GPU kernel that ignores the second axis can never pass the gate. Per-cell
+  densities (and the USGS QL graded from them) fold the cos φ cell-area
+  anisotropy in as √(cos φ). The CPU remains the reference by contract.
+- **One percentile convention.** Three conventions coexisted: nearest-rank in
+  `holdoutRmse` / `buildDsm` / `hillshade` vs the type-7 (NumPy/R/Excel
+  PERCENTILE.INC) quantile in `rasterizeDtm` / `wallSlice`. Every p95 the
+  pipeline reports now routes through one shared type-7 helper
+  (`src/terrain/quantile.ts`), so a reported percentile is reproducible
+  against standard tools regardless of which file computed it.
+- **Contour correctness on fine and degree-denominated grids.** Contour
+  stitching's endpoint-matching quantum was a fixed 1 mm — ≈ 111 m in degrees,
+  welding a fine geographic grid's contours into one blob; it now scales with
+  the grid cell (cell/1000, unit-free). The coarse-interval gate used the
+  range-only rule `interval < range`, falsely rejecting e.g. a 1 m interval on
+  a 0.4–1.2 m surface even though the 1.0 level crosses it; with real surface
+  bounds it now uses the exact level-crossing test (`ceil(minZ/i)·i ≤ maxZ`).
+  Marching-squares saddle cells (cases 5/10) are now disambiguated with the
+  standard cell-average rule instead of a fixed pairing that silently assumed
+  centre-below for both — mislinking basins on ridge/col terrain.
+- **The ground-filter despike actually fires on small cells.** The documented
+  `floorPercentile` despike was a silent no-op for cells with ≤ 20 returns
+  (`ceil(0.05·n)−1 = 0` — the strict minimum, blunder included, still won).
+  Once a cell has ≥ 3 returns, at least the single lowest return is now
+  skipped; 1–2-return cells keep the minimum (no evidence to reject either).
+- **Signed vertical grade.** A straight-DOWN pair reported `gradePercent` as
+  an infinite CLIMB (`+Infinity`); the grade's sign now matches the rise's
+  (±∞), agreeing with the ±90° the angle already reported — in both
+  `slopeBetween` and `profileMetrics`.
+- **Terrain worker point-count clamp.** An oversized caller-supplied point
+  count would throw inside the terrain-core worker while rebuilding its typed
+  array — silently costing the off-thread path via the fallback. The count is
+  now clamped to what the buffer actually holds.
+- **Geographic CRS measurements are refused, not mislabelled.** On a
+  geographic (degree) CRS, X/Y are degrees while Z is linear, so lengths,
+  areas, grades, profiles and volumes mix units and no scalar factor can
+  repair them — a 0.35-"m" corridor is really ≈ 39 km. The measure stack now
+  says so everywhere with ONE shared string: affected measurements carry the
+  red refusal trust grade (not presentable — pure-vertical heights and
+  unit-free angles keep their ordinary grade), the measure-bar hint carries
+  the caveat, and the Measurements panel shows a persistent notice while the
+  frame is geographic. Symmetric on a user override to a projected CRS.
+
 ## [0.5.2] - 2026-06-29
 
 A polish release: a stronger integrity digest, a richer earthwork report, an

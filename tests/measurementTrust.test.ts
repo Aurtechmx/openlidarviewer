@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { gradeMeasurement, summarizeMeasurementTrust } from '../src/render/measure/measurementTrust';
+import { GEOGRAPHIC_CRS_MEASURE_NOTICE } from '../src/render/measure/format';
 
 const strong = { snappedToPoint: true, pointsWithinRadius: 50 };
 const weakSparse = { snappedToPoint: true, pointsWithinRadius: 6 };
@@ -47,6 +48,33 @@ describe('gradeMeasurement', () => {
     const t = gradeMeasurement({ vertices: [voidPt, voidPt], crsKnown: false });
     expect(t.grade).toBe('red');
     expect(t.presentable).toBe(false);
+  });
+
+  it('geographic CRS is a REFUSAL: red + not presentable even with perfect support', () => {
+    // Degrees are not distances — the figure mixes degree X/Y with linear Z,
+    // so it is wrong, not merely uncertified. Stronger than the yellow
+    // "unknown CRS" cap: perfect endpoint support cannot rescue it.
+    const t = gradeMeasurement({ vertices: [strong, strong], crsKnown: true, geographicCrs: true });
+    expect(t.grade).toBe('red');
+    expect(t.presentable).toBe(false);
+    expect(t.caption.toLowerCase()).toContain('degrees');
+    // The reason is the ONE shared copy — hint bar, panel caveat and grade
+    // must never fork their wording.
+    expect(t.reasons).toContain(GEOGRAPHIC_CRS_MEASURE_NOTICE);
+  });
+
+  it('geographic refusal still reports endpoint support honestly (reasons stack)', () => {
+    const t = gradeMeasurement({ vertices: [strong, weakSparse], crsKnown: true, geographicCrs: true });
+    expect(t.grade).toBe('red');
+    // Both signals surface: the sparse-support reason AND the geographic one.
+    expect(t.reasons.join(' ').toLowerCase()).toContain('sparse');
+    expect(t.reasons).toContain(GEOGRAPHIC_CRS_MEASURE_NOTICE);
+  });
+
+  it('geographicCrs false / omitted changes nothing (projected behaviour intact)', () => {
+    const a = gradeMeasurement({ vertices: [strong, strong], crsKnown: true });
+    const b = gradeMeasurement({ vertices: [strong, strong], crsKnown: true, geographicCrs: false });
+    expect(b).toEqual(a);
   });
 
   it('refuses an empty measurement', () => {

@@ -37,7 +37,7 @@ import {
 // Δh in the chart tooltip goes through the shared formatter so it carries
 // its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
 // imperial mode).
-import { formatLength } from '../render/measure/format';
+import { formatLength, GEOGRAPHIC_CRS_MEASURE_NOTICE } from '../render/measure/format';
 // B7/B8 (v0.4.5) — sampler-control defaults + bounds, read from the sampler
 // module so the inputs, the controller clamp and the tests share one rule.
 import {
@@ -264,6 +264,8 @@ export class MeasurePanel {
   private readonly _chainResult: HTMLElement;
   /** Most recently rendered summaries — used by the chain redraw path. */
   private _summaries: MeasurementSummary[] = [];
+  /** Persistent geographic-CRS caveat, toggled via {@link setGeographicNotice}. */
+  private readonly _geoNotice: HTMLElement;
   /** Observer that persists the user's dragged panel width. */
   private _panelWidthObserver?: ResizeObserver;
   /**
@@ -367,8 +369,20 @@ export class MeasurePanel {
     head.addEventListener('click', (e) => {
       if (e.target === head || e.target === title) toggleCollapsed();
     });
+    // Honest-units notice for geographic (degree) CRSs — hidden by default,
+    // toggled by the host from the same CrsService subscription that feeds
+    // the controller's unit factor. Persistent (not per-row): the limitation
+    // is a property of the scan's frame, not of any single measurement, and
+    // it must stay visible while any measurement is read. Same copy as the
+    // hint bar and the per-measurement trust reason, so the wording cannot
+    // fork. Reuses the project-wide `.olv-caveat` honesty primitive.
+    this._geoNotice = el('div', {
+      className: 'olv-caveat olv-mp-geo-notice olv-hidden',
+      text: GEOGRAPHIC_CRS_MEASURE_NOTICE,
+    });
     this.element = el('aside', { className: 'olv-measure-panel olv-hidden' }, [
       head,
+      this._geoNotice,
       this._chainBar,
       this._list,
       el('div', { className: 'olv-mp-footer' }, [
@@ -379,6 +393,16 @@ export class MeasurePanel {
       ]),
     ]);
     this._restorePanelWidth();
+  }
+
+  /**
+   * Show/hide the persistent geographic-CRS measurement caveat. Driven by
+   * the host from the CrsService subscription (the same seam that feeds the
+   * controller's `setGeographicCrs`), so the panel and the hint bar can
+   * never disagree about the active frame.
+   */
+  setGeographicNotice(show: boolean): void {
+    this._geoNotice.classList.toggle('olv-hidden', !show);
   }
 
   /**

@@ -21,6 +21,8 @@
  * policy can't drift from the UI.
  */
 
+import { GEOGRAPHIC_CRS_MEASURE_NOTICE } from './format';
+
 export type TrustGrade = 'green' | 'yellow' | 'red';
 
 /** Per-endpoint support signals, gathered by the caller from the snap index. */
@@ -41,6 +43,18 @@ export interface MeasurementTrustInput {
   readonly crsKnown: boolean;
   /** True when only a streaming subset was resident (the full cloud wasn't measured). */
   readonly residentOnly?: boolean;
+  /**
+   * True when this measurement's NUMBER is built from geographic (degree)
+   * X/Y coordinates — lengths/areas/grades/profiles/volumes on a geographic
+   * CRS. Degrees are not a linear unit and Z is, so the figure mixes units
+   * and no scalar factor can repair it; that is a REFUSAL condition (grade
+   * red, not presentable), stronger than the yellow "unverified scale" of a
+   * missing CRS, because the number is not merely uncertified — it is wrong
+   * as a distance. The caller scopes this to the affected measurement kinds
+   * (a pure-vertical height, for example, is honest metres and is not
+   * flagged).
+   */
+  readonly geographicCrs?: boolean;
 }
 
 export interface MeasurementTrust {
@@ -119,17 +133,28 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     if (grade === 'green') grade = 'yellow'; // can’t certify metric → cap at caution
   }
 
+  // Geographic (degree) frame: the figure mixes degree X/Y with a linear Z,
+  // so it is WRONG as a distance, not merely uncertified — a refusal, not a
+  // caution. Shares the hint/panel copy so the wording cannot fork.
+  const geographicRefusal = input.geographicCrs === true;
+  if (geographicRefusal) {
+    reasons.push(GEOGRAPHIC_CRS_MEASURE_NOTICE);
+    grade = 'red';
+  }
+
   if (input.residentOnly) {
     reasons.push('Only the loaded subset of a streaming cloud was measured — the full-resolution data may shift this.');
     if (grade === 'green') grade = 'yellow';
   }
 
-  const presentable = !anyVoid;
-  const caption = grade === 'green'
-    ? 'Verified — well supported by measured points'
-    : grade === 'yellow'
-      ? 'Caution — loosely supported or unverified scale'
-      : 'Unverified — an endpoint has no points to measure';
+  const presentable = !anyVoid && !geographicRefusal;
+  const caption = geographicRefusal
+    ? 'Unverified — degrees are not distances (geographic CRS)'
+    : grade === 'green'
+      ? 'Verified — well supported by measured points'
+      : grade === 'yellow'
+        ? 'Caution — loosely supported or unverified scale'
+        : 'Unverified — an endpoint has no points to measure';
 
   return { grade, caption, reasons, presentable };
 }
