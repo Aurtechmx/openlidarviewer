@@ -70,6 +70,36 @@ function liveSourceTransformPlugin() {
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
       /loadLas\.ts/,
+      // ── Performance exclusions (v0.5.3) ────────────────────────────────
+      // The stringArray pass rewrites property access (`obj.prop` →
+      // `obj[decode(n)]`) and built-in calls (`Math.hypot` →
+      // `Math[decode(n)]`) into decode-wrapper calls. Inside per-POINT loops
+      // that is one wrapper call per point per access — on a multi-million-
+      // point cloud the deployed site burned whole seconds a plain build
+      // does not (profiled on a 2.5 M-pt PLY: load-path long task 6.6 s →
+      // 10.2 s, single pick 56 ms → 178 ms). Each module below carries an
+      // O(N)-per-point hot loop and is excluded from the transform; the
+      // remaining app surface stays transformed.
+      //   - healthCheck.ts   — duplicate/outlier/finite whole-cloud scans
+      //     at scan attach (~2 s of pure decoder overhead when transformed).
+      //   - PointCloud.ts    — bounds() min/max walk; the loop condition
+      //     alone made two wrapper calls per iteration (~0.5 s per load).
+      //   - colorEncode.ts   — per-point colour buffer building on attach
+      //     and on every colour-mode switch (60 ms → 519 ms when transformed).
+      //   - navMath.ts       — nearestPointAlongRay, the O(N) pick walked on
+      //     every measure/probe hover frame and dblclick-focus; the
+      //     transformed build wrapped `Math.hypot` per point (3.2× per pick).
+      //   - Viewer.ts        — scan-attach buffer plumbing + the per-frame
+      //     render loop; its chunk's decoder burned ~1 s per load transformed.
+      //   - measure/snap.ts  — the snap grid built over every point at scan
+      //     attach (min/max walk + per-point cell insert; ~1.1 s of decoder
+      //     overhead per load when transformed).
+      /analysis\/modules\/healthCheck\.ts/,
+      /model\/PointCloud\.ts/,
+      /render\/colorEncode\.ts/,
+      /render\/navMath\.ts/,
+      /render\/Viewer\.ts/,
+      /render\/measure\/snap\.ts/,
     ],
     options: {
       // A fixed RNG seed makes the transform deterministic — every
