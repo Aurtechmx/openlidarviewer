@@ -3380,9 +3380,12 @@ function revealAnalysePanel(name: string, settled = true): void {
   const snapCloud = activeId ? viewer.getCloud(activeId) ?? null : null;
   viewer.measure.setSnapSource(snapCloud?.positions ?? null);
   // Reveal the clip control and seed its box from this scan's bounds (disabled
-  // until the user enables it).
+  // until the user enables it). Skip the reseed when the viewer already holds
+  // a clip — a session restore may have landed one before the scan revealed,
+  // and fitToScan() applies with the panel's own (disabled) flag, which would
+  // replace the restored clip with "disabled, full-bounds", destroying it.
   clipPanel.setVisible(true);
-  clipPanel.fitToScan();
+  if (!viewer.getClip()) clipPanel.fitToScan();
   // Fresh scan → clear any prior override + verdict so the open-time route is
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
   // override is per-session-per-scan: a new scan returns to auto-detection,
@@ -4773,6 +4776,12 @@ async function exportSession(): Promise<void> {
     // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
     // filter is active; serializeSession drops an empty list.
     classFilter: classLegendPanel.getVisibility().hiddenCodes(),
+    // v5 — the active clip box. The restore side has read this since v5, but
+    // the writer never emitted it — the documented round-trip was dead on the
+    // write side (clip-session finding, Critical). Emitted whenever the viewer
+    // holds a clip, enabled or not, so a positioned-but-dormant box keeps its
+    // geometry across the round trip.
+    clip: viewer.getClip() ?? undefined,
     // v6 — stamp the producing app version so a later re-open can tell whether a
     // newer build would read the scan differently (see exportStaleness).
     software: __APP_VERSION__,
@@ -4854,6 +4863,10 @@ async function importSession(file: File): Promise<void> {
       // being parsed but never re-applied.)
       viewer.setClip(session.clip);
       clipPanel.setVisible(true);
+      // Reflect the restored clip in the panel UI without re-firing onApply —
+      // the viewer already holds it, and firing through the panel while its
+      // own enabled flag was still false used to clear the restored clip.
+      clipPanel.setState(session.clip);
     }
     if (
       session.crs &&

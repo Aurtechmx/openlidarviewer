@@ -135,6 +135,39 @@ export class ClipPanel {
     this._fit();
   }
 
+  /**
+   * Adopt an externally-restored clip (session import) WITHOUT firing
+   * `onApply` — the caller has already pushed the clip to the viewer, and
+   * re-applying through `_apply` while `_enabled` was still false is exactly
+   * what used to clear a just-restored clip (clip-session finding, Critical).
+   * Fills the internal state, the extent inputs, the mode pills, the enable
+   * box, and the readout so the panel UI agrees with what the viewer is
+   * actually clipping to.
+   */
+  setState(clip: ClipBox): void {
+    // A pending debounced apply would re-push the PREVIOUS state — drop it.
+    if (this._applyTimer !== null) { clearTimeout(this._applyTimer); this._applyTimer = null; }
+    this._enabled = clip.enabled;
+    this._enableBox.checked = clip.enabled;
+    this._mode = clip.mode;
+    for (const [m, btn] of this._modeBtns) btn.classList.toggle('is-active', m === clip.mode);
+    this._min = [clip.box.min[0], clip.box.min[1], clip.box.min[2]];
+    this._max = [clip.box.max[0], clip.box.max[1], clip.box.max[2]];
+    for (const { axis } of AXES) {
+      this._minInputs[axis].value = String(round(this._min[axis]));
+      this._maxInputs[axis].value = String(round(this._max[axis]));
+    }
+    // Same readout _apply would show, minus the onApply side effect.
+    if (this._enabled) {
+      const c = this._cb.keptCount(this._current());
+      this._readout.textContent = c
+        ? `${c.kept.toLocaleString()} of ${c.total.toLocaleString()} points kept.`
+        : '';
+    } else {
+      this._readout.textContent = 'Enable to clip the scan to the box above.';
+    }
+  }
+
   private _numInput(onChange: (v: number) => void): HTMLInputElement {
     const input = el('input', { className: 'olv-bc-input olv-clip-num', type: 'number' }) as HTMLInputElement;
     input.step = 'any';
