@@ -208,3 +208,56 @@ describe('loadE57 — pose rotation of normals', () => {
     expect(cloud.normals![2]).toBeCloseTo(0, 6);
   });
 });
+
+describe('loadE57 — declared source metadata attach (v0.5.4)', () => {
+  const onePoint = (): E57ScanData[] => [
+    scan('s', 1, {
+      cartesianX: Float64Array.from([1.5]),
+      cartesianY: Float64Array.from([2.5]),
+      cartesianZ: Float64Array.from([3.5]),
+    }),
+  ];
+
+  it('attaches sourceMetadata and the load-time declaredCapture', async () => {
+    const result = parseResult(onePoint());
+    result.sourceMetadata = {
+      standard: [
+        { name: 'sensorModel', value: 'Procedural heritage reference reconstruction' },
+      ],
+      extensions: [
+        { name: 'license', value: 'CC-BY-4.0', namespaceUri: 'https://aurtech.mx/olv' },
+      ],
+    };
+    mockedParse.mockReturnValue(result);
+    const cloud = await loadE57(new ArrayBuffer(0), 'declared.e57');
+    expect(cloud.metadata?.sourceMetadata).toEqual(result.sourceMetadata);
+    // The keyword scan runs at LOAD time (lazy chunk), so the classifier
+    // wiring in the startup shell reads a plain precomputed field.
+    expect(cloud.metadata?.declaredCapture).toMatchObject({
+      field: 'sensorModel',
+      value: 'Procedural heritage reference reconstruction',
+    });
+    expect(cloud.metadata?.declaredCapture?.label).toBe(
+      'Declared: Procedural heritage reference reconstruction (from file metadata)',
+    );
+  });
+
+  it('attaches sourceMetadata WITHOUT declaredCapture for a physical sensor', async () => {
+    const result = parseResult(onePoint());
+    result.sourceMetadata = {
+      standard: [{ name: 'sensorModel', value: 'VZ-400i' }],
+      extensions: [],
+    };
+    mockedParse.mockReturnValue(result);
+    const cloud = await loadE57(new ArrayBuffer(0), 'tls.e57');
+    expect(cloud.metadata?.sourceMetadata).toEqual(result.sourceMetadata);
+    expect(cloud.metadata?.declaredCapture).toBeUndefined();
+  });
+
+  it('attaches neither when the file declares nothing', async () => {
+    mockedParse.mockReturnValue(parseResult(onePoint()));
+    const cloud = await loadE57(new ArrayBuffer(0), 'bare.e57');
+    expect(cloud.metadata?.sourceMetadata).toBeUndefined();
+    expect(cloud.metadata?.declaredCapture).toBeUndefined();
+  });
+});

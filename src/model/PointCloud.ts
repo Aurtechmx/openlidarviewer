@@ -66,6 +66,22 @@ export interface CloudMetadata {
    * nothing beyond geometry.
    */
   sourceMetadata?: SourceMetadata;
+  /**
+   * The file's own capture statement, precomputed at load time from
+   * `sourceMetadata` (see `diagnostics/declaredCapture.ts`) when the
+   * declared fields state a synthetic / procedural / reconstruction /
+   * reference origin — including the pre-built display strings, so the
+   * startup shell carries none of the wording. The capture-type classifier
+   * quotes it verbatim and demotes its heuristics; absent for files that
+   * declare nothing.
+   */
+  declaredCapture?: {
+    readonly field: string;
+    readonly value: string;
+    readonly label: string;
+    readonly signal: string;
+    readonly disclaimer: string;
+  };
 }
 
 /** Options accepted by the `PointCloud` constructor. */

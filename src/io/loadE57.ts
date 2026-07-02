@@ -16,6 +16,7 @@ import type { E57ScanData } from './e57/parseE57';
 import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
+import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
 import { computeOrigin, recenter } from './coordinateBridge';
 
 /** Clamp a value into the 0–255 byte range. */
@@ -84,6 +85,11 @@ function e57Metadata(
     (sourceMetadata.standard.length > 0 || sourceMetadata.extensions.length > 0)
   ) {
     out.sourceMetadata = sourceMetadata;
+    // Precompute the declared-capture statement HERE (lazy loader chunk) so
+    // the classifier wiring in the startup shell reads a plain field instead
+    // of carrying the keyword scan.
+    const declared = declaredCaptureFromSourceMetadata(sourceMetadata);
+    if (declared) out.declaredCapture = declared;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

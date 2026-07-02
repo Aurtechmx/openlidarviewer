@@ -14,10 +14,11 @@
 import { describe, it, expect } from 'vitest';
 import { classify } from '../src/diagnostics/provenance';
 import type { ScanSignals } from '../src/diagnostics/provenance';
-import {
-  declaredCaptureFromSourceMetadata,
-  signalsForStaticCloud,
-} from '../src/diagnostics/provenanceSignals';
+import { signalsForStaticCloud } from '../src/diagnostics/provenanceSignals';
+// The keyword scan lives in the loader-side module so the startup shell
+// never carries it — see diagnostics/declaredCapture.ts. The loader attach
+// (loadE57 → CloudMetadata.declaredCapture) is pinned in loadE57Merge.test.ts.
+import { declaredCaptureFromSourceMetadata } from '../src/diagnostics/declaredCapture';
 
 /**
  * The Tikal probe's numeric signature: ~470 K points over a 50 × 54 m
@@ -46,10 +47,7 @@ const TIKAL_SOURCE_METADATA = {
 describe('classify — declared capture demotion', () => {
   const f = classify({
     ...TIKAL_SIGNALS,
-    declaredCapture: {
-      field: 'sensorModel',
-      value: 'Procedural heritage reference reconstruction',
-    },
+    declaredCapture: declaredCaptureFromSourceMetadata(TIKAL_SOURCE_METADATA),
   });
 
   it('makes the declaration the primary verdict, quoted verbatim', () => {
@@ -85,7 +83,10 @@ describe('classify — declared capture demotion', () => {
     const g = classify({
       sourceFormat: 'e57',
       pointCount: 10,
-      declaredCapture: { field: 'datasetType', value: 'synthetic_reference_reconstruction' },
+      declaredCapture: declaredCaptureFromSourceMetadata({
+        standard: [],
+        extensions: [{ name: 'datasetType', value: 'synthetic_reference_reconstruction' }],
+      }),
     });
     expect(g.label).toContain('Declared: synthetic_reference_reconstruction');
     expect(g.signals.some((s) => /heuristic guess/i.test(s))).toBe(false);
@@ -114,10 +115,17 @@ describe('classify — behaviour unchanged when metadata is absent', () => {
 describe('declaredCaptureFromSourceMetadata', () => {
   it('finds the synthetic declaration and quotes sensorModel preferentially', () => {
     const d = declaredCaptureFromSourceMetadata(TIKAL_SOURCE_METADATA);
-    expect(d).toEqual({
+    expect(d).toMatchObject({
       field: 'sensorModel',
       value: 'Procedural heritage reference reconstruction',
     });
+    // The display strings are pre-built here (lazy chunk) so the startup
+    // shell carries no wording.
+    expect(d?.label).toBe(
+      'Declared: Procedural heritage reference reconstruction (from file metadata)',
+    );
+    expect(d?.signal).toContain('declared by the file, not verified by OpenLiDARViewer');
+    expect(d?.disclaimer).toContain('not verified by OpenLiDARViewer');
   });
 
   it('falls back to datasetType when sensorModel is not declared', () => {
@@ -125,7 +133,7 @@ describe('declaredCaptureFromSourceMetadata', () => {
       standard: [],
       extensions: [{ name: 'datasetType', value: 'synthetic_reference_reconstruction' }],
     });
-    expect(d).toEqual({
+    expect(d).toMatchObject({
       field: 'datasetType',
       value: 'synthetic_reference_reconstruction',
     });
@@ -136,7 +144,7 @@ describe('declaredCaptureFromSourceMetadata', () => {
       standard: [{ name: 'description', value: 'A procedural test scene' }],
       extensions: [],
     });
-    expect(d).toEqual({ field: 'description', value: 'A procedural test scene' });
+    expect(d).toMatchObject({ field: 'description', value: 'A procedural test scene' });
   });
 
   it('is case-insensitive over the keyword set', () => {
@@ -162,14 +170,16 @@ describe('declaredCaptureFromSourceMetadata', () => {
 });
 
 describe('signalsForStaticCloud — declaredCapture wiring', () => {
-  it('threads the declared capture from cloud.metadata.sourceMetadata', () => {
+  it('threads the load-time declaredCapture from cloud.metadata', () => {
     const signals = signalsForStaticCloud({
       sourceFormat: 'e57',
       pointCount: 469_703,
       bounds: () => ({ min: [0, 0, 0], max: [50, 54, 47.16] }),
-      metadata: { sourceMetadata: TIKAL_SOURCE_METADATA },
+      metadata: {
+        declaredCapture: declaredCaptureFromSourceMetadata(TIKAL_SOURCE_METADATA),
+      },
     });
-    expect(signals.declaredCapture).toEqual({
+    expect(signals.declaredCapture).toMatchObject({
       field: 'sensorModel',
       value: 'Procedural heritage reference reconstruction',
     });

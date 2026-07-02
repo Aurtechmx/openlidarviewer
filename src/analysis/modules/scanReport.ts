@@ -170,12 +170,14 @@ export const scanReport: AnalysisModule = {
     // Declared, not verified — only rows the file actually declared appear.
     const sm = meta?.sourceMetadata;
     if (sm) {
-      for (const f of sm.standard) {
-        rows.push({ label: f.name, value: f.value, status: 'info', group: 'source-standard' });
-      }
-      for (const f of sm.extensions) {
-        rows.push({ label: f.name, value: f.value, status: 'info', group: 'source-extension' });
-      }
+      const declared = (
+        fields: readonly { name: string; value: string }[],
+        group: AnalysisRow['group'],
+      ): void => {
+        for (const f of fields) rows.push({ label: f.name, value: f.value, status: 'info', group });
+      };
+      declared(sm.standard, 'src-std');
+      declared(sm.extensions, 'src-ext');
     }
 
     // Georeferenced bounding box — the scan's extent in real-world

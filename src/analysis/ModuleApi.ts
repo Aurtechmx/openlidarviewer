@@ -10,13 +10,14 @@ export interface AnalysisRow {
   /** When true, the row is a diagnostic shown under "Advanced report". */
   advanced?: boolean;
   /**
-   * Declared source-metadata grouping. `source-standard` rows render inside
-   * the collapsible "Source metadata" section; `source-extension` rows go in
-   * its "Extended metadata (file-declared)" subsection. Both carry verbatim
+   * Declared source-metadata grouping. `src-std` rows render inside the
+   * collapsible "Source metadata" section; `src-ext` rows go in its
+   * "Extended metadata (file-declared)" subsection. Both carry verbatim
    * file declarations — declared, not verified — so the Inspector renders
    * them under that disclosure and truncates long values with a tooltip.
+   * (Tokens kept short deliberately: they ride the eager index bundle.)
    */
-  group?: 'source-standard' | 'source-extension';
+  group?: 'src-std' | 'src-ext';
   /**
    * Honesty stamp: the class scope this metric was computed under. Set only
    * on rows whose value changes with the class filter (count, density,

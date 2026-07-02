@@ -110,6 +110,12 @@ export interface ScanSignals {
     readonly field: string;
     /** The declared value, verbatim. */
     readonly value: string;
+    /** Pre-built verdict headline (composed in the lazy loader chunk). */
+    readonly label: string;
+    /** Pre-built declaration signal line with the not-verified disclosure. */
+    readonly signal: string;
+    /** Pre-built disclaimer for the declared verdict. */
+    readonly disclaimer: string;
   };
 }
 
@@ -186,33 +192,25 @@ function classifyHeuristic(signals: ScanSignals): ProvenanceFingerprint {
  * verbatim, with the heuristic guess demoted to a secondary line at reduced
  * confidence. No literature accuracy ribbon is attached — the cited physical
  * capture-type bounds do not describe a declared synthetic / reference
- * reconstruction, and quoting them would overclaim.
+ * reconstruction, and quoting them would overclaim. The wording itself is
+ * pre-built at load time (`diagnostics/declaredCapture.ts`, lazy chunk) so
+ * the startup shell only threads it through.
  */
 function declaredFingerprint(
-  declared: { readonly field: string; readonly value: string },
+  declared: NonNullable<ScanSignals['declaredCapture']>,
   heuristic: ProvenanceFingerprint,
 ): ProvenanceFingerprint {
-  const signalLines = [
-    `Declared ${declared.field}: "${declared.value}" — declared by the file, ` +
-      `not verified by OpenLiDARViewer`,
-  ];
+  const signals = [declared.signal];
   if (heuristic.captureType !== 'unknown') {
-    signalLines.push(
-      `Heuristic guess (secondary, low confidence): ${heuristic.label} — ` +
-        `demoted because the file's declared metadata contradicts it`,
-    );
+    signals.push(`Heuristic guess (secondary, low confidence): ${heuristic.label}`);
   }
   return {
     captureType: 'unknown',
     confidence: 'high',
-    label: `Declared: ${declared.value} (from file metadata)`,
-    signals: signalLines,
+    label: declared.label,
+    signals,
     bounds: [],
-    disclaimer:
-      'The capture type above is quoted verbatim from the file\'s own ' +
-      'metadata — declared by the file, not verified by OpenLiDARViewer. ' +
-      'No literature accuracy ranges are shown: the cited capture-type ' +
-      'bounds do not apply to a declared synthetic / reference source.',
+    disclaimer: declared.disclaimer,
   };
 }
 
