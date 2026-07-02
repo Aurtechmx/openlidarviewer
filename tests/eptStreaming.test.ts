@@ -207,6 +207,26 @@ test('EptStreamingPointCloud.decodeBinary recovers points within the cube', asyn
   expect(decoded.positions.length).toBe(300);
 });
 
+test('EptStreamingPointCloud pins the RGB bit-depth from the first decoded tile', async () => {
+  const meta = loadFixtureMetadata();
+  const transport = fixtureTransport();
+  const cloud = await EptStreamingPointCloud.open(
+    meta,
+    'fixture://ept-tiny/',
+    'ept-tiny',
+    transport,
+  );
+  const root = cloud.octree.nodes()[0];
+  // No decision yet — decodeMeta carries undefined.
+  expect(cloud.decodeMeta(root.record).rgbEightBit).toBeUndefined();
+  // First RGB tile decides "true 16-bit" (false) → pinned into decodeMeta.
+  cloud.noteDecodedRgbDepth(false);
+  expect(cloud.decodeMeta(root.record).rgbEightBit).toBe(false);
+  // Sticky: a later all-dark tile reporting 8-bit can't flip the dataset.
+  cloud.noteDecodedRgbDepth(true);
+  expect(cloud.decodeMeta(root.record).rgbEightBit).toBe(false);
+});
+
 test('EptStreamingPointCloud.localBounds yields the cube in render space', async () => {
   const meta = loadFixtureMetadata();
   const transport = fixtureTransport();

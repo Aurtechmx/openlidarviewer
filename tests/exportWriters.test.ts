@@ -31,6 +31,7 @@ const PROV: ExportProvenance = {
   exportReadiness: 'Ready',
   exportReason: '',
   accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsQualityLevel: 'QL2' },
+  complexity: null,
   pointDensityPerM2: 4.2,
   measuredCells: 90,
   totalCells: 100,

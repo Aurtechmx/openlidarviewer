@@ -1,12 +1,19 @@
 /**
  * calibrationCheck.ts
  *
- * calibration check. Given a {@link ValidationReport}, assert
+ * Confidence-ORDERING check. Given a {@link ValidationReport}, assert
  * that the evidence grading actually predicts error: the solid (high-
  * confidence) band should not have higher residual error than the
  * dashed band, which should not exceed the gap band. If that ordering
  * is violated, the confidence is decorative — "honesty theater" — and
- * this check returns `calibrated: false` with the offending bands.
+ * this check returns `orderingConsistent: false` with the offending bands.
+ *
+ * NAMING (v0.5.4 honesty rename): this used to be `checkCalibration`,
+ * which overclaimed — a monotone band ordering is a necessary condition
+ * for calibrated confidence, not calibration itself. The genuine
+ * probability calibration (PAV isotonic fit of P(|error| ≤ τ) against
+ * confidence) lives in `calibrateConfidence.ts` and is untouched; this
+ * module now says exactly what it checks and no more.
  *
  * Wired into CI (a unit test), this makes it structurally impossible to
  * ship a regression that breaks the confidence→error correspondence
@@ -17,32 +24,32 @@
 
 import type {
   BandError,
-  CalibrationResult,
+  ConfidenceOrderingResult,
   ValidationReport,
 } from './ValidationReport';
 
-/** Options for {@link checkCalibration}. */
-export interface CalibrationParams {
+/** Options for {@link checkConfidenceOrdering}. */
+export interface ConfidenceOrderingParams {
   /** Minimum held-out samples for a band to be considered. Default 5. */
   readonly minSamplesPerBand?: number;
   /**
    * Relative tolerance when comparing adjacent bands. A higher-
    * confidence band may exceed the next band's error by up to this
-   * fraction before the pair is judged miscalibrated (accounts for
+   * fraction before the pair is judged a violation (accounts for
    * sampling noise). Default 0.15 (15 %).
    */
   readonly tolerance?: number;
 }
 
 /**
- * Assess whether confidence predicts error. Returns an explicit
+ * Assess whether confidence ORDERS error correctly. Returns an explicit
  * `assessable` flag: with fewer than two adequately-sampled bands the
- * ordering cannot be judged, and `calibrated` is not meaningful.
+ * ordering cannot be judged, and `orderingConsistent` is not meaningful.
  */
-export function checkCalibration(
+export function checkConfidenceOrdering(
   report: ValidationReport,
-  params: CalibrationParams = {},
-): CalibrationResult {
+  params: ConfidenceOrderingParams = {},
+): ConfidenceOrderingResult {
   const minSamples = params.minSamplesPerBand ?? 5;
   const tolerance = params.tolerance ?? 0.15;
 
@@ -54,7 +61,7 @@ export function checkCalibration(
 
   if (considered.length < 2) {
     return {
-      calibrated: false,
+      orderingConsistent: false,
       assessable: false,
       score: Number.NaN,
       reason: `not assessable — need >=2 bands with >=${minSamples} samples, have ${considered.length}`,
@@ -81,10 +88,10 @@ export function checkCalibration(
   }
 
   const score = total > 0 ? satisfied / total : Number.NaN;
-  const calibrated = satisfied === total;
-  const reason = calibrated
-    ? `calibrated — error is non-increasing with confidence across ${total} band pair(s)`
-    : `miscalibrated — ${violations.join('; ')}`;
+  const orderingConsistent = satisfied === total;
+  const reason = orderingConsistent
+    ? `ordering holds — error is non-increasing with confidence across ${total} band pair(s)`
+    : `ordering violated — ${violations.join('; ')}`;
 
-  return { calibrated, assessable: true, score, reason, consideredBands: considered };
+  return { orderingConsistent, assessable: true, score, reason, consideredBands: considered };
 }

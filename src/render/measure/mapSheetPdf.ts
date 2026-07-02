@@ -495,18 +495,21 @@ function drawTitleBlock(
   // '—' rather than a fabricated zero).
   const aRows: Array<[string, string]> = prov
     ? [
-        ['NVA (95%)', fmtM(prov.accuracy?.nvaM)],
-        ['VVA (95th pct)', fmtM(prov.accuracy?.vvaM)],
+        // "-style (hold-out)" / "(estimated)": the printed sheet must carry
+        // the same qualifiers as the Analyse-panel preview of these rows —
+        // hold-out figures, not independent-checkpoint assessments.
+        ['NVA-style (95%, hold-out)', fmtM(prov.accuracy?.nvaM)],
+        ['VVA-style (95th pct, hold-out)', fmtM(prov.accuracy?.vvaM)],
         ['RMSEz', fmtM(prov.accuracy?.rmseZM)],
-        ['USGS 3DEP', prov.accuracy && prov.accuracy.usgsQualityLevel !== 'unknown' ? prov.accuracy.usgsQualityLevel : '—'],
+        ['USGS 3DEP', prov.accuracy && prov.accuracy.usgsQualityLevel !== 'unknown' ? `${prov.accuracy.usgsQualityLevel} (estimated)` : '—'],
       ]
     : (() => {
         const a = input.accuracy ?? null;
         return [
-          ['NVA (95%)', fmtM(a?.nvaM)],
-          ['VVA (95th pct)', fmtM(a?.vvaM)],
+          ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
+          ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
           ['RMSEz', fmtM(a?.rmseZM)],
-          ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
+          ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? `${a.qualityLevel} (estimated)` : '—'],
         ];
       })();
   aRows.forEach((r, i) => {

@@ -412,9 +412,15 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.3**. The full, dated history is in
+The current release is **v0.5.4**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.5.4 — Terrain complexity you can cite
+- **Real terrain-complexity metrics** — the terrain core computes the slope-decoupled **Vector Ruggedness Measure** (Sappington et al. 2007) and the **Topographic Position Index** with Weiss (2001) six-class slope position, implemented from the primary literature and computed off the interactive path; a smooth 45° plane scores ~0 ruggedness, so **steepness is never mistaken for complexity** (CI-guarded by an analytic `npm run repro` check)
+- **An engine-fed "Terrain Complexity" row** — the Dataset Intelligence reading is the band of the real VRM median with the numeric **median + IQR, window and units** one hover away, and a derived-metrics line joins the Analyse panel's Terrain Assessment; "—" until a run measures something
+- **A cited density-reliability caveat** — below **4 pts/m²** (Münzinger et al. 2022, doi:10.1016/j.ufug.2022.127637) the complexity outputs say plainly they are indicative; a warning, never a block
+- **Reproducible provenance** — reports and every export record the metric names, window/radius in cells **and** ground units, Z units, the slope/aspect convention note, the derived confidence, and the caveats, stamped identically across README/DXF/SVG/GeoJSON/report
 
 ### v0.5.3 — Epoch alignment · offline PWA · a reproducible evaluation
 - **Two-epoch alignment in change detection** — before two epochs are compared, the after cloud is coarse-registered onto the before cloud (yaw + horizontal shift only, so a real vertical change is preserved), with the shift, yaw, and RMS residual reported and a fit the gate can't trust **refused** rather than applied

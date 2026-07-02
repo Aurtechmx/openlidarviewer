@@ -49,19 +49,24 @@ import {
   computeTerrainReadiness,
   type ReadinessIndicator,
 } from '../terrain/contour/terrainReadiness';
-import {
-  serializeContours,
-  triggerBrowserDownload,
-  type ContourFormat,
-} from '../terrain/contour/contourDownload';
+// Contour serialisers + the unified provenance builder are LAZY (v0.5.4):
+// only export/report actions (already async) reach them, so they ride their
+// own chunk via lazyChunks instead of the eager index. Type-only imports
+// below are erased at compile time and pull nothing in.
+import type { ContourFormat } from '../terrain/contour/contourDownload';
 import type { DxfLinearUnit } from '../terrain/contour/dxfContours';
 import {
   CONTOUR_SHAPE_STYLES,
   defaultContourShapeStyle,
   type ContourShapeStyle,
 } from '../terrain/contour/contourShapeStyle';
-import { buildExportProvenance } from '../terrain/export/exportProvenance';
-import { loadMapSheetPdf, loadDemPackage, loadTerrainReportPdf } from '../lazyChunks';
+import {
+  loadMapSheetPdf,
+  loadDemPackage,
+  loadTerrainReportPdf,
+  loadContourDownload,
+  loadExportProvenance,
+} from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
 import {
@@ -562,6 +567,33 @@ export class AnalysePanel {
     // only the full numeric breakdown is tiered behind one keyboard-accessible
     // disclosure, with the headline numbers promoted into the primary row.
     this._assessmentRow.append(this._renderAssessMetrics(a.supportingMetrics));
+
+    // Derived complexity metrics (v0.5.4) — one compact line under the
+    // assessment: VRM median [IQR] with its window, TPI dominant class with
+    // its radius, units always stated. The strings are pre-formatted by the
+    // (already lazily-loaded) analysis chunk that computed them, so the
+    // panel stays a passthrough and every surface prints the same words.
+    // The cited density-reliability caveat renders with the standard
+    // `.olv-caveat` honesty treatment; nothing renders when the run
+    // measured nothing (no fabricated band).
+    const cx = this._result.complexity;
+    if (cx && cx.band) {
+      const line = el('div', { className: 'olv-analyse-derived' });
+      line.append(
+        el('span', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
+        el('span', {
+          className: 'olv-analyse-derived-value',
+          text: `${cx.bandLabel} — ${cx.detail}`,
+        }),
+      );
+      this._assessmentRow.append(line);
+      const caveat = cx.warnings.find((w) => w.includes('reliability threshold'));
+      if (caveat) {
+        this._assessmentRow.append(
+          el('div', { className: 'olv-caveat olv-analyse-derived-caveat', text: caveat }),
+        );
+      }
+    }
   }
 
   /**
@@ -1424,12 +1456,12 @@ export class AnalysePanel {
       units: 'm',
       reasonWhenAbsent: 'Not enough ground points to cross-validate.',
     });
-    const cal = this._result?.calibration;
+    const cal = this._result?.confidenceOrdering;
     const calText = cal?.assessable
-      ? cal.calibrated
-        ? 'Confidence is calibrated against held-out points.'
+      ? cal.orderingConsistent
+        ? 'Confidence ordering is consistent with held-out error.'
         : 'Warning: confidence does not track error here.'
-      : 'Calibration not assessable on this scan.';
+      : 'Confidence ordering not assessable on this scan.';
     this._validationRow.append(
       this._hint(
         el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
@@ -1445,10 +1477,13 @@ export class AnalysePanel {
       const fmtM = (n: number | null): string =>
         n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
       if (std.nvaM != null || std.vvaM != null) {
+        // "-style (hold-out)": the figures use the ASPRS 2014 FORMULAS on
+        // internally withheld points, not independent checkpoints — the
+        // label must not claim a checkpoint assessment (see the tooltips).
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-strata',
-            text: `NVA ${fmtM(std.nvaM)} · VVA ${fmtM(std.vvaM)} (95%)`,
+            text: `NVA-style ${fmtM(std.nvaM)} · VVA-style ${fmtM(std.vvaM)} (95%, hold-out)`,
           }),
           `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
         ));
@@ -1470,10 +1505,13 @@ export class AnalysePanel {
           (qlReason
             ? `${METRIC_TOOLTIPS.qualityLevel} ${qlReason}`
             : METRIC_TOOLTIPS.qualityLevel) + strideNote;
+        // "(estimated)": the QL's vertical-accuracy leg is hold-out-based
+        // (and the density leg may be stride-scaled) — never a measured,
+        // checkpoint-verified 3DEP grade. The tooltip spells out why.
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-ql',
-            text: `USGS 3DEP ${std.qualityLevel}`,
+            text: `USGS 3DEP ${std.qualityLevel} (estimated)`,
           }),
           qlTooltip,
         ));
@@ -1569,6 +1607,8 @@ export class AnalysePanel {
             // on-screen result when the style already matches), then serialize
             // with the unified provenance derived from that SAME result.
             const result = await this._resultForExport();
+            const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance }] =
+              await Promise.all([loadContourDownload(), loadExportProvenance()]);
             const provenance = buildExportProvenance(result, {
               basename,
               generatedAt: new Date(),
@@ -1864,10 +1904,12 @@ export class AnalysePanel {
     const lockedRows: Array<[string, string]> = [
       ['Horizontal CRS', r.model.crs ?? '— not georeferenced'],
       ['Vertical datum', r.model.verticalDatum ?? '—'],
-      ['NVA (95%)', fmtM(a?.nvaM)],
-      ['VVA (95th pct)', fmtM(a?.vvaM)],
+      ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
+      ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
       ['RMSEz', fmtM(a?.rmseZM)],
-      ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
+      // "(estimated)" — same qualifier the panel chip and provenance stamp
+      // carry: the QL's RMSEz leg is hold-out-based, never checkpoint-verified.
+      ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? `${a.qualityLevel} (estimated)` : '—'],
       ['Approx. scale', 'auto — fits sheet'],
       ['Generated', generatedAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],
     ];
@@ -1980,6 +2022,7 @@ export class AnalysePanel {
     },
   ): Promise<void> {
     const { buildMapSheetPdf } = await loadMapSheetPdf();
+    const { buildExportProvenance } = await loadExportProvenance();
     // Resolved linear unit so the sheet's scale bar + 1:N ratio honour a foot
     // CRS (the map is drawn in source units) instead of the metre default.
     const linearUnit = this._cb.getMapContext?.()?.linearUnit;

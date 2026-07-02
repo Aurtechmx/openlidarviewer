@@ -57,8 +57,10 @@ export class EptChunkDecoder implements ChunkDecoder {
       case 'binary':
         // Synchronous schema-driven decode — keep on the main thread for
         // the binary path; tile sizes are typically tens-of-thousands of
-        // points and decoding is a few hundred microseconds.
-        return this._cloud.decodeBinary(chunk, meta.pointCount);
+        // points and decoding is a few hundred microseconds. The dataset-
+        // level RGB bit-depth rides `meta.rgbEightBit` (pinned by the source
+        // from the first decoded RGB tile) so every tile narrows identically.
+        return this._cloud.decodeBinary(chunk, meta.pointCount, meta.rgbEightBit);
       case 'laszip':
         // Full-tile laz-perf decode. EPT laszip tiles are complete LAZ files
         // (each with its own LAS header); the decoder applies the per-tile
@@ -66,9 +68,11 @@ export class EptChunkDecoder implements ChunkDecoder {
         // narrowing to Float32. When a worker is wired, the decode runs off
         // the main thread (the tile buffer is transferred zero-copy); the
         // in-process path is the fallback for environments without a worker.
+        // Both carry `meta.rgbEightBit` — the dataset-level colour decision.
         return this._laszipWorker
-          ? this._laszipWorker.decodeTile(chunk, this._cloud.renderOrigin, signal)
-          : decodeEptLaszipTile(chunk, this._cloud.renderOrigin);
+          ? this._laszipWorker.decodeTile(
+              chunk, this._cloud.renderOrigin, signal, meta.rgbEightBit)
+          : decodeEptLaszipTile(chunk, this._cloud.renderOrigin, meta.rgbEightBit);
       case 'zstandard':
         throw new Error(
           'EPT zstandard tile decode is not supported in this build. ' +

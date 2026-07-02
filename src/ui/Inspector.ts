@@ -1460,31 +1460,71 @@ export class Inspector {
   setReport(rows: AnalysisRow[]): void {
     this._report.replaceChildren();
     const advanced: AnalysisRow[] = [];
+    const sourceStd: AnalysisRow[] = [];
+    const sourceExt: AnalysisRow[] = [];
     for (const row of rows) {
-      if (row.advanced) advanced.push(row);
+      if (row.group === 'src-std') sourceStd.push(row);
+      else if (row.group === 'src-ext') sourceExt.push(row);
+      else if (row.advanced) advanced.push(row);
       else this._report.append(this._reportRow(row));
     }
-    if (advanced.length > 0) {
-      const body = el('div', { className: 'olv-advanced-body' });
-      for (const row of advanced) body.append(this._reportRow(row));
+    // Shared collapsible builder for the Advanced report and the declared
+    // Source metadata sections.
+    const fold = (title: string, children: (HTMLElement | string)[]): void => {
       this._report.append(
         el('details', { className: 'olv-advanced' }, [
-          el('summary', { className: 'olv-advanced-summary', text: 'Advanced report' }),
-          body,
+          el('summary', { className: 'olv-advanced-summary', text: title }),
+          el('div', { className: 'olv-advanced-body' }, children),
         ]),
       );
+    };
+    if (advanced.length > 0) {
+      fold('Advanced report', advanced.map((row) => this._reportRow(row)));
+    }
+    // Declared source metadata — rendered only when the file declared
+    // something. Values are verbatim declarations; the disclosure line keeps
+    // the honesty boundary explicit ("declared, not verified").
+    if (sourceStd.length > 0 || sourceExt.length > 0) {
+      const children: HTMLElement[] = [
+        el('div', {
+          className: 'olv-report-empty',
+          text: 'Declared by the file, not verified by OpenLiDARViewer.',
+        }),
+        ...sourceStd.map((row) => this._reportRow(row, true)),
+      ];
+      if (sourceExt.length > 0) {
+        children.push(
+          el('div', {
+            className: 'olv-advanced-summary',
+            text: 'Extended metadata (file-declared)',
+          }),
+          ...sourceExt.map((row) => this._reportRow(row, true)),
+        );
+      }
+      fold('Source metadata', children);
     }
   }
 
-  /** Build a single status / label / value report row. */
-  private _reportRow(row: AnalysisRow): HTMLElement {
+  /**
+   * Build a single status / label / value report row. `truncate` clips long
+   * declared-metadata values for display, keeping the verbatim value one
+   * hover away in the tooltip.
+   */
+  private _reportRow(row: AnalysisRow, truncate = false): HTMLElement {
     // Honesty stamp — when a metric was computed under a class filter (subset)
     // or is a header figure that can't be class-scoped (notScoped sentinel),
     // append the scope provenance after the value so no filtered readout is
     // shown unqualified. A full / absent scope yields an empty stamp and the
     // row renders exactly as it did before class scoping existed.
     const stamp = row.scope ? scopeStamp(row.scope, classificationLabel) : '';
-    const valueChildren: (HTMLElement | string)[] = [row.value];
+    // Truncated declared values keep the verbatim text in the tooltip.
+    const valueProps: Parameters<typeof el>[1] = { className: 'olv-report-value' };
+    let shown = row.value;
+    if (truncate && shown.length > 96) {
+      valueProps.title = shown;
+      shown = `${shown.slice(0, 96)}…`;
+    }
+    const valueChildren: (HTMLElement | string)[] = [shown];
     if (stamp) {
       valueChildren.push(
         el('span', {
@@ -1509,7 +1549,7 @@ export class Inspector {
         } as const)[row.status],
       }),
       el('span', { className: 'olv-report-label', text: row.label }),
-      el('span', { className: 'olv-report-value' }, valueChildren),
+      el('span', valueProps, valueChildren),
     ]);
   }
 

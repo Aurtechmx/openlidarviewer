@@ -18,9 +18,12 @@
  *     that quietly dominates a real survey, and the one most tools omit.
  *
  * The two independent sources combine in quadrature. The result also states
- * whether the net change even exceeds its own uncertainty — a change smaller
- * than its error bar is indistinguishable from noise and must be reported as
- * such, never as a confident gain or loss.
+ * whether the net change clears the ~95% level of detection — this module's
+ * own documented LoD convention (LoD ≈ 1.96σ, see {@link cellSigmaFromLoD}).
+ * A change below that threshold is indistinguishable from noise and must be
+ * reported as such, never as a confident gain or loss. (v0.5.4: the flag
+ * previously compared |net| against 1σ — a ~68% bar — while the module
+ * converted LoDs at 1.96σ; the two conventions now agree.)
  *
  * Pure, deterministic. Sits beside {@link detectChange}: that computes the
  * volume, this bounds it.
@@ -59,7 +62,11 @@ export interface ChangeVolumeUncertainty {
   readonly randomErrorM3: number;
   readonly systematicErrorM3: number;
   readonly confidence: ChangeConfidence;
-  /** True only when |net| exceeds σ — i.e. the change is bigger than its error. */
+  /**
+   * True only when |net| exceeds the ~95% level of detection, 1.96σ — the
+   * same LoD convention {@link cellSigmaFromLoD} documents. A |net| between
+   * 1σ and 1.96σ is NOT detectable under this convention.
+   */
   readonly detectable: boolean;
   readonly caveats: readonly string[];
 }
@@ -87,7 +94,10 @@ export function changeVolumeUncertainty(
   const net = input.netVolumeM3;
   const absNet = Math.abs(net);
   const relativeError = absNet > 0 ? sigmaM3 / absNet : 0;
-  const detectable = absNet > sigmaM3;
+  // Detection threshold: the module's documented LoD convention is ~95%,
+  // i.e. 1.96σ (see cellSigmaFromLoD). Comparing against bare σ would call
+  // a ~68%-significant wiggle "detectable".
+  const detectable = absNet > 1.96 * sigmaM3;
 
   let confidence: ChangeConfidence;
   if (!detectable || n < 1) confidence = 'low';
@@ -98,9 +108,9 @@ export function changeVolumeUncertainty(
   const caveats: string[] = [];
   if (!detectable) {
     caveats.push(
-      `Net change (${Math.round(net)} m³) is within its uncertainty (±${Math.round(
-        sigmaM3,
-      )} m³) — not distinguishable from survey noise.`,
+      `Net change (${Math.round(net)} m³) is below the ~95% level of detection ` +
+        `(1.96σ ≈ ${Math.round(1.96 * sigmaM3)} m³) — not distinguishable from ` +
+        `survey noise.`,
     );
   }
   if (reg === 0) {

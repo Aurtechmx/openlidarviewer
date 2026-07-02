@@ -2,6 +2,238 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.4] - 2026-07-02
+
+Terrain science hardening. The "Terrain Complexity" reading is no longer a
+heuristic: it is now backed by two literature-defined metrics computed from
+the analysed DTM, with windows, units, derived confidence, and a cited
+density caveat carried everywhere the number appears.
+
+### Added
+
+- **Real terrain-complexity metrics.** The terrain core now computes the
+  Vector Ruggedness Measure (VRM, Sappington et al. 2007, doi:10.2193/2005-723)
+  and the Topographic Position Index with Weiss (2001) six-class slope
+  position — implemented from the primary literature, riding the existing
+  Horn slope/aspect grids, and computed alongside the heavy core in the
+  worker (never on the interactive path). VRM was chosen deliberately
+  because it is slope-decoupled: a smooth 45° plane scores ~0 ruggedness,
+  so steepness is never mistaken for complexity. Both metrics report
+  median + IQR, state their window/radius in cells AND ground metres,
+  state TPI's Z units, and carry a confidence derived from data support
+  (valid fraction × window support) — never asserted.
+- **The Dataset Intelligence "Terrain Complexity" row is engine-fed.**
+  After a terrain run the row shows the band of the real VRM median
+  (Low / Moderate / High / Very High) with the numeric median + IQR,
+  window, and units one hover away (and in the Details panel). Until a run
+  measures something it still reads "—" — nothing is fabricated.
+- **A derived-metrics line on the Analyse panel** under the Terrain
+  Assessment: VRM median [IQR] with its window, the dominant TPI landform
+  class with its radius, units always stated, with the standard caveat
+  treatment.
+- **A cited density-reliability caveat.** When the scan-scaled ground
+  density is below 4 pts/m², the complexity outputs carry: "point density
+  N pts/m² is below the ≥4 pts/m² reliability threshold reported for
+  detailed terrain/vegetation complexity (Münzinger et al. 2022,
+  doi:10.1016/j.ufug.2022.127637); treat complexity as indicative." A
+  warning, never a block; tested present at 2 pts/m² and absent at 6.
+- **Complexity in reports and export provenance.** The terrain report and
+  every export's provenance now record the metric names, window/radius in
+  cells and ground units, Z units, the Horn slope/aspect convention note,
+  the derived confidence, and the caveats — reproducible parameters,
+  stamped word-for-word identically across README/DXF/SVG/GeoJSON/report
+  (the provenance-consistency suite pins the new fields).
+
+### Reproducibility
+
+- `npm run repro` gains metric M5: VRM slope-independence on an analytic
+  constant-45° plane vs. an equally steep rough surface, and a
+  hand-computed TPI ridge-crest value with its class — CI-guarded, not
+  asserted. Unit fixtures prove VRM is identical across feet/metre CRSs
+  (dimensionless) and that TPI scales exactly with the Z unit.
+
+### Scientific-audit response
+
+A scientific audit of this release was answered in two groups: data-
+correctness defects, each landed with a hand-computed regression test, and
+honesty corrections — places where a formula was right but its label
+claimed more than it measured. Formulas in the second group are unchanged;
+the claims now state their true strength.
+
+Data correctness:
+
+- **EPT size-8 attributes decode by their declared type.** The binary tile
+  decoder read every 8-byte dimension as Float64; `int64`/`uint64` now decode
+  via BigInt and convert to Number only when exactly representable, so
+  X/Y/Z-as-int64 layouts decode correctly and values beyond ±(2⁵³−1) throw
+  the same typed malformed-file error the count validator uses.
+- **EPT RGB bit depth is one dataset-level decision.** 8-bit-stuffed 16-bit
+  colour (the same real-world wrinkle the COPC path already handles) is now
+  detected once, pinned on the first decoded RGB tile, and shared through the
+  decode-metadata seam — the old unconditional `>> 8` rendered such clouds
+  black, and a per-tile decision could have split one cloud into two colour
+  depths.
+- **E57 scans without Cartesian X/Y/Z are skipped honestly.** A spherical-
+  only scan used to inflate the merged allocation and leave phantom
+  zero-coordinate points parked at the local origin; it now contributes
+  nothing to counts, bounds, or attribute decisions, and a load warning
+  (surfaced in the Scan Report) names the skipped scan.
+- **E57 normals rotate with the scan pose** (rotation only, never the
+  translation) instead of keeping the scanner's frame.
+- **E57 pose quaternions are validated**: finite non-unit quaternions are
+  normalised with a warning recording the norm; degenerate ones fall back to
+  the identity with a warning — never silently scaled or NaN geometry.
+- **Over-cap contour levels are thinned evenly, not truncated from the top.**
+  The old cap deleted every level above it — summits vanished. Every k-th
+  level is now kept with the top level forced in, so the minimum and maximum
+  survive at an honestly-stated effective interval of k× the requested one.
+- **Marching-squares saddles use the exact bilinear decider.** Connectivity
+  now flips at the bilinear saddle value z* = (v0·v2 − v1·v3)/(v0+v2−v1−v3)
+  rather than the corner mean — identical on symmetric saddles, correct on
+  asymmetric ones where a dominant corner dragged the mean above the true
+  saddle and mislinked the contour topology.
+
+Honesty (labels fixed, math unchanged):
+
+- **NVA/VVA are labelled "NVA-style / VVA-style (hold-out)"** everywhere they
+  face the user, with tooltips disclosing that the figures apply the ASPRS
+  2014 formulas to internally withheld points — not the independent survey
+  checkpoints the standard defines them against — and that the VVA-analog is
+  the p95 of ALL residuals, not vegetated-class checkpoints.
+- **The USGS 3DEP Quality Level reads "(estimated)"** on the panel chip and
+  the export-provenance stamp, and its tooltip discloses that the RMSEz leg
+  is hold-out-based (the stride-scaled-density note already existed).
+- **`checkCalibration` is now `checkConfidenceOrdering`** (result field
+  `orderingConsistent`): a monotone confidence→error band ordering is a
+  necessary condition for calibration, not calibration itself. The genuine
+  PAV isotonic calibration in `calibrateConfidence` keeps its name.
+- **Stockpile bands say what they are**: the headline prints "± N m³ (1σ)"
+  explicitly, and every result carries a spatial-correlation caveat (the √N
+  sampling term assumes independent residuals, which scan noise violates).
+- **Change detection's "detectable" now means the ~95% level of detection**
+  (|net| > 1.96σ) — the module's own documented LoD convention — instead of
+  a bare 1σ bar that called a ~68% wiggle detectable.
+- **The measured polygon area is described as the vector (Newell) area** —
+  equal to the own-plane area for planar rings, a lower bound for non-planar
+  ones — instead of "the true surface area".
+- **A geographic frame analysed with an unknown latitude now warns** that the
+  east–west scale is uncorrected (cos φ = 1) and derivatives are approximate,
+  instead of degrading silently.
+
+### Declared source metadata (E57) and inspection-PDF fixes
+
+A metadata-rich E57 probe file exposed two gaps: the viewer surfaced almost
+none of what the file declared about itself, and the Engineering Inspection
+PDF asserted a density-derived capture type ("Drone-mounted LiDAR") over a
+file whose own metadata declares a synthetic origin. Both are provenance
+problems; both now honour the same rule — the viewer reports what the file
+DECLARES, labelled as declared and never as verified.
+
+Added:
+
+- **E57 declared source metadata is captured end to end.** The schema reader
+  now extracts the root-level provenance fields (guid, e57LibraryVersion,
+  creationDateTime, coordinateMetadata) and per-scan fields (name, guid,
+  description, sensorVendor / sensorModel / sensorSerialNumber, acquisition
+  times, temperature / humidity / pressure, intensity + colour limits) —
+  plus, generically, any extension-namespace String/Integer/Float leaf
+  fields (e.g. an `olv:` block) at root or scan level, in document order,
+  each with its namespace URI. Everything rides `CloudMetadata.
+  sourceMetadata` as declared-only data: the E57 empty-element default
+  (Integer/Float 0, String "") is treated as NOT declared, so a zero
+  acquisition time or blank string is omitted rather than displayed as a
+  fabricated value, and malformed metadata degrades to omission with a load
+  warning, never a failed load.
+- **The Inspector's Scan report gains a collapsible "Source metadata"
+  section** listing the declared standard fields, with an "Extended metadata
+  (file-declared)" subsection for extension-namespace fields — verbatim
+  values (long ones truncated with the full text in the tooltip) under the
+  disclosure "Declared by the file, not verified by OpenLiDARViewer". Only
+  declared rows render; a metadata-less file shows nothing new.
+- **The Engineering Inspection PDF gains a "Declared source metadata"
+  section** with the same fields and the same not-verified disclosure,
+  omitted entirely when the file declares nothing.
+- **The capture-type classifier now consumes declarations as a signal.**
+  When sensorModel / description / name / datasetType / accuracyClass
+  declare a synthetic / procedural / reconstruction / reference origin, the
+  verdict becomes "Declared: <value> (from file metadata)" — quoted
+  verbatim, with the density heuristic demoted to a secondary
+  low-confidence line and no literature accuracy ribbon attached (the cited
+  physical capture-type bounds do not describe a declared synthetic
+  source). Files without declared metadata classify exactly as before.
+
+Fixed (Engineering Inspection PDF):
+
+- **The page-1 text overlap.** A provenance citation containing a glyph
+  outside WinAnsi ("Ruzgienė") threw mid-section; the per-section error
+  isolation reverted the layout cursor, and the Measurements / Annotations
+  headings drew OVER the already-rendered Provenance + Signals block. The
+  citation line is now sanitised like every other drawn string, and — as
+  defence in depth — a failed section resumes on a fresh page so no later
+  text can ever land on partially-drawn content. A layout regression test
+  parses the rendered content streams and pins the no-overlap rule.
+- **Section-heading underlines span the heading text.** The rule under each
+  section heading was a fixed 40 pt stub; it now spans the measured text
+  width.
+- **WinAnsi glyphs print as themselves.** The sanitiser replaced ², ³, ×,
+  ÷, ±, °, —, – and friends with ASCII fallbacks ("m^2", "--", "1.96 x")
+  even though Helvetica's WinAnsi encoding covers them; those glyphs now
+  pass through verbatim (the Methods appendix follows suit), and only
+  genuinely unencodable characters are mapped (≥ ≤ → ASCII, Greek → names,
+  Latin-Extended letters in author names → base letters, anything else →
+  a visible "?").
+- **Keep-with-next pagination.** Placeholder-only sections ("No
+  measurements taken…") reserve exactly their heading + body instead of a
+  flat 60 pt, so a small section stays with its predecessor when it fits
+  and breaks as one unit when it doesn't — no orphaned headings, no
+  near-empty trailing page holding a two-line block.
+
+### Point-cloud export correctness and provenance (verified against real user exports)
+
+A user's actual CSV/OBJ exports of a metadata-rich E57 exposed one
+data-destroying defect and two disclosure gaps, all fixed here:
+
+Data correctness:
+
+- **E57 unit-range float intensity no longer binarizes to {0, 1}.** The
+  loader stored intensity with a bare `Math.round` into the Uint16 store, so
+  a file declaring continuous float intensity (the sample declares
+  intensityLimits 0.2800009–0.7380647 over 1,564,029 points) collapsed to
+  two values — the user's CSV export contained only 0 (551,801 rows) and
+  1 (1,012,228 rows), and the intensity ramp and inspector saw the same
+  wreckage. The E57 path now follows the PTS/PCD rule it missed: a
+  unit-range channel (declared intensityMaximum ≤ 1, or an observed maximum
+  ≤ 1 when the file declares no limits) rescales ×65535 into the 16-bit
+  store — absolute scaling, never min–max stretching — while wider ranges
+  stay raw. Exports carry the stored 0–65535 integers; against the real
+  sample the channel now spans 18350–48369, continuous. Red-green pinned:
+  the pre-fix fixture read `[0, 1, 1]`.
+- **PLY and OBJ write geographic coordinates at 7 dp.** The v0.4.5 lat/lon
+  precision fix (3 dp of a degree is ~110 m) reached only XYZ/CSV; the PLY
+  and OBJ writers kept millimetre-style 3 dp on degrees. Both now use the
+  same geographic-aware formatter; Z stays 3 dp, projected/local exports are
+  byte-identical.
+
+Honest disclosure:
+
+- **Declared provenance rides the export headers.** XYZ (`#`), PLY
+  (`comment`) and OBJ (`#`) exports of a cloud with declared source metadata
+  now open with: exporter + version, source file name, declared source
+  (sensorModel, else the declared scan name), declared license and declared
+  limitations when present — verbatim values, single-line-flattened and
+  length-capped so file text can never break the format — closed by the
+  standing "declared by the file, not verified by OpenLiDARViewer"
+  disclosure. Only declared fields print; a cloud that declares nothing gets
+  no section, and metadata-less exports stay byte-identical to earlier
+  releases. CSV deliberately stays pure data (no comment convention naive
+  parsers survive): header row first, always.
+- **Dropped channels are named, not silently vanished.** OBJ discloses
+  intensity/classification as "not representable in OBJ — omitted" and
+  normals as "not written by this exporter — omitted" (OBJ could carry
+  `vn`; the wording claims no more than what happens); PLY discloses
+  intensity/classification/normals; XYZ discloses normals (its intensity and
+  classification ride as columns).
+
 ## [0.5.3] - 2026-07-01
 
 A hardening patch on v0.5. Change detection gains real epoch alignment, the

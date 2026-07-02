@@ -30,9 +30,11 @@ function result(over: Partial<StockpileVolumeResult> = {}): StockpileVolumeResul
 }
 
 describe('presentStockpile', () => {
-  test('headline carries the volume and its ± band, with relative %', () => {
+  test('headline carries the volume, its ± band, and an explicit (1σ) label', () => {
+    // "± 41" alone reads as a hard bound; the presenter must say it is one
+    // standard deviation.
     const v = presentStockpile(result());
-    expect(v.headline).toBe('1,254 m³ ± 41');
+    expect(v.headline).toBe('1,254 m³ ± 41 m³ (1σ)');
     expect(v.relative).toBe('±3.3%');
     expect(v.confidence).toBe('medium');
     expect(v.confidenceLabel).toBe('Medium');
@@ -52,7 +54,7 @@ describe('presentStockpile', () => {
     // Same native figures, but in feet → volume in m³ is value × 0.3048³.
     const v = presentStockpile(result({ volume: 1000, sigma: 0 }), { lin: 0.3048 });
     // 1000 ft³ ≈ 28 m³.
-    expect(v.headline).toBe('28 m³ ± 0');
+    expect(v.headline).toBe('28 m³ ± 0 m³ (1σ)');
   });
 
   test('explicit base reads "(set)", not "(lowest ground)"', () => {
@@ -66,7 +68,7 @@ describe('presentStockpile', () => {
 
   test('toast line is a single readable summary', () => {
     expect(stockpileToastLine(presentStockpile(result()))).toBe(
-      'Stockpile: 1,254 m³ ± 41 (±3.3%) · Medium confidence',
+      'Stockpile: 1,254 m³ ± 41 m³ (1σ) (±3.3%) · Medium confidence',
     );
   });
 

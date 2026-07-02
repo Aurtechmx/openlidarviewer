@@ -2,6 +2,31 @@ import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsInfo } from '../io/crs';
 
 /**
+ * One source-metadata field exactly as the file declared it. `value` is
+ * verbatim; nothing here is inferred, normalised, or verified by the viewer.
+ */
+export interface DeclaredMetadataField {
+  /** Local field name as declared, e.g. "sensorModel" or "datasetType". */
+  readonly name: string;
+  /** The declared value, verbatim. */
+  readonly value: string;
+  /** Namespace URI for extension-namespace fields (absent for standard fields). */
+  readonly namespaceUri?: string;
+}
+
+/**
+ * Declared-only source metadata recovered from the file (currently the E57
+ * XML section). Two ordered lists: the format's standard provenance fields,
+ * and extension-namespace fields the writer added (e.g. an `olv:` block).
+ * Everything is DECLARED BY THE FILE, not verified by the viewer — surfaces
+ * that render it must say so. No inference is ever mixed in.
+ */
+export interface SourceMetadata {
+  readonly standard: readonly DeclaredMetadataField[];
+  readonly extensions: readonly DeclaredMetadataField[];
+}
+
+/**
  * Provenance metadata recovered from a file header, when the format carries
  * it. Every field is optional — most scan files fill in only some, or none.
  */
@@ -26,6 +51,37 @@ export interface CloudMetadata {
    * rely on this for distance-in-true-metres and CRS provenance display.
    */
   crs?: CrsInfo | null;
+  /**
+   * Non-fatal anomalies the loader worked around rather than failing on —
+   * e.g. an E57 scan skipped because it carries no Cartesian X/Y/Z, or a
+   * pose quaternion that had to be normalised. Recorded here (and surfaced
+   * in the Scan Report) so a partially-loaded file is never presented as a
+   * cleanly-loaded one.
+   */
+  loadWarnings?: readonly string[];
+  /**
+   * Declared-only source metadata read from the file itself (standard +
+   * extension-namespace fields, ordered). Declared, not verified — display
+   * surfaces must carry that qualifier. Absent when the file declares
+   * nothing beyond geometry.
+   */
+  sourceMetadata?: SourceMetadata;
+  /**
+   * The file's own capture statement, precomputed at load time from
+   * `sourceMetadata` (see `diagnostics/declaredCapture.ts`) when the
+   * declared fields state a synthetic / procedural / reconstruction /
+   * reference origin — including the pre-built display strings, so the
+   * startup shell carries none of the wording. The capture-type classifier
+   * quotes it verbatim and demotes its heuristics; absent for files that
+   * declare nothing.
+   */
+  declaredCapture?: {
+    readonly field: string;
+    readonly value: string;
+    readonly label: string;
+    readonly signal: string;
+    readonly disclaimer: string;
+  };
 }
 
 /** Options accepted by the `PointCloud` constructor. */

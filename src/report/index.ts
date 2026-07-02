@@ -15,6 +15,8 @@ export type {
   ReportAcceptanceRow,
   ReportInputs,
   ReportProvenanceFingerprint,
+  ReportSourceMetadata,
+  ReportSourceMetadataField,
   ReportResult,
   ReportSectionId,
   ReportTemplate,

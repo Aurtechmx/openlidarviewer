@@ -136,7 +136,7 @@ const KIND_TITLE: Record<MeasurementKind, string> = {
     '• Backspace removes the last vertex.\n' +
     '• Click the kind again or press Esc to exit.',
   area:
-    'Area — polygon area, both true (own-plane) and horizontal.\n' +
+    'Area — polygon area, both plane (vector/Newell) and horizontal.\n' +
     '• Click 3+ points to outline the shape.\n' +
     '• Close: click the first vertex, double-click, press Enter, or use the Finish polygon button.\n' +
     '• Backspace removes the last vertex.\n' +

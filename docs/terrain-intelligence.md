@@ -222,6 +222,90 @@ Terrain Assessment speaks to **fitness-for-use, not certification**. Where a
 value is genuinely unknown it is shown as "unknown" with an unknown rating —
 never fabricated, and never read as `0/100`.
 
+## Terrain complexity metrics (v0.5.4)
+
+Alongside the assessment, the terrain core computes two literature-defined
+complexity descriptors (`src/terrain/complexity/`), summarised once per run
+— off the interactive path, alongside the heavy core in the worker (or its
+main-thread fallback), never eagerly at scan attach:
+
+- **Vector Ruggedness Measure (VRM)** — Sappington, Longshore & Thompson
+  (2007), *J. Wildl. Manage.* 71(5), doi:10.2193/2005-723. Each cell
+  contributes a unit surface normal (decomposed from the existing Horn
+  slope/aspect grids — nothing is recomputed); over a moving window of n
+  valid cells, VRM = 1 − R/n ∈ [0, 1]. **Window: 3×3 cells** (Sappington's
+  neighbourhood), always stated with its ground-metre size. VRM is
+  **dimensionless** and unit-independent: the same surface in feet or metres
+  scores identically. Reported as **median + IQR** over valid cells, banded
+  for display (Low / Moderate / High / Very High) with the numbers always
+  alongside the label.
+- **Topographic Position Index (TPI)** and the **six-class slope position**
+  — Weiss (2001), ESRI User Conference poster. TPI is the cell's elevation
+  minus its neighbourhood mean; classes come from TPI standardised to the
+  neighbourhood SD, with tan(5°) splitting flat from mid-slope on the same
+  rise/run slope the rest of the stack uses. **Radius: chosen per grid to
+  target a ~10 m neighbourhood, clamped to 2–10 cells, and the ACHIEVED
+  radius is reported in cells and ground metres.** TPI is expressed in the
+  grid's **own Z units** (it scales linearly with Z; stdTPI and classes are
+  unit-free); the unit is always stated. The summary reports the dominant
+  class with its share of valid cells.
+
+**Why VRM and not a slope-conflating measure.** Surface-area rugosity
+(Jenness 2004) and TRI-style total-curvature measures score a smooth, steep
+plane as "rugged" — steepness masquerades as complexity. VRM is
+slope-decoupled by construction: a constant 45° plane scores ≈ 0 while an
+alternating surface with the same face slope scores high. That
+slope-independence is CI-guarded (`npm run repro`, metric M5) with analytic
+fixtures, alongside a hand-computed TPI ridge-crest check. The arc–chord
+ratio (Du Preez 2015) achieves slope-decoupling differently and remains on
+the deferred list below.
+
+**Honesty envelope.** Both metrics carry the standard `TerrainCoverageMeta`
+fields; the confidence is **derived** from data support only (valid-cell
+fraction × mean window support — border truncation and NoData holes lower
+it), never asserted, and the summary takes the more conservative of the two
+cores' envelopes. Cells with no coverage are NoData: windows shrink, never
+wrap, and never invent a neighbourhood.
+
+**Density-reliability caveat (cited).** When the scan-scaled ground density
+is below **4 pts/m²**, the summary attaches: *"point density N pts/m² is
+below the ≥4 pts/m² reliability threshold reported for detailed
+terrain/vegetation complexity (Münzinger et al. 2022,
+doi:10.1016/j.ufug.2022.127637); treat complexity as indicative."* It is a
+warning, never a block. LaRue et al. (doi:10.5281/zenodo.6463393) provide
+the sensitivity evidence that lidar structural-complexity metrics degrade
+with point density.
+
+**Where it renders.** The Dataset Intelligence "Terrain Complexity" row is
+backed by the real VRM band after a run (numeric median + IQR, window and
+units in the hover/details; "—" until then); the Analyse panel adds a
+derived-metrics line under the Terrain Assessment; the terrain report and
+every export's provenance record the metric names, window/radius in cells
+AND ground units, Z units, the Horn slope/aspect convention note, the
+derived confidence, and the caveats — reproducible parameters, worded
+identically everywhere.
+
+**Licensing note.** pyTopoComplexity (Lai et al. 2025,
+doi:10.5194/esurf-13-417-2025) is prior art for several of these measures
+but is AGPL-licensed: no code was read or ported. The cores are implemented
+from the primary literature only.
+
+### Deferred planned methods
+
+Evaluated and deliberately deferred (kept here so the roadmap is explicit):
+
+- multi-scale TPI with the ten-class landform scheme (Weiss 2001);
+- Booth et al. (2009) wavelet/spectral curvature for landslide-texture
+  mapping;
+- fractal dimension by variogram;
+- arc–chord ratio rugosity (Du Preez 2015);
+- PROTECT-style topographic cross-section profiles;
+- an optional MCC ground filter (Evans & Hudak 2007) alongside SMRF;
+- per-segment lasso IDs for complexity-by-region (prior art: Papucci &
+  Yrttimaa 2026, doi:10.5281/zenodo.20395900);
+- archaeological local-relief workflows (cf. Niculiță 2020,
+  doi:10.3390/s20041192).
+
 ## What confidence means (and what it does not)
 
 The per-cell confidence is **calibrated against measured error**, not

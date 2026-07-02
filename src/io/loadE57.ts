@@ -13,9 +13,10 @@
 
 import { parseE57 } from './e57/parseE57';
 import type { E57ScanData } from './e57/parseE57';
-import type { E57Metadata, E57Pose } from './e57/schema';
+import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
+import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
 import { computeOrigin, recenter } from './coordinateBridge';
 
 /** Clamp a value into the 0–255 byte range. */
@@ -26,6 +27,29 @@ function clampByte(v: number): number {
 /** Clamp a value into the 0–65535 uint16 range. */
 function clampU16(v: number): number {
   return v < 0 ? 0 : v > 65535 ? 65535 : Math.round(v);
+}
+
+/**
+ * Per-scan scale that carries intensity into the Uint16 store. E57 intensity
+ * is commonly a UNIT-RANGE FLOAT (a real user file declares intensityLimits
+ * 0.2800009–0.7380647): rounding those floats straight into a Uint16
+ * collapsed the whole continuous channel to {0, 1} — silent destruction that
+ * reached every downstream surface, including the CSV/XYZ exports. This
+ * mirrors the PTS/PCD house rule: a unit-range channel (declared
+ * intensityMaximum ≤ 1 when the scan declares limits, otherwise an observed
+ * maximum ≤ 1) is rescaled to the full 0–65535 span — absolute values scale
+ * by 65535, they are NOT min–max stretched, so the declared magnitudes keep
+ * their meaning. A wider range is taken as a raw value and only clamped.
+ */
+function intensityScaleFor(scan: E57ScanData): number {
+  const col = scan.columns.intensity;
+  if (!col) return 1;
+  if (scan.intensityMax !== null) {
+    return scan.intensityMax > 0 && scan.intensityMax <= 1 ? 65535 : 1;
+  }
+  let max = 0;
+  for (let i = 0; i < col.length; i++) if (col[i] > max) max = col[i];
+  return max > 0 && max <= 1 ? 65535 : 1;
 }
 
 /** Rotate a point by a quaternion `[w, x, y, z]`. */
@@ -48,9 +72,17 @@ function rotate(
   ];
 }
 
-/** Count a scan's valid points (those not flagged by `cartesianInvalidState`). */
+/**
+ * Count a scan's valid points (those not flagged by `cartesianInvalidState`).
+ * A scan with no Cartesian X/Y/Z columns counts as ZERO: the merge loop skips
+ * it entirely, so counting its records would size the merged arrays for
+ * points that are never written — phantom zero-coordinate points parked at
+ * the local origin. The count and the merge must agree on what merges.
+ */
 function countValid(scan: E57ScanData): number {
-  const invalid = scan.columns.cartesianInvalidState;
+  const col = scan.columns;
+  if (!col.cartesianX || !col.cartesianY || !col.cartesianZ) return 0;
+  const invalid = col.cartesianInvalidState;
   if (!invalid) return scan.recordCount;
   let valid = 0;
   for (let i = 0; i < scan.recordCount; i++) if (invalid[i] === 0) valid++;
@@ -58,10 +90,30 @@ function countValid(scan: E57ScanData): number {
 }
 
 /** Build provenance metadata from the E57 file metadata. */
-function e57Metadata(meta: E57Metadata, scanCount: number): CloudMetadata | undefined {
+function e57Metadata(
+  meta: E57Metadata,
+  sourceMetadata: E57SourceMetadata | null,
+  mergedScanCount: number,
+  warnings: readonly string[],
+): CloudMetadata | undefined {
   const out: CloudMetadata = {};
   if (meta.library) out.sourceSoftware = meta.library;
-  if (scanCount > 1) out.captureSensor = `${scanCount} merged scans`;
+  if (mergedScanCount > 1) out.captureSensor = `${mergedScanCount} merged scans`;
+  if (warnings.length > 0) out.loadWarnings = [...warnings];
+  // Declared-only source metadata (standard + extension-namespace fields).
+  // Carried as-declared; every surface that renders it must qualify it as
+  // declared by the file, not verified.
+  if (
+    sourceMetadata &&
+    (sourceMetadata.standard.length > 0 || sourceMetadata.extensions.length > 0)
+  ) {
+    out.sourceMetadata = sourceMetadata;
+    // Precompute the declared-capture statement HERE (lazy loader chunk) so
+    // the classifier wiring in the startup shell reads a plain field instead
+    // of carrying the keyword scan.
+    const declared = declaredCaptureFromSourceMetadata(sourceMetadata);
+    if (declared) out.declaredCapture = declared;
+  }
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -71,9 +123,32 @@ function e57Metadata(meta: E57Metadata, scanCount: number): CloudMetadata | unde
  */
 export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<PointCloud> {
   const parsed = parseE57(buffer);
-  const scans = parsed.scans;
 
-  // An attribute is merged only when every scan provides it.
+  // Partition the scans FIRST: a scan without Cartesian X/Y/Z (spherical-only,
+  // for example) contributes no points, so it must contribute nothing to the
+  // counts or the attribute decisions either. Merging its record count while
+  // skipping its points left `total − written` phantom points frozen at the
+  // local origin (the pre-v0.5.4 behaviour) — silent data corruption. The
+  // skipped scan is named in a load warning so the user knows the merged
+  // cloud is a subset of the file. Parser-level anomalies (a normalised or
+  // degenerate pose quaternion) ride the same channel.
+  const warnings: string[] = [...parsed.warnings];
+  const scans: E57ScanData[] = [];
+  for (const scan of parsed.scans) {
+    const col = scan.columns;
+    if (col.cartesianX && col.cartesianY && col.cartesianZ) {
+      scans.push(scan);
+    } else {
+      warnings.push(
+        `Scan "${scan.name}" carries no Cartesian X/Y/Z (spherical-only scans ` +
+          `are not supported) — skipped ${scan.recordCount.toLocaleString('en-US')} ` +
+          `point record(s).`,
+      );
+    }
+  }
+
+  // An attribute is merged only when every MERGED scan provides it — a skipped
+  // scan must not veto colour/intensity the merged scans all carry.
   const has = (field: string): boolean => scans.every((s) => s.columns[field] !== undefined);
   const hasColor = has('colorRed') && has('colorGreen') && has('colorBlue');
   const hasIntensity = has('intensity');
@@ -93,13 +168,14 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
   let w = 0; // running point index across all merged scans
   for (const scan of scans) {
     const col = scan.columns;
+    // The partition above guarantees these columns exist on every merged scan.
     const cx = col.cartesianX;
     const cy = col.cartesianY;
     const cz = col.cartesianZ;
-    if (!cx || !cy || !cz) continue; // a scan with no XYZ data — nothing to merge
     const invalid = col.cartesianInvalidState;
     const pose: E57Pose | null = scan.pose;
     const colorScale = scan.colorMax && scan.colorMax > 0 ? 255 / scan.colorMax : 1;
+    const intensityScale = intensity ? intensityScaleFor(scan) : 1;
 
     for (let i = 0; i < scan.recordCount; i++) {
       if (invalid && invalid[i] !== 0) continue;
@@ -122,17 +198,41 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
         colors[w * 3 + 1] = clampByte(col.colorGreen[i] * colorScale);
         colors[w * 3 + 2] = clampByte(col.colorBlue[i] * colorScale);
       }
-      if (intensity && col.intensity) intensity[w] = clampU16(col.intensity[i]);
+      if (intensity && col.intensity) intensity[w] = clampU16(col.intensity[i] * intensityScale);
       if (classification && col.classification) {
         classification[w] = clampByte(col.classification[i]);
       }
       if (normals && col.normalX && col.normalY && col.normalZ) {
-        normals[w * 3] = col.normalX[i];
-        normals[w * 3 + 1] = col.normalY[i];
-        normals[w * 3 + 2] = col.normalZ[i];
+        let nx = col.normalX[i];
+        let ny = col.normalY[i];
+        let nz = col.normalZ[i];
+        // Normals are DIRECTIONS: they transform by the pose ROTATION only,
+        // never the translation. Copying them verbatim (the pre-v0.5.4
+        // behaviour) left every rotated scan's normals pointing where the
+        // scanner saw them, not where the merged geometry now faces —
+        // silently wrong lighting/orientation for any posed multi-scan file.
+        if (pose) {
+          const r = rotate(nx, ny, nz, pose.rotation);
+          nx = r[0];
+          ny = r[1];
+          nz = r[2];
+        }
+        normals[w * 3] = nx;
+        normals[w * 3 + 1] = ny;
+        normals[w * 3 + 2] = nz;
       }
       w++;
     }
+  }
+
+  // Defence in depth: the merge must write EXACTLY the count it declared.
+  // A drift means countValid and the merge loop disagree about what merges,
+  // and the unwritten tail would ship as zero-coordinate phantom points at
+  // the origin — the corruption class this whole partition exists to prevent.
+  if (w !== total) {
+    throw new Error(
+      `E57: merged ${w} points but counted ${total} — internal merge/count mismatch.`,
+    );
   }
 
   // Recenter about a floored-min origin (float64 subtraction, then float32).
@@ -155,6 +255,6 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
     name,
     declaredPointCount: total,
     decodedPointCount: total,
-    metadata: e57Metadata(parsed.metadata, scans.length),
+    metadata: e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),
   });
 }

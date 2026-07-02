@@ -139,10 +139,11 @@ describe('Scan Acceptance — rendering', () => {
 });
 
 describe('Scan Acceptance — Unicode threshold sanitisation', () => {
-  it('renders Unicode glyphs (>=, <=, x) in thresholds without losing the section', async () => {
-    // pdf-lib's WinAnsi Helvetica encoding can't render U+2265 / U+2264 /
-    // U+00D7 directly; the renderer's sanitiseForPdf maps them to ASCII.
-    // Without that mapping the per-section error path would silently skip
+  it('renders Unicode glyphs (≥, ≤, ²) in thresholds without losing the section', async () => {
+    // pdf-lib's WinAnsi Helvetica encoding can't render U+2265 / U+2264
+    // directly; the renderer's sanitiseForPdf maps those to ASCII (while
+    // WinAnsi-native glyphs like ² pass through verbatim since v0.5.4).
+    // Without the sanitiser the per-section error path would silently skip
     // the whole acceptance-checklist section, leaving the user with a
     // PDF that looks correct but has no checks rendered.
     const acceptanceChecks: ReportAcceptanceRow[] = [

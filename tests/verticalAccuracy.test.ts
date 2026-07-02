@@ -43,9 +43,18 @@ describe('computeVerticalAccuracy', () => {
 describe('formatVerticalAccuracy', () => {
   it('states the normal-distribution assumption and both figures', () => {
     const lines = formatVerticalAccuracy(report(0.5, 1.1));
-    expect(lines.join(' ')).toMatch(/NVA @ 95%/);
+    expect(lines.join(' ')).toMatch(/NVA-style @ 95%/);
     expect(lines.join(' ')).toMatch(/assumes normally distributed/i);
-    expect(lines.join(' ')).toMatch(/VVA @ 95%/);
+    expect(lines.join(' ')).toMatch(/VVA-style @ 95%/);
+  });
+
+  it('qualifies every figure as hold-out — never an independent-checkpoint claim', () => {
+    const lines = formatVerticalAccuracy(report(0.5, 1.1));
+    // All three lines carry the hold-out qualifier.
+    for (const line of lines) expect(line).toMatch(/hold-out/);
+    // The disclosures name what the figures are NOT.
+    expect(lines.join(' ')).toMatch(/not independent checkpoints/i);
+    expect(lines.join(' ')).toMatch(/not vegetated-class checkpoints/i);
   });
 
   it('returns a single honest line when there is no measurement', () => {

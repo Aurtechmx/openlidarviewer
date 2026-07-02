@@ -44,6 +44,20 @@ export interface StaticCloudShape {
     readonly sourceSoftware?: string;
     /** Horizontal CRS unit → metres, for converting raw-unit extent/density. */
     readonly crs?: { readonly linearUnitToMetres?: number };
+    /**
+     * The file's own capture declaration, precomputed AT LOAD TIME (in the
+     * lazy loader chunk, via `diagnostics/declaredCapture.ts`) from the
+     * declared source metadata — including its pre-built display strings.
+     * Read here as a plain field so neither the keyword scan nor the
+     * wording rides the startup shell.
+     */
+    readonly declaredCapture?: {
+      readonly field: string;
+      readonly value: string;
+      readonly label: string;
+      readonly signal: string;
+      readonly disclaimer: string;
+    };
   };
 }
 
@@ -106,6 +120,7 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
     densityPerSqM: density,
     sensorString: cloud.metadata?.captureSensor,
     softwareString: cloud.metadata?.sourceSoftware,
+    declaredCapture: cloud.metadata?.declaredCapture,
   };
 }
 

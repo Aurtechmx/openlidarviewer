@@ -130,8 +130,12 @@ export function newellNormal(points: Vec3[]): Vec3 {
 }
 
 /**
- * Area of the polygon on its own best-fit plane (the true surface area).
- * Returns 0 for fewer than three vertices.
+ * Vector (Newell) area of the polygon — half the magnitude of the Newell
+ * normal. For a PLANAR ring this equals the polygon's area in its own plane;
+ * for the slightly non-planar rings real picks produce it is a LOWER BOUND
+ * on the true surface area (folded-away components cancel in the vector
+ * sum), never the area of a draped surface. "True surface area" was an
+ * overclaim; this is the honest statement of what the number is.
  */
 export function polygonAreaPlanar(points: Vec3[]): number {
   if (points.length < 3) return 0;

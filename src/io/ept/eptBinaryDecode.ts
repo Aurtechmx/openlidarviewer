@@ -27,6 +27,7 @@
 
 import type { EptSchemaField } from './eptTypes';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
+import { LoadError } from '../loadErrors';
 
 /**
  * Thrown when an EPT binary tile arrives shorter than the schema
@@ -92,7 +93,32 @@ function readAttr(view: DataView, off: number, attr: AttrLayout): number {
     case 4: return attr.type === 'float'    ? view.getFloat32(off, true)
           : attr.type === 'signed'         ? view.getInt32(off,   true)
                                             : view.getUint32(off,  true);
-    case 8: return view.getFloat64(off, true);
+    case 8: {
+      // Size 8 must branch on the declared type. The earlier code read every
+      // 8-byte attribute as Float64, which reinterprets an int64/uint64's
+      // two's-complement bits as IEEE-754 — an X/Y/Z stored as int64 (a
+      // layout Entwine permits) decoded to garbage positions. Integers are
+      // read as BigInt and converted to Number ONLY when the value is
+      // exactly representable; beyond ±(2^53 − 1) the conversion would
+      // silently round, so we throw the same typed malformed-file error the
+      // count validator uses ("malformed" keyword included on purpose —
+      // classifyLoadError recovers the category from worker-crossed
+      // messages by that word).
+      if (attr.type === 'float') return view.getFloat64(off, true);
+      const big = attr.type === 'signed'
+        ? view.getBigInt64(off, true)
+        : view.getBigUint64(off, true);
+      const num = Number(big);
+      if (!Number.isSafeInteger(num)) {
+        throw new LoadError(
+          'malformed-file',
+          `malformed EPT binary tile: 64-bit ${attr.type} attribute "${attr.name}" ` +
+            `holds ${big}, outside the exactly-representable Number range ` +
+            `(|value| must be ≤ 2^53 − 1).`,
+        );
+      }
+      return num;
+    }
     default: throw new Error(`EPT binary decode: unsupported attribute size ${attr.size}`);
   }
 }
@@ -111,12 +137,20 @@ function findAttr(attrs: readonly AttrLayout[], name: string): AttrLayout | unde
  * @param renderOrigin  The cloud's render origin — subtracted from positions
  *                      in Float64 BEFORE narrowing to Float32 (the same
  *                      precision contract the COPC decoder follows).
+ * @param rgbEightBit   The DATASET-level RGB bit-depth decision, when one has
+ *                      already been made (pinned from the first decoded RGB
+ *                      tile via {@link ChunkDecodeMetadata.rgbEightBit}, the
+ *                      same seam the COPC pipeline uses). Undefined on the
+ *                      first tile — this decode then decides from its own max
+ *                      channel value and reports the decision back on the
+ *                      returned chunk so the source can pin it.
  */
 export function decodeEptBinaryTile(
   buffer: ArrayBuffer,
   pointCount: number,
   schema: readonly EptSchemaField[],
   renderOrigin: readonly [number, number, number],
+  rgbEightBit?: boolean,
 ): DecodedChunk {
   const { attrs, stride } = computeSchemaLayout(schema);
   const expectedBytes = pointCount * stride;
@@ -156,6 +190,19 @@ export function decodeEptBinaryTile(
   const gAttr = findAttr(attrs, 'Green');
   const bAttr = findAttr(attrs, 'Blue');
   if (rAttr && gAttr && bAttr) rgb = new Uint8Array(pointCount * 3);
+  // 16-bit RGB is ambiguous: LAS-heritage writers store full-range 0–65535
+  // (narrow with >> 8), but some stuff 8-bit values into the low byte —
+  // shifting those yields an all-black cloud. Stage the raw 16-bit channels
+  // and make ONE decision per DATASET (not per tile): the pinned decision
+  // from the first decoded RGB tile when provided, else this tile's own max
+  // (≤ 255 ⇒ 8-bit-in-low-byte, copied verbatim). Mirrors
+  // `lasDecodeShared.finalizeRawColors` (per file) and the COPC
+  // `rgbEightBit` metadata seam (per dataset).
+  const rgb16 =
+    rgb && rAttr!.size === 2 && gAttr!.size === 2 && bAttr!.size === 2
+      ? new Uint16Array(pointCount * 3)
+      : undefined;
+  let maxRgb = 0;
   const retNumAttr = findAttr(attrs, 'ReturnNumber');
   const retCntAttr = findAttr(attrs, 'NumberOfReturns');
   const gpsAttr = findAttr(attrs, 'GpsTime');
@@ -192,14 +239,34 @@ export function decodeEptBinaryTile(
       gpsTime[i] = readAttr(view, base + gpsAttr.offset, gpsAttr);
     }
     if (rgb && rAttr && gAttr && bAttr) {
-      // EPT RGB attributes are typically uint16 0-65535 (LAS heritage);
-      // narrow to uint8 0-255 with a >>8 shift.
       const r = readAttr(view, base + rAttr.offset, rAttr);
       const g = readAttr(view, base + gAttr.offset, gAttr);
       const b = readAttr(view, base + bAttr.offset, bAttr);
-      rgb[i * 3]     = rAttr.size === 2 ? r >> 8 : r & 0xff;
-      rgb[i * 3 + 1] = gAttr.size === 2 ? g >> 8 : g & 0xff;
-      rgb[i * 3 + 2] = bAttr.size === 2 ? b >> 8 : b & 0xff;
+      if (rgb16) {
+        // Uniform 16-bit channels: stage raw values; the bit-depth decision
+        // happens ONCE after the loop (see above), never per record.
+        rgb16[i * 3]     = r;
+        rgb16[i * 3 + 1] = g;
+        rgb16[i * 3 + 2] = b;
+        if (r > maxRgb) maxRgb = r;
+        if (g > maxRgb) maxRgb = g;
+        if (b > maxRgb) maxRgb = b;
+      } else {
+        // 8-bit (or mixed-width, a pathological schema) channels carry no
+        // bit-depth ambiguity — copy bytes through, no dataset decision.
+        rgb[i * 3]     = rAttr.size === 2 ? r >> 8 : r & 0xff;
+        rgb[i * 3 + 1] = gAttr.size === 2 ? g >> 8 : g & 0xff;
+        rgb[i * 3 + 2] = bAttr.size === 2 ? b >> 8 : b & 0xff;
+      }
+    }
+  }
+
+  // Narrow staged 16-bit colour with the single dataset-level decision.
+  let usedEightBit: boolean | undefined;
+  if (rgb && rgb16) {
+    usedEightBit = rgbEightBit ?? (maxRgb <= 255);
+    for (let i = 0; i < rgb16.length; i++) {
+      rgb[i] = usedEightBit ? rgb16[i] & 0xff : rgb16[i] >> 8;
     }
   }
 
@@ -212,5 +279,6 @@ export function decodeEptBinaryTile(
     returnCount,
     gpsTime,
     rgb,
+    rgbEightBit: usedEightBit,
   };
 }

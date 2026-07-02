@@ -96,6 +96,27 @@ export interface ScanSignals {
   readonly softwareString?: string;
   /** Whether the scan was loaded via a streaming source (COPC/EPT). */
   readonly streamingSource?: boolean;
+  /**
+   * The file's own capture declaration, when its declared source metadata
+   * (sensorModel / description / name / datasetType / accuracyClass) states a
+   * synthetic / procedural / reconstruction / reference origin. When present,
+   * the declaration BECOMES the verdict and the heuristic guess is demoted to
+   * a secondary, low-confidence line — the classifier must never assert a
+   * physical capture type the file itself contradicts. Quoted verbatim;
+   * declared by the file, not verified by OpenLiDARViewer.
+   */
+  readonly declaredCapture?: {
+    /** Which declared field the quoted value comes from, e.g. "sensorModel". */
+    readonly field: string;
+    /** The declared value, verbatim. */
+    readonly value: string;
+    /** Pre-built verdict headline (composed in the lazy loader chunk). */
+    readonly label: string;
+    /** Pre-built declaration signal line with the not-verified disclosure. */
+    readonly signal: string;
+    /** Pre-built disclaimer for the declared verdict. */
+    readonly disclaimer: string;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,6 +138,19 @@ const DISCLAIMER =
  * streaming sources; numeric signatures are the fallback.
  */
 export function classify(signals: ScanSignals): ProvenanceFingerprint {
+  // 0. The file's own declaration outranks every heuristic. When the loader
+  //    found a declared synthetic / procedural / reconstruction / reference
+  //    statement in the source metadata, the verdict quotes it verbatim and
+  //    the heuristic guess is demoted to a secondary, low-confidence signal
+  //    line — never asserted as the primary capture type.
+  if (signals.declaredCapture) {
+    return declaredFingerprint(signals.declaredCapture, classifyHeuristic(signals));
+  }
+  return classifyHeuristic(signals);
+}
+
+/** The pre-declaration heuristic chain — unchanged when no metadata declares. */
+function classifyHeuristic(signals: ScanSignals): ProvenanceFingerprint {
   // 1. Software-string fingerprints — strongest signal when present.
   const swMatch = matchSoftwareString(signals.softwareString);
   if (swMatch) return swMatch;
@@ -150,6 +184,33 @@ export function classify(signals: ScanSignals): ProvenanceFingerprint {
     disclaimer:
       'No capture-type signature recognised. The viewer is showing the ' +
       'data as-is; no accuracy ribbon is available without further metadata.',
+  };
+}
+
+/**
+ * The declared-source verdict: the file's own metadata statement, quoted
+ * verbatim, with the heuristic guess demoted to a secondary line at reduced
+ * confidence. No literature accuracy ribbon is attached — the cited physical
+ * capture-type bounds do not describe a declared synthetic / reference
+ * reconstruction, and quoting them would overclaim. The wording itself is
+ * pre-built at load time (`diagnostics/declaredCapture.ts`, lazy chunk) so
+ * the startup shell only threads it through.
+ */
+function declaredFingerprint(
+  declared: NonNullable<ScanSignals['declaredCapture']>,
+  heuristic: ProvenanceFingerprint,
+): ProvenanceFingerprint {
+  const signals = [declared.signal];
+  if (heuristic.captureType !== 'unknown') {
+    signals.push(`Heuristic guess (secondary, low confidence): ${heuristic.label}`);
+  }
+  return {
+    captureType: 'unknown',
+    confidence: 'high',
+    label: declared.label,
+    signals,
+    bounds: [],
+    disclaimer: declared.disclaimer,
   };
 }
 
@@ -512,7 +573,10 @@ function aerialAlsFingerprint(
       },
       {
         label: 'NVA formula',
-        value: 'NVA = 1.96 × RMSEz (non-vegetated, normal distribution)',
+        value:
+          'NVA = 1.96 × RMSEz (non-vegetated, normal distribution). This ' +
+          'viewer reports an NVA-STYLE figure from internally withheld ' +
+          'points (hold-out), not independent checkpoints.',
         source: 'Lohani & Ghosh 2017 §6',
       },
     ],

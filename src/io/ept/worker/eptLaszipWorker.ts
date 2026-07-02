@@ -31,6 +31,10 @@ interface DecodeMessage {
   requestId: number;
   tile: ArrayBuffer;
   renderOrigin: [number, number, number];
+  /** Dataset-level RGB bit-depth decision (pinned from the first RGB tile);
+   *  undefined until the source has seen one — the decode then decides and
+   *  reports back via `DecodedChunk.rgbEightBit`. */
+  rgbEightBit?: boolean;
 }
 interface CancelMessage {
   type: 'cancel';
@@ -80,7 +84,7 @@ ctx.onmessage = (event: MessageEvent<InMessage>): void => {
   }
   if (msg.type !== 'decode') return;
 
-  const { requestId, tile, renderOrigin } = msg;
+  const { requestId, tile, renderOrigin, rgbEightBit } = msg;
   if (cancelled.has(requestId)) {
     cancelled.delete(requestId);
     return;
@@ -93,7 +97,7 @@ ctx.onmessage = (event: MessageEvent<InMessage>): void => {
         cancelled.delete(requestId);
         return;
       }
-      const decoded = decodeEptLaszipTileWith(lazPerf, tile, renderOrigin);
+      const decoded = decodeEptLaszipTileWith(lazPerf, tile, renderOrigin, rgbEightBit);
       ctx.postMessage(
         { type: 'decoded', requestId, decoded },
         chunkTransferables(decoded),

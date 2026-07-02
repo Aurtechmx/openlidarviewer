@@ -81,11 +81,15 @@ export class EptLaszipWorkerClient {
    * Decode one complete EPT laszip tile. The `tile` buffer is transferred to
    * the worker — the caller must not reuse it after the call. `renderOrigin` is
    * the EPT cloud's per-cloud Float64 shift, applied inside the worker.
+   * `rgbEightBit` is the dataset-level RGB bit-depth decision (pinned from
+   * the first decoded RGB tile), forwarded to the decode core so every tile
+   * narrows colour identically.
    */
   decodeTile(
     tile: ArrayBuffer,
     renderOrigin: readonly [number, number, number],
     signal?: AbortSignal,
+    rgbEightBit?: boolean,
   ): Promise<DecodedChunk> {
     const requestId = this._nextRequestId++;
     return new Promise<DecodedChunk>((resolve, reject) => {
@@ -108,7 +112,7 @@ export class EptLaszipWorkerClient {
       }
       this._pending.set(requestId, pending);
       this._worker.postMessage(
-        { type: 'decode', requestId, tile, renderOrigin: [...renderOrigin] },
+        { type: 'decode', requestId, tile, renderOrigin: [...renderOrigin], rgbEightBit },
         [tile],
       );
     });

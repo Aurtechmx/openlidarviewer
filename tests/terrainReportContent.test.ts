@@ -285,7 +285,11 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     const text = qm.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
     expect(text).toMatch(/0\.14 m/); // RMSEz
     expect(text).toMatch(/0\.27 m/); // NVA
-    expect(text).toMatch(/QL2/);
+    expect(text).toMatch(/QL2 \(estimated\)/);
+    // The report's labels carry the honesty qualifiers, same as the panel
+    // and the provenance stamp — hold-out formulas, not checkpoints.
+    expect(text).toMatch(/NVA-style \(95%, hold-out\)/);
+    expect(text).toMatch(/VVA-style \(95th pct, hold-out\)/);
   });
 
   it('the not-survey-grade note is always present in the footer', () => {

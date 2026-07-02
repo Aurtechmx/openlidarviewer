@@ -158,6 +158,28 @@ export const scanReport: AnalysisModule = {
       );
     }
 
+    // Non-fatal anomalies the loader worked around (a skipped E57 scan, a
+    // normalised pose quaternion). Shown as warn rows so a partially-loaded
+    // file is never presented as a cleanly-loaded one.
+    for (const w of meta?.loadWarnings ?? []) rows.push(rowWarn('Load Warning', w));
+
+    // Declared source metadata — the file's own provenance declarations
+    // (standard schema fields plus extension-namespace fields), verbatim.
+    // Rendered by the Inspector as a collapsible "Source metadata" section
+    // with the extension fields under "Extended metadata (file-declared)".
+    // Declared, not verified — only rows the file actually declared appear.
+    const sm = meta?.sourceMetadata;
+    if (sm) {
+      const declared = (
+        fields: readonly { name: string; value: string }[],
+        group: AnalysisRow['group'],
+      ): void => {
+        for (const f of fields) rows.push({ label: f.name, value: f.value, status: 'info', group });
+      };
+      declared(sm.standard, 'src-std');
+      declared(sm.extensions, 'src-ext');
+    }
+
     // Georeferenced bounding box — the scan's extent in real-world
     // coordinates (local bounds plus the origin subtracted on load). Shown
     // under the Advanced report; survey and topographic work needs absolute

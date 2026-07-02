@@ -1,25 +1,30 @@
 cff-version: 1.2.0
-message: "If you use OpenLiDARViewer in your research, please cite it."
-title: OpenLiDARViewer
-abstract: >-
-  A single-page, open-source, browser-based point-cloud viewer that opens
-  drone LiDAR surveys, terrestrial laser scans (E57), phone scans, and
-  hierarchical streaming datasets (COPC, EPT) from one drag-and-drop, with
-  no install, no upload, and no conversion step, plus a measurement
-  toolkit, multi-page PDF reporting, and built-in scan validation.
+message: "If you use OpenLiDARViewer in your research, please cite this software."
+title: "OpenLiDARViewer"
 type: software
+
 authors:
-  - name: "Aurtech"
+  - given-names: "A."
+    family-names: "Urias"
+    affiliation: "Aurtech"
+
+version: 0.5.4
+date-released: "2026-07-02"
 license: MIT
-repository-code: "https://github.com/aurtechmx/openlidarviewer"
-version: 0.5.3
-date-released: "2026-07-01"
+repository-code: "https://github.com/Aurtechmx/openlidarviewer"
+
+abstract: >-
+  OpenLiDARViewer is an open-source, local-first, browser-native platform
+  for LiDAR and point-cloud inspection, streaming visualization,
+  measurement, terrain analysis, validation, and reproducible reporting.
+
 keywords:
-  - lidar
-  - point-cloud
-  - e57
-  - copc
-  - ept
-  - webgpu
-  - three.js
-  - visualization
+  - LiDAR
+  - point cloud
+  - geospatial software
+  - browser-native visualization
+  - terrain analysis
+  - COPC
+  - EPT
+  - WebGPU
+  - research software

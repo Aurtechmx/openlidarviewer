@@ -21,6 +21,7 @@ const PROV: ExportProvenance = {
   coverageMode: 'full', contourIntervalM: 10, contourStyle: 'smooth', contourStyleLabel: 'Smooth',
   surfaceQuality: 'Good', exportReadiness: 'Ready', exportReason: '',
   accuracy: { rmseZM: 0.08, nvaM: 0.16, vvaM: 0.21, usgsQualityLevel: 'QL2' },
+  complexity: null,
   pointDensityPerM2: 3, measuredCells: 90, totalCells: 100, classScope: null, warnings: [],
   notSurveyGrade: 'Suitability: not survey-grade unless validated against ground-truth control.',
 };

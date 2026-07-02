@@ -248,6 +248,11 @@ export function buildTerrainReportContent(
   };
 
   // ── Terrain Assessment ──────────────────────────────────────────────────
+  // Derived complexity rows (v0.5.4) source the SAME pre-formatted strings
+  // the provenance stamps and the Analyse panel renders (metric, window in
+  // cells AND ground metres, Z units, derived confidence). A run that
+  // measured nothing renders an honest em-dash, never a fabricated band.
+  const cx = provenance.complexity;
   const assessmentSection: TerrainReportSection = {
     title: 'Terrain Assessment',
     rows: [
@@ -261,6 +266,12 @@ export function buildTerrainReportContent(
       {
         label: 'Export note',
         value: assessment.exportReason ? assessment.exportReason : 'ready to hand off',
+      },
+      { label: 'Ruggedness (VRM)', value: cx ? cx.vrmText : DASH },
+      { label: 'Landform (TPI)', value: cx ? cx.tpiText : DASH },
+      {
+        label: 'Complexity confidence',
+        value: cx ? `${cx.confidence}/100 (derived from data support)` : DASH,
       },
     ],
   };
@@ -303,9 +314,12 @@ export function buildTerrainReportContent(
     title: 'Quality Metrics',
     rows: [
       { label: 'Vertical RMSEz', value: hasAcc ? fmtM(provenance.accuracy?.rmseZM) : DASH },
-      { label: 'NVA (95%)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
-      { label: 'VVA (95th pct)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
-      { label: 'USGS 3DEP Quality Level', value: qlValue },
+      // "-style (hold-out)" / "(estimated)": the report carries the same
+      // qualifiers as the Analyse panel and the provenance stamp — hold-out
+      // figures via the ASPRS formulas, never a checkpoint assessment.
+      { label: 'NVA-style (95%, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
+      { label: 'VVA-style (95th pct, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
+      { label: 'USGS 3DEP Quality Level', value: qlValue === DASH ? DASH : `${qlValue} (estimated)` },
     ],
   };
 
@@ -319,6 +333,9 @@ export function buildTerrainReportContent(
     warnings.push(t);
   };
   for (const w of result.warnings ?? []) pushWarn(w);
+  // Complexity caveats (ordered): envelope warnings + the cited density-
+  // reliability caveat, deduped against the run warnings.
+  for (const w of cx?.caveats ?? []) pushWarn(w);
   for (const c of limitations.causes) pushWarn(c.text);
 
   // ── How to improve (only when not fully-good) ───────────────────────────

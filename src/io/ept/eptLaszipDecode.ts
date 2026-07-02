@@ -159,9 +159,10 @@ function buildContext(buffer: ArrayBuffer): TileDecodeContext {
 export async function decodeEptLaszipTile(
   buffer: ArrayBuffer,
   renderOrigin: readonly [number, number, number],
+  rgbEightBit?: boolean,
 ): Promise<DecodedChunk> {
   const lazPerf = await getLazPerf();
-  return decodeEptLaszipTileWith(lazPerf, buffer, renderOrigin);
+  return decodeEptLaszipTileWith(lazPerf, buffer, renderOrigin, rgbEightBit);
 }
 
 /** The instantiated laz-perf WASM module (type-only — no runtime import). */
@@ -175,11 +176,18 @@ type LazPerfModule = Awaited<ReturnType<typeof import('laz-perf').createLazPerf>
  * record layout lives in exactly one place. Pure of three.js and of any
  * module-acquisition I/O, so it runs unchanged on the main thread or inside a
  * `DedicatedWorkerGlobalScope`.
+ *
+ * `rgbEightBit` is the DATASET-level RGB bit-depth decision, when one has
+ * already been pinned from the first decoded RGB tile (via the
+ * `ChunkDecodeMetadata.rgbEightBit` seam the COPC pipeline uses). Undefined
+ * on the first tile — this decode then decides from its own max channel
+ * value and reports the decision back on the returned chunk.
  */
 export function decodeEptLaszipTileWith(
   lazPerf: LazPerfModule,
   buffer: ArrayBuffer,
   renderOrigin: readonly [number, number, number],
+  rgbEightBit?: boolean,
 ): DecodedChunk {
   const ctx = buildContext(buffer);
   // Bound the per-tile declared count by the tile's own bytes BEFORE the
@@ -203,6 +211,12 @@ export function decodeEptLaszipTileWith(
   const gpsTime = new Float64Array(n);  // always allocated (cheap) — see DecodedChunk
   let rgb: Uint8Array | undefined;
   if (ctx.hasRgb) rgb = new Uint8Array(n * 3);
+  // Stage raw 16-bit colour so the 8-bit-in-low-byte vs true-16-bit narrowing
+  // is decided ONCE per dataset (pinned `rgbEightBit`, else this tile's max),
+  // never per record — see the parameter doc above. Mirrors
+  // `lasDecodeShared.finalizeRawColors` / the COPC `rgbEightBit` seam.
+  const rgb16 = ctx.hasRgb ? new Uint16Array(n * 3) : undefined;
+  let maxRgb = 0;
 
   const [rx, ry, rz] = renderOrigin;
   const filePtr = lazPerf._malloc(fileBytes.byteLength);
@@ -251,20 +265,34 @@ export function decodeEptLaszipTileWith(
         gpsTime[i] = heap.getFloat64(pointPtr + ctx.gpsTimeOffset, true);
       }
 
-      if (rgb && ctx.rgbOffset !== null) {
-        // LAS RGB is uint16 0-65535; narrow to uint8 0-255 with >> 8.
+      if (rgb16 && ctx.rgbOffset !== null) {
+        // LAS RGB is nominally uint16 0-65535, but some writers stuff 8-bit
+        // values into the low byte; stage raw and narrow after the loop.
         const r = heap.getUint16(pointPtr + ctx.rgbOffset, true);
         const g = heap.getUint16(pointPtr + ctx.rgbOffset + 2, true);
         const b = heap.getUint16(pointPtr + ctx.rgbOffset + 4, true);
-        rgb[i * 3]     = r >> 8;
-        rgb[i * 3 + 1] = g >> 8;
-        rgb[i * 3 + 2] = b >> 8;
+        rgb16[i * 3]     = r;
+        rgb16[i * 3 + 1] = g;
+        rgb16[i * 3 + 2] = b;
+        if (r > maxRgb) maxRgb = r;
+        if (g > maxRgb) maxRgb = g;
+        if (b > maxRgb) maxRgb = b;
       }
     }
   } finally {
     reader.delete();
     if (pointPtr) lazPerf._free(pointPtr);
     lazPerf._free(filePtr);
+  }
+
+  // Single dataset-level narrowing decision: the pinned value when the source
+  // provided one, else this tile's own max (≤ 255 ⇒ 8-bit-in-low-byte).
+  let usedEightBit: boolean | undefined;
+  if (rgb && rgb16) {
+    usedEightBit = rgbEightBit ?? (maxRgb <= 255);
+    for (let i = 0; i < rgb16.length; i++) {
+      rgb[i] = usedEightBit ? rgb16[i] & 0xff : rgb16[i] >> 8;
+    }
   }
 
   return {
@@ -277,5 +305,6 @@ export function decodeEptLaszipTileWith(
     gpsTime,
     pointSourceId,
     rgb,
+    rgbEightBit: usedEightBit,
   };
 }

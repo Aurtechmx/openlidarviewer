@@ -317,3 +317,14 @@ export const loadChangeRaster = () => import('./terrain/change/changeRaster');
 export const loadViewCube = () => import('./ui/viewCube');
 export const loadWorkflowConfigPanel = () => import('./ui/WorkflowConfigPanel');
 export const loadReportVerifier = () => import('./ui/reportVerifier');
+
+/**
+ * v0.5.4 — the contour serialisers (GeoJSON / DXF / SVG writers) and the
+ * unified export-provenance builder. Only reached from export/report actions
+ * (all already async), so they no longer ride the eager index bundle —
+ * freeing the room the derived-complexity wiring needed while keeping the
+ * startup shell flat. Routed through here for the usual reason: the live
+ * source-transform must never see the import literals.
+ */
+export const loadContourDownload = () => import('./terrain/contour/contourDownload');
+export const loadExportProvenance = () => import('./terrain/export/exportProvenance');

@@ -69,7 +69,7 @@ import {
 } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
-import { checkCalibration } from '../validate/calibrationCheck';
+import { checkConfidenceOrdering } from '../validate/calibrationCheck';
 import {
   fitConfidenceCalibration,
   applyConfidenceCalibration,
@@ -81,7 +81,7 @@ import {
 } from '../quality/dtmCellStatus';
 import { evaluateDtmQuality, type DtmQualityReport } from '../quality/dtmQualityGate';
 import { recommendGrid, type GridRecommendation } from '../quality/recommendGrid';
-import type { CalibrationResult, ValidationReport } from '../validate/ValidationReport';
+import type { ConfidenceOrderingResult, ValidationReport } from '../validate/ValidationReport';
 import { gateIntervals, type IntervalGateResult } from './intervalGate';
 import { contoursAt, type ContourSet } from './contoursAt';
 import { stitchContourSet, type StitchedLevel } from './stitchContours';
@@ -95,6 +95,10 @@ import {
 } from './contourShapeStyle';
 import { placeLabels, type ContourLabel } from './labelPlacement';
 import { computeVerticalAccuracy, type VerticalAccuracy } from '../validate/verticalAccuracy';
+import {
+  summariseTerrainComplexity,
+  type TerrainComplexitySummary,
+} from '../complexity/complexitySummary';
 
 /**
  * Core (interval-independent) options for {@link computeTerrainCore}. These
@@ -252,7 +256,8 @@ export interface AnalyseGenerationParams {
 export interface TerrainCore {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
-  readonly calibration: CalibrationResult;
+  /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
+  readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
   readonly confidenceCalibrationApplied: boolean;
   /** Vertical tolerance τ the calibrated confidence is defined against, or null. */
@@ -279,6 +284,15 @@ export interface TerrainCore {
   };
   /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
   readonly cellStatusTally: CellStatusTally;
+  /**
+   * Literature-defined terrain-complexity summary — VRM (Sappington et al.
+   * 2007) median + IQR with its window, TPI (Weiss 2001) dominant slope-
+   * position class with its radius, both with stated units and a derived
+   * confidence. Null when nothing was measurable (no valid cells) — the UI
+   * then renders an honest "—". Computed here, in the interval-independent
+   * core (worker path), so it never runs on the interactive path.
+   */
+  readonly complexity: TerrainComplexitySummary | null;
   /** Interval gate (options + recommendation). Interval-independent: it is a
    *  function of cell size, relief and the measured RMSE only. */
   readonly gate: IntervalGateResult;
@@ -318,7 +332,8 @@ export interface TerrainCore {
 export interface AnalyseContoursResult {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
-  readonly calibration: CalibrationResult;
+  /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
+  readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
   readonly confidenceCalibrationApplied: boolean;
   /** Vertical tolerance τ the calibrated confidence is defined against, or null. */
@@ -345,6 +360,12 @@ export interface AnalyseContoursResult {
   };
   /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
   readonly cellStatusTally: CellStatusTally;
+  /**
+   * Terrain-complexity summary (VRM median + IQR, TPI dominant class — with
+   * windows, units, derived confidence, and caveats), or null when nothing
+   * was measurable. Carried unchanged from the core (interval-independent).
+   */
+  readonly complexity: TerrainComplexitySummary | null;
   /** Recommended DTM grid + contour interval for this dataset. */
   readonly gridRecommendation: GridRecommendation;
   readonly gate: IntervalGateResult;
@@ -413,6 +434,19 @@ export function computeTerrainCore(
   const verticalAxis: VerticalAxis = params.verticalAxis ?? 'z';
   const crs = params.crs ?? null;
   const verticalDatum = params.verticalDatum ?? null;
+
+  // A geographic frame with an unresolvable latitude proceeds with cos φ = 1
+  // (no east–west correction) — a deliberate, honest fallback in
+  // horizontalCellMetresXY, but one the user must SEE: away from the equator
+  // the E–W cell span is overstated by 1/cos φ, skewing slope, aspect, area
+  // and density. Push it into result.warnings instead of degrading silently.
+  if (params.isGeographic && (params.latitudeDeg == null || !Number.isFinite(params.latitudeDeg))) {
+    warnings.push(
+      'Geographic frame with latitude unknown — the east–west scale is ' +
+        'uncorrected (cos φ = 1), so slope/aspect/area derivatives are ' +
+        'approximate away from the equator.',
+    );
+  }
 
   // 0) Honour existing classification — drop vegetation / buildings / noise
   // before ground filtering so the bare-earth surface can't anchor to canopy
@@ -509,7 +543,7 @@ export function computeTerrainCore(
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     collectSamples: true,
   });
-  const calibration = checkCalibration(validation);
+  const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);
 
   // 4b) Recalibrate the reported confidence against measured error, so a
@@ -682,10 +716,37 @@ export function computeTerrainCore(
     relief: { slope: sa.slope, aspect: sa.aspect },
   };
 
+  // Terrain-complexity summary (VRM per Sappington et al. 2007, TPI per
+  // Weiss 2001) over the SAME Horn grids and coverage mask the surface
+  // models use — nothing is recomputed, and the summary rides the core so
+  // it is computed off the interactive path (worker or fallback), never
+  // eagerly at attach. The scan-scaled ground density feeds the cited
+  // ≥4 pts/m² reliability caveat (Münzinger et al. 2022); null when the
+  // grid had nothing measurable, which downstream renders as "—".
+  const complexity = dtmHasCoverage
+    ? summariseTerrainComplexity({
+        z: dtm.z,
+        coverage: dtm.coverage,
+        cols: dtm.cols,
+        rows: dtm.rows,
+        slope: sa.slope,
+        aspect: sa.aspect,
+        cellMetresX: horizCellEwM,
+        cellMetresY: horizCellNsM,
+        verticalUnitToMetres: params.verticalUnitToMetres,
+        meta: {
+          coverage: dtm.coverageMode,
+          sourcePointCount: dtm.sourcePointCount,
+          analyzedPointCount: dtm.analyzedPointCount,
+        },
+        groundDensityPerM2: cellMetrics.meanDensity,
+      })
+    : null;
+
   return {
     dtm,
     validation,
-    calibration,
+    confidenceOrdering,
     confidenceCalibrationApplied,
     confidenceToleranceM,
     quality,
@@ -695,6 +756,7 @@ export function computeTerrainCore(
     accuracyStandards,
     surface,
     cellStatusTally,
+    complexity,
     gate,
     accuracy,
     elevationRangeM,
@@ -783,7 +845,7 @@ export function contoursFromCore(
     return {
       dtm,
       validation: core.validation,
-      calibration: core.calibration,
+      confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
       quality: core.quality,
@@ -793,6 +855,7 @@ export function contoursFromCore(
       excludedByClassification: core.excludedByClassification,
       accuracyStandards: core.accuracyStandards,
       cellStatusTally: core.cellStatusTally,
+      complexity: core.complexity,
       gridRecommendation,
       gate,
       intervalM: null,
@@ -857,7 +920,7 @@ export function contoursFromCore(
   return {
     dtm,
     validation: core.validation,
-    calibration: core.calibration,
+    confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,
     quality: core.quality,
@@ -867,6 +930,7 @@ export function contoursFromCore(
     excludedByClassification: core.excludedByClassification,
     accuracyStandards: core.accuracyStandards,
     cellStatusTally: core.cellStatusTally,
+    complexity: core.complexity,
     gridRecommendation,
     gate,
     intervalM,
