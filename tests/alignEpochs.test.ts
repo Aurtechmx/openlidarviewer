@@ -110,6 +110,34 @@ describe('alignEpochClouds', () => {
     expect(r.after).toBe(b); // unchanged reference
   });
 
+  test('a georeferenced (UTM-scale origin) cloud keeps centimetre precision through alignment', () => {
+    // The whole point of the origin/local split is float precision: at a UTM
+    // northing of ~4,000,000 a Float32 quantises at ~0.25–0.5 m — larger than
+    // the centimetre-level misalignment ICP corrects. The aligned cloud must
+    // therefore come back as local + origin, never as absolute world values
+    // stored in a Float32Array.
+    const base = scatter(200);
+    const origin: [number, number, number] = [500000, 4000000, 100];
+    const before = cloudFrom(base, origin);
+    const after = cloudFrom(base.map(([x, y, z]) => [x + 0.5, y, z] as P), origin);
+    const { after: aligned, alignment } = alignEpochClouds(before, after);
+    expect(alignment.applied).toBe(true);
+    const ox = aligned.origin?.[0] ?? 0;
+    const oy = aligned.origin?.[1] ?? 0;
+    let maxErr = 0;
+    for (let i = 0; i < base.length; i++) {
+      // World-frame aligned point vs the before epoch's exact world point.
+      const wx = aligned.positions[i * 3] + ox;
+      const wy = aligned.positions[i * 3 + 1] + oy;
+      maxErr = Math.max(
+        maxErr,
+        Math.abs(wx - (base[i][0] + origin[0])),
+        Math.abs(wy - (base[i][1] + origin[1])),
+      );
+    }
+    expect(maxErr).toBeLessThan(0.02); // cm-level, not the ~0.25–0.5 m f32 step
+  });
+
   test('origins are honoured: a shift expressed via origin still aligns', () => {
     const base = scatter(150);
     const before = cloudFrom(base);

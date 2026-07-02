@@ -101,8 +101,19 @@ function sampleWorld(
   return out;
 }
 
-/** Apply a solved ICP transform to every point of a cloud, returning a world-frame buffer. */
-function transformedWorld(
+/**
+ * Apply a solved ICP transform to every point of a cloud, returning a buffer
+ * that is still LOCAL to the cloud's own origin. The transform is computed in
+ * float64 world space (local + origin), then the origin is subtracted back
+ * before the float32 store. This preservation is not cosmetic: the origin /
+ * local split exists because a Float32Array cannot hold georeferenced
+ * coordinates — at a UTM northing of ~4,000,000 the f32 quantum is ~0.25–0.5 m,
+ * larger than the centimetre-level misalignment ICP corrects, so storing
+ * absolute world values would inject more error than the alignment removes.
+ * Only the small post-transform residual is rounded to f32 here; the
+ * subtraction itself is exact in float64.
+ */
+function transformedLocal(
   positions: Float32Array,
   origin: readonly [number, number, number],
   result: Pick<IcpResult, 'yawRad' | 'translation'>,
@@ -115,9 +126,9 @@ function transformedWorld(
   for (let i = 0; i < n; i++) {
     const w: Vec3 = [positions[i * 3] + ox, positions[i * 3 + 1] + oy, positions[i * 3 + 2] + oz];
     const t = applyIcp(result, w);
-    out[i * 3] = t[0];
-    out[i * 3 + 1] = t[1];
-    out[i * 3 + 2] = t[2];
+    out[i * 3] = t[0] - ox;
+    out[i * 3 + 1] = t[1] - oy;
+    out[i * 3 + 2] = t[2] - oz;
   }
   return out;
 }
@@ -163,8 +174,10 @@ export function alignEpochClouds(
     };
   }
 
-  // Trustworthy fit: move the after cloud into before's frame. It is now in
-  // world coordinates, so its origin collapses to zero. For change detection
+  // Trustworthy fit: move the after cloud into before's frame. The transform
+  // is applied in float64 world space but the result stays LOCAL to the
+  // cloud's own origin (see transformedLocal — absolute world values do not
+  // survive a Float32Array at georeferenced magnitudes). For change detection
   // (horizontalOnly), apply yaw + x/y only and keep z, so a real vertical change
   // is preserved rather than absorbed into the fit's z-shift.
   const horizontalOnly = options.horizontalOnly ?? true;
@@ -172,8 +185,8 @@ export function alignEpochClouds(
     ? { yawRad: fit.yawRad, translation: [fit.translation[0], fit.translation[1], 0] }
     : { yawRad: fit.yawRad, translation: fit.translation };
   const aligned: EpochCloud = {
-    positions: transformedWorld(after.positions, after.origin ?? ZERO, applied),
-    origin: ZERO,
+    positions: transformedLocal(after.positions, after.origin ?? ZERO, applied),
+    origin: after.origin ?? ZERO,
     crs: after.crs,
     verticalDatum: after.verticalDatum,
     // Unit info must survive alignment — the shared-grid cell floor and the
