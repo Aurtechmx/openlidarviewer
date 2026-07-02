@@ -27,3 +27,11 @@ export {
   type VrmResult,
   type VrmSummary,
 } from './vectorRuggedness';
+
+export {
+  deriveComplexityConfidence,
+  finaliseComplexityEnvelope,
+  type ComplexityEnvelope,
+  type ComplexityMetaInput,
+  type ComplexitySupport,
+} from './complexityEnvelope';

@@ -51,6 +51,11 @@
  */
 
 import { quantileSorted } from '../quantile';
+import {
+  finaliseComplexityEnvelope,
+  type ComplexityEnvelope,
+  type ComplexityMetaInput,
+} from './complexityEnvelope';
 
 /** Slope-position class codes (Weiss 2001). 0 is the explicit no-data state. */
 export const TPI_CLASS = {
@@ -87,10 +92,21 @@ export interface TpiParams {
    * so interpolation-withheld cells never manufacture terrain position.
    */
   readonly valid?: ArrayLike<number>;
+  /**
+   * Provenance passthrough from the source product (e.g. `DtmGrid`):
+   * coverage mode + point counts for the honesty envelope. Omitted →
+   * 'full' coverage, 0 points claimed (see complexityEnvelope.ts).
+   */
+  readonly meta?: ComplexityMetaInput;
 }
 
-/** Result of {@link computeTPI}. TPI is in the grid's Z units. */
-export interface TpiResult {
+/**
+ * Result of {@link computeTPI}. TPI is in the grid's Z units. Carries the
+ * `TerrainCoverageMeta` honesty fields (coverage, source/analyzed point
+ * counts, derived 0–100 confidence, ordered warnings) via
+ * {@link ComplexityEnvelope}.
+ */
+export interface TpiResult extends ComplexityEnvelope {
   /** TPI per cell, row-major; NaN where the cell (or its window) is invalid. */
   readonly tpi: Float32Array;
   /** Standardised TPI, (TPI − mean)/stdev over valid cells; NaN invalid. */
@@ -116,6 +132,11 @@ export interface TpiResult {
    * interior window would.
    */
   readonly truncatedWindowCount: number;
+  /**
+   * Mean of (valid window members / full window size) over valid cells,
+   * in [0, 1] — the data-support term behind `confidence`.
+   */
+  readonly meanWindowSupport: number;
   /** Ordered caveats (shrunken windows, missing slope, fallbacks…). */
   readonly warnings: ReadonlyArray<string>;
 }
@@ -154,7 +175,7 @@ export function computeTPI(
   if (n === 0 || z.length < n) {
     if (z.length < n) warnings.push('z shorter than cols×rows — no cells analysed');
     warnings.push('empty grid — no TPI computed');
-    return emptyResult(tpi, stdTpi, n, warnings, params.slope != null);
+    return emptyResult(tpi, stdTpi, n, warnings, params.slope != null, params.meta);
   }
 
   const valid = params.valid;
@@ -176,6 +197,7 @@ export function computeTPI(
   // Pass 1 — TPI per cell (float64 accumulation for the window mean).
   let validCellCount = 0;
   let truncatedWindowCount = 0;
+  let supportSum = 0; // Σ (count / fullWindow) over valid cells
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
@@ -193,6 +215,7 @@ export function computeTPI(
       }
       if (count === 0) continue; // no neighbourhood → honest NaN
       if (count < fullWindow) truncatedWindowCount++;
+      supportSum += count / fullWindow;
       tpi[i] = z[i] - sum / count;
       validCellCount++;
     }
@@ -200,7 +223,7 @@ export function computeTPI(
 
   if (validCellCount === 0) {
     warnings.push('no valid cells — TPI undefined everywhere');
-    return emptyResult(tpi, stdTpi, n, warnings, params.slope != null);
+    return emptyResult(tpi, stdTpi, n, warnings, params.slope != null, params.meta);
   }
 
   // Pass 2 — mean/stdev over valid TPI cells (population stdev), then
@@ -244,7 +267,15 @@ export function computeTPI(
     );
   }
 
+  const meanWindowSupport = supportSum / validCellCount;
+  const envelope = finaliseComplexityEnvelope(
+    { cellCount: n, validCellCount, meanWindowSupport },
+    params.meta,
+    warnings,
+  );
+
   return {
+    ...envelope,
     tpi,
     stdTpi,
     classes,
@@ -254,6 +285,7 @@ export function computeTPI(
     validCellCount,
     cellCount: n,
     truncatedWindowCount,
+    meanWindowSupport,
     warnings,
   };
 }
@@ -285,8 +317,15 @@ function emptyResult(
   cellCount: number,
   warnings: string[],
   slopeSupplied: boolean,
+  meta: ComplexityMetaInput | undefined,
 ): TpiResult {
+  const envelope = finaliseComplexityEnvelope(
+    { cellCount, validCellCount: 0, meanWindowSupport: 0 },
+    meta,
+    warnings,
+  );
   return {
+    ...envelope,
     tpi,
     stdTpi,
     classes: slopeSupplied ? new Uint8Array(cellCount) : null,
@@ -296,6 +335,7 @@ function emptyResult(
     validCellCount: 0,
     cellCount,
     truncatedWindowCount: 0,
+    meanWindowSupport: 0,
     warnings,
   };
 }

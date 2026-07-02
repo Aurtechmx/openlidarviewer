@@ -15,6 +15,7 @@ import {
   TPI_FLAT_SLOPE_TAN,
 } from '../src/terrain/complexity/terrainPositionIndex';
 import { computeVRM } from '../src/terrain/complexity/vectorRuggedness';
+import type { TerrainCoverageMeta } from '../src/terrain/TerrainContracts';
 import { hornSlope, hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
 
 /** Row-major grid builder: z(row, col). */
@@ -352,5 +353,85 @@ describe('computeVRM — edges, NoData, and degenerate inputs stay honest', () =
     const { slope, aspect } = hornSlopeAspect(z, 4, 4, 1);
     const res = computeVRM(slope, aspect, 4, 4, { windowCells: 1 });
     for (let i = 0; i < 16; i++) expect(res.vrm[i]).toBeCloseTo(0, 12);
+  });
+});
+
+// ── Honesty envelope (TerrainContracts.TerrainCoverageMeta fields) ──────────
+
+describe('honesty envelope — confidence derived from data support, never asserted', () => {
+  test('TPI result carries the TerrainCoverageMeta fields with derived confidence', () => {
+    // 9×9 full grid, radius 1 (4-neighbour circle): window support is
+    // 4/4 for the 49 interior cells, 3/4 for 28 edge cells, 2/4 for 4
+    // corners → mean = (49 + 21 + 2)/81 = 72/81; validFraction = 1
+    // → confidence = round(100·72/81) = 89.
+    const z = grid(9, 9, () => 5);
+    const res: TerrainCoverageMeta = computeTPI(z, 9, 9, { radiusCells: 1 });
+    expect(res.coverage).toBe('full');
+    expect(res.sourcePointCount).toBe(0); // no points claimed without meta
+    expect(res.analyzedPointCount).toBe(0);
+    expect(res.confidence).toBe(89);
+    expect(Array.isArray(res.warnings) || res.warnings.length >= 0).toBe(true);
+  });
+
+  test('VRM result: hand-computed window support on a full 9×9, window 3', () => {
+    // 3×3 window (incl. centre): 9/9 interior (49), 6/9 edges (28), 4/9
+    // corners (4) → mean = (49 + 18.666… + 1.777…)/81 = 69.444…/81
+    // → confidence = round(100·0.857338…) = 86.
+    const z = grid(9, 9, () => 5);
+    const { slope, aspect } = hornSlopeAspect(z, 9, 9, 1);
+    const res: TerrainCoverageMeta = computeVRM(slope, aspect, 9, 9, { windowCells: 3 });
+    expect(res.confidence).toBe(86);
+    expect(res.coverage).toBe('full');
+  });
+
+  test('voids reduce confidence and add an ordered void warning', () => {
+    const z = grid(6, 6, (r) => (r < 3 ? 1 : NaN)); // half the grid is void
+    const full = computeTPI(grid(6, 6, () => 1), 6, 6, { radiusCells: 1 });
+    const holed = computeTPI(z, 6, 6, { radiusCells: 1 });
+    expect(holed.confidence).toBeLessThan(full.confidence);
+    expect(holed.confidence).toBeGreaterThan(0); // still derived, not zeroed
+    expect(holed.warnings.some((w) => w.includes('voids'))).toBe(true);
+    // Envelope warnings follow core warnings (truncation precedes voids).
+    const truncIdx = holed.warnings.findIndex((w) => w.includes('truncated'));
+    const voidIdx = holed.warnings.findIndex((w) => w.includes('voids'));
+    expect(truncIdx).toBeGreaterThanOrEqual(0);
+    expect(voidIdx).toBeGreaterThan(truncIdx);
+  });
+
+  test('no valid cells → confidence 0 (no floor, no invented number)', () => {
+    const res = computeTPI(grid(3, 3, () => NaN), 3, 3, { radiusCells: 1 });
+    expect(res.confidence).toBe(0);
+    const vres = computeVRM(new Float32Array(0), new Float32Array(0), 0, 0, { windowCells: 3 });
+    expect(vres.confidence).toBe(0);
+  });
+
+  test('meta passthrough: coverage mode + point counts echo the source product', () => {
+    const z = grid(5, 5, () => 2);
+    const { slope, aspect } = hornSlopeAspect(z, 5, 5, 1);
+    const res = computeVRM(slope, aspect, 5, 5, {
+      windowCells: 3,
+      meta: { coverage: 'resident-only', sourcePointCount: 12345, analyzedPointCount: 6789 },
+    });
+    expect(res.coverage).toBe('resident-only');
+    expect(res.sourcePointCount).toBe(12345);
+    expect(res.analyzedPointCount).toBe(6789);
+    expect(res.warnings.some((w) => w.includes('resident-only'))).toBe(true);
+
+    const sampled = computeTPI(z, 5, 5, { radiusCells: 1, meta: { coverage: 'sampled' } });
+    expect(sampled.coverage).toBe('sampled');
+    expect(sampled.warnings.some((w) => w.includes('sampled'))).toBe(true);
+  });
+
+  test('metrics always ship with dispersion (median + IQR), never bare', () => {
+    const z = grid(9, 9, (r, c) => Math.sin(r * 0.7) + Math.cos(c * 0.9));
+    const { slope, aspect } = hornSlopeAspect(z, 9, 9, 1);
+    const t = computeTPI(z, 9, 9, { radiusCells: 1, slope });
+    const v = computeVRM(slope, aspect, 9, 9, { windowCells: 3 });
+    for (const s of [t.summary, v.summary]) {
+      expect(Number.isFinite(s.median)).toBe(true);
+      expect(Number.isFinite(s.iqr)).toBe(true);
+      expect(s.iqr).toBeGreaterThanOrEqual(0);
+      expect(s.p25).toBeLessThanOrEqual(s.p75);
+    }
   });
 });

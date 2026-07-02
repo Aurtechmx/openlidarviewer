@@ -61,6 +61,11 @@
  */
 
 import { quantileSorted } from '../quantile';
+import {
+  finaliseComplexityEnvelope,
+  type ComplexityEnvelope,
+  type ComplexityMetaInput,
+} from './complexityEnvelope';
 
 /** Options for {@link computeVRM}. */
 export interface VrmParams {
@@ -76,6 +81,12 @@ export interface VrmParams {
    * validity is "slope and aspect both finite".
    */
   readonly valid?: ArrayLike<number>;
+  /**
+   * Provenance passthrough from the source product (e.g. `DtmGrid`):
+   * coverage mode + point counts for the honesty envelope. Omitted →
+   * 'full' coverage, 0 points claimed (see complexityEnvelope.ts).
+   */
+  readonly meta?: ComplexityMetaInput;
 }
 
 /** Median + interquartile range (type-7 quantiles) — never a bare number. */
@@ -88,8 +99,13 @@ export interface VrmSummary {
 
 const NO_SUMMARY: VrmSummary = { median: NaN, p25: NaN, p75: NaN, iqr: NaN };
 
-/** Result of {@link computeVRM}. VRM is dimensionless, in [0, 1]. */
-export interface VrmResult {
+/**
+ * Result of {@link computeVRM}. VRM is dimensionless, in [0, 1]. Carries
+ * the `TerrainCoverageMeta` honesty fields (coverage, source/analyzed
+ * point counts, derived 0–100 confidence, ordered warnings) via
+ * {@link ComplexityEnvelope}.
+ */
+export interface VrmResult extends ComplexityEnvelope {
   /** VRM per cell, row-major; NaN where the centre cell is invalid. */
   readonly vrm: Float32Array;
   /** Robust summary (median + IQR) of the per-cell VRM distribution. */
@@ -103,6 +119,11 @@ export interface VrmResult {
    * (grid border or NoData neighbours) — their VRM rests on less support.
    */
   readonly truncatedWindowCount: number;
+  /**
+   * Mean of (valid window members / full window size) over valid cells,
+   * in [0, 1] — the data-support term behind `confidence`.
+   */
+  readonly meanWindowSupport: number;
   /** Ordered caveats (shrunken windows, parameter fallbacks…). */
   readonly warnings: ReadonlyArray<string>;
 }
@@ -134,14 +155,7 @@ export function computeVRM(
   if (n === 0 || slope.length < n || aspect.length < n) {
     if (n > 0) warnings.push('slope/aspect shorter than cols×rows — no cells analysed');
     warnings.push('empty grid — no VRM computed');
-    return {
-      vrm,
-      summary: NO_SUMMARY,
-      validCellCount: 0,
-      cellCount: n,
-      truncatedWindowCount: 0,
-      warnings,
-    };
+    return emptyVrmResult(vrm, n, warnings, params.meta);
   }
 
   const valid = params.valid;
@@ -166,6 +180,7 @@ export function computeVRM(
 
   let validCellCount = 0;
   let truncatedWindowCount = 0;
+  let supportSum = 0; // Σ (count / fullWindow) over valid cells
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
@@ -190,6 +205,7 @@ export function computeVRM(
       }
       // count ≥ 1 (the centre itself is valid).
       if (count < fullWindow) truncatedWindowCount++;
+      supportSum += count / fullWindow;
       const resultant = Math.sqrt(sx * sx + sy * sy + sz * sz);
       // Unit vectors ⇒ R ≤ n; clamp float-error excursions to keep [0, 1].
       const v = 1 - resultant / count;
@@ -200,14 +216,7 @@ export function computeVRM(
 
   if (validCellCount === 0) {
     warnings.push('no valid cells — VRM undefined everywhere');
-    return {
-      vrm,
-      summary: NO_SUMMARY,
-      validCellCount: 0,
-      cellCount: n,
-      truncatedWindowCount: 0,
-      warnings,
-    };
+    return emptyVrmResult(vrm, n, warnings, params.meta);
   }
 
   if (truncatedWindowCount > 0) {
@@ -222,12 +231,44 @@ export function computeVRM(
   const p25 = quantileSorted(finite, 0.25);
   const p75 = quantileSorted(finite, 0.75);
 
+  const meanWindowSupport = supportSum / validCellCount;
+  const envelope = finaliseComplexityEnvelope(
+    { cellCount: n, validCellCount, meanWindowSupport },
+    params.meta,
+    warnings,
+  );
+
   return {
+    ...envelope,
     vrm,
     summary: { median: quantileSorted(finite, 0.5), p25, p75, iqr: p75 - p25 },
     validCellCount,
     cellCount: n,
     truncatedWindowCount,
+    meanWindowSupport,
+    warnings,
+  };
+}
+
+function emptyVrmResult(
+  vrm: Float32Array,
+  cellCount: number,
+  warnings: string[],
+  meta: ComplexityMetaInput | undefined,
+): VrmResult {
+  const envelope = finaliseComplexityEnvelope(
+    { cellCount, validCellCount: 0, meanWindowSupport: 0 },
+    meta,
+    warnings,
+  );
+  return {
+    ...envelope,
+    vrm,
+    summary: NO_SUMMARY,
+    validCellCount: 0,
+    cellCount,
+    truncatedWindowCount: 0,
+    meanWindowSupport: 0,
     warnings,
   };
 }
