@@ -24,8 +24,7 @@ import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
 import { METRES_PER_DEGREE } from '../ground/horizontalScale';
 import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
-import { compareDtms, type EpochComparison } from './compareDtms';
-import type { ChangeDetectionOptions } from './changeDetection';
+import { compareDtms, type CompareDtmsOptions, type EpochComparison } from './compareDtms';
 
 /** One epoch: its render-local xyz positions (z up) and declared CRS / datum. */
 export interface EpochCloud {
@@ -195,9 +194,17 @@ export function buildSharedEpochDtms(before: EpochCloud, after: EpochCloud): Epo
 export function compareEpochClouds(
   before: EpochCloud,
   after: EpochCloud,
-  options: ChangeDetectionOptions = {},
+  options: CompareDtmsOptions = {},
 ): EpochComparison | null {
   const dtms = buildSharedEpochDtms(before, after);
   if (!dtms) return null;
-  return compareDtms(dtms.before, dtms.after, options);
+  // The clouds know their frame; the DtmGrids can't carry it. Either epoch
+  // declaring degrees makes the shared grid degree-denominated, so cut/fill
+  // volumes must be refused (see CompareDtmsOptions.isGeographic). An
+  // explicit caller option still wins.
+  return compareDtms(dtms.before, dtms.after, {
+    ...options,
+    isGeographic:
+      options.isGeographic ?? (before.isGeographic === true || after.isGeographic === true),
+  });
 }

@@ -6281,9 +6281,14 @@ function compareLoadedLayers(): void {
       // CRS unit factors (from epoch a — a unit mismatch between epochs is
       // already flagged) so cut/fill is m³ and Δz/LoD are metres, not source
       // units. A metre CRS resolves to 1 (no change); a foot CRS to ~0.3048.
+      // A geographic (degree) frame has no such factor at all — flag it so
+      // the comparison refuses the volume figures instead of printing
+      // degree²-based numbers as m³ (the DtmGrids can't carry the frame).
       const cmp = compareDtms(dtms.before, dtms.after, {
         horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
+        isGeographic:
+          a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);

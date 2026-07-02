@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildSharedEpochDtms, compareEpochClouds } from '../src/terrain/change/compareEpochs';
+import { summarizeChange } from '../src/terrain/change/compareDtms';
 import { METRES_PER_DEGREE } from '../src/terrain/ground/horizontalScale';
 
 /** A flat-ish ground plane of points at height `z` over an `n×n` metre grid. */
@@ -115,6 +116,32 @@ describe('compareEpochClouds', () => {
     expect(cmp).not.toBeNull();
     expect(cmp!.result.stats.comparable).toBeGreaterThan(0);
     expect(cmp!.result.stats.netVolumeM3).toBeGreaterThan(0);
+  });
+
+  it('geographic epochs refuse cut/fill volumes (degree² cell areas are not m²)', () => {
+    // A degree-denominated grid has cell areas in degrees² (~2.2e-6² at this
+    // scale) — no scalar converts that to m², so any 'N m³' figure would be
+    // wrong by ~10 orders of magnitude. Worst case pre-fix: two epochs both
+    // declaring the same geographic CRS + datum on the shared grid passed
+    // every co-registration check and the bogus volume shipped unflagged.
+    const step = 1e-4 / 30;
+    const geo = (z: number): Float32Array => {
+      const pts: number[] = [];
+      for (let i = 0; i <= 30; i++)
+        for (let j = 0; j <= 30; j++) pts.push(i * step, j * step, z);
+      return new Float32Array(pts);
+    };
+    const cmp = compareEpochClouds(
+      { positions: geo(0), isGeographic: true, crs: 'EPSG:4326', verticalDatum: 'EPSG:5703' },
+      { positions: geo(1), isGeographic: true, crs: 'EPSG:4326', verticalDatum: 'EPSG:5703' },
+    );
+    expect(cmp).not.toBeNull();
+    expect(cmp!.volumesComputable).toBe(false);
+    expect(cmp!.coregistered).toBe(false); // the refusal note forces the caveat path
+    expect(cmp!.coregistrationNotes.join(' ')).toMatch(/degree/i);
+    const text = summarizeChange(cmp!).join('\n');
+    expect(text).not.toContain('Net volume change'); // no m³ figure at all
+    expect(text.toLowerCase()).toContain('volumes'); // …replaced by the refusal line
   });
 
   it('flags a CRS mismatch between the two epochs', () => {
