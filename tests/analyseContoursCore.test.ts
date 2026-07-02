@@ -215,4 +215,32 @@ describe('computeTerrainCore + contoursFromCore (pure split)', () => {
       expect(contourFingerprint(r)).toEqual(contourFingerprint(oneShot));
     });
   });
+
+  describe('geographic frame with unknown latitude', () => {
+    const pts = gaussianHill({ amplitude: 12 });
+
+    it('warns that the east–west scale is uncorrected (cos φ = 1 no-op)', () => {
+      // isGeographic without a latitude → horizontalCellMetresXY falls back to
+      // cos φ = 1. That fallback must be user-visible, not silent.
+      const core = computeTerrainCore(pts, { cellSizeM: 2, isGeographic: true });
+      const joined = core.coreWarnings.join(' ');
+      expect(joined).toMatch(/latitude unknown/i);
+      expect(joined).toMatch(/east–west scale is uncorrected/i);
+      expect(joined).toMatch(/approximate/i);
+    });
+
+    it('stays silent when a representative latitude IS known', () => {
+      const core = computeTerrainCore(pts, {
+        cellSizeM: 2,
+        isGeographic: true,
+        latitudeDeg: 47.5,
+      });
+      expect(core.coreWarnings.join(' ')).not.toMatch(/latitude unknown/i);
+    });
+
+    it('stays silent for projected frames regardless of latitude', () => {
+      const core = computeTerrainCore(pts, { cellSizeM: 2, crs: 'EPSG:32610' });
+      expect(core.coreWarnings.join(' ')).not.toMatch(/latitude unknown/i);
+    });
+  });
 });

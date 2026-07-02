@@ -435,6 +435,19 @@ export function computeTerrainCore(
   const crs = params.crs ?? null;
   const verticalDatum = params.verticalDatum ?? null;
 
+  // A geographic frame with an unresolvable latitude proceeds with cos φ = 1
+  // (no east–west correction) — a deliberate, honest fallback in
+  // horizontalCellMetresXY, but one the user must SEE: away from the equator
+  // the E–W cell span is overstated by 1/cos φ, skewing slope, aspect, area
+  // and density. Push it into result.warnings instead of degrading silently.
+  if (params.isGeographic && (params.latitudeDeg == null || !Number.isFinite(params.latitudeDeg))) {
+    warnings.push(
+      'Geographic frame with latitude unknown — the east–west scale is ' +
+        'uncorrected (cos φ = 1), so slope/aspect/area derivatives are ' +
+        'approximate away from the equator.',
+    );
+  }
+
   // 0) Honour existing classification — drop vegetation / buildings / noise
   // before ground filtering so the bare-earth surface can't anchor to canopy
   // or rooftops. The full cloud is still used for the DSM further down, so
