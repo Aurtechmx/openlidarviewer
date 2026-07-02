@@ -56,6 +56,26 @@ describe('changeVolumeUncertainty', () => {
     expect(r.detectable).toBe(false);
     expect(r.confidence).toBe('low');
     expect(r.caveats.join(' ')).toMatch(/not distinguishable from survey noise/i);
+    expect(r.caveats.join(' ')).toMatch(/~95% level of detection/);
+  });
+
+  test('a |net| between 1σ and 1.96σ is NOT detectable (the ~95% LoD convention)', () => {
+    // Hand computation: random = 1 · 0.05 · √400 = 1 m³;
+    // systematic = 400 · 1 · 0.02 = 8 m³; σ = √(1² + 8²) = √65 ≈ 8.0623 m³.
+    // 1.96σ ≈ 15.80 m³. A net of 10 m³ exceeds σ (the OLD threshold would
+    // have called it detectable) but is below the ~95% level of detection.
+    const r = changeVolumeUncertainty({
+      netVolumeM3: 10,
+      significantCells: 400,
+      cellAreaM2: 1,
+      cellSigmaM: 0.05,
+      registrationSigmaM: 0.02,
+    });
+    expect(r.sigmaM3).toBeCloseTo(Math.sqrt(65), 4);
+    expect(r.detectable).toBe(false);
+    expect(r.confidence).toBe('low');
+    // The caveat names the convention and the threshold (1.96σ ≈ 16 m³).
+    expect(r.caveats.join(' ')).toMatch(/1\.96σ ≈ 16 m³/);
   });
 
   test('a clear, well-registered change grades high and is detectable', () => {
