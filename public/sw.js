@@ -54,6 +54,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/**
+ * Whether a navigation request targets the app shell itself — the scope root
+ * ('/') or its explicit '/index.html'. Resolved against the worker's
+ * registration scope so a deploy under a sub-path still recognises its own
+ * shell. Only these navigations may refresh the cached './index.html': the
+ * old handler cached EVERY same-origin navigation under that key, so visiting
+ * credits.html (or landing on an error/redirected page) replaced the cached
+ * shell and the next offline load rendered the wrong document (navigation
+ * cache-poisoning finding, Critical).
+ */
+function isShellNavigation(url) {
+  const scope = new URL(self.registration && self.registration.scope ? self.registration.scope : './', self.location.href);
+  const root = scope.pathname.endsWith('/') ? scope.pathname : scope.pathname + '/';
+  return url.pathname === root || url.pathname === root + 'index.html';
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return; // never cache writes/uploads
@@ -78,8 +94,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put('./index.html', copy)).catch(() => {});
+          // Refresh the cached shell ONLY from a clean shell response: the
+          // scope root (or its index.html), 2xx, and not the tail of a
+          // redirect. Anything else — credits.html, a 404/500 page, a
+          // redirect target — must never overwrite './index.html', or the
+          // offline fallback would serve a non-app document as the app.
+          if (res.ok && !res.redirected && isShellNavigation(url)) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put('./index.html', copy)).catch(() => {});
+          }
           return res;
         })
         .catch(() => caches.match('./index.html').then((r) => r || caches.match('./'))),
