@@ -202,10 +202,26 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     for (let k = 0; k < count; k++) levelValues.push(first + k * interval);
   }
   if (levelValues.length > maxLevels) {
+    // THIN evenly rather than truncate from the top: the old slice kept only
+    // the LOWEST maxLevels levels, so an over-fine interval silently deleted
+    // every contour above the cut — summits vanished from the map with a
+    // warning that never said so. Keeping every k-th level preserves the full
+    // elevation range (the bottom level survives by construction; the top
+    // level is forced in) at an effective interval of k × the requested one.
+    const n = levelValues.length;
+    const k = Math.ceil(n / maxLevels);
+    const thinned: number[] = [];
+    for (let i = 0; i < n; i += k) thinned.push(levelValues[i]);
+    // Force the top level in so the summit contour survives the thinning.
+    // (ceil(n / k) ≤ maxLevels entries, so replacing — not appending — keeps
+    // the cap honest.)
+    thinned[thinned.length - 1] = levelValues[n - 1];
     warnings.push(
-      `level count ${levelValues.length} exceeds cap ${maxLevels} — truncated (interval too fine for the elevation range?)`,
+      `level count ${n} exceeds cap ${maxLevels} — ${n} levels thinned to ` +
+        `${thinned.length} (one level in every ${k} kept; the effective ` +
+        `interval is ${k}× the requested one)`,
     );
-    levelValues = levelValues.slice(0, maxLevels);
+    levelValues = thinned;
   }
 
   const levels: ContourLevel[] = levelValues.map((value) => ({ value, segments: [] }));

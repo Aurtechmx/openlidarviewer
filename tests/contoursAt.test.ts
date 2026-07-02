@@ -137,6 +137,28 @@ describe('contoursAt', () => {
     });
     expect(set.levels.length).toBeLessThanOrEqual(10);
     expect(set.warnings.join(' ')).toMatch(/exceeds cap/i);
+    expect(set.warnings.join(' ')).toMatch(/thinned/i);
+  });
+
+  it('THINS over-cap levels evenly — the summit level survives (no top truncation)', () => {
+    // 400 explicit levels 0…399 against a cap of 200. k = ceil(400/200) = 2 —
+    // every 2nd level kept, with the top level forced in. The old slice(0, 200)
+    // deleted every level above 199, wiping the summit off the map.
+    const levels = Array.from({ length: 400 }, (_, i) => i);
+    const set = contoursAt(grid((x, y) => 40 * x + 40 * y, 20, 20), {
+      intervalM: 1,
+      levels,
+      maxLevels: 200,
+    });
+    expect(set.levels.length).toBe(200);
+    const kept = set.levels.map((l) => l.value);
+    expect(kept[0]).toBe(0); // the minimum survives
+    expect(kept[kept.length - 1]).toBe(399); // the summit level survives
+    // Even 2× spacing across the body of the list (hand-checked: 0, 2, 4, …).
+    expect(kept[1]).toBe(2);
+    expect(kept[100]).toBe(200);
+    expect(set.warnings.join(' ')).toMatch(/400 levels thinned to 200/);
+    expect(set.warnings.join(' ')).toMatch(/2× the requested/);
   });
 
   it('returns no levels for an all-gap grid', () => {
