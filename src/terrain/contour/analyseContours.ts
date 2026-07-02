@@ -69,7 +69,7 @@ import {
 } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
-import { checkCalibration } from '../validate/calibrationCheck';
+import { checkConfidenceOrdering } from '../validate/calibrationCheck';
 import {
   fitConfidenceCalibration,
   applyConfidenceCalibration,
@@ -81,7 +81,7 @@ import {
 } from '../quality/dtmCellStatus';
 import { evaluateDtmQuality, type DtmQualityReport } from '../quality/dtmQualityGate';
 import { recommendGrid, type GridRecommendation } from '../quality/recommendGrid';
-import type { CalibrationResult, ValidationReport } from '../validate/ValidationReport';
+import type { ConfidenceOrderingResult, ValidationReport } from '../validate/ValidationReport';
 import { gateIntervals, type IntervalGateResult } from './intervalGate';
 import { contoursAt, type ContourSet } from './contoursAt';
 import { stitchContourSet, type StitchedLevel } from './stitchContours';
@@ -256,7 +256,8 @@ export interface AnalyseGenerationParams {
 export interface TerrainCore {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
-  readonly calibration: CalibrationResult;
+  /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
+  readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
   readonly confidenceCalibrationApplied: boolean;
   /** Vertical tolerance τ the calibrated confidence is defined against, or null. */
@@ -331,7 +332,8 @@ export interface TerrainCore {
 export interface AnalyseContoursResult {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
-  readonly calibration: CalibrationResult;
+  /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
+  readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
   readonly confidenceCalibrationApplied: boolean;
   /** Vertical tolerance τ the calibrated confidence is defined against, or null. */
@@ -528,7 +530,7 @@ export function computeTerrainCore(
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     collectSamples: true,
   });
-  const calibration = checkCalibration(validation);
+  const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);
 
   // 4b) Recalibrate the reported confidence against measured error, so a
@@ -731,7 +733,7 @@ export function computeTerrainCore(
   return {
     dtm,
     validation,
-    calibration,
+    confidenceOrdering,
     confidenceCalibrationApplied,
     confidenceToleranceM,
     quality,
@@ -830,7 +832,7 @@ export function contoursFromCore(
     return {
       dtm,
       validation: core.validation,
-      calibration: core.calibration,
+      confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
       quality: core.quality,
@@ -905,7 +907,7 @@ export function contoursFromCore(
   return {
     dtm,
     validation: core.validation,
-    calibration: core.calibration,
+    confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,
     quality: core.quality,

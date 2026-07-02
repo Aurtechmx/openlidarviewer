@@ -95,18 +95,24 @@ export interface ValidationReport {
   readonly warnings: string[];
 }
 
-/** The result of asserting that confidence predicts error. */
-export interface CalibrationResult {
+/**
+ * The result of asserting that confidence predicts error — an ORDERING
+ * check, not a calibration. (Renamed from `CalibrationResult` in v0.5.4:
+ * the check only verifies that band error is monotone in confidence; the
+ * genuine probability calibration lives in `calibrateConfidence.ts`, and
+ * two different things must not share one name.)
+ */
+export interface ConfidenceOrderingResult {
   /**
-   * True when the evidence grading is calibrated: higher-confidence
+   * True when the confidence→error ORDERING holds: higher-confidence
    * bands have lower (or statistically equal) error than lower-
    * confidence bands. False when the ordering is violated.
    */
-  readonly calibrated: boolean;
+  readonly orderingConsistent: boolean;
   /**
-   * Whether calibration could be assessed at all. Needs at least two
-   * bands with enough samples; otherwise `false` and `calibrated` is
-   * not meaningful.
+   * Whether the ordering could be assessed at all. Needs at least two
+   * bands with enough samples; otherwise `false` and `orderingConsistent`
+   * is not meaningful.
    */
   readonly assessable: boolean;
   /** Fraction of adjacent band pairs that satisfy monotonicity (0..1). NaN if not assessable. */

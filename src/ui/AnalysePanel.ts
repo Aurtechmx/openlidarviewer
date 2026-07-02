@@ -1456,12 +1456,12 @@ export class AnalysePanel {
       units: 'm',
       reasonWhenAbsent: 'Not enough ground points to cross-validate.',
     });
-    const cal = this._result?.calibration;
+    const cal = this._result?.confidenceOrdering;
     const calText = cal?.assessable
-      ? cal.calibrated
-        ? 'Confidence is calibrated against held-out points.'
+      ? cal.orderingConsistent
+        ? 'Confidence ordering is consistent with held-out error.'
         : 'Warning: confidence does not track error here.'
-      : 'Calibration not assessable on this scan.';
+      : 'Confidence ordering not assessable on this scan.';
     this._validationRow.append(
       this._hint(
         el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),

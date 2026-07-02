@@ -1,11 +1,13 @@
 /**
- * calibrationCheck.test.ts — specs. The calibration check is
+ * calibrationCheck.test.ts — specs. The confidence-ORDERING check is
  * the guard that keeps confidence honest, so these specs pin both the
- * pass and fail directions plus the not-assessable case.
+ * pass and fail directions plus the not-assessable case. (Renamed from
+ * checkCalibration in v0.5.4 — it verifies band-error ordering, not a
+ * probability calibration.)
  */
 
 import { describe, it, expect } from 'vitest';
-import { checkCalibration } from '../src/terrain/validate/calibrationCheck';
+import { checkConfidenceOrdering } from '../src/terrain/validate/calibrationCheck';
 import type { BandError, ValidationReport } from '../src/terrain/validate/ValidationReport';
 
 function report(bands: Partial<Record<BandError['grade'], { rmse: number; count: number }>>): ValidationReport {
@@ -32,16 +34,16 @@ function report(bands: Partial<Record<BandError['grade'], { rmse: number; count:
   };
 }
 
-describe('checkCalibration', () => {
+describe('checkConfidenceOrdering', () => {
   it('passes when error rises as confidence falls', () => {
     const r = report({
       solid: { rmse: 0.1, count: 10 },
       dashed: { rmse: 0.3, count: 10 },
       gap: { rmse: 0.6, count: 10 },
     });
-    const c = checkCalibration(r);
+    const c = checkConfidenceOrdering(r);
     expect(c.assessable).toBe(true);
-    expect(c.calibrated).toBe(true);
+    expect(c.orderingConsistent).toBe(true);
     expect(c.score).toBe(1);
   });
 
@@ -50,17 +52,17 @@ describe('checkCalibration', () => {
       solid: { rmse: 0.6, count: 10 },
       dashed: { rmse: 0.2, count: 10 },
     });
-    const c = checkCalibration(r);
+    const c = checkConfidenceOrdering(r);
     expect(c.assessable).toBe(true);
-    expect(c.calibrated).toBe(false);
-    expect(c.reason).toMatch(/miscalibrated/i);
+    expect(c.orderingConsistent).toBe(false);
+    expect(c.reason).toMatch(/ordering violated/i);
   });
 
   it('is not assessable with fewer than two adequately-sampled bands', () => {
     const r = report({ solid: { rmse: 0.1, count: 10 } });
-    const c = checkCalibration(r);
+    const c = checkConfidenceOrdering(r);
     expect(c.assessable).toBe(false);
-    expect(c.calibrated).toBe(false);
+    expect(c.orderingConsistent).toBe(false);
     expect(Number.isNaN(c.score)).toBe(true);
   });
 
@@ -70,8 +72,8 @@ describe('checkCalibration', () => {
       solid: { rmse: 0.31, count: 10 },
       dashed: { rmse: 0.3, count: 10 },
     });
-    const c = checkCalibration(r);
-    expect(c.calibrated).toBe(true);
+    const c = checkConfidenceOrdering(r);
+    expect(c.orderingConsistent).toBe(true);
   });
 
   it('ignores bands below the minimum sample count', () => {
@@ -80,9 +82,9 @@ describe('checkCalibration', () => {
       dashed: { rmse: 0.05, count: 2 }, // too few → ignored
       gap: { rmse: 0.4, count: 10 },
     });
-    const c = checkCalibration(r);
-    // Only solid + gap considered; 0.1 <= 0.4 → calibrated.
+    const c = checkConfidenceOrdering(r);
+    // Only solid + gap considered; 0.1 <= 0.4 → ordering holds.
     expect(c.consideredBands.map((b) => b.grade)).toEqual(['solid', 'gap']);
-    expect(c.calibrated).toBe(true);
+    expect(c.orderingConsistent).toBe(true);
   });
 });

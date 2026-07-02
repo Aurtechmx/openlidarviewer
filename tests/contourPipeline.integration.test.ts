@@ -13,7 +13,7 @@ import { classifyGroundSmrf } from '../src/terrain/ground/groundFilter';
 import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
 import { buildDtmGrid, isHonestDtm } from '../src/terrain/ground/cellConfidence';
 import { holdoutValidateDtm } from '../src/terrain/validate/holdoutRmse';
-import { checkCalibration } from '../src/terrain/validate/calibrationCheck';
+import { checkConfidenceOrdering } from '../src/terrain/validate/calibrationCheck';
 import { gateIntervals } from '../src/terrain/contour/intervalGate';
 import { contoursAt } from '../src/terrain/contour/contoursAt';
 import { tallyContourSet, interpolatedCaption } from '../src/terrain/contour/evidenceGrade';
@@ -88,8 +88,8 @@ describe('contour pipeline A→B→C (integration)', () => {
     expect(report.rmse).toBeLessThan(5); // smooth hill predicts well
     // calibration is allowed to be assessable or not depending on band
     // population, but must not throw and must return a boolean.
-    const cal = checkCalibration(report);
-    expect(typeof cal.calibrated).toBe('boolean');
+    const cal = checkConfidenceOrdering(report);
+    expect(typeof cal.orderingConsistent).toBe('boolean');
   });
 
   const range = dtm && Number.isFinite(dtm.meanConfidence) ? 8 : 8; // hill amplitude
