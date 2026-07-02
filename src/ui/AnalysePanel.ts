@@ -562,6 +562,33 @@ export class AnalysePanel {
     // only the full numeric breakdown is tiered behind one keyboard-accessible
     // disclosure, with the headline numbers promoted into the primary row.
     this._assessmentRow.append(this._renderAssessMetrics(a.supportingMetrics));
+
+    // Derived complexity metrics (v0.5.4) — one compact line under the
+    // assessment: VRM median [IQR] with its window, TPI dominant class with
+    // its radius, units always stated. The strings are pre-formatted by the
+    // (already lazily-loaded) analysis chunk that computed them, so the
+    // panel stays a passthrough and every surface prints the same words.
+    // The cited density-reliability caveat renders with the standard
+    // `.olv-caveat` honesty treatment; nothing renders when the run
+    // measured nothing (no fabricated band).
+    const cx = this._result.complexity;
+    if (cx && cx.band) {
+      const line = el('div', { className: 'olv-analyse-derived' });
+      line.append(
+        el('span', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
+        el('span', {
+          className: 'olv-analyse-derived-value',
+          text: `${cx.bandLabel} — ${cx.detail}`,
+        }),
+      );
+      this._assessmentRow.append(line);
+      const caveat = cx.warnings.find((w) => w.includes('reliability threshold'));
+      if (caveat) {
+        this._assessmentRow.append(
+          el('div', { className: 'olv-caveat olv-analyse-derived-caveat', text: caveat }),
+        );
+      }
+    }
   }
 
   /**

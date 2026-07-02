@@ -282,3 +282,44 @@ describe('summariseDataset — empty state', () => {
     expect(out?.details.engineStatus).toBe('idle');
   });
 });
+
+describe('summariseDataset — engine-derived complexity (VRM/TPI) override, v0.5.4', () => {
+  const derived = {
+    bucket: 'high' as const,
+    label: 'High',
+    detail:
+      'VRM median 0.0340 [IQR 0.0210], 3×3-cell window (≈3 m), dimensionless; ' +
+      'TPI dominant class middle slope (58% of valid cells), median 0.12 [IQR 0.40] m, ' +
+      'radius 10 cells (≈10 m); derived, confidence 82/100',
+  };
+
+  it('the derived reading overrides the heuristic bucket and carries its detail', () => {
+    const out = summariseDataset({
+      pointCount: 100_000,
+      bboxVolume: 1000,
+      meanSlopeDeg: 2, // heuristic alone would read low
+      complexityDerived: derived,
+    });
+    expect(out).not.toBeNull();
+    expect(out!.complexity.bucket).toBe('high');
+    expect(out!.complexity.label).toBe('High');
+    expect(out!.complexity.detail).toBe(derived.detail);
+  });
+
+  it('without the derived reading nothing changes (heuristic path intact)', () => {
+    const out = summariseDataset({ pointCount: 100_000, bboxVolume: 1000 });
+    expect(out!.complexity.bucket).toBe('unknown');
+    expect(out!.complexity.label).toBe('—');
+    expect(out!.complexity.detail).toBeUndefined();
+  });
+
+  it('a derived reading alone is enough signal to summarise', () => {
+    const out = summariseDataset({ complexityDerived: derived });
+    expect(out).not.toBeNull();
+    expect(out!.complexity.label).toBe('High');
+  });
+
+  it('complexity stays a NEUTRAL signal tier even when derived', () => {
+    expect(signalTier('complexity', 'high')).toBe('neutral');
+  });
+});

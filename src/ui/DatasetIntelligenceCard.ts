@@ -123,10 +123,10 @@ export class DatasetIntelligenceCard {
       this._row(
         'Terrain Complexity',
         this._complexityValue,
-        'How varied the underlying surface is — based on slope, ' +
-          'roughness, and elevation variance once the engine has ' +
-          'sampled the cloud. Renders "—" until a measurement is ' +
-          'available.',
+        'How varied the underlying surface is. After a terrain run this is ' +
+          'the vector ruggedness measure (VRM, slope-independent) banded ' +
+          'over its median — hover the value for the numbers, window and ' +
+          'units. Renders "—" until a measurement is available.',
       ),
       this._row(
         'Ground Visibility',
@@ -264,6 +264,12 @@ export class DatasetIntelligenceCard {
     this._complexityValue.textContent = intel.complexity.label;
     this._complexityValue.dataset.bucket = intel.complexity.bucket;
     this._complexityValue.dataset.tier = signalTier('complexity', intel.complexity.bucket);
+    // Engine-derived (VRM/TPI) reading: the numeric median + IQR with window
+    // and units backs the band label as a hover tooltip — pre-formatted by
+    // the analysis chunk, so this stays a passthrough. Cleared when the
+    // summary reverts to the heuristic (no stale numbers on a new scan).
+    if (intel.complexity.detail) this._complexityValue.title = intel.complexity.detail;
+    else this._complexityValue.removeAttribute('title');
 
     this._groundValue.textContent = intel.groundVisibility.label;
     this._groundValue.dataset.bucket = intel.groundVisibility.bucket;
@@ -291,7 +297,7 @@ export class DatasetIntelligenceCard {
   private _renderDetails(intel: DatasetIntelligence): void {
     const formatPoints = (n: number | null): string =>
       n === null || !Number.isFinite(n) ? '—' : compactPointCount(n);
-    this._detailsBody.replaceChildren(
+    const rows = [
       this._detailRow('Coverage', intel.details.coverageMode),
       this._detailRow('Source Points', formatPoints(intel.details.sourcePointCount)),
       this._detailRow('Analyzed Points', formatPoints(intel.details.analyzedPointCount)),
@@ -300,7 +306,13 @@ export class DatasetIntelligenceCard {
         intel.details.engineStatus === 'active' ? 'Active' : 'Idle',
       ),
       this._detailRow('Metric Version', intel.details.metricVersion),
-    );
+    ];
+    // Engine-derived complexity numbers (VRM median [IQR] + window, TPI
+    // dominant class + radius, units) — only when a run measured them.
+    if (intel.complexity.detail) {
+      rows.splice(4, 0, this._detailRow('Complexity Metrics', intel.complexity.detail));
+    }
+    this._detailsBody.replaceChildren(...rows);
   }
 
   /**

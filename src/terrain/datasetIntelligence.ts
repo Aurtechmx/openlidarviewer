@@ -164,6 +164,16 @@ export interface DatasetIntelligenceInput {
   readonly elevationVariance?: number;
   /** Optional terrain-suggestion (classification histogram). */
   readonly terrainSuggestion?: TerrainSuggestionResult;
+  /**
+   * ENGINE-DERIVED complexity (v0.5.4): the real VRM/TPI summary from a
+   * finished terrain run. When present it OVERRIDES the heuristic
+   * slope/roughness/variance bucket — the band label comes from the VRM
+   * median and `detail` carries the numeric median + IQR with window and
+   * units, pre-formatted by the lazily-loaded analysis chunk so this
+   * always-loaded module stays passthrough. Absent until a run finishes;
+   * the row then renders the heuristic bucket or an honest "—".
+   */
+  readonly complexityDerived?: DerivedComplexity;
   /** Coverage envelope from the Terrain Engine. */
   readonly coverageMeta?: TerrainCoverageMeta;
   /**
@@ -173,12 +183,31 @@ export interface DatasetIntelligenceInput {
   readonly metricVersion?: string;
 }
 
+/**
+ * The engine-derived complexity payload a finished terrain run pushes into
+ * the card (see {@link DatasetIntelligenceInput.complexityDerived}). All
+ * strings are pre-formatted by the analysis chunk — single source, no drift.
+ */
+export interface DerivedComplexity {
+  /** Band from the VRM median — never 'unknown' (absent means unknown). */
+  readonly bucket: Exclude<ComplexityBucket, 'unknown'>;
+  /** Band label ('Low' … 'Very High'). */
+  readonly label: string;
+  /** Numeric backing: VRM median [IQR] + window, TPI class + radius, units. */
+  readonly detail: string;
+}
+
 /** The summarised, presentation-ready view. */
 export interface DatasetIntelligence {
   readonly density: { readonly bucket: DensityBucket; readonly label: string };
   readonly complexity: {
     readonly bucket: ComplexityBucket;
     readonly label: string;
+    /**
+     * Present only for the engine-derived (VRM/TPI) reading: the numeric
+     * median + IQR, window/radius and units behind the band label.
+     */
+    readonly detail?: string;
   };
   readonly groundVisibility: {
     readonly bucket: GroundVisibilityBucket;
@@ -438,10 +467,14 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
     input.meanRoughness !== undefined ||
     input.elevationVariance !== undefined ||
     input.terrainSuggestion !== undefined ||
+    input.complexityDerived !== undefined ||
     input.coverageMeta !== undefined;
   if (!hasAnyData) return null;
   const densityBucket = classifyDensity(input);
-  const complexityBucket = classifyComplexity(input);
+  // The engine-derived VRM/TPI reading (a real measurement with stated
+  // window + units) outranks the heuristic bucket whenever a run supplied it.
+  const derived = input.complexityDerived;
+  const complexityBucket = derived ? derived.bucket : classifyComplexity(input);
   const groundBucket = classifyGroundVisibility(input);
   const coverageBucket = classifyCoverage(input.coverageMeta);
   // v0.3.10 honesty pass — when no engine pass has produced a confidence
@@ -458,7 +491,9 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
     : '—';
   return {
     density: { bucket: densityBucket, label: densityLabel(densityBucket) },
-    complexity: { bucket: complexityBucket, label: complexityLabel(complexityBucket) },
+    complexity: derived
+      ? { bucket: complexityBucket, label: derived.label, detail: derived.detail }
+      : { bucket: complexityBucket, label: complexityLabel(complexityBucket) },
     groundVisibility: {
       bucket: groundBucket,
       label: groundVisibilityLabel(groundBucket),

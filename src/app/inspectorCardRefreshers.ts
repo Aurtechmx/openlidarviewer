@@ -1,9 +1,10 @@
 // Inspector load-time card refreshers — extracted from main.ts.
 //
-// These four functions push freshly-derived facts into the Inspector's
+// These functions push freshly-derived facts into the Inspector's
 // Provenance and Dataset Intelligence cards at scan-open time, from data
 // already in hand (header / source kind). They iterate no points and run no
-// engine analysis; the engine-only rows stay "—" until terrain analysis runs.
+// engine analysis; the engine-only rows stay "—" until terrain analysis runs
+// (whose finished result the two `note*` folders merge back in afterwards).
 //
 // Each refresher depends only on the `Inspector` instance plus the pure
 // provenance/dataset-intelligence helpers, so they extract cleanly behind a
@@ -15,7 +16,10 @@ import {
   signalsForStaticCloud,
   signalsForStreamingCloud,
 } from '../diagnostics/provenanceSignals';
-import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
+import {
+  TERRAIN_METRIC_VERSION,
+  type DerivedComplexity,
+} from '../terrain/datasetIntelligence';
 
 export interface InspectorCardRefreshers {
   /** Refresh the Inspector's provenance panel from a freshly attached static cloud. */
@@ -53,6 +57,17 @@ export interface InspectorCardRefreshers {
    * and is left untouched.
    */
   noteAnalyzedPointCount(count: number): void;
+  /**
+   * Fold a finished terrain run's ENGINE-DERIVED complexity (the VRM/TPI
+   * summary — band + the numeric detail with window and units) into the last
+   * pushed Dataset Intelligence summary, replacing the header-time heuristic.
+   * `null` no-ops (a run that measured nothing leaves the row as it was).
+   * Works for both static and streaming scans; the terrain runner's
+   * stale-result guard means this never fires for a closed/replaced scan,
+   * and a new scan's attach-time refresh (which carries no derived
+   * complexity) naturally resets the row.
+   */
+  noteTerrainComplexity(derived: DerivedComplexity | null): void;
 }
 
 /**
@@ -70,6 +85,11 @@ export function createInspectorCardRefreshers(
   // terrain runner's stale-result guard already prevents a result for a
   // closed scan from reaching `noteAnalyzedPointCount` at all.
   let lastStreamingSummary: Parameters<Inspector['setDatasetIntelligence']>[0] | null = null;
+  // The last summary pushed by EITHER path (static or streaming), so a
+  // finished terrain run can fold its engine-derived complexity into it
+  // (`noteTerrainComplexity`) without re-deriving the header facts. Reset by
+  // every attach-time refresh, so derived numbers never survive a scan swap.
+  let lastSummary: Parameters<Inspector['setDatasetIntelligence']>[0] | null = null;
 
   function refreshProvenance(cloud: {
     readonly sourceFormat: string;
@@ -110,7 +130,7 @@ export function createInspectorCardRefreshers(
       const dy = b.max[1] - b.min[1];
       const dz = b.max[2] - b.min[2];
       const bboxVolume = dx * dy * dz;
-      inspector.setDatasetIntelligence({
+      const summary: Parameters<Inspector['setDatasetIntelligence']>[0] = {
         pointCount: cloud.pointCount,
         bboxVolume: Number.isFinite(bboxVolume) && bboxVolume > 0 ? bboxVolume : undefined,
         coverageMeta: {
@@ -129,9 +149,12 @@ export function createInspectorCardRefreshers(
           warnings: [],
         },
         metricVersion: TERRAIN_METRIC_VERSION,
-      });
+      };
+      lastSummary = summary;
+      inspector.setDatasetIntelligence(summary);
     } catch {
       // A cheap summary failure must never block load completion.
+      lastSummary = null;
       inspector.clearDatasetIntelligence();
     }
   }
@@ -177,9 +200,11 @@ export function createInspectorCardRefreshers(
         metricVersion: TERRAIN_METRIC_VERSION,
       };
       lastStreamingSummary = summary;
+      lastSummary = summary;
       inspector.setDatasetIntelligence(summary);
     } catch {
       lastStreamingSummary = null;
+      lastSummary = null;
       inspector.clearDatasetIntelligence();
     }
   }
@@ -188,13 +213,25 @@ export function createInspectorCardRefreshers(
     const base = lastStreamingSummary;
     if (!base || !Number.isFinite(count) || count <= 0) return;
     const updated = {
-      ...base,
+      // Merge onto the CURRENT summary (which may already carry the derived
+      // complexity), so folding the count never drops the other run-fed field.
+      ...(lastSummary ?? base),
       coverageMeta: {
         ...base.coverageMeta!,
         analyzedPointCount: Math.round(count),
       },
     };
     lastStreamingSummary = updated;
+    lastSummary = updated;
+    inspector.setDatasetIntelligence(updated);
+  }
+
+  function noteTerrainComplexity(derived: DerivedComplexity | null): void {
+    const base = lastSummary;
+    if (!base || !derived) return;
+    const updated = { ...base, complexityDerived: derived };
+    lastSummary = updated;
+    if (lastStreamingSummary) lastStreamingSummary = updated;
     inspector.setDatasetIntelligence(updated);
   }
 
@@ -204,5 +241,6 @@ export function createInspectorCardRefreshers(
     refreshDatasetIntelligenceFromStaticCloud,
     refreshDatasetIntelligenceFromStreamingCloud,
     noteAnalyzedPointCount,
+    noteTerrainComplexity,
   };
 }

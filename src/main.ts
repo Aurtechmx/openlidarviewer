@@ -2858,6 +2858,15 @@ const terrainRunner = createTerrainAnalysisRunner({
     // summary came from the streaming path, and the runner's stale-result
     // guard means this never fires for a closed/replaced scan.
     inspectorCards.noteAnalyzedPointCount(result.dtm.analyzedPointCount);
+    // Fold the run's ENGINE-DERIVED terrain complexity (the VRM/TPI summary
+    // computed alongside the core, off the interactive path) into the card:
+    // the band label replaces the header-time heuristic and the numeric
+    // median + IQR with window and units rides as the row's hover detail. A
+    // run that measured nothing (null summary/band) leaves the row honest.
+    const cx = result.complexity;
+    inspectorCards.noteTerrainComplexity(
+      cx && cx.band ? { bucket: cx.band, label: cx.bandLabel, detail: cx.detail } : null,
+    );
   },
 });
 
