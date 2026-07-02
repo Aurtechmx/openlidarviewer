@@ -138,6 +138,21 @@ describe('alignEpochClouds', () => {
     expect(maxErr).toBeLessThan(0.02); // cm-level, not the ~0.25–0.5 m f32 step
   });
 
+  test('geographic (degree) clouds are never planar-ICP aligned — skipped, untouched', () => {
+    // In lon/lat space 1° of longitude ≠ 1° of latitude (cos φ), so a yaw
+    // solved in degree space is a SHEAR in metres — the "rigid" transform is
+    // geometrically invalid there, and the convergence tolerance/gate are in
+    // degree-metres nonsense units. Alignment must refuse the frame outright.
+    const base = scatter(100).map(([x, y, z]) => [x * 1e-4, y * 1e-4, z] as P);
+    const before: EpochCloud = { ...cloudFrom(base), isGeographic: true };
+    const shifted = cloudFrom(base.map(([x, y, z]) => [x + 1e-5, y, z] as P));
+    const after: EpochCloud = { ...shifted, isGeographic: true };
+    const r = alignEpochClouds(before, after);
+    expect(r.alignment.applied).toBe(false);
+    expect(r.after).toBe(after); // same reference — not transformed
+    expect(summarizeAlignment(r.alignment).toLowerCase()).toContain('geographic');
+  });
+
   test('origins are honoured: a shift expressed via origin still aligns', () => {
     const base = scatter(150);
     const before = cloudFrom(base);

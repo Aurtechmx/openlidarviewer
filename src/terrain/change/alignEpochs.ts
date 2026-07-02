@@ -66,6 +66,15 @@ export interface EpochAlignment {
   readonly translation: Vec3;
   /** Points actually used per cloud in the fit. */
   readonly sampleCount: number;
+  /**
+   * The frame is geographic (degrees), so no fit was attempted at all. A
+   * planar "rigid" transform is geometrically invalid in lon/lat space —
+   * 1° of longitude ≠ 1° of latitude (cos φ), so a yaw solved in degree
+   * space is a SHEAR in metres, and the convergence tolerance / residual
+   * gate would be comparing degree-denominated numbers against metre
+   * thresholds. Reproject to a projected CRS to align epochs.
+   */
+  readonly geographicSkipped?: boolean;
 }
 
 const NO_ALIGNMENT: EpochAlignment = {
@@ -77,6 +86,13 @@ const NO_ALIGNMENT: EpochAlignment = {
   yawDeg: 0,
   translation: ZERO,
   sampleCount: 0,
+};
+
+/** The geographic-frame refusal: nothing attempted, clouds untouched. */
+const GEOGRAPHIC_SKIP: EpochAlignment = {
+  ...NO_ALIGNMENT,
+  degenerate: false,
+  geographicSkipped: true,
 };
 
 /** Stride-sample an interleaved xyz buffer into world-frame points (local + origin). */
@@ -143,6 +159,14 @@ export function alignEpochClouds(
   after: EpochCloud,
   options: AlignEpochOptions = {},
 ): { readonly after: EpochCloud; readonly alignment: EpochAlignment } {
+  // Geographic (degree) frames are refused before any fit: the planar rigid
+  // model is invalid in lon/lat space (see EpochAlignment.geographicSkipped).
+  // Measurements already refuse geographic frames through the trust system;
+  // alignment must not silently apply transforms in one.
+  if (before.isGeographic === true || after.isGeographic === true) {
+    return { after, alignment: GEOGRAPHIC_SKIP };
+  }
+
   const maxSamples = options.maxSamples ?? 1500;
   const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples);
   const afterSample = sampleWorld(after.positions, after.origin ?? ZERO, maxSamples);
@@ -211,6 +235,12 @@ export function alignEpochClouds(
 
 /** A one-line, human-readable summary of an alignment outcome for the UI. */
 export function summarizeAlignment(a: EpochAlignment): string {
+  if (a.geographicSkipped) {
+    return (
+      'Alignment: skipped — geographic (degree) coordinates cannot be rigidly ' +
+      'aligned in the plane; reproject both epochs to a projected CRS first.'
+    );
+  }
   if (!a.attempted || a.degenerate) return 'Alignment: skipped (not enough points to register).';
   if (a.refused) {
     return `Alignment: refused — residual ${a.rmsResidualM.toFixed(2)} m exceeds the limit; comparing as-is.`;
