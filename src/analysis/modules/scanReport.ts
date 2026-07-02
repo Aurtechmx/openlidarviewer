@@ -163,6 +163,21 @@ export const scanReport: AnalysisModule = {
     // file is never presented as a cleanly-loaded one.
     for (const w of meta?.loadWarnings ?? []) rows.push(rowWarn('Load Warning', w));
 
+    // Declared source metadata — the file's own provenance declarations
+    // (standard schema fields plus extension-namespace fields), verbatim.
+    // Rendered by the Inspector as a collapsible "Source metadata" section
+    // with the extension fields under "Extended metadata (file-declared)".
+    // Declared, not verified — only rows the file actually declared appear.
+    const sm = meta?.sourceMetadata;
+    if (sm) {
+      for (const f of sm.standard) {
+        rows.push({ label: f.name, value: f.value, status: 'info', group: 'source-standard' });
+      }
+      for (const f of sm.extensions) {
+        rows.push({ label: f.name, value: f.value, status: 'info', group: 'source-extension' });
+      }
+    }
+
     // Georeferenced bounding box — the scan's extent in real-world
     // coordinates (local bounds plus the origin subtracted on load). Shown
     // under the Advanced report; survey and topographic work needs absolute

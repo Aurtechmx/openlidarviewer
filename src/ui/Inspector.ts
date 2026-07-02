@@ -1460,8 +1460,12 @@ export class Inspector {
   setReport(rows: AnalysisRow[]): void {
     this._report.replaceChildren();
     const advanced: AnalysisRow[] = [];
+    const sourceStd: AnalysisRow[] = [];
+    const sourceExt: AnalysisRow[] = [];
     for (const row of rows) {
-      if (row.advanced) advanced.push(row);
+      if (row.group === 'source-standard') sourceStd.push(row);
+      else if (row.group === 'source-extension') sourceExt.push(row);
+      else if (row.advanced) advanced.push(row);
       else this._report.append(this._reportRow(row));
     }
     if (advanced.length > 0) {
@@ -1474,17 +1478,51 @@ export class Inspector {
         ]),
       );
     }
+    // Declared source metadata — collapsible, rendered only when the file
+    // declared something. Values are verbatim declarations; the disclosure
+    // line keeps the honesty boundary explicit ("declared, not verified").
+    if (sourceStd.length > 0 || sourceExt.length > 0) {
+      const body = el('div', { className: 'olv-advanced-body' });
+      body.append(
+        el('div', {
+          className: 'olv-report-empty',
+          text: 'Declared by the file, not verified by OpenLiDARViewer.',
+        }),
+      );
+      for (const row of sourceStd) body.append(this._reportRow(row, true));
+      if (sourceExt.length > 0) {
+        body.append(
+          el('div', {
+            className: 'olv-advanced-summary',
+            text: 'Extended metadata (file-declared)',
+          }),
+        );
+        for (const row of sourceExt) body.append(this._reportRow(row, true));
+      }
+      this._report.append(
+        el('details', { className: 'olv-advanced' }, [
+          el('summary', { className: 'olv-advanced-summary', text: 'Source metadata' }),
+          body,
+        ]),
+      );
+    }
   }
 
-  /** Build a single status / label / value report row. */
-  private _reportRow(row: AnalysisRow): HTMLElement {
+  /**
+   * Build a single status / label / value report row. `truncate` clips long
+   * declared-metadata values for display, keeping the verbatim value one
+   * hover away in the tooltip.
+   */
+  private _reportRow(row: AnalysisRow, truncate = false): HTMLElement {
     // Honesty stamp — when a metric was computed under a class filter (subset)
     // or is a header figure that can't be class-scoped (notScoped sentinel),
     // append the scope provenance after the value so no filtered readout is
     // shown unqualified. A full / absent scope yields an empty stamp and the
     // row renders exactly as it did before class scoping existed.
     const stamp = row.scope ? scopeStamp(row.scope, classificationLabel) : '';
-    const valueChildren: (HTMLElement | string)[] = [row.value];
+    const clipped = truncate && row.value.length > 96;
+    const shown = clipped ? `${row.value.slice(0, 96)}…` : row.value;
+    const valueChildren: (HTMLElement | string)[] = [shown];
     if (stamp) {
       valueChildren.push(
         el('span', {
@@ -1509,7 +1547,14 @@ export class Inspector {
         } as const)[row.status],
       }),
       el('span', { className: 'olv-report-label', text: row.label }),
-      el('span', { className: 'olv-report-value' }, valueChildren),
+      el(
+        'span',
+        // Truncated declared values keep the verbatim text in the tooltip.
+        clipped
+          ? { className: 'olv-report-value', title: row.value }
+          : { className: 'olv-report-value' },
+        valueChildren,
+      ),
     ]);
   }
 
