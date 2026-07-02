@@ -33,6 +33,18 @@ A patch line on v0.5. Work in progress.
   request, so opening a remote scan still goes straight to its source and nothing
   the user loads is stored. Registered on production secure origins only.
 
+### Reproducibility
+
+- **A one-command evaluation harness** (`npm run repro`). It runs the pure
+  analysis cores over deterministic synthetic fixtures with analytic ground truth
+  and writes a metrics table plus reliability figures: the epoch-registration
+  vertical-bias result (horizontal-only preserves a uniform vertical change while
+  a full-3D fit absorbs it), planar-alignment recovery, stockpile ±-band coverage
+  (empirical vs nominal 0.68), and report-digest determinism. The coverage and
+  bias checks also run as a CI-guarded unit test, so the uncertainty claims are
+  tested rather than asserted. A `REVIEWER_QUICKSTART.md` gives the
+  clone → test → repro → verify path.
+
 ## [0.5.2] - 2026-06-29
 
 A polish release: a stronger integrity digest, a richer earthwork report, an

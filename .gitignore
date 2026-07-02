@@ -90,3 +90,6 @@ ELITE_*.md
 # Serena project metadata (local tooling)
 .serena/
 .claude/
+
+# Generated reproducibility artifacts (regenerate with npm run repro)
+benchmarks/out/
