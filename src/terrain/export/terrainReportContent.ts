@@ -314,9 +314,12 @@ export function buildTerrainReportContent(
     title: 'Quality Metrics',
     rows: [
       { label: 'Vertical RMSEz', value: hasAcc ? fmtM(provenance.accuracy?.rmseZM) : DASH },
-      { label: 'NVA (95%)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
-      { label: 'VVA (95th pct)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
-      { label: 'USGS 3DEP Quality Level', value: qlValue },
+      // "-style (hold-out)" / "(estimated)": the report carries the same
+      // qualifiers as the Analyse panel and the provenance stamp — hold-out
+      // figures via the ASPRS formulas, never a checkpoint assessment.
+      { label: 'NVA-style (95%, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
+      { label: 'VVA-style (95th pct, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
+      { label: 'USGS 3DEP Quality Level', value: qlValue === DASH ? DASH : `${qlValue} (estimated)` },
     ],
   };
 

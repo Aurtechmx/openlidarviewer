@@ -1907,7 +1907,9 @@ export class AnalysePanel {
       ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
       ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
       ['RMSEz', fmtM(a?.rmseZM)],
-      ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? a.qualityLevel : '—'],
+      // "(estimated)" — same qualifier the panel chip and provenance stamp
+      // carry: the QL's RMSEz leg is hold-out-based, never checkpoint-verified.
+      ['USGS 3DEP', a && a.qualityLevel !== 'unknown' ? `${a.qualityLevel} (estimated)` : '—'],
       ['Approx. scale', 'auto — fits sheet'],
       ['Generated', generatedAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],
     ];

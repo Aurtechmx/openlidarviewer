@@ -300,8 +300,11 @@ export function provenanceLines(p: ExportProvenance): string[] {
     // and the Terrain Intelligence Report row can never word the verdict apart.
     kv('Export readiness', readinessLine(p.exportReadiness, p.exportReason)),
     kv('Vertical RMSEz', p.accuracy ? fmtM(p.accuracy.rmseZM) : 'unknown'),
-    kv('NVA (95%)', p.accuracy ? fmtM(p.accuracy.nvaM) : 'unknown'),
-    kv('VVA (95th pct)', p.accuracy ? fmtM(p.accuracy.vvaM) : 'unknown'),
+    // "-style (hold-out)": the stamp states the figures' true strength —
+    // ASPRS 2014 FORMULAS on internally withheld points, not independent
+    // checkpoints (see verticalAccuracy.ts for the honesty boundary).
+    kv('NVA-style (95%, hold-out)', p.accuracy ? fmtM(p.accuracy.nvaM) : 'unknown'),
+    kv('VVA-style (95th pct, hold-out)', p.accuracy ? fmtM(p.accuracy.vvaM) : 'unknown'),
     // "(estimated)" mirrors the panel chip: the QL's RMSEz leg is hold-out-
     // based (withheld points, not independent checkpoints), so the stamped
     // grade must carry the same qualifier the screen does.
