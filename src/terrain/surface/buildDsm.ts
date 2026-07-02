@@ -13,6 +13,7 @@
 import type { TerrainPoint } from '../TerrainContracts';
 import type { VerticalAxis } from '../ground/groundFilter';
 import { axisGetters } from '../ground/axisGetters';
+import { quantileSorted } from '../quantile';
 
 /** A plain elevation surface raster (no confidence — that's the DTM's job). */
 export interface SurfaceGrid {
@@ -152,9 +153,8 @@ export function heightAboveGround(
     if (h > max) max = h;
   }
   heights.sort((x, y) => x - y);
-  const p95 = heights.length
-    ? heights[Math.min(heights.length - 1, Math.max(0, Math.ceil(0.95 * heights.length) - 1))]
-    : Number.NaN;
+  // Project-wide type-7 quantile (was nearest-rank; see src/terrain/quantile.ts).
+  const p95 = heights.length ? quantileSorted(heights, 0.95) : Number.NaN;
   return {
     heightM,
     coveredCells: heights.length,

@@ -39,6 +39,7 @@
  */
 
 import type { Axis } from '../../scanShape';
+import { quantileSorted } from '../../quantile';
 
 export interface WallSliceParams {
   /** Detected up axis (from classifyScanShape). */
@@ -285,18 +286,9 @@ const COMPONENT_MIN_MASS = 16;
 
 const EMPTY = new Float64Array(0);
 
-/** Quantile (linear interpolation) of an ASCENDING-sorted array. */
-function quantileSorted(sorted: number[], p: number): number {
-  const n = sorted.length;
-  if (n === 0) return NaN;
-  if (n === 1) return sorted[0];
-  const idx = Math.min(1, Math.max(0, p)) * (n - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  const frac = idx - lo;
-  return sorted[lo] * (1 - frac) + sorted[hi] * frac;
-}
+// Quantiles use the project-wide type-7 helper (`../../quantile`). This file
+// always used the type-7 convention; only the (identical) local copy was
+// removed when the project converged on the shared definition.
 
 /**
  * Occupancy-weighted bounding box of the (h1, h2) points: rasterise onto a

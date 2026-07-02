@@ -15,6 +15,7 @@
  */
 
 import { hornSlopeAspect, hornSlope } from '../ground/terrainDerivatives';
+import { quantileSorted } from '../quantile';
 
 const DEG = Math.PI / 180;
 
@@ -196,9 +197,8 @@ export function slopeStats(
     else bands.steep++;
   }
   vals.sort((a, b) => a - b);
-  const p95 = vals.length
-    ? vals[Math.min(vals.length - 1, Math.max(0, Math.ceil(0.95 * vals.length) - 1))]
-    : Number.NaN;
+  // Project-wide type-7 quantile (was nearest-rank; see src/terrain/quantile.ts).
+  const p95 = vals.length ? quantileSorted(vals, 0.95) : Number.NaN;
   return {
     coveredCells: vals.length,
     meanDeg: vals.length ? sum / vals.length : Number.NaN,
