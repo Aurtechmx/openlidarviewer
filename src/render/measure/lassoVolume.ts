@@ -81,6 +81,60 @@ export function selectByLasso(input: LassoSelectionInput): number[] {
 }
 
 /**
+ * Visibility filters a lasso selection must respect before it is allowed to
+ * EDIT points (as opposed to merely measure them). Both are optional — an
+ * absent predicate means "that filter isn't active" and costs nothing.
+ */
+export interface SelectionVisibilityFilters {
+  /**
+   * World-space keep test — pass the clip box's `clipKeepsPoint` when a clip
+   * is enabled, so points hidden by the box can't be touched.
+   */
+  readonly keepPoint?: (x: number, y: number, z: number) => boolean;
+  /**
+   * Per-index accept test — pass the same class-visibility predicate the
+   * click-pick path uses, so points of a hidden class can't be touched.
+   */
+  readonly acceptIndex?: (index: number) => boolean;
+}
+
+/**
+ * Restrict a `selectByLasso` result to points the user can currently SEE.
+ * The lasso projector already excludes points behind the camera or outside
+ * the viewport, but NOT points hidden by the clip box or by the class-
+ * visibility filter — applying an edit to the raw selection permanently
+ * rewrote invisible points (reclassify-invisible-points finding, Critical).
+ * Click-picking enforces both rules; this gives the lasso edit path the same
+ * contract, as a pure, unit-testable seam.
+ *
+ * Filters `indices` IN PLACE (compacting, then truncating the array) so the
+ * edit hot path allocates nothing; returns the same array for convenience.
+ * With no active filter the array is returned untouched.
+ */
+export function filterSelectionToVisible(
+  indices: number[],
+  positions: Float32Array,
+  filters: SelectionVisibilityFilters,
+): number[] {
+  const { keepPoint, acceptIndex } = filters;
+  if (!keepPoint && !acceptIndex) return indices;
+  let w = 0;
+  for (let r = 0; r < indices.length; r++) {
+    const i = indices[r];
+    if (
+      keepPoint &&
+      !keepPoint(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2])
+    ) {
+      continue;
+    }
+    if (acceptIndex && !acceptIndex(i)) continue;
+    indices[w++] = i;
+  }
+  indices.length = w;
+  return indices;
+}
+
+/**
  * Andrew's monotone-chain convex hull in 2D. Returns the hull vertices
  * in counter-clockwise order starting from the lowest, leftmost point.
  * Identical inputs collapse to a 1- or 2-point degenerate hull. The

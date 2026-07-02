@@ -14,12 +14,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   selectByLasso,
+  filterSelectionToVisible,
   convexHull2D,
   percentile,
   volumeFromLasso,
   type Vec2,
   type ScreenProjector,
 } from '../src/render/measure/lassoVolume';
+import { clipKeepsPoint, type ClipBox } from '../src/render/clip/clipBox';
 
 function makePositions(triples: number[][]): Float32Array {
   const out = new Float32Array(triples.length * 3);
@@ -103,6 +105,76 @@ describe('selectByLasso — projects 3D points to screen + tests against lasso',
       { x: 0, y: 100 },
     ];
     expect(selectByLasso({ positions, lasso, project })).toEqual([0, 1, 2]);
+  });
+});
+
+describe('filterSelectionToVisible — an edit may only touch visible points', () => {
+  // The reclassify-invisible-points finding (Critical): reclassifyLasso
+  // applied the raw selectByLasso result, permanently rewriting points hidden
+  // by the clip box or the class-visibility filter. This is the pure seam the
+  // Viewer now routes the selection through — same rules as click-picking.
+  const positions = makePositions([
+    [0, 0, 0], // 0 — inside clip box
+    [5, 5, 5], // 1 — outside clip box
+    [1, 1, 1], // 2 — inside clip box
+  ]);
+
+  it('returns the selection untouched (same array) when no filter is active', () => {
+    const indices = [0, 1, 2];
+    const out = filterSelectionToVisible(indices, positions, {});
+    expect(out).toBe(indices);
+    expect(out).toEqual([0, 1, 2]);
+  });
+
+  it('drops points the clip predicate hides (keep-inside box)', () => {
+    const clip: ClipBox = {
+      box: { min: [-1, -1, -1], max: [2, 2, 2] },
+      mode: 'keep-inside',
+      enabled: true,
+    };
+    const indices = [0, 1, 2];
+    const out = filterSelectionToVisible(indices, positions, {
+      keepPoint: (x, y, z) => clipKeepsPoint(clip, [x, y, z]),
+    });
+    expect(out).toEqual([0, 2]); // point 1 is clipped away, so it may not be edited
+  });
+
+  it('drops points of a hidden class via the per-index predicate', () => {
+    const classification = Uint8Array.from([2, 5, 2]); // point 1 is class 5
+    const hidden = new Set([5]);
+    const indices = [0, 1, 2];
+    const out = filterSelectionToVisible(indices, positions, {
+      acceptIndex: (i) => !hidden.has(classification[i]),
+    });
+    expect(out).toEqual([0, 2]);
+  });
+
+  it('applies both filters together and compacts in place', () => {
+    const classification = Uint8Array.from([2, 2, 5]);
+    const clip: ClipBox = {
+      box: { min: [-1, -1, -1], max: [2, 2, 2] },
+      mode: 'keep-inside',
+      enabled: true,
+    };
+    const indices = [0, 1, 2];
+    const out = filterSelectionToVisible(indices, positions, {
+      keepPoint: (x, y, z) => clipKeepsPoint(clip, [x, y, z]), // drops 1
+      acceptIndex: (i) => classification[i] !== 5, // drops 2
+    });
+    expect(out).toBe(indices); // in place — no new array
+    expect(out).toEqual([0]);
+  });
+
+  it('a keep-outside clip inverts which points remain editable', () => {
+    const clip: ClipBox = {
+      box: { min: [-1, -1, -1], max: [2, 2, 2] },
+      mode: 'keep-outside',
+      enabled: true,
+    };
+    const out = filterSelectionToVisible([0, 1, 2], positions, {
+      keepPoint: (x, y, z) => clipKeepsPoint(clip, [x, y, z]),
+    });
+    expect(out).toEqual([1]);
   });
 });
 

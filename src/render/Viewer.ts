@@ -63,7 +63,7 @@ import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
-import { type ClipBox, countKept } from './clip/clipBox';
+import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
@@ -74,6 +74,7 @@ import {
 } from './splatShader';
 import type { SplatMode } from './splatShader';
 import {
+  filterSelectionToVisible,
   selectByLasso,
   volumeFromLassoWithFootprint,
 } from './measure/lassoVolume';
@@ -2738,6 +2739,21 @@ export class Viewer {
       return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
     };
     const indices = selectByLasso({ lasso, positions: entry.cloud.positions, project });
+    // An EDIT must only touch points the user can currently see. The lasso
+    // projector already drops points behind the camera, but not points hidden
+    // by the clip box or the class-visibility filter — the raw selection
+    // permanently rewrote invisible points (reclassify-invisible-points
+    // finding, Critical). Apply the same visibility rules click-picking
+    // enforces: the pure `clipKeepsPoint` contract the GPU clip planes
+    // realise, and the `_classPickAccept` mask, so screen and edit agree
+    // point-for-point. In-place filter — no extra allocation on the hot path.
+    const clip = this._clip;
+    filterSelectionToVisible(indices, entry.cloud.positions, {
+      keepPoint: clip?.enabled
+        ? (x, y, z) => clipKeepsPoint(clip, [x, y, z])
+        : undefined,
+      acceptIndex: this._classPickAccept(entry.cloud.classification),
+    });
     const buf = entry.cloud.classification;
     let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
     recordEdit(this._historyFor(id), buf, () => {
