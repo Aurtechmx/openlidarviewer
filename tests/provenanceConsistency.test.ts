@@ -40,6 +40,7 @@ import {
   type TerrainReportContent,
 } from '../src/terrain/export/terrainReportContent';
 import { terrainAssessment } from '../src/terrain/contour/terrainAssessment';
+import { SLOPE_ASPECT_CONVENTION_NOTE } from '../src/terrain/complexity/complexitySummary';
 import { recommendedWorkflows } from '../src/terrain/contour/recommendedWorkflow';
 import { terrainProducts } from '../src/terrain/contour/terrainProducts';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
@@ -99,6 +100,27 @@ function readyResult(): AnalyseContoursResult {
     cellStatusTally: { measured: 90, interpolated: 5, lowConfidence: 0, edgeRisk: 0, empty: 5, total: 100 },
     excludedByClassification: 1200,
     generationParams: { interpolation: 'geodesic', contourStyle: 'smooth', smoothing: true, despike: true, aggregation: 'median' },
+    // Derived terrain complexity (v0.5.4) — the summary the core computes.
+    // Every provenance/report surface must stamp these SAME strings.
+    complexity: {
+      vrmMedian: 0.034, vrmP25: 0.02, vrmP75: 0.041, vrmIqr: 0.021,
+      vrmWindowCells: 3, vrmWindowGroundM: 3,
+      tpiMedian: 0.12, tpiIqr: 0.4,
+      tpiRadiusCells: 10, tpiRadiusGroundM: 10,
+      tpiDominantClass: 'middle', tpiDominantFraction: 0.58,
+      band: 'high', bandLabel: 'High', zUnitLabel: 'm',
+      confidence: 82, validCellCount: 95, cellCount: 100,
+      vrmText: 'median 0.0340 [IQR 0.0210], 3×3-cell window (≈3.0 m), dimensionless',
+      tpiText:
+        'dominant class middle slope (58% of valid cells), median 0.12 [IQR 0.40] m, radius 10 cells (≈10 m)',
+      detail:
+        'VRM median 0.0340 [IQR 0.0210], 3×3-cell window (≈3.0 m), dimensionless; TPI dominant class middle slope (58% of valid cells), median 0.12 [IQR 0.40] m, radius 10 cells (≈10 m); derived, confidence 82/100',
+      slopeAspectConvention: SLOPE_ASPECT_CONVENTION_NOTE,
+      groundDensityPerM2: 4.2,
+      warnings: [
+        '5 of 100 cells (5%) are voids or invalid — summarised over the 95 valid cells only',
+      ],
+    },
     warnings: ['Removed 2 outlier ground cell(s) before building the surface.'],
   } as unknown as AnalyseContoursResult;
 }
@@ -433,6 +455,51 @@ describe('provenance consistency — export-ready run', () => {
   it('a fully-ready DEM README carries no PRELIMINARY caveat', async () => {
     const { demReadme } = await readyOutputs();
     expect(demReadme).not.toMatch(/PRELIMINARY/);
+  });
+
+  it('the shared provenance carries the derived-complexity record — reproducible parameters', async () => {
+    const { prov } = await readyOutputs();
+    const cx = prov.complexity!;
+    expect(cx).not.toBeNull();
+    // Metric name + window/radius in cells AND ground units.
+    expect(cx.vrmWindowCells).toBe(3);
+    expect(cx.vrmWindowGroundM).toBe(3);
+    expect(cx.tpiRadiusCells).toBe(10);
+    expect(cx.tpiRadiusGroundM).toBe(10);
+    expect(cx.vrmText).toContain('3×3-cell window');
+    expect(cx.tpiText).toContain('radius 10 cells');
+    // Z units + the slope/aspect convention note.
+    expect(cx.zUnit).toBe('m');
+    expect(cx.convention).toBe(SLOPE_ASPECT_CONVENTION_NOTE);
+    expect(cx.convention).toContain('Horn (1981)');
+    // Derived confidence + ordered caveats.
+    expect(cx.confidence).toBe(82);
+    expect(cx.caveats).toHaveLength(1);
+    expect(cx.caveats[0]).toContain('voids or invalid');
+  });
+
+  it('README, DXF and SVG stamp the complexity lines verbatim; GeoJSON mirrors the record', async () => {
+    const { prov, demReadme, dxf, svg, geojson, report } = await readyOutputs();
+    const cx = prov.complexity!;
+    for (const text of [demReadme, dxf, svg]) {
+      expect(kvValue(text, 'Ruggedness (VRM)')).toBe(cx.vrmText);
+      expect(kvValue(text, 'Landform (TPI)')).toBe(cx.tpiText);
+      expect(kvValue(text, 'Convention')).toBe(cx.convention);
+      expect(kvValue(text, 'Complexity conf.')).toBe('82/100 (derived from data support)');
+    }
+    // GeoJSON metadata carries the structured record field-by-field.
+    expect(geojson.metadata.complexity).toEqual({
+      ...cx,
+      caveats: [...cx.caveats],
+    });
+    // The report's Terrain Assessment rows print the SAME strings, and the
+    // complexity caveats join the report warnings (deduped, order kept).
+    expect(reportRow(report, 'Terrain Assessment', 'Ruggedness (VRM)')).toBe(cx.vrmText);
+    expect(reportRow(report, 'Terrain Assessment', 'Landform (TPI)')).toBe(cx.tpiText);
+    expect(reportRow(report, 'Terrain Assessment', 'Complexity confidence')).toBe(
+      '82/100 (derived from data support)',
+    );
+    expect(report.warnings).toContain(cx.caveats[0]);
   });
 });
 

@@ -48,6 +48,44 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
 export const NOT_SURVEY_GRADE_NOTE =
   'Suitability: not survey-grade unless validated against ground-truth control.';
 
+/**
+ * Derived terrain-complexity record (v0.5.4), present only when the run
+ * measured it. Reproducible parameters by construction: metric names,
+ * window/radius in CELLS and ground METRES, TPI's Z unit, the slope/aspect
+ * convention note, the derived confidence, and the ordered caveats
+ * (including the cited density-reliability warning). The display strings
+ * (`vrmText` / `tpiText`) are the SAME pre-formatted strings the panel and
+ * card render, so no artifact can word the figures apart.
+ */
+export interface ExportProvenanceComplexity {
+  /** VRM median over valid cells (Sappington et al. 2007), dimensionless. */
+  readonly vrmMedian: number;
+  /** VRM interquartile range (dispersion is mandatory). */
+  readonly vrmIqr: number;
+  /** VRM moving-window edge length in cells (3 = 3×3). */
+  readonly vrmWindowCells: number;
+  /** VRM window edge in ground metres, or null when metres were unknown. */
+  readonly vrmWindowGroundM: number | null;
+  /** 'median 0.0340 [IQR 0.0210], 3×3-cell window (≈3 m), dimensionless'. */
+  readonly vrmText: string;
+  /** TPI neighbourhood radius in cells (Weiss 2001). */
+  readonly tpiRadiusCells: number;
+  /** TPI radius in ground metres, or null when metres were unknown. */
+  readonly tpiRadiusGroundM: number | null;
+  /** Dominant Weiss slope-position class name, or null when not derived. */
+  readonly tpiDominantClass: string | null;
+  /** The TPI display line (dominant class, median [IQR] + Z unit, radius). */
+  readonly tpiText: string;
+  /** Z unit TPI is expressed in ('m' / 'ft' / 'z-units'). */
+  readonly zUnit: string;
+  /** Slope/aspect convention + metric definitions note. */
+  readonly convention: string;
+  /** Derived 0–100 confidence (valid fraction × window support, min of cores). */
+  readonly confidence: number;
+  /** Ordered caveats, incl. the cited < 4 pts/m² density-reliability warning. */
+  readonly caveats: ReadonlyArray<string>;
+}
+
 /** Validated vertical-accuracy figures, present only when the run measured them. */
 export interface ExportProvenanceAccuracy {
   /** Vertical RMSEz in metres. */
@@ -99,6 +137,8 @@ export interface ExportProvenance {
   readonly exportReason: string;
   /** Validated accuracy, or null when the run could not measure it. */
   readonly accuracy: ExportProvenanceAccuracy | null;
+  /** Derived terrain complexity, or null when the run measured none. */
+  readonly complexity: ExportProvenanceComplexity | null;
   /** Mean ground returns per square metre, or null when unknown. */
   readonly pointDensityPerM2: number | null;
   /** Measured DTM cell count, or null when unavailable on the result. */
@@ -178,6 +218,29 @@ export function buildExportProvenance(
 
   const tally = result.cellStatusTally ?? null;
 
+  // Derived complexity — present only when the run produced a banded summary
+  // (a run that measured nothing stays null: no fabricated figures). The
+  // fields are a straight projection of the summary the core computed.
+  const cx = result.complexity ?? null;
+  const complexity: ExportProvenanceComplexity | null =
+    cx && cx.band != null
+      ? {
+          vrmMedian: cx.vrmMedian,
+          vrmIqr: cx.vrmIqr,
+          vrmWindowCells: cx.vrmWindowCells,
+          vrmWindowGroundM: cx.vrmWindowGroundM,
+          vrmText: cx.vrmText,
+          tpiRadiusCells: cx.tpiRadiusCells,
+          tpiRadiusGroundM: cx.tpiRadiusGroundM,
+          tpiDominantClass: cx.tpiDominantClass,
+          tpiText: cx.tpiText,
+          zUnit: cx.zUnitLabel,
+          convention: cx.slopeAspectConvention,
+          confidence: cx.confidence,
+          caveats: [...cx.warnings],
+        }
+      : null;
+
   return {
     software: SOFTWARE_NAME,
     softwareVersion: opts.softwareVersion ?? 'unknown',
@@ -196,6 +259,7 @@ export function buildExportProvenance(
     exportReadiness: assessment.exportReadiness,
     exportReason: assessment.exportReason,
     accuracy,
+    complexity,
     pointDensityPerM2,
     measuredCells: tally ? tally.measured : null,
     totalCells: tally ? tally.total : null,
@@ -244,6 +308,17 @@ export function provenanceLines(p: ExportProvenance): string[] {
       p.pointDensityPerM2 != null ? `${p.pointDensityPerM2.toFixed(1)} pts/m²` : 'unknown',
     ),
   ];
+  // Derived complexity (v0.5.4): metric, window/radius in cells AND ground
+  // metres, Z units and the convention note — reproducible parameters, worded
+  // identically to the panel/card (the texts are the same strings).
+  if (p.complexity) {
+    lines.push(
+      kv('Ruggedness (VRM)', p.complexity.vrmText),
+      kv('Landform (TPI)', p.complexity.tpiText),
+      kv('Convention', p.complexity.convention),
+      kv('Complexity conf.', `${p.complexity.confidence}/100 (derived from data support)`),
+    );
+  }
   if (p.classScope) lines.push(kv('Class scope', p.classScope));
   lines.push(kv('Note', p.notSurveyGrade));
   return lines;
@@ -278,6 +353,23 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
           nvaM: p.accuracy.nvaM,
           vvaM: p.accuracy.vvaM,
           usgsQualityLevel: p.accuracy.usgsQualityLevel,
+        }
+      : null,
+    complexity: p.complexity
+      ? {
+          vrmMedian: p.complexity.vrmMedian,
+          vrmIqr: p.complexity.vrmIqr,
+          vrmWindowCells: p.complexity.vrmWindowCells,
+          vrmWindowGroundM: p.complexity.vrmWindowGroundM,
+          vrmText: p.complexity.vrmText,
+          tpiRadiusCells: p.complexity.tpiRadiusCells,
+          tpiRadiusGroundM: p.complexity.tpiRadiusGroundM,
+          tpiDominantClass: p.complexity.tpiDominantClass,
+          tpiText: p.complexity.tpiText,
+          zUnit: p.complexity.zUnit,
+          convention: p.complexity.convention,
+          confidence: p.complexity.confidence,
+          caveats: [...p.complexity.caveats],
         }
       : null,
     pointDensityPerM2: p.pointDensityPerM2,
