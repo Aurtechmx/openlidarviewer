@@ -50,6 +50,32 @@ terrain/profile hardenings and eight Phase 0 Criticals.
 
 ### Fixed
 
+- **The deployed site no longer runs slower than a local build.** The live
+  deployment's source transform rewrites property access into decode-wrapper
+  calls — and inside per-POINT loops that meant one wrapper call per point per
+  access. On a 2.5 M-point scan the deployed site burned seconds a plain build
+  does not: the scan-attach main-thread task grew from 6.6 s to 10.2 s and a
+  single measure/probe pick from 56 ms to 178 ms (3.2×, profiled headless
+  A/B). The six modules that carry whole-cloud loops (health check, cloud
+  bounds, colour encoding, pick math, snap grid, viewer attach/render loop)
+  are now excluded from the transform, and the deployed build measures at
+  parity with the plain one. Local files still never leave the machine — this
+  was compute, not upload.
+- **Opening a large local file no longer freezes the viewer for seconds.** The
+  Scan Report's health check walks every point several times (duplicate-point
+  scan, median/MAD, outliers, finite check) and ran synchronously at scan
+  attach — ~5 s of frozen UI on a multi-million-point cloud, on top of the
+  transform cost above. It now runs when the main thread next goes idle: the
+  scan renders and navigates immediately and the report card fills in a beat
+  later. Measured attach-path blocking fell from 6.6 s to 0.6 s at 2.5 M
+  points.
+- **Offline support now works on sub-path deployments.** The service worker
+  registered as `/sw.js` — an origin-root path, so any deploy under a sub-path
+  (GitHub Pages `…/repo/`) 404'd the registration and silently lost offline
+  support and installability. The worker URL now resolves relative to the page
+  (unit-tested), and the worker's sample-dataset cache exclusion resolves
+  against its registration scope the same way.
+
 Nine correctness hardenings from the v0.4.x terrain/profile audit, ported onto
 the 0.5 pipeline (each verified at its current location before fixing, every
 new expectation hand-computed):
