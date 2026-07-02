@@ -138,89 +138,62 @@ function liveSourceTransformPlugin() {
  * "Failed to fetch dynamically imported module" the v0.3.1 error classifier
  * surfaces as a "resource-load" toast, but never silently.
  */
+/**
+ * Auto-derive the chunk names lazyChunks.ts is contracted to emit.
+ *
+ * Every dynamic-import seam lives in `src/lazyChunks.ts` (that is the whole
+ * point of the module — see its header). The guard used to pin a hand-copied
+ * subset of those chunk names, which drifted as loaders were added: by v0.5.3
+ * the module carried ~20 loaders (kmlExport, compareEpochs, alignEpochs,
+ * session, viewCube, WorkflowConfigPanel, reportVerifier, …) the guard never
+ * checked. Parsing the import() specifiers at config time makes the pinned
+ * list structurally impossible to under-cover — a new loader is guarded the
+ * moment it is written, and a scrambled specifier still fails the build.
+ *
+ * Rollup names each split chunk after the imported module's basename, so the
+ * basename is the guard key (same `.includes` match as the static pins).
+ */
+function lazyChunkNames(): string[] {
+  const src = readFileSync(new URL('./src/lazyChunks.ts', import.meta.url), 'utf8');
+  // Strip comments so documentation examples (e.g. `import('./literal')`)
+  // never leak into the contract.
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const specifiers = [...code.matchAll(/import\(\s*'([^']+)'\s*\)/g)].map((m) => m[1]);
+  const names = [...new Set(specifiers.map((s) => s.split('/').pop() as string))];
+  if (names.length < 20) {
+    // Refactor tripwire — lazyChunks.ts holds far more seams than this; a
+    // tiny parse result means the regex or the module moved out from under us.
+    throw new Error(
+      `chunkEmissionGuard: parsed only ${names.length} dynamic-import seams from src/lazyChunks.ts — expected 20+. ` +
+        'The lazyChunks parse in vite.config.ts no longer matches the module; fix the parser, do not ship unguarded.',
+    );
+  }
+  return names;
+}
+
 function chunkEmissionGuard() {
   const required = [
-    // COPC streaming subsystem.
-    'StreamingPointCloud',
-    'StreamingScheduler',
-    'StreamingRenderer',
-    'streamingColors',
+    // Every lazyChunks.ts seam, derived from the module itself at config
+    // time — see lazyChunkNames(). The static pins below cover only what
+    // lazyChunks.ts cannot know about: worker files reached through
+    // `new Worker(new URL(...))`, dynamic imports living in other excluded
+    // modules, and the manualChunks vendor splits.
+    ...lazyChunkNames(),
+    // Worker files reached through `new Worker(new URL(...))` — their URL
+    // literals live in the excluded worker-client modules, not lazyChunks.ts,
+    // so they must stay pinned by hand. Losing one means the worker 404s at
+    // runtime (COPC/EPT tile decodes reject; terrain-core offload silently
+    // falls back to main-thread compute) — a regression that drops them must
+    // fail the build loudly.
     'copcWorker',
-    'copcWorkerClient',
-    // EPT laszip decode worker offload — `eptLaszipWorkerClient.ts` spins up
-    // `eptLaszipWorker.ts` via `new Worker(new URL(...))`. Same hazard as the
-    // COPC and terrain workers: the live transform's stringArray pass would
-    // scramble the worker-URL literal, so both files are in the obfuscator
-    // `exclude` list above and both chunks are pinned here. Losing either chunk
-    // means `new Worker(...)` 404s at runtime and every EPT laszip tile decode
-    // rejects — so a regression that drops them must fail the build loudly.
     'eptLaszipWorker',
-    'eptLaszipWorkerClient',
-    // Terrain core worker offload — `terrainCoreWorkerClient.ts` spins up
-    // `terrainCoreWorker.ts` via `new Worker(new URL(...))`. The live
-    // transform's stringArray pass scrambles that worker-URL literal, so
-    // both files are in the obfuscator `exclude` list above and both chunks
-    // are pinned here. Losing either chunk means `new Worker(...)` throws at
-    // runtime and the offload silently falls back to main-thread compute —
-    // so a regression that drops them must fail the build loudly instead.
     'terrainCoreWorker',
+    // Dynamic imports living inside OTHER excluded modules (not lazyChunks.ts):
+    // `computeTerrainCoreAsync.ts` lazy-imports the terrain worker client;
+    // `loadLas.ts` lazy-imports `lazDecode` (laz-perf JS + embedded WASM) so
+    // uncompressed `.las` files never download the decompressor.
     'terrainCoreWorkerClient',
-    'LocalFileRangeSource',
-    'HttpRangeSource',
-    // v0.3.1 — lazy on-demand chunks.
-    'exporters',
-    'DebugOverlay',
-    'streamingBenchmark',
-    'InstrumentedRangeSource',
-    // v0.3.2 — Visual Export Studio (orthographic-rgb / height-map /
-    // intensity / classification; depth lands in v0.3.3).
-    'export',
-    // v0.3.3 — EPT (Entwine Point Tile) module: detection + streaming
-    // source + binary tile decoder + chunk decoder. All lazy — only
-    // loaded when the user opens an ept.json URL. Pinned here so a
-    // refactor that accidentally drags EPT into the initial bundle
-    // fails the live transformed build loudly.
-    'eptDetect',
-    'EptStreamingPointCloud',
-    'EptChunkDecoder',
-    // v0.3.4 — Viewer (three.js + render controllers) deferred so it
-    // stays out of the initial shell. The empty-state UI loads without
-    // three.js; the first scan-open lazy-imports the Viewer module.
-    'Viewer',
-    // v0.3.3 Phase 9 — EPT remote-UX polish (URL validator + error
-    // classifier). Pinned so a refactor that drags it into the initial
-    // bundle fails the live transformed build loudly.
-    'eptUrlValidation',
-    // v0.3.4 — hardened remote-EPT transport (retry + timeout + abort
-    // discipline). Same lazy boundary as the rest of EPT.
-    'eptTransport',
-    // v0.3.3 Phase 2 — PDF Report Engine + pdf-lib (~150 KB dep).
-    // Lazy — only loaded when the user clicks Export → Report PDF.
-    'report',
-    // v0.3.6 chunk-architecture refactor.
-    // `lazDecode` carries laz-perf JS + embedded WASM; lazy-imported
-    // by loadLas.ts when a `.laz` file is opened (and by EPT laszip
-    // tile decode). Uncompressed `.las` files never download it.
     'lazDecode',
-    // v0.4.5 — runtime dynamic-import seams that used to live inline in
-    // main.ts / CatalogPanel.ts (transformed modules), where the live
-    // stringArray pass scrambled the specifiers: `planetaryComputer` and
-    // `rgbAutoNormalize` were silently never emitted (dead catalog search
-    // and Auto-balance on the deployed site) and the `loadLas` pre-warm
-    // 404'd on every boot. All four now route through lazyChunks.ts;
-    // pinned so a re-inline fails the build loudly.
-    'loadLas',
-    'planetaryComputer',
-    'rgbAutoNormalize',
-    'embedBridge',
-    // v0.4.5 — interior floor-plan pipeline + Space/Object report PDF,
-    // reached only through lazyChunks.ts (loadFloorPlan / loadSpaceReportPdf).
-    // Pinned like every other lazy seam so a refactor that re-inlines the
-    // import() (or a transform pass that scrambles it) fails the build
-    // loudly instead of silently killing the panel's export buttons.
-    'extractFloorPlan',
-    'floorPlanSvg',
-    'spaceReportPdf',
     // Vendor chunks pinned via manualChunks. The presence of these
     // chunks proves the manualChunks rule is still active — losing them
     // would re-inflate the loadLas / report chunks.
