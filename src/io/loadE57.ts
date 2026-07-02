@@ -29,6 +29,29 @@ function clampU16(v: number): number {
   return v < 0 ? 0 : v > 65535 ? 65535 : Math.round(v);
 }
 
+/**
+ * Per-scan scale that carries intensity into the Uint16 store. E57 intensity
+ * is commonly a UNIT-RANGE FLOAT (a real user file declares intensityLimits
+ * 0.2800009–0.7380647): rounding those floats straight into a Uint16
+ * collapsed the whole continuous channel to {0, 1} — silent destruction that
+ * reached every downstream surface, including the CSV/XYZ exports. This
+ * mirrors the PTS/PCD house rule: a unit-range channel (declared
+ * intensityMaximum ≤ 1 when the scan declares limits, otherwise an observed
+ * maximum ≤ 1) is rescaled to the full 0–65535 span — absolute values scale
+ * by 65535, they are NOT min–max stretched, so the declared magnitudes keep
+ * their meaning. A wider range is taken as a raw value and only clamped.
+ */
+function intensityScaleFor(scan: E57ScanData): number {
+  const col = scan.columns.intensity;
+  if (!col) return 1;
+  if (scan.intensityMax !== null) {
+    return scan.intensityMax > 0 && scan.intensityMax <= 1 ? 65535 : 1;
+  }
+  let max = 0;
+  for (let i = 0; i < col.length; i++) if (col[i] > max) max = col[i];
+  return max > 0 && max <= 1 ? 65535 : 1;
+}
+
 /** Rotate a point by a quaternion `[w, x, y, z]`. */
 function rotate(
   px: number,
@@ -152,6 +175,7 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
     const invalid = col.cartesianInvalidState;
     const pose: E57Pose | null = scan.pose;
     const colorScale = scan.colorMax && scan.colorMax > 0 ? 255 / scan.colorMax : 1;
+    const intensityScale = intensity ? intensityScaleFor(scan) : 1;
 
     for (let i = 0; i < scan.recordCount; i++) {
       if (invalid && invalid[i] !== 0) continue;
@@ -174,7 +198,7 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
         colors[w * 3 + 1] = clampByte(col.colorGreen[i] * colorScale);
         colors[w * 3 + 2] = clampByte(col.colorBlue[i] * colorScale);
       }
-      if (intensity && col.intensity) intensity[w] = clampU16(col.intensity[i]);
+      if (intensity && col.intensity) intensity[w] = clampU16(col.intensity[i] * intensityScale);
       if (classification && col.classification) {
         classification[w] = clampByte(col.classification[i]);
       }
