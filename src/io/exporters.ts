@@ -9,9 +9,30 @@
  * Coordinates are written in **global** space (the cloud's local positions
  * plus its `origin`), so an exported file carries real-world survey
  * coordinates and round-trips cleanly back through the importer.
+ *
+ * Two honesty rules (v0.5.4) apply to every format with a comment
+ * convention (XYZ `#`, PLY `comment`, OBJ `#`):
+ *
+ *   - **Declared provenance rides along.** When the cloud carries
+ *     `CloudMetadata.sourceMetadata`, the header states the exporter +
+ *     version, the source file name, the declared source (sensorModel or
+ *     scan name), the declared license and limitations when present — each
+ *     verbatim, single-line-sanitised, and explicitly qualified as declared
+ *     by the file, not verified by OpenLiDARViewer. A cloud that declares
+ *     nothing gets no section, so metadata-less exports stay byte-identical
+ *     to earlier releases.
+ *   - **Dropped channels are disclosed.** A channel the cloud carries but
+ *     the writer does not put in the file (intensity/classification in OBJ,
+ *     everything beyond xyz+rgb in PLY, normals in XYZ) is named in a
+ *     comment — a silent drop looks identical to "the source never had it".
+ *
+ * CSV is the deliberate exception: it has no comment convention naive
+ * parsers survive, so it stays pure data — header row, then rows. Its
+ * provenance story is the source file itself.
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import type { SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
 
 /** The export formats this module produces. */
 export type ExportFormat = 'xyz' | 'csv' | 'ply' | 'obj';
@@ -23,8 +44,7 @@ function coord(v: number): string {
 
 /**
  * Horizontal-coordinate formatter (v0.4.5, workplan C5 — extended to PLY/OBJ
- * in v0.5.4; those writers kept the fixed 3 dp the C5 fix removed from
- * XYZ/CSV). Projected/local frames keep the millimetre 3 dp; a GEOGRAPHIC
+ * in v0.5.4). Projected/local frames keep the millimetre 3 dp; a GEOGRAPHIC
  * CRS gets 7 dp, because 3 dp of a degree is ~110 m of position — the old
  * fixed precision silently destroyed lat/lon exports. 1e-7° ≈ 1.1 cm at the
  * equator, matching the survey convention for degree output. Z stays 3 dp
@@ -34,16 +54,95 @@ function horizontalCoordFormatter(cloud: PointCloud): (v: number) => string {
   return cloud.metadata?.crs?.isGeographic === true ? (v) => v.toFixed(7) : coord;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Declared provenance + channel-drop disclosure (v0.5.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Longest declared value quoted into a header line before truncation. */
+const DECLARED_VALUE_MAX = 160;
+
+/**
+ * Collapse a declared value to one line and cap its length — a declared
+ * string is verbatim FILE data, so it must never be able to inject a line
+ * break (which would corrupt line-oriented formats) or swallow a header in
+ * pathological lengths. Truncation is disclosed by the ellipsis.
+ */
+function declaredLine(v: string): string {
+  const flat = v.replace(/\s+/g, ' ').trim();
+  return flat.length > DECLARED_VALUE_MAX ? `${flat.slice(0, DECLARED_VALUE_MAX)}…` : flat;
+}
+
+/**
+ * Find a declared field by its local name. Multi-scan files prefix per-scan
+ * fields ("scan 2 sensorModel"), so the suffix match covers both shapes;
+ * standard fields win over extension-namespace ones of the same name.
+ */
+function declaredField(
+  meta: SourceMetadata,
+  name: string,
+): DeclaredMetadataField | undefined {
+  const match = (f: DeclaredMetadataField): boolean =>
+    f.name === name || f.name.endsWith(` ${name}`);
+  return meta.standard.find(match) ?? meta.extensions.find(match);
+}
+
+/**
+ * The declared-provenance header lines (WITHOUT a comment prefix — each
+ * format prepends its own). Emitted only when the cloud carries declared
+ * source metadata; everything quoted is the file's own declaration, so the
+ * block closes with the standing not-verified disclosure.
+ */
+function provenanceLines(cloud: PointCloud): string[] {
+  const meta = cloud.metadata?.sourceMetadata;
+  if (!meta || (meta.standard.length === 0 && meta.extensions.length === 0)) return [];
+  const lines: string[] = [
+    `exported by OpenLiDARViewer v${__APP_VERSION__}`,
+    `source file: ${declaredLine(cloud.name)}`,
+  ];
+  const source = declaredField(meta, 'sensorModel') ?? declaredField(meta, 'name');
+  if (source) lines.push(`declared source: ${declaredLine(source.value)}`);
+  const license = declaredField(meta, 'license');
+  if (license) lines.push(`declared license: ${declaredLine(license.value)}`);
+  const limitations = declaredField(meta, 'limitations');
+  if (limitations) lines.push(`declared limitations: ${declaredLine(limitations.value)}`);
+  lines.push('declared by the file, not verified by OpenLiDARViewer');
+  return lines;
+}
+
+/**
+ * Disclosure lines for channels the cloud carries but `carried` says the
+ * writer does not put in the file. `unrepresentable` names channels the
+ * FORMAT cannot express (worded "not representable"); everything else the
+ * format could express but this writer does not is worded honestly as
+ * "not written by this exporter".
+ */
+function droppedChannelLines(
+  cloud: PointCloud,
+  carried: { intensity?: boolean; classification?: boolean; normals?: boolean },
+  unrepresentable: readonly string[],
+): string[] {
+  const dropped: string[] = [];
+  if (cloud.intensity && !carried.intensity) dropped.push('intensity');
+  if (cloud.classification && !carried.classification) dropped.push('classification');
+  if (cloud.normals && !carried.normals) dropped.push('normals');
+  return dropped.map((ch) =>
+    unrepresentable.includes(ch)
+      ? `${ch} channel not representable in OBJ — omitted`
+      : `${ch} channel not written by this exporter — omitted`,
+  );
+}
+
 /**
  * Serialise to plain-text XYZ (or CSV when `delimiter` is `,`).
  * Columns: `x y z`, then — each only when the cloud carries the channel —
- * `r g b` (0–255), `intensity` (raw 16-bit) and `classification` (raw
- * ASPRS code). A CSV always gets a header row naming the columns; an XYZ
- * gets a `# columns: …` comment line only when the optional intensity /
- * classification columns are present (so a plain x-y-z file stays
- * byte-identical to earlier releases, and the extra columns are never a
- * guessing game for the next tool). Importers — ours included — skip
- * `#` comment lines by long-standing XYZ convention.
+ * `r g b` (0–255), `intensity` (the 16-bit store, 0–65535; unit-range float
+ * sources are rescaled ×65535 at load) and `classification` (raw ASPRS
+ * code). A CSV always gets a header row naming the columns; an XYZ gets
+ * `#` comment lines (provenance, channel notes, `# columns: …`) only when
+ * there is something to say — a plain x-y-z file stays byte-identical to
+ * earlier releases. Importers — ours included — skip `#` comment lines by
+ * long-standing XYZ convention. A CSV never gets comment lines: naive CSV
+ * parsers must always see the header row first.
  */
 export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   const { positions, colors, origin } = cloud;
@@ -79,7 +178,10 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
       : null;
   if (csv) lines.push(columns.join(','));
   else {
+    for (const l of provenanceLines(cloud)) lines.push(`# ${l}`);
     if (derivedNote) lines.push(derivedNote);
+    for (const l of droppedChannelLines(cloud, { intensity: true, classification: true }, []))
+      lines.push(`# ${l}`);
     if (intensity || classification) lines.push(`# columns: ${columns.join(' ')}`);
   }
 
@@ -112,6 +214,8 @@ export function toPly(cloud: PointCloud): string {
     'ply',
     'format ascii 1.0',
     'comment Generated by OpenLiDARViewer',
+    ...provenanceLines(cloud).map((l) => `comment ${l}`),
+    ...droppedChannelLines(cloud, {}, []).map((l) => `comment ${l}`),
     `element vertex ${n}`,
     'property float x',
     'property float y',
@@ -139,6 +243,8 @@ export function toPly(cloud: PointCloud): string {
 /**
  * Serialise to OBJ as a vertex-only cloud. Colour, when present, is written
  * with the widely-supported `v x y z r g b` extension (channels in 0–1).
+ * OBJ has no standard slot for intensity or classification, so those
+ * channels are disclosed as omitted rather than dropped silently.
  */
 export function toObj(cloud: PointCloud): string {
   const { positions, colors, origin } = cloud;
@@ -148,6 +254,8 @@ export function toObj(cloud: PointCloud): string {
   const lines: string[] = [
     '# OpenLiDARViewer point-cloud export',
     `# ${n} points`,
+    ...provenanceLines(cloud).map((l) => `# ${l}`),
+    ...droppedChannelLines(cloud, {}, ['intensity', 'classification']).map((l) => `# ${l}`),
   ];
   for (let i = 0; i < n; i++) {
     const x = hcoord(positions[i * 3] + origin[0]);

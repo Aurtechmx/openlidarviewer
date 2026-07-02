@@ -1,6 +1,7 @@
 import { toXyz, toCsv, toPly, toObj, exportCloud } from '../src/io/exporters';
 import { loadXyz } from '../src/io/loadXyz';
 import { PointCloud } from '../src/model/PointCloud';
+import type { SourceMetadata } from '../src/model/PointCloud';
 
 function makeCloud(positions: number[], origin: [number, number, number], colors?: number[]): PointCloud {
   return new PointCloud({
@@ -187,6 +188,52 @@ describe('exportCloud + round-trip', () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.5.4: geographic precision in PLY/OBJ, declared-provenance headers, and
+// honest channel-drop disclosure.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The declared source metadata of the user's sample file, abridged. */
+function sampleSourceMetadata(): SourceMetadata {
+  return {
+    standard: [
+      { name: 'name', value: 'Tikal Temple I synthetic reference model — A. Urias / Aurtech' },
+      { name: 'sensorModel', value: 'Procedural heritage reference reconstruction' },
+    ],
+    extensions: [
+      {
+        name: 'license',
+        value: 'CC-BY-4.0',
+        namespaceUri: 'https://aurtech.mx/openlidarviewer/metadata/1.0',
+      },
+      {
+        name: 'limitations',
+        value:
+          'Not photogrammetric, not archaeological survey data, not suitable for ' +
+          'conservation measurements or survey certification.',
+        namespaceUri: 'https://aurtech.mx/openlidarviewer/metadata/1.0',
+      },
+    ],
+  };
+}
+
+function makeDeclaredCloud(extra?: {
+  intensity?: number[];
+  normals?: number[];
+  sourceMetadata?: SourceMetadata;
+}): PointCloud {
+  return new PointCloud({
+    positions: new Float32Array([1, 2, 3]),
+    colors: new Uint8Array([255, 128, 0]),
+    intensity: extra?.intensity ? new Uint16Array(extra.intensity) : undefined,
+    normals: extra?.normals ? new Float32Array(extra.normals) : undefined,
+    origin: [0, 0, 0],
+    sourceFormat: 'e57',
+    name: 'tikal_sample.e57',
+    metadata: { sourceMetadata: extra?.sourceMetadata ?? sampleSourceMetadata() },
+  });
+}
+
 describe('geographic precision in PLY/OBJ (same defect class as the v0.4.5 XYZ/CSV fix)', () => {
   test('OBJ writes lat/lon at 7 dp under a geographic CRS; z stays 3 dp', () => {
     const cloud = makeRichCloud({
@@ -216,5 +263,140 @@ describe('geographic precision in PLY/OBJ (same defect class as the v0.4.5 XYZ/C
     });
     expect(toObj(cloud)).toContain('v 500000.500 4100000.500 100.250');
     expect(toPly(cloud)).toContain('500000.500 4100000.500 100.250');
+  });
+});
+
+describe('declared-provenance headers (v0.5.4)', () => {
+  test('OBJ carries the declared provenance block as # comments', () => {
+    const text = toObj(makeDeclaredCloud());
+    expect(text).toContain(`# exported by OpenLiDARViewer v${__APP_VERSION__}`);
+    expect(text).toContain('# source file: tikal_sample.e57');
+    expect(text).toContain('# declared source: Procedural heritage reference reconstruction');
+    // The license line, verbatim.
+    expect(text).toContain('# declared license: CC-BY-4.0');
+    expect(text).toContain(
+      '# declared limitations: Not photogrammetric, not archaeological survey ' +
+        'data, not suitable for conservation measurements or survey certification.',
+    );
+    expect(text).toContain('# declared by the file, not verified by OpenLiDARViewer');
+  });
+
+  test('PLY carries the same block as header comment lines, before end_header', () => {
+    const text = toPly(makeDeclaredCloud());
+    const header = text.split('end_header')[0];
+    expect(header).toContain(`comment exported by OpenLiDARViewer v${__APP_VERSION__}`);
+    expect(header).toContain('comment source file: tikal_sample.e57');
+    expect(header).toContain('comment declared license: CC-BY-4.0');
+    expect(header).toContain('comment declared by the file, not verified by OpenLiDARViewer');
+  });
+
+  test('XYZ carries the block as # comments; CSV stays pure data', () => {
+    const cloud = makeDeclaredCloud();
+    expect(toXyz(cloud)).toContain('# declared license: CC-BY-4.0');
+    // CSV has no comment convention naive parsers survive — the FIRST line
+    // must remain the column header and no line may start with '#'.
+    const csv = toCsv(cloud).trim().split('\n');
+    expect(csv[0]).toBe('x,y,z,r,g,b');
+    expect(csv.some((l) => l.startsWith('#'))).toBe(false);
+  });
+
+  test('falls back to the declared scan name when no sensorModel is declared', () => {
+    const cloud = makeDeclaredCloud({
+      sourceMetadata: {
+        standard: [{ name: 'name', value: 'Tikal Temple I synthetic reference model' }],
+        extensions: [],
+      },
+    });
+    expect(toObj(cloud)).toContain(
+      '# declared source: Tikal Temple I synthetic reference model',
+    );
+  });
+
+  test('multi-scan "scan N sensorModel" field names still match', () => {
+    const cloud = makeDeclaredCloud({
+      sourceMetadata: {
+        standard: [{ name: 'scan 1 sensorModel', value: 'VZ-400i' }],
+        extensions: [],
+      },
+    });
+    expect(toObj(cloud)).toContain('# declared source: VZ-400i');
+  });
+
+  test('the whole section is omitted when nothing is declared — outputs stay byte-identical', () => {
+    const plain = makeCloud([0, 0, 0], [0, 0, 0]);
+    expect(toXyz(plain)).toBe('0.000 0.000 0.000\n');
+    expect(toObj(plain)).toBe(
+      '# OpenLiDARViewer point-cloud export\n# 1 points\nv 0.000 0.000 0.000\n',
+    );
+    expect(toPly(plain)).not.toContain('comment source file');
+    expect(toPly(plain)).not.toContain('comment declared');
+  });
+
+  test('declared values with newlines are flattened so they cannot break the format', () => {
+    const cloud = makeDeclaredCloud({
+      sourceMetadata: {
+        standard: [{ name: 'sensorModel', value: 'line one\nline two' }],
+        extensions: [],
+      },
+    });
+    expect(toObj(cloud)).toContain('# declared source: line one line two');
+  });
+
+  test('an over-long declared limitations value is truncated with an ellipsis', () => {
+    const long = 'x'.repeat(400);
+    const cloud = makeDeclaredCloud({
+      sourceMetadata: {
+        standard: [],
+        extensions: [{ name: 'limitations', value: long, namespaceUri: 'ns' }],
+      },
+    });
+    const line = toObj(cloud)
+      .split('\n')
+      .find((l) => l.startsWith('# declared limitations:'))!;
+    expect(line.length).toBeLessThan(220);
+    expect(line.endsWith('…')).toBe(true);
+  });
+});
+
+describe('honest channel-drop disclosure (v0.5.4)', () => {
+  test('OBJ discloses a dropped intensity channel', () => {
+    const cloud = makeDeclaredCloud({ intensity: [18350] });
+    expect(toObj(cloud)).toContain(
+      '# intensity channel not representable in OBJ — omitted',
+    );
+  });
+
+  test('OBJ discloses dropped classification and normals', () => {
+    const cloud = makeCloud([0, 0, 0], [0, 0, 0]);
+    cloud.attachDerivedClassification(new Uint8Array([2]));
+    expect(toObj(cloud)).toContain(
+      '# classification channel not representable in OBJ — omitted',
+    );
+    const withNormals = makeDeclaredCloud({ normals: [0, 0, 1] });
+    expect(toObj(withNormals)).toContain(
+      '# normals channel not written by this exporter — omitted',
+    );
+  });
+
+  test('PLY discloses dropped intensity / classification / normals as comments', () => {
+    const cloud = makeDeclaredCloud({ intensity: [18350], normals: [0, 0, 1] });
+    const header = toPly(cloud).split('end_header')[0];
+    expect(header).toContain('comment intensity channel not written by this exporter — omitted');
+    expect(header).toContain('comment normals channel not written by this exporter — omitted');
+  });
+
+  test('XYZ discloses dropped normals (intensity/classification are carried as columns)', () => {
+    const cloud = makeDeclaredCloud({ intensity: [18350], normals: [0, 0, 1] });
+    const text = toXyz(cloud);
+    expect(text).toContain('# normals channel not written by this exporter — omitted');
+    expect(text).not.toContain('# intensity channel');
+    // The intensity COLUMN is present — the channel is carried, not dropped.
+    expect(text).toContain('# columns: x y z r g b intensity');
+  });
+
+  test('no channels → no disclosure lines', () => {
+    const plain = makeCloud([0, 0, 0], [0, 0, 0]);
+    expect(toObj(plain)).not.toContain('omitted');
+    expect(toPly(plain)).not.toContain('omitted');
   });
 });
