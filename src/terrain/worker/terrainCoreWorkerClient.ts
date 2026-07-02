@@ -64,6 +64,16 @@ export class TerrainCoreWorkerClient {
     signal?: AbortSignal,
   ): Promise<TerrainCore> {
     const jobId = this._nextJobId++;
+    // Clamp the caller-supplied count to what the buffer actually holds. The
+    // worker rebuilds its view as `new Float32Array(buffer, 0, n·3)`, so an
+    // oversized `n` would THROW there — and because a worker error funnels
+    // into the safe main-thread fallback, the mistake would silently cost the
+    // off-thread path instead of being corrected here. Floor + ≥0 also guards
+    // fractional/negative counts.
+    const nClamped = Math.min(
+      Math.max(0, Math.floor(n)),
+      Math.floor(positions.length / 3),
+    );
     return new Promise<TerrainCore>((resolve, reject) => {
       if (this._disposed) {
         reject(new Error('The terrain-core worker has been disposed.'));
@@ -99,7 +109,7 @@ export class TerrainCoreWorkerClient {
         {
           jobId,
           positions: copy.buffer,
-          n,
+          n: nClamped,
           coreParams: paramsNoClass,
           classification,
         },

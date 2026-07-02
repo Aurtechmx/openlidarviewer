@@ -80,7 +80,9 @@ export interface ContoursAtParams {
  * `b0|b1<<1|b2<<2|b3<<3` where corners are CCW from bottom-left
  * (v0 BL, v1 BR, v2 TR, v3 TL). Each entry lists edge pairs to connect;
  * edges are 0=bottom(v0-v1) 1=right(v1-v2) 2=top(v2-v3) 3=left(v3-v0).
- * Saddle cases 5 and 10 use the simple (non-center-resolved) pairing.
+ * Saddle cases 5 and 10 are resolved at runtime with the cell-average
+ * rule — see {@link saddlePairs}; the table entries for 5/10 hold the
+ * centre-BELOW-level pairing (high corners isolated).
  */
 const SEGMENT_TABLE: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
   [], // 0
@@ -91,7 +93,7 @@ const SEGMENT_TABLE: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
   [
     [3, 0],
     [1, 2],
-  ], // 5 (saddle)
+  ], // 5 (saddle, centre below level)
   [[0, 2]], // 6
   [[3, 2]], // 7
   [[2, 3]], // 8
@@ -99,13 +101,49 @@ const SEGMENT_TABLE: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
   [
     [0, 1],
     [2, 3],
-  ], // 10 (saddle)
+  ], // 10 (saddle, centre below level)
   [[2, 1]], // 11
   [[1, 3]], // 12
   [[1, 0]], // 13
   [[0, 3]], // 14
   [], // 15
 ];
+
+// Saddle pairings for the centre-ABOVE-level topology. Case 5 (v0+v2 high):
+// a high centre connects the two high corners diagonally, so each LOW corner
+// (v1, v3) is cut off by its own segment — bottom+right around v1, top+left
+// around v3. Case 10 (v1+v3 high) is the mirror: the low corners v0, v2 get
+// left+bottom and right+top. These are exactly the OTHER case's table rows.
+const SADDLE5_CENTRE_HIGH: ReadonlyArray<readonly [number, number]> = [
+  [0, 1],
+  [2, 3],
+];
+const SADDLE10_CENTRE_HIGH: ReadonlyArray<readonly [number, number]> = [
+  [3, 0],
+  [1, 2],
+];
+
+/**
+ * Resolve a marching-squares saddle (mask 5 or 10) with the standard
+ * cell-average rule: sample the cell centre as the mean of the four corner
+ * values; a centre at/above the level means the two HIGH corners are
+ * connected through the middle (each low corner gets cut off), a centre
+ * below means the high corners are isolated. The previous fixed pairing
+ * silently assumed centre-below for BOTH cases, which mislinks basins on
+ * ridge/col terrain (the acknowledged v0.4.3 audit gap). Ties (centre
+ * exactly on the level) resolve as "high", matching the `>=` corner rule.
+ */
+function saddlePairs(
+  mask: number,
+  zc: readonly [number, number, number, number],
+  level: number,
+): ReadonlyArray<readonly [number, number]> {
+  const centre = (zc[0] + zc[1] + zc[2] + zc[3]) / 4;
+  if (centre >= level) {
+    return mask === 5 ? SADDLE5_CENTRE_HIGH : SADDLE10_CENTRE_HIGH;
+  }
+  return SEGMENT_TABLE[mask];
+}
 
 /**
  * Compute graded contour segments from a DTM. Deterministic. Cells that
@@ -237,7 +275,8 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
           (zc[1] >= v ? 2 : 0) |
           (zc[2] >= v ? 4 : 0) |
           (zc[3] >= v ? 8 : 0);
-        const pairs = SEGMENT_TABLE[mask];
+        const pairs =
+          mask === 5 || mask === 10 ? saddlePairs(mask, zc, v) : SEGMENT_TABLE[mask];
         if (pairs.length === 0) continue;
         for (const [ea, eb] of pairs) {
           const a = edgePoint(ea, p, zc, v);

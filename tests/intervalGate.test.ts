@@ -43,6 +43,43 @@ describe('gateIntervals', () => {
     expect(r.recommendedM).toBe(1);
   });
 
+  it('supports a coarse interval when a level crossing EXISTS inside [minZ, maxZ]', () => {
+    // minZ 0.4, maxZ 1.2 — range 0.8. The old range-only rule rejected the
+    // 1 m interval (1 >= 0.8) even though the level 1.0 crosses the surface:
+    // ceil(0.4/1)·1 = 1 ≤ 1.2. Interval 2 genuinely yields nothing:
+    // ceil(0.4/2)·2 = 2 > 1.2.
+    const r = gateIntervals({
+      cellSizeM: 1,
+      elevationRangeM: 0.8,
+      minZ: 0.4,
+      maxZ: 1.2,
+      candidates: [0.5, 1, 2],
+    });
+    const map = new Map(r.options.map((o) => [o.intervalM, o]));
+    expect(map.get(1)!.supported).toBe(true);
+    expect(map.get(2)!.supported).toBe(false);
+    expect(map.get(2)!.reason).toMatch(/coarser than/i);
+  });
+
+  it('still rejects a coarse interval when NO multiple falls inside the bounds', () => {
+    // minZ 0.4, maxZ 0.9: ceil(0.4/1)·1 = 1 > 0.9 — the 1 m level misses.
+    const r = gateIntervals({
+      cellSizeM: 1,
+      elevationRangeM: 0.5,
+      minZ: 0.4,
+      maxZ: 0.9,
+      candidates: [1],
+    });
+    expect(r.options[0].supported).toBe(false);
+  });
+
+  it('falls back to the range-only heuristic when bounds are absent', () => {
+    // Same range as the crossing test but WITHOUT minZ/maxZ — the gate can
+    // only apply the conservative i < range rule (pre-fix behaviour).
+    const r = gateIntervals({ cellSizeM: 1, elevationRangeM: 0.8, candidates: [1] });
+    expect(r.options[0].supported).toBe(false);
+  });
+
   it('disables everything on a flat surface', () => {
     const r = gateIntervals({ cellSizeM: 1, elevationRangeM: 0, rmseM: 0.1 });
     expect(supported(r)).toEqual([]);
