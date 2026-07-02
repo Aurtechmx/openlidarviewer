@@ -52,10 +52,14 @@ function faceButton(label: string, view: StandardView, onView: (v: StandardView)
 export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   const root = document.createElement('div');
   root.className = 'olv-viewcube';
+  // Bottom-LEFT (above the dock): the Inspector is docked on the right
+  // (right:14px, width:232px, z-index:15), so a right-side compass would sit
+  // behind it and its snaps would be un-clickable. The left corner is clear of
+  // the Inspector, the centred nav widget, and the bottom dock.
   root.style.cssText =
-    'position:absolute;bottom:96px;right:18px;width:76px;height:76px;' +
+    'position:absolute;bottom:96px;left:18px;width:76px;height:76px;' +
     'border-radius:50%;background:var(--olv-surface,rgba(20,24,30,0.72));' +
-    'box-shadow:0 2px 10px rgba(0,0,0,0.35);z-index:6;pointer-events:auto;' +
+    'box-shadow:0 2px 10px rgba(0,0,0,0.35);z-index:12;pointer-events:auto;' +
     'backdrop-filter:blur(4px);';
 
   // The rotating rose: holds the four cardinals; counter-rotates with heading.

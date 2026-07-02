@@ -148,6 +148,14 @@ export interface CellConfidenceParams {
    */
   readonly isGeographic?: boolean;
   /**
+   * WORLD grid-centre latitude (degrees) for the geographic cos φ E–W scale.
+   * The raster origin is usually render-recentred (≈ 0), which would silently
+   * degrade cos φ to 1 — so callers that know the cloud's world origin must
+   * pass the real latitude here. Null / omitted falls back to the
+   * raster-origin estimate (correct only for un-recentred grids).
+   */
+  readonly latitudeDeg?: number | null;
+  /**
    * Metres per source horizontal unit (~0.3048 for feet) for a projected frame,
    * so the roughness slope's run is in metres. Ignored when `isGeographic`
    * (metres-per-degree is used instead). Default 1.
@@ -254,7 +262,10 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   const cellM = horizontalCellMetresXY(
     cellSizeM,
     params.isGeographic,
-    originH2 + (rows / 2) * cellSizeM, // grid-centre latitude (geographic only)
+    // Prefer the caller's WORLD latitude: the raster origin is render-
+    // recentred for viewer-fed grids (≈ 0 → cos φ silently 1). The origin
+    // fallback stays correct for grids built in absolute coordinates.
+    params.latitudeDeg ?? originH2 + (rows / 2) * cellSizeM,
     params.horizontalUnitToMetres,
   );
   const slope = hornSlope(z, cols, rows, cellM.x, cellM.y);

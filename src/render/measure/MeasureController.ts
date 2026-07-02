@@ -65,6 +65,7 @@ import {
   formatGrade,
   formatProfileHeadline,
   formatBoxHeadline,
+  GEOGRAPHIC_CRS_MEASURE_NOTICE,
 } from './format';
 // B2 (v0.4.5) — one unit seam: the chart series is converted render-units →
 // metres in `getSummaries` by the same module the panel/CSV/PDF read, so
@@ -397,6 +398,16 @@ export class MeasureController {
   // Whether the active scan has a known CRS with real-world units. Separate from
   // `_unitToMetres` (which is 1 for a metric CRS AND a CRS-less cloud).
   private _crsKnown = false;
+  /**
+   * True when the active scan's CRS is GEOGRAPHIC (degrees). Degrees are not
+   * a linear unit — X/Y in degrees with Z in metres means no scalar
+   * `unitToMetres` can make lengths/areas/grades honest — so the stack keeps
+   * measuring in raw render units (factor 1) but SAYS SO everywhere: the
+   * hint bar carries {@link GEOGRAPHIC_CRS_MEASURE_NOTICE}, the panel shows
+   * its persistent caveat, and every affected measurement's trust grade is
+   * the red refusal (see {@link gradeMeasurement}).
+   */
+  private _geographicCrs = false;
   private _lastCamera: THREE.PerspectiveCamera | null = null;
   private _lastCanvas: HTMLCanvasElement | null = null;
   private _snapBtn: HTMLButtonElement | null = null;
@@ -642,6 +653,28 @@ export class MeasureController {
     // stale "no CRS — scale unverified" caption once it becomes known (or
     // gain one if a known CRS is later cleared). Mirrors the drag-end re-grade.
     for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._emitChange();
+  }
+
+  /** True when the active scan's CRS is geographic (degrees) — see the field doc. */
+  get geographicCrs(): boolean {
+    return this._geographicCrs;
+  }
+
+  /**
+   * Flag the active scan's CRS as geographic (degrees). Fed from the same
+   * CrsService subscription that injects `unitToMetres` / `crsKnown`.
+   * Measurements keep working in raw render units, but every hint re-render
+   * appends the honest geographic caveat and every affected measurement is
+   * re-graded to the red refusal while this is set — mislabelling degrees as
+   * metres is the audit-flagged failure mode. Symmetric on clear (a user
+   * override to a projected CRS restores the ordinary grades).
+   */
+  setGeographicCrs(isGeographic: boolean): void {
+    if (isGeographic === this._geographicCrs) return;
+    this._geographicCrs = isGeographic;
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._updateHint();
     this._emitChange();
   }
 
@@ -1260,6 +1293,13 @@ export class MeasureController {
       vertices,
       crsKnown: this._crsKnown,
       residentOnly: m.volumeResidentOnly === true || m.profileChartResidentOnly === true,
+      // Geographic (degree) frame: the refusal applies to every kind whose
+      // NUMBER mixes degree X/Y with linear Z — lengths, areas, grades,
+      // profiles, boxes, volumes. Pure-vertical heights (Δ along up, in the
+      // Z unit) and unit-free angles keep their ordinary grade; the panel's
+      // persistent caveat still covers them.
+      geographicCrs:
+        this._geographicCrs && m.kind !== 'height' && m.kind !== 'angle',
     });
   }
 
@@ -1417,7 +1457,14 @@ export class MeasureController {
   }
 
   private _updateHint(): void {
-    if (this._active) this._setHintText(this._snapHintPrefix() + this._composeHint());
+    if (this._active) {
+      // Honest units: a geographic scan measures degrees, not metres — every
+      // hint carries the caveat so a raw number is never read as a distance.
+      const hint = this._snapHintPrefix() + this._composeHint();
+      this._setHintText(
+        this._geographicCrs ? `${hint} — ${GEOGRAPHIC_CRS_MEASURE_NOTICE}` : hint,
+      );
+    }
     this._updateFinishBtnVisibility();
   }
 

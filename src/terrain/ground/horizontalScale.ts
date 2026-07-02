@@ -11,6 +11,27 @@
 export const METRES_PER_DEGREE = 111_320;
 
 /**
+ * Latitude clamp for the cos φ east–west scale. Beyond ~±89° a degree of
+ * longitude collapses toward zero and the plate-carrée cell model this module
+ * implements stops being meaningful (a pole-crossing scan needs a projected
+ * CRS, not a cos-φ correction). Clamping keeps the E–W scale finite and
+ * non-zero — cos 89° ≈ 0.0175 — instead of dividing derivatives by ~0.
+ */
+const MAX_ABS_LATITUDE_DEG = 89;
+
+/**
+ * cos(latitude) for the east–west metres-per-degree scale. Non-finite
+ * latitudes return 1 (no correction — the honest isotropic fallback), so a
+ * caller that cannot resolve a representative latitude degrades gracefully
+ * instead of guessing one (or poisoning the scale with NaN).
+ */
+export function cosLatitude(latitudeDeg: number | null | undefined): number {
+  if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return 1;
+  const lat = Math.max(-MAX_ABS_LATITUDE_DEG, Math.min(MAX_ABS_LATITUDE_DEG, latitudeDeg));
+  return Math.cos((lat * Math.PI) / 180);
+}
+
+/**
  * Horizontal cell size in metres. Converts a degree-denominated cell to metres
  * when the frame is geographic; for a projected frame it scales by
  * `horizontalUnitToMetres` (1 for metre data, ~0.3048 for US/international feet)
@@ -48,18 +69,22 @@ export interface CellMetresXY {
  * Projected frames are isotropic: both axes are `cellSizeM × horizontalUnitToMetres`.
  *
  * @param latitudeDeg Representative latitude of the grid (e.g. its centre), in
- *   degrees. Only consulted for geographic frames.
+ *   degrees. Only consulted for geographic frames. Null/undefined/non-finite
+ *   means "unknown" — the E–W axis then keeps the isotropic (cos φ = 1)
+ *   estimate rather than inventing a latitude.
  */
 export function horizontalCellMetresXY(
   cellSizeM: number,
   isGeographic: boolean | undefined,
-  latitudeDeg = 0,
+  latitudeDeg: number | null | undefined = 0,
   horizontalUnitToMetres = 1,
 ): CellMetresXY {
   if (isGeographic) {
     const y = cellSizeM * METRES_PER_DEGREE;
-    const cosLat = Math.max(0, Math.cos((latitudeDeg * Math.PI) / 180));
-    return { x: y * cosLat, y };
+    // Shared cos φ rule ({@link cosLatitude}): clamped at ±89° so the E–W
+    // scale never collapses to 0, and non-finite latitudes fall back to 1
+    // (isotropic) instead of poisoning every derivative with NaN.
+    return { x: y * cosLatitude(latitudeDeg), y };
   }
   const scale =
     Number.isFinite(horizontalUnitToMetres) && horizontalUnitToMetres > 0

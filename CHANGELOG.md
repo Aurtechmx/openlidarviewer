@@ -2,6 +2,215 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.3] - 2026-07-01
+
+A hardening patch on v0.5. Change detection gains real epoch alignment, the
+viewer installs and runs offline (PWA), and a one-command harness reproduces
+the evaluation — on top of seventeen defect fixes from two audit passes: nine
+terrain/profile hardenings and eight Phase 0 Criticals.
+
+### Changed
+
+- **The on-canvas compass is now a discoverable, remembered control.** The
+  compass / ViewCube gizmo from v0.5.2, previously reachable only through the
+  `?viewcube=1` URL flag, can now be toggled from the command palette ("Toggle
+  compass"), and the choice persists. It stays off by default: the app's left and
+  right edges are full-height panel columns, so a persistent gizmo has no free
+  corner without overlapping them. `?viewcube=1` and `?viewcube=0` still force it
+  on or off. The animation loop pauses while the tab is hidden.
+
+### Added
+
+- **Two-cloud alignment in change detection.** The planar ICP core shipped in
+  v0.5.2 is now wired into the two-epoch change-detection flow. Before two epochs
+  are compared, the after cloud is coarse-registered onto the before cloud
+  (yaw + horizontal shift only — a real vertical change is the signal, so z is
+  preserved), and the fit is reported: the shift, the yaw, and the RMS residual
+  appear in the compare result. A fit whose residual exceeds the gate is refused
+  and the clouds are compared as-is, so alignment never invents a shift it can't
+  stand behind. The pure core (`alignEpochClouds`) is unit-tested.
+- **Installable and offline (PWA).** A service worker caches the app shell, so
+  the viewer opens and runs with no network after the first visit, and it can be
+  installed as a standalone app. The worker is local-first by construction: it
+  caches only the same-origin app shell and never touches a cross-origin dataset
+  request, so opening a remote scan still goes straight to its source and nothing
+  the user loads is stored. Registered on production secure origins only.
+
+### Reproducibility
+
+- **A one-command evaluation harness** (`npm run repro`). It runs the pure
+  analysis cores over deterministic synthetic fixtures with analytic ground truth
+  and writes a metrics table plus reliability figures: the epoch-registration
+  vertical-bias result (horizontal-only preserves a uniform vertical change while
+  a full-3D fit absorbs it), planar-alignment recovery, stockpile ±-band coverage
+  (empirical vs nominal 0.68), and report-digest determinism. The coverage and
+  bias checks also run as a CI-guarded unit test, so the uncertainty claims are
+  tested rather than asserted. A `REVIEWER_QUICKSTART.md` gives the
+  clone → test → repro → verify path.
+
+### Fixed
+
+- **The deployed site no longer runs slower than a local build.** The live
+  deployment's source transform rewrites property access into decode-wrapper
+  calls — and inside per-POINT loops that meant one wrapper call per point per
+  access. On a 2.5 M-point scan the deployed site burned seconds a plain build
+  does not: the scan-attach main-thread task grew from 6.6 s to 10.2 s and a
+  single measure/probe pick from 56 ms to 178 ms (3.2×, profiled headless
+  A/B). The six modules that carry whole-cloud loops (health check, cloud
+  bounds, colour encoding, pick math, snap grid, viewer attach/render loop)
+  are now excluded from the transform, and the deployed build measures at
+  parity with the plain one. Local files still never leave the machine — this
+  was compute, not upload.
+- **Opening a large local file no longer freezes the viewer for seconds.** The
+  Scan Report's health check walks every point several times (duplicate-point
+  scan, median/MAD, outliers, finite check) and ran synchronously at scan
+  attach — ~5 s of frozen UI on a multi-million-point cloud, on top of the
+  transform cost above. It now runs when the main thread next goes idle: the
+  scan renders and navigates immediately and the report card fills in a beat
+  later. Measured attach-path blocking fell from 6.6 s to 0.6 s at 2.5 M
+  points.
+- **Offline support now works on sub-path deployments.** The service worker
+  registered as `/sw.js` — an origin-root path, so any deploy under a sub-path
+  (GitHub Pages `…/repo/`) 404'd the registration and silently lost offline
+  support and installability. The worker URL now resolves relative to the page
+  (unit-tested), and the worker's sample-dataset cache exclusion resolves
+  against its registration scope the same way.
+
+Nine correctness hardenings from the v0.4.x terrain/profile audit, ported onto
+the 0.5 pipeline (each verified at its current location before fixing, every
+new expectation hand-computed):
+
+- **Geographic (lat/lon) scans no longer collapse to a 1-cell grid.** The
+  analysis runner's cell-size floor was a raw `0.25` in SOURCE units — on a
+  degree CRS that forced 0.25° ≈ 28 km cells, flattening any scan under ~64° of
+  extent to 1–2 cells. The floor is now 0.25 metres expressed in the source
+  unit (degrees ÷ metres-per-degree, feet ÷ metres-per-foot; metres unchanged).
+  Two-epoch change detection's shared grid had the same unit-blind floor and
+  gets the same fix, with each cloud's CRS units threaded honestly from the
+  loaded metadata (and surviving epoch alignment).
+- **cos φ everywhere derivatives run, from the WORLD latitude.** v0.5.0 made
+  the hold-out and cell-confidence slope fields per-axis, but both derived the
+  "grid-centre latitude" from render-RECENTRED local Y — which is ≈ 0, so
+  cos φ silently degraded to 1. The runner now recovers the true world latitude
+  (cloud origin + local bbox centre) and threads it through the pipeline; the
+  main derivative stage (slope/aspect/hillshade) is per-axis too, through the
+  whole TerrainRasterEngine — CPU reference, the WGSL Horn kernel's uniform,
+  and the per-session equivalence probe, which now runs an anisotropic pass so
+  a GPU kernel that ignores the second axis can never pass the gate. Per-cell
+  densities (and the USGS QL graded from them) fold the cos φ cell-area
+  anisotropy in as √(cos φ). The CPU remains the reference by contract.
+- **One percentile convention.** Three conventions coexisted: nearest-rank in
+  `holdoutRmse` / `buildDsm` / `hillshade` vs the type-7 (NumPy/R/Excel
+  PERCENTILE.INC) quantile in `rasterizeDtm` / `wallSlice`. Every p95 the
+  pipeline reports now routes through one shared type-7 helper
+  (`src/terrain/quantile.ts`), so a reported percentile is reproducible
+  against standard tools regardless of which file computed it.
+- **Contour correctness on fine and degree-denominated grids.** Contour
+  stitching's endpoint-matching quantum was a fixed 1 mm — ≈ 111 m in degrees,
+  welding a fine geographic grid's contours into one blob; it now scales with
+  the grid cell (cell/1000, unit-free). The coarse-interval gate used the
+  range-only rule `interval < range`, falsely rejecting e.g. a 1 m interval on
+  a 0.4–1.2 m surface even though the 1.0 level crosses it; with real surface
+  bounds it now uses the exact level-crossing test (`ceil(minZ/i)·i ≤ maxZ`).
+  Marching-squares saddle cells (cases 5/10) are now disambiguated with the
+  standard cell-average rule instead of a fixed pairing that silently assumed
+  centre-below for both — mislinking basins on ridge/col terrain.
+- **The ground-filter despike actually fires on small cells.** The documented
+  `floorPercentile` despike was a silent no-op for cells with ≤ 20 returns
+  (`ceil(0.05·n)−1 = 0` — the strict minimum, blunder included, still won).
+  Once a cell has ≥ 3 returns, at least the single lowest return is now
+  skipped; 1–2-return cells keep the minimum (no evidence to reject either).
+- **Signed vertical grade.** A straight-DOWN pair reported `gradePercent` as
+  an infinite CLIMB (`+Infinity`); the grade's sign now matches the rise's
+  (±∞), agreeing with the ±90° the angle already reported — in both
+  `slopeBetween` and `profileMetrics`.
+- **Terrain worker point-count clamp.** An oversized caller-supplied point
+  count would throw inside the terrain-core worker while rebuilding its typed
+  array — silently costing the off-thread path via the fallback. The count is
+  now clamped to what the buffer actually holds.
+- **Geographic CRS measurements are refused, not mislabelled.** On a
+  geographic (degree) CRS, X/Y are degrees while Z is linear, so lengths,
+  areas, grades, profiles and volumes mix units and no scalar factor can
+  repair them — a 0.35-"m" corridor is really ≈ 39 km. The measure stack now
+  says so everywhere with ONE shared string: affected measurements carry the
+  red refusal trust grade (not presentable — pure-vertical heights and
+  unit-free angles keep their ordinary grade), the measure-bar hint carries
+  the caveat, and the Measurements panel shows a persistent notice while the
+  frame is geographic. Symmetric on a user override to a projected CRS.
+
+Eight Critical-severity fixes from the Phase 0 baseline audit of the v0.5.x
+line (each reproduced with a failing test before the fix wherever the surface
+allows):
+
+- **Applying epoch alignment no longer degrades a georeferenced survey.** The
+  aligned after cloud was stored as ABSOLUTE world coordinates in a
+  `Float32Array` with its origin collapsed to zero — at georeferenced
+  magnitudes (UTM northing ~4,000,000) the float32 quantum is ~0.25–0.5 m,
+  larger than the centimetre-level misalignment ICP corrects, so applying the
+  alignment injected up to half a metre of horizontal jitter into the after
+  cloud before rasterisation, on the most common real case (two georeferenced
+  surveys). The transform is now computed in float64 world space and stored
+  back LOCAL to the cloud's preserved origin; only the small residual rounds
+  to float32.
+- **Planar ICP is refused on geographic (degree) frames.** `alignEpochClouds`
+  received the geographic flag on both clouds but never read it: the planar
+  rigid model was fit in raw lon/lat, where 1° of longitude ≠ 1° of latitude
+  (cos φ) — a solved yaw is a SHEAR in metres, the convergence tolerance was
+  ~1.1 m expressed in degrees (declaring convergence long before a meaningful
+  fit), and the residual gate compared degree numbers against a metre
+  threshold. The transform could worsen registration off the equator while
+  reporting success. Measurements already refuse geographic frames through
+  the trust system; alignment now refuses them too — clouds untouched, with a
+  distinct summary line pointing at reprojection.
+- **Alignment reports metres, not source units.** The alignment result
+  documents its shift and residual in metres and the UI prints "N m", but the
+  values came out of the fit in the clouds' own units — a foot-CRS survey
+  shifted 10 ft displayed as a "10.00 m shift", and the metre-denominated
+  residual gate compared against feet. The unit seam now lives in one place:
+  the gate converts to source units going into the fit, the reported shift
+  and residual convert to metres coming out, and the applied transform stays
+  in source units, as it must. Geographic frames never reach this seam — they
+  are refused earlier.
+- **Geographic epochs refuse cut/fill volumes instead of printing degrees² as
+  m³.** The epoch-compare path passed geographic DTMs straight into volume
+  integration, where a degree-sized cell area underreports volumes by ~10
+  orders of magnitude, and the summary printed the result as "N m³" — worst
+  case flagged MEASURED, because two epochs declaring the same geographic CRS
+  and vertical datum pass every co-registration check. Volumes on a degree
+  grid are now refused with the shared geographic-refusal reason; the Δz
+  statistics remain valid and are still reported (z is a linear unit).
+- **Lasso reclassify can no longer edit points you cannot see.** The lasso
+  selection culled only points outside the view frustum, so a reclassify
+  permanently rewrote points hidden by the active clip box or by a hidden
+  ASPRS class — an edit to invisible data, contradicting the click-pick
+  contract, which already refuses hidden points. The selection now runs
+  through the same clip predicate the GPU clipping planes realise and the
+  same class-visibility mask picking uses; in-place compaction, no allocation
+  on the edit path.
+- **A classification edit flags the on-screen analysis stale.** The edit hook
+  promised cache invalidation AND a re-grade, but only cleared the
+  terrain-core cache — the rendered verdict, contours, and coverage stayed on
+  screen presented as current while reflecting the previous classification.
+  The Analyse panel now shows a staleness caveat at the top of the results
+  ("results reflect the previous classification — re-run Analyse"), cleared
+  by the next run, and the contract now states what actually happens: a
+  staleness disclosure, not a silent auto re-grade.
+- **The clip box survives a session round-trip.** The v5 session schema
+  documents a clip round-trip and the import side has restored it since v5,
+  but export never emitted the clip — no session written by this app could
+  carry one. Emitting it exposed two more gaps, fixed together: the
+  reveal-time auto-frame destroyed a clip restored before the scan appeared
+  (now skipped when the viewer already holds one), and the Clip panel never
+  reflected a restored box (it now adopts the state — inputs, mode pills,
+  enable box, readout — without re-firing the apply).
+- **Visiting another page can no longer poison the offline app shell.** The
+  service worker cached EVERY same-origin navigation response under the
+  app-shell key, so opening the credits page (or landing on a 404/500 or a
+  redirect tail) replaced the cached shell and the next offline launch served
+  the wrong document as the app. The shell now refreshes only from an ok,
+  non-redirected response to the registration-scope root (or its
+  `/index.html`).
+
 ## [0.5.2] - 2026-06-29
 
 A polish release: a stronger integrity digest, a richer earthwork report, an

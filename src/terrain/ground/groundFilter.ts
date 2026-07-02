@@ -107,8 +107,14 @@ export interface GroundFilterParams {
    * elevation at this low percentile (0..50) of the cell's returns. This
    * rejects gross below-ground blunders (multipath, water, sensor noise)
    * that would otherwise seed a false low ground surface. `0` (default)
-   * keeps the strict minimum. A small value like 5 is a good despike
-   * floor; it only changes cells with enough returns to have an outlier.
+   * keeps the strict minimum.
+   *
+   * GUARANTEE (v0.4.3 audit fix): any value > 0 excludes AT LEAST the single
+   * lowest return once a cell has ≥ 3 returns. The bare nearest-rank formula
+   * alone made small percentiles a silent no-op — `ceil(0.05·n)−1 = 0` for
+   * every n ≤ 20, i.e. essentially always at auto cell sizing — so the
+   * documented despike never actually ran. Cells with 1–2 returns keep the
+   * minimum (there is no evidence to call either return a blunder).
    */
   readonly floorPercentile?: number;
   /** Vertical axis of the source frame. Defaults to `'z'`. */
@@ -274,7 +280,14 @@ export function classifyGroundSmrf(
     const q = floorPercentile / 100;
     for (const [c, arr] of buckets) {
       arr.sort((a, b) => a - b);
-      const idx = Math.min(arr.length - 1, Math.max(0, Math.ceil(q * arr.length) - 1));
+      // Nearest-rank index, with the documented despike FLOOR: once a cell
+      // has ≥ 3 returns, skip at least the single lowest one. Without the
+      // floor, ceil(q·n)−1 is 0 for n ≤ ceil(1/q)·… (n ≤ 20 at q = 0.05),
+      // so the despike the pipeline enables by default never fired — the
+      // strict minimum (and any blunder) still won (v0.4.3 audit finding).
+      const rankIdx = Math.ceil(q * arr.length) - 1;
+      const minSkip = arr.length >= 3 ? 1 : 0;
+      const idx = Math.min(arr.length - 1, Math.max(rankIdx, minSkip));
       minGrid[c] = arr[idx];
     }
   }

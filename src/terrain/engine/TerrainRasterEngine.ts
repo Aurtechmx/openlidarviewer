@@ -169,11 +169,19 @@ export interface TerrainRasterBackend {
     points: ScatterPoints,
     grid: ScatterGrid,
   ): Promise<ScatterMinCount>;
+  /**
+   * Horn slope/aspect over the grid. `cellSizeYM` is the north–south cell
+   * size for anisotropic (geographic, cos φ-corrected) grids; omitted means
+   * square cells (`cellSizeM` both axes) — the historical isotropic call.
+   * A backend MUST honour it: the per-session probe exercises anisotropic
+   * cells, so a kernel that silently ignores `cellSizeYM` fails the gate.
+   */
   derivatives(
     z: Float32Array,
     cols: number,
     rows: number,
     cellSizeM: number,
+    cellSizeYM?: number,
   ): Promise<TerrainDerivatives>;
   hillshade(
     slope: ArrayLike<number>,
@@ -202,6 +210,15 @@ export const EQUIVALENCE_ASPECT_TOLERANCE_RAD = 1e-4;
 export const EQUIVALENCE_ASPECT_SLOPE_FLOOR = 1e-6;
 /** Max allowed per-cell |Δshade| in 8-bit grey levels (rounding seam). */
 export const EQUIVALENCE_SHADE_TOLERANCE = 1;
+/**
+ * Anisotropic probe cell sizes (E–W, N–S): the cos 60° geographic geometry —
+ * the E–W cell is HALF the N–S cell. The probe runs the derivative kernels a
+ * SECOND time with these, so a backend that ignores the per-axis cell size
+ * (computing an isotropic estimate on a geographic grid) cannot pass the
+ * gate — dz/dy would be off by 2× on every sloped cell.
+ */
+export const PROBE_ANISO_CELL_X = 0.5;
+export const PROBE_ANISO_CELL_Y = 1;
 
 const TWO_PI = 2 * Math.PI;
 
@@ -354,7 +371,26 @@ export async function runEquivalenceProbe(
   const { z, cols, rows, cellSizeM } = buildProbeGrid();
   const ref = hornSlopeAspect(z, cols, rows, cellSizeM);
   const got = await backend.derivatives(z, cols, rows, cellSizeM);
-  const d = compareDerivativeGrids(ref, got);
+  const dIso = compareDerivativeGrids(ref, got);
+  // Anisotropic pass — the cos φ-corrected geographic geometry (E–W cell half
+  // the N–S cell). Run on the SAME surface so a backend whose kernel ignores
+  // `cellSizeYM` diverges here even though it matched the square-cell pass.
+  const refAniso = hornSlopeAspect(z, cols, rows, PROBE_ANISO_CELL_X, PROBE_ANISO_CELL_Y);
+  const gotAniso = await backend.derivatives(
+    z,
+    cols,
+    rows,
+    PROBE_ANISO_CELL_X,
+    PROBE_ANISO_CELL_Y,
+  );
+  const dAniso = compareDerivativeGrids(refAniso, gotAniso);
+  // Fold the two passes: the gate is the WORST per-cell disagreement across
+  // both geometries, and the aspect-compared tally covers both.
+  const d = {
+    maxSlopeErr: Math.max(dIso.maxSlopeErr, dAniso.maxSlopeErr),
+    maxAspectErr: Math.max(dIso.maxAspectErr, dAniso.maxAspectErr),
+    comparedAspectCells: dIso.comparedAspectCells + dAniso.comparedAspectCells,
+  };
 
   const n = cols * rows;
   const cov = new Uint8Array(n);
@@ -542,15 +578,20 @@ export class TerrainRasterEngine {
    * The synchronous CPU REFERENCE path — what the (synchronous, worker-side)
    * contour pipeline calls today. Pure delegation to `hornSlopeAspect`;
    * byte-identical to calling it directly.
+   *
+   * `cellSizeYM` (optional) is the north–south cell size for anisotropic
+   * (geographic, cos φ-corrected) grids; omitted keeps square cells, exactly
+   * the historical single-scale behaviour.
    */
   derivativesSync(
     z: Float32Array,
     cols: number,
     rows: number,
     cellSizeM: number,
+    cellSizeYM?: number,
   ): TerrainDerivatives {
     this.lastCall = 'cpu';
-    return hornSlopeAspect(z, cols, rows, cellSizeM);
+    return hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeYM);
   }
 
   /** Synchronous CPU reference hillshade — delegates to `shadeFromSlopeAspect`. */
@@ -579,12 +620,13 @@ export class TerrainRasterEngine {
     cols: number,
     rows: number,
     cellSizeM: number,
+    cellSizeYM?: number,
   ): Promise<TerrainDerivatives> {
     await this.init();
     const gpu = this.gpu;
     if (gpu) {
       try {
-        const out = await gpu.derivatives(z, cols, rows, cellSizeM);
+        const out = await gpu.derivatives(z, cols, rows, cellSizeM, cellSizeYM);
         this.lastCall = 'gpu';
         return out;
       } catch (err) {
@@ -592,7 +634,7 @@ export class TerrainRasterEngine {
       }
     }
     this.lastCall = 'cpu';
-    return hornSlopeAspect(z, cols, rows, cellSizeM);
+    return hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeYM);
   }
 
   /** Async hillshade — same routing/fallback contract as {@link derivatives}. */

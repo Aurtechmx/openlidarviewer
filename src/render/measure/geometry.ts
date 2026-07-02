@@ -181,10 +181,26 @@ export interface Slope {
   rise: number;
   /** Horizontal distance — the component perpendicular to `up`. */
   run: number;
-  /** Grade as a percentage (100 · rise / run); `Infinity` for a vertical pair. */
+  /**
+   * Grade as a percentage (100 · rise / run); SIGNED `±Infinity` for a
+   * vertical pair (straight up = +∞, straight down = −∞ — the grade's sign
+   * must agree with the rise's, exactly as `angleDeg` reads ±90°).
+   */
   gradePercent: number;
   /** Inclination from horizontal, in degrees (−90 … +90). */
   angleDeg: number;
+}
+
+/**
+ * Signed grade percent — the shared vertical-pair rule for
+ * {@link slopeBetween} and {@link profileMetrics}: a degenerate run yields
+ * ±Infinity matching the rise's sign (v0.4.3 audit: the old unsigned
+ * `Infinity` reported a straight-DOWN pair as an infinite CLIMB).
+ */
+function gradePercentOf(rise: number, run: number): number {
+  if (run >= EPSILON) return (100 * rise) / run;
+  if (rise === 0) return 0;
+  return rise > 0 ? Infinity : -Infinity;
 }
 
 /** Slope from `a` to `b` relative to the world-up axis. */
@@ -193,8 +209,7 @@ export function slopeBetween(a: Vec3, b: Vec3, up: Vec3): Slope {
   const d = sub(b, a);
   const rise = dot(d, u);
   const run = length(sub(d, [u[0] * rise, u[1] * rise, u[2] * rise]));
-  const gradePercent =
-    run < EPSILON ? (rise === 0 ? 0 : Infinity) : (100 * rise) / run;
+  const gradePercent = gradePercentOf(rise, run);
   const angleDeg = (Math.atan2(rise, run) * 180) / Math.PI;
   return { rise, run, gradePercent, angleDeg };
 }
@@ -209,7 +224,7 @@ export interface ProfileMetrics {
   lengthHorizontal: number;
   /** Signed vertical change from `a` to `b`, measured along `up`. */
   verticalDrop: number;
-  /** Grade as a percentage (100 · rise / run); `Infinity` for a vertical pair. */
+  /** Grade as a percentage (100 · rise / run); signed `±Infinity` for a vertical pair. */
   gradePercent: number;
   /** Inclination from horizontal, in degrees (−90 … +90). */
   gradeAngleDeg: number;
@@ -233,10 +248,7 @@ export function profileMetrics(a: Vec3, b: Vec3, up: Vec3): ProfileMetrics {
     sub(d, [u[0] * verticalDrop, u[1] * verticalDrop, u[2] * verticalDrop]),
   );
   const length3d = length(d);
-  const gradePercent =
-    lengthHorizontal < EPSILON
-      ? verticalDrop === 0 ? 0 : Infinity
-      : (100 * verticalDrop) / lengthHorizontal;
+  const gradePercent = gradePercentOf(verticalDrop, lengthHorizontal);
   const gradeAngleDeg = (Math.atan2(verticalDrop, lengthHorizontal) * 180) / Math.PI;
   return {
     length3d,

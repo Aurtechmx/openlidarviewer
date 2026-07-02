@@ -205,6 +205,7 @@ import {
   loadFullCloudGradeAction,
   loadSession,
   loadCompareEpochs,
+  loadAlignEpochs,
   loadCompareDtms,
   loadChangeRaster,
 } from './lazyChunks';
@@ -238,6 +239,7 @@ import type { CrsInfo } from './io/crs';
 import { CrsService } from './geo/CrsService';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { createCrsCoordinator } from './app/crsCoordinator';
+import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 
 /**
@@ -774,35 +776,109 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   });
 });
 
-// v0.5.2 — on-canvas compass / ViewCube gizmo. Opt-in behind `?viewcube=1` while
-// it gets on-device verification; the pure heading/face math is unit-tested
-// (viewCubeMath) and the widget routes through lazyChunks so its specifier can't
-// be scrambled by the live obfuscator. Mounts into the overlay once the Viewer
-// is ready and spins the rose from the camera heading each frame.
-if (urlParams.has('viewcube')) {
-  void viewerLoaded.then((v) => {
-    void loadViewCube().then(({ mountViewCube }) => {
-      const cube = mountViewCube({
-        host: stage.overlay,
-        getHeading: () => v.cameraHeadingDeg(),
-        onView: (view) => void v.setStandardView(view),
-      });
-      // Spin the rose each frame, but pause the loop while the tab is hidden so
-      // it isn't burning frames in the background, and keep the handle so it can
-      // be cancelled. (Bounded loop — addresses the v0.5.2 review note.)
-      let rafId = 0;
-      const tick = (): void => {
-        cube.update();
-        rafId = window.requestAnimationFrame(tick);
-      };
-      const resume = (): void => {
-        if (rafId === 0 && !document.hidden) rafId = window.requestAnimationFrame(tick);
-      };
-      const pause = (): void => {
-        if (rafId !== 0) { window.cancelAnimationFrame(rafId); rafId = 0; }
-      };
-      document.addEventListener('visibilitychange', () => (document.hidden ? pause() : resume()));
-      resume();
+// v0.5.3 — on-canvas compass / ViewCube. Promoted from the v0.5.2 URL-only flag
+// to a discoverable, persisted control: toggle it from the command palette
+// ("Toggle compass"), and the choice is remembered. It stays OFF by default —
+// the app's left and right edges are full-height panel columns (left panels and
+// the Inspector), so a persistent gizmo has no free corner to occupy without
+// overlapping them; the user opts in when they want it. `?viewcube=1` forces it
+// on, `?viewcube=0` off. The pure heading/face math is unit-tested (viewCubeMath)
+// and the widget routes through lazyChunks so its specifier can't be scrambled by
+// the live obfuscator. A bounded rAF loop spins the rose and pauses while the tab
+// is hidden.
+const COMPASS_PREF_KEY = 'olv.compass';
+let compassEnabled = ((): boolean => {
+  if (urlParams.get('viewcube') === '0') return false;
+  if (urlParams.has('viewcube')) return true;
+  try {
+    return localStorage.getItem(COMPASS_PREF_KEY) === 'on';
+  } catch {
+    return false;
+  }
+})();
+let compassViewer: typeof viewer | null = null;
+let compassHandle: { readonly update: () => void; readonly dispose: () => void } | null = null;
+let compassRaf = 0;
+let compassVisHandler: (() => void) | null = null;
+
+function startCompass(): void {
+  if (!compassEnabled || compassHandle || !compassViewer) return;
+  // Nothing to orient until a scan is open — don't float the compass over the
+  // empty drop state.
+  if (compassViewer.clouds().length === 0) return;
+  const v = compassViewer;
+  void loadViewCube().then(({ mountViewCube }) => {
+    // Re-validate at mount time: the lazy chunk load is async, so the scan may
+    // have been closed (or the compass toggled off, or one already mounted)
+    // while it loaded. Without the clouds() recheck the compass would mount over
+    // the empty state after a fast open-then-close.
+    if (!compassEnabled || compassHandle || v.clouds().length === 0) return;
+    const cube = mountViewCube({
+      host: stage.overlay,
+      getHeading: () => v.cameraHeadingDeg(),
+      onView: (view) => void v.setStandardView(view),
+    });
+    compassHandle = cube;
+    const tick = (): void => {
+      cube.update();
+      compassRaf = window.requestAnimationFrame(tick);
+    };
+    const resume = (): void => {
+      if (compassRaf === 0 && !document.hidden) compassRaf = window.requestAnimationFrame(tick);
+    };
+    const pause = (): void => {
+      if (compassRaf !== 0) { window.cancelAnimationFrame(compassRaf); compassRaf = 0; }
+    };
+    compassVisHandler = (): void => (document.hidden ? pause() : resume());
+    document.addEventListener('visibilitychange', compassVisHandler);
+    resume();
+  });
+}
+
+function stopCompass(): void {
+  if (compassRaf !== 0) { window.cancelAnimationFrame(compassRaf); compassRaf = 0; }
+  if (compassVisHandler) { document.removeEventListener('visibilitychange', compassVisHandler); compassVisHandler = null; }
+  if (compassHandle) { compassHandle.dispose(); compassHandle = null; }
+}
+
+/** Start or stop the compass to match the preference AND scan presence. */
+function refreshCompass(): void {
+  if (compassEnabled && compassViewer && compassViewer.clouds().length > 0) startCompass();
+  else stopCompass();
+}
+
+/** Show or hide the compass and persist the choice. */
+function setCompassEnabled(on: boolean): void {
+  compassEnabled = on;
+  try {
+    localStorage.setItem(COMPASS_PREF_KEY, on ? 'on' : 'off');
+  } catch {
+    /* private mode — honour for this session only */
+  }
+  refreshCompass();
+}
+
+void viewerLoaded.then((v) => {
+  compassViewer = v;
+  refreshCompass();
+});
+
+// v0.5.3 — PWA: register the offline service worker. Production + secure-context
+// only, and skipped under `?test=1` so it never interferes with e2e or dev. The
+// worker (public/sw.js) caches only the same-origin app shell; it leaves every
+// cross-origin dataset fetch alone, so the local-first, no-upload model holds.
+if (
+  import.meta.env.PROD &&
+  !urlParams.has('test') &&
+  !navigator.webdriver && // never register under automation (Playwright/Selenium e2e)
+  'serviceWorker' in navigator &&
+  window.isSecureContext
+) {
+  window.addEventListener('load', () => {
+    // Resolved against the page URL, not the origin root — the app deploys
+    // under sub-paths (GitHub Pages) where '/sw.js' would 404. See swUrl.ts.
+    navigator.serviceWorker.register(serviceWorkerUrl(window.location.href)).catch(() => {
+      /* offline support is best-effort — a registration failure must not break the app */
     });
   });
 }
@@ -2020,6 +2096,17 @@ function buildActionRegistry(): Action[] {
     },
   });
 
+  // v0.5.3 — toggle the on-canvas compass (promoted to a default control). The
+  // choice persists; the widget loads lazily the first time it is shown.
+  actions.push({
+    id: 'view.compass',
+    title: 'Toggle compass',
+    section: 'View',
+    hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
+    keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
+    run: () => setCompassEnabled(!compassEnabled),
+  });
+
   // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
   // command palette so users who skipped or dismissed can re-trigger
   // it from one keystroke (Cmd-K → "tour").
@@ -2343,6 +2430,13 @@ void viewerLoaded.then(() => {
     // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
     // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
     viewer.measure.setCrsKnown(resolved != null && resolved.linearUnit !== 'unknown');
+    // A GEOGRAPHIC (degree) CRS can't be repaired by any scalar factor —
+    // X/Y are degrees, Z is linear. The controller refuses the affected
+    // trust grades + captions the hint; the panel shows the persistent
+    // caveat. One boolean, one seam, so the two can never disagree.
+    const isGeo = resolved?.kind === 'geographic';
+    viewer.measure.setGeographicCrs(isGeo);
+    measurePanel.setGeographicNotice(isGeo);
   });
 });
 // The Annotations panel lists placed annotations; the controller drives it.
@@ -2773,7 +2867,15 @@ const terrainRunner = createTerrainAnalysisRunner({
 // lands, so the next Analyse recomputes against the edited classes instead of
 // serving a number that silently no longer matches what's on screen.
 void viewerLoaded.then((v) => {
-  v.onClassificationEdited = () => terrainRunner.abortAndClearCache();
+  v.onClassificationEdited = () => {
+    terrainRunner.abortAndClearCache();
+    // The cache is gone but the RENDERED result/contours are not — without a
+    // caveat they read as current while reflecting the previous classes. The
+    // panel no-ops when nothing is on screen; a completed re-run clears it.
+    analysePanel.setStaleNotice(
+      'Classification edited — results reflect the previous classification. Re-run Analyse to refresh.',
+    );
+  };
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -3281,9 +3383,12 @@ function revealAnalysePanel(name: string, settled = true): void {
   const snapCloud = activeId ? viewer.getCloud(activeId) ?? null : null;
   viewer.measure.setSnapSource(snapCloud?.positions ?? null);
   // Reveal the clip control and seed its box from this scan's bounds (disabled
-  // until the user enables it).
+  // until the user enables it). Skip the reseed when the viewer already holds
+  // a clip — a session restore may have landed one before the scan revealed,
+  // and fitToScan() applies with the panel's own (disabled) flag, which would
+  // replace the restored clip with "disabled, full-bounds", destroying it.
   clipPanel.setVisible(true);
-  clipPanel.fitToScan();
+  if (!viewer.getClip()) clipPanel.fitToScan();
   // Fresh scan → clear any prior override + verdict so the open-time route is
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
   // override is per-session-per-scan: a new scan returns to auto-detection,
@@ -4674,6 +4779,12 @@ async function exportSession(): Promise<void> {
     // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
     // filter is active; serializeSession drops an empty list.
     classFilter: classLegendPanel.getVisibility().hiddenCodes(),
+    // v5 — the active clip box. The restore side has read this since v5, but
+    // the writer never emitted it — the documented round-trip was dead on the
+    // write side (clip-session finding, Critical). Emitted whenever the viewer
+    // holds a clip, enabled or not, so a positioned-but-dormant box keeps its
+    // geometry across the round trip.
+    clip: viewer.getClip() ?? undefined,
     // v6 — stamp the producing app version so a later re-open can tell whether a
     // newer build would read the scan differently (see exportStaleness).
     software: __APP_VERSION__,
@@ -4755,6 +4866,10 @@ async function importSession(file: File): Promise<void> {
       // being parsed but never re-applied.)
       viewer.setClip(session.clip);
       clipPanel.setVisible(true);
+      // Reflect the restored clip in the panel UI without re-firing onApply —
+      // the viewer already holds it, and firing through the panel while its
+      // own enabled flag was still false used to clear the restored clip.
+      clipPanel.setState(session.clip);
     }
     if (
       session.crs &&
@@ -4967,10 +5082,28 @@ async function handleFile(file: File): Promise<void> {
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
     }
-    try {
-      inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
-    } catch (err) {
-      if (debug) console.warn('[inspector] runModules + setReport threw', err);
+    // Scan Report — deferred off the attach path (v0.5.3). The health-check
+    // module walks EVERY point several times (duplicate-point set, median/MAD
+    // sorts, outlier + finite scans): ~3 s of the attach long-task on a
+    // multi-million-point cloud, blocking first paint and first input after
+    // "rendering…" clears. Run it when the main thread goes idle instead —
+    // the report card fills in a beat later, navigation is live immediately.
+    // The cloud-id guard drops the stale result if the user swapped scans
+    // before idle arrived (the memoised module re-runs cheaply on re-open).
+    {
+      const reportForId = id;
+      const fillReport = (): void => {
+        if (activeId !== reportForId) return; // scan changed while we waited
+        try {
+          inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
+        } catch (err) {
+          if (debug) console.warn('[inspector] runModules + setReport threw', err);
+        }
+      };
+      type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
+      const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
+      if (typeof rIC === 'function') rIC(fillReport, { timeout: 1500 });
+      else setTimeout(fillReport, 200);
     }
     try {
       inspector.setViews([]);
@@ -5938,6 +6071,8 @@ function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
   viewer.setInspectMode(false);
   viewer.clearMeasurements();
+  // No scan open → take the compass down (nothing to orient).
+  refreshCompass();
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
   clipPanel.setVisible(false);
   // Hide + clear the Analyse panel so it doesn't linger with stale
@@ -6067,6 +6202,8 @@ function refreshLayerCrsFlags(): void {
   inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
   // The two-epoch compare needs exactly two loaded layers.
   inspector.setLayerCompareAvailable(viewer.clouds().length === 2);
+  // Show the compass once a scan is open; hide it again when the last layer goes.
+  refreshCompass();
 }
 
 /**
@@ -6078,6 +6215,30 @@ function refreshLayerCrsFlags(): void {
  */
 /** A georeferenced .asc of the most recent comparison, ready to download. */
 let lastDifference: { stem: string; asc: () => string } | null = null;
+
+/**
+ * The larger of a cloud's X/Y world-frame spans, from a strided sample — a cheap
+ * scale for the epoch-alignment refuse gate (residual ≫ a fraction of the scene
+ * span means the fit never registered). Unit-agnostic (metres or feet).
+ */
+function horizontalSpanXY(positions: Float32Array, origin?: readonly [number, number, number]): number {
+  const n = (positions.length / 3) | 0;
+  if (n === 0) return 0;
+  const ox = origin?.[0] ?? 0;
+  const oy = origin?.[1] ?? 0;
+  const stride = Math.max(1, Math.floor(n / 2000));
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let i = 0; i < n; i += stride) {
+    const x = positions[i * 3] + ox;
+    const y = positions[i * 3 + 1] + oy;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return minX <= maxX ? Math.max(maxX - minX, maxY - minY) : 0;
+}
 
 function compareLoadedLayers(): void {
   const ids = viewer.clouds();
@@ -6091,9 +6252,10 @@ function compareLoadedLayers(): void {
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
+    const [{ buildSharedEpochDtms }, { alignEpochClouds, summarizeAlignment }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
       await Promise.all([
         loadCompareEpochs(),
+        loadAlignEpochs(),
         loadCompareDtms(),
         loadChangeRaster(),
       ]);
@@ -6101,10 +6263,38 @@ function compareLoadedLayers(): void {
     try {
       // Pass each cloud's origin: the two are recentred by their own origins, so
       // the comparison must align them in a common world frame, not raw local.
-      const dtms = buildSharedEpochDtms(
-        { positions: a.positions, origin: a.origin, crs: a.metadata?.crs?.name ?? null, verticalDatum: a.metadata?.crs?.verticalDatum ?? null },
-        { positions: b.positions, origin: b.origin, crs: b.metadata?.crs?.name ?? null, verticalDatum: b.metadata?.crs?.verticalDatum ?? null },
-      );
+      // Unit info rides along so the shared grid's ~0.25 m cell floor is
+      // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25.
+      const beforeCloud = {
+        positions: a.positions,
+        origin: a.origin,
+        crs: a.metadata?.crs?.name ?? null,
+        verticalDatum: a.metadata?.crs?.verticalDatum ?? null,
+        isGeographic: a.metadata?.crs?.isGeographic ?? null,
+        linearUnitToMetres: a.metadata?.crs?.linearUnitToMetres ?? null,
+      };
+      const afterCloud = {
+        positions: b.positions,
+        origin: b.origin,
+        crs: b.metadata?.crs?.name ?? null,
+        verticalDatum: b.metadata?.crs?.verticalDatum ?? null,
+        isGeographic: b.metadata?.crs?.isGeographic ?? null,
+        linearUnitToMetres: b.metadata?.crs?.linearUnitToMetres ?? null,
+      };
+      // Coarse-register the after cloud onto the before cloud first (yaw + x/y
+      // only — a real vertical change is the signal, so z is preserved), so a
+      // small horizontal misregistration between epochs is not read as movement.
+      // Refuse a fit whose residual exceeds 10% of the scene span: that means the
+      // two clouds never registered, so it's compared as-is rather than shifted.
+      // The span is measured in SOURCE units (horizontalSpanXY is unit-agnostic)
+      // while the gate option is metres, so convert by the CRS's linear factor —
+      // geographic frames don't have one, but alignment refuses those outright.
+      const span = horizontalSpanXY(a.positions, a.origin);
+      const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
+      const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
+        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined,
+      });
+      const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
         inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
         return;
@@ -6112,12 +6302,17 @@ function compareLoadedLayers(): void {
       // CRS unit factors (from epoch a — a unit mismatch between epochs is
       // already flagged) so cut/fill is m³ and Δz/LoD are metres, not source
       // units. A metre CRS resolves to 1 (no change); a foot CRS to ~0.3048.
+      // A geographic (degree) frame has no such factor at all — flag it so
+      // the comparison refuses the volume figures instead of printing
+      // degree²-based numbers as m³ (the DtmGrids can't carry the frame).
       const cmp = compareDtms(dtms.before, dtms.after, {
         horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
+        isGeographic:
+          a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, ...summarizeChange(cmp)]);
+      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
       lastDifference = {

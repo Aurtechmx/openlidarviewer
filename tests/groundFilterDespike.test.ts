@@ -35,6 +35,29 @@ describe('floorPercentile despike', () => {
     expect(r.groundSurface[0]).toBeLessThan(1); // ~0, the real ground
   });
 
+  it('fires even for small cells (n = 20, q = 5%): the lone blunder is skipped', () => {
+    // 19 clean returns at z=0 plus one −50 blunder in ONE cell. Nearest rank
+    // alone: ceil(0.05·20)−1 = 0 → the blunder wins (the audit's inert-despike
+    // finding). The documented guarantee — skip at least the single lowest
+    // return once n ≥ 3 — takes sorted[1] = 0, the real ground.
+    const pts: TerrainPoint[] = [];
+    for (let i = 0; i < 19; i++) pts.push({ x: (i % 5) + 0.1, y: Math.floor(i / 5) + 0.1, z: 0 });
+    pts.push({ x: 2, y: 2, z: -50 });
+    const r = classifyGroundSmrf(pts, { ...base, floorPercentile: 5 });
+    expect(r.groundSurface[0]).toBe(0);
+  });
+
+  it('keeps the strict minimum for 2-return cells (no evidence to reject either)', () => {
+    // Two returns in one cell: n < 3, so the despike floor must NOT skip the
+    // lower one — with only two samples neither can be called a blunder.
+    const pts: TerrainPoint[] = [
+      { x: 1, y: 1, z: 5 },
+      { x: 2, y: 2, z: 7 },
+    ];
+    const r = classifyGroundSmrf(pts, { ...base, floorPercentile: 5 });
+    expect(r.groundSurface[0]).toBe(5);
+  });
+
   it('does not change single-return cells (percentile of one value = that value)', () => {
     const pts: TerrainPoint[] = [
       { x: 0, y: 0, z: 3 },

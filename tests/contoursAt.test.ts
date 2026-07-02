@@ -145,3 +145,77 @@ describe('contoursAt', () => {
     expect(set.warnings.join(' ')).toMatch(/insufficient/i);
   });
 });
+
+describe('contoursAt — marching-squares saddle disambiguation (cell-average rule)', () => {
+  // One marching square (2×2 grid of cell values, 1 m cells, origin 0), so
+  // the four corners sit at world (0.5,0.5) BL, (1.5,0.5) BR, (1.5,1.5) TR,
+  // (0.5,1.5) TL. grid()'s zfn is indexed (col,row): v0=z(0,0), v1=z(1,0),
+  // v2=z(1,1), v3=z(0,1).
+  const nearest = (x: number, y: number, corners: Array<[number, number]>): number => {
+    let best = 0;
+    let bestD = Infinity;
+    corners.forEach(([cx, cy], i) => {
+      const d = (x - cx) ** 2 + (y - cy) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  };
+  const CORNERS: Array<[number, number]> = [
+    [0.5, 0.5], // v0 BL
+    [1.5, 0.5], // v1 BR
+    [1.5, 1.5], // v2 TR
+    [0.5, 1.5], // v3 TL
+  ];
+  /** Which corner each segment's midpoint hugs, sorted for stable comparison. */
+  const isolatedCorners = (segs: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }>) =>
+    segs.map((s) => nearest((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, CORNERS)).sort();
+
+  it('case 5, centre ABOVE the level: the LOW corners are cut off', () => {
+    // v0=v2=1 (high), v1=v3=0.5 (low), level 0.6. Cell average 0.75 ≥ 0.6 →
+    // the high corners connect through the middle; each segment isolates a
+    // LOW corner (v1 BR, v3 TL). Hand-computed crossings: bottom (1.3,0.5),
+    // right (1.5,0.7), top (0.7,1.5), left (0.5,1.3).
+    const set = contoursAt(grid((x, y) => (x === y ? 1 : 0.5), 2, 2), {
+      intervalM: 1,
+      levels: [0.6],
+    });
+    const segs = set.levels[0].segments;
+    expect(segs.length).toBe(2);
+    expect(isolatedCorners(segs)).toEqual([1, 3]);
+    // Pin one hand-computed segment exactly: (1.3,0.5) → (1.5,0.7) around v1.
+    const brSeg = segs.find((s) => nearest((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, CORNERS) === 1)!;
+    const xs = [brSeg.x1, brSeg.x2].sort((a, b) => a - b);
+    const ys = [brSeg.y1, brSeg.y2].sort((a, b) => a - b);
+    expect(xs[0]).toBeCloseTo(1.3, 6);
+    expect(xs[1]).toBeCloseTo(1.5, 6);
+    expect(ys[0]).toBeCloseTo(0.5, 6);
+    expect(ys[1]).toBeCloseTo(0.7, 6);
+  });
+
+  it('case 5, centre BELOW the level: the HIGH corners are cut off', () => {
+    // v0=v2=1 (high), v1=v3=0.1 (low), level 0.9. Cell average 0.55 < 0.9 →
+    // the high corners are isolated peaks (v0 BL, v2 TR).
+    const set = contoursAt(grid((x, y) => (x === y ? 1 : 0.1), 2, 2), {
+      intervalM: 1,
+      levels: [0.9],
+    });
+    const segs = set.levels[0].segments;
+    expect(segs.length).toBe(2);
+    expect(isolatedCorners(segs)).toEqual([0, 2]);
+  });
+
+  it('case 10, centre ABOVE the level: mirrors case 5 (low corners v0/v2 cut off)', () => {
+    // v1=v3=1 (high), v0=v2=0.5 (low), level 0.6. Average 0.75 ≥ 0.6 → the
+    // segments isolate the LOW corners v0 (BL) and v2 (TR).
+    const set = contoursAt(grid((x, y) => (x === y ? 0.5 : 1), 2, 2), {
+      intervalM: 1,
+      levels: [0.6],
+    });
+    const segs = set.levels[0].segments;
+    expect(segs.length).toBe(2);
+    expect(isolatedCorners(segs)).toEqual([0, 2]);
+  });
+});

@@ -25,6 +25,7 @@
 
 import type { TerrainPoint, TerrainCoverageMode } from '../TerrainContracts';
 import type { VerticalAxis } from './groundFilter';
+import { quantileSorted } from '../quantile';
 
 /** A grid the raster should align to (e.g. the `groundFilter` grid). */
 export interface GridSpec {
@@ -280,22 +281,9 @@ function clampUnit(p: number): number {
   return p;
 }
 
-/**
- * Quantile of an ASCENDING-sorted, non-empty list at fraction `p` in [0, 1],
- * using linear interpolation between the two bracketing order statistics (the
- * "linear"/type-7 convention, matching NumPy's default `percentile`). `p = 0`
- * returns the minimum, `p = 1` the maximum, `p = 0.5` the median.
- */
-function quantileSorted(sorted: number[], p: number): number {
-  const n = sorted.length;
-  if (n === 1) return sorted[0];
-  const idx = p * (n - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  const frac = idx - lo;
-  return sorted[lo] * (1 - frac) + sorted[hi] * frac;
-}
+// Quantiles use the project-wide type-7 helper (`../quantile`) — the local
+// copy this file used to carry was one of the three conventions the v0.4.3
+// audit flagged; it is now the single shared definition.
 
 /**
  * Robust cell estimator over an ASCENDING-sorted, non-empty list.

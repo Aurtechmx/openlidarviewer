@@ -21,7 +21,7 @@
  *      always receives the CPU-correct answer.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   TerrainRasterEngine,
   getTerrainRasterEngine,
@@ -94,9 +94,11 @@ function faithfulFakeGpu(calls?: {
       if (calls && calls.scatter != null) calls.scatter++;
       return Promise.resolve(scatterMinCountReference(points, grid));
     },
-    derivatives: (z, cols, rows, cell) => {
+    derivatives: (z, cols, rows, cell, cellY) => {
       if (calls) calls.derivatives++;
-      return Promise.resolve(hornSlopeAspect(z, cols, rows, cell));
+      // A faithful backend honours the per-axis cell size — the probe's
+      // anisotropic pass rejects one that ignores it (tested below).
+      return Promise.resolve(hornSlopeAspect(z, cols, rows, cell, cellY));
     },
     hillshade: (s, a, cov, cols, rows, params) => {
       if (calls) calls.hillshade++;
@@ -147,6 +149,14 @@ describe('cpuBackend — pure delegation, byte-identical', () => {
     expect(bytesEqual(a.aspect, b.aspect)).toBe(true);
   });
 
+  it('derivatives passes the anisotropic cell pair through, byte-identical', async () => {
+    const { z, cols, rows } = buildProbeGrid(32, 24);
+    const a = await backend.derivatives(z, cols, rows, 0.5, 1);
+    const b = hornSlopeAspect(z, cols, rows, 0.5, 1);
+    expect(bytesEqual(a.slope, b.slope)).toBe(true);
+    expect(bytesEqual(a.aspect, b.aspect)).toBe(true);
+  });
+
   it('hillshade delegates to shadeFromSlopeAspect, byte-identical', async () => {
     const { z, cols, rows, cellSizeM } = buildProbeGrid(32, 24);
     const sa = hornSlopeAspect(z, cols, rows, cellSizeM);
@@ -167,6 +177,22 @@ describe('engine sync entries — the live pipeline path is the CPU reference', 
     expect(bytesEqual(a.slope, b.slope)).toBe(true);
     expect(bytesEqual(a.aspect, b.aspect)).toBe(true);
     expect(engine.getComputePath().lastCall).toBe('cpu');
+  });
+
+  it('derivativesSync threads the per-axis (anisotropic) cell size through', () => {
+    // The cos φ geographic geometry: E–W cell half the N–S cell. Byte-
+    // identical to calling the reference with both axes — the engine seam
+    // must not collapse the pair back to a square cell.
+    const engine = new TerrainRasterEngine();
+    const { z, cols, rows } = buildProbeGrid();
+    const a = engine.derivativesSync(z, cols, rows, 0.5, 1);
+    const b = hornSlopeAspect(z, cols, rows, 0.5, 1);
+    expect(bytesEqual(a.slope, b.slope)).toBe(true);
+    expect(bytesEqual(a.aspect, b.aspect)).toBe(true);
+    // And the pair genuinely differs from the square-cell result (guards
+    // against a seam that silently drops the Y size).
+    const square = engine.derivativesSync(z, cols, rows, 0.5);
+    expect(bytesEqual(a.slope, square.slope)).toBe(false);
   });
 
   it('hillshadeSync is byte-identical to shadeFromSlopeAspect', () => {
@@ -224,6 +250,19 @@ describe('equivalence harness — f32 kernel arithmetic vs the f64 CPU reference
     });
   }
 
+  it('f32 transcription agrees with CPU on ANISOTROPIC cells (cos 60° pair)', () => {
+    // Same harness as above but with the probe's anisotropic geometry
+    // (E–W 0.5 m, N–S 1 m) — bounds the f32-vs-f64 gap on the per-axis
+    // denominators the new kernel path introduces.
+    const { z, cols, rows } = buildProbeGrid();
+    const ref = hornSlopeAspect(z, cols, rows, 0.5, 1);
+    const got = hornDerivativesF32Reference(z, cols, rows, 0.5, 1);
+    const d = compareDerivativeGrids(ref, got);
+    expect(d.maxSlopeErr).toBeLessThanOrEqual(EQUIVALENCE_SLOPE_TOLERANCE);
+    expect(d.maxAspectErr).toBeLessThanOrEqual(EQUIVALENCE_ASPECT_TOLERANCE_RAD);
+    expect(d.comparedAspectCells).toBeGreaterThan(0);
+  });
+
   it('flat cells keep the EXACT slope-0/aspect-0 convention in both', () => {
     const { z, cols, rows, cellSizeM } = buildProbeGrid();
     const ref = hornSlopeAspect(z, cols, rows, cellSizeM);
@@ -265,6 +304,16 @@ describe('equivalence harness — f32 kernel arithmetic vs the f64 CPU reference
 });
 
 describe('the equivalence gate + auto-fallback (probe at init)', () => {
+  // These fixtures EXPECT the engine to announce probe failures / init
+  // errors on console.warn — that is the honesty contract under test, and
+  // the assertions read the returned ComputePathInfo, not the console.
+  // Silence the expected announcements so a green run stays clean.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   it('a faithful gpu backend passes the probe and serves async calls', async () => {
     const calls = { derivatives: 0, hillshade: 0 };
     const engine = new TerrainRasterEngine({ gpuFactory: okFactory(faithfulFakeGpu(calls)) });
@@ -286,8 +335,8 @@ describe('the equivalence gate + auto-fallback (probe at init)', () => {
   it('a diverging gpu backend FAILS the probe → CPU, recorded, results correct', async () => {
     const corrupt: TerrainRasterBackend = {
       ...faithfulFakeGpu(),
-      derivatives: async (z, cols, rows, cell) => {
-        const out = hornSlopeAspect(z, cols, rows, cell);
+      derivatives: async (z, cols, rows, cell, cellY) => {
+        const out = hornSlopeAspect(z, cols, rows, cell, cellY);
         const slope = out.slope.slice();
         for (let i = 0; i < slope.length; i++) slope[i] += 0.01; // 100× the gate
         return { slope, aspect: out.aspect };
@@ -304,6 +353,30 @@ describe('the equivalence gate + auto-fallback (probe at init)', () => {
     const { z, cols, rows, cellSizeM } = buildProbeGrid(16, 16);
     const got = await engine.derivatives(z, cols, rows, cellSizeM);
     const ref = hornSlopeAspect(z, cols, rows, cellSizeM);
+    expect(bytesEqual(got.slope, ref.slope)).toBe(true);
+    expect(engine.getComputePath().lastCall).toBe('cpu');
+  });
+
+  it('a backend that IGNORES the per-axis cell size FAILS the probe', async () => {
+    // The exact failure mode the anisotropic probe pass exists for: a kernel
+    // that computes a correct isotropic estimate (passes the square-cell
+    // pass bit-for-bit) but silently drops `cellSizeYM` — on a geographic
+    // grid it would overstate dz/dy 2× at the probe's cos 60° geometry.
+    const isotropicOnly: TerrainRasterBackend = {
+      ...faithfulFakeGpu(),
+      derivatives: async (z, cols, rows, cell) => hornSlopeAspect(z, cols, rows, cell),
+    };
+    const engine = new TerrainRasterEngine({ gpuFactory: okFactory(isotropicOnly) });
+    const info = await engine.init();
+    expect(info.path).toBe('cpu');
+    expect(info.reason).toBe('probe-mismatch');
+    expect(info.probe?.passed).toBe(false);
+    expect(info.probe!.maxSlopeErr).toBeGreaterThan(EQUIVALENCE_SLOPE_TOLERANCE);
+
+    // The caller still gets the CPU truth on the anisotropic path.
+    const { z, cols, rows } = buildProbeGrid(16, 16);
+    const got = await engine.derivatives(z, cols, rows, 0.5, 1);
+    const ref = hornSlopeAspect(z, cols, rows, 0.5, 1);
     expect(bytesEqual(got.slope, ref.slope)).toBe(true);
     expect(engine.getComputePath().lastCall).toBe('cpu');
   });
@@ -362,10 +435,10 @@ describe('the equivalence gate + auto-fallback (probe at init)', () => {
     let disposed = false;
     const flaky: TerrainRasterBackend = {
       ...faithfulFakeGpu(),
-      derivatives: async (z, cols, rows, cell) => {
-        // Pass the 64×64 probe, then blow up on real work.
+      derivatives: async (z, cols, rows, cell, cellY) => {
+        // Pass the 64×64 probe (both its passes), then blow up on real work.
         if (cols === PROBE_GRID_SIZE && rows === PROBE_GRID_SIZE) {
-          return hornSlopeAspect(z, cols, rows, cell);
+          return hornSlopeAspect(z, cols, rows, cell, cellY);
         }
         throw new Error('device lost');
       },
@@ -416,6 +489,14 @@ describe('the equivalence gate + auto-fallback (probe at init)', () => {
 });
 
 describe('DTM min/count scatter (phase 2) — ordered-key + CPU reference', () => {
+  // Same expected-announcement noise as the probe suite above — the
+  // scatter-divergence fixtures make the engine warn by design.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   it('the ordered-u32 key round-trips every finite float and preserves order', () => {
     // Round-trip: ordered key -> back to the same f32 value.
     const vals = [-1e30, -1000.5, -3.25, -1, -0.0, 0, 0.5, 3.25, 1000.5, 1e30];

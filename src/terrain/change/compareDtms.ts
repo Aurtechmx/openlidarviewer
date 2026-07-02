@@ -37,6 +37,20 @@ export function dtmToChangeGrid(dtm: DtmGrid): ChangeGrid {
   return { width: dtm.cols, height: dtm.rows, cellSizeM: dtm.cellSizeM, values };
 }
 
+/** Options for {@link compareDtms} — the change-core options plus frame honesty. */
+export interface CompareDtmsOptions extends ChangeDetectionOptions {
+  /**
+   * True when the grids' horizontal frame is geographic (degrees). A DtmGrid
+   * cannot carry this itself, but it changes what the comparison may claim:
+   * a degree² cell area has no scalar conversion to m² (a degree of longitude
+   * alone varies with cos φ), so cut/fill VOLUMES are not computable — while
+   * the per-cell elevation differences remain valid (z is a linear unit).
+   * When set, the comparison refuses the volume figures instead of printing
+   * degree-based numbers as m³, and says so in the co-registration notes.
+   */
+  readonly isGeographic?: boolean;
+}
+
 /** A two-epoch comparison plus the co-registration verdict the grids can't carry. */
 export interface EpochComparison {
   readonly result: ChangeResult;
@@ -51,6 +65,13 @@ export interface EpochComparison {
   readonly coregistrationNotes: readonly string[];
   /** The Level-of-Detection (m) applied: |Δ| ≤ this read as no change (noise floor). */
   readonly levelOfDetectionM: number;
+  /**
+   * False when the grids' frame is geographic (degrees): the cut/fill volume
+   * fields in `result.stats` are then degree²-based and MUST NOT be presented
+   * as m³ (see {@link CompareDtmsOptions.isGeographic}). Omitted/true means
+   * volumes are in m³ as documented. `summarizeChange` honours this.
+   */
+  readonly volumesComputable?: boolean;
 }
 
 /**
@@ -61,9 +82,24 @@ export interface EpochComparison {
 export function compareDtms(
   a: DtmGrid,
   b: DtmGrid,
-  options: ChangeDetectionOptions = {},
+  options: CompareDtmsOptions = {},
 ): EpochComparison {
   const notes: string[] = [];
+
+  // Geographic (degree) frame: Δz statistics stay valid (z is linear) but
+  // cell areas are degrees², so cut/fill volumes are refused rather than
+  // mislabelled as m³ — `detectChange`'s own contract says degree grids
+  // can't be volumed. The note also forces the not-co-registered caveat
+  // path, because two same-CRS geographic epochs would otherwise pass every
+  // check and ship the bogus volume with no warning at all.
+  const volumesComputable = options.isGeographic !== true;
+  if (!volumesComputable) {
+    notes.push(
+      'Geographic (degree) grid — cell areas are in degrees², so cut/fill volumes ' +
+        'are not computable. Reproject both epochs to a projected CRS to measure ' +
+        'volumes; the per-cell elevation differences remain valid.',
+    );
+  }
 
   // World origin: same raster shape is not enough — the grids must start at the
   // same world point, or cell (x,y) of one is a different place than the other.
@@ -117,7 +153,7 @@ export function compareDtms(
   // overall co-registration verdict folds those in too.
   const coregistered = result.aligned && notes.length === 0;
   const levelOfDetectionM = Math.max(0, options.levelOfDetectionM ?? DEFAULT_LOD_M);
-  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM };
+  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable };
 }
 
 /**
@@ -133,10 +169,18 @@ export function summarizeChange(comparison: EpochComparison): string[] {
   if (!coregistered) {
     lines.push('⚠ Not co-registered — treat the difference as indicative, not measured.');
   }
-  lines.push(
-    `Net volume change: ${s.netVolumeM3.toFixed(1)} m³ ` +
-      `(gain ${s.gainVolumeM3.toFixed(1)} m³, loss ${s.lossVolumeM3.toFixed(1)} m³).`,
-  );
+  if (comparison.volumesComputable === false) {
+    // Degree² cell areas: no m³ figure exists — the refusal line replaces it.
+    lines.push(
+      'Cut/fill volumes: not computable on a geographic (degree) grid — ' +
+        'reproject both epochs to a projected CRS to measure volumes.',
+    );
+  } else {
+    lines.push(
+      `Net volume change: ${s.netVolumeM3.toFixed(1)} m³ ` +
+        `(gain ${s.gainVolumeM3.toFixed(1)} m³, loss ${s.lossVolumeM3.toFixed(1)} m³).`,
+    );
+  }
   lines.push(
     `${(s.significantFraction * 100).toFixed(1)}% of comparable cells changed beyond the ` +
       `detection floor of ${comparison.levelOfDetectionM} m ` +

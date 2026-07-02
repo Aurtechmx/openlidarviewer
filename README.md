@@ -412,9 +412,19 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.2**. The full, dated history is in
+The current release is **v0.5.3**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.5.3 — Epoch alignment · offline PWA · a reproducible evaluation
+- **Two-epoch alignment in change detection** — before two epochs are compared, the after cloud is coarse-registered onto the before cloud (yaw + horizontal shift only, so a real vertical change is preserved), with the shift, yaw, and RMS residual reported and a fit the gate can't trust **refused** rather than applied
+- **Installable and offline (PWA)** — a local-first service worker caches the same-origin app shell only (never a dataset request), so the viewer opens with no network after the first visit; the **compass** gains a remembered command-palette toggle
+- **`npm run repro`** — a one-command evaluation harness (registration vertical-bias, alignment recovery, ±-band coverage vs nominal, digest determinism) with CI-guarded coverage/bias tests and a `REVIEWER_QUICKSTART.md`
+- **Seventeen correctness fixes** from two audit passes: nine terrain/profile hardenings (unit-aware grid floors, world-latitude cos φ, one type-7 percentile convention, contour stitching/interval/saddle rules, despike on small cells, signed grade, worker clamp, geographic-CRS refusal) and eight Phase 0 Criticals (float64 alignment application, geographic ICP + volume refusal, metre-true alignment reporting, visibility-respecting reclassify, stale-analysis disclosure, clip-box session round-trip, PWA shell-poisoning guard)
+
+### v0.5.2 — A verifiable integrity digest · version-aware exports
+- The integrity report digest is **SHA-256** by default and a new **"Verify integrity report…"** action lets a recipient check a handed-over report on its own; volume findings carry the whole earthwork (net, cut, fill, area, confidence)
+- Exports and sessions **stamp the producing version**, and re-opening an older session flags the gap; new `lint:inline-imports` and `lint:release-sync` guards close two release-only failure classes
 
 ### v0.5.1 — Auditable volume · classification editing · integrity reports
 - **Stockpile / earthworks volume with a confidence band** — the lasso volume readout states its own uncertainty (sampling error + a systematic base-plane term, combined in quadrature) with a show-the-math breakdown and honest caveats

@@ -9,7 +9,7 @@
  * Exercises the worker bridge's main-thread fallback (no Worker in Node).
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createTerrainAnalysisRunner } from '../src/app/terrainAnalysisRunner';
 import { analyseContours, type AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 import { clearTerrainCoreCache } from '../src/terrain/contour/terrainCoreCache';
@@ -70,6 +70,15 @@ function makeRunner(
 }
 
 describe('terrainAnalysisRunner density wiring (samplePointScale)', () => {
+  // Node has no Worker, so the runner's terrain-core offload announces its
+  // (expected) fallback on console.warn before computing on the main thread.
+  // Silenced — the assertions here read density figures, not the console.
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   const full = densePlane(); // 3600 points, 4 pts/m² by construction
   const quarter = strided(full, 4); // 900 points reach the analysis
   // The runner derives cellSizeM = max(0.25, extent / 256) — reproduce it so

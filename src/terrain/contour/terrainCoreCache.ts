@@ -240,6 +240,11 @@ function paramsKey(params: TerrainCoreParams): string {
     `cs=${params.cellSizeM}`,
     `crs=${params.crs ?? ''}`,
     `geo=${params.isGeographic ? 1 : 0}`,
+    // Grid-centre latitude feeds the cos φ E–W corrections inside the core
+    // (slope/aspect/hillshade, densities), so a changed latitude must MISS.
+    // Constant for one open scan in practice (derived from the scan's own
+    // bbox + origin), but keyed exactly like every other core input.
+    `lat=${params.latitudeDeg ?? ''}`,
     `v2m=${params.verticalUnitToMetres ?? ''}`,
     `vd=${params.verticalDatum ?? ''}`,
     `va=${params.verticalAxis ?? ''}`,

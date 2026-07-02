@@ -137,6 +137,16 @@ describe('slopeBetween', () => {
     expect(s.gradePercent).toBe(Infinity);
     expect(s.angleDeg).toBeCloseTo(90, 6);
   });
+
+  it('signs the infinite grade for a straight-DOWN pair (−∞, matching angle −90°)', () => {
+    // v0.4.3 audit: the unsigned Infinity read a vertical descent as an
+    // infinite CLIMB. The grade's sign must agree with the rise's.
+    const s = slopeBetween(v(0, 0, 5), v(0, 0, 0), UP_Z);
+    expect(s.rise).toBeCloseTo(-5, 9);
+    expect(s.run).toBeCloseTo(0, 9);
+    expect(s.gradePercent).toBe(-Infinity);
+    expect(s.angleDeg).toBeCloseTo(-90, 6);
+  });
 });
 
 describe('verticalDelta', () => {
@@ -180,6 +190,13 @@ describe('profileMetrics', () => {
     expect(p.verticalDrop).toBeCloseTo(7, 9);
     expect(p.gradePercent).toBe(Infinity);
     expect(p.gradeAngleDeg).toBeCloseTo(90, 6);
+  });
+
+  it('signs the infinite grade for a straight-down profile (−∞)', () => {
+    const p = profileMetrics(v(0, 0, 7), v(0, 0, 0), UP_Z);
+    expect(p.verticalDrop).toBeCloseTo(-7, 9);
+    expect(p.gradePercent).toBe(-Infinity);
+    expect(p.gradeAngleDeg).toBeCloseTo(-90, 6);
   });
 
   it('signs the vertical drop — descending profile is negative', () => {

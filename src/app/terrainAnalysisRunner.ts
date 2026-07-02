@@ -29,20 +29,30 @@ import {
   loadTerrainCoreCache,
   loadComputeTerrainCoreAsync,
 } from '../lazyChunks';
+// Tiny pure constant (no heavy terrain code rides along) — the unit-aware
+// cell floor must agree with the metres-per-degree scale the pipeline uses.
+import { METRES_PER_DEGREE } from '../terrain/ground/horizontalScale';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
  * from the gathered positions, exactly as {@link TerrainAnalysisRunner.run}
  * does. Factored out so the PDF export's interval re-pick produces a
  * byte-identical fingerprint and therefore HITS the same cached core instead of
- * recomputing the heavy half.
+ * recomputing the heavy half. Exported for the unit tests (pure).
+ *
+ * `getWorldOriginY` lazily supplies the active cloud's render-recentre offset
+ * on the second horizontal axis (world Y), or null when unknown. Only invoked
+ * for a GEOGRAPHIC frame — there the local Y axis is latitude minus that
+ * offset, so `originY + localCentreY` recovers the grid-centre LATITUDE the
+ * cos φ corrections need. Projected frames never touch it.
  */
-function deriveCoreParams(
+export function deriveCoreParams(
   positions: Float32Array,
   classification: Uint8Array | undefined,
   crsService: CrsService,
   totalPoints?: number,
   residentOnly = false,
+  getWorldOriginY?: () => number | null,
 ): TerrainCoreParams {
   const n = positions.length / 3;
   let minX = Infinity;
@@ -57,10 +67,28 @@ function deriveCoreParams(
     if (x > maxX) maxX = x;
     if (y > maxY) maxY = y;
   }
-  // Aim for a grid ~256 cells across, clamped to a sane floor.
-  const extent = Math.max(maxX - minX, maxY - minY, 1);
-  const cellSizeM = Math.max(0.25, extent / 256);
   const cur = crsService.current();
+  const isGeographic = cur?.kind === 'geographic';
+  // Aim for a grid ~256 cells across, clamped to a sane floor. The floor is
+  // 0.25 METRES expressed in SOURCE units — the old raw `0.25` was unit-blind:
+  // on a geographic (degree) CRS it forced 0.25° ≈ 28 km cells, collapsing any
+  // scan under ~64° of extent to 1–2 cells (the v0.4.3 audit finding). Degrees
+  // divide by metres-per-degree; feet by metres-per-foot; metres unchanged.
+  const metresPerUnit = isGeographic
+    ? METRES_PER_DEGREE
+    : cur?.linearUnitToMetres && cur.linearUnitToMetres > 0
+      ? cur.linearUnitToMetres
+      : 1;
+  const extent = Math.max(maxX - minX, maxY - minY, 1 / metresPerUnit);
+  const cellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
+  // Grid-centre latitude for the pipeline's cos φ east–west corrections.
+  // Local render space subtracts the cloud's world origin, so add it back;
+  // an unknown origin treats local Y as absolute latitude (a geographic file
+  // small enough to skip recentring). Null for projected frames.
+  const latitudeDeg =
+    isGeographic && Number.isFinite(minY) && Number.isFinite(maxY)
+      ? (getWorldOriginY?.() ?? 0) + (minY + maxY) / 2
+      : null;
   const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
   // Stride honesty: the gather caps huge clouds (≤ 300 k points), so per-cell
   // densities — and the USGS QL graded from them — must be scaled back up by
@@ -74,7 +102,8 @@ function deriveCoreParams(
   return {
     cellSizeM,
     crs: crsName,
-    isGeographic: cur?.kind === 'geographic',
+    isGeographic,
+    latitudeDeg,
     // Elevation converts by the Z-axis's OWN unit when the file declares one
     // (e.g. feet height over a metre grid); otherwise it follows the horizontal
     // unit — the GeoTIFF default that vertical units track the model's units.
@@ -170,6 +199,25 @@ export function createTerrainAnalysisRunner(
   // dropped. Null when no run is in flight.
   let terrainAbort: AbortController | null = null;
 
+  // The active cloud's world-origin Y (the render-recentre offset), so a
+  // geographic scan's grid-centre LATITUDE can be recovered from the local
+  // bbox (local Y = latitude − origin). Static clouds carry `origin`;
+  // streamed COPC/EPT scans keep it on the streaming source — the same two
+  // seams the contour-export map context reads. Null when unknown (local Y
+  // is then treated as absolute latitude). Passed as a THUNK so
+  // deriveCoreParams only reads it for geographic frames, and read
+  // identically by run() and the export builders so the core-cache
+  // fingerprint never forks.
+  const worldOriginY = (): number | null => {
+    const viewer = getViewer();
+    const id = getActiveId();
+    const origin =
+      (id ? viewer.getCloud(id)?.origin : null) ??
+      viewer.streamingCloud?.renderOrigin ??
+      null;
+    return origin && Number.isFinite(origin[1]) ? origin[1] : null;
+  };
+
   async function run(intervalM?: number): Promise<void> {
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
@@ -225,6 +273,7 @@ export function createTerrainAnalysisRunner(
         crsService,
         gathered.totalPoints,
         gathered.residentOnly,
+        worldOriginY,
       );
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
@@ -289,6 +338,7 @@ export function createTerrainAnalysisRunner(
       crsService,
       gathered.totalPoints,
       gathered.residentOnly,
+      worldOriginY,
     );
     const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
       computeTerrainCoreAsync(

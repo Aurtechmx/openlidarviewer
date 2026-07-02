@@ -3178,6 +3178,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 .olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+/* Geographic-CRS honesty notice: sits between the panel head and the list;
+ * spacing only — visual grammar comes from .olv-caveat. */
+.olv-mp-geo-notice { margin: 0 0 var(--space-xs) 0; }
 /* align-items:flex-start + min-width:0 so a long reading can wrap to a
  * second line and shrink inside the fixed-width panel instead of
  * bleeding past the rounded edge (regression: dimension+volume strings

@@ -12,7 +12,7 @@
  * so those are covered by the live-build smoke test, not here.
  */
 
-import { test, expect } from 'vitest';
+import { test, expect, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 import {
   ExportRegistry,
@@ -379,11 +379,16 @@ test('orthographic-rgb render: a null framed render falls back to the view captu
     snapshotCalled = true;
     return orig(o);
   };
+  // The composite-skip announcement on console.warn is this fixture's
+  // expected behaviour (Node has no Image) — silenced; the assertions read
+  // the adapter call log, not the console.
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   await orthographicRgbExporter.render(stubContext(adapter), {}).catch(() => {
     /* Node has no Image/canvas for the report-card composition — fine. */
   });
   expect(adapter.framedCalls.length).toBe(1);
   expect(snapshotCalled).toBe(true);
+  warnSpy.mockRestore();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

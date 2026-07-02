@@ -5,7 +5,7 @@
  * pass, the perceptual ramp boundaries, and the cell-size heuristic.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   densityForChunk,
   defaultCellSizeForSpacing,
@@ -102,6 +102,10 @@ describe('densityForChunk — voxel-grid heatmap colours', () => {
     // on, `log1p(hot − cold)` would have been negative → NaN propagated
     // into the RGB output. The clamp to ≥ 0 keeps the output valid; the
     // visible result is the entire cloud reading as a uniform "cold" colour.
+    // The swap announcement on console.warn is the fixture's expected
+    // behaviour — silenced so a green run stays clean (finiteness of the
+    // output is what's asserted, not the console).
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const positions = pack([
       [0, 0, 0],
       [0.1, 0.1, 0],
@@ -115,6 +119,7 @@ describe('densityForChunk — voxel-grid heatmap colours', () => {
     for (let i = 0; i < out.colors.length; i++) {
       expect(Number.isFinite(out.colors[i])).toBe(true);
     }
+    warnSpy.mockRestore();
   });
 });
 

@@ -32,9 +32,11 @@ export function createCpuBackend(): TerrainRasterBackend {
     // GPU must match; wrapped in a resolved Promise for the async contract.
     scatterMinCount: (points, grid) => Promise.resolve(scatterMinCountReference(points, grid)),
     // The backend contract is async (WebGPU readback forces it); the CPU
-    // implementations are synchronous, wrapped in a resolved Promise.
-    derivatives: (z, cols, rows, cellSizeM) =>
-      Promise.resolve(hornSlopeAspect(z, cols, rows, cellSizeM)),
+    // implementations are synchronous, wrapped in a resolved Promise. The
+    // per-axis cell size passes straight through — hornSlopeAspect already
+    // accepts it (cellSizeYM defaults to cellSizeM there, square cells).
+    derivatives: (z, cols, rows, cellSizeM, cellSizeYM) =>
+      Promise.resolve(hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeYM)),
     hillshade: (slope, aspect, coverage, cols, rows, params) =>
       Promise.resolve(shadeFromSlopeAspect(slope, aspect, coverage, cols, rows, params)),
   };

@@ -13,6 +13,22 @@
 import { formatDistance } from '../navMath';
 import type { UnitSystem } from './types';
 
+/**
+ * The measurement stack's honest limitation on a GEOGRAPHIC (degree) CRS.
+ * Render X/Y are degrees while Z is a linear unit, so 3D lengths, areas,
+ * grades and profile chainage mix units and NO single `unitToMetres` factor
+ * can fix them (a degree of longitude alone varies with cos φ). Rather than
+ * silently mislabel degrees as metres — a 0.35-"m" corridor is really
+ * ≈ 39 km — the stack keeps working but states this limit everywhere
+ * measurements surface: the measure-bar hint, the Measurements panel's
+ * persistent caveat, and each affected measurement's trust grade. ONE
+ * string, shared by all three, so the wording cannot fork.
+ */
+export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
+  'Geographic CRS (degrees): X/Y are in degrees, not metres, so lengths, ' +
+  'areas, grades and profiles are NOT reliable distances. Reproject to a ' +
+  'projected CRS for measurement work.';
+
 const FEET_PER_METRE = 3.280839895013123;
 const SQFT_PER_SQM = FEET_PER_METRE * FEET_PER_METRE;
 const SQFT_PER_ACRE = 43_560;

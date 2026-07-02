@@ -62,7 +62,11 @@ import {
   type HillshadeResult,
 } from '../surface/hillshade';
 import { getTerrainRasterEngine } from '../engine/TerrainRasterEngine';
-import { horizontalCellMetres, METRES_PER_DEGREE } from '../ground/horizontalScale';
+import {
+  horizontalCellMetresXY,
+  cosLatitude,
+  METRES_PER_DEGREE,
+} from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
 import { checkCalibration } from '../validate/calibrationCheck';
@@ -109,6 +113,17 @@ export interface TerrainCoreParams {
    * hillshade can convert the cell size to metres. Default false (projected).
    */
   readonly isGeographic?: boolean;
+  /**
+   * Representative latitude of the grid (its centre), in degrees, for a
+   * geographic frame — the WORLD latitude (render-recentred local Y plus the
+   * cloud's world origin), never the recentred local Y itself (which is ≈ 0,
+   * silently degrading cos φ to 1). A degree of longitude spans
+   * `METRES_PER_DEGREE·cos φ` metres, so slope/aspect/hillshade and per-cell
+   * densities scale the E–W axis by cos φ — at 60° latitude an uncorrected
+   * estimate overstates the E–W run ~2×. Null / omitted keeps the isotropic
+   * (cos φ = 1) estimate; ignored entirely for projected frames.
+   */
+  readonly latitudeDeg?: number | null;
   /**
    * Metres per source vertical unit (1 for metre data, ~0.3048 for feet). The
    * hold-out RMSE is reported in metres using this, so the quality score and
@@ -452,6 +467,9 @@ export function computeTerrainCore(
     crs,
     verticalDatum,
     isGeographic: params.isGeographic,
+    // WORLD grid-centre latitude for the confidence roughness slope's cos φ
+    // E–W correction (the grid's own originH2 is render-recentred, ≈ 0).
+    latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
   });
   if (built.despikedCellCount > 0) {
@@ -486,6 +504,7 @@ export function computeTerrainCore(
     // live DTM above (median), so the RMSE isn't measuring a different surface.
     aggregation,
     isGeographic: params.isGeographic,
+    latitudeDeg: params.latitudeDeg,
     verticalUnitToMetres: params.verticalUnitToMetres,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     collectSamples: true,
@@ -529,6 +548,10 @@ export function computeTerrainCore(
         cellSizeM: params.cellSizeM,
         elevationRangeM,
         rmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+        // Real bounds unlock the EXACT level-crossing test for the coarse-
+        // interval rule (a 1 m interval on a 0.4–1.2 m surface crosses 1.0).
+        minZ: Number.isFinite(minZ) ? minZ : null,
+        maxZ: Number.isFinite(maxZ) ? maxZ : null,
       })
     : EMPTY_GATE;
 
@@ -552,9 +575,13 @@ export function computeTerrainCore(
   // draws on (density, completeness, edge risk). Complements the verdict.
   // Effective metres per horizontal unit: metres-per-degree for a geographic
   // frame, else the projected unit scale (1 for metres, ~0.3048 for feet). Feeds
-  // both the density (pts/m²) and the slope run so they read in real metres.
+  // the density (pts/m²) through the cell AREA, which cellMetrics computes as
+  // this scale SQUARED — so for a geographic frame we fold the cos φ
+  // anisotropy in as √(cos φ): area = (cell·M·cos φ)·(cell·M) = (cell·M·√cos φ)²
+  // exactly. Without it a 60°-latitude scan reports ~half the true pts/m² and
+  // an unfairly failing USGS QL. cos φ = 1 (no-op) when latitude is unknown.
   const horizUnitToMetres = params.isGeographic
-    ? METRES_PER_DEGREE
+    ? METRES_PER_DEGREE * Math.sqrt(cosLatitude(params.latitudeDeg))
     : params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0
       ? params.horizontalUnitToMetres
       : 1;
@@ -618,11 +645,15 @@ export function computeTerrainCore(
     : emptySurfaceGrid(dsmGridSpec);
   // Slope/hillshade divide ΔZ (metres) by the horizontal cell size; when the
   // frame is geographic that cell size is in degrees, so convert to metres to
-  // keep the gradient dimensionless. Z-only products (DSM, height-above-ground)
-  // need no such correction.
-  const horizCellM = horizontalCellMetres(
+  // keep the gradient dimensionless. Per-axis: a degree of longitude spans
+  // cos φ fewer metres than a degree of latitude, so the E–W run gets the
+  // cos φ-corrected scale (projected frames return two identical values and
+  // are byte-identical to the old single-scale path). Z-only products (DSM,
+  // height-above-ground) need no such correction.
+  const { x: horizCellEwM, y: horizCellNsM } = horizontalCellMetresXY(
     dtm.cellSizeM,
     params.isGeographic,
+    params.latitudeDeg,
     params.horizontalUnitToMetres,
   );
   // Compute the Horn slope/aspect ONCE and reuse it for the slope stats, the
@@ -636,7 +667,7 @@ export function computeTerrainCore(
   // entries are the GPU-eligible ones (per-session equivalence probe,
   // auto-fallback); the pipeline adopts them when this stage goes async.
   const engine = getTerrainRasterEngine();
-  const sa = engine.derivativesSync(dtm.z, dtm.cols, dtm.rows, horizCellM);
+  const sa = engine.derivativesSync(dtm.z, dtm.cols, dtm.rows, horizCellEwM, horizCellNsM);
   const slopeDegField = new Float32Array(sa.slope.length);
   for (let i = 0; i < sa.slope.length; i++) {
     slopeDegField[i] = (Math.atan(sa.slope[i]) * 180) / Math.PI;
@@ -786,7 +817,10 @@ export function contoursFromCore(
 
   const contours = contoursAt(dtm, { intervalM });
   warnings.push(...contours.warnings);
-  let stitched = stitchContourSet(contours);
+  // Cell-size-aware endpoint quantum: the fixed 1 mm key is ≈111 m in a
+  // degree-denominated frame and would weld a fine geographic grid's
+  // contours into one blob; scaling by the cell keeps the join unit-free.
+  let stitched = stitchContourSet(contours, cellSizeM);
 
   const style = styleLevels(
     contours.levels.map((l) => l.value),
