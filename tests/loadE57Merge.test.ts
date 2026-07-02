@@ -44,6 +44,7 @@ function parseResult(scans: E57ScanData[]): E57ParseResult {
   return {
     scans,
     metadata: { formatName: 'ASTM E57 3D Imaging Data File', guid: 'g', library: 'test-lib', creationDateTime: null },
+    sourceMetadata: null,
     warnings: [],
   };
 }

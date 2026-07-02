@@ -13,7 +13,7 @@
 
 import { parseE57 } from './e57/parseE57';
 import type { E57ScanData } from './e57/parseE57';
-import type { E57Metadata, E57Pose } from './e57/schema';
+import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { computeOrigin, recenter } from './coordinateBridge';
@@ -68,6 +68,7 @@ function countValid(scan: E57ScanData): number {
 /** Build provenance metadata from the E57 file metadata. */
 function e57Metadata(
   meta: E57Metadata,
+  sourceMetadata: E57SourceMetadata | null,
   mergedScanCount: number,
   warnings: readonly string[],
 ): CloudMetadata | undefined {
@@ -75,6 +76,15 @@ function e57Metadata(
   if (meta.library) out.sourceSoftware = meta.library;
   if (mergedScanCount > 1) out.captureSensor = `${mergedScanCount} merged scans`;
   if (warnings.length > 0) out.loadWarnings = [...warnings];
+  // Declared-only source metadata (standard + extension-namespace fields).
+  // Carried as-declared; every surface that renders it must qualify it as
+  // declared by the file, not verified.
+  if (
+    sourceMetadata &&
+    (sourceMetadata.standard.length > 0 || sourceMetadata.extensions.length > 0)
+  ) {
+    out.sourceMetadata = sourceMetadata;
+  }
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -215,6 +225,6 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
     name,
     declaredPointCount: total,
     decodedPointCount: total,
-    metadata: e57Metadata(parsed.metadata, scans.length, warnings),
+    metadata: e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),
   });
 }

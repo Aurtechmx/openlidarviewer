@@ -16,7 +16,7 @@ import { parseE57Header } from './header';
 import { depage, physicalToLogical } from './depage';
 import { parseXml } from './xml';
 import { readE57Document } from './schema';
-import type { E57Field, E57Metadata, E57Pose } from './schema';
+import type { E57Field, E57Metadata, E57Pose, E57SourceMetadata } from './schema';
 import { decodeCompressedVector } from './compressedVector';
 import type { DecodedColumns } from './compressedVector';
 
@@ -41,6 +41,11 @@ export interface E57ScanData {
 export interface E57ParseResult {
   scans: E57ScanData[];
   metadata: E57Metadata;
+  /**
+   * Declared-only source metadata (standard + extension-namespace fields),
+   * or null when the file declares nothing beyond geometry.
+   */
+  sourceMetadata: E57SourceMetadata | null;
   /**
    * Non-fatal anomalies found while interpreting the file (a normalised or
    * degenerate pose quaternion, for example). The loader surfaces these as
@@ -79,5 +84,10 @@ export function parseE57(buffer: ArrayBuffer): E57ParseResult {
     ),
   }));
 
-  return { scans, metadata: document.metadata, warnings: document.warnings };
+  return {
+    scans,
+    metadata: document.metadata,
+    sourceMetadata: document.sourceMetadata,
+    warnings: document.warnings,
+  };
 }
