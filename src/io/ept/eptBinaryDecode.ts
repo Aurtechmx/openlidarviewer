@@ -27,6 +27,7 @@
 
 import type { EptSchemaField } from './eptTypes';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
+import { LoadError } from '../loadErrors';
 
 /**
  * Thrown when an EPT binary tile arrives shorter than the schema
@@ -92,7 +93,32 @@ function readAttr(view: DataView, off: number, attr: AttrLayout): number {
     case 4: return attr.type === 'float'    ? view.getFloat32(off, true)
           : attr.type === 'signed'         ? view.getInt32(off,   true)
                                             : view.getUint32(off,  true);
-    case 8: return view.getFloat64(off, true);
+    case 8: {
+      // Size 8 must branch on the declared type. The earlier code read every
+      // 8-byte attribute as Float64, which reinterprets an int64/uint64's
+      // two's-complement bits as IEEE-754 — an X/Y/Z stored as int64 (a
+      // layout Entwine permits) decoded to garbage positions. Integers are
+      // read as BigInt and converted to Number ONLY when the value is
+      // exactly representable; beyond ±(2^53 − 1) the conversion would
+      // silently round, so we throw the same typed malformed-file error the
+      // count validator uses ("malformed" keyword included on purpose —
+      // classifyLoadError recovers the category from worker-crossed
+      // messages by that word).
+      if (attr.type === 'float') return view.getFloat64(off, true);
+      const big = attr.type === 'signed'
+        ? view.getBigInt64(off, true)
+        : view.getBigUint64(off, true);
+      const num = Number(big);
+      if (!Number.isSafeInteger(num)) {
+        throw new LoadError(
+          'malformed-file',
+          `malformed EPT binary tile: 64-bit ${attr.type} attribute "${attr.name}" ` +
+            `holds ${big}, outside the exactly-representable Number range ` +
+            `(|value| must be ≤ 2^53 − 1).`,
+        );
+      }
+      return num;
+    }
     default: throw new Error(`EPT binary decode: unsupported attribute size ${attr.size}`);
   }
 }
