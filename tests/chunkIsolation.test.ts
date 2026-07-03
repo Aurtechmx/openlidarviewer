@@ -39,17 +39,26 @@ const DIST = join(process.cwd(), 'dist', 'assets');
 /**
  * Chunk-isolation ceiling, in bytes. Vite's nominal warning is 500 KB
  * (500 × 1024 = 512,000); we allow the eager index a small, bounded margin over
- * it (504 KB) for legitimate core load-time logic — CRS resolution, datum
+ * it for legitimate core load-time logic — CRS resolution, datum
  * provenance, coordinate bridges — plus the thin lazy-feature TRIGGERS that must
  * live in the shell (each new Products/Export/edit action wires a sub-KB handler
  * + control here while its heavy code rides a separate chunk). This guard's real
  * job is to catch HEAVY code leaking into the eager chunk (a stray three.js /
- * pdf / decoder import is hundreds of KB), which this ~4 KB margin doesn't mask —
+ * pdf / decoder import is hundreds of KB), which this small margin doesn't mask —
  * the genuine leak guard is the `SHELL_FORBIDDEN_CONTENT` fingerprint test below.
  * The shipped artifact is the obfuscated live build, gated separately by
  * `check-bundle-budget.mjs` against its own ceiling.
+ *
+ * Raised 504 → 508 KiB at v0.5.5 P1 as a deliberate, committed decision:
+ * the hand tool's shell surfaces (the NavBar Pan pad + hand icon, its HUD
+ * legend chip, and the `setPanAvailable` flag wiring) added ~1.6 KB to the
+ * eager index (measured 516,055 B → 517,678 B), and the previous ceiling
+ * had only 41 B of headroom left. The drag geometry itself (panMath +
+ * NavController) rides the lazy Viewer chunk, not the shell — this is
+ * exactly the "sub-KB trigger + control in the shell, heavy code in a
+ * chunk" split the margin exists for.
  */
-const WARNING_THRESHOLD = 504 * 1024;
+const WARNING_THRESHOLD = 508 * 1024;
 
 /** Required chunk-name prefixes — substring-matched against the filename. */
 const REQUIRED_CHUNK_PREFIXES = [
