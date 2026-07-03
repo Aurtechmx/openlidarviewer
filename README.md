@@ -55,7 +55,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates precise.
 - Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
 - Streams large COPC and EPT datasets progressively, with bounded memory and no full-file load. (Experimental 3D Tiles / `.pnts` parser foundations exist, but user-facing 3D Tiles loading is not enabled yet.)
-- Game-like navigation: Orbit, Walk, and Fly modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar smart camera presets.
+- Game-like navigation: Orbit, Walk, Fly, and Pan (hand-tool) modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar smart camera presets.
 - A measurement toolkit — distance, polyline, area, height, angle, slope, cross-section profile (with a resizable height-vs-distance chart), and volume cut/fill against a polygon or 3D lasso — with editable points, in-session persistence, and JSON export/import.
 - Annotations: mark points of interest with categorised, titled notes, revisit them, and save the whole inspection to a file.
 - Inspect any point: click it to read its exact coordinates (UTM + lat/lon when CRS is known), intensity, classification, GPS time, and colour, then copy them in one click.
@@ -206,10 +206,12 @@ OpenLiDARViewer has a game-like navigation system, so a scan can be explored lik
 | Esc | Release the cursor |
 | R | Reset / re-frame the view |
 | F | Focus on the point under the cursor |
-| 1 / 2 / 3 | Orbit / Walk / Fly mode |
+| 1 / 2 / 3 / 4 | Orbit / Walk / Fly / Pan mode |
+| G | Toggle the Pan (hand) tool |
+| Middle-drag | Pan the view in any mode |
 | Double-click | Fly to the clicked point |
 
-Orbit mode is best for inspecting an object or area from the outside. Walk mode suits interiors, buildings, corridors, and street-level scans. Fly mode is for drone LiDAR, terrain, forests, and wide-area scans.
+Orbit mode is best for inspecting an object or area from the outside. Pan mode is the hand tool: grab the scene with a primary drag and it slides 1:1 under the pointer, while scrolling still zooms. Walk mode suits interiors, buildings, corridors, and street-level scans. Fly mode is for drone LiDAR, terrain, forests, and wide-area scans.
 
 Movement speed scales with the size of the loaded scan, so the controls feel right whether the dataset is a small room or a kilometre-wide survey. Full detail is in [`docs/navigation.md`](docs/navigation.md).
 

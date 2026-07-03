@@ -11,8 +11,9 @@ Switch with the bottom-centre control or the number keys.
 | Orbit (`1`) | Inspecting an object, structure, or area from the outside |
 | Walk (`2`) | Interiors, buildings, corridors, rooms, street-level scans |
 | Fly (`3`) | Drone LiDAR, terrain, forests, large facilities, wide-area scans |
+| Pan (`4` or `G`) | Sliding the view across a scan — the hand tool grabs the scene and drags it 1:1 |
 
-Orbit is the default. Drag to rotate, right-drag to pan, scroll to zoom, and double-click a point to focus on it. Walk is first-person: WASD moves on the horizontal plane so you keep your height, and Space and C change height when you want to. Fly is free 6-DOF flight, where WASD follows the look direction so you go wherever you point.
+Orbit is the default. Drag to rotate, right-drag to pan, scroll to zoom, and double-click a point to focus on it. Pan is the hand tool: the cursor becomes an open hand, a primary drag grabs the whole scene and the grabbed point stays under the pointer for the entire drag; scrolling still zooms, and one-finger touch drags pan too. Walk is first-person: WASD moves on the horizontal plane so you keep your height, and Space and C change height when you want to. Fly is free 6-DOF flight, where WASD follows the look direction so you go wherever you point.
 
 ## Controls
 
@@ -26,7 +27,9 @@ Orbit is the default. Drag to rotate, right-drag to pan, scroll to zoom, and dou
 | Esc | Release the cursor |
 | R | Reset / re-frame the view |
 | F | Focus on the point under the cursor |
-| 1 / 2 / 3 | Orbit / Walk / Fly mode |
+| 1 / 2 / 3 / 4 | Orbit / Walk / Fly / Pan mode |
+| G | Toggle the Pan (hand) tool from any mode |
+| Middle-drag | Temporary grab — pan the view in any mode, release to continue |
 | Double-click | Fly to the clicked point |
 
 ## Tools, panels, and shortcuts
