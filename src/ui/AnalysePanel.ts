@@ -829,12 +829,11 @@ export class AnalysePanel {
     tile.append(el('div', { className: 'olv-analyse-caption', text: COVERAGE_CAPTION }));
 
     const readout = this._sampleReadout();
-    tile.append(readout);
     this._attachCoverageSampler(canvas, wrap.crosshair, cols, rows, readout);
 
     const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
     dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'coverage'));
-    tile.append(dl);
+    tile.append(this._tileFooter(readout, dl));
 
     // Link to the 3D 'Confidence' colour mode — the colourblind-safe twin of
     // this tile, painting the SAME buckets onto the point cloud itself. Lives
@@ -987,12 +986,11 @@ export class AnalysePanel {
     tile.append(el('div', { className: 'olv-analyse-caption', text: opts.caption }));
 
     const readout = this._sampleReadout();
-    tile.append(readout);
     this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
 
     const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
     dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, opts.filename));
-    tile.append(dl);
+    tile.append(this._tileFooter(readout, dl));
     return tile;
   }
 
@@ -1132,15 +1130,29 @@ export class AnalysePanel {
     tile.append(caption);
 
     const readout = this._sampleReadout();
-    tile.append(readout);
     this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
 
     const dl = el('button', { className: 'olv-analyse-surface-dl', text: 'Export PNG' });
     dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'relief'));
-    tile.append(dl);
+    tile.append(this._tileFooter(readout, dl));
 
     repaint();
     return tile;
+  }
+
+  /**
+   * v0.5.5 P12 — compact per-tile footer. Adjacent raster tiles (coverage,
+   * relief, canopy) each stacked a full-width "Click the map to sample a
+   * point." row above a full-width "Export PNG" row, so the rail repeated
+   * the same two blocks map after map. The readout and the tile's action
+   * button now share ONE compact line per map. Nothing is removed — the
+   * readout keeps its live-region semantics and its hint text, and the
+   * button keeps its behaviour; only the presentation is consolidated.
+   */
+  private _tileFooter(readout: HTMLElement, ...actions: HTMLElement[]): HTMLElement {
+    const footer = el('div', { className: 'olv-analyse-tile-footer' });
+    footer.append(readout, ...actions);
+    return footer;
   }
 
   /** A grid-sized canvas styled as a preview raster. */
@@ -2202,12 +2214,24 @@ export class AnalysePanel {
     const notFull = coverageMode !== 'full';
     const exp = r.quality.exportReadiness;
     const exportNotReady = exp !== 'available';
-    if (hasDtm && (notFull || exportNotReady)) {
+    const demNoteApplies = hasDtm && (notFull || exportNotReady);
+    // v0.5.5 P12 — the DEM caveat and the contour preview caveat used to
+    // render as two ADJACENT banners with overlapping content ("Preliminary
+    // DEM — …" stacked directly above "Preview export — not survey-grade
+    // …"). When BOTH apply, they merge into one consolidated caveat that
+    // states both facts; each still renders alone when only one applies.
+    // No disclosed information is removed — only the duplicate framing.
+    const previewNoteApplies = e === 'previewOnly' && hasFeatures;
+    const merged = demNoteApplies && previewNoteApplies;
+    if (demNoteApplies) {
       const verdict = exp === 'blocked' ? 'blocked' : exp === 'previewOnly' ? 'preview' : 'ready';
       const georef = r.quality.exportReasons.length > 0 ? ` (${r.quality.exportReasons.join(', ')})` : '';
-      this._demNote.textContent =
-        `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +
-        `Exported with a caveat in the README; not for reliable terrain products.`;
+      this._demNote.textContent = merged
+        ? `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +
+          `Contour and DEM exports are previews — not survey-grade (see the reasons above); ` +
+          `the README carries the caveat. Not for reliable terrain products.`
+        : `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +
+          `Exported with a caveat in the README; not for reliable terrain products.`;
       this._demNote.style.display = '';
     } else {
       this._demNote.textContent = '';
@@ -2218,7 +2242,7 @@ export class AnalysePanel {
       this._exportNote.textContent = `Export disabled — ${r.quality.reasons[0] ?? 'DTM quality gate not met.'}`;
     } else if (!hasFeatures) {
       this._exportNote.textContent = 'No contours at this interval to export.';
-    } else if (e === 'previewOnly') {
+    } else if (e === 'previewOnly' && !merged) {
       this._exportNote.textContent = 'Preview export — not survey-grade (see the reasons above).';
     } else {
       this._exportNote.textContent = '';

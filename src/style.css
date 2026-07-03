@@ -6224,6 +6224,22 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   padding: var(--space-xs) var(--space-md); cursor: pointer;
 }
 .olv-analyse-surface-dl:hover { border-color: var(--accent); }
+/* v0.5.5 P12 — compact per-tile footer: the click-to-sample readout and the
+   tile's Export PNG action share ONE line, so adjacent raster tiles
+   (coverage / relief / canopy) stop repeating full-width hint + button
+   blocks. The readout truncates rather than wraps; its full text stays
+   available to assistive tech via the live region. */
+.olv-analyse-tile-footer {
+  display: flex; align-items: center; gap: var(--space-sm); min-width: 0;
+}
+.olv-analyse-tile-footer .olv-analyse-sample {
+  flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-analyse-tile-footer .olv-analyse-surface-dl {
+  flex: 0 0 auto; align-self: center;
+  padding: var(--space-2xs) var(--space-sm);
+}
 
 /* Stratified RMSE breakdown (by slope band / surface zone). */
 .olv-analyse-strata { font-size: var(--text-2xs); color: var(--text-faint); margin-top: var(--space-2xs); }
