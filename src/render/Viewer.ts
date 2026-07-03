@@ -3138,7 +3138,7 @@ export class Viewer {
   // Navigation
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Switch the navigation mode (orbit / walk / fly). */
+  /** Switch the navigation mode (orbit / walk / fly / pan). */
   setMode(mode: NavMode): void {
     this._nav.setMode(mode);
   }
@@ -3146,6 +3146,15 @@ export class Viewer {
   /** The active navigation mode. */
   get navMode(): NavMode {
     return this._nav.mode;
+  }
+
+  /**
+   * Whether the v0.5.5 hand tool (pan mode) is available — false when the
+   * `?handPan=off` dev flag disabled it. The app reads this to decide
+   * whether the NavBar shows the Pan mode button and its legend entries.
+   */
+  get handPanEnabled(): boolean {
+    return this._nav.handPanEnabled;
   }
 
   /** Set the user speed multiplier for walk/fly (from the speed slider). */
@@ -3704,8 +3713,6 @@ export class Viewer {
     this._inspect.setActive(mode === 'inspect');
     this._annotate.setActive(mode === 'annotate');
     this._probe.setActive(mode === 'probe');
-    // The probe keeps navigation live; every other tool freezes it.
-    this._nav.setInputEnabled(mode === 'none' || mode === 'probe');
     // Inspect manages its own cursor; the measure, annotate and probe cursors
     // are owned here — a crosshair while picking, cleared when no tool is active.
     if (mode === 'measure' || mode === 'annotate' || mode === 'probe') {
@@ -3713,6 +3720,11 @@ export class Viewer {
     } else if (mode === 'none') {
       this._canvas.style.cursor = '';
     }
+    // The probe keeps navigation live; every other tool freezes it. Runs
+    // AFTER the cursor assignment: re-enabling navigation lets the
+    // NavController reclaim its pan-mode `grab` cursor over the cleared one
+    // (and disabling it cancels any hand-tool drag before the tool arms).
+    this._nav.setInputEnabled(mode === 'none' || mode === 'probe');
     this._measureListeners.onModeChange?.(mode === 'measure');
     this._inspectListeners.onModeChange?.(mode === 'inspect');
     this._annotateListeners.onModeChange?.(mode === 'annotate');

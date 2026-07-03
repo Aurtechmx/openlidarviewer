@@ -14,9 +14,12 @@
  *   ?uploadQueue=off         GPU upload queue (P7) off
  *   ?angularPrediction=off   angular-velocity motion model (P3) off
  *
- * P0 state: the flags are parsed and surfaced (debug overlay, metrics JSON)
- * but nothing consumes them yet — the controllers they gate land in later
- * PRs. Defaults therefore equal current (v0.5.4) behavior by construction.
+ * P0 introduced the flags parse-only; consumers arrive with their phases.
+ * P1 (hand tool): `handPan` is consumed by `NavController` (pan mode, the
+ * G/Digit4 bindings, the middle-mouse temporary grab) and, via
+ * `Viewer.handPanEnabled`, by the app to hide the NavBar's Pan surfaces.
+ * The remaining flags are still parse-only until their controllers land.
+ * Defaults equal the new-behavior-ON path; `off` restores v0.5.4 behavior.
  *
  * Pure — no DOM at module scope, no three.js — fully unit-tested in Node.
  * NOT part of the index chunk: only lazy modules (DebugOverlay today, the
