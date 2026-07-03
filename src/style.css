@@ -1537,6 +1537,11 @@ button:disabled { cursor: not-allowed; }
 .olv-modes-triangle .olv-mode-orbit:active { transform: translateX(-50%) scale(0.94); }
 .olv-modes-triangle .olv-mode-walk  { bottom: -8px; left: -3px; }
 .olv-modes-triangle .olv-mode-fly   { bottom: -8px; right: -3px; }
+/* Pan (v0.5.5 hand tool) — a fourth pad docked left of the triangle,
+ * vertically on the Walk/Fly base line so it reads as a sibling tool
+ * rather than a fourth vertex. Same 50px circular pad = same touch
+ * target. Hidden via .olv-hidden when ?handPan=off disables the tool. */
+.olv-modes-triangle .olv-mode-pan   { bottom: -8px; left: -62px; }
 
 /* Centre Reset button — sits at the triangle's centroid. Sized and
  * lit so it reads as the primary "frame the scan" action without

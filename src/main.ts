@@ -3461,6 +3461,11 @@ void viewerLoaded.then(() => {
     onPointerLockChange: (locked) => navBar.setLocked(locked),
     onToggleHelp: () => navBar.toggleHelp(),
   });
+  // The hand tool (v0.5.5 P1) is flag-gated (?handPan=off). The flag lives
+  // in the lazy Viewer chunk (devFlags must stay out of the startup shell),
+  // so the NavBar learns about it here, once the Viewer has resolved —
+  // before any scan load reveals the NavBar.
+  navBar.setPanAvailable(viewer.handPanEnabled);
   viewer.setMeasureListeners({
     onModeChange: (active) => {
       dock.setMeasureActive(active);
