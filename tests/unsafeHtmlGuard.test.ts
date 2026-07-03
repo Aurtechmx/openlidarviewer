@@ -88,7 +88,12 @@ const FORBIDDEN_IDENTIFIERS =
  */
 const ALLOWLIST: readonly string[] = [
   'src/ui/NavBar.ts::<svg viewBox="0 0 140 110"',
-  'src/ui/NavBar.ts::olv-mode-icon',
+  // The trailing quote pins the MODES-loop icon wrapper exactly, so it can't
+  // also claim the Pan pad's `olv-mode-icon olv-mode-pan-icon` site below.
+  "src/ui/NavBar.ts::olv-mode-icon'",
+  // v0.5.5 P1 — the Pan pad's hand icon: `PAN_MODE.icon`, a module-level
+  // literal SVG string in the same house style as the MODES icons.
+  'src/ui/NavBar.ts::olv-mode-pan-icon',
   'src/ui/ThemeToggle.ts::ICON_SVG[name]',
   'src/ui/MeasurePanel.ts::svg + overlay',
   'src/ui/Stage.ts::olv-capture-chip-icon',
