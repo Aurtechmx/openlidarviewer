@@ -84,17 +84,19 @@ describe('scanReport module', () => {
       expect(row.status).toBe('info');
     });
 
-    test('has classification row', () => {
+    test('has classification row with merged coverage (v0.5.5 P12)', () => {
       const row = rowByLabel(scanReport.run(cloud), 'Classification');
       expect(row.value.toLowerCase()).toContain('yes');
+      // 3 out of 4 non-zero = 75% — merged into the same row, not a
+      // separate "Classification Coverage" diagnostic.
+      expect(row.value).toContain('75.0 % coverage');
       expect(row.status).toBe('info');
     });
 
-    test('classification coverage row', () => {
-      const row = rowByLabel(scanReport.run(cloud), 'Classification Coverage');
-      // 3 out of 4 non-zero = 75%
-      expect(parseFloat(row.value)).toBeCloseTo(75, 1);
-      expect(row.status).toBe('info');
+    test('no separate Classification Coverage row remains', () => {
+      expect(
+        scanReport.run(cloud).rows.find((r) => r.label === 'Classification Coverage'),
+      ).toBeUndefined();
     });
   });
 
@@ -146,8 +148,12 @@ describe('scanReport module', () => {
       name: 'unclassified',
     });
 
-    test('Classification → "Present, unclassified"', () => {
-      expect(rowByLabel(scanReport.run(cloud), 'Classification').value).toBe('Present, unclassified');
+    test('Classification → "Present, unclassified" with its coverage inline', () => {
+      // 1 of 4 points carries a non-zero code (class 1 = unclassified), so
+      // coverage reads 25.0 % while assignment honestly stays "unclassified".
+      expect(rowByLabel(scanReport.run(cloud), 'Classification').value).toBe(
+        'Present, unclassified (25.0 % coverage)',
+      );
     });
   });
 

@@ -84,6 +84,14 @@ ctx.onmessage = (event: MessageEvent): void => {
             sourceFormat: cloud.sourceFormat,
             name: cloud.name,
             declaredPointCount: cloud.declaredPointCount,
+            // v0.5.5 P12 — decodedPointCount was DROPPED at this thread
+            // boundary, so the main-thread Health Check fell back to the
+            // voxel-reduced display count and flagged every budget-capped
+            // load as a declared-vs-decoded anomaly. Carry it (and the
+            // deliberate decode stride) across so the check reads the same
+            // numbers the worker saw.
+            decodedPointCount: cloud.decodedPointCount,
+            loadStride: cloud.loadStride,
             metadata: cloud.metadata,
           },
           originalPointCount,

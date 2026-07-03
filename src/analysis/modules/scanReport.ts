@@ -133,15 +133,28 @@ export const scanReport: AnalysisModule = {
     // A cloud can carry the classification dimension while every point is still
     // unassigned (ASPRS 0 = never classified, 1 = unclassified). A bare "Yes"
     // there implies a classified cloud that isn't — so report the honest state.
+    //
+    // v0.5.5 P12 — the coverage percentage (share of visible points with a
+    // non-zero class code) merges INTO this row: the old separate
+    // "Classification Coverage" diagnostic duplicated the same fact one line
+    // below ("Present, unclassified" + "0.0 %" are one statement). Both loops
+    // honour a class-subset scope; full scope is byte-identical to counting
+    // the whole buffer.
     let classValue = 'No';
     if (cls !== undefined) {
       let anyAssigned = false;
+      let nonZero = 0;
       for (let i = 0; i < totalN; i++) {
-        if ((cls[i] & 0xff) > 1) { anyAssigned = true; break; }
+        if (!isVisible(i)) continue;
+        const code = cls[i] & 0xff;
+        if (code > 1) anyAssigned = true;
+        if (code !== 0) nonZero++;
       }
-      classValue = anyAssigned ? 'Yes' : 'Present, unclassified';
+      const base = anyAssigned ? 'Yes' : 'Present, unclassified';
+      classValue =
+        n > 0 ? `${base} (${((nonZero / n) * 100).toFixed(1)} % coverage)` : base;
     }
-    rows.push(rowInfo('Classification', classValue));
+    rows.push(withScope(rowInfo('Classification', classValue), scope));
 
     // Capture provenance — shown only when the file header carried it.
     const meta = cloud.metadata;
@@ -191,27 +204,8 @@ export const scanReport: AnalysisModule = {
     rows.push({ label: 'Min corner', value: corner(bounds.min), status: 'info', advanced: true });
     rows.push({ label: 'Max corner', value: corner(bounds.max), status: 'info', advanced: true });
 
-    // Classification coverage — the share of points with a non-zero class
-    // code. A diagnostic, shown under "Advanced report". Full scope counts
-    // over the whole buffer (byte-identical to the legacy loop, since the
-    // visible count `n` equals the buffer length); subset scope counts only
-    // the visible points, against the visible count as the denominator.
-    let coverage = 'N/A';
-    if (cls !== undefined && n > 0) {
-      const clsBuf = cloud.classification!;
-      let nonZero = 0;
-      for (let i = 0; i < totalN; i++) {
-        if (!isVisible(i)) continue;
-        if (clsBuf[i] !== 0) nonZero++;
-      }
-      coverage = `${((nonZero / n) * 100).toFixed(1)} %`;
-    }
-    rows.push(
-      withScope(
-        { label: 'Classification Coverage', value: coverage, status: 'info', advanced: true },
-        scope,
-      ),
-    );
+    // (v0.5.5 P12 — the separate "Classification Coverage" diagnostic row
+    // merged into the main Classification row above.)
 
     return scope && scope.kind === 'subset' ? { rows, scope } : { rows };
   },

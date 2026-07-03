@@ -196,6 +196,9 @@ export async function loadLas(
     name,
     declaredPointCount: header.pointCount,
     decodedPointCount,
+    // Record the DELIBERATE decode stride (the display-sample cap) so the
+    // Health Check can tell a capped load from genuine decode loss.
+    loadStride: Math.max(1, Math.floor(stride)),
     metadata: lasMetadata(header),
   });
 }

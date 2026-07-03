@@ -78,9 +78,10 @@ describe('scanReport — subset scope restricts and stamps', () => {
     expect(density.scope).toEqual(scope);
 
     // Coverage: both visible points are class 2 (non-zero) → 100% of 2.
-    const coverage = rowByLabel(result, 'Classification Coverage');
-    expect(parseFloat(coverage.value)).toBeCloseTo(100, 1);
-    expect(coverage.scope).toEqual(scope);
+    // v0.5.5 P12 — coverage merged into the Classification row.
+    const classification = rowByLabel(result, 'Classification');
+    expect(classification.value).toContain('100.0 % coverage');
+    expect(classification.scope).toEqual(scope);
 
     // Result-level scope is carried too.
     expect(result.scope).toEqual(scope);
@@ -125,6 +126,8 @@ describe('scanReport — subset scope restricts and stamps', () => {
     const result = scanReport.run(cloud, undefined, { scope });
     expect(rowByLabel(result, 'Point Count').value).toContain('0');
     expect(rowByLabel(result, 'Density').value).toContain('N/A');
-    expect(rowByLabel(result, 'Classification Coverage').value).toBe('N/A');
+    // v0.5.5 P12 — with no visible points there is no coverage figure to
+    // append; the merged Classification row reports presence only.
+    expect(rowByLabel(result, 'Classification').value).not.toContain('coverage');
   });
 });
