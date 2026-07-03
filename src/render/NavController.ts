@@ -338,6 +338,17 @@ export class NavController {
   }
 
   /**
+   * Whether a hand-tool grab is live right now (pan-mode primary drag or the
+   * middle-mouse temporary grab in any mode). The Viewer's per-frame
+   * orbit-centre maintenance reads this to suspend itself — exactly like its
+   * `_userInteracting` gate for OrbitControls gestures — so the soft-clamp
+   * lerp never fights a live drag.
+   */
+  get panDragging(): boolean {
+    return this._panPointerId !== null;
+  }
+
+  /**
    * Smoothly move the camera to `toPos`, looking at `toTarget`, over
    * `duration` seconds with an eased curve. Used for the Frame button,
    * double-click focus, and share-link pose restoration.

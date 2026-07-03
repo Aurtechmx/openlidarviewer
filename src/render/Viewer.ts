@@ -819,6 +819,12 @@ export class Viewer {
    * the axis stays steady through the coast.
    */
   private _lastInteractMs = 0;
+  /**
+   * Edge detector for the hand tool's grab (v0.5.5 P1): true while
+   * `_maintainOrbitCenter` saw `_nav.panDragging` on the previous frame, so
+   * the release edge can stamp `_lastInteractMs` exactly once.
+   */
+  private _panWasDragging = false;
 
   // ── Shared point size in screen pixels (applied to all materials) ────────
   // Defaults to the smallest size; matches the Inspector slider's initial value.
@@ -5002,14 +5008,29 @@ export class Viewer {
     // settles. Result: drag feels exactly like model-viewer's — no
     // micro-judder, no pull-back yank during the gesture.
     if (this._userInteracting) return;
+    // Same suspension for the hand tool's grab (v0.5.5 P1): a middle-mouse
+    // temporary grab in orbit mode bypasses OrbitControls entirely, so the
+    // `_userInteracting` gate above never sees it — without this check the
+    // soft-clamp lerp would fight the live drag. On release, stamp the same
+    // settle window OrbitControls gestures get, so the clamp doesn't yank
+    // the target the very next frame.
+    const nowMs = (typeof performance !== 'undefined' && performance.now)
+      ? performance.now()
+      : Date.now();
+    if (this._nav.panDragging) {
+      this._panWasDragging = true;
+      return;
+    }
+    if (this._panWasDragging) {
+      this._panWasDragging = false;
+      this._lastInteractMs = nowMs;
+      return;
+    }
     // Settle delay — after release, OrbitControls keeps damping the
     // spherical angles for ~15-30 frames. If the soft-clamp lerp engages
     // during that tail, the camera rotates around a target that's also
     // sliding back into the envelope, which reads as a wobbly axis.
     // Skip the maintenance pass until the damping has settled.
-    const nowMs = (typeof performance !== 'undefined' && performance.now)
-      ? performance.now()
-      : Date.now();
     if (isWithinSettleWindow(nowMs, this._lastInteractMs, SETTLE_MS)) return;
 
     // 1) Streaming refinement — drift the target gently toward the live
