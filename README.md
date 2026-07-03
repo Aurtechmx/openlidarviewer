@@ -414,9 +414,16 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.4**. The full, dated history is in
+The current release is **v0.5.5**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.5.5 — Pan tool, a simpler report set, accurate scan health
+- **Pan hand tool** — a fourth navigation mode: `4` selects Pan, `G` toggles it, middle-mouse drags pan temporarily; a mouse, pen, or one-finger touch drag moves the scene while the wheel keeps zooming, and the mode is preserved in sessions and share links
+- **A two-document PDF report set** — Survey Summary (compact handover) and Technical Report (full record); older report-template identifiers map to the nearest current template
+- **More accurate scan health** — the Health Check separates a complete decode, a deliberate display-sample cap, and a declared-versus-decoded count mismatch, so a sampled load is no longer flagged as having lost points
+- **Reproducible performance diagnostics** — the debug overlay records frame-time percentiles, over-threshold frame counts, the longest main-thread task, effective DPR, and render/stream counters, and copies them as JSON; no speedup is claimed without device-specific evidence
+- **Removed the Scan Acceptance template** — its metadata-presence rows did not amount to an acceptance test
 
 ### v0.5.4 — Terrain complexity you can cite
 - **Real terrain-complexity metrics** — the terrain core computes the slope-decoupled **Vector Ruggedness Measure** (Sappington et al. 2007) and the **Topographic Position Index** with Weiss (2001) six-class slope position, implemented from the primary literature and computed off the interactive path; a smooth 45° plane scores ~0 ruggedness, so **steepness is never mistaken for complexity** (CI-guarded by an analytic `npm run repro` check)

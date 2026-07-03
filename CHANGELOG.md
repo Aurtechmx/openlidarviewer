@@ -2,6 +2,51 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.5] - 2026-07-03
+
+Navigation, reporting, and validation. v0.5.5 adds a Pan hand tool, reduces the
+PDF report set to two documents, corrects scan-health reporting for deliberately
+sampled datasets, and adds reproducible performance diagnostics. Browser-native
+and local-first; files never leave the device.
+
+### Added
+
+- **Pan hand tool.** A fourth navigation mode. `4` selects Pan, `G` toggles it,
+  and a middle-mouse drag pans temporarily from any other mode. A primary mouse,
+  pen, or one-finger touch drag moves the scene while the wheel keeps zooming;
+  camera orientation and view scale stay fixed. Pan mode is preserved in saved
+  sessions and share links.
+- **Reproducible performance diagnostics.** The optional debug overlay records
+  frame-time percentiles (p50/p95/p99), counts of frames over common frame-time
+  thresholds, the longest observed main-thread task where the browser supports
+  it, the effective device-pixel ratio, and rendering and streaming counters,
+  and copies them out as JSON. A deterministic scheduler baseline is included for
+  regression testing. No general rendering or streaming speedup is claimed
+  without device-specific evidence.
+
+### Changed
+
+- **The PDF report set is now two documents.** Survey Summary is a compact
+  handover (inspection summary, dataset information, concise provenance,
+  measurements, supplied technical notes). Technical Report is the full record,
+  adding detailed provenance, file-declared source metadata, annotations, and
+  visuals. Older report-template identifiers map to the nearest current template,
+  so existing sessions and integrations still open.
+- **Scan-health reporting separates three cases:** a complete decode, a
+  deliberate display-sample cap, and a declared-versus-decoded count mismatch. A
+  large LAS or LAZ file loaded with an intentional sampling stride reads as
+  sampled rather than as having lost points. The decoded count and applied stride
+  now cross the parsing-worker boundary intact. Classification coverage shows in
+  the Classification row, repeated analysis caveats are merged, and an empty
+  cloud reports a verdict instead of an unrelated point count.
+
+### Removed
+
+- **The Scan Acceptance report template.** Its metadata-presence rows did not
+  amount to an acceptance test. Acceptance reporting should return only when it is
+  backed by explicit, data-derived checks and user-defined criteria; legacy Scan
+  Acceptance identifiers fall back to the nearest current template.
+
 ## [0.5.4] - 2026-07-02
 
 Terrain science hardening. The "Terrain Complexity" reading is no longer a
