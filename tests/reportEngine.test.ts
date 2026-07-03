@@ -13,6 +13,7 @@ import {
   REPORT_TEMPLATES,
   DEFAULT_TEMPLATE_ID,
   getReportTemplate,
+  normalizeReportTemplateId,
   composeReportInputs,
   buildDatasetSummary,
   buildAnnotationRows,
@@ -29,15 +30,9 @@ import type { Measurement } from '../src/render/measure/types';
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('templates', () => {
-  it('ships six report templates (v0.3.6 added Scan Acceptance)', () => {
-    expect(REPORT_TEMPLATES.length).toBe(6);
-    const ids = REPORT_TEMPLATES.map((t) => t.id);
-    expect(ids).toContain('engineering-inspection');
-    expect(ids).toContain('qa-validation');
-    expect(ids).toContain('terrain-review');
-    expect(ids).toContain('survey-summary');
-    expect(ids).toContain('technical-documentation');
-    expect(ids).toContain('scan-acceptance');
+  it('ships exactly two report templates (v0.5.5 P12 consolidation)', () => {
+    expect(REPORT_TEMPLATES.length).toBe(2);
+    expect(REPORT_TEMPLATES.map((t) => t.id)).toEqual(['survey-summary', 'technical-report']);
   });
 
   it('default template id resolves to a valid template', () => {
@@ -58,33 +53,61 @@ describe('templates', () => {
     }
   });
 
-  it('engineering-inspection includes measurements + annotations + visuals + technical notes', () => {
-    const t = getReportTemplate('engineering-inspection');
+  it('technical-report is the complete record: full provenance + declared metadata + measurements + annotations + visuals + notes', () => {
+    const t = getReportTemplate('technical-report');
     expect(t).toBeDefined();
     if (!t) return;
+    expect(t.sections).toContain('provenance');
+    expect(t.sections).toContain('source-metadata');
     expect(t.sections).toContain('measurements');
     expect(t.sections).toContain('annotations');
     expect(t.sections).toContain('visuals');
     expect(t.sections).toContain('technical-notes');
   });
 
-  it('qa-validation skips measurements + technical notes (compact)', () => {
-    const t = getReportTemplate('qa-validation');
+  it('survey-summary is compact: compact provenance, no visuals / annotations / declared metadata', () => {
+    const t = getReportTemplate('survey-summary');
     expect(t).toBeDefined();
     if (!t) return;
-    expect(t.sections).not.toContain('measurements');
-    expect(t.sections).not.toContain('technical-notes');
-  });
-
-  it('terrain-review omits annotations (no inspection rows)', () => {
-    const t = getReportTemplate('terrain-review');
-    expect(t).toBeDefined();
-    if (!t) return;
+    expect(t.sections).toContain('provenance-compact');
+    expect(t.sections).toContain('measurements');
+    expect(t.sections).toContain('technical-notes');
+    expect(t.sections).not.toContain('provenance');
+    expect(t.sections).not.toContain('visuals');
     expect(t.sections).not.toContain('annotations');
+    expect(t.sections).not.toContain('source-metadata');
   });
 
-  it('getReportTemplate returns undefined for an unknown id', () => {
-    expect(getReportTemplate('not-a-template' as never)).toBeUndefined();
+  it('the two templates share ONLY the intended core sections', () => {
+    const survey = getReportTemplate('survey-summary')!;
+    const tech = getReportTemplate('technical-report')!;
+    const shared = survey.sections.filter((s) => tech.sections.includes(s));
+    expect(shared).toEqual([
+      'cover',
+      'inspection-summary',
+      'dataset-summary',
+      'measurements',
+      'technical-notes',
+      'footer',
+    ]);
+  });
+
+  it('legacy template ids map to the nearest current template', () => {
+    expect(normalizeReportTemplateId('engineering-inspection')).toBe('technical-report');
+    expect(normalizeReportTemplateId('qa-validation')).toBe('technical-report');
+    expect(normalizeReportTemplateId('technical-documentation')).toBe('technical-report');
+    expect(normalizeReportTemplateId('terrain-review')).toBe('technical-report');
+    expect(normalizeReportTemplateId('scan-acceptance')).toBe('technical-report');
+    expect(normalizeReportTemplateId('survey-summary')).toBe('survey-summary');
+    expect(normalizeReportTemplateId('technical-report')).toBe('technical-report');
+    // getReportTemplate follows the same mapping, so legacy callers work.
+    expect(getReportTemplate('engineering-inspection')?.id).toBe('technical-report');
+    expect(getReportTemplate('terrain-review')?.id).toBe('technical-report');
+  });
+
+  it('getReportTemplate / normalizeReportTemplateId return undefined for an unknown id', () => {
+    expect(getReportTemplate('not-a-template')).toBeUndefined();
+    expect(normalizeReportTemplateId('not-a-template')).toBeUndefined();
   });
 });
 
@@ -559,13 +582,13 @@ describe('composeReportInputs', () => {
     expect(inputs.templateId).toBe(DEFAULT_TEMPLATE_ID);
   });
 
-  it('qa-validation default sorts annotations by type', () => {
+  it('annotationSort: "type" groups issues first', () => {
     const annotations: Annotation[] = [
       { id: '1', title: 'A', type: 'note', createdAt: 1, updatedAt: 1, localPosition: { x: 0, y: 0, z: 0 } },
       { id: '2', title: 'B', type: 'issue', createdAt: 2, updatedAt: 2, localPosition: { x: 0, y: 0, z: 0 } },
     ];
     const inputs = composeReportInputs({
-      templateId: 'qa-validation',
+      templateId: 'technical-report',
       title: 'QA',
       metadata: {
         fileName: 'scan', format: 'COPC',
@@ -576,17 +599,18 @@ describe('composeReportInputs', () => {
       annotations,
       measurements: [],
       unitSystem: 'metric',
+      annotationSort: 'type',
     });
     expect(inputs.annotations[0].title).toBe('B'); // issue before note
   });
 
-  it('non-qa templates default to chronological annotations', () => {
+  it('annotations default to chronological order', () => {
     const annotations: Annotation[] = [
       { id: '1', title: 'A', type: 'issue', createdAt: 2, updatedAt: 2, localPosition: { x: 0, y: 0, z: 0 } },
       { id: '2', title: 'B', type: 'note', createdAt: 1, updatedAt: 1, localPosition: { x: 0, y: 0, z: 0 } },
     ];
     const inputs = composeReportInputs({
-      templateId: 'engineering-inspection',
+      templateId: 'technical-report',
       title: 'Eng',
       metadata: {
         fileName: 'scan', format: 'COPC',
@@ -634,88 +658,4 @@ describe('composeReportInputs', () => {
     expect(new Date(inputs.cover.exportedAt).toString()).not.toBe('Invalid Date');
   });
 
-  it('scan-acceptance template auto-derives metadata-only acceptance rows when none supplied', () => {
-    // Regression for v0.3.6.x: before this change, picking the
-    // scan-acceptance template from the Inspector dropdown produced a
-    // PDF with an empty acceptance-checklist section because the
-    // composer never wired any acceptanceChecks. The composer now
-    // derives five presence-check rows from the loaded scan's
-    // metadata so the template is meaningful straight from the UI.
-    const inputs = composeReportInputs({
-      templateId: 'scan-acceptance',
-      title: 'Acceptance',
-      metadata: {
-        fileName: 'east-levee.copc.laz',
-        format: 'COPC',
-        sourcePointCount: 12_400_000,
-        width: 100,
-        depth: 100,
-        height: 12,
-        density: 1240,
-        hasRgb: true,
-        hasIntensity: true,
-        hasClassification: false,
-        crsName: 'EPSG:32612',
-        crsUnit: 'metre',
-      },
-      visuals: [],
-      annotations: [],
-      measurements: [],
-      unitSystem: 'metric',
-    });
-    expect(inputs.acceptanceChecks).toBeDefined();
-    expect(inputs.acceptanceChecks?.length).toBe(5);
-    const labels = inputs.acceptanceChecks?.map((r) => r.label) ?? [];
-    expect(labels).toEqual([
-      'Point count',
-      'CRS declared',
-      'RGB channel',
-      'Classification channel',
-      'Intensity channel',
-    ]);
-    // Point count row passes when sourcePointCount > 0.
-    expect(inputs.acceptanceChecks?.[0]?.pass).toBe(true);
-    // CRS row passes when crsName is set.
-    expect(inputs.acceptanceChecks?.[1]?.pass).toBe(true);
-    expect(inputs.acceptanceChecks?.[1]?.actual).toBe('EPSG:32612');
-  });
-
-  it('scan-acceptance template prefers caller-supplied acceptance rows over the defaults', () => {
-    const explicit = [
-      { label: 'Custom check', threshold: 'required', actual: 'present', pass: true },
-    ];
-    const inputs = composeReportInputs({
-      templateId: 'scan-acceptance',
-      title: 'Acceptance',
-      metadata: {
-        fileName: 's', format: 'COPC',
-        sourcePointCount: 1, width: 1, depth: 1, height: 1,
-        density: NaN, hasRgb: false, hasIntensity: false, hasClassification: false,
-      },
-      visuals: [],
-      annotations: [],
-      measurements: [],
-      unitSystem: 'metric',
-      acceptanceChecks: explicit,
-    });
-    expect(inputs.acceptanceChecks?.length).toBe(1);
-    expect(inputs.acceptanceChecks?.[0]?.label).toBe('Custom check');
-  });
-
-  it('non-acceptance templates do NOT auto-derive acceptance rows', () => {
-    const inputs = composeReportInputs({
-      templateId: 'engineering-inspection',
-      title: 'Eng',
-      metadata: {
-        fileName: 's', format: 'COPC',
-        sourcePointCount: 1, width: 1, depth: 1, height: 1,
-        density: NaN, hasRgb: false, hasIntensity: false, hasClassification: false,
-      },
-      visuals: [],
-      annotations: [],
-      measurements: [],
-      unitSystem: 'metric',
-    });
-    expect(inputs.acceptanceChecks).toBeUndefined();
-  });
 });

@@ -4439,16 +4439,22 @@ async function generateReportPdf(templateId: string): Promise<void> {
     throw new Error('Load a scan first.');
   }
 
-  // Derive the cover title from the actual template so each of the six
-  // templates produces a distinct, recognisable PDF. The user-reported
-  // bug — "all reports show the same export" — was driven by a hardcoded
+  // Derive the cover title from the actual template so each template
+  // produces a distinct, recognisable PDF. The user-reported bug — "all
+  // reports show the same export" — was driven by a hardcoded
   // `title: 'Scan Report'` that made the cover identical across every
   // template choice. Pulling `label` off `getReportTemplate(templateId)`
-  // gives "Engineering Inspection", "QA Validation", "Survey Summary",
-  // "Terrain Review", "Technical Documentation", or "Scan Acceptance"
-  // as appropriate. The dataset name moves into the subtitle so both
-  // axes (template type, source scan) are surfaced on the cover.
-  const validatedTemplateId = templateId as import('./report').ReportTemplateId;
+  // gives "Survey Summary" or "Technical Report" as appropriate. The
+  // dataset name moves into the subtitle so both axes (template type,
+  // source scan) are surfaced on the cover.
+  //
+  // v0.5.5 P12 — legacy ids (engineering-inspection, qa-validation,
+  // terrain-review, technical-documentation, scan-acceptance) normalise
+  // to the nearest current template, so an id carried in old UI state or
+  // an external caller keeps working; the export filename follows the
+  // NORMALISED id.
+  const validatedTemplateId =
+    report.normalizeReportTemplateId(templateId) ?? report.DEFAULT_TEMPLATE_ID;
   const template = report.getReportTemplate(validatedTemplateId);
   const coverTitle = template?.label ?? 'Scan Report';
   // Compute the same provenance fingerprint the Inspector's Provenance

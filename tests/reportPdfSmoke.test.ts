@@ -165,14 +165,14 @@ describe('PDF report smoke render', () => {
     // Cast through `as` because the union type rightly forbids this at
     // compile time — the runtime guard is what we're exercising.
     const inputs = {
-      ...makeInputs('engineering-inspection'),
+      ...makeInputs('technical-report'),
       templateId: 'not-a-real-template' as unknown as ReportInputs['templateId'],
     };
     await expect(generateReport(inputs)).rejects.toThrow(/Unknown report template/);
   });
 
   it('survives dark-inspection theme without throwing', async () => {
-    const inputs = makeInputs('engineering-inspection');
+    const inputs = makeInputs('technical-report');
     const dark: ReportInputs = {
       ...inputs,
       branding: { ...inputs.branding, theme: 'dark-inspection' },
@@ -183,7 +183,7 @@ describe('PDF report smoke render', () => {
   });
 
   it('survives minimal-engineering theme without throwing', async () => {
-    const inputs = makeInputs('engineering-inspection');
+    const inputs = makeInputs('technical-report');
     const minimal: ReportInputs = {
       ...inputs,
       branding: { ...inputs.branding, theme: 'minimal-engineering' },
@@ -195,7 +195,7 @@ describe('PDF report smoke render', () => {
 
   it('renders cleanly when every optional field is absent', async () => {
     const minimal: ReportInputs = {
-      templateId: 'engineering-inspection',
+      templateId: 'technical-report',
       branding: {},
       cover: {
         title: 'Bare Cover',
@@ -216,7 +216,7 @@ describe('PDF report smoke render', () => {
 
   it('rejects an annotation list above the safety ceiling', async () => {
     const huge: ReportInputs = {
-      ...makeInputs('engineering-inspection'),
+      ...makeInputs('technical-report'),
       annotations: Array.from({ length: 3000 }, (_, i) => ({
         title: `A ${i}`,
         type: 'point',
@@ -229,7 +229,7 @@ describe('PDF report smoke render', () => {
 
   it('rejects a measurement list above the safety ceiling', async () => {
     const huge: ReportInputs = {
-      ...makeInputs('engineering-inspection'),
+      ...makeInputs('technical-report'),
       measurements: Array.from({ length: 3000 }, (_, i) => ({
         name: `M ${i}`,
         kind: 'distance',
@@ -242,7 +242,7 @@ describe('PDF report smoke render', () => {
 
   it('rejects technical-notes content above the size ceiling', async () => {
     const huge: ReportInputs = {
-      ...makeInputs('engineering-inspection'),
+      ...makeInputs('technical-report'),
       technicalNotes: 'x'.repeat(300_000),
     };
     await expect(generateReport(huge)).rejects.toThrow(/Technical notes.*cap/);
@@ -250,7 +250,7 @@ describe('PDF report smoke render', () => {
 
   it('rejects a visuals list above the safety ceiling', async () => {
     const huge: ReportInputs = {
-      ...makeInputs('engineering-inspection'),
+      ...makeInputs('technical-report'),
       visuals: Array.from({ length: 64 }, () => ({
         blob: new Blob([new Uint8Array(8)], { type: 'image/png' }),
         caption: 'x',
@@ -265,7 +265,7 @@ describe('PDF report smoke render', () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      generateReport(makeInputs('engineering-inspection'), { signal: controller.signal }),
+      generateReport(makeInputs('technical-report'), { signal: controller.signal }),
     ).rejects.toThrow(/aborted/);
   });
 
@@ -274,7 +274,7 @@ describe('PDF report smoke render', () => {
     // embed failure and continue rendering the rest of the template.
     // The result is a thinner-than-expected PDF but a valid one.
     const corrupt: ReportInputs = {
-      ...makeInputs('engineering-inspection'),
+      ...makeInputs('technical-report'),
       visuals: [
         {
           // Not a valid PNG — just random bytes. embedPng throws; the
@@ -307,9 +307,9 @@ describe('PDF report smoke render', () => {
     // bytes even when the inputs are riddled with em-dashes, ellipses,
     // smart quotes, the degree sign, and a stray emoji.
     const inputs: ReportInputs = {
-      ...makeInputs('engineering-inspection'),
+      ...makeInputs('technical-report'),
       cover: {
-        ...makeInputs('engineering-inspection').cover,
+        ...makeInputs('technical-report').cover,
         title: 'East Levee — Survey — “Q1 inspection”',
         subtitle: 'Crew: A & B · ambient 24 °C · clear sky… 🛰',
       },
@@ -351,7 +351,7 @@ describe('PDF report smoke render', () => {
     // Sanity: a normal report should land well inside the 30 s budget.
     // Use an explicit small budget to fail fast if a regression makes the
     // engine pathologically slow.
-    const result = await generateReport(makeInputs('engineering-inspection'), {
+    const result = await generateReport(makeInputs('technical-report'), {
       timeoutMs: 10_000,
     });
     expect(result.pages).toBeGreaterThan(0);

@@ -1,10 +1,26 @@
 /**
  * ReportTemplates.ts
  *
- * The five built-in report templates. Each is a pure-data record:
+ * The two built-in report templates. Each is a pure-data record:
  * id, label, description, ordered list of sections.
  *
- * Templates are EXTENSIBLE — adding a sixth template (or letting users
+ * v0.5.5 P12 — consolidated from the previous six-template catalogue.
+ * Verified evidence (real exports of the same dataset): four of the six
+ * templates emitted ~85 % byte-identical content — identical Inspection
+ * summary, Dataset summary, Provenance, Signals and Expected-accuracy
+ * sections — differing only in which trailing stubs appeared, and no
+ * template contained content matching its title (QA Validation had no
+ * checks; Technical Documentation had no methods appendix). The catalogue
+ * is now two templates whose section sets are genuinely distinct:
+ *
+ *   - `survey-summary`   — the compact handover document.
+ *   - `technical-report` — the complete archived record.
+ *
+ * Legacy ids parse safely via `normalizeReportTemplateId` (see
+ * `LEGACY_TEMPLATE_IDS`), each mapping to the nearest new template, so
+ * saved sessions / external callers keep working.
+ *
+ * Templates are EXTENSIBLE — adding a third template (or letting users
  * author custom ones) is a one-entry addition to `REPORT_TEMPLATES`.
  * The renderer dispatches on `section`, not on template id, so new
  * templates compose existing sections without renderer changes.
@@ -14,18 +30,42 @@
 
 import type { ReportTemplate, ReportTemplateId } from './types';
 
-const engineeringInspection: ReportTemplate = {
-  id: 'engineering-inspection',
-  label: 'Engineering Inspection',
+const surveySummary: ReportTemplate = {
+  id: 'survey-summary',
+  label: 'Survey Summary',
   description:
-    'Full inspection record: cover + dataset metadata + capture-type ' +
-    'provenance + declared source metadata + measurements + annotations + ' +
-    'visuals + technical notes. Use for as-built reviews and ' +
-    'structural-defect documentation.',
+    'Compact handover document: cover, inspection summary, dataset ' +
+    'metadata (CRS/units), capture-type provenance, all measurements, ' +
+    'technical notes when provided. For deliveries where the source scan ' +
+    'travels alongside.',
   sections: [
     'cover',
     'inspection-summary',
     'dataset-summary',
+    // Compact provenance: capture type + confidence + disclaimer only.
+    // The signal list and the literature-cited accuracy bounds are
+    // Technical Report material — the summary names the capture type
+    // without restating the full evidence chain.
+    'provenance-compact',
+    'measurements',
+    'technical-notes',
+    'footer',
+  ],
+};
+
+const technicalReport: ReportTemplate = {
+  id: 'technical-report',
+  label: 'Technical Report',
+  description:
+    'The complete record: everything in Survey Summary plus the full ' +
+    'provenance detail (classifier signals + expected accuracy with cited ' +
+    'literature), the file\'s own declared source metadata, annotations ' +
+    'and visuals. Use for the canonical archived deliverable.',
+  sections: [
+    'cover',
+    'inspection-summary',
+    'dataset-summary',
+    // Full provenance: capture type + signals + literature-cited bounds.
     'provenance',
     // The file's own declared metadata (verbatim, "declared, not verified")
     // reads directly after the heuristic provenance so the two provenance
@@ -39,92 +79,53 @@ const engineeringInspection: ReportTemplate = {
   ],
 };
 
-const qaValidation: ReportTemplate = {
-  id: 'qa-validation',
-  label: 'QA Validation',
-  description:
-    'QA-focused: cover, dataset summary, capture-type provenance, ' +
-    'classification/intensity visuals, annotations (flagged issues). ' +
-    'Skips measurements + notes. Compact, ships in 2–3 pages typically.',
-  sections: ['cover', 'inspection-summary', 'dataset-summary', 'provenance', 'visuals', 'annotations', 'footer'],
-};
+/** The full template catalogue, in display order. */
+export const REPORT_TEMPLATES: readonly ReportTemplate[] = [
+  surveySummary,
+  technicalReport,
+];
 
-const terrainReview: ReportTemplate = {
-  id: 'terrain-review',
-  label: 'Terrain Review',
-  description:
-    'Topographic review: cover, dataset summary, height map + contour ' +
-    'visuals, measurements (slope/distance), footer. No annotations.',
-  sections: ['cover', 'inspection-summary', 'dataset-summary', 'visuals', 'measurements', 'footer'],
-};
-
-const surveySummary: ReportTemplate = {
-  id: 'survey-summary',
-  label: 'Survey Summary',
-  description:
-    'Cover, dataset metadata, capture-type provenance, all measurements, ' +
-    'technical notes. Skips visuals + annotations — for handover documents ' +
-    'where the source scan travels alongside.',
-  sections: ['cover', 'inspection-summary', 'dataset-summary', 'provenance', 'measurements', 'technical-notes', 'footer'],
-};
-
-const technicalDocumentation: ReportTemplate = {
-  id: 'technical-documentation',
-  label: 'Technical Documentation',
-  description:
-    'Everything: cover, dataset summary, capture-type provenance, all ' +
-    'visuals, all measurements + annotations, free-form notes. Use for ' +
-    'the canonical archived record.',
-  sections: [
-    'cover',
-    'inspection-summary',
-    'dataset-summary',
-    'provenance',
-    'visuals',
-    'measurements',
-    'annotations',
-    'technical-notes',
-    'footer',
-  ],
+/**
+ * Retired template ids and the nearest new template each maps to.
+ * Sessions, prefs, bookmarks or callers that still carry a legacy id keep
+ * working — they get the closest current template instead of an error.
+ *
+ *  - qa-validation / engineering-inspection / technical-documentation:
+ *    members of the ~85 %-identical family — the complete record is the
+ *    honest replacement.
+ *  - terrain-review: a strict section-subset of the same shared core.
+ *  - scan-acceptance: retired with this consolidation. Its checklist was
+ *    metadata-only presence rows — the same title-overpromising defect
+ *    this change removes. It returns behind real cloud-sampled checks
+ *    once the analysis seam lands.
+ */
+export const LEGACY_TEMPLATE_IDS: Readonly<Record<string, ReportTemplateId>> = {
+  'engineering-inspection': 'technical-report',
+  'qa-validation': 'technical-report',
+  'technical-documentation': 'technical-report',
+  'terrain-review': 'technical-report',
+  'scan-acceptance': 'technical-report',
 };
 
 /**
- * Scan Acceptance template. A user-supplied-threshold pass/fail sheet
- * for incoming-scan validation. Metadata-only rows in the current
- * release; the cloud-sampled rows (density, void map, NPS, RMSE) land
- * once the analysis seam is online. The Methods appendix cites Lohani
- * & Ghosh 2017 (peer-reviewed Springer survey) as the source for the
- * USGS-style metrics this template will encode over time.
+ * Resolve any template id — current or legacy — to a current one.
+ * Returns `undefined` for genuinely unknown ids so callers can decide
+ * between throwing (engine) and falling back (UI).
  */
-const scanAcceptance: ReportTemplate = {
-  id: 'scan-acceptance',
-  label: 'Scan Acceptance',
-  description:
-    'A pass/fail QA sheet against thresholds you supply. The viewer ' +
-    'reports what was measured; the thresholds are yours. Use it to sign ' +
-    'off (or reject) an incoming scan delivery — every check carries a ' +
-    'literature citation in the Methods appendix.',
-  sections: ['cover', 'inspection-summary', 'dataset-summary', 'provenance', 'acceptance-checklist', 'footer'],
-};
+export function normalizeReportTemplateId(id: string): ReportTemplateId | undefined {
+  if (REPORT_TEMPLATES.some((t) => t.id === id)) return id as ReportTemplateId;
+  return LEGACY_TEMPLATE_IDS[id];
+}
 
-/** The full template catalogue, in display order. */
-export const REPORT_TEMPLATES: readonly ReportTemplate[] = [
-  engineeringInspection,
-  qaValidation,
-  terrainReview,
-  surveySummary,
-  technicalDocumentation,
-  scanAcceptance,
-];
-
-/** Look up a template by id, or `undefined` if unknown. */
-export function getReportTemplate(id: ReportTemplateId): ReportTemplate | undefined {
-  return REPORT_TEMPLATES.find((t) => t.id === id);
+/** Look up a template by id (legacy ids resolve to their replacement). */
+export function getReportTemplate(id: string): ReportTemplate | undefined {
+  const normalized = normalizeReportTemplateId(id);
+  return REPORT_TEMPLATES.find((t) => t.id === normalized);
 }
 
 /**
- * The default template — used when the caller doesn't specify one. Picked
- * to be the most generally useful: Engineering Inspection covers the
- * canonical "drone LiDAR → as-built" workflow.
+ * The default template — used when the caller doesn't specify one. The
+ * complete record covers the canonical "drone LiDAR → as-built" workflow
+ * (the old Engineering Inspection default maps here too).
  */
-export const DEFAULT_TEMPLATE_ID: ReportTemplateId = 'engineering-inspection';
+export const DEFAULT_TEMPLATE_ID: ReportTemplateId = 'technical-report';

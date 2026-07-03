@@ -12,7 +12,6 @@ export type {
   ReportDatasetRow,
   ReportAnnotationRow,
   ReportMeasurementRow,
-  ReportAcceptanceRow,
   ReportInputs,
   ReportProvenanceFingerprint,
   ReportSourceMetadata,
@@ -27,7 +26,9 @@ export type {
 export {
   REPORT_TEMPLATES,
   DEFAULT_TEMPLATE_ID,
+  LEGACY_TEMPLATE_IDS,
   getReportTemplate,
+  normalizeReportTemplateId,
 } from './ReportTemplates';
 
 export {
