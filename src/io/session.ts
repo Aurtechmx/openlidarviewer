@@ -338,7 +338,8 @@ function parseCameraState(v: unknown): SavedCameraState {
     position: parseVec3(o.position),
     target: parseVec3(o.target),
   };
-  if (o.mode === 'orbit' || o.mode === 'walk' || o.mode === 'fly') state.mode = o.mode;
+  // 'pan' joined the mode union in v0.5.5 (P1 hand tool).
+  if (o.mode === 'orbit' || o.mode === 'walk' || o.mode === 'fly' || o.mode === 'pan') state.mode = o.mode;
   if (isFiniteNumber(o.fov)) state.fov = o.fov;
   return state;
 }
