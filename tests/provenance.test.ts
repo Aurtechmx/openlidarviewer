@@ -139,7 +139,7 @@ describe('provenance — numeric classification', () => {
   });
 
   it('classifies dense UAV density + hectare footprint as drone-LiDAR', () => {
-    // The FLEXIGROBOTS profile: ~979 pts/m² over a ~0.98 ha strip. Dense aerial
+    // A dense-UAV profile: ~979 pts/m² over a ~0.98 ha strip. Dense aerial
     // mapping, not a TLS station — must read as drone, not terrestrial.
     const f = classify({
       sourceFormat: 'laz',
