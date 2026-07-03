@@ -119,6 +119,10 @@ const ALLOWLIST: readonly string[] = [
   'src/ui/ClassLegendPanel.ts::ICON_SOLO',
   'src/ui/ExportPanel.ts::Export / Convert',
   'src/ui/FullscreenToggle.ts::ICON_ENTER',
+  // P11 left-rail toggle: `chevron` is a hardcoded, literal static SVG string
+  // (a chevron path) defined inline in wireLeftRailToggle — no user data, same
+  // sanctioned pattern as the other icon SVGs above.
+  'src/main.ts::cfg.chevron',
 ];
 
 /**

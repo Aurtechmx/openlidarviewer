@@ -66,7 +66,7 @@ export interface RenderingState {
    * Rendering section. The viewer keeps the source of truth; the
    * Inspector mirrors it via `syncRendering`.
    */
-  splatMode: 'classic' | 'soft' | 'inspection';
+  splatMode: 'classic' | 'soft' | 'inspection' | 'gaussian';
 }
 
 export interface InspectorCallbacks {
@@ -142,7 +142,7 @@ export interface InspectorCallbacks {
   /** Advanced (streaming COPC only) — auto-balance button. */
   onAutoBalance: () => void;
   /** Rendering > Splat mode chip rail. */
-  onSplatMode: (id: 'classic' | 'soft' | 'inspection') => void;
+  onSplatMode: (id: 'classic' | 'soft' | 'inspection' | 'gaussian') => void;
   /**
    * Visuals Studio > Workflow chip rail (v0.4.5) — apply a terrain workflow
    * preset (Terrain / Construction / Mining / Forestry / Hydrology /
@@ -301,19 +301,30 @@ const VISUALS_SKY_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
 ];
 
 /**
- * Splat mode chips — Rendering > Splat mode rail. Three modes:
+ * Splat mode chips — Rendering > Point appearance rail. Four modes:
  *   - Classic: crisp single-pixel samples (the v0.3.7 baseline).
  *   - Soft: 1.5× sprite radius with forced alphaToCoverage so
  *     neighbouring samples kiss and read as a continuous surface.
  *   - Inspection: 2× sprite radius for sparse measurement work.
+ *   - Gaussian (P13): a windowed radial-Gaussian point kernel — a smooth
+ *     sprite falloff, NOT a trained 3D Gaussian Splat scene.
  */
 const VISUALS_SPLAT_CHIPS: ReadonlyArray<{
-  id: 'classic' | 'soft' | 'inspection';
+  id: 'classic' | 'soft' | 'inspection' | 'gaussian';
   label: string;
+  /** Optional custom tooltip; falls back to a generated one when absent. */
+  title?: string;
 }> = [
   { id: 'classic', label: 'Classic Points' },
   { id: 'soft', label: 'Soft Splats' },
   { id: 'inspection', label: 'Inspection Splats' },
+  {
+    id: 'gaussian',
+    label: 'Gaussian',
+    // Honesty: this is a point-sprite kernel, NOT a trained 3D Gaussian Splat scene.
+    title:
+      'Gaussian-shaped point rendering. This smooths ordinary point samples and is not a trained 3D Gaussian Splat scene.',
+  },
 ];
 
 function section(label: string, body: HTMLElement): HTMLElement {
@@ -604,7 +615,7 @@ export class Inspector {
       ]),
       el('div', { className: 'olv-chips' }, this._sizeModeChips.map((c) => c.chip)),
       slider,
-      el('div', { className: 'olv-render-sublabel', text: 'Splat mode' }),
+      el('div', { className: 'olv-render-sublabel', text: 'Point appearance' }),
       this._visualsSplatRail,
       el('div', { className: 'olv-render-sublabel', text: 'Eye Dome Lighting' }),
       el('div', { className: 'olv-chips' }, [this._edlChip, this._aaChip, this._touchChip]),
@@ -904,7 +915,7 @@ export class Inspector {
       const chip = el('button', {
         className: 'olv-chip',
         text: def.label,
-        title: `Render points as ${def.label.toLowerCase()}`,
+        title: def.title ?? `Render points as ${def.label.toLowerCase()}`,
       });
       chip.dataset.presetId = def.id;
       chip.addEventListener('click', () => this._cb.onSplatMode(def.id));

@@ -1,30 +1,33 @@
 /**
  * devFlags.ts
  *
- * Development/audit-only URL feature flags for the v0.5.5 program
- * (docs/_audit/v0.5.5-program.md §5 P0). Each flag lets a maintainer disable
- * one new v0.5.5 controller — or select the legacy implementation — for A/B
+ * Development/audit-only URL feature flags. Each flag lets a maintainer disable
+ * one v0.5.5 controller — or select the legacy implementation — for A/B
  * comparison against the v0.5.4 baseline:
  *
- *   ?streamingScore=legacy   pixel-space scoring (P4) → v0.5.4 scoring
- *   ?wheelDolly=legacy       wheel dolly controller (P2) → OrbitControls wheel
- *   ?handPan=off             hand tool (P1) unavailable
- *   ?refinementPhase=off     refinement phases (P6) off
- *   ?adaptiveDpr=off         adaptive DPR (P5) off
- *   ?uploadQueue=off         GPU upload queue (P7) off
- *   ?angularPrediction=off   angular-velocity motion model (P3) off
+ *   ?wheelDolly=legacy       wheel/trackpad dolly → OrbitControls wheel
+ *   ?handPan=off             hand (Pan) tool unavailable
+ *   ?adaptiveDpr=off         motion-adaptive device-pixel-ratio off
+ *   ?refinementPhase=off     post-motion refinement phases off
+ *   ?streamingScore=legacy   pixel-space node scoring → v0.5.4 scoring
+ *   ?uploadQueue=off         time-budgeted GPU upload queue off
+ *   ?angularPrediction=off   angular-velocity motion model off
  *
- * P0 introduced the flags parse-only; consumers arrive with their phases.
- * P1 (hand tool): `handPan` is consumed by `NavController` (pan mode, the
- * G/Digit4 bindings, the middle-mouse temporary grab) and, via
- * `Viewer.handPanEnabled`, by the app to hide the NavBar's Pan surfaces.
- * The remaining flags are still parse-only until their controllers land.
- * Defaults equal the new-behavior-ON path; `off` restores v0.5.4 behavior.
+ * Consumer status, kept honest — a flag with no consumer changes nothing:
+ *   - Live: `handPan` (NavController pan mode, the G/Digit4 bindings, the
+ *     middle-mouse temporary grab, and the NavBar Pan surfaces via
+ *     `Viewer.handPanEnabled`); `wheelDolly` (NavController's wheel handler);
+ *     `adaptiveDpr` and `refinementPhase` (the Viewer's resolution/refinement
+ *     loop).
+ *   - Staged: `streamingScore`, `uploadQueue`, and `angularPrediction` have
+ *     tested cores but are not wired into the live render/stream path yet, so
+ *     their flags are parse-only. The metrics export lists these under
+ *     `stagedControllers`, never as active flags.
+ * Defaults equal the new-behavior-ON path; `off` / `legacy` restores v0.5.4.
  *
  * Pure — no DOM at module scope, no three.js — fully unit-tested in Node.
- * NOT part of the index chunk: only lazy modules (DebugOverlay today, the
- * P1–P7 controllers later) may import it. The chunk-isolation guard keeps
- * those importers out of the shell, and this module rides along with them.
+ * NOT part of the index chunk: only lazy modules may import it, and the
+ * chunk-isolation guard keeps those importers out of the shell.
  */
 
 /** Two-way implementation selector: the new default vs the v0.5.4 legacy. */

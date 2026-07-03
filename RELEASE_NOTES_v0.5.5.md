@@ -1,8 +1,10 @@
 # OpenLiDARViewer v0.5.5
 
-A navigation, reporting, and validation release. v0.5.5 adds a Pan hand tool,
-simplifies the PDF report set, corrects scan-health reporting for deliberately
-sampled datasets, and adds reproducible performance diagnostics.
+A navigation, interface, reporting, and validation release. v0.5.5 adds a Pan
+hand tool, refines viewport navigation and point rendering, makes the side
+panels collapsible, simplifies the PDF report set, corrects scan-health
+reporting for deliberately sampled datasets, and adds reproducible performance
+diagnostics.
 
 OpenLiDARViewer stays browser-native and local-first. Local files never leave
 the device, and no account is required.
@@ -20,6 +22,29 @@ In Pan mode a primary mouse or pen drag moves the scene while the wheel keeps
 zooming. One-finger touch dragging works too. Camera orientation and view scale
 stay fixed during the drag. Pan mode is preserved in saved sessions and share
 links.
+
+## Viewport navigation and rendering
+
+Wheel and trackpad zoom is now frame-rate independent: the same gesture reaches
+the same zoom on a 60, 120, or 144 Hz display. The previous behaviour stays
+available with `?wheelDolly=legacy`.
+
+While you move the view, the renderer briefly lowers the device-pixel ratio and
+restores it in stages once the view settles, which keeps interaction responsive
+on dense scenes. It can be turned off with `?adaptiveDpr=off` and
+`?refinementPhase=off`.
+
+A Gaussian point-appearance mode joins the existing point styles. It softens
+ordinary point samples; it is not a trained 3D Gaussian Splat scene.
+
+## Collapsible side panels
+
+The left panel column and the right column (the Inspector, and the streaming
+card when a COPC dataset is open) each collapse with a one-tap handle, clearing
+the viewport for a full-width look at the scene. Each side remembers its state
+per browser. The handles stay hidden until a scan is open, and on small screens,
+where the panels move into the bottom sheet. A wheel over any panel scrolls only
+that panel and never moves the camera.
 
 ## Simpler PDF report set
 
@@ -78,8 +103,8 @@ report-template identifiers fall back to supported templates.
   survey certification or independent validation.
 - A deliberately sampled load stays a display sample, not a full in-memory copy
   of the source cloud.
-- Gaussian-shaped point rendering and 3D Gaussian Splat scene loading are not in
-  this release.
+- The Gaussian point-appearance mode shapes ordinary point samples. Loading a
+  trained 3D Gaussian Splat scene is not in this release.
 
 ## Verify this release
 
@@ -93,6 +118,10 @@ To check the main v0.5.5 changes directly:
 ```bash
 npx vitest run \
   tests/panMath.test.ts \
+  tests/wheelDollyMath.test.ts \
+  tests/adaptiveDpr.test.ts \
+  tests/refinementPhase.test.ts \
+  tests/splatShader.test.ts \
   tests/frameTelemetry.test.ts \
   tests/metricsJson.test.ts \
   tests/reportTemplateGoldens.test.ts \

@@ -31,9 +31,10 @@ async function loadAndOpenRendering(page: Page): Promise<void> {
   }
 }
 
-test('Splat mode rail surfaces three chips', async ({ page }) => {
+test('Point appearance rail surfaces three chips', async ({ page }) => {
   await loadAndOpenRendering(page);
-  const sublabel = page.locator('.olv-render-sublabel', { hasText: 'Splat mode' });
+  // v0.5.5 P13 renamed the "Splat mode" sublabel to "Point appearance".
+  const sublabel = page.locator('.olv-render-sublabel', { hasText: 'Point appearance' });
   await expect(sublabel).toBeVisible();
   // The splat rail sits immediately after its sublabel inside the
   // rendering group. Three chips: Classic / Soft / Inspection.
@@ -71,4 +72,25 @@ test('Clicking Inspection Splats activates that chip', async ({ page }) => {
   const inspection = page.locator('.olv-chip', { hasText: 'Inspection Splats' });
   await inspection.click();
   await expect(inspection).toHaveClass(/olv-chip-active/);
+});
+
+test('the Gaussian chip renders with the honest, non-3DGS tooltip (P13)', async ({ page }) => {
+  await loadAndOpenRendering(page);
+  const gaussian = page.locator('.olv-chip', { hasText: 'Gaussian' });
+  await expect(gaussian).toBeVisible();
+  // Honesty contract: the tooltip must state this is NOT a trained 3D Gaussian Splat scene.
+  await expect(gaussian).toHaveAttribute(
+    'title',
+    'Gaussian-shaped point rendering. This smooths ordinary point samples and is not a trained 3D Gaussian Splat scene.',
+  );
+});
+
+test('Clicking Gaussian activates that chip and clears the others', async ({ page }) => {
+  await loadAndOpenRendering(page);
+  const gaussian = page.locator('.olv-chip', { hasText: 'Gaussian' });
+  await gaussian.click();
+  await expect(gaussian).toHaveClass(/olv-chip-active/);
+  await expect(
+    page.locator('.olv-chip', { hasText: 'Classic Points' }),
+  ).not.toHaveClass(/olv-chip-active/);
 });

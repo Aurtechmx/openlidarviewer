@@ -18,6 +18,7 @@
  */
 
 import type { PointSizeMode } from './render/pointStyle';
+import type { SplatMode } from './render/splatShader';
 import type { UnitSystem } from './render/measure/types';
 import {
   parseWorkflowConfig,
@@ -46,6 +47,8 @@ export interface ViewerPrefs {
   edlStrength: number;
   /** Adaptive or fixed point sizing. */
   pointSizeMode: PointSizeMode;
+  /** Point appearance (P13): Classic / Soft / Inspection / Gaussian. */
+  splatMode: SplatMode;
   /** Whether point-edge antialiasing is on. */
   antialiasing: boolean;
   /** Measurement unit system. */
@@ -60,6 +63,10 @@ export interface ViewerPrefs {
 
 /** The `localStorage` key; the `.v1` suffix lets the schema evolve later. */
 const STORAGE_KEY = 'openlidarviewer.prefs.v1';
+
+/** Valid point-appearance modes (kept in sync with `SplatMode`). Inlined so the
+ *  shell doesn't take a runtime dependency on the render layer. */
+const SPLAT_MODES: readonly SplatMode[] = ['classic', 'soft', 'inspection', 'gaussian'];
 
 /** Clamp a number into `[min, max]`. */
 function clamp(v: number, min: number, max: number): number {
@@ -93,6 +100,10 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   if (o.pointSizeMode === 'adaptive' || o.pointSizeMode === 'fixed') {
     out.pointSizeMode = o.pointSizeMode;
   }
+  // P13 — validate against the known modes inline (kept type-only on splatShader
+  // so prefs never pulls the render layer into the shell chunk). Unknown values
+  // are dropped, like every other malformed key here.
+  if (SPLAT_MODES.includes(o.splatMode as SplatMode)) out.splatMode = o.splatMode as SplatMode;
   if (typeof o.antialiasing === 'boolean') out.antialiasing = o.antialiasing;
   if (o.unitSystem === 'metric' || o.unitSystem === 'imperial') {
     out.unitSystem = o.unitSystem;

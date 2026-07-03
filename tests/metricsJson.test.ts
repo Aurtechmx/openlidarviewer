@@ -45,10 +45,18 @@ describe('buildMetricsDocument', () => {
       },
       streaming: null,
     });
-    expect(doc.schema).toBe('openlidarviewer.debug-metrics/1');
+    expect(doc.schema).toBe('openlidarviewer.debug-metrics/2');
     expect(doc.appVersion).toBe('0.5.4');
     expect(doc.backend).toBe('webgpu');
-    expect(doc.flags).toEqual({ ...DEV_FLAG_DEFAULTS });
+    // Only the wired controls are reported as flags; staged controllers are
+    // listed separately so nothing reads a not-yet-wired flag as active.
+    expect(doc.flags).toEqual({
+      wheelDolly: 'default',
+      handPan: true,
+      refinementPhase: true,
+      adaptiveDpr: true,
+    });
+    expect(doc.stagedControllers).toEqual(['streamingScore', 'uploadQueue', 'angularPrediction']);
     expect(doc.frameTiming).toEqual({
       sampledForMs: 1234.568,
       frames: 100,

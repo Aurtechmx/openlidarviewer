@@ -44,6 +44,12 @@ import {
   panPlaneDelta,
   screenPanDelta,
 } from './panMath';
+import {
+  normalizeWheelDeltaPx,
+  applyWheelImpulse,
+  stepDolly,
+  isDollySettled,
+} from './wheelDollyMath';
 import { readDevFlags } from '../perf/devFlags';
 
 /** The four navigation modes ('pan' is the v0.5.5 hand tool, program §P1). */
@@ -86,6 +92,19 @@ const LOOK_SENSITIVITY = 0.0022;
 const MAX_PITCH = 1.535; // ~88°
 /** Largest delta-time step honoured — guards against huge jumps after a stall. */
 const MAX_DT = 0.1;
+
+// ── P2 wheel/trackpad dolly tuning (program §P2) ─────────────────────────────
+// These are FEEL constants — the numbers a maintainer tunes against real wheels
+// and trackpads on-device. The maths that consumes them is pinned by
+// tests/wheelDollyMath.test.ts; only the feel lives here.
+/** Log-space velocity added per CSS pixel of normalised wheel delta. */
+const WHEEL_SENSITIVITY = 0.006;
+/** Exponential velocity decay per second — how quickly a flick settles. */
+const WHEEL_FRICTION = 12;
+/** Symmetric ceiling on accumulated dolly velocity (anti-runaway). */
+const MAX_DOLLY_VELOCITY = 3;
+/** Fallback CSS line height for `deltaMode === LINE` wheels. */
+const WHEEL_LINE_HEIGHT_PX = 16;
 /** Arrow-key orbit angular speed, radians per second (~4 s for a full turn). */
 const ORBIT_KEY_SPEED = 1.6;
 
@@ -134,6 +153,16 @@ export class NavController {
   // ── Hand tool (pan) — v0.5.5 P1 ────────────────────────────────────────
   /** `?handPan` dev flag, read once at construction (default true). */
   private readonly _handPan: boolean = readDevFlags().handPan;
+
+  // ── Wheel / trackpad dolly (P2) ────────────────────────────────────────
+  /**
+   * `?wheelDolly` dev flag: `true` (default) = the app-owned, refresh-rate-
+   * independent log-space dolly below; `false` (`?wheelDolly=legacy`) hands the
+   * wheel back to OrbitControls' built-in zoom (the v0.5.4 behaviour). Read once.
+   */
+  private readonly _wheelDolly: boolean = readDevFlags().wheelDolly === 'default';
+  /** Current log-space dolly velocity, integrated each frame by `_stepWheelDolly`. */
+  private _dollyVelocity = 0;
   /** Pointer id of the active grab, or null when idle. */
   private _panPointerId: number | null = null;
   /** The grabbed world point `W` — fixed for the whole gesture. */
@@ -160,6 +189,14 @@ export class NavController {
   private readonly _vHoriz = new THREE.Vector3();
   private readonly _vRight = new THREE.Vector3();
   private readonly _vTmp = new THREE.Vector3();
+  private readonly _dollyDir = new THREE.Vector3();
+  private readonly _dollyFwd = new THREE.Vector3();
+
+  // Pointer position (NDC) captured on the last wheel event, so the inertial
+  // dolly can keep zooming toward where the wheel happened (cursor-centred zoom).
+  private _dollyNdcX = 0;
+  private _dollyNdcY = 0;
+  private _dollyCursorValid = false;
 
   // Bound listener references, kept so `dispose()` can remove them.
   private readonly _onKeyDown: (e: KeyboardEvent) => void;
@@ -171,6 +208,7 @@ export class NavController {
   private readonly _onPanPointerDown: (e: PointerEvent) => void;
   private readonly _onPanPointerMove: (e: PointerEvent) => void;
   private readonly _onPanPointerUp: (e: PointerEvent) => void;
+  private readonly _onWheel: (e: WheelEvent) => void;
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -192,6 +230,7 @@ export class NavController {
     this._onPanPointerDown = (e) => this._handlePanPointerDown(e);
     this._onPanPointerMove = (e) => this._handlePanPointerMove(e);
     this._onPanPointerUp = (e) => this._handlePanPointerUp(e);
+    this._onWheel = (e) => this._handleWheel(e);
 
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
@@ -207,6 +246,16 @@ export class NavController {
     // handlers can't fight over the same gesture; wheel dolly is unaffected.
     if (this._handPan) {
       this._controls.mouseButtons.MIDDLE = null as unknown as THREE.MOUSE;
+    }
+    // P2 — take the wheel away from OrbitControls so the app-owned, refresh-rate-
+    // independent log-space dolly owns it. Note: the viewer's "orthographic" mode
+    // is emulated as a very long lens on THIS same perspective camera (see
+    // Viewer.setOrthographic), never a separate OrthographicCamera — so zoom is a
+    // dolly in both modes and this one handler covers both. `passive: false` lets
+    // `preventDefault` stop the page from scrolling under the canvas.
+    if (this._wheelDolly) {
+      this._controls.enableZoom = false;
+      canvas.addEventListener('wheel', this._onWheel, { passive: false });
     }
     // A held key is released only by `keyup`, which the window receives only
     // while focused. On any focus loss (alt-tab, OS shortcut, switching apps)
@@ -422,6 +471,9 @@ export class NavController {
       // Pan keeps the keyboard orbit and OrbitControls damping/wheel alive;
       // the hand drag itself is event-driven (pointermove), not per-frame.
       this._applyKeyboardOrbit(step);
+      // P2 — integrate any in-flight dolly velocity BEFORE `controls.update()`
+      // re-reads the pose.
+      this._stepWheelDolly(step);
       this._controls.update();
       return;
     }
@@ -451,10 +503,104 @@ export class NavController {
     this._applyOrientation();
   }
 
+  // ── P2 wheel / trackpad dolly ──────────────────────────────────────────
+
+  /**
+   * Wheel handler: accumulate a log-space dolly impulse. The maths is in
+   * `wheelDollyMath` (unit-tested); this only feeds it. Runs only while
+   * OrbitControls is enabled (orbit / pan), so it never fights a modal tool.
+   * Sign: a positive `deltaY` (scroll down) grows the eye distance → zoom OUT.
+   * The viewer's "ortho" mode is a narrow-FOV perspective camera on this same
+   * object, so the dolly is the correct zoom in both modes.
+   */
+  private _handleWheel(e: WheelEvent): void {
+    if (!this._wheelDolly || !this._inputEnabled || !this._controls.enabled) return;
+    // P9 — wheel ownership: only dolly events that belong to the interactive
+    // viewport (the canvas itself). A wheel over a panel targets the panel and
+    // must never reach the camera; panels also stop propagation, so this is a
+    // defensive second gate that stays correct if the listener ever moves to a
+    // container.
+    const target = e.target as Node | null;
+    if (target !== this._canvas && !(target !== null && this._canvas.contains(target))) return;
+    if (this._mode !== 'orbit' && this._mode !== 'pan') return;
+    e.preventDefault();
+    // Capture the pointer in NDC so the cursor-centred dolly keeps driving toward
+    // where the wheel happened for the whole inertial tail, not just this frame.
+    const w = Math.max(1, this._canvas.clientWidth);
+    const h = Math.max(1, this._canvas.clientHeight);
+    this._dollyNdcX = (e.offsetX / w) * 2 - 1;
+    this._dollyNdcY = -(e.offsetY / h) * 2 + 1;
+    this._dollyCursorValid = true;
+    const px = normalizeWheelDeltaPx(
+      e.deltaY,
+      e.deltaMode,
+      WHEEL_LINE_HEIGHT_PX,
+      window.innerHeight || 800,
+    );
+    this._dollyVelocity = applyWheelImpulse(
+      this._dollyVelocity,
+      px,
+      WHEEL_SENSITIVITY,
+      MAX_DOLLY_VELOCITY,
+    );
+  }
+
+  /**
+   * Integrate the dolly velocity for one frame: scale the camera↔target distance
+   * by `exp(velocity · dt)`, clamped to OrbitControls' own min/max distance so
+   * the app-owned dolly can never punch past the limits the rest of the app
+   * relies on. When the pointer is known (a wheel event captured it), the zoom
+   * is cursor-centred — the world point under the pointer stays fixed — matching
+   * OrbitControls' `zoomToCursor`, which the legacy wheel path still uses. Falls
+   * back to a target pivot when no pointer is known. No-op once velocity settles.
+   */
+  private _stepWheelDolly(dt: number): void {
+    if (!this._wheelDolly || isDollySettled(this._dollyVelocity)) return;
+    const s = stepDolly(this._dollyVelocity, dt, WHEEL_FRICTION);
+    this._dollyVelocity = s.velocity;
+    if (s.scale === 1) return;
+    const target = this._controls.target;
+    const offset = this._vTmp.subVectors(this._camera.position, target);
+    const dist = offset.length();
+    if (!(dist > 1e-6)) return;
+    let next = dist * s.scale;
+    const min = this._controls.minDistance;
+    const max = this._controls.maxDistance;
+    if (Number.isFinite(min)) next = Math.max(min, next);
+    if (Number.isFinite(max)) next = Math.min(max, next);
+
+    // Cursor-centred zoom: translate the camera along the world ray through the
+    // captured pointer position by the change in radius, then re-seat the target
+    // along the (unchanged) view direction at the new radius. This keeps the
+    // world point under the pointer stationary — the OrbitControls zoomToCursor
+    // behaviour. Falls back to the target pivot when no pointer is known (e.g. a
+    // keyboard-driven step) or the ray degenerates.
+    if (this._dollyCursorValid) {
+      this._camera.updateMatrixWorld();
+      const dir = this._dollyDir
+        .set(this._dollyNdcX, this._dollyNdcY, 0.5)
+        .unproject(this._camera)
+        .sub(this._camera.position);
+      const len = dir.length();
+      if (len > 1e-6) {
+        dir.multiplyScalar(1 / len);
+        const forward = this._dollyFwd.copy(offset).multiplyScalar(-1 / dist);
+        this._camera.position.addScaledVector(dir, dist - next);
+        target.copy(this._camera.position).addScaledVector(forward, next);
+        return;
+      }
+    }
+
+    // Fallback — target pivot.
+    offset.multiplyScalar(next / dist);
+    this._camera.position.copy(target).add(offset);
+  }
+
   /** Remove every event listener. Call when tearing the viewer down. */
   dispose(): void {
     this._cancelPanGesture();
     this._releaseCursor();
+    this._canvas.removeEventListener('wheel', this._onWheel);
     window.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('keyup', this._onKeyUp);
     this._canvas.removeEventListener('click', this._onCanvasClick);

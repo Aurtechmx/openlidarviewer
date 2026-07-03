@@ -84,19 +84,21 @@ export function buildMetricsDocument(input: MetricsJsonInput): Record<string, un
   const r = input.rendering;
   const s = input.streaming;
   return {
-    schema: 'openlidarviewer.debug-metrics/1',
+    schema: 'openlidarviewer.debug-metrics/2',
     appVersion: input.appVersion,
     generatedAt: input.generatedAt,
     backend: input.backend,
+    // Only controls that actually change the measured runtime are reported as
+    // flags. Controllers whose code exists in the tree but is not yet wired
+    // into the live render/stream path are listed under stagedControllers, so
+    // a benchmark can never read a staged flag as an active feature.
     flags: {
-      streamingScore: input.flags.streamingScore,
       wheelDolly: input.flags.wheelDolly,
       handPan: input.flags.handPan,
       refinementPhase: input.flags.refinementPhase,
       adaptiveDpr: input.flags.adaptiveDpr,
-      uploadQueue: input.flags.uploadQueue,
-      angularPrediction: input.flags.angularPrediction,
     },
+    stagedControllers: ['streamingScore', 'uploadQueue', 'angularPrediction'],
     frameTiming: t
       ? {
           sampledForMs: ms(t.sampledForMs),

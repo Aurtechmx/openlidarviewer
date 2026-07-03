@@ -16,8 +16,54 @@ import {
   splatRadiusWithDensity,
   splatRadiusMultiplier,
   splatForcesAlphaToCoverage,
+  gaussianSplatAlpha,
+  GAUSSIAN_SPLAT_SHARPNESS,
   type SplatMode,
 } from '../src/render/splatShader';
+
+describe('gaussianSplatAlpha — P13 windowed Gaussian point kernel', () => {
+  it('is exactly 1 at the sprite centre', () => {
+    expect(gaussianSplatAlpha(0)).toBe(1);
+  });
+
+  it('is exactly 0 at the sprite boundary (no hard ring)', () => {
+    expect(gaussianSplatAlpha(1)).toBe(0);
+  });
+
+  it('clamps out-of-range distance', () => {
+    expect(gaussianSplatAlpha(-0.5)).toBe(1);
+    expect(gaussianSplatAlpha(2)).toBe(0);
+  });
+
+  it('decreases monotonically from centre to edge', () => {
+    let prev = Number.POSITIVE_INFINITY;
+    for (let i = 0; i <= 20; i++) {
+      const a = gaussianSplatAlpha(i / 20);
+      expect(a).toBeLessThanOrEqual(prev + 1e-12);
+      prev = a;
+    }
+  });
+
+  it('stays finite and in [0, 1] across a distance × sharpness sweep', () => {
+    for (const k of [1e-3, 0.5, 1, GAUSSIAN_SPLAT_SHARPNESS, 10, 100, 1000]) {
+      for (let i = 0; i <= 50; i++) {
+        const a = gaussianSplatAlpha(i / 50, k);
+        expect(Number.isFinite(a)).toBe(true);
+        expect(a).toBeGreaterThanOrEqual(0);
+        expect(a).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('handles a non-positive sharpness via the floor without NaN', () => {
+    expect(Number.isFinite(gaussianSplatAlpha(0.5, 0))).toBe(true);
+    expect(Number.isFinite(gaussianSplatAlpha(0.5, -5))).toBe(true);
+  });
+
+  it('uses the default sharpness when omitted', () => {
+    expect(gaussianSplatAlpha(0.5)).toBe(gaussianSplatAlpha(0.5, GAUSSIAN_SPLAT_SHARPNESS));
+  });
+});
 
 describe('splatAlpha — canonical curve at feather = 1', () => {
   it('returns 1 at the sprite centre', () => {

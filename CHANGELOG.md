@@ -4,10 +4,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [0.5.5] - 2026-07-03
 
-Navigation, reporting, and validation. v0.5.5 adds a Pan hand tool, reduces the
-PDF report set to two documents, corrects scan-health reporting for deliberately
-sampled datasets, and adds reproducible performance diagnostics. Browser-native
-and local-first; files never leave the device.
+Navigation, interface, reporting, and validation. v0.5.5 adds a Pan hand tool,
+refines viewport navigation and point rendering, makes the side panels
+collapsible, reduces the PDF report set to two documents, corrects scan-health
+reporting for deliberately sampled datasets, and adds reproducible performance
+diagnostics. Browser-native and local-first; files never leave the device.
 
 ### Added
 
@@ -16,6 +17,19 @@ and local-first; files never leave the device.
   pen, or one-finger touch drag moves the scene while the wheel keeps zooming;
   camera orientation and view scale stay fixed. Pan mode is preserved in saved
   sessions and share links.
+- **Frame-rate-independent wheel and trackpad zoom.** The same gesture reaches
+  the same zoom on a 60, 120, or 144 Hz display. The previous behaviour stays
+  available with `?wheelDolly=legacy`.
+- **Motion-adaptive resolution.** While the view moves, the renderer lowers the
+  device-pixel ratio and restores it in stages once the view settles, keeping
+  interaction responsive on dense scenes. Disable with `?adaptiveDpr=off` and
+  `?refinementPhase=off`.
+- **Gaussian point-appearance mode.** A point style that softens ordinary point
+  samples. It is not a trained 3D Gaussian Splat scene.
+- **Collapsible side panels.** A one-tap handle on the left column, and one on
+  the right column (Inspector, plus the streaming card for COPC datasets),
+  collapses each side for a full-width view. Each side's state persists per
+  browser; the handles stay hidden until a scan is open and on small screens.
 - **Reproducible performance diagnostics.** The optional debug overlay records
   frame-time percentiles (p50/p95/p99), counts of frames over common frame-time
   thresholds, the longest observed main-thread task where the browser supports
@@ -39,6 +53,9 @@ and local-first; files never leave the device.
   now cross the parsing-worker boundary intact. Classification coverage shows in
   the Classification row, repeated analysis caveats are merged, and an empty
   cloud reports a verdict instead of an unrelated point count.
+- **Left-column panels share one width** so the rail reads as a single aligned
+  stack, and its collapse handle sits flush against it. A wheel over any overlay
+  panel now scrolls only that panel and never reaches the camera or the page.
 
 ### Removed
 

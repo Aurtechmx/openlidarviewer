@@ -47,12 +47,26 @@ export const INSPECTION_SPLAT_DEFAULTS: SplatParams = {
 };
 
 /**
+ * Sharpness `k` of the Gaussian point kernel (P13). Higher = tighter core,
+ * softer skirt. Chosen so the falloff reads clearly without a hard ring; the
+ * windowing in `gaussianSplatAlpha` pins alpha to exactly 0 at the edge.
+ */
+export const GAUSSIAN_SPLAT_SHARPNESS = 3.0;
+
+/**
+ * Dedicated on-screen radius multiplier for the Gaussian kernel (P13), kept
+ * independent of the square/circle point-size path. A little wider than Soft so
+ * the smooth skirt has room to read as continuous.
+ */
+export const GAUSSIAN_RADIUS_MULTIPLIER = 1.75;
+
+/**
  * Splat rendering mode. Drives the Viewer's per-frame radius multiplier
  * + alphaToCoverage forcing so the visible point-cloud reads as either
  * crisp samples ("Classic") or a continuous soft surface ("Soft" /
  * "Inspection").
  */
-export type SplatMode = 'classic' | 'soft' | 'inspection';
+export type SplatMode = 'classic' | 'soft' | 'inspection' | 'gaussian';
 
 /**
  * Effective on-screen radius multiplier per mode. Multiplied into the
@@ -69,6 +83,9 @@ export function splatRadiusMultiplier(mode: SplatMode): number {
     case 'classic': return 1.0;
     case 'soft': return 1.5;
     case 'inspection': return 2.0;
+    // Gaussian needs a little more room than Soft so the smooth skirt has
+    // space to read as continuous — its own dedicated multiplier (P13).
+    case 'gaussian': return GAUSSIAN_RADIUS_MULTIPLIER;
   }
 }
 
@@ -79,7 +96,9 @@ export function splatRadiusMultiplier(mode: SplatMode): number {
  * Classic respects the user's choice.
  */
 export function splatForcesAlphaToCoverage(mode: SplatMode): boolean {
-  return mode === 'soft' || mode === 'inspection';
+  // Gaussian, like Soft / Inspection, relies on a smooth alpha edge to read as
+  // continuous, so it forces alpha-to-coverage on regardless of the user's AA.
+  return mode === 'soft' || mode === 'inspection' || mode === 'gaussian';
 }
 
 /**
@@ -105,6 +124,39 @@ export function splatAlpha(distFromCenter: number, feather: number): number {
   // 1 - t². At t = 0 (start) alpha is 1; at t = 1 (edge) alpha is 0.
   const t = (d - startFalloff) / f;
   return 1 - t * t;
+}
+
+/**
+ * Gaussian point-kernel alpha at a normalised distance from the sprite centre
+ * (P13). A radial Gaussian, windowed so it is EXACTLY 1 at the centre and
+ * EXACTLY 0 at the sprite boundary — no hard ring, no NaN:
+ *
+ *   raw(d)   = exp(-k · d²)
+ *   alpha(d) = (raw(d) − raw(1)) / (1 − raw(1))
+ *
+ * Subtracting the edge value `raw(1)` and renormalising pins alpha(0) = 1 and
+ * alpha(1) = 0, monotonically decreasing. `1 − exp(-k)` is a strictly positive
+ * constant for any `k > 0`, so there is no division by zero and no NaN.
+ *
+ * IMPORTANT: this is a point-SPRITE kernel that smooths ordinary point samples.
+ * It is NOT a trained 3-D Gaussian Splat scene (that is v0.6.0). The TSL
+ * fragment node in `Viewer.ts` must mirror THIS formula exactly, the same
+ * contract `splatAlpha` already holds, so a screenshot and this unit test agree.
+ *
+ * @param distFromCenter Normalised distance (0 = centre, 1 = edge); clamped.
+ * @param sharpness Gaussian sharpness `k` (> 0); clamped to a small floor.
+ * @returns Alpha in `[0, 1]`.
+ */
+export function gaussianSplatAlpha(
+  distFromCenter: number,
+  sharpness: number = GAUSSIAN_SPLAT_SHARPNESS,
+): number {
+  const d = clamp01(distFromCenter);
+  const k = Math.max(1e-3, sharpness);
+  const edge = Math.exp(-k); // raw(1), in (0, 1)
+  const raw = Math.exp(-k * d * d); // raw(d)
+  const a = (raw - edge) / (1 - edge);
+  return a <= 0 ? 0 : a >= 1 ? 1 : a;
 }
 
 /**
