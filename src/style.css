@@ -1245,6 +1245,21 @@ button:disabled { cursor: not-allowed; }
   margin: 0; font-family: var(--mono); font-size: var(--text-xs); line-height: 1.5;
   color: var(--text-dim); white-space: pre;
 }
+.olv-debug-copy {
+  /* The machine-readable export action (v0.5.5 P0). The overlay body is
+     pointer-events:none, so the button re-enables events for itself. */
+  pointer-events: auto;
+  cursor: pointer;
+  margin-top: var(--space-md);
+  padding: 2px 8px;
+  background: none;
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs); color: var(--text-dim);
+  -webkit-tap-highlight-color: transparent;
+}
+.olv-debug-copy:hover { color: var(--accent); border-color: var(--accent); }
+.olv-debug-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Streaming COPC panel — anchored top-right at the same column as the
  * Inspector. Both share width: 232px. The max-height is capped at
