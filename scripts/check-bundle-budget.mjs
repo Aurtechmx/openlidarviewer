@@ -29,7 +29,7 @@ const ASSETS = join(ROOT, 'dist', 'assets');
 
 /** prefix (before the -hash.js) → hard ceiling in KiB. */
 const BUDGETS = [
-  { prefix: 'index', maxKiB: 760 },                 // live ~750 KiB (v0.5.2: lazy-loaded the workflow settings popup)
+  { prefix: 'index', maxKiB: 772 },                 // live ~761 KiB (v0.5.5: left+right rail collapse landed as shell UI; kept tight, ~1.5% headroom)
   { prefix: 'vendor-three-webgpu', maxKiB: 1100 },  // live ~978 KiB
   { prefix: 'vendor-pdf', maxKiB: 512 },            // live ~410 KiB
 ];
