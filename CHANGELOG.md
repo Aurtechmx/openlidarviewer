@@ -24,6 +24,22 @@ files never leave the device.
 - **Streaming point-cloud export.** Export the streamed-in (resident) points of
   a COPC/EPT scan to LAS/LAZ/XYZ at display resolution. The export is flagged as
   a reduced view while the whole cloud is still streaming.
+- **Clearer scan-loading feedback.** Opening a scan — a device file or a public
+  or streaming dataset — now shows a prominent blue blinking "Opening…"
+  indicator, so an in-flight load reads the same way from either entry point.
+- **Readable GPU errors.** If the graphics backend fails to render a scan (a
+  shader or pipeline error, which surfaces after the scan has already decoded),
+  the reason is now shown as a message instead of leaving a blank view with no
+  explanation.
+
+### Fixed
+
+- **Point filters no longer affect scans that don't use them.** The elevation
+  and intensity filters now touch a scan's render path only while a filter is
+  actually active; opening a scan without a filter renders exactly as it did
+  before the filters existed.
+- **Startup hardening.** Guarded an empty-state initialisation path so a fresh
+  page load can't error before a scan is opened.
 
 ## [0.5.5] - 2026-07-03
 
