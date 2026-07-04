@@ -51,6 +51,14 @@ export interface SynthCopcOptions {
   offset?: [number, number, number];
   center?: [number, number, number];
   halfsize?: number;
+  /**
+   * The LAS header's tight data min/max. Defaults to the octree cube
+   * (`center ± halfsize`); set it smaller to model a real scan whose data
+   * extent is tighter than the cube (e.g. a flat airborne strip inside a cubic
+   * octree) — used to prove `dataBounds()` reads the header, not the cube.
+   */
+  headerMin?: [number, number, number];
+  headerMax?: [number, number, number];
   spacing?: number;
   /** Flat node list — wrapped in a single root page. */
   nodes?: SynthNode[];
@@ -169,12 +177,17 @@ export function buildSyntheticCopc(options: SynthCopcOptions = {}): SynthCopcRes
   view.setFloat64(155, offset[0], true);
   view.setFloat64(163, offset[1], true);
   view.setFloat64(171, offset[2], true);
-  view.setFloat64(179, center[0] + halfsize, true); // max x
-  view.setFloat64(187, center[0] - halfsize, true); // min x
-  view.setFloat64(195, center[1] + halfsize, true);
-  view.setFloat64(203, center[1] - halfsize, true);
-  view.setFloat64(211, center[2] + halfsize, true);
-  view.setFloat64(219, center[2] - halfsize, true);
+  // LAS header min/max — the TIGHT data extent. Defaults to the octree cube
+  // (`center ± halfsize`); `headerMin`/`headerMax` override it to model a scan
+  // whose data is tighter than the cube.
+  const hMax = options.headerMax ?? [center[0] + halfsize, center[1] + halfsize, center[2] + halfsize];
+  const hMin = options.headerMin ?? [center[0] - halfsize, center[1] - halfsize, center[2] - halfsize];
+  view.setFloat64(179, hMax[0], true); // max x
+  view.setFloat64(187, hMin[0], true); // min x
+  view.setFloat64(195, hMax[1], true);
+  view.setFloat64(203, hMin[1], true);
+  view.setFloat64(211, hMax[2], true);
+  view.setFloat64(219, hMin[2], true);
   view.setBigUint64(235, BigInt(evlrHeaderStart), true);
   view.setUint32(243, 1, true); // one EVLR — the COPC hierarchy
   view.setBigUint64(247, BigInt(pointCount), true);

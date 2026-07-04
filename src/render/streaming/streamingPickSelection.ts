@@ -56,6 +56,14 @@ export interface StreamingPickNode {
    * all-visible hot path the caller passes no `accept` predicate at all.
    */
   classification?: Uint8Array;
+  /**
+   * Per-point raw intensity, one entry per point. Threaded so the elevation /
+   * intensity filters can reject hidden points from the pick (via
+   * `acceptForNode`). `ArrayLike<number>` since decoded intensity is raw
+   * `Uint16Array` while static clouds may hold `Float32Array`. Omitted when no
+   * such filter is active or the node has no intensity channel.
+   */
+  intensity?: ArrayLike<number>;
 }
 
 /** The result of `selectStreamingPick` when a node was hit. */
@@ -93,18 +101,18 @@ export const STREAMING_PICK_ANGULAR_TOLERANCE = 0.07;
  * entries (this module makes no assumptions about node-level visibility — that
  * lives in the Viewer's pick loop along with the mesh-parent check).
  *
- * The optional `acceptClass` predicate confines the pick to currently-visible
- * *classes* — "you can't click a point you can't see". When supplied, each
- * candidate point is kept only if its node carries a classification and
- * `acceptClass(code)` is true for that point's class. Omit it on the all-visible
- * hot path so no per-point call is made and selection is byte-identical to
- * having no class filter.
+ * The optional `acceptForNode` factory confines the pick to currently-visible
+ * points — "you can't click a point you can't see". For each node it returns a
+ * `(index) => boolean` predicate (or `undefined` for no filtering on that
+ * node), which the Viewer builds from the active class / elevation / intensity
+ * windows against that node's own buffers. Omit it on the all-visible hot path
+ * so no per-point call is made and selection is byte-identical to unfiltered.
  */
 export function selectStreamingPick(
   nodes: readonly StreamingPickNode[],
   origin: Vec3,
   direction: Vec3,
-  acceptClass?: (classCode: number) => boolean,
+  acceptForNode?: (node: StreamingPickNode) => ((index: number) => boolean) | undefined,
 ): StreamingPickHit | null {
   if (nodes.length === 0) return null;
 
@@ -116,14 +124,10 @@ export function selectStreamingPick(
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     if (node.depth > maxResidentDepth) maxResidentDepth = node.depth;
-    // Confine to visible classes only when a class filter is active AND this
-    // node carries per-point classification. With no filter, pass no predicate
-    // so `nearestPointAlongRay` keeps its untouched hot path.
-    const cls = node.classification;
-    const accept =
-      acceptClass !== undefined && cls !== undefined
-        ? (index: number) => acceptClass(cls[index])
-        : undefined;
+    // Per-node accept predicate (class + elevation + intensity), or undefined
+    // for no filtering — in which case `nearestPointAlongRay` keeps its
+    // untouched hot path.
+    const accept = acceptForNode?.(node);
     const hit = nearestPointAlongRay(node.positions, origin, direction, accept);
     if (!hit) continue;
     const score = hit.offset / hit.along;

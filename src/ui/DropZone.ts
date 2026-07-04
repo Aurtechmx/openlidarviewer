@@ -102,11 +102,31 @@ export class DropZone {
   }
 
   /**
+   * Show the prominent blue blinking "Opening …" state — the first feedback a
+   * scan open gives, before staged progress (decoding / uploading / rendering)
+   * takes over. Used by BOTH device-file and public/streaming opens so the two
+   * entry points feel identical. The pulse is pure CSS (`is-opening`); staged
+   * `setProgress`, `setError`, `setPreload`, and clear all drop the class.
+   */
+  setOpening(text: string): void {
+    this._clearHideTimer();
+    this.toast.classList.remove('olv-toast-error');
+    this.toast.classList.add('is-opening');
+    this._bar.classList.add('olv-hidden');
+    this._text.textContent = text;
+    this._srStatus.textContent = text;
+    this._srAlert.textContent = '';
+    this.toast.classList.remove('olv-hidden');
+  }
+
+  /**
    * Show a progress message, optionally with a 0..1 completion bar. Pass
    * `null` to hide the toast entirely.
    */
   setProgress(text: string | null, fraction?: number): void {
     this._clearHideTimer();
+    // Staged progress supersedes the blue "Opening …" pulse.
+    this.toast.classList.remove('is-opening');
     if (text === null) {
       this.toast.classList.add('olv-hidden');
       this._bar.classList.add('olv-hidden');
@@ -141,6 +161,7 @@ export class DropZone {
       return;
     }
     this.toast.classList.remove('olv-toast-error');
+    this.toast.classList.remove('is-opening');
     const text = lines.join('\n');
     this._text.textContent = text;
     this._srStatus.textContent = text;
@@ -164,6 +185,7 @@ export class DropZone {
     this._onCancel = null;
     this._cancel.classList.add('olv-hidden');
     this._bar.classList.add('olv-hidden');
+    this.toast.classList.remove('is-opening');
     this.toast.classList.add('olv-toast-error');
     this._text.textContent = text;
     // The alert node announces immediately (role=alert is implicitly

@@ -80,8 +80,22 @@ export interface StreamingSource {
   counts(): NodeCounts;
   /** The deepest octree level the hierarchy has revealed. */
   maxDepth(): number;
-  /** The cloud's bounds in local (render) space — used to frame the camera. */
+  /**
+   * The octree ROOT CUBE in local (render) space — equal-sided, used to frame
+   * the camera. This is NOT the data extent: a 1000×1000×138 m scan has a
+   * 1000³ cube, so `localBounds` over-reports the vertical (and any partial-
+   * footprint) span. Use {@link dataBounds} for the true data extent, density,
+   * and any figure shown to the user.
+   */
   localBounds(): Box6;
+  /**
+   * The TIGHT data AABB in local (render) space — the real extent of the
+   * points, from the LAS header (COPC) or `bounds.conforming` (EPT). This is
+   * what "Width/Depth/Height", footprint area, and nominal density must use;
+   * `localBounds` (the cube) would inflate them. Origin-shifted the same way as
+   * `localBounds`, so the two are directly comparable.
+   */
+  dataBounds(): Box6;
   /**
    * The format-aware default initial colour mode for the cloud. COPC's
    * implementation looks at `metadata.header.hasRgb`; EPT's implementation

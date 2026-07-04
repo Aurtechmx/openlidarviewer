@@ -737,6 +737,20 @@ button:disabled { cursor: not-allowed; }
   font-size: var(--text-xs); color: var(--text-dim); min-height: 16px;
   max-width: 420px; line-height: 1.5; text-align: center;
 }
+/* Opening a remote dataset is a wait the user needs to notice — lift the status
+   out of the dim palette into the accent, slightly larger and bolder, with a
+   soft pulse so it clearly reads as "working". */
+.olv-catalog-status.is-opening {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  animation: olv-catalog-pulse 1.4s ease-in-out infinite;
+}
+@keyframes olv-catalog-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .olv-catalog-status.is-opening { animation: none; } }
+/* A failed open reads in the error colour so a blocked fetch never looks like
+   a silent hang. */
+.olv-catalog-status.is-error { color: var(--rating-weak); font-weight: 600; }
 .olv-catalog-results {
   display: flex; flex-direction: column; gap: var(--space-sm); width: 100%;
   max-height: 200px; overflow-y: auto;
@@ -1057,6 +1071,50 @@ button:disabled { cursor: not-allowed; }
   color: var(--text);
   width: 32px;
   text-align: right;
+}
+/* Elevation filter — two number inputs (Min/Max in world units) plus a
+   Show-all reset. Mirrors the height-trim row rhythm so the section reads as
+   part of the same family of range controls. */
+.olv-elev-body { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-elev-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+.olv-elev-cap { flex-shrink: 0; }
+.olv-elev-input {
+  flex: 1;
+  min-width: 60px;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  accent-color: var(--accent);
+}
+.olv-elev-reset {
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-sm);
+  cursor: pointer;
+}
+.olv-elev-reset:hover { color: var(--text); }
+/* Filter-active cue — when a range filter is narrower than the cloud's extent
+   (points are hidden), the section label gains a subtle accent tag so a scan
+   never reads as "missing data" when it is really just filtered. */
+.olv-section.olv-filter-active > .olv-section-label::after {
+  content: ' · filtering';
+  color: var(--accent);
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
 }
 .olv-chip {
   font-size: var(--text-xs); color: var(--text-dim);
@@ -1431,6 +1489,24 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-toast-error { border-color: color-mix(in srgb, var(--rating-weak) 50%, transparent); }
 .olv-toast-error .olv-toast-dot { background: var(--rating-weak); }
+/* "Opening …" state — the prominent blue blinking indicator shown while a scan
+   (device file or public/streaming dataset) is being fetched and decoded. Mirrors
+   the catalog status pulse so both entry points read the same. The accent border
+   + glowing, pulsing dot + accent text make the toast unmistakably "working". */
+.olv-toast.is-opening { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.olv-toast.is-opening .olv-toast-text { color: var(--accent); font-weight: 600; }
+.olv-toast.is-opening .olv-toast-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: olv-toast-opening-pulse 1.4s ease-in-out infinite;
+}
+@keyframes olv-toast-opening-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent) 60%, transparent); }
+  50% { opacity: 0.5; box-shadow: 0 0 2px 0 color-mix(in srgb, var(--accent) 30%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-toast.is-opening .olv-toast-dot { animation: none; }
+}
 
 /* ───────────────────────────────────────────────────────────────────────────
    Navigation bar — bottom-centre mode switcher, speed slider, controls HUD

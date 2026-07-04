@@ -205,6 +205,16 @@ export class EptStreamingPointCloud implements StreamingSource {
     ];
   }
 
+  /** The tight data AABB (EPT `bounds.conforming`), origin-shifted into local space. */
+  dataBounds(): Box6 {
+    const c = this.metadata.bounds.conforming;
+    const [rx, ry, rz] = this.renderOrigin;
+    return [
+      c[0] - rx, c[1] - ry, c[2] - rz,
+      c[3] - rx, c[4] - ry, c[5] - rz,
+    ];
+  }
+
   /**
    * Fetch the tile bytes for one node. The node record's `id` IS the
    * EPT address string `"D-X-Y-Z"`, so we can rebuild the key + URL.

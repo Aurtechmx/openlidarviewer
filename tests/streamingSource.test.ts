@@ -48,6 +48,7 @@ test('the COPC implementation conforms to the StreamingSource interface', async 
 
   // The interface members are all reachable through the StreamingSource type.
   expect(cloud.kind).toBe('copc');
+  expect(cloud.dataBounds()).toHaveLength(6);
   expect(typeof cloud.name).toBe('string');
   expect(cloud.renderOrigin).toHaveLength(3);
   expect(cloud.sourcePointCount).toBeGreaterThan(0);
@@ -57,6 +58,30 @@ test('the COPC implementation conforms to the StreamingSource interface', async 
   // The new methods that the scheduler depends on for format-agnosticism:
   expect(typeof cloud.readNodeChunk).toBe('function');
   expect(typeof cloud.decodeMeta).toBe('function');
+});
+
+test('dataBounds() reads the tight LAS header extent, NOT the octree cube', async () => {
+  // Octree cube half-side 128 (Z span 256), but the data is a flat strip only
+  // 20 m tall in Z — the shape of a real airborne scan inside a cubic octree.
+  const fixture = buildSyntheticCopc({
+    center: [0, 0, 0],
+    halfsize: 128,
+    headerMin: [-100, -100, -10],
+    headerMax: [100, 100, 10],
+    nodes: [{ key: [0, 0, 0, 0], pointCount: 100 }],
+  });
+  const cloud = await StreamingPointCloud.open(
+    new ArrayBufferRangeSource(fixture.buffer),
+    'tight.copc.laz',
+  );
+  const cube = cloud.localBounds();
+  const data = cloud.dataBounds();
+  const zSpan = (b: readonly number[]): number => b[5] - b[2];
+  // The cube keeps the full 256 m Z; dataBounds must report the tight 20 m.
+  // A regression that pointed dataBounds back at the cube would fail here.
+  expect(zSpan(cube)).toBeCloseTo(256, 0);
+  expect(zSpan(data)).toBeCloseTo(20, 0);
+  expect(zSpan(data)).toBeLessThan(zSpan(cube));
 });
 
 test('the scheduler accepts any StreamingSource conforming object — EPT will plug in here', async () => {
@@ -82,6 +107,7 @@ test('the scheduler accepts any StreamingSource conforming object — EPT will p
     counts: () => realCloud.counts(),
     maxDepth: () => realCloud.maxDepth(),
     localBounds: () => realCloud.localBounds(),
+    dataBounds: () => realCloud.dataBounds(),
     readNodeChunk: (record, signal) => realCloud.readNodeChunk(record, signal),
     decodeMeta: (record) => realCloud.decodeMeta(record),
     // v0.3.3 — `defaultColorMode`, `availableColorModes`, and `crs` joined

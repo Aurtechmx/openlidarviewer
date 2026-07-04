@@ -451,7 +451,7 @@ export class CatalogPanel {
       this._results.replaceChildren();
       return;
     }
-    this._setStatus(`Opening ${loc.displayName}…`);
+    this._setStatus(`Opening ${loc.displayName}…`, 'opening');
     this._results.replaceChildren();
     // Direct handoff — main.ts wires this into `handleRemoteUrl` which
     // detects the EPT manifest by URL pattern and routes to the EPT
@@ -460,8 +460,30 @@ export class CatalogPanel {
     this._onPickUrl(loc.streamUrl, loc.displayName);
   }
 
-  private _setStatus(text: string): void {
+  /**
+   * Surface a failed open in the catalog itself. Without this the fetch error
+   * was reported elsewhere (the drop zone) while the catalog kept reading
+   * "Opening …" — so a blocked remote fetch (e.g. a bucket that doesn't allow
+   * the current origin) looked like a silent hang.
+   */
+  showOpenError(message: string): void {
+    this._setStatus(message, 'error');
+  }
+
+  /**
+   * Clear the "Opening …" pulse once a dataset has successfully attached.
+   * Without a success transition the panel kept pulsing "Opening …" after the
+   * scan was already loaded (it only had opening + error states). Clears the
+   * text and both state classes so the status returns to neutral/idle.
+   */
+  markLoaded(): void {
+    this._setStatus('', 'info');
+  }
+
+  private _setStatus(text: string, kind: 'info' | 'opening' | 'error' = 'info'): void {
     this._status.textContent = text;
+    this._status.classList.toggle('is-opening', kind === 'opening');
+    this._status.classList.toggle('is-error', kind === 'error');
   }
 }
 

@@ -53,6 +53,7 @@ import {
   mix,
   length,
   smoothstep,
+  step,
   positionView,
   positionGeometry,
   perspectiveDepthToViewZ,
@@ -60,7 +61,10 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassVisibility } from './class/classVisibility';
-import { classVisibleAt } from './class/classMaskUniform';
+import { buildPointFilterAccept } from './pointFilterAccept';
+import type { PointFilterWindow } from './pointFilterAccept';
+import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
+import { intensityFilterUniform } from './intensityFilterUniform';
 import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
@@ -233,6 +237,7 @@ import { writeFloatColorsInto } from './colorEncode';
 // synchronous `setStreamingQuality` path.
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
 import type { StreamingRenderer } from './streaming/StreamingRenderer';
+import { buildResidentSnapshot } from './streaming/residentSnapshot';
 import type { StreamingSource } from './streaming/StreamingSource';
 import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
@@ -998,6 +1003,39 @@ export class Viewer {
    */
   private readonly _materialsWithClass = new WeakSet<THREE.PointsNodeMaterial>();
 
+  // ── Elevation filter (v0.5.6) ────────────────────────────────────────────
+  // Shared uniforms driving a per-point size multiply, mirroring the class
+  // mask. `enabled` gates the whole test (0 → identity, so the unfiltered scene
+  // is pixel-identical); `axisIsZ` selects the up-axis component (1 = z / Z-up,
+  // 0 = y / Y-up); `min`/`max` are the inclusive window in ATTRIBUTE space
+  // (origin-shifted), converted from the world window by `elevationFilterUniform`.
+  private readonly _elevFilterEnabled = uniform(0);
+  private readonly _elevFilterAxisIsZ = uniform(1);
+  private readonly _elevFilterMin = uniform(0);
+  private readonly _elevFilterMax = uniform(0);
+  /**
+   * Materials whose mesh carries the named `aPos` instance-position attribute —
+   * only these fold the elevation multiply into their size node. Both static
+   * clouds and streaming nodes get `aPos` (they share `buildPointMesh`), so both
+   * are filtered by the shared uniforms; any mesh built without it keeps the
+   * prior graph and never references a missing attribute.
+   */
+  private readonly _materialsWithElev = new WeakSet<THREE.PointsNodeMaterial>();
+
+  // Intensity filter (v0.5.6): `enabled` gates the test; `min`/`max` are the
+  // inclusive window in raw intensity units, matching the `aIntensity` attribute
+  // (no origin shift — intensity is a raw per-point scalar).
+  private readonly _intenFilterEnabled = uniform(0);
+  private readonly _intenFilterMin = uniform(0);
+  private readonly _intenFilterMax = uniform(0);
+  /**
+   * Materials whose mesh carries the `aIntensity` instance attribute — only
+   * these fold the intensity multiply. A cloud without an intensity channel
+   * (PLY, some PCD) skips the attribute and keeps the prior graph, so the filter
+   * is a silent no-op there, exactly like the class mask.
+   */
+  private readonly _materialsWithInten = new WeakSet<THREE.PointsNodeMaterial>();
+
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
@@ -1630,6 +1668,11 @@ export class Viewer {
         // EDL defaults on for desktop WebGPU; off on the WebGL 2 fallback and on
         // mobile, so a weak device is never dropped below interactive on load.
         this._edlEnabled = edlDefaultEnabled(this.activeBackend(), this._isMobile());
+        // Wire the WebGPU device's uncaptured-error channel to the host so a
+        // shader-compile / pipeline-creation failure (which surfaces AFTER the
+        // scan has decoded + attached) becomes a visible error instead of a
+        // blank canvas with no signal. No-op on the WebGL 2 fallback.
+        this._installGpuErrorListener();
         // Force the first window of frames to render at full rate so
         // the empty state, hero animation, and any pending tween land
         // smoothly before the idle-render throttle kicks in.
@@ -1667,6 +1710,9 @@ export class Viewer {
    * @returns A string ID that identifies this cloud in subsequent calls.
    */
   addCloud(input: PointCloud): string {
+    // A new scan starts a fresh GPU-error slate, so an error this scan raises is
+    // surfaced even if an earlier scan happened to emit the same message text.
+    this._resetGpuErrorHistory();
     // GPU-safety net — no caller may upload a cloud beyond the hard point
     // ceiling. The device-aware load budget already sizes clouds to the
     // machine; this guards any other path that might reach the GPU.
@@ -1686,6 +1732,9 @@ export class Viewer {
       // downsampled positions by `downsampleToBudget`), never the original
       // input — the attribute must align 1:1 with the uploaded points.
       cloud.classification ?? null,
+      // Intensity rides along 1:1 for the intensity filter (v0.5.6); the
+      // downsampled cloud carries a downsampled intensity in lockstep.
+      cloud.intensity ?? null,
     );
     this._scene.add(mesh);
 
@@ -1705,6 +1754,7 @@ export class Viewer {
     positions: Float32Array,
     colorsU8: Uint8Array,
     classification: ArrayLike<number> | null = null,
+    intensity: ArrayLike<number> | null = null,
   ): PointMeshHandle {
     const geometry = new THREE.InstancedBufferGeometry();
     geometry.setAttribute(
@@ -1716,6 +1766,10 @@ export class Viewer {
     geometry.instanceCount = instanceCount;
 
     const positionAttr = new THREE.InstancedBufferAttribute(positions, 3);
+    // Expose the per-instance position under a name so the size graph can read
+    // the point's elevation for the elevation filter (v0.5.6). Same buffer as
+    // `positionNode`, just a named binding — mirrors `aClass`.
+    geometry.setAttribute('aPos', positionAttr);
     const colorAttr = new THREE.InstancedBufferAttribute(toFloatColors(colorsU8), 3);
 
     // Per-point ASPRS classification, uploaded as a one-value-per-instance
@@ -1732,6 +1786,20 @@ export class Viewer {
       for (let i = 0; i < n; i++) classData[i] = classification[i];
       classAttr = new THREE.InstancedBufferAttribute(classData, 1);
       geometry.setAttribute('aClass', classAttr);
+    }
+
+    // Per-point intensity, uploaded as a one-value-per-instance float attribute
+    // named `aIntensity` (v0.5.6 intensity filter). Raw source units — the size
+    // graph compares against the window directly. Skipped when the cloud carries
+    // no intensity channel, so such meshes keep the prior graph and the filter
+    // stays a no-op for them. Mirrors `aClass`.
+    let intenAttr: THREE.InstancedBufferAttribute | null = null;
+    if (intensity !== null) {
+      const intenData = new Float32Array(instanceCount);
+      const ni = Math.min(instanceCount, intensity.length);
+      for (let i = 0; i < ni; i++) intenData[i] = intensity[i];
+      intenAttr = new THREE.InstancedBufferAttribute(intenData, 1);
+      geometry.setAttribute('aIntensity', intenAttr);
     }
 
     // `instancedBufferAttribute` is typed as a broad node-type union; narrow
@@ -1768,6 +1836,11 @@ export class Viewer {
     // setup, so `_applySizeMode` folds the class-mask multiply into its size
     // node. Class-less meshes are never registered and keep the prior graph.
     if (classAttr !== null) this._materialsWithClass.add(material);
+    // Every mesh from this shared builder (static clouds and streaming nodes)
+    // carries `aPos`, so all fold the elevation multiply (identity while off).
+    this._materialsWithElev.add(material);
+    // Record intensity carriers so `_applySizeMode` folds the intensity multiply.
+    if (intenAttr !== null) this._materialsWithInten.add(material);
     // A cloud added while a clip is active inherits it from its first frame.
     if (this._clip?.enabled) {
       material.clippingPlanes = clipBoxPlanes(this._clip);
@@ -1842,6 +1915,8 @@ export class Viewer {
     isMobile: boolean,
     benchmark?: StreamingBenchmark | null,
   ): Promise<void> {
+    // Fresh scan ⇒ fresh GPU-error slate (see addCloud).
+    this._resetGpuErrorHistory();
     const [{ StreamingRenderer }, { StreamingScheduler }] =
       await Promise.all([
         loadStreamingRenderer(),
@@ -2833,18 +2908,23 @@ export class Viewer {
     const indices = selectByLasso({ lasso, positions: entry.cloud.positions, project });
     // An EDIT must only touch points the user can currently see. The lasso
     // projector already drops points behind the camera, but not points hidden
-    // by the clip box or the class-visibility filter — the raw selection
+    // by the clip box or the visibility filters — the raw selection
     // permanently rewrote invisible points (reclassify-invisible-points
     // finding, Critical). Apply the same visibility rules click-picking
     // enforces: the pure `clipKeepsPoint` contract the GPU clip planes
-    // realise, and the `_classPickAccept` mask, so screen and edit agree
-    // point-for-point. In-place filter — no extra allocation on the hot path.
+    // realise, and the class + elevation + intensity filter accept, so screen
+    // and edit agree point-for-point. In-place filter — no hot-path allocation.
     const clip = this._clip;
     filterSelectionToVisible(indices, entry.cloud.positions, {
       keepPoint: clip?.enabled
         ? (x, y, z) => clipKeepsPoint(clip, [x, y, z])
         : undefined,
-      acceptIndex: this._classPickAccept(entry.cloud.classification),
+      acceptIndex: this._pickAccept(
+        entry.cloud.positions,
+        entry.cloud.classification,
+        entry.cloud.intensity,
+        this._currentFilterWindow(),
+      ),
     });
     const buf = entry.cloud.classification;
     let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
@@ -3052,6 +3132,18 @@ export class Viewer {
   /** Switch between adaptive (distance-scaled) and fixed point sizing. */
   setPointSizeMode(mode: PointSizeMode): void {
     this._pointSizeMode = mode;
+    this._reapplyAllSizeModes();
+  }
+
+  /**
+   * Re-run `_applySizeMode` on every live material — static clouds and streaming
+   * nodes alike — and flag them for a pipeline rebuild. Called whenever the size
+   * graph's SHAPE can change: a point-size-mode switch, or a per-point filter
+   * turning on or off (which adds/removes a fold, changing the compiled shader).
+   * A filter merely NARROWING within an already-active window does not call this
+   * — that only moves uniform values and needs no rebuild.
+   */
+  private _reapplyAllSizeModes(): void {
     for (const { material } of this._clouds.values()) {
       this._applySizeMode(material);
       material.needsUpdate = true;
@@ -3090,6 +3182,42 @@ export class Viewer {
    */
   onStreamingNodeReady?: () => void;
 
+  /**
+   * Optional host hook fired when the GPU backend reports an UNCAPTURED error —
+   * the async channel WebGPU uses for shader-compile and pipeline-creation
+   * failures. These happen AFTER a scan's decode + attach have already resolved
+   * (the render loop is what actually builds the pipeline), so without this hook
+   * such a failure is silent: the load "succeeds", progress clears, but nothing
+   * paints and the user has no signal as to why. The host routes this to a
+   * visible error (drop-zone toast + catalog status). Messages are de-duplicated
+   * upstream — a broken pipeline re-emits the same validation error every frame.
+   * Set to `undefined` to detach.
+   */
+  onGpuError?: (message: string) => void;
+
+  /**
+   * Distinct GPU-error messages already surfaced. A shader/pipeline validation
+   * failure repeats every frame; we report each unique message once so
+   * `onGpuError` isn't spammed. Bounded (`_GPU_ERROR_CAP`) so it can't grow
+   * without limit, and cleared on each new scan open so a later scan's error is
+   * never suppressed just because an earlier scan produced the same text.
+   */
+  private _seenGpuErrors = new Set<string>();
+  private static readonly _GPU_ERROR_CAP = 64;
+  /**
+   * The WebGPU device and the bound `uncapturederror` handler, stored so
+   * `dispose()` can detach the listener. An anonymous handler would keep the
+   * disposed Viewer alive through its closure for as long as the device lives.
+   */
+  private _gpuDevice: {
+    addEventListener?: (t: string, cb: (e: unknown) => void) => void;
+    removeEventListener?: (t: string, cb: (e: unknown) => void) => void;
+    lost?: Promise<{ reason?: string; message?: string }>;
+  } | null = null;
+  private _onGpuUncapturedError: ((e: unknown) => void) | null = null;
+  /** Set once `device.lost` resolves — suppresses further per-frame GPU noise. */
+  private _gpuDeviceLost = false;
+
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();
     // `uniformArray`'s backing JS array is what its per-render `update()` copies
@@ -3102,8 +3230,162 @@ export class Viewer {
     }
     // Cache whether any class is hidden so the pick paths skip the per-point
     // visibility predicate entirely on the all-visible hot path.
+    const wasFiltered = this._classFiltered;
     this._classFiltered = anyHidden;
+    // The class fold is present in the size graph only while some class is
+    // hidden. Crossing the all-visible ↔ some-hidden boundary changes the graph
+    // shape, so rebuild the affected pipelines. Changing WHICH classes are hidden
+    // while still filtered is a uniform-only change (the mask array re-uploads).
+    if (wasFiltered !== anyHidden) this._reapplyAllSizeModes();
     this._bumpRenderActivity();
+  }
+
+  /**
+   * Set the elevation filter window in world/source units, or clear it with
+   * `undefined`. Points whose up-axis coordinate falls outside the inclusive
+   * window collapse to zero size (hidden) on the next frame; the unfiltered
+   * scene is pixel-identical. The window is converted to the primary cloud's
+   * attribute space (origin-shifted along the up-axis) by the pure
+   * `elevationFilterUniform` core. Applies to static clouds and streaming nodes
+   * alike, since both come from the shared `buildPointMesh`.
+   */
+  setElevationFilter(range: readonly [number, number] | undefined): void {
+    const axisIsZ = this._worldUp.z === 1;
+    const axis: UpAxis = axisIsZ ? 2 : 1;
+    const axisIdx = axisIsZ ? 2 : 1;
+    // The world-space origin that was subtracted from the positions, along the
+    // up-axis. Static clouds record it as `origin`; the streaming source as
+    // `renderOrigin`. Prefer the streaming source when present, else the first
+    // static cloud. Clouds that share an origin (the common case) convert
+    // identically.
+    const streamingCloud = this._streaming?.cloud;
+    const staticCloud = this._clouds.values().next().value?.cloud;
+    const origin = streamingCloud
+      ? streamingCloud.renderOrigin[axisIdx]
+      : staticCloud
+        ? staticCloud.origin[axisIdx]
+        : 0;
+    const u = elevationFilterUniform(range, axis, origin);
+    const wasActive = this._elevFilterEnabled.value !== 0;
+    this._elevFilterEnabled.value = u.enabled;
+    this._elevFilterAxisIsZ.value = axisIsZ ? 1 : 0;
+    this._elevFilterMin.value = u.min;
+    this._elevFilterMax.value = u.max;
+    // Turning the filter on or off changes the size graph's SHAPE (the elevation
+    // fold enters or leaves the compiled shader), so rebuild the affected
+    // pipelines. Merely moving the window while it stays active only changes
+    // uniform values and needs no rebuild — the mask node re-reads them per frame.
+    if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
+    this._bumpRenderActivity();
+  }
+
+  /**
+   * The first static cloud's elevation extent in world/source units, along the
+   * current up-axis, for seeding the elevation-filter control. `bounds()` is in
+   * local (origin-shifted) space, so the world extent adds the cloud's origin
+   * back. Returns null when no static cloud is loaded (e.g. a streaming-only
+   * session), leaving the control to accept typed values.
+   */
+  elevationExtent(): { min: number; max: number } | null {
+    const axisIdx = this._worldUp.z === 1 ? 2 : 1;
+    const entry = this._clouds.values().next().value;
+    if (entry) {
+      const b = entry.cloud.bounds();
+      const o = entry.cloud.origin[axisIdx];
+      return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
+    }
+    // Streaming: the tight data bounds come from the file header (known at open,
+    // stable as nodes stream in), so the elevation control seeds once and never
+    // reseeds. Convert the attribute-space bound back to world with the render
+    // origin, matching the static branch above.
+    const sc = this._streaming?.cloud;
+    if (sc) {
+      // Box6 is [minX,minY,minZ, maxX,maxY,maxZ]; the max lives at axisIdx + 3.
+      const b = sc.dataBounds();
+      const o = sc.renderOrigin[axisIdx];
+      return { min: b[axisIdx] + o, max: b[axisIdx + 3] + o };
+    }
+    return null;
+  }
+
+  /**
+   * Set the intensity filter window in raw intensity units, or clear it with
+   * `undefined`. Points whose intensity falls outside the inclusive window
+   * collapse to zero size (hidden); the unfiltered scene is pixel-identical.
+   * Applies to static clouds and streaming nodes alike (both carry `aIntensity`
+   * when the source has an intensity channel). No-op for clouds without one.
+   */
+  setIntensityFilter(range: readonly [number, number] | undefined): void {
+    const u = intensityFilterUniform(range);
+    const wasActive = this._intenFilterEnabled.value !== 0;
+    this._intenFilterEnabled.value = u.enabled;
+    this._intenFilterMin.value = u.min;
+    this._intenFilterMax.value = u.max;
+    // On/off toggles the intensity fold in the compiled shader — rebuild the
+    // affected pipelines on that transition only. Narrowing an already-active
+    // window is a uniform-only change.
+    if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
+    this._bumpRenderActivity();
+  }
+
+  /**
+   * The first static cloud's intensity min/max, for seeding the intensity-filter
+   * control. Returns null when no static cloud is loaded or the cloud has no
+   * intensity channel. O(n) over the intensity array — run once on load.
+   */
+  intensityExtent(): { min: number; max: number } | null {
+    const entry = this._clouds.values().next().value;
+    const inten = entry?.cloud.intensity;
+    if (inten && inten.length > 0) return this._intensityRange([inten]);
+    // Streaming: LAS headers carry no intensity range, so scan the resident
+    // chunks' intensity buffers. Called once when the streaming scan seeds its
+    // control (not per node), so the O(resident) pass is paid a single time and
+    // the extent stays stable even as more nodes stream in.
+    if (this._streaming?.cloud) {
+      const buffers: ArrayLike<number>[] = [];
+      for (const { decoded } of this._streamingPickData.values()) {
+        if (decoded.intensity && decoded.intensity.length > 0) buffers.push(decoded.intensity);
+      }
+      return buffers.length > 0 ? this._intensityRange(buffers) : null;
+    }
+    return null;
+  }
+
+  /** Min/max over one or more intensity buffers, or null when none are finite. */
+  private _intensityRange(buffers: readonly ArrayLike<number>[]): { min: number; max: number } | null {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const buf of buffers) {
+      for (let i = 0; i < buf.length; i++) {
+        const v = buf[i];
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+    }
+    return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
+  }
+
+  /**
+   * A PointCloud built from the streaming cloud's resident (decoded-so-far)
+   * nodes — the honest display-resolution snapshot the Export / Convert panel
+   * writes when a streaming scan is open. Returns null when no streaming cloud
+   * is attached or nothing is resident yet. Full-resolution re-read isn't
+   * available for a range-read streaming source, so this snapshot is exactly
+   * what the viewer holds; positions carry the render origin as their shift.
+   */
+  snapshotResidentCloud(): PointCloud | null {
+    const s = this._streaming;
+    if (!s) return null;
+    const chunks = s.renderer.residentChunks();
+    if (chunks.length === 0) return null;
+    const crs = s.cloud.crs();
+    return buildResidentSnapshot(chunks, {
+      origin: s.cloud.renderOrigin,
+      name: s.cloud.name,
+      // COPC and EPT both decode LAZ point records — the honest source format.
+      sourceFormat: 'laz',
+      ...(crs ? { metadata: { crs } } : {}),
+    });
   }
 
   // ── A.6 Inspection presets ──────────────────────────────────────────────
@@ -4062,6 +4344,91 @@ export class Viewer {
   }
 
   /**
+   * Subscribe to the WebGPU device's `uncapturederror` event. This is the only
+   * channel through which a shader-compile or render-pipeline validation error
+   * surfaces: three.js builds the pipeline lazily inside the render loop, long
+   * after `addCloud` / streaming-attach have resolved, so such a failure never
+   * throws on a path any caller can `catch`. Left unhandled it is invisible —
+   * the scan "opens", the progress toast clears, and the canvas simply stays
+   * blank. Routing it to `onGpuError` turns "nothing happened and I don't know
+   * why" into an actionable message.
+   *
+   * Guarded and best-effort: only WebGPU exposes a `GPUDevice`; the WebGL 2
+   * fallback has no equivalent event and is skipped. Every access is defensive
+   * because the backend's internal shape is not part of three's public API.
+   */
+  private _installGpuErrorListener(): void {
+    if (this.activeBackend() !== 'webgpu') return;
+    try {
+      const backend = (this._renderer as unknown as {
+        backend?: { device?: Viewer['_gpuDevice'] };
+      }).backend;
+      const device = backend?.device ?? null;
+      if (!device || typeof device.addEventListener !== 'function') return;
+      // Bound handler stored on the instance so `dispose()` can detach it with a
+      // matching reference (an anonymous arrow could never be removed).
+      const handler = (event: unknown): void => {
+        const gpuError = (event as { error?: { message?: string; constructor?: { name?: string } } }).error;
+        const kind = gpuError?.constructor?.name ?? 'GPUError';
+        const detail = gpuError?.message ?? String(event);
+        this._reportGpuError(`${kind}: ${detail}`);
+      };
+      device.addEventListener('uncapturederror', handler);
+      this._gpuDevice = device;
+      this._onGpuUncapturedError = handler;
+      // `device.lost` resolves if the GPU device is reset or evicted — a
+      // separate channel from uncapturederror. Left unhandled it leaves a
+      // permanently blank canvas with no signal; surface it once so the host
+      // can tell the user to reload. (Full re-init is out of scope here.)
+      if (device.lost && typeof device.lost.then === 'function') {
+        void device.lost.then((info) => {
+          this._gpuDeviceLost = true;
+          const reason = info?.reason ?? 'unknown';
+          const detail = info?.message ?? '';
+          this._reportGpuError(
+            `GPUDeviceLost: the graphics device was lost (${reason}). ${detail} Reload the page to continue.`.trim(),
+          );
+        });
+      }
+    } catch {
+      // Never let error-plumbing setup break init — the viewer is still usable.
+    }
+  }
+
+  /**
+   * De-duplicate then forward a GPU error to the host. A broken pipeline emits
+   * the same validation error on every frame; we surface each distinct message
+   * exactly once so the toast isn't retriggered in a render-rate loop.
+   */
+  private _reportGpuError(message: string): void {
+    // Once the device is lost, every subsequent frame raises fresh uncaptured
+    // errors from the dead device — pure noise. The one actionable message
+    // ("device lost, reload") has already been surfaced, so drop the rest.
+    if (this._gpuDeviceLost && !message.startsWith('GPUDeviceLost')) return;
+    if (this._seenGpuErrors.has(message)) return;
+    // Bound: a pathological stream of distinct messages can't grow the set
+    // without limit. Dropping the history just means an old message could be
+    // re-reported later — harmless, and far better than an unbounded set.
+    if (this._seenGpuErrors.size >= Viewer._GPU_ERROR_CAP) this._seenGpuErrors.clear();
+    this._seenGpuErrors.add(message);
+    console.error(`OpenLiDARViewer: GPU error — ${message}`);
+    try {
+      this.onGpuError?.(message);
+    } catch {
+      // A throwing host handler must not take down the render loop.
+    }
+  }
+
+  /**
+   * Forget the GPU errors surfaced so far. Called when a new scan opens so a
+   * fresh scan's error is never silently suppressed because an earlier scan
+   * happened to emit the same message text.
+   */
+  private _resetGpuErrorHistory(): void {
+    if (this._seenGpuErrors.size > 0) this._seenGpuErrors = new Set<string>();
+  }
+
+  /**
    * Sample the current rendering performance — frame rate, draw calls, and the
    * point and memory footprint. Cheap enough for the `?debug=1` overlay to poll
    * on a throttled cadence; returns zeroed counters before the first frame has
@@ -4750,6 +5117,14 @@ export class Viewer {
     if (typeof document !== 'undefined' && this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
     }
+    // Detach the WebGPU uncaptured-error handler so a device that outlives this
+    // Viewer can't retain it (and the disposed Viewer) through the closure.
+    if (this._gpuDevice && this._onGpuUncapturedError
+      && typeof this._gpuDevice.removeEventListener === 'function') {
+      this._gpuDevice.removeEventListener('uncapturederror', this._onGpuUncapturedError);
+    }
+    this._gpuDevice = null;
+    this._onGpuUncapturedError = null;
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
     if (this._resizeObserver) {
@@ -4813,16 +5188,37 @@ export class Viewer {
    */
   private _applySizeMode(material: THREE.PointsNodeMaterial): void {
     const adaptive = this._pointSizeMode === 'adaptive';
-    if (!this._materialsWithClass.has(material)) {
+    // A fold enters this material's size graph only when BOTH the mesh carries
+    // the required attribute AND the corresponding filter is currently active.
+    //
+    // Gating on the ACTIVE state (not just attribute presence) is deliberate and
+    // load-bearing: an inactive filter used to still fold its mask into every
+    // carrier mesh, relying on the `mix(1, …, enabled)` identity to be a no-op.
+    // That left `attribute('aPos')` / `attribute('aIntensity')` reads compiled
+    // into essentially every scan's vertex shader even with no filter in use —
+    // a shape the plain-open path never had before v0.5.6, and the regression
+    // behind "scans open but nothing renders." With this gate, a scan opened
+    // without any active filter gets the exact pre-filter graph (adaptive node
+    // or `null`) — no extra attribute reads, no mask math. Folds appear only
+    // when the user actually turns a filter on (which re-runs this via
+    // `_reapplyAllSizeModes`, rebuilding the pipeline for that transition).
+    const foldClass = this._materialsWithClass.has(material) && this._classFiltered;
+    const foldElev = this._materialsWithElev.has(material) && this._elevFilterEnabled.value !== 0;
+    const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
+    if (!foldClass && !foldElev && !foldInten) {
       material.sizeNode = (
         adaptive ? this._adaptiveSizeNode : null
       ) as typeof material.sizeNode;
       return;
     }
-    const base: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
-    material.sizeNode = base.mul(
-      this._classMaskMultiplier(),
-    ) as typeof material.sizeNode;
+    // At least one filter is active on this material. Route fixed mode through
+    // `materialPointSize` (the node form of `material.size`) so the pixel size is
+    // preserved while the mask(s) multiply it, then fold each active multiplier.
+    let node: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
+    if (foldElev) node = node.mul(this._elevMaskMultiplier());
+    if (foldClass) node = node.mul(this._classMaskMultiplier());
+    if (foldInten) node = node.mul(this._intenMaskMultiplier());
+    material.sizeNode = node as typeof material.sizeNode;
   }
 
   /**
@@ -4842,6 +5238,44 @@ export class Viewer {
     const aClass: TslNode = attribute('aClass');
     const code: TslNode = int(aClass);
     return (this._classMaskUniform as TslNode).element(code);
+  }
+
+  /**
+   * The per-point elevation-mask multiplier (v0.5.6): reads the up-axis
+   * component of the instanced position (`aPos`), tests it against the inclusive
+   * `[min, max]` window, and resolves to `1` (in range or filter off) or `0`
+   * (out of range) — multiplying an out-of-range point's size by 0 collapses its
+   * sprite to nothing, exactly like the class mask.
+   *
+   * Built from `step` + `mix` only (no boolean nodes): `lo = step(min, elev)` is
+   * 1 when `elev >= min`; `hi = step(elev, max)` is 1 when `elev <= max`; their
+   * product is the inclusive in-range flag. `mix(1, inRange, enabled)` yields the
+   * identity `1` when the filter is disabled, so the graph is a no-op until a
+   * window is set. `axisIsZ` picks z (Z-up) or y (Y-up) without a rebuild.
+   */
+  private _elevMaskMultiplier(): TslNode {
+    const pos: TslNode = attribute('aPos');
+    const axisIsZ: TslNode = this._elevFilterAxisIsZ;
+    const elev: TslNode = pos.z.mul(axisIsZ).add(pos.y.mul(axisIsZ.oneMinus()));
+    const lo: TslNode = step(this._elevFilterMin as TslNode, elev); // elev >= min
+    const hi: TslNode = step(elev, this._elevFilterMax as TslNode); // elev <= max
+    const inRange: TslNode = lo.mul(hi);
+    return mix(float(1), inRange, this._elevFilterEnabled as TslNode);
+  }
+
+  /**
+   * The per-point intensity-mask multiplier (v0.5.6): reads the `aIntensity`
+   * instance attribute, tests it against the inclusive `[min, max]` window, and
+   * resolves to `1` (in range or filter off) or `0` (out of range). Same
+   * `step` + `mix` construction as the elevation mask — no origin shift, since
+   * intensity is a raw scalar compared directly against the window.
+   */
+  private _intenMaskMultiplier(): TslNode {
+    const inten: TslNode = attribute('aIntensity');
+    const lo: TslNode = step(this._intenFilterMin as TslNode, inten); // inten >= min
+    const hi: TslNode = step(inten, this._intenFilterMax as TslNode); // inten <= max
+    const inRange: TslNode = lo.mul(hi);
+    return mix(float(1), inRange, this._intenFilterEnabled as TslNode);
   }
 
   /**
@@ -5443,18 +5877,25 @@ export class Viewer {
     // Pure selection — angular-miss-fair, refinement-aware. Centralised in
     // `streamingPickSelection.ts` so it's unit-tested separately from the
     // Viewer's mesh-lifecycle plumbing.
-    // Only thread classification + the class predicate when a filter is active,
-    // so the all-visible hot path allocates and compares exactly as before.
-    const mask = this._classMaskUniform.array as ArrayLike<number>;
+    // Thread each node's class + intensity so the pick can obey the class,
+    // elevation, and intensity filters (positions drive the elevation test).
+    // The per-node accept factory is passed only when SOME filter is active, so
+    // the all-visible hot path compares exactly as before (no per-point call).
+    const filterWindow = this._currentFilterWindow();
+    const anyFilter =
+      filterWindow.classActive || filterWindow.elevActive || filterWindow.intenActive;
     const pick = selectStreamingPick(
       eligibleEntries.map((e) => ({
         positions: e.decoded.positions,
         depth: e.depth,
-        classification: this._classFiltered ? e.decoded.classification : undefined,
+        classification: e.decoded.classification,
+        intensity: e.decoded.intensity,
       })),
       [o.x, o.y, o.z],
       [d.x, d.y, d.z],
-      this._classFiltered ? (code: number) => classVisibleAt(mask, code) : undefined,
+      anyFilter
+        ? (node) => this._pickAccept(node.positions, node.classification, node.intensity, filterWindow)
+        : undefined,
     );
     if (!pick) return null;
     const winning = eligibleEntries[pick.nodeIndex];
@@ -5497,12 +5938,41 @@ export class Viewer {
    * predicate consults the same 256-entry mask the GPU uses via `classVisibleAt`,
    * so screen and pick agree point-for-point.
    */
-  private _classPickAccept(
+  /**
+   * Snapshot the active filter windows (class + elevation + intensity) in the
+   * same spaces the GPU uniforms use, so a CPU accept predicate built from it
+   * rejects exactly the points the shader collapses to zero size. Read once per
+   * pick and shared across every candidate buffer.
+   */
+  private _currentFilterWindow(): PointFilterWindow {
+    return {
+      classActive: this._classFiltered,
+      classMask: this._classMaskUniform.array as ArrayLike<number>,
+      elevActive: this._elevFilterEnabled.value !== 0,
+      elevAxisIdx: this._elevFilterAxisIsZ.value === 1 ? 2 : 1,
+      elevMin: this._elevFilterMin.value as number,
+      elevMax: this._elevFilterMax.value as number,
+      intenActive: this._intenFilterEnabled.value !== 0,
+      intenMin: this._intenFilterMin.value as number,
+      intenMax: this._intenFilterMax.value as number,
+    };
+  }
+
+  /**
+   * The per-point pick predicate for a buffer: confines a pick to points the
+   * user can actually see — visible class AND inside the elevation AND intensity
+   * windows — so no hidden point can become the chosen vertex. Returns
+   * `undefined` when nothing is filtered (the hot path). Replaces the former
+   * class-only `_classPickAccept`; positions drive the elevation test, so the
+   * caller passes the buffer's own positions/classification/intensity.
+   */
+  private _pickAccept(
+    positions: ArrayLike<number>,
     classification: ArrayLike<number> | null | undefined,
+    intensity: ArrayLike<number> | null | undefined,
+    window: PointFilterWindow,
   ): ((index: number) => boolean) | undefined {
-    if (!this._classFiltered || !classification) return undefined;
-    const mask = this._classMaskUniform.array as ArrayLike<number>;
-    return (index: number) => classVisibleAt(mask, classification[index]);
+    return buildPointFilterAccept(positions, classification, intensity, window);
   }
 
   private _pickDetailed(
@@ -5516,13 +5986,14 @@ export class Viewer {
 
     let best: { cloud: PointCloud; index: number; point: THREE.Vector3 } | null = null;
     let bestScore = Infinity;
+    const filterWindow = this._currentFilterWindow();
     for (const { mesh, cloud, locked } of this._clouds.values()) {
       if (!mesh.visible || locked) continue;
       const hit = nearestPointAlongRay(
         cloud.positions,
         [o.x, o.y, o.z],
         [d.x, d.y, d.z],
-        this._classPickAccept(cloud.classification),
+        this._pickAccept(cloud.positions, cloud.classification, cloud.intensity, filterWindow),
       );
       if (!hit) continue;
       const score = hit.offset / hit.along; // angular miss

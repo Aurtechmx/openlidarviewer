@@ -65,7 +65,7 @@ function find(summary: ReturnType<typeof buildInspectionSummary>, label: string)
 describe('buildInspectionSummary — density tier gating', () => {
   it('asserts USGS QL1 for airborne ALS at >= 8 pts/m²', () => {
     const s = buildInspectionSummary(meta({ density: 16 }), alsProvenance());
-    const d = find(s, 'Point density');
+    const d = find(s, 'Point density (all returns)');
     expect(d?.tier).toBe('met');
     expect(d?.detail).toMatch(/QL1/);
     expect(d?.source).toMatch(/USGS/);
@@ -74,7 +74,7 @@ describe('buildInspectionSummary — density tier gating', () => {
 
   it('asserts USGS QL2 (below QL1) for airborne ALS between 2 and 8', () => {
     const s = buildInspectionSummary(meta({ density: 4 }), alsProvenance());
-    const d = find(s, 'Point density');
+    const d = find(s, 'Point density (all returns)');
     expect(d?.tier).toBe('met');
     expect(d?.detail).toMatch(/QL2/);
     expect(d?.detail).toMatch(/below QL1/i);
@@ -82,14 +82,14 @@ describe('buildInspectionSummary — density tier gating', () => {
 
   it('flags below-QL2 as caution for airborne ALS under 2 pts/m²', () => {
     const s = buildInspectionSummary(meta({ density: 1 }), alsProvenance());
-    const d = find(s, 'Point density');
+    const d = find(s, 'Point density (all returns)');
     expect(d?.tier).toBe('caution');
     expect(d?.detail).toMatch(/Below USGS QL2/);
   });
 
   it('does NOT apply QL tiers for TLS (no QL literature cited)', () => {
     const s = buildInspectionSummary(meta({ density: 16 }), tlsProvenance());
-    const d = find(s, 'Point density');
+    const d = find(s, 'Point density (all returns)');
     expect(d?.tier).toBe('info');
     expect(d?.detail).toMatch(/No capture-type density standard/);
     expect(d?.source).toBeUndefined();
@@ -98,13 +98,13 @@ describe('buildInspectionSummary — density tier gating', () => {
 
   it('does NOT apply QL tiers when there is no provenance', () => {
     const s = buildInspectionSummary(meta({ density: 16 }));
-    expect(find(s, 'Point density')?.tier).toBe('info');
+    expect(find(s, 'Point density (all returns)')?.tier).toBe('info');
     expect(s.densityBar).toBeUndefined();
   });
 
   it('reports density unknown when not finite', () => {
     const s = buildInspectionSummary(meta({ density: Number.NaN }), alsProvenance());
-    const d = find(s, 'Point density');
+    const d = find(s, 'Point density (all returns)');
     expect(d?.value).toBe('—');
     expect(d?.tier).toBe('unknown');
     expect(s.densityBar).toBeUndefined();

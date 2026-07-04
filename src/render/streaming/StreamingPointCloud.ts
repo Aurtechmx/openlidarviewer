@@ -157,6 +157,13 @@ export class StreamingPointCloud implements StreamingSource {
     ];
   }
 
+  /** The tight data AABB (LAS header min/max), origin-shifted into local space. */
+  dataBounds(): Box6 {
+    const { min, max } = this.metadata.header;
+    const [rx, ry, rz] = this.renderOrigin;
+    return [min[0] - rx, min[1] - ry, min[2] - rz, max[0] - rx, max[1] - ry, max[2] - rz];
+  }
+
   /**
    * Read a node's compressed chunk from the COPC source. Implements
    * {@link StreamingSource.readNodeChunk}; the scheduler calls this through

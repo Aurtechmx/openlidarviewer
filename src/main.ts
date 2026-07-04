@@ -354,11 +354,19 @@ const catalogPanel = new CatalogPanel({
     // The picker maps to a single categorical event suffix in the
     // local-first usage counter. The URL itself never leaves the device.
     recordUsage('scan-open', 'curated:usgs-ept');
-    handleRemoteUrl(url).catch((err) => {
-      dropZone.setError(
-        err instanceof Error ? err.message : 'Failed to open the dataset.',
-      );
-    });
+    handleRemoteUrl(url).then(
+      // Success transition: clear the "Opening …" pulse once the scan attaches,
+      // so the catalog status doesn't keep pulsing after a successful load.
+      () => catalogPanel.markLoaded(),
+      (err) => {
+        const msg = err instanceof Error ? err.message : 'Failed to open the dataset.';
+        // Surface the failure in BOTH the drop zone and the catalog's own status
+        // — the catalog is what the user is looking at, so a blocked remote fetch
+        // no longer reads as an endless "Opening …".
+        dropZone.setError(msg);
+        catalogPanel.showOpenError(`Couldn't open the dataset: ${msg}`);
+      },
+    );
   },
   // Pre-warm the streaming chunks when the user changes the dropdown
   // selection. By the time they click Open the EPT / COPC chunks are
@@ -397,6 +405,7 @@ const catalogPanel = new CatalogPanel({
         const mod = await loadPlanetaryComputerCatalog();
         const signed = await mod.signAssetUrl(item.assetUrl);
         await handleRemoteUrl(signed);
+        catalogPanel.markLoaded();
       } catch (err) {
         const raw = err instanceof Error ? err.message : 'Failed to open the PC tile.';
         // Distinguish signing failure from streaming failure so the user
@@ -1137,6 +1146,32 @@ let pendingShareState: ShareState | null = (() => {
   return hash.startsWith('#s=') ? decodeShareState(hash.slice(3)) : null;
 })();
 
+// The point-filter windows the user has set, tracked so a saved `.olvsession`
+// round-trips them (see the `pointFilters` block in serializeSession). Null =
+// no filter. Cleared on the empty state.
+let activeElevFilter: [number, number] | null = null;
+let activeIntenFilter: [number, number] | null = null;
+// True once the streaming scan's elevation + intensity filter controls have been
+// seeded. Streaming (COPC/EPT) has no static cloud, so the extent setters weren't
+// being called at all and the controls stayed hidden. We seed ONCE (first
+// resident node) — not per node — so a growing resident intensity range can't
+// re-seed and stomp a window the user has set mid-stream. Reset on every
+// streaming open/close.
+let streamingFilterSeeded = false;
+
+/** Seed the streaming scan's filter controls from the resident data, once. */
+function seedStreamingFilterExtents(): void {
+  if (streamingFilterSeeded || !viewer.hasStreamingCloud) return;
+  const elev = viewer.elevationExtent();
+  const inten = viewer.intensityExtent();
+  // Elevation is header-derived and available immediately; intensity needs a
+  // resident node. Wait until at least one is present before marking seeded.
+  if (!elev && !inten) return;
+  inspector.setElevationExtent(elev);
+  inspector.setIntensityExtent(inten);
+  streamingFilterSeeded = true;
+}
+
 const inspector = new Inspector({
   onColorMode: (mode) => {
     currentColorMode = mode;
@@ -1150,6 +1185,14 @@ const inspector = new Inspector({
   onHeightPercentileTrim: (trim) => {
     viewer.setHeightPercentileTrim(trim);
     syncInspectorVisuals();
+  },
+  onElevationFilter: (range) => {
+    viewer.setElevationFilter(range ?? undefined);
+    activeElevFilter = range;
+  },
+  onIntensityFilter: (range) => {
+    viewer.setIntensityFilter(range ?? undefined);
+    activeIntenFilter = range;
   },
   onPointSize: (size) => {
     viewer.setPointSize(size);
@@ -1798,7 +1841,9 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       metaDatumKnown = !!crs?.verticalDatum;
       classification = cloud.classificationIsDerived ? 'derived' : cloud.classification ? 'source' : 'none';
     } else if (streaming) {
-      const lb = streaming.localBounds();
+      // Tight data AABB, not the octree cube — the cube overstates footprint
+      // area (and understates density) for a partial-footprint scan.
+      const lb = streaming.dataBounds();
       areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]) * areaUnitToM2;
       pointCount = streaming.sourcePointCount;
       const sCrs = streaming.crs();
@@ -2672,6 +2717,10 @@ void viewerLoaded.then(() => {
   // has streamed in, re-classify and re-route (only if the verdict changes).
   // Debounced + growth-gated so a burst of node-ready events can't thrash.
   viewer.onStreamingNodeReady = () => {
+    // Seed the elevation + intensity filter controls once the first node is
+    // resident (idempotent + guarded, so it runs a single time per streaming
+    // scan). Fixes the streaming filter controls staying hidden.
+    seedStreamingFilterExtents();
     // A manual (non-auto) "Treat as" choice pins the routing exactly like the
     // "Run terrain anyway" override — a late streaming node must not flip it.
     if (scanRouteOverridden || scanTypeOverride !== 'auto') return;
@@ -2683,6 +2732,21 @@ void viewerLoaded.then(() => {
       scanRouteTimer = null;
       applyScanRoute(false);
     }, 500);
+  };
+  // GPU render-stage failures (shader-compile / pipeline-creation) surface on the
+  // WebGPU device's uncaptured-error channel — AFTER a scan's decode + attach have
+  // already resolved. Without this hook such a failure is silent: the scan "opens",
+  // the progress toast clears, and the canvas stays blank with no reason shown
+  // (the exact "scans not opening and doesn't show why" report). Route it to BOTH
+  // surfaces a scan can be opened from — the drop-zone toast (device files) and the
+  // catalog status line (public datasets) — so whichever the user just used shows
+  // the cause. De-duplicated inside the Viewer, so this fires once per distinct error.
+  viewer.onGpuError = (message) => {
+    const friendly =
+      `The GPU couldn't render this scan (${message}). ` +
+      `Try a smaller scan, reload the page, or update your browser/GPU drivers.`;
+    dropZone.setError(friendly);
+    catalogPanel.showOpenError(friendly);
   };
 });
 
@@ -2896,11 +2960,105 @@ const reducedById = new Map<string, boolean>();
 // In-project "Export / Convert" panel — converts the open cloud to LAS / XYZ
 // / ASC with the same CRS options as the splash batch converter. The engine
 // (proj4) is imported lazily on Export, so this panel adds nothing heavy.
+// Streaming export snapshot — the Convert lane exports the resident (decoded-
+// so-far) points of a streaming scan. Building the snapshot concatenates every
+// resident node, so memoise it and rebuild only when the resident count
+// changes: the panel calls `getCloud()` on every option toggle for its live
+// summary, which must stay cheap, while the export click still gets a snapshot
+// current as of the latest streamed-in nodes.
+let streamingSnapshot: { cloud: PointCloud; residentCount: number } | null = null;
+function streamingExportCloud(): PointCloud | null {
+  // `viewer` is null until the lazy Viewer chunk resolves; ExportPanel's
+  // constructor reaches this (via getCloud in _renderGzipRow/_renderSummary)
+  // during startup, before that. No viewer ⇒ no streaming cloud to snapshot.
+  const sc = viewer?.streamingCloud;
+  if (!sc) {
+    streamingSnapshot = null;
+    return null;
+  }
+  const rc = sc.residentPointCount;
+  if (!streamingSnapshot || streamingSnapshot.residentCount !== rc) {
+    const snap = viewer.snapshotResidentCloud();
+    streamingSnapshot = snap ? { cloud: snap, residentCount: rc } : null;
+  }
+  return streamingSnapshot?.cloud ?? null;
+}
+
+/**
+ * Origin + CRS + name for the ACTIVE scan, static OR streaming. The Products-
+ * lane exporters (measurements / integrity report / KML) place local points
+ * back into the source frame by adding the cloud origin — but streaming clouds
+ * aren't tracked by `activeId`, so reading only the static cloud left them
+ * exporting at RENDER-frame coordinates (off by the whole `renderOrigin`) with
+ * no CRS. This resolves the origin from the streaming source's `renderOrigin`
+ * when no static cloud is active.
+ */
+function exportGeoContext(): {
+  origin: readonly [number, number, number];
+  crsName: string | undefined;
+  name: string | null;
+} {
+  if (activeId) {
+    const c = viewer.getCloud(activeId);
+    if (c) return { origin: c.origin, crsName: c.metadata?.crs?.name, name: c.name };
+  }
+  const sc = viewer.streamingCloud;
+  if (sc) return { origin: sc.renderOrigin, crsName: sc.crs()?.name ?? undefined, name: sc.name };
+  return { origin: [0, 0, 0], crsName: undefined, name: null };
+}
+
 const exportPanel = new ExportPanel({
-  getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : null),
+  // Allocation-free summary for the live panel — NEVER snapshots the streaming
+  // resident set (that ~150 MB materialization is deferred to the Export click
+  // via getCloud below). Reads only scalar facts: resident count + colour/CRS
+  // capabilities the streaming source already knows.
+  summaryInfo: () => {
+    // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
+    // constructor calls this (via _renderSummary) during startup — before that.
+    // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
+    // an explicit `viewer == null` check would trip TS2367 (viewer is typed
+    // non-null via a cast). No viewer ⇒ nothing exportable yet.
+    if (activeId != null) {
+      const c = viewer?.getCloud(activeId);
+      if (!c) return null;
+      const crs = c.metadata?.crs ?? null;
+      return {
+        pointCount: c.pointCount,
+        hasRgb: c.colors != null,
+        hasGpsTime: c.gpsTime != null,
+        crsName: crs?.name ?? null,
+        hasWkt: crs?.wkt != null,
+      };
+    }
+    const sc = viewer?.streamingCloud;
+    if (!sc) return null;
+    const crs = sc.crs();
+    return {
+      pointCount: viewer.residentPointTotal(),
+      hasRgb: sc.availableColorModes().includes('rgb'),
+      // COPC/EPT point records (PDRF 6/7/8) carry GPS time.
+      hasGpsTime: true,
+      crsName: crs?.name ?? null,
+      hasWkt: crs?.wkt != null,
+    };
+  },
+  getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : streamingExportCloud()),
+  isStreamingPending: () => viewer?.streamingCloud != null && streamingExportCloud() == null,
   getActiveClip: () => viewer.getClip(),
   hasFullSource: () => activeId != null && sourceFileById.has(activeId),
-  isReduced: () => activeId != null && reducedById.get(activeId) === true,
+  // A streaming snapshot exports only the resident (streamed-in) points, so it
+  // is a reduced subset whenever the whole cloud hasn't landed yet — flag it so
+  // the export status says "reduced view" and never reads as the full survey.
+  isReduced: () => {
+    if (activeId != null) return reducedById.get(activeId) === true;
+    // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
+    // constructor calls this (via _renderFullResRow) during startup — before
+    // that. Optional-chain the deref: with no viewer there is no streaming
+    // cloud, so nothing is a reduced view yet. (An explicit `viewer == null`
+    // check would trip TS2367 since `viewer` is typed non-null via a cast.)
+    const sc = viewer?.streamingCloud;
+    return sc != null && sc.residentPointCount < sc.sourcePointCount;
+  },
   getFullCloud: async () => {
     const f = activeId ? sourceFileById.get(activeId) : null;
     if (!f) return null;
@@ -2923,36 +3081,38 @@ const exportPanel = new ExportPanel({
     const measurements = viewer.measure.getMeasurements();
     if (measurements.length === 0) return;
     const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
     // Measurement points are LOCAL (recentered); add the origin back to land them
-    // in the source projected/local frame. Geographic reprojection (→ lon/lat) is
-    // a later option — for now we emit in the scan's own coordinates.
-    const origin = cloud?.origin ?? [0, 0, 0];
+    // in the source projected/local frame. `exportGeoContext` resolves the
+    // origin for streaming scans too (renderOrigin) — a plain static-only read
+    // would export at render-frame coordinates. Geographic reprojection
+    // (→ lon/lat) is a later option — for now we emit in the scan's own frame.
+    const geo = exportGeoContext();
+    const origin = geo.origin;
     const ctx: MeasurementExportContext = {
       toOutput: (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
-      crsName: cloud?.metadata?.crs?.name,
+      crsName: geo.crsName,
       geographic: false,
     };
     const text = format === 'geojson'
       ? measurementsToGeoJSON(measurements, ctx)
       : measurementsToCsv(measurements, ctx);
-    const stem = cloud ? baseName(cloud.name) : 'measurements';
+    const stem = geo.name ? baseName(geo.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
   exportIntegrityReport: async () => {
     if (!viewer) return;
     const ms = viewer.measure.getMeasurements();
     if (ms.length === 0) return;
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    const geo = exportGeoContext();
     const { integrityReportFile } = await loadMeasurementReport();
     const f = integrityReportFile(
       ms,
       viewer.measure.worldUp,
       viewer.measure.unitToMetres,
-      cloud ? baseName(cloud.name) : 'scan',
-      cloud?.metadata?.crs?.name,
+      geo.name ? baseName(geo.name) : 'scan',
+      geo.crsName,
       new Date().toISOString(),
       activeId ? viewer.classificationEpoch(activeId) : 0,
       __APP_VERSION__,
@@ -2961,8 +3121,8 @@ const exportPanel = new ExportPanel({
   },
   exportKml: async () => {
     if (!viewer) return;
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
-    const origin = cloud?.origin ?? [0, 0, 0];
+    const geo = exportGeoContext();
+    const origin = geo.origin;
     const toLonLat = makeLocalToLonLat(crsService.current(), origin);
     if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
     const { buildKml } = await loadKmlExport();
@@ -2976,7 +3136,7 @@ const exportPanel = new ExportPanel({
         position: v.pose.position,
         target: v.pose.target,
       })),
-      crsName: cloud?.metadata?.crs?.name ?? crsService.current()?.name ?? null,
+      crsName: geo.crsName ?? crsService.current()?.name ?? null,
       // The exporter reports metres (keys end in _m); unitToMetres scales render
       // units, so the label is always metres.
       unitLabel: 'm',
@@ -2986,13 +3146,15 @@ const exportPanel = new ExportPanel({
       notSurveyGradeNote:
         'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',
     };
-    const stem = cloud ? baseName(cloud.name) : 'site';
+    const stem = geo.name ? baseName(geo.name) : 'site';
     downloadText(`${stem}.kml`, buildKml(input));
   },
   kmlStatus: () => {
     if (!viewer) return { ready: false, reason: 'Open a scan first.' };
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
-    if (!cloud) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
+    // Resolve origin/CRS for static AND streaming — a georeferenced streaming
+    // scan can place KML too; gating on the static `activeId` disabled it.
+    const geo = exportGeoContext();
+    if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
     const features =
       viewer.measure.getMeasurements().length + viewer.annotate.getAnnotations().length;
     if (features === 0) {
@@ -3005,7 +3167,7 @@ const exportPanel = new ExportPanel({
         reason: 'KML needs a georeferenced scan (it places features on a lat/lon map).',
       };
     }
-    if (!makeLocalToLonLat(resolved, cloud.origin ?? [0, 0, 0])) {
+    if (!makeLocalToLonLat(resolved, geo.origin)) {
       return {
         ready: false,
         reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
@@ -3619,6 +3781,14 @@ if (testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
+      // Elevation filter (v0.5.6) device-verify seam: pass a world-space
+      // [min, max] window (or null to clear) and confirm points outside it hide.
+      setElevationFilter: (range: [number, number] | null) =>
+        v.setElevationFilter(range ?? undefined),
+      // Intensity filter (v0.5.6) device-verify seam: pass a raw-intensity
+      // [min, max] window (or null to clear) and confirm points outside it hide.
+      setIntensityFilter: (range: [number, number] | null) =>
+        v.setIntensityFilter(range ?? undefined),
       // Classification edit seam — seed a uniform class, reclassify a screen
       // lasso, undo/redo, and read a point's class, so the reclassify tool's
       // full flow is e2e-verifiable without running the heavy classifier.
@@ -4342,7 +4512,11 @@ function runStreamingModules(cloud: {
   }
   rows.push(headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
 
-  // Bounds — prefer the header's source-coordinate min/max for accuracy.
+  // Bounds — the header's source-coordinate min/max is the TIGHT data extent
+  // (a 1000×1000×138 m scan reports 138 m here). Do NOT use `localBounds`: for
+  // streaming that is the octree ROOT CUBE (1000³), which over-reports the
+  // vertical (and any partial-footprint) span. This matches the Streaming
+  // panel's Extent row, which also reads the header.
   const header = cloud.metadata?.header;
   if (header) {
     const w = header.max[0] - header.min[0];
@@ -4542,7 +4716,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
   let metadata: import('./report').MetadataInputs;
   let exportFileStem: string;
   if (streamingCloud) {
-    const b = streamingCloud.localBounds();
+    // `dataBounds` (tight data AABB), NOT `localBounds` (the octree cube): the
+    // cube inflates height ~7× and, for a partial footprint, deflates density.
+    const b = streamingCloud.dataBounds();
     const crs = streamingCloud.crs();
     // Footprint + density in metres / pts·m⁻², not raw CRS units (see
     // reportFootprint): a foot-CRS scan would otherwise overstate the headline
@@ -4938,7 +5114,8 @@ async function exportSession(): Promise<void> {
 
   let scanSummary: import('./io/session').SessionScanSummary | undefined;
   if (streamingCloud) {
-    const b = streamingCloud.localBounds();
+    // Tight data AABB, not the octree cube — see the dataBounds() note above.
+    const b = streamingCloud.dataBounds();
     const crs = streamingCloud.crs();
     scanSummary = {
       fileName: streamingCloud.name,
@@ -4983,6 +5160,16 @@ async function exportSession(): Promise<void> {
     // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
     // filter is active; serializeSession drops an empty list.
     classFilter: classLegendPanel.getVisibility().hiddenCodes(),
+    // v6 — the active point-filter windows, so reopening the session restores
+    // "only the ground band" / "hide low-return noise". Omitted when unset.
+    ...(activeElevFilter || activeIntenFilter
+      ? {
+          pointFilters: {
+            ...(activeElevFilter ? { elevation: activeElevFilter } : {}),
+            ...(activeIntenFilter ? { intensity: activeIntenFilter } : {}),
+          },
+        }
+      : {}),
     // v5 — the active clip box. The restore side has read this since v5, but
     // the writer never emitted it — the documented round-trip was dead on the
     // write side (clip-session finding, Critical). Emitted whenever the viewer
@@ -5064,6 +5251,28 @@ async function importSession(file: File): Promise<void> {
       // restored scan shows the same classes the author left visible.
       classLegendPanel.applyFilter(session.classFilter);
     }
+    // v6 — re-apply the saved elevation / intensity windows, but ONLY when a
+    // scan is actually loaded. The elevation window is converted to the cloud's
+    // attribute space using that cloud's origin + up-axis; applying it with no
+    // scan present would convert against origin 0 and the default axis, so the
+    // window would be wrong the moment a scan did load. A session is a
+    // measurement overlay for an open scan, so "no scan ⇒ skip the filter" is
+    // the correct, non-surprising behaviour.
+    if (session.pointFilters && (activeId != null || viewer.hasStreamingCloud)) {
+      // The Inspector extents were seeded when the scan opened, so restoring
+      // writes the window into the inputs and drives the GPU filter + cue.
+      const pf = session.pointFilters;
+      if (pf.elevation) {
+        viewer.setElevationFilter(pf.elevation);
+        inspector.restoreElevationFilter(pf.elevation);
+        activeElevFilter = [pf.elevation[0], pf.elevation[1]];
+      }
+      if (pf.intensity) {
+        viewer.setIntensityFilter(pf.intensity);
+        inspector.restoreIntensityFilter(pf.intensity);
+        activeIntenFilter = [pf.intensity[0], pf.intensity[1]];
+      }
+    }
     if (session.clip) {
       // Restore the saved clip box so a shared capsule reproduces the author's
       // isolation/cut-away, not an unclipped scene. (The serialized clip was
@@ -5144,7 +5353,10 @@ async function handleFile(file: File): Promise<void> {
   // `loading` guard too (TOCTOU). The `finally` below is the only reset.
   loading = true;
   const controller = new AbortController();
-  dropZone.setProgress(`Reading ${file.name}…`);
+  // Blue blinking "Opening …" — the prominent first feedback, matching the
+  // catalog status vocabulary so device and public-dataset loads read the same.
+  // The load's staged progress (decoding / uploading / rendering) supersedes it.
+  dropZone.setOpening(`Opening ${file.name}…`);
   dropZone.setCancelHandler(() => controller.abort());
   try {
     // ensure the lazy-loaded Viewer is ready before touching it.
@@ -5280,6 +5492,8 @@ async function handleFile(file: File): Promise<void> {
       refreshLayerCrsFlags();
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
+      inspector.setElevationExtent(viewer.elevationExtent());
+      inspector.setIntensityExtent(viewer.intensityExtent());
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
         result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
       );
@@ -5728,7 +5942,9 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
     await viewerLoaded;
-    dropZone.setProgress(`Reading EPT manifest from ${shortUrl(url)}…`);
+    // Blue blinking "Opening …" first, consistent with the COPC + device paths;
+    // the manifest read + node streaming supersede it with staged progress.
+    dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
     dropZone.setCancelHandler(() => controller.abort());
     const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
 
@@ -5945,7 +6161,10 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
     await viewerLoaded;
-    dropZone.setProgress(`Connecting to ${shortUrl(url)}…`);
+    // Blue blinking "Opening …" (by dataset name) — the same prominent indicator
+    // device files show, so a public/streaming open reads identically. Staged
+    // progress from the streaming pipeline supersedes it once bytes arrive.
+    dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
     dropZone.setCancelHandler(() => controller.abort());
     // The remote range source is part of the lazy COPC chunk.
     const { HttpRangeSource } = await loadHttpRangeSource();
@@ -6032,6 +6251,8 @@ function describeRemoteCopcError(err: unknown, url: string): string {
 
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
+  // A new streaming scan must re-seed its filter controls from its own data.
+  streamingFilterSeeded = false;
   // Finalize the benchmark (if any) before tearing the session down — we
   // want the final cache snapshot and peak resident counters to be observed.
   // The post-session report is logged only under `?benchmark=1`; `?debug=1`
@@ -6301,6 +6522,14 @@ function resetToEmptyState(): void {
   // a different cloud with stale trust.
   viewer.setCoverageGrid(null);
   inspector.setCoverageAvailable(false);
+  // No scan → clear any elevation filter and hide its control.
+  viewer.setElevationFilter(undefined);
+  inspector.setElevationExtent(null);
+  viewer.setIntensityFilter(undefined);
+  inspector.setIntensityExtent(null);
+  activeElevFilter = null;
+  activeIntenFilter = null;
+  streamingFilterSeeded = false;
   // Hide + clear the classification legend so it doesn't linger with a stale
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
@@ -6555,6 +6784,8 @@ function removeCloud(id: string): void {
   else {
     refreshLayerCrsFlags();
     applyLayerVisibility();
+    inspector.setElevationExtent(viewer.elevationExtent());
+    inspector.setIntensityExtent(viewer.intensityExtent());
   }
 }
 

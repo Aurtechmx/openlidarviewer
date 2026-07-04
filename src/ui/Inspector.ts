@@ -78,6 +78,16 @@ export interface InspectorCallbacks {
    * dramatic gradient on field-only scans.
    */
   onHeightPercentileTrim: (trim: number) => void;
+  /**
+   * Elevation filter (v0.5.6): a world-space `[min, max]` height window, or
+   * `null` to clear. Points outside the window are hidden.
+   */
+  onElevationFilter?: (range: [number, number] | null) => void;
+  /**
+   * A raw-intensity `[min, max]` filter window, or `null` to clear. Points
+   * whose intensity falls outside the window are hidden.
+   */
+  onIntensityFilter?: (range: [number, number] | null) => void;
   onPointSize: (size: number) => void;
   onToggleVisible: (id: string, visible: boolean) => void;
   onRemove: (id: string) => void;
@@ -335,6 +345,158 @@ function section(label: string, body: HTMLElement): HTMLElement {
 }
 
 /**
+ * True when a `[lo, hi]` window actually hides points versus the cloud's full
+ * extent — used to flag a range-filter section as "filtering". A window equal to
+ * (or wider than) the extent hides nothing, so it should not read as active.
+ * With no known extent, any window is treated as filtering.
+ */
+function narrowsExtent(
+  lo: number,
+  hi: number,
+  ext: { min: number; max: number } | null,
+): boolean {
+  if (!ext) return true;
+  return lo > ext.min || hi < ext.max;
+}
+
+/** Blur a numeric input on Enter so the value commits on narrow / touch screens. */
+function enterConfirms(input: HTMLInputElement): void {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') input.blur();
+  });
+}
+
+/** A built range-filter section (elevation or intensity) plus its seed hook. */
+interface RangeFilter {
+  /** The `<section>` to mount in the panel. Hidden until an extent is seeded. */
+  readonly section: HTMLElement;
+  /**
+   * Seed the Min/Max inputs from the data extent and reveal the section; pass
+   * null to hide it (no cloud, or no channel). Clears the active-state cue.
+   */
+  setExtent(ext: { min: number; max: number } | null): void;
+  /**
+   * Restore a saved window (from a session): write it into the inputs and
+   * re-run the apply path (fires `onApply`, refreshes the active cue). Null
+   * reseeds to the full extent and clears the filter.
+   */
+  applyWindow(range: readonly [number, number] | null): void;
+}
+
+/**
+ * Build one Min/Max range-filter section — the shared body behind the
+ * elevation and intensity filters (v0.5.6). Owns the two numeric inputs, the
+ * "Show all" reset, Enter-to-confirm, and the "· filtering" active-state cue
+ * (shown only when the window is narrower than the seeded extent). `onApply`
+ * receives the window `[min, max]`, or null when the user clears it.
+ */
+function buildRangeFilter(opts: {
+  title: string;
+  /** Noun for the input aria-labels, e.g. 'elevation' or 'intensity'. */
+  unit: string;
+  resetTitle: string;
+  onApply: (range: [number, number] | null) => void;
+}): RangeFilter {
+  let extent: { min: number; max: number } | null = null;
+  const mkInput = (bound: string): HTMLInputElement => {
+    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
+    i.step = 'any';
+    i.setAttribute('aria-label', `${bound} ${opts.unit}`);
+    return i;
+  };
+  const minInput = mkInput('Minimum');
+  const maxInput = mkInput('Maximum');
+  const reset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
+  reset.setAttribute('type', 'button');
+  reset.setAttribute('title', opts.resetTitle);
+  const body = el('div', { className: 'olv-elev-body' }, [
+    el('div', { className: 'olv-elev-row' }, [
+      el('span', { className: 'olv-elev-cap', text: 'Min' }),
+      minInput,
+      el('span', { className: 'olv-elev-cap', text: 'Max' }),
+      maxInput,
+    ]),
+    reset,
+  ]);
+  const sectionEl = section(opts.title, body);
+  sectionEl.classList.add('olv-hidden');
+
+  // Read a numeric field, or null when it's empty/blank. `Number('')` is 0
+  // (and `Number.isFinite(0)` is true), so without the empty-string guard,
+  // clearing a field to retype would momentarily apply a bogus `0` bound and
+  // filter the scan to a sliver. Null means "no valid value yet" — leave the
+  // current window untouched until both fields hold real numbers.
+  const readField = (v: string): number | null => {
+    if (v.trim() === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const apply = (): void => {
+    const lo = readField(minInput.value);
+    const hi = readField(maxInput.value);
+    if (lo === null || hi === null) return;
+    opts.onApply([lo, hi]);
+    // Flag "filtering" only when the window is narrower than the full extent —
+    // a full-range window hides nothing, so it shouldn't read as active.
+    sectionEl.classList.toggle('olv-filter-active', narrowsExtent(lo, hi, extent));
+  };
+  minInput.addEventListener('input', apply);
+  maxInput.addEventListener('input', apply);
+  enterConfirms(minInput);
+  enterConfirms(maxInput);
+  reset.addEventListener('click', () => {
+    if (extent) {
+      minInput.value = String(Math.floor(extent.min));
+      maxInput.value = String(Math.ceil(extent.max));
+    }
+    opts.onApply(null);
+    sectionEl.classList.remove('olv-filter-active');
+  });
+
+  return {
+    section: sectionEl,
+    setExtent(ext): void {
+      // Only act when the extent actually CHANGES — a new (or first) scan.
+      // Re-seeding with the same extent is a no-op so a streaming extent that
+      // re-reports the same range can't stomp the user's current window.
+      const changed =
+        !extent || !ext || extent.min !== ext.min || extent.max !== ext.max;
+      extent = ext;
+      if (!ext || !Number.isFinite(ext.min) || !Number.isFinite(ext.max)) {
+        sectionEl.classList.add('olv-hidden');
+        // No usable extent ⇒ no scan to filter: clear any live GPU filter so the
+        // renderer can't keep applying a stale window from a previous scan.
+        if (changed) opts.onApply(null);
+        return;
+      }
+      if (!changed) return;
+      minInput.value = String(Math.floor(ext.min));
+      maxInput.value = String(Math.ceil(ext.max));
+      // A fresh seed is the full extent — visible, nothing filtered yet. Clear
+      // any filter carried over from a previous scan so the reset fields and the
+      // renderer agree (the "reseed leaves the old GPU filter active" bug).
+      sectionEl.classList.remove('olv-hidden', 'olv-filter-active');
+      opts.onApply(null);
+    },
+    applyWindow(range): void {
+      if (range) {
+        minInput.value = String(range[0]);
+        maxInput.value = String(range[1]);
+        apply();
+      } else {
+        if (extent) {
+          minInput.value = String(Math.floor(extent.min));
+          maxInput.value = String(Math.ceil(extent.max));
+        }
+        opts.onApply(null);
+        sectionEl.classList.remove('olv-filter-active');
+      }
+    },
+  };
+}
+
+/**
  * A collapsible section using native `<details>` / `<summary>`. The
  * summary is styled to match the static `olv-section-label` so the
  * panel reads as a uniform list of sections — the only visual
@@ -463,6 +625,11 @@ export class Inspector {
     className: 'olv-height-trim-label',
     text: '5%',
   });
+  // Range filters (v0.5.6) — an elevation (world-unit height) filter and an
+  // intensity (raw-unit) filter, both built from the shared `buildRangeFilter`
+  // so the DOM, the active-state cue, and the seed/reset logic live once.
+  private _elevFilter!: RangeFilter;
+  private _intenFilter!: RangeFilter;
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
   // Captured section refs — `setStreamingMode` toggles their visibility so
@@ -810,11 +977,19 @@ export class Inspector {
     // Detail, Provenance, Coordinate system, Scan report, Image export,
     // Report PDF — work uniformly against either source type.
     this._layersSection = section('Layers', this._layers);
-    // v0.3.7 final-polish — build the height percentile-trim row and
-    // mount it inside the "Color by" section beneath the chip rail.
-    // The row hides itself when the active mode isn't 'elevation'.
+    // Height percentile-trim row, mounted inside "Color by" beneath the chip
+    // rail and shown only while colouring BY elevation. It clips the top/bottom
+    // N% of heights from the COLOUR RAMP so tall outliers (a bird, a mast) don't
+    // wash out the gradient — it recolours, it does NOT hide points. Labelled
+    // "Colour trim" and tooltip'd to keep it distinct from the Elevation filter
+    // below, which is what actually hides points.
+    this._heightTrimRow.title =
+      'Clips the top and bottom of the elevation colour ramp so outliers don’t ' +
+      'wash out the gradient. This only affects colour — to hide points by ' +
+      'height, use the Elevation filter.';
+    this._heightTrimSlider.setAttribute('aria-label', 'Elevation colour-ramp trim (percent)');
     this._heightTrimRow.replaceChildren(
-      el('span', { className: 'olv-height-trim-name', text: 'Trim outliers' }),
+      el('span', { className: 'olv-height-trim-name', text: 'Colour trim' }),
       this._heightTrimSlider,
       this._heightTrimLabel,
     );
@@ -830,6 +1005,22 @@ export class Inspector {
       this._heightTrimRow,
     ]);
     this._colorBySection = section('Color by', colorByBody);
+
+    // Range filters (v0.5.6): elevation (world-unit height) and intensity
+    // (raw units). Both hide points outside the window and share one builder.
+    const resetTitle = 'Clear the filter and show every point in this scan';
+    this._elevFilter = buildRangeFilter({
+      title: 'Elevation filter',
+      unit: 'elevation',
+      resetTitle,
+      onApply: (r) => this._cb.onElevationFilter?.(r),
+    });
+    this._intenFilter = buildRangeFilter({
+      title: 'Intensity filter',
+      unit: 'intensity',
+      resetTitle,
+      onApply: (r) => this._cb.onIntensityFilter?.(r),
+    });
 
     // Visuals Studio — Visuals Studio.
     // Build the three chip rails. Each chip's click fires the matching
@@ -1014,6 +1205,8 @@ export class Inspector {
       this._datasetIntelligence.element,
       this._layersSection,
       this._colorBySection,
+      this._elevFilter.section,
+      this._intenFilter.section,
       // Visuals Studio (presets, curator's tool) → Rendering (raw,
       // technician's tool). Point size is folded into Rendering as a
       // sub-group, so the panel keeps one slot per intent instead of
@@ -1041,6 +1234,33 @@ export class Inspector {
       ariaLabel: 'Show scan information',
     });
     this.sheetToggle.addEventListener('click', () => this.toggleSheet());
+  }
+
+  /**
+   * Seed the elevation-filter inputs from a cloud's world extent and reveal the
+   * section. Passing null hides it (no static cloud loaded).
+   */
+  setElevationExtent(ext: { min: number; max: number } | null): void {
+    this._elevFilter.setExtent(ext);
+  }
+
+  /**
+   * Seed the intensity-filter inputs from a cloud's intensity range and reveal
+   * the section. Passing null hides it (no static cloud, or no intensity
+   * channel).
+   */
+  setIntensityExtent(ext: { min: number; max: number } | null): void {
+    this._intenFilter.setExtent(ext);
+  }
+
+  /** Restore a saved elevation window (session import) — applies + shows it. */
+  restoreElevationFilter(range: readonly [number, number] | null): void {
+    this._elevFilter.applyWindow(range);
+  }
+
+  /** Restore a saved intensity window (session import) — applies + shows it. */
+  restoreIntensityFilter(range: readonly [number, number] | null): void {
+    this._intenFilter.applyWindow(range);
   }
 
   /** Open the Inspector as a bottom sheet (phones). */
