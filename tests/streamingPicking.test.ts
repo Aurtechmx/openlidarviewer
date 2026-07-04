@@ -241,28 +241,35 @@ describe('selectStreamingPick — class filter (visible-classes-only picks)', ()
       classification: new Uint8Array([2, 6]),
     };
     const visible = new Set([2]);
-    const hit = selectStreamingPick([n], ORIGIN, DIR, (c) => visible.has(c));
+    // The factory returns a per-point predicate built from THIS node's own
+    // classification buffer (the caller owns the class/elev/intensity logic).
+    const hit = selectStreamingPick([n], ORIGIN, DIR, (node) =>
+      node.classification
+        ? (i: number) => visible.has(node.classification![i])
+        : undefined,
+    );
     expect(hit?.pointIndex).toBe(0);
     expect(hit?.point[0]).toBeCloseTo(0.1, 6);
   });
 
-  test('a predicate hiding every point class returns null', () => {
+  test('a factory whose predicate hides every point returns null', () => {
     const n: StreamingPickNode = {
       positions: new Float32Array([0, 0, -8]),
       depth: 2,
       classification: new Uint8Array([6]),
     };
-    expect(selectStreamingPick([n], ORIGIN, DIR, () => false)).toBeNull();
+    expect(selectStreamingPick([n], ORIGIN, DIR, () => () => false)).toBeNull();
   });
 
-  test('a node without classification is left untouched by the predicate', () => {
-    // Defensive: when a node carries no classification array, the predicate
-    // can't apply, so the node's points stay eligible (never silently dropped).
+  test('a factory returning undefined for a node leaves its points eligible', () => {
+    // The all-visible contract: when the factory returns undefined for a node
+    // (no active filter, or the node lacks the needed attribute), that node's
+    // points stay eligible and the search runs its untouched hot path.
     const n: StreamingPickNode = {
       positions: new Float32Array([0, 0, -8]),
       depth: 2,
     };
-    const hit = selectStreamingPick([n], ORIGIN, DIR, () => false);
+    const hit = selectStreamingPick([n], ORIGIN, DIR, () => undefined);
     expect(hit?.pointIndex).toBe(0);
   });
 });

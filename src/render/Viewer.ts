@@ -61,7 +61,8 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassVisibility } from './class/classVisibility';
-import { classVisibleAt } from './class/classMaskUniform';
+import { buildPointFilterAccept } from './pointFilterAccept';
+import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
 import { intensityFilterUniform } from './intensityFilterUniform';
 import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
@@ -2907,18 +2908,23 @@ export class Viewer {
     const indices = selectByLasso({ lasso, positions: entry.cloud.positions, project });
     // An EDIT must only touch points the user can currently see. The lasso
     // projector already drops points behind the camera, but not points hidden
-    // by the clip box or the class-visibility filter — the raw selection
+    // by the clip box or the visibility filters — the raw selection
     // permanently rewrote invisible points (reclassify-invisible-points
     // finding, Critical). Apply the same visibility rules click-picking
     // enforces: the pure `clipKeepsPoint` contract the GPU clip planes
-    // realise, and the `_classPickAccept` mask, so screen and edit agree
-    // point-for-point. In-place filter — no extra allocation on the hot path.
+    // realise, and the class + elevation + intensity filter accept, so screen
+    // and edit agree point-for-point. In-place filter — no hot-path allocation.
     const clip = this._clip;
     filterSelectionToVisible(indices, entry.cloud.positions, {
       keepPoint: clip?.enabled
         ? (x, y, z) => clipKeepsPoint(clip, [x, y, z])
         : undefined,
-      acceptIndex: this._classPickAccept(entry.cloud.classification),
+      acceptIndex: this._pickAccept(
+        entry.cloud.positions,
+        entry.cloud.classification,
+        entry.cloud.intensity,
+        this._currentFilterWindow(),
+      ),
     });
     const buf = entry.cloud.classification;
     let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
@@ -5840,18 +5846,25 @@ export class Viewer {
     // Pure selection — angular-miss-fair, refinement-aware. Centralised in
     // `streamingPickSelection.ts` so it's unit-tested separately from the
     // Viewer's mesh-lifecycle plumbing.
-    // Only thread classification + the class predicate when a filter is active,
-    // so the all-visible hot path allocates and compares exactly as before.
-    const mask = this._classMaskUniform.array as ArrayLike<number>;
+    // Thread each node's class + intensity so the pick can obey the class,
+    // elevation, and intensity filters (positions drive the elevation test).
+    // The per-node accept factory is passed only when SOME filter is active, so
+    // the all-visible hot path compares exactly as before (no per-point call).
+    const filterWindow = this._currentFilterWindow();
+    const anyFilter =
+      filterWindow.classActive || filterWindow.elevActive || filterWindow.intenActive;
     const pick = selectStreamingPick(
       eligibleEntries.map((e) => ({
         positions: e.decoded.positions,
         depth: e.depth,
-        classification: this._classFiltered ? e.decoded.classification : undefined,
+        classification: e.decoded.classification,
+        intensity: e.decoded.intensity,
       })),
       [o.x, o.y, o.z],
       [d.x, d.y, d.z],
-      this._classFiltered ? (code: number) => classVisibleAt(mask, code) : undefined,
+      anyFilter
+        ? (node) => this._pickAccept(node.positions, node.classification, node.intensity, filterWindow)
+        : undefined,
     );
     if (!pick) return null;
     const winning = eligibleEntries[pick.nodeIndex];
@@ -5894,12 +5907,41 @@ export class Viewer {
    * predicate consults the same 256-entry mask the GPU uses via `classVisibleAt`,
    * so screen and pick agree point-for-point.
    */
-  private _classPickAccept(
+  /**
+   * Snapshot the active filter windows (class + elevation + intensity) in the
+   * same spaces the GPU uniforms use, so a CPU accept predicate built from it
+   * rejects exactly the points the shader collapses to zero size. Read once per
+   * pick and shared across every candidate buffer.
+   */
+  private _currentFilterWindow(): PointFilterWindow {
+    return {
+      classActive: this._classFiltered,
+      classMask: this._classMaskUniform.array as ArrayLike<number>,
+      elevActive: this._elevFilterEnabled.value !== 0,
+      elevAxisIdx: this._elevFilterAxisIsZ.value === 1 ? 2 : 1,
+      elevMin: this._elevFilterMin.value as number,
+      elevMax: this._elevFilterMax.value as number,
+      intenActive: this._intenFilterEnabled.value !== 0,
+      intenMin: this._intenFilterMin.value as number,
+      intenMax: this._intenFilterMax.value as number,
+    };
+  }
+
+  /**
+   * The per-point pick predicate for a buffer: confines a pick to points the
+   * user can actually see — visible class AND inside the elevation AND intensity
+   * windows — so no hidden point can become the chosen vertex. Returns
+   * `undefined` when nothing is filtered (the hot path). Replaces the former
+   * class-only `_classPickAccept`; positions drive the elevation test, so the
+   * caller passes the buffer's own positions/classification/intensity.
+   */
+  private _pickAccept(
+    positions: ArrayLike<number>,
     classification: ArrayLike<number> | null | undefined,
+    intensity: ArrayLike<number> | null | undefined,
+    window: PointFilterWindow,
   ): ((index: number) => boolean) | undefined {
-    if (!this._classFiltered || !classification) return undefined;
-    const mask = this._classMaskUniform.array as ArrayLike<number>;
-    return (index: number) => classVisibleAt(mask, classification[index]);
+    return buildPointFilterAccept(positions, classification, intensity, window);
   }
 
   private _pickDetailed(
@@ -5913,13 +5955,14 @@ export class Viewer {
 
     let best: { cloud: PointCloud; index: number; point: THREE.Vector3 } | null = null;
     let bestScore = Infinity;
+    const filterWindow = this._currentFilterWindow();
     for (const { mesh, cloud, locked } of this._clouds.values()) {
       if (!mesh.visible || locked) continue;
       const hit = nearestPointAlongRay(
         cloud.positions,
         [o.x, o.y, o.z],
         [d.x, d.y, d.z],
-        this._classPickAccept(cloud.classification),
+        this._pickAccept(cloud.positions, cloud.classification, cloud.intensity, filterWindow),
       );
       if (!hit) continue;
       const score = hit.offset / hit.along; // angular miss
