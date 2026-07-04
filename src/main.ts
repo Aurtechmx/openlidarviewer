@@ -5275,10 +5275,10 @@ async function handleFile(file: File): Promise<void> {
   // `loading` guard too (TOCTOU). The `finally` below is the only reset.
   loading = true;
   const controller = new AbortController();
-  // "Opening …" matches the catalog status vocabulary (CatalogPanel's is-opening
-  // line) so device and public-dataset loads read the same. The load's staged
-  // progress (decoding / uploading / rendering) overwrites this a beat later.
-  dropZone.setProgress(`Opening ${file.name}…`);
+  // Blue blinking "Opening …" — the prominent first feedback, matching the
+  // catalog status vocabulary so device and public-dataset loads read the same.
+  // The load's staged progress (decoding / uploading / rendering) supersedes it.
+  dropZone.setOpening(`Opening ${file.name}…`);
   dropZone.setCancelHandler(() => controller.abort());
   try {
     // ensure the lazy-loaded Viewer is ready before touching it.
@@ -5864,7 +5864,9 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
     await viewerLoaded;
-    dropZone.setProgress(`Reading EPT manifest from ${shortUrl(url)}…`);
+    // Blue blinking "Opening …" first, consistent with the COPC + device paths;
+    // the manifest read + node streaming supersede it with staged progress.
+    dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
     dropZone.setCancelHandler(() => controller.abort());
     const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
 
@@ -6081,7 +6083,10 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
     await viewerLoaded;
-    dropZone.setProgress(`Connecting to ${shortUrl(url)}…`);
+    // Blue blinking "Opening …" (by dataset name) — the same prominent indicator
+    // device files show, so a public/streaming open reads identically. Staged
+    // progress from the streaming pipeline supersedes it once bytes arrive.
+    dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
     dropZone.setCancelHandler(() => controller.abort());
     // The remote range source is part of the lazy COPC chunk.
     const { HttpRangeSource } = await loadHttpRangeSource();

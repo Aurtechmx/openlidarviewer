@@ -1489,6 +1489,24 @@ button:disabled { cursor: not-allowed; }
 }
 .olv-toast-error { border-color: color-mix(in srgb, var(--rating-weak) 50%, transparent); }
 .olv-toast-error .olv-toast-dot { background: var(--rating-weak); }
+/* "Opening …" state — the prominent blue blinking indicator shown while a scan
+   (device file or public/streaming dataset) is being fetched and decoded. Mirrors
+   the catalog status pulse so both entry points read the same. The accent border
+   + glowing, pulsing dot + accent text make the toast unmistakably "working". */
+.olv-toast.is-opening { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.olv-toast.is-opening .olv-toast-text { color: var(--accent); font-weight: 600; }
+.olv-toast.is-opening .olv-toast-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: olv-toast-opening-pulse 1.4s ease-in-out infinite;
+}
+@keyframes olv-toast-opening-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent) 60%, transparent); }
+  50% { opacity: 0.5; box-shadow: 0 0 2px 0 color-mix(in srgb, var(--accent) 30%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-toast.is-opening .olv-toast-dot { animation: none; }
+}
 
 /* ───────────────────────────────────────────────────────────────────────────
    Navigation bar — bottom-centre mode switcher, speed slider, controls HUD
