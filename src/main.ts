@@ -3768,8 +3768,12 @@ function wireRailToggle(cfg: RailToggleConfig): void {
 
   const apply = (collapsed: boolean): void => {
     for (const p of cfg.panels) p.classList.toggle(cfg.collapsedClass, collapsed);
+    // The tab carries its own collapsed state so it can snap to the screen edge
+    // independently — several tabs can share one edge (right column: one per
+    // panel) without a sibling selector confusing them.
+    tab.classList.toggle('is-collapsed', collapsed);
     tab.setAttribute('aria-expanded', String(!collapsed));
-    const label = collapsed ? 'Show panels' : 'Hide panels';
+    const label = collapsed ? 'Show panel' : 'Hide panel';
     tab.setAttribute('aria-label', label);
     tab.title = label;
   };
@@ -3882,17 +3886,30 @@ void viewerLoaded.then(() => {
       storageKey: 'olv.leftRail.collapsed',
       ariaControls: 'olv-left-panels',
     });
-    // Same one-tap collapse for the right column (Streaming card + Inspector).
+    // Right column — each panel collapses on its own handle, centred on that
+    // panel. The Streaming card (top, only while a COPC streams) and the
+    // Inspector (bottom, or full-height when not streaming) are independent, so
+    // one can be hidden without the other. Both handles ride the same right
+    // edge; the empty-state hide keeps only the visible panel's handle on screen.
     if (!inspector.element.id) inspector.element.id = 'olv-inspector';
     if (!streamingPanel.element.id) streamingPanel.element.id = 'olv-streaming-panel';
     wireRailToggle({
       overlay: stage.overlay,
-      panels: [inspector.element, streamingPanel.element],
+      panels: [streamingPanel.element],
       tabClass: 'olv-right-rail-tab',
       chevron: RAIL_CHEVRON_RIGHT,
       collapsedClass: 'olv-right-collapsed',
-      storageKey: 'olv.rightRail.collapsed',
-      ariaControls: `${inspector.element.id} ${streamingPanel.element.id}`,
+      storageKey: 'olv.rightRail.streaming.collapsed',
+      ariaControls: streamingPanel.element.id,
+    });
+    wireRailToggle({
+      overlay: stage.overlay,
+      panels: [inspector.element],
+      tabClass: 'olv-right-rail-tab',
+      chevron: RAIL_CHEVRON_RIGHT,
+      collapsedClass: 'olv-right-collapsed',
+      storageKey: 'olv.rightRail.inspector.collapsed',
+      ariaControls: inspector.element.id,
     });
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);

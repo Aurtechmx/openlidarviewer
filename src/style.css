@@ -3267,9 +3267,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
   }
   /* Collapsed — slide the panel fully past the right edge (its own width plus
-     the 14px inset and a small margin), GPU transform only, no reflow. */
+     the 14px inset and a small margin), GPU transform only, no reflow.
+     `animation: none` releases the `olv-rise-in` entrance animation's hold: it
+     runs with fill-mode `both`, so its held end-state would otherwise pin the
+     Inspector's transform/opacity and override this rule (the Streaming card has
+     no such animation, which is why only it collapsed before). */
   .olv-inspector.olv-right-collapsed,
   .olv-streaming-panel.olv-right-collapsed {
+    animation: none;
     transform: translateX(calc(100% + var(--space-lg, 16px)));
     opacity: 0;
     pointer-events: none;
@@ -3300,9 +3305,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     color 160ms var(--ease-standard), border-color 160ms var(--ease-standard),
     box-shadow 200ms var(--ease-standard), background 200ms var(--ease-standard);
 }
-/* Collapsed — the same handle, now emerging from the screen's right edge as the
-   single "show panels" affordance. */
-.olv-inspector.olv-right-collapsed ~ .olv-right-rail-tab {
+/* Collapsed — the handle emerges from the screen's right edge as the "show
+   panel" affordance. Keyed on the tab's own state so the two right handles
+   (Streaming, Inspector) snap independently. */
+.olv-right-rail-tab.is-collapsed {
   right: 0;
 }
 /* Hover — the handle reaches out a touch (leftward, into the canvas) and the
@@ -3326,8 +3332,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-right-rail-tab[aria-expanded="false"] svg { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
   .olv-inspector, .olv-streaming-panel { transition: none; }
+  /* No slide under reduced motion, but still release the entrance animation so
+     the collapse's opacity:0 / pointer-events:none actually take (the panel
+     fades out in place instead of staying a dead, visible layer). */
   .olv-inspector.olv-right-collapsed,
-  .olv-streaming-panel.olv-right-collapsed { transform: none; }
+  .olv-streaming-panel.olv-right-collapsed { animation: none; transform: none; }
   .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
 }
 @media (max-width: 768px) { .olv-right-rail-tab { display: none; } }

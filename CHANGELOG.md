@@ -18,18 +18,20 @@ diagnostics. Browser-native and local-first; files never leave the device.
   camera orientation and view scale stay fixed. Pan mode is preserved in saved
   sessions and share links.
 - **Frame-rate-independent wheel and trackpad zoom.** The same gesture reaches
-  the same zoom on a 60, 120, or 144 Hz display. The previous behaviour stays
-  available with `?wheelDolly=legacy`.
+  the same zoom on a 60, 120, or 144 Hz display, and zoom centres on the pointer
+  so the point under the cursor stays put. The previous behaviour stays available
+  with `?wheelDolly=legacy`.
 - **Motion-adaptive resolution.** While the view moves, the renderer lowers the
-  device-pixel ratio and restores it in stages once the view settles, keeping
-  interaction responsive on dense scenes. Disable with `?adaptiveDpr=off` and
-  `?refinementPhase=off`.
+  device-pixel ratio a little and restores it once you stop, keeping interaction
+  smooth on dense scenes without a visible drop in sharpness. Disable with
+  `?adaptiveDpr=off`.
 - **Gaussian point-appearance mode.** A point style that softens ordinary point
   samples. It is not a trained 3D Gaussian Splat scene.
-- **Collapsible side panels.** A one-tap handle on the left column, and one on
-  the right column (Inspector, plus the streaming card for COPC datasets),
-  collapses each side for a full-width view. Each side's state persists per
-  browser; the handles stay hidden until a scan is open and on small screens.
+- **Collapsible side panels.** A one-tap handle collapses the left column; on the
+  right, the Inspector and (when a COPC dataset streams) the streaming card each
+  collapse on their own handle, so either can be hidden without the other. Each
+  handle's state persists per browser and stays hidden until a scan is open and on
+  small screens.
 - **Reproducible performance diagnostics.** The optional debug overlay records
   frame-time percentiles (p50/p95/p99), counts of frames over common frame-time
   thresholds, the longest observed main-thread task where the browser supports

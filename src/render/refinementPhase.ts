@@ -74,9 +74,13 @@ export function nextRefinementPhase(current: RefinementPhase, input: PhaseInput)
  * one device pixel.
  */
 export const PHASE_DPR_SCALE: Readonly<Record<RefinementPhase, number>> = {
-  moving: 0.66,
-  coverage: 0.66,
-  'center-refine': 0.85,
+  // Gentle reduction: motion renders only a touch below full so the drop is
+  // barely visible (on a 1.5-cap panel this is ~1.25 vs 1.5 parked), then steps
+  // straight back to full. Earlier values (0.66) fell to the 1.0 floor during
+  // motion, which read as a sluggish, soft navigation feel.
+  moving: 0.85,
+  coverage: 0.9,
+  'center-refine': 0.95,
   'full-refine': 1.0,
 };
 

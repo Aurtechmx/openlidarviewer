@@ -509,13 +509,14 @@ const MAX_PIXEL_RATIO = 1.5;
  * the streaming scheduler keeps its cadence — only the actual
  * GPU `render()` call is gated.
  */
-const RENDER_HOLDOVER_MS = 500;
+const RENDER_HOLDOVER_MS = 350;
 /**
  * P6 proxy (until the P4 scheduler emits real coverage / spacing signals): ms
  * after the camera parks at which the center is treated as "refined", so the
  * refinement phase reaches `full-refine` and DPR steps up to full resolution.
+ * Kept short so the view re-sharpens promptly after navigation stops.
  */
-const PHASE_CENTER_PROXY_MS = 600;
+const PHASE_CENTER_PROXY_MS = 250;
 const IDLE_HEARTBEAT_FRAMES = 6;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */

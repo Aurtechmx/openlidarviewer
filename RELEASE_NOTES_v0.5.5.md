@@ -26,25 +26,25 @@ links.
 ## Viewport navigation and rendering
 
 Wheel and trackpad zoom is now frame-rate independent: the same gesture reaches
-the same zoom on a 60, 120, or 144 Hz display. The previous behaviour stays
-available with `?wheelDolly=legacy`.
+the same zoom on a 60, 120, or 144 Hz display. Zoom also centres on the pointer,
+so the point under the cursor stays put. The previous behaviour stays available
+with `?wheelDolly=legacy`.
 
-While you move the view, the renderer briefly lowers the device-pixel ratio and
-restores it in stages once the view settles, which keeps interaction responsive
-on dense scenes. It can be turned off with `?adaptiveDpr=off` and
-`?refinementPhase=off`.
+While you move the view, the renderer lowers the device-pixel ratio a little and
+restores it once you stop, which keeps interaction smooth on dense scenes without
+a visible drop in sharpness. Turn it off with `?adaptiveDpr=off`.
 
 A Gaussian point-appearance mode joins the existing point styles. It softens
 ordinary point samples; it is not a trained 3D Gaussian Splat scene.
 
 ## Collapsible side panels
 
-The left panel column and the right column (the Inspector, and the streaming
-card when a COPC dataset is open) each collapse with a one-tap handle, clearing
-the viewport for a full-width look at the scene. Each side remembers its state
-per browser. The handles stay hidden until a scan is open, and on small screens,
-where the panels move into the bottom sheet. A wheel over any panel scrolls only
-that panel and never moves the camera.
+The left panel column collapses with a one-tap handle. On the right, the
+Inspector and (when a COPC dataset streams) the streaming card each collapse on
+their own handle, so you can hide either without the other. Every handle
+remembers its state per browser and stays hidden until a scan is open; on small
+screens the panels move into the bottom sheet instead. A wheel over any panel
+scrolls only that panel and never moves the camera.
 
 ## Simpler PDF report set
 

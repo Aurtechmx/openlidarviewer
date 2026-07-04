@@ -420,8 +420,8 @@ summary.
 
 ### v0.5.5 — Pan tool, collapsible panels, refined navigation, a simpler report set, accurate scan health
 - **Pan hand tool** — a fourth navigation mode: `4` selects Pan, `G` toggles it, middle-mouse drags pan temporarily; a mouse, pen, or one-finger touch drag moves the scene while the wheel keeps zooming, and the mode is preserved in sessions and share links
-- **Refined viewport navigation** — frame-rate-independent wheel and trackpad zoom (same gesture, same zoom at 60/120/144 Hz), plus motion-adaptive resolution that lowers the device-pixel ratio while you move and restores it when the view settles
-- **Collapsible side panels** — one-tap handles collapse the left column and the right column (Inspector, plus the streaming card for COPC datasets) for a full-width view; each side's state persists per browser
+- **Refined viewport navigation** — frame-rate-independent, pointer-centred wheel and trackpad zoom (same gesture, same zoom at 60/120/144 Hz), plus motion-adaptive resolution that lowers the device-pixel ratio slightly while you move and restores it when you stop
+- **Collapsible side panels** — a one-tap handle collapses the left column; on the right the Inspector and (for COPC streams) the streaming card each collapse on their own handle, so either can be hidden without the other; state persists per browser
 - **Gaussian point-appearance mode** — a point style that softens ordinary point samples (not a trained 3D Gaussian Splat scene)
 - **A two-document PDF report set** — Survey Summary (compact handover) and Technical Report (full record); older report-template identifiers map to the nearest current template
 - **More accurate scan health** — the Health Check separates a complete decode, a deliberate display-sample cap, and a declared-versus-decoded count mismatch, so a sampled load is no longer flagged as having lost points
