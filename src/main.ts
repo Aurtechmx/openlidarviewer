@@ -1151,6 +1151,26 @@ let pendingShareState: ShareState | null = (() => {
 // no filter. Cleared on the empty state.
 let activeElevFilter: [number, number] | null = null;
 let activeIntenFilter: [number, number] | null = null;
+// True once the streaming scan's elevation + intensity filter controls have been
+// seeded. Streaming (COPC/EPT) has no static cloud, so the extent setters weren't
+// being called at all and the controls stayed hidden. We seed ONCE (first
+// resident node) — not per node — so a growing resident intensity range can't
+// re-seed and stomp a window the user has set mid-stream. Reset on every
+// streaming open/close.
+let streamingFilterSeeded = false;
+
+/** Seed the streaming scan's filter controls from the resident data, once. */
+function seedStreamingFilterExtents(): void {
+  if (streamingFilterSeeded || !viewer.hasStreamingCloud) return;
+  const elev = viewer.elevationExtent();
+  const inten = viewer.intensityExtent();
+  // Elevation is header-derived and available immediately; intensity needs a
+  // resident node. Wait until at least one is present before marking seeded.
+  if (!elev && !inten) return;
+  inspector.setElevationExtent(elev);
+  inspector.setIntensityExtent(inten);
+  streamingFilterSeeded = true;
+}
 
 const inspector = new Inspector({
   onColorMode: (mode) => {
@@ -2697,6 +2717,10 @@ void viewerLoaded.then(() => {
   // has streamed in, re-classify and re-route (only if the verdict changes).
   // Debounced + growth-gated so a burst of node-ready events can't thrash.
   viewer.onStreamingNodeReady = () => {
+    // Seed the elevation + intensity filter controls once the first node is
+    // resident (idempotent + guarded, so it runs a single time per streaming
+    // scan). Fixes the streaming filter controls staying hidden.
+    seedStreamingFilterExtents();
     // A manual (non-auto) "Treat as" choice pins the routing exactly like the
     // "Run terrain anyway" override — a late streaming node must not flip it.
     if (scanRouteOverridden || scanTypeOverride !== 'auto') return;
@@ -6193,6 +6217,8 @@ function describeRemoteCopcError(err: unknown, url: string): string {
 
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
+  // A new streaming scan must re-seed its filter controls from its own data.
+  streamingFilterSeeded = false;
   // Finalize the benchmark (if any) before tearing the session down — we
   // want the final cache snapshot and peak resident counters to be observed.
   // The post-session report is logged only under `?benchmark=1`; `?debug=1`
@@ -6469,6 +6495,7 @@ function resetToEmptyState(): void {
   inspector.setIntensityExtent(null);
   activeElevFilter = null;
   activeIntenFilter = null;
+  streamingFilterSeeded = false;
   // Hide + clear the classification legend so it doesn't linger with a stale
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());

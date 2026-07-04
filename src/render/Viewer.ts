@@ -3287,12 +3287,25 @@ export class Viewer {
    * session), leaving the control to accept typed values.
    */
   elevationExtent(): { min: number; max: number } | null {
-    const entry = this._clouds.values().next().value;
-    if (!entry) return null;
     const axisIdx = this._worldUp.z === 1 ? 2 : 1;
-    const b = entry.cloud.bounds();
-    const o = entry.cloud.origin[axisIdx];
-    return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
+    const entry = this._clouds.values().next().value;
+    if (entry) {
+      const b = entry.cloud.bounds();
+      const o = entry.cloud.origin[axisIdx];
+      return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
+    }
+    // Streaming: the tight data bounds come from the file header (known at open,
+    // stable as nodes stream in), so the elevation control seeds once and never
+    // reseeds. Convert the attribute-space bound back to world with the render
+    // origin, matching the static branch above.
+    const sc = this._streaming?.cloud;
+    if (sc) {
+      // Box6 is [minX,minY,minZ, maxX,maxY,maxZ]; the max lives at axisIdx + 3.
+      const b = sc.dataBounds();
+      const o = sc.renderOrigin[axisIdx];
+      return { min: b[axisIdx] + o, max: b[axisIdx + 3] + o };
+    }
+    return null;
   }
 
   /**
@@ -3323,13 +3336,31 @@ export class Viewer {
   intensityExtent(): { min: number; max: number } | null {
     const entry = this._clouds.values().next().value;
     const inten = entry?.cloud.intensity;
-    if (!inten || inten.length === 0) return null;
+    if (inten && inten.length > 0) return this._intensityRange([inten]);
+    // Streaming: LAS headers carry no intensity range, so scan the resident
+    // chunks' intensity buffers. Called once when the streaming scan seeds its
+    // control (not per node), so the O(resident) pass is paid a single time and
+    // the extent stays stable even as more nodes stream in.
+    if (this._streaming?.cloud) {
+      const buffers: ArrayLike<number>[] = [];
+      for (const { decoded } of this._streamingPickData.values()) {
+        if (decoded.intensity && decoded.intensity.length > 0) buffers.push(decoded.intensity);
+      }
+      return buffers.length > 0 ? this._intensityRange(buffers) : null;
+    }
+    return null;
+  }
+
+  /** Min/max over one or more intensity buffers, or null when none are finite. */
+  private _intensityRange(buffers: readonly ArrayLike<number>[]): { min: number; max: number } | null {
     let min = Infinity;
     let max = -Infinity;
-    for (let i = 0; i < inten.length; i++) {
-      const v = inten[i];
-      if (v < min) min = v;
-      if (v > max) max = v;
+    for (const buf of buffers) {
+      for (let i = 0; i < buf.length; i++) {
+        const v = buf[i];
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
     }
     return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
   }
