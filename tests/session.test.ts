@@ -772,3 +772,77 @@ describe('v6 software stamp', () => {
     expect(parseSession(JSON.stringify(raw)).software).toBeUndefined();
   });
 });
+
+describe('v0.5.6 — profile / box / volume measurement kinds round-trip', () => {
+  function withKinds(): Omit<InspectionSession, 'app' | 'kind' | 'version'> {
+    const base = sampleSession();
+    const extra: Measurement[] = [
+      {
+        id: 'prof1',
+        kind: 'profile',
+        name: 'Transect',
+        points: [p(0, 0, 0), p(10, 0, 2)],
+        profileChart: [
+          { distance: 0, height: 1, count: 5 },
+          { distance: 5, height: NaN },
+          { distance: 10, height: 2, count: 3 },
+        ],
+        profileChartResidentOnly: true,
+        profileCorridorWidth: 1.5,
+        profileGroundPercentile: 15,
+      },
+      { id: 'box1', kind: 'box', name: 'BBox', points: [p(0, 0, 0), p(2, 3, 4)] },
+      {
+        id: 'vol1',
+        kind: 'volume',
+        name: 'Stockpile',
+        points: [p(0, 0, 0), p(1, 0, 0), p(1, 1, 0)],
+        volume: {
+          fill: 10, cut: 2, net: 8, referenceZ: 0.5,
+          footprintArea: 1, pointsInPolygon: 1200, density: 3.2, confidence: 'high',
+        },
+        volumeResidentOnly: true,
+      },
+    ];
+    return { ...base, measurements: [...base.measurements, ...extra] };
+  }
+
+  test('all three kinds survive a serialize → parse round-trip', () => {
+    const back = parseSession(serializeSession(withKinds())).measurements;
+    const kinds = back.map((m) => m.kind);
+    expect(kinds).toContain('profile');
+    expect(kinds).toContain('box');
+    expect(kinds).toContain('volume');
+  });
+
+  test('profile keeps its chart (with NaN gap), corridor width, ground percentile, resident flag', () => {
+    const back = parseSession(serializeSession(withKinds())).measurements;
+    const prof = back.find((m) => m.id === 'prof1');
+    expect(prof).toBeDefined();
+    expect(prof?.profileChart).toHaveLength(3);
+    // JSON has no NaN literal — a corridor gap serialises as null and must restore to NaN.
+    expect(Number.isNaN(prof?.profileChart?.[1].height ?? 0)).toBe(true);
+    expect(prof?.profileChart?.[0].count).toBe(5);
+    expect(prof?.profileCorridorWidth).toBe(1.5);
+    expect(prof?.profileGroundPercentile).toBe(15);
+    expect(prof?.profileChartResidentOnly).toBe(true);
+  });
+
+  test('volume keeps its cut/fill record and resident flag', () => {
+    const back = parseSession(serializeSession(withKinds())).measurements;
+    const vol = back.find((m) => m.id === 'vol1');
+    expect(vol?.volume?.net).toBe(8);
+    expect(vol?.volume?.confidence).toBe('high');
+    expect(vol?.volumeResidentOnly).toBe(true);
+  });
+
+  test('a malformed volume record is dropped, but the measurement still imports', () => {
+    const raw = JSON.parse(serializeSession(withKinds())) as { measurements: Record<string, unknown>[] };
+    const vol = raw.measurements.find((m) => m.id === 'vol1');
+    (vol!.volume as Record<string, unknown>).confidence = 'bogus';
+    const back = parseSession(JSON.stringify(raw)).measurements;
+    const parsed = back.find((m) => m.id === 'vol1');
+    expect(parsed).toBeDefined();
+    expect(parsed?.volume).toBeUndefined();
+  });
+});

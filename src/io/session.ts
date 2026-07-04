@@ -14,7 +14,14 @@
  * imports, `Measurement` / `Annotation` and friends, are themselves pure.)
  */
 
-import type { Measurement, MeasurementKind, UnitSystem, Vec3 } from '../render/measure/types';
+import type {
+  Measurement,
+  MeasurementKind,
+  ProfileChartSample,
+  UnitSystem,
+  Vec3,
+  VolumeRecord,
+} from '../render/measure/types';
 import { MIN_POINTS } from '../render/measure/types';
 import type { MeasurementTrust, TrustGrade } from '../render/measure/measurementTrust';
 import type { Annotation, SavedCameraState, Vec3Object } from '../render/annotate/types';
@@ -173,6 +180,12 @@ const KINDS: readonly MeasurementKind[] = [
   'height',
   'angle',
   'slope',
+  // v0.5.6 fix: these were serialized (serializeSession emits the whole
+  // Measurement) but the parser's whitelist silently dropped them on import,
+  // losing profile / box / volume measurements and their specialised data.
+  'profile',
+  'box',
+  'volume',
 ];
 
 /**
@@ -414,9 +427,82 @@ function parseMeasurements(v: unknown): Measurement[] {
     // was actually found), which is the point of evidence.
     const trust = parseMeasurementTrust(item.trust);
     if (trust) m.trust = trust;
+    // Kind-specific specialised data. Serialised as part of the Measurement
+    // object; parsed here so a round-tripped profile/volume keeps its chart,
+    // corridor width, ground percentile, cut/fill record, and resident-only
+    // provenance instead of degrading to bare vertices. Each field is validated
+    // and gated on its kind; anything malformed is dropped, never thrown.
+    if (k === 'profile') {
+      const chart = parseProfileChart(item.profileChart);
+      if (chart) m.profileChart = chart;
+      if (item.profileChartResidentOnly === true) m.profileChartResidentOnly = true;
+      if (isFiniteNum(item.profileCorridorWidth)) m.profileCorridorWidth = item.profileCorridorWidth;
+      if (isFiniteNum(item.profileGroundPercentile)) {
+        // Percentile is dimensionless 0..100; clamp defensively.
+        m.profileGroundPercentile = Math.min(100, Math.max(0, item.profileGroundPercentile));
+      }
+    } else if (k === 'volume') {
+      const volume = parseVolumeRecord(item.volume);
+      if (volume) m.volume = volume;
+      if (item.volumeResidentOnly === true) m.volumeResidentOnly = true;
+    }
     out.push(m);
   }
   return out;
+}
+
+/** A finite number, else the value is treated as absent. */
+function isFiniteNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/**
+ * Parse a persisted profile height-vs-distance series, or `undefined` when it
+ * isn't a usable array. Each sample needs finite `distance`; `height` may be
+ * NaN (a corridor gap) so it's accepted as any number, and the raw JSON encodes
+ * NaN as `null`, which we map back to NaN. `count` is optional and finite.
+ */
+function parseProfileChart(v: unknown): ProfileChartSample[] | undefined {
+  if (!Array.isArray(v) || v.length === 0) return undefined;
+  const out: ProfileChartSample[] = [];
+  for (const s of v.slice(0, MAX_SESSION_ITEMS)) {
+    if (!isRecord(s)) continue;
+    if (!isFiniteNum(s.distance)) continue;
+    // JSON has no NaN literal — a gap serialises as null; restore it to NaN.
+    const height = isFiniteNum(s.height) ? s.height : NaN;
+    const sample: ProfileChartSample = { distance: s.distance, height };
+    if (isFiniteNum(s.count)) sample.count = s.count;
+    out.push(sample);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+const VOLUME_CONFIDENCE: readonly VolumeRecord['confidence'][] = ['high', 'medium', 'low'];
+
+/**
+ * Parse a persisted volume cut/fill record, or `undefined` when malformed. All
+ * numeric fields must be finite; an unknown confidence band is dropped so the
+ * record can't carry an invalid badge. Values are stored in native render
+ * units³ (see the VolumeRecord unit contract) and are not converted here.
+ */
+function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
+  if (!isRecord(v)) return undefined;
+  const nums = ['fill', 'cut', 'net', 'referenceZ', 'footprintArea', 'pointsInPolygon', 'density'] as const;
+  for (const key of nums) if (!isFiniteNum(v[key])) return undefined;
+  if (typeof v.confidence !== 'string'
+    || !VOLUME_CONFIDENCE.includes(v.confidence as VolumeRecord['confidence'])) {
+    return undefined;
+  }
+  return {
+    fill: v.fill as number,
+    cut: v.cut as number,
+    net: v.net as number,
+    referenceZ: v.referenceZ as number,
+    footprintArea: v.footprintArea as number,
+    pointsInPolygon: v.pointsInPolygon as number,
+    density: v.density as number,
+    confidence: v.confidence as VolumeRecord['confidence'],
+  };
 }
 
 const TRUST_GRADES: readonly TrustGrade[] = ['green', 'yellow', 'red'];
