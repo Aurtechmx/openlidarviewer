@@ -3008,6 +3008,35 @@ function exportGeoContext(): {
 }
 
 const exportPanel = new ExportPanel({
+  // Allocation-free summary for the live panel — NEVER snapshots the streaming
+  // resident set (that ~150 MB materialization is deferred to the Export click
+  // via getCloud below). Reads only scalar facts: resident count + colour/CRS
+  // capabilities the streaming source already knows.
+  summaryInfo: () => {
+    if (activeId != null) {
+      const c = viewer.getCloud(activeId);
+      if (!c) return null;
+      const crs = c.metadata?.crs ?? null;
+      return {
+        pointCount: c.pointCount,
+        hasRgb: c.colors != null,
+        hasGpsTime: c.gpsTime != null,
+        crsName: crs?.name ?? null,
+        hasWkt: crs?.wkt != null,
+      };
+    }
+    const sc = viewer.streamingCloud;
+    if (!sc) return null;
+    const crs = sc.crs();
+    return {
+      pointCount: viewer.residentPointTotal(),
+      hasRgb: sc.availableColorModes().includes('rgb'),
+      // COPC/EPT point records (PDRF 6/7/8) carry GPS time.
+      hasGpsTime: true,
+      crsName: crs?.name ?? null,
+      hasWkt: crs?.wkt != null,
+    };
+  },
   getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : streamingExportCloud()),
   isStreamingPending: () => viewer?.streamingCloud != null && streamingExportCloud() == null,
   getActiveClip: () => viewer.getClip(),

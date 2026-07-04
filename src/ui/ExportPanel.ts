@@ -21,7 +21,43 @@ import { buildExportSummary, type ExportSummaryInput } from '../export/exportSum
 import { clipCloud } from '../render/clip/clipCloud';
 import type { ClipBox } from '../render/clip/clipBox';
 
+/**
+ * Lightweight, allocation-free description of the exportable cloud, used to
+ * render the live summary/enablement WITHOUT materializing the point buffers.
+ * For a streaming scan, building the actual export cloud snapshots every
+ * resident node into a fresh PointCloud (~150 MB at 5M points with common
+ * attributes) — far too heavy to run on every option toggle. This carries only
+ * the scalar facts the summary needs; the full cloud is built once, on Export.
+ */
+export interface ExportCloudSummary {
+  /** Points that WILL export (resident count for streaming; full count static). */
+  pointCount: number;
+  hasRgb: boolean;
+  hasGpsTime: boolean;
+  crsName: string | null;
+  hasWkt: boolean;
+}
+
+/** Fallback: derive a summary from an already-materialized cloud (no host summaryInfo). */
+function cloudToSummary(cloud: PointCloud | null): ExportCloudSummary | null {
+  if (!cloud) return null;
+  const crs = cloud.metadata?.crs ?? null;
+  return {
+    pointCount: cloud.pointCount,
+    hasRgb: cloud.colors != null,
+    hasGpsTime: cloud.gpsTime != null,
+    crsName: crs?.name ?? null,
+    hasWkt: crs?.wkt != null,
+  };
+}
+
 export interface ExportPanelCallbacks {
+  /**
+   * Lightweight summary of the exportable cloud for the live panel, or null when
+   * no scan is exportable. MUST NOT materialize streaming buffers. When omitted,
+   * the panel falls back to `getCloud()` (which may allocate) for compatibility.
+   */
+  summaryInfo?: () => ExportCloudSummary | null;
   /** Return the loaded (display-resolution) cloud, or null when none is active. */
   getCloud: () => PointCloud | null;
   /** Whether a full-resolution re-decode of the source is possible (local file). */
@@ -317,21 +353,25 @@ export class ExportPanel {
 
   /** Recompute the live "what you'll get" line from the active cloud + options. */
   private _renderSummary(): void {
-    const cloud = this._cb.getCloud();
-    if (!cloud) {
+    // Prefer the allocation-free summary; only fall back to getCloud() (which can
+    // materialize a streaming snapshot) when no host summaryInfo is wired. This
+    // keeps the live summary off the heavy path — the snapshot is built on Export.
+    const info: ExportCloudSummary | null = this._cb.summaryInfo
+      ? this._cb.summaryInfo()
+      : cloudToSummary(this._cb.getCloud());
+    if (!info) {
       this._summary.textContent = '';
       return;
     }
-    const crs = cloud.metadata?.crs ?? null;
     const input: ExportSummaryInput = {
-      pointCount: cloud.pointCount,
+      pointCount: info.pointCount,
       format: this._format,
-      hasRgb: cloud.colors != null,
-      hasGpsTime: cloud.gpsTime != null,
+      hasRgb: info.hasRgb,
+      hasGpsTime: info.hasGpsTime,
       crsMode: this._crsMode,
-      crsLabel: crs?.name ?? null,
+      crsLabel: info.crsName,
       targetEpsg: parseEpsg(this._targetEpsg),
-      hasWkt: crs?.wkt != null,
+      hasWkt: info.hasWkt,
       classification: this._classProvenance(),
       includeClassification: this._includeClass,
       viewDecimated: this._cb.isReduced(),
@@ -510,7 +550,12 @@ export class ExportPanel {
 
   private async _export(): Promise<void> {
     if (this._busy) return;
-    if (!this._cb.getCloud()) {
+    // Existence check via the lightweight summary so opening the panel / pressing
+    // export doesn't materialize a streaming snapshot before we've committed to it.
+    const exportable = this._cb.summaryInfo
+      ? this._cb.summaryInfo() != null
+      : this._cb.getCloud() != null;
+    if (!exportable) {
       this._setStatus(
         this._cb.isStreamingPending?.()
           ? 'The scan is still streaming in — try export again once points appear.'
