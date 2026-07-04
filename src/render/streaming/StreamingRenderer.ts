@@ -299,6 +299,19 @@ export class StreamingRenderer {
     return out;
   }
 
+  /**
+   * The decoded chunk of every resident node — for a resident-snapshot export.
+   * Each chunk carries the full attribute set (positions, intensity, class,
+   * returns, GPS time, optional RGB) kept CPU-side for recolouring, so the
+   * snapshot needs no GPU readback or re-decode. Positions are in local
+   * (render-origin-shifted) space, matching the picking arrays above.
+   */
+  residentChunks(): DecodedChunk[] {
+    const out: DecodedChunk[] = [];
+    for (const entry of this._meshes.values()) out.push(entry.decoded);
+    return out;
+  }
+
   /** Remove and dispose every resident mesh. */
   dispose(): void {
     // Cancel any pending fade tick before disposing meshes so the rAF

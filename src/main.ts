@@ -2899,11 +2899,40 @@ const reducedById = new Map<string, boolean>();
 // In-project "Export / Convert" panel — converts the open cloud to LAS / XYZ
 // / ASC with the same CRS options as the splash batch converter. The engine
 // (proj4) is imported lazily on Export, so this panel adds nothing heavy.
+// Streaming export snapshot — the Convert lane exports the resident (decoded-
+// so-far) points of a streaming scan. Building the snapshot concatenates every
+// resident node, so memoise it and rebuild only when the resident count
+// changes: the panel calls `getCloud()` on every option toggle for its live
+// summary, which must stay cheap, while the export click still gets a snapshot
+// current as of the latest streamed-in nodes.
+let streamingSnapshot: { cloud: PointCloud; residentCount: number } | null = null;
+function streamingExportCloud(): PointCloud | null {
+  const sc = viewer.streamingCloud;
+  if (!sc) {
+    streamingSnapshot = null;
+    return null;
+  }
+  const rc = sc.residentPointCount;
+  if (!streamingSnapshot || streamingSnapshot.residentCount !== rc) {
+    const snap = viewer.snapshotResidentCloud();
+    streamingSnapshot = snap ? { cloud: snap, residentCount: rc } : null;
+  }
+  return streamingSnapshot?.cloud ?? null;
+}
+
 const exportPanel = new ExportPanel({
-  getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : null),
+  getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : streamingExportCloud()),
+  isStreamingPending: () => viewer.streamingCloud != null && streamingExportCloud() == null,
   getActiveClip: () => viewer.getClip(),
   hasFullSource: () => activeId != null && sourceFileById.has(activeId),
-  isReduced: () => activeId != null && reducedById.get(activeId) === true,
+  // A streaming snapshot exports only the resident (streamed-in) points, so it
+  // is a reduced subset whenever the whole cloud hasn't landed yet — flag it so
+  // the export status says "reduced view" and never reads as the full survey.
+  isReduced: () => {
+    if (activeId != null) return reducedById.get(activeId) === true;
+    const sc = viewer.streamingCloud;
+    return sc != null && sc.residentPointCount < sc.sourcePointCount;
+  },
   getFullCloud: async () => {
     const f = activeId ? sourceFileById.get(activeId) : null;
     if (!f) return null;
@@ -4349,16 +4378,27 @@ function runStreamingModules(cloud: {
   }
   rows.push(headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
 
-  // Bounds — prefer the header's source-coordinate min/max for accuracy.
+  // Bounds — prefer the runtime tight extent (`localBounds`, the same value the
+  // Streaming panel's Extent row shows) over the header's declared min/max.
+  // Some COPC writers stamp the header bbox as the cubic octree root (a
+  // 1000×1000×138 scan written with a 1000³ header), which over-reports the
+  // vertical extent ~7×. `localBounds` reflects the actual node bounds; extents
+  // are origin-shift-invariant, so W/D are identical to the header (the
+  // footprint fills the cube in X/Y) and only the Height row is corrected —
+  // density/spacing are unchanged. Fall back to the header when the runtime
+  // bounds aren't available.
   const header = cloud.metadata?.header;
-  if (header) {
-    const w = header.max[0] - header.min[0];
-    const d = header.max[1] - header.min[1];
-    const h = header.max[2] - header.min[2];
-    rows.push(info('Width', `${w.toFixed(1)} m`));
-    rows.push(info('Depth', `${d.toFixed(1)} m`));
-    rows.push(info('Height', `${h.toFixed(1)} m`));
-    const footprintArea = w * d;
+  const lb = cloud.localBounds?.();
+  const ext = lb
+    ? { w: lb[3] - lb[0], d: lb[4] - lb[1], h: lb[5] - lb[2] }
+    : header
+      ? { w: header.max[0] - header.min[0], d: header.max[1] - header.min[1], h: header.max[2] - header.min[2] }
+      : null;
+  if (ext) {
+    rows.push(info('Width', `${ext.w.toFixed(1)} m`));
+    rows.push(info('Depth', `${ext.d.toFixed(1)} m`));
+    rows.push(info('Height', `${ext.h.toFixed(1)} m`));
+    const footprintArea = ext.w * ext.d;
     if (footprintArea > 0 && cloud.sourcePointCount > 0) {
       const density = cloud.sourcePointCount / footprintArea;
       rows.push(headerMetric('Density', `${density.toFixed(1)} pts/m²`));

@@ -53,6 +53,12 @@ export interface ExportPanelCallbacks {
   kmlStatus?: () => { ready: boolean; reason: string };
   /** The active clip box, if any — when enabled, the cloud export is restricted to it. */
   getActiveClip?: () => ClipBox | null;
+  /**
+   * Whether a streaming scan is attached but has no resident points to export
+   * yet. Lets the gate say "still streaming in" instead of the misleading
+   * "open a scan first" during the brief window before the first node lands.
+   */
+  isStreamingPending?: () => boolean;
 }
 
 export class ExportPanel {
@@ -505,7 +511,12 @@ export class ExportPanel {
   private async _export(): Promise<void> {
     if (this._busy) return;
     if (!this._cb.getCloud()) {
-      this._setStatus('Open a scan first, then export.', 'warn');
+      this._setStatus(
+        this._cb.isStreamingPending?.()
+          ? 'The scan is still streaming in — try export again once points appear.'
+          : 'Open a scan first, then export.',
+        'warn',
+      );
       return;
     }
     const target = parseEpsg(this._targetEpsg);

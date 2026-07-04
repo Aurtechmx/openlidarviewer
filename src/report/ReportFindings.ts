@@ -81,6 +81,17 @@ export interface ReportInspectionSummary {
 const USGS_QL1_PTS_PER_M2 = 8;
 const USGS_QL2_PTS_PER_M2 = 2;
 const USGS_DENSITY_SOURCE = 'Lohani & Ghosh 2017 §6 (USGS Lidar Base Spec)';
+/**
+ * The technical report's density is the all-returns total over the footprint —
+ * the nominal delivery density USGS QL tiers are defined against. The terrain /
+ * DEM products instead grade **bare-earth (ground) density**, which is far
+ * lower under canopy, so the two reports can legitimately land on different QL
+ * verdicts for the same scan. Naming the basis on each keeps that from reading
+ * as a contradiction.
+ */
+const DENSITY_LABEL = 'Point density (all returns)';
+const GROUND_BASIS_NOTE =
+  ' Terrain/DEM products grade bare-earth ground density separately.';
 
 /**
  * The QL density comparison is applicable only when the classifier has cited
@@ -123,7 +134,7 @@ function densityFinding(
   const d = metadata.density;
   if (!Number.isFinite(d) || d <= 0) {
     return {
-      label: 'Point density',
+      label: DENSITY_LABEL,
       value: '—',
       detail: 'Not reported for this source.',
       tier: 'unknown',
@@ -133,7 +144,7 @@ function densityFinding(
   if (!qlApplies) {
     // No capture-type density standard applies — state the number, claim nothing.
     return {
-      label: 'Point density',
+      label: DENSITY_LABEL,
       value,
       detail: 'No capture-type density standard applied to this scan.',
       tier: 'info',
@@ -141,26 +152,26 @@ function densityFinding(
   }
   if (d >= USGS_QL1_PTS_PER_M2) {
     return {
-      label: 'Point density',
+      label: DENSITY_LABEL,
       value,
-      detail: `Meets USGS QL1 (≥ ${USGS_QL1_PTS_PER_M2} pts/m²).`,
+      detail: `Meets USGS QL1 (≥ ${USGS_QL1_PTS_PER_M2} pts/m²) on all-returns density.${GROUND_BASIS_NOTE}`,
       tier: 'met',
       source: USGS_DENSITY_SOURCE,
     };
   }
   if (d >= USGS_QL2_PTS_PER_M2) {
     return {
-      label: 'Point density',
+      label: DENSITY_LABEL,
       value,
-      detail: `Meets USGS QL2 (≥ ${USGS_QL2_PTS_PER_M2} pts/m²); below QL1 (≥ ${USGS_QL1_PTS_PER_M2}).`,
+      detail: `Meets USGS QL2 (≥ ${USGS_QL2_PTS_PER_M2} pts/m²); below QL1 (≥ ${USGS_QL1_PTS_PER_M2}) on all-returns density.${GROUND_BASIS_NOTE}`,
       tier: 'met',
       source: USGS_DENSITY_SOURCE,
     };
   }
   return {
-    label: 'Point density',
+    label: DENSITY_LABEL,
     value,
-    detail: `Below USGS QL2 (≥ ${USGS_QL2_PTS_PER_M2} pts/m²).`,
+    detail: `Below USGS QL2 (≥ ${USGS_QL2_PTS_PER_M2} pts/m²) on all-returns density.${GROUND_BASIS_NOTE}`,
     tier: 'caution',
     source: USGS_DENSITY_SOURCE,
   };

@@ -235,6 +235,7 @@ import { writeFloatColorsInto } from './colorEncode';
 // synchronous `setStreamingQuality` path.
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
 import type { StreamingRenderer } from './streaming/StreamingRenderer';
+import { buildResidentSnapshot } from './streaming/residentSnapshot';
 import type { StreamingSource } from './streaming/StreamingSource';
 import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
@@ -3181,6 +3182,29 @@ export class Viewer {
     const b = entry.cloud.bounds();
     const o = entry.cloud.origin[axisIdx];
     return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
+  }
+
+  /**
+   * A PointCloud built from the streaming cloud's resident (decoded-so-far)
+   * nodes — the honest display-resolution snapshot the Export / Convert panel
+   * writes when a streaming scan is open. Returns null when no streaming cloud
+   * is attached or nothing is resident yet. Full-resolution re-read isn't
+   * available for a range-read streaming source, so this snapshot is exactly
+   * what the viewer holds; positions carry the render origin as their shift.
+   */
+  snapshotResidentCloud(): PointCloud | null {
+    const s = this._streaming;
+    if (!s) return null;
+    const chunks = s.renderer.residentChunks();
+    if (chunks.length === 0) return null;
+    const crs = s.cloud.crs();
+    return buildResidentSnapshot(chunks, {
+      origin: s.cloud.renderOrigin,
+      name: s.cloud.name,
+      // COPC and EPT both decode LAZ point records — the honest source format.
+      sourceFormat: 'laz',
+      ...(crs ? { metadata: { crs } } : {}),
+    });
   }
 
   // ── A.6 Inspection presets ──────────────────────────────────────────────
