@@ -1012,9 +1012,10 @@ export class Viewer {
   private readonly _elevFilterMax = uniform(0);
   /**
    * Materials whose mesh carries the named `aPos` instance-position attribute —
-   * only these fold the elevation multiply into their size node. Class-less and
-   * (for now) streaming meshes keep the prior graph, so they never reference a
-   * missing attribute. Static clouds get `aPos` at build time.
+   * only these fold the elevation multiply into their size node. Both static
+   * clouds and streaming nodes get `aPos` (they share `buildPointMesh`), so both
+   * are filtered by the shared uniforms; any mesh built without it keeps the
+   * prior graph and never references a missing attribute.
    */
   private readonly _materialsWithElev = new WeakSet<THREE.PointsNodeMaterial>();
 
@@ -1792,8 +1793,8 @@ export class Viewer {
     // setup, so `_applySizeMode` folds the class-mask multiply into its size
     // node. Class-less meshes are never registered and keep the prior graph.
     if (classAttr !== null) this._materialsWithClass.add(material);
-    // Static clouds always carry `aPos`, so they always fold the elevation
-    // multiply (identity while the filter is off).
+    // Every mesh from this shared builder (static clouds and streaming nodes)
+    // carries `aPos`, so all fold the elevation multiply (identity while off).
     this._materialsWithElev.add(material);
     // A cloud added while a clip is active inherits it from its first frame.
     if (this._clip?.enabled) {
@@ -3139,8 +3140,8 @@ export class Viewer {
    * window collapse to zero size (hidden) on the next frame; the unfiltered
    * scene is pixel-identical. The window is converted to the primary cloud's
    * attribute space (origin-shifted along the up-axis) by the pure
-   * `elevationFilterUniform` core. Static clouds only in this slice — streaming
-   * nodes join next.
+   * `elevationFilterUniform` core. Applies to static clouds and streaming nodes
+   * alike, since both come from the shared `buildPointMesh`.
    */
   setElevationFilter(range: readonly [number, number] | undefined): void {
     const axisIsZ = this._worldUp.z === 1;
@@ -3164,6 +3165,22 @@ export class Viewer {
     this._elevFilterMin.value = u.min;
     this._elevFilterMax.value = u.max;
     this._bumpRenderActivity();
+  }
+
+  /**
+   * The first static cloud's elevation extent in world/source units, along the
+   * current up-axis, for seeding the elevation-filter control. `bounds()` is in
+   * local (origin-shifted) space, so the world extent adds the cloud's origin
+   * back. Returns null when no static cloud is loaded (e.g. a streaming-only
+   * session), leaving the control to accept typed values.
+   */
+  elevationExtent(): { min: number; max: number } | null {
+    const entry = this._clouds.values().next().value;
+    if (!entry) return null;
+    const axisIdx = this._worldUp.z === 1 ? 2 : 1;
+    const b = entry.cloud.bounds();
+    const o = entry.cloud.origin[axisIdx];
+    return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
   }
 
   // ── A.6 Inspection presets ──────────────────────────────────────────────

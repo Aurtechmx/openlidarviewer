@@ -1151,6 +1151,9 @@ const inspector = new Inspector({
     viewer.setHeightPercentileTrim(trim);
     syncInspectorVisuals();
   },
+  onElevationFilter: (range) => {
+    viewer.setElevationFilter(range ?? undefined);
+  },
   onPointSize: (size) => {
     viewer.setPointSize(size);
     syncInspectorVisuals();
@@ -5284,6 +5287,7 @@ async function handleFile(file: File): Promise<void> {
       refreshLayerCrsFlags();
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
+      inspector.setElevationExtent(viewer.elevationExtent());
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
         result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
       );
@@ -6305,6 +6309,9 @@ function resetToEmptyState(): void {
   // a different cloud with stale trust.
   viewer.setCoverageGrid(null);
   inspector.setCoverageAvailable(false);
+  // No scan → clear any elevation filter and hide its control.
+  viewer.setElevationFilter(undefined);
+  inspector.setElevationExtent(null);
   // Hide + clear the classification legend so it doesn't linger with a stale
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
@@ -6559,6 +6566,7 @@ function removeCloud(id: string): void {
   else {
     refreshLayerCrsFlags();
     applyLayerVisibility();
+    inspector.setElevationExtent(viewer.elevationExtent());
   }
 }
 

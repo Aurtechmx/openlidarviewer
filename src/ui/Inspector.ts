@@ -78,6 +78,11 @@ export interface InspectorCallbacks {
    * dramatic gradient on field-only scans.
    */
   onHeightPercentileTrim: (trim: number) => void;
+  /**
+   * Elevation filter (v0.5.6): a world-space `[min, max]` height window, or
+   * `null` to clear. Points outside the window are hidden.
+   */
+  onElevationFilter?: (range: [number, number] | null) => void;
   onPointSize: (size: number) => void;
   onToggleVisible: (id: string, visible: boolean) => void;
   onRemove: (id: string) => void;
@@ -463,6 +468,22 @@ export class Inspector {
     className: 'olv-height-trim-label',
     text: '5%',
   });
+  // Elevation filter (v0.5.6) — two world-space bounds. The section is hidden
+  // until a static cloud provides an extent to seed the inputs.
+  private _elevExtent: { min: number; max: number } | null = null;
+  private readonly _elevMinInput = (() => {
+    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
+    i.step = 'any';
+    i.setAttribute('aria-label', 'Minimum elevation');
+    return i;
+  })();
+  private readonly _elevMaxInput = (() => {
+    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
+    i.step = 'any';
+    i.setAttribute('aria-label', 'Maximum elevation');
+    return i;
+  })();
+  private _elevFilterSection!: HTMLElement;
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
   // Captured section refs — `setStreamingMode` toggles their visibility so
@@ -831,6 +852,38 @@ export class Inspector {
     ]);
     this._colorBySection = section('Color by', colorByBody);
 
+    // Elevation filter (v0.5.6) — a world-space height window; points outside it
+    // hide. Seeded from the cloud's z-extent by `setElevationExtent`, and hidden
+    // until then. Applies only when both bounds parse (ignores mid-typing).
+    const applyElev = (): void => {
+      const lo = Number(this._elevMinInput.value);
+      const hi = Number(this._elevMaxInput.value);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+      this._cb.onElevationFilter?.([lo, hi]);
+    };
+    this._elevMinInput.addEventListener('input', applyElev);
+    this._elevMaxInput.addEventListener('input', applyElev);
+    const elevReset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
+    elevReset.setAttribute('type', 'button');
+    elevReset.addEventListener('click', () => {
+      if (this._elevExtent) {
+        this._elevMinInput.value = String(Math.floor(this._elevExtent.min));
+        this._elevMaxInput.value = String(Math.ceil(this._elevExtent.max));
+      }
+      this._cb.onElevationFilter?.(null);
+    });
+    const elevBody = el('div', { className: 'olv-elev-body' }, [
+      el('div', { className: 'olv-elev-row' }, [
+        el('span', { className: 'olv-elev-cap', text: 'Min' }),
+        this._elevMinInput,
+        el('span', { className: 'olv-elev-cap', text: 'Max' }),
+        this._elevMaxInput,
+      ]),
+      elevReset,
+    ]);
+    this._elevFilterSection = section('Elevation filter', elevBody);
+    this._elevFilterSection.classList.add('olv-hidden');
+
     // Visuals Studio — Visuals Studio.
     // Build the three chip rails. Each chip's click fires the matching
     // callback; `syncVisuals` updates the active class on every rail
@@ -1014,6 +1067,7 @@ export class Inspector {
       this._datasetIntelligence.element,
       this._layersSection,
       this._colorBySection,
+      this._elevFilterSection,
       // Visuals Studio (presets, curator's tool) → Rendering (raw,
       // technician's tool). Point size is folded into Rendering as a
       // sub-group, so the panel keeps one slot per intent instead of
@@ -1041,6 +1095,21 @@ export class Inspector {
       ariaLabel: 'Show scan information',
     });
     this.sheetToggle.addEventListener('click', () => this.toggleSheet());
+  }
+
+  /**
+   * Seed the elevation-filter inputs from a cloud's world extent and reveal
+   * the section. Passing null hides the section (no static cloud loaded).
+   */
+  setElevationExtent(ext: { min: number; max: number } | null): void {
+    this._elevExtent = ext;
+    if (!ext || !Number.isFinite(ext.min) || !Number.isFinite(ext.max)) {
+      this._elevFilterSection.classList.add('olv-hidden');
+      return;
+    }
+    this._elevMinInput.value = String(Math.floor(ext.min));
+    this._elevMaxInput.value = String(Math.ceil(ext.max));
+    this._elevFilterSection.classList.remove('olv-hidden');
   }
 
   /** Open the Inspector as a bottom sheet (phones). */
