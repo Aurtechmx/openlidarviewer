@@ -354,14 +354,19 @@ const catalogPanel = new CatalogPanel({
     // The picker maps to a single categorical event suffix in the
     // local-first usage counter. The URL itself never leaves the device.
     recordUsage('scan-open', 'curated:usgs-ept');
-    handleRemoteUrl(url).catch((err) => {
-      const msg = err instanceof Error ? err.message : 'Failed to open the dataset.';
-      // Surface the failure in BOTH the drop zone and the catalog's own status —
-      // the catalog is what the user is looking at, so a blocked remote fetch no
-      // longer reads as an endless "Opening …".
-      dropZone.setError(msg);
-      catalogPanel.showOpenError(`Couldn't open the dataset: ${msg}`);
-    });
+    handleRemoteUrl(url).then(
+      // Success transition: clear the "Opening …" pulse once the scan attaches,
+      // so the catalog status doesn't keep pulsing after a successful load.
+      () => catalogPanel.markLoaded(),
+      (err) => {
+        const msg = err instanceof Error ? err.message : 'Failed to open the dataset.';
+        // Surface the failure in BOTH the drop zone and the catalog's own status
+        // — the catalog is what the user is looking at, so a blocked remote fetch
+        // no longer reads as an endless "Opening …".
+        dropZone.setError(msg);
+        catalogPanel.showOpenError(`Couldn't open the dataset: ${msg}`);
+      },
+    );
   },
   // Pre-warm the streaming chunks when the user changes the dropdown
   // selection. By the time they click Open the EPT / COPC chunks are
@@ -400,6 +405,7 @@ const catalogPanel = new CatalogPanel({
         const mod = await loadPlanetaryComputerCatalog();
         const signed = await mod.signAssetUrl(item.assetUrl);
         await handleRemoteUrl(signed);
+        catalogPanel.markLoaded();
       } catch (err) {
         const raw = err instanceof Error ? err.message : 'Failed to open the PC tile.';
         // Distinguish signing failure from streaming failure so the user

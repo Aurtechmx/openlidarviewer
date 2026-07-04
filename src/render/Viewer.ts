@@ -1709,6 +1709,9 @@ export class Viewer {
    * @returns A string ID that identifies this cloud in subsequent calls.
    */
   addCloud(input: PointCloud): string {
+    // A new scan starts a fresh GPU-error slate, so an error this scan raises is
+    // surfaced even if an earlier scan happened to emit the same message text.
+    this._resetGpuErrorHistory();
     // GPU-safety net — no caller may upload a cloud beyond the hard point
     // ceiling. The device-aware load budget already sizes clouds to the
     // machine; this guards any other path that might reach the GPU.
@@ -1911,6 +1914,8 @@ export class Viewer {
     isMobile: boolean,
     benchmark?: StreamingBenchmark | null,
   ): Promise<void> {
+    // Fresh scan ⇒ fresh GPU-error slate (see addCloud).
+    this._resetGpuErrorHistory();
     const [{ StreamingRenderer }, { StreamingScheduler }] =
       await Promise.all([
         loadStreamingRenderer(),
@@ -3185,11 +3190,27 @@ export class Viewer {
   onGpuError?: (message: string) => void;
 
   /**
-   * Distinct GPU-error messages already surfaced this session. A shader/pipeline
-   * validation failure repeats every frame; we report each unique message once
-   * so `onGpuError` isn't spammed and the UI toast isn't retriggered in a loop.
+   * Distinct GPU-error messages already surfaced. A shader/pipeline validation
+   * failure repeats every frame; we report each unique message once so
+   * `onGpuError` isn't spammed. Bounded (`_GPU_ERROR_CAP`) so it can't grow
+   * without limit, and cleared on each new scan open so a later scan's error is
+   * never suppressed just because an earlier scan produced the same text.
    */
-  private readonly _seenGpuErrors = new Set<string>();
+  private _seenGpuErrors = new Set<string>();
+  private static readonly _GPU_ERROR_CAP = 64;
+  /**
+   * The WebGPU device and the bound `uncapturederror` handler, stored so
+   * `dispose()` can detach the listener. An anonymous handler would keep the
+   * disposed Viewer alive through its closure for as long as the device lives.
+   */
+  private _gpuDevice: {
+    addEventListener?: (t: string, cb: (e: unknown) => void) => void;
+    removeEventListener?: (t: string, cb: (e: unknown) => void) => void;
+    lost?: Promise<{ reason?: string; message?: string }>;
+  } | null = null;
+  private _onGpuUncapturedError: ((e: unknown) => void) | null = null;
+  /** Set once `device.lost` resolves — suppresses further per-frame GPU noise. */
+  private _gpuDeviceLost = false;
 
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();
@@ -4303,16 +4324,35 @@ export class Viewer {
     if (this.activeBackend() !== 'webgpu') return;
     try {
       const backend = (this._renderer as unknown as {
-        backend?: { device?: { addEventListener?: (t: string, cb: (e: unknown) => void) => void } };
+        backend?: { device?: Viewer['_gpuDevice'] };
       }).backend;
-      const device = backend?.device;
+      const device = backend?.device ?? null;
       if (!device || typeof device.addEventListener !== 'function') return;
-      device.addEventListener('uncapturederror', (event: unknown) => {
+      // Bound handler stored on the instance so `dispose()` can detach it with a
+      // matching reference (an anonymous arrow could never be removed).
+      const handler = (event: unknown): void => {
         const gpuError = (event as { error?: { message?: string; constructor?: { name?: string } } }).error;
         const kind = gpuError?.constructor?.name ?? 'GPUError';
         const detail = gpuError?.message ?? String(event);
         this._reportGpuError(`${kind}: ${detail}`);
-      });
+      };
+      device.addEventListener('uncapturederror', handler);
+      this._gpuDevice = device;
+      this._onGpuUncapturedError = handler;
+      // `device.lost` resolves if the GPU device is reset or evicted — a
+      // separate channel from uncapturederror. Left unhandled it leaves a
+      // permanently blank canvas with no signal; surface it once so the host
+      // can tell the user to reload. (Full re-init is out of scope here.)
+      if (device.lost && typeof device.lost.then === 'function') {
+        void device.lost.then((info) => {
+          this._gpuDeviceLost = true;
+          const reason = info?.reason ?? 'unknown';
+          const detail = info?.message ?? '';
+          this._reportGpuError(
+            `GPUDeviceLost: the graphics device was lost (${reason}). ${detail} Reload the page to continue.`.trim(),
+          );
+        });
+      }
     } catch {
       // Never let error-plumbing setup break init — the viewer is still usable.
     }
@@ -4324,7 +4364,15 @@ export class Viewer {
    * exactly once so the toast isn't retriggered in a render-rate loop.
    */
   private _reportGpuError(message: string): void {
+    // Once the device is lost, every subsequent frame raises fresh uncaptured
+    // errors from the dead device — pure noise. The one actionable message
+    // ("device lost, reload") has already been surfaced, so drop the rest.
+    if (this._gpuDeviceLost && !message.startsWith('GPUDeviceLost')) return;
     if (this._seenGpuErrors.has(message)) return;
+    // Bound: a pathological stream of distinct messages can't grow the set
+    // without limit. Dropping the history just means an old message could be
+    // re-reported later — harmless, and far better than an unbounded set.
+    if (this._seenGpuErrors.size >= Viewer._GPU_ERROR_CAP) this._seenGpuErrors.clear();
     this._seenGpuErrors.add(message);
     console.error(`OpenLiDARViewer: GPU error — ${message}`);
     try {
@@ -4332,6 +4380,15 @@ export class Viewer {
     } catch {
       // A throwing host handler must not take down the render loop.
     }
+  }
+
+  /**
+   * Forget the GPU errors surfaced so far. Called when a new scan opens so a
+   * fresh scan's error is never silently suppressed because an earlier scan
+   * happened to emit the same message text.
+   */
+  private _resetGpuErrorHistory(): void {
+    if (this._seenGpuErrors.size > 0) this._seenGpuErrors = new Set<string>();
   }
 
   /**
@@ -5023,6 +5080,14 @@ export class Viewer {
     if (typeof document !== 'undefined' && this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
     }
+    // Detach the WebGPU uncaptured-error handler so a device that outlives this
+    // Viewer can't retain it (and the disposed Viewer) through the closure.
+    if (this._gpuDevice && this._onGpuUncapturedError
+      && typeof this._gpuDevice.removeEventListener === 'function') {
+      this._gpuDevice.removeEventListener('uncapturederror', this._onGpuUncapturedError);
+    }
+    this._gpuDevice = null;
+    this._onGpuUncapturedError = null;
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
     if (this._resizeObserver) {

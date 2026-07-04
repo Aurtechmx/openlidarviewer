@@ -470,6 +470,16 @@ export class CatalogPanel {
     this._setStatus(message, 'error');
   }
 
+  /**
+   * Clear the "Opening …" pulse once a dataset has successfully attached.
+   * Without a success transition the panel kept pulsing "Opening …" after the
+   * scan was already loaded (it only had opening + error states). Clears the
+   * text and both state classes so the status returns to neutral/idle.
+   */
+  markLoaded(): void {
+    this._setStatus('', 'info');
+  }
+
   private _setStatus(text: string, kind: 'info' | 'opening' | 'error' = 'info'): void {
     this._status.textContent = text;
     this._status.classList.toggle('is-opening', kind === 'opening');
