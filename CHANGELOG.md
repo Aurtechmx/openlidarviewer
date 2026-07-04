@@ -14,8 +14,16 @@ files never leave the device.
   is given in world units and converted to each cloud's local space along its
   up-axis (Z-up for LAS/LAZ/E57, Y-up for phone scans); points outside it
   collapse to zero size on the GPU, so the filtered view adds no draw work and
-  clearing the filter restores the scene exactly. Wired for static clouds in
-  this update; streaming COPC nodes and an on-screen control follow.
+  clearing the filter restores the scene exactly. Works for static clouds and
+  streaming COPC/EPT nodes, with an on-screen control in the Inspector.
+- **Intensity filter.** Hide points outside a chosen intensity window, in the
+  file's raw intensity units. Same GPU approach as the elevation filter (points
+  outside collapse to zero size, no draw cost); the control seeds from the
+  cloud's own intensity range and is hidden for scans without an intensity
+  channel.
+- **Streaming point-cloud export.** Export the streamed-in (resident) points of
+  a COPC/EPT scan to LAS/LAZ/XYZ at display resolution. The export is flagged as
+  a reduced view while the whole cloud is still streaming.
 
 ## [0.5.5] - 2026-07-03
 

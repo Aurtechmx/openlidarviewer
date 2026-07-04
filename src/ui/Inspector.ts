@@ -83,6 +83,11 @@ export interface InspectorCallbacks {
    * `null` to clear. Points outside the window are hidden.
    */
   onElevationFilter?: (range: [number, number] | null) => void;
+  /**
+   * A raw-intensity `[min, max]` filter window, or `null` to clear. Points
+   * whose intensity falls outside the window are hidden.
+   */
+  onIntensityFilter?: (range: [number, number] | null) => void;
   onPointSize: (size: number) => void;
   onToggleVisible: (id: string, visible: boolean) => void;
   onRemove: (id: string) => void;
@@ -484,6 +489,21 @@ export class Inspector {
     return i;
   })();
   private _elevFilterSection!: HTMLElement;
+  // Intensity filter (v0.5.6) — mirrors the elevation filter, raw intensity units.
+  private _intenExtent: { min: number; max: number } | null = null;
+  private readonly _intenMinInput = (() => {
+    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
+    i.step = 'any';
+    i.setAttribute('aria-label', 'Minimum intensity');
+    return i;
+  })();
+  private readonly _intenMaxInput = (() => {
+    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
+    i.step = 'any';
+    i.setAttribute('aria-label', 'Maximum intensity');
+    return i;
+  })();
+  private _intenFilterSection!: HTMLElement;
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
   // Captured section refs — `setStreamingMode` toggles their visibility so
@@ -884,6 +904,38 @@ export class Inspector {
     this._elevFilterSection = section('Elevation filter', elevBody);
     this._elevFilterSection.classList.add('olv-hidden');
 
+    // Intensity filter (v0.5.6) — a raw-intensity window; points outside it
+    // hide. Seeded from the cloud's intensity range by `setIntensityExtent`, and
+    // hidden until then (and for clouds with no intensity channel).
+    const applyInten = (): void => {
+      const lo = Number(this._intenMinInput.value);
+      const hi = Number(this._intenMaxInput.value);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+      this._cb.onIntensityFilter?.([lo, hi]);
+    };
+    this._intenMinInput.addEventListener('input', applyInten);
+    this._intenMaxInput.addEventListener('input', applyInten);
+    const intenReset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
+    intenReset.setAttribute('type', 'button');
+    intenReset.addEventListener('click', () => {
+      if (this._intenExtent) {
+        this._intenMinInput.value = String(Math.floor(this._intenExtent.min));
+        this._intenMaxInput.value = String(Math.ceil(this._intenExtent.max));
+      }
+      this._cb.onIntensityFilter?.(null);
+    });
+    const intenBody = el('div', { className: 'olv-elev-body' }, [
+      el('div', { className: 'olv-elev-row' }, [
+        el('span', { className: 'olv-elev-cap', text: 'Min' }),
+        this._intenMinInput,
+        el('span', { className: 'olv-elev-cap', text: 'Max' }),
+        this._intenMaxInput,
+      ]),
+      intenReset,
+    ]);
+    this._intenFilterSection = section('Intensity filter', intenBody);
+    this._intenFilterSection.classList.add('olv-hidden');
+
     // Visuals Studio — Visuals Studio.
     // Build the three chip rails. Each chip's click fires the matching
     // callback; `syncVisuals` updates the active class on every rail
@@ -1068,6 +1120,7 @@ export class Inspector {
       this._layersSection,
       this._colorBySection,
       this._elevFilterSection,
+      this._intenFilterSection,
       // Visuals Studio (presets, curator's tool) → Rendering (raw,
       // technician's tool). Point size is folded into Rendering as a
       // sub-group, so the panel keeps one slot per intent instead of
@@ -1110,6 +1163,22 @@ export class Inspector {
     this._elevMinInput.value = String(Math.floor(ext.min));
     this._elevMaxInput.value = String(Math.ceil(ext.max));
     this._elevFilterSection.classList.remove('olv-hidden');
+  }
+
+  /**
+   * Seed the intensity-filter inputs from a cloud's intensity range and reveal
+   * the section. Passing null hides it (no static cloud, or no intensity
+   * channel).
+   */
+  setIntensityExtent(ext: { min: number; max: number } | null): void {
+    this._intenExtent = ext;
+    if (!ext || !Number.isFinite(ext.min) || !Number.isFinite(ext.max)) {
+      this._intenFilterSection.classList.add('olv-hidden');
+      return;
+    }
+    this._intenMinInput.value = String(Math.floor(ext.min));
+    this._intenMaxInput.value = String(Math.ceil(ext.max));
+    this._intenFilterSection.classList.remove('olv-hidden');
   }
 
   /** Open the Inspector as a bottom sheet (phones). */

@@ -14,8 +14,22 @@ works for Z-up surveys (LAS, LAZ, E57) and Y-up phone scans. Points outside the
 window collapse to zero size on the GPU: the filtered view adds no draw work, and
 clearing the filter restores the scene exactly.
 
-This update wires the filter for static clouds. Streaming COPC nodes and an
-on-screen control are next in the 0.5.6 line.
+The filter works for static clouds and streaming COPC/EPT nodes, driven by an
+on-screen control in the Inspector.
+
+## Intensity filter
+
+Hide points outside a chosen intensity window, in the file's raw intensity
+units. It uses the same GPU approach as the elevation filter: points outside the
+window collapse to zero size, so the filtered view adds no draw work. The
+control seeds from the cloud's own intensity range and stays hidden for scans
+that carry no intensity channel.
+
+## Streaming point-cloud export
+
+Export the streamed-in (resident) points of a COPC or EPT scan to LAS, LAZ, or
+XYZ at display resolution. While the whole cloud is still streaming, the export
+is flagged as a reduced view so it is never mistaken for the full survey.
 
 ## Compatibility and scope
 

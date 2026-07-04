@@ -1154,6 +1154,9 @@ const inspector = new Inspector({
   onElevationFilter: (range) => {
     viewer.setElevationFilter(range ?? undefined);
   },
+  onIntensityFilter: (range) => {
+    viewer.setIntensityFilter(range ?? undefined);
+  },
   onPointSize: (size) => {
     viewer.setPointSize(size);
     syncInspectorVisuals();
@@ -3684,6 +3687,10 @@ if (testApi) {
       // [min, max] window (or null to clear) and confirm points outside it hide.
       setElevationFilter: (range: [number, number] | null) =>
         v.setElevationFilter(range ?? undefined),
+      // Intensity filter (v0.5.6) device-verify seam: pass a raw-intensity
+      // [min, max] window (or null to clear) and confirm points outside it hide.
+      setIntensityFilter: (range: [number, number] | null) =>
+        v.setIntensityFilter(range ?? undefined),
       // Classification edit seam — seed a uniform class, reclassify a screen
       // lasso, undo/redo, and read a point's class, so the reclassify tool's
       // full flow is e2e-verifiable without running the heavy classifier.
@@ -5353,6 +5360,7 @@ async function handleFile(file: File): Promise<void> {
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspector.setElevationExtent(viewer.elevationExtent());
+      inspector.setIntensityExtent(viewer.intensityExtent());
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
         result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
       );
@@ -6377,6 +6385,8 @@ function resetToEmptyState(): void {
   // No scan → clear any elevation filter and hide its control.
   viewer.setElevationFilter(undefined);
   inspector.setElevationExtent(null);
+  viewer.setIntensityFilter(undefined);
+  inspector.setIntensityExtent(null);
   // Hide + clear the classification legend so it doesn't linger with a stale
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
@@ -6632,6 +6642,7 @@ function removeCloud(id: string): void {
     refreshLayerCrsFlags();
     applyLayerVisibility();
     inspector.setElevationExtent(viewer.elevationExtent());
+    inspector.setIntensityExtent(viewer.intensityExtent());
   }
 }
 

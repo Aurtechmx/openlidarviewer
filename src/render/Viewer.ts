@@ -63,6 +63,7 @@ import type { PointCloud } from '../model/PointCloud';
 import type { ClassVisibility } from './class/classVisibility';
 import { classVisibleAt } from './class/classMaskUniform';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
+import { intensityFilterUniform } from './intensityFilterUniform';
 import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
@@ -1020,6 +1021,20 @@ export class Viewer {
    */
   private readonly _materialsWithElev = new WeakSet<THREE.PointsNodeMaterial>();
 
+  // Intensity filter (v0.5.6): `enabled` gates the test; `min`/`max` are the
+  // inclusive window in raw intensity units, matching the `aIntensity` attribute
+  // (no origin shift — intensity is a raw per-point scalar).
+  private readonly _intenFilterEnabled = uniform(0);
+  private readonly _intenFilterMin = uniform(0);
+  private readonly _intenFilterMax = uniform(0);
+  /**
+   * Materials whose mesh carries the `aIntensity` instance attribute — only
+   * these fold the intensity multiply. A cloud without an intensity channel
+   * (PLY, some PCD) skips the attribute and keeps the prior graph, so the filter
+   * is a silent no-op there, exactly like the class mask.
+   */
+  private readonly _materialsWithInten = new WeakSet<THREE.PointsNodeMaterial>();
+
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
@@ -1708,6 +1723,9 @@ export class Viewer {
       // downsampled positions by `downsampleToBudget`), never the original
       // input — the attribute must align 1:1 with the uploaded points.
       cloud.classification ?? null,
+      // Intensity rides along 1:1 for the intensity filter (v0.5.6); the
+      // downsampled cloud carries a downsampled intensity in lockstep.
+      cloud.intensity ?? null,
     );
     this._scene.add(mesh);
 
@@ -1727,6 +1745,7 @@ export class Viewer {
     positions: Float32Array,
     colorsU8: Uint8Array,
     classification: ArrayLike<number> | null = null,
+    intensity: ArrayLike<number> | null = null,
   ): PointMeshHandle {
     const geometry = new THREE.InstancedBufferGeometry();
     geometry.setAttribute(
@@ -1758,6 +1777,20 @@ export class Viewer {
       for (let i = 0; i < n; i++) classData[i] = classification[i];
       classAttr = new THREE.InstancedBufferAttribute(classData, 1);
       geometry.setAttribute('aClass', classAttr);
+    }
+
+    // Per-point intensity, uploaded as a one-value-per-instance float attribute
+    // named `aIntensity` (v0.5.6 intensity filter). Raw source units — the size
+    // graph compares against the window directly. Skipped when the cloud carries
+    // no intensity channel, so such meshes keep the prior graph and the filter
+    // stays a no-op for them. Mirrors `aClass`.
+    let intenAttr: THREE.InstancedBufferAttribute | null = null;
+    if (intensity !== null) {
+      const intenData = new Float32Array(instanceCount);
+      const ni = Math.min(instanceCount, intensity.length);
+      for (let i = 0; i < ni; i++) intenData[i] = intensity[i];
+      intenAttr = new THREE.InstancedBufferAttribute(intenData, 1);
+      geometry.setAttribute('aIntensity', intenAttr);
     }
 
     // `instancedBufferAttribute` is typed as a broad node-type union; narrow
@@ -1797,6 +1830,8 @@ export class Viewer {
     // Every mesh from this shared builder (static clouds and streaming nodes)
     // carries `aPos`, so all fold the elevation multiply (identity while off).
     this._materialsWithElev.add(material);
+    // Record intensity carriers so `_applySizeMode` folds the intensity multiply.
+    if (intenAttr !== null) this._materialsWithInten.add(material);
     // A cloud added while a clip is active inherits it from its first frame.
     if (this._clip?.enabled) {
       material.clippingPlanes = clipBoxPlanes(this._clip);
@@ -3182,6 +3217,40 @@ export class Viewer {
     const b = entry.cloud.bounds();
     const o = entry.cloud.origin[axisIdx];
     return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
+  }
+
+  /**
+   * Set the intensity filter window in raw intensity units, or clear it with
+   * `undefined`. Points whose intensity falls outside the inclusive window
+   * collapse to zero size (hidden); the unfiltered scene is pixel-identical.
+   * Applies to static clouds and streaming nodes alike (both carry `aIntensity`
+   * when the source has an intensity channel). No-op for clouds without one.
+   */
+  setIntensityFilter(range: readonly [number, number] | undefined): void {
+    const u = intensityFilterUniform(range);
+    this._intenFilterEnabled.value = u.enabled;
+    this._intenFilterMin.value = u.min;
+    this._intenFilterMax.value = u.max;
+    this._bumpRenderActivity();
+  }
+
+  /**
+   * The first static cloud's intensity min/max, for seeding the intensity-filter
+   * control. Returns null when no static cloud is loaded or the cloud has no
+   * intensity channel. O(n) over the intensity array — run once on load.
+   */
+  intensityExtent(): { min: number; max: number } | null {
+    const entry = this._clouds.values().next().value;
+    const inten = entry?.cloud.intensity;
+    if (!inten || inten.length === 0) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < inten.length; i++) {
+      const v = inten[i];
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
   }
 
   /**
@@ -4916,10 +4985,11 @@ export class Viewer {
     const adaptive = this._pointSizeMode === 'adaptive';
     const hasClass = this._materialsWithClass.has(material);
     const hasElev = this._materialsWithElev.has(material);
+    const hasInten = this._materialsWithInten.has(material);
     // No per-point filter applies to this material — keep the exact prior graph
-    // (adaptive node or `null`) so class-less, elevation-less meshes are
-    // untouched and never reference a missing attribute.
-    if (!hasClass && !hasElev) {
+    // (adaptive node or `null`) so unfiltered meshes are untouched and never
+    // reference a missing attribute.
+    if (!hasClass && !hasElev && !hasInten) {
       material.sizeNode = (
         adaptive ? this._adaptiveSizeNode : null
       ) as typeof material.sizeNode;
@@ -4927,11 +4997,12 @@ export class Viewer {
     }
     // Any filtered material routes fixed mode through `materialPointSize` (the
     // node form of `material.size`) so the pixel size is preserved while the
-    // mask multiplies it. Fold each active multiplier; both are the identity (×1)
-    // when their filter is off, so the unfiltered scene stays pixel-for-pixel.
+    // mask multiplies it. Fold each active multiplier; every one is the identity
+    // (×1) when its filter is off, so the unfiltered scene stays pixel-for-pixel.
     let node: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
     if (hasElev) node = node.mul(this._elevMaskMultiplier());
     if (hasClass) node = node.mul(this._classMaskMultiplier());
+    if (hasInten) node = node.mul(this._intenMaskMultiplier());
     material.sizeNode = node as typeof material.sizeNode;
   }
 
@@ -4975,6 +5046,21 @@ export class Viewer {
     const hi: TslNode = step(elev, this._elevFilterMax as TslNode); // elev <= max
     const inRange: TslNode = lo.mul(hi);
     return mix(float(1), inRange, this._elevFilterEnabled as TslNode);
+  }
+
+  /**
+   * The per-point intensity-mask multiplier (v0.5.6): reads the `aIntensity`
+   * instance attribute, tests it against the inclusive `[min, max]` window, and
+   * resolves to `1` (in range or filter off) or `0` (out of range). Same
+   * `step` + `mix` construction as the elevation mask — no origin shift, since
+   * intensity is a raw scalar compared directly against the window.
+   */
+  private _intenMaskMultiplier(): TslNode {
+    const inten: TslNode = attribute('aIntensity');
+    const lo: TslNode = step(this._intenFilterMin as TslNode, inten); // inten >= min
+    const hi: TslNode = step(inten, this._intenFilterMax as TslNode); // inten <= max
+    const inRange: TslNode = lo.mul(hi);
+    return mix(float(1), inRange, this._intenFilterEnabled as TslNode);
   }
 
   /**
