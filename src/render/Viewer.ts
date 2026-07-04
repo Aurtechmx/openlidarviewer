@@ -3121,6 +3121,18 @@ export class Viewer {
   /** Switch between adaptive (distance-scaled) and fixed point sizing. */
   setPointSizeMode(mode: PointSizeMode): void {
     this._pointSizeMode = mode;
+    this._reapplyAllSizeModes();
+  }
+
+  /**
+   * Re-run `_applySizeMode` on every live material — static clouds and streaming
+   * nodes alike — and flag them for a pipeline rebuild. Called whenever the size
+   * graph's SHAPE can change: a point-size-mode switch, or a per-point filter
+   * turning on or off (which adds/removes a fold, changing the compiled shader).
+   * A filter merely NARROWING within an already-active window does not call this
+   * — that only moves uniform values and needs no rebuild.
+   */
+  private _reapplyAllSizeModes(): void {
     for (const { material } of this._clouds.values()) {
       this._applySizeMode(material);
       material.needsUpdate = true;
@@ -3191,7 +3203,13 @@ export class Viewer {
     }
     // Cache whether any class is hidden so the pick paths skip the per-point
     // visibility predicate entirely on the all-visible hot path.
+    const wasFiltered = this._classFiltered;
     this._classFiltered = anyHidden;
+    // The class fold is present in the size graph only while some class is
+    // hidden. Crossing the all-visible ↔ some-hidden boundary changes the graph
+    // shape, so rebuild the affected pipelines. Changing WHICH classes are hidden
+    // while still filtered is a uniform-only change (the mask array re-uploads).
+    if (wasFiltered !== anyHidden) this._reapplyAllSizeModes();
     this._bumpRenderActivity();
   }
 
@@ -3221,10 +3239,16 @@ export class Viewer {
         ? staticCloud.origin[axisIdx]
         : 0;
     const u = elevationFilterUniform(range, axis, origin);
+    const wasActive = this._elevFilterEnabled.value !== 0;
     this._elevFilterEnabled.value = u.enabled;
     this._elevFilterAxisIsZ.value = axisIsZ ? 1 : 0;
     this._elevFilterMin.value = u.min;
     this._elevFilterMax.value = u.max;
+    // Turning the filter on or off changes the size graph's SHAPE (the elevation
+    // fold enters or leaves the compiled shader), so rebuild the affected
+    // pipelines. Merely moving the window while it stays active only changes
+    // uniform values and needs no rebuild — the mask node re-reads them per frame.
+    if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
     this._bumpRenderActivity();
   }
 
@@ -3253,9 +3277,14 @@ export class Viewer {
    */
   setIntensityFilter(range: readonly [number, number] | undefined): void {
     const u = intensityFilterUniform(range);
+    const wasActive = this._intenFilterEnabled.value !== 0;
     this._intenFilterEnabled.value = u.enabled;
     this._intenFilterMin.value = u.min;
     this._intenFilterMax.value = u.max;
+    // On/off toggles the intensity fold in the compiled shader — rebuild the
+    // affected pipelines on that transition only. Narrowing an already-active
+    // window is a uniform-only change.
+    if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
     this._bumpRenderActivity();
   }
 
@@ -5057,26 +5086,36 @@ export class Viewer {
    */
   private _applySizeMode(material: THREE.PointsNodeMaterial): void {
     const adaptive = this._pointSizeMode === 'adaptive';
-    const hasClass = this._materialsWithClass.has(material);
-    const hasElev = this._materialsWithElev.has(material);
-    const hasInten = this._materialsWithInten.has(material);
-    // No per-point filter applies to this material — keep the exact prior graph
-    // (adaptive node or `null`) so unfiltered meshes are untouched and never
-    // reference a missing attribute.
-    if (!hasClass && !hasElev && !hasInten) {
+    // A fold enters this material's size graph only when BOTH the mesh carries
+    // the required attribute AND the corresponding filter is currently active.
+    //
+    // Gating on the ACTIVE state (not just attribute presence) is deliberate and
+    // load-bearing: an inactive filter used to still fold its mask into every
+    // carrier mesh, relying on the `mix(1, …, enabled)` identity to be a no-op.
+    // That left `attribute('aPos')` / `attribute('aIntensity')` reads compiled
+    // into essentially every scan's vertex shader even with no filter in use —
+    // a shape the plain-open path never had before v0.5.6, and the regression
+    // behind "scans open but nothing renders." With this gate, a scan opened
+    // without any active filter gets the exact pre-filter graph (adaptive node
+    // or `null`) — no extra attribute reads, no mask math. Folds appear only
+    // when the user actually turns a filter on (which re-runs this via
+    // `_reapplyAllSizeModes`, rebuilding the pipeline for that transition).
+    const foldClass = this._materialsWithClass.has(material) && this._classFiltered;
+    const foldElev = this._materialsWithElev.has(material) && this._elevFilterEnabled.value !== 0;
+    const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
+    if (!foldClass && !foldElev && !foldInten) {
       material.sizeNode = (
         adaptive ? this._adaptiveSizeNode : null
       ) as typeof material.sizeNode;
       return;
     }
-    // Any filtered material routes fixed mode through `materialPointSize` (the
-    // node form of `material.size`) so the pixel size is preserved while the
-    // mask multiplies it. Fold each active multiplier; every one is the identity
-    // (×1) when its filter is off, so the unfiltered scene stays pixel-for-pixel.
+    // At least one filter is active on this material. Route fixed mode through
+    // `materialPointSize` (the node form of `material.size`) so the pixel size is
+    // preserved while the mask(s) multiply it, then fold each active multiplier.
     let node: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
-    if (hasElev) node = node.mul(this._elevMaskMultiplier());
-    if (hasClass) node = node.mul(this._classMaskMultiplier());
-    if (hasInten) node = node.mul(this._intenMaskMultiplier());
+    if (foldElev) node = node.mul(this._elevMaskMultiplier());
+    if (foldClass) node = node.mul(this._classMaskMultiplier());
+    if (foldInten) node = node.mul(this._intenMaskMultiplier());
     material.sizeNode = node as typeof material.sizeNode;
   }
 
