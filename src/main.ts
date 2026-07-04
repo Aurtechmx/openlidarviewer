@@ -1801,7 +1801,9 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       metaDatumKnown = !!crs?.verticalDatum;
       classification = cloud.classificationIsDerived ? 'derived' : cloud.classification ? 'source' : 'none';
     } else if (streaming) {
-      const lb = streaming.localBounds();
+      // Tight data AABB, not the octree cube — the cube overstates footprint
+      // area (and understates density) for a partial-footprint scan.
+      const lb = streaming.dataBounds();
       areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]) * areaUnitToM2;
       pointCount = streaming.sourcePointCount;
       const sCrs = streaming.crs();
@@ -2920,6 +2922,29 @@ function streamingExportCloud(): PointCloud | null {
   return streamingSnapshot?.cloud ?? null;
 }
 
+/**
+ * Origin + CRS + name for the ACTIVE scan, static OR streaming. The Products-
+ * lane exporters (measurements / integrity report / KML) place local points
+ * back into the source frame by adding the cloud origin — but streaming clouds
+ * aren't tracked by `activeId`, so reading only the static cloud left them
+ * exporting at RENDER-frame coordinates (off by the whole `renderOrigin`) with
+ * no CRS. This resolves the origin from the streaming source's `renderOrigin`
+ * when no static cloud is active.
+ */
+function exportGeoContext(): {
+  origin: readonly [number, number, number];
+  crsName: string | undefined;
+  name: string | null;
+} {
+  if (activeId) {
+    const c = viewer.getCloud(activeId);
+    if (c) return { origin: c.origin, crsName: c.metadata?.crs?.name, name: c.name };
+  }
+  const sc = viewer.streamingCloud;
+  if (sc) return { origin: sc.renderOrigin, crsName: sc.crs()?.name ?? undefined, name: sc.name };
+  return { origin: [0, 0, 0], crsName: undefined, name: null };
+}
+
 const exportPanel = new ExportPanel({
   getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : streamingExportCloud()),
   isStreamingPending: () => viewer.streamingCloud != null && streamingExportCloud() == null,
@@ -2955,36 +2980,38 @@ const exportPanel = new ExportPanel({
     const measurements = viewer.measure.getMeasurements();
     if (measurements.length === 0) return;
     const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
     // Measurement points are LOCAL (recentered); add the origin back to land them
-    // in the source projected/local frame. Geographic reprojection (→ lon/lat) is
-    // a later option — for now we emit in the scan's own coordinates.
-    const origin = cloud?.origin ?? [0, 0, 0];
+    // in the source projected/local frame. `exportGeoContext` resolves the
+    // origin for streaming scans too (renderOrigin) — a plain static-only read
+    // would export at render-frame coordinates. Geographic reprojection
+    // (→ lon/lat) is a later option — for now we emit in the scan's own frame.
+    const geo = exportGeoContext();
+    const origin = geo.origin;
     const ctx: MeasurementExportContext = {
       toOutput: (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
-      crsName: cloud?.metadata?.crs?.name,
+      crsName: geo.crsName,
       geographic: false,
     };
     const text = format === 'geojson'
       ? measurementsToGeoJSON(measurements, ctx)
       : measurementsToCsv(measurements, ctx);
-    const stem = cloud ? baseName(cloud.name) : 'measurements';
+    const stem = geo.name ? baseName(geo.name) : 'measurements';
     downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
   },
   exportIntegrityReport: async () => {
     if (!viewer) return;
     const ms = viewer.measure.getMeasurements();
     if (ms.length === 0) return;
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+    const geo = exportGeoContext();
     const { integrityReportFile } = await loadMeasurementReport();
     const f = integrityReportFile(
       ms,
       viewer.measure.worldUp,
       viewer.measure.unitToMetres,
-      cloud ? baseName(cloud.name) : 'scan',
-      cloud?.metadata?.crs?.name,
+      geo.name ? baseName(geo.name) : 'scan',
+      geo.crsName,
       new Date().toISOString(),
       activeId ? viewer.classificationEpoch(activeId) : 0,
       __APP_VERSION__,
@@ -2993,8 +3020,8 @@ const exportPanel = new ExportPanel({
   },
   exportKml: async () => {
     if (!viewer) return;
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
-    const origin = cloud?.origin ?? [0, 0, 0];
+    const geo = exportGeoContext();
+    const origin = geo.origin;
     const toLonLat = makeLocalToLonLat(crsService.current(), origin);
     if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
     const { buildKml } = await loadKmlExport();
@@ -3008,7 +3035,7 @@ const exportPanel = new ExportPanel({
         position: v.pose.position,
         target: v.pose.target,
       })),
-      crsName: cloud?.metadata?.crs?.name ?? crsService.current()?.name ?? null,
+      crsName: geo.crsName ?? crsService.current()?.name ?? null,
       // The exporter reports metres (keys end in _m); unitToMetres scales render
       // units, so the label is always metres.
       unitLabel: 'm',
@@ -3018,13 +3045,15 @@ const exportPanel = new ExportPanel({
       notSurveyGradeNote:
         'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',
     };
-    const stem = cloud ? baseName(cloud.name) : 'site';
+    const stem = geo.name ? baseName(geo.name) : 'site';
     downloadText(`${stem}.kml`, buildKml(input));
   },
   kmlStatus: () => {
     if (!viewer) return { ready: false, reason: 'Open a scan first.' };
-    const cloud = activeId ? viewer.getCloud(activeId) ?? null : null;
-    if (!cloud) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
+    // Resolve origin/CRS for static AND streaming — a georeferenced streaming
+    // scan can place KML too; gating on the static `activeId` disabled it.
+    const geo = exportGeoContext();
+    if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
     const features =
       viewer.measure.getMeasurements().length + viewer.annotate.getAnnotations().length;
     if (features === 0) {
@@ -3037,7 +3066,7 @@ const exportPanel = new ExportPanel({
         reason: 'KML needs a georeferenced scan (it places features on a lat/lon map).',
       };
     }
-    if (!makeLocalToLonLat(resolved, cloud.origin ?? [0, 0, 0])) {
+    if (!makeLocalToLonLat(resolved, geo.origin)) {
       return {
         ready: false,
         reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
@@ -4378,27 +4407,20 @@ function runStreamingModules(cloud: {
   }
   rows.push(headerMetric('Source point count', cloud.sourcePointCount.toLocaleString('en-US')));
 
-  // Bounds — prefer the runtime tight extent (`localBounds`, the same value the
-  // Streaming panel's Extent row shows) over the header's declared min/max.
-  // Some COPC writers stamp the header bbox as the cubic octree root (a
-  // 1000×1000×138 scan written with a 1000³ header), which over-reports the
-  // vertical extent ~7×. `localBounds` reflects the actual node bounds; extents
-  // are origin-shift-invariant, so W/D are identical to the header (the
-  // footprint fills the cube in X/Y) and only the Height row is corrected —
-  // density/spacing are unchanged. Fall back to the header when the runtime
-  // bounds aren't available.
+  // Bounds — the header's source-coordinate min/max is the TIGHT data extent
+  // (a 1000×1000×138 m scan reports 138 m here). Do NOT use `localBounds`: for
+  // streaming that is the octree ROOT CUBE (1000³), which over-reports the
+  // vertical (and any partial-footprint) span. This matches the Streaming
+  // panel's Extent row, which also reads the header.
   const header = cloud.metadata?.header;
-  const lb = cloud.localBounds?.();
-  const ext = lb
-    ? { w: lb[3] - lb[0], d: lb[4] - lb[1], h: lb[5] - lb[2] }
-    : header
-      ? { w: header.max[0] - header.min[0], d: header.max[1] - header.min[1], h: header.max[2] - header.min[2] }
-      : null;
-  if (ext) {
-    rows.push(info('Width', `${ext.w.toFixed(1)} m`));
-    rows.push(info('Depth', `${ext.d.toFixed(1)} m`));
-    rows.push(info('Height', `${ext.h.toFixed(1)} m`));
-    const footprintArea = ext.w * ext.d;
+  if (header) {
+    const w = header.max[0] - header.min[0];
+    const d = header.max[1] - header.min[1];
+    const h = header.max[2] - header.min[2];
+    rows.push(info('Width', `${w.toFixed(1)} m`));
+    rows.push(info('Depth', `${d.toFixed(1)} m`));
+    rows.push(info('Height', `${h.toFixed(1)} m`));
+    const footprintArea = w * d;
     if (footprintArea > 0 && cloud.sourcePointCount > 0) {
       const density = cloud.sourcePointCount / footprintArea;
       rows.push(headerMetric('Density', `${density.toFixed(1)} pts/m²`));
@@ -4589,7 +4611,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
   let metadata: import('./report').MetadataInputs;
   let exportFileStem: string;
   if (streamingCloud) {
-    const b = streamingCloud.localBounds();
+    // `dataBounds` (tight data AABB), NOT `localBounds` (the octree cube): the
+    // cube inflates height ~7× and, for a partial footprint, deflates density.
+    const b = streamingCloud.dataBounds();
     const crs = streamingCloud.crs();
     // Footprint + density in metres / pts·m⁻², not raw CRS units (see
     // reportFootprint): a foot-CRS scan would otherwise overstate the headline
@@ -4985,7 +5009,8 @@ async function exportSession(): Promise<void> {
 
   let scanSummary: import('./io/session').SessionScanSummary | undefined;
   if (streamingCloud) {
-    const b = streamingCloud.localBounds();
+    // Tight data AABB, not the octree cube — see the dataBounds() note above.
+    const b = streamingCloud.dataBounds();
     const crs = streamingCloud.crs();
     scanSummary = {
       fileName: streamingCloud.name,

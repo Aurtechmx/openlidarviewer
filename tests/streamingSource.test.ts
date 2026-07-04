@@ -82,6 +82,7 @@ test('the scheduler accepts any StreamingSource conforming object — EPT will p
     counts: () => realCloud.counts(),
     maxDepth: () => realCloud.maxDepth(),
     localBounds: () => realCloud.localBounds(),
+    dataBounds: () => realCloud.dataBounds(),
     readNodeChunk: (record, signal) => realCloud.readNodeChunk(record, signal),
     decodeMeta: (record) => realCloud.decodeMeta(record),
     // v0.3.3 — `defaultColorMode`, `availableColorModes`, and `crs` joined

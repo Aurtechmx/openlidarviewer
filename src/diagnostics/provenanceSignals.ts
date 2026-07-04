@@ -65,7 +65,13 @@ export interface StaticCloudShape {
 export interface StreamingCloudShape {
   readonly kind: 'copc' | 'ept';
   readonly sourcePointCount?: number;
-  /** Streaming clouds expose extent through `localBounds(): Box6`. */
+  /**
+   * The TIGHT data extent — preferred for the aspect-ratio + density signals.
+   * `localBounds` (the octree cube) reports a 1:1:1 aspect and a cube-area
+   * density, which mis-cues the capture-type classifier for streaming scans.
+   */
+  readonly dataBounds?: () => readonly [number, number, number, number, number, number];
+  /** The octree cube — a fallback only when `dataBounds` is unavailable. */
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
   /** Horizontal CRS, for converting raw-unit extent/density to metres / pts·m⁻². */
   readonly crs?: () => { readonly linearUnitToMetres?: number } | null | undefined;
@@ -134,9 +140,11 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
 export function signalsForStreamingCloud(cloud: StreamingCloudShape): ScanSignals {
   let extent: readonly [number, number, number] | undefined;
   let density: number | undefined;
-  if (typeof cloud.localBounds === 'function') {
+  // Prefer the tight data AABB; the cube (`localBounds`) is only a last resort.
+  const boundsFn = cloud.dataBounds ?? cloud.localBounds;
+  if (typeof boundsFn === 'function') {
     try {
-      const b = cloud.localBounds();
+      const b = boundsFn();
       // Convert raw CRS-unit extent → metres (see the static path) so the
       // classifier and its USGS-QL density tier are graded in metres.
       const f = unitFactor(cloud.crs?.()?.linearUnitToMetres);
