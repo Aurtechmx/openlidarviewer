@@ -355,9 +355,12 @@ const catalogPanel = new CatalogPanel({
     // local-first usage counter. The URL itself never leaves the device.
     recordUsage('scan-open', 'curated:usgs-ept');
     handleRemoteUrl(url).catch((err) => {
-      dropZone.setError(
-        err instanceof Error ? err.message : 'Failed to open the dataset.',
-      );
+      const msg = err instanceof Error ? err.message : 'Failed to open the dataset.';
+      // Surface the failure in BOTH the drop zone and the catalog's own status —
+      // the catalog is what the user is looking at, so a blocked remote fetch no
+      // longer reads as an endless "Opening …".
+      dropZone.setError(msg);
+      catalogPanel.showOpenError(`Couldn't open the dataset: ${msg}`);
     });
   },
   // Pre-warm the streaming chunks when the user changes the dropdown

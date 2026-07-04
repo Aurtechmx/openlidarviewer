@@ -737,6 +737,20 @@ button:disabled { cursor: not-allowed; }
   font-size: var(--text-xs); color: var(--text-dim); min-height: 16px;
   max-width: 420px; line-height: 1.5; text-align: center;
 }
+/* Opening a remote dataset is a wait the user needs to notice — lift the status
+   out of the dim palette into the accent, slightly larger and bolder, with a
+   soft pulse so it clearly reads as "working". */
+.olv-catalog-status.is-opening {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  animation: olv-catalog-pulse 1.4s ease-in-out infinite;
+}
+@keyframes olv-catalog-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .olv-catalog-status.is-opening { animation: none; } }
+/* A failed open reads in the error colour so a blocked fetch never looks like
+   a silent hang. */
+.olv-catalog-status.is-error { color: var(--rating-weak); font-weight: 600; }
 .olv-catalog-results {
   display: flex; flex-direction: column; gap: var(--space-sm); width: 100%;
   max-height: 200px; overflow-y: auto;
