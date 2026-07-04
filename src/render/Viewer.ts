@@ -1667,6 +1667,11 @@ export class Viewer {
         // EDL defaults on for desktop WebGPU; off on the WebGL 2 fallback and on
         // mobile, so a weak device is never dropped below interactive on load.
         this._edlEnabled = edlDefaultEnabled(this.activeBackend(), this._isMobile());
+        // Wire the WebGPU device's uncaptured-error channel to the host so a
+        // shader-compile / pipeline-creation failure (which surfaces AFTER the
+        // scan has decoded + attached) becomes a visible error instead of a
+        // blank canvas with no signal. No-op on the WebGL 2 fallback.
+        this._installGpuErrorListener();
         // Force the first window of frames to render at full rate so
         // the empty state, hero animation, and any pending tween land
         // smoothly before the idle-render throttle kicks in.
@@ -3154,6 +3159,26 @@ export class Viewer {
    */
   onStreamingNodeReady?: () => void;
 
+  /**
+   * Optional host hook fired when the GPU backend reports an UNCAPTURED error —
+   * the async channel WebGPU uses for shader-compile and pipeline-creation
+   * failures. These happen AFTER a scan's decode + attach have already resolved
+   * (the render loop is what actually builds the pipeline), so without this hook
+   * such a failure is silent: the load "succeeds", progress clears, but nothing
+   * paints and the user has no signal as to why. The host routes this to a
+   * visible error (drop-zone toast + catalog status). Messages are de-duplicated
+   * upstream — a broken pipeline re-emits the same validation error every frame.
+   * Set to `undefined` to detach.
+   */
+  onGpuError?: (message: string) => void;
+
+  /**
+   * Distinct GPU-error messages already surfaced this session. A shader/pipeline
+   * validation failure repeats every frame; we report each unique message once
+   * so `onGpuError` isn't spammed and the UI toast isn't retriggered in a loop.
+   */
+  private readonly _seenGpuErrors = new Set<string>();
+
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();
     // `uniformArray`'s backing JS array is what its per-render `update()` copies
@@ -4229,6 +4254,55 @@ export class Viewer {
   activeBackend(): 'webgpu' | 'webgl2' {
     const backend = (this._renderer as unknown as { backend: { isWebGPUBackend?: boolean } }).backend;
     return backend?.isWebGPUBackend === true ? 'webgpu' : 'webgl2';
+  }
+
+  /**
+   * Subscribe to the WebGPU device's `uncapturederror` event. This is the only
+   * channel through which a shader-compile or render-pipeline validation error
+   * surfaces: three.js builds the pipeline lazily inside the render loop, long
+   * after `addCloud` / streaming-attach have resolved, so such a failure never
+   * throws on a path any caller can `catch`. Left unhandled it is invisible —
+   * the scan "opens", the progress toast clears, and the canvas simply stays
+   * blank. Routing it to `onGpuError` turns "nothing happened and I don't know
+   * why" into an actionable message.
+   *
+   * Guarded and best-effort: only WebGPU exposes a `GPUDevice`; the WebGL 2
+   * fallback has no equivalent event and is skipped. Every access is defensive
+   * because the backend's internal shape is not part of three's public API.
+   */
+  private _installGpuErrorListener(): void {
+    if (this.activeBackend() !== 'webgpu') return;
+    try {
+      const backend = (this._renderer as unknown as {
+        backend?: { device?: { addEventListener?: (t: string, cb: (e: unknown) => void) => void } };
+      }).backend;
+      const device = backend?.device;
+      if (!device || typeof device.addEventListener !== 'function') return;
+      device.addEventListener('uncapturederror', (event: unknown) => {
+        const gpuError = (event as { error?: { message?: string; constructor?: { name?: string } } }).error;
+        const kind = gpuError?.constructor?.name ?? 'GPUError';
+        const detail = gpuError?.message ?? String(event);
+        this._reportGpuError(`${kind}: ${detail}`);
+      });
+    } catch {
+      // Never let error-plumbing setup break init — the viewer is still usable.
+    }
+  }
+
+  /**
+   * De-duplicate then forward a GPU error to the host. A broken pipeline emits
+   * the same validation error on every frame; we surface each distinct message
+   * exactly once so the toast isn't retriggered in a render-rate loop.
+   */
+  private _reportGpuError(message: string): void {
+    if (this._seenGpuErrors.has(message)) return;
+    this._seenGpuErrors.add(message);
+    console.error(`OpenLiDARViewer: GPU error — ${message}`);
+    try {
+      this.onGpuError?.(message);
+    } catch {
+      // A throwing host handler must not take down the render loop.
+    }
   }
 
   /**

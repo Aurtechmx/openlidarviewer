@@ -2703,6 +2703,21 @@ void viewerLoaded.then(() => {
       applyScanRoute(false);
     }, 500);
   };
+  // GPU render-stage failures (shader-compile / pipeline-creation) surface on the
+  // WebGPU device's uncaptured-error channel — AFTER a scan's decode + attach have
+  // already resolved. Without this hook such a failure is silent: the scan "opens",
+  // the progress toast clears, and the canvas stays blank with no reason shown
+  // (the exact "scans not opening and doesn't show why" report). Route it to BOTH
+  // surfaces a scan can be opened from — the drop-zone toast (device files) and the
+  // catalog status line (public datasets) — so whichever the user just used shows
+  // the cause. De-duplicated inside the Viewer, so this fires once per distinct error.
+  viewer.onGpuError = (message) => {
+    const friendly =
+      `The GPU couldn't render this scan (${message}). ` +
+      `Try a smaller scan, reload the page, or update your browser/GPU drivers.`;
+    dropZone.setError(friendly);
+    catalogPanel.showOpenError(friendly);
+  };
 });
 
 // The last non-terrain analysis the ObjectPanel rendered, captured so the panel's
@@ -5260,7 +5275,10 @@ async function handleFile(file: File): Promise<void> {
   // `loading` guard too (TOCTOU). The `finally` below is the only reset.
   loading = true;
   const controller = new AbortController();
-  dropZone.setProgress(`Reading ${file.name}…`);
+  // "Opening …" matches the catalog status vocabulary (CatalogPanel's is-opening
+  // line) so device and public-dataset loads read the same. The load's staged
+  // progress (decoding / uploading / rendering) overwrites this a beat later.
+  dropZone.setProgress(`Opening ${file.name}…`);
   dropZone.setCancelHandler(() => controller.abort());
   try {
     // ensure the lazy-loaded Viewer is ready before touching it.
