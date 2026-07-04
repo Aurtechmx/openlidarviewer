@@ -366,6 +366,113 @@ function enterConfirms(input: HTMLInputElement): void {
   });
 }
 
+/** A built range-filter section (elevation or intensity) plus its seed hook. */
+interface RangeFilter {
+  /** The `<section>` to mount in the panel. Hidden until an extent is seeded. */
+  readonly section: HTMLElement;
+  /**
+   * Seed the Min/Max inputs from the data extent and reveal the section; pass
+   * null to hide it (no cloud, or no channel). Clears the active-state cue.
+   */
+  setExtent(ext: { min: number; max: number } | null): void;
+  /**
+   * Restore a saved window (from a session): write it into the inputs and
+   * re-run the apply path (fires `onApply`, refreshes the active cue). Null
+   * reseeds to the full extent and clears the filter.
+   */
+  applyWindow(range: readonly [number, number] | null): void;
+}
+
+/**
+ * Build one Min/Max range-filter section — the shared body behind the
+ * elevation and intensity filters (v0.5.6). Owns the two numeric inputs, the
+ * "Show all" reset, Enter-to-confirm, and the "· filtering" active-state cue
+ * (shown only when the window is narrower than the seeded extent). `onApply`
+ * receives the window `[min, max]`, or null when the user clears it.
+ */
+function buildRangeFilter(opts: {
+  title: string;
+  /** Noun for the input aria-labels, e.g. 'elevation' or 'intensity'. */
+  unit: string;
+  resetTitle: string;
+  onApply: (range: [number, number] | null) => void;
+}): RangeFilter {
+  let extent: { min: number; max: number } | null = null;
+  const mkInput = (bound: string): HTMLInputElement => {
+    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
+    i.step = 'any';
+    i.setAttribute('aria-label', `${bound} ${opts.unit}`);
+    return i;
+  };
+  const minInput = mkInput('Minimum');
+  const maxInput = mkInput('Maximum');
+  const reset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
+  reset.setAttribute('type', 'button');
+  reset.setAttribute('title', opts.resetTitle);
+  const body = el('div', { className: 'olv-elev-body' }, [
+    el('div', { className: 'olv-elev-row' }, [
+      el('span', { className: 'olv-elev-cap', text: 'Min' }),
+      minInput,
+      el('span', { className: 'olv-elev-cap', text: 'Max' }),
+      maxInput,
+    ]),
+    reset,
+  ]);
+  const sectionEl = section(opts.title, body);
+  sectionEl.classList.add('olv-hidden');
+
+  const apply = (): void => {
+    const lo = Number(minInput.value);
+    const hi = Number(maxInput.value);
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+    opts.onApply([lo, hi]);
+    // Flag "filtering" only when the window is narrower than the full extent —
+    // a full-range window hides nothing, so it shouldn't read as active.
+    sectionEl.classList.toggle('olv-filter-active', narrowsExtent(lo, hi, extent));
+  };
+  minInput.addEventListener('input', apply);
+  maxInput.addEventListener('input', apply);
+  enterConfirms(minInput);
+  enterConfirms(maxInput);
+  reset.addEventListener('click', () => {
+    if (extent) {
+      minInput.value = String(Math.floor(extent.min));
+      maxInput.value = String(Math.ceil(extent.max));
+    }
+    opts.onApply(null);
+    sectionEl.classList.remove('olv-filter-active');
+  });
+
+  return {
+    section: sectionEl,
+    setExtent(ext): void {
+      extent = ext;
+      if (!ext || !Number.isFinite(ext.min) || !Number.isFinite(ext.max)) {
+        sectionEl.classList.add('olv-hidden');
+        return;
+      }
+      minInput.value = String(Math.floor(ext.min));
+      maxInput.value = String(Math.ceil(ext.max));
+      // A fresh seed is the full extent — visible, nothing filtered yet.
+      sectionEl.classList.remove('olv-hidden', 'olv-filter-active');
+    },
+    applyWindow(range): void {
+      if (range) {
+        minInput.value = String(range[0]);
+        maxInput.value = String(range[1]);
+        apply();
+      } else {
+        if (extent) {
+          minInput.value = String(Math.floor(extent.min));
+          maxInput.value = String(Math.ceil(extent.max));
+        }
+        opts.onApply(null);
+        sectionEl.classList.remove('olv-filter-active');
+      }
+    },
+  };
+}
+
 /**
  * A collapsible section using native `<details>` / `<summary>`. The
  * summary is styled to match the static `olv-section-label` so the
@@ -495,37 +602,11 @@ export class Inspector {
     className: 'olv-height-trim-label',
     text: '5%',
   });
-  // Elevation filter (v0.5.6) — two world-space bounds. The section is hidden
-  // until a static cloud provides an extent to seed the inputs.
-  private _elevExtent: { min: number; max: number } | null = null;
-  private readonly _elevMinInput = (() => {
-    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
-    i.step = 'any';
-    i.setAttribute('aria-label', 'Minimum elevation');
-    return i;
-  })();
-  private readonly _elevMaxInput = (() => {
-    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
-    i.step = 'any';
-    i.setAttribute('aria-label', 'Maximum elevation');
-    return i;
-  })();
-  private _elevFilterSection!: HTMLElement;
-  // Intensity filter (v0.5.6) — mirrors the elevation filter, raw intensity units.
-  private _intenExtent: { min: number; max: number } | null = null;
-  private readonly _intenMinInput = (() => {
-    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
-    i.step = 'any';
-    i.setAttribute('aria-label', 'Minimum intensity');
-    return i;
-  })();
-  private readonly _intenMaxInput = (() => {
-    const i = el('input', { type: 'number', className: 'olv-elev-input' }) as HTMLInputElement;
-    i.step = 'any';
-    i.setAttribute('aria-label', 'Maximum intensity');
-    return i;
-  })();
-  private _intenFilterSection!: HTMLElement;
+  // Range filters (v0.5.6) — an elevation (world-unit height) filter and an
+  // intensity (raw-unit) filter, both built from the shared `buildRangeFilter`
+  // so the DOM, the active-state cue, and the seed/reset logic live once.
+  private _elevFilter!: RangeFilter;
+  private _intenFilter!: RangeFilter;
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
   // Captured section refs — `setStreamingMode` toggles their visibility so
@@ -873,11 +954,19 @@ export class Inspector {
     // Detail, Provenance, Coordinate system, Scan report, Image export,
     // Report PDF — work uniformly against either source type.
     this._layersSection = section('Layers', this._layers);
-    // v0.3.7 final-polish — build the height percentile-trim row and
-    // mount it inside the "Color by" section beneath the chip rail.
-    // The row hides itself when the active mode isn't 'elevation'.
+    // Height percentile-trim row, mounted inside "Color by" beneath the chip
+    // rail and shown only while colouring BY elevation. It clips the top/bottom
+    // N% of heights from the COLOUR RAMP so tall outliers (a bird, a mast) don't
+    // wash out the gradient — it recolours, it does NOT hide points. Labelled
+    // "Colour trim" and tooltip'd to keep it distinct from the Elevation filter
+    // below, which is what actually hides points.
+    this._heightTrimRow.title =
+      'Clips the top and bottom of the elevation colour ramp so outliers don’t ' +
+      'wash out the gradient. This only affects colour — to hide points by ' +
+      'height, use the Elevation filter.';
+    this._heightTrimSlider.setAttribute('aria-label', 'Elevation colour-ramp trim (percent)');
     this._heightTrimRow.replaceChildren(
-      el('span', { className: 'olv-height-trim-name', text: 'Trim outliers' }),
+      el('span', { className: 'olv-height-trim-name', text: 'Colour trim' }),
       this._heightTrimSlider,
       this._heightTrimLabel,
     );
@@ -894,88 +983,21 @@ export class Inspector {
     ]);
     this._colorBySection = section('Color by', colorByBody);
 
-    // Elevation filter (v0.5.6) — a world-space height window; points outside it
-    // hide. Seeded from the cloud's z-extent by `setElevationExtent`, and hidden
-    // until then. Applies only when both bounds parse (ignores mid-typing).
-    const applyElev = (): void => {
-      const lo = Number(this._elevMinInput.value);
-      const hi = Number(this._elevMaxInput.value);
-      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
-      this._cb.onElevationFilter?.([lo, hi]);
-      // Flag the section as actively hiding points only when the window is
-      // narrower than the cloud's full extent — a full-range window filters
-      // nothing, so it shouldn't read as active.
-      this._elevFilterSection.classList.toggle(
-        'olv-filter-active',
-        narrowsExtent(lo, hi, this._elevExtent),
-      );
-    };
-    this._elevMinInput.addEventListener('input', applyElev);
-    this._elevMaxInput.addEventListener('input', applyElev);
-    enterConfirms(this._elevMinInput);
-    enterConfirms(this._elevMaxInput);
-    const elevReset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
-    elevReset.setAttribute('type', 'button');
-    elevReset.setAttribute('title', 'Clear the filter and show every point in this scan');
-    elevReset.addEventListener('click', () => {
-      if (this._elevExtent) {
-        this._elevMinInput.value = String(Math.floor(this._elevExtent.min));
-        this._elevMaxInput.value = String(Math.ceil(this._elevExtent.max));
-      }
-      this._cb.onElevationFilter?.(null);
-      this._elevFilterSection.classList.remove('olv-filter-active');
+    // Range filters (v0.5.6): elevation (world-unit height) and intensity
+    // (raw units). Both hide points outside the window and share one builder.
+    const resetTitle = 'Clear the filter and show every point in this scan';
+    this._elevFilter = buildRangeFilter({
+      title: 'Elevation filter',
+      unit: 'elevation',
+      resetTitle,
+      onApply: (r) => this._cb.onElevationFilter?.(r),
     });
-    const elevBody = el('div', { className: 'olv-elev-body' }, [
-      el('div', { className: 'olv-elev-row' }, [
-        el('span', { className: 'olv-elev-cap', text: 'Min' }),
-        this._elevMinInput,
-        el('span', { className: 'olv-elev-cap', text: 'Max' }),
-        this._elevMaxInput,
-      ]),
-      elevReset,
-    ]);
-    this._elevFilterSection = section('Elevation filter', elevBody);
-    this._elevFilterSection.classList.add('olv-hidden');
-
-    // Intensity filter (v0.5.6) — a raw-intensity window; points outside it
-    // hide. Seeded from the cloud's intensity range by `setIntensityExtent`, and
-    // hidden until then (and for clouds with no intensity channel).
-    const applyInten = (): void => {
-      const lo = Number(this._intenMinInput.value);
-      const hi = Number(this._intenMaxInput.value);
-      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
-      this._cb.onIntensityFilter?.([lo, hi]);
-      this._intenFilterSection.classList.toggle(
-        'olv-filter-active',
-        narrowsExtent(lo, hi, this._intenExtent),
-      );
-    };
-    this._intenMinInput.addEventListener('input', applyInten);
-    this._intenMaxInput.addEventListener('input', applyInten);
-    enterConfirms(this._intenMinInput);
-    enterConfirms(this._intenMaxInput);
-    const intenReset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
-    intenReset.setAttribute('type', 'button');
-    intenReset.setAttribute('title', 'Clear the filter and show every point in this scan');
-    intenReset.addEventListener('click', () => {
-      if (this._intenExtent) {
-        this._intenMinInput.value = String(Math.floor(this._intenExtent.min));
-        this._intenMaxInput.value = String(Math.ceil(this._intenExtent.max));
-      }
-      this._cb.onIntensityFilter?.(null);
-      this._intenFilterSection.classList.remove('olv-filter-active');
+    this._intenFilter = buildRangeFilter({
+      title: 'Intensity filter',
+      unit: 'intensity',
+      resetTitle,
+      onApply: (r) => this._cb.onIntensityFilter?.(r),
     });
-    const intenBody = el('div', { className: 'olv-elev-body' }, [
-      el('div', { className: 'olv-elev-row' }, [
-        el('span', { className: 'olv-elev-cap', text: 'Min' }),
-        this._intenMinInput,
-        el('span', { className: 'olv-elev-cap', text: 'Max' }),
-        this._intenMaxInput,
-      ]),
-      intenReset,
-    ]);
-    this._intenFilterSection = section('Intensity filter', intenBody);
-    this._intenFilterSection.classList.add('olv-hidden');
 
     // Visuals Studio — Visuals Studio.
     // Build the three chip rails. Each chip's click fires the matching
@@ -1160,8 +1182,8 @@ export class Inspector {
       this._datasetIntelligence.element,
       this._layersSection,
       this._colorBySection,
-      this._elevFilterSection,
-      this._intenFilterSection,
+      this._elevFilter.section,
+      this._intenFilter.section,
       // Visuals Studio (presets, curator's tool) → Rendering (raw,
       // technician's tool). Point size is folded into Rendering as a
       // sub-group, so the panel keeps one slot per intent instead of
@@ -1192,20 +1214,11 @@ export class Inspector {
   }
 
   /**
-   * Seed the elevation-filter inputs from a cloud's world extent and reveal
-   * the section. Passing null hides the section (no static cloud loaded).
+   * Seed the elevation-filter inputs from a cloud's world extent and reveal the
+   * section. Passing null hides it (no static cloud loaded).
    */
   setElevationExtent(ext: { min: number; max: number } | null): void {
-    this._elevExtent = ext;
-    if (!ext || !Number.isFinite(ext.min) || !Number.isFinite(ext.max)) {
-      this._elevFilterSection.classList.add('olv-hidden');
-      return;
-    }
-    this._elevMinInput.value = String(Math.floor(ext.min));
-    this._elevMaxInput.value = String(Math.ceil(ext.max));
-    this._elevFilterSection.classList.remove('olv-hidden');
-    // A fresh seed is the full extent — nothing filtered yet.
-    this._elevFilterSection.classList.remove('olv-filter-active');
+    this._elevFilter.setExtent(ext);
   }
 
   /**
@@ -1214,15 +1227,17 @@ export class Inspector {
    * channel).
    */
   setIntensityExtent(ext: { min: number; max: number } | null): void {
-    this._intenExtent = ext;
-    if (!ext || !Number.isFinite(ext.min) || !Number.isFinite(ext.max)) {
-      this._intenFilterSection.classList.add('olv-hidden');
-      return;
-    }
-    this._intenMinInput.value = String(Math.floor(ext.min));
-    this._intenMaxInput.value = String(Math.ceil(ext.max));
-    this._intenFilterSection.classList.remove('olv-hidden');
-    this._intenFilterSection.classList.remove('olv-filter-active');
+    this._intenFilter.setExtent(ext);
+  }
+
+  /** Restore a saved elevation window (session import) — applies + shows it. */
+  restoreElevationFilter(range: readonly [number, number] | null): void {
+    this._elevFilter.applyWindow(range);
+  }
+
+  /** Restore a saved intensity window (session import) — applies + shows it. */
+  restoreIntensityFilter(range: readonly [number, number] | null): void {
+    this._intenFilter.applyWindow(range);
   }
 
   /** Open the Inspector as a bottom sheet (phones). */

@@ -80,6 +80,33 @@ describe('serializeSession / parseSession', () => {
     expect(doc.kind).toBe('measurement-session');
     expect(doc.version).toBe(SESSION_VERSION);
   });
+
+  it('round-trips the point-filter windows (v6), order-normalised', () => {
+    const back = parseSession(
+      serializeSession({
+        ...sampleSession(),
+        pointFilters: { elevation: [10, 50], intensity: [4000, 100] },
+      }),
+    );
+    expect(back.pointFilters?.elevation).toEqual([10, 50]);
+    // Intensity given hi<lo is normalised to [min, max].
+    expect(back.pointFilters?.intensity).toEqual([100, 4000]);
+  });
+
+  it('omits pointFilters entirely when no window is set (pre-v6 byte-shape)', () => {
+    const doc = JSON.parse(serializeSession(sampleSession())) as Record<string, unknown>;
+    expect('pointFilters' in doc).toBe(false);
+  });
+
+  it('drops a malformed point-filter window rather than throwing', () => {
+    const back = parseSession(
+      serializeSession({
+        ...sampleSession(),
+        pointFilters: { elevation: [Number.NaN, 5] as unknown as [number, number] },
+      }),
+    );
+    expect(back.pointFilters).toBeUndefined();
+  });
 });
 
 describe('parseSession — backward compatibility (schema v1)', () => {

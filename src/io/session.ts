@@ -74,6 +74,14 @@ export interface SessionScanSummary {
   crsUnit?: string;
 }
 
+/** Inclusive `[min, max]` point-filter windows persisted with a session. */
+export interface SessionPointFilters {
+  /** Elevation window in world/source units. */
+  elevation?: readonly [number, number];
+  /** Intensity window in raw intensity units. */
+  intensity?: readonly [number, number];
+}
+
 /** A named, saved camera viewpoint. */
 export interface SavedView {
   name: string;
@@ -135,6 +143,14 @@ export interface InspectionSession {
    */
   classFilter?: number[];
   /**
+   * v6 — the point-filter windows active at export time: an elevation window
+   * (world/source units) and an intensity window (raw units), each an inclusive
+   * `[min, max]`. On import the Viewer re-applies them so a recipe reproduces
+   * "only the ground band" / "hide the low-return noise" exactly. Strictly
+   * additive: absent ⇒ no filter; a malformed window is dropped, not thrown.
+   */
+  pointFilters?: SessionPointFilters;
+  /**
    * v5 — the clipping box at export time (region + mode + enabled). On import
    * the Viewer restores the clip so a shared recipe reproduces an isolation
    * slice or cut-away exactly. Strictly additive and tolerantly parsed: a
@@ -195,6 +211,9 @@ export function serializeSession(
   // hidden, so an unfiltered session keeps the pre-v5 byte-shape.
   const hidden = sanitizeClassFilter(session.classFilter);
   if (hidden.length > 0) doc.classFilter = hidden;
+  // v6 — point-filter windows, only the ones actually set.
+  const pf = sanitizePointFilters(session.pointFilters);
+  if (pf) doc.pointFilters = pf;
   // v5 — the clipping box, only when one is present (enabled or not, so a
   // disabled-but-positioned clip round-trips its geometry).
   if (session.clip) doc.clip = session.clip;
@@ -259,6 +278,8 @@ export function parseSession(text: string): InspectionSession {
   // non-array, or out-of-range / duplicate entries are dropped, never thrown.
   const classFilter = sanitizeClassFilter(raw.classFilter);
   if (classFilter.length > 0) out.classFilter = classFilter;
+  const pointFilters = sanitizePointFilters(raw.pointFilters);
+  if (pointFilters) out.pointFilters = pointFilters;
   // v5 — the clipping box. Dropped (not thrown) if the box geometry is malformed.
   const clip = parseClipBox(raw.clip);
   if (clip) out.clip = clip;
@@ -475,6 +496,31 @@ function isPointSizeMode(v: unknown): v is PointSizeMode {
  * defensively parsed so a partial block still yields what's valid (e.g.
  * a missing `edlStrength` doesn't drop the rest).
  */
+/** A finite, ordered inclusive `[min, max]` window, or null when malformed. */
+function parseWindow(v: unknown): [number, number] | null {
+  if (!Array.isArray(v) || v.length !== 2) return null;
+  const a = v[0];
+  const b = v[1];
+  if (!isFiniteNumber(a) || !isFiniteNumber(b)) return null;
+  return a <= b ? [a, b] : [b, a];
+}
+
+/**
+ * Validate the optional point-filter block, keeping only the windows that
+ * parse. Returns null when neither is usable so the field is omitted entirely
+ * (an unfiltered session keeps its pre-v6 byte-shape).
+ */
+function sanitizePointFilters(v: unknown): SessionPointFilters | null {
+  if (!isRecord(v)) return null;
+  const elevation = parseWindow(v.elevation);
+  const intensity = parseWindow(v.intensity);
+  if (!elevation && !intensity) return null;
+  const out: SessionPointFilters = {};
+  if (elevation) out.elevation = elevation;
+  if (intensity) out.intensity = intensity;
+  return out;
+}
+
 function parseRenderSettings(v: unknown): SessionRenderSettings | null {
   if (!isRecord(v)) return null;
   // Demand at least one valid field — otherwise the block is meaningless.

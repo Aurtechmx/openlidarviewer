@@ -1137,6 +1137,12 @@ let pendingShareState: ShareState | null = (() => {
   return hash.startsWith('#s=') ? decodeShareState(hash.slice(3)) : null;
 })();
 
+// The point-filter windows the user has set, tracked so a saved `.olvsession`
+// round-trips them (see the `pointFilters` block in serializeSession). Null =
+// no filter. Cleared on the empty state.
+let activeElevFilter: [number, number] | null = null;
+let activeIntenFilter: [number, number] | null = null;
+
 const inspector = new Inspector({
   onColorMode: (mode) => {
     currentColorMode = mode;
@@ -1153,9 +1159,11 @@ const inspector = new Inspector({
   },
   onElevationFilter: (range) => {
     viewer.setElevationFilter(range ?? undefined);
+    activeElevFilter = range;
   },
   onIntensityFilter: (range) => {
     viewer.setIntensityFilter(range ?? undefined);
+    activeIntenFilter = range;
   },
   onPointSize: (size) => {
     viewer.setPointSize(size);
@@ -5062,6 +5070,16 @@ async function exportSession(): Promise<void> {
     // v5 — class-visibility filter (hidden ASPRS codes). Emitted only when a
     // filter is active; serializeSession drops an empty list.
     classFilter: classLegendPanel.getVisibility().hiddenCodes(),
+    // v6 — the active point-filter windows, so reopening the session restores
+    // "only the ground band" / "hide low-return noise". Omitted when unset.
+    ...(activeElevFilter || activeIntenFilter
+      ? {
+          pointFilters: {
+            ...(activeElevFilter ? { elevation: activeElevFilter } : {}),
+            ...(activeIntenFilter ? { intensity: activeIntenFilter } : {}),
+          },
+        }
+      : {}),
     // v5 — the active clip box. The restore side has read this since v5, but
     // the writer never emitted it — the documented round-trip was dead on the
     // write side (clip-session finding, Critical). Emitted whenever the viewer
@@ -5142,6 +5160,22 @@ async function importSession(file: File): Promise<void> {
       // and emits onChange, which the host has wired to the GPU mask, so the
       // restored scan shows the same classes the author left visible.
       classLegendPanel.applyFilter(session.classFilter);
+    }
+    if (session.pointFilters) {
+      // v6 — re-apply the saved elevation / intensity windows. The Inspector
+      // extents were seeded when the scan reopened, so restoring writes the
+      // window into the inputs and drives the GPU filter + active-state cue.
+      const pf = session.pointFilters;
+      if (pf.elevation) {
+        viewer.setElevationFilter(pf.elevation);
+        inspector.restoreElevationFilter(pf.elevation);
+        activeElevFilter = [pf.elevation[0], pf.elevation[1]];
+      }
+      if (pf.intensity) {
+        viewer.setIntensityFilter(pf.intensity);
+        inspector.restoreIntensityFilter(pf.intensity);
+        activeIntenFilter = [pf.intensity[0], pf.intensity[1]];
+      }
     }
     if (session.clip) {
       // Restore the saved clip box so a shared capsule reproduces the author's
@@ -6387,6 +6421,8 @@ function resetToEmptyState(): void {
   inspector.setElevationExtent(null);
   viewer.setIntensityFilter(undefined);
   inspector.setIntensityExtent(null);
+  activeElevFilter = null;
+  activeIntenFilter = null;
   // Hide + clear the classification legend so it doesn't linger with a stale
   // class list after the scan is closed. v0.4.1.
   classLegendPanel.setClasses(new Map());
