@@ -1093,6 +1093,15 @@ button:disabled { cursor: not-allowed; }
   cursor: pointer;
 }
 .olv-elev-reset:hover { color: var(--text); }
+/* Filter-active cue — when a range filter is narrower than the cloud's extent
+   (points are hidden), the section label gains a subtle accent tag so a scan
+   never reads as "missing data" when it is really just filtered. */
+.olv-section.olv-filter-active > .olv-section-label::after {
+  content: ' · filtering';
+  color: var(--accent);
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
 .olv-chip {
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);

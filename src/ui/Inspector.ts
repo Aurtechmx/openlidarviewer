@@ -345,6 +345,28 @@ function section(label: string, body: HTMLElement): HTMLElement {
 }
 
 /**
+ * True when a `[lo, hi]` window actually hides points versus the cloud's full
+ * extent — used to flag a range-filter section as "filtering". A window equal to
+ * (or wider than) the extent hides nothing, so it should not read as active.
+ * With no known extent, any window is treated as filtering.
+ */
+function narrowsExtent(
+  lo: number,
+  hi: number,
+  ext: { min: number; max: number } | null,
+): boolean {
+  if (!ext) return true;
+  return lo > ext.min || hi < ext.max;
+}
+
+/** Blur a numeric input on Enter so the value commits on narrow / touch screens. */
+function enterConfirms(input: HTMLInputElement): void {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') input.blur();
+  });
+}
+
+/**
  * A collapsible section using native `<details>` / `<summary>`. The
  * summary is styled to match the static `olv-section-label` so the
  * panel reads as a uniform list of sections — the only visual
@@ -880,17 +902,28 @@ export class Inspector {
       const hi = Number(this._elevMaxInput.value);
       if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
       this._cb.onElevationFilter?.([lo, hi]);
+      // Flag the section as actively hiding points only when the window is
+      // narrower than the cloud's full extent — a full-range window filters
+      // nothing, so it shouldn't read as active.
+      this._elevFilterSection.classList.toggle(
+        'olv-filter-active',
+        narrowsExtent(lo, hi, this._elevExtent),
+      );
     };
     this._elevMinInput.addEventListener('input', applyElev);
     this._elevMaxInput.addEventListener('input', applyElev);
+    enterConfirms(this._elevMinInput);
+    enterConfirms(this._elevMaxInput);
     const elevReset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
     elevReset.setAttribute('type', 'button');
+    elevReset.setAttribute('title', 'Clear the filter and show every point in this scan');
     elevReset.addEventListener('click', () => {
       if (this._elevExtent) {
         this._elevMinInput.value = String(Math.floor(this._elevExtent.min));
         this._elevMaxInput.value = String(Math.ceil(this._elevExtent.max));
       }
       this._cb.onElevationFilter?.(null);
+      this._elevFilterSection.classList.remove('olv-filter-active');
     });
     const elevBody = el('div', { className: 'olv-elev-body' }, [
       el('div', { className: 'olv-elev-row' }, [
@@ -912,17 +945,25 @@ export class Inspector {
       const hi = Number(this._intenMaxInput.value);
       if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
       this._cb.onIntensityFilter?.([lo, hi]);
+      this._intenFilterSection.classList.toggle(
+        'olv-filter-active',
+        narrowsExtent(lo, hi, this._intenExtent),
+      );
     };
     this._intenMinInput.addEventListener('input', applyInten);
     this._intenMaxInput.addEventListener('input', applyInten);
+    enterConfirms(this._intenMinInput);
+    enterConfirms(this._intenMaxInput);
     const intenReset = el('button', { className: 'olv-elev-reset', text: 'Show all' });
     intenReset.setAttribute('type', 'button');
+    intenReset.setAttribute('title', 'Clear the filter and show every point in this scan');
     intenReset.addEventListener('click', () => {
       if (this._intenExtent) {
         this._intenMinInput.value = String(Math.floor(this._intenExtent.min));
         this._intenMaxInput.value = String(Math.ceil(this._intenExtent.max));
       }
       this._cb.onIntensityFilter?.(null);
+      this._intenFilterSection.classList.remove('olv-filter-active');
     });
     const intenBody = el('div', { className: 'olv-elev-body' }, [
       el('div', { className: 'olv-elev-row' }, [
@@ -1163,6 +1204,8 @@ export class Inspector {
     this._elevMinInput.value = String(Math.floor(ext.min));
     this._elevMaxInput.value = String(Math.ceil(ext.max));
     this._elevFilterSection.classList.remove('olv-hidden');
+    // A fresh seed is the full extent — nothing filtered yet.
+    this._elevFilterSection.classList.remove('olv-filter-active');
   }
 
   /**
@@ -1179,6 +1222,7 @@ export class Inspector {
     this._intenMinInput.value = String(Math.floor(ext.min));
     this._intenMaxInput.value = String(Math.ceil(ext.max));
     this._intenFilterSection.classList.remove('olv-hidden');
+    this._intenFilterSection.classList.remove('olv-filter-active');
   }
 
   /** Open the Inspector as a bottom sheet (phones). */
