@@ -63,8 +63,17 @@ const DIST = join(process.cwd(), 'dist', 'assets');
  * added a little more eager shell surface (index measured 520,230 B, 38 B over
  * the prior ceiling). Same split as above — only the sub-KB DOM triggers live in
  * the shell; the rail and camera logic ride lazy chunks.
+ *
+ * Raised 512 → 516 KiB at v0.5.6 for the point-filter correctness work: the
+ * Inspector range controls, the drop-zone "Opening" state, the export summaryInfo
+ * callback, the streaming filter-extent seeding, and the GPU-error / catalog
+ * wiring added eager shell surface (index measured 526,032 B, 1,744 B over the
+ * prior ceiling). The heavy filter logic — the per-point accept predicate
+ * (`pointFilterAccept`), per-cloud extent scans, and the mask nodes — rides the
+ * lazy Viewer chunk, and the `SHELL_FORBIDDEN_CONTENT` test below confirms no
+ * decoder/pdf/WebGPU import leaked into the shell. Same sub-KB-trigger split.
  */
-const WARNING_THRESHOLD = 512 * 1024;
+const WARNING_THRESHOLD = 516 * 1024;
 
 /** Required chunk-name prefixes — substring-matched against the filename. */
 const REQUIRED_CHUNK_PREFIXES = [
