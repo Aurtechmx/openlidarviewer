@@ -3013,8 +3013,13 @@ const exportPanel = new ExportPanel({
   // via getCloud below). Reads only scalar facts: resident count + colour/CRS
   // capabilities the streaming source already knows.
   summaryInfo: () => {
+    // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
+    // constructor calls this (via _renderSummary) during startup — before that.
+    // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
+    // an explicit `viewer == null` check would trip TS2367 (viewer is typed
+    // non-null via a cast). No viewer ⇒ nothing exportable yet.
     if (activeId != null) {
-      const c = viewer.getCloud(activeId);
+      const c = viewer?.getCloud(activeId);
       if (!c) return null;
       const crs = c.metadata?.crs ?? null;
       return {
@@ -3025,7 +3030,7 @@ const exportPanel = new ExportPanel({
         hasWkt: crs?.wkt != null,
       };
     }
-    const sc = viewer.streamingCloud;
+    const sc = viewer?.streamingCloud;
     if (!sc) return null;
     const crs = sc.crs();
     return {
