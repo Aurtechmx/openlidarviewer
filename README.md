@@ -55,7 +55,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates precise.
 - Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
 - Streams large COPC and EPT datasets progressively, with bounded memory and no full-file load. (Experimental 3D Tiles / `.pnts` parser foundations exist, but user-facing 3D Tiles loading is not enabled yet.)
-- Game-like navigation: Orbit, Walk, and Fly modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar smart camera presets.
+- Game-like navigation: Orbit, Walk, Fly, and Pan (hand-tool) modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar smart camera presets.
 - A measurement toolkit — distance, polyline, area, height, angle, slope, cross-section profile (with a resizable height-vs-distance chart), and volume cut/fill against a polygon or 3D lasso — with editable points, in-session persistence, and JSON export/import.
 - Annotations: mark points of interest with categorised, titled notes, revisit them, and save the whole inspection to a file.
 - Inspect any point: click it to read its exact coordinates (UTM + lat/lon when CRS is known), intensity, classification, GPS time, and colour, then copy them in one click.
@@ -206,10 +206,12 @@ OpenLiDARViewer has a game-like navigation system, so a scan can be explored lik
 | Esc | Release the cursor |
 | R | Reset / re-frame the view |
 | F | Focus on the point under the cursor |
-| 1 / 2 / 3 | Orbit / Walk / Fly mode |
+| 1 / 2 / 3 / 4 | Orbit / Walk / Fly / Pan mode |
+| G | Toggle the Pan (hand) tool |
+| Middle-drag | Pan the view in any mode |
 | Double-click | Fly to the clicked point |
 
-Orbit mode is best for inspecting an object or area from the outside. Walk mode suits interiors, buildings, corridors, and street-level scans. Fly mode is for drone LiDAR, terrain, forests, and wide-area scans.
+Orbit mode is best for inspecting an object or area from the outside. Pan mode is the hand tool: grab the scene with a primary drag and it slides 1:1 under the pointer, while scrolling still zooms. Walk mode suits interiors, buildings, corridors, and street-level scans. Fly mode is for drone LiDAR, terrain, forests, and wide-area scans.
 
 Movement speed scales with the size of the loaded scan, so the controls feel right whether the dataset is a small room or a kilometre-wide survey. Full detail is in [`docs/navigation.md`](docs/navigation.md).
 
@@ -412,9 +414,19 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.4**. The full, dated history is in
+The current release is **v0.5.5**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
+
+### v0.5.5 — Pan tool, collapsible panels, refined navigation, a simpler report set, accurate scan health
+- **Pan hand tool** — a fourth navigation mode: `4` selects Pan, `G` toggles it, middle-mouse drags pan temporarily; a mouse, pen, or one-finger touch drag moves the scene while the wheel keeps zooming, and the mode is preserved in sessions and share links
+- **Refined viewport navigation** — frame-rate-independent, pointer-centred wheel and trackpad zoom (same gesture, same zoom at 60/120/144 Hz), plus motion-adaptive resolution that lowers the device-pixel ratio slightly while you move and restores it when you stop
+- **Collapsible side panels** — a one-tap handle collapses the left column; on the right the Inspector and (for COPC streams) the streaming card each collapse on their own handle, so either can be hidden without the other; state persists per browser
+- **Gaussian point-appearance mode** — a point style that softens ordinary point samples (not a trained 3D Gaussian Splat scene)
+- **A two-document PDF report set** — Survey Summary (compact handover) and Technical Report (full record); older report-template identifiers map to the nearest current template
+- **More accurate scan health** — the Health Check separates a complete decode, a deliberate display-sample cap, and a declared-versus-decoded count mismatch, so a sampled load is no longer flagged as having lost points
+- **Reproducible performance diagnostics** — the debug overlay records frame-time percentiles, over-threshold frame counts, the longest main-thread task, effective DPR, and render/stream counters, and copies them as JSON; no speedup is claimed without device-specific evidence
+- **Removed the Scan Acceptance template** — its metadata-presence rows did not amount to an acceptance test
 
 ### v0.5.4 — Terrain complexity you can cite
 - **Real terrain-complexity metrics** — the terrain core computes the slope-decoupled **Vector Ruggedness Measure** (Sappington et al. 2007) and the **Topographic Position Index** with Weiss (2001) six-class slope position, implemented from the primary literature and computed off the interactive path; a smooth 45° plane scores ~0 ruggedness, so **steepness is never mistaken for complexity** (CI-guarded by an analytic `npm run repro` check)

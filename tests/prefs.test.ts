@@ -73,4 +73,18 @@ describe('parsePrefs', () => {
     expect(parsePrefs(JSON.stringify({ unitSystem: 'metric' })).unitSystem).toBe('metric');
     expect(parsePrefs(JSON.stringify({ unitSystem: 'imperial' })).unitSystem).toBe('imperial');
   });
+
+  test('round-trips every valid splat mode (P13)', () => {
+    for (const mode of ['classic', 'soft', 'inspection', 'gaussian'] as const) {
+      expect(parsePrefs(JSON.stringify({ splatMode: mode })).splatMode).toBe(mode);
+    }
+  });
+
+  test('drops an unknown or malformed splat mode, leaving it unset', () => {
+    // Unknown / wrong-type values are dropped like every other malformed key,
+    // so the viewer keeps its own default.
+    expect(parsePrefs(JSON.stringify({ splatMode: 'hologram' })).splatMode).toBeUndefined();
+    expect(parsePrefs(JSON.stringify({ splatMode: 42 })).splatMode).toBeUndefined();
+    expect(parsePrefs('{}').splatMode).toBeUndefined();
+  });
 });

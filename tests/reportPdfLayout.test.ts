@@ -130,7 +130,7 @@ function droneProvenance(): ReportProvenanceFingerprint {
 
 function tikalInputs(overrides: Partial<Parameters<typeof composeReportInputs>[0]> = {}): ReportInputs {
   return composeReportInputs({
-    templateId: 'engineering-inspection',
+    templateId: 'technical-report',
     title: 'Engineering Inspection',
     subtitle: TIKAL_METADATA.fileName,
     metadata: TIKAL_METADATA,
@@ -161,7 +161,7 @@ const TIKAL_SOURCE_METADATA = {
 // 1. The page-1 overlap pin
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('engineering-inspection layout — overlap regression', () => {
+describe('technical-report layout — overlap regression', () => {
   it('renders every section (the Ruzgienė citation no longer aborts provenance)', async () => {
     const { failed } = await renderRuns(tikalInputs());
     expect(failed).toEqual([]);
@@ -221,7 +221,7 @@ describe('engineering-inspection layout — overlap regression', () => {
 // 2. Section-heading underline spans the heading text
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('engineering-inspection layout — heading underline', () => {
+describe('technical-report layout — heading underline', () => {
   it('spans the measured heading width, not a fixed 40 pt stub', async () => {
     const { runs, rects } = await renderRuns(tikalInputs());
     const HEADINGS = new Set([
@@ -290,7 +290,7 @@ describe('sanitiseForPdf — WinAnsi glyph policy', () => {
 // 4. Declared source metadata section — presence, disclosure, omission
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('engineering-inspection — Declared source metadata section', () => {
+describe('technical-report — Declared source metadata section', () => {
   it('renders the declared fields under the not-verified disclosure', async () => {
     const { runs, failed } = await renderRuns(
       tikalInputs({ sourceMetadata: TIKAL_SOURCE_METADATA }),
@@ -343,7 +343,7 @@ describe('engineering-inspection — Declared source metadata section', () => {
 // 5. Keep-with-next pagination
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('engineering-inspection — keep-with-next pagination', () => {
+describe('technical-report — keep-with-next pagination', () => {
   it('never leaves a section heading orphaned at the bottom of a page', async () => {
     // Sweep the annotation count so section starts land at many different
     // heights, including just above the old flat-60 break threshold.

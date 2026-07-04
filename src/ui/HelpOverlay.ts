@@ -70,8 +70,9 @@ export class HelpOverlay {
           ['Revisit', 'The Annotations panel jumps to, edits or deletes any finding.'],
         ]),
         section('Navigation', [
-          ['Orbit / Walk / Fly', 'Switch mode with 1, 2 and 3.'],
+          ['Orbit / Walk / Fly / Pan', 'Switch mode with 1, 2, 3 and 4.'],
           ['Look', 'Drag to rotate, or orbit with the arrow keys; scroll to zoom.'],
+          ['Pan', 'The hand tool grabs the scene and drags it 1:1 — middle-drag pans in any mode.'],
           ['Move', 'WASD in walk and fly; Space / C raise and lower; hold Shift to sprint.'],
           ['Frame', 'R frames the whole scan; F focuses the centre; double-click a point to focus there.'],
           ['Re-orient', 'Hold Space while a tool is active to rotate / pan, then release to resume.'],
@@ -83,6 +84,7 @@ export class HelpOverlay {
           ['I', 'Toggle the Inspect tool.'],
           ['L', 'Toggle the lasso volume tool.'],
           ['T / O / P', 'Camera presets — Top, Oblique and Planar views.'],
+          ['G', 'Toggle the Pan (hand) tool from any mode.'],
           ['H', 'Show or hide the controls HUD.'],
           ['V', 'Save the current camera view.'],
           ['Delete', 'Remove the selected annotation.'],

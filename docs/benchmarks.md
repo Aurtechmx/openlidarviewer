@@ -81,7 +81,7 @@ at.
 
 | | |
 |---|---|
-| File | `20210916_FLEXIGROBOTS_L1_PRO_50M_4MS_B9.laz` |
+| File | `sample_uav_survey_50m.laz` |
 | Size | 75.7 MB |
 | Points | 9,597,830 |
 | Format | Compressed LAZ, georeferenced |

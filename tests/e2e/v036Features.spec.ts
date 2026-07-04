@@ -102,19 +102,21 @@ test('empty state shows three capture-kind chips with their labels', async ({
 
 // ── 3. Triangular NavWidget + centre Reset ─────────────────────────────────
 
-test('the nav widget renders three mode vertex buttons and a Reset', async ({
+test('the nav widget renders four mode buttons and a Reset', async ({
   page,
 }) => {
   await page.goto('/');
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
-  // Three mode buttons (Orbit / Walk / Fly) and one Reset action at the
-  // triangle centroid. The dashed cyan outline lives in
-  // `.olv-modes-tri-bg` so a redesign that drops the geometric framing
-  // would surface here too.
+  // Three vertex mode buttons (Orbit / Walk / Fly), the Pan pad — the
+  // v0.5.5 hand tool docked beside the triangle (default-on `?handPan`
+  // flag) — and one Reset action at the triangle centroid. The dashed cyan
+  // outline lives in `.olv-modes-tri-bg` so a redesign that drops the
+  // geometric framing would surface here too.
   await expect(page.locator('.olv-modes-tri-bg')).toBeVisible();
-  await expect(page.locator('.olv-mode')).toHaveCount(3);
+  await expect(page.locator('.olv-mode')).toHaveCount(4);
+  await expect(page.locator('.olv-mode-pan')).toBeVisible();
   await expect(page.locator('.olv-mode-reset')).toBeVisible();
 });
 

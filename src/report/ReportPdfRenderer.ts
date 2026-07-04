@@ -202,14 +202,14 @@ export async function renderReportPdf(
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-template design DNA
 //
-// Six templates, six distinct covers. The user-reported "all reports look
+// Two templates, two distinct covers. The user-reported "all reports look
 // the same" bug was driven partly by a shared hardcoded title; the deeper
 // design-excellence issue was that even with different titles, each
 // template surfaced an identical layout + accent. This map gives every
 // template a short tag (rendered as a small chip on the cover) and a
 // default accent that the cover renderer uses when the user has not
 // overridden via `branding.accentColor`. The eye reads a Survey Summary
-// and a QA Validation as different documents even before reading the
+// and a Technical Report as different documents even before reading the
 // title.
 //
 // Colour choices are intentionally drawn from a single hue family with
@@ -226,29 +226,13 @@ interface TemplateDesignKey {
 }
 
 const TEMPLATE_DESIGN_KEYS: Record<ReportTemplateId, TemplateDesignKey> = {
-  'engineering-inspection': {
-    tag: 'INSPECTION',
-    defaultAccent: { r: 0.13, g: 0.45, b: 0.78 }, // engineer blue
-  },
-  'qa-validation': {
-    tag: 'QA',
-    defaultAccent: { r: 0.85, g: 0.46, b: 0.10 }, // amber
-  },
   'survey-summary': {
     tag: 'SURVEY',
     defaultAccent: { r: 0.20, g: 0.55, b: 0.32 }, // surveyor green
   },
-  'terrain-review': {
-    tag: 'TERRAIN',
-    defaultAccent: { r: 0.58, g: 0.40, b: 0.20 }, // sienna
-  },
-  'technical-documentation': {
-    tag: 'DOCS',
-    defaultAccent: { r: 0.36, g: 0.40, b: 0.45 }, // slate
-  },
-  'scan-acceptance': {
-    tag: 'ACCEPTANCE',
-    defaultAccent: { r: 0.14, g: 0.55, b: 0.55 }, // teal
+  'technical-report': {
+    tag: 'TECHNICAL',
+    defaultAccent: { r: 0.13, g: 0.45, b: 0.78 }, // engineer blue
   },
 };
 
@@ -282,6 +266,10 @@ async function renderSection(
       return renderDatasetSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'provenance':
       return renderProvenance(cursor, inputs, doc, accent, theme, body, bold, organisation);
+    case 'provenance-compact':
+      return renderProvenance(cursor, inputs, doc, accent, theme, body, bold, organisation, {
+        compact: true,
+      });
     case 'source-metadata':
       return renderSourceMetadata(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'visuals':
@@ -292,8 +280,6 @@ async function renderSection(
       return renderMeasurements(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'technical-notes':
       return renderTechnicalNotes(cursor, inputs, doc, accent, theme, body, bold, organisation);
-    case 'acceptance-checklist':
-      return renderAcceptanceChecklist(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'footer':
       // Footer is stamped per-page in stampFooterPageNumbers; nothing
       // section-specific to do here, but we keep the slot in the
@@ -902,6 +888,12 @@ async function renderDatasetSummary(
  *  - Literature-derived accuracy bounds, each with its source paper
  *  - The honest-hedge disclaimer the classifier always emits
  *
+ * v0.5.5 P12 — `opts.compact` (the `provenance-compact` section, Survey
+ * Summary) renders ONLY the capture-type headline + the disclaimer. The
+ * signal list and the "Expected accuracy (cited literature)" block are
+ * Technical Report detail; the compact form names the capture type
+ * without restating the evidence chain.
+ *
  * Skipped silently when `inputs.provenance` is omitted — templates
  * that don't include the `provenance` section don't pay for it.
  */
@@ -914,6 +906,7 @@ async function renderProvenance(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
+  opts?: { readonly compact?: boolean },
 ): Promise<PageCursor> {
   cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Provenance', accent, bold);
@@ -938,7 +931,8 @@ async function renderProvenance(
   );
   cursor = { page: cursor.page, y: cursor.y - 6 };
   // Signals — bullet list of the cues that drove the classification.
-  if (p.signals.length > 0) {
+  // Compact form (Survey Summary) skips the detail blocks entirely.
+  if (!opts?.compact && p.signals.length > 0) {
     cursor = ensureSpace(cursor, 16 + p.signals.length * 14, doc, accent, theme, organisation);
     cursor.page.drawText('Signals', {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
@@ -953,7 +947,7 @@ async function renderProvenance(
     cursor = { page: cursor.page, y: cursor.y - 4 };
   }
   // Literature-cited accuracy bounds — the Research-Derived ribbon.
-  if (p.bounds.length > 0) {
+  if (!opts?.compact && p.bounds.length > 0) {
     cursor = ensureSpace(cursor, 16 + p.bounds.length * 28, doc, accent, theme, organisation);
     cursor.page.drawText('Expected accuracy (cited literature)', {
       x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
@@ -1258,165 +1252,11 @@ export function sanitiseForPdf(input: string): string {
   );
 }
 
-/**
- * v0.3.6 — Acceptance Checklist section. Renders a pass/fail table over
- * user-supplied thresholds, then a Methods appendix that cites the
- * literature behind every metric.
- *
- * The colour signalling is deliberately restrained: the headline reads
- * green when every row passes and red when any row fails, but the
- * per-row indicator is a small dot in the theme's accent (pass) or a
- * muted red (fail) — the report stays scannable on the
- * `dark-inspection` and `minimal-engineering` themes.
- */
-async function renderAcceptanceChecklist(
-  cursor: PageCursor,
-  inputs: ReportInputs,
-  doc: PDFDocument,
-  accent: ParsedColor,
-  theme: ReportThemePalette,
-  body: PDFFont,
-  bold: PDFFont,
-  organisation: string | undefined,
-): Promise<PageCursor> {
-  const checks = inputs.acceptanceChecks ?? [];
-  if (checks.length === 0) return cursor;
-
-  cursor = ensureSpace(cursor, 80, doc, accent, theme, organisation);
-  cursor = drawSectionHeader(cursor, 'Acceptance', accent, bold);
-
-  // Headline summary — "5 of 6 checks passed" or "All 6 checks passed".
-  const failed = checks.filter((c) => !c.pass).length;
-  const passed = checks.length - failed;
-  const headline = failed === 0
-    ? `All ${checks.length} ${checks.length === 1 ? 'check' : 'checks'} passed`
-    : `${passed} of ${checks.length} checks passed — ${failed} ${failed === 1 ? 'failure' : 'failures'}`;
-  cursor.page.drawText(headline, {
-    x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
-    size: BODY_FONT_SIZE, font: bold,
-    color: failed === 0
-      ? rgb(accent.r, accent.g, accent.b)
-      : rgb(0.78, 0.22, 0.22),
-  });
-  cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 10 };
-
-  // The check rows themselves. Layout uses the 12-column print grid:
-  //   - col 1        — status marker (dot + redundant P/F letter for
-  //                    grayscale + colorblind disambiguation)
-  //   - cols 2-5     — label
-  //   - cols 6-8     — threshold
-  //   - cols 9-12    — actual value (bold + red on fail)
-  // The redundant P/F letter is the scientific-visualization principle of
-  // "never rely on colour alone" applied to the QA semantic.
-  const COL_LABEL_X = gridX(2);
-  const COL_THRESHOLD_X = gridX(6);
-  const COL_ACTUAL_X = gridX(9);
-  for (const row of checks) {
-    cursor = ensureSpace(cursor, 18, doc, accent, theme, organisation);
-    const dotColor = row.pass
-      ? rgb(accent.r, accent.g, accent.b)
-      : rgb(0.78, 0.22, 0.22);
-    // Status dot.
-    cursor.page.drawCircle({
-      x: gridX(1) + 3, y: cursor.y - BODY_FONT_SIZE + 3,
-      size: 3,
-      color: dotColor,
-    });
-    // Redundant letter — small "P" / "F" centred over the dot. The
-    // letter encodes pass/fail independently of the dot's colour, so
-    // colorblind readers and grayscale printouts retain the meaning.
-    cursor.page.drawText(row.pass ? 'P' : 'F', {
-      x: gridX(1) + 1.4, y: cursor.y - BODY_FONT_SIZE + 0.5,
-      size: 5, font: bold,
-      color: rgb(
-        theme.pageBackground.r,
-        theme.pageBackground.g,
-        theme.pageBackground.b,
-      ),
-    });
-    // Label.
-    cursor.page.drawText(sanitiseForPdf(row.label), {
-      x: COL_LABEL_X, y: cursor.y - BODY_FONT_SIZE,
-      size: BODY_FONT_SIZE, font: body,
-      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
-    });
-    // Threshold.
-    cursor.page.drawText(sanitiseForPdf(row.threshold), {
-      x: COL_THRESHOLD_X, y: cursor.y - BODY_FONT_SIZE,
-      size: BODY_FONT_SIZE - 0.5, font: body,
-      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
-    });
-    // Actual.
-    cursor.page.drawText(sanitiseForPdf(row.actual), {
-      x: COL_ACTUAL_X, y: cursor.y - BODY_FONT_SIZE,
-      size: BODY_FONT_SIZE, font: row.pass ? body : bold,
-      color: row.pass
-        ? rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b)
-        : rgb(0.78, 0.22, 0.22),
-    });
-    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
-
-    // Optional explanation line for failed rows.
-    if (row.note) {
-      cursor = ensureSpace(cursor, 12, doc, accent, theme, organisation);
-      cursor.page.drawText(`- ${sanitiseForPdf(row.note)}`, {
-        x: COL_LABEL_X, y: cursor.y - BODY_FONT_SIZE + 2,
-        size: BODY_FONT_SIZE - 1.5, font: body,
-        color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
-      });
-      cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 1 };
-    }
-  }
-
-  // Methods appendix — every Scan Acceptance template carries it. The
-  // citations are the actual source the user can hand to a reviewer.
-  cursor = ensureSpace(cursor, 80, doc, accent, theme, organisation);
-  cursor = { page: cursor.page, y: cursor.y - 10 };
-  cursor = drawSectionHeader(cursor, 'Methods', accent, bold);
-  const methodsLines = [
-    'Thresholds shown above were supplied by the report author. The viewer',
-    'reports measured values; the pass/fail decision is the author\'s.',
-    '',
-    'Metadata-row methodology:',
-    '  - Point count, classification / intensity / RGB presence: read directly',
-    '    from the LAS / LAZ / COPC / EPT header without sampling.',
-    '  - CRS: parsed from the LASF_Projection VLR (LAS / LAZ) or the',
-    '    ept.json srs.wkt field (EPT).',
-    '  - File hash: SHA-256 over the source bytes for chain-of-custody.',
-    '  - Capture date: read from the LAS public header GPS time field',
-    '    when present.',
-    '',
-    'Cloud-sampled methodology (out of scope for this report):',
-    '  - Density / NPS heatmap / void test: Lohani & Ghosh 2017 §6',
-    '    (Springer NASI A, peer-reviewed). Void area threshold = (4 × NPS)²;',
-    '    spatial distribution test = ≥ 90 % of (2 × NPS)² cells contain',
-    '    ≥ 1 first return.',
-    '  - NVA / VVA from GCPs: NVA = 1.96 × RMSEz (open ground, normal',
-    '    distribution); VVA = 95th percentile of |ΔZ| (vegetated).',
-    '    Lohani & Ghosh 2017 §6.',
-    '  - Civil tolerance bands: planimetric ≤ 1.0 / 1.6 × GSD,',
-    '    elevation ≤ 1.6 / 2.5 × GSD. Ruzgienė 2025 §4.',
-    '  - iPhone-LiDAR empirical envelope: 0.115 m H-RMSE with re-anchoring,',
-    '    0.16 m V-RMSE at 20 m GCP spacing. Krausková 2025 (Sensors).',
-    '',
-    'None of the above implies survey-grade accuracy without independent',
-    'GCP validation. See OpenLiDARViewer\'s positioning notes in the docs.',
-  ];
-  for (const line of methodsLines) {
-    cursor = ensureSpace(cursor, 13, doc, accent, theme, organisation);
-    // Sanitised so the diacritics in the cited author names (Ruzgienė,
-    // Krausková) transliterate instead of throwing at draw time; the ≥ / ≤ /
-    // × / ² glyphs above are WinAnsi-native and pass through as themselves.
-    cursor.page.drawText(sanitiseForPdf(line), {
-      x: MARGIN, y: cursor.y - BODY_FONT_SIZE + 1,
-      size: BODY_FONT_SIZE - 1.5, font: body,
-      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
-    });
-    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 1 };
-  }
-
-  return cursor;
-}
+// v0.5.5 P12 — the Acceptance Checklist renderer (v0.3.6) was removed with
+// the `scan-acceptance` template: its checklist was metadata-only presence
+// rows, the same title-overpromising defect the consolidation fixes. It
+// returns behind real cloud-sampled checks (density / void map / NPS /
+// RMSE, Lohani & Ghosh 2017) once the analysis seam lands.
 
 async function renderTechnicalNotes(
   cursor: PageCursor,

@@ -23,7 +23,7 @@
  *      any cookie, never serialised into any URL.
  *   2. Categorical keys only — the recorded values are bounded category
  *      enums plus short subcategory strings ('laz', 'distance', 'depth',
- *      'engineering-inspection'). Never filenames, never coordinates,
+ *      'technical-report'). Never filenames, never coordinates,
  *      never user identifiers, never error messages, never stack traces.
  *   3. The user can clear at any moment with `reset()`.
  *   4. The `?notelemetry=1` URL flag suppresses every `increment()` call
@@ -42,7 +42,7 @@ export type UsageCategory =
   | 'scan-open'      // subcategory = source format ('laz', 'copc', 'ply', …)
   | 'measurement'   // subcategory = measurement kind ('distance', 'profile', …)
   | 'export'        // subcategory = export mode ('height-map', 'orthographic-rgb', …)
-  | 'report'        // subcategory = report template id ('engineering-inspection', …)
+  | 'report'        // subcategory = report template id ('technical-report', …)
   | 'error';        // subcategory = error class ('load', 'export', 'report')
 
 /** A single durable counter row. */

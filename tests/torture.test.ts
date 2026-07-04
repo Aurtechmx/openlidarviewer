@@ -194,7 +194,7 @@ describe('torture — report-input composition stability', () => {
     };
     const input = {
       title: 'Torture Inspection',
-      templateId: 'engineering-inspection' as const,
+      templateId: 'technical-report' as const,
       branding: { accentColor: '#00b2ff' },
       annotations: [],
       measurements: [],

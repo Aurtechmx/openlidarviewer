@@ -75,40 +75,86 @@ function checkEmptyCloud(cloud: PointCloud): AnalysisRow {
   if (cloud.pointCount === 0) {
     return {
       label: 'Empty Cloud',
-      value: '0 points',
+      value: 'Empty — 0 points',
       status: 'fail',
     };
   }
+  // The check is a VERDICT (is this cloud empty?), so the pass value is the
+  // verdict — printing the loaded point count here mislabelled the display-
+  // sample count as an "Empty Cloud" figure. Point counts belong to the Scan
+  // Report's Point Count / Loaded rows.
   return {
     label: 'Empty Cloud',
-    value: `${cloud.pointCount} points`,
+    value: 'None',
     status: 'pass',
   };
 }
 
+/** Locale-formatted integer for the health rows ("4,683,690"). */
+function fmtCount(n: number): string {
+  return n.toLocaleString('en-US');
+}
+
 function checkDeclaredVsDecoded(cloud: PointCloud): AnalysisRow {
+  const label = 'Declared vs Decoded Count';
   // The count decoded from the file — not `pointCount`, which a downsampled
   // cloud would report as the reduced count and falsely flag as a mismatch.
   const decoded = cloud.decodedPointCount ?? cloud.pointCount;
   if (cloud.declaredPointCount === undefined) {
-    return {
-      label: 'Declared vs Decoded Count',
-      value: `${decoded} decoded (no declared count)`,
-      status: 'info',
-    };
+    return { label, value: `${fmtCount(decoded)} decoded (no declared count)`, status: 'info' };
   }
   const declared = cloud.declaredPointCount;
-  if (declared !== decoded) {
+  if (declared === decoded) {
+    return { label, value: `${fmtCount(declared)} (match)`, status: 'pass' };
+  }
+
+  // Deliberate display-sample cap: the budget plan decoded one record per
+  // bucket of `loadStride`, so decoded < declared is the EXPECTED outcome of
+  // the cap, not an anomaly. The stratified sampler keeps exactly one record
+  // per bucket — ceil(declared / stride) — so anything at or above that is a
+  // complete capped decode (informational); anything below it means the
+  // decode genuinely lost points even after accounting for the cap (amber).
+  const stride = cloud.loadStride ?? 1;
+  if (stride > 1) {
+    const expected = Math.ceil(declared / stride);
+    if (decoded >= expected) {
+      return {
+        label,
+        value: `Declared ${fmtCount(declared)} · decoded ${fmtCount(decoded)} (display sample cap)`,
+        status: 'info',
+      };
+    }
     return {
-      label: 'Declared vs Decoded Count',
-      value: `Declared: ${declared}, Decoded: ${decoded}`,
+      label,
+      value:
+        `Declared ${fmtCount(declared)}, expected ${fmtCount(expected)} after the ` +
+        `display-sample cap, decoded ${fmtCount(decoded)} — decode lost points`,
       status: 'warn',
     };
   }
+
+  // No full-decode count survived (a loader that doesn't record it, or an
+  // older saved session): `decoded` above fell back to the in-memory count,
+  // which a budget downsample legitimately reduces below `declared`. That is
+  // NOT evidence of decode loss — report it neutrally rather than raising a
+  // false anomaly. Genuine loss stays detectable on the paths that do record
+  // the decode count (LAS/LAZ).
+  if (cloud.decodedPointCount === undefined && cloud.pointCount < declared) {
+    return {
+      label,
+      value:
+        `Declared ${fmtCount(declared)} · ${fmtCount(cloud.pointCount)} in memory ` +
+        `(display sample; full decode count not recorded)`,
+      status: 'info',
+    };
+  }
+
+  // A real mismatch on a full decode — the file header promised a different
+  // count than the decoder produced.
   return {
-    label: 'Declared vs Decoded Count',
-    value: `${declared} (match)`,
-    status: 'pass',
+    label,
+    value: `Declared: ${fmtCount(declared)}, Decoded: ${fmtCount(decoded)}`,
+    status: 'warn',
   };
 }
 

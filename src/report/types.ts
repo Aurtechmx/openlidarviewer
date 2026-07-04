@@ -16,31 +16,29 @@
 
 import type { ReportInspectionSummary } from './ReportFindings';
 
-/** The five built-in report templates. */
+/**
+ * The two built-in report templates (v0.5.5 P12 consolidation). Legacy
+ * ids — engineering-inspection, qa-validation, terrain-review,
+ * technical-documentation, scan-acceptance — parse safely via
+ * `normalizeReportTemplateId` in `ReportTemplates.ts`, each mapping to
+ * the nearest current template.
+ */
 export type ReportTemplateId =
-  | 'engineering-inspection'
-  | 'qa-validation'
-  | 'terrain-review'
   | 'survey-summary'
-  | 'technical-documentation'
-  // A user-supplied-threshold acceptance pass/fail sheet for
-  // incoming-scan validation. Metadata-only rows in the current release;
-  // the cloud-sampled rows (density, void map, NPS, RMSE) wait for the
-  // analysis seam.
-  | 'scan-acceptance';
+  | 'technical-report';
 
 /** Which sections a template wants, in render order. */
 export type ReportSectionId =
   | 'cover'
   | 'inspection-summary'     // synthesised findings card (density tier, gaps, caveats)
   | 'dataset-summary'
-  | 'provenance'             // v0.3.6 — auto-computed capture-type + literature bounds
+  | 'provenance'             // v0.3.6 — auto-computed capture-type + signals + literature bounds
+  | 'provenance-compact'     // v0.5.5 — capture type + confidence + disclaimer only
   | 'source-metadata'        // v0.5.4 — the file's own declared metadata, verbatim
   | 'visuals'
   | 'annotations'
   | 'measurements'
   | 'technical-notes'
-  | 'acceptance-checklist'   // v0.3.6 — pass/fail rows + methods appendix
   | 'footer';
 
 /** Branding inputs — organisation name, optional logo, author/contact. */
@@ -195,26 +193,6 @@ export interface ReportMeasurementRow {
 }
 
 /**
- * v0.3.6 — one row in the Scan Acceptance Checklist.
- *
- * The caller computes pass/fail against user-supplied thresholds before
- * handing the row to the report engine. The viewer reports what was
- * measured; the threshold-vs-pass-fail decision is the user's.
- *
- * No USGS QL1 / QL2 thresholds are baked in — those airborne-specific
- * values would be misapplied to TLS / iPhone / cropped subsets. Each row
- * names its own threshold so a surveyor handing the PDF to a contract
- * dispute has the citations on hand.
- */
-export interface ReportAcceptanceRow {
-  readonly label: string;        // 'Point count'
-  readonly threshold: string;    // '≥ 5,000,000'
-  readonly actual: string;       // '12,400,000'
-  readonly pass: boolean;
-  readonly note?: string;        // 'CRS missing — cannot georeference exports'
-}
-
-/**
  * The full inputs the engine takes — everything needed to render a report,
  * cleanly separated from the live Viewer / DOM. Each field is optional so
  * a partial report still works; the renderer renders what's there.
@@ -229,13 +207,6 @@ export interface ReportInputs {
   readonly measurements: readonly ReportMeasurementRow[];
   /** Free-form Markdown-ish notes appended to the report. Optional. */
   readonly technicalNotes?: string;
-  /**
-   * v0.3.6 — pass/fail rows for the Scan Acceptance template. The caller
-   * computes pass/fail against user-supplied thresholds before handing
-   * the rows to the report engine. Omit when the template doesn't include
-   * the `acceptance-checklist` section.
-   */
-  readonly acceptanceChecks?: readonly ReportAcceptanceRow[];
   /**
    * v0.3.6 — capture-type provenance fingerprint. Lifted directly from
    * the classifier output the Inspector's "Provenance" section also

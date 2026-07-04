@@ -94,10 +94,15 @@ function liveSourceTransformPlugin() {
       //   - measure/snap.ts  — the snap grid built over every point at scan
       //     attach (min/max walk + per-point cell insert; ~1.1 s of decoder
       //     overhead per load when transformed).
+      //   - panMath.ts       — the hand-tool drag geometry (v0.5.5 P1):
+      //     ray-plane math run on every captured pointermove of a grab
+      //     (120+ Hz pointers); sibling of navMath.ts, excluded for the
+      //     same per-event Math-wrapper reason.
       /analysis\/modules\/healthCheck\.ts/,
       /model\/PointCloud\.ts/,
       /render\/colorEncode\.ts/,
       /render\/navMath\.ts/,
+      /render\/panMath\.ts/,
       /render\/Viewer\.ts/,
       /render\/measure\/snap\.ts/,
     ],

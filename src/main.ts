@@ -3461,6 +3461,11 @@ void viewerLoaded.then(() => {
     onPointerLockChange: (locked) => navBar.setLocked(locked),
     onToggleHelp: () => navBar.toggleHelp(),
   });
+  // The hand tool (v0.5.5 P1) is flag-gated (?handPan=off). The flag lives
+  // in the lazy Viewer chunk (devFlags must stay out of the startup shell),
+  // so the NavBar learns about it here, once the Viewer has resolved —
+  // before any scan load reveals the NavBar.
+  navBar.setPanAvailable(viewer.handPanEnabled);
   viewer.setMeasureListeners({
     onModeChange: (active) => {
       dock.setMeasureActive(active);
@@ -3710,6 +3715,139 @@ function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): void {
   }
 }
 
+/**
+ * P11 — the dock (bottom tool bar) is a separate fixed element; the left column
+ * must never scroll its last control under it. Mirrors wireMeasureBarClearance:
+ * writes the dock's REAL height into `--olv-dock-clear` (= dock height + its 14px
+ * bottom offset + an 8px gap) so the column's max-height always ends above the
+ * dock. Fallback 80px (the previous static reserve) keeps layout unchanged where
+ * ResizeObserver is unavailable.
+ */
+function wireDockClearance(dock: HTMLElement, column: HTMLElement): void {
+  if (typeof ResizeObserver === 'undefined') return;
+  try {
+    const ro = new ResizeObserver(() => {
+      const h = dock.offsetHeight; // 0 while hidden (display: none)
+      column.style.setProperty('--olv-dock-clear', h > 0 ? `${h + 14 + 8}px` : '80px');
+    });
+    ro.observe(dock);
+  } catch {
+    /* Static 80px fallback — only ancient engines. */
+  }
+}
+
+/**
+ * P11 — collapse / expand the whole left rail with one control. The column slides
+ * off-screen (transform only) leaving a slim frosted grabber tab to reopen it;
+ * state persists in localStorage. Desktop/tablet only — the mobile bottom-sheet
+ * owns small screens and the tab is hidden there by CSS.
+ */
+/**
+ * Rail collapse — one grabber that slides a side panel column out of the way,
+ * shared by the left rail (the single `.olv-left-panels` container) and the
+ * right column (the Inspector plus the streaming/COPC card). Every element in
+ * `panels` receives `collapsedClass` on toggle and is measured for centring and
+ * the empty-state hide. The grabber only appears when the column holds visible
+ * content, is centred on the union of the visible panels, and persists its
+ * state in localStorage. Desktop only — on phones the panels live in the bottom
+ * sheet and CSS hides the grabber.
+ */
+interface RailToggleConfig {
+  overlay: HTMLElement;
+  panels: HTMLElement[];
+  tabClass: string;
+  chevron: string;
+  collapsedClass: string;
+  storageKey: string;
+  ariaControls: string;
+}
+function wireRailToggle(cfg: RailToggleConfig): void {
+  const tab = el('button', { className: cfg.tabClass, unsafeHtml: cfg.chevron });
+  tab.setAttribute('type', 'button');
+  tab.setAttribute('aria-controls', cfg.ariaControls);
+
+  const apply = (collapsed: boolean): void => {
+    for (const p of cfg.panels) p.classList.toggle(cfg.collapsedClass, collapsed);
+    // The tab carries its own collapsed state so it can snap to the screen edge
+    // independently — several tabs can share one edge (right column: one per
+    // panel) without a sibling selector confusing them.
+    tab.classList.toggle('is-collapsed', collapsed);
+    tab.setAttribute('aria-expanded', String(!collapsed));
+    const label = collapsed ? 'Show panel' : 'Hide panel';
+    tab.setAttribute('aria-label', label);
+    tab.title = label;
+  };
+
+  let collapsed = false;
+  try {
+    collapsed = localStorage.getItem(cfg.storageKey) === '1';
+  } catch {
+    /* private mode — default expanded */
+  }
+  apply(collapsed);
+
+  tab.addEventListener('click', () => {
+    collapsed = !collapsed;
+    apply(collapsed);
+    try {
+      localStorage.setItem(cfg.storageKey, collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  });
+  cfg.overlay.append(tab);
+
+  // The grabber only makes sense when the column holds visible panels, and it
+  // must sit AGAINST them. Centre it on the union of the visible panels' boxes
+  // and hide it while the column is empty — the "Open a scan" state, where the
+  // panels are display:none / carry `olv-hidden`. The collapse is transform-
+  // only, so the vertical span is unchanged and the centre holds even collapsed.
+  // A ResizeObserver keeps it in step; CSS `translateY(-50%)` centres on `top`.
+  tab.classList.add('olv-hidden');
+  const positionTab = (): void => {
+    const boxes = cfg.panels
+      .filter((n) => n.offsetHeight > 0 && !n.classList.contains('olv-hidden'))
+      .map((n) => n.getBoundingClientRect());
+    const empty = boxes.length === 0;
+    tab.classList.toggle('olv-hidden', empty);
+    if (empty) return;
+    const top = Math.min(...boxes.map((b) => b.top));
+    const bottom = Math.max(...boxes.map((b) => b.bottom));
+    tab.style.top = `${Math.round((top + bottom) / 2)}px`;
+  };
+  if (typeof ResizeObserver !== 'undefined') {
+    try {
+      const ro = new ResizeObserver(positionTab);
+      for (const p of cfg.panels) ro.observe(p);
+    } catch {
+      /* static fallback — the window listener + initial call still run */
+    }
+  }
+  window.addEventListener('resize', positionTab);
+  positionTab();
+}
+
+// Inline, literally-embedded chevron SVGs — the sanctioned `unsafeHtml` use (see
+// dom.ts). Each points the way its rail moves to collapse; CSS flips it on state.
+const RAIL_CHEVRON_LEFT =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M15 6l-6 6 6 6"/></svg>';
+const RAIL_CHEVRON_RIGHT =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M9 6l6 6-6 6"/></svg>';
+
+/**
+ * P9 — contain a scrollable overlay panel's wheel events so a wheel over the
+ * panel scrolls only the panel and never bubbles to a handler that could move
+ * the camera or scroll the page. Passive: this is normal scrolling, so it never
+ * calls `preventDefault` (which would break natural / momentum scrolling).
+ */
+function containPanelWheel(panel: HTMLElement): void {
+  panel.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: true });
+}
+
 void viewerLoaded.then(() => {
   if (!bareMode) {
     // The tool overlays go in first so the panels paint above them.
@@ -3724,11 +3862,55 @@ void viewerLoaded.then(() => {
     // The measurement and annotation panels share a stacked left-side column.
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
+    leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
     leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
+    // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
+    // reach the camera. Stop it here (passive — this is plain scrolling, never a
+    // preventDefault), so no ancestor handler can act on a panel scroll. The
+    // canvas controller also gates on target (NavController `_handleWheel`).
+    containPanelWheel(leftPanels);
+    containPanelWheel(inspector.element);
+    containPanelWheel(streamingPanel.element);
     // Push the column below the measure toolbar whenever it is visible —
     // see wireMeasureBarClearance for why this is measured, not static CSS.
     wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
+    // P11 — keep the column above the real dock height, and add the one-tap rail collapse.
+    wireDockClearance(dock.dock, leftPanels);
+    wireRailToggle({
+      overlay: stage.overlay,
+      panels: [leftPanels],
+      tabClass: 'olv-rail-tab',
+      chevron: RAIL_CHEVRON_LEFT,
+      collapsedClass: 'olv-rail-collapsed',
+      storageKey: 'olv.leftRail.collapsed',
+      ariaControls: 'olv-left-panels',
+    });
+    // Right column — each panel collapses on its own handle, centred on that
+    // panel. The Streaming card (top, only while a COPC streams) and the
+    // Inspector (bottom, or full-height when not streaming) are independent, so
+    // one can be hidden without the other. Both handles ride the same right
+    // edge; the empty-state hide keeps only the visible panel's handle on screen.
+    if (!inspector.element.id) inspector.element.id = 'olv-inspector';
+    if (!streamingPanel.element.id) streamingPanel.element.id = 'olv-streaming-panel';
+    wireRailToggle({
+      overlay: stage.overlay,
+      panels: [streamingPanel.element],
+      tabClass: 'olv-right-rail-tab',
+      chevron: RAIL_CHEVRON_RIGHT,
+      collapsedClass: 'olv-right-collapsed',
+      storageKey: 'olv.rightRail.streaming.collapsed',
+      ariaControls: streamingPanel.element.id,
+    });
+    wireRailToggle({
+      overlay: stage.overlay,
+      panels: [inspector.element],
+      tabClass: 'olv-right-rail-tab',
+      chevron: RAIL_CHEVRON_RIGHT,
+      collapsedClass: 'olv-right-collapsed',
+      storageKey: 'olv.rightRail.inspector.collapsed',
+      ariaControls: inspector.element.id,
+    });
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
     stage.overlay.append(projectCard.element);
@@ -4434,16 +4616,22 @@ async function generateReportPdf(templateId: string): Promise<void> {
     throw new Error('Load a scan first.');
   }
 
-  // Derive the cover title from the actual template so each of the six
-  // templates produces a distinct, recognisable PDF. The user-reported
-  // bug — "all reports show the same export" — was driven by a hardcoded
+  // Derive the cover title from the actual template so each template
+  // produces a distinct, recognisable PDF. The user-reported bug — "all
+  // reports show the same export" — was driven by a hardcoded
   // `title: 'Scan Report'` that made the cover identical across every
   // template choice. Pulling `label` off `getReportTemplate(templateId)`
-  // gives "Engineering Inspection", "QA Validation", "Survey Summary",
-  // "Terrain Review", "Technical Documentation", or "Scan Acceptance"
-  // as appropriate. The dataset name moves into the subtitle so both
-  // axes (template type, source scan) are surfaced on the cover.
-  const validatedTemplateId = templateId as import('./report').ReportTemplateId;
+  // gives "Survey Summary" or "Technical Report" as appropriate. The
+  // dataset name moves into the subtitle so both axes (template type,
+  // source scan) are surfaced on the cover.
+  //
+  // v0.5.5 P12 — legacy ids (engineering-inspection, qa-validation,
+  // terrain-review, technical-documentation, scan-acceptance) normalise
+  // to the nearest current template, so an id carried in old UI state or
+  // an external caller keeps working; the export filename follows the
+  // NORMALISED id.
+  const validatedTemplateId =
+    report.normalizeReportTemplateId(templateId) ?? report.DEFAULT_TEMPLATE_ID;
   const template = report.getReportTemplate(validatedTemplateId);
   const coverTitle = template?.label ?? 'Scan Report';
   // Compute the same provenance fingerprint the Inspector's Provenance
@@ -4565,6 +4753,7 @@ function persistPrefs(): void {
     edlEnabled: viewer.edlEnabled,
     edlStrength: viewer.edlStrength,
     pointSizeMode: viewer.pointSizeMode,
+    splatMode: viewer.splatMode,
     antialiasing: viewer.antialiasing,
     unitSystem: viewer.measure.unitSystem,
     touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
@@ -4596,6 +4785,7 @@ function applyPrefs(): void {
   if (p.edlEnabled !== undefined) viewer.setEdlEnabled(p.edlEnabled);
   if (p.edlStrength !== undefined) viewer.setEdlStrength(p.edlStrength);
   if (p.pointSizeMode !== undefined) viewer.setPointSizeMode(p.pointSizeMode);
+  if (p.splatMode !== undefined) viewer.setSplatMode(p.splatMode);
   if (p.antialiasing !== undefined) viewer.setAntialiasing(p.antialiasing);
   if (p.unitSystem !== undefined) viewer.measure.setUnitSystem(p.unitSystem);
   if (p.touchModel !== undefined) {

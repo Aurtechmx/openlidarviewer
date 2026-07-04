@@ -48,7 +48,8 @@ function asCamera(v: unknown): SavedCameraState | null {
   const target = asVec3(v.target);
   if (!position || !target) return null;
   const camera: SavedCameraState = { position, target };
-  if (v.mode === 'orbit' || v.mode === 'walk' || v.mode === 'fly') camera.mode = v.mode;
+  // 'pan' joined the mode union in v0.5.5 (P1 hand tool).
+  if (v.mode === 'orbit' || v.mode === 'walk' || v.mode === 'fly' || v.mode === 'pan') camera.mode = v.mode;
   if (typeof v.fov === 'number' && Number.isFinite(v.fov)) camera.fov = v.fov;
   return camera;
 }

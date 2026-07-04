@@ -16,6 +16,9 @@ import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { FrameStats } from '../render/Viewer';
 import type { LoadTelemetry } from '../io/loadTelemetry';
 import { formatTelemetry } from '../io/loadTelemetry';
+import { FrameTelemetry } from '../perf/frameTelemetry';
+import { readDevFlags } from '../perf/devFlags';
+import { buildMetricsJson } from '../perf/metricsJson';
 
 /** Live COPC streaming counters — present only while a COPC scan is open. */
 export interface StreamingDebugStats {
@@ -119,17 +122,28 @@ function formatInt(n: number): string {
 export class DebugOverlay {
   readonly element: HTMLElement;
   private readonly _live: HTMLElement;
+  private readonly _perf: HTMLElement;
   private readonly _streamingLabel: HTMLElement;
   private readonly _streaming: HTMLElement;
   private readonly _telemetry: HTMLElement;
   private readonly _benchmark: HTMLElement;
   private readonly _sample: () => DebugSample;
   private _timer: number | undefined;
+  /**
+   * Per-frame collector (v0.5.5 P0) — constructed here (the overlay only
+   * exists under `?debug=1` / `?benchmark=1`), but it allocates its ring and
+   * registers its rAF loop + longtask observer ONLY between {@link start}
+   * and {@link stop}. A normal session never loads this chunk at all.
+   */
+  private readonly _perfCollector = new FrameTelemetry();
+  /** Most recent polled sample — reused by {@link metricsJson}. */
+  private _lastSample: DebugSample | null = null;
 
   constructor(sample: () => DebugSample) {
     this._sample = sample;
 
     this._live = el('pre', { className: 'olv-debug-block', text: 'initialising…' });
+    this._perf = el('pre', { className: 'olv-debug-block', text: '(collecting…)' });
     this._streamingLabel = el('div', {
       className: 'olv-debug-label olv-hidden',
       text: 'streaming',
@@ -156,14 +170,43 @@ export class DebugOverlay {
     title.addEventListener('click', () => this.toggleCollapsed());
     this._title = title;
 
+    // Copy the machine-readable metrics document (perf + rendering +
+    // streaming counters + dev flags) to the clipboard. Feedback is inline
+    // on the button label; failures are reported, never silent.
+    const copyBtn = el('button', {
+      className: 'olv-debug-copy',
+      type: 'button',
+      text: 'Copy metrics JSON',
+      ariaLabel: 'Copy metrics JSON to clipboard',
+    });
+    copyBtn.addEventListener('click', () => {
+      const revert = (label: string): void => {
+        copyBtn.textContent = label;
+        window.setTimeout(() => {
+          copyBtn.textContent = 'Copy metrics JSON';
+        }, 1_500);
+      };
+      try {
+        void navigator.clipboard.writeText(this.metricsJson()).then(
+          () => revert('Copied ✓'),
+          () => revert('Copy failed'),
+        );
+      } catch {
+        revert('Copy failed');
+      }
+    });
+
     this._body = el('div', { className: 'olv-debug-body' }, [
       el('div', { className: 'olv-debug-label', text: 'rendering' }),
       this._live,
+      el('div', { className: 'olv-debug-label', text: 'perf' }),
+      this._perf,
       this._streamingLabel,
       this._streaming,
       el('div', { className: 'olv-debug-label', text: 'last load' }),
       this._telemetry,
       this._benchmark,
+      copyBtn,
     ]);
 
     this.element = el('div', { className: 'olv-debug' }, [title, this._body]);
@@ -185,19 +228,39 @@ export class DebugOverlay {
     this._title.setAttribute('aria-label', collapsed ? 'Expand debug overlay' : 'Collapse debug overlay');
   }
 
-  /** Begin polling the sampler. Idempotent. */
+  /** Begin polling the sampler and collecting per-frame telemetry. Idempotent. */
   start(): void {
     if (this._timer !== undefined) return;
+    this._perfCollector.start();
     this._refresh();
     this._timer = window.setInterval(() => this._refresh(), REFRESH_MS);
   }
 
-  /** Stop polling and release the interval timer. */
+  /** Stop polling, release the interval timer, and tear down telemetry. */
   stop(): void {
     if (this._timer !== undefined) {
       window.clearInterval(this._timer);
       this._timer = undefined;
     }
+    this._perfCollector.stop();
+  }
+
+  /**
+   * The machine-readable metrics document — what "Copy metrics JSON" copies.
+   * Built purely from the latest polled sample, the frame-telemetry
+   * snapshot, and the parsed dev flags; see `src/perf/metricsJson.ts`.
+   */
+  metricsJson(): string {
+    const sample = this._lastSample ?? this._sample();
+    return buildMetricsJson({
+      appVersion: __APP_VERSION__,
+      generatedAt: new Date().toISOString(),
+      backend: sample.backend,
+      flags: readDevFlags(),
+      telemetry: this._perfCollector.snapshot(),
+      rendering: sample.stats,
+      streaming: sample.streaming ?? null,
+    });
   }
 
   /** Show the telemetry from the most recent file load. */
@@ -213,7 +276,31 @@ export class DebugOverlay {
 
   /** Re-read the sampler and repaint the live block. */
   private _refresh(): void {
-    const { backend, stats, streaming, terrainCompute } = this._sample();
+    const sample = this._sample();
+    this._lastSample = sample;
+    const { backend, stats, streaming, terrainCompute } = sample;
+
+    // Perf section (v0.5.5 P0) — rolling frame-time percentiles, over-budget
+    // frame counters, longest observed main-thread task (honest "—" where the
+    // platform can't measure it), and the effective DPR.
+    const perf = this._perfCollector.snapshot();
+    if (perf && perf.frame.windowCount > 0) {
+      const f = perf.frame;
+      this._perf.textContent = [
+        `frame time    p50=${f.p50Ms.toFixed(1)} p95=${f.p95Ms.toFixed(1)}` +
+          ` p99=${f.p99Ms.toFixed(1)} max=${f.maxMs.toFixed(1)} ms  (n=${f.windowCount})`,
+        `over budget   >16.7ms: ${f.over16_7} · >33.3ms: ${f.over33_3}` +
+          `  (of ${f.total})`,
+        `longest task  ${
+          perf.longestTaskMs === null
+            ? '— (longtask unsupported)'
+            : `${perf.longestTaskMs.toFixed(0)} ms (${perf.longTaskCount} task(s))`
+        }`,
+        `effective dpr ${perf.effectiveDpr}`,
+      ].join('\n');
+    } else {
+      this._perf.textContent = '(collecting…)';
+    }
     const backendLabel =
       backend === 'webgpu' ? 'WebGPU' : backend === 'webgl2' ? 'WebGL 2' : '—';
 

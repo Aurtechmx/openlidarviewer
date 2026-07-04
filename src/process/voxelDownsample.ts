@@ -168,8 +168,11 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     name: cloud.name,
     declaredPointCount: cloud.declaredPointCount,
     // Preserve the decoded count so the Health Check still compares against
-    // what was read from the file, not this reduced cloud.
+    // what was read from the file, not this reduced cloud — and the load
+    // stride, so a deliberate display-sample cap stays distinguishable from
+    // genuine decode loss after the voxel pass.
     decodedPointCount: cloud.decodedPointCount,
+    loadStride: cloud.loadStride,
     // Provenance metadata is independent of point count — carry it through.
     metadata: cloud.metadata,
   });

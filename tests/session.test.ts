@@ -235,7 +235,7 @@ describe('parseSession — tolerance', () => {
       },
       colorMode: 'classification',
       scanSummary: {
-        fileName: '20210916_FLEXIGROB.copc.laz',
+        fileName: 'sample_uav_survey.copc.laz',
         sourcePoints: 9_600_000,
         width: 78.8,
         depth: 124.4,
@@ -256,7 +256,7 @@ describe('parseSession — tolerance', () => {
     expect(back.render?.pointSizeMode).toBe('adaptive');
     expect(back.render?.antialiasing).toBe(false);
     expect(back.colorMode).toBe('classification');
-    expect(back.scanSummary?.fileName).toBe('20210916_FLEXIGROB.copc.laz');
+    expect(back.scanSummary?.fileName).toBe('sample_uav_survey.copc.laz');
     expect(back.scanSummary?.sourcePoints).toBe(9_600_000);
     expect(back.scanSummary?.crs).toMatch(/UTM zone 12N/);
     expect(back.scanSummary?.crsUnit).toBe('metre');

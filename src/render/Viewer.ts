@@ -49,6 +49,8 @@ import {
   exp,
   exp2,
   max,
+  min,
+  mix,
   length,
   smoothstep,
   positionView,
@@ -66,11 +68,26 @@ import type { ColorMode, CoverageColorGrid } from './colorModes';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
+import { angularVelocity } from './angularVelocity';
+import {
+  targetPixelRatio,
+  quantizeDpr,
+  shouldApplyDpr,
+  DPR_MOTION_FLOOR,
+  DPR_FULL_REDUCTION_ANGULAR,
+} from './adaptiveDpr';
+import {
+  nextRefinementPhase,
+  phaseDprScale,
+  type RefinementPhase,
+} from './refinementPhase';
+import { readDevFlags } from '../perf/devFlags';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
 import {
   splatRadiusMultiplier,
   splatForcesAlphaToCoverage,
+  GAUSSIAN_SPLAT_SHARPNESS,
 } from './splatShader';
 import type { SplatMode } from './splatShader';
 import {
@@ -492,7 +509,14 @@ const MAX_PIXEL_RATIO = 1.5;
  * the streaming scheduler keeps its cadence — only the actual
  * GPU `render()` call is gated.
  */
-const RENDER_HOLDOVER_MS = 500;
+const RENDER_HOLDOVER_MS = 350;
+/**
+ * P6 proxy (until the P4 scheduler emits real coverage / spacing signals): ms
+ * after the camera parks at which the center is treated as "refined", so the
+ * refinement phase reaches `full-refine` and DPR steps up to full resolution.
+ * Kept short so the view re-sharpens promptly after navigation stops.
+ */
+const PHASE_CENTER_PROXY_MS = 250;
 const IDLE_HEARTBEAT_FRAMES = 6;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */
@@ -712,6 +736,39 @@ function buildPointMaskNode(): TslNode {
   return smoothstep(float(0.30), float(0.50), r).oneMinus();
 }
 
+/**
+ * P13 — the GPU mirror of `gaussianSplatAlpha` (splatShader.ts). `positionGeometry.xy`
+ * is the sprite-quad coordinate in [-0.5, 0.5]², so `r = length(xy)` runs 0 at the
+ * centre to 0.5 at the sprite edge; normalise to `d ∈ [0, 1]` (d = min(2r, 1)) and
+ * apply the SAME windowed Gaussian the unit test pins:
+ *
+ *   raw(d)   = exp(-k · d²)
+ *   alpha(d) = (raw(d) − exp(-k)) / (1 − exp(-k))     ∈ [0, 1]
+ *
+ * Pinned to exactly 1 at the centre and 0 at the edge — no hard ring. `k` is the
+ * shared `GAUSSIAN_SPLAT_SHARPNESS` constant so a screenshot and the unit test
+ * agree at the same `d`.
+ */
+function buildGaussianAlphaNode(): TslNode {
+  const r: TslNode = length((positionGeometry as TslNode).xy);
+  const d: TslNode = min(r.mul(2), float(1));
+  const k: TslNode = float(GAUSSIAN_SPLAT_SHARPNESS);
+  const edge: TslNode = exp(k.negate()); // exp(-k), in (0, 1)
+  const raw: TslNode = exp(k.negate().mul(d.mul(d))); // exp(-k · d²)
+  return raw.sub(edge).div(float(1).sub(edge)).clamp(float(0), float(1));
+}
+
+/**
+ * P13 — the point opacity node, switched between the existing antialiased rim
+ * mask and the Gaussian kernel by a shared uniform (`gaussianFactor` = 0 for
+ * Classic/Soft/Inspection, 1 for Gaussian). Both branches are cheap and evaluate
+ * per-fragment; `mix` picks between them so switching modes needs no material
+ * rebuild — just a uniform write.
+ */
+function buildPointOpacityNode(gaussianFactor: TslNode): TslNode {
+  return mix(buildPointMaskNode(), buildGaussianAlphaNode(), gaussianFactor);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Viewer
 // ─────────────────────────────────────────────────────────────────────────────
@@ -744,6 +801,23 @@ export class Viewer {
   // the behaviour is unchanged — only the warning goes away.
   private readonly _timer = new THREE.Timer();
   private _rafId: number | null = null;
+
+  // ── P5 adaptive DPR (program §P5) — drops backing-store resolution while the
+  //    camera moves, driven by the P3 angular-velocity signal. Flag-gated. ──
+  /** `?adaptiveDpr` dev flag (default on). Read once. */
+  private readonly _adaptiveDpr: boolean = readDevFlags().adaptiveDpr;
+  /** Reused quaternion buffers for the angular-velocity read — no per-frame alloc. */
+  private readonly _curCamQuat: [number, number, number, number] = [0, 0, 0, 0];
+  private readonly _prevCamQuat: [number, number, number, number] = [0, 0, 0, 0];
+  private _hasPrevCamQuat = false;
+  /** performance.now() of the last APPLIED DPR change — rate-limits reductions. */
+  private _lastDprChangeMs = 0;
+  /** `?refinementPhase` dev flag (default on) — drive DPR by discrete phases (P6). */
+  private readonly _refinementPhasesEnabled: boolean = readDevFlags().refinementPhase;
+  /** Current P6 refinement phase. */
+  private _phase: RefinementPhase = 'moving';
+  /** performance.now() when the camera last parked (0 while moving). */
+  private _settledAtMs = 0;
   /**
    * Performance timestamp until which the renderer stays at full
    * rAF rate. Bumped on every user input via `_bumpRenderActivity`.
@@ -819,6 +893,12 @@ export class Viewer {
    * the axis stays steady through the coast.
    */
   private _lastInteractMs = 0;
+  /**
+   * Edge detector for the hand tool's grab (v0.5.5 P1): true while
+   * `_maintainOrbitCenter` saw `_nav.panDragging` on the previous frame, so
+   * the release edge can stamp `_lastInteractMs` exactly once.
+   */
+  private _panWasDragging = false;
 
   // ── Shared point size in screen pixels (applied to all materials) ────────
   // Defaults to the smallest size; matches the Inspector slider's initial value.
@@ -871,6 +951,12 @@ export class Viewer {
   private _antialiasing = true;
   /** Base point size and the adaptive reference distance, as live uniforms. */
   private readonly _pointSizeUniform = uniform(1);
+  /**
+   * P13 — drives the point opacity node between the antialiased rim mask (0) and
+   * the Gaussian kernel (1). Shared across every cloud material so `setSplatMode`
+   * switches the whole scene with one uniform write — no material rebuild.
+   */
+  private readonly _gaussianOpacityFactor = uniform(0);
   private readonly _attnRef = uniform(100);
   /** The shared adaptive size node, assigned to every cloud's material. */
   private readonly _adaptiveSizeNode = buildAdaptiveSizeNode(
@@ -1665,7 +1751,9 @@ export class Viewer {
     material.transparent = false;
     // Round, soft-edged points — a circular alpha mask kept depth-correct via
     // alpha-to-coverage (no transparency sort, no draw-order artefacts).
-    material.opacityNode = buildPointMaskNode() as typeof material.opacityNode;
+    material.opacityNode = buildPointOpacityNode(
+      this._gaussianOpacityFactor,
+    ) as typeof material.opacityNode;
     // v0.3.7 final-polish: 0.18 was 0.5. Combined with the widened
     // smoothstep range in `buildPointMaskNode`, this keeps more of the
     // soft-edge gradient around the disc while still depth-sorting
@@ -2452,6 +2540,9 @@ export class Viewer {
   setSplatMode(mode: SplatMode): void {
     if (this._splatMode === mode) return;
     this._splatMode = mode;
+    // P13 — flip the shared opacity-node uniform so every material renders the
+    // Gaussian kernel (1) or the rim mask (0). No material rebuild required.
+    this._gaussianOpacityFactor.value = mode === 'gaussian' ? 1 : 0;
     // Re-push the user's point size so the new multiplier lands.
     this.setPointSize(this._pointSize);
     // Force AA on for Soft / Inspection; restore the user's setting
@@ -3138,7 +3229,7 @@ export class Viewer {
   // Navigation
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Switch the navigation mode (orbit / walk / fly). */
+  /** Switch the navigation mode (orbit / walk / fly / pan). */
   setMode(mode: NavMode): void {
     this._nav.setMode(mode);
   }
@@ -3146,6 +3237,15 @@ export class Viewer {
   /** The active navigation mode. */
   get navMode(): NavMode {
     return this._nav.mode;
+  }
+
+  /**
+   * Whether the v0.5.5 hand tool (pan mode) is available — false when the
+   * `?handPan=off` dev flag disabled it. The app reads this to decide
+   * whether the NavBar shows the Pan mode button and its legend entries.
+   */
+  get handPanEnabled(): boolean {
+    return this._nav.handPanEnabled;
   }
 
   /** Set the user speed multiplier for walk/fly (from the speed slider). */
@@ -3704,8 +3804,6 @@ export class Viewer {
     this._inspect.setActive(mode === 'inspect');
     this._annotate.setActive(mode === 'annotate');
     this._probe.setActive(mode === 'probe');
-    // The probe keeps navigation live; every other tool freezes it.
-    this._nav.setInputEnabled(mode === 'none' || mode === 'probe');
     // Inspect manages its own cursor; the measure, annotate and probe cursors
     // are owned here — a crosshair while picking, cleared when no tool is active.
     if (mode === 'measure' || mode === 'annotate' || mode === 'probe') {
@@ -3713,6 +3811,11 @@ export class Viewer {
     } else if (mode === 'none') {
       this._canvas.style.cursor = '';
     }
+    // The probe keeps navigation live; every other tool freezes it. Runs
+    // AFTER the cursor assignment: re-enabling navigation lets the
+    // NavController reclaim its pan-mode `grab` cursor over the cleared one
+    // (and disabling it cancels any hand-tool drag before the tool arms).
+    this._nav.setInputEnabled(mode === 'none' || mode === 'probe');
     this._measureListeners.onModeChange?.(mode === 'measure');
     this._inspectListeners.onModeChange?.(mode === 'inspect');
     this._annotateListeners.onModeChange?.(mode === 'annotate');
@@ -4990,14 +5093,29 @@ export class Viewer {
     // settles. Result: drag feels exactly like model-viewer's — no
     // micro-judder, no pull-back yank during the gesture.
     if (this._userInteracting) return;
+    // Same suspension for the hand tool's grab (v0.5.5 P1): a middle-mouse
+    // temporary grab in orbit mode bypasses OrbitControls entirely, so the
+    // `_userInteracting` gate above never sees it — without this check the
+    // soft-clamp lerp would fight the live drag. On release, stamp the same
+    // settle window OrbitControls gestures get, so the clamp doesn't yank
+    // the target the very next frame.
+    const nowMs = (typeof performance !== 'undefined' && performance.now)
+      ? performance.now()
+      : Date.now();
+    if (this._nav.panDragging) {
+      this._panWasDragging = true;
+      return;
+    }
+    if (this._panWasDragging) {
+      this._panWasDragging = false;
+      this._lastInteractMs = nowMs;
+      return;
+    }
     // Settle delay — after release, OrbitControls keeps damping the
     // spherical angles for ~15-30 frames. If the soft-clamp lerp engages
     // during that tail, the camera rotates around a target that's also
     // sliding back into the envelope, which reads as a wobbly axis.
     // Skip the maintenance pass until the damping has settled.
-    const nowMs = (typeof performance !== 'undefined' && performance.now)
-      ? performance.now()
-      : Date.now();
     if (isWithinSettleWindow(nowMs, this._lastInteractMs, SETTLE_MS)) return;
 
     // 1) Streaming refinement — drift the target gently toward the live
@@ -5670,6 +5788,70 @@ export class Viewer {
     return false;
   }
 
+  /**
+   * P5 — set the renderer's device-pixel-ratio for this frame. Full resolution
+   * when parked; a reduced ratio while moving, driven by the camera's angular
+   * speed (the P3 signal). `setPixelRatio` reallocates the drawing buffer, so
+   * `shouldApplyDpr` sharpens immediately on park but rate-limits reductions.
+   * Reads the live applied ratio back from the renderer (no separate bookkeeping
+   * to desync with the resize handler). No-op unless the frame renders and the
+   * `?adaptiveDpr` flag is on; DPR-only, so it is camera-agnostic (ortho-safe).
+   */
+  private _applyAdaptiveDpr(moving: boolean, dt: number, nowMs: number, rendered: boolean): void {
+    if (!this._adaptiveDpr || !rendered) return;
+    const q = this._camera.quaternion;
+    this._curCamQuat[0] = q.x;
+    this._curCamQuat[1] = q.y;
+    this._curCamQuat[2] = q.z;
+    this._curCamQuat[3] = q.w;
+    const angularSpeed = this._hasPrevCamQuat
+      ? angularVelocity(this._prevCamQuat, this._curCamQuat, dt)
+      : 0;
+    this._prevCamQuat[0] = q.x;
+    this._prevCamQuat[1] = q.y;
+    this._prevCamQuat[2] = q.z;
+    this._prevCamQuat[3] = q.w;
+    this._hasPrevCamQuat = true;
+    const maxDpr = Math.min(
+      typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+      MAX_PIXEL_RATIO,
+    );
+    const floor = Math.min(maxDpr, DPR_MOTION_FLOOR);
+
+    let target: number;
+    if (this._refinementPhasesEnabled) {
+      // P6 — track settle time and step DPR by discrete refinement phase. The
+      // coverage / central-refinement readiness are time proxies here until the
+      // P4 scheduler emits real signals; the phase machine itself is exact.
+      if (moving) this._settledAtMs = 0;
+      else if (this._settledAtMs === 0) this._settledAtMs = nowMs;
+      const msSinceSettle = moving ? 0 : nowMs - this._settledAtMs;
+      this._phase = nextRefinementPhase(this._phase, {
+        moving,
+        msSinceSettle,
+        settleMs: SETTLE_MS,
+        coverageComplete: msSinceSettle >= SETTLE_MS,
+        centralRefined: msSinceSettle >= PHASE_CENTER_PROXY_MS,
+      });
+      target = Math.max(floor, maxDpr * phaseDprScale(this._phase));
+      if (this._phase === 'moving' && angularSpeed > 0) {
+        // P3 — faster rotation pulls the moving-phase resolution toward the floor.
+        const t = Math.min(1, angularSpeed / DPR_FULL_REDUCTION_ANGULAR);
+        target = Math.max(floor, target + (floor - target) * t);
+      }
+    } else {
+      // Flag off: the continuous P5 mapping (no discrete phases).
+      target = targetPixelRatio({ maxDpr, moving, angularSpeed });
+    }
+
+    target = quantizeDpr(target);
+    const applied = this._renderer.getPixelRatio();
+    if (shouldApplyDpr(applied, target, nowMs, this._lastDprChangeMs)) {
+      this._renderer.setPixelRatio(target);
+      this._lastDprChangeMs = nowMs;
+    }
+  }
+
   private _startLoop(): void {
     const loop = () => {
       this._rafId = requestAnimationFrame(loop);
@@ -5702,6 +5884,8 @@ export class Viewer {
         : Date.now();
       const moving = cameraIsMoving(this._nav.isTweening, nowMs, this._renderActivityUntilMs);
       const wantEdl = edlActiveThisFrame(this._edlEnabled, moving);
+      // P5 — pick this frame's DPR before rendering so the render uses it.
+      this._applyAdaptiveDpr(moving, delta, nowMs, rendered);
       if (rendered) {
         this._idleRenderHeartbeat = 0;
         // EDL when parked → render through the post-processing pipeline; moving

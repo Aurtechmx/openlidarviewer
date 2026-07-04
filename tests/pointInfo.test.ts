@@ -16,7 +16,7 @@ import type { RawPointInfo } from '../src/render/pointInfo';
 /** A raw picked point with every attribute present (origin at zero). */
 function fullRaw(): RawPointInfo {
   return {
-    layer: '20210916_FLEXIGROBOTS.laz',
+    layer: 'sample_uav_survey.laz',
     index: 1284392,
     local: [42.38149, 18.20351, 6.91284],
     origin: [0, 0, 0],
@@ -75,7 +75,7 @@ test('makePointInfo passes attributes through unchanged', () => {
   expect(info.classification).toBe(2);
   expect(info.rgb).toEqual([180, 92, 40]);
   expect(info.index).toBe(1284392);
-  expect(info.layer).toBe('20210916_FLEXIGROBOTS.laz');
+  expect(info.layer).toBe('sample_uav_survey.laz');
 });
 
 test('field text helpers show real values when present', () => {
@@ -102,7 +102,7 @@ test('pointInfoCopyText produces the documented plain-text block', () => {
   expect(text).toBe(
     [
       'OpenLiDARViewer Point Info',
-      'Layer: 20210916_FLEXIGROBOTS.laz',
+      'Layer: sample_uav_survey.laz',
       'Index: 1284392',
       'X: 42.381',
       'Y: 18.204',
@@ -126,7 +126,7 @@ test('pointInfoCopyText marks missing attributes as "Not available"', () => {
 test('pointInfoJson is JSON-friendly with classification as a name', () => {
   const json = pointInfoJson(makePointInfo(fullRaw()));
   expect(json).toEqual({
-    layer: '20210916_FLEXIGROBOTS.laz',
+    layer: 'sample_uav_survey.laz',
     index: 1284392,
     x: 42.381,
     y: 18.204,

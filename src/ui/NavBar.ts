@@ -93,6 +93,27 @@ const MODES: ModeDef[] = [
   },
 ];
 
+/**
+ * The v0.5.5 hand tool (P1) — a fourth mode rendered as its own circular pad
+ * beside the triangle rather than as a fourth vertex: the trio composition is
+ * the established rotate/travel metaphor, while Pan is a grab-the-scene tool.
+ * Hidden (with its legend entries) when the `?handPan=off` dev flag disables
+ * the tool — see `setPanAvailable`.
+ */
+const PAN_MODE: ModeDef = {
+  mode: 'pan',
+  label: 'Pan',
+  spatial: 'left of triangle',
+  hint: 'Pan view — grab the scene and drag it; scroll still zooms (G or 4)',
+  // An open hand, original artwork in the dockIcons house style
+  // (24×24, currentColor, 1.6 px stroke, round caps/joins).
+  icon: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8.2 12.5V6.4a1.2 1.2 0 0 1 2.4 0"/>
+<path d="M10.6 11V4.9a1.2 1.2 0 0 1 2.4 0"/>
+<path d="M13 11V5.7a1.2 1.2 0 0 1 2.4 0"/>
+<path d="M15.4 11.4V7.3a1.2 1.2 0 0 1 2.4 0v6.2c0 3.9-2.5 6.4-6.1 6.4-2.9 0-4.5-1.4-5.8-3.8l-1.6-3c-.4-.8-.1-1.7.7-2.1.7-.4 1.6-.1 2.1.5l1.1 1.6"/></svg>`,
+};
+
 /** One key-cap + caption pair for the controls HUD. */
 function legendItem(keys: string[], caption: string): HTMLElement {
   const caps = keys.map((k) => el('kbd', { className: 'olv-key', text: k }));
@@ -122,6 +143,10 @@ export class NavBar {
   private readonly _hud: HTMLElement;
   private readonly _speed: HTMLElement;
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
+  /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
+  private _panBtn!: HTMLButtonElement;
+  /** Legend chips that only make sense while the hand tool exists. */
+  private _panLegendItems: HTMLElement[] = [];
 
   private _mode: NavMode = 'orbit';
   private _locked = false;
@@ -179,6 +204,31 @@ export class NavBar {
       this._modeButtons.set(def.mode, button);
       return button;
     });
+    // Pan (hand tool, v0.5.5 P1) — a fourth mode pad docked to the left of
+    // the triangle. Same construction as the vertex buttons so `_render()`
+    // drives its active state + aria-pressed through `_modeButtons`.
+    {
+      const def = PAN_MODE;
+      // The extra `olv-mode-pan-icon` class keeps this unsafeHtml call site
+      // textually distinct from the MODES loop above — the unsafeHtmlGuard
+      // allowlist is one-to-one per reviewed site.
+      const iconWrap = el('span', { className: 'olv-mode-icon olv-mode-pan-icon', unsafeHtml: def.icon });
+      iconWrap.setAttribute('aria-hidden', 'true');
+      const labelEl = el('span', { className: 'olv-mode-label', text: def.label });
+      const button = el('button', {
+        className: `olv-mode olv-mode-${def.mode}`,
+        title: def.hint,
+        ariaLabel: `${def.label} mode, ${def.spatial}. ${def.hint}`,
+      }, [iconWrap, labelEl]);
+      button.setAttribute('aria-pressed', def.mode === this._mode ? 'true' : 'false');
+      button.addEventListener('click', () => {
+        button.blur();
+        this._cb.onMode(def.mode);
+      });
+      this._modeButtons.set(def.mode, button);
+      this._panBtn = button;
+      segments.push(button);
+    }
     // Centre Reset button — sits at the triangle's centroid. Compact,
     // ringed in cyan so it reads as a peer to the three modes without
     // competing for primary attention.
@@ -211,8 +261,8 @@ export class NavBar {
     switcher.setAttribute('role', 'group');
     switcher.setAttribute(
       'aria-label',
-      'Navigation mode — Orbit (top), Walk (bottom-left), Fly (bottom-right). ' +
-        'The centre button resets the camera to fit the whole scan.',
+      'Navigation mode — Orbit (top), Walk (bottom-left), Fly (bottom-right), ' +
+        'Pan (left). The centre button resets the camera to fit the whole scan.',
     );
 
     // ── Speed slider (walk / fly only) ────────────────────────────────────
@@ -250,9 +300,14 @@ export class NavBar {
       legendItem(['Space'], 'Up'),
       legendItem(['C'], 'Down'),
     ]);
+    // The Pan chip (its 4 / G bindings) exists only while the hand tool does
+    // (`?handPan=off` reverts the legend to the v0.5.4 trio).
+    const panChip = legendItem(['4', 'G'], 'Pan view');
+    this._panLegendItems = [panChip];
     const modesGroup = el('div', { className: 'olv-legend-group' }, [
       legendItem(['Esc'], 'Release cursor'),
       legendItem(['1', '2', '3'], 'Modes'),
+      panChip,
     ]);
     const metaGroup = el('div', { className: 'olv-legend-group' }, [
       legendItem(['R'], 'Reset'),
@@ -409,6 +464,18 @@ export class NavBar {
     this._render();
   }
 
+  /**
+   * Show or hide the hand tool's surfaces — the Pan mode pad and its legend
+   * chip. Driven by `viewer.handPanEnabled` (the `?handPan=off` dev flag);
+   * with the flag off the NavBar renders exactly the v0.5.4 trio.
+   */
+  setPanAvailable(available: boolean): void {
+    this._panBtn.classList.toggle('olv-hidden', !available);
+    for (const item of this._panLegendItems) {
+      item.classList.toggle('olv-hidden', !available);
+    }
+  }
+
   /** Reflect the pointer-lock state. */
   setLocked(locked: boolean): void {
     this._locked = locked;
@@ -454,7 +521,9 @@ export class NavBar {
       // visible active state so screen readers announce mode changes.
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
-    const navigating = this._mode !== 'orbit';
+    // Walk/fly only: pan is OrbitControls-driven like orbit — no WASD speed
+    // to set, no pointer lock to prompt for.
+    const navigating = this._mode === 'walk' || this._mode === 'fly';
     this._speed.classList.toggle('olv-hidden', !navigating);
     // v0.3.10: HUD visibility now follows `_helpPinned`. The flashHelp
     // call on scan load primes it true so the legend + camera presets

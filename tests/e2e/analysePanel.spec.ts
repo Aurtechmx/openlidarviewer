@@ -123,7 +123,16 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   // The printable map-sheet PDF export (renamed "Export Contours") is offered
   // alongside the vector formats and opens the pre-export dialog.
   await expect(page.locator('.olv-analyse-dl', { hasText: 'Export Contours' })).toBeVisible();
-  await expect(page.locator('.olv-analyse-export-note')).toContainText(/not survey-grade/i);
+  // The "not survey-grade" honesty caveat must be visible. When BOTH the DEM and
+  // contour-preview caveats apply, P12 consolidates them into ONE banner
+  // (`.olv-analyse-dem-note`) and leaves the standalone contour note empty; when
+  // only the contour caveat applies it stays in `.olv-analyse-export-note`.
+  // Assert the disclosure wherever the consolidation places it.
+  await expect(
+    page
+      .locator('.olv-analyse-export-note, .olv-analyse-dem-note')
+      .filter({ hasText: /not survey-grade/i }),
+  ).toBeVisible();
   // The DEM raster package is offered as the primary export and stays enabled
   // regardless of the contour gate (a bare-earth raster is valid either way).
   const dem = page.locator('.olv-analyse-dl', { hasText: 'DEM (ZIP)' });

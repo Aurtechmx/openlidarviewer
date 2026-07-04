@@ -121,6 +121,15 @@ export interface PointCloudOptions {
    * declared count against what was decoded — not against the reduced count.
    */
   decodedPointCount?: number;
+  /**
+   * v0.5.5 P12 — the decode stride the loader DELIBERATELY applied (the
+   * budget-aware display-sample cap decodes one record per bucket of
+   * `loadStride`). 1 / undefined = every record was read. Kept so the
+   * Health Check can distinguish "decoded < declared because of the
+   * display-sample cap" (informational) from "decode genuinely lost
+   * points" (a real anomaly). Survives voxel downsampling.
+   */
+  loadStride?: number;
   /** Provenance metadata read from the file header, when available. */
   metadata?: CloudMetadata;
 }
@@ -155,6 +164,7 @@ export class PointCloud {
   readonly name: string;
   readonly declaredPointCount?: number;
   readonly decodedPointCount?: number;
+  readonly loadStride?: number;
   readonly metadata?: CloudMetadata;
 
   /**
@@ -213,6 +223,7 @@ export class PointCloud {
     this.name = options.name;
     this.declaredPointCount = options.declaredPointCount;
     this.decodedPointCount = options.decodedPointCount;
+    this.loadStride = options.loadStride;
     this.metadata = options.metadata;
   }
 
