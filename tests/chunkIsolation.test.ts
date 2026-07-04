@@ -57,8 +57,14 @@ const DIST = join(process.cwd(), 'dist', 'assets');
  * NavController) rides the lazy Viewer chunk, not the shell — this is
  * exactly the "sub-KB trigger + control in the shell, heavy code in a
  * chunk" split the margin exists for.
+ *
+ * Raised 508 → 512 KiB at v0.5.5 for the collapsible side rails: the left and
+ * right grabber wiring, the chevron SVGs, and the per-panel toggle controls
+ * added a little more eager shell surface (index measured 520,230 B, 38 B over
+ * the prior ceiling). Same split as above — only the sub-KB DOM triggers live in
+ * the shell; the rail and camera logic ride lazy chunks.
  */
-const WARNING_THRESHOLD = 508 * 1024;
+const WARNING_THRESHOLD = 512 * 1024;
 
 /** Required chunk-name prefixes — substring-matched against the filename. */
 const REQUIRED_CHUNK_PREFIXES = [
