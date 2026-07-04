@@ -11,19 +11,21 @@ files never leave the device.
 ### Added
 
 - **Elevation filter.** Hide points outside a chosen height window. The window
-  is given in world units and converted to each cloud's local space along its
-  up-axis (Z-up for LAS/LAZ/E57, Y-up for phone scans); points outside it
-  collapse to zero size on the GPU, so the filtered view adds no draw work and
-  clearing the filter restores the scene exactly. Works for static clouds and
-  streaming COPC/EPT nodes, with an on-screen control in the Inspector.
+  is given in world units and converted to the scan's attribute space along its
+  up-axis (Z-up for LAS/LAZ/E57, Y-up for phone scans); out-of-window points
+  collapse to zero size on the GPU (they still run the vertex stage but produce
+  no visible sprite and add no extra draw calls), and clearing the filter
+  restores the scene exactly. Picking, measuring, snapping, and classification
+  edits all respect the filter — you can't select a point you can't see. Works
+  for static clouds and streaming COPC/EPT nodes, with an Inspector control.
 - **Intensity filter.** Hide points outside a chosen intensity window, in the
-  file's raw intensity units. Same GPU approach as the elevation filter (points
-  outside collapse to zero size, no draw cost); the control seeds from the
-  cloud's own intensity range and is hidden for scans without an intensity
-  channel.
+  file's raw intensity units. Same GPU approach as the elevation filter; the
+  control seeds from the cloud's own intensity range and is hidden for scans
+  without an intensity channel.
 - **Streaming point-cloud export.** Export the streamed-in (resident) points of
-  a COPC/EPT scan to LAS/LAZ/XYZ at display resolution. The export is flagged as
-  a reduced view while the whole cloud is still streaming.
+  a COPC/EPT scan to LAS or XYZ (optionally gzip-compressed as `.las.gz`) at
+  display resolution. The export is flagged as a reduced view while the whole
+  cloud is still streaming. (In-browser LAZ writing is not yet available.)
 - **Clearer scan-loading feedback.** Opening a scan — a device file or a public
   or streaming dataset — now shows a prominent blue blinking "Opening…"
   indicator, so an in-flight load reads the same way from either entry point.
@@ -38,8 +40,31 @@ files never leave the device.
   and intensity filters now touch a scan's render path only while a filter is
   actually active; opening a scan without a filter renders exactly as it did
   before the filters existed.
+- **Filters apply to interaction, not just the picture.** Picking, measuring,
+  snapping, focus, probing, annotating, and lasso reclassification now reject
+  points hidden by the elevation or intensity filter, so a hidden point can't
+  become a measurement vertex or be rewritten by a class edit.
+- **Streaming filter controls now appear.** A COPC/EPT scan seeds its elevation
+  and intensity controls from the streamed data (previously they stayed hidden),
+  and a static→streaming swap clears any leftover filter state.
+- **Range-control accuracy.** Clearing a filter field no longer briefly applies
+  a bogus zero bound, and re-seeding the extent for a new scan clears the prior
+  scan's active filter so the control and the rendered scene always agree.
+- **Sessions keep every measurement.** Profile, box, and volume measurements and
+  their data (profile chart, corridor width, ground percentile, cut/fill volume
+  record, resident-only flags) now survive a session round-trip instead of being
+  silently dropped on import.
+- **GPU error handling.** The graphics-error listener is now released on teardown
+  and de-duplicated per scan, and a lost GPU device surfaces a clear message
+  instead of a permanently blank canvas.
 - **Startup hardening.** Guarded an empty-state initialisation path so a fresh
   page load can't error before a scan is opened.
+
+### Known limitations
+
+- Elevation/intensity filtering uses a single up-axis and reference origin, so a
+  session with multiple layers at differing origins or mixed Z-up/Y-up axes may
+  filter some layers inconsistently. Per-layer filtering is planned.
 
 ## [0.5.5] - 2026-07-03
 
