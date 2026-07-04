@@ -53,6 +53,7 @@ import {
   mix,
   length,
   smoothstep,
+  step,
   positionView,
   positionGeometry,
   perspectiveDepthToViewZ,
@@ -61,6 +62,7 @@ import {
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassVisibility } from './class/classVisibility';
 import { classVisibleAt } from './class/classMaskUniform';
+import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
 import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
@@ -998,6 +1000,24 @@ export class Viewer {
    */
   private readonly _materialsWithClass = new WeakSet<THREE.PointsNodeMaterial>();
 
+  // ── Elevation filter (v0.5.6) ────────────────────────────────────────────
+  // Shared uniforms driving a per-point size multiply, mirroring the class
+  // mask. `enabled` gates the whole test (0 → identity, so the unfiltered scene
+  // is pixel-identical); `axisIsZ` selects the up-axis component (1 = z / Z-up,
+  // 0 = y / Y-up); `min`/`max` are the inclusive window in ATTRIBUTE space
+  // (origin-shifted), converted from the world window by `elevationFilterUniform`.
+  private readonly _elevFilterEnabled = uniform(0);
+  private readonly _elevFilterAxisIsZ = uniform(1);
+  private readonly _elevFilterMin = uniform(0);
+  private readonly _elevFilterMax = uniform(0);
+  /**
+   * Materials whose mesh carries the named `aPos` instance-position attribute —
+   * only these fold the elevation multiply into their size node. Class-less and
+   * (for now) streaming meshes keep the prior graph, so they never reference a
+   * missing attribute. Static clouds get `aPos` at build time.
+   */
+  private readonly _materialsWithElev = new WeakSet<THREE.PointsNodeMaterial>();
+
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
@@ -1716,6 +1736,10 @@ export class Viewer {
     geometry.instanceCount = instanceCount;
 
     const positionAttr = new THREE.InstancedBufferAttribute(positions, 3);
+    // Expose the per-instance position under a name so the size graph can read
+    // the point's elevation for the elevation filter (v0.5.6). Same buffer as
+    // `positionNode`, just a named binding — mirrors `aClass`.
+    geometry.setAttribute('aPos', positionAttr);
     const colorAttr = new THREE.InstancedBufferAttribute(toFloatColors(colorsU8), 3);
 
     // Per-point ASPRS classification, uploaded as a one-value-per-instance
@@ -1768,6 +1792,9 @@ export class Viewer {
     // setup, so `_applySizeMode` folds the class-mask multiply into its size
     // node. Class-less meshes are never registered and keep the prior graph.
     if (classAttr !== null) this._materialsWithClass.add(material);
+    // Static clouds always carry `aPos`, so they always fold the elevation
+    // multiply (identity while the filter is off).
+    this._materialsWithElev.add(material);
     // A cloud added while a clip is active inherits it from its first frame.
     if (this._clip?.enabled) {
       material.clippingPlanes = clipBoxPlanes(this._clip);
@@ -3103,6 +3130,39 @@ export class Viewer {
     // Cache whether any class is hidden so the pick paths skip the per-point
     // visibility predicate entirely on the all-visible hot path.
     this._classFiltered = anyHidden;
+    this._bumpRenderActivity();
+  }
+
+  /**
+   * Set the elevation filter window in world/source units, or clear it with
+   * `undefined`. Points whose up-axis coordinate falls outside the inclusive
+   * window collapse to zero size (hidden) on the next frame; the unfiltered
+   * scene is pixel-identical. The window is converted to the primary cloud's
+   * attribute space (origin-shifted along the up-axis) by the pure
+   * `elevationFilterUniform` core. Static clouds only in this slice — streaming
+   * nodes join next.
+   */
+  setElevationFilter(range: readonly [number, number] | undefined): void {
+    const axisIsZ = this._worldUp.z === 1;
+    const axis: UpAxis = axisIsZ ? 2 : 1;
+    const axisIdx = axisIsZ ? 2 : 1;
+    // The world-space origin that was subtracted from the positions, along the
+    // up-axis. Static clouds record it as `origin`; the streaming source as
+    // `renderOrigin`. Prefer the streaming source when present, else the first
+    // static cloud. Clouds that share an origin (the common case) convert
+    // identically.
+    const streamingCloud = this._streaming?.cloud;
+    const staticCloud = this._clouds.values().next().value?.cloud;
+    const origin = streamingCloud
+      ? streamingCloud.renderOrigin[axisIdx]
+      : staticCloud
+        ? staticCloud.origin[axisIdx]
+        : 0;
+    const u = elevationFilterUniform(range, axis, origin);
+    this._elevFilterEnabled.value = u.enabled;
+    this._elevFilterAxisIsZ.value = axisIsZ ? 1 : 0;
+    this._elevFilterMin.value = u.min;
+    this._elevFilterMax.value = u.max;
     this._bumpRenderActivity();
   }
 
@@ -4813,16 +4873,25 @@ export class Viewer {
    */
   private _applySizeMode(material: THREE.PointsNodeMaterial): void {
     const adaptive = this._pointSizeMode === 'adaptive';
-    if (!this._materialsWithClass.has(material)) {
+    const hasClass = this._materialsWithClass.has(material);
+    const hasElev = this._materialsWithElev.has(material);
+    // No per-point filter applies to this material — keep the exact prior graph
+    // (adaptive node or `null`) so class-less, elevation-less meshes are
+    // untouched and never reference a missing attribute.
+    if (!hasClass && !hasElev) {
       material.sizeNode = (
         adaptive ? this._adaptiveSizeNode : null
       ) as typeof material.sizeNode;
       return;
     }
-    const base: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
-    material.sizeNode = base.mul(
-      this._classMaskMultiplier(),
-    ) as typeof material.sizeNode;
+    // Any filtered material routes fixed mode through `materialPointSize` (the
+    // node form of `material.size`) so the pixel size is preserved while the
+    // mask multiplies it. Fold each active multiplier; both are the identity (×1)
+    // when their filter is off, so the unfiltered scene stays pixel-for-pixel.
+    let node: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
+    if (hasElev) node = node.mul(this._elevMaskMultiplier());
+    if (hasClass) node = node.mul(this._classMaskMultiplier());
+    material.sizeNode = node as typeof material.sizeNode;
   }
 
   /**
@@ -4842,6 +4911,29 @@ export class Viewer {
     const aClass: TslNode = attribute('aClass');
     const code: TslNode = int(aClass);
     return (this._classMaskUniform as TslNode).element(code);
+  }
+
+  /**
+   * The per-point elevation-mask multiplier (v0.5.6): reads the up-axis
+   * component of the instanced position (`aPos`), tests it against the inclusive
+   * `[min, max]` window, and resolves to `1` (in range or filter off) or `0`
+   * (out of range) — multiplying an out-of-range point's size by 0 collapses its
+   * sprite to nothing, exactly like the class mask.
+   *
+   * Built from `step` + `mix` only (no boolean nodes): `lo = step(min, elev)` is
+   * 1 when `elev >= min`; `hi = step(elev, max)` is 1 when `elev <= max`; their
+   * product is the inclusive in-range flag. `mix(1, inRange, enabled)` yields the
+   * identity `1` when the filter is disabled, so the graph is a no-op until a
+   * window is set. `axisIsZ` picks z (Z-up) or y (Y-up) without a rebuild.
+   */
+  private _elevMaskMultiplier(): TslNode {
+    const pos: TslNode = attribute('aPos');
+    const axisIsZ: TslNode = this._elevFilterAxisIsZ;
+    const elev: TslNode = pos.z.mul(axisIsZ).add(pos.y.mul(axisIsZ.oneMinus()));
+    const lo: TslNode = step(this._elevFilterMin as TslNode, elev); // elev >= min
+    const hi: TslNode = step(elev, this._elevFilterMax as TslNode); // elev <= max
+    const inRange: TslNode = lo.mul(hi);
+    return mix(float(1), inRange, this._elevFilterEnabled as TslNode);
   }
 
   /**

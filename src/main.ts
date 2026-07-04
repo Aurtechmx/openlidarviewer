@@ -3619,6 +3619,10 @@ if (testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
+      // Elevation filter (v0.5.6) device-verify seam: pass a world-space
+      // [min, max] window (or null to clear) and confirm points outside it hide.
+      setElevationFilter: (range: [number, number] | null) =>
+        v.setElevationFilter(range ?? undefined),
       // Classification edit seam — seed a uniform class, reclassify a screen
       // lasso, undo/redo, and read a point's class, so the reclassify tool's
       // full flow is e2e-verifiable without running the heavy classifier.
