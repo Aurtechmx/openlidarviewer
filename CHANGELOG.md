@@ -2,6 +2,21 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.6] - 2026-07-04
+
+Point filtering. v0.5.6 connects the staged point-filter work to the live
+renderer, starting with an elevation filter. Browser-native and local-first;
+files never leave the device.
+
+### Added
+
+- **Elevation filter.** Hide points outside a chosen height window. The window
+  is given in world units and converted to each cloud's local space along its
+  up-axis (Z-up for LAS/LAZ/E57, Y-up for phone scans); points outside it
+  collapse to zero size on the GPU, so the filtered view adds no draw work and
+  clearing the filter restores the scene exactly. Wired for static clouds in
+  this update; streaming COPC nodes and an on-screen control follow.
+
 ## [0.5.5] - 2026-07-03
 
 Navigation, interface, reporting, and validation. v0.5.5 adds a Pan hand tool,
