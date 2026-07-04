@@ -421,10 +421,21 @@ function buildRangeFilter(opts: {
   const sectionEl = section(opts.title, body);
   sectionEl.classList.add('olv-hidden');
 
+  // Read a numeric field, or null when it's empty/blank. `Number('')` is 0
+  // (and `Number.isFinite(0)` is true), so without the empty-string guard,
+  // clearing a field to retype would momentarily apply a bogus `0` bound and
+  // filter the scan to a sliver. Null means "no valid value yet" — leave the
+  // current window untouched until both fields hold real numbers.
+  const readField = (v: string): number | null => {
+    if (v.trim() === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
   const apply = (): void => {
-    const lo = Number(minInput.value);
-    const hi = Number(maxInput.value);
-    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return;
+    const lo = readField(minInput.value);
+    const hi = readField(maxInput.value);
+    if (lo === null || hi === null) return;
     opts.onApply([lo, hi]);
     // Flag "filtering" only when the window is narrower than the full extent —
     // a full-range window hides nothing, so it shouldn't read as active.
@@ -446,15 +457,27 @@ function buildRangeFilter(opts: {
   return {
     section: sectionEl,
     setExtent(ext): void {
+      // Only act when the extent actually CHANGES — a new (or first) scan.
+      // Re-seeding with the same extent is a no-op so a streaming extent that
+      // re-reports the same range can't stomp the user's current window.
+      const changed =
+        !extent || !ext || extent.min !== ext.min || extent.max !== ext.max;
       extent = ext;
       if (!ext || !Number.isFinite(ext.min) || !Number.isFinite(ext.max)) {
         sectionEl.classList.add('olv-hidden');
+        // No usable extent ⇒ no scan to filter: clear any live GPU filter so the
+        // renderer can't keep applying a stale window from a previous scan.
+        if (changed) opts.onApply(null);
         return;
       }
+      if (!changed) return;
       minInput.value = String(Math.floor(ext.min));
       maxInput.value = String(Math.ceil(ext.max));
-      // A fresh seed is the full extent — visible, nothing filtered yet.
+      // A fresh seed is the full extent — visible, nothing filtered yet. Clear
+      // any filter carried over from a previous scan so the reset fields and the
+      // renderer agree (the "reseed leaves the old GPU filter active" bug).
       sectionEl.classList.remove('olv-hidden', 'olv-filter-active');
+      opts.onApply(null);
     },
     applyWindow(range): void {
       if (range) {

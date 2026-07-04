@@ -5193,10 +5193,16 @@ async function importSession(file: File): Promise<void> {
       // restored scan shows the same classes the author left visible.
       classLegendPanel.applyFilter(session.classFilter);
     }
-    if (session.pointFilters) {
-      // v6 — re-apply the saved elevation / intensity windows. The Inspector
-      // extents were seeded when the scan reopened, so restoring writes the
-      // window into the inputs and drives the GPU filter + active-state cue.
+    // v6 — re-apply the saved elevation / intensity windows, but ONLY when a
+    // scan is actually loaded. The elevation window is converted to the cloud's
+    // attribute space using that cloud's origin + up-axis; applying it with no
+    // scan present would convert against origin 0 and the default axis, so the
+    // window would be wrong the moment a scan did load. A session is a
+    // measurement overlay for an open scan, so "no scan ⇒ skip the filter" is
+    // the correct, non-surprising behaviour.
+    if (session.pointFilters && (activeId != null || viewer.hasStreamingCloud)) {
+      // The Inspector extents were seeded when the scan opened, so restoring
+      // writes the window into the inputs and drives the GPU filter + cue.
       const pf = session.pointFilters;
       if (pf.elevation) {
         viewer.setElevationFilter(pf.elevation);
