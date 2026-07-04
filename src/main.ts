@@ -2938,7 +2938,10 @@ const reducedById = new Map<string, boolean>();
 // current as of the latest streamed-in nodes.
 let streamingSnapshot: { cloud: PointCloud; residentCount: number } | null = null;
 function streamingExportCloud(): PointCloud | null {
-  const sc = viewer.streamingCloud;
+  // `viewer` is null until the lazy Viewer chunk resolves; ExportPanel's
+  // constructor reaches this (via getCloud in _renderGzipRow/_renderSummary)
+  // during startup, before that. No viewer ⇒ no streaming cloud to snapshot.
+  const sc = viewer?.streamingCloud;
   if (!sc) {
     streamingSnapshot = null;
     return null;
@@ -2976,7 +2979,7 @@ function exportGeoContext(): {
 
 const exportPanel = new ExportPanel({
   getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : streamingExportCloud()),
-  isStreamingPending: () => viewer.streamingCloud != null && streamingExportCloud() == null,
+  isStreamingPending: () => viewer?.streamingCloud != null && streamingExportCloud() == null,
   getActiveClip: () => viewer.getClip(),
   hasFullSource: () => activeId != null && sourceFileById.has(activeId),
   // A streaming snapshot exports only the resident (streamed-in) points, so it
@@ -2984,7 +2987,12 @@ const exportPanel = new ExportPanel({
   // the export status says "reduced view" and never reads as the full survey.
   isReduced: () => {
     if (activeId != null) return reducedById.get(activeId) === true;
-    const sc = viewer.streamingCloud;
+    // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
+    // constructor calls this (via _renderFullResRow) during startup — before
+    // that. Optional-chain the deref: with no viewer there is no streaming
+    // cloud, so nothing is a reduced view yet. (An explicit `viewer == null`
+    // check would trip TS2367 since `viewer` is typed non-null via a cast.)
+    const sc = viewer?.streamingCloud;
     return sc != null && sc.residentPointCount < sc.sourcePointCount;
   },
   getFullCloud: async () => {
