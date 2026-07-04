@@ -36,8 +36,9 @@ async function stallRemoteHost(page: Page): Promise<void> {
 
 /**
  * Start a load against the stalled host and wait until it is genuinely in
- * flight: the DropZone progress toast reads "Connecting to <host>…" only
- * after main.ts has claimed the `loading` flag and entered the probe.
+ * flight: the DropZone toast reads the blue "Opening <name>…" state (v0.5.6
+ * unified the remote-open toast with the device-open wording) only after
+ * main.ts has claimed the `loading` flag and entered the probe.
  */
 async function startStalledLoad(page: Page): Promise<void> {
   await stallRemoteHost(page);
@@ -45,7 +46,7 @@ async function startStalledLoad(page: Page): Promise<void> {
   await page.locator('.olv-url-input').fill(STALLED_URL);
   await page.locator('.olv-url-btn').click();
   await expect(page.locator('.olv-toast')).toContainText(
-    'Connecting to example.com',
+    'Opening test.copc.laz',
     { timeout: 20_000 },
   );
 }
@@ -96,7 +97,7 @@ test.describe('open from URL — cancel mid-load', () => {
     // chunk, holding the `loading` flag, parked on the stalled probe) —
     // otherwise the post-cancel reopen below could race the flag release.
     await expect(page.locator('.olv-toast')).toContainText(
-      'Connecting to example.com',
+      'Opening test.copc.laz',
       { timeout: 20_000 },
     );
 
