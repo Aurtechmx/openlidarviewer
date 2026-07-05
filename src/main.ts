@@ -37,12 +37,6 @@ import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowCont
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
-import {
-  buildCapabilityDescriptor,
-  extentFromBounds,
-  provenanceCardModel,
-} from './render/scanCapability';
-import { profileFor, sectionVisible } from './render/displayProfile';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
 import {
@@ -214,6 +208,7 @@ import {
   loadAlignEpochs,
   loadCompareDtms,
   loadChangeRaster,
+  loadApplyDisplayProfile,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -5509,27 +5504,15 @@ async function handleFile(file: File): Promise<void> {
       );
       // v0.5.7 capability-driven card: derive the display profile from the
       // loaded scan and surface the declared-by-the-file provenance (E57 olv:
-      // block, headline). Additive — null on the unchanged geo path.
+      // block, headline) + hide the CRS section for local-frame scans. Loaded
+      // lazily (via lazyChunks) so displayProfile + scanCapability stay out of
+      // the eager startup shell / index bundle budget. Additive; a no-op on the
+      // geo path.
       {
-        const c = result.cloud;
-        const descriptor = buildCapabilityDescriptor({
-          sourceFormat: c.sourceFormat,
-          hasRgb: c.colors !== undefined,
-          hasIntensity: c.intensity !== undefined,
-          hasClassification: c.classification !== undefined,
-          hasNormals: c.normals !== undefined,
-          hasGpsTime: c.gpsTime !== undefined,
-          crs: c.metadata?.crs,
-          isMesh: c.sourceFormat === 'obj' || c.sourceFormat === 'glb' || c.sourceFormat === 'gltf',
-          hasTexture: c.metadata?.hasTexture,
-          extentMetres: extentFromBounds(c.bounds()),
-          generator: c.metadata?.sourceSoftware,
-          extensionFields: c.metadata?.sourceMetadata?.extensions,
+        const profileCloud = result.cloud;
+        void loadApplyDisplayProfile().then(({ applyDisplayProfile }) => {
+          applyDisplayProfile(profileCloud, inspector);
         });
-        inspector.setDeclaredProvenance(provenanceCardModel(descriptor));
-        // Hide the Coordinate-system section for local-frame profiles (a bare
-        // E57 / handheld / mesh scan has no geodetic CRS to show there).
-        inspector.setCrsSectionVisible(sectionVisible(profileFor(descriptor), 'crsDatum'));
       }
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);

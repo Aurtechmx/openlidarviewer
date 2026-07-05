@@ -39,6 +39,14 @@
  */
 export const loadViewer = () => import('./render/Viewer');
 
+/**
+ * Load the v0.5.7 capability-driven panel wiring on scan open. Held out of the
+ * eager shell (it imports `displayProfile` + `scanCapability`) so those modules
+ * don't count against the tight `index` bundle budget — the profile is only
+ * needed once a scan has loaded.
+ */
+export const loadApplyDisplayProfile = () => import('./render/applyDisplayProfile');
+
 /** Load the streaming point-cloud module (COPC octree + IO). */
 export const loadStreamingPointCloud = () =>
   import('./render/streaming/StreamingPointCloud');
