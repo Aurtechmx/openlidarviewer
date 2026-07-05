@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildCapabilityDescriptor,
   provenanceFromDeclaredFields,
+  provenanceCardModel,
   normalizeSourceFormat,
   extentFromBounds,
 } from '../src/render/scanCapability';
@@ -143,5 +144,60 @@ describe('buildCapabilityDescriptor -> profile end to end', () => {
     });
     expect(d.isGeoreferenced).toBe(true);
     expect(profileFor(d)).toBe('geo');
+  });
+});
+
+describe('provenanceCardModel', () => {
+  it('builds a full card for the Tikal E57 (headline + declared rows + caveat)', () => {
+    const d = buildCapabilityDescriptor({
+      sourceFormat: 'e57',
+      hasRgb: true,
+      hasIntensity: true,
+      hasClassification: false,
+      hasNormals: false,
+      hasGpsTime: false,
+      crs: null,
+      extentMetres: [50, 54, 47],
+      extensionFields: tikalFields,
+    });
+    const card = provenanceCardModel(d)!;
+    expect(card.headline).toBe('Terrestrial laser scan — local coordinates');
+    expect(card.referenceGrade).toBe(true);
+    expect(card.limitations).toContain('Not photogrammetric');
+    const labels = card.declaredRows.map((r) => r.label);
+    expect(labels).toEqual(['Creator', 'Organization', 'License', 'Dataset type', 'Accuracy class', 'Source basis']);
+    const license = card.declaredRows.find((r) => r.label === 'License');
+    expect(license?.value).toBe('CC-BY-4.0');
+  });
+
+  it('shows a headline with no declared rows for a handheld scan', () => {
+    const d = buildCapabilityDescriptor({
+      sourceFormat: 'glb',
+      hasRgb: false,
+      hasIntensity: false,
+      hasClassification: false,
+      hasNormals: false,
+      hasGpsTime: false,
+      isMesh: true,
+      hasTexture: true,
+      extentMetres: [0.6, 0.4, 0.5],
+    });
+    const card = provenanceCardModel(d)!;
+    expect(card.headline).toBe('Handheld / object capture — local coordinates');
+    expect(card.declaredRows).toEqual([]);
+    expect(card.referenceGrade).toBe(false);
+  });
+
+  it('returns null for the unchanged geo path with no provenance', () => {
+    const d = buildCapabilityDescriptor({
+      sourceFormat: 'las',
+      hasRgb: true,
+      hasIntensity: true,
+      hasClassification: true,
+      hasNormals: false,
+      hasGpsTime: true,
+      crs: { name: 'EPSG:6339' },
+    });
+    expect(provenanceCardModel(d)).toBeNull();
   });
 });

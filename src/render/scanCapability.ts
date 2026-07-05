@@ -16,6 +16,7 @@
 
 import type { DeclaredMetadataField } from '../model/PointCloud';
 import type { CapabilityDescriptor, ScanProvenance, SourceFormat } from './displayProfile';
+import { profileHeadline, isReferenceGradeProvenance } from './displayProfile';
 
 /** Source-format strings `displayProfile` understands. */
 const KNOWN_FORMATS: ReadonlySet<string> = new Set<SourceFormat>([
@@ -99,6 +100,72 @@ export interface ScanCapabilityInput {
   readonly generator?: string;
   /** Declared extension-namespace fields (E57 `olv:` block, etc.). */
   readonly extensionFields?: readonly DeclaredMetadataField[];
+}
+
+/** One labelled row of declared-by-the-file provenance. */
+export interface ProvenanceCardRow {
+  readonly label: string;
+  readonly value: string;
+}
+
+/**
+ * The view model for the profile / declared-provenance card. Pure data the UI
+ * renders verbatim under a "declared by the file, not verified" qualifier. All
+ * strings come straight from the file's own metadata; nothing is inferred.
+ */
+export interface ProvenanceCardModel {
+  /** The profile headline (e.g. "Terrestrial laser scan — local coordinates"). */
+  readonly headline: string;
+  /** Labelled declared fields, in display order. */
+  readonly declaredRows: readonly ProvenanceCardRow[];
+  /** The declared limitations string, when present, shown as a caveat. */
+  readonly limitations?: string;
+  /**
+   * True when the file itself declares it is not survey grade — the UI should
+   * suppress any survey-grade framing and can show a soft caveat.
+   */
+  readonly referenceGrade: boolean;
+}
+
+/** The declared fields to surface, in order, with their display labels. */
+const PROVENANCE_ROW_LABELS: ReadonlyArray<readonly [keyof ScanProvenance, string]> = [
+  ['creator', 'Creator'],
+  ['organization', 'Organization'],
+  ['license', 'License'],
+  ['datasetType', 'Dataset type'],
+  ['accuracyClass', 'Accuracy class'],
+  ['sourceBasis', 'Source basis'],
+];
+
+/**
+ * Build the profile / declared-provenance card model for a descriptor, or
+ * `null` when there is nothing to show (the unchanged `geo` path with no
+ * declared provenance). The card appears for the new profiles and for any scan
+ * that carries a recognised provenance block.
+ */
+export function provenanceCardModel(d: CapabilityDescriptor): ProvenanceCardModel | null {
+  const headline = profileHeadline(d);
+  const prov = d.provenance;
+
+  const declaredRows: ProvenanceCardRow[] = [];
+  if (prov) {
+    for (const [key, label] of PROVENANCE_ROW_LABELS) {
+      const value = prov[key];
+      if (value && value.trim() !== '') declaredRows.push({ label, value: value.trim() });
+    }
+  }
+
+  // Nothing to render: default path, no provenance, no headline.
+  if (headline === '' && declaredRows.length === 0) return null;
+
+  return {
+    headline,
+    declaredRows,
+    ...(prov?.limitations && prov.limitations.trim() !== ''
+      ? { limitations: prov.limitations.trim() }
+      : {}),
+    referenceGrade: isReferenceGradeProvenance(prov),
+  };
 }
 
 /** Assemble a {@link CapabilityDescriptor} from a scan's state. Pure. */
