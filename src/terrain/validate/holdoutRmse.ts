@@ -292,7 +292,7 @@ export function holdoutValidateDtm(
     zoneSq[zone] += sq;
     zoneAbs[zone] += abs;
     zoneCnt[zone] += 1;
-    if (samples) samples.push({ confidence: predConf, absError: abs });
+    if (samples) samples.push({ confidence: predConf, absError: abs, zone });
   }
 
   if (covered === 0) {

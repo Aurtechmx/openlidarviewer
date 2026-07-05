@@ -37,6 +37,12 @@ export interface ConfidenceSample {
   readonly confidence: number;
   /** Absolute vertical residual at that point, source linear units. */
   readonly absError: number;
+  /**
+   * Whether the held-out point landed on a measured or interpolated cell.
+   * Optional (older callers omit it); the measured-vs-model reliability split
+   * uses it to keep an empirical reliability separate from model-based support.
+   */
+  readonly zone?: SurfaceZone;
 }
 
 /** Slope band a held-out point fell in (by local Horn slope). */

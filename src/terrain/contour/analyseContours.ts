@@ -69,6 +69,7 @@ import {
 } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
+import { splitReliability, type ReliabilitySplit } from '../validate/reliabilitySplit';
 import { checkConfidenceOrdering } from '../validate/calibrationCheck';
 import {
   fitConfidenceCalibration,
@@ -256,6 +257,12 @@ export interface AnalyseGenerationParams {
 export interface TerrainCore {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
+  /**
+   * Measured-cell empirical reliability (with a Wilson CI) kept separate from
+   * interpolated-cell model support, at tolerance τ = the calibration
+   * tolerance. Null when there was too little held-out evidence to state one.
+   */
+  readonly reliabilitySplit: ReliabilitySplit | null;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -332,6 +339,9 @@ export interface TerrainCore {
 export interface AnalyseContoursResult {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
+  /** Measured-cell empirical reliability (Wilson CI) vs interpolated model
+   *  support, at τ = the calibration tolerance. Null when unstated. */
+  readonly reliabilitySplit: ReliabilitySplit | null;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -546,6 +556,21 @@ export function computeTerrainCore(
   const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);
 
+  // Measured-cell empirical reliability (Wilson CI) kept separate from
+  // interpolated-cell model support, at τ = the measured RMSE. Only stated when
+  // there is real held-out evidence and a finite τ; a void has no truth to test.
+  const reliabilityTolerance =
+    Number.isFinite(validation.rmse) && validation.rmse > 0 ? validation.rmse : null;
+  const reliabilitySplit: ReliabilitySplit | null =
+    reliabilityTolerance !== null && validation.samples && validation.samples.length > 0
+      ? splitReliability(
+          validation.samples
+            .filter((s) => s.zone !== undefined)
+            .map((s) => ({ absError: s.absError, zone: s.zone as 'measured' | 'interpolated' })),
+          reliabilityTolerance,
+        )
+      : null;
+
   // 4b) Recalibrate the reported confidence against measured error, so a
   // cell's % means "probability the height is within τ of truth" rather
   // than a bare heuristic. τ is the measured RMSE. When there isn't
@@ -746,6 +771,7 @@ export function computeTerrainCore(
   return {
     dtm,
     validation,
+    reliabilitySplit,
     confidenceOrdering,
     confidenceCalibrationApplied,
     confidenceToleranceM,
@@ -845,6 +871,7 @@ export function contoursFromCore(
     return {
       dtm,
       validation: core.validation,
+      reliabilitySplit: core.reliabilitySplit,
       confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
@@ -920,6 +947,7 @@ export function contoursFromCore(
   return {
     dtm,
     validation: core.validation,
+    reliabilitySplit: core.reliabilitySplit,
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,

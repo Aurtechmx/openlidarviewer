@@ -1553,6 +1553,22 @@ export class AnalysePanel {
         text: `RMSE by zone: ${zoneParts.join(' · ')} m`,
       }));
     }
+
+    // Measured-cell empirical reliability with its Wilson CI, kept distinct from
+    // interpolated model support (Phase 4). Only shown with enough measured
+    // held-out points; a small sample gives a wide, uninformative interval.
+    const rel = this._result?.reliabilitySplit;
+    if (rel && rel.measured.n >= MIN_STRATUM_SAMPLES && Number.isFinite(rel.measured.reliability)) {
+      const pct = (x: number): string => `${Math.round(x * 100)}%`;
+      const m = rel.measured;
+      this._validationRow.append(this._hint(
+        el('div', {
+          className: 'olv-analyse-reliability',
+          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz| ≤ ${fmtR(m.tolerance)} m`,
+        }),
+        'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
+      ));
+    }
   }
 
   private _renderBody(): void {
