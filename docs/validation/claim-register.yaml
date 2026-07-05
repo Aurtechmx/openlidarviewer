@@ -299,24 +299,24 @@ claims:
 
   - claimId: HILLSHADE
     product: Hillshade
-    algorithm: Standard illumination model
+    algorithm: ESRI illumination model (Lambert)
     algorithmVersion: v0.4.x
-    claim: "Analytical hillshade from slope + aspect."
-    currentEvidence: E1_UNIT_VERIFIED
+    claim: "Analytic hillshade from slope + aspect under a fixed sun azimuth/altitude."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/relief*.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/terrainTruth.hillshade.test.ts, tests/relief*.test.ts]
+    supportingDatasets: [analytic flat-plane Lambert]
     units: [dimensionless]
     crsDatum: metric-or-geographic
     assumptions: ["light azimuth/altitude as configured"]
     failureModes: ["edge/NoData"]
     exportAllowed: true
-    userLabel: "Unit-verified hillshade"
+    userLabel: "Analytically verified hillshade"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Illumination model per stated azimuth/altitude."
-    prohibitedClaim: ["cross-implementation agreement (pending)"]
+    approvedClaim: "Exact flat-plane Lambert value + correct N/E/S/W ordering, verified analytically."
+    prohibitedClaim: ["cross-implementation agreement with GDAL/ESRI (pending)"]
 
   - claimId: VRM-TPI
     product: VRM / TPI terrain descriptors
