@@ -149,14 +149,29 @@ export async function loadGltf(
     scenes?: { nodes?: GltfNode[] }[];
     nodes?: GltfNode[];
     asset?: { generator?: string };
+    images?: unknown[];
+    materials?: unknown[];
   };
+  // Read the source glTF JSON too (loaders.gl keeps it on the parse result); it
+  // is the most reliable place for asset.generator, images, and materials
+  // regardless of what postProcessGLTF preserves.
+  const rawJson = (raw as {
+    json?: { asset?: { generator?: string }; images?: unknown[]; materials?: unknown[] };
+  }).json;
   // The glTF `asset.generator` string (e.g. "Polycam", "Scaniverse",
   // "RealityKit") is the capture app's stamp — the honest home for it is the
   // same declared-software field a LAS "Generating Software" record uses. The
   // display profile reads it (via metadata.sourceSoftware) for high-confidence
   // handheld-capture identification. Many exports omit it, in which case the
   // profile falls back to the geometry signal.
-  const generator = gltf.asset?.generator?.trim();
+  const generator = (rawJson?.asset?.generator ?? gltf.asset?.generator)?.trim();
+  // Whether the asset carried a texture/material. The loader keeps only vertex
+  // geometry (dropping textures), so this flag is the only surviving signal that
+  // a bare-looking point set was a textured capture — the display profile uses
+  // it to tell a handheld/object capture from a plain CAD mesh.
+  const hasTexture =
+    (rawJson?.images?.length ?? gltf.images?.length ?? 0) > 0
+    || (rawJson?.materials?.length ?? gltf.materials?.length ?? 0) > 0;
 
   const positions: number[] = [];
   const colors: number[] = [];
@@ -185,6 +200,13 @@ export async function loadGltf(
     origin: [0, 0, 0],
     sourceFormat: sourceFormat as SourceFormat,
     name,
-    ...(generator ? { metadata: { sourceSoftware: generator } } : {}),
+    ...(generator || hasTexture
+      ? {
+          metadata: {
+            ...(generator ? { sourceSoftware: generator } : {}),
+            ...(hasTexture ? { hasTexture: true } : {}),
+          },
+        }
+      : {}),
   });
 }

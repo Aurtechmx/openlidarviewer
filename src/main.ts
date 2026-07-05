@@ -5516,6 +5516,7 @@ async function handleFile(file: File): Promise<void> {
           hasGpsTime: c.gpsTime !== undefined,
           crs: c.metadata?.crs,
           isMesh: c.sourceFormat === 'obj' || c.sourceFormat === 'glb' || c.sourceFormat === 'gltf',
+          hasTexture: c.metadata?.hasTexture,
           extentMetres: extentFromBounds(c.bounds()),
           generator: c.metadata?.sourceSoftware,
           extensionFields: c.metadata?.sourceMetadata?.extensions,
