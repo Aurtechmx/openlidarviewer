@@ -148,7 +148,15 @@ export async function loadGltf(
   const gltf = postProcessGLTF(raw) as unknown as {
     scenes?: { nodes?: GltfNode[] }[];
     nodes?: GltfNode[];
+    asset?: { generator?: string };
   };
+  // The glTF `asset.generator` string (e.g. "Polycam", "Scaniverse",
+  // "RealityKit") is the capture app's stamp — the honest home for it is the
+  // same declared-software field a LAS "Generating Software" record uses. The
+  // display profile reads it (via metadata.sourceSoftware) for high-confidence
+  // handheld-capture identification. Many exports omit it, in which case the
+  // profile falls back to the geometry signal.
+  const generator = gltf.asset?.generator?.trim();
 
   const positions: number[] = [];
   const colors: number[] = [];
@@ -177,5 +185,6 @@ export async function loadGltf(
     origin: [0, 0, 0],
     sourceFormat: sourceFormat as SourceFormat,
     name,
+    ...(generator ? { metadata: { sourceSoftware: generator } } : {}),
   });
 }
