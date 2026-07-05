@@ -41,7 +41,9 @@ describe('crossCheck comparison maths', () => {
     const nd = -9999;
     const ours = [1, nd, 3, NaN, 5, 6, 7, 8, 9, 10];
     const ref = [1, 2, nd, 4, 5, 6, 7, 8, 9, 10];
-    const r = crossCheck(ours, ref, { toleranceAbs: 0.01, nodata: nd });
+    // minCells 4 so the 7 surviving cells clear the overlap floor — this case
+    // is testing nodata/NaN skipping, not the insufficient-overlap gate.
+    const r = crossCheck(ours, ref, { toleranceAbs: 0.01, nodata: nd, minCells: 4 });
     // cells 1 and 2 (nodata) and 3 (NaN) are skipped → 7 compared
     expect(r.count).toBe(7);
     expect(r.skipped).toBe(3);
