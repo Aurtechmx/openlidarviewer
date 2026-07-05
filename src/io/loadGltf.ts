@@ -168,7 +168,10 @@ export async function loadGltf(
   // Whether the asset carried a texture/material. The loader keeps only vertex
   // geometry (dropping textures), so this flag is the only surviving signal that
   // a bare-looking point set was a textured capture — the display profile uses
-  // it to tell a handheld/object capture from a plain CAD mesh.
+  // it to tell a handheld/object capture from a plain CAD mesh. Soft signal:
+  // a default `materials: [{}]` (untextured) reads as true here, so it
+  // over-triggers toward "capture" rather than under — the profile treats it as
+  // supporting evidence, never a sole determinant.
   const hasTexture =
     (rawJson?.images?.length ?? gltf.images?.length ?? 0) > 0
     || (rawJson?.materials?.length ?? gltf.materials?.length ?? 0) > 0;

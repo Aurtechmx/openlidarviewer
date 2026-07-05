@@ -2,6 +2,60 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.7] - 2026-07-05
+
+Object and E57 capture honesty, plus an explicit evidence model. v0.5.7 makes
+the viewer read a scan for what it is — a compact object, an interior, or a
+local-frame terrestrial/handheld capture — and stops applying airborne-survey
+and terrain framing where it does not belong. It also replaces the old single
+"Production" status with a documented evidence ladder so every scientific claim
+states how strongly it is supported.
+
+### Added
+
+- **Capture lens.** A single derivation composes the scan-shape verdict
+  (object / interior / terrain) with the display profile (geo / terrestrial-scan
+  / handheld / mesh) into one read used across the classifier, reports, and
+  panels. It distinguishes "not terrain" (contours/coverage don't apply) from
+  "local frame" (no geodetic CRS), so a terrestrial scan of a hillside keeps its
+  contours but suppresses CRS, and a temple keeps its CRS suppression without
+  losing shape context.
+- **Declared-by-the-file provenance card.** When a scan carries a recognised
+  display profile or an `olv:` provenance block (E57), the Inspector surfaces the
+  declared capture app, sensor, and profile headline under an explicit "Declared
+  by the file — not verified" qualifier. Values are shown verbatim; nothing here
+  is inferred.
+- **Evidence model.** A machine-readable claim register
+  (`docs/validation/claim-register.yaml`) and an evidence ladder E0–E6
+  (`src/validation/evidenceLevel.ts`) record, per product, the current evidence
+  level, the level required to export as validated, and the approved and
+  prohibited claims. Independent evidence begins at E4; nothing ships at E4+ yet,
+  and the docs say so.
+- **glTF capture stamps.** The glTF `asset.generator` string (e.g. Polycam,
+  Scaniverse, RealityKit) and a texture/material presence flag are read on load
+  and fed to the display profile for handheld-capture identification.
+
+### Changed
+
+- **The capture-type classifier is now shape-aware.** A compact object or
+  interior can no longer be labelled drone/aerial/spaceborne from point density
+  alone — airborne capture is ruled out by geometry and the verdict is demoted to
+  an honest "ground-based, method not determined" rather than a fabricated one.
+  Direct evidence (software/sensor strings, the file's own declaration) still
+  wins.
+- **The Coordinate-system section hides for local-frame scans** (terrestrial /
+  handheld / mesh), where a bare "CRS unknown" row reads as a defect rather than
+  a fact. The geo/survey path is unchanged.
+- **The class legend only shows when the cloud carries classes** — a scan with
+  no classification channel (E57, mesh, most phone captures) no longer shows an
+  empty legend.
+- **Validation docs corrected for overstatement.** The terrain matrix's
+  "Production" status is replaced by evidence levels; the ground filter is
+  described as an SMRF-core progressive-morphological subset; confidence,
+  NVA/VVA-style, and QL wording are scoped to what the evidence supports; and the
+  CRS limitation states precisely what is detected, converted, and propagated
+  versus not reprojected.
+
 ## [0.5.6] - 2026-07-04
 
 Point filtering. v0.5.6 connects the staged point-filter work to the live

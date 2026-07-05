@@ -5514,9 +5514,16 @@ async function handleFile(file: File): Promise<void> {
       // geo path.
       {
         const profileCloud = result.cloud;
-        void loadApplyDisplayProfile().then(({ applyDisplayProfile }) => {
-          applyDisplayProfile(profileCloud, inspector);
-        });
+        void loadApplyDisplayProfile()
+          .then(({ applyDisplayProfile }) => {
+            applyDisplayProfile(profileCloud, inspector);
+          })
+          // The card is additive and no-op on absence; a chunk-load or
+          // derivation failure must not surface as an unhandled rejection (the
+          // enclosing try/catch is synchronous and won't catch this promise).
+          .catch((err) => {
+            if (debug) console.warn('[inspector] display-profile card threw', err);
+          });
       }
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
