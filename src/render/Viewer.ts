@@ -69,6 +69,8 @@ import {
   wireGpuDeviceErrors,
   type GpuDeviceLike,
 } from './gpuErrorLedger';
+import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
+import { keyFromId } from '../io/copc/voxelKey';
 import { intensityFilterUniform } from './intensityFilterUniform';
 import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
@@ -3375,7 +3377,24 @@ export class Viewer {
   snapshotResidentCloud(): PointCloud | null {
     const s = this._streaming;
     if (!s) return null;
-    const chunks = s.renderer.residentChunks();
+    // Reduce the resident set to the deterministic leaf frontier (Gate 5): keep
+    // the deepest resident node per octree path and drop ancestors that have a
+    // resident descendant, plus any node fading out, so a mid-cross-fade export
+    // doesn't carry overlapping coarse+fine LOD samples of the same region.
+    const entries = s.renderer.residentFrontierEntries();
+    if (entries.length === 0) return null;
+    const frontierNodes: FrontierNode[] = [];
+    for (const e of entries) {
+      const key = keyFromId(e.id);
+      if (key) frontierNodes.push({ id: e.id, key, fadingOut: e.fadingOut });
+    }
+    const keep = computeExportFrontier(frontierNodes);
+    // An unparseable id can't be reasoned about; keep it rather than silently
+    // dropping its points. Parseable ids obey the frontier keep-set.
+    const parseable = new Set(frontierNodes.map((n) => n.id));
+    const chunks = entries
+      .filter((e) => (parseable.has(e.id) ? keep.has(e.id) : true))
+      .map((e) => e.decoded);
     if (chunks.length === 0) return null;
     const crs = s.cloud.crs();
     return buildResidentSnapshot(chunks, {
