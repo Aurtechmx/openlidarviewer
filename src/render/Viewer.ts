@@ -64,6 +64,11 @@ import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
 import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
+import {
+  GpuErrorLedger,
+  wireGpuDeviceErrors,
+  type GpuDeviceLike,
+} from './gpuErrorLedger';
 import { intensityFilterUniform } from './intensityFilterUniform';
 import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
@@ -3196,27 +3201,21 @@ export class Viewer {
   onGpuError?: (message: string) => void;
 
   /**
-   * Distinct GPU-error messages already surfaced. A shader/pipeline validation
-   * failure repeats every frame; we report each unique message once so
-   * `onGpuError` isn't spammed. Bounded (`_GPU_ERROR_CAP`) so it can't grow
-   * without limit, and cleared on each new scan open so a later scan's error is
-   * never suppressed just because an earlier scan produced the same text.
+   * De-dup + cap + reset bookkeeping for surfaced GPU errors. A shader/pipeline
+   * validation failure repeats every frame; the ledger reports each unique
+   * message once so `onGpuError` isn't spammed, bounds the remembered set, and
+   * is reset on each new scan open so a later scan's error is never suppressed
+   * just because an earlier scan produced the same text. Extracted to a pure
+   * module (`gpuErrorLedger.ts`) so it is unit-tested without a GPU.
    */
-  private _seenGpuErrors = new Set<string>();
-  private static readonly _GPU_ERROR_CAP = 64;
+  private readonly _gpuErrorLedger = new GpuErrorLedger();
   /**
-   * The WebGPU device and the bound `uncapturederror` handler, stored so
-   * `dispose()` can detach the listener. An anonymous handler would keep the
-   * disposed Viewer alive through its closure for as long as the device lives.
+   * Detaches the WebGPU `uncapturederror` listener and neutralises the
+   * `device.lost` promise, so a device that outlives this Viewer can't retain it
+   * (and the disposed Viewer) through the handler closure. `null` on the WebGL 2
+   * fallback (no device to wire).
    */
-  private _gpuDevice: {
-    addEventListener?: (t: string, cb: (e: unknown) => void) => void;
-    removeEventListener?: (t: string, cb: (e: unknown) => void) => void;
-    lost?: Promise<{ reason?: string; message?: string }>;
-  } | null = null;
-  private _onGpuUncapturedError: ((e: unknown) => void) | null = null;
-  /** Set once `device.lost` resolves — suppresses further per-frame GPU noise. */
-  private _gpuDeviceLost = false;
+  private _detachGpuErrors: (() => void) | null = null;
 
   applyClassVisibility(v: ClassVisibility): void {
     const mask = v.toMaskArray();
@@ -4361,35 +4360,19 @@ export class Viewer {
     if (this.activeBackend() !== 'webgpu') return;
     try {
       const backend = (this._renderer as unknown as {
-        backend?: { device?: Viewer['_gpuDevice'] };
+        backend?: { device?: GpuDeviceLike };
       }).backend;
-      const device = backend?.device ?? null;
-      if (!device || typeof device.addEventListener !== 'function') return;
-      // Bound handler stored on the instance so `dispose()` can detach it with a
-      // matching reference (an anonymous arrow could never be removed).
-      const handler = (event: unknown): void => {
-        const gpuError = (event as { error?: { message?: string; constructor?: { name?: string } } }).error;
-        const kind = gpuError?.constructor?.name ?? 'GPUError';
-        const detail = gpuError?.message ?? String(event);
-        this._reportGpuError(`${kind}: ${detail}`);
-      };
-      device.addEventListener('uncapturederror', handler);
-      this._gpuDevice = device;
-      this._onGpuUncapturedError = handler;
-      // `device.lost` resolves if the GPU device is reset or evicted — a
-      // separate channel from uncapturederror. Left unhandled it leaves a
-      // permanently blank canvas with no signal; surface it once so the host
-      // can tell the user to reload. (Full re-init is out of scope here.)
-      if (device.lost && typeof device.lost.then === 'function') {
-        void device.lost.then((info) => {
-          this._gpuDeviceLost = true;
-          const reason = info?.reason ?? 'unknown';
-          const detail = info?.message ?? '';
-          this._reportGpuError(
-            `GPUDeviceLost: the graphics device was lost (${reason}). ${detail} Reload the page to continue.`.trim(),
-          );
-        });
-      }
+      // The wiring itself lives in the pure `gpuErrorLedger` module so a fake
+      // device can drive it in tests; here we only supply the real backend
+      // device and the two host callbacks. `device.lost` sets the ledger's
+      // suppression flag before surfacing the one actionable reload message.
+      this._detachGpuErrors = wireGpuDeviceErrors(backend?.device ?? null, {
+        onError: (message) => this._reportGpuError(message),
+        onDeviceLost: (message) => {
+          this._gpuErrorLedger.noteDeviceLost();
+          this._reportGpuError(message);
+        },
+      });
     } catch {
       // Never let error-plumbing setup break init — the viewer is still usable.
     }
@@ -4397,20 +4380,12 @@ export class Viewer {
 
   /**
    * De-duplicate then forward a GPU error to the host. A broken pipeline emits
-   * the same validation error on every frame; we surface each distinct message
-   * exactly once so the toast isn't retriggered in a render-rate loop.
+   * the same validation error on every frame; the ledger admits each distinct
+   * message exactly once (and drops post-device-loss noise) so the toast isn't
+   * retriggered in a render-rate loop.
    */
   private _reportGpuError(message: string): void {
-    // Once the device is lost, every subsequent frame raises fresh uncaptured
-    // errors from the dead device — pure noise. The one actionable message
-    // ("device lost, reload") has already been surfaced, so drop the rest.
-    if (this._gpuDeviceLost && !message.startsWith('GPUDeviceLost')) return;
-    if (this._seenGpuErrors.has(message)) return;
-    // Bound: a pathological stream of distinct messages can't grow the set
-    // without limit. Dropping the history just means an old message could be
-    // re-reported later — harmless, and far better than an unbounded set.
-    if (this._seenGpuErrors.size >= Viewer._GPU_ERROR_CAP) this._seenGpuErrors.clear();
-    this._seenGpuErrors.add(message);
+    if (!this._gpuErrorLedger.admit(message)) return;
     console.error(`OpenLiDARViewer: GPU error — ${message}`);
     try {
       this.onGpuError?.(message);
@@ -4425,7 +4400,7 @@ export class Viewer {
    * happened to emit the same message text.
    */
   private _resetGpuErrorHistory(): void {
-    if (this._seenGpuErrors.size > 0) this._seenGpuErrors = new Set<string>();
+    this._gpuErrorLedger.reset();
   }
 
   /**
@@ -5119,12 +5094,10 @@ export class Viewer {
     }
     // Detach the WebGPU uncaptured-error handler so a device that outlives this
     // Viewer can't retain it (and the disposed Viewer) through the closure.
-    if (this._gpuDevice && this._onGpuUncapturedError
-      && typeof this._gpuDevice.removeEventListener === 'function') {
-      this._gpuDevice.removeEventListener('uncapturederror', this._onGpuUncapturedError);
+    if (this._detachGpuErrors) {
+      this._detachGpuErrors();
+      this._detachGpuErrors = null;
     }
-    this._gpuDevice = null;
-    this._onGpuUncapturedError = null;
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
     if (this._resizeObserver) {
