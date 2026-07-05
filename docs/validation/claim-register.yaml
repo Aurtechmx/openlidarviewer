@@ -13,6 +13,19 @@
 #
 # This is a living document; update an entry in the same change that alters its
 # product. A product with no entry is treated as E0 / not exportable.
+#
+# Phase 3–4 tooling (v0.5.8) — mechanisms now exist to REACH the required
+# levels; running them is still pending, so no level below has changed:
+#   - Cross-implementation harness: src/validation/crossCheck.ts +
+#     docs/validation/cross-implementation.md. Every reference slot is pending;
+#     an E4 promotion needs a real PDAL/GDAL/CloudCompare reference committed.
+#   - Honest estimators: src/terrain/validate/spatialBlockHoldout.ts
+#     (spatially-blocked hold-out, less optimistic than random point hold-out,
+#     with a bootstrap CI) and src/terrain/validate/reliabilitySplit.ts
+#     (measured-cell empirical reliability + Wilson CI, kept distinct from
+#     interpolated model-based support).
+#   - Typed units: src/units/units.ts makes source-unit / metre confusion a
+#     compile error at the measurement + CRS boundaries.
 
 schemaVersion: 1
 softwareVersion: 0.5.6            # package.json version at seeding
