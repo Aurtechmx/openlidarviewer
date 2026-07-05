@@ -4829,8 +4829,12 @@ async function generateReportPdf(templateId: string): Promise<void> {
   try {
     const activeCloud = activeId ? viewer.getCloud(activeId) : null;
     const streamingCloud = viewer.streamingCloud;
+    // The shape router's verdict rules out an aerial density guess for a
+    // compact object / interior (v0.5.7 capture lens) — a temple is not drone
+    // LiDAR just because its density resembles a UAV survey.
+    const isNonTerrain = lastScanVerdict === 'object' || lastScanVerdict === 'interior';
     if (activeCloud) {
-      const f = classifyProvenance(signalsForStaticCloud(activeCloud as never));
+      const f = classifyProvenance({ ...signalsForStaticCloud(activeCloud as never), isNonTerrain });
       provenanceFp = {
         label: f.label,
         confidence: f.confidence,
@@ -4839,7 +4843,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
         disclaimer: f.disclaimer,
       };
     } else if (streamingCloud) {
-      const f = classifyProvenance(signalsForStreamingCloud(streamingCloud as never));
+      const f = classifyProvenance({ ...signalsForStreamingCloud(streamingCloud as never), isNonTerrain });
       provenanceFp = {
         label: f.label,
         confidence: f.confidence,

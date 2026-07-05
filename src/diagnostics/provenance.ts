@@ -117,6 +117,15 @@ export interface ScanSignals {
     /** Pre-built disclaimer for the declared verdict. */
     readonly disclaimer: string;
   };
+  /**
+   * The scan-shape verdict says this is a compact object or an interior space
+   * (`scanShape.nonTerrain`). When true, the classifier must never assert an
+   * airborne / aerial / spaceborne capture type from density alone — a temple
+   * is not drone LiDAR just because its point density resembles a UAV survey.
+   * Direct evidence (software / sensor strings, the file's own declaration)
+   * still wins; only the indirect density heuristic is ruled out.
+   */
+  readonly isNonTerrain?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,15 +147,53 @@ const DISCLAIMER =
  * streaming sources; numeric signatures are the fallback.
  */
 export function classify(signals: ScanSignals): ProvenanceFingerprint {
+  // The heuristic chain, with a shape guard: a scan the shape router flagged as
+  // a compact object / interior can never be asserted as airborne from density
+  // alone. Direct evidence inside `classifyHeuristic` (software / sensor
+  // strings) has already won by this point if present.
+  const heuristic = ruleOutAerialForObject(classifyHeuristic(signals), signals.isNonTerrain === true);
   // 0. The file's own declaration outranks every heuristic. When the loader
   //    found a declared synthetic / procedural / reconstruction / reference
   //    statement in the source metadata, the verdict quotes it verbatim and
   //    the heuristic guess is demoted to a secondary, low-confidence signal
   //    line — never asserted as the primary capture type.
   if (signals.declaredCapture) {
-    return declaredFingerprint(signals.declaredCapture, classifyHeuristic(signals));
+    return declaredFingerprint(signals.declaredCapture, heuristic);
   }
-  return classifyHeuristic(signals);
+  return heuristic;
+}
+
+/** Airborne capture types the shape guard rules out for a compact object. */
+const AERIAL_CAPTURE_TYPES: ReadonlySet<CaptureType> = new Set<CaptureType>([
+  'drone-lidar',
+  'aerial-als',
+  'spaceborne',
+]);
+
+/**
+ * When the scan reads as a compact object / interior, an aerial density guess
+ * is factually wrong: airborne capture is ruled out by the geometry. Demote it
+ * to an honest "ground-based, method not determined" verdict — we know it is
+ * NOT aerial, but density alone can't say which ground-based method it is, so we
+ * don't fabricate TLS/SLAM. Non-aerial guesses (terrestrial, iPhone, mobile
+ * SLAM) and any direct-evidence match pass through unchanged.
+ */
+function ruleOutAerialForObject(
+  fp: ProvenanceFingerprint,
+  isNonTerrain: boolean,
+): ProvenanceFingerprint {
+  if (!isNonTerrain || !AERIAL_CAPTURE_TYPES.has(fp.captureType)) return fp;
+  return {
+    captureType: 'unknown',
+    confidence: 'low',
+    label: 'Ground-based scan — capture method not determined',
+    signals: [
+      ...fp.signals,
+      'Shape reads as a compact object / interior — airborne capture ruled out by geometry.',
+    ],
+    bounds: [],
+    disclaimer: fp.disclaimer,
+  };
 }
 
 /** The pre-declaration heuristic chain — unchanged when no metadata declares. */
