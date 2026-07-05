@@ -29,7 +29,7 @@ coverage are in [terrain-intelligence.md](terrain-intelligence.md) and
 
 E57 coverage is broad but not exhaustive. The E57 reader handles the common real-world files terrestrial scanners produce — Cartesian XYZ with colour, intensity, classification, and normals — and has been tested with Trimble exports. E57 files that use uncommon schema features, spherical coordinates, or non-standard extensions may not load.
 
-Coordinate reference systems are handled only loosely. The viewer recenters large coordinates for precision, but it does not do full CRS handling or reprojection.
+Coordinate reference systems are read, not transformed. Precisely, the viewer DOES: detect the CRS and vertical datum from the source (LAS VLRs / GeoKeys, compound-CRS WKT); convert linear units to metres for measurement and density when the unit is known; recenter large coordinates for floating-point precision (a local render frame, reversible via the stored origin); propagate the detected CRS / datum / units into export metadata and warnings; and refuse metric area/volume on a geographic-degree grid. It does NOT: perform full reprojection between coordinate systems, or vertical-datum transformation (e.g. ellipsoidal↔orthometric). Coordinates are shown and exported in their source frame with the source CRS recorded, never silently reprojected. Cross-datum quantitative comparison is blocked rather than approximated.
 
 Classification visualization depends on classification attributes actually being present in the file, and many scans carry none.
 

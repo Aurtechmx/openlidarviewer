@@ -38,6 +38,14 @@ export interface CloudMetadata {
   /** Human-readable capture / file-creation date. */
   captureDate?: string;
   /**
+   * True when the source asset carried a texture/material (glTF images or
+   * materials), even though the loader keeps only vertex geometry. A decode
+   * observation, not declared provenance — used by the display profile to
+   * treat a textured, object-scale mesh as a handheld/object capture rather
+   * than a bare mesh.
+   */
+  hasTexture?: boolean;
+  /**
    * The scanner's registered world position, when the format records it (the
    * PTX per-scan transform). Real-world coordinates, before the load-time
    * origin shift.

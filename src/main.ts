@@ -208,6 +208,7 @@ import {
   loadAlignEpochs,
   loadCompareDtms,
   loadChangeRaster,
+  loadApplyDisplayProfile,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -3597,6 +3598,10 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // Apply the (all-visible) mask so a previously-filtered scan can't leak its
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());
+  // The legend is revealed even for a class-less scan: it renders a designed
+  // empty state (explanatory message + disabled "Show all") that is the entry
+  // point to Classify (derive a classification). Hiding it would remove that
+  // affordance — the empty legend is intentional, not a defect.
   classLegendPanel.show();
   void showReclassifyUi();
   // Reset the inspector's copy/JSON scope stamp — the fresh legend is
@@ -4824,8 +4829,12 @@ async function generateReportPdf(templateId: string): Promise<void> {
   try {
     const activeCloud = activeId ? viewer.getCloud(activeId) : null;
     const streamingCloud = viewer.streamingCloud;
+    // The shape router's verdict rules out an aerial density guess for a
+    // compact object / interior (v0.5.7 capture lens) — a temple is not drone
+    // LiDAR just because its density resembles a UAV survey.
+    const isNonTerrain = lastScanVerdict === 'object' || lastScanVerdict === 'interior';
     if (activeCloud) {
-      const f = classifyProvenance(signalsForStaticCloud(activeCloud as never));
+      const f = classifyProvenance({ ...signalsForStaticCloud(activeCloud as never), isNonTerrain });
       provenanceFp = {
         label: f.label,
         confidence: f.confidence,
@@ -4834,7 +4843,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
         disclaimer: f.disclaimer,
       };
     } else if (streamingCloud) {
-      const f = classifyProvenance(signalsForStreamingCloud(streamingCloud as never));
+      const f = classifyProvenance({ ...signalsForStreamingCloud(streamingCloud as never), isNonTerrain });
       provenanceFp = {
         label: f.label,
         confidence: f.confidence,
@@ -5497,6 +5506,25 @@ async function handleFile(file: File): Promise<void> {
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
         result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
       );
+      // v0.5.7 capability-driven card: derive the display profile from the
+      // loaded scan and surface the declared-by-the-file provenance (E57 olv:
+      // block, headline) + hide the CRS section for local-frame scans. Loaded
+      // lazily (via lazyChunks) so displayProfile + scanCapability stay out of
+      // the eager startup shell / index bundle budget. Additive; a no-op on the
+      // geo path.
+      {
+        const profileCloud = result.cloud;
+        void loadApplyDisplayProfile()
+          .then(({ applyDisplayProfile }) => {
+            applyDisplayProfile(profileCloud, inspector);
+          })
+          // The card is additive and no-op on absence; a chunk-load or
+          // derivation failure must not surface as an unhandled rejection (the
+          // enclosing try/catch is synchronous and won't catch this promise).
+          .catch((err) => {
+            if (debug) console.warn('[inspector] display-profile card threw', err);
+          });
+      }
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
     }

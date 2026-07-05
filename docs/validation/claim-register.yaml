@@ -1,0 +1,553 @@
+# OpenLiDARViewer — machine-readable scientific claim register
+# Research-hardening Phase 1. See docs/validation/EVIDENCE_MODEL.md for the
+# ladder and field definitions, and src/validation/evidenceLevel.ts for the
+# identifiers + gate logic.
+#
+# Honesty rules (do not violate when editing):
+#   - currentEvidence must reflect evidence that EXISTS today. Nothing here is
+#     E4+ yet: no independent cross-implementation or field validation has been
+#     run. Synthetic known-truth fixtures are E3, not accuracy.
+#   - externalValidationStatus is `pending` wherever external data is required
+#     and unavailable. Never infer it from density / format / metadata.
+#   - prohibitedClaim lists statements the current evidence does NOT support.
+#
+# This is a living document; update an entry in the same change that alters its
+# product. A product with no entry is treated as E0 / not exportable.
+
+schemaVersion: 1
+softwareVersion: 0.5.6            # package.json version at seeding
+generated: 2026-07-05
+validationOwner: A. Urias / Aurtech
+
+claims:
+  # ── Interactive measurements ────────────────────────────────────────────────
+  - claimId: MEAS-DISTANCE
+    product: Distance measurement
+    algorithm: Euclidean distance between picked points (unit-aware)
+    algorithmVersion: v0.5.x
+    claim: "Straight-line distance between two user-picked points, in the scan's linear units converted to metres when the CRS unit is known."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/measure*.test.ts]
+    supportingDatasets: []
+    units: [metres, source-units, feet]
+    crsDatum: "Horizontal only; converts native→metres when linear unit is known; refuses metric distance in geographic degrees."
+    assumptions: ["pick accuracy is visual-inspection grade", "no lens/registration error modelled"]
+    failureModes: ["geographic-degree CRS", "unknown unit", "coarse pick on sparse cloud"]
+    exportAllowed: true
+    userLabel: "Visual-inspection-grade measurement"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Geometric distance in the stated units; visual-inspection grade."
+    prohibitedClaim: ["survey-grade distance", "certified accuracy"]
+
+  - claimId: MEAS-AREA
+    product: Area measurement
+    algorithm: Polygon shoelace area (planimetric, unit-aware)
+    algorithmVersion: v0.5.x
+    claim: "Planimetric area of a user polygon in square metres when the horizontal unit is known."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/measure*.test.ts, tests/formatArea*.test.ts]
+    supportingDatasets: []
+    units: [square-metres, source-units]
+    crsDatum: "Refuses area on a geographic-degree grid."
+    assumptions: ["planar projection assumed over the polygon extent"]
+    failureModes: ["geographic degrees", "non-planar / large extent"]
+    exportAllowed: true
+    userLabel: "Visual-inspection-grade area"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Planimetric area in the stated units; visual-inspection grade."
+    prohibitedClaim: ["survey-grade area", "geodetic area"]
+
+  - claimId: MEAS-HEIGHT
+    product: Height / vertical measurement
+    algorithm: Vertical delta (unit-aware, up-axis-aware)
+    algorithmVersion: v0.5.x
+    claim: "Vertical difference along the scan up-axis in metres when the vertical unit is known."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/measure*.test.ts]
+    supportingDatasets: []
+    units: [metres, source-units]
+    crsDatum: "Vertical unit applied when known; no vertical-datum transformation."
+    assumptions: ["vertical unit == horizontal unit unless a vertical unit is declared"]
+    failureModes: ["unknown vertical datum", "Y-up vs Z-up ambiguity"]
+    exportAllowed: true
+    userLabel: "Visual-inspection-grade height"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Vertical delta in the stated units; visual-inspection grade."
+    prohibitedClaim: ["orthometric height", "datum-referenced elevation"]
+
+  - claimId: MEAS-ANGLE
+    product: Angle measurement
+    algorithm: Angle between two vectors
+    algorithmVersion: v0.5.x
+    claim: "Angle between two user-defined segments."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/measure*.test.ts]
+    supportingDatasets: []
+    units: [degrees]
+    crsDatum: "Frame-relative; not azimuth unless CRS-north is known."
+    assumptions: ["planar interpretation of the two segments"]
+    failureModes: ["mixed horizontal/vertical scale", "geographic degrees for planar angle"]
+    exportAllowed: true
+    userLabel: "Visual-inspection-grade angle"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Geometric angle between picked segments."
+    prohibitedClaim: ["true bearing / azimuth without CRS north"]
+
+  - claimId: MEAS-PROFILE
+    product: Cross-section profile
+    algorithm: Sampled elevation along a section line
+    algorithmVersion: v0.5.x
+    claim: "Elevation profile sampled along a user section line."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/profile*.test.ts, tests/profileStations*.test.ts]
+    supportingDatasets: []
+    units: [metres, source-units]
+    crsDatum: "Local frame; native→metres when known."
+    assumptions: ["sampling density limits vertical fidelity"]
+    failureModes: ["gaps along the section", "sparse cloud"]
+    exportAllowed: true
+    userLabel: "Section profile (visual-inspection grade)"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Sampled elevation profile along the section."
+    prohibitedClaim: ["survey-grade longitudinal section"]
+
+  # ── Volumes ─────────────────────────────────────────────────────────────────
+  - claimId: VOL-POINT-SAMPLE
+    product: Point-sample volume (preview)
+    algorithm: Uniform-density point-sample estimator
+    algorithmVersion: v0.5.x
+    claim: "Approximate cut/fill volume from a uniform-density point sample against a base."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts]
+    supportingDatasets: []
+    units: [cubic-metres]
+    crsDatum: "Refuses on geographic degrees; local metric only."
+    assumptions: ["uniform point density", "base surface as specified"]
+    failureModes: ["density gradient", "missing footprint quadrant", "sloped/curved base"]
+    exportAllowed: true
+    userLabel: "Uniform-density point-sample preview"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Order-of-magnitude preview volume; not a survey quantity."
+    prohibitedClaim: ["survey-grade volume", "area-weighted integration", "quantified uncertainty"]
+
+  - claimId: VOL-STOCKPILE
+    product: Stockpile volume
+    algorithm: Point-sample estimator over a fitted/explicit base (area-weighted integration pending — Phase 8)
+    algorithmVersion: v0.5.x
+    claim: "Stockpile volume above a reference base."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts]
+    supportingDatasets: []
+    units: [cubic-metres]
+    crsDatum: "Local metric; refuses geographic degrees."
+    assumptions: ["uniform density", "base uncertainty currently unquantified"]
+    failureModes: ["non-uniform density", "coverage gaps", "base-surface error"]
+    exportAllowed: true
+    userLabel: "Exploratory stockpile preview"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Exploratory volume preview; spatial correlation and base uncertainty unquantified."
+    prohibitedClaim: ["survey-grade stockpile volume", "validated uncertainty interval"]
+
+  # ── Ground / terrain surfaces ───────────────────────────────────────────────
+  - claimId: GROUND-FILTER
+    product: Ground classification
+    algorithm: SMRF-core progressive morphological ground filter (subset of Pingel et al. 2013; not the full SMRF pipeline)
+    algorithmVersion: v0.4.4
+    claim: "Bare-earth vs non-ground separation via a progressive morphological opening + slope/elevation thresholds."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/groundFilter.test.ts, tests/groundFilterValidation.test.ts]
+    supportingDatasets: [synthetic known-truth fixtures]
+    units: [class-codes]
+    crsDatum: "Metric grid; unit-aware cell floors."
+    assumptions: ["implements a SUBSET of SMRF stages — see output metadata for which"]
+    failureModes: ["steep + sparse terrain", "dense low vegetation", "buildings vs ground on complex roofs"]
+    exportAllowed: true
+    userLabel: "SMRF-core progressive morphological ground filter"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "Ground separation validated on synthetic known-truth fixtures."
+    prohibitedClaim: ["SMRF (unqualified)", "field-validated ground accuracy", "precision/recall on external benchmarks"]
+
+  - claimId: DTM
+    product: DTM (bare-earth grid)
+    algorithm: Gridded interpolation of ground-classified returns
+    algorithmVersion: v0.4.4
+    claim: "Bare-earth elevation grid over covered cells; gaps left empty or interpolated, never fabricated."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/terrainTruth.dtm.test.ts]
+    supportingDatasets: [synthetic analytic surfaces]
+    units: [metres]
+    crsDatum: "Metric; refuses geographic-degree area/volume derivatives."
+    assumptions: ["interpolation model as configured", "coverage-gated"]
+    failureModes: ["large voids", "steep breaklines", "vegetation leakage from ground filter"]
+    exportAllowed: true
+    userLabel: "Synthetically validated DTM"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "DTM validated against analytic surfaces (covered cells)."
+    prohibitedClaim: ["field-validated DTM accuracy", "independent checkpoint accuracy"]
+
+  - claimId: DSM
+    product: DSM (top surface)
+    algorithm: Top-return gridded surface
+    algorithmVersion: v0.4.4
+    claim: "Top-surface elevation grid."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/terrainTruth.surface.test.ts, tests/dsmChm.test.ts]
+    supportingDatasets: [synthetic overlay scenes]
+    units: [metres]
+    crsDatum: metric
+    assumptions: ["top-return selection per cell"]
+    failureModes: ["thin structures below grid resolution"]
+    exportAllowed: true
+    userLabel: "Synthetically validated DSM"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "DSM equals the top surface on synthetic scenes."
+    prohibitedClaim: ["field-validated DSM accuracy"]
+
+  - claimId: CHM
+    product: CHM (canopy height, DSM − DTM)
+    algorithm: DSM − DTM with NoData preservation
+    algorithmVersion: v0.4.4
+    claim: "Height-above-ground field."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/terrainTruth.surface.test.ts, tests/dsmChm.test.ts]
+    supportingDatasets: [synthetic overlay scenes]
+    units: [metres]
+    crsDatum: metric
+    assumptions: ["depends on DTM + DSM validity"]
+    failureModes: ["propagates DTM/DSM error"]
+    exportAllowed: true
+    userLabel: "Synthetically validated CHM"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "Canopy-height reconstruction validated on synthetic scenes."
+    prohibitedClaim: ["field-validated canopy height"]
+
+  - claimId: CONTOURS
+    product: Contours
+    algorithm: Marching squares + stitching + evidence grading
+    algorithmVersion: v0.4.x
+    claim: "Iso-elevation contours graded solid/dashed/gap by supporting confidence."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/contoursAt.test.ts, tests/stitchContours.test.ts, tests/contourPipeline.integration.test.ts]
+    supportingDatasets: [synthetic surfaces]
+    units: [metres]
+    crsDatum: metric
+    assumptions: ["depends on DTM validity"]
+    failureModes: ["gaps interpolated → dashed", "noise → jagged isolines"]
+    exportAllowed: true
+    userLabel: "Synthetically validated contours"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "Contours validated against synthetic surfaces; grade tracks confidence."
+    prohibitedClaim: ["survey-grade contours"]
+
+  # ── Terrain descriptors ─────────────────────────────────────────────────────
+  - claimId: SLOPE-RASTER
+    product: Slope raster
+    algorithm: Horn 3x3 gradient
+    algorithmVersion: v0.4.x
+    claim: "Slope in degrees per Horn's method; cos-latitude / per-axis cell metres on geographic grids."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/terrainTruth.surface.test.ts]
+    supportingDatasets: [analytic planes]
+    units: [degrees]
+    crsDatum: "Handles geographic grids via per-axis cell metres."
+    assumptions: ["Horn convention documented"]
+    failureModes: ["edge cells", "NoData islands"]
+    exportAllowed: true
+    userLabel: "Analytically verified slope (Horn)"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Slope = atan(gradient) verified on analytic planes."
+    prohibitedClaim: ["cross-validated against GDAL/SAGA (pending)"]
+
+  - claimId: HILLSHADE
+    product: Hillshade
+    algorithm: ESRI illumination model (Lambert)
+    algorithmVersion: v0.4.x
+    claim: "Analytic hillshade from slope + aspect under a fixed sun azimuth/altitude."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/terrainTruth.hillshade.test.ts, tests/relief*.test.ts]
+    supportingDatasets: [analytic flat-plane Lambert]
+    units: [dimensionless]
+    crsDatum: metric-or-geographic
+    assumptions: ["light azimuth/altitude as configured"]
+    failureModes: ["edge/NoData"]
+    exportAllowed: true
+    userLabel: "Analytically verified hillshade"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Exact flat-plane Lambert value + correct N/E/S/W ordering, verified analytically."
+    prohibitedClaim: ["cross-implementation agreement with GDAL/ESRI (pending)"]
+
+  - claimId: VRM-TPI
+    product: VRM / TPI terrain descriptors
+    algorithm: Vector ruggedness measure / topographic position index
+    algorithmVersion: v0.4.x
+    claim: "Ruggedness / relative-position indices over a stated neighbourhood."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/*vrm*.test.ts, tests/*tpi*.test.ts]
+    supportingDatasets: []
+    units: [dimensionless]
+    crsDatum: metric
+    assumptions: ["neighbourhood radius documented (Phase 11)"]
+    failureModes: ["scale sensitivity", "edge effects"]
+    exportAllowed: true
+    userLabel: "Unit-verified terrain descriptor"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Index per the documented convention + neighbourhood."
+    prohibitedClaim: ["standardised / cross-validated ruggedness"]
+
+  # ── Accuracy statistics ─────────────────────────────────────────────────────
+  - claimId: HOLDOUT-RMSE
+    product: Hold-out RMSE (interpolation)
+    algorithm: Conditional point-wise interpolation holdout
+    algorithmVersion: v0.4.x
+    claim: "RMSE of held-out points against the interpolated surface — an INTERNAL diagnostic, not independent checkpoint accuracy."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/holdoutRmse.test.ts]
+    supportingDatasets: [analytic surfaces]
+    units: [metres]
+    crsDatum: metric
+    assumptions: ["point-wise holdout is optimistic vs spatially-blocked (Phase 4)"]
+    failureModes: ["spatial autocorrelation inflates apparent accuracy"]
+    exportAllowed: true
+    userLabel: "Conditional point-wise interpolation holdout"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "Internal holdout RMSE against known synthetic surfaces."
+    prohibitedClaim: ["independent checkpoint accuracy", "field accuracy", "spatially-blocked error (pending)"]
+
+  - claimId: NVA-VVA
+    product: NVA/VVA-style vertical accuracy
+    algorithm: NVA/VVA formula (1.96 x RMSEz) on INTERNAL holdout
+    algorithmVersion: v0.4.x
+    claim: "NVA/VVA-STYLE statistic derived from internal holdout — not an independent checkpoint accuracy assessment."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/verticalAccuracy.test.ts]
+    supportingDatasets: [analytic surfaces]
+    units: [metres]
+    crsDatum: "Vertical; no datum transformation."
+    assumptions: ["ASPRS NVA/VVA presume INDEPENDENT checkpoints; we have none"]
+    failureModes: ["overstatement if presented as ASPRS NVA/VVA"]
+    exportAllowed: true
+    userLabel: "NVA-style / VVA-style internal holdout statistic"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: pending
+    approvedClaim: "NVA/VVA-style statistic from internal holdout."
+    prohibitedClaim: ["ASPRS NVA/VVA compliance", "independent checkpoint accuracy"]
+
+  - claimId: QUALITY-LEVEL
+    product: USGS Quality-Level comparison
+    algorithm: Two-metric threshold comparison (density + internal RMSE)
+    algorithmVersion: v0.4.x
+    claim: "Comparison of density + internal RMSE against named/versioned thresholds — NOT a quality-level compliance determination."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/*qualityLevel*.test.ts, tests/verticalAccuracy.test.ts]
+    supportingDatasets: []
+    units: [pts-per-sq-m, metres]
+    crsDatum: metric
+    assumptions: ["compliance requires independent checkpoints + full standard"]
+    failureModes: ["misread as compliance"]
+    exportAllowed: true
+    userLabel: "Two-metric threshold comparison (not a compliance determination)"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Density + internal RMSE compared to stated thresholds."
+    prohibitedClaim: ["USGS QL compliance", "meets ASPRS quality level"]
+
+  - claimId: CONFIDENCE-OVERLAY
+    product: Confidence overlay
+    algorithm: Measured-cell empirical reliability (measured) + model-based support (interpolated)
+    algorithmVersion: v0.4.x
+    claim: "For measured cells, empirical reliability at a stated tolerance τ; for interpolated cells, a model-based support score that is NOT empirically calibrated."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/*confidence*.test.ts]
+    supportingDatasets: [analytic surfaces]
+    units: [fraction, metres-tolerance]
+    crsDatum: metric
+    assumptions: ["measured and interpolated reliability are DIFFERENT concepts (Phase 5)"]
+    failureModes: ["naked percentage read as calibrated probability"]
+    exportAllowed: true
+    userLabel: "Measured-cell empirical reliability (τ) / model-based support"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Empirical reliability for measured cells at |error| <= tau; model-based support for interpolated cells."
+    prohibitedClaim: ["calibrated probability for interpolated cells", "single undifferentiated confidence"]
+
+  # ── Change detection ────────────────────────────────────────────────────────
+  - claimId: EPOCH-ALIGN
+    product: Epoch alignment
+    algorithm: ICP (yaw + horizontal translation model; full model optional)
+    algorithmVersion: v0.5.x
+    claim: "Rigid alignment of two epochs; horizontal-only model preserves the vertical signal."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/alignEpochs*.test.ts, tests/compareEpochs*.test.ts]
+    supportingDatasets: [synthetic epoch pairs]
+    units: [metres]
+    crsDatum: "Refuses cross-datum / unknown-datum quantitative comparison."
+    assumptions: ["applied permissively today — refusal-by-default gates are Phase 9"]
+    failureModes: ["low overlap", "stride sampling spatial bias", "geographic-frame ICP"]
+    exportAllowed: true
+    userLabel: "Yaw + horizontal translation (vertical signal preserved)"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Rigid alignment with reported residuals on synthetic pairs."
+    prohibitedClaim: ["validated registration accuracy", "safe cross-datum comparison"]
+
+  - claimId: CHANGE-RASTER
+    product: Change raster / DTM difference
+    algorithm: Per-cell epoch difference with LoD
+    algorithmVersion: v0.5.x
+    claim: "Per-cell elevation change with a level-of-detection threshold."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/compareDtms*.test.ts, tests/changeRaster*.test.ts]
+    supportingDatasets: [synthetic epoch pairs]
+    units: [metres]
+    crsDatum: "Blocks cross-datum / unknown-datum comparison."
+    assumptions: ["single global LoD today — per-cell LoD95 is Phase 10", "cells treated independently"]
+    failureModes: ["registration error", "interpolation-status blending", "spatial covariance ignored"]
+    exportAllowed: true
+    userLabel: "Change raster (single-LoD, exploratory uncertainty)"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Per-cell change vs a global LoD on synthetic pairs."
+    prohibitedClaim: ["validated change accuracy", "per-cell LoD95 (pending)"]
+
+  - claimId: CHANGE-VOLUME
+    product: Change volume (gain/loss/net)
+    algorithm: Integrated change over the difference grid
+    algorithmVersion: v0.5.x
+    claim: "Gain / loss / net volume from the change raster."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/compareDtms*.test.ts]
+    supportingDatasets: []
+    units: [cubic-metres]
+    crsDatum: "Blocks cross-datum."
+    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified"]
+    failureModes: ["propagates registration + surface error"]
+    exportAllowed: true
+    userLabel: "Exploratory change volume"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Integrated change volume with exploratory uncertainty."
+    prohibitedClaim: ["validated change volume", "quantified spatially-correlated uncertainty"]
+
+  - claimId: UNCERTAINTY-BAND
+    product: Uncertainty band (on deltas / volumes)
+    algorithm: Model-based propagation (Monte Carlo GUM budget pending — Phases 8/10)
+    algorithmVersion: v0.5.x
+    claim: "Model-based uncertainty band; not all sources included."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/*uncertainty*.test.ts]
+    supportingDatasets: []
+    units: [metres, cubic-metres]
+    crsDatum: metric
+    assumptions: ["spatial correlation and several GUM terms currently omitted"]
+    failureModes: ["understatement if omitted terms are large"]
+    exportAllowed: true
+    userLabel: "Exploratory model-based uncertainty (omitted terms listed)"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: pending
+    approvedClaim: "Model-based band over the included sources."
+    prohibitedClaim: ["complete uncertainty budget", "validated coverage interval"]
+
+  # ── Provenance / integrity ──────────────────────────────────────────────────
+  - claimId: REPORT-DIGEST
+    product: Report digest
+    algorithm: SHA-256 of canonicalised report content
+    algorithmVersion: v0.5.x
+    claim: "Content-integrity digest — detects edits made without re-stamping. NOT proof of authorship."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E1_UNIT_VERIFIED
+    supportingTests: [tests/reportManifest*.test.ts, tests/reportVerifier*.test.ts]
+    supportingDatasets: []
+    units: [hash]
+    crsDatum: n/a
+    assumptions: ["digest != signature != trusted identity (signing is Phase 14)"]
+    failureModes: ["misread as authorship proof"]
+    exportAllowed: true
+    userLabel: "Content-integrity digest (not authorship)"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "SHA-256 detects post-stamp content edits."
+    prohibitedClaim: ["proof of authorship", "signed by a trusted identity"]
+
+  - claimId: PROVENANCE-INFERENCE
+    product: Capture-type provenance inference
+    algorithm: Heuristic classifier (software/sensor strings, format, density) + shape guard (v0.5.7)
+    algorithmVersion: v0.5.7
+    claim: "A GUESS of capture type from metadata + density, with literature context. NOT measured dataset accuracy; ruled out as aerial for object/interior scans (v0.5.7)."
+    currentEvidence: E1_UNIT_VERIFIED
+    requiredEvidence: E1_UNIT_VERIFIED
+    supportingTests: [tests/provenance.test.ts, tests/provenanceObjectShape.test.ts, tests/provenanceConsistency.test.ts]
+    supportingDatasets: []
+    units: [category]
+    crsDatum: n/a
+    assumptions: ["literature accuracy ranges are context, not measurements of THIS scan"]
+    failureModes: ["overstated if the literature ribbon is read as this dataset's accuracy"]
+    exportAllowed: true
+    userLabel: "Literature context inferred from metadata; not measured dataset accuracy"
+    softwareStatus: shipping
+    evidenceLevel: E1_UNIT_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "Heuristic capture-type guess with cited literature context."
+    prohibitedClaim: ["measured accuracy of this dataset", "aerial classification for an object/interior scan", "input to readiness/uncertainty calculations"]

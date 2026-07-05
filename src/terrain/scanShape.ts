@@ -133,11 +133,21 @@ const OVERHANG_OBJECT = 0.2;
  * on its true up however steep it gets (an 0.8-gradient slope still measures 0%
  * stacking) — the AND can therefore never promote a slope. A scanned object
  * (statue, sculpture) stacks a few percent from limbs / folds even viewed
- * top-down. Tuned on a real iPhone statue scan (aspect 0.64, 5.9% stacked, up
- * mis-picked as the flattest axis) against every terrain fixture (all 0%
- * overhang; the steepest, slope-0.8, reaches aspect 0.80 but 0% stacking).
+ * top-down.
+ *
+ * The load-bearing guard is OVERHANG_SOLID, NOT the aspect bar: a height field
+ * reads ≈0% overhang however steep, so the AND can never promote a slope no
+ * matter how low the aspect bar goes. The aspect bar only sets how COMPACT an
+ * object must be. It was first tuned at 0.55 on one iPhone statue scan (Statue1:
+ * aspect 0.64, 5.9% stacked) — but the SAME object captured with more ground
+ * slab around it (Statue2: aspect 0.506, 4.4% stacked) widens the footprint and
+ * slipped under 0.55, misrouting to terrain. Lowered to 0.45 so a moderately
+ * compact object survives a captured base plane; still safe against terrain,
+ * which the overhang guard rejects regardless of aspect. Both real statue scans
+ * are pinned in `tests/scanShapeStatueBasePlane.test.ts`; the steepest terrain
+ * fixture (slope-0.8, aspect 0.80) still reads 0% overhang and stays terrain.
  */
-const ASPECT_SOLID = 0.55;
+const ASPECT_SOLID = 0.45;
 const OVERHANG_SOLID = 0.03;
 
 // ── Band / coverage geometry. ────────────────────────────────────────────────

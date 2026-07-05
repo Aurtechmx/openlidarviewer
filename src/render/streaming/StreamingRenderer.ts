@@ -313,6 +313,24 @@ export class StreamingRenderer {
     return out;
   }
 
+  /**
+   * Every resident node tagged with its id and whether it is fading out — the
+   * input the export frontier (Gate 5) needs to drop overlapping LOD samples of
+   * the same region during a cross-fade. Fade-out state is read from the fade
+   * table (`direction: 'out'`), which carries the node id.
+   */
+  residentFrontierEntries(): { id: string; fadingOut: boolean; decoded: DecodedChunk }[] {
+    const fadingOut = new Set<string>();
+    for (const state of this._fades.values()) {
+      if (state.direction === 'out' && state.nodeId) fadingOut.add(state.nodeId);
+    }
+    const out: { id: string; fadingOut: boolean; decoded: DecodedChunk }[] = [];
+    for (const [id, entry] of this._meshes) {
+      out.push({ id, fadingOut: fadingOut.has(id), decoded: entry.decoded });
+    }
+    return out;
+  }
+
   /** Remove and dispose every resident mesh. */
   dispose(): void {
     // Cancel any pending fade tick before disposing meshes so the rAF

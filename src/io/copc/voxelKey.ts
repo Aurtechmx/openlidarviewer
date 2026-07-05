@@ -23,6 +23,18 @@ export function keyId(key: VoxelKey): string {
   return `${key.depth}-${key.x}-${key.y}-${key.z}`;
 }
 
+/**
+ * Parse a `"depth-x-y-z"` id back into a key, or `null` when the string is not
+ * exactly four non-negative integers. The inverse of {@link keyId}.
+ */
+export function keyFromId(id: string): VoxelKey | null {
+  const parts = id.split('-');
+  if (parts.length !== 4) return null;
+  const [depth, x, y, z] = parts.map((p) => Number(p));
+  const key = { depth, x, y, z };
+  return isValidKey(key) ? key : null;
+}
+
 /** Whether a key is structurally valid (non-negative integers). */
 export function isValidKey(key: VoxelKey): boolean {
   return (
