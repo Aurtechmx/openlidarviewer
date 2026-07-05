@@ -46,9 +46,6 @@ states how strongly it is supported.
 - **The Coordinate-system section hides for local-frame scans** (terrestrial /
   handheld / mesh), where a bare "CRS unknown" row reads as a defect rather than
   a fact. The geo/survey path is unchanged.
-- **The class legend only shows when the cloud carries classes** — a scan with
-  no classification channel (E57, mesh, most phone captures) no longer shows an
-  empty legend.
 - **Validation docs corrected for overstatement.** The terrain matrix's
   "Production" status is replaced by evidence levels; the ground filter is
   described as an SMRF-core progressive-morphological subset; confidence,

@@ -3598,11 +3598,11 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // Apply the (all-visible) mask so a previously-filtered scan can't leak its
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());
-  // Only reveal the legend when the cloud actually carries classes — a scan
-  // with no classification channel (E57, mesh, most phone captures) would
-  // otherwise show an empty legend. Matches the guarded reveal used elsewhere.
-  if (classLegendPanel.hasClasses()) classLegendPanel.show();
-  else classLegendPanel.hide();
+  // The legend is revealed even for a class-less scan: it renders a designed
+  // empty state (explanatory message + disabled "Show all") that is the entry
+  // point to Classify (derive a classification). Hiding it would remove that
+  // affordance — the empty legend is intentional, not a defect.
+  classLegendPanel.show();
   void showReclassifyUi();
   // Reset the inspector's copy/JSON scope stamp — the fresh legend is
   // all-visible, so this clears any stamp left by a prior filtered scan.

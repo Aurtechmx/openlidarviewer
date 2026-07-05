@@ -51,9 +51,7 @@ bare CAD mesh.
 
 The Coordinate-system section now hides for local-frame scans, where the only
 thing it could show is a "CRS unknown" row that reads as a defect rather than a
-fact. The class legend only appears when the cloud actually carries classes, so
-an E57, a mesh, or a phone capture with no classification channel no longer shows
-an empty legend. The georeferenced-survey path is unchanged.
+fact. The georeferenced-survey path is unchanged.
 
 ## An explicit evidence model
 
