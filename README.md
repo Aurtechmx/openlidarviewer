@@ -418,6 +418,15 @@ The current release is **v0.5.7**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
 summary.
 
+### v0.5.7 — Object & E57 capture honesty, and an evidence model
+- **Capture lens** — reads a scan as object / interior / terrain and stops applying survey and terrain framing where it doesn't belong; the capture-type classifier is now shape-aware, so a compact object can't be labelled aerial from point density alone
+- **Declared-by-the-file provenance card** — an E57 `olv:` block or a glTF `asset.generator` stamp is surfaced in the Inspector under an explicit "declared, not verified" qualifier; nothing is inferred
+- **Evidence model** — a machine-readable claim register and an E0–E6 evidence ladder record how strongly each product is supported; nothing is E4+ (independently or field-validated) yet, and the docs say so
+- **Fix** — a compact object captured together with a large ground slab now routes to object, not terrain
+
+### v0.5.6 — Point filtering
+- **Elevation and intensity filters** wired to the live renderer and extended to selection: a point you can't see can't be picked, measured, or reclassified. Streaming-resident export, plus clearer loading and GPU-error feedback
+
 ### v0.5.5 — Pan tool, collapsible panels, refined navigation, a simpler report set, accurate scan health
 - **Pan hand tool** — a fourth navigation mode: `4` selects Pan, `G` toggles it, middle-mouse drags pan temporarily; a mouse, pen, or one-finger touch drag moves the scene while the wheel keeps zooming, and the mode is preserved in sessions and share links
 - **Refined viewport navigation** — frame-rate-independent, pointer-centred wheel and trackpad zoom (same gesture, same zoom at 60/120/144 Hz), plus motion-adaptive resolution that lowers the device-pixel ratio slightly while you move and restores it when you stop
