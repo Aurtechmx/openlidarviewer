@@ -22,25 +22,35 @@ Validation methods used below:
 All terrain tests are pure-data (no DOM, no three.js, no I/O) and
 deterministic. Run them with `npx vitest run`.
 
+The **Status** column has been replaced by an **evidence level** per
+[`EVIDENCE_MODEL.md`](./EVIDENCE_MODEL.md) and the machine-readable
+[`claim-register.yaml`](./claim-register.yaml). "Production" is no longer used as
+a scientific-validation status — it conflated "the code works" with "the science
+is validated". **Nothing here is E4+ (independently or externally validated)
+yet**; synthetic known-truth fixtures are E3, analytic checks E2, interop/unit
+checks E1. Held-out RMSE is an INTERNAL diagnostic (points withheld from the same
+scan), not independent checkpoint accuracy — optimistic relative to a
+spatially-blocked or field checkpoint (research-hardening Phases 4–5).
+
 ## Matrix
 
-| Terrain product | How it is validated | Test file(s) | Status |
+| Terrain product | How it is validated | Test file(s) | Evidence level |
 |---|---|---|---|
-| Ground filter (SMRF) | Known-truth fixture: ground recall and non-ground (building/canopy) rejection bars, plus DTM RMSE on interior cells; a sparse + steep variant reports recall rather than gating it | `tests/groundFilterValidation.test.ts`, `tests/groundFilter.test.ts` | Production |
-| DTM (bare-earth grid) | Known-truth fixture: covered cells asserted against the analytic elevation (flat / slope / hill / pit / ridge / valley / terrace), gaps left empty or interpolated — never fabricated | `tests/terrainTruth.dtm.test.ts` | Production |
-| DSM (top surface) | Known-truth fixture: DSM equals the top surface (roof over building, canopy top over trees) on classified overlay scenes | `tests/terrainTruth.surface.test.ts` | Production |
-| CHM (canopy height, DSM − DTM) | Known-truth fixture for the height-above-ground field; reconstruction logic (DSM = DTM + canopy, nodata preserved) checked directly | `tests/terrainTruth.surface.test.ts`, `tests/dsmChm.test.ts` | Production |
-| Slope (Horn) | Analytic check: flat ≈ 0°, uniform slope = atan(gradient) on interior cells | `tests/terrainTruth.surface.test.ts` | Production |
-| Hillshade (ESRI illumination) | Analytic check: exact flat-plane Lambert value at a known sun altitude, and the brighter/darker ordering for N/E/S/W-facing slopes under a fixed azimuth | `tests/terrainTruth.hillshade.test.ts` | Production |
-| Hold-out RMSE / vertical accuracy | Held-out RMSE against analytic surfaces where the true error is known; ASPRS NVA/VVA derivation and honest formatting | `tests/holdoutRmse.test.ts`, `tests/verticalAccuracy.test.ts` | Production |
-| Confidence calibration | Fit + apply a monotonic calibration map; the calibration check guards both pass and fail directions plus the not-assessable case | `tests/calibrateConfidence.test.ts`, `tests/calibrationCheck.test.ts` | Production |
-| Terrain Assessment (four statuses) | Exercised end to end through the contour pipeline and surface fixtures; statuses are derived purely from the quality report, score, metrics, and coverage so they cannot disagree with the numbers shown | `tests/analyseContours.test.ts`, `tests/contourPipeline.integration.test.ts` | Production |
-| Contours (evidence-graded) | Known-truth + integration: marching-squares output, stitching, styling, and feature model on synthetic surfaces; grade (solid / dashed / gap) tracks supporting confidence | `tests/contoursAt.test.ts`, `tests/stitchContours.test.ts`, `tests/contourStyle.test.ts`, `tests/contourFeatureModel.test.ts`, `tests/contourPipeline.integration.test.ts` | Production |
-| DEM export — Esri ASCII Grid | Interop check: header fields, north-row-first ordering, NODATA for empty cells | `tests/demExport.test.ts` | Production |
-| DEM export — GeoTIFF | Interop check: valid little-endian TIFF, expected raster + geo tags, north-row-first, NODATA; EPSG propagated into every GeoTIFF; full package (DTM/DSM/CHM `.asc` + `.tif` + `.prj` + README) bundled | `tests/demExport.test.ts` | Production |
-| CRS / datum warnings | Propagation check: known CRS+datum emit no warning and carry a GeoJSON `crs` member; unknown CRS/datum surface the exact pinned warning and propagate into export metadata; vertical-datum detection, compound-CRS WKT, LAS GeoKey fidelity, `.prj` sidecar | `tests/crsDatumWarnings.test.ts`, `tests/crsVerticalHardening.test.ts` | Production |
-| Profiles (cross-section) | Known-truth fixture: sampled (distance, height) polyline asserted against the analytic surface; height sampler, civil stats, stationing, and chart bounds covered | `tests/profileAnalyticalFixtures.test.ts`, `tests/profileSampler.test.ts`, `tests/civilProfileStats.test.ts`, `tests/profileStations.test.ts` | Production |
-| Measurements (distance / area / height / angle / slope / volume) | Analytic check: closed-form geometry (length, planar + horizontal area, angle at vertex, slope, volume) on known inputs | `tests/measureGeometry.test.ts`, `tests/measurementChains.test.ts` | Production — visual-inspection grade, not survey-grade |
+| Ground filter (SMRF-core progressive morphological) | Known-truth fixture: ground recall and non-ground (building/canopy) rejection bars, plus DTM RMSE on interior cells; a sparse + steep variant reports recall rather than gating it. Implements a SUBSET of SMRF (Pingel et al. 2013) — no net-cutting refinement pass (see `groundFilter.ts`). | `tests/groundFilterValidation.test.ts`, `tests/groundFilter.test.ts` | E3 Synthetically validated · external pending |
+| DTM (bare-earth grid) | Known-truth fixture: covered cells asserted against the analytic elevation (flat / slope / hill / pit / ridge / valley / terrace), gaps left empty or interpolated — never fabricated | `tests/terrainTruth.dtm.test.ts` | E3 Synthetically validated · external pending |
+| DSM (top surface) | Known-truth fixture: DSM equals the top surface (roof over building, canopy top over trees) on classified overlay scenes | `tests/terrainTruth.surface.test.ts` | E3 Synthetically validated |
+| CHM (canopy height, DSM − DTM) | Known-truth fixture for the height-above-ground field; reconstruction logic (DSM = DTM + canopy, nodata preserved) checked directly | `tests/terrainTruth.surface.test.ts`, `tests/dsmChm.test.ts` | E3 Synthetically validated |
+| Slope (Horn) | Analytic check: flat ≈ 0°, uniform slope = atan(gradient) on interior cells | `tests/terrainTruth.surface.test.ts` | E2 Analytically verified |
+| Hillshade (ESRI illumination) | Analytic check: exact flat-plane Lambert value at a known sun altitude, and the brighter/darker ordering for N/E/S/W-facing slopes under a fixed azimuth | `tests/terrainTruth.hillshade.test.ts` | E2 Analytically verified |
+| Hold-out RMSE / vertical accuracy (NVA/VVA-style) | Held-out RMSE against analytic surfaces where the true error is known; NVA/VVA-STYLE derivation (1.96 × RMSEz) on internal holdout — **not** independent checkpoint accuracy and not ASPRS NVA/VVA compliance | `tests/holdoutRmse.test.ts`, `tests/verticalAccuracy.test.ts` | E3 Synthetically validated · external pending |
+| Confidence calibration | Fit + apply a monotonic calibration map; the check guards pass, fail, and not-assessable. Measured-cell empirical reliability and interpolated-cell model-based support are distinct concepts (Phase 5) | `tests/calibrateConfidence.test.ts`, `tests/calibrationCheck.test.ts` | E2 Analytically verified |
+| Terrain Assessment (four statuses) | Exercised end to end through the contour pipeline and surface fixtures; statuses are derived purely from the quality report, score, metrics, and coverage so they cannot disagree with the numbers shown | `tests/analyseContours.test.ts`, `tests/contourPipeline.integration.test.ts` | E3 Synthetically validated |
+| Contours (evidence-graded) | Known-truth + integration: marching-squares output, stitching, styling, and feature model on synthetic surfaces; grade (solid / dashed / gap) tracks supporting confidence | `tests/contoursAt.test.ts`, `tests/stitchContours.test.ts`, `tests/contourStyle.test.ts`, `tests/contourFeatureModel.test.ts`, `tests/contourPipeline.integration.test.ts` | E3 Synthetically validated |
+| DEM export — Esri ASCII Grid | Interop check: header fields, north-row-first ordering, NODATA for empty cells | `tests/demExport.test.ts` | E2 Interop-verified |
+| DEM export — GeoTIFF | Interop check: valid little-endian TIFF, expected raster + geo tags, north-row-first, NODATA; EPSG propagated into every GeoTIFF; full package (DTM/DSM/CHM `.asc` + `.tif` + `.prj` + README) bundled | `tests/demExport.test.ts` | E2 Interop-verified |
+| CRS / datum warnings (detection + propagation only) | Propagation check: known CRS+datum emit no warning and carry a GeoJSON `crs` member; unknown CRS/datum surface the exact pinned warning and propagate into export metadata; vertical-datum detection, compound-CRS WKT, LAS GeoKey fidelity, `.prj` sidecar. **Detection, unit conversion, recentering, metadata propagation, warnings only — no full reprojection or vertical-datum transformation.** | `tests/crsDatumWarnings.test.ts`, `tests/crsVerticalHardening.test.ts` | E1 Unit verified |
+| Profiles (cross-section) | Known-truth fixture: sampled (distance, height) polyline asserted against the analytic surface; height sampler, civil stats, stationing, and chart bounds covered | `tests/profileAnalyticalFixtures.test.ts`, `tests/profileSampler.test.ts`, `tests/civilProfileStats.test.ts`, `tests/profileStations.test.ts` | E2 Analytically verified |
+| Measurements (distance / area / height / angle / slope / volume) | Analytic check: closed-form geometry (length, planar + horizontal area, angle at vertex, slope, volume) on known inputs | `tests/measureGeometry.test.ts`, `tests/measurementChains.test.ts` | E2 Analytically verified — visual-inspection grade, not survey-grade |
 
 ## What the matrix does and does not assert
 
