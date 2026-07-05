@@ -659,6 +659,8 @@ export class Inspector {
   private _onProvenanceOverride: ((type: CaptureType) => void) | null = null;
   /** CRS section body — populated by setCrs(). */
   private readonly _crsBody: HTMLElement;
+  /** The whole Coordinate-system collapsible — hidden for local-frame profiles. */
+  private _crsSection: HTMLElement | null = null;
   /** Caller registers this to react to user CRS overrides. */
   private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void) | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
@@ -1232,7 +1234,7 @@ export class Inspector {
           this._provenanceBody,
         ]),
       ),
-      collapsibleSection('Coordinate system', this._crsBody),
+      (this._crsSection = collapsibleSection('Coordinate system', this._crsBody)),
       collapsibleSection('Scan report', this._report),
       collapsibleSection('Saved views', views),
       this._exportSection,
@@ -1868,6 +1870,7 @@ export class Inspector {
     // the new cheap-summary push.
     this._datasetIntelligence.clear();
     this.setDeclaredProvenance(null);
+    this.setCrsSectionVisible(true);
     this.closeSheet();
   }
 
@@ -1896,6 +1899,16 @@ export class Inspector {
     this._currentProvenance = null;
     this._showProvenancePlaceholder();
     this.setDeclaredProvenance(null);
+  }
+
+  /**
+   * Show or hide the whole Coordinate-system section (v0.5.7). Local-frame
+   * profiles (terrestrial-scan, handheld-scan, mesh) hide it: a scan with no
+   * geodetic CRS has nothing but a "CRS unknown" row to show there, which reads
+   * as a defect rather than a fact. The geo/survey path keeps it.
+   */
+  setCrsSectionVisible(visible: boolean): void {
+    this._crsSection?.classList.toggle('olv-hidden', !visible);
   }
 
   /**

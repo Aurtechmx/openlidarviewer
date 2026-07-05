@@ -42,6 +42,7 @@ import {
   extentFromBounds,
   provenanceCardModel,
 } from './render/scanCapability';
+import { profileFor, sectionVisible } from './render/displayProfile';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
 import {
@@ -5522,6 +5523,9 @@ async function handleFile(file: File): Promise<void> {
           extensionFields: c.metadata?.sourceMetadata?.extensions,
         });
         inspector.setDeclaredProvenance(provenanceCardModel(descriptor));
+        // Hide the Coordinate-system section for local-frame profiles (a bare
+        // E57 / handheld / mesh scan has no geodetic CRS to show there).
+        inspector.setCrsSectionVisible(sectionVisible(profileFor(descriptor), 'crsDatum'));
       }
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
