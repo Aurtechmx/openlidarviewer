@@ -37,6 +37,11 @@ import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowCont
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
+import {
+  buildCapabilityDescriptor,
+  extentFromBounds,
+  provenanceCardModel,
+} from './render/scanCapability';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
 import {
@@ -5497,6 +5502,26 @@ async function handleFile(file: File): Promise<void> {
       inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
         result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
       );
+      // v0.5.7 capability-driven card: derive the display profile from the
+      // loaded scan and surface the declared-by-the-file provenance (E57 olv:
+      // block, headline). Additive — null on the unchanged geo path.
+      {
+        const c = result.cloud;
+        const descriptor = buildCapabilityDescriptor({
+          sourceFormat: c.sourceFormat,
+          hasRgb: c.colors !== undefined,
+          hasIntensity: c.intensity !== undefined,
+          hasClassification: c.classification !== undefined,
+          hasNormals: c.normals !== undefined,
+          hasGpsTime: c.gpsTime !== undefined,
+          crs: c.metadata?.crs,
+          isMesh: c.sourceFormat === 'obj' || c.sourceFormat === 'glb' || c.sourceFormat === 'gltf',
+          extentMetres: extentFromBounds(c.bounds()),
+          generator: c.metadata?.sourceSoftware,
+          extensionFields: c.metadata?.sourceMetadata?.extensions,
+        });
+        inspector.setDeclaredProvenance(provenanceCardModel(descriptor));
+      }
     } catch (err) {
       if (debug) console.warn('[inspector] cloud + details setup threw', err);
     }

@@ -8,6 +8,7 @@ import type {
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import { scopeStamp } from '../render/class/classScope';
 import { classificationLabel } from '../render/pointInfo';
+import type { ProvenanceCardModel } from '../render/scanCapability';
 import type { ColorMode } from '../render/colorModes';
 import {
   buildColorChipModel,
@@ -646,6 +647,12 @@ export class Inspector {
   private readonly _datasetIntelligence: DatasetIntelligenceCard;
   /** Provenance fingerprint body — populated by setProvenance(). */
   private readonly _provenanceBody: HTMLElement;
+  /**
+   * Declared-by-the-file profile / provenance card (v0.5.7), rendered above the
+   * classifier fingerprint. Populated by setDeclaredProvenance(); hidden until a
+   * scan with a recognised display profile or an olv: provenance block loads.
+   */
+  private readonly _declaredProvenanceBody: HTMLElement;
   /** Last fingerprint surfaced; lets the user override drop in cleanly. */
   private _currentProvenance: ProvenanceFingerprint | null = null;
   /** Caller registers this to be told when the user overrides the type. */
@@ -954,6 +961,10 @@ export class Inspector {
     // Provenance fingerprint — populated when a scan opens via setProvenance.
     this._provenanceBody = el('div', { className: 'olv-provenance' });
     this._showProvenancePlaceholder();
+    // Declared-by-the-file card sits above the classifier fingerprint, in the
+    // same collapsible Provenance section. Kept a sibling of `_provenanceBody`
+    // so the fingerprint's own render (`_renderProvenance`) is untouched.
+    this._declaredProvenanceBody = el('div', { className: 'olv-declared-prov olv-hidden' });
 
     // Coordinate reference system — detected on load, user can override
     // via the picker. Sits next to Provenance because both are
@@ -1214,7 +1225,13 @@ export class Inspector {
       visualsStudioSection,
       this._renderingSection,
       collapsibleSection('Detail', this._detail),
-      collapsibleSection('Provenance', this._provenanceBody),
+      collapsibleSection(
+        'Provenance',
+        el('div', { className: 'olv-provenance-wrap' }, [
+          this._declaredProvenanceBody,
+          this._provenanceBody,
+        ]),
+      ),
       collapsibleSection('Coordinate system', this._crsBody),
       collapsibleSection('Scan report', this._report),
       collapsibleSection('Saved views', views),
@@ -1850,6 +1867,7 @@ export class Inspector {
     // load doesn't briefly flash stale numbers between paint and
     // the new cheap-summary push.
     this._datasetIntelligence.clear();
+    this.setDeclaredProvenance(null);
     this.closeSheet();
   }
 
@@ -1877,6 +1895,53 @@ export class Inspector {
   clearProvenance(): void {
     this._currentProvenance = null;
     this._showProvenancePlaceholder();
+    this.setDeclaredProvenance(null);
+  }
+
+  /**
+   * Render the declared-by-the-file profile / provenance card (v0.5.7), or hide
+   * it when `model` is null (the unchanged geo path with no declared metadata).
+   * Every value is shown verbatim under a "declared, not verified" qualifier —
+   * nothing here is inferred. Sits above the classifier fingerprint.
+   */
+  setDeclaredProvenance(model: ProvenanceCardModel | null): void {
+    const body = this._declaredProvenanceBody;
+    body.replaceChildren();
+    if (!model) {
+      body.classList.add('olv-hidden');
+      return;
+    }
+    body.classList.remove('olv-hidden');
+    if (model.headline) {
+      body.append(el('div', { className: 'olv-declared-prov-headline', text: model.headline }));
+    }
+    if (model.declaredRows.length > 0 || model.limitations) {
+      body.append(
+        el('div', {
+          className: 'olv-declared-prov-qualifier',
+          text: 'Declared by the file — not verified.',
+        }),
+      );
+    }
+    for (const row of model.declaredRows) {
+      body.append(
+        el('div', { className: 'olv-declared-prov-row' }, [
+          el('span', { className: 'olv-declared-prov-key', text: row.label }),
+          el('span', { className: 'olv-declared-prov-val', text: row.value }),
+        ]),
+      );
+    }
+    if (model.referenceGrade) {
+      body.append(
+        el('div', {
+          className: 'olv-declared-prov-note',
+          text: 'The file declares this is not survey grade.',
+        }),
+      );
+    }
+    if (model.limitations) {
+      body.append(el('div', { className: 'olv-declared-prov-limits', text: model.limitations }));
+    }
   }
 
   /**

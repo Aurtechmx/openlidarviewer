@@ -2083,6 +2083,34 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-crs-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .olv-provenance { display: flex; flex-direction: column; gap: var(--space-md); }
+
+/* v0.5.7 declared-by-the-file profile / provenance card, above the fingerprint. */
+.olv-provenance-wrap { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-declared-prov {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding-bottom: var(--space-md);
+  border-bottom: 0.5px solid var(--hairline);
+}
+.olv-declared-prov-headline { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
+.olv-declared-prov-qualifier {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.olv-declared-prov-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+}
+.olv-declared-prov-key { color: var(--text-dim); }
+.olv-declared-prov-val { color: var(--text); text-align: right; }
+.olv-declared-prov-note { font-size: var(--text-xs); color: var(--accent); margin-top: var(--space-2xs); }
+.olv-declared-prov-limits { font-size: var(--text-2xs); color: var(--text-dim); line-height: 1.4; }
+
 .olv-prov-headline { display: flex; justify-content: space-between; align-items: center; }
 .olv-prov-label { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .olv-prov-confidence {
