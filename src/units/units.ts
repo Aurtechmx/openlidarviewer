@@ -71,6 +71,33 @@ export const sourceToMetres = (v: SourceUnits, unitToMetres: number): Metres =>
 /** US-survey-foot helper, kept separate so the ~2 ppm difference is explicit. */
 export const usSurveyFeetToMetres = (ft: number): Metres => metres(ft * M_PER_US_FT);
 
+/**
+ * A source frame's linear-unit scale, as a DISCRIMINATED union so an unknown
+ * unit can never be silently treated as metres. When the CRS names its linear
+ * unit we carry the exact metres-per-unit factor; when it does not, the scale is
+ * explicitly `unknown` and no metre value can be produced from it.
+ */
+export type LinearUnitScale =
+  | { readonly known: true; readonly metresPerUnit: number }
+  | { readonly known: false };
+
+export const knownUnit = (metresPerUnit: number): LinearUnitScale => ({
+  known: true,
+  metresPerUnit,
+});
+export const unknownUnit = (): LinearUnitScale => ({ known: false });
+
+/**
+ * Convert a source-unit length to metres ONLY when the unit is known. Returns
+ * `null` for an unknown unit, so the caller is forced to handle it (show source
+ * units, refuse a metric claim) rather than receiving a `Metres` it would
+ * present as if it were real metres. This is the type-level guard against the
+ * "unknown unit branded as metres" bug.
+ */
+export function toMetresIfKnown(v: SourceUnits, scale: LinearUnitScale): Metres | null {
+  return scale.known ? metres(raw(v) * scale.metresPerUnit) : null;
+}
+
 // ── Angular conversions. ─────────────────────────────────────────────────────
 export const radToDeg = (r: Radians): Degrees => degrees(raw(r) * DEG_PER_RAD);
 export const degToRad = (d: Degrees): Radians => radians(raw(d) / DEG_PER_RAD);

@@ -13,6 +13,7 @@ import {
   metres, feet, sourceUnits, degrees, sqMetres, cubicMetres, raw,
   feetToMetres, metresToFeet, sourceToMetres, usSurveyFeetToMetres,
   radToDeg, degToRad, sqMetresToSqFeet, cubicMetresToCubicFeet, UNIT_FACTORS,
+  knownUnit, unknownUnit, toMetresIfKnown,
 } from '../src/units/units';
 
 describe('branded unit conversions', () => {
@@ -52,6 +53,15 @@ describe('branded unit conversions', () => {
       expect(raw(radToDeg(degToRad(degrees(d))))).toBeCloseTo(d, 9);
     }
     expect(raw(degToRad(degrees(180)))).toBeCloseTo(Math.PI, 12);
+  });
+
+  it('converts to metres only when the unit is known, else null', () => {
+    // Known unit (feet) → real metres.
+    const known = toMetresIfKnown(sourceUnits(10), knownUnit(0.3048));
+    expect(known).not.toBeNull();
+    expect(raw(known!)).toBeCloseTo(3.048, 12);
+    // Unknown unit → null, so it can never be presented as metres.
+    expect(toMetresIfKnown(sourceUnits(10), unknownUnit())).toBeNull();
   });
 
   it('derives area and volume factors from the exact linear factor', () => {

@@ -90,10 +90,13 @@ export function demAccuracyStandards(
     const match = QL_TABLE.find((q) => density >= q.minDensity && rmse <= q.maxRmseM);
     if (match) {
       qualityLevel = match.level;
-      qualityLevelReason = `${density.toFixed(1)} pts/m² and ${rmse.toFixed(2)} m RMSEz meet ${match.level}.`;
+      // A two-metric comparison (ground density + hold-out RMSEz) against the
+      // 3DEP thresholds — NOT a 3DEP quality-level determination, which requires
+      // independent checkpoint accuracy we do not have. Word it as a comparison.
+      qualityLevelReason = `${density.toFixed(1)} pts/m² and ${rmse.toFixed(2)} m RMSEz match the ${match.level} density + vertical thresholds — an indicative comparison, not a USGS 3DEP determination.`;
     } else {
       qualityLevel = 'below-QL3';
-      qualityLevelReason = `${density.toFixed(1)} pts/m² / ${rmse.toFixed(2)} m RMSEz is below USGS QL3.`;
+      qualityLevelReason = `${density.toFixed(1)} pts/m² / ${rmse.toFixed(2)} m RMSEz is below the USGS QL3 thresholds (indicative comparison, not a 3DEP determination).`;
     }
   }
 
