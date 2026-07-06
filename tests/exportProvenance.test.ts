@@ -167,6 +167,9 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(text).toMatch(/NVA-style \(95%, hold-out\)/);
     expect(text).toMatch(/VVA-style \(95th pct, hold-out\)/);
     expect(text).toMatch(/not survey-grade/i);
+    // The evidence gate is stamped on the artifact: below required level today,
+    // so every terrain export is marked exploratory.
+    expect(text).toMatch(/Evidence\s+.*exploratory/i);
   });
 
   it('json mirrors the line values exactly', () => {
@@ -182,6 +185,7 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(j.exportReadiness).toBe('Ready');
     expect((j.accuracy as { usgsQualityLevel: string }).usgsQualityLevel).toBe('QL2');
     expect(j.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
+    expect(j.evidence).toMatch(/exploratory/i);
     expect(Array.isArray(j.warnings)).toBe(true);
   });
 

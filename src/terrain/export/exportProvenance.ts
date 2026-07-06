@@ -36,6 +36,7 @@ import {
 } from '../contour/terrainAssessment';
 import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
+import { exportGate } from '../../validation/evidenceRegistry';
 
 /** Producing software name — single source of truth for every export stamp. */
 export const SOFTWARE_NAME = 'OpenLiDARViewer';
@@ -47,6 +48,17 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  */
 export const NOT_SURVEY_GRADE_NOTE =
   'Suitability: not survey-grade unless validated against ground-truth control.';
+
+/**
+ * The evidence-gate note, DERIVED from the runtime evidence registry (not
+ * asserted): the terrain raster products are all below their required evidence
+ * level today, so `exportGate` marks every terrain export exploratory. Stamped
+ * on the artifact so a downstream reader sees the gate verdict, per the evidence
+ * model. When a product reaches its required level the note flips automatically.
+ */
+export const EVIDENCE_GATE_NOTE: string = exportGate('DTM').exploratoryOnly
+  ? 'Evidence: exploratory export. Terrain products are validated only against synthetic known-truth (pre-E4) — not cross-validated against an independent tool, and not field-validated. Do not present as a validated deliverable.'
+  : 'Evidence: meets the required validation level for this product.';
 
 /**
  * Derived terrain-complexity record (v0.5.4), present only when the run
@@ -332,6 +344,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
   }
   if (p.classScope) lines.push(kv('Class scope', p.classScope));
   lines.push(kv('Note', p.notSurveyGrade));
+  lines.push(kv('Evidence', EVIDENCE_GATE_NOTE));
   return lines;
 }
 
@@ -375,5 +388,6 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     classScope: p.classScope,
     warnings: [...p.warnings],
     notSurveyGrade: p.notSurveyGrade,
+    evidence: EVIDENCE_GATE_NOTE,
   };
 }
