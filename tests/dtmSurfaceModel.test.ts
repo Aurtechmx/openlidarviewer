@@ -58,4 +58,16 @@ describe('DtmSurfaceModel + spatial-block CV', () => {
     // Not fitted yet → no coverage anywhere.
     expect(model.predict(5, 5)).toBeNull();
   });
+
+  it('refuses to extrapolate outside the grid domain (returns null, not an edge value)', () => {
+    const model = new DtmSurfaceModel({
+      grid: { originH1: 0, originH2: 0, cols: 10, rows: 10, cellSizeM: 1 },
+    });
+    model.fit([
+      { x: 1, y: 1, z: 5 }, { x: 2, y: 2, z: 5 }, { x: 3, y: 3, z: 5 }, { x: 8, y: 8, z: 5 },
+    ]);
+    // Well outside the 10×10 grid → no prediction, rather than clamping to an edge cell.
+    expect(model.predict(100, 100)).toBeNull();
+    expect(model.predict(-50, 5)).toBeNull();
+  });
 });

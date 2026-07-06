@@ -92,6 +92,17 @@ describe('spatial-block hold-out', () => {
     expect(blocked.rmse).toBeGreaterThan(random);
   });
 
+  it('is translation-invariant: shifting all coordinates gives the same RMSE', () => {
+    const shift = (pts: XYZ[], d: number): XYZ[] => pts.map((p) => ({ x: p.x + d, y: p.y + d, z: p.z }));
+    const base = planeGrid();
+    const a = spatialBlockHoldout(base, new NearestModel(), { blockSize: 5, seed: 3 });
+    const b = spatialBlockHoldout(shift(base, 1000), new NearestModel(), { blockSize: 5, seed: 3 });
+    // Blocks anchor at the data minimum, so a global translation must not change
+    // the partition, the folds, or the reported error.
+    expect(b.rmse).toBeCloseTo(a.rmse, 9);
+    expect(b.blocks).toBe(a.blocks);
+  });
+
   it('refuses to split when everything is in one block', () => {
     const clustered: XYZ[] = [
       { x: 0.1, y: 0.1, z: 1 }, { x: 0.2, y: 0.2, z: 1 },

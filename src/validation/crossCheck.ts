@@ -44,10 +44,18 @@ export interface CrossCheckOptions {
   readonly minCells?: number;
   /**
    * Fraction of compared cells that must fall within tolerance for a soft
-   * "agree" when a few outliers exist. Default 1.0 (every cell must agree). Set
-   * below 1 only with an explicit, documented rationale.
+   * "agree" when a few outliers exist. Default 1.0 (every cell must agree).
+   * Clamped to (0, 1]: a value of 0 (which would pass every comparison) is
+   * rejected and treated as 1.0.
    */
   readonly withinTolThreshold?: number;
+  /**
+   * Allow a length mismatch between `ours` and `reference` and compare only the
+   * overlapping prefix. Default false: differently-sized grids are not aligned,
+   * so agreement over a prefix is meaningless and the verdict is forced to
+   * `disagree`. Only set this true after an explicit resample onto a common grid.
+   */
+  readonly allowPartialOverlap?: boolean;
 }
 
 export interface CrossCheckReport {
@@ -83,10 +91,24 @@ export function crossCheck(
   reference: ArrayLike<number>,
   opts: CrossCheckOptions,
 ): CrossCheckReport {
+  // Validate options up front so a permissive setting can't manufacture an
+  // AGREE: a non-finite/negative tolerance, a sub-1 minimum, or a zero
+  // agreement threshold are all rejected rather than silently accepted.
   const tol = opts.toleranceAbs;
+  if (!Number.isFinite(tol) || tol < 0) {
+    return {
+      ...pendingCrossCheck(),
+      verdict: 'insufficient',
+      toleranceAbs: Number.isFinite(tol) ? tol : 0,
+      summary: `Invalid tolerance (${tol}); cannot compute agreement.`,
+    };
+  }
   const nodata = opts.nodata;
-  const minCells = opts.minCells ?? 8;
-  const threshold = opts.withinTolThreshold ?? 1;
+  const minCells = Math.max(1, Math.floor(Number.isFinite(opts.minCells) ? (opts.minCells as number) : 8));
+  let threshold = opts.withinTolThreshold ?? 1;
+  if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) threshold = 1;
+  const allowPartial = opts.allowPartialOverlap === true;
+  const lengthMismatch = ours.length !== reference.length;
   const n = Math.min(ours.length, reference.length);
 
   let count = 0;
@@ -119,12 +141,18 @@ export function crossCheck(
   const withinTolFraction = count > 0 ? within / count : 0;
 
   let verdict: CrossCheckVerdict;
-  if (count < minCells) verdict = 'insufficient';
+  if (lengthMismatch && !allowPartial) {
+    // Differently-sized grids are not aligned; agreement over a prefix would be
+    // a false positive. Refuse to call it agreement.
+    verdict = 'disagree';
+  } else if (count < minCells) verdict = 'insufficient';
   else if (withinTolFraction >= threshold) verdict = 'agree';
   else verdict = 'disagree';
 
   const summary =
-    verdict === 'insufficient'
+    lengthMismatch && !allowPartial
+      ? `Grid length mismatch (${ours.length} vs ${reference.length}); not aligned — resample onto a common grid before comparing.`
+      : verdict === 'insufficient'
       ? `Insufficient overlap: ${count} comparable cells (< ${minCells}).`
       : `${verdict === 'agree' ? 'Agrees' : 'Disagrees'} with reference over ${count} cells: ` +
         `max |Δ| ${maxAbsDiff.toPrecision(3)}, RMSE ${rmse.toPrecision(3)}, ` +

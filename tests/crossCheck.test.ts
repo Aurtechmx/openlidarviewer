@@ -78,6 +78,39 @@ describe('crossCheck comparison maths', () => {
   });
 });
 
+describe('crossCheck cannot be tricked into a false AGREE (audit hardening)', () => {
+  it('refuses to agree on a grid length mismatch (not aligned)', () => {
+    const r = crossCheck([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8], {
+      toleranceAbs: 0.01,
+    });
+    expect(r.verdict).toBe('disagree');
+    expect(r.summary).toMatch(/mismatch/i);
+  });
+
+  it('allows a prefix comparison only with the explicit opt-in', () => {
+    const r = crossCheck([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8], {
+      toleranceAbs: 0.01,
+      allowPartialOverlap: true,
+    });
+    expect(r.verdict).toBe('agree'); // 8 aligned cells all match
+  });
+
+  it('rejects a zero agreement threshold (would pass everything)', () => {
+    const r = crossCheck([1, 2, 3, 4, 5, 6, 7, 8], [9, 9, 9, 9, 9, 9, 9, 9], {
+      toleranceAbs: 0.01,
+      withinTolThreshold: 0,
+    });
+    expect(r.verdict).not.toBe('agree'); // 0% within tol must not read as agree
+  });
+
+  it('rejects a non-finite / negative tolerance', () => {
+    expect(crossCheck([1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8], { toleranceAbs: Number.NaN }).verdict)
+      .toBe('insufficient');
+    expect(crossCheck([1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8], { toleranceAbs: -1 }).verdict)
+      .toBe('insufficient');
+  });
+});
+
 describe('reference manifest honesty', () => {
   it('ships every reference slot as pending (nothing is E4)', () => {
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);

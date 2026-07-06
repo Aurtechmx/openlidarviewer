@@ -92,6 +92,11 @@ export class DtmSurfaceModel implements SurfaceModel {
     const { cols, rows, cellSizeM, originH1, originH2 } = this.g;
     const fx = (x - originH1) / cellSizeM - 0.5;
     const fy = (y - originH2) / cellSizeM - 0.5;
+    // Refuse out-of-domain queries. The valid interpolation range in cell-centre
+    // space is [-0.5, cols-0.5] × [-0.5, rows-0.5]; beyond it the corner clamp
+    // below would extrapolate by snapping to an edge cell and quietly return a
+    // fabricated height. A query outside the grid has no prediction: return null.
+    if (fx < -0.5 || fx > cols - 0.5 || fy < -0.5 || fy > rows - 0.5) return null;
     const col0 = Math.floor(fx);
     const row0 = Math.floor(fy);
     const tx = fx - col0;

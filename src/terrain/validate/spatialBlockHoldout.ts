@@ -134,10 +134,20 @@ export function spatialBlockHoldout(
   }
 
   // Assign each point to a block key.
+  // Anchor the block grid at the data's own minimum, not at absolute zero, so
+  // the partition is translation-invariant: shifting every coordinate by a
+  // constant yields the same blocks (and the same RMSE). Zero-anchoring made the
+  // block boundaries depend on where the data sat in its CRS.
+  let minX = Infinity;
+  let minY = Infinity;
+  for (const p of finite) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+  }
   const blockOf = new Map<string, XYZ[]>();
   for (const p of finite) {
-    const bx = Math.floor(p.x / blockSize);
-    const by = Math.floor(p.y / blockSize);
+    const bx = Math.floor((p.x - minX) / blockSize);
+    const by = Math.floor((p.y - minY) / blockSize);
     const key = `${bx}:${by}`;
     const bucket = blockOf.get(key);
     if (bucket) bucket.push(p);
@@ -160,26 +170,35 @@ export function spatialBlockHoldout(
   const foldOfBlock = new Map<string, number>();
   shuffled.forEach((key, i) => foldOfBlock.set(key, i % folds));
 
-  // For each fold: train on every OTHER block, score this fold's blocks.
+  // For each fold: train on every OTHER block, score this fold's blocks. Keep
+  // residuals grouped BY BLOCK as well as flat, so the CI can use a block
+  // bootstrap (residuals within a block are spatially correlated; resampling
+  // individual residuals would ignore that and report too tight an interval).
   const residuals: number[] = [];
+  const residualsByBlock: number[][] = [];
   let uncovered = 0;
   for (let f = 0; f < folds; f++) {
     const train: XYZ[] = [];
-    const testBlocks: XYZ[] = [];
+    const testKeys: string[] = [];
     for (const key of blockKeys) {
-      const pts = blockOf.get(key) as XYZ[];
-      if (foldOfBlock.get(key) === f) testBlocks.push(...pts);
-      else train.push(...pts);
+      if (foldOfBlock.get(key) === f) testKeys.push(key);
+      else train.push(...(blockOf.get(key) as XYZ[]));
     }
-    if (train.length === 0 || testBlocks.length === 0) continue;
+    if (train.length === 0 || testKeys.length === 0) continue;
     model.fit(train);
-    for (const p of testBlocks) {
-      const pred = model.predict(p.x, p.y);
-      if (pred === null || !Number.isFinite(pred)) {
-        uncovered++;
-        continue;
+    for (const key of testKeys) {
+      const blockRes: number[] = [];
+      for (const p of blockOf.get(key) as XYZ[]) {
+        const pred = model.predict(p.x, p.y);
+        if (pred === null || !Number.isFinite(pred)) {
+          uncovered++;
+          continue;
+        }
+        const r = p.z - pred;
+        residuals.push(r);
+        blockRes.push(r);
       }
-      residuals.push(p.z - pred);
+      if (blockRes.length > 0) residualsByBlock.push(blockRes);
     }
   }
 
@@ -192,21 +211,28 @@ export function spatialBlockHoldout(
   for (const r of residuals) sumAbs += Math.abs(r);
   const mae = sumAbs / residuals.length;
 
-  // Bootstrap CI on the RMSE: resample residuals with replacement, recompute.
+  // BLOCK bootstrap for the RMSE CI: resample whole blocks with replacement and
+  // recompute RMSE over the pooled residuals. Resampling individual residuals
+  // (an iid bootstrap) would ignore the spatial correlation within a block and
+  // report an interval that is too tight; the block is the exchangeable unit.
   const B = Math.max(0, Math.floor(opts.bootstrapN ?? 1000));
   const ciLevel = opts.ciLevel ?? 0.95;
   let ciLow = rmse;
   let ciHigh = rmse;
-  if (B > 0 && residuals.length > 1) {
+  if (B > 0 && residualsByBlock.length > 1) {
+    const nb = residualsByBlock.length;
     const boot = new Array<number>(B);
-    const m = residuals.length;
     for (let b = 0; b < B; b++) {
       let s = 0;
-      for (let k = 0; k < m; k++) {
-        const r = residuals[Math.floor(rng() * m)];
-        s += r * r;
+      let cnt = 0;
+      for (let k = 0; k < nb; k++) {
+        const blk = residualsByBlock[Math.floor(rng() * nb)];
+        for (const r of blk) {
+          s += r * r;
+          cnt++;
+        }
       }
-      boot[b] = Math.sqrt(s / m);
+      boot[b] = cnt > 0 ? Math.sqrt(s / cnt) : 0;
     }
     boot.sort((a, b) => a - b);
     const alpha = (1 - ciLevel) / 2;
