@@ -1569,6 +1569,20 @@ export class AnalysePanel {
         'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
       ));
     }
+
+    // Spatially-blocked hold-out RMSE — a less optimistic accuracy estimate than
+    // the random hold-out above, since it predicts across whole withheld blocks
+    // (Phase 4). Shown with its bootstrap CI when it was computed.
+    const blocked = this._result?.blockedAccuracy;
+    if (blocked && blocked.n > 0 && Number.isFinite(blocked.rmse)) {
+      this._validationRow.append(this._hint(
+        el('div', {
+          className: 'olv-analyse-blocked',
+          text: `Blocked RMSE: ${fmtR(blocked.rmse)} m (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
+        }),
+        'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks withheld, then scored on them, so it measures how the DTM predicts across a real gap. It runs larger than the random hold-out RMSE, which is optimistic because withheld points sit among their neighbours. Still a data-quality diagnostic, not field-checkpoint accuracy.',
+      ));
+    }
   }
 
   private _renderBody(): void {
