@@ -48,7 +48,9 @@ describe('runtime evidence registry vs YAML register', () => {
 describe('export gate', () => {
   it('gates a below-required product to exploratory-only (nothing is E4+ yet)', () => {
     const dtm = exportGate('DTM'); // E3 < required E5
-    expect(dtm.allowed).toBe(true);
+    // `allowed` means "exportable as a VALIDATED artifact" — false here, since
+    // the product is only offered as an explicitly exploratory export.
+    expect(dtm.allowed).toBe(false);
     expect(dtm.exploratoryOnly).toBe(true);
     expect(dtm.reason).toMatch(/exploratory/i);
     expect(isValidatedExport('DTM')).toBe(false);
