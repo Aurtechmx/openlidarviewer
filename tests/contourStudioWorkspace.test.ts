@@ -96,21 +96,17 @@ describe('renderContourStudioWorkspace', () => {
     expect(blocked.allText()).toContain('Blocked');
   });
 
-  it('a blocked launch disables export buttons', () => {
+  it('a blocked launch marks the evidence claim Blocked and every check failed', () => {
     const c = createContourStudioController();
     const root = renderContourStudioWorkspace({ controller: c, launch: UNAVAILABLE }) as unknown as FakeEl;
-    const btns = root.byClass('olv-cs-export-btn');
-    expect(btns.length).toBeGreaterThan(0);
-    expect(btns.every((b) => b.disabled)).toBe(true);
-  });
-
-  it('an available launch fires onExport for an enabled product', () => {
-    const c = createContourStudioController();
-    const onExport = vi.fn();
-    const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE, onExport }) as unknown as FakeEl;
-    const btns = root.byClass('olv-cs-export-btn');
-    btns[0].click();
-    expect(onExport).toHaveBeenCalledTimes(1);
+    // The workspace no longer renders its own (unwired) export buttons — the
+    // single working export surface lives in the panel. A blocked launch is
+    // conveyed by the evidence claim line and blocked check rows.
+    expect(root.byClass('olv-cs-export-btn').length).toBe(0);
+    const claim = root.byClass('olv-cs-ladder-claim');
+    expect(claim.length).toBe(1);
+    expect(claim[0].allText()).toContain('Blocked');
+    expect(root.byClass('is-blocked').length).toBeGreaterThan(0);
   });
 
   it('renders the review bar rows when a review summary is provided', () => {

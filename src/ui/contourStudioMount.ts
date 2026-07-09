@@ -36,8 +36,6 @@ export interface MountContourStudioOptions {
   readonly deliverableHost: HTMLElement;
   /** Reveals `deliverableHost` — the launcher's action. */
   readonly onLaunch: () => void;
-  /** Export product chosen in the workspace (wired to real exporters in PR9–11). */
-  readonly onExport?: (product: 'pdf' | 'geojson' | 'dxf' | 'package') => void;
 }
 
 const WORKSPACE_HOST_CLASS = 'olv-cs-host';
@@ -77,6 +75,6 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
     crsProjected: opts.ctx.crsProjected,
   });
   host.append(
-    renderContourStudioWorkspace({ controller, launch: state, review, onExport: opts.onExport }),
+    renderContourStudioWorkspace({ controller, launch: state, review }),
   );
 }

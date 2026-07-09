@@ -7210,3 +7210,264 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-health-blockers-title { font-weight: 600; font-size: 11.5px; margin-top: 2px; }
 .olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .olv-health-blockers li { font-size: 11.5px; opacity: 0.9; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Contour Studio (v0.5.9) — launcher + workspace
+   Premium terrain-deliverable surface. Built on the app's design tokens so it
+   reads as a first-class panel, not raw DOM. Everything here is scoped to the
+   olv-contour-* / olv-cs-* classes emitted by contourStudioLauncher.ts and
+   contourStudioWorkspace.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.olv-analyse-contour-launcher { margin-top: 10px; }
+.olv-analyse-contour-deliverable { margin-top: 10px; display: flex; flex-direction: column; gap: 12px; }
+.olv-analyse-contour-deliverable.olv-hidden { display: none; }
+
+/* ── Launcher card ─────────────────────────────────────────────────────── */
+.olv-contour-launcher {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 14px 16px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-raised) 92%, transparent) 0%,
+                            var(--panel-raised) 100%);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+.olv-contour-launcher::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 10px; bottom: 10px;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-gradient);
+  opacity: 0.9;
+}
+.olv-contour-launcher.is-exploratory::before { background: var(--rating-preview, var(--accent)); opacity: 0.7; }
+.olv-contour-launcher.is-unavailable::before { background: var(--text-faint); opacity: 0.5; }
+.olv-contour-launcher-head { display: flex; flex-direction: column; gap: 3px; }
+.olv-contour-launcher-title {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: 0.1px;
+  color: var(--text);
+}
+.olv-contour-launcher-message { margin: 0; font-size: var(--text-sm); line-height: 1.45; color: var(--text-dim); }
+.olv-contour-launcher-reasons {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.olv-contour-launcher-reasons li {
+  position: relative;
+  padding-left: 15px;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+.olv-contour-launcher-reasons li::before {
+  content: "";
+  position: absolute;
+  left: 3px; top: 6px;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+.olv-contour-launcher-action {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 8px 16px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--on-accent);
+  background: var(--brand-gradient);
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+.olv-contour-launcher-action:hover { filter: brightness(1.08); }
+.olv-contour-launcher-action:active { transform: translateY(1px); }
+.olv-contour-launcher-action:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+.olv-contour-launcher.is-exploratory .olv-contour-launcher-action {
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--hairline-strong);
+}
+.olv-contour-launcher.is-exploratory .olv-contour-launcher-action:hover { border-color: var(--accent); }
+
+/* ── Workspace shell ───────────────────────────────────────────────────── */
+.olv-cs-host { display: block; }
+.olv-contour-studio-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 55%),
+    var(--panel-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.26);
+}
+.olv-cs-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+.olv-cs-title {
+  font-size: var(--text-xl);
+  font-weight: 680;
+  letter-spacing: 0.2px;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  width: fit-content;
+}
+.olv-cs-subtitle { margin: 0; font-size: var(--text-sm); line-height: 1.5; color: var(--text-faint); max-width: 46ch; }
+.olv-cs-body { display: flex; flex-direction: column; gap: 16px; }
+.olv-cs-section-head {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+/* Purpose cards */
+.olv-cs-purpose-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.olv-cs-purpose-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--panel-recessive);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+}
+.olv-cs-purpose-card:hover { border-color: var(--hairline-strong); }
+.olv-cs-purpose-card:active { transform: translateY(1px); }
+.olv-cs-purpose-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.olv-cs-purpose-label { display: block; font-size: var(--text-md); font-weight: 620; color: var(--text); }
+.olv-cs-purpose-summary { display: block; font-size: var(--text-xs); line-height: 1.4; color: var(--text-faint); }
+
+/* Review + settings summary — definition grids */
+.olv-cs-review-list, .olv-cs-summary-list {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  gap: 6px 14px;
+  margin: 0;
+}
+.olv-cs-review-list dt, .olv-cs-summary-list dt {
+  position: relative;
+  padding-left: 14px;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  align-self: start;
+}
+.olv-cs-review-list dd, .olv-cs-summary-list dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text);
+  align-self: start;
+}
+.olv-cs-review-label::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 5px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.olv-cs-review-label.is-high::before { background: var(--rating-production, #2fbf71); }
+.olv-cs-review-label.is-medium::before { background: var(--rating-preview, var(--accent)); }
+.olv-cs-review-label.is-low::before { background: var(--rating-caution, #d98a2b); }
+
+/* Evidence ladder */
+.olv-cs-ladder { display: flex; flex-direction: column; gap: 6px; }
+.olv-cs-ladder-row { display: flex; align-items: center; gap: 9px; }
+.olv-cs-ladder-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  background: var(--panel-recessive);
+  border: 1px solid var(--hairline);
+}
+.olv-cs-ladder-row.is-met .olv-cs-ladder-mark {
+  color: var(--on-accent);
+  background: var(--rating-production, #2fbf71);
+  border-color: transparent;
+}
+.olv-cs-ladder-label { font-size: var(--text-sm); color: var(--text-dim); }
+
+/* Launcher eyebrow label ("Terrain Products") sits above the title */
+.olv-contour-launcher-head {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+/* Evidence ladder — mark colour by state */
+.olv-cs-ladder-row.is-warn .olv-cs-ladder-mark {
+  color: var(--on-accent);
+  background: var(--rating-caution, #d98a2b);
+  border-color: transparent;
+}
+.olv-cs-ladder-row.is-blocked .olv-cs-ladder-mark {
+  color: #fff;
+  background: var(--rating-blocked, #d24b4b);
+  border-color: transparent;
+}
+
+/* Evidence claim — a statement line, never a crushed badge */
+.olv-cs-ladder-claim {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--panel-recessive);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--text-faint);
+}
+.olv-cs-ladder-claim.is-met { border-left-color: var(--rating-production, #2fbf71); }
+.olv-cs-ladder-claim.is-warn { border-left-color: var(--rating-caution, #d98a2b); }
+.olv-cs-ladder-claim.is-blocked { border-left-color: var(--rating-blocked, #d24b4b); }
+.olv-cs-ladder-claim-label {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  flex: 0 0 auto;
+}
+.olv-cs-ladder-claim-value { font-size: var(--text-sm); font-weight: 600; color: var(--text); }

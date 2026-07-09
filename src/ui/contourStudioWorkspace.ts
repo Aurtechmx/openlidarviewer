@@ -42,8 +42,6 @@ export interface ContourStudioWorkspaceOptions {
   readonly launch: ContourStudioLaunchState;
   /** The review-bar recommendations built from the analysis result (PR5). */
   readonly review?: ContourReviewSummary;
-  /** Fired when an export action is chosen (wired to real exporters in PR9–11). */
-  readonly onExport?: (product: 'pdf' | 'geojson' | 'dxf' | 'package') => void;
 }
 
 /** Render the review bar (spec §7.1): one row per recommendation with its
@@ -71,28 +69,37 @@ const PURPOSE_ORDER: readonly ContourStudioPurpose[] = [
 ];
 
 /** Evidence-ladder rows, derived HONESTLY from the launch state. */
-function ladderRows(launch: ContourStudioLaunchState): ReadonlyArray<{ label: string; mark: string }> {
-  const ok = '✓';
-  const warn = '!';
-  const blocked = '✕';
+type LadderState = 'met' | 'warn' | 'blocked';
+const LADDER_GLYPH: Record<LadderState, string> = { met: '✓', warn: '!', blocked: '✕' };
+
+/** The six evidence checks (glyph rows). The overall claim is rendered
+ *  separately as a statement line, so its sentence is never crushed into a
+ *  status badge. */
+function ladderRows(launch: ContourStudioLaunchState): ReadonlyArray<{ label: string; state: LadderState }> {
   const status = launch.status;
-  const claim =
-    status === 'available'
-      ? 'Supported (internal validation only)'
-      : status === 'exploratory'
-        ? 'Exploratory'
-        : 'Blocked';
-  const surface = status === 'unavailable' ? blocked : ok;
-  const support = status === 'available' ? ok : status === 'exploratory' ? warn : blocked;
+  const base: LadderState = status === 'unavailable' ? 'blocked' : 'met';
+  const support: LadderState = status === 'available' ? 'met' : status === 'exploratory' ? 'warn' : 'blocked';
+  const validation: LadderState = status === 'unavailable' ? 'blocked' : 'warn';
   return [
-    { label: 'Source', mark: status === 'unavailable' ? blocked : ok },
-    { label: 'Surface', mark: surface },
-    { label: 'Support', mark: support },
-    { label: 'Validation', mark: status === 'unavailable' ? blocked : warn },
-    { label: 'Contours', mark: status === 'unavailable' ? blocked : ok },
-    { label: 'Package', mark: status === 'unavailable' ? blocked : ok },
-    { label: 'Claim', mark: claim },
+    { label: 'Source', state: base },
+    { label: 'Surface', state: base },
+    { label: 'Support', state: support },
+    { label: 'Validation', state: validation },
+    { label: 'Contours', state: base },
+    { label: 'Package', state: base },
   ];
+}
+
+/** The overall evidence claim, shown as a statement line under the checks. */
+function ladderClaim(launch: ContourStudioLaunchState): { text: string; state: LadderState } {
+  switch (launch.status) {
+    case 'available':
+      return { text: 'Supported (internal validation only)', state: 'met' };
+    case 'exploratory':
+      return { text: 'Exploratory', state: 'warn' };
+    default:
+      return { text: 'Blocked', state: 'blocked' };
+  }
 }
 
 function renderPurposeCards(
@@ -141,40 +148,17 @@ function renderLadder(launch: ContourStudioLaunchState): HTMLElement {
   const wrap = el('div', { className: 'olv-cs-ladder' });
   wrap.append(el('div', { className: 'olv-cs-section-head', text: 'Evidence' }));
   for (const row of ladderRows(launch)) {
-    const r = el('div', { className: 'olv-cs-ladder-row' });
-    r.append(el('span', { className: 'olv-cs-ladder-mark', text: row.mark }));
+    const r = el('div', { className: `olv-cs-ladder-row is-${row.state}` });
+    r.append(el('span', { className: 'olv-cs-ladder-mark', text: LADDER_GLYPH[row.state] }));
     r.append(el('span', { className: 'olv-cs-ladder-label', text: row.label }));
     wrap.append(r);
   }
+  const claim = ladderClaim(launch);
+  const claimLine = el('div', { className: `olv-cs-ladder-claim is-${claim.state}` });
+  claimLine.append(el('span', { className: 'olv-cs-ladder-claim-label', text: 'Claim' }));
+  claimLine.append(el('span', { className: 'olv-cs-ladder-claim-value', text: claim.text }));
+  wrap.append(claimLine);
   return wrap;
-}
-
-function renderExportBar(
-  state: ContourStudioState,
-  launch: ContourStudioLaunchState,
-  onExport?: ContourStudioWorkspaceOptions['onExport'],
-): HTMLElement {
-  const bar = el('div', { className: 'olv-cs-export-bar' });
-  // Blocked launch → no polished deliverable is offered (§19.4).
-  const blocked = launch.status === 'unavailable';
-  const products: Array<{ id: 'pdf' | 'geojson' | 'dxf' | 'package'; label: string; on: boolean }> = [
-    { id: 'pdf', label: 'PDF', on: state.deliverable.pdf },
-    { id: 'geojson', label: 'GIS (GeoJSON)', on: state.deliverable.geojson },
-    { id: 'dxf', label: 'CAD (DXF)', on: state.deliverable.dxf },
-    { id: 'package', label: 'Complete package', on: state.deliverable.completePackage },
-  ];
-  for (const p of products) {
-    if (!p.on) continue;
-    const b = el('button', { className: 'olv-cs-export-btn', text: p.label });
-    b.type = 'button';
-    b.disabled = blocked;
-    if (!blocked && onExport) b.addEventListener('click', () => onExport(p.id));
-    bar.append(b);
-  }
-  if (blocked) {
-    bar.append(el('p', { className: 'olv-cs-export-note', text: 'Exports are unavailable until the blocking reasons are resolved.' }));
-  }
-  return bar;
 }
 
 /**
@@ -185,7 +169,7 @@ function renderExportBar(
 export function renderContourStudioWorkspace(
   opts: ContourStudioWorkspaceOptions,
 ): HTMLElement {
-  const { controller, launch, review, onExport } = opts;
+  const { controller, launch, review } = opts;
   const root = el('div', { className: 'olv-contour-studio-workspace' });
   root.setAttribute('role', 'region');
   root.setAttribute('aria-label', 'Contour Studio');
@@ -214,7 +198,6 @@ export function renderContourStudioWorkspace(
     body.append(
       renderSettingsSummary(state),
       renderLadder(launch),
-      renderExportBar(state, launch, onExport),
     );
   };
 
