@@ -2,6 +2,38 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.8] - 2026-07-08
+
+Architectural and scientific-provenance hardening. This release starts a staged
+cleanup that ties every output to the exact build that produced it and stops the
+viewer from asserting units it does not know.
+
+### Added
+
+- **Build identity.** Each build now carries one identity resolved at build
+  time: version, git commit, a dirty-tree flag, build time, Node version and
+  channel. It is stamped into every terrain export's provenance (text and JSON)
+  and into the report PDF's creator metadata, so an artifact records which build
+  made it, not just which release. When git is unavailable the commit is
+  reported as `unknown` rather than fabricated, and the build time honours
+  `SOURCE_DATE_EPOCH` for reproducible builds.
+- **Layer-boundary lint.** A CI check fails the build if a science or core
+  module (`terrain`, `validation`, `analysis`, `science`) imports the UI layer
+  or three.js, keeping those modules pure and worker-safe.
+- **Method registry.** A single catalogue of the scientific methods the viewer
+  runs, each with a stable `id@version`, so provenance and reports can name the
+  exact algorithm and revision behind a number.
+- **Architecture cleanup plan.** `docs/architecture/v0.5.8-cleanup-plan.md`
+  records the staged program and its current state.
+
+### Fixed
+
+- **Inspector units.** The picked-point card showed every projected and every
+  local or unknown-CRS coordinate with a metre suffix. A foot-based survey
+  therefore read as metres, and an unknown-unit scan asserted metres it never
+  knew. Axes now follow the CRS's own linear unit (metre, foot), and an unknown
+  unit shows no suffix instead of claiming metres.
+
 ## [0.5.7] - 2026-07-05
 
 Object and E57 capture honesty, plus an explicit evidence model. v0.5.7 makes
