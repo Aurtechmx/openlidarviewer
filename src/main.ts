@@ -11,6 +11,7 @@ import './style.css';
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import type { CameraPose } from './render/NavController';
+import { isMobileDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
@@ -998,9 +999,9 @@ function showLassoToast(
   );
 }
 
-/** True on phone-width viewports — drives the touch hint and point budget. */
+/** Input-aware mobile check — drives the touch hint and the tighter point budget. */
 function isPhone(): boolean {
-  return window.matchMedia('(max-width: 767px)').matches;
+  return isMobileDevice();
 }
 
 // The previously-loaded scan's label, so a 2nd drop's instant answer can name
@@ -4143,9 +4144,11 @@ void viewerLoaded.then(() => {
       );
     };
 
+    // Layout swap stays keyed to the WIDTH breakpoint so JS layout and the CSS
+    // `@media` rules never disagree; input-aware detection drives behaviour only.
     const mobileMql =
       typeof window.matchMedia === 'function'
-        ? window.matchMedia('(max-width: 767px)')
+        ? window.matchMedia(MOBILE_LAYOUT_QUERY)
         : null;
     let mobileApplied = false;
     const applyMobileSheet = (): void => {
