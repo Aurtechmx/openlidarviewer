@@ -8,8 +8,23 @@ const pkg = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
 ) as { version: string };
 
+// A FIXED build identity for tests: the real Vite build resolves this from git +
+// wall clock (see resolveBuildIdentity in vite.config.ts), but tests need it
+// deterministic so provenance assertions don't chase a moving timestamp/commit.
+const TEST_BUILD_IDENTITY = {
+  version: pkg.version,
+  commit: 'testtest',
+  dirty: false,
+  builtAt: '1970-01-01T00:00:00.000Z',
+  node: process.version,
+  channel: 'test',
+};
+
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_IDENTITY__: JSON.stringify(TEST_BUILD_IDENTITY),
+  },
   test: {
     globals: true,
     environment: 'node',

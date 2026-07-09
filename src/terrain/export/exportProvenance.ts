@@ -37,6 +37,7 @@ import {
 import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
 import { exportGate } from '../../validation/evidenceRegistry';
+import { buildIdentityProvenance } from '../../build/buildIdentity';
 
 /** Producing software name — single source of truth for every export stamp. */
 export const SOFTWARE_NAME = 'OpenLiDARViewer';
@@ -119,6 +120,12 @@ export interface ExportProvenance {
   readonly software: string;
   /** Producing software version (the `__APP_VERSION__` Vite stamps). */
   readonly softwareVersion: string;
+  /**
+   * Exact build identity that produced the artifact — version, commit, channel
+   * and build time (from {@link buildIdentityProvenance}). Records which BUILD,
+   * not just which release, so two builds of the same version stay traceable.
+   */
+  readonly build: string;
   /** Terrain metric version (e.g. 'v0.4.1'). */
   readonly metricVersion: string;
   /** ISO 8601 generation timestamp. */
@@ -256,6 +263,7 @@ export function buildExportProvenance(
   return {
     software: SOFTWARE_NAME,
     softwareVersion: opts.softwareVersion ?? 'unknown',
+    build: buildIdentityProvenance(),
     metricVersion: opts.metricVersion ?? 'unknown',
     generated: toIso(opts.generatedAt),
     source: opts.basename ?? null,
@@ -299,6 +307,7 @@ function kv(key: string, value: string): string {
 export function provenanceLines(p: ExportProvenance): string[] {
   const lines: string[] = [
     kv('Software', `${p.software} ${p.softwareVersion}`),
+    kv('Build', p.build),
     kv('Metric version', p.metricVersion),
     kv('Generated', p.generated),
     kv('Source', p.source ?? 'unknown'),
@@ -357,6 +366,7 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
   return {
     software: p.software,
     softwareVersion: p.softwareVersion,
+    build: p.build,
     metricVersion: p.metricVersion,
     generated: p.generated,
     source: p.source,

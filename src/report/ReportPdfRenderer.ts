@@ -31,6 +31,7 @@ import {
   type ParsedColor,
   type ReportThemePalette,
 } from './ReportBranding';
+import { buildIdentityLabel } from '../build/buildIdentity';
 import { describeAnnotationGroups } from '../render/annotate/annotationClustering';
 import type { AnnotationType } from '../render/annotate/types';
 import type { FindingTier, ReportFinding, ReportInspectionSummary } from './ReportFindings';
@@ -110,7 +111,7 @@ export async function renderReportPdf(
   doc.setTitle(inputs.cover.title, { showInWindowTitleBar: true });
   doc.setLanguage('en-US');
   doc.setAuthor(inputs.branding.author ?? 'OpenLiDARViewer');
-  doc.setCreator(`OpenLiDARViewer Report Engine v${__APP_VERSION__}`);
+  doc.setCreator(`OpenLiDARViewer Report Engine v${buildIdentityLabel()}`);
   doc.setProducer('pdf-lib (lazy chunk)');
   doc.setCreationDate(new Date());
 

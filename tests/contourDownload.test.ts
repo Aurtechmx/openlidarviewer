@@ -9,7 +9,8 @@ import type { ContourFeature, ContourFeatureModel } from '../src/terrain/contour
 import type { ExportProvenance } from '../src/terrain/export/exportProvenance';
 
 const PROV: ExportProvenance = {
-  software: 'OpenLiDARViewer', softwareVersion: '9.9.9', metricVersion: 'v0.4.1',
+  software: 'OpenLiDARViewer', softwareVersion: '9.9.9',
+  build: '9.9.9 (testtest) · test · built 1970-01-01T00:00:00.000Z', metricVersion: 'v0.4.1',
   generated: '2026-06-05T00:00:00.000Z', source: 'site',
   horizontalCrs: 'EPSG:32610', crsKnown: true, verticalDatum: 'EPSG:5703', datumKnown: true,
   coverageMode: 'full', contourIntervalM: 1, contourStyle: 'smooth', contourStyleLabel: 'Smooth',
