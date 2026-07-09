@@ -10,11 +10,19 @@ import {
 } from '../src/terrain/validate/verticalAccuracy';
 import type { ValidationReport } from '../src/terrain/validate/ValidationReport';
 
-function report(rmse: number, p95: number, sampleSize = 100): ValidationReport {
+function report(
+  rmse: number,
+  p95: number,
+  sampleSize = 100,
+  bias = 0,
+  nmad = Number.NaN,
+): ValidationReport {
   return {
     rmse,
     mae: rmse * 0.8,
     p95,
+    bias,
+    nmad,
     sampleSize,
     uncoveredCount: 0,
     holdoutFraction: 0.2,
@@ -32,6 +40,16 @@ describe('computeVerticalAccuracy', () => {
     expect(a.nva95).toBeCloseTo(0.5 * NVA_95_MULTIPLIER, 6);
     expect(a.vva95).toBe(1.1);
     expect(a.standard).toBe('ASPRS 2014');
+  });
+
+  it('carries signed bias + NMAD through, and formats them with direction', () => {
+    const a = computeVerticalAccuracy(report(0.5, 1.1, 100, -0.08, 0.3));
+    expect(a.bias).toBe(-0.08);
+    expect(a.nmad).toBe(0.3);
+    const lines = formatVerticalAccuracy(report(0.5, 1.1, 100, -0.08, 0.3)).join('\n');
+    // Negative bias ⇒ surface reads high; NMAD line present.
+    expect(lines).toMatch(/Systematic bias: -0\.08 m.*reads high/);
+    expect(lines).toMatch(/NMAD \(robust spread, hold-out\): 0\.30 m/);
   });
 
   it('reports NaN figures when RMSE is not measurable', () => {

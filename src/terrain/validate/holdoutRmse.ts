@@ -213,6 +213,11 @@ export function holdoutValidateDtm(
 
   // Residuals at held-out points.
   const allAbs: number[] = [];
+  // SIGNED residuals too — so we can report systematic bias (mean signed error)
+  // and robust spread (NMAD), which absolute-only stats hide: a surface sitting
+  // uniformly 8 cm low has a large bias but its RMSE alone looks like noise.
+  const allSigned: number[] = [];
+  let sumSigned = 0;
   let sumSq = 0;
   let sumAbs = 0;
   let covered = 0;
@@ -269,6 +274,8 @@ export function holdoutValidateDtm(
     const abs = Math.abs(residual);
     const sq = residual * residual;
     allAbs.push(abs);
+    allSigned.push(residual);
+    sumSigned += residual;
     sumSq += sq;
     sumAbs += abs;
     covered++;
@@ -337,10 +344,20 @@ export function holdoutValidateDtm(
     };
   });
 
+  // Signed BIAS: the mean signed residual. A non-zero bias is a systematic
+  // vertical offset (the surface sits high or low), which RMSE/MAE cannot show.
+  const bias = sumSigned / covered;
+  // NMAD: 1.4826 × median(|residual − median(residual)|). A robust, outlier-
+  // resistant spread — the ASPRS-recommended companion to RMSE for LiDAR error,
+  // and the honest number to trust when residuals are non-normal.
+  const nmad = normalizedMedianAbsDeviation(allSigned);
+
   return {
     rmse,
     mae,
     p95,
+    bias,
+    nmad,
     sampleSize: covered,
     uncoveredCount: uncovered,
     holdoutFraction,
@@ -354,11 +371,27 @@ export function holdoutValidateDtm(
   };
 }
 
+/**
+ * Normalised median absolute deviation: 1.4826 × median(|x − median(x)|). The
+ * constant makes NMAD a consistent estimator of the standard deviation for
+ * normally-distributed data, while staying robust to the outliers (blunders,
+ * vegetation hits) that inflate RMSE. Returns NaN for an empty sample.
+ */
+function normalizedMedianAbsDeviation(values: readonly number[]): number {
+  if (values.length === 0) return Number.NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const med = quantileSorted(sorted, 0.5);
+  const dev = values.map((v) => Math.abs(v - med)).sort((a, b) => a - b);
+  return 1.4826 * quantileSorted(dev, 0.5);
+}
+
 function emptyReport(holdoutFraction: number, warnings: string[]): ValidationReport {
   return {
     rmse: Number.NaN,
     mae: Number.NaN,
     p95: Number.NaN,
+    bias: Number.NaN,
+    nmad: Number.NaN,
     sampleSize: 0,
     uncoveredCount: 0,
     holdoutFraction,

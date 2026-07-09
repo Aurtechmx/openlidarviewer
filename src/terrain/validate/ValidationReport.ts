@@ -75,6 +75,17 @@ export interface ValidationReport {
   readonly mae: number;
   /** 95th-percentile absolute residual. */
   readonly p95: number;
+  /**
+   * Mean SIGNED residual — the systematic vertical bias. Positive ⇒ the held-out
+   * points sit above the surface (the surface reads low), negative ⇒ the reverse.
+   * NaN when count 0.
+   */
+  readonly bias: number;
+  /**
+   * Normalised median absolute deviation (1.4826 × MAD) — a robust, outlier-
+   * resistant estimate of the vertical error spread. NaN when count 0.
+   */
+  readonly nmad: number;
   /** Held-out points that landed in a covered cell (used in the stats). */
   readonly sampleSize: number;
   /** Held-out points whose cell had no training data (could not predict). */
