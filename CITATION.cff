@@ -8,8 +8,8 @@ authors:
     family-names: "Urias"
     affiliation: "Aurtech"
 
-version: 0.5.8
-date-released: "2026-07-08"
+version: 0.5.9
+date-released: "2026-07-09"
 license: MIT
 repository-code: "https://github.com/Aurtechmx/openlidarviewer"
 

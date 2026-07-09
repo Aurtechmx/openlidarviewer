@@ -2,6 +2,25 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.9] - 2026-07-09
+
+Contour Studio groundwork plus a batch of scientific-correctness and honesty fixes carried over from the roadmap. This release begins the staged Contour Studio program (a post-analysis terrain-deliverable workflow) and lands validation, unit, evidence-gate, and registration fixes that stand on their own.
+
+### Added
+
+- **Contour Studio launch-state core.** A pure, tested state machine (`src/terrain/contourStudio/contourStudioLaunchState.ts`) that decides whether the deliverable launcher is hidden, disabled, exploratory, or available from explicit analysis prerequisites. Hard blockers (no surface, no ground, mostly-unsupported area) outrank soft caps (unknown vertical units, geographic CRS, streaming, no interval, sparse support). Foundation for the launcher; not yet wired into the UI.
+- **Trimmed ICP registration.** Robust correspondence trimming with a median-based warm-start, so change-detection alignment resists gross blunders and scattered outliers instead of collapsing. Diagnostics (inlier fraction over the whole cloud, kept-set RMS) are reported honestly.
+
+### Fixed
+
+- **Optimistic hold-out validation.** Ground classification can now be re-run per fold with held-out points excluded, removing the classify-before-split optimism when a classifier is injected; the disclosure warning is conditional and accurate. (Shipped terrain products still run the full-cloud path until the analyser passes the hook; disclosed.)
+- **Self-validating confidence calibration.** The reported calibration quality is now computed by deterministic K-fold cross-fitting, so no sample is scored by a calibrator trained on it. Out-of-fold reliability and Brier score are exposed.
+- **Unit overclaiming on elevation.** Picked-point elevation no longer prints metres on a foot vertical datum or unknown units, and space reports no longer say "metres (assumed)" on unknown-scale data. Both route through the typed-unit helpers.
+
+### Changed
+
+- **Evidence gate coverage.** Measurements CSV, the integrity report, and the map-sheet PDF now route their claim status through the one central evidence gate rather than exporting ungated. The `exportGate` / `isValidatedExport` API is unchanged.
+
 ## [0.5.8] - 2026-07-08
 
 Architectural and scientific-provenance hardening. This release starts a staged
