@@ -8,17 +8,25 @@
  */
 
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { CrsLinearUnit } from '../io/crs';
 
 /**
  * Labels + per-axis unit suffixes for the inspector's World coordinate group.
  *
  * The headings/labels switch on the CRS kind — Easting/Northing for a
  * projected CRS, Longitude/Latitude for a geographic one, plain X/Y/Z for
- * local/unknown. The UNIT suffixes matter as much as the labels: a geographic
- * dataset's X/Y are DEGREES, not metres, so rendering them with " m" (as the
- * card did pre-fix) was a label-vs-value drift — the World group printed
- * "Longitude: -122.4 m". Z stays metric (elevation) in every frame. Pure +
- * DOM-free so it lives next to `splitPointCoords` and is unit-tested here
+ * local/unknown. The UNIT suffixes matter as much as the labels, and there are
+ * two honesty failures the suffix logic must avoid:
+ *   - a geographic dataset's X/Y are DEGREES, not metres (rendering them " m"
+ *     printed "Longitude: -122.4 m"); and
+ *   - the axis unit of a PROJECTED CRS is its own linear unit — a foot-based
+ *     survey's Easting/Northing are FEET. The card used to hardcode " m" for
+ *     every projected and every local/unknown scan, so a US-survey-foot survey
+ *     read as metres, and an unknown-unit scan asserted metres it never knew —
+ *     directly contradicting the inspector's own "shown in source units only"
+ *     note. When the linear unit is unknown we now assert NO suffix rather than
+ *     fabricate metres.
+ * Pure + DOM-free so it lives next to `splitPointCoords` and is unit-tested here
  * rather than dragging the three.js-bound `InspectTool` into Node.
  */
 export interface WorldCoordLabels {
@@ -31,10 +39,29 @@ export interface WorldCoordLabels {
   readonly zUnit: string;
 }
 
+/**
+ * Axis unit suffix for a CRS's linear unit. HONESTY: an unknown linear unit
+ * yields NO suffix — the coordinate is shown in bare source units, never
+ * asserted as metres.
+ */
+function linearAxisSuffix(unit: CrsLinearUnit): string {
+  switch (unit) {
+    case 'metre':
+      return ' m';
+    case 'foot':
+    case 'us-survey-foot':
+      return ' ft';
+    case 'unknown':
+      return '';
+  }
+}
+
 /** Build the World-group labels + units for a resolved CRS (or undefined). */
 export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels {
+  // No CRS, local, or unknown: the coordinates are in the file's own units,
+  // whose scale we do NOT know — assert no unit rather than fabricate metres.
   if (!crs || crs.kind === 'local' || crs.kind === 'unknown') {
-    return { heading: 'World', x: 'X', y: 'Y', z: 'Z', xUnit: ' m', yUnit: ' m', zUnit: ' m' };
+    return { heading: 'World', x: 'X', y: 'Y', z: 'Z', xUnit: '', yUnit: '', zUnit: '' };
   }
   if (crs.kind === 'geographic') {
     return {
@@ -47,14 +74,19 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
       zUnit: ' m',
     };
   }
+  // Projected: the axis unit is the CRS's own linear unit, so a foot-based CRS
+  // shows Easting/Northing/Elevation in feet, not metres. Z follows the same
+  // horizontal linear unit; a rare CRS with a DISTINCT vertical unit is a known
+  // follow-up (the vast majority share one linear unit across all axes).
+  const suffix = linearAxisSuffix(crs.linearUnit);
   return {
     heading: `World (${crs.name})`,
     x: 'Easting',
     y: 'Northing',
     z: 'Elevation',
-    xUnit: ' m',
-    yUnit: ' m',
-    zUnit: ' m',
+    xUnit: suffix,
+    yUnit: suffix,
+    zUnit: suffix,
   };
 }
 
