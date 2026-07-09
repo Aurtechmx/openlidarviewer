@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildSpaceReportContent } from '../src/terrain/space/spaceReportLayout';
+import { knownUnit, unknownUnit } from '../src/units/units';
 import { spaceMetrics } from '../src/terrain/spaceMetrics';
 import { objectMetrics } from '../src/terrain/objectMetrics';
 import { classifyScanShape } from '../src/terrain/scanShape';
@@ -122,7 +123,52 @@ describe('buildSpaceReportContent — graceful', () => {
     expect(content.provenance.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
     expect(content.caveats).toEqual([]);
   });
+});
 
+// ── Source-unit honesty on the provenance "Units" line ──────────────────────
+// The report used to label EVERY factor-of-1 scan "metres (assumed)", so an
+// unknown / local scan (factor defaults to 1) asserted metres it never knew.
+// The scale is now discriminated: unknown units make NO metre claim; a known
+// metre CRS still says metres; a known foot CRS says feet.
+describe('buildSpaceReportContent — source-unit honesty', () => {
+  type UnitOpts = { linearUnit?: ReturnType<typeof knownUnit>; unitToMetres?: number };
+  const unitsOf = (opts: UnitOpts): string =>
+    buildSpaceReportContent({ space: null, name: 'Scan', ...opts }).provenance.units;
+
+  it('an UNKNOWN unit scale makes no metre claim', () => {
+    const u = unitsOf({ linearUnit: unknownUnit() });
+    expect(u).toBe('source units (scale unverified — not asserted as metres)');
+    // Never the old false claim, and never a bare positive "metres" assertion.
+    expect(u).not.toContain('metres (assumed)');
+    expect(u).not.toMatch(/^metres\b/);
+    // The provenance footer line must not smuggle the metre claim back either.
+    const lines = buildSpaceReportContent({ space: null, linearUnit: unknownUnit() }).provenanceLines;
+    expect(lines.join(' ')).not.toContain('metres (assumed)');
+  });
+
+  it('a KNOWN metre CRS still shows metres', () => {
+    expect(unitsOf({ linearUnit: knownUnit(1) })).toBe('metres');
+  });
+
+  it('a KNOWN foot CRS shows feet, converted to metres', () => {
+    expect(unitsOf({ linearUnit: knownUnit(0.3048) })).toBe('feet (source) → metres');
+    expect(unitsOf({ linearUnit: knownUnit(1200 / 3937) })).toBe('feet (source) → metres');
+  });
+
+  it('the legacy factor-of-1 path no longer asserts "metres (assumed)"', () => {
+    // This is the exact shape the production caller passes for an unknown /
+    // local scan (crsService factor defaults to 1).
+    const u = unitsOf({ unitToMetres: 1 });
+    expect(u).not.toContain('metres (assumed)');
+    expect(u).toBe('source units (scale unverified — not asserted as metres)');
+  });
+
+  it('the legacy numeric path still reports a known foot factor honestly', () => {
+    expect(unitsOf({ unitToMetres: 0.3048 })).toBe('feet (source) → metres');
+  });
+});
+
+describe('buildSpaceReportContent — graceful (ceiling)', () => {
   it('handles a missing ceiling height (null) without throwing', () => {
     // An open object scan presented as interior: ceilingHeightM can be null.
     const pos = cubeShell();

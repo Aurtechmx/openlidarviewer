@@ -21,6 +21,12 @@ import { metresToFeet, sqMetresToSqFeet, cubicMetresToCubicFeet } from '../space
 import type { ObjectMetrics } from '../objectMetrics';
 import { SOFTWARE_NAME, NOT_SURVEY_GRADE_NOTE } from '../export/exportProvenance';
 import { evidenceNote } from '../../validation/exportEvidenceNote';
+import {
+  type LinearUnitScale,
+  knownUnit,
+  unknownUnit,
+  UNIT_FACTORS,
+} from '../../units/units';
 
 /** One label/value line in a report section. */
 export interface ReportRow {
@@ -74,8 +80,22 @@ export interface SpaceReportInput {
   readonly metricVersion?: string | null;
   /** Generation timestamp — Date or ISO string. */
   readonly generatedAt?: Date | string | null;
-  /** Source-unit→metre factor (from the CRS). 1 ⇒ metres assumed. */
+  /**
+   * Legacy source-unit→metre factor (from the CRS). AMBIGUOUS at exactly 1: a
+   * genuine metre CRS and an unknown / local scan BOTH arrive as 1, so this
+   * number alone cannot honestly assert metres. Prefer {@link linearUnit}, which
+   * carries the known/unknown distinction; a bare factor of 1 is read as an
+   * UNKNOWN scale (no metre claim) rather than the old "metres (assumed)".
+   */
   readonly unitToMetres?: number;
+  /**
+   * The source frame's linear-unit scale as a discriminated union, so an unknown
+   * unit can never be silently labelled metres. When supplied this WINS over
+   * {@link unitToMetres}: `knownUnit(1)` prints "metres", a foot factor prints
+   * the feet→metres conversion, and `unknownUnit()` states the coordinates are
+   * in the file's own (unverified) units.
+   */
+  readonly linearUnit?: LinearUnitScale;
 }
 
 const DASH = '—';
@@ -128,8 +148,45 @@ function captureSection(q: SpaceMetrics['quality']): ReportSection {
   };
 }
 
-function unitsLabel(unitToMetres: number): string {
-  return unitToMetres === 1 ? 'metres (assumed)' : `source units x ${unitToMetres} -> metres`;
+/** True when a metres-per-unit factor is an international or US-survey foot. */
+function isFootFactor(metresPerUnit: number): boolean {
+  return (
+    Math.abs(metresPerUnit - UNIT_FACTORS.M_PER_FT) < 1e-6 ||
+    Math.abs(metresPerUnit - UNIT_FACTORS.M_PER_US_FT) < 1e-6
+  );
+}
+
+/**
+ * HONEST source-unit label for the provenance block. An UNKNOWN scale must never
+ * be printed as metres — it states the coordinates are in the file's own,
+ * unverified units. A KNOWN metre CRS prints "metres"; a known foot CRS prints
+ * the feet→metres conversion; any other known factor prints the explicit factor.
+ */
+function unitsLabel(scale: LinearUnitScale): string {
+  if (!scale.known) return 'source units (scale unverified — not asserted as metres)';
+  const f = scale.metresPerUnit;
+  if (f === 1) return 'metres';
+  if (isFootFactor(f)) return 'feet (source) → metres';
+  return `source units × ${f} → metres`;
+}
+
+/**
+ * Bridge the legacy bare `unitToMetres` number to a discriminated scale. A
+ * factor of exactly 1 is AMBIGUOUS (a genuine metre CRS and an unknown / local
+ * scan both arrive as 1), so it is read as UNKNOWN — the conservative, honest
+ * reading that never fabricates a metre claim. A finite non-unit factor was
+ * supplied deliberately from a KNOWN linear unit, so it is a known scale.
+ */
+function scaleFromFactor(unitToMetres: number | undefined): LinearUnitScale {
+  if (
+    unitToMetres != null &&
+    Number.isFinite(unitToMetres) &&
+    unitToMetres > 0 &&
+    unitToMetres !== 1
+  ) {
+    return knownUnit(unitToMetres);
+  }
+  return unknownUnit();
 }
 
 /**
@@ -205,7 +262,9 @@ function assemble(
   sections: ReportSection[],
 ): SpaceReportContent {
   const name = (input.name ?? '').trim() || 'Untitled scan';
-  const u2m = input.unitToMetres && input.unitToMetres > 0 ? input.unitToMetres : 1;
+  // Prefer the discriminated scale; fall back to the legacy numeric factor,
+  // which reads an ambiguous factor-of-1 as UNKNOWN rather than asserting metres.
+  const scale: LinearUnitScale = input.linearUnit ?? scaleFromFactor(input.unitToMetres);
   const provenance: SpaceReportProvenance = {
     software: SOFTWARE_NAME,
     softwareVersion: input.softwareVersion ?? 'unknown',
@@ -213,7 +272,7 @@ function assemble(
     generated: toIso(input.generatedAt),
     source: input.name ?? null,
     scanType,
-    units: unitsLabel(u2m),
+    units: unitsLabel(scale),
     sampledPointCount: space?.quality.sampledPointCount ?? 0,
     sourcePointCount: space?.quality.sourcePointCount ?? 0,
     notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
