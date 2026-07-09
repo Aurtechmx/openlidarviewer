@@ -1,14 +1,16 @@
 /**
  * contourStudioMount.ts
  *
- * The lazy entry point for the Contour Studio launcher (v0.5.9 §26.1: Contour
- * Studio must sit behind a lazy boundary, not in the eager startup shell).
+ * The lazy entry point for Contour Studio (v0.5.9 §26.1: Contour Studio must sit
+ * behind a lazy boundary, not in the eager startup shell).
  *
- * This module bundles the result→state adapter and the launcher DOM builder so
- * they load as a single split chunk the first time an analysis completes, never
- * as part of the initial payload. It is reached only through
- * `loadContourStudioMount()` in `lazyChunks.ts` (kept out of the live
- * source-transform), so the dynamic-import specifier stays statically analysable.
+ * This module bundles the result→state adapter, the launcher, the state
+ * controller, and the workspace shell so they load as one split chunk the first
+ * time an analysis completes, never as part of the initial payload. It is
+ * reached only through `loadContourStudioMount()` in `lazyChunks.ts` (kept out
+ * of the live source-transform), so the dynamic-import specifier stays
+ * statically analysable. All DOM construction lives here rather than in the eager
+ * panel, keeping the shell's contribution to the launcher near zero.
  */
 
 import {
@@ -16,20 +18,52 @@ import {
   type LaunchFrameContext,
 } from '../terrain/contourStudio/contourStudioLaunchStateFromResult';
 import { renderContourStudioLauncher } from './contourStudioLauncher';
+import { renderContourStudioWorkspace } from './contourStudioWorkspace';
+import { createContourStudioController } from '../terrain/contourStudio/contourStudioController';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 
 export type { LaunchFrameContext };
 
+export interface MountContourStudioOptions {
+  readonly result: AnalyseContoursResult;
+  readonly ctx: LaunchFrameContext;
+  /** Where the launcher card is rendered (the panel's launcher slot). */
+  readonly launcherHost: HTMLElement;
+  /** The gated container the workspace shell is rendered into (above exports). */
+  readonly deliverableHost: HTMLElement;
+  /** Reveals `deliverableHost` — the launcher's action. */
+  readonly onLaunch: () => void;
+  /** Export product chosen in the workspace (wired to real exporters in PR9–11). */
+  readonly onExport?: (product: 'pdf' | 'geojson' | 'dxf' | 'package') => void;
+}
+
+const WORKSPACE_HOST_CLASS = 'olv-cs-host';
+
 /**
- * Compute the launch state from a result + frame context and render the
- * launcher element, or `null` when the state is not visible (before analysis).
- * `onLaunch` reveals the gated contour export controls.
+ * Compute the launch state and render the launcher + workspace shell into the
+ * panel's hosts. Idempotent: re-mounting clears the launcher slot and reuses a
+ * single workspace host inside the deliverable container, so repeated analyses
+ * never stack duplicate studios.
  */
-export function buildContourLauncher(
-  result: AnalyseContoursResult,
-  ctx: LaunchFrameContext,
-  onLaunch: () => void,
-): HTMLElement | null {
-  const state = contourStudioLaunchStateFromResult(result, ctx);
-  return renderContourStudioLauncher(state, { onLaunch });
+export function mountContourStudio(opts: MountContourStudioOptions): void {
+  const state = contourStudioLaunchStateFromResult(opts.result, opts.ctx);
+
+  // Launcher card.
+  opts.launcherHost.replaceChildren();
+  const launcher = renderContourStudioLauncher(state, { onLaunch: opts.onLaunch });
+  if (launcher) opts.launcherHost.append(launcher);
+
+  // Workspace shell — a single reusable host at the top of the deliverable
+  // container, above the existing export controls.
+  let host = opts.deliverableHost.querySelector(`.${WORKSPACE_HOST_CLASS}`);
+  if (!host) {
+    host = document.createElement('div');
+    host.className = WORKSPACE_HOST_CLASS;
+    opts.deliverableHost.prepend(host);
+  }
+  host.replaceChildren();
+  const controller = createContourStudioController();
+  host.append(
+    renderContourStudioWorkspace({ controller, launch: state, onExport: opts.onExport }),
+  );
 }

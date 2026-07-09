@@ -529,10 +529,13 @@ export class AnalysePanel {
       .then((m) => {
         // Drop if a newer frame/result landed while the chunk loaded.
         if (token !== this._contourToken || this._result !== result) return;
-        const card = m.buildContourLauncher(result, ctx, () =>
-          this._contourDeliverable.classList.remove('olv-hidden'),
-        );
-        if (card) this._contourLauncher.append(card);
+        m.mountContourStudio({
+          result,
+          ctx,
+          launcherHost: this._contourLauncher,
+          deliverableHost: this._contourDeliverable,
+          onLaunch: () => this._contourDeliverable.classList.remove('olv-hidden'),
+        });
       })
       .catch(() => {
         /* The launcher is an optional post-analysis surface — if its chunk
