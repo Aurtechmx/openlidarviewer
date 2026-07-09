@@ -20,50 +20,14 @@
  * Pure data, deterministic. No DOM, no I/O.
  */
 
-import {
-  exportDecision,
-  type EvidenceLevel,
-  type ExportDecision,
-} from './evidenceLevel';
+import { exportDecision, type ExportDecision } from './evidenceLevel';
+// The registry is GENERATED from docs/validation/claim-register.yaml by
+// scripts/generate-claim-registry.mjs (`npm run gen:claim-registry`), so it can
+// never be hand-mirrored out of sync. lint:claim-register fails on any drift.
+import { EVIDENCE_REGISTRY, type RegistryEntry } from './claimRegistry.generated';
 
-export interface RegistryEntry {
-  readonly current: EvidenceLevel;
-  readonly required: EvidenceLevel;
-  readonly exportAllowed: boolean;
-}
-
-/**
- * Mirror of `claim-register.yaml`. Keep in sync — the cross-check test fails if
- * this drifts from the YAML. Nothing here is E4+, so every product below its
- * required level gates to exploratory today.
- */
-export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
-  'MEAS-DISTANCE': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'MEAS-AREA': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'MEAS-HEIGHT': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'MEAS-ANGLE': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'MEAS-PROFILE': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
-  'VOL-POINT-SAMPLE': { current: 'E1_UNIT_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'VOL-STOCKPILE': { current: 'E1_UNIT_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'GROUND-FILTER': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'DTM': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'DSM': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
-  'CHM': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
-  'CONTOURS': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
-  'SLOPE-RASTER': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
-  'HILLSHADE': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
-  'VRM-TPI': { current: 'E1_UNIT_VERIFIED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
-  'HOLDOUT-RMSE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'NVA-VVA': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'QUALITY-LEVEL': { current: 'E1_UNIT_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'CONFIDENCE-OVERLAY': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'EPOCH-ALIGN': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'CHANGE-RASTER': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'CHANGE-VOLUME': { current: 'E1_UNIT_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'UNCERTAINTY-BAND': { current: 'E1_UNIT_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'REPORT-DIGEST': { current: 'E1_UNIT_VERIFIED', required: 'E1_UNIT_VERIFIED', exportAllowed: true },
-  'PROVENANCE-INFERENCE': { current: 'E1_UNIT_VERIFIED', required: 'E1_UNIT_VERIFIED', exportAllowed: true },
-};
+export { EVIDENCE_REGISTRY };
+export type { RegistryEntry };
 
 /**
  * Resolve the export decision for a product by its claim id. An unknown id is

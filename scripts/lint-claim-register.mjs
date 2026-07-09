@@ -79,7 +79,9 @@ for (const c of claims) {
 }
 
 // ── Parse the runtime registry id set ────────────────────────────────────────
-const registrySrc = read('src/validation/evidenceRegistry.ts');
+// The runtime map is GENERATED from the YAML (src/validation/claimRegistry.generated.ts);
+// checking it against the YAML here proves the generated output is fresh.
+const registrySrc = read('src/validation/claimRegistry.generated.ts');
 const registryIds = new Set();
 const entryRe = /'([A-Z0-9-]+)':\s*\{\s*current:/g;
 let em;
