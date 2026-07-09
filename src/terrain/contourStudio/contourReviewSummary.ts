@@ -94,11 +94,21 @@ export function buildContourReviewSummary(
       sourceUnitLabel: input.sourceUnitLabel,
     });
     const claim = contourUnitClaim(def, { crsProjected: input.crsProjected });
+    // The interval gate must have approved a metric interval for support to be
+    // claimed. When gate.recommendedM is null we fell back to the grid's
+    // geometry-only suggestion, which the gate did not endorse — so even on a
+    // known-unit projected frame the interval is cartographic-only, never
+    // "supported (internal)". Gating the label on gate approval keeps the
+    // review from overstating support the interval gate refused.
+    const gateRecommended = result.gate.recommendedM;
+    const gateApprovedInterval =
+      gateRecommended != null && Number.isFinite(gateRecommended) && gateRecommended > 0;
+    const supported = claim === 'metric-supported' && gateApprovedInterval;
     const rmse = result.validation.rmse;
     const rationale: string[] = [];
     if (Number.isFinite(rmse)) rationale.push(`Internal vertical RMSE ${num(rmse)} m.`);
     rationale.push(
-      claim === 'metric-supported'
+      supported
         ? 'Recommended for the current scale and internal terrain evidence.'
         : 'Cartographic recommendation only (no metric support claimed).',
     );
@@ -106,9 +116,9 @@ export function buildContourReviewSummary(
     rows.push({
       key: 'interval',
       label: 'Interval',
-      value: `${formatContourInterval(def)} · ${claim === 'metric-supported' ? 'supported (internal)' : 'cartographic-only'}`,
+      value: `${formatContourInterval(def)} · ${supported ? 'supported (internal)' : 'cartographic-only'}`,
       rationale,
-      confidence: claim === 'metric-supported' ? 'high' : 'medium',
+      confidence: supported ? 'high' : 'medium',
     });
   } else {
     rows.push({

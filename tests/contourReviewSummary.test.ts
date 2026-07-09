@@ -80,6 +80,23 @@ describe('buildContourReviewSummary', () => {
     expect(interval.value).not.toMatch(/\bm\b/); // no fabricated metre unit
   });
 
+  it('interval row is cartographic-only when the gate refused but the grid suggests a metre interval', () => {
+    // Regression: gate.recommendedM null (interval gate refused any metric
+    // interval) but grid.contourIntervalM is a valid 0.5 m fallback on a
+    // projected metre CRS with a known unit. The review must not label the
+    // grid fallback "supported (internal)" — support the gate refused cannot
+    // be reasserted from a geometry-only suggestion.
+    const s = buildContourReviewSummary(
+      resultStub({ recommendedM: null, contourIntervalM: 0.5 }),
+      metreInput(AVAILABLE),
+    );
+    const interval = s.rows.find((r) => r.key === 'interval')!;
+    expect(interval.value).toContain('0.5 m');
+    expect(interval.value).toContain('cartographic-only');
+    expect(interval.value).not.toContain('supported (internal)');
+    expect(interval.confidence).toBe('medium');
+  });
+
   it('interval row reports none when nothing is supportable', () => {
     const s = buildContourReviewSummary(resultStub({ recommendedM: null, contourIntervalM: 0, gateWarnings: ['relief too low'] }), metreInput(EXPLORATORY));
     const interval = s.rows.find((r) => r.key === 'interval')!;
