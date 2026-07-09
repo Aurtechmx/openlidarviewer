@@ -28,7 +28,7 @@
 #     compile error at the measurement + CRS boundaries.
 
 schemaVersion: 1
-softwareVersion: 0.5.6            # package.json version at seeding
+softwareVersion: 0.5.8            # package.json version at seeding
 generated: 2026-07-05
 validationOwner: A. Urias / Aurtech
 
