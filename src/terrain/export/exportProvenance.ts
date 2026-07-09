@@ -38,6 +38,12 @@ import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
 import { exportGate } from '../../validation/evidenceRegistry';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
+import { methodTag } from '../../science/methodRegistry';
+import {
+  buildScientificAnalysisRecord,
+  scientificRecordJson,
+  type ScientificAnalysisRecord,
+} from '../../science/scientificAnalysisRecord';
 
 /** Producing software name — single source of truth for every export stamp. */
 export const SOFTWARE_NAME = 'OpenLiDARViewer';
@@ -289,6 +295,53 @@ export function buildExportProvenance(
   };
 }
 
+/**
+ * The registered methods a DTM/terrain export actually ran, derived from what
+ * the provenance shows was computed. Ground extraction + gridded surface are
+ * always present; the hold-out accuracy and complexity methods appear only when
+ * the run produced those figures. (Spatial-block and reliability estimators run
+ * on the analysis result, not on this provenance object; wiring their ids in is
+ * a follow-up when the record is built from the result directly.)
+ */
+function terrainMethodIds(p: ExportProvenance): string[] {
+  const ids = ['olv.ground.smrf', 'olv.dtm.idw-fill'];
+  if (p.accuracy) ids.push('olv.validation.holdout-rmse');
+  if (p.complexity) ids.push('olv.terrain.vrm', 'olv.terrain.tpi', 'olv.terrain.slope-horn');
+  return ids;
+}
+
+/**
+ * Derive the canonical {@link ScientificAnalysisRecord} for a terrain export
+ * from its provenance — the FIRST consumer of the record (PR3). The linear unit
+ * is intentionally omitted: this provenance object does not carry the resolved
+ * unit token, and the record never fabricates one (a later step threads it from
+ * the analysis result).
+ */
+export function analysisRecordFromProvenance(p: ExportProvenance): ScientificAnalysisRecord {
+  return buildScientificAnalysisRecord({
+    kind: 'terrain-dtm',
+    source: p.source,
+    generatedAt: p.generated,
+    crs: {
+      horizontal: p.horizontalCrs,
+      horizontalKnown: p.crsKnown,
+      verticalDatum: p.verticalDatum,
+      verticalDatumKnown: p.datumKnown,
+    },
+    methodIds: terrainMethodIds(p),
+    evidenceExploratory: exportGate('DTM').exploratoryOnly,
+    summary: {
+      surfaceQuality: p.surfaceQuality,
+      exportReadiness: p.exportReadiness,
+      rmseZM: p.accuracy?.rmseZM ?? null,
+      usgsQualityLevel: p.accuracy?.usgsQualityLevel ?? 'unknown',
+      pointDensityPerM2: p.pointDensityPerM2,
+      measuredCells: p.measuredCells,
+      totalCells: p.totalCells,
+    },
+  });
+}
+
 /** Format a metre value at 2 dp, or an em-dash when absent. */
 function fmtM(v: number | null | undefined): string {
   return v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—';
@@ -352,6 +405,11 @@ export function provenanceLines(p: ExportProvenance): string[] {
     );
   }
   if (p.classScope) lines.push(kv('Class scope', p.classScope));
+  // The registered methods (id@version) that produced these figures, so a reader
+  // can trace each number to the algorithm and revision behind it.
+  const record = analysisRecordFromProvenance(p);
+  lines.push(kv('Methods', record.methods.map(methodTag).join(', ')));
+  lines.push(kv('Record', `schema ${record.schemaVersion} · ${record.contentHash}`));
   lines.push(kv('Note', p.notSurveyGrade));
   lines.push(kv('Evidence', EVIDENCE_GATE_NOTE));
   return lines;
@@ -399,5 +457,9 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     warnings: [...p.warnings],
     notSurveyGrade: p.notSurveyGrade,
     evidence: EVIDENCE_GATE_NOTE,
+    // The canonical analysis record (PR3): the single structure every output can
+    // derive from — build, CRS, registered methods, evidence verdict, a summary,
+    // and a build-stable content fingerprint.
+    record: scientificRecordJson(analysisRecordFromProvenance(p)),
   };
 }
