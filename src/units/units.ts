@@ -36,14 +36,25 @@ export type SqMetres = Branded<'SqMetres'>;
 /** A volume in cubic metres. */
 export type CubicMetres = Branded<'CubicMetres'>;
 
+/**
+ * Reject a non-finite value at the point a unit is asserted. A NaN / Infinity
+ * measurement is never valid physical data; catching it at construction turns a
+ * silent poison value (that propagates through every downstream computation) into
+ * a loud error at its source.
+ */
+function finite(n: number): number {
+  if (!Number.isFinite(n)) throw new RangeError(`unit value must be finite, got ${n}`);
+  return n;
+}
+
 // ── Constructors. Assert the unit of a raw number at the point it is known. ──
-export const metres = (n: number): Metres => n as Metres;
-export const feet = (n: number): Feet => n as Feet;
-export const sourceUnits = (n: number): SourceUnits => n as SourceUnits;
-export const degrees = (n: number): Degrees => n as Degrees;
-export const radians = (n: number): Radians => n as Radians;
-export const sqMetres = (n: number): SqMetres => n as SqMetres;
-export const cubicMetres = (n: number): CubicMetres => n as CubicMetres;
+export const metres = (n: number): Metres => finite(n) as Metres;
+export const feet = (n: number): Feet => finite(n) as Feet;
+export const sourceUnits = (n: number): SourceUnits => finite(n) as SourceUnits;
+export const degrees = (n: number): Degrees => finite(n) as Degrees;
+export const radians = (n: number): Radians => finite(n) as Radians;
+export const sqMetres = (n: number): SqMetres => finite(n) as SqMetres;
+export const cubicMetres = (n: number): CubicMetres => finite(n) as CubicMetres;
 
 /** Drop the brand to hand a plain number to formatting / rendering / IO. */
 export const raw = (v: Branded<string>): number => v;

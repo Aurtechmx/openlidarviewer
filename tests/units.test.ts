@@ -69,3 +69,20 @@ describe('branded unit conversions', () => {
     expect(cubicMetresToCubicFeet(cubicMetres(1))).toBeCloseTo(1 / 0.3048 ** 3, 9);
   });
 });
+
+describe('unit constructors reject non-finite values (poison at the source)', () => {
+  it('throws on NaN / ±Infinity', () => {
+    for (const bad of [Number.NaN, Infinity, -Infinity]) {
+      expect(() => metres(bad)).toThrow(/finite/);
+      expect(() => feet(bad)).toThrow(/finite/);
+      expect(() => sqMetres(bad)).toThrow(/finite/);
+      expect(() => cubicMetres(bad)).toThrow(/finite/);
+      expect(() => degrees(bad)).toThrow(/finite/);
+    }
+  });
+  it('accepts finite values incl. zero and negatives', () => {
+    expect(() => metres(0)).not.toThrow();
+    expect(() => metres(-12.5)).not.toThrow();
+    expect(metres(3.2) as number).toBe(3.2);
+  });
+});
