@@ -56,6 +56,15 @@ viewer from asserting units it does not know.
   registry is now generated from `docs/validation/claim-register.yaml`
   (`npm run gen:claim-registry`); `lint:claim-register` fails if the generated
   output drifts from the YAML, removing the two-place edit.
+- **Plain-build chunk-isolation ceiling raised 516 → 520 KiB.** A committed
+  contract decision: the boot-time input-aware mobile detection and the sub-KB
+  scientific-record / export-provenance triggers added ~3.4 KB of eager shell
+  surface since v0.5.6 (index measured 529,464 B, 1,080 B over the prior
+  ceiling). The heavy code still rides lazy chunks — the shell-leak fingerprint
+  guard confirms no decoder / pdf / WebGPU / TSL import entered the startup
+  shell. `test:build` (plain build + chunk-isolation contract) is now part of
+  `test:release`, so this contract is enforced on every release, not only the
+  obfuscated live-build budget.
 
 ## [0.5.7] - 2026-07-05
 
