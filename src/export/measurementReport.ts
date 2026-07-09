@@ -23,6 +23,17 @@ import {
   type ReportManifest,
 } from '../render/measure/reportManifest';
 import type { HashFn } from '../render/measure/auditLog';
+import { exportGate } from '../validation/evidenceRegistry';
+import { evidenceNote, evidenceStatus, type EvidenceStatus } from '../validation/exportEvidenceNote';
+
+/**
+ * The claim the integrity report stands on (§19). REPORT-DIGEST is the tamper-
+ * evident digest itself, which is E1 (unit-verified) and required E1 — so the
+ * gate reports it VALIDATED. The exporter still routes through the gate rather
+ * than asserting that: if the register ever lowers the digest below its bar, or
+ * disables it, this exporter's verdict flips automatically.
+ */
+export const INTEGRITY_REPORT_CLAIM = 'REPORT-DIGEST';
 
 export interface ReportProvenance {
   readonly datasetId: string;
@@ -96,11 +107,29 @@ export function measurementsToFindings(
   return findings;
 }
 
+/** The output of {@link integrityReportFile}: the artifact plus its gate verdict. */
+export interface IntegrityReportFile {
+  readonly filename: string;
+  readonly text: string;
+  /** The central gate verdict for the integrity-report product (§19). */
+  readonly evidence: string;
+  /** Compact claim status ('validated' when the digest meets its bar). */
+  readonly evidenceStatus: EvidenceStatus;
+  /** True when the product may leave only as an exploratory artifact. */
+  readonly exploratory: boolean;
+}
+
 /**
  * One-call helper for the export handler: build + sign the report and return the
  * download filename and pretty-printed JSON. Positional args keep the eager call
  * site byte-cheap; the manifest assembly and serialization stay in this lazy
  * chunk. Verification re-canonicalizes, so pretty-printing the file is safe.
+ *
+ * §19: the export DECISION now routes through the one gate. A product the
+ * register marks not-exportable is refused outright (throws); otherwise the
+ * artifact is produced and its gate verdict (validated / exploratory) travels
+ * back on the result so the caller can watermark / flag it. The verdict is
+ * NEVER promoted here — it is whatever the registry says for `claimId`.
  */
 export function integrityReportFile(
   measurements: readonly Measurement[],
@@ -111,7 +140,15 @@ export function integrityReportFile(
   generatedAt: string,
   classificationEpoch: number,
   software?: string,
-): { readonly filename: string; readonly text: string } {
+  claimId: string = INTEGRITY_REPORT_CLAIM,
+): IntegrityReportFile {
+  const gate = exportGate(claimId);
+  // A product the register disables entirely never leaves — not even as an
+  // exploratory artifact. (No current claim is disabled; this is the honest
+  // floor so a future `exportAllowed: false` is enforced, not bypassed.)
+  if (!gate.allowed && !gate.exploratoryOnly) {
+    throw new Error(`Integrity report refused: ${gate.reason}`);
+  }
   const manifest = measurementsToReportManifest(measurements, up, unitToMetres, {
     datasetId,
     crsName,
@@ -119,7 +156,13 @@ export function integrityReportFile(
     classificationEpoch,
     software,
   });
-  return { filename: `${datasetId}-report.json`, text: JSON.stringify(manifest, null, 2) };
+  return {
+    filename: `${datasetId}-report.json`,
+    text: JSON.stringify(manifest, null, 2),
+    evidence: evidenceNote(claimId),
+    evidenceStatus: evidenceStatus(claimId),
+    exploratory: gate.exploratoryOnly,
+  };
 }
 
 /** Build (and sign) a report manifest from the placed measurements. */

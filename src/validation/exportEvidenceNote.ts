@@ -43,3 +43,20 @@ export function evidenceNote(claimId: string): string {
 export function isExploratoryExport(claimId: string): boolean {
   return exportGate(claimId).exploratoryOnly;
 }
+
+/**
+ * The compact, machine-friendly claim status for a product — the SAME gate
+ * verdict as {@link evidenceNote}, reduced to one token so an exporter that has
+ * no room for a full sentence (a CSV cell, a PDF collar, a JSON status field)
+ * can still stamp the honest status. Never promotes: a below-threshold product
+ * is `exploratory`, a not-exportable product is `refused`, and only a product
+ * that genuinely meets its required level is `validated`.
+ */
+export type EvidenceStatus = 'validated' | 'exploratory' | 'refused';
+
+export function evidenceStatus(claimId: string): EvidenceStatus {
+  const d = exportGate(claimId);
+  if (d.exploratoryOnly) return 'exploratory';
+  if (d.allowed) return 'validated';
+  return 'refused';
+}
