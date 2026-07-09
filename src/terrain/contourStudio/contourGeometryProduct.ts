@@ -83,12 +83,19 @@ export function analyticalProduct(
 }
 
 export interface GeneralizeOptions {
-  /** Simplification tolerance, in the source (horizontal) unit. Must be > 0. */
+  /** Base simplification tolerance, in the source (horizontal) unit. Must be > 0. */
   readonly toleranceSource: number;
   /** Horizontal unit scale (for the metre-equivalent of the tolerance). */
   readonly horizontalUnit: LinearUnitScale;
   readonly methodId?: string;
   readonly methodVersion?: string;
+  /**
+   * Optional per-feature tolerance override (v0.5.9 §16 terrain-aware
+   * generalization, PR8): return the tolerance to use for this feature, given
+   * the base tolerance. Values are clamped to be positive. When absent, the
+   * base tolerance applies uniformly.
+   */
+  readonly toleranceForFeature?: (feature: ContourFeature, baseTolerance: number) => number;
 }
 
 /**
@@ -108,7 +115,10 @@ export function cartographicProduct(
   let topologyPreserved = true;
 
   const simplified: ContourFeature[] = analytical.features.map((f) => {
-    const out = douglasPeucker(f.coordinates, tol);
+    const featureTol = opts.toleranceForFeature
+      ? Math.max(1e-9, opts.toleranceForFeature(f, tol))
+      : tol;
+    const out = douglasPeucker(f.coordinates, featureTol);
     // Per-vertex displacement: each ORIGINAL vertex's distance to the simplified
     // polyline (how far the generalized line moved from the exact geometry).
     for (const p of f.coordinates) displacements.push(distanceToPolyline(p, out));
