@@ -1,8 +1,8 @@
 /**
  * propertyGates.test.ts — property fuzzing of the two safety gates, no framework.
  *
- * A hand-rolled seeded loop (ponytail: fast-check would be a dependency for what
- * ten lines do). It asserts the invariants that MUST hold for every input, not
+ * A hand-rolled seeded loop — a property-testing dependency would be overkill
+ * for what ten lines do. It asserts the invariants that MUST hold for every input, not
  * just the handful of examples the unit tests pin:
  *   - Evidence gate: a product is never simultaneously "validated" and
  *     "exploratory", and any unregistered id is exploratory (never silently OK).
