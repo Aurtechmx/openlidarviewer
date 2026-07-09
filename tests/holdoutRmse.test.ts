@@ -34,6 +34,12 @@ describe('holdoutValidateDtm', () => {
     expect(r.mae).toBeLessThan(1e-6);
   });
 
+  it('discloses the classify-before-split limitation in its warnings', () => {
+    const { points, mask } = surface((x) => 0.3 * x);
+    const r = holdoutValidateDtm(points, mask, { cellSizeM: 1, holdoutFraction: 0.3, seed: 1 });
+    expect(r.warnings.some((w) => /classification used the full cloud/i.test(w))).toBe(true);
+  });
+
   it('tags collected samples with their surface zone (for the reliability split)', () => {
     const { points, mask } = surface((x) => 0.5 * x);
     const r = holdoutValidateDtm(points, mask, {

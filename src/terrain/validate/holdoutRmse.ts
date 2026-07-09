@@ -156,6 +156,16 @@ export function holdoutValidateDtm(
     warnings.push('split produced an empty train or test set');
     return emptyReport(holdoutFraction, warnings);
   }
+  // HONESTY: the hold-out withholds points from the SURFACE FIT only (the DTM
+  // below is built from `train` alone). Ground CLASSIFICATION, however, ran once
+  // over the whole cloud before this split, so the held-out points' ground
+  // membership was decided with the full cloud in view. That makes this a mild
+  // optimism versus true end-to-end validation (classify inside each fold), and
+  // is one reason terrain products sit at E3 (synthetic) rather than a field-
+  // validated level. Stated, not hidden.
+  warnings.push(
+    'hold-out withholds points from the surface fit only; ground classification used the full cloud (mild optimism vs classify-inside-fold)',
+  );
 
   // Grid covering ALL ground returns so test points map into it.
   let minH1 = Infinity;

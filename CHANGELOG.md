@@ -33,6 +33,29 @@ viewer from asserting units it does not know.
   therefore read as metres, and an unknown-unit scan asserted metres it never
   knew. Axes now follow the CRS's own linear unit (metre, foot), and an unknown
   unit shows no suffix instead of claiming metres.
+- **Contour interval gate on foot data.** The interval honesty-gate compared the
+  metre-valued hold-out RMSE against source-unit contour intervals, so a foot-CRS
+  surface could offer intervals finer than its true vertical error. The RMSE is
+  now expressed in the interval's own units before gating; the recommendation is
+  invariant to the declared vertical scale.
+- **Unit constructors reject non-finite input.** The branded-unit constructors
+  now throw on NaN / ±Infinity, catching a poison value at its source instead of
+  letting it propagate through every downstream computation.
+- **Validation honesty.** The hold-out report now states explicitly that it
+  withholds points from the surface fit only — ground classification runs over
+  the full cloud — a mild optimism versus true classify-inside-fold validation.
+- **Packaging.** An unanchored `build` entry in `.gitignore` had been silently
+  excluding `src/build/buildIdentity.ts` from the source archive, breaking a
+  clean checkout's typecheck and build. The ignore patterns are now root-anchored,
+  the file is tracked, and a new `lint:no-ignored-src` gate fails the build if any
+  source file is ever git-ignored.
+
+### Changed
+
+- **Claim register is generated, not hand-mirrored.** The runtime evidence
+  registry is now generated from `docs/validation/claim-register.yaml`
+  (`npm run gen:claim-registry`); `lint:claim-register` fails if the generated
+  output drifts from the YAML, removing the two-place edit.
 
 ## [0.5.7] - 2026-07-05
 

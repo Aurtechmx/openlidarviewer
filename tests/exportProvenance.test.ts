@@ -187,6 +187,15 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(j.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
     expect(j.evidence).toMatch(/exploratory/i);
     expect(Array.isArray(j.warnings)).toBe(true);
+    // The canonical ScientificAnalysisRecord is embedded in the ONE provenance
+    // object every terrain exporter (GeoJSON / DXF / SVG / DEM README / PDF)
+    // stamps — so it is present in every export's metadata, not just one path.
+    const rec = j.record as { contentHash: string; methods: string[]; schemaVersion: number };
+    expect(typeof rec.contentHash).toBe('string');
+    expect(rec.contentHash.length).toBeGreaterThan(0);
+    expect(Array.isArray(rec.methods)).toBe(true);
+    expect(rec.methods).toContain('olv.ground.smrf@1');
+    expect(rec.schemaVersion).toBeGreaterThanOrEqual(1);
   });
 
   it('preview / unknown-CRS provenance shows the reason in the readiness line', () => {
