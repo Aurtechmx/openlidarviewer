@@ -24,6 +24,8 @@ function report(bands: Partial<Record<BandError['grade'], { rmse: number; count:
     rmse: 0,
     mae: 0,
     p95: 0,
+    bias: 0,
+    nmad: 0,
     sampleSize: perBand.reduce((a, b) => a + b.count, 0),
     uncoveredCount: 0,
     holdoutFraction: 0.2,

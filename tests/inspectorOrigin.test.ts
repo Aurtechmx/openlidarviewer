@@ -101,11 +101,30 @@ test('worldCoordLabels: projected CRS uses metres on all three axes', () => {
   expect([l.xUnit, l.yUnit, l.zUnit]).toEqual([' m', ' m', ' m']);
 });
 
-test('worldCoordLabels: local / unknown / undefined fall back to plain metric X/Y/Z', () => {
+test('worldCoordLabels: local / unknown / undefined assert NO unit (source units, not metres)', () => {
+  // HONESTY: an unknown-scale scan must not print " m" — that contradicts the
+  // inspector's own "shown in source units only" note. Bare X/Y/Z, no suffix.
   for (const c of [undefined, crs('local'), crs('unknown')]) {
     const l = worldCoordLabels(c);
     expect(l.heading).toBe('World');
     expect([l.x, l.y, l.z]).toEqual(['X', 'Y', 'Z']);
-    expect([l.xUnit, l.yUnit, l.zUnit]).toEqual([' m', ' m', ' m']);
+    expect([l.xUnit, l.yUnit, l.zUnit]).toEqual(['', '', '']);
   }
+});
+
+test('worldCoordLabels: a foot-based projected CRS shows feet, never metres', () => {
+  // The old hardcoded " m" printed a US-survey-foot survey's eastings as metres.
+  const footCrs: ResolvedCrs = {
+    kind: 'projected',
+    name: 'NAD83 / California zone 3 (ftUS)',
+    epsg: 2227,
+    linearUnit: 'us-survey-foot',
+    linearUnitToMetres: 1200 / 3937,
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: false,
+  };
+  const l = worldCoordLabels(footCrs);
+  expect([l.x, l.y, l.z]).toEqual(['Easting', 'Northing', 'Elevation']);
+  expect([l.xUnit, l.yUnit, l.zUnit]).toEqual([' ft', ' ft', ' ft']);
 });

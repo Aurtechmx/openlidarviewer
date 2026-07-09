@@ -53,6 +53,22 @@ describe('icpRegister', () => {
     expect(maxError(src.map((p) => applyIcp(r, p)), tgt)).toBeLessThan(0.02);
   });
 
+  test('inlier fraction: 1.0 for a clean overlap within tolerance', () => {
+    const src = cloud(50, 40, 1);
+    const r = icpRegister(src, src, { maxResidual: 0.001 });
+    expect(r.inlierFraction).toBe(1);
+  });
+
+  test('inlier fraction: below 1 when residual exceeds tolerance', () => {
+    const src = cloud(60, 40, 9);
+    // Pitch about X — planar (yaw-only) ICP cannot remove it, so residual stays.
+    const c = Math.cos(0.3), s = Math.sin(0.3);
+    const tgt: Vec3[] = src.map(([x, y, z]) => [x, y * c - z * s, y * s + z * c]);
+    const r = icpRegister(src, tgt, { maxResidual: 0.01 });
+    expect(r.inlierFraction).toBeLessThan(1);
+    expect(r.inlierFraction).toBeGreaterThanOrEqual(0);
+  });
+
   test('recovers a known translation + yaw', () => {
     const src = cloud(60, 40, 11);
     const yaw0 = 0.08;

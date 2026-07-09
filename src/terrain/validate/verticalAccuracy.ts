@@ -43,6 +43,10 @@ export interface VerticalAccuracy {
   readonly nva95: number;
   /** VVA at 95% = 95th-percentile absolute error (no normal assumption). NaN when N/A. */
   readonly vva95: number;
+  /** Systematic vertical bias (mean signed residual). NaN when N/A. */
+  readonly bias: number;
+  /** Robust spread: NMAD (1.4826 × MAD). NaN when N/A. */
+  readonly nmad: number;
   /** Held-out sample size behind the figures. */
   readonly sampleSize: number;
   /** Standard tag for the deliverable. */
@@ -56,6 +60,8 @@ export function computeVerticalAccuracy(report: ValidationReport): VerticalAccur
     rmseZ,
     nva95: Number.isFinite(rmseZ) ? NVA_95_MULTIPLIER * rmseZ : Number.NaN,
     vva95: Number.isFinite(report.p95) ? report.p95 : Number.NaN,
+    bias: Number.isFinite(report.bias) ? report.bias : Number.NaN,
+    nmad: Number.isFinite(report.nmad) ? report.nmad : Number.NaN,
     sampleSize: report.sampleSize,
     standard: 'ASPRS 2014',
   };
@@ -71,11 +77,26 @@ export function formatVerticalAccuracy(report: ValidationReport, units = 'm'): s
     return ['Vertical accuracy: — (not enough ground points to validate)'];
   }
   const u = ` ${units}`;
-  return [
+  const lines = [
     `Vertical RMSEz: ${a.rmseZ.toFixed(2)}${u} (n=${a.sampleSize}, hold-out)`,
     `NVA-style @ 95% (${a.standard} formula, hold-out): ${a.nva95.toFixed(2)}${u} — ` +
       `assumes normally distributed error; withheld points, not independent checkpoints`,
     `VVA-style @ 95% (percentile, hold-out): ${a.vva95.toFixed(2)}${u} — ` +
       `p95 of ALL residuals, not vegetated-class checkpoints`,
   ];
+  // Bias + NMAD expose what RMSE hides: a systematic offset and a robust spread.
+  if (Number.isFinite(a.bias)) {
+    const sign = a.bias >= 0 ? '+' : '';
+    lines.push(
+      `Systematic bias: ${sign}${a.bias.toFixed(2)}${u} (mean signed residual, hold-out; ` +
+        `${a.bias >= 0 ? 'surface reads low' : 'surface reads high'})`,
+    );
+  }
+  if (Number.isFinite(a.nmad)) {
+    lines.push(
+      `NMAD (robust spread, hold-out): ${a.nmad.toFixed(2)}${u} — outlier-resistant, ` +
+        `trust over RMSEz when errors are non-normal`,
+    );
+  }
+  return lines;
 }

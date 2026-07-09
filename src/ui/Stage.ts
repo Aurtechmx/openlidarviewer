@@ -2,6 +2,7 @@ import { el } from './dom';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
+import { isMobileDevice } from './isMobileDevice';
 
 /** A built-in sample scan offered on the empty state. */
 export interface Sample {
@@ -90,11 +91,6 @@ function brandMarkImg(className: string, alt = ''): HTMLImageElement {
   return img;
 }
 
-/** Coarse mobile detection — matches Stage's mobile copy + size breakpoints. */
-function isMobileViewport(): boolean {
-  return typeof window !== 'undefined'
-    && window.matchMedia('(max-width: 767px)').matches;
-}
 
 /**
  * Best-effort cellular detection. The Network Information API ships on
@@ -287,7 +283,7 @@ export class Stage {
     // Item 7: copy is mobile-aware. On phones the "drag onto the page"
     // instruction is meaningless (iOS Safari has no drag-and-drop), so the
     // mobile variant leads with the pick-from-device action.
-    const mobile = isMobileViewport();
+    const mobile = isMobileDevice();
     // Hero: the official brand mark (public/brand-mark.svg, via <img> —
     // the delivered logo asset, mark-only crop) above the text wordmark.
     // The text stays as real text (not the asset's near-white raster
@@ -660,7 +656,7 @@ export class Stage {
    * Error-handling-UX item E2.
    */
   private _approveFile(file: File): Promise<boolean> {
-    if (!isMobileViewport()) return Promise.resolve(true);
+    if (!isMobileDevice()) return Promise.resolve(true);
     if (file.size < MOBILE_MEMORY_WARN_BYTES) return Promise.resolve(true);
     const message =
       `This file is ${formatBytes(file.size)}. On phones it may exceed the ` +
@@ -687,7 +683,7 @@ export class Stage {
         `may use your mobile-data quota.`,
       );
     }
-    if (isMobileViewport() && size >= MOBILE_MEMORY_WARN_BYTES) {
+    if (isMobileDevice() && size >= MOBILE_MEMORY_WARN_BYTES) {
       reasons.push(
         `This sample is ${formatBytes(size)} — on phones it may exceed the ` +
         `tab's memory.`,

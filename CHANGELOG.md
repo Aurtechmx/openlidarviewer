@@ -2,6 +2,70 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.5.8] - 2026-07-08
+
+Architectural and scientific-provenance hardening. This release starts a staged
+cleanup that ties every output to the exact build that produced it and stops the
+viewer from asserting units it does not know.
+
+### Added
+
+- **Build identity.** Each build now carries one identity resolved at build
+  time: version, git commit, a dirty-tree flag, build time, Node version and
+  channel. It is stamped into every terrain export's provenance (text and JSON)
+  and into the report PDF's creator metadata, so an artifact records which build
+  made it, not just which release. When git is unavailable the commit is
+  reported as `unknown` rather than fabricated, and the build time honours
+  `SOURCE_DATE_EPOCH` for reproducible builds.
+- **Layer-boundary lint.** A CI check fails the build if a science or core
+  module (`terrain`, `validation`, `analysis`, `science`) imports the UI layer
+  or three.js, keeping those modules pure and worker-safe.
+- **Method registry.** A single catalogue of the scientific methods the viewer
+  runs, each with a stable `id@version`, so provenance and reports can name the
+  exact algorithm and revision behind a number.
+- **Architecture cleanup plan.** `docs/architecture/v0.5.8-cleanup-plan.md`
+  records the staged program and its current state.
+
+### Fixed
+
+- **Inspector units.** The picked-point card showed every projected and every
+  local or unknown-CRS coordinate with a metre suffix. A foot-based survey
+  therefore read as metres, and an unknown-unit scan asserted metres it never
+  knew. Axes now follow the CRS's own linear unit (metre, foot), and an unknown
+  unit shows no suffix instead of claiming metres.
+- **Contour interval gate on foot data.** The interval honesty-gate compared the
+  metre-valued hold-out RMSE against source-unit contour intervals, so a foot-CRS
+  surface could offer intervals finer than its true vertical error. The RMSE is
+  now expressed in the interval's own units before gating; the recommendation is
+  invariant to the declared vertical scale.
+- **Unit constructors reject non-finite input.** The branded-unit constructors
+  now throw on NaN / ±Infinity, catching a poison value at its source instead of
+  letting it propagate through every downstream computation.
+- **Validation honesty.** The hold-out report now states explicitly that it
+  withholds points from the surface fit only — ground classification runs over
+  the full cloud — a mild optimism versus true classify-inside-fold validation.
+- **Packaging.** An unanchored `build` entry in `.gitignore` had been silently
+  excluding `src/build/buildIdentity.ts` from the source archive, breaking a
+  clean checkout's typecheck and build. The ignore patterns are now root-anchored,
+  the file is tracked, and a new `lint:no-ignored-src` gate fails the build if any
+  source file is ever git-ignored.
+
+### Changed
+
+- **Claim register is generated, not hand-mirrored.** The runtime evidence
+  registry is now generated from `docs/validation/claim-register.yaml`
+  (`npm run gen:claim-registry`); `lint:claim-register` fails if the generated
+  output drifts from the YAML, removing the two-place edit.
+- **Plain-build chunk-isolation ceiling raised 516 → 520 KiB.** A committed
+  contract decision: the boot-time input-aware mobile detection and the sub-KB
+  scientific-record / export-provenance triggers added ~3.4 KB of eager shell
+  surface since v0.5.6 (index measured 529,464 B, 1,080 B over the prior
+  ceiling). The heavy code still rides lazy chunks — the shell-leak fingerprint
+  guard confirms no decoder / pdf / WebGPU / TSL import entered the startup
+  shell. `test:build` (plain build + chunk-isolation contract) is now part of
+  `test:release`, so this contract is enforced on every release, not only the
+  obfuscated live-build budget.
+
 ## [0.5.7] - 2026-07-05
 
 Object and E57 capture honesty, plus an explicit evidence model. v0.5.7 makes

@@ -72,8 +72,18 @@ const DIST = join(process.cwd(), 'dist', 'assets');
  * (`pointFilterAccept`), per-cloud extent scans, and the mask nodes — rides the
  * lazy Viewer chunk, and the `SHELL_FORBIDDEN_CONTENT` test below confirms no
  * decoder/pdf/WebGPU import leaked into the shell. Same sub-KB-trigger split.
+ *
+ * Raised 516 → 520 KiB at v0.5.8 for the architectural/scientific cleanup: the
+ * input-aware mobile detection (`isMobileDevice`, which must run at boot to gate
+ * the first layout and so cannot be lazy-loaded) wired into Stage + main, plus
+ * the sub-KB scientific-record / export-provenance triggers (method-registry id
+ * lookups and the generated claim-register reference) added eager shell surface
+ * (index measured 529,464 B, 1,080 B over the prior ceiling). The heavy work —
+ * the ground filter, DTM/holdout validation, and every export renderer — rides
+ * lazy chunks, and the `SHELL_FORBIDDEN_CONTENT` test below confirms no
+ * decoder/pdf/WebGPU/TSL import leaked into the shell. Same sub-KB-trigger split.
  */
-const WARNING_THRESHOLD = 516 * 1024;
+const WARNING_THRESHOLD = 520 * 1024;
 
 /** Required chunk-name prefixes — substring-matched against the filename. */
 const REQUIRED_CHUNK_PREFIXES = [

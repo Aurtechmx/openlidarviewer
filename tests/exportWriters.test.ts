@@ -16,6 +16,7 @@ import type { ExportProvenance } from '../src/terrain/export/exportProvenance';
 const PROV: ExportProvenance = {
   software: 'OpenLiDARViewer',
   softwareVersion: '9.9.9',
+  build: '9.9.9 (testtest) · test · built 1970-01-01T00:00:00.000Z',
   metricVersion: 'v0.4.1',
   generated: '2026-06-05T00:00:00.000Z',
   source: 'site',

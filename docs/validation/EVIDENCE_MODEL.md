@@ -74,3 +74,22 @@ Independently reproduced.
 - When external evidence is unavailable, build the harness, write the dataset
   spec, and set `externalValidationStatus: pending` — do not infer it from
   density, format, or metadata (rule 9).
+
+## Tooling that moves a claim up the ladder (Phase 3–4)
+
+These exist now; they are the mechanisms, not the evidence. A claim only rises
+when the mechanism is actually run against real data and the result committed.
+
+- **E3 → E4 (cross-implementation).** `src/validation/crossCheck.ts` compares our
+  grid to an independent tool's grid within a stated tolerance. The procedure is
+  in [`cross-implementation.md`](./cross-implementation.md). Every reference slot
+  ships `pending`; no reference output is bundled or fabricated.
+- **Honest internal error.** `src/terrain/validate/spatialBlockHoldout.ts`
+  replaces random point hold-out (optimistic) with spatially-blocked hold-out and
+  a bootstrap CI. It still is not field accuracy (E5); it is a less-biased E3
+  diagnostic.
+- **Reliability vs support.** `src/terrain/validate/reliabilitySplit.ts` reports
+  measured-cell empirical reliability with a Wilson interval, kept separate from
+  interpolated-cell model support, which carries no calibrated-probability claim.
+- **Unit safety.** `src/units/units.ts` makes source-unit vs metre confusion a
+  compile error at the measurement and CRS boundaries.

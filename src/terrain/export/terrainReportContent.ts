@@ -310,6 +310,19 @@ export function buildTerrainReportContent(
       : acc && acc.qualityLevel !== 'unknown'
         ? acc.qualityLevel
         : DASH;
+  // Phase 4 honesty figures, single-sourced from the same result the panel
+  // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
+  const pctOf = (x: number): string => `${Math.round(x * 100)}%`;
+  const relM = result.reliabilitySplit?.measured;
+  const reliabilityValue =
+    relM && relM.n >= 5 && Number.isFinite(relM.reliability)
+      ? `${pctOf(relM.reliability)} (95% CI ${pctOf(relM.ciLow)}-${pctOf(relM.ciHigh)}, |dz| <= ${fmtM(relM.tolerance)})`
+      : DASH;
+  const blk = result.blockedAccuracy;
+  const blockedValue =
+    blk && blk.n > 0 && Number.isFinite(blk.rmse)
+      ? `${fmtM(blk.rmse)} (95% CI ${fmtM(blk.ciLow)}-${fmtM(blk.ciHigh)})`
+      : DASH;
   const qualitySection: TerrainReportSection = {
     title: 'Quality Metrics',
     rows: [
@@ -319,6 +332,10 @@ export function buildTerrainReportContent(
       // figures via the ASPRS formulas, never a checkpoint assessment.
       { label: 'NVA-style (95%, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.nvaM) : DASH },
       { label: 'VVA-style (95th pct, hold-out)', value: hasAcc ? fmtM(provenance.accuracy?.vvaM) : DASH },
+      // Measured-cell empirical reliability (Wilson CI) and the less optimistic
+      // spatially-blocked RMSE — the same numbers the Analyse panel surfaces.
+      { label: 'Measured reliability', value: reliabilityValue },
+      { label: 'Blocked RMSE (spatial CV)', value: blockedValue },
       { label: 'USGS 3DEP Quality Level', value: qlValue === DASH ? DASH : `${qlValue} (estimated)` },
     ],
   };

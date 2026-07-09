@@ -69,6 +69,10 @@ import {
 } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
+import { splitReliability, type ReliabilitySplit } from '../validate/reliabilitySplit';
+import { spatialBlockHoldout, type SpatialBlockResult } from '../validate/spatialBlockHoldout';
+import { DtmSurfaceModel } from '../validate/dtmSurfaceModel';
+import { axisGetters } from '../ground/axisGetters';
 import { checkConfidenceOrdering } from '../validate/calibrationCheck';
 import {
   fitConfidenceCalibration,
@@ -256,6 +260,20 @@ export interface AnalyseGenerationParams {
 export interface TerrainCore {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
+  /**
+   * Measured-cell empirical reliability (with a Wilson CI) kept separate from
+   * interpolated-cell model support, at tolerance τ = the calibration
+   * tolerance. Null when there was too little held-out evidence to state one.
+   */
+  readonly reliabilitySplit: ReliabilitySplit | null;
+  /**
+   * Spatially-blocked hold-out RMSE (in metres) with a bootstrap CI — a less
+   * optimistic accuracy estimate than the random point hold-out, since it
+   * predicts across whole withheld blocks. Null when skipped (grid too large
+   * to afford the k rebuilds, or too few blocks to split). Diagnostic, not
+   * field accuracy.
+   */
+  readonly blockedAccuracy: SpatialBlockResult | null;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -332,6 +350,12 @@ export interface TerrainCore {
 export interface AnalyseContoursResult {
   readonly dtm: DtmGrid;
   readonly validation: ValidationReport;
+  /** Measured-cell empirical reliability (Wilson CI) vs interpolated model
+   *  support, at τ = the calibration tolerance. Null when unstated. */
+  readonly reliabilitySplit: ReliabilitySplit | null;
+  /** Spatially-blocked hold-out RMSE (metres) + bootstrap CI, or null when
+   *  skipped. A less optimistic accuracy estimate than the random hold-out. */
+  readonly blockedAccuracy: SpatialBlockResult | null;
   /** Confidence→error ORDERING check (an honesty gate, not the PAV calibration). */
   readonly confidenceOrdering: ConfidenceOrderingResult;
   /** True when the reported confidence was recalibrated against measured error. */
@@ -546,6 +570,74 @@ export function computeTerrainCore(
   const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);
 
+  // Measured-cell empirical reliability (Wilson CI) kept separate from
+  // interpolated-cell model support, at τ = the measured RMSE. Only stated when
+  // there is real held-out evidence and a finite τ; a void has no truth to test.
+  const reliabilityTolerance =
+    Number.isFinite(validation.rmse) && validation.rmse > 0 ? validation.rmse : null;
+  const reliabilitySplit: ReliabilitySplit | null =
+    reliabilityTolerance !== null && validation.samples && validation.samples.length > 0
+      ? splitReliability(
+          validation.samples
+            .filter((s) => s.zone !== undefined)
+            .map((s) => ({ absError: s.absError, zone: s.zone as 'measured' | 'interpolated' })),
+          reliabilityTolerance,
+        )
+      : null;
+
+  // Spatially-blocked hold-out — a less optimistic accuracy estimate that
+  // predicts across whole withheld blocks (see spatialBlockHoldout). It costs k
+  // DTM rebuilds, so it is bounded: skipped on grids over CELL_CAP cells, and
+  // the ground set is strided to POINT_CAP points. Diagnostic only; reported in
+  // metres. Null when skipped or when there aren't enough blocks to split.
+  const BLOCKED_CELL_CAP = 250_000; // ~500×500 grid
+  const BLOCKED_POINT_CAP = 20_000;
+  const vMetresB =
+    Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0
+      ? (params.verticalUnitToMetres as number)
+      : 1;
+  let blockedAccuracy: SpatialBlockResult | null = null;
+  if (dtm.cols * dtm.rows <= BLOCKED_CELL_CAP) {
+    const { getH1, getH2, getV } = axisGetters(verticalAxis);
+    const groundXYZ: Array<{ x: number; y: number; z: number }> = [];
+    for (let i = 0; i < groundPts.length; i++) {
+      if (gf.isGround[i] !== 1) continue;
+      const p = groundPts[i];
+      if (!Number.isFinite(getH1(p)) || !Number.isFinite(getH2(p)) || !Number.isFinite(getV(p))) continue;
+      groundXYZ.push({ x: getH1(p), y: getH2(p), z: getV(p) });
+    }
+    const stride = Math.max(1, Math.ceil(groundXYZ.length / BLOCKED_POINT_CAP));
+    const sampled = stride > 1 ? groundXYZ.filter((_, i) => i % stride === 0) : groundXYZ;
+    if (sampled.length >= 32) {
+      const model = new DtmSurfaceModel({
+        grid: {
+          originH1: dtm.originH1,
+          originH2: dtm.originH2,
+          cols: dtm.cols,
+          rows: dtm.rows,
+          cellSizeM: dtm.cellSizeM,
+        },
+        aggregation,
+        isGeographic: params.isGeographic,
+        latitudeDeg: params.latitudeDeg,
+        horizontalUnitToMetres: params.horizontalUnitToMetres,
+      });
+      const raw = spatialBlockHoldout(sampled, model, {
+        blockSize: dtm.cellSizeM * 8,
+        folds: 4,
+        seed: params.holdoutSeed ?? 1,
+      });
+      // Scale residual-derived figures from source vertical units to metres.
+      blockedAccuracy = {
+        ...raw,
+        rmse: raw.rmse * vMetresB,
+        mae: raw.mae * vMetresB,
+        ciLow: raw.ciLow * vMetresB,
+        ciHigh: raw.ciHigh * vMetresB,
+      };
+    }
+  }
+
   // 4b) Recalibrate the reported confidence against measured error, so a
   // cell's % means "probability the height is within τ of truth" rather
   // than a bare heuristic. τ is the measured RMSE. When there isn't
@@ -581,9 +673,14 @@ export function computeTerrainCore(
     ? gateIntervals({
         cellSizeM: params.cellSizeM,
         elevationRangeM,
-        rmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+        // UNIT CONSISTENCY: candidate intervals and the elevation range/bounds
+        // are in the surface's SOURCE vertical units (contours draw against
+        // `dtm.z`, which `contoursAt` uses raw). The hold-out RMSE is in METRES.
+        // Feeding it raw made the "finer than 2×error" rule compare feet against
+        // metres on foot-based data; express RMSE in the interval's own units.
+        rmseM: Number.isFinite(validation.rmse) ? validation.rmse / vMetresB : null,
         // Real bounds unlock the EXACT level-crossing test for the coarse-
-        // interval rule (a 1 m interval on a 0.4–1.2 m surface crosses 1.0).
+        // interval rule (a 1-unit interval on a 0.4–1.2-unit surface crosses 1.0).
         minZ: Number.isFinite(minZ) ? minZ : null,
         maxZ: Number.isFinite(maxZ) ? maxZ : null,
       })
@@ -746,6 +843,8 @@ export function computeTerrainCore(
   return {
     dtm,
     validation,
+    reliabilitySplit,
+    blockedAccuracy,
     confidenceOrdering,
     confidenceCalibrationApplied,
     confidenceToleranceM,
@@ -845,6 +944,8 @@ export function contoursFromCore(
     return {
       dtm,
       validation: core.validation,
+      reliabilitySplit: core.reliabilitySplit,
+      blockedAccuracy: core.blockedAccuracy,
       confidenceOrdering: core.confidenceOrdering,
       confidenceCalibrationApplied: core.confidenceCalibrationApplied,
       confidenceToleranceM: core.confidenceToleranceM,
@@ -920,6 +1021,8 @@ export function contoursFromCore(
   return {
     dtm,
     validation: core.validation,
+    reliabilitySplit: core.reliabilitySplit,
+    blockedAccuracy: core.blockedAccuracy,
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,

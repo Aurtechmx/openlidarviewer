@@ -167,6 +167,9 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(text).toMatch(/NVA-style \(95%, hold-out\)/);
     expect(text).toMatch(/VVA-style \(95th pct, hold-out\)/);
     expect(text).toMatch(/not survey-grade/i);
+    // The evidence gate is stamped on the artifact: below required level today,
+    // so every terrain export is marked exploratory.
+    expect(text).toMatch(/Evidence\s+.*exploratory/i);
   });
 
   it('json mirrors the line values exactly', () => {
@@ -182,7 +185,17 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     expect(j.exportReadiness).toBe('Ready');
     expect((j.accuracy as { usgsQualityLevel: string }).usgsQualityLevel).toBe('QL2');
     expect(j.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
+    expect(j.evidence).toMatch(/exploratory/i);
     expect(Array.isArray(j.warnings)).toBe(true);
+    // The canonical ScientificAnalysisRecord is embedded in the ONE provenance
+    // object every terrain exporter (GeoJSON / DXF / SVG / DEM README / PDF)
+    // stamps — so it is present in every export's metadata, not just one path.
+    const rec = j.record as { contentHash: string; methods: string[]; schemaVersion: number };
+    expect(typeof rec.contentHash).toBe('string');
+    expect(rec.contentHash.length).toBeGreaterThan(0);
+    expect(Array.isArray(rec.methods)).toBe(true);
+    expect(rec.methods).toContain('olv.ground.smrf@1');
+    expect(rec.schemaVersion).toBeGreaterThanOrEqual(1);
   });
 
   it('preview / unknown-CRS provenance shows the reason in the readiness line', () => {

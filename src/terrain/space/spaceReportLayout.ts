@@ -20,6 +20,7 @@ import type { SpaceMetrics } from '../spaceMetrics';
 import { metresToFeet, sqMetresToSqFeet, cubicMetresToCubicFeet } from '../spaceMetrics';
 import type { ObjectMetrics } from '../objectMetrics';
 import { SOFTWARE_NAME, NOT_SURVEY_GRADE_NOTE } from '../export/exportProvenance';
+import { evidenceNote } from '../../validation/exportEvidenceNote';
 
 /** One label/value line in a report section. */
 export interface ReportRow {
@@ -240,6 +241,10 @@ export function spaceProvenanceLines(p: SpaceReportProvenance): string[] {
     kv('Units', p.units),
     kv('Points', `${i0(p.sampledPointCount)} used / ${i0(p.sourcePointCount)} source`),
     kv('Note', p.notSurveyGrade),
+    // Route the space/object report through the ONE evidence gate (PR6): its
+    // dimensional figures sit below their required level, so the report states
+    // the exploratory verdict rather than shipping with no gate stamp.
+    kv('Evidence', evidenceNote('MEAS-AREA')),
   ];
 }
 

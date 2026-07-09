@@ -1553,6 +1553,36 @@ export class AnalysePanel {
         text: `RMSE by zone: ${zoneParts.join(' · ')} m`,
       }));
     }
+
+    // Measured-cell empirical reliability with its Wilson CI, kept distinct from
+    // interpolated model support (Phase 4). Only shown with enough measured
+    // held-out points; a small sample gives a wide, uninformative interval.
+    const rel = this._result?.reliabilitySplit;
+    if (rel && rel.measured.n >= MIN_STRATUM_SAMPLES && Number.isFinite(rel.measured.reliability)) {
+      const pct = (x: number): string => `${Math.round(x * 100)}%`;
+      const m = rel.measured;
+      this._validationRow.append(this._hint(
+        el('div', {
+          className: 'olv-analyse-reliability',
+          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz| ≤ ${fmtR(m.tolerance)} m`,
+        }),
+        'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
+      ));
+    }
+
+    // Spatially-blocked hold-out RMSE — a less optimistic accuracy estimate than
+    // the random hold-out above, since it predicts across whole withheld blocks
+    // (Phase 4). Shown with its bootstrap CI when it was computed.
+    const blocked = this._result?.blockedAccuracy;
+    if (blocked && blocked.n > 0 && Number.isFinite(blocked.rmse)) {
+      this._validationRow.append(this._hint(
+        el('div', {
+          className: 'olv-analyse-blocked',
+          text: `Blocked RMSE: ${fmtR(blocked.rmse)} m (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
+        }),
+        'Spatially-blocked cross-validation: the surface is rebuilt with whole blocks withheld, then scored on them, so it measures how the DTM predicts across a real gap. It runs larger than the random hold-out RMSE, which is optimistic because withheld points sit among their neighbours. Still a data-quality diagnostic, not field-checkpoint accuracy.',
+      ));
+    }
   }
 
   private _renderBody(): void {

@@ -37,6 +37,12 @@ export interface ConfidenceSample {
   readonly confidence: number;
   /** Absolute vertical residual at that point, source linear units. */
   readonly absError: number;
+  /**
+   * Whether the held-out point landed on a measured or interpolated cell.
+   * Optional (older callers omit it); the measured-vs-model reliability split
+   * uses it to keep an empirical reliability separate from model-based support.
+   */
+  readonly zone?: SurfaceZone;
 }
 
 /** Slope band a held-out point fell in (by local Horn slope). */
@@ -69,6 +75,17 @@ export interface ValidationReport {
   readonly mae: number;
   /** 95th-percentile absolute residual. */
   readonly p95: number;
+  /**
+   * Mean SIGNED residual — the systematic vertical bias. Positive ⇒ the held-out
+   * points sit above the surface (the surface reads low), negative ⇒ the reverse.
+   * NaN when count 0.
+   */
+  readonly bias: number;
+  /**
+   * Normalised median absolute deviation (1.4826 × MAD) — a robust, outlier-
+   * resistant estimate of the vertical error spread. NaN when count 0.
+   */
+  readonly nmad: number;
   /** Held-out points that landed in a covered cell (used in the stats). */
   readonly sampleSize: number;
   /** Held-out points whose cell had no training data (could not predict). */

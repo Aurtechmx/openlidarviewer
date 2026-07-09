@@ -1,5 +1,6 @@
 import { defineConfig, type PluginOption } from 'vite';
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
 
@@ -8,6 +9,47 @@ import { visualizer } from 'rollup-plugin-visualizer';
 const pkg = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
 ) as { version: string };
+
+/**
+ * Resolve the SINGLE build-time identity, frozen into the bundle as the
+ * `__BUILD_IDENTITY__` global (see src/build/buildIdentity.ts). This is what
+ * lets an export record which BUILD produced it, not just which release.
+ *
+ * Honesty: git is queried best-effort. On a checkout with no `.git` (a source
+ * tarball) the queries throw and `commit` stays the literal `'unknown'`,
+ * `dirty` stays `false` — never a fabricated hash. `builtAt` honours
+ * `SOURCE_DATE_EPOCH` so a reproducible build can pin the timestamp.
+ */
+function resolveBuildIdentity(mode: string): {
+  version: string;
+  commit: string;
+  dirty: boolean;
+  builtAt: string;
+  node: string;
+  channel: string;
+} {
+  let commit = 'unknown';
+  let dirty = false;
+  try {
+    commit =
+      execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString()
+        .trim() || 'unknown';
+    dirty =
+      execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString()
+        .trim().length > 0;
+  } catch {
+    // git unavailable (e.g. a source-tarball build) — stay 'unknown' / false.
+  }
+  const epoch = process.env.SOURCE_DATE_EPOCH;
+  const builtAt =
+    epoch && /^\d+$/.test(epoch)
+      ? new Date(Number(epoch) * 1000).toISOString()
+      : new Date().toISOString();
+  const channel = mode === 'live' ? 'live' : mode === 'development' ? 'dev' : 'plain';
+  return { version: pkg.version, commit, dirty, builtAt, node: process.version, channel };
+}
 
 /**
  * The live-deployment source-transform plugin.
@@ -383,7 +425,10 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_IDENTITY__: JSON.stringify(resolveBuildIdentity(mode)),
+  },
   // The chunk-emission guard runs on every build; the live source transform only on `live`.
   plugins: [
     chunkEmissionGuard() as PluginOption,

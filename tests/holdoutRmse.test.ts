@@ -34,6 +34,25 @@ describe('holdoutValidateDtm', () => {
     expect(r.mae).toBeLessThan(1e-6);
   });
 
+  it('discloses the classify-before-split limitation in its warnings', () => {
+    const { points, mask } = surface((x) => 0.3 * x);
+    const r = holdoutValidateDtm(points, mask, { cellSizeM: 1, holdoutFraction: 0.3, seed: 1 });
+    expect(r.warnings.some((w) => /classification used the full cloud/i.test(w))).toBe(true);
+  });
+
+  it('tags collected samples with their surface zone (for the reliability split)', () => {
+    const { points, mask } = surface((x) => 0.5 * x);
+    const r = holdoutValidateDtm(points, mask, {
+      cellSizeM: 1, holdoutFraction: 0.3, seed: 1, collectSamples: true,
+    });
+    expect(r.samples && r.samples.length).toBeGreaterThan(0);
+    // Every collected sample now carries a measured/interpolated zone so the
+    // measured-vs-model reliability split can separate the two.
+    for (const s of r.samples ?? []) {
+      expect(s.zone === 'measured' || s.zone === 'interpolated').toBe(true);
+    }
+  });
+
   it('reports a small RMSE on a gently tilted plane (bilinear recovery)', () => {
     const { points, mask } = surface((x) => 0.5 * x);
     const r = holdoutValidateDtm(points, mask, { cellSizeM: 1, holdoutFraction: 0.3, seed: 1 });
