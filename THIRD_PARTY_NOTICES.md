@@ -108,10 +108,13 @@ that license has been removed.
 These small files live under `tests/` and are used only by the automated
 test suite; they are not part of the published web app.
 
-- `tests/bunnyFloat.e57` — the "Stanford Bunny", from the Stanford Computer
-  Graphics Laboratory 3D Scanning Repository
-  (https://graphics.stanford.edu/data/3Dscanrep/). Provided for research use;
-  credited here as a courtesy. Used only to exercise the E57 reader.
+- `tests/bunnyFloat.e57` — NOT redistributed. The "Stanford Bunny" (Stanford
+  Computer Graphics Laboratory 3D Scanning Repository,
+  https://graphics.stanford.edu/data/3Dscanrep/) does not carry an explicit
+  redistribution grant, so it is not bundled with this repository. The E57
+  reader's real-file coverage runs against the licensed pump fixture below; a
+  developer may drop `tests/bunnyFloat.e57` locally to run the additional
+  bit-packed invalid-state decode assertions.
 - `tests/pumpARowColumnIndexNoInvalidPoints.e57` — a pump-room laser scan
   (gridded, XYZ + intensity + RGB) from the libE57 example/test data
   (http://www.libe57.org/data.html). © 2008 Carnahan-Proctor and Cross, Inc.

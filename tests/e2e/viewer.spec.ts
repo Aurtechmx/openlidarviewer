@@ -52,11 +52,14 @@ test('opens a dropped E57 scan', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
 
-  // Drop the bundled E57 fixture — exercises the full sniff → parse → render path.
-  const e57 = readFileSync(fileURLToPath(new URL('../bunnyFloat.e57', import.meta.url)));
+  // Drop the bundled (licensed) E57 fixture — exercises the full
+  // sniff → parse → render path.
+  const e57 = readFileSync(
+    fileURLToPath(new URL('../pumpARowColumnIndexNoInvalidPoints.e57', import.meta.url)),
+  );
   const dataTransfer = await page.evaluateHandle((bytes) => {
     const dt = new DataTransfer();
-    dt.items.add(new File([new Uint8Array(bytes)], 'bunny.e57'));
+    dt.items.add(new File([new Uint8Array(bytes)], 'pump.e57'));
     return dt;
   }, [...e57]);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
