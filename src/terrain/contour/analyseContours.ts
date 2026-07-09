@@ -673,9 +673,14 @@ export function computeTerrainCore(
     ? gateIntervals({
         cellSizeM: params.cellSizeM,
         elevationRangeM,
-        rmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+        // UNIT CONSISTENCY: candidate intervals and the elevation range/bounds
+        // are in the surface's SOURCE vertical units (contours draw against
+        // `dtm.z`, which `contoursAt` uses raw). The hold-out RMSE is in METRES.
+        // Feeding it raw made the "finer than 2×error" rule compare feet against
+        // metres on foot-based data; express RMSE in the interval's own units.
+        rmseM: Number.isFinite(validation.rmse) ? validation.rmse / vMetresB : null,
         // Real bounds unlock the EXACT level-crossing test for the coarse-
-        // interval rule (a 1 m interval on a 0.4–1.2 m surface crosses 1.0).
+        // interval rule (a 1-unit interval on a 0.4–1.2-unit surface crosses 1.0).
         minZ: Number.isFinite(minZ) ? minZ : null,
         maxZ: Number.isFinite(maxZ) ? maxZ : null,
       })
