@@ -29,7 +29,7 @@ const ASSETS = join(ROOT, 'dist', 'assets');
 
 /** prefix (before the -hash.js) → hard ceiling in KiB. */
 const BUDGETS = [
-  { prefix: 'index', maxKiB: 772 },                 // live ~761 KiB (v0.5.5: left+right rail collapse landed as shell UI; kept tight, ~1.5% headroom)
+  { prefix: 'index', maxKiB: 776 },                 // live ~775 KiB. Raised 772→776 at v0.5.9 (committed): the Contour Studio launcher's minimal shell wiring (AnalysePanel.setContourFrame + the gated deliverable container that relocates the existing contour-export controls) adds ~3 KiB obfuscated. The launcher itself, its state adapter, and its strings ride the lazy `contourStudioMount` chunk (§26.1), not the shell — verified: a separate contourStudioMount-*.js is emitted and the plain-build shell-leak fingerprint guard stays green.
   { prefix: 'vendor-three-webgpu', maxKiB: 1100 },  // live ~978 KiB
   { prefix: 'vendor-pdf', maxKiB: 512 },            // live ~410 KiB
 ];

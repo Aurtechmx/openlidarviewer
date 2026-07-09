@@ -296,6 +296,20 @@ export function createTerrainAnalysisRunner(
       if (isStale()) return;
       analysePanel.setBusy(false);
       analysePanel.update(result);
+      // Contour Studio launcher: hand the panel the CRS frame facts (projected
+      // vs geographic, vertical unit known) that live here on the CRS service.
+      // The panel lazily loads the launcher (adapter + render), computes the
+      // launch state from this result, and gates the contour export controls
+      // behind it — keeping Contour Studio out of the eager shell (§26.1).
+      const cur = crsService.current();
+      analysePanel.setContourFrame({
+        streaming: false,
+        crsProjected: cur?.kind === 'projected',
+        // Conservative proxy: a known vertical datum implies we trust the
+        // vertical reference/unit. Unknown → the launcher caps to exploratory
+        // rather than claiming metric-supported intervals.
+        verticalUnitsKnown: !!result.quality.datumKnown,
+      });
       // Hand the fresh result to the host AFTER the panel adopts it, so any
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the
       // same winning result the panel shows.

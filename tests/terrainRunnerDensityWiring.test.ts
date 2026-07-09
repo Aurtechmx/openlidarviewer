@@ -58,6 +58,7 @@ function makeRunner(
     setBusy: () => {},
     setStatus: () => {},
     update: () => {},
+    setContourFrame: () => {},
   } as unknown as AnalysePanel;
   const fakeCrs = { current: () => null } as unknown as CrsService;
   return createTerrainAnalysisRunner({

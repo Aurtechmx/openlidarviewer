@@ -99,6 +99,8 @@ import {
   renderWorkflowCard,
   renderWhyDetails,
 } from './workflowCardRender';
+import { loadContourStudioMount } from '../lazyChunks';
+import type { LaunchFrameContext } from './contourStudioMount';
 import type { SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
 import type { DatasetIntelligence } from '../terrain/datasetIntelligence';
@@ -261,6 +263,16 @@ export class AnalysePanel {
   private readonly _exportNote: HTMLElement;
   private readonly _exportButtons: HTMLButtonElement[] = [];
   /**
+   * Contour Studio launcher slot + the gated deliverable container. v0.5.9 §3:
+   * the crowded panel no longer shows the contour export controls inline. It
+   * shows a noticed "Terrain Products" launcher; the export controls live in
+   * `_contourDeliverable`, hidden until the launcher's action is invoked.
+   */
+  private readonly _contourLauncher: HTMLElement;
+  private readonly _contourDeliverable: HTMLElement;
+  /** Monotonic token so a slow lazy launcher load can't mount a stale result. */
+  private _contourToken = 0;
+  /**
    * The contour shape style applied to the quick GeoJSON / SVG / DXF exports.
    * The Export-Contours (map PDF) dialog overrides it per-export; there is no
    * panel-level picker — style is chosen in that dialog.
@@ -346,6 +358,19 @@ export class AnalysePanel {
     this._legend = this._buildLegend();
     this._roadmap = this._buildRoadmap();
 
+    // Contour Studio launcher + gated deliverable (v0.5.9 §3). The contour
+    // export controls move out of the always-visible results flow into
+    // `_contourDeliverable`, revealed only when the launcher action fires.
+    this._contourLauncher = el('div', { className: 'olv-analyse-contour-launcher' });
+    this._contourDeliverable = el('div', {
+      className: 'olv-analyse-contour-deliverable olv-hidden',
+    });
+    this._contourDeliverable.append(
+      section('Contour export'),
+      this._exportRow,
+      this._exportNote,
+    );
+
     // Everything that needs a result lives in one region we show/hide.
     this._resultsRegion = el('div', { className: 'olv-analyse-results' });
     // The detailed metrics live behind a collapsed "Details" expander so the
@@ -378,9 +403,8 @@ export class AnalysePanel {
       details,
       section('Surface models'),
       this._surfaceRow,
-      section('Contour export'),
-      this._exportRow,
-      this._exportNote,
+      this._contourLauncher,
+      this._contourDeliverable,
       this._legend,
       this._body,
     );
@@ -460,7 +484,15 @@ export class AnalysePanel {
     // primary action — visual weight follows importance.
     this._runBtn.textContent = this._runLabel();
     this._runBtn.classList.toggle('is-rerun', has);
-    if (!has) return;
+    if (!has) {
+      // No result: clear the launcher and re-hide the deliverable so a stale
+      // contour export UI can never linger after the scan is cleared. Bumping
+      // the token cancels any in-flight lazy launcher mount.
+      this._contourToken++;
+      this._contourLauncher.replaceChildren();
+      this._contourDeliverable.classList.add('olv-hidden');
+      return;
+    }
     this._renderFitness();
     this._renderAssessment();
     this._renderScore();
@@ -471,6 +503,41 @@ export class AnalysePanel {
     this._renderSurface();
     this._renderBody();
     this._renderExportGate();
+  }
+
+  /**
+   * Supply the reference-frame facts (from the terrain runner, which owns the
+   * CRS service) and (re)mount the Contour Studio launcher. The launcher, its
+   * state adapter, and its strings live behind a lazy chunk (v0.5.9 §26.1), so
+   * this kicks off a dynamic import and mounts the result asynchronously; a
+   * monotonic token drops a stale mount if the scan changed meanwhile.
+   *
+   * The launcher replaces the always-visible contour export section: the export
+   * controls stay hidden in `_contourDeliverable` until the user clicks the
+   * launcher's action. `null` (or no current result) clears the launcher.
+   * Honesty-first: label + enabled state come from the computed launch state.
+   */
+  setContourFrame(ctx: LaunchFrameContext | null): void {
+    const token = ++this._contourToken; // any new call supersedes a pending mount
+    this._contourLauncher.replaceChildren();
+    // Always re-hide first: opening the deliverable is an explicit user action,
+    // and a fresh frame must not leak the previous scan's open panel.
+    this._contourDeliverable.classList.add('olv-hidden');
+    const result = this._result;
+    if (!ctx || !result) return;
+    void loadContourStudioMount()
+      .then((m) => {
+        // Drop if a newer frame/result landed while the chunk loaded.
+        if (token !== this._contourToken || this._result !== result) return;
+        const card = m.buildContourLauncher(result, ctx, () =>
+          this._contourDeliverable.classList.remove('olv-hidden'),
+        );
+        if (card) this._contourLauncher.append(card);
+      })
+      .catch(() => {
+        /* The launcher is an optional post-analysis surface — if its chunk
+         * fails to load, omit it rather than breaking the panel. */
+      });
   }
 
   /**

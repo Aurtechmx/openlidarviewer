@@ -40,6 +40,14 @@
 export const loadViewer = () => import('./render/Viewer');
 
 /**
+ * Load the Contour Studio launcher (state adapter + launcher DOM builder) on
+ * demand — the first time a terrain analysis completes, never in the initial
+ * shell (v0.5.9 §26.1). Keeps the launcher, adapter, and launch-state strings
+ * out of the eager index chunk.
+ */
+export const loadContourStudioMount = () => import('./ui/contourStudioMount');
+
+/**
  * Load the v0.5.7 capability-driven panel wiring on scan open. Held out of the
  * eager shell (it imports `displayProfile` + `scanCapability`) so those modules
  * don't count against the tight `index` bundle budget — the profile is only
