@@ -55,6 +55,14 @@ export interface IcpResult {
   readonly translation: Vec3;
   /** Empty/degenerate input (fewer than 3 points in either cloud). */
   readonly degenerate: boolean;
+  /**
+   * Fraction of source points whose final nearest-neighbour distance is within
+   * `maxResidual` — a REPORTED overlap/inlier diagnostic, not used to steer the
+   * solve. Low overlap (say < 0.5) with a small RMS is the classic "locked onto
+   * a subset" failure the RMS alone hides. Trivially 1 when `maxResidual` is
+   * Infinity (no tolerance set to measure against).
+   */
+  readonly inlierFraction: number;
 }
 
 /** Apply a solved ICP transform to a point: R(yaw)·p + t. */
@@ -101,7 +109,7 @@ export function icpRegister(
   if (source.length < 3 || target.length < 3) {
     return {
       converged: false, refused: true, iterations: 0, rmsResidual: Infinity,
-      yawRad: 0, translation: [0, 0, 0], degenerate: true,
+      yawRad: 0, translation: [0, 0, 0], degenerate: true, inlierFraction: 0,
     };
   }
 
@@ -168,13 +176,19 @@ export function icpRegister(
     prevRms = rms;
   }
 
-  // Final residual at the converged transform.
+  // Final residual at the converged transform, plus the reported inlier count
+  // (source points within `maxResidual` of a target point). Diagnostic only.
   let sumD2 = 0;
+  let inliers = 0;
+  const maxD2 = maxResidual * maxResidual;
   for (const p of source) {
     const m = applyIcp({ yawRad: yaw, translation: t }, p);
-    sumD2 += nearest(m, target).d2;
+    const { d2 } = nearest(m, target);
+    sumD2 += d2;
+    if (d2 <= maxD2) inliers++;
   }
   const finalRms = Math.sqrt(sumD2 / source.length);
+  const inlierFraction = inliers / source.length;
 
   // Normalise yaw to (−π, π].
   let yawN = yaw % (2 * Math.PI);
@@ -189,5 +203,6 @@ export function icpRegister(
     yawRad: yawN,
     translation: t,
     degenerate: false,
+    inlierFraction,
   };
 }
