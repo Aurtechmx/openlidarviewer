@@ -4,12 +4,15 @@ node_modules
 .pnp.*
 
 # ── Build output ─────────────────────────────────────────────────────────────
-dist
-dist-ssr
-build
-vbuild
-distcheck
-coverage
+# NOTE: these are anchored to the repo root (leading `/`). An unanchored `build`
+# matched `src/build/` anywhere and silently un-tracked `src/build/buildIdentity.ts`,
+# which broke a clean checkout's typecheck/build. Keep these root-anchored.
+/dist
+/dist-ssr
+/build
+/vbuild
+/distcheck
+/coverage
 *.tsbuildinfo
 
 # ── Test / tooling output ────────────────────────────────────────────────────
