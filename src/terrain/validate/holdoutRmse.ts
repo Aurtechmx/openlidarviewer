@@ -91,7 +91,40 @@ export interface HoldoutParams {
    * so the slope's run is in metres. Ignored when `isGeographic`. Default 1.
    */
   readonly horizontalUnitToMetres?: number;
+  /**
+   * OPTIONAL train-only ground reclassifier — the honest fix for the
+   * classify-before-split leak. This module validates a SURFACE given a ground
+   * mask; it does not itself own a classifier, so by default the mask it is
+   * handed was produced over the WHOLE cloud (the held-out points helped decide
+   * their own ground membership — a mild optimism).
+   *
+   * When supplied, this hook is invoked ONCE with the full point array and a
+   * `isHeldOut` flag array (1 ⇒ that point is a held-out test point that MUST be
+   * excluded from classification). It must return a fresh ground mask over
+   * `points`. The surface is then fit from the points this train-only pass calls
+   * ground (minus the held-out set), so the held-out points no longer influence
+   * the classification that decides the training surface — the leak is removed
+   * for the fold's fit rather than merely disclosed.
+   *
+   * Must be pure and deterministic (same inputs → same mask) to keep the report
+   * reproducible. If it throws, returns a wrong-length mask, or yields no ground
+   * points, the run falls back to the supplied full-cloud mask and re-states the
+   * documented limitation in `warnings`.
+   */
+  readonly reclassifyGround?: (
+    points: ReadonlyArray<TerrainPoint>,
+    isHeldOut: Uint8Array,
+  ) => Uint8Array | ReadonlyArray<number>;
 }
+
+/**
+ * Disclosure kept when the surface-fit classification leak is NOT removed
+ * (no `reclassifyGround` hook): the held-out points' ground membership was
+ * decided by a classifier that saw the full cloud, a mild optimism versus a
+ * true classify-inside-fold. Stated, not hidden.
+ */
+const FULL_CLOUD_CLASSIFICATION_WARNING =
+  'hold-out withholds points from the surface fit only; ground classification used the full cloud (mild optimism vs classify-inside-fold)';
 
 /** Small, fast, deterministic PRNG (mulberry32). */
 function mulberry32(seed: number): () => number {
@@ -128,8 +161,11 @@ export function holdoutValidateDtm(
     holdoutFraction = 0.2;
   }
 
-  // Collect finite ground returns.
+  // Collect finite ground returns, keeping each one's index back into the
+  // source `points` array so a train-only reclassifier can be told exactly which
+  // originals were withheld.
   const ground: TerrainPoint[] = [];
+  const groundIdx: number[] = [];
   for (let i = 0; i < points.length; i++) {
     if (isGround[i] !== 1) continue;
     const p = points[i];
@@ -137,6 +173,7 @@ export function holdoutValidateDtm(
       continue;
     }
     ground.push(p);
+    groundIdx.push(i);
   }
 
   if (ground.length < 4) {
@@ -144,28 +181,75 @@ export function holdoutValidateDtm(
     return emptyReport(holdoutFraction, warnings);
   }
 
-  // Deterministic split.
+  // Deterministic split. Iterate by index (identical RNG draw order to the
+  // previous `for..of ground`, so the split is unchanged) while recording each
+  // held-out point's ORIGINAL source index for the reclassifier.
   const rng = mulberry32(params.seed ?? 1);
   const train: TerrainPoint[] = [];
   const test: TerrainPoint[] = [];
-  for (const p of ground) {
-    if (rng() < holdoutFraction) test.push(p);
-    else train.push(p);
+  const testIdx: number[] = [];
+  for (let j = 0; j < ground.length; j++) {
+    const p = ground[j];
+    if (rng() < holdoutFraction) {
+      test.push(p);
+      testIdx.push(groundIdx[j]);
+    } else {
+      train.push(p);
+    }
   }
   if (train.length === 0 || test.length === 0) {
     warnings.push('split produced an empty train or test set');
     return emptyReport(holdoutFraction, warnings);
   }
-  // HONESTY: the hold-out withholds points from the SURFACE FIT only (the DTM
-  // below is built from `train` alone). Ground CLASSIFICATION, however, ran once
-  // over the whole cloud before this split, so the held-out points' ground
-  // membership was decided with the full cloud in view. That makes this a mild
-  // optimism versus true end-to-end validation (classify inside each fold), and
-  // is one reason terrain products sit at E3 (synthetic) rather than a field-
-  // validated level. Stated, not hidden.
-  warnings.push(
-    'hold-out withholds points from the surface fit only; ground classification used the full cloud (mild optimism vs classify-inside-fold)',
-  );
+
+  // The DTM below is fit from `fitTrain`. The hold-out already withholds points
+  // from the SURFACE FIT; the remaining leak is the ground CLASSIFICATION, which
+  // decided the held-out points' membership with the full cloud in view. If the
+  // caller supplied a train-only reclassifier, re-run classification WITHOUT the
+  // held-out points and fit the surface from that mask — a real reduction of the
+  // leak, not a reworded warning. Otherwise keep the full-cloud train set and
+  // re-state the documented limitation.
+  let fitTrain: TerrainPoint[] = train;
+  if (params.reclassifyGround) {
+    const isHeldOut = new Uint8Array(points.length);
+    for (const idx of testIdx) isHeldOut[idx] = 1;
+    let newMask: Uint8Array | ReadonlyArray<number> | null = null;
+    try {
+      newMask = params.reclassifyGround(points, isHeldOut);
+    } catch {
+      newMask = null;
+    }
+    if (!newMask || newMask.length !== points.length) {
+      warnings.push(
+        'reclassifyGround returned an invalid mask; falling back to full-cloud classification',
+      );
+      warnings.push(FULL_CLOUD_CLASSIFICATION_WARNING);
+    } else {
+      const reTrain: TerrainPoint[] = [];
+      for (let i = 0; i < points.length; i++) {
+        if (isHeldOut[i] === 1) continue; // held-out points never train the surface
+        if (newMask[i] !== 1) continue;
+        const p = points[i];
+        if (!Number.isFinite(getH1(p)) || !Number.isFinite(getH2(p)) || !Number.isFinite(getV(p))) {
+          continue;
+        }
+        reTrain.push(p);
+      }
+      if (reTrain.length === 0) {
+        warnings.push(
+          'train-only reclassification produced no ground points; falling back to full-cloud classification',
+        );
+        warnings.push(FULL_CLOUD_CLASSIFICATION_WARNING);
+      } else {
+        fitTrain = reTrain;
+        warnings.push(
+          'ground classification re-run on training points only (held-out points excluded from the classifier); surface-fit classification leak removed',
+        );
+      }
+    }
+  } else {
+    warnings.push(FULL_CLOUD_CLASSIFICATION_WARNING);
+  }
 
   // Grid covering ALL ground returns so test points map into it.
   let minH1 = Infinity;
@@ -191,7 +275,7 @@ export function holdoutValidateDtm(
   // the delivered one. Before v0.4.5 this path skipped the despike and the
   // extrapolation guard and dropped `horizontalUnitToMetres`, so the
   // confidence calibration was fit against a DIFFERENT surface.
-  const raster = rasterizeDtm(train, new Uint8Array(train.length).fill(1), {
+  const raster = rasterizeDtm(fitTrain, new Uint8Array(fitTrain.length).fill(1), {
     grid: { originH1: minH1, originH2: minH2, cols, rows, cellSizeM },
     aggregation: params.aggregation ?? 'mean',
     verticalAxis: vertical,

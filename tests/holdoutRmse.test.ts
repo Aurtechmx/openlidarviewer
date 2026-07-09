@@ -113,3 +113,123 @@ describe('holdoutValidateDtm', () => {
     expect(r.warnings.join(' ')).toMatch(/holdoutFraction/i);
   });
 });
+
+/**
+ * DEFECT 1 — classify-before-split. The default path keeps the full-cloud
+ * classification and discloses it. The `reclassifyGround` hook actually removes
+ * the leak: it re-runs classification on training points only (held-out points
+ * excluded), so the surface fit is no longer built with the held-out points'
+ * ground membership decided using themselves.
+ */
+describe('holdoutValidateDtm — train-only reclassification (classify-before-split fix)', () => {
+  /**
+   * Constructed leak fixture. True ground is a flat z=0 plane. A ridge of
+   * BLUNDER returns sits at z=10 (non-ground in the full-cloud mask). The
+   * injected classifier is deliberately leak-sensitive: it promotes the ridge to
+   * ground ONLY when some points are held out — standing in for a real
+   * classifier whose decision shifts once the held-out points leave the cloud.
+   * With the full-cloud mask the surface is clean (RMSE≈0, optimistic); with
+   * train-only reclassification the ridge enters the fit, lifting the surface and
+   * revealing a real, larger residual — the optimism is removed.
+   */
+  function leakScenario(): { points: TerrainPoint[]; isGround: Uint8Array } {
+    const points: TerrainPoint[] = [];
+    const isGround: number[] = [];
+    for (let x = 0; x <= 8; x += 0.5) {
+      for (let y = 0; y <= 8; y += 0.5) {
+        points.push({ x, y, z: 0 });
+        isGround.push(1);
+      }
+    }
+    for (let x = 0; x <= 8; x += 0.5) {
+      points.push({ x, y: 4.25, z: 10 }); // ridge blunders, initially non-ground
+      isGround.push(0);
+    }
+    return { points, isGround: Uint8Array.from(isGround) };
+  }
+
+  // The leak-sensitive classifier: ridge (z>5) becomes ground only when the
+  // held-out set is non-empty; true-ground points stay ground.
+  const leakClassifier = (
+    pts: ReadonlyArray<TerrainPoint>,
+    heldOut: Uint8Array,
+  ): Uint8Array => {
+    let any = 0;
+    for (const v of heldOut) if (v) { any = 1; break; }
+    return Uint8Array.from(pts.map((p) => (p.z > 5 ? any : 1)));
+  };
+
+  it('default path keeps the full-cloud classification and discloses it', () => {
+    const { points, isGround } = leakScenario();
+    const r = holdoutValidateDtm(points, isGround, { cellSizeM: 1, holdoutFraction: 0.3, seed: 1 });
+    expect(r.warnings.some((w) => /classification used the full cloud/i.test(w))).toBe(true);
+    // Full-cloud surface is clean: the optimistic ≈0 RMSE.
+    expect(r.rmse).toBeLessThan(1e-6);
+  });
+
+  it('reclassifyGround removes the optimism: held-out estimate no longer biased low', () => {
+    const { points, isGround } = leakScenario();
+    const full = holdoutValidateDtm(points, isGround, { cellSizeM: 1, holdoutFraction: 0.3, seed: 1 });
+    const reclassed = holdoutValidateDtm(points, isGround, {
+      cellSizeM: 1,
+      holdoutFraction: 0.3,
+      seed: 1,
+      reclassifyGround: leakClassifier,
+    });
+    // The train-only fit reveals a real residual the full-cloud fit hid.
+    expect(reclassed.rmse).toBeGreaterThan(full.rmse);
+    expect(reclassed.rmse).toBeGreaterThan(0.5);
+    // Disclosure flips: leak removed, no longer the "full cloud" caveat.
+    expect(reclassed.warnings.some((w) => /re-run on training points only/i.test(w))).toBe(true);
+    expect(reclassed.warnings.some((w) => /classification used the full cloud/i.test(w))).toBe(false);
+  });
+
+  it('never shows the classifier the held-out points (leak is structurally removed)', () => {
+    const { points, isGround } = leakScenario();
+    let seen: Uint8Array | null = null;
+    holdoutValidateDtm(points, isGround, {
+      cellSizeM: 1,
+      holdoutFraction: 0.3,
+      seed: 1,
+      reclassifyGround: (pts, heldOut) => {
+        seen = heldOut;
+        return leakClassifier(pts, heldOut);
+      },
+    });
+    expect(seen).not.toBeNull();
+    const flags = seen as unknown as Uint8Array;
+    let held = 0;
+    flags.forEach((v, i) => {
+      if (v) {
+        held++;
+        // Only ground returns are ever withheld — every held-out flag is ground.
+        expect(isGround[i]).toBe(1);
+      }
+    });
+    expect(held).toBeGreaterThan(0);
+  });
+
+  it('is deterministic with the reclassifier for a fixed seed', () => {
+    const { points, isGround } = leakScenario();
+    const a = holdoutValidateDtm(points, isGround, {
+      cellSizeM: 1, holdoutFraction: 0.3, seed: 5, reclassifyGround: leakClassifier,
+    });
+    const b = holdoutValidateDtm(points, isGround, {
+      cellSizeM: 1, holdoutFraction: 0.3, seed: 5, reclassifyGround: leakClassifier,
+    });
+    expect(a.rmse).toBe(b.rmse);
+    expect(a.sampleSize).toBe(b.sampleSize);
+  });
+
+  it('falls back to the full-cloud disclosure when the reclassifier returns an invalid mask', () => {
+    const { points, isGround } = leakScenario();
+    const r = holdoutValidateDtm(points, isGround, {
+      cellSizeM: 1,
+      holdoutFraction: 0.3,
+      seed: 1,
+      reclassifyGround: () => new Uint8Array(3), // wrong length
+    });
+    expect(r.warnings.some((w) => /invalid mask/i.test(w))).toBe(true);
+    expect(r.warnings.some((w) => /classification used the full cloud/i.test(w))).toBe(true);
+  });
+});

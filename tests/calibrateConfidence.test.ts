@@ -96,6 +96,63 @@ describe('fitConfidenceCalibration', () => {
 
 });
 
+/**
+ * DEFECT 2 — circular calibration. The applied curve is fit on all held-out
+ * samples (correct: it is applied to unseen LIVE cells), but its QUALITY must be
+ * reported out-of-fold, never scored on its own fit set. `evaluation` is the
+ * K-fold cross-fit assessment that guarantees this.
+ */
+describe('fitConfidenceCalibration — out-of-fold evaluation (anti-circularity)', () => {
+  it('reports an out-of-fold cross-fit evaluation by default', () => {
+    const cal = fitConfidenceCalibration(samples(), { toleranceM: 1 });
+    expect(cal.evaluation).toBeDefined();
+    expect(cal.evaluation!.crossValidated).toBe(true);
+    expect(cal.evaluation!.folds).toBe(5);
+    // Every held-out sample is scored exactly once, out-of-fold.
+    expect(cal.evaluation!.sampleSize).toBe(100);
+    expect(cal.evaluation!.brier).toBeGreaterThanOrEqual(0);
+    expect(cal.evaluation!.reliability).toBeGreaterThanOrEqual(0);
+    expect(cal.evaluation!.reliability).toBeLessThanOrEqual(1);
+  });
+
+  it('is not fit on the evaluation fold: no point is scored by a calibrator trained on it', () => {
+    // Two folds (by index parity) with INVERTED reliability: even-index samples
+    // are all within tolerance, odd-index all outside — at the SAME confidences.
+    // A self-scored (in-sample) calibrator would learn 50% everywhere → Brier
+    // ≈0.25. Cross-fit scores each fold with the OPPOSITE fold, whose reliability
+    // is inverted, so predictions are ~1 where the truth is 0 and vice versa →
+    // Brier ≈1.0. A Brier far above 0.25 is only possible if the calibrator that
+    // scored each point was never trained on it.
+    const s: ConfidenceSample[] = [];
+    for (let i = 0; i < 80; i++) {
+      const within = i % 2 === 0; // even → within tol, odd → outside
+      const confidence = i % 4 < 2 ? 25 : 75; // both bins present in each fold
+      s.push({ confidence, absError: within ? 0.1 : 5 });
+    }
+    const cal = fitConfidenceCalibration(s, { toleranceM: 1, bins: 10, cvFolds: 2, seed: 0 });
+    expect(cal.assessable).toBe(true);
+    const ev = cal.evaluation!;
+    expect(ev.crossValidated).toBe(true);
+    expect(ev.sampleSize).toBe(80);
+    expect(ev.brier).toBeGreaterThan(0.9); // self-scoring would be ~0.25
+    expect(ev.reliability).toBeCloseTo(0.5, 1);
+  });
+
+  it('is deterministic (seeded fold assignment)', () => {
+    const a = fitConfidenceCalibration(samples(), { toleranceM: 1 });
+    const b = fitConfidenceCalibration(samples(), { toleranceM: 1 });
+    expect(a.evaluation).toEqual(b.evaluation);
+  });
+
+  it('can be disabled, omitting the evaluation block', () => {
+    const cal = fitConfidenceCalibration(samples(), { toleranceM: 1, crossValidate: false });
+    expect(cal.evaluation).toBeUndefined();
+    // The applied curve is unaffected by whether quality was cross-fit.
+    expect(cal.assessable).toBe(true);
+    expect(cal.remap(90)).toBeGreaterThan(cal.remap(20));
+  });
+});
+
 describe('applyConfidenceCalibration', () => {
   function grid(conf: number[], cov: number[]): DtmGrid {
     const n = conf.length;
@@ -125,6 +182,12 @@ describe('applyConfidenceCalibration', () => {
     const g = applyConfidenceCalibration(grid([90, 20], [2, 2]), cal);
     expect(g.confidence[0]).toBeGreaterThan(g.confidence[1]);
     expect(g.warnings.some((w) => /calibrated/i.test(w))).toBe(true);
+  });
+
+  it('surfaces the out-of-fold quality in the warning (honest, non-circular reporting)', () => {
+    const cal = fitConfidenceCalibration(samples(), { toleranceM: 1 });
+    const g = applyConfidenceCalibration(grid([90, 20], [2, 2]), cal);
+    expect(g.warnings.some((w) => /out-of-fold/i.test(w) && /cross-fit/i.test(w))).toBe(true);
   });
 
   it('returns the grid untouched when calibration is not assessable', () => {
