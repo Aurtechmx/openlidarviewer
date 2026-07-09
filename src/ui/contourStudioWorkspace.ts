@@ -20,6 +20,7 @@
 import type { ContourStudioController } from '../terrain/contourStudio/contourStudioController';
 import type { ContourStudioState } from '../terrain/contourStudio/contourStudioState';
 import type { ContourStudioLaunchState } from '../terrain/contourStudio/contourStudioLaunchState';
+import type { ContourReviewSummary } from '../terrain/contourStudio/contourReviewSummary';
 import {
   PURPOSE_META,
   type PurposeMeta,
@@ -39,8 +40,26 @@ function el<K extends keyof HTMLElementTagNameMap>(
 export interface ContourStudioWorkspaceOptions {
   readonly controller: ContourStudioController;
   readonly launch: ContourStudioLaunchState;
+  /** The review-bar recommendations built from the analysis result (PR5). */
+  readonly review?: ContourReviewSummary;
   /** Fired when an export action is chosen (wired to real exporters in PR9–11). */
   readonly onExport?: (product: 'pdf' | 'geojson' | 'dxf' | 'package') => void;
+}
+
+/** Render the review bar (spec §7.1): one row per recommendation with its
+ *  rationale exposed via the title attribute (no black-box values). */
+function renderReviewBar(review: ContourReviewSummary): HTMLElement {
+  const wrap = el('div', { className: 'olv-cs-review' });
+  wrap.append(el('div', { className: 'olv-cs-section-head', text: 'Review' }));
+  const list = el('dl', { className: 'olv-cs-review-list' });
+  for (const row of review.rows) {
+    const dt = el('dt', { className: `olv-cs-review-label is-${row.confidence}`, text: row.label });
+    const dd = el('dd', { className: 'olv-cs-review-value', text: row.value });
+    if (row.rationale.length > 0) dd.title = row.rationale.join(' ');
+    list.append(dt, dd);
+  }
+  wrap.append(list);
+  return wrap;
 }
 
 const PURPOSE_ORDER: readonly ContourStudioPurpose[] = [
@@ -166,7 +185,7 @@ function renderExportBar(
 export function renderContourStudioWorkspace(
   opts: ContourStudioWorkspaceOptions,
 ): HTMLElement {
-  const { controller, launch, onExport } = opts;
+  const { controller, launch, review, onExport } = opts;
   const root = el('div', { className: 'olv-contour-studio-workspace' });
   root.setAttribute('role', 'region');
   root.setAttribute('aria-label', 'Contour Studio');
@@ -190,6 +209,9 @@ export function renderContourStudioWorkspace(
       renderPurposeCards(state.purpose, (p) =>
         controller.dispatch({ type: 'set-purpose', purpose: p }),
       ),
+    );
+    if (review) body.append(renderReviewBar(review));
+    body.append(
       renderSettingsSummary(state),
       renderLadder(launch),
       renderExportBar(state, launch, onExport),

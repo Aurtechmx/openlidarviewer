@@ -20,6 +20,9 @@ import {
 import { renderContourStudioLauncher } from './contourStudioLauncher';
 import { renderContourStudioWorkspace } from './contourStudioWorkspace';
 import { createContourStudioController } from '../terrain/contourStudio/contourStudioController';
+import { buildContourReviewSummary } from '../terrain/contourStudio/contourReviewSummary';
+import { baseContourStudioState } from '../terrain/contourStudio/contourStudioState';
+import { knownUnit, unknownUnit } from '../units/units';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 
 export type { LaunchFrameContext };
@@ -63,7 +66,17 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
   }
   host.replaceChildren();
   const controller = createContourStudioController();
+  // Review summary (PR5): recommendations surfaced from the analysis result.
+  // The pipeline normalises the vertical axis to metres, so a known vertical
+  // unit is metres here; unknown stays unknown (no metric claim).
+  const review = buildContourReviewSummary(opts.result, {
+    launch: state,
+    state: baseContourStudioState(),
+    verticalUnit: opts.ctx.verticalUnitsKnown ? knownUnit(1) : unknownUnit(),
+    sourceUnitLabel: 'm',
+    crsProjected: opts.ctx.crsProjected,
+  });
   host.append(
-    renderContourStudioWorkspace({ controller, launch: state, onExport: opts.onExport }),
+    renderContourStudioWorkspace({ controller, launch: state, review, onExport: opts.onExport }),
   );
 }

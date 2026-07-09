@@ -113,6 +113,19 @@ describe('renderContourStudioWorkspace', () => {
     expect(onExport).toHaveBeenCalledTimes(1);
   });
 
+  it('renders the review bar rows when a review summary is provided', () => {
+    const c = createContourStudioController();
+    const review = {
+      rows: [
+        { key: 'grid' as const, label: 'Grid', value: '0.25 m · recommended', rationale: ['because spacing'], confidence: 'high' as const },
+        { key: 'evidence' as const, label: 'Evidence', value: 'Supported', rationale: [], confidence: 'high' as const },
+      ],
+    };
+    const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE, review }) as unknown as FakeEl;
+    expect(root.byClass('olv-cs-review').length).toBe(1);
+    expect(root.allText()).toContain('0.25 m · recommended');
+  });
+
   it('the settings summary reflects the current purpose', () => {
     const c = createContourStudioController();
     const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE }) as unknown as FakeEl;
