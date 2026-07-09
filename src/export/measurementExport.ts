@@ -19,6 +19,7 @@
 
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
+import { evidenceNote } from '../validation/exportEvidenceNote';
 import {
   distance,
   polylineLength,
@@ -195,6 +196,11 @@ export function measurementsToGeoJSON(
   if (!ctx.geographic && ctx.crsName) {
     fc.crs = { type: 'name', properties: { name: ctx.crsName } };
   }
+  // Route the export through the ONE evidence gate (PR6): measurements sit below
+  // their required evidence level, so the file carries the exploratory verdict
+  // rather than leaving with no gate stamp at all. RFC 7946 permits foreign
+  // members on a FeatureCollection, so a reader that ignores it is unaffected.
+  fc.evidence = evidenceNote('MEAS-DISTANCE');
   return JSON.stringify(fc, null, 2);
 }
 
