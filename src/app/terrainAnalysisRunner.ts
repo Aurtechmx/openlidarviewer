@@ -32,6 +32,8 @@ import {
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
 import { METRES_PER_DEGREE } from '../terrain/ground/horizontalScale';
+// Honest vertical-unit label for the Contour Studio launch frame (feet vs metres).
+import { verticalUnitLabel } from '../units/units';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
@@ -302,13 +304,19 @@ export function createTerrainAnalysisRunner(
       // launch state from this result, and gates the contour export controls
       // behind it — keeping Contour Studio out of the eager shell (§26.1).
       const cur = crsService.current();
+      // The vertical UNIT is known when the CRS actually declared a linear/
+      // vertical unit scale — NOT when the vertical DATUM is known (datum ≠
+      // unit: foot data can have a known datum). Carry the REAL scale + label so
+      // Contour Studio labels a foot interval "ft", never "m". Unknown unit →
+      // the launcher caps to exploratory and claims no metric-supported interval.
+      const vScale = cur?.verticalUnitToMetres ?? cur?.linearUnitToMetres ?? null;
+      const vUnitKnown = vScale != null && Number.isFinite(vScale) && vScale > 0;
       analysePanel.setContourFrame({
         streaming: false,
         crsProjected: cur?.kind === 'projected',
-        // Conservative proxy: a known vertical datum implies we trust the
-        // vertical reference/unit. Unknown → the launcher caps to exploratory
-        // rather than claiming metric-supported intervals.
-        verticalUnitsKnown: !!result.quality.datumKnown,
+        verticalUnitsKnown: vUnitKnown,
+        verticalUnitToMetres: vUnitKnown ? vScale : null,
+        verticalUnitLabel: vUnitKnown ? verticalUnitLabel(vScale) : null,
       });
       // Hand the fresh result to the host AFTER the panel adopts it, so any
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the

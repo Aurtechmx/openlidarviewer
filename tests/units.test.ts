@@ -13,7 +13,7 @@ import {
   metres, feet, sourceUnits, degrees, sqMetres, cubicMetres, raw,
   feetToMetres, metresToFeet, sourceToMetres, usSurveyFeetToMetres,
   radToDeg, degToRad, sqMetresToSqFeet, cubicMetresToCubicFeet, UNIT_FACTORS,
-  knownUnit, unknownUnit, toMetresIfKnown,
+  knownUnit, unknownUnit, toMetresIfKnown, verticalUnitLabel,
 } from '../src/units/units';
 
 describe('branded unit conversions', () => {
@@ -84,5 +84,19 @@ describe('unit constructors reject non-finite values (poison at the source)', ()
     expect(() => metres(0)).not.toThrow();
     expect(() => metres(-12.5)).not.toThrow();
     expect(metres(3.2) as number).toBe(3.2);
+  });
+});
+
+describe('verticalUnitLabel', () => {
+  it('labels metres, international feet, and US survey feet', () => {
+    expect(verticalUnitLabel(1)).toBe('m');
+    expect(verticalUnitLabel(0.3048)).toBe('ft');
+    expect(verticalUnitLabel(1200 / 3937)).toBe('ft'); // US survey foot
+  });
+  it('returns "units" for an unrecognised or invalid scale', () => {
+    expect(verticalUnitLabel(0.9144)).toBe('units'); // yard — not m/ft
+    expect(verticalUnitLabel(0)).toBe('units');
+    expect(verticalUnitLabel(Number.NaN)).toBe('units');
+    expect(verticalUnitLabel(-1)).toBe('units');
   });
 });

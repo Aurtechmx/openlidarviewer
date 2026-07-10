@@ -31,6 +31,15 @@ export interface LaunchFrameContext {
   readonly crsProjected: boolean;
   /** The vertical unit (metre/foot) is known, not unknown/local. */
   readonly verticalUnitsKnown: boolean;
+  /**
+   * Metres per source vertical unit when the unit is known (≈0.3048 for feet,
+   * 1 for metres), else null. This is the REAL scale from the CRS — Contour
+   * Studio must use it so a foot interval is never presented as metres. Null
+   * (or omitted) ⇒ unknown unit ⇒ no metric claim.
+   */
+  readonly verticalUnitToMetres?: number | null;
+  /** Display label for the source vertical unit ('m' | 'ft' | 'units'), or null when unknown. */
+  readonly verticalUnitLabel?: string | null;
 }
 
 /**

@@ -2,11 +2,18 @@
  * exportManifest.ts
  *
  * The evidence-gated export manifest (v0.5.9 spec §19). Every scientific Contour
- * Studio exporter is REGISTERED here with the claim it exports, and no export
- * path resolves a decision without going through {@link resolveExportDecision}.
- * That decision can only ever downgrade — a product the registry marks validated
- * is still capped to exploratory when the launch context isn't fully supported,
- * and never the reverse.
+ * Studio exporter is REGISTERED here with the claim it exports; the intended
+ * contract is that every functional export path resolves its decision through
+ * {@link resolveExportDecision}. That decision can only ever downgrade — a
+ * product the registry marks validated is still capped to exploratory when the
+ * launch context isn't fully supported, and never the reverse.
+ *
+ * STATUS (v0.5.9): the resolver and its downgrade-only invariant are implemented
+ * and unit-tested, but no production export path calls it yet — Contour Studio
+ * ships as a foundation shell with no functional file export in this release.
+ * The resolver becomes the enforced gate when those exports land; until then it
+ * is a tested model, not a runtime guard. (The separate, older `evidenceStatus`
+ * gate IS wired for the live measurement / report / map-sheet exports.)
  *
  * This builds on the existing evidence registry (`evidenceStatus` / `exportGate`)
  * rather than inventing a parallel gate. The decision type is named

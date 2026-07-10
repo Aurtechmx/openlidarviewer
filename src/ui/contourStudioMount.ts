@@ -65,13 +65,17 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
   host.replaceChildren();
   const controller = createContourStudioController();
   // Review summary (PR5): recommendations surfaced from the analysis result.
-  // The pipeline normalises the vertical axis to metres, so a known vertical
-  // unit is metres here; unknown stays unknown (no metric claim).
+  // The contour interval gate reports intervals in the surface's SOURCE vertical
+  // units (feet for foot data), so we must carry the REAL scale + label from the
+  // CRS — never assume metres. A foot interval is shown as "2 ft (0.61 m)", not
+  // "2 m". Unknown unit ⇒ unknownUnit() ⇒ no metric claim.
+  const scale = opts.ctx.verticalUnitToMetres;
+  const unitKnown = scale != null && Number.isFinite(scale) && scale > 0;
   const review = buildContourReviewSummary(opts.result, {
     launch: state,
     state: baseContourStudioState(),
-    verticalUnit: opts.ctx.verticalUnitsKnown ? knownUnit(1) : unknownUnit(),
-    sourceUnitLabel: 'm',
+    verticalUnit: unitKnown ? knownUnit(scale) : unknownUnit(),
+    sourceUnitLabel: (unitKnown ? opts.ctx.verticalUnitLabel : null) ?? '',
     crsProjected: opts.ctx.crsProjected,
   });
   host.append(

@@ -99,6 +99,21 @@ export const knownUnit = (metresPerUnit: number): LinearUnitScale => ({
 export const unknownUnit = (): LinearUnitScale => ({ known: false });
 
 /**
+ * Human display label for a metres-per-unit scale: 'm' at unity, 'ft' at either
+ * the international (0.3048) or US-survey (1200/3937) foot, else 'units'. Used to
+ * label source-unit numbers honestly (a foot interval must read "ft", never "m")
+ * without threading a separate name field alongside the numeric scale.
+ */
+export function verticalUnitLabel(metresPerUnit: number): 'm' | 'ft' | 'units' {
+  if (!Number.isFinite(metresPerUnit) || metresPerUnit <= 0) return 'units';
+  if (Math.abs(metresPerUnit - 1) < 1e-6) return 'm';
+  if (Math.abs(metresPerUnit - M_PER_FT) < 1e-4 || Math.abs(metresPerUnit - M_PER_US_FT) < 1e-4) {
+    return 'ft';
+  }
+  return 'units';
+}
+
+/**
  * Convert a source-unit length to metres ONLY when the unit is known. Returns
  * `null` for an unknown unit, so the caller is forced to handle it (show source
  * units, refuse a metric claim) rather than receiving a `Metres` it would

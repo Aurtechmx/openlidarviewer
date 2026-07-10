@@ -13,6 +13,20 @@
  */
 import { execSync } from 'node:child_process';
 
+// This gate is only meaningful inside a git working tree. The published source
+// archive is produced by `git archive`, which by construction contains only
+// tracked files (no ignored file can be present), and it ships WITHOUT a .git
+// directory. So when there is no repository — e.g. a reviewer running the gate
+// from the extracted source zip — the check is vacuously satisfied and must
+// SKIP gracefully rather than fail, otherwise `test:release` reports a false
+// failure the archive can never fix.
+try {
+  execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
+} catch {
+  console.log('lint:no-ignored-src SKIPPED — no git repository (source archive); the archive only contains tracked files by construction.');
+  process.exit(0);
+}
+
 let ignored = '';
 try {
   // Files under src/ that exist on disk but are ignored by .gitignore.
