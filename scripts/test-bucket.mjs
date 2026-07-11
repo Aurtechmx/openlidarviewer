@@ -33,8 +33,12 @@ import { dirname, resolve } from 'node:path';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TESTS_DIR = resolve(ROOT, 'tests');
 
-// Heavy decode / large-data / integration — the genuinely slow files.
-const SLOW = /^(torture|benchmark)|integration|streaming|copc|ept|laz|octree|voxelDownsample|convertRoundTrip|convertBatch|moduleApi|preload/i;
+// Heavy decode / large-data / integration — the genuinely slow files. LAS/LAZ
+// and buffer/worker decode tests spin up a WASM decoder and are the ones that
+// get starved (and time out) under the parallel `unit` bucket, so they belong
+// here where the runner caps parallelism and raises the timeout.
+const SLOW =
+  /^(torture|benchmark|parse|loadLas|loadLaz|laszip)|integration|streaming|copc|ept|laz|octree|voxelDownsample|convertRoundTrip|convertBatch|moduleApi|preload|wasm|decode/i;
 // The terrain-analysis pipeline.
 const TERRAIN = /^(analyse|analysis|contour|cell|ground|dem|hillshade|slope|calibrat|confidence|coverage|crs|datum|evidence|interval|civilProfile|profile|surface|quality|terrain|raster|gpuDeriv|scatter|aspect|canopy|dsm|dtm|seam|provenance|metricVersion|score|assessment|readiness|whyNot|recommend)/i;
 // The interface layer.
@@ -87,7 +91,21 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const result = spawnSync('npx', ['vitest', 'run', ...files, ...rest], {
+// Per-bucket runner policy (determinism over raw speed on CI):
+//   slow    — WASM/LAZ decode + integration: cap to 2 workers so a decoder is
+//             never starved, and give it a generous per-test timeout.
+//   terrain — heavy DTM/surface builds that legitimately run ~10-14 s in
+//             isolation: raise the timeout so parallel contention can't tip a
+//             genuine 14 s test past the strict 15 s global limit.
+// The fast buckets (unit/export/ui) keep the strict 15 s global timeout, so a
+// real regression there still trips it.
+const BUCKET_ARGS = {
+  slow: ['--maxWorkers=2', '--testTimeout=60000'],
+  terrain: ['--testTimeout=45000'],
+};
+const bucketArgs = BUCKET_ARGS[arg] ?? [];
+
+const result = spawnSync('npx', ['vitest', 'run', ...files, ...bucketArgs, ...rest], {
   cwd: ROOT,
   stdio: 'inherit',
 });

@@ -34,5 +34,11 @@ export default defineConfig({
     // suites don't time out (and flake) under parallel load on a busy machine —
     // 15 s is still unambiguously "broken" if a unit test ever hits it.
     testTimeout: 15_000,
+    // Cap parallelism so a WASM/LAZ decoder or a heavy DTM build isn't starved
+    // of CPU under full-bucket parallel load on a busy CI runner — the root cause
+    // of the loadLas / terrain-density timeout flakes. 75 % of cores keeps most
+    // of the speed while removing the over-subscription; the per-bucket runner
+    // (scripts/test-bucket.mjs) tightens this further for the slow bucket.
+    maxWorkers: '75%',
   },
 });
