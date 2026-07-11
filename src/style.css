@@ -7061,15 +7061,38 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     z-index: 50;
     display: flex;
     flex-direction: column;
-    max-height: 72vh;
+    /* Height is driven by the active snap detent (peek/half/full) below. The
+       dynamic viewport unit (dvh) accounts for the mobile URL bar; a vh line
+       first is the fallback where dvh is unsupported. The cap keeps 'full'
+       clear of the status bar. */
+    height: auto;
+    max-height: 92vh;
+    max-height: min(92dvh, 92vh);
     background: var(--panel-raised, var(--panel));
     border-top: 1px solid var(--hairline-strong, var(--hairline));
     border-radius: 16px 16px 0 0;
     box-shadow: var(--shadow-raised, 0 -14px 38px rgba(0, 0, 0, 0.5));
     padding-bottom: env(safe-area-inset-bottom);
     pointer-events: auto;
+    /* Smooth snapping between detents; the drag disables it for 1:1 tracking. */
+    transition: height 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: height;
   }
   .olv-mobile-sheet.olv-hidden { display: none; }
+  .olv-mobile-sheet.is-dragging { transition: none; }
+
+  /* ── Snap detents ─────────────────────────────────────────────────────────
+     'peek' leaves height:auto so the collapsed sheet is just its head (the body
+     is display:none via .olv-hidden). 'half' and 'full' set explicit dynamic-
+     viewport heights and let the body scroll inside. */
+  .olv-mobile-sheet.olv-msheet--half {
+    height: 50vh;
+    height: 50dvh;
+  }
+  .olv-mobile-sheet.olv-msheet--full {
+    height: 88vh;
+    height: min(88dvh, 92vh);
+  }
 
   /* Head: a grip line, the segmented tablist, and the collapse handle. */
   .olv-msheet-head {
@@ -7080,6 +7103,11 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     padding: 14px var(--space-md) var(--space-sm);
     flex: 0 0 auto;
     cursor: pointer;
+    /* The head is the drag surface: claim vertical gestures so a drag moves the
+       sheet instead of scrolling the page behind it. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   .olv-msheet-head::before {
     content: "";
@@ -7094,7 +7122,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     border-radius: 10px; padding: 3px;
   }
   .olv-msheet-tab {
-    flex: 1 1 0; min-height: 40px;
+    flex: 1 1 0; min-height: 44px;
     border: 0; border-radius: 8px; background: transparent;
     color: var(--text-dim); font: inherit; font-weight: 500;
     cursor: pointer;

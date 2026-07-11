@@ -270,3 +270,117 @@ describe('MobileSheet', () => {
     expect(root.hasClass('olv-hidden')).toBe(false);
   });
 });
+
+// ── Pure snap-math helpers ───────────────────────────────────────────────────
+// These carry the drag decision logic so it can be tested without pointer
+// events: nearestDetent snaps by position, flingTarget steps on a fast flick.
+describe('snap helpers', () => {
+  const heights = { peek: 56, half: 400, full: 700 };
+
+  it('nearestDetent picks the closest detent by position', async () => {
+    const { nearestDetent } = await import('../src/ui/MobileSheet');
+    expect(nearestDetent(58, heights)).toBe('peek');
+    expect(nearestDetent(120, heights)).toBe('peek');
+    expect(nearestDetent(390, heights)).toBe('half');
+    expect(nearestDetent(690, heights)).toBe('full');
+    expect(nearestDetent(9999, heights)).toBe('full');
+    // An exact midpoint ties; the scan resolves toward the lower detent.
+    expect(nearestDetent((heights.peek + heights.half) / 2, heights)).toBe('peek');
+  });
+
+  it('flingTarget steps one detent on a fast flick and clamps at the ends', async () => {
+    const { flingTarget } = await import('../src/ui/MobileSheet');
+    const T = 0.5;
+    // Up (negative velocity) expands one step; down (positive) collapses one.
+    expect(flingTarget('peek', -1, T)).toBe('half');
+    expect(flingTarget('half', -1, T)).toBe('full');
+    expect(flingTarget('full', 1, T)).toBe('half');
+    expect(flingTarget('half', 1, T)).toBe('peek');
+    // Clamp at the ends — no wraparound.
+    expect(flingTarget('full', -3, T)).toBe('full');
+    expect(flingTarget('peek', 3, T)).toBe('peek');
+    // A slow release (below threshold) stays put; the caller snaps by position.
+    expect(flingTarget('half', -0.2, T)).toBe('half');
+    expect(flingTarget('half', 0.2, T)).toBe('half');
+    // At exactly the threshold it still steps (boundary is inclusive).
+    expect(flingTarget('peek', -T, T)).toBe('half');
+  });
+});
+
+// ── Detent state → DOM/ARIA ──────────────────────────────────────────────────
+describe('MobileSheet detents', () => {
+  it('setDetent moves through peek/half/full and reflects in the DOM + ARIA', async () => {
+    const detents: string[] = [];
+    const flips: boolean[] = [];
+    const { root, sheet } = await makeSheet({
+      onDetentChange: (d: string) => detents.push(d),
+      onExpandedChange: (e: boolean) => flips.push(e),
+    });
+    const body = root.find((e) => e.hasClass('olv-msheet-body'))!;
+    const handle = root.find((e) => e.attrs['role'] !== 'tab' && e.tagName === 'button' && e.attrs['aria-expanded'] != null)!;
+
+    // Starts collapsed at 'peek' (the default).
+    expect(sheet.getDetent()).toBe('peek');
+    expect(root.hasClass('olv-msheet--peek')).toBe(true);
+    expect(root.dataset.detent).toBe('peek');
+
+    // peek → half: expands, swaps the detent class, updates ARIA, flips expanded.
+    sheet.setDetent('half');
+    expect(sheet.getDetent()).toBe('half');
+    expect(sheet.isExpanded()).toBe(true);
+    expect(root.hasClass('olv-msheet--half')).toBe(true);
+    expect(root.hasClass('olv-msheet--peek')).toBe(false);
+    expect(root.hasClass('is-collapsed')).toBe(false);
+    expect(body.hasClass('olv-hidden')).toBe(false);
+    expect(handle.attrs['aria-expanded']).toBe('true');
+    expect(root.dataset.detent).toBe('half');
+
+    // half → full: the detent changes but the expanded boolean does NOT flip.
+    sheet.setDetent('full');
+    expect(root.hasClass('olv-msheet--full')).toBe(true);
+    expect(root.hasClass('olv-msheet--half')).toBe(false);
+    expect(sheet.isExpanded()).toBe(true);
+
+    // full → peek: collapses again.
+    sheet.setDetent('peek');
+    expect(sheet.isExpanded()).toBe(false);
+    expect(root.hasClass('is-collapsed')).toBe(true);
+    expect(body.hasClass('olv-hidden')).toBe(true);
+    expect(handle.attrs['aria-expanded']).toBe('false');
+
+    // onDetentChange fires on every change; onExpandedChange only on the two
+    // peek⇄expanded boundary crossings (not on half⇄full).
+    expect(detents).toEqual(['half', 'full', 'peek']);
+    expect(flips).toEqual([true, false]);
+  });
+
+  it('initialDetent starts the sheet at the given detent', async () => {
+    const { sheet, root } = await makeSheet({ initialDetent: 'half' });
+    expect(sheet.getDetent()).toBe('half');
+    expect(sheet.isExpanded()).toBe(true);
+    expect(root.hasClass('olv-msheet--half')).toBe(true);
+    expect(root.hasClass('is-collapsed')).toBe(false);
+  });
+
+  it('setDetent is idempotent — no callbacks when the detent is unchanged', async () => {
+    const detents: string[] = [];
+    const flips: boolean[] = [];
+    const { sheet } = await makeSheet({
+      onDetentChange: (d: string) => detents.push(d),
+      onExpandedChange: (e: boolean) => flips.push(e),
+    });
+    sheet.setDetent('peek'); // already at peek
+    expect(detents).toEqual([]);
+    expect(flips).toEqual([]);
+  });
+
+  it('toggleExpanded still follows the two-state peek↔full path', async () => {
+    const { sheet } = await makeSheet({ initialDetent: 'half' });
+    // From an expanded detent a toggle collapses to peek…
+    sheet.toggleExpanded();
+    expect(sheet.getDetent()).toBe('peek');
+    // …and from peek it opens to full (not half), matching legacy behaviour.
+    sheet.toggleExpanded();
+    expect(sheet.getDetent()).toBe('full');
+  });
+});
