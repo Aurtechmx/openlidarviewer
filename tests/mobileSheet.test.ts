@@ -21,6 +21,7 @@ class FakeEl {
   private _classes = new Set<string>();
   private readonly _listeners = new Map<string, ((ev: unknown) => void)[]>();
   focused = false;
+  parent: FakeEl | null = null;
   readonly tagName: string;
   // `className` and `classList` share ONE backing set, so el()'s
   // `node.className = '…'` and later `classList.toggle()` stay consistent.
@@ -44,7 +45,24 @@ class FakeEl {
   get textContent(): string {
     return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
   }
-  append(...kids: FakeEl[]): void { this.children.push(...kids); }
+  append(...kids: FakeEl[]): void {
+    for (const k of kids) { k.parent = this; this.children.push(k); }
+  }
+  private _matches(sel: string): boolean {
+    if (sel.startsWith('.')) return this._classes.has(sel.slice(1));
+    const attr = /^\[([^=\]]+)="([^"]+)"\]$/.exec(sel);
+    if (attr) return this.attrs[attr[1]] === attr[2];
+    return false;
+  }
+  /** Minimal `closest`: walks up parents matching `.class` or `[attr="v"]`. */
+  closest(sel: string): FakeEl | null {
+    let node: FakeEl | null = this;
+    while (node) {
+      if (node._matches(sel)) return node;
+      node = node.parent;
+    }
+    return null;
+  }
   addEventListener(type: string, fn: (ev: unknown) => void): void {
     const list = this._listeners.get(type) ?? [];
     list.push(fn);
@@ -146,18 +164,83 @@ describe('MobileSheet', () => {
     expect(sheet.slot('view' as never)).toBe(sheet.slot('view' as never));
   });
 
+  it('starts COLLAPSED by default', async () => {
+    const { root, sheet } = await makeSheet();
+    const body = root.find((e) => e.hasClass('olv-msheet-body'))!;
+    const handle = root.find((e) => e.attrs['role'] !== 'tab' && e.tagName === 'button' && e.attrs['aria-expanded'] != null)!;
+    expect(sheet.isExpanded()).toBe(false);
+    expect(root.hasClass('is-collapsed')).toBe(true);
+    expect(body.hasClass('olv-hidden')).toBe(true);
+    // aria-expanded reflects the collapsed state at construction time.
+    expect(handle.attrs['aria-expanded']).toBe('false');
+  });
+
+  it('initialExpanded: true starts expanded', async () => {
+    const { root, sheet } = await makeSheet({ initialExpanded: true });
+    const body = root.find((e) => e.hasClass('olv-msheet-body'))!;
+    const handle = root.find((e) => e.attrs['role'] !== 'tab' && e.tagName === 'button' && e.attrs['aria-expanded'] != null)!;
+    expect(sheet.isExpanded()).toBe(true);
+    expect(root.hasClass('is-collapsed')).toBe(false);
+    expect(body.hasClass('olv-hidden')).toBe(false);
+    expect(handle.attrs['aria-expanded']).toBe('true');
+  });
+
   it('collapse handle toggles body visibility + aria-expanded', async () => {
     const flips: boolean[] = [];
-    const { root, sheet } = await makeSheet({ onExpandedChange: (e: boolean) => flips.push(e) });
+    const { root, sheet } = await makeSheet({
+      initialExpanded: true,
+      onExpandedChange: (e: boolean) => flips.push(e),
+    });
     const handle = root.find((e) => e.attrs['role'] !== 'tab' && e.tagName === 'button' && e.attrs['aria-expanded'] != null)!;
     const body = root.find((e) => e.hasClass('olv-msheet-body'))!;
     expect(sheet.isExpanded()).toBe(true);
-    handle.fire('click');
+    handle.fire('click', { target: handle });
     expect(sheet.isExpanded()).toBe(false);
     expect(root.hasClass('is-collapsed')).toBe(true);
     expect(body.hasClass('olv-hidden')).toBe(true);
     expect(handle.attrs['aria-expanded']).toBe('false');
     expect(flips).toEqual([false]);
+  });
+
+  it('tapping the head (non-tab region) toggles the sheet', async () => {
+    const flips: boolean[] = [];
+    const { root, sheet } = await makeSheet({ onExpandedChange: (e: boolean) => flips.push(e) });
+    const head = root.find((e) => e.hasClass('olv-msheet-head'))!;
+    expect(sheet.isExpanded()).toBe(false);
+    // A tap on the grip (the head itself) expands the collapsed sheet.
+    head.fire('click', { target: head });
+    expect(sheet.isExpanded()).toBe(true);
+    // And toggles back closed.
+    head.fire('click', { target: head });
+    expect(sheet.isExpanded()).toBe(false);
+    expect(flips).toEqual([true, false]);
+  });
+
+  it('tapping the head toggles exactly once when the handle is hit', async () => {
+    const flips: boolean[] = [];
+    const { root, sheet } = await makeSheet({
+      initialExpanded: true,
+      onExpandedChange: (e: boolean) => flips.push(e),
+    });
+    const head = root.find((e) => e.hasClass('olv-msheet-head'))!;
+    const handle = root.find((e) => e.hasClass('olv-msheet-handle'))!;
+    // In the real DOM a handle click bubbles to the head; simulate both
+    // listeners firing for the same tap and assert a single net toggle.
+    handle.fire('click', { target: handle });
+    head.fire('click', { target: handle });
+    expect(sheet.isExpanded()).toBe(false);
+    expect(flips).toEqual([false]);
+  });
+
+  it('tapping a tab does NOT toggle collapse via the head handler', async () => {
+    const flips: boolean[] = [];
+    const { root, sheet, tab } = await makeSheet({ onExpandedChange: (e: boolean) => flips.push(e) });
+    const head = root.find((e) => e.hasClass('olv-msheet-head'))!;
+    expect(sheet.isExpanded()).toBe(false);
+    // A tap whose target is inside a tab is ignored by the head toggle.
+    head.fire('click', { target: tab('view') });
+    expect(sheet.isExpanded()).toBe(false);
+    expect(flips).toEqual([]);
   });
 
   it('selecting a tab re-expands a collapsed sheet', async () => {

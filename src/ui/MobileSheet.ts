@@ -44,6 +44,11 @@ export interface MobileSheetOptions {
    * stays the hero on phones, matching the desktop verdict-as-hero treatment.
    */
   readonly initialTab?: MobileTab;
+  /**
+   * Whether the sheet starts expanded. Defaults to `false` so on phones the
+   * sheet opens COLLAPSED to just its head, leaving the canvas visible.
+   */
+  readonly initialExpanded?: boolean;
 }
 
 export class MobileSheet {
@@ -55,12 +60,14 @@ export class MobileSheet {
   private readonly _onTabChange?: (tab: MobileTab) => void;
   private readonly _onExpandedChange?: (expanded: boolean) => void;
   private _active: MobileTab;
-  private _expanded = true;
+  private _expanded: boolean;
 
   constructor(opts: MobileSheetOptions = {}) {
     this._onTabChange = opts.onTabChange;
     this._onExpandedChange = opts.onExpandedChange;
     this._active = opts.initialTab ?? 'analyse';
+    // Default COLLAPSED on phones so the sheet opens as just its head.
+    this._expanded = opts.initialExpanded ?? false;
 
     // ── tablist (the segmented control) ────────────────────────────────────
     const tablist = el('div', { className: 'olv-msheet-tabs' });
@@ -89,6 +96,15 @@ export class MobileSheet {
     this._handle = handle;
 
     const head = el('div', { className: 'olv-msheet-head' }, [tablist, handle]);
+    // The whole head/grip is tappable to toggle the sheet — EXCEPT taps on a
+    // tab (which select a tab) and taps on the handle (which has its own
+    // listener above, so we skip here to avoid a double-toggle).
+    head.addEventListener('click', (ev) => {
+      const target = ev.target as HTMLElement | null;
+      if (target?.closest('[role="tab"]')) return;
+      if (target?.closest('.olv-msheet-handle')) return;
+      this.toggleExpanded();
+    });
 
     // ── tabpanel slots ─────────────────────────────────────────────────────
     const body = el('div', { className: 'olv-msheet-body' });

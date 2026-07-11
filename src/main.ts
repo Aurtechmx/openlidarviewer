@@ -4123,6 +4123,10 @@ void viewerLoaded.then(() => {
           annotationPanel.element,
           exportPanel.element,
         );
+      // Drop the desktop collapsed state so mobile users don't see a nested
+      // collapsed header inside the sheet's own collapse chrome.
+      analysePanel.element.classList.remove('olv-collapsed');
+      exportPanel.element.classList.remove('olv-collapsed');
       // The now-empty left column would still capture touches over its band —
       // hide it. The Inspector's standalone "Scan Info" launcher is superseded.
       leftPanels.classList.add('olv-hidden');

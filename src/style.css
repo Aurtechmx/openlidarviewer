@@ -5220,10 +5220,15 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 
 /* 6. Mobile clamps — readable hero + tap-sized URL Open. */
 @media (max-width: 480px) {
-  .olv-empty-title { font-size: 40px; }
+  .olv-empty-title { font-size: clamp(26px, 8vw, 32px); line-height: 1.05; }
   .olv-empty-sub { font-size: var(--text-md); max-width: 320px; }
   .olv-empty-hero { font-size: var(--text-sm); letter-spacing: 0.18em; margin-bottom: var(--space-sm); }
-  .olv-empty-hero-mark { width: 76px; height: 76px; }
+  .olv-empty-hero-mark { width: clamp(56px, 18vw, 68px); height: clamp(56px, 18vw, 68px); }
+  /* Topbar density on phones: drop the GitHub ghost link and shrink the
+     wordmark so the brand mark + trust badge stay uncrowded. Brand mark
+     (.olv-wordmark-mark) stays visible. */
+  .olv-github { display: none; }
+  .olv-wordmark { font-size: var(--text-md); gap: var(--space-sm); }
   .olv-url-input { width: 100%; max-width: none; flex: 1 1 100%; }
   .olv-url-btn { width: 100%; }
   .olv-url-controls { flex-direction: column; gap: var(--space-md); }
@@ -7074,6 +7079,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     gap: var(--space-sm);
     padding: 14px var(--space-md) var(--space-sm);
     flex: 0 0 auto;
+    cursor: pointer;
   }
   .olv-msheet-head::before {
     content: "";
@@ -7105,7 +7111,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   }
   .olv-msheet-handle {
     position: relative;
-    width: 44px; min-height: 40px; flex: 0 0 auto;
+    width: 44px; min-width: 44px; min-height: 44px; flex: 0 0 auto;
     border: 0; background: transparent; color: var(--text-dim);
     border-radius: 8px; cursor: pointer;
   }
