@@ -28,6 +28,7 @@ const PROV: ExportProvenance = {
   contourIntervalM: 1,
   contourStyle: 'smooth',
   contourStyleLabel: 'Smooth',
+  contourMethod: null, deliverablePurpose: null,
   surfaceQuality: 'Good',
   exportReadiness: 'Ready',
   exportReason: '',

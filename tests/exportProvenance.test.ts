@@ -59,6 +59,26 @@ describe('buildExportProvenance — field derivation', () => {
     expect(p.source).toBe('site');
   });
 
+  it('stamps the Contour Studio method + purpose when supplied, and carries them into the file JSON', () => {
+    const p = buildExportProvenance(readyResult(), {
+      ...OPTS,
+      contourMethod: 'olv.contour.analytical@1',
+      deliverablePurpose: 'survey-review',
+    });
+    expect(p.contourMethod).toBe('olv.contour.analytical@1');
+    expect(p.deliverablePurpose).toBe('survey-review');
+    // The serialized provenance the writers embed must carry them too.
+    const json = provenanceJson(p) as Record<string, unknown>;
+    expect(json.contourMethod).toBe('olv.contour.analytical@1');
+    expect(json.deliverablePurpose).toBe('survey-review');
+  });
+
+  it('leaves the Contour Studio method + purpose null when not supplied (non-Studio exports)', () => {
+    const p = buildExportProvenance(readyResult(), OPTS);
+    expect(p.contourMethod).toBeNull();
+    expect(p.deliverablePurpose).toBeNull();
+  });
+
   it('reports a known CRS + datum and the ready verdict honestly', () => {
     const p = buildExportProvenance(readyResult(), OPTS);
     expect(p.horizontalCrs).toBe('EPSG:32610');

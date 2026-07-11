@@ -100,7 +100,11 @@ import {
   renderWhyDetails,
 } from './workflowCardRender';
 import { loadContourStudioMount } from '../lazyChunks';
-import type { LaunchFrameContext, ContourStudioExportProduct } from './contourStudioMount';
+import type {
+  LaunchFrameContext,
+  ContourStudioExportProduct,
+  ContourExportIntent,
+} from './contourStudioMount';
 import type { SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
 import type { DatasetIntelligence } from '../terrain/datasetIntelligence';
@@ -556,7 +560,8 @@ export class AnalysePanel {
           launcherHost: this._contourLauncher,
           deliverableHost: this._contourDeliverable,
           onLaunch: () => this._contourDeliverable.classList.remove('olv-hidden'),
-          onExport: (product, btn) => this._handleContourStudioExport(product, btn),
+          onExport: (product, btn, intent) =>
+            this._handleContourStudioExport(product, btn, intent),
         });
       })
       .catch(() => {
@@ -575,21 +580,29 @@ export class AnalysePanel {
    */
   private _handleContourStudioExport(
     product: ContourStudioExportProduct,
-    srcBtn?: HTMLButtonElement,
+    srcBtn: HTMLButtonElement,
+    intent: ContourExportIntent,
   ): void {
+    // Make the purpose REAL: adopt the intent's geometry style so the exported
+    // contours are regenerated at it (Survey Review = exact 'crisp' analytical;
+    // the cartographic purposes = generalized). `_resultForExport` reads this and
+    // rebuilds via the host's buildResultForExport, so two purposes serialize
+    // different vertices — not just a different on-screen summary.
+    this._contourStyle = intent.shapeStyle;
     // The map sheet opens a pre-export dialog; that dialog IS the feedback, so no
-    // busy spinner — just trigger the backing button.
+    // busy spinner — just trigger the backing button (which reads _contourStyle).
     if (product === 'pdf') {
       this._studioExportBtns.get('pdf')?.click();
       return;
     }
-    void this._runStudioExport(product, srcBtn);
+    void this._runStudioExport(product, srcBtn, intent);
   }
 
   /** Await the real exporter for a product, toggling the source button's busy state. */
   private async _runStudioExport(
     product: Exclude<ContourStudioExportProduct, 'pdf'>,
-    btn?: HTMLButtonElement,
+    btn: HTMLButtonElement | undefined,
+    intent: ContourExportIntent,
   ): Promise<void> {
     const label = btn?.textContent ?? '';
     if (btn) {
@@ -601,7 +614,13 @@ export class AnalysePanel {
         case 'geojson':
         case 'dxf':
         case 'svg':
-          await this._exportContourFormat(product);
+          // Stamp the geometry method + purpose into the exported file's
+          // provenance, so a Survey Review GeoJSON is self-describing as exact
+          // analytical geometry and a Presentation Map is stamped generalized.
+          await this._exportContourFormat(product, undefined, {
+            contourMethod: intent.methodTag,
+            deliverablePurpose: intent.purpose,
+          });
           break;
         case 'package':
           await this._exportDemPackage(this._demButton);
@@ -1775,7 +1794,11 @@ export class AnalysePanel {
    * await completion. When `btn` is supplied its busy state is toggled; the guard
    * still refuses a blocked export so no misleading file is ever written.
    */
-  private async _exportContourFormat(fmt: ContourFormat, btn?: HTMLButtonElement): Promise<void> {
+  private async _exportContourFormat(
+    fmt: ContourFormat,
+    btn?: HTMLButtonElement,
+    provenanceExtra?: { contourMethod?: string; deliverablePurpose?: string },
+  ): Promise<void> {
     // Hard guard — the quality gate also disables buttons, but a blocked export
     // must never write a misleading file.
     if (
@@ -1803,6 +1826,10 @@ export class AnalysePanel {
         generatedAt: new Date(),
         softwareVersion: __APP_VERSION__,
         metricVersion: TERRAIN_METRIC_VERSION,
+        // Contour Studio purpose provenance: the geometry method actually
+        // exported (analytical vs generalized) + the purpose that chose it.
+        contourMethod: provenanceExtra?.contourMethod,
+        deliverablePurpose: provenanceExtra?.deliverablePurpose,
       });
       // World-frame registration: the analysis runs in the cloud's recentred
       // LOCAL frame, so exports must add the load-time origin back (the same

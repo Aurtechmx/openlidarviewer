@@ -14,6 +14,7 @@ const PROV: ExportProvenance = {
   generated: '2026-06-05T00:00:00.000Z', source: 'site',
   horizontalCrs: 'EPSG:32610', crsKnown: true, verticalDatum: 'EPSG:5703', datumKnown: true,
   coverageMode: 'full', contourIntervalM: 1, contourStyle: 'smooth', contourStyleLabel: 'Smooth',
+  contourMethod: null, deliverablePurpose: null,
   surfaceQuality: 'Good', exportReadiness: 'Ready', exportReason: '',
   accuracy: { rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, usgsQualityLevel: 'QL2' },
   complexity: null,

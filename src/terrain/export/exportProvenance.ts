@@ -154,6 +154,10 @@ export interface ExportProvenance {
   readonly contourStyle: ContourShapeStyle | null;
   /** Human label for {@link contourStyle}, or 'unknown'. */
   readonly contourStyleLabel: string;
+  /** Contour geometry method actually exported (`id@version`), or null. */
+  readonly contourMethod: string | null;
+  /** Contour Studio purpose that produced this deliverable, or null. */
+  readonly deliverablePurpose: string | null;
   /** Surface-quality verdict (Good / Preview / Limited / Blocked). */
   readonly surfaceQuality: TerrainStatus;
   /** Export-readiness verdict (Ready / Preview / Blocked). */
@@ -190,6 +194,14 @@ export interface ExportProvenanceOptions {
   readonly metricVersion?: string | null;
   /** Active class-filter scope description, when a filter is in effect. */
   readonly classScope?: string | null;
+  /**
+   * Contour geometry method actually exported, as `id@version` (e.g.
+   * `olv.contour.analytical@1` or `olv.contour.generalize.terrain-adaptive@1`).
+   * Set by Contour Studio so a deliverable is self-describing; null otherwise.
+   */
+  readonly contourMethod?: string | null;
+  /** Contour Studio purpose that produced this deliverable, or null. */
+  readonly deliverablePurpose?: string | null;
 }
 
 /** Resolve the generation timestamp to an ISO string. */
@@ -281,6 +293,8 @@ export function buildExportProvenance(
     contourIntervalM: intervalM,
     contourStyle: style,
     contourStyleLabel: style ? contourShapeStyleLabel(style) : 'unknown',
+    contourMethod: opts.contourMethod ?? null,
+    deliverablePurpose: opts.deliverablePurpose ?? null,
     surfaceQuality: assessment.status,
     exportReadiness: assessment.exportReadiness,
     exportReason: assessment.exportReason,
@@ -436,6 +450,8 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     contourIntervalM: p.contourIntervalM,
     contourStyle: p.contourStyle,
     contourStyleLabel: p.contourStyleLabel,
+    contourMethod: p.contourMethod,
+    deliverablePurpose: p.deliverablePurpose,
     surfaceQuality: p.surfaceQuality,
     exportReadiness: p.exportReadiness,
     exportReason: p.exportReason,

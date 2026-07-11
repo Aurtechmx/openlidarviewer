@@ -25,11 +25,16 @@ import {
 import { createContourStudioController } from '../terrain/contourStudio/contourStudioController';
 import { buildContourReviewSummary } from '../terrain/contourStudio/contourReviewSummary';
 import { baseContourStudioState } from '../terrain/contourStudio/contourStudioState';
+import {
+  contourExportIntentFromState,
+  type ContourExportIntent,
+} from '../terrain/contourStudio/contourExportIntent';
 import { knownUnit, unknownUnit } from '../units/units';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 
 export type { LaunchFrameContext };
 export type { ContourStudioExportProduct };
+export type { ContourExportIntent };
 
 export interface MountContourStudioOptions {
   readonly result: AnalyseContoursResult;
@@ -40,8 +45,17 @@ export interface MountContourStudioOptions {
   readonly deliverableHost: HTMLElement;
   /** Reveals `deliverableHost` — the launcher's action. */
   readonly onLaunch: () => void;
-  /** Fires when a Studio export product is chosen; the host runs the real exporter. The clicked button is passed so the host can show its busy state. */
-  readonly onExport?: (product: ContourStudioExportProduct, btn: HTMLButtonElement) => void;
+  /**
+   * Fires when a Studio export product is chosen; the host runs the real
+   * exporter. The clicked button is passed so the host can show its busy state,
+   * and the export intent (geometry style + method stamp derived from the active
+   * purpose) so the exported file actually reflects the chosen purpose.
+   */
+  readonly onExport?: (
+    product: ContourStudioExportProduct,
+    btn: HTMLButtonElement,
+    intent: ContourExportIntent,
+  ) => void;
 }
 
 const WORKSPACE_HOST_CLASS = 'olv-cs-host';
@@ -84,7 +98,19 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
     sourceUnitLabel: (unitKnown ? opts.ctx.verticalUnitLabel : null) ?? '',
     crsProjected: opts.ctx.crsProjected,
   });
+  // The workspace fires onExport(product, btn); the mount adds the export intent
+  // derived from the LIVE controller state (so it reflects the purpose the user
+  // has selected at click time) before handing off to the host.
+  const hostOnExport = opts.onExport;
   host.append(
-    renderContourStudioWorkspace({ controller, launch: state, review, onExport: opts.onExport }),
+    renderContourStudioWorkspace({
+      controller,
+      launch: state,
+      review,
+      onExport: hostOnExport
+        ? (product, btn) =>
+            hostOnExport(product, btn, contourExportIntentFromState(controller.getState()))
+        : undefined,
+    }),
   );
 }
