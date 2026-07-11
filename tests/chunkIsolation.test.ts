@@ -82,8 +82,16 @@ const DIST = join(process.cwd(), 'dist', 'assets');
  * the ground filter, DTM/holdout validation, and every export renderer — rides
  * lazy chunks, and the `SHELL_FORBIDDEN_CONTENT` test below confirms no
  * decoder/pdf/WebGPU/TSL import leaked into the shell. Same sub-KB-trigger split.
+ *
+ * Raised 520 → 528 KiB at v0.5.9: the wired Contour Studio export dispatch
+ * (`_handleContourStudioExport` + `_runStudioExport` + the extracted
+ * `_exportContourFormat`) and the mobile sheet behavior contract (collapsed
+ * default, tappable head, un-nest) are small eager shell additions (plain index
+ * measured 532,477 B, 3 B under the prior ceiling — no headroom for the pending
+ * panel redesign). Every export RENDERER still rides a lazy chunk; only the
+ * ~1 KB dispatch + DOM wiring is eager, and SHELL_FORBIDDEN_CONTENT stays green.
  */
-const WARNING_THRESHOLD = 520 * 1024;
+const WARNING_THRESHOLD = 528 * 1024;
 
 /** Required chunk-name prefixes — substring-matched against the filename. */
 const REQUIRED_CHUNK_PREFIXES = [

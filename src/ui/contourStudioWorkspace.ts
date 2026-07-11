@@ -55,8 +55,11 @@ export interface ContourStudioWorkspaceOptions {
   readonly launch: ContourStudioLaunchState;
   /** The review-bar recommendations built from the analysis result (PR5). */
   readonly review?: ContourReviewSummary;
-  /** Fires when an export product is chosen; the host runs the real exporter. */
-  readonly onExport?: (product: ContourStudioExportProduct) => void;
+  /**
+   * Fires when an export product is chosen; the host runs the real exporter. The
+   * clicked button is passed so the host can show its busy state during export.
+   */
+  readonly onExport?: (product: ContourStudioExportProduct, btn: HTMLButtonElement) => void;
 }
 
 /** Render the review bar (spec §7.1): one row per recommendation with its
@@ -185,7 +188,7 @@ function renderLadder(launch: ContourStudioLaunchState): HTMLElement {
  */
 function renderExportBar(
   launch: ContourStudioLaunchState,
-  onExport?: (product: ContourStudioExportProduct) => void,
+  onExport?: (product: ContourStudioExportProduct, btn: HTMLButtonElement) => void,
 ): HTMLElement {
   const wrap = el('div', { className: 'olv-cs-export' });
   wrap.append(el('div', { className: 'olv-cs-section-head', text: 'Export' }));
@@ -211,7 +214,7 @@ function renderExportBar(
       const b = el('button', { className: 'olv-cs-export-btn', text: it.label });
       b.type = 'button';
       b.disabled = blocked;
-      if (!blocked && onExport) b.addEventListener('click', () => onExport(it.id));
+      if (!blocked && onExport) b.addEventListener('click', () => onExport(it.id, b));
       btns.append(b);
     }
     group.append(btns);

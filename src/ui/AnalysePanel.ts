@@ -378,6 +378,12 @@ export class AnalysePanel {
     this._contourDeliverable = el('div', {
       className: 'olv-analyse-contour-deliverable olv-hidden',
     });
+    // Re-surface the DEM honesty caveat under the Studio export section. The
+    // Contour Studio workspace is prepended into this container at mount time, so
+    // this note sits BELOW it; `_renderExportGate` fills + shows it whenever a
+    // preview/partial DEM is exportable, keeping the one-line caveat visible in
+    // the UI (not only in the exported README).
+    this._contourDeliverable.append(this._demNote);
 
     // Everything that needs a result lives in one region we show/hide.
     this._resultsRegion = el('div', { className: 'olv-analyse-results' });
@@ -543,7 +549,7 @@ export class AnalysePanel {
           launcherHost: this._contourLauncher,
           deliverableHost: this._contourDeliverable,
           onLaunch: () => this._contourDeliverable.classList.remove('olv-hidden'),
-          onExport: (product) => this._handleContourStudioExport(product),
+          onExport: (product, btn) => this._handleContourStudioExport(product, btn),
         });
       })
       .catch(() => {
@@ -555,12 +561,54 @@ export class AnalysePanel {
   /**
    * Run the real, honesty-gated exporter behind a Contour Studio export product.
    * The Studio workspace owns the visible premium export section; each product
-   * maps to the backing button built in `_buildExportRow`, so clicking it reuses
-   * every existing guard (blocked-export refusal), provenance stamp, unit
-   * handling, and busy-state — no export logic is duplicated or re-implemented.
+   * routes to the SAME exporter the panel uses, so every guard (blocked-export
+   * refusal), provenance stamp and unit handling is reused — no export logic is
+   * duplicated. `srcBtn` (the clicked Studio button) shows the busy state, so a
+   * long export reads as in-progress on the button the user actually pressed.
    */
-  private _handleContourStudioExport(product: ContourStudioExportProduct): void {
-    this._studioExportBtns.get(product)?.click();
+  private _handleContourStudioExport(
+    product: ContourStudioExportProduct,
+    srcBtn?: HTMLButtonElement,
+  ): void {
+    // The map sheet opens a pre-export dialog; that dialog IS the feedback, so no
+    // busy spinner — just trigger the backing button.
+    if (product === 'pdf') {
+      this._studioExportBtns.get('pdf')?.click();
+      return;
+    }
+    void this._runStudioExport(product, srcBtn);
+  }
+
+  /** Await the real exporter for a product, toggling the source button's busy state. */
+  private async _runStudioExport(
+    product: Exclude<ContourStudioExportProduct, 'pdf'>,
+    btn?: HTMLButtonElement,
+  ): Promise<void> {
+    const label = btn?.textContent ?? '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '…';
+    }
+    try {
+      switch (product) {
+        case 'geojson':
+        case 'dxf':
+        case 'svg':
+          await this._exportContourFormat(product);
+          break;
+        case 'package':
+          await this._exportDemPackage(this._demButton);
+          break;
+        case 'report':
+          await this._exportTerrainReport(this._reportButton);
+          break;
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    }
   }
 
   /**
@@ -1714,67 +1762,76 @@ export class AnalysePanel {
     });
   }
 
+  /**
+   * Serialize + download the contours in one vector format. Extracted so both
+   * the (detached) backing button and the Studio export section can drive it and
+   * await completion. When `btn` is supplied its busy state is toggled; the guard
+   * still refuses a blocked export so no misleading file is ever written.
+   */
+  private async _exportContourFormat(fmt: ContourFormat, btn?: HTMLButtonElement): Promise<void> {
+    // Hard guard — the quality gate also disables buttons, but a blocked export
+    // must never write a misleading file.
+    if (
+      !this._result ||
+      this._result.model.features.length === 0 ||
+      this._result.quality.exportReadiness === 'blocked'
+    ) {
+      return;
+    }
+    const basename = this._cb.getExportBasename?.() ?? 'contours';
+    const label = btn?.textContent ?? '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '…';
+    }
+    try {
+      // Regenerate at the selected shape style (cache hit; reuses the on-screen
+      // result when the style already matches), then serialize with the unified
+      // provenance derived from that SAME result.
+      const result = await this._resultForExport();
+      const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance }] =
+        await Promise.all([loadContourDownload(), loadExportProvenance()]);
+      const provenance = buildExportProvenance(result, {
+        basename,
+        generatedAt: new Date(),
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
+      });
+      // World-frame registration: the analysis runs in the cloud's recentred
+      // LOCAL frame, so exports must add the load-time origin back (the same
+      // `worldOrigin` the DEM package and map sheet already use). When the host
+      // can't supply one, serializeContours omits the CRS stamp rather than
+      // georeferencing local coordinates.
+      const mapCtx = this._cb.getMapContext?.();
+      const worldOrigin = mapCtx?.worldOrigin ?? null;
+      triggerBrowserDownload(
+        serializeContours(result.model, fmt, {
+          basename,
+          labels: result.labels,
+          provenance,
+          worldOrigin,
+          // Resolved CRS unit → DXF $INSUNITS + the SVG scale note, so a
+          // foot-based CRS stamps feet instead of the metre default.
+          linearUnit: mapCtx?.linearUnit,
+        }),
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: contour export failed.', err);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    }
+  }
+
   private _buildExportRow(): HTMLElement {
     const row = el('div', { className: 'olv-analyse-export' });
     const formats: ContourFormat[] = ['geojson', 'svg', 'dxf'];
     for (const fmt of formats) {
       const btn = el('button', { className: 'olv-analyse-dl', text: fmt.toUpperCase() });
-      btn.addEventListener('click', () => {
-        void (async (): Promise<void> => {
-          // Hard guard — the quality gate also disables the buttons, but a
-          // blocked export must never write a misleading file.
-          if (
-            !this._result ||
-            this._result.model.features.length === 0 ||
-            this._result.quality.exportReadiness === 'blocked'
-          ) {
-            return;
-          }
-          const basename = this._cb.getExportBasename?.() ?? 'contours';
-          const label = btn.textContent ?? fmt.toUpperCase();
-          btn.disabled = true;
-          btn.textContent = '…';
-          try {
-            // Regenerate at the selected shape style (cache hit; reuses the
-            // on-screen result when the style already matches), then serialize
-            // with the unified provenance derived from that SAME result.
-            const result = await this._resultForExport();
-            const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance }] =
-              await Promise.all([loadContourDownload(), loadExportProvenance()]);
-            const provenance = buildExportProvenance(result, {
-              basename,
-              generatedAt: new Date(),
-              softwareVersion: __APP_VERSION__,
-              metricVersion: TERRAIN_METRIC_VERSION,
-            });
-            // World-frame registration: the analysis runs in the cloud's
-            // recentred LOCAL frame, so exports must add the load-time
-            // origin back (the same `worldOrigin` the DEM package and map
-            // sheet already use). When the host can't supply one,
-            // serializeContours omits the CRS stamp rather than
-            // georeferencing local coordinates.
-            const mapCtx = this._cb.getMapContext?.();
-            const worldOrigin = mapCtx?.worldOrigin ?? null;
-            triggerBrowserDownload(
-              serializeContours(result.model, fmt, {
-                basename,
-                labels: result.labels,
-                provenance,
-                worldOrigin,
-                // Resolved CRS unit → DXF $INSUNITS + the SVG scale note, so a
-                // foot-based CRS stamps feet instead of the metre default.
-                linearUnit: mapCtx?.linearUnit,
-              }),
-            );
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.error('OpenLiDARViewer: contour export failed.', err);
-          } finally {
-            btn.disabled = false;
-            btn.textContent = label;
-          }
-        })();
-      });
+      btn.addEventListener('click', () => void this._exportContourFormat(fmt, btn));
       this._exportButtons.push(btn);
       this._studioExportBtns.set(fmt, btn);
       row.append(btn);
@@ -1821,7 +1878,8 @@ export class AnalysePanel {
     // the full disclosure). Empty + hidden until _renderExportGate fills it.
     this._demNote = el('p', { className: 'olv-analyse-dem-note' });
     this._demNote.style.display = 'none';
-    row.append(this._demNote);
+    // NOTE: _demNote is mounted into `_contourDeliverable` (below the Studio
+    // export section), not this detached row — see the constructor.
     return row;
   }
 

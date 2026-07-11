@@ -40,8 +40,8 @@ export interface MountContourStudioOptions {
   readonly deliverableHost: HTMLElement;
   /** Reveals `deliverableHost` — the launcher's action. */
   readonly onLaunch: () => void;
-  /** Fires when a Studio export product is chosen; the host runs the real exporter. */
-  readonly onExport?: (product: ContourStudioExportProduct) => void;
+  /** Fires when a Studio export product is chosen; the host runs the real exporter. The clicked button is passed so the host can show its busy state. */
+  readonly onExport?: (product: ContourStudioExportProduct, btn: HTMLButtonElement) => void;
 }
 
 const WORKSPACE_HOST_CLASS = 'olv-cs-host';

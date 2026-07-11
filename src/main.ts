@@ -4133,6 +4133,11 @@ void viewerLoaded.then(() => {
       inspector.sheetToggle.classList.add('olv-hidden');
     };
     const toDesktopLayout = (): void => {
+      // Restore the desktop default collapsed state we dropped for the mobile
+      // sheet, so a device that crosses the breakpoint (rotate / resize) gets the
+      // compact desktop panels back rather than fully-expanded ones.
+      analysePanel.element.classList.add('olv-collapsed');
+      exportPanel.element.classList.add('olv-collapsed');
       leftPanels.classList.remove('olv-hidden');
       inspector.sheetToggle.classList.remove('olv-hidden');
       // Inspector returns to the overlay in its original slot (just before the
