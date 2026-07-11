@@ -410,15 +410,22 @@ export class AnalysePanel {
       className: 'olv-caveat olv-analyse-stale-notice olv-hidden',
     });
 
+    // Terrain Products (Contour Studio launcher + gated deliverable) leads the
+    // results as its own surface — the deliverable entry point is no longer
+    // buried below the metrics and surface models. The launcher card carries its
+    // own "Terrain Products" eyebrow; this wrapper just groups + spaces it. Only
+    // the stale caveat outranks it, so a stale verdict is never read as current.
+    const terrainProducts = el('div', { className: 'olv-analyse-products' });
+    terrainProducts.append(this._contourLauncher, this._contourDeliverable);
+
     this._resultsRegion.append(
       this._staleNotice,
+      terrainProducts,
       this._fitnessRow,
       this._assessmentRow,
       details,
       section('Surface models'),
       this._surfaceRow,
-      this._contourLauncher,
-      this._contourDeliverable,
       this._legend,
       this._body,
     );

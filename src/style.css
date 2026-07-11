@@ -7504,3 +7504,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cs-export-btn:active { transform: translateY(1px); }
 .olv-cs-export-btn:disabled { opacity: 0.45; cursor: not-allowed; border-color: var(--hairline); background: transparent; }
 .olv-cs-export-note { margin: 2px 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+
+/* Terrain Products surface — leads the results flow (v0.5.9 redesign) */
+.olv-analyse-products { margin-bottom: 14px; }
+.olv-analyse-products:empty { display: none; }
