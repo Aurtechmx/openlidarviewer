@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
 import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
+import { sha256Hex } from '../src/terrain/export/sha256';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 // A 2×2 grid, row-major (row 0 = south). Values rise to the north-east.
@@ -200,6 +201,26 @@ describe('buildDemPackage', () => {
     }
     expect(hasName(zip, 'site.prj')).toBe(true);
     expect(hasName(zip, 'site-README.txt')).toBe(true);
+  });
+
+  it('includes a SHA256SUMS.txt whose digests verify every other file in the package', () => {
+    const zip = buildDemPackage(fixtureResult(), {
+      worldOrigin: { x: 600000, y: 4000000 }, basename: 'site', wkt: 'PROJCS["x"]',
+    });
+    const sums = extractEntry(zip, 'SHA256SUMS.txt');
+    expect(sums).not.toBeNull();
+    const manifest = new TextDecoder().decode(sums!).trimEnd();
+    const lines = manifest.split('\n');
+    // Real deliverable integrity: every listed file must exist in the archive and
+    // re-hash to exactly the digest the manifest claims (a `sha256sum -c` pass).
+    expect(lines.length).toBeGreaterThanOrEqual(8); // 3×(asc+tif) + prj + README
+    for (const line of lines) {
+      const [hex, name] = line.split('  ');
+      expect(name).not.toBe('SHA256SUMS.txt'); // never lists itself
+      const bytes = extractEntry(zip, name);
+      expect(bytes, `manifest lists missing file ${name}`).not.toBeNull();
+      expect(sha256Hex(bytes!), `digest mismatch for ${name}`).toBe(hex);
+    }
   });
 
   it('omits the .prj when no WKT is supplied', () => {
