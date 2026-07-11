@@ -18,7 +18,10 @@ import {
   type LaunchFrameContext,
 } from '../terrain/contourStudio/contourStudioLaunchStateFromResult';
 import { renderContourStudioLauncher } from './contourStudioLauncher';
-import { renderContourStudioWorkspace } from './contourStudioWorkspace';
+import {
+  renderContourStudioWorkspace,
+  type ContourStudioExportProduct,
+} from './contourStudioWorkspace';
 import { createContourStudioController } from '../terrain/contourStudio/contourStudioController';
 import { buildContourReviewSummary } from '../terrain/contourStudio/contourReviewSummary';
 import { baseContourStudioState } from '../terrain/contourStudio/contourStudioState';
@@ -26,6 +29,7 @@ import { knownUnit, unknownUnit } from '../units/units';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 
 export type { LaunchFrameContext };
+export type { ContourStudioExportProduct };
 
 export interface MountContourStudioOptions {
   readonly result: AnalyseContoursResult;
@@ -36,6 +40,8 @@ export interface MountContourStudioOptions {
   readonly deliverableHost: HTMLElement;
   /** Reveals `deliverableHost` — the launcher's action. */
   readonly onLaunch: () => void;
+  /** Fires when a Studio export product is chosen; the host runs the real exporter. */
+  readonly onExport?: (product: ContourStudioExportProduct) => void;
 }
 
 const WORKSPACE_HOST_CLASS = 'olv-cs-host';
@@ -79,6 +85,6 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
     crsProjected: opts.ctx.crsProjected,
   });
   host.append(
-    renderContourStudioWorkspace({ controller, launch: state, review }),
+    renderContourStudioWorkspace({ controller, launch: state, review, onExport: opts.onExport }),
   );
 }

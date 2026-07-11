@@ -7471,3 +7471,30 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   flex: 0 0 auto;
 }
 .olv-cs-ladder-claim-value { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+
+/* Contour Studio — premium export section (Gestalt-grouped by deliverable kind) */
+.olv-cs-export { display: flex; flex-direction: column; gap: 10px; }
+.olv-cs-export-group { display: flex; flex-direction: column; gap: 6px; }
+.olv-cs-export-group-label {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-faint);
+}
+.olv-cs-export-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.olv-cs-export-btn {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  font-size: var(--text-md);
+  font-weight: 550;
+  color: var(--text);
+  background: var(--panel-recessive);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+}
+.olv-cs-export-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+.olv-cs-export-btn:active { transform: translateY(1px); }
+.olv-cs-export-btn:disabled { opacity: 0.45; cursor: not-allowed; border-color: var(--hairline); background: transparent; }
+.olv-cs-export-note { margin: 2px 0 0; font-size: var(--text-xs); color: var(--text-faint); }

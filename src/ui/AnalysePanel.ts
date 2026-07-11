@@ -100,7 +100,7 @@ import {
   renderWhyDetails,
 } from './workflowCardRender';
 import { loadContourStudioMount } from '../lazyChunks';
-import type { LaunchFrameContext } from './contourStudioMount';
+import type { LaunchFrameContext, ContourStudioExportProduct } from './contourStudioMount';
 import type { SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
 import type { DatasetIntelligence } from '../terrain/datasetIntelligence';
@@ -258,8 +258,7 @@ export class AnalysePanel {
   private readonly _runBtn: HTMLButtonElement;
   /** Everything that only makes sense once an analysis result exists. */
   private readonly _resultsRegion: HTMLElement;
-  /** Export row + note + legend. */
-  private readonly _exportRow: HTMLElement;
+  /** Export note + legend (the raw export row is retired; see `_buildExportRow`). */
   private readonly _exportNote: HTMLElement;
   private readonly _exportButtons: HTMLButtonElement[] = [];
   /**
@@ -272,6 +271,13 @@ export class AnalysePanel {
   private readonly _contourDeliverable: HTMLElement;
   /** Monotonic token so a slow lazy launcher load can't mount a stale result. */
   private _contourToken = 0;
+  /**
+   * Maps each Contour Studio export product to the real, honesty-gated exporter
+   * button built in `_buildExportRow`. The Studio's premium export section is the
+   * single visible surface; dispatching a product clicks its backing button so
+   * all existing guards, provenance, and busy-state logic are reused verbatim.
+   */
+  private readonly _studioExportBtns = new Map<ContourStudioExportProduct, HTMLButtonElement>();
   /**
    * The contour shape style applied to the quick GeoJSON / SVG / DXF exports.
    * The Export-Contours (map PDF) dialog overrides it per-export; there is no
@@ -353,23 +359,25 @@ export class AnalysePanel {
     this._qualityRow = el('div', { className: 'olv-analyse-quality' });
     this._validationRow = el('div', { className: 'olv-analyse-validation' });
     this._body = el('div', { className: 'olv-analyse-body' });
-    this._exportRow = this._buildExportRow();
+    // Build the export buttons (populates `_studioExportBtns` + `_exportButtons`);
+    // the returned row is intentionally not mounted — the Contour Studio workspace
+    // owns the visible export section and dispatches to these backing buttons.
+    this._buildExportRow();
     this._exportNote = el('p', { className: 'olv-analyse-export-note' });
     this._legend = this._buildLegend();
     this._roadmap = this._buildRoadmap();
 
-    // Contour Studio launcher + gated deliverable (v0.5.9 §3). The contour
-    // export controls move out of the always-visible results flow into
-    // `_contourDeliverable`, revealed only when the launcher action fires.
+    // Contour Studio launcher + gated deliverable (v0.5.9 §3). The deliverable is
+    // revealed only when the launcher action fires; the Contour Studio workspace
+    // (mounted lazily into this container) now owns the single premium export
+    // section. The old raw "Contour export" button row is retired — its buttons
+    // are still built (below) but kept detached as the backing click-targets the
+    // Studio export section dispatches to, so every exporter's guards, provenance
+    // and busy-state are reused verbatim rather than re-implemented.
     this._contourLauncher = el('div', { className: 'olv-analyse-contour-launcher' });
     this._contourDeliverable = el('div', {
       className: 'olv-analyse-contour-deliverable olv-hidden',
     });
-    this._contourDeliverable.append(
-      section('Contour export'),
-      this._exportRow,
-      this._exportNote,
-    );
 
     // Everything that needs a result lives in one region we show/hide.
     this._resultsRegion = el('div', { className: 'olv-analyse-results' });
@@ -535,12 +543,24 @@ export class AnalysePanel {
           launcherHost: this._contourLauncher,
           deliverableHost: this._contourDeliverable,
           onLaunch: () => this._contourDeliverable.classList.remove('olv-hidden'),
+          onExport: (product) => this._handleContourStudioExport(product),
         });
       })
       .catch(() => {
         /* The launcher is an optional post-analysis surface — if its chunk
          * fails to load, omit it rather than breaking the panel. */
       });
+  }
+
+  /**
+   * Run the real, honesty-gated exporter behind a Contour Studio export product.
+   * The Studio workspace owns the visible premium export section; each product
+   * maps to the backing button built in `_buildExportRow`, so clicking it reuses
+   * every existing guard (blocked-export refusal), provenance stamp, unit
+   * handling, and busy-state — no export logic is duplicated or re-implemented.
+   */
+  private _handleContourStudioExport(product: ContourStudioExportProduct): void {
+    this._studioExportBtns.get(product)?.click();
   }
 
   /**
@@ -1756,6 +1776,7 @@ export class AnalysePanel {
         })();
       });
       this._exportButtons.push(btn);
+      this._studioExportBtns.set(fmt, btn);
       row.append(btn);
     }
     // Printable map sheet — the field deliverable (contours + collar + accuracy).
@@ -1764,6 +1785,7 @@ export class AnalysePanel {
     const mapBtn = el('button', { className: 'olv-analyse-dl', text: 'Export Contours' });
     mapBtn.addEventListener('click', () => this._openMapPdfDialog(mapBtn));
     this._exportButtons.push(mapBtn);
+    this._studioExportBtns.set('pdf', mapBtn);
     row.append(mapBtn);
 
     // DEM package — the georeferenced raster deliverable (DTM + DSM + CHM as
@@ -1775,6 +1797,7 @@ export class AnalysePanel {
     this._demButton = el('button', { className: 'olv-analyse-dl is-primary', text: 'DEM (ZIP)' });
     this._demButton.title = 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet';
     this._demButton.addEventListener('click', () => void this._exportDemPackage(this._demButton));
+    this._studioExportBtns.set('package', this._demButton);
     row.append(this._demButton);
 
     // Terrain Intelligence Report — the one-click, client-facing deliverable that
@@ -1790,6 +1813,7 @@ export class AnalysePanel {
     this._reportButton.title =
       'Download a one-page terrain intelligence report: assessment, coverage, accuracy, recommended workflows and which products you can take away';
     this._reportButton.addEventListener('click', () => void this._exportTerrainReport(this._reportButton));
+    this._studioExportBtns.set('report', this._reportButton);
     row.append(this._reportButton);
 
     // Honesty caveat for the DEM export — the raster stays usable for partial /

@@ -37,11 +37,26 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * The export products Contour Studio can offer. Defined here (the lower module)
+ * so the mount can re-export it without an import cycle. The host maps each to a
+ * real, honesty-gated exporter.
+ */
+export type ContourStudioExportProduct =
+  | 'pdf'
+  | 'geojson'
+  | 'dxf'
+  | 'svg'
+  | 'package'
+  | 'report';
+
 export interface ContourStudioWorkspaceOptions {
   readonly controller: ContourStudioController;
   readonly launch: ContourStudioLaunchState;
   /** The review-bar recommendations built from the analysis result (PR5). */
   readonly review?: ContourReviewSummary;
+  /** Fires when an export product is chosen; the host runs the real exporter. */
+  readonly onExport?: (product: ContourStudioExportProduct) => void;
 }
 
 /** Render the review bar (spec §7.1): one row per recommendation with its
@@ -162,6 +177,56 @@ function renderLadder(launch: ContourStudioLaunchState): HTMLElement {
 }
 
 /**
+ * The premium export section (§7.4): one honesty-gated surface, Gestalt-grouped
+ * by deliverable kind (Vector / Map sheet / Data package / Report). Each button
+ * fires `onExport(product)`; the host runs the real, gated exporter. A blocked
+ * launch disables every product and says why — no polished deliverable is
+ * offered when the surface can't support one.
+ */
+function renderExportBar(
+  launch: ContourStudioLaunchState,
+  onExport?: (product: ContourStudioExportProduct) => void,
+): HTMLElement {
+  const wrap = el('div', { className: 'olv-cs-export' });
+  wrap.append(el('div', { className: 'olv-cs-section-head', text: 'Export' }));
+  const blocked = launch.status === 'unavailable';
+  const groups: ReadonlyArray<{
+    label: string;
+    items: ReadonlyArray<{ id: ContourStudioExportProduct; label: string }>;
+  }> = [
+    { label: 'Vector', items: [
+      { id: 'geojson', label: 'GeoJSON' },
+      { id: 'dxf', label: 'DXF' },
+      { id: 'svg', label: 'SVG' },
+    ] },
+    { label: 'Map sheet', items: [{ id: 'pdf', label: 'PDF' }] },
+    { label: 'Data package', items: [{ id: 'package', label: 'DEM (ZIP)' }] },
+    { label: 'Report', items: [{ id: 'report', label: 'Intelligence (PDF)' }] },
+  ];
+  for (const g of groups) {
+    const group = el('div', { className: 'olv-cs-export-group' });
+    group.append(el('div', { className: 'olv-cs-export-group-label', text: g.label }));
+    const btns = el('div', { className: 'olv-cs-export-btns' });
+    for (const it of g.items) {
+      const b = el('button', { className: 'olv-cs-export-btn', text: it.label });
+      b.type = 'button';
+      b.disabled = blocked;
+      if (!blocked && onExport) b.addEventListener('click', () => onExport(it.id));
+      btns.append(b);
+    }
+    group.append(btns);
+    wrap.append(group);
+  }
+  if (blocked) {
+    wrap.append(el('p', {
+      className: 'olv-cs-export-note',
+      text: 'Exports unlock once the blocking reasons above are resolved.',
+    }));
+  }
+  return wrap;
+}
+
+/**
  * Build the workspace element. Re-renders its dynamic body when the controller
  * state changes (purpose switch). Returns the root element; the caller owns
  * mounting and, if needed, unsubscription via the returned element's lifetime.
@@ -169,7 +234,7 @@ function renderLadder(launch: ContourStudioLaunchState): HTMLElement {
 export function renderContourStudioWorkspace(
   opts: ContourStudioWorkspaceOptions,
 ): HTMLElement {
-  const { controller, launch, review } = opts;
+  const { controller, launch, review, onExport } = opts;
   const root = el('div', { className: 'olv-contour-studio-workspace' });
   root.setAttribute('role', 'region');
   root.setAttribute('aria-label', 'Contour Studio');
@@ -198,6 +263,7 @@ export function renderContourStudioWorkspace(
     body.append(
       renderSettingsSummary(state),
       renderLadder(launch),
+      renderExportBar(launch, onExport),
     );
   };
 
