@@ -144,7 +144,9 @@ export class ContourExportAdapter {
     const restore = btn.textContent ?? '';
     btn.textContent = 'Blocked';
     btn.disabled = true;
-    window.setTimeout(() => {
+    // Global setTimeout (not window.*) so the adapter is also unit-testable in a
+    // non-DOM environment; it resolves to the same timer in the browser.
+    setTimeout(() => {
       btn.textContent = restore;
       btn.disabled = false;
     }, BLOCKED_FLASH_MS);
