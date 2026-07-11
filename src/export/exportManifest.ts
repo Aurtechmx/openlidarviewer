@@ -32,6 +32,7 @@ export type ScientificProduct =
   | 'contours-geojson-analytical'
   | 'contours-geojson-cartographic'
   | 'contours-dxf-cartographic'
+  | 'contours-svg-cartographic'
   | 'dtm-raster'
   | 'deliverable-package';
 
@@ -50,6 +51,10 @@ export const SCIENTIFIC_EXPORTERS: readonly ScientificExporterRegistration[] = [
   { exporterId: 'contour.geojson.analytical', product: 'contours-geojson-analytical', claimId: 'CONTOURS', requiresEvidenceDecision: true },
   { exporterId: 'contour.geojson.cartographic', product: 'contours-geojson-cartographic', claimId: 'CONTOURS', requiresEvidenceDecision: true },
   { exporterId: 'contour.dxf.cartographic', product: 'contours-dxf-cartographic', claimId: 'CONTOURS', requiresEvidenceDecision: true },
+  // SVG is a cartographic vector sheet (never analytical): a smoothed/rounded
+  // print line is stamped as such, so it shares the CONTOURS claim but is
+  // registered distinctly so it can never be minted as exact analytical geometry.
+  { exporterId: 'contour.svg.cartographic', product: 'contours-svg-cartographic', claimId: 'CONTOURS', requiresEvidenceDecision: true },
   { exporterId: 'contour.dem', product: 'dtm-raster', claimId: 'DTM', requiresEvidenceDecision: true },
   { exporterId: 'contour.package', product: 'deliverable-package', claimId: 'CONTOURS', requiresEvidenceDecision: true },
 ] as const;

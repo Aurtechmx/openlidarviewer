@@ -26,6 +26,7 @@ const PROV: ExportProvenance = {
   complexity: null,
   pointDensityPerM2: 3, measuredCells: 90, totalCells: 100, classScope: null, warnings: [],
   notSurveyGrade: 'Suitability: not survey-grade unless validated against ground-truth control.',
+  exportPermit: null,
 };
 
 function feature(value: number, isIndex: boolean, pts: Array<[number, number]>): ContourFeature {

@@ -40,6 +40,7 @@ const PROV: ExportProvenance = {
   classScope: null,
   warnings: [],
   notSurveyGrade: 'Suitability: not survey-grade unless validated against ground-truth control.',
+  exportPermit: null,
 };
 
 function feat(

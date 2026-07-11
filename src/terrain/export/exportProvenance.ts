@@ -105,6 +105,24 @@ export interface ExportProvenanceComplexity {
   readonly caveats: ReadonlyArray<string>;
 }
 
+/**
+ * The evidence-gate permit a scientific export was minted under (§19). Present
+ * only when the export was routed through {@link resolveContourExportPermit} (the
+ * enforced path). Records the decision the gate returned — a `validated` or
+ * downgraded-to-`exploratory` verdict, its watermark, and the caveats — so the
+ * file itself carries proof of the gate that permitted it, not just an ambient
+ * readiness note.
+ */
+export interface ExportPermitStamp {
+  readonly status: 'validated' | 'exploratory';
+  /** The decision badge ('Internal validation' / 'Exploratory'). */
+  readonly label: string;
+  /** The exploratory watermark, or null for a validated permit. */
+  readonly watermark: string | null;
+  /** The gate's caveats (not-survey-grade note + any downgrade reasons). */
+  readonly caveats: readonly string[];
+}
+
 /** Validated vertical-accuracy figures, present only when the run measured them. */
 export interface ExportProvenanceAccuracy {
   /** Vertical RMSEz in metres. */
@@ -180,6 +198,12 @@ export interface ExportProvenance {
   readonly warnings: ReadonlyArray<string>;
   /** The standing not-survey-grade note ({@link NOT_SURVEY_GRADE_NOTE}). */
   readonly notSurveyGrade: string;
+  /**
+   * The evidence-gate permit this export was minted under, or null when the
+   * export did not route through the enforced permit (e.g. a non-contour path).
+   * §19: a contour file that carries no permit stamp was not gate-approved.
+   */
+  readonly exportPermit: ExportPermitStamp | null;
 }
 
 /** Options for {@link buildExportProvenance}. */
@@ -202,6 +226,12 @@ export interface ExportProvenanceOptions {
   readonly contourMethod?: string | null;
   /** Contour Studio purpose that produced this deliverable, or null. */
   readonly deliverablePurpose?: string | null;
+  /**
+   * The evidence-gate permit the export was minted under (from
+   * `resolveContourExportPermit`). Stamped into the file so the artifact records
+   * which decision permitted it. Null / omitted for non-gated paths.
+   */
+  readonly exportPermit?: ExportPermitStamp | null;
 }
 
 /** Resolve the generation timestamp to an ISO string. */
@@ -306,6 +336,7 @@ export function buildExportProvenance(
     classScope: opts.classScope ?? null,
     warnings: result.warnings ?? [],
     notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
+    exportPermit: opts.exportPermit ?? null,
   };
 }
 
@@ -426,6 +457,17 @@ export function provenanceLines(p: ExportProvenance): string[] {
   lines.push(kv('Record', `schema ${record.schemaVersion} · ${record.contentHash}`));
   lines.push(kv('Note', p.notSurveyGrade));
   lines.push(kv('Evidence', EVIDENCE_GATE_NOTE));
+  // The evidence-gate permit that authorised this file (§19). Absent only for a
+  // non-gated path; a gated contour export always carries its decision here.
+  if (p.exportPermit) {
+    const perm = p.exportPermit;
+    lines.push(
+      kv(
+        'Export permit',
+        perm.watermark ? `${perm.label} — ${perm.watermark}` : perm.label,
+      ),
+    );
+  }
   return lines;
 }
 
@@ -473,6 +515,14 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     warnings: [...p.warnings],
     notSurveyGrade: p.notSurveyGrade,
     evidence: EVIDENCE_GATE_NOTE,
+    exportPermit: p.exportPermit
+      ? {
+          status: p.exportPermit.status,
+          label: p.exportPermit.label,
+          watermark: p.exportPermit.watermark,
+          caveats: [...p.exportPermit.caveats],
+        }
+      : null,
     // The canonical analysis record (PR3): the single structure every output can
     // derive from — build, CRS, registered methods, evidence verdict, a summary,
     // and a build-stable content fingerprint.

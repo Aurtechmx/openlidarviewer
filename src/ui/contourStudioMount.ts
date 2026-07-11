@@ -29,12 +29,14 @@ import {
   contourExportIntentFromState,
   type ContourExportIntent,
 } from '../terrain/contourStudio/contourExportIntent';
+import type { ContourExportFrameFacts } from '../export/contourExportPermit';
 import { knownUnit, unknownUnit } from '../units/units';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 
 export type { LaunchFrameContext };
 export type { ContourStudioExportProduct };
 export type { ContourExportIntent };
+export type { ContourExportFrameFacts };
 
 export interface MountContourStudioOptions {
   readonly result: AnalyseContoursResult;
@@ -48,13 +50,16 @@ export interface MountContourStudioOptions {
   /**
    * Fires when a Studio export product is chosen; the host runs the real
    * exporter. The clicked button is passed so the host can show its busy state,
-   * and the export intent (geometry style + method stamp derived from the active
-   * purpose) so the exported file actually reflects the chosen purpose.
+   * the export intent (geometry style + method stamp derived from the active
+   * purpose) so the exported file reflects the chosen purpose, and the stable
+   * per-frame gate facts so the host can mint the §19 export permit at click
+   * time (launch status + unit facts) before writing any file.
    */
   readonly onExport?: (
     product: ContourStudioExportProduct,
     btn: HTMLButtonElement,
     intent: ContourExportIntent,
+    frame: ContourExportFrameFacts,
   ) => void;
 }
 
@@ -98,9 +103,20 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
     sourceUnitLabel: (unitKnown ? opts.ctx.verticalUnitLabel : null) ?? '',
     crsProjected: opts.ctx.crsProjected,
   });
+  // Stable per-frame gate facts for the §19 export permit: the launch status
+  // plus the CRS unit facts. Computed ONCE here (from the same launch state the
+  // launcher renders) and handed to the host so it mints a permit at click time
+  // by adding only the analytical/cartographic flag from the intent — the gate
+  // context never depends on click ordering.
+  const frame: ContourExportFrameFacts = {
+    launchStatus: state.status,
+    verticalUnitsKnown: opts.ctx.verticalUnitsKnown,
+    crsProjected: opts.ctx.crsProjected,
+    blockedReasons: 'reasons' in state ? state.reasons : undefined,
+  };
   // The workspace fires onExport(product, btn); the mount adds the export intent
   // derived from the LIVE controller state (so it reflects the purpose the user
-  // has selected at click time) before handing off to the host.
+  // has selected at click time) and the frame gate facts before handing off.
   const hostOnExport = opts.onExport;
   host.append(
     renderContourStudioWorkspace({
@@ -109,7 +125,7 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
       review,
       onExport: hostOnExport
         ? (product, btn) =>
-            hostOnExport(product, btn, contourExportIntentFromState(controller.getState()))
+            hostOnExport(product, btn, contourExportIntentFromState(controller.getState()), frame)
         : undefined,
     }),
   );
