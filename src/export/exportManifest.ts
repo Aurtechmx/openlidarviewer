@@ -25,7 +25,10 @@ import {
   evidenceStatus as registryEvidenceStatus,
   type EvidenceStatus,
 } from '../validation/exportEvidenceNote';
-import { NOT_SURVEY_GRADE_NOTE } from '../terrain/export/exportProvenance';
+// Import the note from its dependency-free leaf module, NOT from exportProvenance:
+// the gate is reached eagerly (Contour Studio mints permits synchronously), so
+// pulling in exportProvenance here would collapse its deliberately-lazy chunk.
+import { NOT_SURVEY_GRADE_NOTE } from '../terrain/export/exportNotes';
 
 export type ScientificProduct =
   | 'contour-map-pdf'

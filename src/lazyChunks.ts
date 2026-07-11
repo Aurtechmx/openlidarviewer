@@ -48,6 +48,15 @@ export const loadViewer = () => import('./render/Viewer');
 export const loadContourStudioMount = () => import('./ui/contourStudioMount');
 
 /**
+ * Load the Contour Studio export ORCHESTRATION (the permit gate + dispatch) on
+ * the first export click. The permit resolver pulls the evidence registry, so
+ * keeping it here — not eager in AnalysePanel — holds that whole chain out of the
+ * startup shell. The export only fires from inside the (already lazy) Studio, so
+ * this chunk is guaranteed loadable by the time it is needed.
+ */
+export const loadContourExportAdapter = () => import('./ui/contourExportAdapter');
+
+/**
  * Load the v0.5.7 capability-driven panel wiring on scan open. Held out of the
  * eager shell (it imports `displayProfile` + `scanCapability`) so those modules
  * don't count against the tight `index` bundle budget — the profile is only

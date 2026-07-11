@@ -52,9 +52,15 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  * The standing honesty note stamped on every artifact. Plain language about
  * what the output is suitable for — never an affirmative survey-grade claim.
  * (v0.4.5 wording: the previous "Fitness-for-use" QA jargon confused users.)
+ *
+ * Defined in the dependency-free `exportNotes` leaf and re-exported here so the
+ * evidence gate can reach it without dragging this (lazy) module into the eager
+ * bundle; every existing importer of it from `exportProvenance` is unchanged, and
+ * this module still uses it internally (hence import-and-re-export, not a bare
+ * `export ... from`, which would not create a usable local binding).
  */
-export const NOT_SURVEY_GRADE_NOTE =
-  'Suitability: not survey-grade unless validated against ground-truth control.';
+import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
+export { NOT_SURVEY_GRADE_NOTE };
 
 /**
  * The evidence-gate note, DERIVED from the runtime evidence registry (not

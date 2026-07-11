@@ -105,13 +105,13 @@ import type {
   ContourStudioExportProduct,
   ContourExportIntent,
 } from './contourStudioMount';
-import {
-  resolveContourExportPermit,
-  type ContourPermitProduct,
-  type ContourExportFrameFacts,
-  type ContourExportPermit,
+import type {
+  ContourExportFrameFacts,
+  ContourExportPermit,
 } from '../export/contourExportPermit';
-import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
+import { permitStamp } from '../export/permitStamp';
+import type { ContourExportAdapter, ContourExportHost } from './contourExportAdapter';
+import { loadContourExportAdapter } from '../lazyChunks';
 import type { SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
 import type { DatasetIntelligence } from '../terrain/datasetIntelligence';
@@ -598,125 +598,36 @@ export class AnalysePanel {
     intent: ContourExportIntent,
     frame: ContourExportFrameFacts,
   ): void {
-    // Make the purpose REAL: adopt the intent's geometry style so the exported
-    // contours are regenerated at it (Survey Review = exact 'crisp' analytical;
-    // the cartographic purposes = generalized). `_resultForExport` reads this and
-    // rebuilds via the host's buildResultForExport, so two purposes serialize
-    // different vertices — not just a different on-screen summary.
-    this._contourStyle = intent.shapeStyle;
-
-    // §19 ENFORCEMENT: the DEM package and intelligence report route through
-    // their own existing evidence gate (`_exportDemPackage` / `_exportTerrainReport`
-    // carry their own guards). The contour VECTOR + map-PDF products are gated
-    // HERE by the single authoritative permit — no file is written without one.
-    if (product === 'package') {
-      void this._runStudioExport('package', srcBtn, intent, null);
-      return;
-    }
-    if (product === 'report') {
-      void this._runStudioExport('report', srcBtn, intent, null);
-      return;
-    }
-
-    // Mint the permit for this contour product. `product` is now narrowed to the
-    // four gated contour file types; the analytical flag comes from the intent's
-    // method id (only exact analytical geometry mints the analytical exporter).
-    const permitProduct = product as ContourPermitProduct;
-    const permit = resolveContourExportPermit(permitProduct, {
-      launchStatus: frame.launchStatus,
-      verticalUnitsKnown: frame.verticalUnitsKnown,
-      crsProjected: frame.crsProjected,
-      analyticalGeometry: intent.methodId === 'olv.contour.analytical',
-      blockedReasons: frame.blockedReasons,
-    });
-    if (!permit.ok) {
-      // Blocked: write nothing and surface why (the gate's own reasons). This is
-      // a defensive guard — the launcher only exposes exports for exploratory /
-      // available states, which always mint a granted permit — so a block here
-      // means an inconsistent state; flash the button and log rather than
-      // silently doing nothing (which would read as a broken button).
-      // eslint-disable-next-line no-console
-      console.warn(
-        `OpenLiDARViewer: contour ${product} export blocked by the evidence gate — ${permit.reasons.join(' ')}`,
-      );
-      const restore = srcBtn.textContent ?? '';
-      srcBtn.textContent = 'Blocked';
-      srcBtn.disabled = true;
-      window.setTimeout(() => {
-        srcBtn.textContent = restore;
-        srcBtn.disabled = false;
-      }, 1500);
-      return;
-    }
-
-    // The map sheet opens a pre-export dialog; that dialog IS the feedback, so no
-    // busy spinner — stash the granted permit for the async PDF path and trigger
-    // the backing button (which reads _contourStyle + _contourPdfPermit).
-    if (product === 'pdf') {
-      this._contourPdfPermit = permit;
-      this._studioExportBtns.get('pdf')?.click();
-      return;
-    }
-    void this._runStudioExport(product, srcBtn, intent, permit);
+    // The export orchestration (permit gate, dispatch, busy/blocked state) lives
+    // in ContourExportAdapter, loaded LAZILY: the permit resolver pulls the
+    // evidence registry, so keeping it out of the eager panel holds that whole
+    // chain out of the startup shell (§26.1). The Studio is already lazy, so the
+    // chunk is loadable by the time a user can click an export.
+    void loadContourExportAdapter()
+      .then(({ ContourExportAdapter }) => {
+        if (!this._contourExportAdapter) {
+          const host: ContourExportHost = {
+            setContourStyle: (style) => {
+              this._contourStyle = style;
+            },
+            exportVector: (fmt, opts) => this._exportContourFormat(fmt, undefined, opts),
+            openMapPdf: (permit) => {
+              this._contourPdfPermit = permit;
+              this._studioExportBtns.get('pdf')?.click();
+            },
+            exportDemPackage: () => this._exportDemPackage(this._demButton),
+            exportTerrainReport: () => this._exportTerrainReport(this._reportButton),
+          };
+          this._contourExportAdapter = new ContourExportAdapter(host);
+        }
+        this._contourExportAdapter.handle(product, srcBtn, intent, frame);
+      })
+      .catch(() => {
+        /* The export orchestration chunk failed to load — leave the button
+         * untouched rather than crash the panel. */
+      });
   }
-
-  /** Await the real exporter for a product, toggling the source button's busy state. */
-  private async _runStudioExport(
-    product: Exclude<ContourStudioExportProduct, 'pdf'>,
-    btn: HTMLButtonElement | undefined,
-    intent: ContourExportIntent,
-    permit: ContourExportPermit | null,
-  ): Promise<void> {
-    const label = btn?.textContent ?? '';
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = '…';
-    }
-    try {
-      switch (product) {
-        case 'geojson':
-        case 'dxf':
-        case 'svg':
-          // Stamp the geometry method + purpose AND the evidence-gate permit into
-          // the exported file's provenance, so a Survey Review GeoJSON is
-          // self-describing as exact analytical geometry, a Presentation Map is
-          // stamped generalized, and every file records the permit that let it out.
-          await this._exportContourFormat(product, undefined, {
-            contourMethod: intent.methodTag,
-            deliverablePurpose: intent.purpose,
-            permit,
-          });
-          break;
-        case 'package':
-          await this._exportDemPackage(this._demButton);
-          break;
-        case 'report':
-          await this._exportTerrainReport(this._reportButton);
-          break;
-      }
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = label;
-      }
-    }
-  }
-
-  /**
-   * Build the file-borne provenance stamp from a granted permit, or null when
-   * the permit is absent/blocked. Single mapping from the gate decision to the
-   * {@link ExportPermitStamp} every export writes.
-   */
-  private _permitStamp(permit: ContourExportPermit | null): ExportPermitStamp | null {
-    if (!permit || !permit.ok) return null;
-    const d = permit.decision;
-    return {
-      status: d.status,
-      label: d.badge,
-      watermark: d.status === 'exploratory' ? d.watermark : null,
-      caveats: d.caveats,
-    };
-  }
+  private _contourExportAdapter: ContourExportAdapter | null = null;
 
   /**
    * Composite terrain quality score — a single 0–100 number with its band and
@@ -1923,7 +1834,7 @@ export class AnalysePanel {
         deliverablePurpose: provenanceExtra?.deliverablePurpose,
         // §19: stamp the evidence-gate permit that authorised this file, so the
         // artifact records the decision (validated / exploratory + watermark).
-        exportPermit: this._permitStamp(permit),
+        exportPermit: permitStamp(permit),
       });
       // World-frame registration: the analysis runs in the cloud's recentred
       // LOCAL frame, so exports must add the load-time origin back (the same
@@ -2368,7 +2279,7 @@ export class AnalysePanel {
       softwareVersion: __APP_VERSION__,
       metricVersion: TERRAIN_METRIC_VERSION,
       // Stamp the permit into the sheet's provenance (title-block honesty).
-      exportPermit: this._permitStamp(permit),
+      exportPermit: permitStamp(permit),
     });
     const bytes = await buildMapSheetPdf({
       model: result.model,
