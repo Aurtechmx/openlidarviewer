@@ -87,6 +87,18 @@ describe('unit constructors reject non-finite values (poison at the source)', ()
   });
 });
 
+describe('knownUnit — constructor invariant', () => {
+  it('accepts a finite positive scale', () => {
+    expect(knownUnit(1)).toEqual({ known: true, metresPerUnit: 1 });
+    expect(knownUnit(0.3048)).toEqual({ known: true, metresPerUnit: 0.3048 });
+  });
+  it('rejects non-finite or non-positive scales', () => {
+    for (const bad of [Number.NaN, Infinity, -Infinity, 0, -1]) {
+      expect(() => knownUnit(bad)).toThrow(/finite and > 0/);
+    }
+  });
+});
+
 describe('verticalUnitLabel', () => {
   it('labels metres, international feet, and US survey feet', () => {
     expect(verticalUnitLabel(1)).toBe('m');

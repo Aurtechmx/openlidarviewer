@@ -92,10 +92,18 @@ export type LinearUnitScale =
   | { readonly known: true; readonly metresPerUnit: number }
   | { readonly known: false };
 
-export const knownUnit = (metresPerUnit: number): LinearUnitScale => ({
-  known: true,
-  metresPerUnit,
-});
+export const knownUnit = (metresPerUnit: number): LinearUnitScale => {
+  // Enforce the invariant at the constructor rather than trusting callers: a
+  // known unit scale must be finite and strictly positive. NaN/Infinity/0/-1
+  // are not "known" scales — refuse them so a bad scale can never masquerade as
+  // a valid conversion factor.
+  if (!Number.isFinite(metresPerUnit) || metresPerUnit <= 0) {
+    throw new RangeError(
+      `knownUnit: metresPerUnit must be finite and > 0, received ${metresPerUnit}`,
+    );
+  }
+  return { known: true, metresPerUnit };
+};
 export const unknownUnit = (): LinearUnitScale => ({ known: false });
 
 /**

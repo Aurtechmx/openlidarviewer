@@ -8,7 +8,7 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 
 A pure, tested launch-state core now decides whether the deliverable launcher should be hidden, disabled, offered as exploratory, or offered as a full deliverable, using only facts the analysis already produced. Hard blockers (no terrain surface, no ground source, an area that is mostly unsupported) outrank soft caps (unknown vertical units, a geographic CRS, an incomplete stream, no recommended interval, sparse support). The core carries no UI or rendering dependencies, so it is testable without a browser and keeps the science layer clean.
 
-This is the foundation only. Wiring the launcher into the interface and moving contour controls out of the analysis panel is the remainder of the first Contour Studio change and is not shipped in this build.
+This build ships the launcher and workspace, not just the core. After analysis, a Terrain Products surface leads the panel with the Contour Studio launcher; opening it reveals purpose presets, a unit-aware review, an evidence ladder, and a single premium export section that routes to the viewer's existing contour, DEM, and terrain-report exporters. Selecting a purpose is real: it regenerates the exported contour geometry (Survey Review = exact analytical isolines; the cartographic purposes = generalized) and stamps the geometry method + purpose into the file's provenance. What remains for a *complete* Contour Studio: the launcher still lives inside the analysis panel rather than a separate app-shell surface, the new evidence-gate resolver is implemented and tested but not yet the enforced production caller, and the dedicated complete-package ZIP and multipage Contour Studio PDF renderers are not yet wired (the "package" and "PDF" actions currently route to the existing DEM ZIP and map-sheet flows).
 
 ## Validation correctness
 
@@ -32,7 +32,7 @@ Change-detection alignment gains trimmed ICP with a median-based warm-start, so 
 
 v0.5.9 is not a survey-certification release, and Contour Studio is not yet a complete, shipped feature.
 
-> The launch-state core is a tested foundation with no production caller yet; the validation classify-in-fold fix is a mechanism the shipped analyser does not call yet; both are disclosed rather than presented as finished.
+> The Contour Studio launcher, workspace, and purpose-driven exports ship and work; the complete deliverable ZIP, the multipage Contour Studio PDF, the production evidence-gate enforcement, and moving the launcher fully outside the analysis panel do not. The validation classify-in-fold fix is a mechanism the shipped analyser does not call yet. All of these are disclosed rather than presented as finished.
 
 ## Deploy
 

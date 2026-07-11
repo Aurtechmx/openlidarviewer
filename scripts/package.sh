@@ -80,8 +80,16 @@ mkdir -p "$TMP/source/$SRC_PREFIX"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git archive --format=tar --prefix="$SRC_PREFIX/" HEAD | tar -x -C "$TMP/source"
 else
-  rsync -a --exclude node_modules --exclude dist --exclude .git \
-        --exclude 'release' --exclude '*.log' ./ "$TMP/source/$SRC_PREFIX/"
+  # No git: enumerate with rsync. Exclude build/vcs/deps AND any generated
+  # test/coverage output that a prior local run may have produced — otherwise a
+  # source archive built after an E2E run would ship Playwright traces / coverage.
+  rsync -a \
+        --exclude node_modules --exclude dist --exclude .git \
+        --exclude 'release' --exclude '*.log' \
+        --exclude 'test-results' --exclude 'playwright-report' \
+        --exclude 'coverage' --exclude '.tmp' --exclude '.cache' \
+        --exclude '.DS_Store' \
+        ./ "$TMP/source/$SRC_PREFIX/"
 fi
 find "$TMP/source" -type d -exec chmod 755 {} +
 find "$TMP/source" -type f -exec chmod 644 {} +
@@ -95,8 +103,20 @@ verify_zip "$OUT_DIR/$SOURCE"
 # So a reviewer can verify integrity, and the release record pins exactly which
 # commit + environment produced these artifacts.
 echo "→ Writing checksums + release manifest…"
-COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
-DIRTY="false"; git diff --quiet 2>/dev/null || DIRTY="true"
+# Tri-state git provenance: "no git" is NOT the same as "dirty". A source-archive
+# build (no .git) reports gitAvailable:false with null commit/dirty, rather than
+# falsely claiming a dirty working tree.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  GIT_AVAILABLE=true
+  COMMIT="\"$(git rev-parse HEAD)\""
+  if git diff --quiet 2>/dev/null; then DIRTY=false; else DIRTY=true; fi
+  SOURCE_KIND="git-checkout"
+else
+  GIT_AVAILABLE=false
+  COMMIT=null
+  DIRTY=null
+  SOURCE_KIND="source-archive"
+fi
 NODE_V="$(node -v 2>/dev/null || echo unknown)"
 (
   cd "$OUT_DIR"
@@ -107,7 +127,9 @@ NODE_V="$(node -v 2>/dev/null || echo unknown)"
 {
   "project": "openlidarviewer",
   "version": "${VERSION}",
-  "gitCommit": "${COMMIT}",
+  "sourceKind": "${SOURCE_KIND}",
+  "gitAvailable": ${GIT_AVAILABLE},
+  "gitCommit": ${COMMIT},
   "dirtyWorkingTree": ${DIRTY},
   "nodeVersion": "${NODE_V}",
   "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
