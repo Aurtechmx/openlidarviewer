@@ -90,7 +90,7 @@ describe('renderClaimRegisterMarkdown', () => {
   });
 
   it('renders method@version, both evidence levels, and both claim wordings', () => {
-    const row = md.split('\n').find((l) => l.includes('TEST-ONE'));
+    const row = md.split('\n').find((l: string) => l.includes('TEST-ONE'));
     expect(row).toBeDefined();
     expect(row).toContain('Closed-form thing (variant) @ v1.2');
     expect(row).toContain('E2_ANALYTICALLY_VERIFIED');
