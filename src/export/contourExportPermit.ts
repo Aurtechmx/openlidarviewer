@@ -30,8 +30,13 @@ import {
   type ExportDecisionContext,
 } from './exportManifest';
 
-/** The contour products that produce a downloadable file gated by this permit. */
-export type ContourPermitProduct = 'pdf' | 'geojson' | 'dxf' | 'svg';
+/**
+ * The products that produce a downloadable file gated by this permit. The four
+ * contour vectors + map-PDF share the CONTOURS claim; `dem` is the bare-earth
+ * raster package, governed by the DTM claim, routed through the SAME resolver so
+ * every scientific deliverable's evidence decision comes from one place.
+ */
+export type ContourPermitProduct = 'pdf' | 'geojson' | 'dxf' | 'svg' | 'dem';
 
 /** The frame + unit facts the permit needs, lifted from the launch state. */
 export interface ContourPermitContext {
@@ -100,6 +105,8 @@ export function exporterIdForContourProduct(
       return 'contour.dxf.cartographic';
     case 'svg':
       return 'contour.svg.cartographic';
+    case 'dem':
+      return 'contour.dem';
   }
 }
 

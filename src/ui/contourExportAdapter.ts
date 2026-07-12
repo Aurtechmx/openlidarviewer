@@ -22,6 +22,8 @@ import {
   type ContourExportFrameFacts,
   type ContourExportPermit,
 } from '../export/contourExportPermit';
+import { permitStamp } from '../export/permitStamp';
+import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
 
 /** The vector contour formats the adapter dispatches to the host. */
 export type ContourVectorFormat = Extract<ContourStudioExportProduct, 'geojson' | 'dxf' | 'svg'>;
@@ -41,8 +43,12 @@ export interface ContourExportHost {
   ): Promise<void>;
   /** Stash the granted permit for the async map-sheet dialog, then open it. */
   openMapPdf(permit: ContourExportPermit): void;
-  /** Run the DEM package export (governed by its own evidence gate). */
-  exportDemPackage(): Promise<void>;
+  /**
+   * Run the DEM raster package export, stamped with the evidence-gate permit the
+   * adapter resolved (or null when unavailable). The DEM keeps its own internal
+   * availability contract; the stamp records the unified gate decision.
+   */
+  exportDemPackage(permitStamp: ExportPermitStamp | null): Promise<void>;
   /** Run the terrain intelligence report export (its own gate). */
   exportTerrainReport(): Promise<void>;
 }
@@ -72,12 +78,27 @@ export class ContourExportAdapter {
     // Make the purpose real: two purposes regenerate different geometry.
     this.host.setContourStyle(intent.shapeStyle);
 
-    // DEM package + report carry their own evidence gate; run them (with the
-    // clicked button showing busy) without minting a contour permit.
+    // DEM raster package: routed through the SAME resolver (DTM claim). A hard
+    // block (no usable surface) refuses; otherwise it exports stamped with the
+    // resolved decision — the raster keeps its preview-availability contract, so
+    // an exploratory launch still exports, just labelled exploratory.
     if (product === 'package') {
-      void this._busy(srcBtn, () => this.host.exportDemPackage());
+      const demPermit = resolveContourExportPermit('dem', {
+        launchStatus: frame.launchStatus,
+        verticalUnitsKnown: frame.verticalUnitsKnown,
+        crsProjected: frame.crsProjected,
+        analyticalGeometry: false,
+        blockedReasons: frame.blockedReasons,
+      });
+      if (!demPermit.ok) {
+        this._flashBlocked(srcBtn, product, demPermit.reasons);
+        return;
+      }
+      void this._busy(srcBtn, () => this.host.exportDemPackage(permitStamp(demPermit)));
       return;
     }
+    // The terrain intelligence report still uses its own gate (not a registered
+    // scientific exporter) — folding it in is a follow-up.
     if (product === 'report') {
       void this._busy(srcBtn, () => this.host.exportTerrainReport());
       return;

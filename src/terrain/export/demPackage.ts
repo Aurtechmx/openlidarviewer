@@ -20,7 +20,7 @@
  */
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
-import { buildExportProvenance, provenanceLines } from './exportProvenance';
+import { buildExportProvenance, provenanceLines, type ExportPermitStamp } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
@@ -88,6 +88,13 @@ export interface DemPackageOptions {
   readonly softwareVersion?: string;
   /** Terrain metric version (e.g. 'v0.4.1'). Default 'unknown'. */
   readonly metricVersion?: string;
+  /**
+   * The §19 evidence-gate permit stamp for this raster (from the unified
+   * resolver, DTM claim). Stamped into the README provenance so the package
+   * records the same gate decision as the contour exports. null / omitted when
+   * the export did not route through the gate.
+   */
+  readonly exportPermit?: ExportPermitStamp | null;
 }
 
 /** Parse an "EPSG:1234" identifier to its numeric code, or null. */
@@ -156,6 +163,8 @@ export interface DemReadmeOptions {
   readonly softwareName: string;
   readonly softwareVersion: string;
   readonly metricVersion: string;
+  /** The evidence-gate permit stamp for this raster, or null. */
+  readonly exportPermit?: ExportPermitStamp | null;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -189,6 +198,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     generatedAt: opts.generationDateIso,
     softwareVersion: opts.softwareVersion,
     metricVersion: opts.metricVersion,
+    exportPermit: opts.exportPermit ?? null,
   });
 
   const cov = (() => {
@@ -375,6 +385,7 @@ export function buildDemPackage(
     softwareName: options.softwareName ?? 'OpenLiDARViewer',
     softwareVersion: options.softwareVersion ?? 'unknown',
     metricVersion: options.metricVersion ?? 'unknown',
+    exportPermit: options.exportPermit ?? null,
   });
   entries.push({
     name: `${basename}-README.txt`,

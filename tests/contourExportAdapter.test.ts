@@ -20,7 +20,7 @@ function fakeHost() {
   const calls = {
     vector: [] as Array<{ fmt: string; permit: ContourExportPermit; contourMethod?: string; deliverablePurpose?: string }>,
     mapPdf: [] as ContourExportPermit[],
-    dem: 0,
+    dem: [] as Array<{ status: string } | null>,
     report: 0,
     styles: [] as string[],
   };
@@ -30,7 +30,7 @@ function fakeHost() {
       calls.vector.push({ fmt, permit: opts.permit, contourMethod: opts.contourMethod, deliverablePurpose: opts.deliverablePurpose });
     },
     openMapPdf: (permit) => { calls.mapPdf.push(permit); },
-    exportDemPackage: async () => { calls.dem++; },
+    exportDemPackage: async (stamp) => { calls.dem.push(stamp ? { status: stamp.status } : null); },
     exportTerrainReport: async () => { calls.report++; },
   };
   return { host, calls };
@@ -69,7 +69,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
     expect(calls.vector[0].deliverablePurpose).toBe('Survey Review');
     // Nothing else fired.
     expect(calls.mapPdf).toHaveLength(0);
-    expect(calls.dem).toBe(0);
+    expect(calls.dem).toHaveLength(0);
     expect(calls.report).toBe(0);
     // The geometry style was adopted from the intent.
     expect(calls.styles).toEqual(['crisp']);
@@ -108,15 +108,35 @@ describe('ContourExportAdapter — gated dispatch', () => {
     expect(b.textContent).toBe('Blocked');
   });
 
-  it('routes the DEM package and report to their own exporters (own gate, no permit)', () => {
+  it('routes the DEM package through the resolver (DTM claim) and stamps the permit', () => {
     const { host, calls } = fakeHost();
-    const a = new ContourExportAdapter(host);
-    a.handle('package', btn(), intent(), okFrame);
-    a.handle('report', btn(), intent(), okFrame);
-    expect(calls.dem).toBe(1);
-    expect(calls.report).toBe(1);
+    new ContourExportAdapter(host).handle('package', btn(), intent(), okFrame);
+    expect(calls.dem).toHaveLength(1);
+    // A supported frame mints a granted permit → a stamp is threaded to the DEM.
+    expect(calls.dem[0]).not.toBeNull();
+    expect(['validated', 'exploratory']).toContain(calls.dem[0]!.status);
     expect(calls.vector).toHaveLength(0);
-    expect(calls.mapPdf).toHaveLength(0);
+  });
+
+  it('refuses the DEM package (writes nothing) when the launch state is blocked', () => {
+    const { host, calls } = fakeHost();
+    const b = btn();
+    new ContourExportAdapter(host).handle('package', b, intent(), {
+      launchStatus: 'unavailable',
+      verticalUnitsKnown: true,
+      crsProjected: true,
+      blockedReasons: ['No terrain surface has been computed.'],
+    });
+    expect(calls.dem).toHaveLength(0);
+    expect(b.textContent).toBe('Blocked');
+  });
+
+  it('routes the terrain report to its own exporter (own gate)', () => {
+    const { host, calls } = fakeHost();
+    new ContourExportAdapter(host).handle('report', btn(), intent(), okFrame);
+    expect(calls.report).toBe(1);
+    expect(calls.dem).toHaveLength(0);
+    expect(calls.vector).toHaveLength(0);
   });
 
   it('caps to an exploratory (still granted) permit when the vertical unit is unknown', () => {

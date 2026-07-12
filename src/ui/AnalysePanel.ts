@@ -110,6 +110,7 @@ import type {
   ContourExportPermit,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
+import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
 import type { ContourExportAdapter, ContourExportHost } from './contourExportAdapter';
 import { loadContourExportAdapter } from '../lazyChunks';
 import type { SpaceKind } from '../terrain/scanShape';
@@ -615,7 +616,7 @@ export class AnalysePanel {
               this._contourPdfPermit = permit;
               this._studioExportBtns.get('pdf')?.click();
             },
-            exportDemPackage: () => this._exportDemPackage(this._demButton),
+            exportDemPackage: (stamp) => this._exportDemPackage(this._demButton, stamp),
             exportTerrainReport: () => this._exportTerrainReport(this._reportButton),
           };
           this._contourExportAdapter = new ContourExportAdapter(host);
@@ -1923,7 +1924,10 @@ export class AnalysePanel {
   }
 
   /** Build and download the georeferenced DEM package (lazy raster writers). */
-  private async _exportDemPackage(btn: HTMLButtonElement): Promise<void> {
+  private async _exportDemPackage(
+    btn: HTMLButtonElement,
+    exportPermit?: ExportPermitStamp | null,
+  ): Promise<void> {
     const r = this._result;
     if (!r) return;
     const label = btn.textContent ?? 'DEM (ZIP)';
@@ -1948,6 +1952,10 @@ export class AnalysePanel {
         softwareName: 'OpenLiDARViewer',
         softwareVersion: __APP_VERSION__,
         metricVersion: TERRAIN_METRIC_VERSION,
+        // The §19 evidence-gate permit the Studio resolved for this raster (DTM
+        // claim), stamped into the README's provenance. null via the direct
+        // convenience button, which keeps its own availability.
+        exportPermit: exportPermit ?? null,
       });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/zip' }), `${basename}-dem.zip`);
     } catch (err) {
