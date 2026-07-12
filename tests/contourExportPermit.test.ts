@@ -19,7 +19,15 @@ import {
 } from '../src/export/contourExportPermit';
 import { exporterRegistration } from '../src/export/exportManifest';
 
-const ALL_PRODUCTS: ContourPermitProduct[] = ['pdf', 'geojson', 'dxf', 'svg'];
+const ALL_PRODUCTS: ContourPermitProduct[] = [
+  'pdf',
+  'geojson',
+  'dxf',
+  'svg',
+  'dem',
+  'complete-package',
+  'report',
+];
 
 /** A fully-supported context with an injectable registry status. */
 function ctx(over: Partial<ContourPermitContext> = {}): ContourPermitContext {
@@ -48,12 +56,6 @@ describe('contour export permit — registration (no bypass)', () => {
     expect(exporterIdForContourProduct('geojson', false)).toBe('contour.geojson.cartographic');
     // SVG is always cartographic — the analytical flag can't promote it.
     expect(exporterIdForContourProduct('svg', true)).toBe('contour.svg.cartographic');
-  });
-
-  it('maps the terrain intelligence report to a REGISTERED exporter (contour.report)', () => {
-    const id = exporterIdForContourProduct('report', false);
-    expect(id).toBe('contour.report');
-    expect(exporterRegistration(id)).toBeDefined();
   });
 });
 

@@ -129,7 +129,7 @@ export class ContourExportAdapter {
     // contour.report). A hard block (no usable surface) refuses; otherwise it
     // exports stamped with the resolved decision — the report keeps describing
     // preview/blocked verdicts honestly in its body, and its provenance footer
-    // now also records the gate decision that permitted the file.
+    // records the gate decision that permitted the file.
     if (product === 'report') {
       const reportPermit = resolveContourExportPermit('report', {
         launchStatus: frame.launchStatus,

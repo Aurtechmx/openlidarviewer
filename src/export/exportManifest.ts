@@ -11,10 +11,12 @@
  * STATUS: the resolver is ENFORCED for every Contour Studio export product.
  * Every GeoJSON, DXF, SVG, contour map-PDF, DEM raster package, complete
  * deliverable ZIP and terrain intelligence report export is minted through
- * `resolveContourExportPermit` → {@link resolveExportDecision}; the writer refuses
- * when the permit is blocked and stamps the decision (validated / exploratory +
- * watermark) into the exported file's provenance. The separate, older
- * `evidenceStatus` gate remains wired for the live measurement exports.
+ * `resolveContourExportPermit` → {@link resolveExportDecision}; the caller
+ * refuses when the permit is blocked (writer-level for the vectors, map PDF and
+ * deliverable ZIP; adapter-level for the DEM package and report, whose writers
+ * keep a stampless direct-button path) and stamps the decision (validated /
+ * exploratory + watermark) into the exported file's provenance. The separate,
+ * older `evidenceStatus` gate remains wired for the live measurement exports.
  *
  * This builds on the existing evidence registry (`evidenceStatus` / `exportGate`)
  * rather than inventing a parallel gate. The decision type is named
