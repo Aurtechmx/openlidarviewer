@@ -81,4 +81,34 @@ describe('buildColorChipModel', () => {
   it('exposes the disabled tooltip copy for the UI', () => {
     expect(COVERAGE_DISABLED_TITLE).toMatch(/terrain analysis/i);
   });
+
+  it('shows the scalar chips (gpsTime, returnNumber) only when the cloud carries the field', () => {
+    // `availableModes(cloud)` appends these data-gated modes only when the
+    // channel exists — the chip model must surface them as ordinary enabled
+    // chips, never as analysis-gated ones.
+    const withScalars = buildColorChipModel(
+      [...DATA_MODES, 'gpsTime', 'returnNumber'],
+      'elevation',
+      false,
+    );
+    const gps = withScalars.find((c) => c.mode === 'gpsTime')!;
+    const ret = withScalars.find((c) => c.mode === 'returnNumber')!;
+    expect(gps.disabled).toBe(false);
+    expect(ret.disabled).toBe(false);
+
+    const without = buildColorChipModel(DATA_MODES, 'elevation', false);
+    expect(without.find((c) => c.mode === 'gpsTime')).toBeUndefined();
+    expect(without.find((c) => c.mode === 'returnNumber')).toBeUndefined();
+  });
+
+  it('keeps the gated chips last even when scalar chips are present', () => {
+    const chips = buildColorChipModel(
+      [...DATA_MODES, 'gpsTime', 'returnNumber'],
+      'gpsTime',
+      false,
+    );
+    expect(chips[chips.length - 2].mode).toBe('coverage');
+    expect(chips[chips.length - 1].mode).toBe('confidence');
+    expect(chips.find((c) => c.mode === 'gpsTime')!.active).toBe(true);
+  });
 });

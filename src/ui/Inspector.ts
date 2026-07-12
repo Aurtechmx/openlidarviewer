@@ -170,6 +170,8 @@ const MODE_LABELS: Record<ColorMode, string> = {
   classification: 'Class',
   normal: 'Normal',
   density: 'Density',
+  gpsTime: 'GPS time',
+  returnNumber: 'Return',
   coverage: 'Coverage',
   confidence: 'Confidence',
 };
@@ -182,6 +184,8 @@ const MODE_TITLES: Record<ColorMode, string> = {
   classification: 'Colour points by their ASPRS classification code',
   normal: 'Colour points by surface-normal direction',
   density: 'Colour points by local coverage — dark = sparse, bright = dense',
+  gpsTime: 'Colour points by GPS acquisition time — dark early, bright late (Cividis)',
+  returnNumber: 'Colour points by return number — dark first return, bright last (Cividis)',
   coverage:
     'Colour points by bare-earth trust — green strong (measured), yellow ' +
     'moderate (interpolated), red weak (extrapolated/gap). Approximate.',

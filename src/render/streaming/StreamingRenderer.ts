@@ -22,7 +22,7 @@ import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { ColorMode } from '../colorModes';
-import { streamingNodeColors, intensityRangeOf } from './streamingColors';
+import { streamingNodeColors, intensityRangeOf, scalarRangeOf } from './streamingColors';
 // Shared sRGB → linear seam (a leaf module — no Viewer cycle). The recolour
 // path must apply the same EOTF the initial `buildPointMesh` upload does.
 import { writeFloatColorsInto } from '../colorEncode';
@@ -177,14 +177,21 @@ export class StreamingRenderer {
     this._viewer = viewer;
     this._mode = mode;
     this._fadeIn = options.fadeIn ?? false;
-    // Elevation range from the COPC cube; intensity range is seeded once the
-    // coarse root node arrives.
+    // Elevation range from the COPC cube; the per-field scalar ranges
+    // (intensity, gpsTime, returnNumber) are seeded once the coarse root
+    // node arrives. Their 0..1 placeholders are never painted from in
+    // practice — `onNodeReady` reseeds from the first arriving node BEFORE
+    // computing that node's colours.
     const local = cloud.localBounds();
     this._ranges = {
       minZ: local[2],
       maxZ: local[5],
       minIntensity: 0,
       maxIntensity: 1,
+      minGpsTime: 0,
+      maxGpsTime: 1,
+      minReturnNumber: 0,
+      maxReturnNumber: 1,
     };
   }
 
@@ -212,15 +219,34 @@ export class StreamingRenderer {
         positions: decoded.positions,
         pointCount: decoded.pointCount,
       });
+      // The gpsTime / returnNumber windows seed exactly like intensity —
+      // exact min/max of the coarsest node, cloud-global thereafter. A
+      // coarse COPC node is a spatially-uniform sample of the whole cloud,
+      // so its GPS-time span approximates the full acquisition window.
+      const gpsTime = scalarRangeOf(decoded.gpsTime, decoded.pointCount);
+      const returns = scalarRangeOf(decoded.returnNumber, decoded.pointCount);
       this._ranges = {
         ...this._ranges,
         minIntensity: intensity.min,
         maxIntensity: intensity.max,
         minZ: elevation.minZ,
         maxZ: elevation.maxZ,
+        minGpsTime: gpsTime.min,
+        maxGpsTime: gpsTime.max,
+        minReturnNumber: returns.min,
+        maxReturnNumber: returns.max,
       };
       this._rangeSeedDepth = seedDepth;
-      if (this._mode === 'intensity' || this._mode === 'elevation') this._recolorAll();
+      // Every mode that colours against a seeded range must repaint the
+      // resident nodes when the range converges to a shallower seed.
+      if (
+        this._mode === 'intensity' ||
+        this._mode === 'elevation' ||
+        this._mode === 'gpsTime' ||
+        this._mode === 'returnNumber'
+      ) {
+        this._recolorAll();
+      }
     }
     const colors = streamingNodeColors(this._mode, decoded, this._ranges, this._rgbAppearance);
     // Pass the node's decoded per-point classification so the shared class

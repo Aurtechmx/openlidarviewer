@@ -12,7 +12,12 @@
  */
 
 import type { ColorMode } from '../colorModes';
-import { colorByElevation, colorByIntensity, colorByClassification } from '../colorModes';
+import {
+  colorByElevation,
+  colorByIntensity,
+  colorByClassification,
+  colorByScalar,
+} from '../colorModes';
 import { densityForChunk, defaultCellSizeForSpacing } from '../densityColors';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { CopcMetadata } from '../../io/copc/copcTypes';
@@ -42,6 +47,18 @@ export interface StreamingColorRanges {
   /** Intensity range — seeded from the root node's decoded chunk. */
   minIntensity: number;
   maxIntensity: number;
+  /**
+   * GPS-time range — seeded from the coarsest resident node, exactly like
+   * intensity. The values are Float64 absolute times (~3e8 s GPS adjusted
+   * standard time); every node normalises against THIS cloud-global window
+   * before ramping, both to keep sub-second deltas visible and to keep
+   * adjacent nodes from banding at their shared edge on node-local minima.
+   */
+  minGpsTime: number;
+  maxGpsTime: number;
+  /** Return-number range — seeded from the coarsest resident node. */
+  minReturnNumber: number;
+  maxReturnNumber: number;
 }
 
 /**
@@ -53,6 +70,13 @@ export function availableStreamingModes(metadata: CopcMetadata): ColorMode[] {
   const modes: ColorMode[] = [];
   if (metadata.header.hasRgb) modes.push('rgb');
   modes.push('intensity', 'elevation', 'classification', 'density');
+  // The continuous scalar modes — parity with the static pipeline's
+  // `availableModes`. GPS time is gated on the header flag (defensive: COPC
+  // mandates PDRF 6/7/8 which always carry it, but the flag is the honest
+  // source of truth); return numbers are structural in every LAS point
+  // record, so the mode is always offered.
+  if (metadata.header.hasGpsTime) modes.push('gpsTime');
+  modes.push('returnNumber');
   return modes;
 }
 
@@ -61,17 +85,30 @@ export function defaultStreamingMode(metadata: CopcMetadata): ColorMode {
   return metadata.header.hasRgb ? 'rgb' : 'elevation';
 }
 
-/** The intensity `[min, max]` of a decoded chunk — used to seed the global range. */
-export function intensityRangeOf(decoded: DecodedChunk): { min: number; max: number } {
-  if (decoded.pointCount === 0) return { min: 0, max: 0 };
-  let min = decoded.intensity[0];
-  let max = decoded.intensity[0];
-  for (let i = 1; i < decoded.pointCount; i++) {
-    const v = decoded.intensity[i];
+/**
+ * The `[min, max]` of any per-point scalar array — used to seed the
+ * cloud-global colour ranges from a decoded node. One helper for intensity,
+ * gpsTime, and returnNumber so the seeding semantics can never drift
+ * per-field.
+ */
+export function scalarRangeOf(
+  values: ArrayLike<number>,
+  count: number,
+): { min: number; max: number } {
+  if (count === 0) return { min: 0, max: 0 };
+  let min = values[0];
+  let max = values[0];
+  for (let i = 1; i < count; i++) {
+    const v = values[i];
     if (v < min) min = v;
     if (v > max) max = v;
   }
   return { min, max };
+}
+
+/** The intensity `[min, max]` of a decoded chunk — used to seed the global range. */
+export function intensityRangeOf(decoded: DecodedChunk): { min: number; max: number } {
+  return scalarRangeOf(decoded.intensity, decoded.pointCount);
 }
 
 /**
@@ -136,6 +173,21 @@ export function streamingNodeColors(
       );
     case 'classification':
       return colorByClassification(decoded.classification, n);
+    // The scalar modes colour against the cloud-GLOBAL window (never a
+    // node-local one) for the same reason elevation and intensity do:
+    // per-node ranges would rebase the ramp at every node boundary and band
+    // adjacent COPC/EPT nodes at their shared edge. GPS time's Float64
+    // magnitude is handled inside `colorByScalar` — the min subtraction
+    // happens in double precision, so sub-second deltas survive the ramp.
+    case 'gpsTime':
+      return colorByScalar(decoded.gpsTime, n, ranges.minGpsTime, ranges.maxGpsTime);
+    case 'returnNumber':
+      return colorByScalar(
+        decoded.returnNumber,
+        n,
+        ranges.minReturnNumber,
+        ranges.maxReturnNumber,
+      );
     case 'density':
       // Per-node density heatmap. Cell size derives from the streaming
       // ranges' spacing hint if present; otherwise the helper clamps to a
