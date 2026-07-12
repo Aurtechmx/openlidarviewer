@@ -49,6 +49,12 @@ describe('contour export permit — registration (no bypass)', () => {
     // SVG is always cartographic — the analytical flag can't promote it.
     expect(exporterIdForContourProduct('svg', true)).toBe('contour.svg.cartographic');
   });
+
+  it('maps the terrain intelligence report to a REGISTERED exporter (contour.report)', () => {
+    const id = exporterIdForContourProduct('report', false);
+    expect(id).toBe('contour.report');
+    expect(exporterRegistration(id)).toBeDefined();
+  });
 });
 
 describe('contour export permit — refusal (writes nothing)', () => {
@@ -69,6 +75,15 @@ describe('contour export permit — refusal (writes nothing)', () => {
   it('refuses when the registry has refused the claim', () => {
     const p = resolveContourExportPermit('dxf', ctx({ evidenceStatusOf: () => 'refused' }));
     expect(p.ok).toBe(false);
+  });
+
+  it('refuses the terrain report when the launch state is unavailable', () => {
+    const p = resolveContourExportPermit('report', ctx({
+      launchStatus: 'unavailable',
+      blockedReasons: ['No terrain surface has been computed.'],
+    }));
+    expect(p.ok).toBe(false);
+    if (!p.ok) expect(p.reasons).toContain('No terrain surface has been computed.');
   });
 });
 
@@ -104,5 +119,19 @@ describe('contour export permit — downgrade-only', () => {
     const p = resolveContourExportPermit('pdf', ctx({ evidenceStatusOf: () => 'exploratory' }));
     expect(p.ok).toBe(true);
     if (p.ok) expect(p.decision.status).toBe('exploratory');
+  });
+
+  it('grants the terrain report validated only when fully supported, downgrade-only otherwise', () => {
+    // Fully supported + registry-validated ⇒ validated (never promoted past it).
+    const validated = resolveContourExportPermit('report', ctx());
+    expect(validated.ok).toBe(true);
+    if (validated.ok) expect(validated.decision.status).toBe('validated');
+    // An exploratory launch caps the SAME product to exploratory + watermark.
+    const capped = resolveContourExportPermit('report', ctx({ launchStatus: 'exploratory' }));
+    expect(capped.ok).toBe(true);
+    if (capped.ok) {
+      expect(capped.decision.status).toBe('exploratory');
+      if (capped.decision.status === 'exploratory') expect(capped.decision.watermark).toBeTruthy();
+    }
   });
 });

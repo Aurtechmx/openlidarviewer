@@ -8,15 +8,13 @@
  * product the registry marks validated is still capped to exploratory when the
  * launch context isn't fully supported, and never the reverse.
  *
- * STATUS (v0.5.9): the resolver is ENFORCED for the Contour Studio contour file
- * exports. Every GeoJSON, DXF, SVG and contour map-PDF export is minted through
+ * STATUS: the resolver is ENFORCED for every Contour Studio export product.
+ * Every GeoJSON, DXF, SVG, contour map-PDF, DEM raster package, complete
+ * deliverable ZIP and terrain intelligence report export is minted through
  * `resolveContourExportPermit` → {@link resolveExportDecision}; the writer refuses
  * when the permit is blocked and stamps the decision (validated / exploratory +
- * watermark) into the exported file's provenance. NOT yet routed through this
- * resolver: the DEM raster package and the terrain intelligence report, which
- * still use the older `evidenceStatus` / `exportGate` gate (folding them in is a
- * follow-up so a single resolver governs every scientific export). The separate,
- * older `evidenceStatus` gate also remains wired for the live measurement exports.
+ * watermark) into the exported file's provenance. The separate, older
+ * `evidenceStatus` gate remains wired for the live measurement exports.
  *
  * This builds on the existing evidence registry (`evidenceStatus` / `exportGate`)
  * rather than inventing a parallel gate. The decision type is named
@@ -40,7 +38,8 @@ export type ScientificProduct =
   | 'contours-dxf-cartographic'
   | 'contours-svg-cartographic'
   | 'dtm-raster'
-  | 'deliverable-package';
+  | 'deliverable-package'
+  | 'terrain-intelligence-report';
 
 export interface ScientificExporterRegistration {
   readonly exporterId: string;
@@ -63,6 +62,10 @@ export const SCIENTIFIC_EXPORTERS: readonly ScientificExporterRegistration[] = [
   { exporterId: 'contour.svg.cartographic', product: 'contours-svg-cartographic', claimId: 'CONTOURS', requiresEvidenceDecision: true },
   { exporterId: 'contour.dem', product: 'dtm-raster', claimId: 'DTM', requiresEvidenceDecision: true },
   { exporterId: 'contour.package', product: 'deliverable-package', claimId: 'CONTOURS', requiresEvidenceDecision: true },
+  // The terrain intelligence report presents the DTM-derived analysis (verdicts,
+  // coverage, accuracy), so its evidence is governed by the same DTM claim as
+  // the raster — the report can never claim more than the surface it summarises.
+  { exporterId: 'contour.report', product: 'terrain-intelligence-report', claimId: 'DTM', requiresEvidenceDecision: true },
 ] as const;
 
 export function exporterRegistration(exporterId: string): ScientificExporterRegistration | undefined {

@@ -18,7 +18,7 @@ The science stays stricter than the UI looks:
 - Unknown vertical units or a geographic CRS cap the output to cartographic-only; metric contour support is claimed only on a projected metre-based frame, and a source-unit number is never presented as metres.
 - Analytical contours are exact isolines of the grid; cartographic contours are generalized for legibility, reference the analytical geometry's hash, and are never labelled exact.
 - A label is never placed on an unsupported span as if it were measured; interpolated spans are marked interpolated.
-- Every scientific export routes through the evidence gate. The decision can only downgrade: a product is capped to exploratory when a prerequisite is incomplete and blocked when there is nothing usable. A blocked product yields a diagnostic explanation, never a polished deliverable, and an exploratory product is watermarked.
+- Every scientific export routes through the one evidence resolver — the contour vectors (GeoJSON, DXF, SVG), the map-sheet PDF, the DEM raster package, the complete deliverable ZIP, and the terrain intelligence report all mint their permit through the same central gate. The decision can only downgrade: a product is capped to exploratory when a prerequisite is incomplete and blocked when there is nothing usable. A blocked product yields a diagnostic explanation, never a polished deliverable; an exploratory product is watermarked, and the permit decision is stamped into each artifact's provenance.
 - Validation is internal (hold-out) only; nothing is survey-grade, and no output asserts certification or standards compliance.
 
 ## Purposes
@@ -43,4 +43,4 @@ UI (vanilla-TS DOM builders) under `src/ui/`: `contourStudioLauncher.ts`, `conto
 
 ## Status and limits
 
-v0.5.9 lands the Contour Studio cores and the workspace shell. The pixel-level PDF/raster rendering, the ZIP byte assembly, functional exports, worker progress/cancel for heavy compute, and the browser end-to-end suite are integration and device-verified work that sits on top of these cores. See `VALIDATION_REPORT_v0.5.9.md` and `docs/validation/THREATS_TO_VALIDITY.md` for the evidence scope.
+v0.5.9 lands the Contour Studio cores and the workspace shell. The pixel-level PDF/raster rendering, the ZIP byte assembly, functional exports, worker progress/cancel for heavy compute, and the browser end-to-end suite are integration and device-verified work that sits on top of these cores. Since that release, every Studio export product — including the DEM raster package and the terrain intelligence report, which shipped in 0.5.9 with their own product-specific gates — has been folded under the single central evidence resolver. See `VALIDATION_REPORT_v0.5.9.md` and `docs/validation/THREATS_TO_VALIDITY.md` for the evidence scope.

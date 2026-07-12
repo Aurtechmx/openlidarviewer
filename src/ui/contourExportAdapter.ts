@@ -54,8 +54,13 @@ export interface ContourExportHost {
    * + README + SHA256SUMS), gated + stamped by the resolved permit.
    */
   exportCompletePackage(permit: ContourExportPermit): Promise<void>;
-  /** Run the terrain intelligence report export (its own gate). */
-  exportTerrainReport(): Promise<void>;
+  /**
+   * Run the terrain intelligence report export, stamped with the evidence-gate
+   * permit the adapter resolved (or null when unavailable). The report keeps its
+   * honest describe-anything content contract; the stamp records the unified
+   * gate decision in its provenance footer.
+   */
+  exportTerrainReport(permitStamp: ExportPermitStamp | null): Promise<void>;
 }
 
 /** Milliseconds the "Blocked" flash sits on a button before restoring. */
@@ -70,9 +75,9 @@ export class ContourExportAdapter {
 
   /**
    * Handle one Studio export product. `frame` carries the stable per-frame gate
-   * facts; `intent` the per-click purpose/geometry. Vector + map-PDF products are
-   * gated here by the single authoritative permit; the DEM package and report
-   * route through their own existing gates.
+   * facts; `intent` the per-click purpose/geometry. EVERY product is gated here
+   * by the single authoritative permit — vectors, map-PDF, DEM package, complete
+   * deliverable and terrain report all resolve through the one evidence resolver.
    */
   handle(
     product: ContourStudioExportProduct,
@@ -120,10 +125,24 @@ export class ContourExportAdapter {
       void this._busy(srcBtn, () => this.host.exportCompletePackage(permit));
       return;
     }
-    // The terrain intelligence report still uses its own gate (not a registered
-    // scientific exporter) — folding it in is a follow-up.
+    // Terrain intelligence report: routed through the SAME resolver (DTM claim,
+    // contour.report). A hard block (no usable surface) refuses; otherwise it
+    // exports stamped with the resolved decision — the report keeps describing
+    // preview/blocked verdicts honestly in its body, and its provenance footer
+    // now also records the gate decision that permitted the file.
     if (product === 'report') {
-      void this._busy(srcBtn, () => this.host.exportTerrainReport());
+      const reportPermit = resolveContourExportPermit('report', {
+        launchStatus: frame.launchStatus,
+        verticalUnitsKnown: frame.verticalUnitsKnown,
+        crsProjected: frame.crsProjected,
+        analyticalGeometry: false,
+        blockedReasons: frame.blockedReasons,
+      });
+      if (!reportPermit.ok) {
+        this._flashBlocked(srcBtn, product, reportPermit.reasons);
+        return;
+      }
+      void this._busy(srcBtn, () => this.host.exportTerrainReport(permitStamp(reportPermit)));
       return;
     }
 

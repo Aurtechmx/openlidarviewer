@@ -33,10 +33,18 @@ import {
 /**
  * The products that produce a downloadable file gated by this permit. The four
  * contour vectors + map-PDF share the CONTOURS claim; `dem` is the bare-earth
- * raster package, governed by the DTM claim, routed through the SAME resolver so
- * every scientific deliverable's evidence decision comes from one place.
+ * raster package and `report` the terrain intelligence report, both governed by
+ * the DTM claim, routed through the SAME resolver so every scientific
+ * deliverable's evidence decision comes from one place.
  */
-export type ContourPermitProduct = 'pdf' | 'geojson' | 'dxf' | 'svg' | 'dem' | 'complete-package';
+export type ContourPermitProduct =
+  | 'pdf'
+  | 'geojson'
+  | 'dxf'
+  | 'svg'
+  | 'dem'
+  | 'complete-package'
+  | 'report';
 
 /** The frame + unit facts the permit needs, lifted from the launch state. */
 export interface ContourPermitContext {
@@ -109,6 +117,8 @@ export function exporterIdForContourProduct(
       return 'contour.dem';
     case 'complete-package':
       return 'contour.package';
+    case 'report':
+      return 'contour.report';
   }
 }
 

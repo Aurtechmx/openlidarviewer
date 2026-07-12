@@ -2,6 +2,12 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- **Terrain intelligence report joins the unified evidence gate.** The report was the last Contour Studio product with a standalone gate; its Studio export now mints a permit through the same central evidence resolver as the vectors, map PDF, DEM package and complete deliverable (`contour.report`, governed by the DTM claim — the report can never claim more than the surface it summarises). A blocked permit refuses the export with the same blocked-button feedback as the other products; a granted permit's decision (validated / exploratory + watermark) is stamped into the report's provenance footer. The resolver only ever downgrades, and the report keeps honestly describing preview/blocked verdicts in its body; the direct panel convenience button keeps its own availability (no stamp), as the DEM's does.
+
 ## [0.5.9] - 2026-07-09
 
 Contour Studio groundwork plus a batch of scientific-correctness and honesty fixes carried over from the roadmap. This release begins the staged Contour Studio program (a post-analysis terrain-deliverable workflow) and lands validation, unit, evidence-gate, and registration fixes that stand on their own.

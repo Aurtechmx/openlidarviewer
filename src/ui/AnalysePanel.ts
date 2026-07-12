@@ -619,7 +619,7 @@ export class AnalysePanel {
             },
             exportDemPackage: (stamp) => this._exportDemPackage(this._demButton, stamp),
             exportCompletePackage: (permit) => this._exportCompletePackage(permit),
-            exportTerrainReport: () => this._exportTerrainReport(this._reportButton),
+            exportTerrainReport: (stamp) => this._exportTerrainReport(this._reportButton, stamp),
           };
           this._contourExportAdapter = new ContourExportAdapter(host);
         }
@@ -2020,7 +2020,10 @@ export class AnalysePanel {
    * the unified provenance (so it matches every other export of this scan).
    * Filename: `<basename>-terrain-report.pdf`.
    */
-  private async _exportTerrainReport(btn: HTMLButtonElement): Promise<void> {
+  private async _exportTerrainReport(
+    btn: HTMLButtonElement,
+    exportPermit?: ExportPermitStamp | null,
+  ): Promise<void> {
     const r = this._result;
     if (!r) return;
     const label = btn.textContent ?? 'Intelligence report (PDF)';
@@ -2042,6 +2045,10 @@ export class AnalysePanel {
         // Dataset Statistics rows must be the card's own strings, never a
         // re-derivation that could disagree with what the user saw on screen.
         intelligence: this._cb.getDatasetIntelligence?.() ?? null,
+        // The §19 evidence-gate permit the Studio resolved for this report (DTM
+        // claim), stamped into the provenance footer. null via the direct
+        // convenience button, which keeps its own availability.
+        exportPermit: exportPermit ?? null,
       });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${basename}-terrain-report.pdf`);
     } catch (err) {
