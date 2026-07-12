@@ -3,12 +3,12 @@
   "version": "0.5.9",
   "sourceKind": "git-checkout",
   "gitAvailable": true,
-  "gitCommit": "c30d8b1c136894af0441fe49a946d86756126f91",
+  "gitCommit": "24268d74e949e6becebf2e06e46d8234b4a0d82f",
   "dirtyWorkingTree": false,
   "nodeVersion": "v22.22.3",
-  "builtAt": "2026-07-11T15:40:07Z",
+  "builtAt": "2026-07-12T07:16:28Z",
   "artifacts": {
-    "deploy": { "file": "openlidarviewer-v0.5.9-deploy-20260711-1739-root.zip", "sha256": "bc1d39f8df40cdc1756ba78a6c9c885d8aa8f54ec732f8ec50812253c9674abb" },
-    "source": { "file": "openlidarviewer-v0.5.9-source-20260711-1739.zip", "sha256": "577930e17baddff6e46ee043601c0af485ce1e65e47841d996b855a845ec02d6" }
+    "deploy": { "file": "openlidarviewer-v0.5.9-deploy-20260712-0916-root.zip", "sha256": "6b34095c9956d27b0dff60027f3da0a2b6bf03802840d33b75c706775837bc1b" },
+    "source": { "file": "openlidarviewer-v0.5.9-source-20260712-0916.zip", "sha256": "f1e2517f45e501bf867c250dbfd5218abbfe00ca40580fe5925297840e92ec9b" }
   }
 }
