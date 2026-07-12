@@ -648,3 +648,32 @@ test('every preset references a mode that is actually registered', () => {
     expect(defaultExportRegistry.has(preset.mode)).toBe(true);
   }
 });
+
+// — Preset honesty: never advertise what the pipeline cannot deliver --------
+
+test('no preset requests or advertises transparent output', () => {
+  // The live renderer is constructed with alpha:false, so a transparent
+  // export is IMPOSSIBLE without an offscreen render-target path that does
+  // not exist yet. Presets that claimed "transparent background" shipped an
+  // opaque PNG — an honesty bug. Until the render-target path lands, no
+  // preset may set the flag or mention transparency in its description.
+  for (const preset of EXPORT_PRESETS) {
+    expect(preset.options.transparent, `${preset.id} sets transparent`).not.toBe(true);
+    expect(preset.description, `${preset.id} advertises transparency`).not.toMatch(/transparent/i);
+  }
+});
+
+test('presets that request an explicit size keep the overlay bakes off', () => {
+  // An explicit width/height routes the export through the true offscreen
+  // re-render (adapter.renderFigure), which is a DIRECT render — measurement
+  // and annotation overlays cannot be baked on that path yet. A preset that
+  // combined both would silently drop the overlays it promised, so the two
+  // capabilities are mutually exclusive at the preset level.
+  for (const preset of EXPORT_PRESETS) {
+    const wantsExplicitSize =
+      typeof preset.options.width === 'number' || typeof preset.options.height === 'number';
+    if (!wantsExplicitSize) continue;
+    expect(preset.options.includeAnnotations, `${preset.id} bakes annotations`).toBe(false);
+    expect(preset.options.includeMeasurements, `${preset.id} bakes measurements`).toBe(false);
+  }
+});

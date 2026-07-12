@@ -6883,7 +6883,22 @@ async function saveSnapshot(): Promise<void> {
     // banner the Studio export path uses so a filtered snapshot can't leave the
     // app undisclosed. With an empty stamp (nothing hidden) the helper returns
     // the input Blob unchanged, keeping the snapshot byte-identical to before.
-    const stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
+    let stamped = await composeClassScopeBannerOntoBlob(blob, currentClassScopeStamp());
+    // Embed figure provenance (build / CRS / colormap / camera / clip) as PNG
+    // text chunks — the same chunks every Studio export carries, so a saved
+    // view can answer "which build drew you, seen from where?" months later.
+    // The stamping code lives in the lazy Studio chunk (already pre-warmed
+    // after a scan loads); a chunk-load or stamping failure is swallowed
+    // because the snapshot itself must never sink on a metadata enrichment.
+    try {
+      const studio = await loadExportStudio();
+      stamped = await studio.stampFigureProvenanceOntoBlob(
+        stamped,
+        viewer.figureViewContext(),
+      );
+    } catch (err) {
+      console.warn('[snapshot] provenance stamping skipped:', err);
+    }
     triggerDownload(stamped, 'openlidarviewer.png');
   } catch {
     dropZone.setError('Could not save the view');

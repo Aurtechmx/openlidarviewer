@@ -32,15 +32,27 @@ export interface ExportPreset {
   readonly options: ExportOptions;
 }
 
+// Honesty rules the presets below obey — a preset's description is a promise,
+// and every option it sets must actually flow through the pipeline:
+//
+//   • No preset sets or advertises `transparent`. The live renderer is
+//     constructed with `alpha: false`, so a transparent export is IMPOSSIBLE
+//     today; the old "transparent background" preset shipped an opaque PNG.
+//     Transparency returns when an offscreen render-target path lands.
+//   • An explicit `width` means a TRUE re-render at that size
+//     (`adapter.renderFigure` via `runStudioExport`) — a direct render that
+//     cannot bake measurement/annotation overlays. Presets therefore either
+//     request a size (with overlays off) or bake overlays (at the live
+//     view's resolution), never both.
+
 const terrainReview: ExportPreset = {
   id: 'terrain-review',
   label: 'Terrain Review',
-  description: 'Top-down elevation map at 2048 px, transparent background.',
+  description: 'Elevation colouring of the current view, re-rendered at a true 2048 px width.',
   mode: 'height-map',
   options: {
     ramp: 'terrain',
     width: 2048,
-    transparent: true,
     includeAnnotations: false,
     includeMeasurements: false,
   } satisfies HeightMapOptions,
@@ -49,11 +61,9 @@ const terrainReview: ExportPreset = {
 const qaInspection: ExportPreset = {
   id: 'qa-inspection',
   label: 'QA Inspection',
-  description: 'Classification map at 2048 px with annotations + measurements baked in.',
+  description: 'Classification map at the live view resolution with annotations + measurements baked in.',
   mode: 'classification',
   options: {
-    width: 2048,
-    transparent: false,
     background: '#ffffff',
     includeAnnotations: true,
     includeMeasurements: true,
@@ -64,11 +74,10 @@ const qaInspection: ExportPreset = {
 const classificationReview: ExportPreset = {
   id: 'classification-review',
   label: 'Classification Review',
-  description: 'High-res 4096 px classification with the ASPRS legend.',
+  description: 'High-res classification re-rendered at a true 4096 px width, with the ASPRS legend.',
   mode: 'classification',
   options: {
     width: 4096,
-    transparent: false,
     background: '#ffffff',
     includeAnnotations: false,
     includeMeasurements: false,
@@ -79,11 +88,9 @@ const classificationReview: ExportPreset = {
 const technicalReport: ExportPreset = {
   id: 'technical-report',
   label: 'Technical Report',
-  description: 'Orthographic RGB of the current view at 2048 px, opaque.',
+  description: 'RGB capture of the current view at the live resolution with annotations + measurements baked in.',
   mode: 'orthographic-rgb',
   options: {
-    width: 2048,
-    transparent: false,
     background: '#ffffff',
     includeAnnotations: true,
     includeMeasurements: true,
@@ -93,12 +100,13 @@ const technicalReport: ExportPreset = {
 const intensityScan: ExportPreset = {
   id: 'intensity-scan',
   label: 'Intensity Scan',
-  description: 'Top-down grayscale intensity at 2048 px with histogram normalisation.',
+  description: 'Grayscale intensity re-rendered at a true 2048 px width with histogram normalisation.',
   mode: 'intensity',
   options: {
     width: 2048,
-    transparent: false,
     background: '#000000',
+    includeAnnotations: false,
+    includeMeasurements: false,
     normalize: true,
     invert: false,
   } satisfies IntensityOptions,
@@ -107,12 +115,13 @@ const intensityScan: ExportPreset = {
 const normalQa: ExportPreset = {
   id: 'normal-qa',
   label: 'Normal Map (QA)',
-  description: 'RGB-encoded surface normals at 2048 px. Requires per-point normals (PCD / PTX / GLTF).',
+  description: 'RGB-encoded surface normals re-rendered at a true 2048 px width. Requires per-point normals (PCD / PTX / GLTF).',
   mode: 'normal',
   options: {
     width: 2048,
-    transparent: false,
     background: '#808080',
+    includeAnnotations: false,
+    includeMeasurements: false,
     smooth: true,
   } satisfies NormalMapOptions,
 };

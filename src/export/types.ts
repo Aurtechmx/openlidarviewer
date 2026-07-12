@@ -34,6 +34,41 @@ export type ExportMode =
   | 'contour';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Figure provenance — what the Viewer can honestly assert about the live view
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The live perspective camera's pose at export time, for the `olv:camera`
+ * provenance chunk. Target and fov are optional because not every caller can
+ * honestly supply them (a bare context camera has no orbit target) — absent
+ * fields are omitted from the chunk, never fabricated.
+ */
+export interface FigureCameraPose {
+  readonly position: readonly [number, number, number];
+  readonly target?: readonly [number, number, number] | null;
+  readonly fovDeg?: number;
+}
+
+/** The active clip box at export time, for the `olv:clip` provenance chunk. */
+export interface FigureClipSummary {
+  readonly mode: 'keep-inside' | 'keep-outside';
+  readonly min: readonly [number, number, number];
+  readonly max: readonly [number, number, number];
+}
+
+/**
+ * Everything the Viewer can honestly assert about the live view for a
+ * figure's PNG provenance. Fields the app cannot vouch for are null — the
+ * provenance builder then omits the corresponding chunk entirely.
+ */
+export interface FigureViewContext {
+  readonly crs: { name: string; unit: string; epsg?: number } | null;
+  readonly colorMode: string;
+  readonly camera: FigureCameraPose | null;
+  readonly clip: FigureClipSummary | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Scene adapter — what every exporter needs from the Viewer
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -140,6 +175,31 @@ export interface ExportSceneAdapter {
     heightPx: number;
     extent: { minX: number; minY: number; maxX: number; maxY: number };
   } | null>;
+  /**
+   * TRUE offscreen re-render of the LIVE perspective view at an explicit
+   * pixel size — the honest-resolution path behind `options.width`/`height`.
+   * Unlike `snapshot()` (which can only copy the on-screen drawing buffer,
+   * so a "2048 px" request used to silently ship the canvas size), this
+   * re-renders the scene with the live camera re-aspected to the target.
+   * DIRECT render: no EDL post pass and no overlay bakes — the offscreen
+   * pass is bound to a bare scene render. Returns the blob plus the ACTUAL
+   * rendered size, or null when the device cannot complete the re-render
+   * (caller falls back to the WYSIWYG snapshot and reports its real size).
+   * Optional so older adapters / test stubs keep type-checking.
+   */
+  renderFigure?(options: { widthPx?: number; heightPx?: number }): Promise<{
+    blob: Blob;
+    widthPx: number;
+    heightPx: number;
+  } | null>;
+  /**
+   * The live view facts a figure's PNG provenance chunks record — camera
+   * pose, active clip, CRS, colour mode. Optional for the same
+   * compatibility reason as above; when absent, the export still embeds
+   * build + CRS + colormap provenance from the other adapter methods and
+   * simply omits the camera/clip chunks.
+   */
+  figureViewContext?(): FigureViewContext | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,7 +245,14 @@ export interface CommonExportOptions {
   height?: number;
   /** PNG today; WebP in a future release. */
   format?: 'png';
-  /** Transparent background instead of a solid colour. */
+  /**
+   * Transparent background instead of a solid colour. NOT HONOURED YET:
+   * the live renderer is constructed with `alpha: false`, so every capture
+   * path (snapshot copy and offscreen re-render alike) produces opaque
+   * pixels. The field stays for API stability, but nothing may advertise it
+   * until an offscreen render-target path makes it real — the pre-v0.5.21
+   * presets claimed "transparent background" and shipped opaque PNGs.
+   */
   transparent?: boolean;
   /** CSS-compatible background colour when `transparent` is false. */
   background?: string;
