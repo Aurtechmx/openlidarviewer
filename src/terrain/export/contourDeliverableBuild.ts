@@ -23,7 +23,9 @@ import type { ExportPermitStamp } from './exportProvenance';
 import type { ScientificExportDecision } from '../../export/exportManifest';
 import type { ContourWorldOrigin } from '../contour/contourFeatureModel';
 import type { DxfLinearUnit } from '../contour/dxfContours';
-import { buildExportProvenance, provenanceJson } from './exportProvenance';
+import { buildExportProvenance, provenanceJson, analysisRecordFromProvenance } from './exportProvenance';
+import { buildContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
+import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
 import { writeGeoTiff } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
@@ -66,13 +68,24 @@ const OMISSION_REASONS: Partial<Record<PackageRole, string>> = {
 };
 
 /**
- * Build the complete deliverable ZIP bytes from a result. Throws (via the
- * manifest) if the decision is blocked — a blocked product yields no package.
+ * The product bytes + honest availability flags shared by the sync (PDF-less)
+ * and async (with-PDF) builders. Gathering these once keeps the two entry
+ * points byte-for-byte identical for every product they both emit.
  */
-export function buildContourDeliverableFromResult(
+interface GatheredDeliverable {
+  readonly basename: string;
+  readonly provenance: ReturnType<typeof buildExportProvenance>;
+  readonly isAnalytical: boolean;
+  readonly hasContours: boolean;
+  readonly dtm: AnalyseContoursResult['dtm'] | null;
+  readonly horizontalUnit: 'ft' | 'm';
+  readonly bytes: Map<PackageRole, Uint8Array>;
+}
+
+function gatherDeliverable(
   result: AnalyseContoursResult,
   opts: DeliverableBuildOptions,
-): Uint8Array {
+): GatheredDeliverable {
   const basename = opts.basename || 'contour-deliverable';
   const provenance = buildExportProvenance(result, {
     basename,
@@ -93,36 +106,7 @@ export function buildContourDeliverableFromResult(
 
   const dtm = result.dtm ?? null;
   const hasContours = (model?.features.length ?? 0) > 0;
-
   const horizontalUnit = opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot' ? 'ft' : 'm';
-
-  const manifest = buildContourPackageManifest({
-    projectName: basename,
-    decision: opts.decision,
-    available: {
-      pdf: false,
-      analyticalGeojson: hasContours && isAnalytical,
-      cartographicGeojson: hasContours && !isAnalytical,
-      cartographicDxf: false,
-      dtm: dtm != null,
-      hillshade: false,
-      support: false,
-      uncertainty: false,
-      validationJson: false,
-      provenanceJson: true,
-      studioJson: false,
-    },
-    omissionReasons: OMISSION_REASONS,
-    provenance: {
-      crs: provenance.horizontalCrs,
-      verticalDatum: provenance.verticalDatum,
-      horizontalUnit: opts.isGeographic ? 'degrees' : horizontalUnit,
-      verticalUnit: horizontalUnit,
-      software: provenance.software,
-      softwareVersion: provenance.softwareVersion,
-    },
-    citation: `${provenance.software} ${provenance.softwareVersion}, ${basename} contour deliverable.`,
-  });
 
   const bytes = new Map<PackageRole, Uint8Array>();
 
@@ -160,5 +144,117 @@ export function buildContourDeliverableFromResult(
 
   bytes.set('provenance-json', enc(JSON.stringify(provenanceJson(provenance), null, 2)));
 
-  return assembleContourDeliverable(manifest, bytes);
+  return { basename, provenance, isAnalytical, hasContours, dtm, horizontalUnit, bytes };
+}
+
+/** Assemble the package manifest for a gathered deliverable. `pdf` flips when
+ *  the multipage Contour Studio PDF is included (async path only). */
+function manifestFor(g: GatheredDeliverable, opts: DeliverableBuildOptions, pdf: boolean) {
+  return buildContourPackageManifest({
+    projectName: g.basename,
+    decision: opts.decision,
+    available: {
+      pdf,
+      analyticalGeojson: g.hasContours && g.isAnalytical,
+      cartographicGeojson: g.hasContours && !g.isAnalytical,
+      cartographicDxf: false,
+      dtm: g.dtm != null,
+      hillshade: false,
+      support: false,
+      uncertainty: false,
+      validationJson: false,
+      provenanceJson: true,
+      studioJson: false,
+    },
+    omissionReasons: OMISSION_REASONS,
+    provenance: {
+      crs: g.provenance.horizontalCrs,
+      verticalDatum: g.provenance.verticalDatum,
+      horizontalUnit: opts.isGeographic ? 'degrees' : g.horizontalUnit,
+      verticalUnit: g.horizontalUnit,
+      software: g.provenance.software,
+      softwareVersion: g.provenance.softwareVersion,
+    },
+    citation: `${g.provenance.software} ${g.provenance.softwareVersion}, ${g.basename} contour deliverable.`,
+  });
+}
+
+/**
+ * Build the complete deliverable ZIP bytes from a result. Throws (via the
+ * manifest) if the decision is blocked — a blocked product yields no package.
+ *
+ * SYNCHRONOUS + PDF-LESS. pdf-lib is async, so the multipage Contour Studio PDF
+ * cannot be emitted here without changing this signature (which the existing
+ * synchronous callers and `demExport.test.ts` depend on). Use
+ * {@link buildContourDeliverableFromResultAsync} for the with-PDF package.
+ */
+export function buildContourDeliverableFromResult(
+  result: AnalyseContoursResult,
+  opts: DeliverableBuildOptions,
+): Uint8Array {
+  const g = gatherDeliverable(result, opts);
+  return assembleContourDeliverable(manifestFor(g, opts, false), g.bytes);
+}
+
+/**
+ * Build the complete deliverable ZIP bytes INCLUDING the multipage Contour
+ * Studio PDF (`contour-map-pdf` role). Async because pdf-lib is async. Builds
+ * the pure PDF content model from the result's provenance + honest support /
+ * validation / geometry figures, emits the bytes via {@link buildContourStudioPdf},
+ * flips `available.pdf` on, and adds the bytes to the package byte map. Throws
+ * (via the model / manifest) for a blocked decision. Renders honest content
+ * only — no fabricated numbers.
+ */
+export async function buildContourDeliverableFromResultAsync(
+  result: AnalyseContoursResult,
+  opts: DeliverableBuildOptions,
+): Promise<Uint8Array> {
+  const g = gatherDeliverable(result, opts);
+
+  // Honest support split from the DTM cell tally (measured / interpolated /
+  // everything-else-unsupported), as percentages of all cells.
+  const tally = result.cellStatusTally;
+  const total = tally.total > 0 ? tally.total : 1;
+  const measuredPct = (tally.measured / total) * 100;
+  const interpolatedPct = (tally.interpolated / total) * 100;
+  const unsupportedPct = Math.max(0, 100 - measuredPct - interpolatedPct);
+
+  const validation = result.validation;
+  const record = analysisRecordFromProvenance(g.provenance);
+
+  const pdfModel = buildContourPdfModel({
+    title: `${g.basename} - Contour deliverable`,
+    provenance: {
+      software: g.provenance.software,
+      softwareVersion: g.provenance.softwareVersion,
+      gitCommit: g.provenance.build,
+      generated: g.provenance.generated,
+      crs: g.provenance.horizontalCrs,
+      verticalDatum: g.provenance.verticalDatum,
+      horizontalUnit: opts.isGeographic ? 'degrees' : g.horizontalUnit,
+      verticalUnit: g.horizontalUnit,
+      grid: g.dtm != null ? `${g.dtm.cols}x${g.dtm.rows} @ ${g.dtm.cellSizeM} m` : 'unknown',
+      // The registered contour method actually exported, when Contour Studio set
+      // it; otherwise none (never a fabricated id).
+      methodIds: g.provenance.contourMethod ? [g.provenance.contourMethod] : [],
+      sourceHash: record.contentHash,
+    },
+    support: { measuredPct, interpolatedPct, unsupportedPct },
+    validation: {
+      mode: validation.method,
+      rmseM: Number.isFinite(validation.rmse) ? validation.rmse : null,
+      sampleSize: validation.sampleSize,
+      // Hold-out only — no independent field checkpoints are supplied here.
+      independentCheckpoints: false,
+    },
+    decision: opts.decision,
+    // The bundled geometry is labelled by its actual style; the other variant is
+    // not shipped in this package, so analyticalAvailable stays false.
+    geometry: { cartographic: !g.isAnalytical, analyticalAvailable: false },
+  });
+
+  const pdfBytes = await buildContourStudioPdf(pdfModel);
+  g.bytes.set('contour-map-pdf', pdfBytes);
+
+  return assembleContourDeliverable(manifestFor(g, opts, true), g.bytes);
 }

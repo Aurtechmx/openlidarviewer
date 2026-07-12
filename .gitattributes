@@ -1,0 +1,4 @@
+# Exclude generated release artifacts from `git archive` source exports.
+# The release/ tree is npm-run-package output (checksums, manifest, deploy/
+# source zips); it must never ship inside the source zip.
+release/ export-ignore

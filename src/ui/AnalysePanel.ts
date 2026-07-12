@@ -1987,12 +1987,12 @@ export class AnalysePanel {
             shapeStyle: 'crisp',
           })
         : this._result;
-      const [{ buildContourDeliverableFromResult }] = await Promise.all([
+      const [{ buildContourDeliverableFromResultAsync }] = await Promise.all([
         loadContourDeliverableBuild(),
       ]);
       const ctx = this._cb.getMapContext?.() ?? {};
       const basename = this._cb.getExportBasename?.() ?? 'contours';
-      const bytes = buildContourDeliverableFromResult(result, {
+      const bytes = await buildContourDeliverableFromResultAsync(result, {
         decision: permit.decision,
         basename,
         worldOrigin: ctx.worldOrigin ?? null,

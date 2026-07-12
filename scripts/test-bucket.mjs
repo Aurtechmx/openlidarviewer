@@ -101,7 +101,7 @@ if (files.length === 0) {
 // real regression there still trips it.
 const BUCKET_ARGS = {
   slow: ['--maxWorkers=2', '--testTimeout=60000'],
-  terrain: ['--testTimeout=45000'],
+  terrain: ['--testTimeout=45000', '--maxWorkers=4'],
 };
 const bucketArgs = BUCKET_ARGS[arg] ?? [];
 

@@ -10,7 +10,7 @@
  * a DOM.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ContourExportAdapter, type ContourExportHost } from '../src/ui/contourExportAdapter';
 import type { ContourExportIntent } from '../src/terrain/contourStudio/contourExportIntent';
 import type { ContourExportFrameFacts, ContourExportPermit } from '../src/export/contourExportPermit';
@@ -97,6 +97,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('writes NOTHING and flashes the button when the launch state is blocked', () => {
+    vi.useFakeTimers();
     const { host, calls } = fakeHost();
     const b = btn();
     new ContourExportAdapter(host).handle('geojson', b, intent(), {
@@ -108,6 +109,12 @@ describe('ContourExportAdapter — gated dispatch', () => {
     expect(calls.vector).toHaveLength(0);
     expect(calls.mapPdf).toHaveLength(0);
     expect(b.textContent).toBe('Blocked');
+    expect(b.disabled).toBe(true);
+    // The flash restores the button once the timer elapses (no open handle left).
+    vi.runAllTimers();
+    expect(b.textContent).toBe('Export');
+    expect(b.disabled).toBe(false);
+    vi.useRealTimers();
   });
 
   it('routes the DEM package through the resolver (DTM claim) and stamps the permit', () => {
@@ -121,6 +128,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('refuses the DEM package (writes nothing) when the launch state is blocked', () => {
+    vi.useFakeTimers();
     const { host, calls } = fakeHost();
     const b = btn();
     new ContourExportAdapter(host).handle('package', b, intent(), {
@@ -131,6 +139,12 @@ describe('ContourExportAdapter — gated dispatch', () => {
     });
     expect(calls.dem).toHaveLength(0);
     expect(b.textContent).toBe('Blocked');
+    expect(b.disabled).toBe(true);
+    // The flash restores the button once the timer elapses (no open handle left).
+    vi.runAllTimers();
+    expect(b.textContent).toBe('Export');
+    expect(b.disabled).toBe(false);
+    vi.useRealTimers();
   });
 
   it('routes the complete deliverable through the resolver with a granted permit', () => {
@@ -144,6 +158,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
   });
 
   it('refuses the complete deliverable (writes nothing) when the launch state is blocked', () => {
+    vi.useFakeTimers();
     const { host, calls } = fakeHost();
     const b = btn();
     new ContourExportAdapter(host).handle('deliverable', b, intent(), {
@@ -154,6 +169,12 @@ describe('ContourExportAdapter — gated dispatch', () => {
     });
     expect(calls.complete).toHaveLength(0);
     expect(b.textContent).toBe('Blocked');
+    expect(b.disabled).toBe(true);
+    // The flash restores the button once the timer elapses (no open handle left).
+    vi.runAllTimers();
+    expect(b.textContent).toBe('Export');
+    expect(b.disabled).toBe(false);
+    vi.useRealTimers();
   });
 
   it('routes the terrain report to its own exporter (own gate)', () => {

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { readFileSync } from 'node:fs';
+import os from 'node:os';
 
 // Mirror the `__APP_VERSION__` define the Vite build stamps in, so test files
 // (and modules they import — like `BaseExportMode.ts`) can read the version
@@ -20,6 +21,13 @@ const TEST_BUILD_IDENTITY = {
   channel: 'test',
 };
 
+// Resolve the worker cap once, up front. `availableParallelism()` (Node 18.14+)
+// reflects cgroup/affinity limits better than `cpus().length`; fall back to the
+// latter on older runtimes. See the `maxWorkers` comment below for why we clamp
+// to an absolute 8 rather than trusting a bare percentage.
+const cores = os.availableParallelism ? os.availableParallelism() : os.cpus().length;
+const maxWorkers = Math.max(1, Math.min(8, Math.floor(cores * 0.75)));
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -36,9 +44,15 @@ export default defineConfig({
     testTimeout: 15_000,
     // Cap parallelism so a WASM/LAZ decoder or a heavy DTM build isn't starved
     // of CPU under full-bucket parallel load on a busy CI runner — the root cause
-    // of the loadLas / terrain-density timeout flakes. 75 % of cores keeps most
-    // of the speed while removing the over-subscription; the per-bucket runner
+    // of the loadLas / terrain-density timeout flakes. We take 75 % of cores but
+    // never more than 8 workers: a relative percentage alone lets a many-core,
+    // low-RAM runner (e.g. ~56 CPUs / ~4 GB) spawn ~40 fork workers and exhaust
+    // memory (EPIPE / hang at pool shutdown) even when every assertion passes, so
+    // the absolute cap of 8 keeps memory bounded on those runners while a normal
+    // dev box still gets full 75 % speed. The per-bucket runner
     // (scripts/test-bucket.mjs) tightens this further for the slow bucket.
-    maxWorkers: '75%',
+    // (Vitest 4 dropped the top-level `minWorkers` option; a floor of 1 is
+    // already guaranteed by the Math.max(1, …) clamp on `maxWorkers` above.)
+    maxWorkers,
   },
 });
