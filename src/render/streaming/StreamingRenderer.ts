@@ -26,7 +26,7 @@ import { streamingNodeColors, intensityRangeOf, scalarRangeOf } from './streamin
 // Shared sRGB → linear seam (a leaf module — no Viewer cycle). The recolour
 // path must apply the same EOTF the initial `buildPointMesh` upload does.
 import { writeFloatColorsInto } from '../colorEncode';
-import { computeElevationRange } from '../elevationRange';
+import { computeElevationRange, computeScalarRange } from '../elevationRange';
 import type { StreamingColorRanges } from './streamingColors';
 import type { RgbAppearance } from '../rgbAppearance';
 
@@ -219,11 +219,17 @@ export class StreamingRenderer {
         positions: decoded.positions,
         pointCount: decoded.pointCount,
       });
-      // The gpsTime / returnNumber windows seed exactly like intensity —
-      // exact min/max of the coarsest node, cloud-global thereafter. A
-      // coarse COPC node is a spatially-uniform sample of the whole cloud,
-      // so its GPS-time span approximates the full acquisition window.
-      const gpsTime = scalarRangeOf(decoded.gpsTime, decoded.pointCount);
+      // A coarse COPC node is a spatially-uniform sample of the whole cloud,
+      // so its scalar spans approximate the full acquisition. The gpsTime
+      // window routes through the SAME percentile-clipped core the static
+      // pipeline's gpsTime mode uses — a raw min/max would let one garbage
+      // timestamp in the seeding node own the cloud-global window (and a NaN
+      // from a malformed chunk would poison it; the core skips non-finite
+      // values). returnNumber seeds on exact finite min/max like intensity:
+      // return ordinals are a handful of small integers, so percentile
+      // clipping would merge real ordinals into an endpoint colour instead
+      // of guarding against anything.
+      const gpsTime = computeScalarRange(decoded.gpsTime, { count: decoded.pointCount });
       const returns = scalarRangeOf(decoded.returnNumber, decoded.pointCount);
       this._ranges = {
         ...this._ranges,

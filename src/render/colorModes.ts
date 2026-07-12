@@ -10,7 +10,7 @@
 import { clamp, clamp01 } from '../numeric';
 import type { PointCloud } from '../model/PointCloud';
 import { densityForChunk, defaultCellSizeForSpacing } from './densityColors';
-import { computeElevationRange } from './elevationRange';
+import { computeElevationRange, computeScalarRange } from './elevationRange';
 import {
   coverageColorForConfidence,
   COVERAGE_NONE,
@@ -644,8 +644,12 @@ export interface ColorForModeOptions {
  * one NaN from a malformed loader must not poison a whole ramp. Returns
  * `{ 0, 0 }` when nothing finite exists so callers get the degenerate
  * "everything at the bottom colour" behaviour instead of a NaN range.
+ *
+ * Exported as the ONE raw finite min/max scan for ramp ranges: the streaming
+ * pipeline's `scalarRangeOf` delegates here, so the static and streaming
+ * seeding semantics for non-finite values can never drift apart.
  */
-function finiteMinMax(values: ArrayLike<number>, count: number): { min: number; max: number } {
+export function finiteMinMax(values: ArrayLike<number>, count: number): { min: number; max: number } {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (let i = 0; i < count; i++) {
@@ -688,12 +692,17 @@ export function colorForMode(
       if (!cloud.gpsTime) {
         throw new Error(`colorForMode('gpsTime'): cloud "${cloud.name}" has no gpsTime attribute`);
       }
-      // Normalise against the per-cloud min/max BEFORE ramping — GPS times
-      // are Float64 seconds with ~3e8 absolute values, so only the delta
-      // from the cloud's own start carries visual information.
+      // Percentile-clipped range through the same core elevation uses. GPS
+      // times are Float64 seconds with ~3e8 absolute values, so only the
+      // delta from the cloud's own acquisition window carries visual
+      // information — and a raw min/max would let one garbage timestamp (an
+      // epoch-zero record from a malformed writer) compress the whole flight
+      // line into a single colour stop, the exact failure the elevation ramp
+      // already guards against. The core also skips non-finite values, so a
+      // NaN timestamp cannot poison the range.
       const src = cloud.gpsTime;
-      const { min, max } = finiteMinMax(src, n);
-      return colorByScalar(src, n, min, max);
+      const range = computeScalarRange(src, { count: n });
+      return colorByScalar(src, n, range.min, range.max);
     }
 
     // ── returnNumber (ordered scalar, Cividis ramp) ───────────────────────────
@@ -703,6 +712,13 @@ export function colorForMode(
           `colorForMode('returnNumber'): cloud "${cloud.name}" has no returnNumber attribute`,
         );
       }
+      // Raw finite min/max, DELIBERATELY not percentile-clipped. Return
+      // numbers are a handful of small ordinals (1..15 by the LAS format —
+      // typically 1..5 in practice), so there is no unbounded-outlier
+      // failure mode for a percentile band to guard against; clipping would
+      // instead merge real ordinals (a legitimate 5th return) into an
+      // endpoint colour and erase exactly the deep-canopy reading the mode
+      // exists to show.
       const src = cloud.returnNumber;
       const { min, max } = finiteMinMax(src, n);
       return colorByScalar(src, n, min, max);

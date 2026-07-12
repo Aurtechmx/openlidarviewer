@@ -116,6 +116,27 @@ test('scalarRangeOf finds the min and max of an arbitrary per-point array', () =
   expect(scalarRangeOf(new Uint8Array(0), 0)).toEqual({ min: 0, max: 0 });
 });
 
+test('scalarRangeOf skips non-finite values — one NaN timestamp must not poison the seed', () => {
+  // gpsTime is the first NaN-capable (Float64) channel routed through this
+  // helper — intensity (Uint16) and returns (Uint8) can never be NaN. A NaN
+  // in slot 0 of the seeding node is the worst case: a raw first-element
+  // seed makes both ends of the cloud-global window NaN and every streaming
+  // node renders solid black in gpsTime mode.
+  const base = 3.2e8;
+  expect(scalarRangeOf(new Float64Array([NaN, base + 10, base]), 3)).toEqual({
+    min: base,
+    max: base + 10,
+  });
+  expect(scalarRangeOf(new Float64Array([base, Infinity, base + 10]), 3)).toEqual({
+    min: base,
+    max: base + 10,
+  });
+  // Nothing finite at all degenerates to { 0, 0 } — the same fallback the
+  // static pipeline's finite scan uses, so callers paint the bottom colour
+  // instead of feeding a NaN range into the ramp.
+  expect(scalarRangeOf(new Float64Array([NaN, NaN]), 2)).toEqual({ min: 0, max: 0 });
+});
+
 test('intensityRangeOf still matches the generic scalar range', () => {
   const c = chunk(3, false);
   c.intensity.set([10, 200, 55]);

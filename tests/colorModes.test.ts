@@ -378,6 +378,35 @@ describe('colorForMode — gpsTime', () => {
   test('throws when gpsTime is absent', () => {
     expect(() => colorForMode('gpsTime', makePositionsOnlyCloud())).toThrow();
   });
+
+  test('a single garbage timestamp cannot compress the whole ramp — percentile-clipped range', () => {
+    // One malformed record writing an epoch-zero timestamp among ~3.2e8 s
+    // GPS adjusted standard times. A raw min/max range would put every real
+    // point at t ≈ 1 — the whole flight line collapses to the top colour —
+    // exactly the outlier failure the percentile core exists for.
+    const n = 100;
+    const base = 3.2e8;
+    const gpsTime = new Float64Array(n);
+    gpsTime[0] = 0; // the garbage timestamp
+    for (let i = 1; i < n; i++) gpsTime[i] = base + i;
+    const cloud = new PointCloud({
+      positions: new Float32Array(n * 3),
+      gpsTime,
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'outlier.las',
+    });
+    const out = colorForMode('gpsTime', cloud);
+    // The garbage point clamps to the bottom of the ramp instead of owning it.
+    expect([out[0], out[1], out[2]]).toEqual([0, 32, 76]);
+    // The real acquisition window spans the palette: many distinct colours
+    // across the flight line, not one endpoint stop for all 99 points.
+    const distinct = new Set<string>();
+    for (let i = 1; i < n; i++) {
+      distinct.add(`${out[i * 3]},${out[i * 3 + 1]},${out[i * 3 + 2]}`);
+    }
+    expect(distinct.size).toBeGreaterThan(10);
+  });
 });
 
 describe('colorForMode — returnNumber', () => {

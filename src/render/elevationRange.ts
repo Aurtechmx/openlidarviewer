@@ -9,8 +9,12 @@
  * 20-30 m above where 99 % of the cloud's points actually live.
  * The same failure applies to ANY per-point scalar (intensity spikes,
  * a stray GPS-time outlier), so the core is generic: `computeScalarRange`
- * works on a flat per-point array, and `computeElevationRange` remains
- * as a thin wrapper that reads the up-axis out of interleaved positions.
+ * works on a flat per-point array — the gpsTime colour mode ranges
+ * through it in both the static and streaming pipelines — and
+ * `computeElevationRange` remains as a thin wrapper that reads the
+ * up-axis out of interleaved positions. Not every scalar mode wants the
+ * clip: returnNumber deliberately ranges on raw finite min/max (small
+ * ordinals with no outlier failure mode — see its `colorForMode` case).
  *
  * The standard mitigation, used by CloudCompare, Potree, and the
  * Entwine viewer: pick the [P, 100 - P] percentile band (defaults to

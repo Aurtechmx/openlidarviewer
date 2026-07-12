@@ -17,6 +17,7 @@ import {
   colorByIntensity,
   colorByClassification,
   colorByScalar,
+  finiteMinMax,
 } from '../colorModes';
 import { densityForChunk, defaultCellSizeForSpacing } from '../densityColors';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
@@ -87,23 +88,20 @@ export function defaultStreamingMode(metadata: CopcMetadata): ColorMode {
 
 /**
  * The `[min, max]` of any per-point scalar array — used to seed the
- * cloud-global colour ranges from a decoded node. One helper for intensity,
- * gpsTime, and returnNumber so the seeding semantics can never drift
- * per-field.
+ * cloud-global colour ranges from a decoded node. One helper for intensity
+ * and returnNumber so the seeding semantics can never drift per-field, and a
+ * straight delegation to the static pipeline's `finiteMinMax` so the two
+ * pipelines share ONE definition of the non-finite rules: skip NaN/±Infinity
+ * (a malformed loader must not poison a cloud-global window) and degenerate
+ * to `{ 0, 0 }` when nothing finite exists. The current seeded channels are
+ * integer-typed and can never be NaN, but the guard costs nothing and any
+ * future Float channel routed through here inherits it.
  */
 export function scalarRangeOf(
   values: ArrayLike<number>,
   count: number,
 ): { min: number; max: number } {
-  if (count === 0) return { min: 0, max: 0 };
-  let min = values[0];
-  let max = values[0];
-  for (let i = 1; i < count; i++) {
-    const v = values[i];
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  return { min, max };
+  return finiteMinMax(values, count);
 }
 
 /** The intensity `[min, max]` of a decoded chunk — used to seed the global range. */

@@ -4,6 +4,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Added
+
+- **GPS-time and return-number colour modes.** Two continuous scalar colour modes join the chip row in the Inspector and the streaming panel, data-gated on their channel: "GPS time" ramps acquisition time (dark early → bright late) and "Return" ramps return ordinals (dark first → bright last), both defaulting to the colourblind-safe Cividis palette and available in the static and COPC/EPT streaming pipelines alike. Streaming nodes colour against one cloud-global window seeded from the coarsest resident node, so adjacent nodes never band at shared edges; the GPS-time range is percentile-clipped through the same core as elevation, so one garbage timestamp cannot compress the whole ramp, and non-finite values from a malformed chunk cannot poison the window. Honesty gate: classification keeps its categorical palette and `pointSourceId` deliberately gets no ramp mode — sequential colour on unordered flight-line ids would invent an ordering the data does not have.
+
 ### Changed
 
 - **Terrain intelligence report joins the unified evidence gate.** The report was the last Contour Studio product with a standalone gate; its Studio export now mints a permit through the same central evidence resolver as the vectors, map PDF, DEM package and complete deliverable (`contour.report`, governed by the DTM claim — the report can never claim more than the surface it summarises). A blocked permit refuses the export with the same blocked-button feedback as the other products; a granted permit's decision (validated / exploratory + watermark) is stamped into the report's provenance footer. The resolver only ever downgrades, and the report keeps honestly describing preview/blocked verdicts in its body; the direct panel convenience button keeps its own availability (no stamp), as the DEM's does.
