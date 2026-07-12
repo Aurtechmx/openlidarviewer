@@ -105,12 +105,14 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.validation.holdout-rmse': {
     id: 'olv.validation.holdout-rmse',
-    version: 1,
+    version: 2,
     name: 'Hold-out vertical accuracy (ASPRS-2014-style)',
     summary:
-      'Withholds ground points from the surface fit and reports RMSEz plus ' +
-      'NVA/VVA-style figures using the ASPRS 2014 formulas — hold-out, not ' +
-      'independent checkpoints.',
+      'Withholds ground points from the surface fit, re-runs ground ' +
+      'classification on the training points only (classify-inside-fold, so a ' +
+      'withheld point never helps decide its own ground membership), and ' +
+      'reports RMSEz plus NVA/VVA-style figures using the ASPRS 2014 formulas ' +
+      '— hold-out, not independent checkpoints.',
     citation: 'ASPRS (2014) Positional Accuracy Standards, formulas only (hold-out basis)',
     category: 'validation',
   },

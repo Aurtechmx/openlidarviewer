@@ -27,7 +27,7 @@ the paper that specifies it.
 | `olv.terrain.vrm` | 1 | Vector Ruggedness Measure | Sappington et al. (2007) |
 | `olv.terrain.tpi` | 1 | Topographic Position Index | Weiss (2001) |
 | `olv.dtm.idw-fill` | 1 | DTM raster + IDW void fill | internal (standard IDW) |
-| `olv.validation.holdout-rmse` | 1 | Hold-out vertical accuracy | ASPRS (2014) formulas, hold-out basis |
+| `olv.validation.holdout-rmse` | 2 | Hold-out vertical accuracy (classify-inside-fold) | ASPRS (2014) formulas, hold-out basis |
 | `olv.validation.spatial-block` | 2 | Spatial-block cross-validation | Roberts et al. (2017) |
 | `olv.validation.reliability-wilson` | 1 | Measured-cell reliability | Wilson (1927) |
 | `olv.registration.icp-planar` | 1 | Planar rigid ICP | Besl & McKay (1992); Umeyama (1991) |

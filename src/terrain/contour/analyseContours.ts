@@ -69,6 +69,7 @@ import {
 } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
+import { makeTrainOnlyReclassifier } from '../validate/trainOnlyReclassify';
 import { splitReliability, type ReliabilitySplit } from '../validate/reliabilitySplit';
 import { spatialBlockHoldout, type SpatialBlockResult } from '../validate/spatialBlockHoldout';
 import { DtmSurfaceModel } from '../validate/dtmSurfaceModel';
@@ -439,6 +440,30 @@ function normalisePoints(input: TerrainPointInput): ReadonlyArray<TerrainPoint> 
 }
 
 /**
+ * Resolve the ground-filter parameters the core actually runs with (caller
+ * overrides + pipeline defaults). Exported as the SINGLE source of truth for
+ * both the main classification pass and the hold-out validation's train-only
+ * reclassifier — sharing one resolved object is what makes parameter drift
+ * between the delivered surface and the validated one structurally
+ * impossible (and lets tests mirror the exact shipped parameters).
+ */
+export function resolveGroundFilterParams(
+  params: TerrainCoreParams,
+  verticalAxis: VerticalAxis,
+): GroundFilterParams {
+  return {
+    cellSizeM: params.cellSizeM,
+    maxWindowCells: params.ground?.maxWindowCells ?? 8,
+    slope: params.ground?.slope ?? 0.2,
+    elevationThresholdM: params.ground?.elevationThresholdM ?? 0.5,
+    scalingFactorM: params.ground?.scalingFactorM,
+    // Despike by default in the pipeline (the leaf stays strict-min).
+    floorPercentile: params.ground?.floorPercentile ?? 5,
+    verticalAxis,
+  };
+}
+
+/**
  * Run every interval-INDEPENDENT stage of the pipeline. The expensive half:
  * classification → ground filter → DTM raster + hardening → void fill →
  * hold-out validation + confidence calibration → interval gate → quality +
@@ -484,17 +509,12 @@ export function computeTerrainCore(
     );
   }
 
-  // 1) Ground classification.
-  const gf = classifyGroundSmrf(groundPts, {
-    cellSizeM: params.cellSizeM,
-    maxWindowCells: params.ground?.maxWindowCells ?? 8,
-    slope: params.ground?.slope ?? 0.2,
-    elevationThresholdM: params.ground?.elevationThresholdM ?? 0.5,
-    scalingFactorM: params.ground?.scalingFactorM,
-    // Despike by default in the pipeline (the leaf stays strict-min).
-    floorPercentile: params.ground?.floorPercentile ?? 5,
-    verticalAxis,
-  });
+  // 1) Ground classification. The resolved parameters are built ONCE (see
+  // resolveGroundFilterParams) and shared with the hold-out validation's
+  // train-only reclassifier below, so the per-split classification can never
+  // drift from the pass that produced the delivered surface.
+  const groundParams = resolveGroundFilterParams(params, verticalAxis);
+  const gf = classifyGroundSmrf(groundPts, groundParams);
   warnings.push(...gf.warnings);
 
   // 2) DTM raster aligned to the filter grid + 3) per-cell confidence.
@@ -566,6 +586,15 @@ export function computeTerrainCore(
     verticalUnitToMetres: params.verticalUnitToMetres,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     collectSamples: true,
+    // Close the classify-before-split leak (disclosed since v0.5.9): re-run
+    // the SAME classifier with the SAME resolved parameters on the training
+    // points only, so a held-out point never helps decide its own ground
+    // membership. The hook flips the report's disclosure automatically.
+    // Cost: the hold-out is a single deterministic split, so this is exactly
+    // ONE extra SMRF pass over the training share of the analysed cloud
+    // (already capped by the gather stride) — ground-filter cost ≤ 2× per
+    // run, never K passes.
+    reclassifyGround: makeTrainOnlyReclassifier(groundParams),
   });
   const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);

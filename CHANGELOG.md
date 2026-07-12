@@ -4,6 +4,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hold-out validation leak closed on the shipped path.** v0.5.9 added the per-fold `reclassifyGround` hook but shipped terrain products still ran the full-cloud classification path (disclosed). The analyser (`computeTerrainCore`) now passes a train-only reclassifier that re-runs the SAME SMRF classifier with the SAME resolved parameters on the training points only, so a held-out point never helps decide its own ground membership; the report's full-cloud disclosure flips off automatically because the leak is removed, not restated. Cost is bounded: the hold-out is a single deterministic split, so this is exactly one extra SMRF pass over the training share of the already-capped analysed cloud (ground-filter cost ≤ 2× per run). `olv.validation.holdout-rmse` bumps to version 2 (behavioural change under the stability rule). The spatially-blocked diagnostic still scores against the full-cloud mask and its threats-to-validity disclosure stands.
+
 ### Changed
 
 - **Terrain intelligence report joins the unified evidence gate.** The report was the last Contour Studio product with a standalone gate; its Studio export now mints a permit through the same central evidence resolver as the vectors, map PDF, DEM package and complete deliverable (`contour.report`, governed by the DTM claim — the report can never claim more than the surface it summarises). A blocked permit refuses the export with the same blocked-button feedback as the other products; a granted permit's decision (validated / exploratory + watermark) is stamped into the report's provenance footer. The resolver only ever downgrades, and the report keeps honestly describing preview/blocked verdicts in its body; the direct panel convenience button keeps its own availability (no stamp), as the DEM's does.

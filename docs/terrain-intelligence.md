@@ -77,6 +77,11 @@ composed by the `analyseContours` orchestrator
   measured-cell confidence combines relative and absolute sample adequacy.
 - **Validation + calibration** (`validate/`). Hold-out cross-validation
   (`holdoutRmse.ts`) measures vertical residual at withheld ground points;
+  ground classification is re-run on the training points only
+  (`validate/trainOnlyReclassify.ts`, same SMRF parameters as the main pass),
+  so a withheld point never helps decide its own ground membership
+  (classify-inside-fold — the classify-before-split optimism disclosed in
+  v0.5.9 is removed, not just stated);
   `calibrateConfidence.ts` fits a monotonic map from heuristic confidence to
   measured reliability and recalibrates the reported confidence, so a cell's
   percentage reflects the probability its elevation is within the measured
