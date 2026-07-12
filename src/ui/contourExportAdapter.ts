@@ -49,6 +49,11 @@ export interface ContourExportHost {
    * availability contract; the stamp records the unified gate decision.
    */
   exportDemPackage(permitStamp: ExportPermitStamp | null): Promise<void>;
+  /**
+   * Run the complete deliverable ZIP export (curated contours + DTM + provenance
+   * + README + SHA256SUMS), gated + stamped by the resolved permit.
+   */
+  exportCompletePackage(permit: ContourExportPermit): Promise<void>;
   /** Run the terrain intelligence report export (its own gate). */
   exportTerrainReport(): Promise<void>;
 }
@@ -95,6 +100,24 @@ export class ContourExportAdapter {
         return;
       }
       void this._busy(srcBtn, () => this.host.exportDemPackage(permitStamp(demPermit)));
+      return;
+    }
+    // Complete deliverable ZIP: gated as the bundle product (contour.package /
+    // CONTOURS claim). A hard block refuses; otherwise it assembles + downloads,
+    // stamped with the resolved decision.
+    if (product === 'deliverable') {
+      const permit = resolveContourExportPermit('complete-package', {
+        launchStatus: frame.launchStatus,
+        verticalUnitsKnown: frame.verticalUnitsKnown,
+        crsProjected: frame.crsProjected,
+        analyticalGeometry: false,
+        blockedReasons: frame.blockedReasons,
+      });
+      if (!permit.ok) {
+        this._flashBlocked(srcBtn, product, permit.reasons);
+        return;
+      }
+      void this._busy(srcBtn, () => this.host.exportCompletePackage(permit));
       return;
     }
     // The terrain intelligence report still uses its own gate (not a registered

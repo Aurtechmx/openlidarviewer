@@ -66,6 +66,7 @@ import {
   loadTerrainReportPdf,
   loadContourDownload,
   loadExportProvenance,
+  loadContourDeliverableBuild,
 } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
@@ -617,6 +618,7 @@ export class AnalysePanel {
               this._studioExportBtns.get('pdf')?.click();
             },
             exportDemPackage: (stamp) => this._exportDemPackage(this._demButton, stamp),
+            exportCompletePackage: (permit) => this._exportCompletePackage(permit),
             exportTerrainReport: () => this._exportTerrainReport(this._reportButton),
           };
           this._contourExportAdapter = new ContourExportAdapter(host);
@@ -1964,6 +1966,50 @@ export class AnalysePanel {
     } finally {
       btn.disabled = false;
       btn.textContent = label;
+    }
+  }
+
+  /**
+   * Build + download the complete deliverable ZIP (curated contours + DTM +
+   * provenance + README + SHA256SUMS), gated by the resolved permit. The contour
+   * geometry is regenerated at the exact analytical style so the bundled GeoJSON
+   * is the canonical, reproducible one; the permit decision + stamp travel into
+   * every file's provenance.
+   */
+  private async _exportCompletePackage(permit: ContourExportPermit): Promise<void> {
+    if (!permit.ok || !this._result) return;
+    try {
+      // Canonical analytical geometry for the bundle (regenerate to crisp when
+      // the host can; otherwise use the on-screen result honestly labelled).
+      const result = this._cb.buildResultForExport
+        ? await this._cb.buildResultForExport({
+            intervalM: this._result.model.intervalM,
+            shapeStyle: 'crisp',
+          })
+        : this._result;
+      const [{ buildContourDeliverableFromResult }] = await Promise.all([
+        loadContourDeliverableBuild(),
+      ]);
+      const ctx = this._cb.getMapContext?.() ?? {};
+      const basename = this._cb.getExportBasename?.() ?? 'contours';
+      const bytes = buildContourDeliverableFromResult(result, {
+        decision: permit.decision,
+        basename,
+        worldOrigin: ctx.worldOrigin ?? null,
+        linearUnit: ctx.linearUnit,
+        isGeographic: ctx.isGeographic ?? false,
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
+        generatedAt: new Date(),
+        exportPermit: permitStamp(permit),
+      });
+      triggerDownload(
+        new Blob([bytes as BlobPart], { type: 'application/zip' }),
+        `${basename}-contour-deliverable.zip`,
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('OpenLiDARViewer: complete deliverable export failed.', err);
     }
   }
 

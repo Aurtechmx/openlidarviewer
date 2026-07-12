@@ -3,6 +3,7 @@ import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
 import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
 import { sha256Hex } from '../src/terrain/export/sha256';
+import { buildContourDeliverableFromResult } from '../src/terrain/export/contourDeliverableBuild';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 // A 2×2 grid, row-major (row 0 = south). Values rise to the north-east.
@@ -201,6 +202,37 @@ describe('buildDemPackage', () => {
     }
     expect(hasName(zip, 'site.prj')).toBe(true);
     expect(hasName(zip, 'site-README.txt')).toBe(true);
+  });
+
+  it('builds the complete deliverable ZIP: DTM + provenance + README + verifying SHA256SUMS', () => {
+    const zip = buildContourDeliverableFromResult(fixtureResult(), {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    // The curated bundle: DTM raster, provenance JSON, README, checksums. (The
+    // model-less DEM fixture has no contours, so the GeoJSON is honestly omitted.)
+    expect(extractEntry(zip, 'site_DTM.tif')).not.toBeNull();
+    expect(extractEntry(zip, 'site_Provenance.json')).not.toBeNull();
+    expect(extractEntry(zip, 'site_README.txt')).not.toBeNull();
+    const sums = extractEntry(zip, 'SHA256SUMS');
+    expect(sums).not.toBeNull();
+    // Every listed digest re-verifies against the named file (a `shasum -c` pass).
+    for (const line of new TextDecoder().decode(sums!).trimEnd().split('\n')) {
+      const [hex, name] = line.split('  ');
+      expect(name).not.toBe('SHA256SUMS');
+      const bytes = extractEntry(zip, name);
+      expect(bytes, `deliverable manifest lists missing ${name}`).not.toBeNull();
+      expect(sha256Hex(bytes!)).toBe(hex);
+    }
+    // The provenance JSON parses and carries the software identity.
+    const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
+    expect(prov.software).toBe('OpenLiDARViewer');
   });
 
   it('includes a SHA256SUMS.txt whose digests verify every other file in the package', () => {

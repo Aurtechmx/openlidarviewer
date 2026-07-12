@@ -48,6 +48,7 @@ export type ContourStudioExportProduct =
   | 'dxf'
   | 'svg'
   | 'package'
+  | 'deliverable'
   | 'report';
 
 export interface ContourStudioWorkspaceOptions {
@@ -203,7 +204,10 @@ function renderExportBar(
       { id: 'svg', label: 'SVG' },
     ] },
     { label: 'Map sheet', items: [{ id: 'pdf', label: 'PDF' }] },
-    { label: 'Data package', items: [{ id: 'package', label: 'DEM (ZIP)' }] },
+    { label: 'Data package', items: [
+      { id: 'package', label: 'DEM (ZIP)' },
+      { id: 'deliverable', label: 'Complete (ZIP)' },
+    ] },
     { label: 'Report', items: [{ id: 'report', label: 'Intelligence (PDF)' }] },
   ];
   for (const g of groups) {

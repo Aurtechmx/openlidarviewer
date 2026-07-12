@@ -164,6 +164,7 @@ export const loadMapSheetPdf = () => import('./render/measure/mapSheetPdf');
  * sees the import literal.
  */
 export const loadDemPackage = () => import('./terrain/export/demPackage');
+export const loadContourDeliverableBuild = () => import('./terrain/export/contourDeliverableBuild');
 
 /**
  * Load the Space / Object Report PDF builder (also pulls in pdf-lib). Only

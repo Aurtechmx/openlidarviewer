@@ -36,7 +36,7 @@ import {
  * raster package, governed by the DTM claim, routed through the SAME resolver so
  * every scientific deliverable's evidence decision comes from one place.
  */
-export type ContourPermitProduct = 'pdf' | 'geojson' | 'dxf' | 'svg' | 'dem';
+export type ContourPermitProduct = 'pdf' | 'geojson' | 'dxf' | 'svg' | 'dem' | 'complete-package';
 
 /** The frame + unit facts the permit needs, lifted from the launch state. */
 export interface ContourPermitContext {
@@ -107,6 +107,8 @@ export function exporterIdForContourProduct(
       return 'contour.svg.cartographic';
     case 'dem':
       return 'contour.dem';
+    case 'complete-package':
+      return 'contour.package';
   }
 }
 

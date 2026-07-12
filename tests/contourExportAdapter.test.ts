@@ -21,6 +21,7 @@ function fakeHost() {
     vector: [] as Array<{ fmt: string; permit: ContourExportPermit; contourMethod?: string; deliverablePurpose?: string }>,
     mapPdf: [] as ContourExportPermit[],
     dem: [] as Array<{ status: string } | null>,
+    complete: [] as ContourExportPermit[],
     report: 0,
     styles: [] as string[],
   };
@@ -31,6 +32,7 @@ function fakeHost() {
     },
     openMapPdf: (permit) => { calls.mapPdf.push(permit); },
     exportDemPackage: async (stamp) => { calls.dem.push(stamp ? { status: stamp.status } : null); },
+    exportCompletePackage: async (permit) => { calls.complete.push(permit); },
     exportTerrainReport: async () => { calls.report++; },
   };
   return { host, calls };
@@ -128,6 +130,29 @@ describe('ContourExportAdapter — gated dispatch', () => {
       blockedReasons: ['No terrain surface has been computed.'],
     });
     expect(calls.dem).toHaveLength(0);
+    expect(b.textContent).toBe('Blocked');
+  });
+
+  it('routes the complete deliverable through the resolver with a granted permit', () => {
+    const { host, calls } = fakeHost();
+    new ContourExportAdapter(host).handle('deliverable', btn(), intent(), okFrame);
+    expect(calls.complete).toHaveLength(1);
+    expect(calls.complete[0].ok).toBe(true);
+    if (calls.complete[0].ok) expect(calls.complete[0].exporterId).toBe('contour.package');
+    expect(calls.dem).toHaveLength(0);
+    expect(calls.vector).toHaveLength(0);
+  });
+
+  it('refuses the complete deliverable (writes nothing) when the launch state is blocked', () => {
+    const { host, calls } = fakeHost();
+    const b = btn();
+    new ContourExportAdapter(host).handle('deliverable', b, intent(), {
+      launchStatus: 'unavailable',
+      verticalUnitsKnown: true,
+      crsProjected: true,
+      blockedReasons: ['No terrain surface has been computed.'],
+    });
+    expect(calls.complete).toHaveLength(0);
     expect(b.textContent).toBe('Blocked');
   });
 
