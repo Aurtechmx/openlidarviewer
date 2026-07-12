@@ -212,6 +212,19 @@ export const ELEVATION_PALETTES: ReadonlyArray<{
 ];
 
 /**
+ * Sample a named perceptual ramp at normalised value `t` ∈ [0, 1], returning
+ * [r, g, b] in 0-255. Public wrapper over the internal {@link sampleRamp} so a
+ * colorbar / legend renders the SAME ramp the points on screen use — a legend
+ * swatch can never disagree with the colouring it labels.
+ */
+export function elevationRampColor(
+  t: number,
+  palette: ElevationPalette = DEFAULT_ELEVATION_PALETTE,
+): [number, number, number] {
+  return sampleRamp(t, palette);
+}
+
+/**
  * Interpolate a named perceptual ramp at normalised value `t` ∈ [0, 1].
  * Returns [r, g, b] in 0-255.
  */
