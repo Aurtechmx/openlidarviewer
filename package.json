@@ -58,7 +58,11 @@
     "lint:no-ignored-src": "node scripts/lint-no-ignored-src.mjs",
     "lint:claim-register": "node scripts/lint-claim-register.mjs",
     "gen:claim-registry": "node scripts/generate-claim-registry.mjs",
-    "lint:release-sync": "node scripts/lint-release-sync.mjs"
+    "lint:release-sync": "node scripts/lint-release-sync.mjs",
+    "docs:render": "node scripts/render-claim-register.mjs",
+    "docs:dev": "npm run docs:render && vitepress dev docs-site",
+    "docs:build": "npm run docs:render && vitepress build docs-site && node scripts/lint-docs-site.mjs",
+    "docs:preview": "vitepress preview docs-site"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
@@ -82,6 +86,7 @@
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vite-plugin-javascript-obfuscator": "^3.1.0",
+    "vitepress": "1.6.4",
     "vitest": "^4.1.7"
   }
 }
