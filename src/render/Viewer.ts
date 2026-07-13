@@ -169,6 +169,9 @@ import { computeScaleBar, pixelsPerMetreAt } from './scaleBar';
 // dependency-free leaf, so this static import does NOT merge the lazy
 // pngWorldFile/Studio chunks into the shell bundle.
 import { frameTopDownOrtho } from './export/orthoFraming';
+// Pure size/aspect planning for the honest custom-resolution figure render
+// (the same dependency-free-leaf pattern as orthoFraming above).
+import { planFigureRender } from './export/figureFraming';
 import { MeasureController } from './measure/MeasureController';
 import {
   sampleProfile,
@@ -263,6 +266,7 @@ import type {
   ExportOptions,
   ExportResult,
   ExportSceneAdapter,
+  FigureViewContext,
 } from '../export/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4982,6 +4986,19 @@ export class Viewer {
         if (!aabb) return null;
         return viewer._renderFramedTopDown(aabb, options.widthPx);
       },
+      renderFigure(options: { widthPx?: number; heightPx?: number }): Promise<{
+        blob: Blob;
+        widthPx: number;
+        heightPx: number;
+      } | null> {
+        // The honest-resolution seam: `runStudioExport` routes explicit
+        // width/height requests here so "2048 px" means 2048 rendered
+        // pixels, not an upscaled copy of the live canvas.
+        return viewer.renderFigure(options);
+      },
+      figureViewContext(): FigureViewContext {
+        return viewer.figureViewContext();
+      },
     };
   }
 
@@ -5040,22 +5057,50 @@ export class Viewer {
     // Output size: requested width (default 2048), height from the
     // footprint aspect so pixels stay square to within the 1 px rounding the
     // world file's independent X/Y scales absorb exactly.
-    const outW = framing.widthPx;
-    const outH = framing.heightPx;
+    const blob = await this._renderAtSize(framing.widthPx, framing.heightPx, () => {
+      this._renderer.render(this._scene, camera);
+    });
+    return {
+      blob,
+      widthPx: framing.widthPx,
+      heightPx: framing.heightPx,
+      // The frustum-derived rectangle — exactly what the camera framed.
+      extent: framing.extent,
+    };
+  }
 
+  /**
+   * The proven offscreen-capture primitive every true re-render path uses:
+   * size the live renderer's drawing buffer to EXACTLY `outW × outH`
+   * (pixel ratio 1 — the requested pixels are the delivered pixels), run
+   * two render+present cycles, encode the canvas to a PNG Blob, and restore
+   * the live size in a `finally` so a throw can never leave the on-screen
+   * canvas at export resolution. Extracted verbatim from
+   * `_renderFramedTopDown` (whose behaviour is pinned by the world-file
+   * tests) so `renderFigure` reuses the identical mechanics instead of a
+   * second, drifting copy.
+   *
+   * Two render+present cycles for the same WebGPU buffer-flush reason
+   * `snapshot()` documents: a single un-awaited render captures the
+   * previous frame.
+   *
+   * `renderFrame` performs exactly one render call with whatever camera the
+   * caller prepared — this primitive owns the buffer round-trip, never the
+   * camera.
+   */
+  private async _renderAtSize(
+    outW: number,
+    outH: number,
+    renderFrame: () => void,
+  ): Promise<Blob> {
     const gl = this._renderer.domElement as HTMLCanvasElement;
     const prevSize = this._renderer.getSize(new THREE.Vector2());
     const prevRatio = this._renderer.getPixelRatio();
     try {
-      // Pixel ratio 1 so the drawing buffer is EXACTLY outW × outH — the
-      // world file divides the extent by these pixel counts.
       this._renderer.setPixelRatio(1);
       this._renderer.setSize(outW, outH, false);
-      // Two render+present cycles for the same WebGPU buffer-flush reason
-      // `snapshot()` documents: a single un-awaited render captures the
-      // previous frame.
       const present = (): Promise<void> => {
-        this._renderer.render(this._scene, camera);
+        renderFrame();
         return new Promise((resolve) => {
           if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => resolve());
@@ -5066,20 +5111,98 @@ export class Viewer {
       };
       await present();
       await present();
-      const blob = await this._canvasToBlob(gl);
-      return {
-        blob,
-        widthPx: outW,
-        heightPx: outH,
-        // The frustum-derived rectangle — exactly what the camera framed.
-        extent: framing.extent,
-      };
+      return await this._canvasToBlob(gl);
     } finally {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);
       // Repaint the live view at the restored size on the next frames.
       this._bumpRenderActivity();
     }
+  }
+
+  /**
+   * TRUE re-render of the LIVE perspective view at an explicit pixel size —
+   * the honest-resolution path behind the Studio's width/height options.
+   *
+   * Why this exists: `snapshot()` copies the on-screen drawing buffer, so
+   * it can only ever deliver the canvas resolution (its `supersample`
+   * option upscales the 2-D composite — the points themselves stay at
+   * canvas resolution). The Studio presets used to advertise "2048 px" on
+   * top of that copy: a lie. This method renders the scene AGAIN at the
+   * requested size with the live camera re-aspected to the target, so the
+   * delivered pixels are real rendered geometry.
+   *
+   * Renders DIRECT (no EDL post pass) — the EDL pipeline's render targets
+   * are sized to the live canvas, and depth-edge shading is a reading aid,
+   * not data. No overlays are baked either: the overlay compositor is bound
+   * to the live canvas geometry (see `snapshot()`), and re-projecting it
+   * against a re-aspected camera is follow-up work.
+   *
+   * The camera aspect round-trip is `try/finally`-wrapped exactly like the
+   * renderer size round-trip inside `_renderAtSize`, so a throw cannot
+   * leave the live camera re-aspected.
+   *
+   * Returns null when no size can be planned (invalid request). Size and
+   * aspect maths live in the pure, unit-tested `planFigureRender` leaf.
+   */
+  async renderFigure(options: {
+    widthPx?: number;
+    heightPx?: number;
+  }): Promise<{ blob: Blob; widthPx: number; heightPx: number } | null> {
+    await this.ready;
+    const gl = this._renderer.domElement as HTMLCanvasElement;
+    const plan = planFigureRender(
+      { widthPx: options.widthPx, heightPx: options.heightPx },
+      { widthPx: gl.width, heightPx: gl.height },
+    );
+    if (!plan) return null;
+
+    const camera = this._camera;
+    const prevAspect = camera.aspect;
+    try {
+      camera.aspect = plan.aspect;
+      camera.updateProjectionMatrix();
+      const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
+        this._renderer.render(this._scene, camera);
+      });
+      return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
+    } finally {
+      camera.aspect = prevAspect;
+      camera.updateProjectionMatrix();
+    }
+  }
+
+  /**
+   * The live-view facts a figure's PNG provenance records — CRS, colour
+   * mode, camera pose, active clip. Everything here is what the app can
+   * honestly assert right now; a fact the Viewer cannot vouch for is null
+   * and the provenance builder omits its chunk entirely (never fabricated).
+   * Consumed by the Studio pipeline through the export adapter below and by
+   * `saveSnapshot` in main.ts through the lazy Studio chunk.
+   */
+  figureViewContext(): FigureViewContext {
+    const adapter = this._buildExportAdapter();
+    const cam = this._camera;
+    const target = this._controls.target;
+    const clip = this._clip;
+    return {
+      crs: adapter.crsLabel(),
+      colorMode: adapter.currentColorMode(),
+      camera: {
+        position: [cam.position.x, cam.position.y, cam.position.z],
+        target: [target.x, target.y, target.z],
+        fovDeg: cam.fov,
+      },
+      // Only an ENABLED clip is a fact about the rendered pixels — a
+      // dormant box changes nothing and therefore records nothing.
+      clip: clip?.enabled
+        ? {
+            mode: clip.mode,
+            min: [clip.box.min[0], clip.box.min[1], clip.box.min[2]],
+            max: [clip.box.max[0], clip.box.max[1], clip.box.max[2]],
+          }
+        : null,
+    };
   }
 
   /**

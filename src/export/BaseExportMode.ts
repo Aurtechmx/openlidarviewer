@@ -43,6 +43,8 @@ import {
   linearUnitOf,
 } from './ScanReportRenderer';
 import type { ScanReportData, ScanReportRow } from './ScanReportRenderer';
+import { stampFigureProvenanceOntoBlob } from './figureMetadata';
+import { paletteLabelOfOptions } from './figureProvenance';
 
 /** Encode a canvas to a `Blob` of the given MIME type. */
 export function captureCanvasToBlob(
@@ -252,16 +254,33 @@ export function buildScanReport(
 }
 
 /**
- * The shared "WYSIWYG snapshot + scan report" pipeline every Studio mode
- * uses. Each exporter only declares its mode, its report title, and any
- * mode-specific rows; this function does the rest:
+ * The shared capture + scan-report pipeline every Studio mode uses. Each
+ * exporter only declares its mode, its report title, and any mode-specific
+ * rows; this function does the rest:
  *
  *   1. Force the runtime colour mode via `withColorMode` (finally-restored).
- *   2. Call `adapter.snapshot()` to capture the live view through the live
- *      camera + EDL pipeline, with optional measurement and annotation
- *      overlays baked in. This is the "match the on-screen view" guarantee.
+ *   2. Capture. Two honest paths:
+ *      a. An explicit `options.width`/`height` request routes to
+ *         `adapter.renderFigure` — the TRUE offscreen re-render at the
+ *         requested pixel size. This closed a live honesty bug: the presets
+ *         advertised "2048 px" while this function ignored the option and
+ *         shipped the canvas-sized snapshot. The re-render is a DIRECT
+ *         render (no EDL, no overlay bakes) of the live perspective view.
+ *      b. Otherwise (or when the adapter can't re-render / the device
+ *         fails), `adapter.snapshot()` captures the live view through the
+ *         live camera + EDL pipeline with optional measurement and
+ *         annotation overlays baked in — the WYSIWYG guarantee.
  *   3. Compose the scan-report card into the bottom-right corner.
- *   4. Return the final `ExportResult` Blob with mode + metadata.
+ *   4. Embed figure provenance (build / CRS / colormap / camera / clip) as
+ *      PNG text chunks — LAST, so no later re-encode strips it.
+ *   5. Return the final `ExportResult` Blob reporting the ACTUAL rendered
+ *      pixel size — the re-render's size on path (a), the live canvas size
+ *      on path (b) — never an unfulfilled request.
+ *
+ * `options.transparent` is intentionally NOT consumed here: the live
+ * renderer is constructed with `alpha: false`, so transparency is
+ * impossible until an offscreen render-target path exists. The presets no
+ * longer advertise it (see ExportPresets.ts).
  *
  * Pure orchestration — every render-side step is delegated to the adapter,
  * so the exporters stay testable.
@@ -277,19 +296,60 @@ export async function runStudioExport(
 ): Promise<ExportResult> {
   const includeMeasurements = options.includeMeasurements !== false;
   const includeAnnotations = options.includeAnnotations !== false;
+  const wantsExplicitSize =
+    typeof options.width === 'number' || typeof options.height === 'number';
 
-  const blob = await withColorMode(context.adapter, colorMode, async () => {
-    return context.adapter.snapshot({
-      measurements: includeMeasurements,
-      annotations: includeAnnotations,
-      // Inspect tool + LiveProbe both bake by default — if the user is
-      // looking at point data when they click Export, that data ships in
-      // the PNG. The contract is "whatever's on screen ships in the
-      // export"; this is the implementation.
-      inspector: true,
-      probe: true,
-    });
-  });
+  // The capture carries the size of the pixels that actually got rendered —
+  // the re-render's planned size, or null for a canvas-sized snapshot — and
+  // the result reports it verbatim.
+  const capture = await withColorMode(
+    context.adapter,
+    colorMode,
+    async (): Promise<{ blob: Blob; size: { width: number; height: number } | null }> => {
+      if (wantsExplicitSize && context.adapter.renderFigure) {
+        // The re-render has two distinct failure shapes and both must
+        // degrade to the snapshot rather than sink the export:
+        //   • null return — the size request was unplannable (the framing
+        //     planner refused it); the adapter knew before touching the GPU.
+        //   • rejection — a REAL device failure mid-render (lost context,
+        //     canvas encode that yields no blob). The adapter never converts
+        //     these into null, so they surface here as a throw.
+        // Either way the user asked for an image and an image exists on
+        // screen, so a capture-quality problem must never become an error
+        // toast — the same best-effort contract the provenance embedding
+        // follows. The rejection is logged (not swallowed silently) because
+        // a device failure is diagnostic gold, and the result dimensions
+        // below report the snapshot's real size, not the request we failed
+        // to honour.
+        try {
+          const figure = await context.adapter.renderFigure({
+            widthPx: typeof options.width === 'number' ? options.width : undefined,
+            heightPx: typeof options.height === 'number' ? options.height : undefined,
+          });
+          if (figure) {
+            return {
+              blob: figure.blob,
+              size: { width: figure.widthPx, height: figure.heightPx },
+            };
+          }
+        } catch (err) {
+          console.warn('[export] Figure re-render failed; falling back to the live snapshot.', err);
+        }
+      }
+      const snapshot = await context.adapter.snapshot({
+        measurements: includeMeasurements,
+        annotations: includeAnnotations,
+        // Inspect tool + LiveProbe both bake by default — if the user is
+        // looking at point data when they click Export, that data ships in
+        // the PNG. The contract is "whatever's on screen ships in the
+        // export"; this is the implementation.
+        inspector: true,
+        probe: true,
+      });
+      return { blob: snapshot, size: null };
+    },
+  );
+  const blob = capture.blob;
 
   // Class-filter scope stamp threaded from the call site (Viewer → main.ts).
   // Empty when no class is hidden, so the banner + card row are no-ops and the
@@ -300,15 +360,27 @@ export async function runStudioExport(
   // Draw the "showing N of M classes" caveat banner across the top of the
   // raster while a filter is active — the escape-hatch closure: a filtered
   // image can't leave the app without a class-scope stamp.
-  const final = await composeClassScopeBannerOntoBlob(withReport, classScopeStamp);
+  const composed = await composeClassScopeBannerOntoBlob(withReport, classScopeStamp);
+
+  // Figure provenance, embedded after every canvas re-encode is done. The
+  // colour mode recorded is the one this export FORCED — the artifact's
+  // truth — not whatever the live view happened to show beforehand. Camera
+  // and clip come from the optional view-context accessor; adapters that
+  // don't implement it still get build + CRS + colormap chunks.
+  const view = context.adapter.figureViewContext?.() ?? null;
+  const final = await stampFigureProvenanceOntoBlob(composed, {
+    crs: context.adapter.crsLabel(),
+    colorMode,
+    palette: paletteLabelOfOptions(options as Readonly<Record<string, unknown>>),
+    camera: view?.camera ?? null,
+    clip: view?.clip ?? null,
+  });
 
   return {
     blob: final,
     mode,
-    // The snapshot pipeline captures at the live canvas size; we report
-    // those dimensions back so the caller has accurate output info.
-    width: context.canvas.width,
-    height: context.canvas.height,
+    width: capture.size?.width ?? context.canvas.width,
+    height: capture.size?.height ?? context.canvas.height,
     mimeType: 'image/png',
     metadata: extraResultMeta,
   };

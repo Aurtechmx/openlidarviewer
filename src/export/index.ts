@@ -49,11 +49,28 @@ export type {
   ExportSceneAdapter,
   ExportUnavailableReason,
   ExportWorldFile,
+  FigureCameraPose,
+  FigureClipSummary,
+  FigureViewContext,
   HeightMapOptions,
   HeightMapRamp,
   IntensityOptions,
   OrthographicRgbOptions,
 } from './types';
+// PNG figure provenance — the text-chunk writer, the provenance builder, and
+// the one-call Blob stamper. Exported through this barrel so main.ts's
+// saveSnapshot reaches them via the `loadExportStudio()` seam: the stamping
+// code stays in this lazy chunk and adds nothing to the eager shell.
+export { encodePngTextChunks, readPngTextChunks } from './pngTextChunks';
+export type { PngTextEntry } from './pngTextChunks';
+export {
+  buildFigureProvenance,
+  paletteLabelOfOptions,
+  FIGURE_SOFTWARE,
+} from './figureProvenance';
+export type { FigureProvenanceInput } from './figureProvenance';
+export { stampFigureProvenanceOntoBlob } from './figureMetadata';
+export type { FigureStampContext } from './figureMetadata';
 export {
   orthographicRgbExporter,
   orthoCameraForPerspective,
