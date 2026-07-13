@@ -82,11 +82,11 @@ The picking tools — Measure, Inspect, Annotate, and Probe — are mutually exc
 
 ## Saved views
 
-In the Saved views section of the panel, click Save current view — or press `V` — to store the camera position. Each saved view can be renamed in place; click Go to glide the camera back to it, or the `×` to delete it. Saved views are kept in the session file, so they survive an export and import. This is useful for inspection, reports, and presentations.
+In the Saved views section of the panel, click Save current view — or press `V` — to store a named **view state**: the camera plus the display state you are looking at — the clip box, colour mode, class filter, elevation/intensity filters, and render settings. Each saved view can be renamed in place; click Go to glide the camera back and reapply that state, or the `×` to delete it. Saved views are kept in the session file, so they survive an export and import — which means a report or paper can cite a view state by name ("Figure 3 is the 'north-scarp' state") and a reader with the same scan regenerates it. Views saved by older versions carry only a camera and restore exactly as they always did. One honest caveat for streamed scans (COPC/EPT): a restored view reproduces the same settings over whatever detail is resident at that moment, so expect the same picture, not necessarily the same individual points.
 
 ## Keyboard shortcuts
 
-`A`, `M`, and `I` toggle the Annotate, Measure, and Inspect tools; `V` saves the current camera view; `Delete` removes the selected annotation; `Ctrl`/`Cmd`+`Z` undoes an annotation change and adding `Shift` redoes it; `Esc` cancels the active tool; and `?` opens the help overlay. Shortcuts are suppressed while you are typing in a field. Navigation keeps its own keys — `1`/`2`/`3` for the modes, `R` to frame the scan, `F` to focus the centre. The Help button in the tool dock opens a reference card covering all of this.
+`A`, `M`, and `I` toggle the Annotate, Measure, and Inspect tools; `V` saves the current view state; `Delete` removes the selected annotation; `Ctrl`/`Cmd`+`Z` undoes an annotation change and adding `Shift` redoes it; `Esc` cancels the active tool; and `?` opens the help overlay. Shortcuts are suppressed while you are typing in a field. Navigation keeps its own keys — `1`/`2`/`3` for the modes, `R` to frame the scan, `F` to focus the centre. The Help button in the tool dock opens a reference card covering all of this.
 
 ## Exporting
 

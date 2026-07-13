@@ -33,7 +33,7 @@ import type { BoxBounds } from '../render/measure/geometry';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 
 /**
- * Current session-file schema version (v6). The history, oldest first: v3 added
+ * Current session-file schema version (v7). The history, oldest first: v3 added
  *   • the live camera state (not just saved views) so a re-import lands
  *     the viewer on the exact viewpoint the user saved;
  *   • render settings (point size, EDL, antialiasing, size mode) so the
@@ -44,13 +44,22 @@ import type { ClipBox, ClipMode } from '../render/clip/clipBox';
  *     .olvsession in a text editor and you can tell which scan it was
  *     captured against without loading anything.
  *
+ * v7 turns each saved view from a camera bookmark into a restorable view
+ * STATE: a view may carry the same display bundle the session records
+ * globally (clip box, colour mode, class filter, point-filter windows,
+ * render settings), so a paper can cite "Figure 3 = view state
+ * 'north-scarp'" and a reviewer regenerates that exact framing AND display.
+ * v7 also reserves the top-level `processingManifest` slot (opaque
+ * passthrough) so the verifiable-processing workstream can populate it
+ * without another version bump.
+ *
  * Older v1 + v2 files parse with no loss — the new optional fields just
  * read as undefined, and the Viewer falls back to its current state.
  */
-export const SESSION_VERSION = 6;
+export const SESSION_VERSION = 7;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
+const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
 
 /** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
@@ -89,8 +98,37 @@ export interface SessionPointFilters {
   intensity?: readonly [number, number];
 }
 
-/** A named, saved camera viewpoint. */
-export interface SavedView {
+/**
+ * v7 — everything a restorable view state carries. The session records this
+ * bundle twice: once GLOBALLY (the flat optional fields on
+ * {@link InspectionSession}, the live state at export time) and once PER
+ * SAVED VIEW (the optional fields on {@link SavedView}), both through the
+ * same sub-parsers so the two surfaces can never drift. `camera` is optional
+ * here because a saved view keeps its camera in the required
+ * `SavedView.camera` slot; the global path fills it in.
+ *
+ * Streaming honesty: restoring a bundle re-applies settings and re-renders —
+ * on a streaming (COPC/EPT) cloud the resident node set varies with budget
+ * and load order, so byte-identical point MEMBERSHIP is not guaranteed, only
+ * the same camera/clip/colour/filter recipe over whatever is resident.
+ */
+export interface ViewStateBundle {
+  camera?: SavedCameraState;
+  render?: SessionRenderSettings;
+  colorMode?: ColorMode;
+  /** Hidden ASPRS class codes, same contract as `InspectionSession.classFilter`. */
+  classFilter?: number[];
+  pointFilters?: SessionPointFilters;
+  clip?: ClipBox;
+}
+
+/**
+ * A named, saved camera viewpoint. Since v7 it may carry the full display
+ * bundle (clip, colour mode, class filter, point filters, render settings);
+ * a bundle-free view serialises exactly as it did in v6 — `{ name, camera }`,
+ * nothing else — so camera-only bookmarks keep their byte-shape.
+ */
+export interface SavedView extends Omit<ViewStateBundle, 'camera'> {
   name: string;
   camera: SavedCameraState;
 }
@@ -171,6 +209,17 @@ export interface InspectionSession {
    * and is treated as "an earlier version" (see `exportStaleness.ts`).
    */
   software?: string;
+  /**
+   * v7 — RESERVED for the verifiable processing manifest (the record of every
+   * derivation applied to the scan, so a reviewer can audit how a published
+   * number was produced). The slot is claimed here so the manifest workstream
+   * can start writing it WITHOUT another coordinated version bump. Until that
+   * lands the field is an opaque passthrough: the serializer emits whatever
+   * the caller supplies verbatim, the parser copies it verbatim with no
+   * validation, and no reader interprets it. Absent ⇒ omitted from the JSON
+   * (byte-shape preserved).
+   */
+  processingManifest?: unknown;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -190,11 +239,11 @@ const KINDS: readonly MeasurementKind[] = [
 
 /**
  * Serialise a session to a pretty-printed JSON string (always the current
- * `SESSION_VERSION` — currently v3). v3 optional fields
- * (`camera`, `render`, `colorMode`, `scanSummary`) are included whenever
- * the caller supplied them; absent fields are omitted from the JSON to
- * keep the v1/v2 baseline byte-shape unchanged for files that don't use
- * the new surface.
+ * `SESSION_VERSION`). Optional fields (`camera`, `render`, `colorMode`,
+ * `scanSummary`, and the later additions) are included whenever the caller
+ * supplied them; absent fields are omitted from the JSON to keep the
+ * earlier-schema byte-shape unchanged for files that don't use the new
+ * surface.
  */
 // `isSessionFile` + `SESSION_EXTENSION` live in the tiny eager `./sessionFile`
 // module so the file router doesn't drag this parser into the initial bundle;
@@ -211,7 +260,10 @@ export function serializeSession(
     upAxis: session.upAxis,
     origin: session.origin,
     unitSystem: session.unitSystem,
-    views: session.views,
+    // v7 — each view re-serialised through the same emit-only-when-set
+    // discipline as the top-level fields, so a camera-only view stays
+    // byte-identical to its v6 form.
+    views: session.views.map(serializeSavedView),
     measurements: session.measurements,
     annotations: session.annotations,
   };
@@ -234,7 +286,32 @@ export function serializeSession(
   if (typeof session.software === 'string' && session.software !== '') {
     doc.software = session.software;
   }
+  // v7 — reserved manifest slot, opaque passthrough (see the field docs).
+  // `null` counts as absent so a JSON-roundtripped "no manifest" can't emit
+  // a literal null and change the byte-shape.
+  if (session.processingManifest != null) {
+    doc.processingManifest = session.processingManifest;
+  }
   return JSON.stringify(doc, null, 2);
+}
+
+/**
+ * Emit one saved view with the v7 optional bundle applied field-by-field:
+ * `name` + `camera` always (the v6 shape), then each bundle field ONLY when
+ * it carries something — the same sanitisers as the top-level fields, so an
+ * empty class filter or a window-less point-filter block is dropped rather
+ * than serialised as noise.
+ */
+function serializeSavedView(view: SavedView): SavedView {
+  const doc: SavedView = { name: view.name, camera: view.camera };
+  if (view.render) doc.render = view.render;
+  if (view.colorMode) doc.colorMode = view.colorMode;
+  const hidden = sanitizeClassFilter(view.classFilter);
+  if (hidden.length > 0) doc.classFilter = hidden;
+  const pf = sanitizePointFilters(view.pointFilters);
+  if (pf) doc.pointFilters = pf;
+  if (view.clip) doc.clip = view.clip;
+  return doc;
 }
 
 /**
@@ -298,6 +375,11 @@ export function parseSession(text: string): InspectionSession {
   if (clip) out.clip = clip;
   // v6 — the producing app version. A non-string is ignored (treated as absent).
   if (typeof raw.software === 'string' && raw.software !== '') out.software = raw.software;
+  // v7 — reserved manifest slot: copied verbatim, never validated (opaque
+  // passthrough until the processing-manifest workstream defines its shape).
+  // Deliberately version-independent on read so a file that carries one is
+  // never stripped by a round-trip.
+  if (raw.processingManifest != null) out.processingManifest = raw.processingManifest;
   return out;
 }
 
@@ -382,6 +464,12 @@ function parseCameraState(v: unknown): SavedCameraState {
  * Parse saved views. A v2 view is `{ name, camera }`; a v1 view is a bare
  * camera pose `{ position, target }`. Both are accepted, and a view with no
  * name is given a generated one.
+ *
+ * v7 — a view may additionally carry the display bundle (clip, colour mode,
+ * class filter, point filters, render settings). Each field goes through the
+ * SAME tolerant sub-parser as its top-level twin, and each is independently
+ * dropped when malformed, so a partly-broken view still restores its name,
+ * camera, and whatever else IS valid. A pre-v7 view simply has none of them.
  */
 function parseViews(v: unknown): SavedView[] {
   if (!Array.isArray(v)) return [];
@@ -394,7 +482,19 @@ function parseViews(v: unknown): SavedView[] {
         : `View ${i + 1}`;
     // v2 form: a nested `camera`. v1 form: position/target on the item itself.
     const camera = isRecord(item.camera) ? item.camera : item;
-    out.push({ name, camera: parseCameraState(camera) });
+    const view: SavedView = { name, camera: parseCameraState(camera) };
+    const render = parseRenderSettings(item.render);
+    if (render) view.render = render;
+    if (typeof item.colorMode === 'string' && isColorMode(item.colorMode)) {
+      view.colorMode = item.colorMode;
+    }
+    const classFilter = sanitizeClassFilter(item.classFilter);
+    if (classFilter.length > 0) view.classFilter = classFilter;
+    const pointFilters = sanitizePointFilters(item.pointFilters);
+    if (pointFilters) view.pointFilters = pointFilters;
+    const clip = parseClipBox(item.clip);
+    if (clip) view.clip = clip;
+    out.push(view);
   });
   return out;
 }

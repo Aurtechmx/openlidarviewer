@@ -572,7 +572,10 @@ describe('parseSession / serializeSession — v4 CRS persistence', () => {
     const json = serializeSession(sampleSession());
     const parsed = JSON.parse(json);
     expect(parsed.version).toBe(SESSION_VERSION);
-    expect(SESSION_VERSION).toBe(6);
+    // The v7 bump is the R3 coordinated one: per-view state bundles plus the
+    // reserved processingManifest slot land together, so later workstreams
+    // (the manifest writer) do NOT need another version change.
+    expect(SESSION_VERSION).toBe(7);
   });
 
   it('a v4 file with a non-finite linearUnitToMetres rejects the crs', () => {
@@ -844,5 +847,191 @@ describe('v0.5.6 — profile / box / volume measurement kinds round-trip', () =>
     const parsed = back.find((m) => m.id === 'vol1');
     expect(parsed).toBeDefined();
     expect(parsed?.volume).toBeUndefined();
+  });
+});
+
+describe('v7 — named restorable view states', () => {
+  /** A view carrying the full v7 display-state bundle. */
+  function fullBundleView(): SavedView {
+    return {
+      name: 'north-scarp',
+      camera: { position: p(1, 2, 3), target: p(4, 5, 6), mode: 'orbit', fov: 42 },
+      clip: {
+        box: { min: [0, 0, 0] as Vec3, max: [10, 10, 5] as Vec3 },
+        mode: 'keep-inside',
+        enabled: true,
+      },
+      colorMode: 'elevation',
+      classFilter: [3, 4, 5],
+      pointFilters: { elevation: [10, 50], intensity: [100, 4000] },
+      render: {
+        pointSize: 2.5,
+        edlEnabled: true,
+        edlStrength: 0.6,
+        pointSizeMode: 'fixed',
+        antialiasing: false,
+      },
+    };
+  }
+
+  it('round-trips a named full-bundle view state', () => {
+    const back = parseSession(
+      serializeSession({ ...sampleSession(), views: [fullBundleView()] }),
+    );
+    expect(back.views).toHaveLength(1);
+    const v = back.views[0];
+    expect(v.name).toBe('north-scarp');
+    expect(v.camera).toEqual({ position: [1, 2, 3], target: [4, 5, 6], mode: 'orbit', fov: 42 });
+    expect(v.clip).toEqual({
+      box: { min: [0, 0, 0], max: [10, 10, 5] }, mode: 'keep-inside', enabled: true,
+    });
+    expect(v.colorMode).toBe('elevation');
+    expect(v.classFilter).toEqual([3, 4, 5]);
+    expect(v.pointFilters).toEqual({ elevation: [10, 50], intensity: [100, 4000] });
+    expect(v.render).toEqual({
+      pointSize: 2.5, edlEnabled: true, edlStrength: 0.6,
+      pointSizeMode: 'fixed', antialiasing: false,
+    });
+  });
+
+  it('a v6 file imports under v7 with camera-only views intact (new fields undefined)', () => {
+    const v6doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: 6,
+      upAxis: 'y',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [{ name: 'Figure 3', camera: { position: [1, 2, 3], target: [0, 0, 0] } }],
+      measurements: [],
+      annotations: [],
+    };
+    const back = parseSession(JSON.stringify(v6doc));
+    expect(back.views).toHaveLength(1);
+    expect(back.views[0].name).toBe('Figure 3');
+    expect(back.views[0].camera.position).toEqual([1, 2, 3]);
+    expect(back.views[0].clip).toBeUndefined();
+    expect(back.views[0].colorMode).toBeUndefined();
+    expect(back.views[0].classFilter).toBeUndefined();
+    expect(back.views[0].pointFilters).toBeUndefined();
+    expect(back.views[0].render).toBeUndefined();
+    expect(back.version).toBe(SESSION_VERSION);
+  });
+
+  it('camera-only views keep the exact v6 byte-shape (name + camera, nothing else)', () => {
+    const doc = JSON.parse(serializeSession(sampleSession())) as {
+      views: Record<string, unknown>[];
+    };
+    // Key SET and key ORDER both pinned — this is what makes a v7 export of a
+    // bundle-free view byte-identical to the v6 writer's output.
+    expect(Object.keys(doc.views[0])).toEqual(['name', 'camera']);
+    expect(doc.views[0]).toEqual({
+      name: 'Overview',
+      camera: { position: [1, 2, 3], target: [4, 5, 6], mode: 'orbit' },
+    });
+  });
+
+  it('malformed per-view sub-fields are dropped, not thrown (name + camera kept)', () => {
+    const doc = {
+      app: 'OpenLiDARViewer',
+      kind: 'measurement-session',
+      version: 7,
+      upAxis: 'z',
+      origin: [0, 0, 0],
+      unitSystem: 'metric',
+      views: [{
+        name: 'broken-extras',
+        camera: { position: [1, 2, 3], target: [0, 0, 0] },
+        clip: { box: { min: [0, 0], max: 'wide' }, mode: 'keep-inside', enabled: true },
+        colorMode: 'sepia',
+        classFilter: 'ground-only',
+        pointFilters: { elevation: [Number.NaN, 5] },
+        render: { edl: 'yes' },
+      }],
+      measurements: [],
+      annotations: [],
+    };
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.views).toHaveLength(1);
+    const v = back.views[0];
+    expect(v.name).toBe('broken-extras');
+    expect(v.camera.position).toEqual([1, 2, 3]);
+    expect(v.clip).toBeUndefined();
+    expect(v.colorMode).toBeUndefined();
+    expect(v.classFilter).toBeUndefined();
+    expect(v.pointFilters).toBeUndefined();
+    expect(v.render).toBeUndefined();
+  });
+
+  it('per-view classFilter and pointFilters are sanitised like the session globals', () => {
+    const back = parseSession(serializeSession({
+      ...sampleSession(),
+      views: [{
+        name: 'messy',
+        camera: { position: p(0, 0, 0), target: p(1, 1, 1) },
+        classFilter: [5, 3, 5, 999, -1],
+        pointFilters: { elevation: [50, 10] },
+      }],
+    }));
+    expect(back.views[0].classFilter).toEqual([3, 5]);
+    expect(back.views[0].pointFilters?.elevation).toEqual([10, 50]);
+  });
+
+  it('a view whose classFilter sanitises to empty omits the field (emit-only-when-set)', () => {
+    const doc = JSON.parse(serializeSession({
+      ...sampleSession(),
+      views: [{
+        name: 'empties',
+        camera: { position: p(0, 0, 0), target: p(1, 1, 1) },
+        classFilter: [],
+        pointFilters: {},
+      }],
+    })) as { views: Record<string, unknown>[] };
+    expect(Object.keys(doc.views[0])).toEqual(['name', 'camera']);
+  });
+
+  it('still rejects an unsupported (future) version', () => {
+    const doc = {
+      app: 'OpenLiDARViewer', kind: 'measurement-session', version: 8,
+      upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric',
+      views: [], measurements: [], annotations: [],
+    };
+    expect(() => parseSession(JSON.stringify(doc))).toThrow(/Unsupported session version/);
+  });
+});
+
+describe('v7 — reserved processingManifest passthrough', () => {
+  it('round-trips an arbitrary manifest opaquely (no validation, no loss)', () => {
+    const manifest = {
+      schema: 'olv-processing-manifest@1',
+      steps: [
+        { op: 'crop', params: { bounds: [0, 0, 0, 10, 10, 5] } },
+        { op: 'classify', params: { method: 'smrf', version: 2 }, notes: ['deterministic'] },
+      ],
+      digest: 'sha256:abc123',
+    };
+    const back = parseSession(
+      serializeSession({ ...sampleSession(), processingManifest: manifest }),
+    );
+    expect(back.processingManifest).toEqual(manifest);
+  });
+
+  it('is omitted from the JSON when absent (byte-shape preserved)', () => {
+    const doc = JSON.parse(serializeSession(sampleSession())) as Record<string, unknown>;
+    expect('processingManifest' in doc).toBe(false);
+  });
+
+  it('a manifest in a hand-edited older-versioned file still passes through', () => {
+    // The field is opaque and version-independent on read: a reader never
+    // validates it, so the NEXT workstream can populate it without another
+    // version bump and older-tagged files carrying one keep it.
+    const doc = {
+      app: 'OpenLiDARViewer', kind: 'measurement-session', version: 6,
+      upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric',
+      views: [], measurements: [], annotations: [],
+      processingManifest: ['anything', { nested: true }],
+    };
+    expect(parseSession(JSON.stringify(doc)).processingManifest)
+      .toEqual(['anything', { nested: true }]);
   });
 });
