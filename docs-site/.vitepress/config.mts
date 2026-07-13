@@ -151,7 +151,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/', activeMatch: '^/guide/' },
       { text: 'Formats', link: '/formats/', activeMatch: '^/formats/' },
       { text: 'Scientific validation', link: '/validation/', activeMatch: '^/validation/' },
-      { text: 'Reproducibility', link: '/reproducibility/', activeMatch: '^/reproducibility/' },
+      { text: 'Reproducibility & artifacts', link: '/reproducibility/', activeMatch: '^/reproducibility/' },
       { text: 'Reference', link: '/reference/architecture', activeMatch: '^/reference/' },
       { text: 'Releases', link: '/releases/', activeMatch: '^/releases/' },
       // Build-time version display, straight from package.json.

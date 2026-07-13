@@ -57,7 +57,11 @@ jobs:
 
   deploy:
     needs: build
-    # The ONLY job in the repo with Pages write access.
+    # The ONLY job in the repo with Pages write access. The ref guard is
+    # defense-in-depth for workflow_dispatch: a dispatch from a non-main ref
+    # builds (harmless) but never deploys, independent of the github-pages
+    # environment's branch policy.
+    if: github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write
