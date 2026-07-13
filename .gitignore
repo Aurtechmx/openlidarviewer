@@ -104,3 +104,10 @@ ELITE_*.md
 
 # Generated reproducibility artifacts (regenerate with npm run repro)
 benchmarks/out/
+
+# ── Docs-site build output (regenerate with npm run docs:build) ──────────────
+# The rendered claim-register partial (docs-site/validation/
+# claim-register.generated.md) IS committed — same convention as
+# src/validation/claimRegistry.generated.ts.
+docs-site/.vitepress/dist/
+docs-site/.vitepress/cache/

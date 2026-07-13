@@ -94,7 +94,12 @@ Snapshot, in the tool dock, saves the current view as a PNG; any placed measurem
 
 **Report PDF.** Export → Report PDF builds a multi-page technical report from the live working state — a cover page, dataset summary (point count, bounds, density, CRS), embedded image exports, annotations and measurements tables, technical notes, and a footer. Five built-in templates (Engineering Inspection, QA Validation, Terrain Review, Survey Summary, Technical Documentation) set the default voice; three themes (`light-technical`, `dark-inspection`, `minimal-engineering`) and white-label project metadata (Client / Project / Phase / Reference / Date) plus an optional footer note propagate through every page. Branding (accent colour, logo, organisation, author) and the metric/imperial unit system propagate through every table. The PDF engine and its pdf-lib dependency load only when you click the button, so the initial app payload stays unchanged for users who never need a report.
 
+<!-- #region session-reference -->
+<!-- The region markers on this page let the docs site's "Embed & session
+     reference" include these sections verbatim — this file stays the single
+     canonical copy. Keep the markers around their sections when editing. -->
 **Session round-trip (`.olvsession`).** The session Export saves the full working state — camera, render settings, active colour mode, annotations, measurements, named views, and scan metadata — to a `.olvsession` JSON file. Import loads one back, restoring the camera and view exactly. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
+<!-- #endregion session-reference -->
 
 ## Mobile Usage
 
@@ -108,6 +113,7 @@ Snapshot, in the tool dock, saves the current view as a PNG; any placed measurem
 
 The annotation editor and panel use touch-sized controls on phones. The live probe is a hover tool, so it is desktop-only.
 
+<!-- #region embed-reference -->
 ## Sharing a view
 
 The **Share** tool in the bottom dock copies a link that reproduces the current view — the camera position and target, the colour mode, the point sizing, and the selected annotation. The link carries **no scan data**: the recipient opens the same scan themselves, and the saved view is applied on top. This keeps "share this view" working with no upload and no backend.
@@ -144,3 +150,4 @@ Two URL flags surface developer diagnostics; neither appears in a normal session
 `?debug=1` shows a live performance overlay — frame rate and frame time, the GPU backend (WebGPU or WebGL 2), draw calls, the displayed and total point counts, and an estimated GPU memory figure — refreshed about four times a second, alongside the most recent load's stage-by-stage telemetry. The raw error detail for any failed load is also logged to the console under this flag.
 
 `?benchmark=1` emits a structured benchmark result for each load — the time to first render and the full per-stage timing breakdown — to both the overlay and the console, so loading performance can be compared across versions.
+<!-- #endregion embed-reference -->
