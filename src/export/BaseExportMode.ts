@@ -333,7 +333,7 @@ export async function runStudioExport(
             };
           }
         } catch (err) {
-          console.warn('Figure re-render failed; falling back to the live snapshot.', err);
+          console.warn('[export] Figure re-render failed; falling back to the live snapshot.', err);
         }
       }
       const snapshot = await context.adapter.snapshot({

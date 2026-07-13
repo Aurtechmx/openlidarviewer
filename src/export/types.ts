@@ -250,7 +250,7 @@ export interface CommonExportOptions {
    * the live renderer is constructed with `alpha: false`, so every capture
    * path (snapshot copy and offscreen re-render alike) produces opaque
    * pixels. The field stays for API stability, but nothing may advertise it
-   * until an offscreen render-target path makes it real — the pre-v0.5.21
+   * until an offscreen render-target path makes it real — the previous
    * presets claimed "transparent background" and shipped opaque PNGs.
    */
   transparent?: boolean;
