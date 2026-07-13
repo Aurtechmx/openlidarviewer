@@ -663,6 +663,18 @@ test('no preset requests or advertises transparent output', () => {
   }
 });
 
+test('no preset sets a background colour — nothing in the pipeline reads it', () => {
+  // `options.background` has zero consumers: the offscreen re-render and the
+  // snapshot copy both ship pixels cleared to the scene's own background, so
+  // a preset that sets a colour makes exactly the promise-the-pixels-ignore
+  // mistake the transparent flag made. The field survives on
+  // CommonExportOptions for API stability; presets must not touch it until a
+  // capture path actually applies the colour.
+  for (const preset of EXPORT_PRESETS) {
+    expect(preset.options.background, `${preset.id} sets background`).toBeUndefined();
+  }
+});
+
 test('presets that request an explicit size keep the overlay bakes off', () => {
   // An explicit width/height routes the export through the true offscreen
   // re-render (adapter.renderFigure), which is a DIRECT render — measurement

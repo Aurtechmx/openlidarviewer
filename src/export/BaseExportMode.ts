@@ -307,20 +307,34 @@ export async function runStudioExport(
     colorMode,
     async (): Promise<{ blob: Blob; size: { width: number; height: number } | null }> => {
       if (wantsExplicitSize && context.adapter.renderFigure) {
-        const figure = await context.adapter.renderFigure({
-          widthPx: typeof options.width === 'number' ? options.width : undefined,
-          heightPx: typeof options.height === 'number' ? options.height : undefined,
-        });
-        if (figure) {
-          return {
-            blob: figure.blob,
-            size: { width: figure.widthPx, height: figure.heightPx },
-          };
+        // The re-render has two distinct failure shapes and both must
+        // degrade to the snapshot rather than sink the export:
+        //   • null return — the size request was unplannable (the framing
+        //     planner refused it); the adapter knew before touching the GPU.
+        //   • rejection — a REAL device failure mid-render (lost context,
+        //     canvas encode that yields no blob). The adapter never converts
+        //     these into null, so they surface here as a throw.
+        // Either way the user asked for an image and an image exists on
+        // screen, so a capture-quality problem must never become an error
+        // toast — the same best-effort contract the provenance embedding
+        // follows. The rejection is logged (not swallowed silently) because
+        // a device failure is diagnostic gold, and the result dimensions
+        // below report the snapshot's real size, not the request we failed
+        // to honour.
+        try {
+          const figure = await context.adapter.renderFigure({
+            widthPx: typeof options.width === 'number' ? options.width : undefined,
+            heightPx: typeof options.height === 'number' ? options.height : undefined,
+          });
+          if (figure) {
+            return {
+              blob: figure.blob,
+              size: { width: figure.widthPx, height: figure.heightPx },
+            };
+          }
+        } catch (err) {
+          console.warn('Figure re-render failed; falling back to the live snapshot.', err);
         }
-        // Null = the device could not complete the offscreen re-render.
-        // Fall through to the snapshot so the user still gets an image —
-        // the result dimensions below report the snapshot's real size, not
-        // the request we failed to honour.
       }
       const snapshot = await context.adapter.snapshot({
         measurements: includeMeasurements,

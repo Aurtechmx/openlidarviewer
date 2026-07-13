@@ -45,6 +45,7 @@ async function textChunksOf(blob: Blob): Promise<ReadonlyArray<{ keyword: string
 function figureAdapter(opts: {
   withRenderFigure?: boolean;
   renderFigureResult?: { blob: Blob; widthPx: number; heightPx: number } | null;
+  renderFigureRejects?: boolean;
   withViewContext?: boolean;
 }): { adapter: ExportSceneAdapter; calls: string[] } {
   const calls: string[] = [];
@@ -68,6 +69,12 @@ function figureAdapter(opts: {
   if (opts.withRenderFigure) {
     adapter.renderFigure = vi.fn(async (o: { widthPx?: number; heightPx?: number }) => {
       calls.push(`renderFigure:${o.widthPx ?? '-'}x${o.heightPx ?? '-'}`);
+      if (opts.renderFigureRejects) {
+        // The shape of a REAL device failure: the render throws, or the
+        // canvas encode produces no blob and `_canvasToBlob` rejects. The
+        // real adapter never converts these into a null return.
+        throw new Error('device lost mid-render');
+      }
       return opts.renderFigureResult !== undefined
         ? opts.renderFigureResult
         : { blob: tinyPngBlob(), widthPx: o.widthPx ?? 2048, heightPx: 1152 };
@@ -158,7 +165,7 @@ test('an adapter without renderFigure falls back to the snapshot and reports hon
   expect(result.height).toBe(600);
 });
 
-test('a renderFigure that returns null (device could not re-render) falls back to the snapshot', async () => {
+test('a renderFigure that returns null (unplannable size request) falls back to the snapshot', async () => {
   const { adapter, calls } = figureAdapter({ withRenderFigure: true, renderFigureResult: null });
   const result = await runStudioExport(
     figureContext(adapter),
@@ -171,6 +178,36 @@ test('a renderFigure that returns null (device could not re-render) falls back t
   expect(calls).toContain('snapshot');
   expect(result.width).toBe(800);
   expect(result.height).toBe(600);
+});
+
+test('a renderFigure that REJECTS (device failure mid-render) also falls back to the snapshot', async () => {
+  // Real device failures — a lost context, a canvas encode that yields no
+  // blob — surface as rejections from the adapter, not as a null return.
+  // An export must degrade to the WYSIWYG snapshot on a capture-quality
+  // problem rather than die with an error toast, for the same reason the
+  // provenance embedding is best-effort: the user asked for an image, and
+  // an image exists on screen.
+  const { adapter, calls } = figureAdapter({ withRenderFigure: true, renderFigureRejects: true });
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const result = await runStudioExport(
+      figureContext(adapter),
+      'height-map',
+      'Height Map',
+      'elevation',
+      { width: 2048 },
+    );
+    expect(calls.some((c) => c.startsWith('renderFigure'))).toBe(true);
+    expect(calls).toContain('snapshot');
+    // The result reports the snapshot's real size, never the size the
+    // failed re-render was asked for.
+    expect(result.width).toBe(800);
+    expect(result.height).toBe(600);
+    // The failure is not swallowed silently — it lands in the console.
+    expect(warnSpy).toHaveBeenCalled();
+  } finally {
+    warnSpy.mockRestore();
+  }
 });
 
 test('the re-render runs INSIDE the colour-mode swap, and the swap is restored', async () => {

@@ -254,7 +254,14 @@ export interface CommonExportOptions {
    * presets claimed "transparent background" and shipped opaque PNGs.
    */
   transparent?: boolean;
-  /** CSS-compatible background colour when `transparent` is false. */
+  /**
+   * CSS-compatible background colour when `transparent` is false. NOT
+   * HONOURED YET, for the same reason as `transparent`: no capture path
+   * reads it — the offscreen re-render and the snapshot copy both ship
+   * pixels cleared to the scene's own background. The field stays for API
+   * stability, but presets must not set it until a capture path actually
+   * applies the colour (test-pinned in exportStudio.test.ts).
+   */
   background?: string;
   /** Bake measurement overlay into the export. */
   includeMeasurements?: boolean;

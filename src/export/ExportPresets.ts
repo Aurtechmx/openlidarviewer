@@ -44,6 +44,12 @@ export interface ExportPreset {
 //     cannot bake measurement/annotation overlays. Presets therefore either
 //     request a size (with overlays off) or bake overlays (at the live
 //     view's resolution), never both.
+//   • No preset sets `background`. The field has zero consumers — the
+//     offscreen re-render and the snapshot copy both ship pixels cleared to
+//     the scene's own background — so a preset colour would be exactly the
+//     promise-the-pixels-ignore mistake the transparent flag made. The
+//     field survives on CommonExportOptions for API stability; presets may
+//     touch it only once a capture path actually applies the colour.
 
 const terrainReview: ExportPreset = {
   id: 'terrain-review',
@@ -64,7 +70,6 @@ const qaInspection: ExportPreset = {
   description: 'Classification map at the live view resolution with annotations + measurements baked in.',
   mode: 'classification',
   options: {
-    background: '#ffffff',
     includeAnnotations: true,
     includeMeasurements: true,
     legend: true,
@@ -78,7 +83,6 @@ const classificationReview: ExportPreset = {
   mode: 'classification',
   options: {
     width: 4096,
-    background: '#ffffff',
     includeAnnotations: false,
     includeMeasurements: false,
     legend: true,
@@ -91,7 +95,6 @@ const technicalReport: ExportPreset = {
   description: 'RGB capture of the current view at the live resolution with annotations + measurements baked in.',
   mode: 'orthographic-rgb',
   options: {
-    background: '#ffffff',
     includeAnnotations: true,
     includeMeasurements: true,
   } satisfies OrthographicRgbOptions,
@@ -104,7 +107,6 @@ const intensityScan: ExportPreset = {
   mode: 'intensity',
   options: {
     width: 2048,
-    background: '#000000',
     includeAnnotations: false,
     includeMeasurements: false,
     normalize: true,
@@ -119,7 +121,6 @@ const normalQa: ExportPreset = {
   mode: 'normal',
   options: {
     width: 2048,
-    background: '#808080',
     includeAnnotations: false,
     includeMeasurements: false,
     smooth: true,
