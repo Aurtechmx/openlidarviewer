@@ -104,6 +104,16 @@ describe('renderClaimRegisterMarkdown', () => {
     expect(md).toContain('AUTO-GENERATED');
     expect(md).toContain('9.9.9');
   });
+
+  it('keeps the header comment contiguous so the docs site can strip it', () => {
+    // The site renders with html:false and hides comments via a rule that
+    // sees one block at a time (docs-site/.vitepress/stripHtmlComments.mts);
+    // a blank line inside the comment would split it across two paragraphs
+    // and publish it as visible text above the table.
+    const comment = md.slice(md.indexOf('<!--'), md.indexOf('-->') + 3);
+    expect(comment).toContain('AUTO-GENERATED');
+    expect(comment).not.toMatch(/\n\s*\n/);
+  });
 });
 
 describe('generated docs page vs the real register (drift check)', () => {

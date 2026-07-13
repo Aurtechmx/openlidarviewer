@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitepress';
 import { readFileSync, readdirSync } from 'node:fs';
+import { stripHtmlComments } from './stripHtmlComments.mts';
 
 /**
  * VitePress config for the OpenLiDARViewer docs site.
@@ -55,11 +56,16 @@ const CANONICAL_LINKS: Record<string, string> = {
   'REVIEWER_QUICKSTART.md': '/reproducibility/reviewer-quickstart',
   'architecture.md': '/reference/architecture',
   'performance.md': '/reference/performance',
-  'benchmarks.md': '/reference/benchmarks',
   'limitations.md': '/reference/limitations',
   'CHANGELOG.md': '/releases/',
   // Documents that are deliberately NOT published (developer/internal) keep
   // working by pointing at the repository copy instead of a dead page.
+  // benchmarks.md sits here because the Reference section is a fixed set —
+  // Architecture, Performance, Embed & session, Limitations — and the
+  // benchmark figures are field observations already summarised where they
+  // matter, in performance.md; readers who want the raw runs get the
+  // canonical file.
+  'benchmarks.md': `${GITHUB}/blob/main/docs/benchmarks.md`,
   'developer-manual.md': `${GITHUB}/blob/main/docs/developer-manual.md`,
   'CONTRIBUTING.md': `${GITHUB}/blob/main/CONTRIBUTING.md`,
   'SECURITY.md': `${GITHUB}/blob/main/SECURITY.md`,
@@ -107,9 +113,15 @@ export default defineConfig({
     // parsed as an unclosed element and fail the build. None of the included
     // documents use raw inline HTML (verified), so raw HTML is disabled and
     // markdown-it escapes those angle brackets back into visible text.
+    // The one casualty of that escaping is HTML comments — region markers,
+    // the generated claim-register header — which GitHub hides but escaping
+    // would surface as visible text; stripHtmlComments removes them from the
+    // pipeline, and scripts/lint-docs-site.mjs fails the build if any
+    // escaped comment still reaches a published page.
     html: false,
 
     config(md) {
+      stripHtmlComments(md);
       // Rewrite canonical repo-relative links (see CANONICAL_LINKS above).
       const defaultRender =
         md.renderer.rules.link_open ??
@@ -194,7 +206,6 @@ export default defineConfig({
           items: [
             { text: 'Architecture', link: '/reference/architecture' },
             { text: 'Performance', link: '/reference/performance' },
-            { text: 'Benchmarks', link: '/reference/benchmarks' },
             { text: 'Embed & session reference', link: '/reference/embed-session' },
             { text: 'Limitations', link: '/reference/limitations' },
           ],

@@ -101,9 +101,12 @@ export function renderClaimRegisterMarkdown({ softwareVersion, generated, claims
     ].join(' | ').trim(),
   );
   return [
+    // The header comment stays one contiguous block — no blank line inside —
+    // because the docs site strips comments a block at a time
+    // (docs-site/.vitepress/stripHtmlComments.mts); a blank line would split
+    // it into two paragraphs and publish it as visible text above the table.
     '<!--',
     '  claim-register.generated.md — AUTO-GENERATED. DO NOT EDIT.',
-    '',
     '  Rendered from docs/validation/claim-register.yaml by',
     '  scripts/render-claim-register.mjs. Edit the YAML and run',
     '  `npm run docs:render`. tests/renderClaimRegister.test.ts fails on drift.',

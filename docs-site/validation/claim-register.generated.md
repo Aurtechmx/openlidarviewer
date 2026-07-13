@@ -1,6 +1,5 @@
 <!--
   claim-register.generated.md — AUTO-GENERATED. DO NOT EDIT.
-
   Rendered from docs/validation/claim-register.yaml by
   scripts/render-claim-register.mjs. Edit the YAML and run
   `npm run docs:render`. tests/renderClaimRegister.test.ts fails on drift.

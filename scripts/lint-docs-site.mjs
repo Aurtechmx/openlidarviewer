@@ -14,8 +14,12 @@
  *      leaves an unresolved include as literal text on the published page, so
  *      a typo'd path would otherwise ship silently.
  *   3. Built-output check — when docs-site/.vitepress/dist exists (i.e. after
- *      `vitepress build`), no emitted file may match a forbidden name, and no
- *      page may carry the tell-tale text of an unresolved include.
+ *      `vitepress build`), no emitted file may match a forbidden name, no
+ *      page may carry the tell-tale text of an unresolved include, and no
+ *      page may show an escaped HTML comment as visible prose (the site
+ *      renders with `html: false`, so a comment that slips past the
+ *      stripping rule in docs-site/.vitepress/stripHtmlComments.mts would
+ *      surface to readers as a literal `<!-- ... -->` paragraph).
  *
  * Usage: `node scripts/lint-docs-site.mjs` (runs as part of `npm run docs:build`).
  */
@@ -40,7 +44,19 @@ const FORBIDDEN = [
   /^docs\/research-notes\.md$/,
 ];
 
-const problems = [];
+/**
+ * True when a built page's VISIBLE text contains an escaped HTML comment.
+ * Code contexts are excluded first — inline `<code>` and fenced `<pre>`
+ * blocks may legitimately SHOW comment syntax as an example — so the check
+ * fires only on comment text a reader would meet as stray page prose.
+ * Pure — exported for tests/lintDocsSite.test.ts.
+ */
+export function htmlShowsEscapedComment(html) {
+  const visible = html
+    .replace(/<pre[\s\S]*?<\/pre>/g, '')
+    .replace(/<code[\s\S]*?<\/code>/g, '');
+  return visible.includes('&lt;!--');
+}
 
 function walk(dir, filter) {
   const out = [];
@@ -52,50 +68,67 @@ function walk(dir, filter) {
   return out;
 }
 
-// ── 1 + 2. Every include target must exist and must not be forbidden ─────────
-const INCLUDE_RE = /<!--\s*@include:\s*([^\s>]+?)(?:\{[^}]*\})?\s*-->/g;
-for (const page of walk(SITE, /\.md$/)) {
-  const text = readFileSync(page, 'utf8');
-  let m;
-  while ((m = INCLUDE_RE.exec(text)) !== null) {
-    const target = m[1].split('#')[0]; // strip a region anchor
-    const abs = resolve(dirname(page), target);
-    const rel = relative(ROOT, abs);
-    if (!existsSync(abs)) {
-      problems.push(`${relative(ROOT, page)} includes missing file ${rel}`);
-    }
-    for (const f of FORBIDDEN) {
-      if (f.test(rel)) problems.push(`${relative(ROOT, page)} includes FORBIDDEN file ${rel}`);
-    }
-  }
-}
+function run() {
+  const problems = [];
 
-// ── 3. Built output must not carry a forbidden document or a raw include ─────
-if (existsSync(DIST)) {
-  for (const file of walk(DIST, /./)) {
-    const rel = relative(DIST, file);
-    for (const f of FORBIDDEN) {
-      // The dist tree mirrors page paths, so a forbidden doc that somehow
-      // became a page shows up under its own name.
-      if (f.test(rel) || f.test(`docs/${rel}`)) {
-        problems.push(`built site contains forbidden path ${rel}`);
+  // ── 1 + 2. Every include target must exist and must not be forbidden ───────
+  const INCLUDE_RE = /<!--\s*@include:\s*([^\s>]+?)(?:\{[^}]*\})?\s*-->/g;
+  for (const page of walk(SITE, /\.md$/)) {
+    const text = readFileSync(page, 'utf8');
+    let m;
+    while ((m = INCLUDE_RE.exec(text)) !== null) {
+      const target = m[1].split('#')[0]; // strip a region anchor
+      const abs = resolve(dirname(page), target);
+      const rel = relative(ROOT, abs);
+      if (!existsSync(abs)) {
+        problems.push(`${relative(ROOT, page)} includes missing file ${rel}`);
+      }
+      for (const f of FORBIDDEN) {
+        if (f.test(rel)) problems.push(`${relative(ROOT, page)} includes FORBIDDEN file ${rel}`);
       }
     }
-    if (rel.endsWith('.html') && readFileSync(file, 'utf8').includes('@include:')) {
-      problems.push(`built page ${rel} contains an unresolved @include`);
-    }
   }
-} else {
-  console.log('lint:docs-site — no dist/ yet; checked page includes only.');
+
+  // ── 3. Built output: no forbidden document, raw include, or visible comment ─
+  if (existsSync(DIST)) {
+    for (const file of walk(DIST, /./)) {
+      const rel = relative(DIST, file);
+      for (const f of FORBIDDEN) {
+        // The dist tree mirrors page paths, so a forbidden doc that somehow
+        // became a page shows up under its own name.
+        if (f.test(rel) || f.test(`docs/${rel}`)) {
+          problems.push(`built site contains forbidden path ${rel}`);
+        }
+      }
+      if (rel.endsWith('.html')) {
+        const html = readFileSync(file, 'utf8');
+        if (html.includes('@include:')) {
+          problems.push(`built page ${rel} contains an unresolved @include`);
+        }
+        if (htmlShowsEscapedComment(html)) {
+          problems.push(`built page ${rel} shows an escaped HTML comment as visible text`);
+        }
+      }
+    }
+  } else {
+    console.log('lint:docs-site — no dist/ yet; checked page includes only.');
+  }
+
+  if (problems.length === 0) {
+    console.log('lint:docs-site OK — all includes resolve; no forbidden document is published.');
+    process.exit(0);
+  }
+
+  console.error('lint:docs-site FAILED');
+  console.error('');
+  for (const p of problems) console.error(`  • ${p}`);
+  console.error('');
+  process.exit(1);
 }
 
-if (problems.length === 0) {
-  console.log('lint:docs-site OK — all includes resolve; no forbidden document is published.');
-  process.exit(0);
+// Import-safe: the checks run only when invoked as a script, so the unit test
+// can import htmlShowsEscapedComment without triggering a lint pass (the same
+// guard lint-unsafe-html.mjs uses).
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  run();
 }
-
-console.error('lint:docs-site FAILED');
-console.error('');
-for (const p of problems) console.error(`  • ${p}`);
-console.error('');
-process.exit(1);
