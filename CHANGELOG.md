@@ -4,9 +4,14 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Added
+
+- **GPS-time and return-number colour modes.** Two continuous scalar colour modes join the chip row in the Inspector and the streaming panel, data-gated on their channel: "GPS time" ramps acquisition time (dark early → bright late) and "Return" ramps return ordinals (dark first → bright last), both defaulting to the colourblind-safe Cividis palette and available in the static and COPC/EPT streaming pipelines alike. Streaming nodes colour against one cloud-global window seeded from the coarsest resident node, so adjacent nodes never band at shared edges; the GPS-time range is percentile-clipped through the same core as elevation, so one garbage timestamp cannot compress the whole ramp, and non-finite values from a malformed chunk cannot poison the window. Honesty gate: classification keeps its categorical palette and `pointSourceId` deliberately gets no ramp mode — sequential colour on unordered flight-line ids would invent an ordering the data does not have.
+
 ### Fixed
 
 - **Hold-out validation leak closed on the shipped path.** v0.5.9 added the per-fold `reclassifyGround` hook but shipped terrain products still ran the full-cloud classification path (disclosed). The analyser (`computeTerrainCore`) now passes a train-only reclassifier that re-runs the SAME SMRF classifier with the SAME resolved parameters on the training points only, so a held-out point never helps decide its own ground membership; the report's full-cloud disclosure flips off automatically because the leak is removed, not restated. Cost is bounded: the hold-out is a single deterministic split, so this is exactly one extra SMRF pass over the training share of the already-capped analysed cloud (ground-filter cost ≤ 2× per run). `olv.validation.holdout-rmse` bumps to version 2 (behavioural change under the stability rule). The spatially-blocked diagnostic still scores against the full-cloud mask and its threats-to-validity disclosure stands.
+- **Contour Studio purposes now genuinely change the exported geometry.** Selecting a cartographic purpose (Engineering Plan, Terrain Research, Presentation Map, Custom) previously exported the on-screen default geometry byte-for-byte — the purpose changed only a provenance line, and the file was stamped with the generalize method id for a generalization that never ran. The export intent now derives shape style and method stamp from the same predicate (Survey Review = exact analytical isolines; every cartographic purpose = genuinely generalized geometry), so a "generalized"-stamped file always carries generalized geometry.
 
 ### Changed
 

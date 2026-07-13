@@ -10,7 +10,7 @@
 import { clamp, clamp01 } from '../numeric';
 import type { PointCloud } from '../model/PointCloud';
 import { densityForChunk, defaultCellSizeForSpacing } from './densityColors';
-import { computeElevationRange } from './elevationRange';
+import { computeElevationRange, computeScalarRange } from './elevationRange';
 import {
   coverageColorForConfidence,
   COVERAGE_NONE,
@@ -32,6 +32,26 @@ export type ColorMode =
   | 'elevation'
   | 'classification'
   | 'normal'
+  /**
+   * GPS acquisition time — early → late on the CVD-safe Cividis ramp. A
+   * genuinely CONTINUOUS per-point scalar (Float64 seconds), so a perceptual
+   * ramp is an honest encoding. The absolute values are huge (~3e8 s GPS
+   * adjusted standard time); the colour pass normalises against the
+   * per-cloud min/max before ramping so sub-second deltas survive.
+   */
+  | 'gpsTime'
+  /**
+   * Return number — first → last return on the CVD-safe Cividis ramp. Return
+   * ordinals are a small but genuinely ORDERED quantity (1st return ≺ 2nd ≺
+   * 3rd …), so a sequential ramp reads honestly: brighter = later return,
+   * i.e. deeper canopy penetration.
+   *
+   * HONESTY GATE — the categorical ids stay categorical: classification keeps
+   * its qualitative ASPRS palette and pointSourceId gets NO ramp mode at all.
+   * Painting unordered ids on a sequential ramp would invent an ordering the
+   * data does not have (flight line 7 is not "more" than flight line 3).
+   */
+  | 'returnNumber'
   /**
    * Density heatmap — perceptual hot-cold colouring of points-per-m² in a
    * horizontal voxel grid. Surfaces coverage gaps an analyst would otherwise
@@ -115,6 +135,16 @@ export type ElevationPalette = 'cividis' | 'viridis' | 'inferno' | 'turbo' | 'cl
  * picker can swap to it.
  */
 export const DEFAULT_ELEVATION_PALETTE: ElevationPalette = 'turbo';
+
+/**
+ * The default palette for the generic scalar modes (gpsTime, returnNumber,
+ * intensity-with-colormap). Cividis — the only ramp in the catalogue tagged
+ * fully colourblind-safe (see `paletteCatalog.ts`). Elevation keeps its own
+ * Turbo default (chosen for drama on low-relief fields, see above); the
+ * scalar modes are new surfaces with no legacy expectation, so they start
+ * from the ramp that is readable to everyone.
+ */
+export const DEFAULT_SCALAR_PALETTE: ElevationPalette = 'cividis';
 
 /** A set of control points for a linear colour ramp. [t, r, g, b], rgb 0-255. */
 type RampControlPoints = ReadonlyArray<readonly [number, number, number, number]>;
@@ -393,6 +423,62 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The ONE loop through `sampleRamp` — every ramp-coloured scalar mode
+ * (elevation, gpsTime, returnNumber, intensity-with-colormap) funnels
+ * through here so normalisation, clamping, and no-data semantics can never
+ * drift between modes. `elemStride` / `elemOffset` let the elevation path
+ * read one component out of interleaved xyz triplets (stride 3, offset =
+ * up-axis) while flat per-point arrays read every value (stride 1, offset 0).
+ *
+ * Values read as plain JS numbers (doubles), so Float64 sources with huge
+ * absolute values — GPS time at ~3e8 s — keep their sub-range deltas: the
+ * `(v − min) / range` normalisation happens in double precision and only the
+ * final 0..1 `t` meets the ramp.
+ */
+function rampScalars(
+  values: ArrayLike<number>,
+  count: number,
+  min: number,
+  max: number,
+  palette: ElevationPalette,
+  elemStride: number,
+  elemOffset: number,
+): Uint8Array {
+  const out = new Uint8Array(count * 3);
+  const range = max - min;
+  for (let i = 0; i < count; i++) {
+    const v = values[i * elemStride + elemOffset];
+    // NaN skip — a NaN value keeps its (0, 0, 0) bytes as an honest "no
+    // data" black instead of feeding NaN through the ramp maths. (±Infinity
+    // still flows through and clamps to a ramp endpoint, matching what the
+    // pre-refactor elevation loop did.)
+    if (v !== v) continue;
+    const t = range === 0 ? 0 : (v - min) / range;
+    const [r, g, b] = sampleRamp(t, palette);
+    out[i * 3] = r;
+    out[i * 3 + 1] = g;
+    out[i * 3 + 2] = b;
+  }
+  return out;
+}
+
+/**
+ * Colour `count` points by an arbitrary per-point scalar over an explicit
+ * `[min, max]` range. Values at/below `min` take the ramp's bottom colour,
+ * at/above `max` the top colour; a degenerate `min === max` paints every
+ * point the bottom colour. Defaults to the CVD-safe Cividis ramp.
+ */
+export function colorByScalar(
+  values: ArrayLike<number>,
+  count: number,
+  min: number,
+  max: number,
+  palette: ElevationPalette = DEFAULT_SCALAR_PALETTE,
+): Uint8Array {
+  return rampScalars(values, count, min, max, palette, 1, 0);
+}
+
 /** Colour `count` points by Z over an explicit `[minZ, maxZ]` range. */
 export function colorByElevation(
   positions: Float32Array,
@@ -407,25 +493,23 @@ export function colorByElevation(
    */
   upAxis: 0 | 1 | 2 = 2,
 ): Uint8Array {
-  const out = new Uint8Array(count * 3);
-  const range = maxZ - minZ;
-  for (let i = 0; i < count; i++) {
-    const t = range === 0 ? 0 : (positions[i * 3 + upAxis] - minZ) / range;
-    const [r, g, b] = sampleRamp(t, palette);
-    out[i * 3] = r;
-    out[i * 3 + 1] = g;
-    out[i * 3 + 2] = b;
-  }
-  return out;
+  return rampScalars(positions, count, minZ, maxZ, palette, 3, upAxis);
 }
 
-/** Colour `count` points by intensity over an explicit `[minI, maxI]` range. */
+/**
+ * Colour `count` points by intensity over an explicit `[minI, maxI]` range.
+ * Greyscale by default — the reading every LiDAR analyst expects and the
+ * behaviour every existing call site relies on. Pass a `palette` to ramp the
+ * same normalised intensity through a perceptual colormap instead.
+ */
 export function colorByIntensity(
   intensity: ArrayLike<number>,
   count: number,
   minI: number,
   maxI: number,
+  palette?: ElevationPalette,
 ): Uint8Array {
+  if (palette) return rampScalars(intensity, count, minI, maxI, palette, 1, 0);
   const out = new Uint8Array(count * 3);
   const range = maxI - minI;
   for (let i = 0; i < count; i++) {
@@ -568,6 +652,28 @@ export interface ColorForModeOptions {
   coverageGrid?: CoverageColorGrid;
 }
 
+/**
+ * The `[min, max]` of a per-point scalar array, skipping non-finite values —
+ * one NaN from a malformed loader must not poison a whole ramp. Returns
+ * `{ 0, 0 }` when nothing finite exists so callers get the degenerate
+ * "everything at the bottom colour" behaviour instead of a NaN range.
+ *
+ * Exported as the ONE raw finite min/max scan for ramp ranges: the streaming
+ * pipeline's `scalarRangeOf` delegates here, so the static and streaming
+ * seeding semantics for non-finite values can never drift apart.
+ */
+export function finiteMinMax(values: ArrayLike<number>, count: number): { min: number; max: number } {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < count; i++) {
+    const v = values[i];
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return min <= max ? { min, max } : { min: 0, max: 0 };
+}
+
 export function colorForMode(
   mode: ColorMode,
   cloud: PointCloud,
@@ -590,13 +696,45 @@ export function colorForMode(
         throw new Error(`colorForMode('intensity'): cloud "${cloud.name}" has no intensity attribute`);
       }
       const src = cloud.intensity;
-      let minI = src[0];
-      let maxI = src[0];
-      for (let i = 1; i < n; i++) {
-        if (src[i] < minI) minI = src[i];
-        if (src[i] > maxI) maxI = src[i];
+      const { min, max } = finiteMinMax(src, n);
+      return colorByIntensity(src, n, min, max);
+    }
+
+    // ── gpsTime (continuous scalar, Cividis ramp) ─────────────────────────────
+    case 'gpsTime': {
+      if (!cloud.gpsTime) {
+        throw new Error(`colorForMode('gpsTime'): cloud "${cloud.name}" has no gpsTime attribute`);
       }
-      return colorByIntensity(src, n, minI, maxI);
+      // Percentile-clipped range through the same core elevation uses. GPS
+      // times are Float64 seconds with ~3e8 absolute values, so only the
+      // delta from the cloud's own acquisition window carries visual
+      // information — and a raw min/max would let one garbage timestamp (an
+      // epoch-zero record from a malformed writer) compress the whole flight
+      // line into a single colour stop, the exact failure the elevation ramp
+      // already guards against. The core also skips non-finite values, so a
+      // NaN timestamp cannot poison the range.
+      const src = cloud.gpsTime;
+      const range = computeScalarRange(src, { count: n });
+      return colorByScalar(src, n, range.min, range.max);
+    }
+
+    // ── returnNumber (ordered scalar, Cividis ramp) ───────────────────────────
+    case 'returnNumber': {
+      if (!cloud.returnNumber) {
+        throw new Error(
+          `colorForMode('returnNumber'): cloud "${cloud.name}" has no returnNumber attribute`,
+        );
+      }
+      // Raw finite min/max, DELIBERATELY not percentile-clipped. Return
+      // numbers are a handful of small ordinals (1..15 by the LAS format —
+      // typically 1..5 in practice), so there is no unbounded-outlier
+      // failure mode for a percentile band to guard against; clipping would
+      // instead merge real ordinals (a legitimate 5th return) into an
+      // endpoint colour and erase exactly the deep-canopy reading the mode
+      // exists to show.
+      const src = cloud.returnNumber;
+      const { min, max } = finiteMinMax(src, n);
+      return colorByScalar(src, n, min, max);
     }
 
     // ── elevation ───────────────────────────────────────────────────────────
@@ -721,6 +859,12 @@ export function availableModes(cloud: PointCloud): ColorMode[] {
   // Density is always available — it derives from positions alone, which
   // every cloud carries by definition.
   modes.push('density');
+  // The continuous scalar modes, data-gated on their channel. Note the
+  // honesty gate: `pointSourceId` is also decoded, but it is a categorical
+  // flight-line id — ramping it would invent an ordering the data does not
+  // have, so it deliberately gets NO colour mode here.
+  if (cloud.gpsTime)      modes.push('gpsTime');
+  if (cloud.returnNumber) modes.push('returnNumber');
   return modes;
 }
 

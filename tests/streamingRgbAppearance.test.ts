@@ -27,7 +27,16 @@ function makeDecoded(rgb: number[]): DecodedChunk {
   } as unknown as DecodedChunk;
 }
 
-const RANGES = { minZ: 0, maxZ: 1, minIntensity: 0, maxIntensity: 1 } as const;
+const RANGES = {
+  minZ: 0,
+  maxZ: 1,
+  minIntensity: 0,
+  maxIntensity: 1,
+  minGpsTime: 0,
+  maxGpsTime: 1,
+  minReturnNumber: 0,
+  maxReturnNumber: 1,
+} as const;
 
 describe('streamingNodeColors — RGB appearance pass-through', () => {
   it('returns raw RGB bytes when no appearance is passed', () => {
