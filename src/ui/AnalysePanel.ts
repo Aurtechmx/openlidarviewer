@@ -151,6 +151,8 @@ export interface AnalysePanelCallbacks {
   buildResultForExport?: (opts: {
     intervalM: number;
     shapeStyle: ContourShapeStyle;
+    /** Per-purpose generalization tolerance (cells) for the 'generalized' style. */
+    generalizeToleranceCells?: number;
   }) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
@@ -297,6 +299,13 @@ export class AnalysePanel {
    * panel-level picker — style is chosen in that dialog.
    */
   private _contourStyle: ContourShapeStyle = defaultContourShapeStyle;
+  /**
+   * Per-purpose generalization tolerance (cells) adopted from the active Contour
+   * Studio export intent, threaded into `buildResultForExport` so each purpose's
+   * 'generalized' export simplifies at its own bounded strength. Undefined means
+   * "use the default tolerance" (the manual map-PDF style picker never sets it).
+   */
+  private _contourGeneralizeToleranceCells: number | undefined = undefined;
   /**
    * The §19 export permit for the pending map-sheet PDF. The map PDF export runs
    * asynchronously through a dialog, so the permit minted at click time is
@@ -620,8 +629,9 @@ export class AnalysePanel {
       .then(({ ContourExportAdapter }) => {
         if (!this._contourExportAdapter) {
           const host: ContourExportHost = {
-            setContourStyle: (style) => {
+            setContourStyle: (style, generalizeToleranceCells) => {
               this._contourStyle = style;
+              this._contourGeneralizeToleranceCells = generalizeToleranceCells;
             },
             exportVector: (fmt, opts) => this._exportContourFormat(fmt, undefined, opts),
             openMapPdf: (permit) => {
@@ -1791,6 +1801,7 @@ export class AnalysePanel {
     return this._cb.buildResultForExport({
       intervalM: r.model.intervalM,
       shapeStyle: style,
+      generalizeToleranceCells: this._contourGeneralizeToleranceCells,
     });
   }
 
@@ -2282,7 +2293,10 @@ export class AnalysePanel {
             });
           }
           // Remember the chosen style as the default for subsequent quick exports.
+          // A manual pick uses the default generalization tolerance, so clear any
+          // per-purpose tolerance a prior Studio export had adopted.
           this._contourStyle = chosenStyle;
+          this._contourGeneralizeToleranceCells = undefined;
           await this._buildAndDownloadMapPdf(result, {
             title: titleInput.value,
             preparedBy: preparedInput.value,

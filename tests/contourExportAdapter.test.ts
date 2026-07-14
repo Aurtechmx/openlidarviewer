@@ -47,6 +47,7 @@ const btn = (): HTMLButtonElement =>
 const intent = (over: Partial<ContourExportIntent> = {}): ContourExportIntent => ({
   purpose: 'Survey Review',
   shapeStyle: 'crisp',
+  generalizeToleranceCells: 0,
   labelsIndexOnly: false,
   methodId: 'olv.contour.analytical',
   methodVersion: 1,

@@ -11,9 +11,50 @@
 
 import {
   baseContourStudioState,
+  BASE_GENERALIZE_TOLERANCE_CELLS,
   type ContourStudioPurpose,
   type ContourStudioState,
 } from './contourStudioState';
+
+/**
+ * Per-purpose generalization strength (cells) — the single source of truth for
+ * how hard each purpose simplifies its exported contour geometry. It is the
+ * Douglas–Peucker epsilon as a fraction of the grid cell (`ε = tolerance × cell`,
+ * applied by the honesty-gated {@link simplifyPolyline}, so a low-confidence or
+ * gap vertex is NEVER dropped regardless of the value). The ordering is honest,
+ * not cosmetic:
+ *
+ *   - Survey Review     → 0     EXACT. A review wants the raw analytical isolines;
+ *                               0 routes the export to the crisp style (no
+ *                               generalization at all), tolerance 0 in provenance.
+ *   - Terrain Research  → 0.25  LIGHT. Faithful enough for reproducibility/QA
+ *                               while shedding marching-squares stair-steps —
+ *                               a quarter-cell of give is below the grid's own
+ *                               resolution, so the line stays terrain-legible.
+ *   - Engineering Plan  → 0.5   MODERATE. The historical default
+ *                               (`BASE_GENERALIZE_TOLERANCE_CELLS`) — a clean
+ *                               CAD-ready line without visibly departing the data.
+ *   - Presentation Map  → 1.0   STRONG. Cartographic-only (no analytical claim),
+ *                               so the cleanest visual: a full cell of give
+ *                               removes clutter for a legible map. Still bounded
+ *                               at one cell — it never invents terrain.
+ *   - Custom            → 0.5   The neutral base default; coincides with
+ *                               Engineering Plan until the user adjusts it (both
+ *                               generalize at the base tolerance), which is fine —
+ *                               Custom is "you drive every setting".
+ *
+ * Bounded to [0, 1] cell: the strongest preset gives at most one grid cell, so no
+ * purpose can over-simplify a faithful line into a misleading one.
+ */
+export const PURPOSE_GENERALIZE_TOLERANCE_CELLS: Readonly<
+  Record<ContourStudioPurpose, number>
+> = {
+  'survey-review': 0,
+  'terrain-research': 0.25,
+  'engineering-plan': BASE_GENERALIZE_TOLERANCE_CELLS, // 0.5 — the moderate default
+  'presentation-map': 1.0,
+  custom: BASE_GENERALIZE_TOLERANCE_CELLS, // 0.5 — neutral base
+};
 
 /** Human-facing metadata for a purpose card. */
 export interface PurposeMeta {
@@ -65,7 +106,10 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
   switch (purpose) {
     case 'engineering-plan':
       return {
-        surface: { cartographicSmoothing: true },
+        surface: {
+          cartographicSmoothing: true,
+          generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['engineering-plan'],
+        },
         contour: { analytical: true, cartographic: true, indexEvery: 5 },
         labels: { enabled: true, indexOnly: false },
         appearance: { hillshade: false, hypsometricTint: false },
@@ -81,7 +125,11 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
     case 'survey-review':
       return {
         // Minimal smoothing: the review wants exact analytical geometry.
-        surface: { cartographicSmoothing: false },
+        surface: {
+          cartographicSmoothing: false,
+          // 0 → exact: the export uses the crisp analytical style, no generalize.
+          generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['survey-review'],
+        },
         contour: { analytical: true, cartographic: false, indexEvery: 5 },
         labels: { enabled: true, indexOnly: true },
         appearance: { hillshade: false, hypsometricTint: false },
@@ -99,7 +147,10 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
       };
     case 'terrain-research':
       return {
-        surface: { cartographicSmoothing: true },
+        surface: {
+          cartographicSmoothing: true,
+          generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['terrain-research'],
+        },
         contour: { analytical: true, cartographic: true, indexEvery: 5 },
         labels: { enabled: true, indexOnly: false },
         appearance: { hillshade: true, hypsometricTint: false },
@@ -114,7 +165,10 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
       };
     case 'presentation-map':
       return {
-        surface: { cartographicSmoothing: true },
+        surface: {
+          cartographicSmoothing: true,
+          generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['presentation-map'],
+        },
         contour: { analytical: false, cartographic: true, indexEvery: 5 },
         labels: { enabled: true, indexOnly: true },
         appearance: { hillshade: true, hypsometricTint: true },
@@ -144,6 +198,7 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
 /** The dotted setting paths a purpose owns — used to preserve user overrides. */
 const PURPOSE_OWNED_PATHS = [
   'surface.cartographicSmoothing',
+  'surface.generalizeToleranceCells',
   'contour.analytical',
   'contour.cartographic',
   'contour.indexEvery',
