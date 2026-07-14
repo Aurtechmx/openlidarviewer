@@ -200,6 +200,28 @@ export class StreamingRenderer {
     return this._mode;
   }
 
+  /**
+   * The cloud-global colour ranges every resident node is painted against —
+   * exposed (read-only) so the colorbar legend can label EXACTLY the window
+   * the streaming pixels normalise to, rather than recomputing an
+   * approximation of it. See {@link colorRangesSeeded} for whether the
+   * scalar fields hold real data yet.
+   */
+  get colorRanges(): Readonly<StreamingColorRanges> {
+    return this._ranges;
+  }
+
+  /**
+   * Whether a decoded node has seeded the scalar ranges. Before the first
+   * seed, `minZ`/`maxZ` hold the honest header cube extent (usable for an
+   * elevation legend, with no percentile trim to disclose) while the
+   * intensity / gpsTime / returnNumber fields are 0..1 placeholders that
+   * describe nothing — a legend must not label them.
+   */
+  get colorRangesSeeded(): boolean {
+    return this._rangeSeedDepth !== Number.POSITIVE_INFINITY;
+  }
+
   /** Count of resident node meshes currently in the scene. */
   get residentMeshCount(): number {
     return this._meshes.size;

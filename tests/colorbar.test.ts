@@ -68,3 +68,26 @@ describe('buildColorbarSvg', () => {
     expect(svg).not.toContain('<b>');
   });
 });
+
+describe('grayscale ramp (intensity legend)', () => {
+  // The live intensity colouring is GRAYSCALE (`colorByIntensity` without a
+  // palette maps t → round(t·255) on all three channels). The legend must
+  // sample the same mapping, or it would label pixels with colours the
+  // renderer never painted.
+  it('colorbarStops("grayscale") mirrors colorByIntensity exactly', () => {
+    const stops = colorbarStops('grayscale', 9);
+    expect(stops).toHaveLength(9);
+    for (const s of stops) {
+      const grey = Math.round(s.t * 255);
+      expect(s.rgb).toEqual([grey, grey, grey]);
+    }
+  });
+
+  it('buildColorbarSvg renders a grayscale gradient', () => {
+    const svg = buildColorbarSvg({ palette: 'grayscale', min: 0, max: 65535, label: 'Intensity' });
+    expect(svg).toContain('stop-color="rgb(0,0,0)"');
+    expect(svg).toContain('stop-color="rgb(255,255,255)"');
+    // No unit was given, so no suffix may appear after the label.
+    expect(svg).toContain('>Intensity</text>');
+  });
+});
