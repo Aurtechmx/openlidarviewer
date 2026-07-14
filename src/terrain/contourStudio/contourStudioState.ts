@@ -35,9 +35,27 @@ export type ContourArea =
       readonly coordinates: ReadonlyArray<readonly [number, number]>;
     };
 
+/**
+ * The neutral baseline generalization strength (cells) — the same historical
+ * default the shipped uniform-tolerance generalize pass has always used
+ * (`GENERALIZE_EPS_CELLS`). The `custom` purpose and the base state carry this;
+ * the cartographic presets override it (see `contourStudioPurpose.ts`).
+ */
+export const BASE_GENERALIZE_TOLERANCE_CELLS = 0.5;
+
 /** Whether cartographic generalization is applied by default for this purpose. */
 export interface ContourSurfaceSettings {
   readonly cartographicSmoothing: boolean;
+  /**
+   * Generalization strength (cells) the export applies for this purpose, as a
+   * fraction of the grid cell — the Douglas–Peucker epsilon that drives the
+   * 'generalized' shape style. 0 means EXACT geometry (no generalization → the
+   * export uses the crisp analytical style); a positive value simplifies harder
+   * the larger it is. Bounded and honest: it is recorded in export provenance so
+   * every deliverable names the tolerance it was generalised at. Owned by the
+   * purpose (preserved on user override) like `cartographicSmoothing`.
+   */
+  readonly generalizeToleranceCells: number;
 }
 
 /** Which geometry products to emit + how often an index (bold) contour falls. */
@@ -110,7 +128,10 @@ export function baseContourStudioState(): ContourStudioState {
     schemaVersion: CONTOUR_STUDIO_SCHEMA,
     purpose: 'custom',
     area: { kind: 'entire-scan' },
-    surface: { cartographicSmoothing: true },
+    surface: {
+      cartographicSmoothing: true,
+      generalizeToleranceCells: BASE_GENERALIZE_TOLERANCE_CELLS,
+    },
     contour: { analytical: true, cartographic: true, indexEvery: 5 },
     labels: { enabled: true, indexOnly: false },
     appearance: { hillshade: false, hypsometricTint: false },

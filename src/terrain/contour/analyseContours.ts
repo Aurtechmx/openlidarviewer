@@ -96,6 +96,7 @@ import { tallyContourSet, type GradeTally } from './evidenceGrade';
 import {
   applyContourShapeStyle,
   defaultContourShapeStyle,
+  GENERALIZE_EPS_CELLS,
   type ContourShapeStyle,
 } from './contourShapeStyle';
 import { placeLabels, type ContourLabel } from './labelPlacement';
@@ -218,6 +219,16 @@ export interface IntervalContourParams {
    */
   readonly shapeStyle?: ContourShapeStyle;
   /**
+   * Generalization strength for the 'generalized' shape style, as a fraction of
+   * the grid cell (the Douglas–Peucker epsilon is `generalizeToleranceCells ×
+   * cell`). Contour Studio purposes set this per purpose so each deliverable
+   * generalises at its own bounded tolerance (Survey exact = crisp, Terrain
+   * Research light, Engineering moderate, Presentation strong). Ignored for every
+   * style but 'generalized'; when omitted the default 0.5 is used, so callers that
+   * never set it are byte-unchanged.
+   */
+  readonly generalizeToleranceCells?: number;
+  /**
    * Legacy boolean toggle for smoothing. Honoured for back-compat when
    * `shapeStyle` is not given: `false` ⇒ `'crisp'`, otherwise the default
    * `'smooth'`. Prefer `shapeStyle`.
@@ -241,6 +252,15 @@ export interface AnalyseGenerationParams {
   readonly interpolation: 'idw' | 'geodesic';
   /** The contour shape style applied to the exported geometry. */
   readonly contourStyle: ContourShapeStyle;
+  /**
+   * Generalization tolerance actually used (cells) for the 'generalized' style —
+   * the Douglas–Peucker epsilon as a fraction of the cell size. Null for every
+   * other style (crisp/smooth/rounded/semi-geometric do not run the per-purpose
+   * generalize pass). Recorded from the real generation config so export
+   * provenance names the exact tolerance a deliverable was simplified at, and can
+   * never drift from the geometry that shipped.
+   */
+  readonly generalizeToleranceCells?: number | null;
   /**
    * True when contour smoothing was applied. Derived as `style !== 'crisp'` and
    * kept for back-compat with any consumer that still reads a boolean.
@@ -931,6 +951,15 @@ export function contoursFromCore(
     (intervalParams.smooth === false ? 'crisp' : defaultContourShapeStyle);
   // Back-compat boolean: anything but raw geometry counts as "smoothed".
   const smoothingApplied = shapeStyle !== 'crisp';
+  // The generalization tolerance actually applied (cells). Only the 'generalized'
+  // style runs the Douglas–Peucker pass; for every other style it is null so the
+  // provenance never claims a tolerance a style did not use. When the caller does
+  // not specify one, the historical default (0.5) is what applyContourShapeStyle
+  // uses, so we record that exact value.
+  const generalizeToleranceCells =
+    shapeStyle === 'generalized'
+      ? (intervalParams.generalizeToleranceCells ?? GENERALIZE_EPS_CELLS)
+      : null;
   // Interval-dependent warnings are appended AFTER the core warnings so the
   // composed `warnings` array is in the same order as a single-pass run.
   const warnings: string[] = [...core.coreWarnings];
@@ -954,6 +983,7 @@ export function contoursFromCore(
   const generationParams: AnalyseGenerationParams = {
     interpolation: core.interpolation,
     contourStyle: shapeStyle,
+    generalizeToleranceCells,
     smoothing: smoothingApplied,
     despike: core.despikeApplied,
     aggregation: core.aggregation,
@@ -1026,7 +1056,10 @@ export function contoursFromCore(
   // is exactly the historical Chaikin ×2, so the live contours are unchanged.
   stitched = stitched.map((level) => ({
     value: level.value,
-    polylines: applyContourShapeStyle(level.polylines, shapeStyle, { cellSizeM }),
+    polylines: applyContourShapeStyle(level.polylines, shapeStyle, {
+      cellSizeM,
+      generalizeToleranceCells: intervalParams.generalizeToleranceCells,
+    }),
   }));
 
   const model = buildFeatureModel(stitched, style.levels, {

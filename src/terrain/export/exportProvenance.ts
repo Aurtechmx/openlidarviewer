@@ -185,6 +185,13 @@ export interface ExportProvenance {
   readonly contourStyleLabel: string;
   /** Contour geometry method actually exported (`id@version`), or null. */
   readonly contourMethod: string | null;
+  /**
+   * Generalization tolerance (cells) the exported geometry was simplified at when
+   * the 'generalized' style ran — the per-purpose Douglas–Peucker epsilon as a
+   * fraction of the cell. Null for exact/other styles. Read from the run's actual
+   * generation config, so the deliverable names the exact tolerance it used.
+   */
+  readonly contourGeneralizeToleranceCells: number | null;
   /** Contour Studio purpose that produced this deliverable, or null. */
   readonly deliverablePurpose: string | null;
   /** Surface-quality verdict (Good / Preview / Limited / Blocked). */
@@ -231,8 +238,8 @@ export interface ExportProvenanceOptions {
   readonly classScope?: string | null;
   /**
    * Contour geometry method actually exported, as `id@version` (e.g.
-   * `olv.contour.analytical@1` or `olv.contour.generalize.terrain-adaptive@1`).
-   * Set by Contour Studio so a deliverable is self-describing; null otherwise.
+   * `olv.contour.analytical@1` or `olv.contour.generalize@1`). Set by Contour
+   * Studio so a deliverable is self-describing; null otherwise.
    */
   readonly contourMethod?: string | null;
   /** Contour Studio purpose that produced this deliverable, or null. */
@@ -276,6 +283,10 @@ export function buildExportProvenance(
   const style =
     result.generationParams?.contourStyle ?? result.model?.contourStyle ?? null;
   const intervalM = result.intervalM ?? result.model?.intervalM ?? null;
+  // The exact generalization tolerance the geometry was simplified at (cells),
+  // read from the real generation config so provenance can never drift from the
+  // shipped geometry. Null unless the 'generalized' style actually ran.
+  const generalizeToleranceCells = result.generationParams?.generalizeToleranceCells ?? null;
 
   // Accuracy is present only when the hold-out validation measured an RMSEz;
   // otherwise the whole block is null (never a fabricated zero).
@@ -335,6 +346,7 @@ export function buildExportProvenance(
     contourStyle: style,
     contourStyleLabel: style ? contourShapeStyleLabel(style) : 'unknown',
     contourMethod: opts.contourMethod ?? null,
+    contourGeneralizeToleranceCells: generalizeToleranceCells,
     deliverablePurpose: opts.deliverablePurpose ?? null,
     surfaceQuality: assessment.status,
     exportReadiness: assessment.exportReadiness,
@@ -484,14 +496,24 @@ export function processingManifestFromProvenance(p: ExportProvenance): Processin
   // the surface/validation ops it consumes. Interval and shape style are the
   // final parameters this provenance carries for it.
   if (p.contourMethod) {
+    const capturesTolerance = p.contourGeneralizeToleranceCells != null;
     const params: Record<string, string | number> = {
       ...(p.contourIntervalM != null ? { intervalM: p.contourIntervalM } : {}),
       ...(p.contourStyle ? { style: p.contourStyle } : {}),
+      // The exact per-purpose generalization tolerance (cells) — so a generalized
+      // deliverable is self-describing and two purposes are distinguishable from
+      // provenance alone. Present only when the generalize pass actually ran.
+      ...(capturesTolerance
+        ? { generalizeToleranceCells: p.contourGeneralizeToleranceCells as number }
+        : {}),
     };
     ops.push({
       method: p.contourMethod,
       params,
-      ...(p.contourMethod.includes('generalize')
+      // Only the legacy path (a generalize method whose tolerance was not
+      // captured) carries the honest "not captured" caveat; once the tolerance is
+      // recorded the params ARE the description.
+      ...(p.contourMethod.includes('generalize') && !capturesTolerance
         ? { note: 'generalization tolerance band not captured in this slice' }
         : {}),
     });

@@ -161,6 +161,8 @@ export interface TerrainAnalysisRunner {
   buildResultForExport(opts: {
     intervalM: number;
     shapeStyle: ContourShapeStyle;
+    /** Per-purpose generalization tolerance (cells) for the 'generalized' style. */
+    generalizeToleranceCells?: number;
   }): Promise<AnalyseContoursResult>;
   /**
    * Abort any in-flight compute and drop every cached terrain core. Called
@@ -342,6 +344,7 @@ export function createTerrainAnalysisRunner(
   async function buildResultForExport(opts: {
     intervalM: number;
     shapeStyle?: ContourShapeStyle;
+    generalizeToleranceCells?: number;
   }): Promise<AnalyseContoursResult> {
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
@@ -373,7 +376,11 @@ export function createTerrainAnalysisRunner(
         new AbortController().signal,
       ),
     );
-    return contoursFromCore(core, { intervalM: opts.intervalM, shapeStyle: opts.shapeStyle });
+    return contoursFromCore(core, {
+      intervalM: opts.intervalM,
+      shapeStyle: opts.shapeStyle,
+      generalizeToleranceCells: opts.generalizeToleranceCells,
+    });
   }
 
   // Back-compat shim: the interval-only builder is the export builder with the
