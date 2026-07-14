@@ -123,6 +123,13 @@ describe('buildSpaceReportContent — graceful', () => {
     expect(content.provenance.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
     expect(content.caveats).toEqual([]);
   });
+
+  it('every provenance line keeps at least two spaces between key and value', () => {
+    // Guards the kv gutter: a future key at or past the column width must not
+    // jam into its value (the terrain provenance kv had exactly this bug).
+    const lines = buildSpaceReportContent({ space: null, name: 'Empty' }).provenanceLines;
+    for (const line of lines) expect(line).toMatch(/^\S.*?\s{2,}\S/);
+  });
 });
 
 // ── Source-unit honesty on the provenance "Units" line ──────────────────────

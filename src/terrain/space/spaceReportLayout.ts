@@ -290,7 +290,9 @@ function assemble(
 /** Plain `Key  Value` provenance lines for the report footer. */
 export function spaceProvenanceLines(p: SpaceReportProvenance): string[] {
   const KEY_W = 16;
-  const kv = (k: string, v: string): string => `${k.padEnd(KEY_W)}${v}`;
+  // Keys wider than the column still need a gutter (same guarantee as the
+  // terrain provenance kv), or key and value jam into one token.
+  const kv = (k: string, v: string): string => `${k.padEnd(Math.max(KEY_W, k.length + 2))}${v}`;
   return [
     kv('Software', `${p.software} ${p.softwareVersion}`),
     kv('Metric version', p.metricVersion),

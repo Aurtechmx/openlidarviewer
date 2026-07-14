@@ -126,16 +126,71 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   }
 
   // ── Provenance footer ──
-  page.drawLine({ start: { x: M, y: M + 86 }, end: { x: PW - M, y: M + 86 }, thickness: 0.75, color: FRAME });
-  let fy = M + 74;
-  for (const line of content.provenanceLines) {
-    text(line, M, fy, 7.5, font, DIM);
+  // Bottom-anchored from the block's MEASURED height (the old fixed start at
+  // M + 74 ran the stamp's tail into the bold note once the Evidence line
+  // joined it), and long lines wrap with a hanging indent instead of leaving
+  // the sheet. The bold note keeps its bottom-margin slot (last line at
+  // M - 4), wrapping upward from there.
+  const footerW = PW - 2 * M;
+  const stampIndent = 24;
+  const stamp = content.provenanceLines.flatMap((line) =>
+    wrapStampLine(font, line, footerW, 7.5, stampIndent).map((seg, i) => ({
+      seg,
+      x: i === 0 ? M : M + stampIndent,
+    })),
+  );
+  const note = wrapStampLine(bold, content.provenance.notSurveyGrade, footerW, 8, 0);
+  const noteTop = M - 4 + (note.length - 1) * 11;
+  const fy0 = noteTop + 16 + (stamp.length - 1) * 10;
+  page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: 0.75, color: FRAME });
+  let fy = fy0;
+  for (const s of stamp) {
+    text(s.seg, s.x, fy, 7.5, font, DIM);
     fy -= 10;
   }
   // The standing honesty note in bold so a preview can never read as certified.
-  text(content.provenance.notSurveyGrade, M, M - 4, 8, bold, WARN);
+  let ny = noteTop;
+  for (const seg of note) {
+    text(seg, M, ny, 8, bold, WARN);
+    ny -= 11;
+  }
 
   return doc.save();
+}
+
+/**
+ * Split one `Key  Value` provenance line into segments that fit the footer
+ * width, breaking ONLY at spaces and keeping each segment's internal spacing
+ * (a plain word-split would collapse the padded key column). Continuation
+ * segments render with a hanging indent, so they measure against `maxW -
+ * indent`. A single unbreakable run longer than the width draws whole rather
+ * than truncating — provenance never silently loses characters. Mirrors the
+ * helper in terrainReportPdf.ts (pure, injected font measurer).
+ */
+function wrapStampLine(
+  font: PDFFont,
+  s: string,
+  maxW: number,
+  sz: number,
+  indent: number,
+): string[] {
+  const out: string[] = [];
+  let rest = safe(s);
+  let w = maxW;
+  while (font.widthOfTextAtSize(rest, sz) > w) {
+    // The longest space-boundary prefix that fits.
+    let cut = -1;
+    for (let i = rest.indexOf(' '); i !== -1; i = rest.indexOf(' ', i + 1)) {
+      if (font.widthOfTextAtSize(rest.slice(0, i), sz) <= w) cut = i;
+      else break;
+    }
+    if (cut <= 0) break;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut + 1).trimStart();
+    w = maxW - indent;
+  }
+  out.push(rest);
+  return out;
 }
 
 /** Word-wrap text into the page width, advancing y; returns the new y. */
