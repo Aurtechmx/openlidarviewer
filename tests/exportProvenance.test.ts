@@ -234,6 +234,27 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
   });
 });
 
+describe('provenanceLines — key/value separation', () => {
+  it('every line keeps at least two spaces between key and value, even past the key column', () => {
+    const p = buildExportProvenance(readyResult(), OPTS);
+    for (const line of provenanceLines(p)) {
+      // A key at or beyond the column width must still get a gutter — never
+      // "NVA-style (95%, hold-out)0.27 m" jammed into one token.
+      expect(line).toMatch(/^\S.*?\s{2,}\S/);
+    }
+  });
+
+  it('the hold-out accuracy keys (wider than the column) separate from their values', () => {
+    const lines = provenanceLines(buildExportProvenance(readyResult(), OPTS));
+    expect(lines.find((l) => l.startsWith('NVA-style'))).toMatch(
+      /^NVA-style \(95%, hold-out\)\s{2,}0\.27 m$/,
+    );
+    expect(lines.find((l) => l.startsWith('VVA-style'))).toMatch(
+      /^VVA-style \(95th pct, hold-out\)\s{2,}0\.30 m$/,
+    );
+  });
+});
+
 describe('processingManifestFromProvenance — the verify-only manifest assembly', () => {
   /** readyResult() with the derived-complexity block the VRM/TPI ops bind from. */
   function complexResult(): AnalyseContoursResult {
