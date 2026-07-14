@@ -195,6 +195,13 @@ export interface AnalysePanelCallbacks {
      * metre default. Omitted ⇒ serializeContours' standing metre assumption.
      */
     linearUnit?: DxfLinearUnit;
+    /**
+     * Metres-per-unit of the Z (elevation) axis, ONLY when the source declares a
+     * vertical unit separately. Lets the complete-deliverable README report the
+     * real elevation unit (or honest 'unknown') instead of copying the horizontal
+     * unit. Omitted ⇒ the deliverable reports the vertical unit as unknown.
+     */
+    verticalUnitToMetres?: number;
   };
 }
 
@@ -2019,6 +2026,9 @@ export class AnalysePanel {
         basename,
         worldOrigin: ctx.worldOrigin ?? null,
         linearUnit: ctx.linearUnit,
+        // Real elevation-axis unit when the CRS declares one; undefined ⇒ the
+        // README honestly reports the vertical unit as unknown (never the plan unit).
+        verticalUnitToMetres: ctx.verticalUnitToMetres,
         isGeographic: ctx.isGeographic ?? false,
         softwareVersion: __APP_VERSION__,
         metricVersion: TERRAIN_METRIC_VERSION,

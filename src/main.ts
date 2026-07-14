@@ -2717,6 +2717,11 @@ const analysePanel = new AnalysePanel({
       // "unitless" rather than asserting metres. Undefined before a CRS
       // resolves ⇒ serializeContours keeps its standing metre default.
       linearUnit: cur?.linearUnit,
+      // Metres-per-unit of the Z axis when the CRS declares a vertical unit
+      // SEPARATELY (compound / vertical CRS). Undefined for the common
+      // horizontal-only capture ⇒ the deliverable reports elevation unit as
+      // unknown instead of assuming it equals the horizontal unit.
+      verticalUnitToMetres: cur?.verticalUnitToMetres,
     };
   },
 });

@@ -235,6 +235,45 @@ describe('buildDemPackage', () => {
     expect(prov.software).toBe('OpenLiDARViewer');
   });
 
+  it('never copies the horizontal unit onto the vertical — an undeclared elevation unit reads "unknown"', () => {
+    const zip = buildContourDeliverableFromResult(fixtureResult(), {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      linearUnit: 'foot', // horizontal CRS is feet…
+      // …but no verticalUnitToMetres ⇒ the elevation unit is genuinely undeclared.
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
+    expect(readme).toMatch(/Horizontal unit: ft/);
+    // The bug this pins: vertical was asserted equal to horizontal ('ft'). An
+    // undeclared elevation unit must read 'unknown', never inherit the plan unit.
+    expect(readme).toMatch(/Vertical unit: unknown/);
+    expect(readme).not.toMatch(/Vertical unit: ft/);
+  });
+
+  it('reports a declared vertical unit that differs from the horizontal unit', () => {
+    const zip = buildContourDeliverableFromResult(fixtureResult(), {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      linearUnit: 'foot', // horizontal feet…
+      verticalUnitToMetres: 1, // …but a declared metre vertical axis.
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
+    expect(readme).toMatch(/Horizontal unit: ft/);
+    expect(readme).toMatch(/Vertical unit: m/);
+  });
+
   it('includes a SHA256SUMS.txt whose digests verify every other file in the package', () => {
     const zip = buildDemPackage(fixtureResult(), {
       worldOrigin: { x: 600000, y: 4000000 }, basename: 'site', wkt: 'PROJCS["x"]',

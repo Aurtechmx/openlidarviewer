@@ -27,6 +27,7 @@ import { buildExportProvenance, provenanceJson, analysisRecordFromProvenance } f
 import { buildContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
 import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
+import { verticalUnitLabel } from '../../units/units';
 import { writeGeoTiff } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
 import {
@@ -47,6 +48,13 @@ export interface DeliverableBuildOptions {
   readonly worldOrigin?: ContourWorldOrigin | null;
   /** Resolved horizontal linear unit ('metre' | 'foot' | …). */
   readonly linearUnit?: DxfLinearUnit;
+  /**
+   * Metres-per-unit of the Z (elevation) axis, ONLY when the source declares a
+   * vertical unit separately from the horizontal one. Absent/null ⇒ the
+   * elevation unit is genuinely unknown and is reported as such — the vertical
+   * unit is never inferred from the horizontal unit.
+   */
+  readonly verticalUnitToMetres?: number | null;
   /** True when the horizontal CRS is geographic. */
   readonly isGeographic?: boolean;
   readonly softwareVersion: string;
@@ -79,6 +87,8 @@ interface GatheredDeliverable {
   readonly hasContours: boolean;
   readonly dtm: AnalyseContoursResult['dtm'] | null;
   readonly horizontalUnit: 'ft' | 'm';
+  /** Elevation unit label — a declared Z unit ('m'|'ft'|'units') or 'unknown'. */
+  readonly verticalUnit: string;
   readonly bytes: Map<PackageRole, Uint8Array>;
 }
 
@@ -107,6 +117,12 @@ function gatherDeliverable(
   const dtm = result.dtm ?? null;
   const hasContours = (model?.features.length ?? 0) > 0;
   const horizontalUnit = opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+  // Elevation unit is reported ONLY from a separately-declared Z axis — never
+  // copied from the horizontal unit. Undeclared ⇒ honest 'unknown', matching the
+  // convention the live Contour Studio uses (unknownUnit()).
+  const vScale = opts.verticalUnitToMetres;
+  const verticalUnit =
+    vScale != null && Number.isFinite(vScale) && vScale > 0 ? verticalUnitLabel(vScale) : 'unknown';
 
   const bytes = new Map<PackageRole, Uint8Array>();
 
@@ -144,7 +160,7 @@ function gatherDeliverable(
 
   bytes.set('provenance-json', enc(JSON.stringify(provenanceJson(provenance), null, 2)));
 
-  return { basename, provenance, isAnalytical, hasContours, dtm, horizontalUnit, bytes };
+  return { basename, provenance, isAnalytical, hasContours, dtm, horizontalUnit, verticalUnit, bytes };
 }
 
 /** Assemble the package manifest for a gathered deliverable. `pdf` flips when
@@ -171,7 +187,7 @@ function manifestFor(g: GatheredDeliverable, opts: DeliverableBuildOptions, pdf:
       crs: g.provenance.horizontalCrs,
       verticalDatum: g.provenance.verticalDatum,
       horizontalUnit: opts.isGeographic ? 'degrees' : g.horizontalUnit,
-      verticalUnit: g.horizontalUnit,
+      verticalUnit: g.verticalUnit,
       software: g.provenance.software,
       softwareVersion: g.provenance.softwareVersion,
     },
@@ -232,7 +248,7 @@ export async function buildContourDeliverableFromResultAsync(
       crs: g.provenance.horizontalCrs,
       verticalDatum: g.provenance.verticalDatum,
       horizontalUnit: opts.isGeographic ? 'degrees' : g.horizontalUnit,
-      verticalUnit: g.horizontalUnit,
+      verticalUnit: g.verticalUnit,
       grid: g.dtm != null ? `${g.dtm.cols}x${g.dtm.rows} @ ${g.dtm.cellSizeM} m` : 'unknown',
       // The registered contour method actually exported, when Contour Studio set
       // it; otherwise none (never a fabricated id).
