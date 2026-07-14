@@ -57,6 +57,17 @@ describe('buildContourPackageManifest', () => {
     expect(m.zipName).toBe('Site_A_North_Contour_Deliverable.zip');
   });
 
+  it('names the multipage PDF an honest report — never a rendered map sheet', () => {
+    const m = buildContourPackageManifest(input(validated));
+    const pdf = m.entries.find((e) => e.role === 'contour-map-pdf')!;
+    expect(pdf.status).toBe('included');
+    // The in-ZIP PDF is a TEXT technical report (summary + support + validation
+    // + provenance). Only the standalone map-sheet PDF renders an actual map,
+    // so this filename must not oversell itself as one.
+    expect(pdf.filename).toMatch(/Contour_Report\.pdf$/);
+    expect(pdf.filename).not.toMatch(/map/i);
+  });
+
   it('omits an unavailable product with a reason — never an empty file', () => {
     const m = buildContourPackageManifest(
       input(validated, { available: { ...allAvailable, uncertainty: false }, omissionReasons: { 'uncertainty-raster': 'Uncertainty was not computed for this scan.' } }),

@@ -157,7 +157,7 @@ export interface PackageInput {
 interface FileSpec { role: PackageRole; ext: string; label: string; available: (a: PackageAvailability) => boolean; desc: string }
 
 const FILE_SPECS: readonly FileSpec[] = [
-  { role: 'contour-map-pdf', ext: 'Contour_Map.pdf', label: 'Contour map (PDF)', available: (a) => a.pdf, desc: 'The multipage contour map with support, validation, and provenance pages.' },
+  { role: 'contour-map-pdf', ext: 'Contour_Report.pdf', label: 'Contour report (PDF)', available: (a) => a.pdf, desc: 'Multipage technical report — contour summary, surface support, validation, method and provenance. Text pages, not a rendered map sheet.' },
   { role: 'contours-analytical-geojson', ext: 'Contours_Analytical.geojson', label: 'Analytical contours (GeoJSON)', available: (a) => a.analyticalGeojson, desc: 'Exact isolines of the terrain surface — for GIS and reproducibility.' },
   { role: 'contours-cartographic-geojson', ext: 'Contours_Cartographic.geojson', label: 'Cartographic contours (GeoJSON)', available: (a) => a.cartographicGeojson, desc: 'Generalized, labelled lines for presentation — derived from the analytical geometry.' },
   { role: 'contours-cartographic-dxf', ext: 'Contours_Cartographic.dxf', label: 'Cartographic contours (DXF)', available: (a) => a.cartographicDxf, desc: 'The cartographic contours for CAD.' },

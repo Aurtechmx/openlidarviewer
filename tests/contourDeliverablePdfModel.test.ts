@@ -38,7 +38,7 @@ function input(decision: ScientificExportDecision, over: Partial<ContourPdfInput
 describe('buildContourPdfModel', () => {
   it('builds the four standard pages with a complete title block', () => {
     const m = buildContourPdfModel(input(validated));
-    expect(m.pages.map((p) => p.title)).toEqual(['Contour map', 'Surface support', 'Validation', 'Method and provenance']);
+    expect(m.pages.map((p) => p.title)).toEqual(['Contour summary', 'Surface support', 'Validation', 'Method and provenance']);
     expect(validateContourPdfModel(m).problems).toEqual([]);
     const title = m.titleBlock.join('\n');
     expect(title).toContain('OpenLiDARViewer 0.5.9');

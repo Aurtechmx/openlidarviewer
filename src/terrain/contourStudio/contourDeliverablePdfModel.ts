@@ -88,7 +88,7 @@ export function buildContourPdfModel(input: ContourPdfInput): ContourPdfModel {
       (input.geometry.analyticalAvailable ? ' Exact analytical geometry is available in the GIS export.' : '')
     : 'Analytical (exact) contours are shown.';
   const mapPage: ContourPdfPage = {
-    title: 'Contour map',
+    title: 'Contour summary',
     lines: [
       geometryNote,
       `Vertical unit: ${input.provenance.verticalUnit}`,
