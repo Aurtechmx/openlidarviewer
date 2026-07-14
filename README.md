@@ -31,7 +31,7 @@ No install, no account, no upload. Open **[lidar.aurtech.mx](https://lidar.aurte
 
 OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. You can inspect a scan, navigate it in 3D, switch how it is colored, measure distances, and export results, without setting up a desktop GIS workflow.
 
-The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that real LiDAR work needs.
+The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that LiDAR work needs.
 
 It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is a browser-native LiDAR inspection and terrain-analysis platform focused on transparency, validation, and local-first processing.
 

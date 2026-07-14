@@ -2,3 +2,12 @@
 # The release/ tree is npm-run-package output (checksums, manifest, deploy/
 # source zips); it must never ship inside the source zip.
 release/ export-ignore
+
+# Exclude internal engineering docs (version-pinned plans, phase audits, PR
+# writeups) from `git archive` source exports. They stay tracked for developers
+# and history; they are not part of the public release artifact.
+docs/_audit/ export-ignore
+docs/architecture/v0.5.8-cleanup-plan.md export-ignore
+docs/gate2-per-cloud-filter-plan.md export-ignore
+docs/v0.5.7-plan.md export-ignore
+docs/v0.5.7-object-e57-capture-lens.md export-ignore
