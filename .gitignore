@@ -111,3 +111,6 @@ benchmarks/out/
 # src/validation/claimRegistry.generated.ts.
 docs-site/.vitepress/dist/
 docs-site/.vitepress/cache/
+
+# Local Python virtualenv (docs/validation tooling) — never commit
+.venv/
