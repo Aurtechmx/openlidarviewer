@@ -159,6 +159,14 @@ const SHELL_FORBIDDEN_CONTENT = [
   'WebGPURenderer',
   // TSL runtime — NodeMaterial is a unique signature.
   'NodeMaterial',
+  // The shared colorbar generator (colorbar.ts) emits this SVG gradient-id
+  // prefix — a distinctive literal that survives plain minification and is
+  // NOT a dynamic-import specifier. It rides the lazy `colorbar-*.js` chunk
+  // (imported only by the lazy Viewer and ColorbarOverlay chunks), so its
+  // presence in the shell would mean the legend generator leaked eager — a
+  // direct guard on the shared chunk, not just the transitive ColorbarOverlay
+  // name pin above.
+  'olv-cbar-',
 ] as const;
 
 function listDistAssets(): string[] {
