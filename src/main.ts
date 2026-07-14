@@ -214,6 +214,7 @@ import {
   loadFloorPlanConfidence,
   loadFullCloudGradeAction,
   loadSession,
+  loadExportProvenance,
   loadCompareEpochs,
   loadAlignEpochs,
   loadCompareDtms,
@@ -5368,6 +5369,29 @@ async function exportSession(): Promise<void> {
     };
   }
 
+  // v7 — the verify-only processing manifest, filled into the slot the schema
+  // reserved. Derived from the CURRENT analysis result's provenance (the same
+  // derivation every terrain export stamps), so a session saved after an
+  // analysis carries the ordered, hash-chained record of the methods + final
+  // parameters behind the on-screen numbers. No analysis → the slot stays
+  // absent (serializeSession omits it), never an empty placeholder. The
+  // provenance/manifest modules ride the lazy terrain-export chunk — loaded
+  // here on demand via lazyChunks so the eager shell stays manifest-free.
+  let processingManifest: unknown;
+  const analysed = analysePanel.currentResult();
+  if (analysed) {
+    const { buildExportProvenance, processingManifestFromProvenance } =
+      await loadExportProvenance();
+    processingManifest = processingManifestFromProvenance(
+      buildExportProvenance(analysed, {
+        basename: exportFileName ? baseName(exportFileName) : null,
+        generatedAt: new Date(),
+        softwareVersion: __APP_VERSION__,
+        metricVersion: TERRAIN_METRIC_VERSION,
+      }),
+    );
+  }
+
   // The GLOBAL live state and every saved view's bundle come from the same
   // capture path (captureViewState) — the extraction that replaced the old
   // inline field-by-field block here, so the export and the named views can
@@ -5395,6 +5419,10 @@ async function exportSession(): Promise<void> {
     // v6 — stamp the producing app version so a later re-open can tell whether a
     // newer build would read the scan differently (see exportStaleness).
     software: __APP_VERSION__,
+    // v7 — the reserved slot, filled above when an analysis exists; the
+    // serializer omits it when undefined so no-analysis sessions keep their
+    // byte-shape.
+    processingManifest,
   });
   // `.olvsession` is the new canonical extension; the file is
   // still JSON internally (Mac/Linux's Open With dialog associates the

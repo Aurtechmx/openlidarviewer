@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { serializeSession, parseSession, SESSION_VERSION, isSessionFile, SESSION_EXTENSION } from '../src/io/session';
 import type { InspectionSession, SavedView } from '../src/io/session';
+import {
+  buildProcessingManifest,
+  verifyProcessingManifest,
+  type ProcessingManifest,
+} from '../src/science/processingManifest';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import type { Annotation } from '../src/render/annotate/types';
 
@@ -1033,5 +1038,37 @@ describe('v7 — reserved processingManifest passthrough', () => {
     };
     expect(parseSession(JSON.stringify(doc)).processingManifest)
       .toEqual(['anything', { nested: true }]);
+  });
+
+  it('a hostile literal-null manifest is treated as absent and never re-emitted', () => {
+    // A hand-edited file can carry `"processingManifest": null`. The parser must
+    // read that as "no manifest" (not a truthy opaque value), and re-serialising
+    // must omit the key entirely so the null can't propagate as byte-noise.
+    const doc = JSON.parse(serializeSession(sampleSession())) as Record<string, unknown>;
+    doc.processingManifest = null;
+    const back = parseSession(JSON.stringify(doc));
+    expect(back.processingManifest).toBeUndefined();
+    expect('processingManifest' in (JSON.parse(serializeSession(back)) as object)).toBe(false);
+  });
+
+  it('a REAL processing manifest round-trips opaquely and still verifies', () => {
+    // The actual manifest the exporter embeds (not a synthetic stand-in): the
+    // session layer must pass it through byte-faithfully enough that the hash
+    // chain still verifies after serialize → parse — the whole point of
+    // carrying it.
+    const manifest = buildProcessingManifest({
+      build: '0.5.9 (abc1234)',
+      source: 'site.laz',
+      ops: [
+        { method: 'olv.ground.smrf@1', params: {}, note: 'params not captured in this slice' },
+        { method: 'olv.dtm.idw-fill@1', params: { coverageMode: 'full' } },
+      ],
+    });
+    const back = parseSession(
+      serializeSession({ ...sampleSession(), processingManifest: manifest }),
+    );
+    expect(back.processingManifest).toEqual(manifest);
+    expect(verifyProcessingManifest(back.processingManifest as ProcessingManifest))
+      .toEqual({ ok: true });
   });
 });

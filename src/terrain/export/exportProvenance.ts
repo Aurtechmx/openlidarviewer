@@ -38,12 +38,17 @@ import { readinessLine } from '../quality/readinessEngine';
 import { contourShapeStyleLabel, type ContourShapeStyle } from '../contour/contourShapeStyle';
 import { exportGate } from '../../validation/evidenceRegistry';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
-import { methodTag } from '../../science/methodRegistry';
+import { methodRef, methodTag } from '../../science/methodRegistry';
 import {
   buildScientificAnalysisRecord,
   scientificRecordJson,
   type ScientificAnalysisRecord,
 } from '../../science/scientificAnalysisRecord';
+import {
+  buildProcessingManifest,
+  type ProcessingManifest,
+  type ProcessingOpInput,
+} from '../../science/processingManifest';
 
 /** Producing software name — single source of truth for every export stamp. */
 export const SOFTWARE_NAME = 'OpenLiDARViewer';
@@ -393,6 +398,107 @@ export function analysisRecordFromProvenance(p: ExportProvenance): ScientificAna
   });
 }
 
+/**
+ * The one honest wording for a manifest op whose parameters this slice does
+ * not capture. The manifest binds only what the provenance object genuinely
+ * holds — an op whose method ran with settings that never reached the
+ * provenance says so with this note instead of fabricating values.
+ */
+export const PARAMS_NOT_CAPTURED_NOTE = 'params not captured in this slice';
+
+/**
+ * Assemble the verify-only processing manifest from what the provenance
+ * ALREADY holds — the same derivation trick as {@link analysisRecordFromProvenance},
+ * requiring no new capture wiring in the pipeline. The op order is the
+ * pipeline order {@link terrainMethodIds} emits (ground extraction → gridded
+ * surface → hold-out validation → complexity metrics), with the contour
+ * geometry method appended last when the export stamped one, because contour
+ * generation consumes the finished surface.
+ *
+ * Parameter honesty, op by op:
+ *   - SMRF ground extraction and the hold-out validation ran with settings
+ *     (windows, thresholds, fold shares) this provenance object does not
+ *     carry, so their ops bind nothing and say so via
+ *     {@link PARAMS_NOT_CAPTURED_NOTE}. Threading those params through the
+ *     provenance is a later slice.
+ *   - The gridded surface binds the coverage scope it was built from; the
+ *     grid cell size is likewise not carried here yet, and the op's note
+ *     names that omission.
+ *   - VRM / TPI bind the window / radius the run actually used (already on
+ *     the complexity block, in cells and — when metres were known — ground
+ *     metres), and TPI its Z unit.
+ *   - Horn slope/aspect has no free parameters (a fixed 3×3 stencil on the
+ *     DTM grid), which its note states so an empty params object cannot be
+ *     misread as an omission.
+ *   - The contour op binds the interval and shape style when present; a
+ *     generalized method's tolerance band is not carried on this object, so
+ *     that op honestly notes the gap instead.
+ */
+export function processingManifestFromProvenance(p: ExportProvenance): ProcessingManifest {
+  const tag = (id: string): string => methodTag(methodRef(id));
+  const ops: ProcessingOpInput[] = terrainMethodIds(p).map((id): ProcessingOpInput => {
+    switch (id) {
+      case 'olv.dtm.idw-fill':
+        return {
+          method: tag(id),
+          params: { coverageMode: p.coverageMode },
+          note: 'grid cell size not captured in this slice',
+        };
+      case 'olv.terrain.vrm': {
+        const cx = p.complexity!;
+        return {
+          method: tag(id),
+          params: {
+            windowCells: cx.vrmWindowCells,
+            // Ground metres only when the run knew them — omission is the
+            // honest form of "metres unknown", mirroring the null on the block.
+            ...(cx.vrmWindowGroundM != null ? { windowGroundM: cx.vrmWindowGroundM } : {}),
+          },
+        };
+      }
+      case 'olv.terrain.tpi': {
+        const cx = p.complexity!;
+        return {
+          method: tag(id),
+          params: {
+            radiusCells: cx.tpiRadiusCells,
+            ...(cx.tpiRadiusGroundM != null ? { radiusGroundM: cx.tpiRadiusGroundM } : {}),
+            zUnit: cx.zUnit,
+          },
+        };
+      }
+      case 'olv.terrain.slope-horn':
+        return {
+          method: tag(id),
+          params: {},
+          note: 'fixed 3×3 stencil; no free parameters',
+        };
+      // SMRF, hold-out validation, and any future id whose params the
+      // provenance does not carry: bind nothing, say so.
+      default:
+        return { method: tag(id), params: {}, note: PARAMS_NOT_CAPTURED_NOTE };
+    }
+  });
+  // The contour geometry method (Contour Studio stamps it as an `id@version`
+  // tag) is a genuine processing step of the exported artifact, appended after
+  // the surface/validation ops it consumes. Interval and shape style are the
+  // final parameters this provenance carries for it.
+  if (p.contourMethod) {
+    const params: Record<string, string | number> = {
+      ...(p.contourIntervalM != null ? { intervalM: p.contourIntervalM } : {}),
+      ...(p.contourStyle ? { style: p.contourStyle } : {}),
+    };
+    ops.push({
+      method: p.contourMethod,
+      params,
+      ...(p.contourMethod.includes('generalize')
+        ? { note: 'generalization tolerance band not captured in this slice' }
+        : {}),
+    });
+  }
+  return buildProcessingManifest({ build: p.build, source: p.source, ops });
+}
+
 /** Format a metre value at 2 dp, or an em-dash when absent. */
 function fmtM(v: number | null | undefined): string {
   return v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—';
@@ -461,6 +567,18 @@ export function provenanceLines(p: ExportProvenance): string[] {
   const record = analysisRecordFromProvenance(p);
   lines.push(kv('Methods', record.methods.map(methodTag).join(', ')));
   lines.push(kv('Record', `schema ${record.schemaVersion} · ${record.contentHash}`));
+  // The verify-only processing manifest: op count + shortened chain head so a
+  // reader can match this stamp against the full manifest in the JSON
+  // metadata (or a session file) and confirm the record is intact. Twelve hex
+  // digits (48 bits) is ample for eyeball matching; the full head lives in
+  // the structured form.
+  const manifest = processingManifestFromProvenance(p);
+  lines.push(
+    kv(
+      'Manifest',
+      `schema ${manifest.schemaVersion} · ${manifest.head.slice(0, 12)} · ${manifest.ops.length} ops · verifiable`,
+    ),
+  );
   lines.push(kv('Note', p.notSurveyGrade));
   lines.push(kv('Evidence', EVIDENCE_GATE_NOTE));
   // The evidence-gate permit that authorised this file (§19). Absent only for a
@@ -533,5 +651,20 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     // derive from — build, CRS, registered methods, evidence verdict, a summary,
     // and a build-stable content fingerprint.
     record: scientificRecordJson(analysisRecordFromProvenance(p)),
+    // The verify-only processing manifest (R5): the ordered, hash-chained
+    // record of the methods + final parameters behind this artifact. Copied
+    // field-by-field (fresh ops array, fresh params objects) so the JSON owns
+    // its own data, like the record and complexity blocks above. Verification
+    // is `verifyProcessingManifest` in src/science/processingManifest.ts.
+    processingManifest: (() => {
+      const m = processingManifestFromProvenance(p);
+      return {
+        schemaVersion: m.schemaVersion,
+        build: m.build,
+        source: m.source,
+        ops: m.ops.map((op) => ({ ...op, params: { ...op.params } })),
+        head: m.head,
+      };
+    })(),
   };
 }

@@ -66,6 +66,21 @@ The v0.5.7 UI evidence badges (Phase 17) map each level via `evidenceBadge(...)`
 to: Not assessed / Analytic / Synthetic / Cross-implementation / External /
 Independently reproduced.
 
+## Processing-provenance manifest
+
+Alongside the gate verdict, every terrain export's provenance embeds a
+**verify-only processing manifest** (`src/science/processingManifest.ts`,
+schema 1): the ordered list of registered methods that produced the artifact,
+each op bound to the final parameters the provenance actually carries, chained
+by SHA-256 hashes seeded from the manifest envelope (schema, build identity,
+source name). `verifyProcessingManifest` recomputes the chain and reports the
+first altered op, so a reviewer holding only the artifact (or a `.olvsession`
+that embeds the same manifest) can confirm the record of *what was run, in
+what order, with which settings* is intact. The claim stops there: it is
+ordering + parameters + tamper-evidence, not an execution recipe — no executor
+consumes it, and an op whose settings never reached the provenance says
+`params not captured in this slice` rather than fabricating them.
+
 ## How to use it
 
 - When adding or changing a product, add/update its register entry in the same

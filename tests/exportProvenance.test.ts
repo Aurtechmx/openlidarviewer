@@ -10,14 +10,17 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   buildExportProvenance,
+  processingManifestFromProvenance,
   provenanceLines,
   provenanceJson,
   NOT_SURVEY_GRADE_NOTE,
   SOFTWARE_NAME,
   type ExportProvenance,
 } from '../src/terrain/export/exportProvenance';
+import { verifyProcessingManifest } from '../src/science/processingManifest';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 /** A complete, full-coverage, export-ready analysis result with everything known. */
@@ -228,5 +231,117 @@ describe('provenanceLines / provenanceJson — shape + identical values', () => 
     const pv = buildExportProvenance(preview, OPTS);
     const line = provenanceLines(pv).find((l) => l.startsWith('Export readiness'));
     expect(line).toMatch(/Preview\s+—\s+.*unknown/i);
+  });
+});
+
+describe('processingManifestFromProvenance — the verify-only manifest assembly', () => {
+  /** readyResult() with the derived-complexity block the VRM/TPI ops bind from. */
+  function complexResult(): AnalyseContoursResult {
+    return {
+      ...(readyResult() as unknown as Record<string, unknown>),
+      complexity: {
+        band: 'moderate',
+        vrmMedian: 0.034, vrmIqr: 0.021, vrmWindowCells: 3, vrmWindowGroundM: 3.2,
+        vrmText: 'median 0.0340 [IQR 0.0210], 3×3-cell window (≈3 m), dimensionless',
+        tpiRadiusCells: 5, tpiRadiusGroundM: 5.5, tpiDominantClass: 'Flat',
+        tpiText: 'Flat, median 0.1 [IQR 0.2] m, 5-cell radius',
+        zUnitLabel: 'm', slopeAspectConvention: 'Horn 1981; aspect downslope from north',
+        confidence: 80, warnings: [],
+      },
+    } as unknown as AnalyseContoursResult;
+  }
+
+  it('orders one op per method the run actually executed, in pipeline order', () => {
+    const p = buildExportProvenance(readyResult(), OPTS);
+    const m = processingManifestFromProvenance(p);
+    expect(m.schemaVersion).toBe(1);
+    expect(m.build).toBe(p.build);
+    expect(m.source).toBe('site');
+    // Accuracy present, complexity absent, no contour method supplied:
+    // ground → grid → hold-out validation, and nothing fabricated beyond that.
+    expect(m.ops.map((op) => op.method)).toEqual([
+      'olv.ground.smrf@1',
+      'olv.dtm.idw-fill@1',
+      'olv.validation.holdout-rmse@2',
+    ]);
+    expect(m.ops.map((op) => op.seq)).toEqual([0, 1, 2]);
+  });
+
+  it('binds the params the provenance actually carries and verifies intact', () => {
+    const p = buildExportProvenance(complexResult(), {
+      ...OPTS,
+      contourMethod: 'olv.contour.analytical@1',
+    });
+    const m = processingManifestFromProvenance(p);
+    const byMethod = new Map(m.ops.map((op) => [op.method, op]));
+    // Grid op binds the coverage scope the provenance holds.
+    expect(byMethod.get('olv.dtm.idw-fill@1')?.params).toMatchObject({ coverageMode: 'full' });
+    // Complexity ops bind their window/radius parameters from the run.
+    expect(byMethod.get('olv.terrain.vrm@1')?.params).toEqual({ windowCells: 3, windowGroundM: 3.2 });
+    expect(byMethod.get('olv.terrain.tpi@1')?.params).toEqual({ radiusCells: 5, radiusGroundM: 5.5, zUnit: 'm' });
+    // The contour geometry op is appended last with the interval + style.
+    const last = m.ops[m.ops.length - 1];
+    expect(last.method).toBe('olv.contour.analytical@1');
+    expect(last.params).toEqual({ intervalM: 1, style: 'smooth' });
+    expect(verifyProcessingManifest(m)).toEqual({ ok: true });
+  });
+
+  it('honestly notes params the provenance does not carry instead of fabricating them', () => {
+    const p = buildExportProvenance(readyResult(), OPTS);
+    const m = processingManifestFromProvenance(p);
+    const smrf = m.ops.find((op) => op.method === 'olv.ground.smrf@1');
+    const holdout = m.ops.find((op) => op.method === 'olv.validation.holdout-rmse@2');
+    expect(smrf?.params).toEqual({});
+    expect(smrf?.note).toBe('params not captured in this slice');
+    expect(holdout?.params).toEqual({});
+    expect(holdout?.note).toBe('params not captured in this slice');
+  });
+
+  it('omits complexity ops and the contour op when the run produced neither', () => {
+    const p = buildExportProvenance(readyResult(), OPTS);
+    const m = processingManifestFromProvenance(p);
+    const methods = m.ops.map((op) => op.method);
+    expect(methods).not.toContain('olv.terrain.vrm@1');
+    expect(methods).not.toContain('olv.terrain.tpi@1');
+    expect(methods.some((id) => id.startsWith('olv.contour.'))).toBe(false);
+  });
+
+  it('is deterministic and survives the JSON round trip every export performs', () => {
+    const p = buildExportProvenance(complexResult(), OPTS);
+    const a = processingManifestFromProvenance(p);
+    const b = processingManifestFromProvenance(p);
+    expect(a).toEqual(b);
+    const back = JSON.parse(JSON.stringify(a)) as typeof a;
+    expect(verifyProcessingManifest(back)).toEqual({ ok: true });
+    expect(back.head).toBe(a.head);
+  });
+
+  it('provenanceJson embeds the manifest beside the record, and it verifies', () => {
+    const p = buildExportProvenance(complexResult(), OPTS);
+    const j = provenanceJson(p);
+    const m = j.processingManifest as import('../src/science/processingManifest').ProcessingManifest;
+    expect(m.schemaVersion).toBe(1);
+    expect(m.ops.length).toBeGreaterThan(0);
+    expect(verifyProcessingManifest(JSON.parse(JSON.stringify(m)) as typeof m)).toEqual({ ok: true });
+    // Beside the record, not replacing it.
+    expect(j.record).toBeTruthy();
+  });
+
+  it('provenanceLines carries exactly ONE Manifest line with schema, head, count', () => {
+    const p = buildExportProvenance(readyResult(), OPTS);
+    const m = processingManifestFromProvenance(p);
+    const manifestLines = provenanceLines(p).filter((l) => l.startsWith('Manifest'));
+    expect(manifestLines).toHaveLength(1);
+    expect(manifestLines[0]).toBe(
+      `Manifest          schema 1 · ${m.head.slice(0, 12)} · 3 ops · verifiable`,
+    );
+  });
+
+  it('never uses re-execution wording anywhere in the provenance module', () => {
+    const src = readFileSync(
+      new URL('../src/terrain/export/exportProvenance.ts', import.meta.url),
+      'utf8',
+    );
+    expect(/replay/i.test(src)).toBe(false);
   });
 });
