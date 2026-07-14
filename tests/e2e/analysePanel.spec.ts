@@ -112,30 +112,52 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(page.locator('.olv-analyse-reco', { hasText: /Recommended grid/i })).toBeVisible();
   await expect(page.locator('.olv-analyse-reco', { hasText: /contour interval/i })).toBeVisible();
 
-  // Export gating: a synthetic dense grid has coverage but no CRS, so the
-  // DTM gate lands on `previewOnly` (not survey-grade). By design that still
-  // offers a clearly-labelled preview export rather than disabling it — the
-  // button stays enabled and the note flags it as not survey-grade. (A
-  // `blocked` gate is what disables the buttons; that path is unit-tested.)
-  const geojson = page.locator('.olv-analyse-dl', { hasText: 'GEOJSON' });
+  // Export gating (v0.5.9): the export controls no longer sit inline. They are
+  // the Contour Studio workspace's export bar, mounted inside the gated
+  // `.olv-analyse-contour-deliverable` container, which starts `olv-hidden` and
+  // is revealed only when the Terrain Products launcher's action fires. The
+  // launcher mounts lazily (a dynamic chunk) once the analysis completes, so
+  // wait for its action button, then click it to open the deliverable. For this
+  // synthetic scan (coverage but no CRS) the launch state is `exploratory`, so
+  // the action reads "Create Exploratory Contours" and the revealed export
+  // buttons stay enabled — only an `unavailable` state disables them (that path
+  // is unit-tested). The retired inline `.olv-analyse-dl` row still exists as a
+  // set of DETACHED backing click-targets the workspace dispatches to, so it is
+  // no longer asserted on here.
+  const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
+  await expect(launch).toBeVisible({ timeout: 20_000 });
+  await expect(launch).toBeEnabled();
+  await launch.click();
+  // The gated deliverable is revealed (loses `olv-hidden`), surfacing the real
+  // shipped export surface — the workspace `.olv-cs-export-btn` bar.
+  await expect(page.locator('.olv-analyse-contour-deliverable')).not.toHaveClass(/olv-hidden/);
+
+  // Vector export: the GeoJSON button is visible and (exploratory ⇒ not blocked)
+  // enabled.
+  const geojson = page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ });
   await expect(geojson).toBeVisible();
   await expect(geojson).toBeEnabled();
-  // The printable map-sheet PDF export (renamed "Export Contours") is offered
-  // alongside the vector formats and opens the pre-export dialog.
-  await expect(page.locator('.olv-analyse-dl', { hasText: 'Export Contours' })).toBeVisible();
+  // The printable map-sheet export is the "Map sheet → PDF" button, offered
+  // alongside the vector formats (it opens the pre-export dialog via the panel's
+  // backing map-PDF target).
+  const mapPdf = page.locator('.olv-cs-export-btn', { hasText: /^PDF$/ });
+  await expect(mapPdf).toBeVisible();
+  await expect(mapPdf).toBeEnabled();
   // The "not survey-grade" honesty caveat must be visible. When BOTH the DEM and
   // contour-preview caveats apply, P12 consolidates them into ONE banner
-  // (`.olv-analyse-dem-note`) and leaves the standalone contour note empty; when
-  // only the contour caveat applies it stays in `.olv-analyse-export-note`.
-  // Assert the disclosure wherever the consolidation places it.
+  // (`.olv-analyse-dem-note`, which lives inside the now-revealed deliverable)
+  // and leaves the standalone contour note empty; when only the contour caveat
+  // applies it stays in `.olv-analyse-export-note`. Assert the disclosure
+  // wherever the consolidation places it.
   await expect(
     page
       .locator('.olv-analyse-export-note, .olv-analyse-dem-note')
       .filter({ hasText: /not survey-grade/i }),
   ).toBeVisible();
-  // The DEM raster package is offered as the primary export and stays enabled
-  // regardless of the contour gate (a bare-earth raster is valid either way).
-  const dem = page.locator('.olv-analyse-dl', { hasText: 'DEM (ZIP)' });
+  // The DEM raster package is offered as the primary data-package export and
+  // stays enabled regardless of the contour gate (a bare-earth raster is valid
+  // either way).
+  const dem = page.locator('.olv-cs-export-btn', { hasText: /^DEM \(ZIP\)$/ });
   await expect(dem).toBeVisible();
   await expect(dem).toBeEnabled();
 });
