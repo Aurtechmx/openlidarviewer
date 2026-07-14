@@ -511,6 +511,17 @@ export class AnalysePanel {
     this._staleNotice.classList.toggle('olv-hidden', !show);
   }
 
+  /**
+   * The CURRENT analysis result, or null when none has run (or the scan was
+   * cleared). Exposed for the session exporter: the `.olvsession` embeds the
+   * verify-only processing manifest derived from this result's provenance, and
+   * main.ts owns the session-export flow while this panel owns the result —
+   * a read-only accessor is the narrowest seam between the two.
+   */
+  currentResult(): AnalyseContoursResult | null {
+    return this._result;
+  }
+
   /** Re-render from a fresh analysis result (or clear when null). */
   update(result: AnalyseContoursResult | null): void {
     this._result = result;
