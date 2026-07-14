@@ -28,6 +28,41 @@ import {
   mapScaleRatio,
   type Box,
 } from '../../terrain/contour/mapSheetLayout';
+import { evidenceNote, evidenceStatus } from '../../validation/exportEvidenceNote';
+
+/**
+ * The claim the map sheet stands on (§19). A printed contour map sheet is the
+ * CONTOURS product — synthetically validated (E3) but below its required E4
+ * cross-implementation bar, so the gate marks it exploratory. The sheet stamps
+ * that verdict in its collar (see {@link mapSheetEvidenceNote}) so a printed
+ * deliverable carries the same honest status as the GeoJSON / DXF / DEM exports
+ * of the same scan, never reading as a validated survey product.
+ */
+export const MAP_SHEET_CLAIM = 'CONTOURS';
+
+/**
+ * The evidence-gate note for the map sheet, DERIVED from the one gate (never
+ * asserted). Pure + exported so the collar wording can be asserted without
+ * rendering a PDF. Defaults to the CONTOURS claim; a caller may pass another id
+ * for a differently-sourced sheet.
+ */
+export function mapSheetEvidenceNote(claimId: string = MAP_SHEET_CLAIM): string {
+  return evidenceNote(claimId);
+}
+
+/**
+ * The compact collar line drawn on the sheet — "Evidence: exploratory export"
+ * etc. Concise so it fits the title-block strip; the full sentence is available
+ * via {@link mapSheetEvidenceNote} for anywhere with room.
+ */
+export function mapSheetEvidenceLine(claimId: string = MAP_SHEET_CLAIM): string {
+  const status = evidenceStatus(claimId);
+  return status === 'validated'
+    ? 'Evidence: validated export (meets required evidence level).'
+    : status === 'refused'
+      ? 'Evidence: export not permitted at current evidence level.'
+      : 'Evidence: exploratory export - below required evidence level.';
+}
 
 export type SheetSize = 'letter' | 'a4' | 'a3';
 export type SheetOrientation = 'portrait' | 'landscape';
@@ -528,5 +563,19 @@ function drawTitleBlock(
     : input.readiness ?? 'previewOnly';
   const note = readinessNote(readiness);
   rightText(note, rxr, topY - 90, 6.5, bold, readiness === 'ready' ? INK : rgb(0.6, 0.2, 0.1));
+  // Evidence-gate verdict (§19) — the SAME central gate the other exports stamp,
+  // so a printed sheet carries the honest claim status (exploratory for CONTOURS
+  // today) and can never read as a validated deliverable. Drawn beneath the
+  // readiness note; wrapped so a long verdict degrades gracefully in the strip.
+  const evLine = mapSheetEvidenceLine();
+  const evColor = evidenceStatus(MAP_SHEET_CLAIM) === 'validated' ? DIM : rgb(0.6, 0.2, 0.1);
+  const evWrapped = wrapTextToWidth(
+    evLine,
+    (PW - M - 4) - (M + (PW - 2 * M) * 0.46),
+    6,
+    (s, sz) => font.widthOfTextAtSize(safe(s), sz),
+    2,
+  );
+  evWrapped.forEach((ln, i) => rightText(ln, rxr, topY - 101 - i * 8, 6, font, evColor));
   rightText('OpenLiDARViewer - terrain analysis', rxr, M - 10 + 2, 6, font, DIM);
 }

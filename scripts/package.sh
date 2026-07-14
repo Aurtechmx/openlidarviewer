@@ -71,14 +71,25 @@ cp "$TMP/$DEPLOY" "$OUT_DIR/$DEPLOY"
 verify_zip "$OUT_DIR/$DEPLOY"
 
 # ── Source archive: working tree minus build/vcs/deps, web-safe modes ──────
+# The source archive extracts into ONE clean top-level folder
+# (openlidarviewer-vX.Y.Z/) rather than spraying files into the CWD.
 echo "→ Assembling source archive…"
-mkdir -p "$TMP/source"
+SRC_PREFIX="openlidarviewer-v${VERSION}"
+mkdir -p "$TMP/source/$SRC_PREFIX"
 # Use git to enumerate tracked files when available; fall back to rsync.
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  git archive --format=tar HEAD | tar -x -C "$TMP/source"
+  git archive --format=tar --prefix="$SRC_PREFIX/" HEAD | tar -x -C "$TMP/source"
 else
-  rsync -a --exclude node_modules --exclude dist --exclude .git \
-        --exclude 'release' --exclude '*.log' ./ "$TMP/source/"
+  # No git: enumerate with rsync. Exclude build/vcs/deps AND any generated
+  # test/coverage output that a prior local run may have produced — otherwise a
+  # source archive built after an E2E run would ship Playwright traces / coverage.
+  rsync -a \
+        --exclude node_modules --exclude dist --exclude .git \
+        --exclude 'release' --exclude '*.log' \
+        --exclude 'test-results' --exclude 'playwright-report' \
+        --exclude 'coverage' --exclude '.tmp' --exclude '.cache' \
+        --exclude '.DS_Store' \
+        ./ "$TMP/source/$SRC_PREFIX/"
 fi
 find "$TMP/source" -type d -exec chmod 755 {} +
 find "$TMP/source" -type f -exec chmod 644 {} +
@@ -88,7 +99,51 @@ SOURCE="openlidarviewer-v${VERSION}-source-${TS}.zip"
 cp "$TMP/$SOURCE" "$OUT_DIR/$SOURCE"
 verify_zip "$OUT_DIR/$SOURCE"
 
+# ── Release provenance: checksums + a frozen manifest tying tag↔zip↔hash ────
+# So a reviewer can verify integrity, and the release record pins exactly which
+# commit + environment produced these artifacts.
+echo "→ Writing checksums + release manifest…"
+# Tri-state git provenance: "no git" is NOT the same as "dirty". A source-archive
+# build (no .git) reports gitAvailable:false with null commit/dirty, rather than
+# falsely claiming a dirty working tree.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  GIT_AVAILABLE=true
+  COMMIT="\"$(git rev-parse HEAD)\""
+  if git diff --quiet 2>/dev/null; then DIRTY=false; else DIRTY=true; fi
+  SOURCE_KIND="git-checkout"
+else
+  GIT_AVAILABLE=false
+  COMMIT=null
+  DIRTY=null
+  SOURCE_KIND="source-archive"
+fi
+NODE_V="$(node -v 2>/dev/null || echo unknown)"
+(
+  cd "$OUT_DIR"
+  shasum -a 256 "$DEPLOY" "$SOURCE" > SHA256SUMS
+  DEPLOY_SHA="$(shasum -a 256 "$DEPLOY" | cut -d' ' -f1)"
+  SOURCE_SHA="$(shasum -a 256 "$SOURCE" | cut -d' ' -f1)"
+  cat > "release-manifest-v${VERSION}.json" <<JSON
+{
+  "project": "openlidarviewer",
+  "version": "${VERSION}",
+  "sourceKind": "${SOURCE_KIND}",
+  "gitAvailable": ${GIT_AVAILABLE},
+  "gitCommit": ${COMMIT},
+  "dirtyWorkingTree": ${DIRTY},
+  "nodeVersion": "${NODE_V}",
+  "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "artifacts": {
+    "deploy": { "file": "${DEPLOY}", "sha256": "${DEPLOY_SHA}" },
+    "source": { "file": "${SOURCE}", "sha256": "${SOURCE_SHA}" }
+  }
+}
+JSON
+)
+
 echo
 echo "✓ Packaged v${VERSION}:"
 echo "    $OUT_DIR/$DEPLOY"
 echo "    $OUT_DIR/$SOURCE"
+echo "    $OUT_DIR/SHA256SUMS"
+echo "    $OUT_DIR/release-manifest-v${VERSION}.json"

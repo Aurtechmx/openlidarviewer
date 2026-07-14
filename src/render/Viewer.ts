@@ -74,8 +74,14 @@ import { keyFromId } from '../io/copc/voxelKey';
 import { intensityFilterUniform } from './intensityFilterUniform';
 import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
-import { colorForMode, defaultMode } from './colorModes';
+import { colorForMode, defaultMode, rampRangeForMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
+import {
+  buildActiveColorbarSpec,
+  burnInColorbarLayout,
+  type ActiveColorbar,
+} from './activeColorbar';
+import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
@@ -169,6 +175,9 @@ import { computeScaleBar, pixelsPerMetreAt } from './scaleBar';
 // dependency-free leaf, so this static import does NOT merge the lazy
 // pngWorldFile/Studio chunks into the shell bundle.
 import { frameTopDownOrtho } from './export/orthoFraming';
+// Pure size/aspect planning for the honest custom-resolution figure render
+// (the same dependency-free-leaf pattern as orthoFraming above).
+import { planFigureRender } from './export/figureFraming';
 import { MeasureController } from './measure/MeasureController';
 import {
   sampleProfile,
@@ -263,6 +272,7 @@ import type {
   ExportOptions,
   ExportResult,
   ExportSceneAdapter,
+  FigureViewContext,
 } from '../export/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -413,6 +423,16 @@ export interface SnapshotOptions {
    * and draws a contrasting bar + label.
    */
   scaleBar?: boolean;
+  /**
+   * Burn the labelled colorbar for the ACTIVE continuous colour mode
+   * (elevation / intensity / gpsTime / returnNumber) onto the right edge of
+   * the snapshot. Self-gating: categorical modes (rgb / classification /
+   * normal / density / coverage / confidence) draw nothing, so callers can
+   * request it unconditionally. The values come from the SAME spec-builder
+   * the on-screen legend overlay renders ({@link Viewer.activeColorbar}),
+   * so the exported figure and the live view can never disagree.
+   */
+  colorbar?: boolean;
 }
 
 /**
@@ -1747,6 +1767,10 @@ export class Viewer {
 
     this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
     this._configureForClouds(cloud);
+    // A first cloud can arrive already in a scalar default mode (elevation
+    // on a colourless scan) without any setColorMode call — the legend must
+    // appear for it too.
+    this._notifyColorContextChanged();
     return id;
   }
 
@@ -1986,6 +2010,11 @@ export class Viewer {
     this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null };
     this._streamingFrame = 0;
     this._configureForStreaming(cloud);
+    // A streaming open can land directly in a scalar default mode
+    // (elevation on an RGB-less COPC) with no setStreamingColorMode call —
+    // surface the legend for it. Later range reseeds refresh through the
+    // host's node-ready hook.
+    this._notifyColorContextChanged();
   }
 
   /** Detach and fully dispose the current streaming cloud, if any. */
@@ -2005,6 +2034,8 @@ export class Viewer {
     // cloud's bounds after detach.
     this._orbitClampAabb = this._visibleCloudAabb();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    // The streaming legend (if shown) no longer describes anything.
+    this._notifyColorContextChanged();
   }
 
   /** Whether a streaming COPC cloud is currently open. */
@@ -2041,6 +2072,9 @@ export class Viewer {
   /** Switch the streaming cloud's colour mode. */
   setStreamingColorMode(mode: ColorMode): void {
     this._streaming?.renderer.setColorMode(mode);
+    // The legend follows the streaming mode too (both colour paths must
+    // drive the same overlay — see onColorContextChanged).
+    if (this._streaming) this._notifyColorContextChanged();
   }
 
   /** Apply a new streaming quality preset (point/concurrency budgets). */
@@ -2121,6 +2155,132 @@ export class Viewer {
     return first ? first.mode : 'rgb';
   }
 
+  // ── Colorbar legend (live overlay + snapshot burn-in) ────────────────────
+
+  /**
+   * Fired after anything that can change what the colorbar legend should
+   * say: a colour-mode swap (static or streaming), a percentile-trim change,
+   * a cloud arriving/leaving, or the elevation unit resolving. The host
+   * subscribes once and re-reads {@link activeColorbar} — the Viewer never
+   * touches the overlay DOM itself.
+   */
+  onColorContextChanged?: () => void;
+
+  /** Guarded dispatch — a host throw must never break a colour-mode swap. */
+  private _notifyColorContextChanged(): void {
+    if (!this.onColorContextChanged) return;
+    try {
+      this.onColorContextChanged();
+    } catch {
+      /* a legend refresh failure must never break the render path */
+    }
+  }
+
+  /**
+   * Elevation unit label pushed in by the host from the CRS service (the
+   * same resolved CRS every panel reads, including user overrides — which
+   * per-cloud file metadata alone would miss). `null` = unknown, and the
+   * legend then shows bare numbers (honesty rule: never a guessed "m").
+   */
+  private _elevationUnitLabel: string | null = null;
+
+  /** Set the CRS-resolved elevation unit label ('m' / 'ft'), or null = unknown. */
+  setElevationUnit(label: string | null): void {
+    if (label === this._elevationUnitLabel) return;
+    this._elevationUnitLabel = label;
+    this._notifyColorContextChanged();
+  }
+
+  /**
+   * The colorbar for the ACTIVE colour mode, or null when the mode carries
+   * no continuous legend. This is the single source both consumers read:
+   * the live overlay (via the host) and the snapshot burn-in — so the PNG
+   * a user exports always matches the legend they saw.
+   *
+   * Static clouds: the range comes from {@link rampRangeForMode} — the very
+   * function `colorForMode` painted with — evaluated against the FIRST
+   * static cloud (the same dispatch `activeColorMode` uses; in the rare
+   * multi-cloud scene each cloud ramps its own window and the legend
+   * honestly describes the primary one). Elevation adds the cloud's origin
+   * back so the labels read world/source values, not render-local ones.
+   *
+   * Streaming clouds: the ranges are read VERBATIM from the renderer's
+   * seeded cloud-global windows — recomputing them here would race the
+   * reseed. Before the first seed only elevation is labelable (header cube
+   * extent, no trim); the other scalar fields are 0..1 placeholders and
+   * yield null. The seeded elevation/gpsTime windows come from the
+   * percentile-clipped core (default p5–p95), which is what the note
+   * discloses. NOTE: the streaming reseed path does not (yet) honour the
+   * height-trim slider — it always clips at the default p5–p95 — so the
+   * legend reports that fixed window rather than pretending the slider
+   * applied (see StreamingRenderer.onNodeReady).
+   */
+  activeColorbar(): ActiveColorbar | null {
+    const mode = this.activeColorMode();
+    if (this._streaming) {
+      const r = this._streaming.renderer.colorRanges;
+      const seeded = this._streaming.renderer.colorRangesSeeded;
+      // Streaming sources are LAS-derived and Z-up by spec; positions are
+      // render-local, so add the render origin's Z back for display.
+      const zOff = this._streaming.cloud.renderOrigin[2];
+      let range: { min: number; max: number } | null = null;
+      let trim = 0;
+      switch (mode) {
+        case 'elevation':
+          range = { min: r.minZ + zOff, max: r.maxZ + zOff };
+          // Seeded window = computeElevationRange defaults (p5–p95);
+          // pre-seed = raw header cube (no trim to disclose).
+          trim = seeded ? 5 : 0;
+          break;
+        case 'intensity':
+          range = seeded ? { min: r.minIntensity, max: r.maxIntensity } : null;
+          break;
+        case 'gpsTime':
+          range = seeded ? { min: r.minGpsTime, max: r.maxGpsTime } : null;
+          // computeScalarRange defaults — see StreamingRenderer.onNodeReady.
+          trim = 5;
+          break;
+        case 'returnNumber':
+          range = seeded ? { min: r.minReturnNumber, max: r.maxReturnNumber } : null;
+          break;
+        default:
+          return null;
+      }
+      return buildActiveColorbarSpec({
+        mode,
+        range,
+        trimPercent: trim,
+        elevationUnit: this._elevationUnitLabel,
+      });
+    }
+    const entry = this._clouds.values().next().value;
+    if (!entry) return null;
+    const upAxis = isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1;
+    const range = rampRangeForMode(mode, entry.cloud, {
+      heightPercentileTrim: this._heightPercentileTrim,
+      upAxis,
+    });
+    if (!range) return null;
+    // Elevation ranges come out in render-local coordinates (the loader
+    // subtracted `origin`); add the up-axis origin back so the legend reads
+    // true world/source heights — the same reconstruction elevationExtent()
+    // performs for the filter controls.
+    const display =
+      mode === 'elevation'
+        ? {
+            min: range.min + entry.cloud.origin[upAxis],
+            max: range.max + entry.cloud.origin[upAxis],
+          }
+        : range;
+    return buildActiveColorbarSpec({
+      mode,
+      range: display,
+      trimPercent:
+        mode === 'elevation' ? this._heightPercentileTrim : mode === 'gpsTime' ? 5 : 0,
+      elevationUnit: this._elevationUnitLabel,
+    });
+  }
+
   /**
    * Remove a previously added cloud from the scene and free its GPU resources.
    */
@@ -2140,6 +2300,8 @@ export class Viewer {
     // doesn't leave the camera clamping to its ghost bounds.
     this._orbitClampAabb = this._visibleCloudAabb();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    // Removing the active cloud can hide (or re-target) the legend.
+    this._notifyColorContextChanged();
   }
 
   /** Return an array of all currently loaded cloud IDs. */
@@ -2427,6 +2589,8 @@ export class Viewer {
       entry.colorAttr.needsUpdate = true;
       void id; // silence the unused-binding lint
     }
+    // A trim change moves the elevation ramp window — the legend must follow.
+    this._notifyColorContextChanged();
   }
 
   /** Read the current percentile-trim setting. */
@@ -2553,6 +2717,9 @@ export class Viewer {
       const defaultMode = this._streaming.cloud.defaultColorMode();
       if (defaultMode === 'rgb' && this._streaming.renderer.colorMode !== 'rgb') {
         this._streaming.renderer.setColorMode('rgb');
+        // Direct renderer call bypasses setStreamingColorMode — notify the
+        // legend explicitly so the auto-switch to RGB hides it.
+        this._notifyColorContextChanged();
       }
     }
   }
@@ -2754,6 +2921,8 @@ export class Viewer {
     // Color buffer just changed — make sure the idle-render throttle
     // doesn't swallow the next frame so the user sees the new colours.
     this._bumpRenderActivity();
+    // The legend describes the active mode's ramp — refresh it.
+    this._notifyColorContextChanged();
   }
 
   /**
@@ -4523,6 +4692,11 @@ export class Viewer {
     const supersample =
       options?.supersample === 2 || options?.supersample === 4 ? options.supersample : 1;
     const wantScaleBar = options?.scaleBar === true;
+    // Colorbar burn-in — resolved up front so a categorical mode (which
+    // yields null) still takes the untouched fast path below. The spec is
+    // the SAME one the live overlay renders (activeColorbar), so the
+    // exported figure always matches the legend on screen.
+    const activeBar = options?.colorbar === true ? this.activeColorbar() : null;
 
     // Fast path: no overlays + no upscale + no scale bar — return the
     // GL canvas untouched at native resolution.
@@ -4532,6 +4706,7 @@ export class Viewer {
       !wantInspector &&
       !wantProbe &&
       !wantScaleBar &&
+      activeBar === null &&
       supersample === 1
     ) {
       return this._canvasToBlob(gl);
@@ -4593,6 +4768,15 @@ export class Viewer {
       if (bar.stepPixels > 0) {
         drawScaleBar(ctx, out, bar);
       }
+    }
+
+    // Colorbar legend burn-in — right edge, vertically centred, so it can
+    // never collide with the scale bar (bottom-left), the Studio's
+    // scan-report card (composed bottom-right after this snapshot), or the
+    // class-scope banner (top). Values and ramp come from the same
+    // `activeColorbar()` spec the on-screen overlay shows.
+    if (activeBar) {
+      drawColorbar(ctx, out, activeBar);
     }
 
     // LiveProbe — same compositing pattern. The probe stores its last known
@@ -4836,6 +5020,7 @@ export class Viewer {
         annotations: boolean;
         inspector: boolean;
         probe: boolean;
+        colorbar?: boolean;
       }): Promise<Blob> {
         // Delegate to the live snapshot pipeline so the export matches the
         // on-screen view EXACTLY — EDL, perspective camera, overlays, all
@@ -4849,6 +5034,9 @@ export class Viewer {
           annotations: options.annotations,
           inspector: options.inspector,
           probe: options.probe,
+          // Colorbar legend for continuous scalar exports; self-gating
+          // inside snapshot(), so categorical modes are untouched.
+          colorbar: options.colorbar === true,
         });
       },
       sourceName(): string {
@@ -4982,6 +5170,19 @@ export class Viewer {
         if (!aabb) return null;
         return viewer._renderFramedTopDown(aabb, options.widthPx);
       },
+      renderFigure(options: { widthPx?: number; heightPx?: number }): Promise<{
+        blob: Blob;
+        widthPx: number;
+        heightPx: number;
+      } | null> {
+        // The honest-resolution seam: `runStudioExport` routes explicit
+        // width/height requests here so "2048 px" means 2048 rendered
+        // pixels, not an upscaled copy of the live canvas.
+        return viewer.renderFigure(options);
+      },
+      figureViewContext(): FigureViewContext {
+        return viewer.figureViewContext();
+      },
     };
   }
 
@@ -5040,22 +5241,50 @@ export class Viewer {
     // Output size: requested width (default 2048), height from the
     // footprint aspect so pixels stay square to within the 1 px rounding the
     // world file's independent X/Y scales absorb exactly.
-    const outW = framing.widthPx;
-    const outH = framing.heightPx;
+    const blob = await this._renderAtSize(framing.widthPx, framing.heightPx, () => {
+      this._renderer.render(this._scene, camera);
+    });
+    return {
+      blob,
+      widthPx: framing.widthPx,
+      heightPx: framing.heightPx,
+      // The frustum-derived rectangle — exactly what the camera framed.
+      extent: framing.extent,
+    };
+  }
 
+  /**
+   * The proven offscreen-capture primitive every true re-render path uses:
+   * size the live renderer's drawing buffer to EXACTLY `outW × outH`
+   * (pixel ratio 1 — the requested pixels are the delivered pixels), run
+   * two render+present cycles, encode the canvas to a PNG Blob, and restore
+   * the live size in a `finally` so a throw can never leave the on-screen
+   * canvas at export resolution. Extracted verbatim from
+   * `_renderFramedTopDown` (whose behaviour is pinned by the world-file
+   * tests) so `renderFigure` reuses the identical mechanics instead of a
+   * second, drifting copy.
+   *
+   * Two render+present cycles for the same WebGPU buffer-flush reason
+   * `snapshot()` documents: a single un-awaited render captures the
+   * previous frame.
+   *
+   * `renderFrame` performs exactly one render call with whatever camera the
+   * caller prepared — this primitive owns the buffer round-trip, never the
+   * camera.
+   */
+  private async _renderAtSize(
+    outW: number,
+    outH: number,
+    renderFrame: () => void,
+  ): Promise<Blob> {
     const gl = this._renderer.domElement as HTMLCanvasElement;
     const prevSize = this._renderer.getSize(new THREE.Vector2());
     const prevRatio = this._renderer.getPixelRatio();
     try {
-      // Pixel ratio 1 so the drawing buffer is EXACTLY outW × outH — the
-      // world file divides the extent by these pixel counts.
       this._renderer.setPixelRatio(1);
       this._renderer.setSize(outW, outH, false);
-      // Two render+present cycles for the same WebGPU buffer-flush reason
-      // `snapshot()` documents: a single un-awaited render captures the
-      // previous frame.
       const present = (): Promise<void> => {
-        this._renderer.render(this._scene, camera);
+        renderFrame();
         return new Promise((resolve) => {
           if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => resolve());
@@ -5066,20 +5295,98 @@ export class Viewer {
       };
       await present();
       await present();
-      const blob = await this._canvasToBlob(gl);
-      return {
-        blob,
-        widthPx: outW,
-        heightPx: outH,
-        // The frustum-derived rectangle — exactly what the camera framed.
-        extent: framing.extent,
-      };
+      return await this._canvasToBlob(gl);
     } finally {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);
       // Repaint the live view at the restored size on the next frames.
       this._bumpRenderActivity();
     }
+  }
+
+  /**
+   * TRUE re-render of the LIVE perspective view at an explicit pixel size —
+   * the honest-resolution path behind the Studio's width/height options.
+   *
+   * Why this exists: `snapshot()` copies the on-screen drawing buffer, so
+   * it can only ever deliver the canvas resolution (its `supersample`
+   * option upscales the 2-D composite — the points themselves stay at
+   * canvas resolution). The Studio presets used to advertise "2048 px" on
+   * top of that copy: a lie. This method renders the scene AGAIN at the
+   * requested size with the live camera re-aspected to the target, so the
+   * delivered pixels are real rendered geometry.
+   *
+   * Renders DIRECT (no EDL post pass) — the EDL pipeline's render targets
+   * are sized to the live canvas, and depth-edge shading is a reading aid,
+   * not data. No overlays are baked either: the overlay compositor is bound
+   * to the live canvas geometry (see `snapshot()`), and re-projecting it
+   * against a re-aspected camera is follow-up work.
+   *
+   * The camera aspect round-trip is `try/finally`-wrapped exactly like the
+   * renderer size round-trip inside `_renderAtSize`, so a throw cannot
+   * leave the live camera re-aspected.
+   *
+   * Returns null when no size can be planned (invalid request). Size and
+   * aspect maths live in the pure, unit-tested `planFigureRender` leaf.
+   */
+  async renderFigure(options: {
+    widthPx?: number;
+    heightPx?: number;
+  }): Promise<{ blob: Blob; widthPx: number; heightPx: number } | null> {
+    await this.ready;
+    const gl = this._renderer.domElement as HTMLCanvasElement;
+    const plan = planFigureRender(
+      { widthPx: options.widthPx, heightPx: options.heightPx },
+      { widthPx: gl.width, heightPx: gl.height },
+    );
+    if (!plan) return null;
+
+    const camera = this._camera;
+    const prevAspect = camera.aspect;
+    try {
+      camera.aspect = plan.aspect;
+      camera.updateProjectionMatrix();
+      const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
+        this._renderer.render(this._scene, camera);
+      });
+      return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
+    } finally {
+      camera.aspect = prevAspect;
+      camera.updateProjectionMatrix();
+    }
+  }
+
+  /**
+   * The live-view facts a figure's PNG provenance records — CRS, colour
+   * mode, camera pose, active clip. Everything here is what the app can
+   * honestly assert right now; a fact the Viewer cannot vouch for is null
+   * and the provenance builder omits its chunk entirely (never fabricated).
+   * Consumed by the Studio pipeline through the export adapter below and by
+   * `saveSnapshot` in main.ts through the lazy Studio chunk.
+   */
+  figureViewContext(): FigureViewContext {
+    const adapter = this._buildExportAdapter();
+    const cam = this._camera;
+    const target = this._controls.target;
+    const clip = this._clip;
+    return {
+      crs: adapter.crsLabel(),
+      colorMode: adapter.currentColorMode(),
+      camera: {
+        position: [cam.position.x, cam.position.y, cam.position.z],
+        target: [target.x, target.y, target.z],
+        fovDeg: cam.fov,
+      },
+      // Only an ENABLED clip is a fact about the rendered pixels — a
+      // dormant box changes nothing and therefore records nothing.
+      clip: clip?.enabled
+        ? {
+            mode: clip.mode,
+            min: [clip.box.min[0], clip.box.min[1], clip.box.min[2]],
+            max: [clip.box.max[0], clip.box.max[1], clip.box.max[2]],
+          }
+        : null,
+    };
   }
 
   /**
@@ -6696,5 +7003,103 @@ function drawScaleBar(
   ctx.strokeText(bar.label, x0, labelY);
   ctx.fillStyle = '#ffffff';
   ctx.fillText(bar.label, x0, labelY);
+  ctx.restore();
+}
+
+/**
+ * Burn the active colour mode's labelled colorbar onto the snapshot —
+ * a vertical ramp on the right edge with the field name + unit above it,
+ * tick labels to its left, and the honesty note (percentile window /
+ * gpsTime normalisation) beneath the bar.
+ *
+ * RASTERISES the same data the SVG generator serialises: the ramp segments
+ * come from {@link colorbarStops} (which samples the exact per-mode painting,
+ * grayscale included) and the tick values from {@link niceTicks} — so the
+ * burned-in legend and the on-screen SVG can never disagree. The geometry is
+ * the pure {@link burnInColorbarLayout} (unit-tested separately); this
+ * function only owns the ctx calls, mirroring `drawScaleBar`'s split. Text
+ * is white with a dark stroke — the same treatment as the scale bar — so it
+ * reads on any cloud colour without needing a backing card.
+ */
+function drawColorbar(
+  ctx: CanvasRenderingContext2D,
+  out: HTMLCanvasElement,
+  active: ActiveColorbar,
+): void {
+  const spec = active.spec;
+  const L = burnInColorbarLayout(out.width, out.height);
+  const range = spec.max - spec.min;
+  if (!(range > 0)) return; // defensive — the spec-builder already refuses this
+
+  ctx.save();
+  const font = (px: number, weight = 400): string =>
+    `${weight} ${px}px system-ui, -apple-system, sans-serif`;
+  const strokedText = (text: string, x: number, y: number): void => {
+    // Dark stroke under white fill — legible on light and dark clouds alike.
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(13, 17, 23, 0.85)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, x, y);
+  };
+
+  // Title (field name + unit when known) above the bar, right-aligned to the
+  // bar's right edge so long labels grow inward, never off-canvas.
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.font = font(L.titleFontSize, 600);
+  const title = spec.unit ? `${spec.label} (${spec.unit})` : spec.label;
+  const titleY = L.barY - Math.round(L.titleFontSize * 0.6);
+  strokedText(title, L.barX + L.barWidth, titleY);
+  // Honesty note under the bar, smaller — e.g. "p5–p95 window".
+  if (active.note) {
+    ctx.font = font(Math.max(9, Math.round(L.fontSize * 0.85)));
+    strokedText(active.note, L.barX + L.barWidth, L.barY + L.barHeight + Math.round(L.fontSize * 1.4));
+  }
+
+  // The ramp — adjacent rects sampled from the SAME stops the SVG gradient
+  // uses, bottom = min → top = max. 64 samples ≈ visually continuous while
+  // staying trivially rasterisable on a bare 2D context (no gradient object,
+  // so the draw also works under the mock contexts tests use).
+  const stops = colorbarStops(spec.palette, 64);
+  for (let i = 0; i < stops.length - 1; i++) {
+    const t0 = stops[i].t;
+    const t1 = stops[i + 1].t;
+    const yTop = L.barY + (1 - t1) * L.barHeight;
+    const h = (t1 - t0) * L.barHeight;
+    const [r, g, b] = stops[i].rgb;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    // +1px overlap hides seam hairlines from fractional rects.
+    ctx.fillRect(L.barX, yTop, L.barWidth, h + 1);
+  }
+  // White outline so the bar reads against dark clouds (scale-bar treatment).
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(L.barX - 0.5, L.barY - 0.5, L.barWidth + 1, L.barHeight + 1);
+
+  // Tick labels to the LEFT of the bar (the right side is the canvas edge).
+  // The exact endpoints are always labelled — the legend MUST state min/max
+  // — and nice interior ticks fill in between, skipping any that would
+  // collide with the endpoint labels.
+  ctx.font = font(L.fontSize);
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const labelX = L.barX - L.tickLength - 4;
+  const yOf = (v: number): number => L.barY + (1 - (v - spec.min) / range) * L.barHeight;
+  const drawTick = (v: number): void => {
+    const y = yOf(v);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(L.barX - L.tickLength, Math.round(y) - 1, L.tickLength, 2);
+    strokedText(formatColorbarValue(v), labelX, y);
+  };
+  drawTick(spec.min);
+  drawTick(spec.max);
+  const clearance = L.fontSize * 1.1;
+  for (const v of niceTicks(spec.min, spec.max, spec.ticks ?? 5)) {
+    const y = yOf(v);
+    if (Math.abs(y - yOf(spec.min)) < clearance) continue;
+    if (Math.abs(y - yOf(spec.max)) < clearance) continue;
+    drawTick(v);
+  }
   ctx.restore();
 }

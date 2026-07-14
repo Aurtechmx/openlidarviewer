@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildTerrainReportPdf } from '../src/render/measure/terrainReportPdf';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
+import { extractTextOps } from './pdfTextOps';
 
 function readyResult(): AnalyseContoursResult {
   return {
@@ -128,5 +129,76 @@ describe('buildTerrainReportPdf', () => {
     const content = buildTerrainReportContent(readyResult(), OPTS);
     const bytes = await buildTerrainReportPdf(content);
     expect(isPdf(bytes)).toBe(true);
+  });
+});
+
+// ── Provenance-footer visibility (regression) ────────────────────────────────
+// The stamp outgrew the old fixed footer strip when Methods / Record / Manifest
+// joined it (v0.5.8/0.5.9): at ~27 lines everything past line ~12 was drawn
+// below y = 0 and through the bold note. These tests decode the REAL content
+// streams and pin every baseline to the page.
+
+/** readyResult() + the derived-complexity block — the longest complexity rows. */
+function maximalResult(): AnalyseContoursResult {
+  return {
+    ...(readyResult() as unknown as Record<string, unknown>),
+    complexity: {
+      band: 'moderate',
+      vrmMedian: 0.034, vrmIqr: 0.021, vrmWindowCells: 3, vrmWindowGroundM: 3.2,
+      vrmText: 'median 0.0340 [IQR 0.0210], 3×3-cell window (≈3 m), dimensionless',
+      tpiRadiusCells: 5, tpiRadiusGroundM: 5.5, tpiDominantClass: 'Flat',
+      tpiText: 'Flat, median 0.1 [IQR 0.2] m, 5-cell radius',
+      zUnitLabel: 'm',
+      slopeAspectConvention: 'Slope per Horn 1981 (3×3 stencil); aspect measured downslope from north',
+      confidence: 80,
+      warnings: ['Point density below 4 pts/m2 - complexity figures may be unreliable.'],
+    },
+  } as unknown as AnalyseContoursResult;
+}
+
+/** Every optional provenance line present: complexity + classScope + permit. */
+const MAX_OPTS = {
+  ...OPTS,
+  classScope: 'Ground + Road (classes 2, 11) - 82% of points',
+  contourMethod: 'olv.contour.generalize.terrain-adaptive@1',
+  deliverablePurpose: 'engineering-preview',
+  exportPermit: {
+    status: 'exploratory',
+    label: 'Exploratory',
+    watermark: 'EXPLORATORY - NOT A VALIDATED DELIVERABLE',
+    caveats: ['Suitability: not survey-grade unless validated against ground-truth control.'],
+  },
+} as const;
+
+const PAGE_H = 841.89; // A4 portrait height, matching the renderer
+const M = 48;
+
+describe('buildTerrainReportPdf — provenance footer stays on the page', () => {
+  it('keeps every text op on the page for a maximal provenance', async () => {
+    const bytes = await buildTerrainReportPdf(maximalResult(), MAX_OPTS);
+    const ops = await extractTextOps(bytes);
+    expect(ops.length).toBeGreaterThan(60);
+    for (const op of ops) {
+      expect(op.y).toBeGreaterThanOrEqual(0);
+      expect(op.y).toBeLessThanOrEqual(PAGE_H);
+    }
+  });
+
+  it('keeps the stamp clear of the note strip and loses none of its lines', async () => {
+    const bytes = await buildTerrainReportPdf(maximalResult(), MAX_OPTS);
+    const ops = await extractTextOps(bytes);
+    // The stamp is the only 7.5 pt text; it must clear the bold note's strip.
+    const stamp = ops.filter((o) => o.size === 7.5);
+    expect(stamp.length).toBeGreaterThanOrEqual(27);
+    for (const o of stamp) expect(o.y).toBeGreaterThanOrEqual(M + 8);
+    // The lines the fixed footer used to push off the page are all drawn…
+    for (const key of ['Methods', 'Record', 'Manifest', 'Note', 'Evidence', 'Export permit']) {
+      expect(stamp.some((o) => o.text.startsWith(key))).toBe(true);
+    }
+    // …the VRM window's '≈' degrades to '~' (not to a baffling '?')…
+    expect(stamp.some((o) => o.text.includes('(~3 m)'))).toBe(true);
+    // …and the bold honesty note still closes the LAST page.
+    const last = Math.max(...ops.map((o) => o.page));
+    expect(ops.some((o) => o.page === last && o.text.startsWith('Suitability:'))).toBe(true);
   });
 });

@@ -74,6 +74,8 @@ const MODE_LABEL: Record<ColorMode, string> = {
   classification: 'Class',
   normal: 'Normal',
   density: 'Density',
+  gpsTime: 'GPS time',
+  returnNumber: 'Return',
   // Streaming clouds don't expose the Coverage / Confidence modes (they're
   // static-terrain products); the labels are here only to satisfy the
   // exhaustive ColorMode map.

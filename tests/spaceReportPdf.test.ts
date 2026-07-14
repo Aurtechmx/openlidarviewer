@@ -9,6 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildSpaceReportPdf } from '../src/render/measure/spaceReportPdf';
+import { extractTextOps } from './pdfTextOps';
 import { extractFloorPlan } from '../src/terrain/space/floorplan/extractFloorPlan';
 import { spaceMetrics } from '../src/terrain/spaceMetrics';
 import { objectMetrics } from '../src/terrain/objectMetrics';
@@ -94,6 +95,32 @@ describe('buildSpaceReportPdf', () => {
   it('is graceful with null metrics', async () => {
     const bytes = await buildSpaceReportPdf({ space: null, name: 'Empty' });
     expect(isPdf(bytes)).toBe(true);
+  });
+
+  it('keeps the provenance stamp on the page and clear of the bold note (regression)', async () => {
+    // The fixed footer start (M + 74) ran the 9-line stamp's tail into the
+    // bold note at M - 4 once the Evidence line joined it. Decode the real
+    // content streams and pin every baseline: on the page, above the note.
+    const pos = cubeShell();
+    const space = spaceMetrics(pos, { upAxis: 'z', spaceKind: 'object', hasRgb: false });
+    const bytes = await buildSpaceReportPdf({
+      space,
+      object: objectMetrics(pos),
+      name: 'Sculpture',
+      softwareVersion: '0.4.3',
+      metricVersion: 'v0.4.1',
+    });
+    const ops = await extractTextOps(bytes);
+    for (const op of ops) {
+      expect(op.y).toBeGreaterThanOrEqual(0);
+      expect(op.y).toBeLessThanOrEqual(792); // US Letter height
+    }
+    // No floor plan in this report, so 7.5 pt text is exactly the stamp.
+    const stamp = ops.filter((o) => o.size === 7.5);
+    expect(stamp.length).toBeGreaterThanOrEqual(9);
+    for (const o of stamp) expect(o.y).toBeGreaterThanOrEqual(48 + 8);
+    expect(stamp.some((o) => o.text.startsWith('Evidence'))).toBe(true);
+    expect(ops.some((o) => o.text.startsWith('Suitability:'))).toBe(true);
   });
 
   it('builds the imperial-unit interior report with rooms in the embed', async () => {

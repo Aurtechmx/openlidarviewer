@@ -444,3 +444,27 @@ describe('buildTerrainReportContent — honest nulls', () => {
     expect(datum).toMatch(/unknown/i);
   });
 });
+
+describe('buildTerrainReportContent — §19 permit stamp in provenance', () => {
+  it('stamps the resolved evidence-gate permit into the provenance footer', () => {
+    const c = buildTerrainReportContent(readyResult(), {
+      ...OPTS,
+      exportPermit: {
+        status: 'exploratory',
+        label: 'Exploratory',
+        watermark: 'EXPLORATORY',
+        caveats: ['One or more scientific prerequisites are incomplete.'],
+      },
+    });
+    // The footer carries the gate decision, watermark included — the report
+    // itself records the permit that authorised it.
+    expect(c.provenanceLines.some((l) => /Export permit\s+Exploratory — EXPLORATORY/.test(l))).toBe(true);
+    expect(c.provenance.exportPermit?.status).toBe('exploratory');
+  });
+
+  it('carries NO permit line when the export did not route through the gate', () => {
+    const c = buildTerrainReportContent(readyResult(), OPTS);
+    expect(c.provenance.exportPermit).toBeNull();
+    expect(c.provenanceLines.some((l) => /Export permit/.test(l))).toBe(false);
+  });
+});

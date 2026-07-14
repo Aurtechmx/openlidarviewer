@@ -1,0 +1,92 @@
+# Contour validation case manifest (v0.5.9 spec §24)
+#
+# Honesty rules: `status: covered` means an automated test verifies the case in
+# this repository. `status: pending` means the case requires external reference
+# data or a device that is not available here; it is NOT claimed as validated.
+# No case is marked covered without a test that actually runs it.
+
+schemaVersion: 1
+softwareVersion: 0.5.9
+
+# ── Analytic cases (§24.1) — closed-form isolines, E3 self-consistency ────────
+analytic:
+  - id: tilted-plane
+    truth: parallel straight lines spaced interval / gradient
+    status: covered
+    test: tests/contourAnalyticValidation.test.ts, tests/contoursAt.test.ts
+  - id: cone
+    truth: concentric circles of radius = level
+    status: covered
+    test: tests/contourAnalyticValidation.test.ts
+  - id: paraboloid-hill
+    truth: circles of radius sqrt(level / a)
+    status: covered
+    test: tests/contourAnalyticValidation.test.ts
+  - id: plane
+    truth: single straight line at the level position
+    status: covered
+    test: tests/contoursAt.test.ts
+  - id: pit
+    truth: concentric closed depressions
+    status: pending
+    note: analytic generator not yet added; same family as cone/paraboloid
+  - id: ridge
+    status: pending
+  - id: valley
+    status: pending
+  - id: terrace
+    status: pending
+  - id: symmetric-saddle
+    status: pending
+  - id: asymmetric-saddle
+    status: pending
+  - id: plateau
+    status: pending
+  - id: discontinuity-barrier
+    truth: contours must not bridge the barrier (gaps preserved)
+    status: covered
+    test: tests/contourGeometryProduct.test.ts (per-feature generalization does not merge features)
+
+# ── Synthetic sweeps (§24.2) ──────────────────────────────────────────────────
+synthetic:
+  - id: unknown-units
+    truth: no metric contour support is claimed; interval labelled "units unverified"
+    status: covered
+    test: tests/contourLevelDefinition.test.ts, tests/contourReviewSummary.test.ts
+  - id: foot-units
+    truth: interval shows feet plus a metre equivalent
+    status: covered
+    test: tests/contourLevelDefinition.test.ts
+  - id: missing-blocks
+    truth: unsupported spans are not labelled as measured and not bridged
+    status: covered
+    test: tests/contourLabelEngine.test.ts, tests/contourGeometryProduct.test.ts
+  - id: noise
+    status: pending
+  - id: sparse-density
+    status: pending
+  - id: density-gradient
+    status: pending
+  - id: outliers
+    status: pending
+  - id: vegetation-contamination
+    status: pending
+  - id: building-contamination
+    status: pending
+
+# ── Cross-implementation (§24.3) — E4, requires external reference outputs ─────
+cross-implementation:
+  status: pending
+  note: >-
+    Requires independent contour extraction from the same raster (for example
+    PDAL/GDAL). The harness exists at src/validation/crossCheck.ts with every
+    reference slot pending; no external reference outputs are bundled and none
+    were fabricated. Until run, no case here is above E3.
+
+# ── External datasets (§24.4) ─────────────────────────────────────────────────
+external:
+  status: pending
+  note: >-
+    Only datasets with lawful redistribution or a DOI, a stated license, CRS,
+    vertical datum, and a reference DTM or checkpoints would be included. None
+    are bundled; see DATA_AVAILABILITY.md.

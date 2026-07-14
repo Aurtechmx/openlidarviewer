@@ -20,10 +20,22 @@
  */
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
-import { buildExportProvenance, provenanceLines } from './exportProvenance';
+import { buildExportProvenance, provenanceLines, type ExportPermitStamp } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff } from './demGeoTiff';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
+import { sha256Hex } from './sha256';
+
+/**
+ * Build a `SHA256SUMS` integrity manifest over `entries`, in the standard
+ * `sha256sum` format (`<lowercase-hex>␠␠<name>`, one per line). The manifest
+ * covers every file in the deliverable EXCEPT itself, so a recipient can run
+ * `sha256sum -c SHA256SUMS.txt` to confirm nothing was truncated or altered in
+ * transit — the deliverable now proves its own integrity, not just its provenance.
+ */
+export function buildSha256Manifest(entries: ReadonlyArray<ZipEntry>): string {
+  return entries.map((e) => `${sha256Hex(e.bytes)}  ${e.name}`).join('\n') + '\n';
+}
 
 /**
  * Resolved linear unit of a projected CRS — the SAME vocabulary the DXF
@@ -76,6 +88,13 @@ export interface DemPackageOptions {
   readonly softwareVersion?: string;
   /** Terrain metric version (e.g. 'v0.4.1'). Default 'unknown'. */
   readonly metricVersion?: string;
+  /**
+   * The §19 evidence-gate permit stamp for this raster (from the unified
+   * resolver, DTM claim). Stamped into the README provenance so the package
+   * records the same gate decision as the contour exports. null / omitted when
+   * the export did not route through the gate.
+   */
+  readonly exportPermit?: ExportPermitStamp | null;
 }
 
 /** Parse an "EPSG:1234" identifier to its numeric code, or null. */
@@ -144,6 +163,8 @@ export interface DemReadmeOptions {
   readonly softwareName: string;
   readonly softwareVersion: string;
   readonly metricVersion: string;
+  /** The evidence-gate permit stamp for this raster, or null. */
+  readonly exportPermit?: ExportPermitStamp | null;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -177,6 +198,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     generatedAt: opts.generationDateIso,
     softwareVersion: opts.softwareVersion,
     metricVersion: opts.metricVersion,
+    exportPermit: opts.exportPermit ?? null,
   });
 
   const cov = (() => {
@@ -227,6 +249,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  ${basename}-dsm.asc / .tif   Digital surface model (top surface: canopy + structures)`,
     `  ${basename}-chm.asc / .tif   Canopy height model (above-ground height = DSM - DTM)`,
     `  *.prj                        Coordinate reference system (WKT), when known`,
+    `  SHA256SUMS.txt               SHA-256 of every file above (verify: sha256sum -c)`,
     ``,
     `Raster`,
     `  Grid size      ${dtm.cols} x ${dtm.rows} cells`,
@@ -362,10 +385,20 @@ export function buildDemPackage(
     softwareName: options.softwareName ?? 'OpenLiDARViewer',
     softwareVersion: options.softwareVersion ?? 'unknown',
     metricVersion: options.metricVersion ?? 'unknown',
+    exportPermit: options.exportPermit ?? null,
   });
   entries.push({
     name: `${basename}-README.txt`,
     bytes: new TextEncoder().encode(readme),
+  });
+
+  // Integrity manifest LAST: it hashes every file already assembled (README
+  // included) so a recipient can verify the whole deliverable with a standard
+  // `sha256sum -c`. It hashes everything except itself, per the sha256sum
+  // convention, so its own presence doesn't need to be self-referential.
+  entries.push({
+    name: 'SHA256SUMS.txt',
+    bytes: new TextEncoder().encode(buildSha256Manifest(entries)),
   });
 
   return buildZip(entries);

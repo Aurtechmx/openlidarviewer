@@ -40,6 +40,15 @@ export interface AlignEpochOptions {
   /** ICP iteration cap. Default 25. */
   readonly maxIterations?: number;
   /**
+   * Keep only the best-residual `trimFraction` of correspondences in the fit
+   * (trimmed ICP with a robust median warm start — see {@link icpRegister}).
+   * Default undefined = 1 (use every point, unchanged). Set below 1 (e.g. 0.8)
+   * when the two epochs only partially overlap or carry gross outliers
+   * (vegetation, moving objects, a construction blob) that would otherwise drag
+   * the registration off the stable ground both surveys share.
+   */
+  readonly trimFraction?: number;
+  /**
    * Apply only the horizontal part of the fit (yaw + x/y shift) and leave z
    * untouched. Default true, and the right choice for change detection: a
    * uniform vertical change (subsidence, uplift, fill) is the signal being
@@ -191,6 +200,7 @@ export function alignEpochClouds(
     maxIterations: options.maxIterations,
     maxResidual:
       options.maxResidualM != null ? options.maxResidualM / metresPerUnit : undefined,
+    trimFraction: options.trimFraction,
   });
   const sampleCount = Math.min(beforeSample.length, afterSample.length);
   const yawDeg = (fit.yawRad * 180) / Math.PI;

@@ -69,6 +69,7 @@ import {
 } from '../ground/horizontalScale';
 import { excludeNonGroundClasses } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
+import { makeTrainOnlyReclassifier } from '../validate/trainOnlyReclassify';
 import { splitReliability, type ReliabilitySplit } from '../validate/reliabilitySplit';
 import { spatialBlockHoldout, type SpatialBlockResult } from '../validate/spatialBlockHoldout';
 import { DtmSurfaceModel } from '../validate/dtmSurfaceModel';
@@ -95,6 +96,7 @@ import { tallyContourSet, type GradeTally } from './evidenceGrade';
 import {
   applyContourShapeStyle,
   defaultContourShapeStyle,
+  GENERALIZE_EPS_CELLS,
   type ContourShapeStyle,
 } from './contourShapeStyle';
 import { placeLabels, type ContourLabel } from './labelPlacement';
@@ -217,6 +219,16 @@ export interface IntervalContourParams {
    */
   readonly shapeStyle?: ContourShapeStyle;
   /**
+   * Generalization strength for the 'generalized' shape style, as a fraction of
+   * the grid cell (the Douglas–Peucker epsilon is `generalizeToleranceCells ×
+   * cell`). Contour Studio purposes set this per purpose so each deliverable
+   * generalises at its own bounded tolerance (Survey exact = crisp, Terrain
+   * Research light, Engineering moderate, Presentation strong). Ignored for every
+   * style but 'generalized'; when omitted the default 0.5 is used, so callers that
+   * never set it are byte-unchanged.
+   */
+  readonly generalizeToleranceCells?: number;
+  /**
    * Legacy boolean toggle for smoothing. Honoured for back-compat when
    * `shapeStyle` is not given: `false` ⇒ `'crisp'`, otherwise the default
    * `'smooth'`. Prefer `shapeStyle`.
@@ -240,6 +252,15 @@ export interface AnalyseGenerationParams {
   readonly interpolation: 'idw' | 'geodesic';
   /** The contour shape style applied to the exported geometry. */
   readonly contourStyle: ContourShapeStyle;
+  /**
+   * Generalization tolerance actually used (cells) for the 'generalized' style —
+   * the Douglas–Peucker epsilon as a fraction of the cell size. Null for every
+   * other style (crisp/smooth/rounded/semi-geometric do not run the per-purpose
+   * generalize pass). Recorded from the real generation config so export
+   * provenance names the exact tolerance a deliverable was simplified at, and can
+   * never drift from the geometry that shipped.
+   */
+  readonly generalizeToleranceCells?: number | null;
   /**
    * True when contour smoothing was applied. Derived as `style !== 'crisp'` and
    * kept for back-compat with any consumer that still reads a boolean.
@@ -439,6 +460,30 @@ function normalisePoints(input: TerrainPointInput): ReadonlyArray<TerrainPoint> 
 }
 
 /**
+ * Resolve the ground-filter parameters the core actually runs with (caller
+ * overrides + pipeline defaults). Exported as the SINGLE source of truth for
+ * both the main classification pass and the hold-out validation's train-only
+ * reclassifier — sharing one resolved object is what makes parameter drift
+ * between the delivered surface and the validated one structurally
+ * impossible (and lets tests mirror the exact shipped parameters).
+ */
+export function resolveGroundFilterParams(
+  params: TerrainCoreParams,
+  verticalAxis: VerticalAxis,
+): GroundFilterParams {
+  return {
+    cellSizeM: params.cellSizeM,
+    maxWindowCells: params.ground?.maxWindowCells ?? 8,
+    slope: params.ground?.slope ?? 0.2,
+    elevationThresholdM: params.ground?.elevationThresholdM ?? 0.5,
+    scalingFactorM: params.ground?.scalingFactorM,
+    // Despike by default in the pipeline (the leaf stays strict-min).
+    floorPercentile: params.ground?.floorPercentile ?? 5,
+    verticalAxis,
+  };
+}
+
+/**
  * Run every interval-INDEPENDENT stage of the pipeline. The expensive half:
  * classification → ground filter → DTM raster + hardening → void fill →
  * hold-out validation + confidence calibration → interval gate → quality +
@@ -484,17 +529,12 @@ export function computeTerrainCore(
     );
   }
 
-  // 1) Ground classification.
-  const gf = classifyGroundSmrf(groundPts, {
-    cellSizeM: params.cellSizeM,
-    maxWindowCells: params.ground?.maxWindowCells ?? 8,
-    slope: params.ground?.slope ?? 0.2,
-    elevationThresholdM: params.ground?.elevationThresholdM ?? 0.5,
-    scalingFactorM: params.ground?.scalingFactorM,
-    // Despike by default in the pipeline (the leaf stays strict-min).
-    floorPercentile: params.ground?.floorPercentile ?? 5,
-    verticalAxis,
-  });
+  // 1) Ground classification. The resolved parameters are built ONCE (see
+  // resolveGroundFilterParams) and shared with the hold-out validation's
+  // train-only reclassifier below, so the per-split classification can never
+  // drift from the pass that produced the delivered surface.
+  const groundParams = resolveGroundFilterParams(params, verticalAxis);
+  const gf = classifyGroundSmrf(groundPts, groundParams);
   warnings.push(...gf.warnings);
 
   // 2) DTM raster aligned to the filter grid + 3) per-cell confidence.
@@ -566,6 +606,15 @@ export function computeTerrainCore(
     verticalUnitToMetres: params.verticalUnitToMetres,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     collectSamples: true,
+    // Close the classify-before-split leak (disclosed since v0.5.9): re-run
+    // the SAME classifier with the SAME resolved parameters on the training
+    // points only, so a held-out point never helps decide its own ground
+    // membership. The hook flips the report's disclosure automatically.
+    // Cost: the hold-out is a single deterministic split, so this is exactly
+    // ONE extra SMRF pass over the training share of the analysed cloud
+    // (already capped by the gather stride) — ground-filter cost ≤ 2× per
+    // run, never K passes.
+    reclassifyGround: makeTrainOnlyReclassifier(groundParams),
   });
   const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);
@@ -902,6 +951,15 @@ export function contoursFromCore(
     (intervalParams.smooth === false ? 'crisp' : defaultContourShapeStyle);
   // Back-compat boolean: anything but raw geometry counts as "smoothed".
   const smoothingApplied = shapeStyle !== 'crisp';
+  // The generalization tolerance actually applied (cells). Only the 'generalized'
+  // style runs the Douglas–Peucker pass; for every other style it is null so the
+  // provenance never claims a tolerance a style did not use. When the caller does
+  // not specify one, the historical default (0.5) is what applyContourShapeStyle
+  // uses, so we record that exact value.
+  const generalizeToleranceCells =
+    shapeStyle === 'generalized'
+      ? (intervalParams.generalizeToleranceCells ?? GENERALIZE_EPS_CELLS)
+      : null;
   // Interval-dependent warnings are appended AFTER the core warnings so the
   // composed `warnings` array is in the same order as a single-pass run.
   const warnings: string[] = [...core.coreWarnings];
@@ -925,6 +983,7 @@ export function contoursFromCore(
   const generationParams: AnalyseGenerationParams = {
     interpolation: core.interpolation,
     contourStyle: shapeStyle,
+    generalizeToleranceCells,
     smoothing: smoothingApplied,
     despike: core.despikeApplied,
     aggregation: core.aggregation,
@@ -997,7 +1056,10 @@ export function contoursFromCore(
   // is exactly the historical Chaikin ×2, so the live contours are unchanged.
   stitched = stitched.map((level) => ({
     value: level.value,
-    polylines: applyContourShapeStyle(level.polylines, shapeStyle, { cellSizeM }),
+    polylines: applyContourShapeStyle(level.polylines, shapeStyle, {
+      cellSizeM,
+      generalizeToleranceCells: intervalParams.generalizeToleranceCells,
+    }),
   }));
 
   const model = buildFeatureModel(stitched, style.levels, {

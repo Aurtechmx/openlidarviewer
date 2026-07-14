@@ -92,11 +92,34 @@ export type LinearUnitScale =
   | { readonly known: true; readonly metresPerUnit: number }
   | { readonly known: false };
 
-export const knownUnit = (metresPerUnit: number): LinearUnitScale => ({
-  known: true,
-  metresPerUnit,
-});
+export const knownUnit = (metresPerUnit: number): LinearUnitScale => {
+  // Enforce the invariant at the constructor rather than trusting callers: a
+  // known unit scale must be finite and strictly positive. NaN/Infinity/0/-1
+  // are not "known" scales — refuse them so a bad scale can never masquerade as
+  // a valid conversion factor.
+  if (!Number.isFinite(metresPerUnit) || metresPerUnit <= 0) {
+    throw new RangeError(
+      `knownUnit: metresPerUnit must be finite and > 0, received ${metresPerUnit}`,
+    );
+  }
+  return { known: true, metresPerUnit };
+};
 export const unknownUnit = (): LinearUnitScale => ({ known: false });
+
+/**
+ * Human display label for a metres-per-unit scale: 'm' at unity, 'ft' at either
+ * the international (0.3048) or US-survey (1200/3937) foot, else 'units'. Used to
+ * label source-unit numbers honestly (a foot interval must read "ft", never "m")
+ * without threading a separate name field alongside the numeric scale.
+ */
+export function verticalUnitLabel(metresPerUnit: number): 'm' | 'ft' | 'units' {
+  if (!Number.isFinite(metresPerUnit) || metresPerUnit <= 0) return 'units';
+  if (Math.abs(metresPerUnit - 1) < 1e-6) return 'm';
+  if (Math.abs(metresPerUnit - M_PER_FT) < 1e-4 || Math.abs(metresPerUnit - M_PER_US_FT) < 1e-4) {
+    return 'ft';
+  }
+  return 'units';
+}
 
 /**
  * Convert a source-unit length to metres ONLY when the unit is known. Returns

@@ -99,6 +99,59 @@ describe('applyContourShapeStyle', () => {
     expect(semi.vertices.length).toBeLessThanOrEqual(generalized.vertices.length);
   });
 
+  it('generalizeToleranceCells overrides the default strength — monotonic vertex reduction', () => {
+    const poly = wavyLine();
+    // A sweep of increasing tolerances must never INCREASE the vertex count: a
+    // larger Douglas–Peucker epsilon drops at least as many redundant vertices.
+    const counts = [0.25, 0.5, 1.0, 2.0].map(
+      (t) => applyContourShapeStyle([poly], 'generalized', { cellSizeM: 1, generalizeToleranceCells: t })[0].vertices.length,
+    );
+    for (let i = 1; i < counts.length; i++) {
+      expect(counts[i]).toBeLessThanOrEqual(counts[i - 1]);
+    }
+    // The extremes genuinely differ (the override is doing real work).
+    expect(counts[counts.length - 1]).toBeLessThan(counts[0]);
+  });
+
+  it('an omitted generalizeToleranceCells reproduces the default (0.5) EXACTLY', () => {
+    const poly = wavyLine();
+    const [byDefault] = applyContourShapeStyle([poly], 'generalized', { cellSizeM: 1 });
+    const [explicit] = applyContourShapeStyle([poly], 'generalized', {
+      cellSizeM: 1,
+      generalizeToleranceCells: 0.5,
+    });
+    expect(explicit.vertices.length).toBe(byDefault.vertices.length);
+    explicit.vertices.forEach((p, i) => {
+      expect(p.x).toBe(byDefault.vertices[i].x);
+      expect(p.y).toBe(byDefault.vertices[i].y);
+    });
+  });
+
+  it('a light tolerance keeps MORE vertices than the moderate default (faithful vs clean)', () => {
+    const poly = wavyLine();
+    const [light] = applyContourShapeStyle([poly], 'generalized', {
+      cellSizeM: 1,
+      generalizeToleranceCells: 0.25,
+    });
+    const [moderate] = applyContourShapeStyle([poly], 'generalized', {
+      cellSizeM: 1,
+      generalizeToleranceCells: 0.5,
+    });
+    expect(light.vertices.length).toBeGreaterThanOrEqual(moderate.vertices.length);
+  });
+
+  it('tolerance 0 simplifies nothing — vertex count matches the smooth-only pass', () => {
+    // The honesty-gated simplifier returns the polyline unchanged for epsilon ≤ 0,
+    // so 'generalized' at tolerance 0 is a pure Chaikin ×2 — same as 'smooth'.
+    const poly = wavyLine();
+    const [smooth] = applyContourShapeStyle([poly], 'smooth', { cellSizeM: 1 });
+    const [genZero] = applyContourShapeStyle([poly], 'generalized', {
+      cellSizeM: 1,
+      generalizeToleranceCells: 0,
+    });
+    expect(genZero.vertices.length).toBe(smooth.vertices.length);
+  });
+
   it('honesty — a low-confidence/gap vertex keeps its EXACT coordinates under EVERY style', () => {
     const gap = v(5, 3, 10); // confidence 10 → gap
     const poly = line([v(0, 0), v(2, 1), v(4, 0.5), gap, v(6, 0.4), v(8, 1), v(10, 0)]);

@@ -19,7 +19,7 @@
 
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
-import { evidenceNote } from '../validation/exportEvidenceNote';
+import { evidenceNote, evidenceStatus } from '../validation/exportEvidenceNote';
 import {
   distance,
   polylineLength,
@@ -204,12 +204,21 @@ export function measurementsToGeoJSON(
   return JSON.stringify(fc, null, 2);
 }
 
-/** Stable CSV column order — every metric any kind can emit, plus identity. */
+/**
+ * Stable CSV column order — every metric any kind can emit, plus identity, and
+ * a trailing `evidence` column carrying the ONE gate verdict (PR §19). The
+ * GeoJSON export stamps the full note once at collection level; a CSV has no
+ * document header, so the honest status rides one column per row instead —
+ * every measurement row states the same central claim status, so a spreadsheet
+ * of measurements can never read as a validated deliverable when the registry
+ * says it is only exploratory.
+ */
 const CSV_COLUMNS = [
   'id', 'name', 'kind', 'vertices',
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
   'grade_pct', 'angle_deg', 'area_m2', 'perimeter_m',
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
+  'evidence',
 ] as const;
 
 /**
@@ -234,6 +243,10 @@ export function measurementsToCsv(
   ctx: MeasurementExportContext,
 ): string {
   const rows: string[] = [CSV_COLUMNS.join(',')];
+  // Route the CSV through the SAME one gate the GeoJSON path uses (PR §19):
+  // measurements sit below their required evidence level, so every row carries
+  // the exploratory verdict rather than leaving with no gate stamp at all.
+  const evidence = evidenceStatus('MEAS-DISTANCE');
   for (const m of measurements) {
     const metrics = measurementMetrics(m, ctx.up, ctx.unitToMetres);
     const base: Record<string, string | number> = {
@@ -242,6 +255,7 @@ export function measurementsToCsv(
       kind: m.kind,
       vertices: m.points.length,
       ...metrics,
+      evidence,
     };
     rows.push(CSV_COLUMNS.map((c) => (c in base ? csvCell(base[c]) : '')).join(','));
   }

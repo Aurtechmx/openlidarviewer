@@ -128,3 +128,76 @@ test('worldCoordLabels: a foot-based projected CRS shows feet, never metres', ()
   expect([l.x, l.y, l.z]).toEqual(['Easting', 'Northing', 'Elevation']);
   expect([l.xUnit, l.yUnit, l.zUnit]).toEqual([' ft', ' ft', ' ft']);
 });
+
+// ── Distinct VERTICAL unit — the axis the v0.5.8 horizontal fix left hardcoded ──
+// The elevation used to print " m" unconditionally (geographic) or inherit the
+// horizontal linear unit (projected). A CRS that DECLARES a distinct vertical
+// unit must report the elevation in that unit — a foot height is " ft", never
+// silently metres; an unrecognised vertical scale asserts NO suffix.
+
+test('worldCoordLabels: geographic CRS with a declared FOOT height shows ft on Z, never m', () => {
+  const geoFootHeight: ResolvedCrs = {
+    kind: 'geographic',
+    name: 'WGS 84 + NAVD88 height (ftUS)',
+    epsg: 4326,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    verticalUnitToMetres: 1200 / 3937, // US survey foot
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: false,
+  };
+  const l = worldCoordLabels(geoFootHeight);
+  // Horizontal stays degrees; the DECLARED foot height must not read metres.
+  expect([l.xUnit, l.yUnit]).toEqual(['°', '°']);
+  expect(l.zUnit).toBe(' ft');
+});
+
+test('worldCoordLabels: metre-projected CRS with a declared FOOT height shows ft on Z', () => {
+  const metreXYFootZ: ResolvedCrs = {
+    kind: 'projected',
+    name: 'UTM 10N + foot height',
+    epsg: 32610,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    verticalUnitToMetres: 0.3048, // international foot
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: false,
+  };
+  const l = worldCoordLabels(metreXYFootZ);
+  expect([l.xUnit, l.yUnit]).toEqual([' m', ' m']);
+  expect(l.zUnit).toBe(' ft');
+});
+
+test('worldCoordLabels: foot-projected CRS with a declared METRE height shows m on Z', () => {
+  const footXYMetreZ: ResolvedCrs = {
+    kind: 'projected',
+    name: 'State plane (ftUS) + metre height',
+    epsg: 2227,
+    linearUnit: 'us-survey-foot',
+    linearUnitToMetres: 1200 / 3937,
+    verticalUnitToMetres: 1,
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: false,
+  };
+  const l = worldCoordLabels(footXYMetreZ);
+  expect([l.xUnit, l.yUnit]).toEqual([' ft', ' ft']);
+  expect(l.zUnit).toBe(' m');
+});
+
+test('worldCoordLabels: an unrecognised vertical scale asserts NO suffix (never fabricates metres)', () => {
+  const oddVertical: ResolvedCrs = {
+    kind: 'projected',
+    name: 'Projected + unknown-scale height',
+    epsg: 32610,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    verticalUnitToMetres: 0.9, // not metre, not foot → do not assert a unit
+    source: 'las-vlr',
+    confidence: 'low',
+    userConfirmed: false,
+  };
+  expect(worldCoordLabels(oddVertical).zUnit).toBe('');
+});

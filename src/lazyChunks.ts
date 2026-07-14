@@ -40,6 +40,23 @@
 export const loadViewer = () => import('./render/Viewer');
 
 /**
+ * Load the Contour Studio launcher (state adapter + launcher DOM builder) on
+ * demand — the first time a terrain analysis completes, never in the initial
+ * shell (v0.5.9 §26.1). Keeps the launcher, adapter, and launch-state strings
+ * out of the eager index chunk.
+ */
+export const loadContourStudioMount = () => import('./ui/contourStudioMount');
+
+/**
+ * Load the Contour Studio export ORCHESTRATION (the permit gate + dispatch) on
+ * the first export click. The permit resolver pulls the evidence registry, so
+ * keeping it here — not eager in AnalysePanel — holds that whole chain out of the
+ * startup shell. The export only fires from inside the (already lazy) Studio, so
+ * this chunk is guaranteed loadable by the time it is needed.
+ */
+export const loadContourExportAdapter = () => import('./ui/contourExportAdapter');
+
+/**
  * Load the v0.5.7 capability-driven panel wiring on scan open. Held out of the
  * eager shell (it imports `displayProfile` + `scanCapability`) so those modules
  * don't count against the tight `index` bundle budget — the profile is only
@@ -147,6 +164,7 @@ export const loadMapSheetPdf = () => import('./render/measure/mapSheetPdf');
  * sees the import literal.
  */
 export const loadDemPackage = () => import('./terrain/export/demPackage');
+export const loadContourDeliverableBuild = () => import('./terrain/export/contourDeliverableBuild');
 
 /**
  * Load the Space / Object Report PDF builder (also pulls in pdf-lib). Only
@@ -203,6 +221,16 @@ export const loadReclassifyUi = () => import('./ui/reclassifyUi');
 
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
+
+/**
+ * Load the live colorbar legend overlay. Fetched the first time the active
+ * colour mode is a continuous scalar (elevation / intensity / gpsTime /
+ * returnNumber) — an RGB-only session never downloads it, and the eager
+ * shell carries only the sub-KB refresh trigger (the bundle budget has no
+ * headroom for more). Routed through here for the usual reason: the live
+ * source-transform must never see the import literal.
+ */
+export const loadColorbarOverlay = () => import('./ui/ColorbarOverlay');
 
 /**
  * Load the batch format converter (its modal UI plus the conversion engine and

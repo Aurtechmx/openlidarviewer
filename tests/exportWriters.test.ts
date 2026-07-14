@@ -28,6 +28,7 @@ const PROV: ExportProvenance = {
   contourIntervalM: 1,
   contourStyle: 'smooth',
   contourStyleLabel: 'Smooth',
+  contourMethod: null, contourGeneralizeToleranceCells: null, deliverablePurpose: null,
   surfaceQuality: 'Good',
   exportReadiness: 'Ready',
   exportReason: '',
@@ -39,6 +40,7 @@ const PROV: ExportProvenance = {
   classScope: null,
   warnings: [],
   notSurveyGrade: 'Suitability: not survey-grade unless validated against ground-truth control.',
+  exportPermit: null,
 };
 
 function feat(

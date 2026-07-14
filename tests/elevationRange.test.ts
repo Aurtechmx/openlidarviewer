@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { computeElevationRange } from '../src/render/elevationRange';
+import { computeElevationRange, computeScalarRange } from '../src/render/elevationRange';
 
 function pack(zs: ReadonlyArray<number>): Float32Array {
   const out = new Float32Array(zs.length * 3);
@@ -107,6 +107,18 @@ describe('computeElevationRange', () => {
     expect(r.maxZ).toBeCloseTo(5.25, 4);
   });
 
+  it('is a thin wrapper over computeScalarRange — identical numbers', () => {
+    const zs: number[] = [];
+    for (let i = 0; i < 500; i++) zs.push((i * 37) % 100);
+    const viaElevation = computeElevationRange({ positions: pack(zs) });
+    const viaScalar = computeScalarRange(Float32Array.from(zs));
+    expect(viaElevation.minZ).toBe(viaScalar.min);
+    expect(viaElevation.maxZ).toBe(viaScalar.max);
+    expect(viaElevation.trueMinZ).toBe(viaScalar.trueMin);
+    expect(viaElevation.trueMaxZ).toBe(viaScalar.trueMax);
+    expect(viaElevation.sampleCount).toBe(viaScalar.sampleCount);
+  });
+
   it('the strided sample stays statistically stable on a large cloud', () => {
     // 200 000 points — the stride should cap the sample at ~50 000 but
     // the percentile picks should still match the analytical answer
@@ -123,5 +135,68 @@ describe('computeElevationRange', () => {
     expect(r.minZ).toBeLessThanOrEqual(11_000);
     expect(r.maxZ).toBeGreaterThanOrEqual(189_000);
     expect(r.maxZ).toBeLessThanOrEqual(191_000);
+  });
+});
+
+describe('computeScalarRange', () => {
+  it('returns zero-span for an empty input', () => {
+    const r = computeScalarRange(new Float64Array(0));
+    expect(r.min).toBe(0);
+    expect(r.max).toBe(0);
+    expect(r.sampleCount).toBe(0);
+  });
+
+  it('returns the single value for a one-element input', () => {
+    const r = computeScalarRange([42.5]);
+    expect(r.min).toBeCloseTo(42.5, 6);
+    expect(r.max).toBeCloseTo(42.5, 6);
+  });
+
+  it('clips outliers to the requested percentile band', () => {
+    // 99 values in 0..0.4 plus one outlier at 30 — the generic twin of the
+    // tall-tree case the elevation range was built for.
+    const values: number[] = [];
+    for (let i = 0; i < 99; i++) values.push((i % 5) * 0.1);
+    values.push(30);
+    const r = computeScalarRange(values, { lowerPercentile: 5, upperPercentile: 95 });
+    expect(r.trueMax).toBeCloseTo(30, 4);
+    expect(r.max).toBeLessThan(5);
+    expect(r.min).toBeLessThan(r.max);
+  });
+
+  it('honours explicit lower/upper percentiles', () => {
+    const values: number[] = [];
+    for (let i = 0; i < 100; i++) values.push(i);
+    const r = computeScalarRange(values, { lowerPercentile: 10, upperPercentile: 80 });
+    expect(r.min).toBeGreaterThanOrEqual(8);
+    expect(r.min).toBeLessThanOrEqual(12);
+    expect(r.max).toBeGreaterThanOrEqual(78);
+    expect(r.max).toBeLessThanOrEqual(82);
+  });
+
+  it('skips non-finite values', () => {
+    const r = computeScalarRange([NaN, 1, 2, Infinity, 3, -Infinity]);
+    expect(Number.isFinite(r.min)).toBe(true);
+    expect(Number.isFinite(r.max)).toBe(true);
+    expect(r.trueMin).toBe(1);
+    expect(r.trueMax).toBe(3);
+  });
+
+  it('preserves Float64 precision on huge-magnitude values (GPS time)', () => {
+    // GPS adjusted standard time: ~3.2e8 s base with 0.5 s spacing. A Float32
+    // sample buffer quantises 3.2e8 to ~32 s steps, collapsing the band; the
+    // Float64 path must keep the ~90 % percentile span near its analytic 45 s.
+    const base = 3.2e8;
+    const values = new Float64Array(100);
+    for (let i = 0; i < 100; i++) values[i] = base + i * 0.5;
+    const r = computeScalarRange(values, { lowerPercentile: 5, upperPercentile: 95 });
+    const span = r.max - r.min;
+    expect(span).toBeGreaterThan(40);
+    expect(span).toBeLessThan(50);
+  });
+
+  it('respects an explicit count over the array length', () => {
+    const r = computeScalarRange([1, 2, 3, 999], { count: 3, lowerPercentile: 0, upperPercentile: 100 });
+    expect(r.trueMax).toBe(3);
   });
 });

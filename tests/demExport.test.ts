@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
 import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
+import { sha256Hex } from '../src/terrain/export/sha256';
+import { buildContourDeliverableFromResult } from '../src/terrain/export/contourDeliverableBuild';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 // A 2×2 grid, row-major (row 0 = south). Values rise to the north-east.
@@ -200,6 +202,96 @@ describe('buildDemPackage', () => {
     }
     expect(hasName(zip, 'site.prj')).toBe(true);
     expect(hasName(zip, 'site-README.txt')).toBe(true);
+  });
+
+  it('builds the complete deliverable ZIP: DTM + provenance + README + verifying SHA256SUMS', () => {
+    const zip = buildContourDeliverableFromResult(fixtureResult(), {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    // The curated bundle: DTM raster, provenance JSON, README, checksums. (The
+    // model-less DEM fixture has no contours, so the GeoJSON is honestly omitted.)
+    expect(extractEntry(zip, 'site_DTM.tif')).not.toBeNull();
+    expect(extractEntry(zip, 'site_Provenance.json')).not.toBeNull();
+    expect(extractEntry(zip, 'site_README.txt')).not.toBeNull();
+    const sums = extractEntry(zip, 'SHA256SUMS');
+    expect(sums).not.toBeNull();
+    // Every listed digest re-verifies against the named file (a `shasum -c` pass).
+    for (const line of new TextDecoder().decode(sums!).trimEnd().split('\n')) {
+      const [hex, name] = line.split('  ');
+      expect(name).not.toBe('SHA256SUMS');
+      const bytes = extractEntry(zip, name);
+      expect(bytes, `deliverable manifest lists missing ${name}`).not.toBeNull();
+      expect(sha256Hex(bytes!)).toBe(hex);
+    }
+    // The provenance JSON parses and carries the software identity.
+    const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
+    expect(prov.software).toBe('OpenLiDARViewer');
+  });
+
+  it('never copies the horizontal unit onto the vertical — an undeclared elevation unit reads "unknown"', () => {
+    const zip = buildContourDeliverableFromResult(fixtureResult(), {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      linearUnit: 'foot', // horizontal CRS is feet…
+      // …but no verticalUnitToMetres ⇒ the elevation unit is genuinely undeclared.
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
+    expect(readme).toMatch(/Horizontal unit: ft/);
+    // The bug this pins: vertical was asserted equal to horizontal ('ft'). An
+    // undeclared elevation unit must read 'unknown', never inherit the plan unit.
+    expect(readme).toMatch(/Vertical unit: unknown/);
+    expect(readme).not.toMatch(/Vertical unit: ft/);
+  });
+
+  it('reports a declared vertical unit that differs from the horizontal unit', () => {
+    const zip = buildContourDeliverableFromResult(fixtureResult(), {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      linearUnit: 'foot', // horizontal feet…
+      verticalUnitToMetres: 1, // …but a declared metre vertical axis.
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
+    expect(readme).toMatch(/Horizontal unit: ft/);
+    expect(readme).toMatch(/Vertical unit: m/);
+  });
+
+  it('includes a SHA256SUMS.txt whose digests verify every other file in the package', () => {
+    const zip = buildDemPackage(fixtureResult(), {
+      worldOrigin: { x: 600000, y: 4000000 }, basename: 'site', wkt: 'PROJCS["x"]',
+    });
+    const sums = extractEntry(zip, 'SHA256SUMS.txt');
+    expect(sums).not.toBeNull();
+    const manifest = new TextDecoder().decode(sums!).trimEnd();
+    const lines = manifest.split('\n');
+    // Real deliverable integrity: every listed file must exist in the archive and
+    // re-hash to exactly the digest the manifest claims (a `sha256sum -c` pass).
+    expect(lines.length).toBeGreaterThanOrEqual(8); // 3×(asc+tif) + prj + README
+    for (const line of lines) {
+      const [hex, name] = line.split('  ');
+      expect(name).not.toBe('SHA256SUMS.txt'); // never lists itself
+      const bytes = extractEntry(zip, name);
+      expect(bytes, `manifest lists missing file ${name}`).not.toBeNull();
+      expect(sha256Hex(bytes!), `digest mismatch for ${name}`).toBe(hex);
+    }
   });
 
   it('omits the .prj when no WKT is supplied', () => {

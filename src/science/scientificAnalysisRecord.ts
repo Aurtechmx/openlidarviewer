@@ -23,6 +23,7 @@
 import type { BuildIdentity } from '../build/buildIdentity';
 import { BUILD_IDENTITY } from '../build/buildIdentity';
 import { methodRef, methodTag, type MethodRef } from './methodRegistry';
+import { canonicalJson, fnv1a } from '../canonicalHash';
 
 /** The schema version of {@link ScientificAnalysisRecord}. Bump on shape change. */
 export const SCIENTIFIC_RECORD_SCHEMA = 1;
@@ -96,26 +97,6 @@ function toIso(at: Date | string | null | undefined): string {
   if (at instanceof Date) return at.toISOString();
   if (typeof at === 'string' && at.length > 0) return at;
   return new Date().toISOString();
-}
-
-/** Deterministic JSON with sorted object keys, so the fingerprint is stable. */
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
-}
-
-/** FNV-1a 32-bit over a UTF-16 code-unit stream, as 8-hex-digit string. */
-function fnv1a(s: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    // 32-bit FNV prime multiply via shifts (avoids Math.imul overflow concerns).
-    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0');
 }
 
 /**

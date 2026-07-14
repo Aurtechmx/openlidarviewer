@@ -9,6 +9,7 @@
 
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsLinearUnit } from '../io/crs';
+import { UNIT_FACTORS } from '../units/units';
 
 /**
  * Labels + per-axis unit suffixes for the inspector's World coordinate group.
@@ -56,6 +57,35 @@ function linearAxisSuffix(unit: CrsLinearUnit): string {
   }
 }
 
+/** True when a metres-per-unit factor is an international or US-survey foot. */
+function isFootFactor(metresPerUnit: number): boolean {
+  return (
+    Math.abs(metresPerUnit - UNIT_FACTORS.M_PER_FT) < 1e-6 ||
+    Math.abs(metresPerUnit - UNIT_FACTORS.M_PER_US_FT) < 1e-6
+  );
+}
+
+/**
+ * Elevation-axis suffix. HONESTY for the Z axis, which the v0.5.8 horizontal fix
+ * did not cover:
+ *   - when the CRS DECLARES a distinct vertical linear unit we honour it, so a
+ *     foot vertical datum (e.g. NAVD88 height in US survey feet on a geographic
+ *     or metre-projected CRS) reads " ft", NEVER the hardcoded " m" the card used
+ *     to print for every elevation;
+ *   - an unrecognised vertical scale asserts NO suffix rather than fabricate
+ *     metres; and
+ *   - when the file declares no vertical unit the elevation follows the axis's
+ *     own `fallback` (the GeoTIFF default: vertical units follow the model's
+ *     linear units — degrees-horizontal CRSs pass " m" by convention, projected
+ *     CRSs pass their horizontal linear-unit suffix).
+ */
+function verticalAxisSuffix(verticalUnitToMetres: number | undefined, fallback: string): string {
+  if (verticalUnitToMetres === undefined) return fallback;
+  if (verticalUnitToMetres === 1) return ' m';
+  if (isFootFactor(verticalUnitToMetres)) return ' ft';
+  return '';
+}
+
 /** Build the World-group labels + units for a resolved CRS (or undefined). */
 export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels {
   // No CRS, local, or unknown: the coordinates are in the file's own units,
@@ -71,13 +101,16 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
       z: 'Elevation',
       xUnit: '°',
       yUnit: '°',
-      zUnit: ' m',
+      // Elevation is metres by the geographic convention, UNLESS the file
+      // declared a distinct (e.g. foot) vertical unit — then honour that.
+      zUnit: verticalAxisSuffix(crs.verticalUnitToMetres, ' m'),
     };
   }
   // Projected: the axis unit is the CRS's own linear unit, so a foot-based CRS
   // shows Easting/Northing/Elevation in feet, not metres. Z follows the same
-  // horizontal linear unit; a rare CRS with a DISTINCT vertical unit is a known
-  // follow-up (the vast majority share one linear unit across all axes).
+  // horizontal linear unit by default, but a CRS with a DISTINCT declared
+  // vertical unit (e.g. metre easting/northing over a foot height) now reports
+  // the elevation in its own unit rather than inheriting the horizontal one.
   const suffix = linearAxisSuffix(crs.linearUnit);
   return {
     heading: `World (${crs.name})`,
@@ -86,7 +119,7 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
     z: 'Elevation',
     xUnit: suffix,
     yUnit: suffix,
-    zUnit: suffix,
+    zUnit: verticalAxisSuffix(crs.verticalUnitToMetres, suffix),
   };
 }
 

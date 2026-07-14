@@ -1,0 +1,74 @@
+# Docs site — build + GitHub Pages deploy, fully isolated from ci.yml and the
+# release pipeline. Runs only on pushes to main that touch documentation
+# surfaces, builds the VitePress site (which first re-renders the claim
+# register from its YAML), verifies the publish allowlist, and deploys.
+#
+# The site is built for the project-pages subpath
+# (https://aurtechmx.github.io/openlidarviewer/). To serve it from a docs
+# subdomain instead (e.g. docs.aurtech.mx with a CNAME), set DOCS_BASE=/ on
+# the build step — the base default lives in docs-site/.vitepress/config.mts.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'docs-site/**'
+      - 'scripts/render-claim-register.mjs'
+      - 'scripts/lint-docs-site.mjs'
+      - 'CHANGELOG.md'
+      - 'RELEASE_NOTES_v*.md'
+      - 'REPRODUCIBILITY.md'
+      - 'ARTIFACT_EVALUATION.md'
+      - 'DATA_AVAILABILITY.md'
+      - 'REVIEWER_QUICKSTART.md'
+      - 'VALIDATION_REPORT_v*.md'
+      - 'package.json'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+# Default to read-only, matching ci.yml / security.yml; the deploy job below
+# grants itself the two write scopes Pages needs, so a compromised build step
+# can never publish.
+permissions:
+  contents: read
+
+# One deploy at a time; a superseded push just skips to the newest.
+concurrency:
+  group: docs-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build docs site (renders claim register, then verifies the publish allowlist)
+        run: npm run docs:build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs-site/.vitepress/dist
+
+  deploy:
+    needs: build
+    # The ONLY job in the repo with Pages write access. The ref guard is
+    # defense-in-depth for workflow_dispatch: a dispatch from a non-main ref
+    # builds (harmless) but never deploys, independent of the github-pages
+    # environment's branch policy.
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

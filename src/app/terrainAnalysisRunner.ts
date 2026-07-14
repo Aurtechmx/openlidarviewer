@@ -32,6 +32,8 @@ import {
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
 import { METRES_PER_DEGREE } from '../terrain/ground/horizontalScale';
+// Honest vertical-unit label for the Contour Studio launch frame (feet vs metres).
+import { verticalUnitLabel } from '../units/units';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
@@ -159,6 +161,8 @@ export interface TerrainAnalysisRunner {
   buildResultForExport(opts: {
     intervalM: number;
     shapeStyle: ContourShapeStyle;
+    /** Per-purpose generalization tolerance (cells) for the 'generalized' style. */
+    generalizeToleranceCells?: number;
   }): Promise<AnalyseContoursResult>;
   /**
    * Abort any in-flight compute and drop every cached terrain core. Called
@@ -296,6 +300,26 @@ export function createTerrainAnalysisRunner(
       if (isStale()) return;
       analysePanel.setBusy(false);
       analysePanel.update(result);
+      // Contour Studio launcher: hand the panel the CRS frame facts (projected
+      // vs geographic, vertical unit known) that live here on the CRS service.
+      // The panel lazily loads the launcher (adapter + render), computes the
+      // launch state from this result, and gates the contour export controls
+      // behind it — keeping Contour Studio out of the eager shell (§26.1).
+      const cur = crsService.current();
+      // The vertical UNIT is known when the CRS actually declared a linear/
+      // vertical unit scale — NOT when the vertical DATUM is known (datum ≠
+      // unit: foot data can have a known datum). Carry the REAL scale + label so
+      // Contour Studio labels a foot interval "ft", never "m". Unknown unit →
+      // the launcher caps to exploratory and claims no metric-supported interval.
+      const vScale = cur?.verticalUnitToMetres ?? cur?.linearUnitToMetres ?? null;
+      const vUnitKnown = vScale != null && Number.isFinite(vScale) && vScale > 0;
+      analysePanel.setContourFrame({
+        streaming: false,
+        crsProjected: cur?.kind === 'projected',
+        verticalUnitsKnown: vUnitKnown,
+        verticalUnitToMetres: vUnitKnown ? vScale : null,
+        verticalUnitLabel: vUnitKnown ? verticalUnitLabel(vScale) : null,
+      });
       // Hand the fresh result to the host AFTER the panel adopts it, so any
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the
       // same winning result the panel shows.
@@ -320,6 +344,7 @@ export function createTerrainAnalysisRunner(
   async function buildResultForExport(opts: {
     intervalM: number;
     shapeStyle?: ContourShapeStyle;
+    generalizeToleranceCells?: number;
   }): Promise<AnalyseContoursResult> {
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
@@ -351,7 +376,11 @@ export function createTerrainAnalysisRunner(
         new AbortController().signal,
       ),
     );
-    return contoursFromCore(core, { intervalM: opts.intervalM, shapeStyle: opts.shapeStyle });
+    return contoursFromCore(core, {
+      intervalM: opts.intervalM,
+      shapeStyle: opts.shapeStyle,
+      generalizeToleranceCells: opts.generalizeToleranceCells,
+    });
   }
 
   // Back-compat shim: the interval-only builder is the export builder with the

@@ -238,12 +238,29 @@ export interface ContourShapeStyleOptions {
    * resolution rather than a fixed world distance. Default 1.
    */
   readonly cellSizeM?: number;
+  /**
+   * Generalization strength for the 'generalized' style, as a fraction of the
+   * cell size (the Douglas–Peucker epsilon is `generalizeToleranceCells × cell`).
+   * Lets a caller (e.g. a Contour Studio purpose) tune how hard the line is
+   * simplified — 0.25 keeps it faithful, 1.0 is a clean cartographic pass. Only
+   * the 'generalized' style reads it; every other style ignores it. When omitted,
+   * the historical {@link GENERALIZE_EPS_CELLS} (0.5) is used, so existing callers
+   * are byte-unchanged. A non-positive value simplifies nothing (honesty-gated
+   * `simplifyPolyline` returns the polyline unchanged for epsilon ≤ 0).
+   */
+  readonly generalizeToleranceCells?: number;
 }
 
 // Simplify epsilons as a fraction of the cell size. 'generalized' keeps the
 // curve faithful (light); 'semi-geometric' straightens harder so segments read
 // geometric. Tuned to be gentle — a single cell of give for the light pass.
-const GENERALIZE_EPS_CELLS = 0.5;
+//
+// GENERALIZE_EPS_CELLS is the DEFAULT strength for the 'generalized' style when
+// no per-call tolerance is supplied. It is exported so the analysis pipeline can
+// record the SAME number it actually generalised at into export provenance (no
+// mirrored constant that could drift). A caller (e.g. a Contour Studio purpose)
+// may override it via {@link ContourShapeStyleOptions.generalizeToleranceCells}.
+export const GENERALIZE_EPS_CELLS = 0.5;
 const SEMI_GEOMETRIC_EPS_CELLS = 1.75;
 
 /**
@@ -265,6 +282,9 @@ export function applyContourShapeStyle(
   opts: ContourShapeStyleOptions = {},
 ): ContourPolyline[] {
   const cell = opts.cellSizeM && opts.cellSizeM > 0 ? opts.cellSizeM : 1;
+  // Per-call generalization strength (cells); falls back to the historical
+  // default so callers that never set it are byte-identical to before.
+  const generalizeEpsCells = opts.generalizeToleranceCells ?? GENERALIZE_EPS_CELLS;
   switch (style) {
     case 'crisp':
       return polylines.map(clonePolyline);
@@ -274,7 +294,7 @@ export function applyContourShapeStyle(
       return polylines.map((p) => chaikinSmooth(p, { iterations: 4 }));
     case 'generalized':
       return polylines.map((p) =>
-        chaikinSmooth(simplifyPolyline(p, GENERALIZE_EPS_CELLS * cell), { iterations: 2 }),
+        chaikinSmooth(simplifyPolyline(p, generalizeEpsCells * cell), { iterations: 2 }),
       );
     case 'semi-geometric':
       return polylines.map((p) =>

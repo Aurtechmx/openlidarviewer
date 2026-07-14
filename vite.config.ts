@@ -266,6 +266,12 @@ function chunkEmissionGuard() {
     'src/export/index.ts',
     'src/export/ExportRegistry.ts',
     'src/export/BaseExportMode.ts',
+    // PNG figure provenance (text-chunk writer + builder + Blob stamper)
+    // rides the export chunk too — main.ts's saveSnapshot reaches it through
+    // the loadExportStudio() seam, never a static import.
+    'src/export/pngTextChunks.ts',
+    'src/export/figureProvenance.ts',
+    'src/export/figureMetadata.ts',
     // The Viewer + three.js renderer ride a separate chunk.
     'src/render/Viewer.ts',
     'node_modules/three/build/',

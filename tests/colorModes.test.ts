@@ -1,4 +1,13 @@
-import { colorForMode, availableModes, defaultMode } from '../src/render/colorModes';
+import {
+  colorForMode,
+  availableModes,
+  defaultMode,
+  colorByScalar,
+  colorByElevation,
+  colorByIntensity,
+  DEFAULT_ELEVATION_PALETTE,
+  DEFAULT_SCALAR_PALETTE,
+} from '../src/render/colorModes';
 import { PointCloud } from '../src/model/PointCloud';
 import {
   COVERAGE_STRONG,
@@ -224,6 +233,206 @@ describe('colorForMode — elevation', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// colorByScalar — the generic scalar → perceptual-ramp core
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('colorByScalar', () => {
+  // Cividis endpoints (control points from colorModes.ts) — the CVD-safe
+  // default the scalar modes pin to.
+  const CIVIDIS_LO = [0, 32, 76];
+  const CIVIDIS_HI = [253, 231, 37];
+
+  test('returns a Uint8Array with 3 bytes per point', () => {
+    const out = colorByScalar([0, 1, 2], 3, 0, 2);
+    expect(out).toBeInstanceOf(Uint8Array);
+    expect(out.length).toBe(9);
+  });
+
+  test('defaults to the CVD-safe Cividis ramp — min hits the bottom stop, max the top', () => {
+    expect(DEFAULT_SCALAR_PALETTE).toBe('cividis');
+    const out = colorByScalar([0, 10], 2, 0, 10);
+    expect([out[0], out[1], out[2]]).toEqual(CIVIDIS_LO);
+    expect([out[3], out[4], out[5]]).toEqual(CIVIDIS_HI);
+  });
+
+  test('distinct values map to distinct ramp colours', () => {
+    const out = colorByScalar([0, 1, 2, 3], 4, 0, 3);
+    const colourOf = (i: number) => `${out[i * 3]},${out[i * 3 + 1]},${out[i * 3 + 2]}`;
+    expect(new Set([0, 1, 2, 3].map(colourOf)).size).toBe(4);
+  });
+
+  test('degenerate min === max paints every point the bottom colour', () => {
+    const out = colorByScalar([5, 5, 5], 3, 5, 5);
+    for (let i = 0; i < 3; i++) {
+      expect([out[i * 3], out[i * 3 + 1], out[i * 3 + 2]]).toEqual(CIVIDIS_LO);
+    }
+  });
+
+  test('a NaN value is skipped — its bytes stay (0,0,0), neighbours unaffected', () => {
+    const out = colorByScalar([0, Number.NaN, 10], 3, 0, 10);
+    expect([out[0], out[1], out[2]]).toEqual(CIVIDIS_LO);
+    expect([out[3], out[4], out[5]]).toEqual([0, 0, 0]);
+    expect([out[6], out[7], out[8]]).toEqual(CIVIDIS_HI);
+  });
+
+  test('values outside [min, max] clamp to the ramp endpoints', () => {
+    const out = colorByScalar([-100, 100], 2, 0, 10);
+    expect([out[0], out[1], out[2]]).toEqual(CIVIDIS_LO);
+    expect([out[3], out[4], out[5]]).toEqual(CIVIDIS_HI);
+  });
+
+  test('honours an explicit palette', () => {
+    // Turbo's top stop is a dark red (122, 4, 2) — nothing like Cividis yellow.
+    const out = colorByScalar([0, 1], 2, 0, 1, 'turbo');
+    expect([out[3], out[4], out[5]]).toEqual([122, 4, 2]);
+  });
+
+  test('reads Float64 sources with huge absolute values without precision collapse', () => {
+    // GPS adjusted standard time — ~3.2e8 s with sub-second deltas. A Float32
+    // round-trip would quantise all four to the same value.
+    const base = 3.2e8;
+    const values = new Float64Array([base, base + 0.25, base + 0.5, base + 1]);
+    const out = colorByScalar(values, 4, base, base + 1);
+    const colourOf = (i: number) => `${out[i * 3]},${out[i * 3 + 1]},${out[i * 3 + 2]}`;
+    expect(new Set([0, 1, 2, 3].map(colourOf)).size).toBe(4);
+    expect([out[0], out[1], out[2]]).toEqual(CIVIDIS_LO);
+    expect([out[9], out[10], out[11]]).toEqual(CIVIDIS_HI);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// colorByElevation — parity pin for the colorByScalar refactor
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('colorByElevation routed through the scalar core', () => {
+  test('byte-identical to colorByScalar over the extracted up-axis values', () => {
+    const zs = [0, 1.5, Number.NaN, 3, -2];
+    const positions = new Float32Array(zs.length * 3);
+    for (let i = 0; i < zs.length; i++) positions[i * 3 + 2] = zs[i];
+    const viaElevation = colorByElevation(positions, zs.length, -2, 3);
+    const viaScalar = colorByScalar(
+      Float32Array.from(zs), zs.length, -2, 3, DEFAULT_ELEVATION_PALETTE,
+    );
+    expect(viaElevation).toEqual(viaScalar);
+  });
+
+  test('upAxis parity — Y-up extraction matches the scalar core over Y', () => {
+    const ys = [10, 20, 30];
+    const positions = new Float32Array([7, 10, 9, 7, 20, 9, 7, 30, 9]);
+    const viaElevation = colorByElevation(positions, 3, 10, 30, 'viridis', 1);
+    const viaScalar = colorByScalar(ys, 3, 10, 30, 'viridis');
+    expect(viaElevation).toEqual(viaScalar);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// colorByIntensity — optional colormap path
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('colorByIntensity with a palette', () => {
+  test('stays greyscale when no palette is passed (back-compat)', () => {
+    const out = colorByIntensity([0, 50, 100], 3, 0, 100);
+    for (let i = 0; i < 3; i++) {
+      expect(out[i * 3]).toBe(out[i * 3 + 1]);
+      expect(out[i * 3 + 1]).toBe(out[i * 3 + 2]);
+    }
+  });
+
+  test('ramps through the palette when one is passed', () => {
+    const out = colorByIntensity([0, 100], 2, 0, 100, 'cividis');
+    expect([out[0], out[1], out[2]]).toEqual([0, 32, 76]);
+    expect([out[3], out[4], out[5]]).toEqual([253, 231, 37]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// colorForMode — gpsTime / returnNumber (continuous scalar modes)
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('colorForMode — gpsTime', () => {
+  /** Cloud carrying a Float64 GPS-time channel with huge absolute values. */
+  function makeGpsTimeCloud(): PointCloud {
+    const base = 3.2e8;
+    return new PointCloud({
+      positions: new Float32Array([0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0]),
+      gpsTime: new Float64Array([base, base + 1, base + 2, base + 3]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'gps.las',
+    });
+  }
+
+  test('ramps early → late acquisition time on Cividis (min bottom, max top)', () => {
+    const out = colorForMode('gpsTime', makeGpsTimeCloud());
+    expect(out.length).toBe(4 * 3);
+    expect([out[0], out[1], out[2]]).toEqual([0, 32, 76]);
+    expect([out[9], out[10], out[11]]).toEqual([253, 231, 37]);
+  });
+
+  test('normalises per-cloud so sub-range deltas on huge Float64 values stay distinct', () => {
+    const out = colorForMode('gpsTime', makeGpsTimeCloud());
+    const colourOf = (i: number) => `${out[i * 3]},${out[i * 3 + 1]},${out[i * 3 + 2]}`;
+    expect(new Set([0, 1, 2, 3].map(colourOf)).size).toBe(4);
+  });
+
+  test('throws when gpsTime is absent', () => {
+    expect(() => colorForMode('gpsTime', makePositionsOnlyCloud())).toThrow();
+  });
+
+  test('a single garbage timestamp cannot compress the whole ramp — percentile-clipped range', () => {
+    // One malformed record writing an epoch-zero timestamp among ~3.2e8 s
+    // GPS adjusted standard times. A raw min/max range would put every real
+    // point at t ≈ 1 — the whole flight line collapses to the top colour —
+    // exactly the outlier failure the percentile core exists for.
+    const n = 100;
+    const base = 3.2e8;
+    const gpsTime = new Float64Array(n);
+    gpsTime[0] = 0; // the garbage timestamp
+    for (let i = 1; i < n; i++) gpsTime[i] = base + i;
+    const cloud = new PointCloud({
+      positions: new Float32Array(n * 3),
+      gpsTime,
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'outlier.las',
+    });
+    const out = colorForMode('gpsTime', cloud);
+    // The garbage point clamps to the bottom of the ramp instead of owning it.
+    expect([out[0], out[1], out[2]]).toEqual([0, 32, 76]);
+    // The real acquisition window spans the palette: many distinct colours
+    // across the flight line, not one endpoint stop for all 99 points.
+    const distinct = new Set<string>();
+    for (let i = 1; i < n; i++) {
+      distinct.add(`${out[i * 3]},${out[i * 3 + 1]},${out[i * 3 + 2]}`);
+    }
+    expect(distinct.size).toBeGreaterThan(10);
+  });
+});
+
+describe('colorForMode — returnNumber', () => {
+  function makeReturnCloud(): PointCloud {
+    return new PointCloud({
+      positions: new Float32Array([0, 0, 0, 1, 0, 0, 2, 0, 0]),
+      returnNumber: new Uint8Array([1, 2, 3]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'returns.las',
+    });
+  }
+
+  test('ramps first → last return on Cividis (min bottom, max top)', () => {
+    const out = colorForMode('returnNumber', makeReturnCloud());
+    expect(out.length).toBe(3 * 3);
+    expect([out[0], out[1], out[2]]).toEqual([0, 32, 76]);
+    expect([out[6], out[7], out[8]]).toEqual([253, 231, 37]);
+  });
+
+  test('throws when returnNumber is absent', () => {
+    expect(() => colorForMode('returnNumber', makePositionsOnlyCloud())).toThrow();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // colorForMode — classification
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -417,6 +626,41 @@ describe('availableModes', () => {
   test('normal included only when normals present', () => {
     expect(availableModes(makeNormalsCloud())).toContain('normal');
     expect(availableModes(makeFullCloud())).not.toContain('normal');
+  });
+
+  test('gpsTime included only when the channel is present', () => {
+    const withGps = new PointCloud({
+      positions: new Float32Array([0, 0, 0]),
+      gpsTime: new Float64Array([3.2e8]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'gps.las',
+    });
+    expect(availableModes(withGps)).toContain('gpsTime');
+    expect(availableModes(makePositionsOnlyCloud())).not.toContain('gpsTime');
+  });
+
+  test('returnNumber included only when the channel is present', () => {
+    const withReturns = new PointCloud({
+      positions: new Float32Array([0, 0, 0]),
+      returnNumber: new Uint8Array([1]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'returns.las',
+    });
+    expect(availableModes(withReturns)).toContain('returnNumber');
+    expect(availableModes(makePositionsOnlyCloud())).not.toContain('returnNumber');
+  });
+
+  test('honesty gate — a pointSourceId channel adds NO ramp mode (categorical id)', () => {
+    const withSource = new PointCloud({
+      positions: new Float32Array([0, 0, 0]),
+      pointSourceId: new Uint16Array([7]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'source.las',
+    });
+    expect(availableModes(withSource)).toEqual(availableModes(makePositionsOnlyCloud()));
   });
 
   test('positions-only cloud has exactly two modes (elevation + density)', () => {

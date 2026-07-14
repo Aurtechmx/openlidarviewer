@@ -19,6 +19,8 @@ Local-first. Cited. Honest about what it can't tell you.
 
 **New here? Read the [User Guide](docs/USER_GUIDE.md)** — open a scan, measure, analyse terrain, compare two scans, and share your work, with nothing uploaded.
 
+**Full documentation lives at the [docs site](https://aurtechmx.github.io/openlidarviewer/)** — guide, format matrix, scientific validation (evidence model + claim register), reproducibility, and reference.
+
 ### Try it in 10 seconds
 
 No install, no account, no upload. Open **[lidar.aurtech.mx](https://lidar.aurtech.mx/)**, then drag a `.las`, `.laz`, or `.copc.laz` file (or paste a remote COPC / `ept.json` URL) onto the page. You're navigating the cloud in your browser, and the file never leaves your device.
@@ -29,7 +31,7 @@ No install, no account, no upload. Open **[lidar.aurtech.mx](https://lidar.aurte
 
 OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. You can inspect a scan, navigate it in 3D, switch how it is colored, measure distances, and export results, without setting up a desktop GIS workflow.
 
-The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that real LiDAR work needs.
+The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that LiDAR work needs.
 
 It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is a browser-native LiDAR inspection and terrain-analysis platform focused on transparency, validation, and local-first processing.
 
@@ -253,15 +255,9 @@ Measurement is meant for visual inspection and research, not survey-grade use. T
 
 **Current export targets:** `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
 
-**iPhone and mobile scans.** OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format, usually PLY, OBJ, or GLB/GLTF (and XYZ/CSV). `USDZ` exports need conversion to a supported format first.
+That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (ASTM E2807, tested against Trimble exports) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings. Large `COPC` and `EPT` datasets stream progressively — locally or over HTTP range requests from a URL — with bounded memory and no full-file load; see [`docs/streaming.md`](docs/streaming.md).
 
-**Terrestrial laser scanners.** `E57` (ASTM E2807), the standard exchange format for terrestrial laser scanners, is read directly in the browser. The parser handles Cartesian coordinates, RGB colour, intensity, classification, surface normals, scan poses, and multi-scan files (every scan is merged into one cloud). E57 exports from Trimble survey scanners have been tested, and other standard E57 files — Leica, FARO, Matterport, and similar — follow the same ASTM format.
-
-**Drone LiDAR and professional point clouds.** Georeferenced drone LiDAR surveys in LAS and LAZ work today. `PCD` (the Point Cloud Library format, in ASCII, binary, and binary-compressed variants) and the terrestrial-scanner text formats `PTX` and `PTS` are read directly in the browser.
-
-**COPC streaming.** Large `COPC` (Cloud Optimized Point Cloud) `.copc.laz` files open through a dedicated streaming pipeline: the octree hierarchy is read with partial range requests, a coarse view renders almost immediately, and visible regions refine progressively as the camera moves. Decoding runs in a worker, memory stays bounded by a view-dependent budget, and the point data is never read whole. A COPC scan opens the same way whether it is on disk or hosted at a URL — a remote scan streams over HTTP range requests from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link, provided the host allows range and cross-origin requests. Full detail is in [`docs/streaming.md`](docs/streaming.md).
-
-Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Full detail is in [`docs/supported-formats.md`](docs/supported-formats.md).
+Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. The per-format detail — including scanner and app compatibility notes — is the format matrix at the [docs site](https://aurtechmx.github.io/openlidarviewer/formats/) (source: [`docs/supported-formats.md`](docs/supported-formats.md)).
 
 **Recommended formats for large datasets:**
 
@@ -414,136 +410,10 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.8**. The full, dated history is in
-[CHANGELOG.md](CHANGELOG.md); the highlights below are a reverse-chronological
-summary.
-
-### v0.5.7 — Object & E57 capture honesty, and an evidence model
-- **Capture lens** — reads a scan as object / interior / terrain and stops applying survey and terrain framing where it doesn't belong; the capture-type classifier is now shape-aware, so a compact object can't be labelled aerial from point density alone
-- **Declared-by-the-file provenance card** — an E57 `olv:` block or a glTF `asset.generator` stamp is surfaced in the Inspector under an explicit "declared, not verified" qualifier; nothing is inferred
-- **Evidence model** — a machine-readable claim register and an E0–E6 evidence ladder record how strongly each product is supported; nothing is E4+ (independently or field-validated) yet, and the docs say so
-- **Fix** — a compact object captured together with a large ground slab now routes to object, not terrain
-
-### v0.5.6 — Point filtering
-- **Elevation and intensity filters** wired to the live renderer and extended to selection: a point you can't see can't be picked, measured, or reclassified. Streaming-resident export, plus clearer loading and GPU-error feedback
-
-### v0.5.5 — Pan tool, collapsible panels, refined navigation, a simpler report set, accurate scan health
-- **Pan hand tool** — a fourth navigation mode: `4` selects Pan, `G` toggles it, middle-mouse drags pan temporarily; a mouse, pen, or one-finger touch drag moves the scene while the wheel keeps zooming, and the mode is preserved in sessions and share links
-- **Refined viewport navigation** — frame-rate-independent, pointer-centred wheel and trackpad zoom (same gesture, same zoom at 60/120/144 Hz), plus motion-adaptive resolution that lowers the device-pixel ratio slightly while you move and restores it when you stop
-- **Collapsible side panels** — a one-tap handle collapses the left column; on the right the Inspector and (for COPC streams) the streaming card each collapse on their own handle, so either can be hidden without the other; state persists per browser
-- **Gaussian point-appearance mode** — a point style that softens ordinary point samples (not a trained 3D Gaussian Splat scene)
-- **A two-document PDF report set** — Survey Summary (compact handover) and Technical Report (full record); older report-template identifiers map to the nearest current template
-- **More accurate scan health** — the Health Check separates a complete decode, a deliberate display-sample cap, and a declared-versus-decoded count mismatch, so a sampled load is no longer flagged as having lost points
-- **Reproducible performance diagnostics** — the debug overlay records frame-time percentiles, over-threshold frame counts, the longest main-thread task, effective DPR, and render/stream counters, and copies them as JSON; no speedup is claimed without device-specific evidence
-- **Removed the Scan Acceptance template** — its metadata-presence rows did not amount to an acceptance test
-
-### v0.5.4 — Terrain complexity you can cite
-- **Real terrain-complexity metrics** — the terrain core computes the slope-decoupled **Vector Ruggedness Measure** (Sappington et al. 2007) and the **Topographic Position Index** with Weiss (2001) six-class slope position, implemented from the primary literature and computed off the interactive path; a smooth 45° plane scores ~0 ruggedness, so **steepness is never mistaken for complexity** (CI-guarded by an analytic `npm run repro` check)
-- **An engine-fed "Terrain Complexity" row** — the Dataset Intelligence reading is the band of the real VRM median with the numeric **median + IQR, window and units** one hover away, and a derived-metrics line joins the Analyse panel's Terrain Assessment; "—" until a run measures something
-- **A cited density-reliability caveat** — below **4 pts/m²** (Münzinger et al. 2022, doi:10.1016/j.ufug.2022.127637) the complexity outputs say plainly they are indicative; a warning, never a block
-- **Reproducible provenance** — reports and every export record the metric names, window/radius in cells **and** ground units, Z units, the slope/aspect convention note, the derived confidence, and the caveats, stamped identically across README/DXF/SVG/GeoJSON/report
-
-### v0.5.3 — Epoch alignment · offline PWA · a reproducible evaluation
-- **Two-epoch alignment in change detection** — before two epochs are compared, the after cloud is coarse-registered onto the before cloud (yaw + horizontal shift only, so a real vertical change is preserved), with the shift, yaw, and RMS residual reported and a fit the gate can't trust **refused** rather than applied
-- **Installable and offline (PWA)** — a local-first service worker caches the same-origin app shell only (never a dataset request), so the viewer opens with no network after the first visit; the **compass** gains a remembered command-palette toggle
-- **`npm run repro`** — a one-command evaluation harness (registration vertical-bias, alignment recovery, ±-band coverage vs nominal, digest determinism) with CI-guarded coverage/bias tests and a `REVIEWER_QUICKSTART.md`
-- **Seventeen correctness fixes** from two audit passes: nine terrain/profile hardenings (unit-aware grid floors, world-latitude cos φ, one type-7 percentile convention, contour stitching/interval/saddle rules, despike on small cells, signed grade, worker clamp, geographic-CRS refusal) and eight Phase 0 Criticals (float64 alignment application, geographic ICP + volume refusal, metre-true alignment reporting, visibility-respecting reclassify, stale-analysis disclosure, clip-box session round-trip, PWA shell-poisoning guard)
-
-### v0.5.2 — A verifiable integrity digest · version-aware exports
-- The integrity report digest is **SHA-256** by default and a new **"Verify integrity report…"** action lets a recipient check a handed-over report on its own; volume findings carry the whole earthwork (net, cut, fill, area, confidence)
-- Exports and sessions **stamp the producing version**, and re-opening an older session flags the gap; new `lint:inline-imports` and `lint:release-sync` guards close two release-only failure classes
-
-### v0.5.1 — Auditable volume · classification editing · integrity reports
-- **Stockpile / earthworks volume with a confidence band** — the lasso volume readout states its own uncertainty (sampling error + a systematic base-plane term, combined in quadrature) with a show-the-math breakdown and honest caveats
-- **Manual classification editing** end-to-end: a class picker + **lasso-reclassify** tool with real **multi-step undo/redo**; edits mutate the live class channel and round-trip straight into LAS export, and they bump a per-cloud **edit epoch** that invalidates any stale analysis/grade
-- **Tamper-evident integrity report** — measurements export as a JSON report whose findings, provenance, and classification edit-epoch are hashed into a verifiable content digest (catches accidental/casual edits; not a cryptographic signature), plus a **two-epoch change-detection band** that reports whether a change even exceeds its own error
-
-### v0.5.0 — Measure · Place · Compare · Share
-- The **v0.5 line**: measure tools that **snap** to real returns or to placed geometry, **KML export** of annotations/measurements/views for georeferenced scans, a **Layers** panel (show/hide, isolate, lock, CRS-mismatch flagging), **two-epoch change detection** (cut/fill with co-registration honesty), and a **clip box**
-- A **full-cloud quality grade** for streaming scans (deep octree sample, areal-primary density tier, cancel, vertical-unit-aware Z), an **Evidence Capsule** that carries trust grades inside the shared `.olvsession`, **per-measurement honesty grading** (red/yellow/green + show-why + refusal), and **instant analysis-on-drop**
-- A broad hardening pass: **EPT laszip tiles decode in a dedicated worker**, units reported in **true metres** (lasso volume, scan report, change detection, geographic-grid slope), **horizontal datum resolved once and never downgraded**, **COPC RGB bit-depth decided once per file**, an **enforcing Content-Security-Policy** + injection-sink lint guard, and lazy-loading of the session parser, exporters, and change-detection off the initial bundle
-
-### v0.4.9 — Data Fitness scorecard, file-scale honesty & a leaner deploy
-- The **Data Fitness scorecard** leads the Analyse panel — one plain verdict plus a six-row traffic-light scorecard (Location & height, Coverage, Ground detail, Vertical accuracy, Classification, Integrity) with shape-distinct glyphs and a USGS Quality Level badge shown only when earned; the panel is de-duplicated so each fact has a single home
-- **File-scale honesty** across the Scan Report, the inspection PDF, the provenance density, and the Layers chip — the file's true point count and back-scaled density, not the strided display sample (with a "Loaded" row disclosing it); dense drone surveys identify as UAV LiDAR; georeferenced scans with an undeclared datum read "elevation datum not declared," not "relative"
-- A **leaner deploy** (~1.05 MB of brand assets trimmed), a portable `_headers` file and relative PWA manifest for any static host, and fixes for the zoom-out square-clip, contour-GeoJSON elevation, and vertical-unit handling
-
-### v0.4.8 — Derived classification & trust you can act on
-- **Derive a classification** for scans that ship functionally unclassified (every point ASPRS 0/1), with **RGB-assisted vegetation**, per-run **confidence**, and **void-honest heights** that leave hole-filled points unclassified rather than guessed
-- **Dataset Story** and **Export Health check** actions synthesise what a scan is, its biggest limiter, and a ready / caution / blocked hand-off verdict; shared `.olvsession` files remember the class-visibility filter
-- A new **Credits** page attributing the sample-data providers and the open-source dependencies; a producer's existing classification is never overwritten
-
-### v0.4.7 — Accessibility, workflow & honesty fixes
-- A **colourblind-safe (Okabe-Ito) classification palette** toggle, an **annotation grouping** summary (totals, per-category counts, areas) in the panel and the PDF report, and a quiet **signal-tier cue** on the Dataset Intelligence card
-- The **workflow recorder** returns — record and replay `.olvworkflow` camera/tool sequences with a settings popup (file format, save destination, start/stop shortcut, replay speed, pre-record countdown, capture scope, loop)
-- Correctness and honesty fixes: empty files are rejected with a clear message instead of a blank scene; reprojection never ships non-finite coordinates; NAD83↔WGS84-family identity shifts are flagged; measured areas read the same in the report as on screen; unknown signals show "—" rather than a fabricated value
-
-### v0.4.6 — Navigation, design audit & honesty hardening
-- Six axis-aligned **standard views** (Top / Bottom / Front / Back / Left / Right) plus an **Orthographic toggle** (a near-parallel long-lens projection) for distortion-free measuring; **icon + label toolbars** across the dock, measurement bar, Layers and Export; a header **full-screen toggle**; and a mobile bottom-sheet reflow
-- Phase 1 of the **design audit** (visual-only: verdict-as-hero, two-tier surfaces, quieter typography, all themes re-verified WCAG AA) and an equivalence-gated **WebGPU compute seam** where the CPU stays the reference and the GPU must prove per-session equivalence before it is trusted
-- Contour **map-sheet (PDF) fixes** (title/legend overlap, scale-bar unit match, ungeoreferenced sheets drop the graticule and north arrow) and label-vs-value drift fixes
-
-### v0.4.0 – v0.4.5 — Terrain Intelligence + the honesty pipeline
-- Confidence-aware **DTM and contour pipeline** behind the **Analyse panel** — ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0–100 terrain quality score, surface models (DSM, canopy height, slope, multi-directional hillshade), and a single top-level Terrain Assessment verdict (0.4.0–0.4.4)
-- Evidence-graded **contour export** (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced **DEM package** (ASCII Grid + GeoTIFF), all gated behind a DTM quality check so a terrain-product export is only offered when the surface passes the quality gate
-- One **readiness engine** behind every export verdict, a colourblind-safe **Confidence** colour overlay (twin of Coverage), and **profile intelligence** — summary, station table, CSV, sampler controls (0.4.5)
-- **True measurement units** on foot-CRS scans, **workflow presets** in the Visuals Studio, and an accessible **onboarding tour** (0.4.5)
-- Interior **floor plan** reconstruction — **experimental preview**: a wall-graph + room-segmentation sketch from interior scans, with claim-accurate "preview" labelling throughout; not a survey product
-
-### v0.3.9 — Refined interaction surface + terrain foundation
-- Smart camera presets — Top, Iso, Oblique, Planar
-- Theme system — Dark, Light, High-contrast — with a persisted preference
-- Command palette (`Cmd-K` / `Ctrl-K`) for keyboard-first access to every tool, mode, theme, and export
-- Workflow recorder — save and replay `.olvworkflow` files of camera moves and tool actions
-- Onboarding tour + searchable shortcut sheet (`?`)
-- Terrain Intelligence (`src/terrain/`) — honesty-contracted terrain type contracts and the informational Dataset Intelligence card
-- Dataset Intelligence card — Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence; honest `—` when no signal is available
-- Mobile touch model — twist + pinch + pan decomposition with dead zones; opt-in 3-finger zoom for advanced users
-- Mobile Scan Intelligence bottom-sheet — peek + tap-to-toggle; tool-dock overflow "More" disclosure
-- A coordinate bridge with `CrsService`, UTM + lat/lon inspector readouts, and a streaming-aware Visuals Studio with white balance + auto-balance gated to streaming COPC
-
-### v0.3.8 — Visuals Studio + lasso volume + FLAI integration
-- Visuals Studio — three chip rails (Colour Mode, RGB Preset, Sky / EDL) that re-style the scan without leaving the panel
-- Soft splat rendering — Classic round points, Soft splats, or Inspection mode with density-aware radius
-- Lasso volume — 3D volumetric (not screen polygon) selection with NaN / degenerate / self-intersection guards, save-to-session, and a streaming-resident caveat
-- FLAI integration — additional curated COPC URLs verified through a CORS + LAS-header probe
-- Polygon completion workflow — click first vertex to close, with visual feedback
-
-### v0.3.7 — Rendering quality + new LiDAR capabilities
-- EDL + SSAO combined ambient occlusion
-- Hillshade overlay colour mode
-- Local-density adaptive point sizing
-- Palette editor + named perceptual presets, with a 5/95 percentile-clipped height mode and Turbo default
-- HDR sky / atmospheric backgrounds — Studio Dark, Blueprint, Survey Light, Terrain, Black
-- Inspection presets (Survey / Terrain / Foliage / Class / QA)
-- **Cross-section + height profile** — pickable section line with a chart strip in the Measurements panel
-- **Volume (cut / fill)** measurement against a polygon
-- **Classification editor** with LAS write-back
-- **Density heatmap** overlay
-- **3D Tiles / `.pnts` foundations** (experimental, not yet user-facing) — parser groundwork for Cesium-style tilesets; not openable yet
-- **Interactive box clipping / slicing**
-- Patch view + colour provenance
-- White balance (temperature + tint), auto-balance, EDL presets (Subtle / Balanced / Inspection)
-- Photoreal RGB + Drone RGB + Mobile LiDAR + Infrastructure presets
-- Measurement chains — combine placed measurements as sum / difference / ratio
-
-### v0.3.6 — Research foundation
-- Verified public LiDAR dataset picker — 18 hand-vetted COPC / EPT URLs, every one probed at release time, no API key
-- Provenance fingerprint — classifies capture type (iPhone / drone / terrestrial / aerial / spaceborne) with literature-cited accuracy bounds
-- Scan Acceptance report template — pass/fail checklist over user-supplied thresholds, with a literature-cited Methods appendix
-- Local-first usage counters — categorical session stats in `localStorage` only, `?notelemetry=1` opt-out
-
-### v0.3.0 – v0.3.5 — Streaming + reporting platform
-- COPC LAZ streaming — local and remote (0.3.0); hardened across 0.3.1–0.3.3
-- EPT (Entwine Point Tile) streaming — local and remote, `binary` and `laszip` tiles (0.3.3)
-- PCD, PTS, PTX static imports
-- Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, contour (0.3.2–0.3.3)
-- Multi-page PDF technical reports — six built-in templates with branding and unit-system awareness (0.3.3–0.3.6)
-- `.olvsession` session round-trip — camera, render settings, colour mode, annotations, measurements, scan metadata (0.3.3)
-- Measurement toolkit — distance, polyline, area, height, angle, slope, cross-section profile
-- Annotation system with categorised markers and notes
-- Point inspector and live probe
-- WebGPU primary path with a WebGL 2 fallback
+The current release is **v0.5.9**. The full, dated history is in
+[CHANGELOG.md](CHANGELOG.md), and the per-release highlights live in the
+[Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/)
+(source: the `RELEASE_NOTES_v*.md` files in this repository).
 
 ## Current Limitations
 
