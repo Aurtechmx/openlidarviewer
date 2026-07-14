@@ -129,6 +129,8 @@ import { buildBenchmarkResult, formatBenchmarkResult } from './io/benchmark';
 // variable annotations.
 import type { StreamingBenchmark } from './render/streaming/streamingBenchmark';
 import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
+// Type-only: the overlay itself rides a lazy chunk (loadColorbarOverlay).
+import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
@@ -219,6 +221,7 @@ import {
   loadCompareDtms,
   loadChangeRaster,
   loadApplyDisplayProfile,
+  loadColorbarOverlay,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -248,6 +251,9 @@ import { CatalogPanel } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { CrsInfo } from './io/crs';
 import { CrsService } from './geo/CrsService';
+// Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
+// feeds the colorbar legend's elevation unit from the resolved CRS.
+import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { serviceWorkerUrl } from './app/swUrl';
@@ -1112,6 +1118,49 @@ let confidenceColorPrev: ColorMode | undefined;
 let viewerReady = false;
 /** The `?debug=1` / `?benchmark=1` performance overlay, when one is shown. */
 let debugOverlay: DebugOverlay | null = null;
+
+/** The live colorbar legend overlay (lazy chunk) — null until first needed. */
+let colorbarOverlay: ColorbarOverlay | null = null;
+/** In-flight guard so a burst of refreshes fetches the overlay chunk once. */
+let colorbarOverlayLoading = false;
+
+/**
+ * Refresh the on-screen colorbar legend from the Viewer's active colour
+ * context. The Viewer fires `onColorContextChanged` on every mode / trim /
+ * cloud / unit change (static AND streaming paths), and the streaming
+ * node-ready hook re-calls this as the cloud-global ranges converge; the
+ * overlay itself no-ops when the spec is unchanged, so frequent calls are
+ * free. The overlay chunk is fetched on the FIRST continuous-scalar mode
+ * only — an RGB-only session never downloads it.
+ */
+function refreshColorbarOverlay(): void {
+  if (!viewerReady) return;
+  const active = viewer.activeColorbar();
+  if (!active) {
+    colorbarOverlay?.update(null);
+    return;
+  }
+  if (!colorbarOverlay) {
+    if (colorbarOverlayLoading) return;
+    colorbarOverlayLoading = true;
+    void loadColorbarOverlay()
+      .then((mod) => {
+        colorbarOverlay = new mod.ColorbarOverlay();
+        stage.overlay.append(colorbarOverlay.element);
+        // Re-read the CURRENT spec — the mode may have changed while the
+        // chunk was in flight, and stale legends are worse than none.
+        colorbarOverlay.update(viewer.activeColorbar());
+      })
+      .catch((err) => {
+        // A missing legend must never break the session; allow a retry on
+        // the next colour change.
+        colorbarOverlayLoading = false;
+        console.warn('[colorbar] overlay chunk failed to load:', err);
+      });
+    return;
+  }
+  colorbarOverlay.update(active);
+}
 
 /** The COPC decode worker client — created lazily on the first COPC open. */
 let copcDecoder: CopcWorkerClient | null = null;
@@ -2546,6 +2595,19 @@ void viewerLoaded.then(() => {
     const isGeo = resolved?.kind === 'geographic';
     viewer.measure.setGeographicCrs(isGeo);
     measurePanel.setGeographicNotice(isGeo);
+    // Colorbar legend — the elevation unit comes from the SAME resolved CRS
+    // (overrides included), through the same vertical-unit rule the terrain
+    // runner uses: an explicit vertical unit wins, else the horizontal
+    // linear unit WHEN KNOWN. An unknown CRS reports factor 1 as a
+    // pass-through, so gate on `linearUnit !== 'unknown'` — otherwise
+    // unknown units would masquerade as metres on the legend. `verticalUnitLabel`
+    // returns 'units' for odd factors; that is not a unit, so it maps to
+    // null and the legend shows bare numbers (honesty rule).
+    const vToM =
+      resolved?.verticalUnitToMetres ??
+      (resolved && resolved.linearUnit !== 'unknown' ? resolved.linearUnitToMetres : null);
+    const vLabel = vToM != null ? verticalUnitLabel(vToM) : 'units';
+    viewer.setElevationUnit(vLabel === 'units' ? null : vLabel);
   });
 });
 // The Annotations panel lists placed annotations; the controller drives it.
@@ -2780,11 +2842,18 @@ void viewerLoaded.then(() => {
   // resident, so a 360 house can read as terrain early; once enough geometry
   // has streamed in, re-classify and re-route (only if the verdict changes).
   // Debounced + growth-gated so a burst of node-ready events can't thrash.
+  // Colour-context changes (mode / trim / cloud / unit, static AND
+  // streaming) drive the live colorbar legend through one seam.
+  viewer.onColorContextChanged = refreshColorbarOverlay;
   viewer.onStreamingNodeReady = () => {
     // Seed the elevation + intensity filter controls once the first node is
     // resident (idempotent + guarded, so it runs a single time per streaming
     // scan). Fixes the streaming filter controls staying hidden.
     seedStreamingFilterExtents();
+    // The cloud-global colour ranges reseed as coarser nodes arrive
+    // (StreamingRenderer.onNodeReady) — keep the legend's window in step.
+    // The overlay no-ops on an unchanged spec, so this per-node call is free.
+    refreshColorbarOverlay();
     // A manual (non-auto) "Treat as" choice pins the routing exactly like the
     // "Run terrain anyway" override — a late streaming node must not flip it.
     if (scanRouteOverridden || scanTypeOverride !== 'auto') return;
@@ -7024,6 +7093,11 @@ async function saveSnapshot(): Promise<void> {
     const blob = await viewer.snapshot({
       annotations: viewer.annotate.getAnnotations().length > 0,
       measurements: viewer.measure.getMeasurements().length > 0,
+      // Publishability: burn the labelled colorbar when a continuous scalar
+      // mode is active. Self-gating in the Viewer (categorical modes draw
+      // nothing), and single-sourced with the on-screen legend, so the PNG
+      // always matches what the user saw.
+      colorbar: true,
     });
     // `snapshot()` renders the live scene through the class-mask shader, so a
     // filtered view drops hidden classes from the PNG. Stamp the same scope

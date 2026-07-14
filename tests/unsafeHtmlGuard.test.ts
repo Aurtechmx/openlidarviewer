@@ -123,6 +123,13 @@ const ALLOWLIST: readonly string[] = [
   // (a chevron path) defined inline in wireLeftRailToggle — no user data, same
   // sanctioned pattern as the other icon SVGs above.
   'src/main.ts::cfg.chevron',
+  // Colorbar legend overlay (hand-verified 2026-07-14). `buildColorbarSvg` is
+  // the pure figure-legend generator: it XML-escapes EVERY text value it
+  // interpolates (see `esc()` in src/render/colorbar.ts, pinned by
+  // tests/colorbar.test.ts), and its inputs here are app-chosen constants
+  // (mode labels, palette ids, formatted numbers) — no file name, CRS/WKT,
+  // annotation text, or any other user-derived string can reach it.
+  'src/ui/ColorbarOverlay.ts::buildColorbarSvg(s)',
 ];
 
 /**

@@ -674,6 +674,78 @@ export function finiteMinMax(values: ArrayLike<number>, count: number): { min: n
   return min <= max ? { min, max } : { min: 0, max: 0 };
 }
 
+/**
+ * The ramp window a continuous scalar mode paints across — the SAME range
+ * `colorForMode` feeds its colouring pass, extracted so a legend (the live
+ * colorbar overlay, the snapshot burn-in) can label the exact window the
+ * pixels used. `colorForMode`'s scalar cases consume THIS function, so the
+ * two can never drift: a legend that recomputed the range independently
+ * could silently disagree with the colours after a parameter change here.
+ *
+ * Returns `null` when the mode has no cloud-global ramp range to label:
+ * the categorical / vector modes (rgb, classification, normal), density
+ * (per-chunk normalised — no global window), the analysis-gated overlays
+ * (coverage / confidence — bucketed, their legend lives in the Analyse
+ * panel), and any scalar mode whose attribute the cloud does not carry.
+ */
+export function rampRangeForMode(
+  mode: ColorMode,
+  cloud: PointCloud,
+  opts?: ColorForModeOptions,
+): { min: number; max: number } | null {
+  const n = cloud.pointCount;
+  switch (mode) {
+    case 'intensity': {
+      // Raw finite min/max — matches the intensity case in colorForMode.
+      if (!cloud.intensity) return null;
+      return finiteMinMax(cloud.intensity, n);
+    }
+    case 'gpsTime': {
+      // Percentile-clipped (default p5–p95) — see the gpsTime case below.
+      if (!cloud.gpsTime) return null;
+      const r = computeScalarRange(cloud.gpsTime, { count: n });
+      return { min: r.min, max: r.max };
+    }
+    case 'returnNumber': {
+      // Raw finite min/max, DELIBERATELY unclipped — see the case below.
+      if (!cloud.returnNumber) return null;
+      return finiteMinMax(cloud.returnNumber, n);
+    }
+    case 'elevation': {
+      const trim = clamp(opts?.heightPercentileTrim ?? 5, 0, 25);
+      const upAxis = opts?.upAxis ?? 2;
+      const r = computeElevationRange({
+        positions: cloud.positions,
+        pointCount: n,
+        lowerPercentile: trim,
+        upperPercentile: 100 - trim,
+        upAxis,
+      });
+      return { min: r.minZ, max: r.maxZ };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Narrow a `rampRangeForMode` result the caller has already guaranteed (the
+ * missing-attribute throw ran first). Keeps `colorForMode`'s scalar cases
+ * free of non-null assertions while still failing LOUDLY if the two
+ * functions ever fall out of step on their attribute gates.
+ */
+function mustRampRange(
+  r: { min: number; max: number } | null,
+  mode: ColorMode,
+): { min: number; max: number } {
+  if (!r) {
+    throw new Error(
+      `colorForMode('${mode}'): rampRangeForMode returned null after the attribute check passed — the two functions drifted`,
+    );
+  }
+  return r;
+}
+
 export function colorForMode(
   mode: ColorMode,
   cloud: PointCloud,
@@ -695,9 +767,10 @@ export function colorForMode(
       if (!cloud.intensity) {
         throw new Error(`colorForMode('intensity'): cloud "${cloud.name}" has no intensity attribute`);
       }
-      const src = cloud.intensity;
-      const { min, max } = finiteMinMax(src, n);
-      return colorByIntensity(src, n, min, max);
+      // Range through the shared legend seam (raw finite min/max) so the
+      // colorbar labels exactly the window these greys normalise against.
+      const { min, max } = mustRampRange(rampRangeForMode('intensity', cloud, opts), 'intensity');
+      return colorByIntensity(cloud.intensity, n, min, max);
     }
 
     // ── gpsTime (continuous scalar, Cividis ramp) ─────────────────────────────
@@ -712,10 +785,10 @@ export function colorForMode(
       // epoch-zero record from a malformed writer) compress the whole flight
       // line into a single colour stop, the exact failure the elevation ramp
       // already guards against. The core also skips non-finite values, so a
-      // NaN timestamp cannot poison the range.
-      const src = cloud.gpsTime;
-      const range = computeScalarRange(src, { count: n });
-      return colorByScalar(src, n, range.min, range.max);
+      // NaN timestamp cannot poison the range. Routed through the shared
+      // legend seam so the colorbar labels this exact clipped window.
+      const range = mustRampRange(rampRangeForMode('gpsTime', cloud, opts), 'gpsTime');
+      return colorByScalar(cloud.gpsTime, n, range.min, range.max);
     }
 
     // ── returnNumber (ordered scalar, Cividis ramp) ───────────────────────────
@@ -731,10 +804,10 @@ export function colorForMode(
       // failure mode for a percentile band to guard against; clipping would
       // instead merge real ordinals (a legitimate 5th return) into an
       // endpoint colour and erase exactly the deep-canopy reading the mode
-      // exists to show.
-      const src = cloud.returnNumber;
-      const { min, max } = finiteMinMax(src, n);
-      return colorByScalar(src, n, min, max);
+      // exists to show. Routed through the shared legend seam so the
+      // colorbar labels this exact ordinal window.
+      const { min, max } = mustRampRange(rampRangeForMode('returnNumber', cloud, opts), 'returnNumber');
+      return colorByScalar(cloud.returnNumber, n, min, max);
     }
 
     // ── elevation ───────────────────────────────────────────────────────────
@@ -744,17 +817,12 @@ export function colorForMode(
       // line, a flag-mast) compress the entire field of points into
       // one colour stop. The 2nd / 98th percentile band keeps the
       // ramp meaningful on outlier-heavy clouds and matches what
-      // CloudCompare / Potree / Entwine viewers do.
-      const trim = clamp(opts?.heightPercentileTrim ?? 5, 0, 25);
+      // CloudCompare / Potree / Entwine viewers do. Routed through the
+      // shared legend seam (which owns the trim clamp + percentile band) so
+      // the colorbar labels exactly the window these colours ramp across.
       const upAxis = opts?.upAxis ?? 2;
-      const range = computeElevationRange({
-        positions: cloud.positions,
-        pointCount: n,
-        lowerPercentile: trim,
-        upperPercentile: 100 - trim,
-        upAxis,
-      });
-      return colorByElevation(cloud.positions, n, range.minZ, range.maxZ, undefined, upAxis);
+      const range = mustRampRange(rampRangeForMode('elevation', cloud, opts), 'elevation');
+      return colorByElevation(cloud.positions, n, range.min, range.max, undefined, upAxis);
     }
 
     // ── normal ──────────────────────────────────────────────────────────────

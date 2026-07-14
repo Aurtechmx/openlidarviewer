@@ -90,8 +90,18 @@ const DIST = join(process.cwd(), 'dist', 'assets');
  * measured 532,477 B, 3 B under the prior ceiling — no headroom for the pending
  * panel redesign). Every export RENDERER still rides a lazy chunk; only the
  * ~1 KB dispatch + DOM wiring is eager, and SHELL_FORBIDDEN_CONTENT stays green.
+ *
+ * Raised 528 → 532 KiB for the colorbar legend (ws/colorbar-ui): the merges
+ * since v0.5.9 had already brought the plain index to 540,279 B (393 B under
+ * the prior ceiling), and the legend's eager surface — the sub-KB
+ * `refreshColorbarOverlay` trigger, the Viewer hook + CRS-unit wiring, and
+ * the `loadColorbarOverlay` seam — measured +1,365 B (540,279 → 541,644 B).
+ * The legend itself is the sanctioned split: the overlay DOM rides its own
+ * lazy `ColorbarOverlay-*.js` chunk, the SVG generator + spec-builder ride
+ * the shared lazy `colorbar-*.js` chunk (imported only by the Viewer and
+ * overlay chunks), and SHELL_FORBIDDEN_CONTENT stays green.
  */
-const WARNING_THRESHOLD = 528 * 1024;
+const WARNING_THRESHOLD = 532 * 1024;
 
 /** Required chunk-name prefixes — substring-matched against the filename. */
 const REQUIRED_CHUNK_PREFIXES = [
@@ -122,6 +132,10 @@ const REQUIRED_CHUNK_PREFIXES = [
   'extractFloorPlan',
   'floorPlanSvg',
   'spaceReportPdf',
+  // Colorbar legend overlay (ws/colorbar-ui) — lazy via loadColorbarOverlay.
+  // Pinned so a re-inline can't silently drag the legend DOM (and the shared
+  // colorbar generator chunk it imports) into the eager shell.
+  'ColorbarOverlay',
 ] as const;
 
 /**

@@ -19,9 +19,19 @@
 
 import { elevationRampColor, type ElevationPalette } from './colorModes';
 
+/**
+ * The ramps a colorbar can label. Every named perceptual palette, plus
+ * `'grayscale'` — the intensity mode's actual painting (`colorByIntensity`
+ * without a palette maps t → round(t·255) on all three channels). The
+ * grayscale entry exists for the honesty rule: an intensity legend must
+ * sample the SAME mapping the points use, and that mapping is not one of the
+ * elevation ramps.
+ */
+export type ColorbarRamp = ElevationPalette | 'grayscale';
+
 export interface ColorbarSpec {
-  /** The perceptual ramp to render (matches the on-screen colouring). */
-  readonly palette: ElevationPalette;
+  /** The ramp to render (matches the on-screen colouring). */
+  readonly palette: ColorbarRamp;
   /** Data value at the ramp's low end. */
   readonly min: number;
   /** Data value at the ramp's high end. */
@@ -44,12 +54,20 @@ export interface ColorbarStop {
 }
 
 /** Sample the ramp at `samples` evenly-spaced stops (inclusive of 0 and 1). */
-export function colorbarStops(palette: ElevationPalette, samples = 24): ColorbarStop[] {
+export function colorbarStops(palette: ColorbarRamp, samples = 24): ColorbarStop[] {
   const n = Math.max(2, Math.floor(samples));
   const out: ColorbarStop[] = [];
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
-    out.push({ t, rgb: elevationRampColor(t, palette) });
+    if (palette === 'grayscale') {
+      // Mirror `colorByIntensity`'s grayscale mapping EXACTLY (t → round(t·255)
+      // per channel) — the intensity legend must never show a grey the
+      // renderer wouldn't paint for the same normalised value.
+      const grey = Math.round(t * 255);
+      out.push({ t, rgb: [grey, grey, grey] });
+    } else {
+      out.push({ t, rgb: elevationRampColor(t, palette) });
+    }
   }
   return out;
 }
@@ -90,8 +108,13 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** Format a tick value: integer when whole, else up to 2 dp, trimmed. */
-function fmtTick(v: number): string {
+/**
+ * Format a tick value: integer when whole, else up to 2 dp, trimmed. Exported
+ * so the legend overlay's explicit min–max range line formats its endpoints
+ * with the SAME rule the SVG's tick labels use — two formatters would let the
+ * range line and the ticks disagree on the same number.
+ */
+export function formatColorbarValue(v: number): string {
   if (Number.isInteger(v)) return String(v);
   return String(Number(v.toFixed(2)));
 }
@@ -122,7 +145,7 @@ export function buildColorbarSvg(spec: ColorbarSpec): string {
       .map((v) => {
         const x = x0 + posOf(v) * barW;
         return `<line x1="${x.toFixed(1)}" y1="${y0 + barH}" x2="${x.toFixed(1)}" y2="${y0 + barH + 4}" stroke="#666" stroke-width="1"/>` +
-          `<text x="${x.toFixed(1)}" y="${y0 + barH + 15}" font-size="9" text-anchor="middle" fill="#333">${fmtTick(v)}</text>`;
+          `<text x="${x.toFixed(1)}" y="${y0 + barH + 15}" font-size="9" text-anchor="middle" fill="#333">${formatColorbarValue(v)}</text>`;
       })
       .join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="52" viewBox="0 0 ${W} 52" role="img" aria-label="${label}${unit} colour scale">` +
@@ -139,7 +162,7 @@ export function buildColorbarSvg(spec: ColorbarSpec): string {
     .map((v) => {
       const y = yOf(v);
       return `<line x1="${x0 + barW}" y1="${y.toFixed(1)}" x2="${x0 + barW + 4}" y2="${y.toFixed(1)}" stroke="#666" stroke-width="1"/>` +
-        `<text x="${x0 + barW + 7}" y="${(y + 3).toFixed(1)}" font-size="9" text-anchor="start" fill="#333">${fmtTick(v)}</text>`;
+        `<text x="${x0 + barW + 7}" y="${(y + 3).toFixed(1)}" font-size="9" text-anchor="start" fill="#333">${formatColorbarValue(v)}</text>`;
     })
     .join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="70" height="${H}" viewBox="0 0 70 ${H}" role="img" aria-label="${label}${unit} colour scale">` +

@@ -116,6 +116,13 @@ export interface ExportSceneAdapter {
     inspector: boolean;
     /** Bake the LiveProbe's last-known readout when probe mode is active. */
     probe: boolean;
+    /**
+     * Burn the labelled colorbar for the active CONTINUOUS colour mode
+     * (elevation / intensity / gpsTime / returnNumber). Self-gating in the
+     * Viewer: categorical modes draw nothing, so exporters may request it
+     * unconditionally. Optional so existing adapter fakes stay valid.
+     */
+    colorbar?: boolean;
   }): Promise<Blob>;
   /** Display name of the loaded scan(s) — used in the scan-report card. */
   sourceName(): string;

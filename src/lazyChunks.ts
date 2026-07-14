@@ -223,6 +223,16 @@ export const loadReclassifyUi = () => import('./ui/reclassifyUi');
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 
 /**
+ * Load the live colorbar legend overlay. Fetched the first time the active
+ * colour mode is a continuous scalar (elevation / intensity / gpsTime /
+ * returnNumber) — an RGB-only session never downloads it, and the eager
+ * shell carries only the sub-KB refresh trigger (the bundle budget has no
+ * headroom for more). Routed through here for the usual reason: the live
+ * source-transform must never see the import literal.
+ */
+export const loadColorbarOverlay = () => import('./ui/ColorbarOverlay');
+
+/**
  * Load the batch format converter (its modal UI plus the conversion engine and
  * proj4). Only reached when the user opens the converter, so proj4 and the LAS
  * writer never enter the initial app payload.

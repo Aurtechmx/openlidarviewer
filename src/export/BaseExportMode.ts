@@ -345,6 +345,12 @@ export async function runStudioExport(
         // export"; this is the implementation.
         inspector: true,
         probe: true,
+        // Publishability: a quantitative figure needs its labelled min/max
+        // colorbar. Requested unconditionally because the Viewer self-gates
+        // on the FORCED colour mode at capture time (withColorMode has
+        // already applied `colorMode` by now) — height-map / intensity /
+        // depth exports gain the legend; rgb / classification stay untouched.
+        colorbar: true,
       });
       return { blob: snapshot, size: null };
     },
