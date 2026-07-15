@@ -72,7 +72,8 @@ composed by the `analyseContours` orchestrator
 - **Per-cell confidence** (`ground/cellConfidence.ts`). Produces the
   confidence-aware DTM — every cell carries an elevation, a 0..100
   confidence, coverage provenance, and interpolation distance. Void cells are
-  filled by **inverse-distance weighting** (`ground/idwFill.ts`); slope for
+  filled by **geodesic-distance propagation** (`ground/geodesicFill.ts`, seeded by
+  an IDW prefill from `ground/idwFill.ts`); slope for
   the roughness penalty uses **Horn's method** (`ground/terrainDerivatives.ts`);
   measured-cell confidence combines relative and absolute sample adequacy.
 - **Validation + calibration** (`validate/`). Hold-out cross-validation
@@ -156,8 +157,8 @@ The bare-earth DTM is built in stages, each a pure-data leaf:
    no invented heights.
 3. **Confidence-aware grid** (`ground/cellConfidence.ts`). Each cell gets an
    elevation, a 0–100 confidence, coverage provenance, and an interpolation
-   distance. Void cells are filled by inverse-distance weighting
-   (`ground/idwFill.ts`); the roughness penalty uses slope from Horn's
+   distance. Void cells are filled by geodesic-distance propagation
+   (`ground/geodesicFill.ts`, seeded by an IDW prefill); the roughness penalty uses slope from Horn's
    method (`ground/terrainDerivatives.ts`). A measured cell, an interpolated
    cell, and an empty cell are always distinguishable downstream.
 

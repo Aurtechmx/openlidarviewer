@@ -93,14 +93,19 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation: 'Weiss (2001), TPI poster / Jenness (2006) implementation',
     category: 'terrain',
   },
+  // Id is a stable legacy token (predates the geodesic upgrade) kept so existing
+  // exports/sessions stamped `olv.dtm.idw-fill@1` stay resolvable; the shipped
+  // fill is geodesic — an Euclidean IDW prefill only SEEDS it — so the name and
+  // summary describe the actual algorithm, not just the prefill.
   'olv.dtm.idw-fill': {
     id: 'olv.dtm.idw-fill',
     version: 1,
-    name: 'DTM rasterisation with inverse-distance void fill',
+    name: 'DTM rasterisation with geodesic-distance void fill',
     summary:
-      'Bins ground returns to a grid, then fills interior voids by inverse-distance ' +
-      'interpolation, tracking measured vs interpolated cells.',
-    citation: 'Internal composition (standard IDW gridding); no single source method.',
+      'Bins ground returns to a grid, then fills interior voids by geodesic-distance ' +
+      'propagation from measured cells (an Euclidean IDW prefill seeds a provisional ' +
+      'surface, refined along in-surface geodesic distance), tracking measured vs interpolated cells.',
+    citation: 'Internal composition (geodesic-distance void fill with an IDW prefill); no single source method.',
     category: 'dtm',
   },
   'olv.validation.holdout-rmse': {
