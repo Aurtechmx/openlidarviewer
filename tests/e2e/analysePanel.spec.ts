@@ -160,4 +160,11 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   const dem = page.locator('.olv-cs-export-btn', { hasText: /^DEM \(ZIP\)$/ });
   await expect(dem).toBeVisible();
   await expect(dem).toBeEnabled();
+  // The complete deliverable bundle ("Complete (ZIP)") — the purpose-aware
+  // curated package — is offered and, exploratory ⇒ enabled (it watermarks
+  // rather than blocks). Its per-purpose geometry + provenance stamps are
+  // unit-covered in tests/demExport.test.ts; this pins the shipped button.
+  const complete = page.locator('.olv-cs-export-btn', { hasText: /^Complete \(ZIP\)$/ });
+  await expect(complete).toBeVisible();
+  await expect(complete).toBeEnabled();
 });

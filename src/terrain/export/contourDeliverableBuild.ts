@@ -104,6 +104,21 @@ interface GatheredDeliverable {
   readonly bytes: Map<PackageRole, Uint8Array>;
 }
 
+/**
+ * The grid summary in the deliverable's OWN horizontal unit — never a
+ * hard-coded metre. A foot or geographic (degree) frame is labelled honestly,
+ * mirroring the `horizontalUnit` the same provenance reports.
+ */
+export function deliverableGridLabel(
+  dtm: AnalyseContoursResult['dtm'] | null,
+  horizontalUnit: string,
+  isGeographic: boolean | undefined,
+): string {
+  if (dtm == null) return 'unknown';
+  const unit = isGeographic ? 'degrees' : horizontalUnit;
+  return `${dtm.cols}x${dtm.rows} @ ${dtm.cellSizeM} ${unit}`;
+}
+
 function gatherDeliverable(
   result: AnalyseContoursResult,
   opts: DeliverableBuildOptions,
@@ -265,7 +280,7 @@ export async function buildContourDeliverableFromResultAsync(
       verticalDatum: g.provenance.verticalDatum,
       horizontalUnit: opts.isGeographic ? 'degrees' : g.horizontalUnit,
       verticalUnit: g.verticalUnit,
-      grid: g.dtm != null ? `${g.dtm.cols}x${g.dtm.rows} @ ${g.dtm.cellSizeM} m` : 'unknown',
+      grid: deliverableGridLabel(g.dtm, g.horizontalUnit, opts.isGeographic),
       // The registered contour method actually exported, when Contour Studio set
       // it; otherwise none (never a fabricated id).
       methodIds: g.provenance.contourMethod ? [g.provenance.contourMethod] : [],

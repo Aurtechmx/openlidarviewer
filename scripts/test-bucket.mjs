@@ -98,8 +98,13 @@ if (files.length === 0) {
 //             isolation: raise the timeout so parallel contention can't tip a
 //             genuine 14 s test past the strict 15 s global limit.
 // The fast buckets (unit/export/ui) keep the strict 15 s global timeout, so a
-// real regression there still trips it.
+// real regression there still trips it. They also pin an absolute worker cap so
+// a high-core machine can't over-subscribe the pool and hang at shutdown
+// (EPIPE / "Worker exited unexpectedly") even when every assertion passes.
 const BUCKET_ARGS = {
+  unit: ['--maxWorkers=4'],
+  export: ['--maxWorkers=4'],
+  ui: ['--maxWorkers=4'],
   slow: ['--maxWorkers=2', '--testTimeout=60000'],
   terrain: ['--testTimeout=45000', '--maxWorkers=4'],
 };

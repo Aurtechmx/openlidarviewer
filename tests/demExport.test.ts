@@ -3,7 +3,7 @@ import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
 import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
 import { sha256Hex } from '../src/terrain/export/sha256';
-import { buildContourDeliverableFromResult } from '../src/terrain/export/contourDeliverableBuild';
+import { buildContourDeliverableFromResult, deliverableGridLabel } from '../src/terrain/export/contourDeliverableBuild';
 import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
@@ -29,6 +29,18 @@ const COLS = 2;
 const ROWS = 2;
 const Z = new Float32Array([10, 20, 30, 40]);
 const COV = new Uint8Array([2, 2, 1, 0]); // last cell empty
+
+describe('deliverableGridLabel', () => {
+  it('labels the grid in the horizontal unit, never a hard-coded metre', () => {
+    const dtm = { cols: 40, rows: 30, cellSizeM: 1 } as unknown as AnalyseContoursResult['dtm'];
+    // Foot / geographic frames must NOT be stamped as metres (the vertical-unit
+    // bug's twin — the grid spacing is in the horizontal unit, not always m).
+    expect(deliverableGridLabel(dtm, 'ft', false)).toBe('40x30 @ 1 ft');
+    expect(deliverableGridLabel(dtm, 'm', false)).toBe('40x30 @ 1 m');
+    expect(deliverableGridLabel(dtm, 'm', true)).toBe('40x30 @ 1 degrees');
+    expect(deliverableGridLabel(null, 'ft', false)).toBe('unknown');
+  });
+});
 
 describe('writeAsciiGrid (Esri ASCII Grid / AAIGrid)', () => {
   it('writes a correct header and emits north-row-first with NODATA', () => {
