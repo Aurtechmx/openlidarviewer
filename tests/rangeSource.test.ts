@@ -453,6 +453,10 @@ test('validateRemoteCopcUrl blocks localhost and private/link-local hosts (SSRF)
     'http://[::ffff:10.0.0.1]/scan.copc.laz',
     'http://[::ffff:192.168.1.1]/scan.copc.laz',
     'http://[::ffff:169.254.169.254]/latest/meta-data',
+    // Trailing-dot (root-anchored FQDN) forms resolve to the same host.
+    'http://localhost./scan.copc.laz',
+    'http://printer.local./scan.copc.laz',
+    'http://svc.internal./scan.copc.laz',
   ];
   for (const url of blocked) {
     const res = validateRemoteCopcUrl(url);

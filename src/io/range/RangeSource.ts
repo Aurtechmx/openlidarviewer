@@ -155,7 +155,10 @@ export function validateRemoteCopcUrl(
  * user's own machine.
  */
 export function isBlockedHost(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  // Strip brackets AND any trailing dot(s): a root-anchored FQDN like
+  // "localhost." or "svc.internal." resolves to the same host but would slip
+  // past the equality / endsWith checks below.
+  const h = hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
   if (h === '' || h === 'localhost') return true;
   if (h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
   // IPv6 loopback / unspecified / link-local / unique-local.
