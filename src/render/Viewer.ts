@@ -1833,15 +1833,15 @@ export class Viewer {
       geometry.setAttribute('aIntensity', intenAttr);
     }
 
-    // `instancedBufferAttribute` is typed as a broad node-type union; narrow
-    // it to each property's accepted type — the itemSize (3) makes it a vec3.
+    // `instancedBufferAttribute` is typed as a broad TSL node union. Narrowing it
+    // with `NonNullable<typeof material.…>` materialises that union and trips
+    // tsc's union-complexity limit (TS2590) on some toolchains (it surfaced on
+    // CI's Node 22, not local Node 26). Cast through the file's `TslNode` interop
+    // alias instead — the itemSize (3) makes each a vec3; the shader maths is
+    // verified at runtime, and this matches how the rest of the file bridges TSL.
     const material = new THREE.PointsNodeMaterial();
-    material.positionNode = instancedBufferAttribute(positionAttr) as NonNullable<
-      typeof material.positionNode
-    >;
-    material.colorNode = instancedBufferAttribute(colorAttr) as NonNullable<
-      typeof material.colorNode
-    >;
+    material.positionNode = instancedBufferAttribute(positionAttr) as TslNode;
+    material.colorNode = instancedBufferAttribute(colorAttr) as TslNode;
     // Apply the splat multiplier at build time so a cloud added after
     // the user has picked Soft / Inspection from the chip rail renders
     // with the right sprite size from the very first frame.
