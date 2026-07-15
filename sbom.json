@@ -1,0 +1,3666 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "serialNumber": "urn:uuid:93533070-3c9f-4d32-a37e-fe053d0b8aa8",
+  "metadata": {
+    "timestamp": "2026-07-15T13:13:29.365Z",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "npm",
+          "version": "11.12.1"
+        },
+        {
+          "type": "application",
+          "name": "cyclonedx-npm",
+          "group": "@cyclonedx",
+          "version": "2.1.0",
+          "author": "Jan Kowalleck",
+          "description": "Create CycloneDX Software Bill of Materials (SBOM) from NPM projects.",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0"
+              }
+            }
+          ],
+          "externalReferences": [
+            {
+              "url": "git+https://github.com/CycloneDX/cyclonedx-node-npm.git",
+              "type": "vcs",
+              "comment": "as detected from PackageJson property \"repository.url\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-node-npm#readme",
+              "type": "website",
+              "comment": "as detected from PackageJson property \"homepage\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-node-npm/issues",
+              "type": "issue-tracker",
+              "comment": "as detected from PackageJson property \"bugs.url\""
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "name": "cyclonedx-library",
+          "group": "@cyclonedx",
+          "version": "7.1.0",
+          "author": "Jan Kowalleck",
+          "description": "Core functionality of CycloneDX for JavaScript (Node.js or WebBrowser).",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0"
+              }
+            }
+          ],
+          "externalReferences": [
+            {
+              "url": "git+https://github.com/CycloneDX/cyclonedx-javascript-library.git",
+              "type": "vcs",
+              "comment": "as detected from PackageJson property \"repository.url\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-javascript-library#readme",
+              "type": "website",
+              "comment": "as detected from PackageJson property \"homepage\""
+            },
+            {
+              "url": "https://github.com/CycloneDX/cyclonedx-javascript-library/issues",
+              "type": "issue-tracker",
+              "comment": "as detected from PackageJson property \"bugs.url\""
+            }
+          ]
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "name": "openlidarviewer",
+      "version": "0.5.9",
+      "bom-ref": "openlidarviewer@0.5.9",
+      "author": "A. Urias",
+      "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/openlidarviewer@0.5.9?vcs_url=git%2Bhttps%3A%2F%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer.git",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/Aurtechmx/openlidarviewer.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://lidar.aurtech.mx/",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/Aurtechmx/openlidarviewer/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": ""
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "inter",
+      "group": "@fontsource-variable",
+      "version": "5.2.8",
+      "bom-ref": "@fontsource-variable/inter@5.2.8",
+      "author": "Google Inc.",
+      "description": "Self-host the Inter font in a neatly bundled NPM package.",
+      "licenses": [
+        {
+          "license": {
+            "id": "OFL-1.1",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40fontsource-variable/inter@5.2.8#fonts/variable/inter",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/fontsource/font-files.git#fonts/variable/inter",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://fontsource.org/fonts/inter",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/fontsource/font-files/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.2.8.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "90e7cfd83fb291b717fcfdc8167a243a15513684e8ce8e7f27184021560ba5e6bf50198243f6163c17d6203b812265d7ff5e4a1fe78a878c69114c92dac41019"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@fontsource-variable/inter"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "jetbrains-mono",
+      "group": "@fontsource",
+      "version": "5.2.8",
+      "bom-ref": "@fontsource/jetbrains-mono@5.2.8",
+      "author": "Google Inc.",
+      "description": "Self-host the JetBrains Mono font in a neatly bundled NPM package.",
+      "licenses": [
+        {
+          "license": {
+            "id": "OFL-1.1",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40fontsource/jetbrains-mono@5.2.8#fonts/google/jetbrains-mono",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/fontsource/font-files.git#fonts/google/jetbrains-mono",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://fontsource.org/fonts/jetbrains-mono",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/fontsource/font-files/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@fontsource/jetbrains-mono/-/jetbrains-mono-5.2.8.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "eb0f3f486e24aaf20cbbbc5def0b7ac7789d9f542ec77a7d37adace86deb7e574e5181e959c73614aaea7fe568e388d1bea5a3da802d4c7ad95c43f6de848ac1"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@fontsource/jetbrains-mono"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "manrope",
+      "group": "@fontsource",
+      "version": "5.2.8",
+      "bom-ref": "@fontsource/manrope@5.2.8",
+      "author": "Google Inc.",
+      "description": "Self-host the Manrope font in a neatly bundled NPM package.",
+      "licenses": [
+        {
+          "license": {
+            "id": "OFL-1.1",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40fontsource/manrope@5.2.8#fonts/google/manrope",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/fontsource/font-files.git#fonts/google/manrope",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://fontsource.org/fonts/manrope",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/fontsource/font-files/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@fontsource/manrope/-/manrope-5.2.8.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "8091c999cb9493ba9670d09f700ae2fc3250b57b4162a8bdc8aadab6be235e14a8d08df152d34d288fa281021cc3973e9bde60d2fa2e9e4f199d7fe46fca344c"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@fontsource/manrope"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "core",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/core@4.4.3",
+      "description": "The core API for working with loaders.gl loaders and writers",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/core@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/core/-/core-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "0fa91715da54b58c28a92e4e40b2da2c42e41e54b7a8875c4a0cd5bec87f3229d1b5e7952084c9a23a8473f9660f1d73551de3e96343ef23c61788b868ec223a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/core"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "loader-utils",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/loader-utils@4.4.3",
+      "description": "Framework-independent loaders for 3D graphics formats",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/loader-utils@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e72b753aa64f611dddfb1140aadcd228edb81ddef4d7d2aa37e88e5a9ed704a3d0052fac0048409e64939ced5ac68e392048b5e09dc584c0e4fa776a06848a11"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/loader-utils"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "schema",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/schema@4.4.3",
+      "description": "Table format APIs for JSON, CSV, etc...",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/schema@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "b436fface9f8e271d6bcc15239a024d7fa5071072eb318ab1823353b904c251d0f43bd54ac21decb9eabb1b71feffc0686fc91c0fb57fa888cce527d4e637cbd"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/schema"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "worker-utils",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/worker-utils@4.4.3",
+      "description": "Utilities for running tasks on worker threads",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/worker-utils@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "459b7f3701579ba2b1dc59ffaea896dc096c7bd6745ed064b47fc4140a7c5ba2efb0abb1a5132350ba867f26d3bb6c1a45745850d619eb31acf5a3966ed0d12f"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/worker-utils"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "log",
+      "group": "@probe.gl",
+      "version": "4.1.1",
+      "bom-ref": "@probe.gl/log@4.1.1",
+      "description": "JavaScript debug logging for browser and Node",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40probe.gl/log@4.1.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/probe.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/probe.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/probe.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@probe.gl/log/-/log-4.1.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "91c66cf414f8e292fb852d4e91118a6115c8fd237d29e8d494f0fe058e340e0b912f3742e6d2c6ff6f1618cc9f29d9ffe75193e1ad29fb43fcc6f0e7d44cfe2a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@probe.gl/log"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "stats",
+      "group": "@probe.gl",
+      "version": "4.1.1",
+      "bom-ref": "@probe.gl/stats@4.1.1",
+      "description": "Stats object for reporting performance statistics",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40probe.gl/stats@4.1.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/probe.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/probe.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/probe.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@probe.gl/stats/-/stats-4.1.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e15a40c8c1ceab2752bcf944c87c17684f80908751d379d7f90865c6c9360ff216e0e5660d9808b2f241d5c0f3c8412d71f29c9da11b7d77a23e07a305c793ea"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@probe.gl/stats"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "schema-utils",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/schema-utils@4.4.3",
+      "description": "Schema-related utilities for loaders.gl...",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/schema-utils@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "4e08334169337fda4861b8fc23d4654e4df79305ec96f0e46359e7c3f38bfe18a46baa9396cd46d76eea2b99bdb248808c4964e5992f40b41cc2139ba195d978"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/schema-utils"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "geojson",
+      "group": "@types",
+      "version": "7946.0.16",
+      "bom-ref": "@types/geojson@7946.0.16",
+      "description": "TypeScript definitions for geojson",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40types/geojson@7946.0.16#types/geojson",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/geojson",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/geojson",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@types/geojson/-/geojson-7946.0.16.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e82f27a96babde3f7c53afa55c37d351621f82f654f84ba6be91ca7188ee8ca1fbc286322e3dac5267dfd2d461aea33b068854c3b3f3dd90758e3da05bd16f9a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@types/geojson"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "apache-arrow",
+      "version": "21.1.0",
+      "bom-ref": "apache-arrow@21.1.0",
+      "author": "Apache Software Foundation",
+      "description": "Apache Arrow columnar in-memory format",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/apache-arrow@21.1.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/apache/arrow-js.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://arrow.apache.org/js/",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/apache/arrow-js/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/apache-arrow/-/apache-arrow-21.1.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "910ad82f1842f8d4d5559e020b3185e8bfee3d53b32660f54f75e06e25273fba1379514e160114bba20a370083929168055a832908af957e11505aaa9d616510"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/apache-arrow"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "helpers",
+      "group": "@swc",
+      "version": "0.5.23",
+      "bom-ref": "@swc/helpers@0.5.23",
+      "author": "강동윤",
+      "description": "External helpers for the swc project.",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40swc/helpers@0.5.23#packages/helpers",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/swc-project/swc.git#packages/helpers",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://swc.rs",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/swc-project/swc/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.23.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e654ac30e4d751178f8250dfbee01052a9067a4f47836924b0e61acb69b4f9747ef9bd8d5982ffe2c5b2baf54122cf282a725ac64762f7085a2ffb2a375dda7f"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@swc/helpers"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "tslib",
+      "version": "2.8.1",
+      "bom-ref": "tslib@2.8.1",
+      "author": "Microsoft Corp.",
+      "description": "Runtime library for TypeScript helper functions",
+      "licenses": [
+        {
+          "license": {
+            "id": "0BSD",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/tslib@2.8.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/Microsoft/tslib.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://www.typescriptlang.org/",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/Microsoft/TypeScript/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a0916ef781d06fe29576e49440bef09e99aa9df98bb0e03f9c087a6fa107d30084a0ad3f98f79753a737c0a0d5f373243ae1cf447b525ca294f7d2016b34bfdb"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/tslib"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "command-line-args",
+      "group": "@types",
+      "version": "5.2.3",
+      "bom-ref": "@types/command-line-args@5.2.3",
+      "description": "TypeScript definitions for command-line-args",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40types/command-line-args@5.2.3#types/command-line-args",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/command-line-args",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/command-line-args",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@types/command-line-args/-/command-line-args-5.2.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "bafd1a1ba47463c58764b4da999c2d7ec0cb5519ce6be9fe9f9ac4bc558be4d6b9819f15d9379a6ff76e0cf173208221b3daa2cc3a5c6af0aeb022c966eeb62b"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@types/command-line-args"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "command-line-usage",
+      "group": "@types",
+      "version": "5.0.4",
+      "bom-ref": "@types/command-line-usage@5.0.4",
+      "description": "TypeScript definitions for command-line-usage",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40types/command-line-usage@5.0.4#types/command-line-usage",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/command-line-usage",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/command-line-usage",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@types/command-line-usage/-/command-line-usage-5.0.4.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "07047928fdc4b3f09286dd31a817145d2dea0805155f0a512ac576f9aaf179beb96ad6acb971bd2f2902f406f5d02c37b36ada1fdd99a8e7882da41bb01d800a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@types/command-line-usage"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "node",
+      "group": "@types",
+      "version": "24.13.2",
+      "bom-ref": "@types/node@24.13.2",
+      "description": "TypeScript definitions for node",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40types/node@24.13.2#types/node",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/node",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@types/node/-/node-24.13.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "7d16b4f6465382ef28ef52857038d416e73b17e7446d96199a42349a0e5805346cd3230a8d81ecabf734bab0ca7836fe0f9a9581739d15cbaef8364f28e213c0"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@types/node"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "undici-types",
+      "version": "7.18.2",
+      "bom-ref": "undici-types@7.18.2",
+      "description": "A stand-alone types package for Undici",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/undici-types@7.18.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/nodejs/undici.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://undici.nodejs.org",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/nodejs/undici/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/undici-types/-/undici-types-7.18.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "02cb82cdf7c61c9c9b49a46b9abe5e1ebf359b0254de48f0e8cfaea6b5af09788d78df52386c10dc99fc8dbf26dd9ea2cd58249e7d51d054c21003f642b2d8ff"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/undici-types"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "command-line-args",
+      "version": "6.0.2",
+      "bom-ref": "command-line-args@6.0.2",
+      "author": "Lloyd Brookes",
+      "description": "A mature, feature-complete library to parse command-line options.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/command-line-args@6.0.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/75lb/command-line-args.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/75lb/command-line-args#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/75lb/command-line-args/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/command-line-args/-/command-line-args-6.0.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "0088d8571ad5f57ef9d8b98f0cb6d562ff1a302b873d22d9257128daaa3fc497eff8d621699e2c312174d6b33e8073da320bcf3349790ff17e431fa2d967d299"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/command-line-args"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "array-back",
+      "version": "6.2.3",
+      "bom-ref": "array-back@6.2.3",
+      "author": "Lloyd Brookes",
+      "description": "Guarantees an array back",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/array-back@6.2.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/75lb/array-back.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/75lb/array-back#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/75lb/array-back/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/array-back/-/array-back-6.2.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "4860ef9a0e904d8893c4206461599385ca1aebbb8b977e69cb344776908604e72a172e81b709e986814f93b2e126c843f989352addf958659e64f4e0c11e0587"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/array-back"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "find-replace",
+      "version": "5.0.2",
+      "bom-ref": "find-replace@5.0.2",
+      "author": "Lloyd Brookes",
+      "description": "Replace or remove multiple items in an array.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/find-replace@5.0.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/75lb/find-replace.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/75lb/find-replace#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/75lb/find-replace/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/find-replace/-/find-replace-5.0.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "638e410221379b3d90b2b3767dbe5012d3b8a9be3835c4bb7a7ff4cbd3c456c837e751ec2de55c94ff103cc1fbf4b7bdb07debb39452c09bbdf56d163d93b8dd"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/find-replace"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "lodash.camelcase",
+      "version": "4.3.0",
+      "bom-ref": "lodash.camelcase@4.3.0",
+      "author": "John-David Dalton",
+      "description": "The lodash method `_.camelCase` exported as a module.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/lodash.camelcase@4.3.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/lodash/lodash.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://lodash.com/",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/lodash/lodash/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/lodash.camelcase/-/lodash.camelcase-4.3.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "4f0b849c29f16dcdeb02f85ffcb6c6eed2540f386a5f2167bf776dccb38f8021bf84e0cbed6167b1bc24b640fbc9457446bade3ff9753c02eafd84a0e95be394"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/lodash.camelcase"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "typical",
+      "version": "7.3.0",
+      "bom-ref": "typical@7.3.0",
+      "author": "Lloyd Brookes",
+      "description": "Isomorphic, functional type-checking for Javascript",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/typical@7.3.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/75lb/typical.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/75lb/typical#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/75lb/typical/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/typical/-/typical-7.3.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "c9ae2683fdf4be6f833967c183860ade3d960fa4d6b519026dab0e26be340ac79810dcc251bcbfeeb22f5c0f7d246b101de3712db9d77722cbc4a4afded6ae17"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/typical"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "command-line-usage",
+      "version": "7.0.4",
+      "bom-ref": "command-line-usage@7.0.4",
+      "author": "Lloyd Brookes",
+      "description": "Generates command-line usage information",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/command-line-usage@7.0.4",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/75lb/command-line-usage.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/75lb/command-line-usage#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/75lb/command-line-usage/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/command-line-usage/-/command-line-usage-7.0.4.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "f3951dbf34cdc7fface429128019bfd21ccff344451c06bb3ec7de0031397b3645dee1f3dff4ea8fd8082864fd3d3b69c9c73751aeb84f4a15ba519f2b1cdfaa"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/command-line-usage"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "chalk-template",
+      "version": "0.4.0",
+      "bom-ref": "chalk-template@0.4.0",
+      "description": "Terminal string styling with tagged template literals",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/chalk-template@0.4.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/chalk/chalk-template.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/chalk/chalk-template#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/chalk/chalk-template/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/chalk-template/-/chalk-template-0.4.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "fe086b82685f63c45a49d7a8e3784d5f1a681c0b7175bb245078cfa5fa94586b6d160c9c52160f1b1dd86410a7502bce6bb0e88af9f521979cdc31061683202e"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/chalk-template"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "chalk",
+      "version": "4.1.2",
+      "bom-ref": "chalk@4.1.2",
+      "description": "Terminal string styling done right",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/chalk@4.1.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/chalk/chalk.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/chalk/chalk#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/chalk/chalk/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/chalk/-/chalk-4.1.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a0a9db845c91217a54b9ecfc881326c846b89db8f820e432ba173fc32f6463bfd654f73020ef5503aebc3eef1190eefed06efa48b44e7b2c3d0a9434eb58b898"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/chalk"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "ansi-styles",
+      "version": "4.3.0",
+      "bom-ref": "ansi-styles@4.3.0",
+      "author": "Sindre Sorhus",
+      "description": "ANSI escape codes for styling strings in the terminal",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/ansi-styles@4.3.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/chalk/ansi-styles.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/chalk/ansi-styles#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/chalk/ansi-styles/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-4.3.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "cdb07dac22404f5adb8e25436f686a2851cd60bc60b64f0d511c59dc86700f717a36dc5b5d94029e74a2d4b931f880e885d3e5169db6db05402c885e64941212"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/ansi-styles"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "color-convert",
+      "version": "2.0.1",
+      "bom-ref": "color-convert@2.0.1",
+      "author": "Heather Arthur",
+      "description": "Plain color conversion functions",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/color-convert@2.0.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/Qix-/color-convert.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/Qix-/color-convert#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/Qix-/color-convert/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/color-convert/-/color-convert-2.0.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "4511023ec8fb8aeff16f9a0a61cb051d2a6914d9ec8ffe763954d129be333f9a275f0545df3566993a0d70e7c60be0910e97cafd4e7ce1f320dfc64709a12529"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/color-convert"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "color-name",
+      "version": "1.1.4",
+      "bom-ref": "color-name@1.1.4",
+      "author": "DY",
+      "description": "A list of color names and its values",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/color-name@1.1.4",
+      "externalReferences": [
+        {
+          "url": "git+ssh://git@github.com/colorjs/color-name.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/colorjs/color-name",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/colorjs/color-name/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/color-name/-/color-name-1.1.4.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "74ecbedc0b96ddadb035b64722e319a537208c6b8b53fb812ffb9b71917d3976c3a3c7dfe0ef32569e417f479f4bcb84a18a39ab8171edd63d3a04065e002c40"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/color-name"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "supports-color",
+      "version": "7.2.0",
+      "bom-ref": "supports-color@7.2.0",
+      "author": "Sindre Sorhus",
+      "description": "Detect whether a terminal supports color",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/supports-color@7.2.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/chalk/supports-color.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/chalk/supports-color#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/chalk/supports-color/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "aa9080bd197db2db8e1ef78ab27ec79dc251befe74d6a21a70acd094effe2f0c5cf7ed2adb02f2bf80dfbedf34fc33e7da9a8e06c25d0e2a205c647df8ebf047"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/supports-color"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "has-flag",
+      "version": "4.0.0",
+      "bom-ref": "has-flag@4.0.0",
+      "author": "Sindre Sorhus",
+      "description": "Check if argv has a specific flag",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/has-flag@4.0.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/sindresorhus/has-flag.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/sindresorhus/has-flag#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/sindresorhus/has-flag/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/has-flag/-/has-flag-4.0.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "1329094ff4352a34d672da698080207d23b4b4a56e6548e180caf5ee4a93ba6325e807efdc421295e53ba99533a170c54c01d30c2e0d3a81bf67153712f94c3d"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/has-flag"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "table-layout",
+      "version": "4.1.1",
+      "bom-ref": "table-layout@4.1.1",
+      "author": "Lloyd Brookes",
+      "description": "Stylable text tables, handling ansi colour. Useful for console output.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/table-layout@4.1.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/75lb/table-layout.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/75lb/table-layout#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/75lb/table-layout/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/table-layout/-/table-layout-4.1.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "88ae7f621671ab918ee73f306f46d8d77d7bb83177663a616b440514b03cfedac0a222db403d0751b31eb046b1cb35200f18b642571b33c22fa8e9448e0a1704"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/table-layout"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wordwrapjs",
+      "version": "5.1.1",
+      "bom-ref": "wordwrapjs@5.1.1",
+      "author": "Lloyd Brookes",
+      "description": "Word-wrapping for javascript.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/wordwrapjs@5.1.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/75lb/wordwrapjs.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/75lb/wordwrapjs#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/75lb/wordwrapjs/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/wordwrapjs/-/wordwrapjs-5.1.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "d32c1e21b908349a1d936ee05fd2c118ccf241d0436a7decfdd1008b004e8fe31fd0f3f258bebfae291a964bfc11e0f413c8e6e28e515c43ab1533f73576e126"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/wordwrapjs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "flatbuffers",
+      "version": "25.9.23",
+      "bom-ref": "flatbuffers@25.9.23",
+      "author": "The FlatBuffers project",
+      "description": "Memory Efficient Serialization Library",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/flatbuffers@25.9.23",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/google/flatbuffers.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://google.github.io/flatbuffers/",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/google/flatbuffers/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/flatbuffers/-/flatbuffers-25.9.23.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "308d6ab3b2e8e12cb0d043b3525d318ecda5b287aa164bb8e0aa6781f21db87058bf39bc876fbb2bc60c421d49b55555ad4be12e9370a958b80c445e8142613d"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/flatbuffers"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "json-bignum",
+      "version": "0.0.3",
+      "bom-ref": "json-bignum@0.0.3",
+      "author": "Datalanche, Inc.",
+      "description": "Node.js JSON replacement which handles 64-bit integers and arbitrary-precision decimals.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared",
+            "url": "https://github.com/datalanche/json-bignum/raw/master/LICENSE"
+          }
+        }
+      ],
+      "purl": "pkg:npm/json-bignum@0.0.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/datalanche/json-bignum.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/datalanche/json-bignum",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/datalanche/json-bignum/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/json-bignum/-/json-bignum-0.0.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "d961f25e3dce7c74a0372bb30db4b1235c368e0c398245925a14bb420e1b597c759cb9378e76f07d4792d0f49b6b7233a53516747c4189e10b5335d18d0076ce"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/json-bignum"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "env",
+      "group": "@probe.gl",
+      "version": "4.1.1",
+      "bom-ref": "@probe.gl/env@4.1.1",
+      "description": "JavaScript environment detection for browser and Node",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40probe.gl/env@4.1.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/probe.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/probe.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/probe.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@probe.gl/env/-/env-4.1.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "fbaf2c78d0cc56c11e811078ee9140fd6b35163cbc6a0705617c73a2b293a323dc0facddfa0679ba1c282dded3cec4b0e98767b3fff6284b335a7f849cd1d36c"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@probe.gl/env"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "gltf",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/gltf@4.4.3",
+      "description": "Framework-independent loader for the glTF format",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/gltf@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/gltf/-/gltf-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "39813fd2718b626df07a209befcf913b074d572b8b4bc219c0df0dbc6a9cb6ab741d2e190f8d1b8aeedbf4bf319056d54d94244195c3a7267ad67e4f490794d4"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/gltf"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "draco",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/draco@4.4.3",
+      "description": "Framework-independent loader and writer for Draco compressed meshes and point clouds",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/draco@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/draco/-/draco-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "60d2353140c321bac905a9a05357a62c10b691051b112348399bfd6dc4bcc70c6bf5234c7e700c65681d509918702e71cd5daaeadcb623f6f678685742477d11"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/draco"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "draco3d",
+      "version": "1.5.7",
+      "bom-ref": "draco3d@1.5.7",
+      "author": "Google Draco Team",
+      "description": "Draco is a library for compressing and decompressing 3D geometric meshes and point clouds. It is intended to improve the storage and transmission of 3D graphics.",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/draco3d@1.5.7",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/google/draco.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/google/draco#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/google/draco/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/draco3d/-/draco3d-1.5.7.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "9ba5822adfdeac35dcc3eef42095e71bb3376b0c103c0b19bc9197e7363b6de06aa442f0e910c6918554d16e37005c727b8a436798b62dbc9cfcd346ab08d455"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/draco3d"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "images",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/images@4.4.3",
+      "description": "Framework-independent loaders and writers for images (PNG, JPG, ...)",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/images@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/images/-/images-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6b80bac7ee066547217fe230a5d04ebf219e2c649b18e5686fe59259f1947b3110e20aaed734b5a67de5097dd94cbe4ff82877bfa28ac0f19d3b961d4dde7613"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/images"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "textures",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/textures@4.4.3",
+      "description": "Framework-independent loaders for compressed and super compressed (basis) textures ",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/textures@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/textures/-/textures-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "40d0be6a7c0925c1ec2ec680cd7a3327e214371067a96b192d4324519228ad57b2f9741ca7685c62783988e99442709974847d8187b9dd525ad23d42d095d14a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/textures"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "types",
+      "group": "@math.gl",
+      "version": "4.1.0",
+      "bom-ref": "@math.gl/types@4.1.0",
+      "description": "TypeScript types for math.gl",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40math.gl/types@4.1.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/math.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/math.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/math.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@math.gl/types/-/types-4.1.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "72561974772646f33354ae5f8de0e44251d4cd741235d67bb38c4ea82de724f833e02fd366451e713a3d612e0faee66ab4375afda8387ab9dd3f43089f8d1d18"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@math.gl/types"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "ktx-parse",
+      "version": "0.7.1",
+      "bom-ref": "ktx-parse@0.7.1",
+      "author": "Don McCurdy",
+      "description": "KTX 2.0 (.ktx2) parser and serializer.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/ktx-parse@0.7.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/donmccurdy/ktx-parse.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/donmccurdy/ktx-parse#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/donmccurdy/ktx-parse/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/ktx-parse/-/ktx-parse-0.7.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "15e037839ea4b1d14dc235c926c73508273b728f802580e9ea2a48a7cefccd9d9b53c91644e6ad2d87f7f53404778fd745252f057a2f43c81a54a58f5ec08b11"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/ktx-parse"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "texture-compressor",
+      "version": "1.0.2",
+      "bom-ref": "texture-compressor@1.0.2",
+      "author": "Tim van Scherpenzeel",
+      "description": "CLI tool for texture compression using ASTC, ETC, PVRTC and S3TC in a KTX container.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/texture-compressor@1.0.2",
+      "externalReferences": [
+        {
+          "url": "https://registry.npmjs.org/texture-compressor/-/texture-compressor-1.0.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "752b55828690d75980e61b49f91cd9e75671219a8d3a058a008bed8cbad6d409624102c29ab0ea373419f0987dd5879a950f790d7b7830476e2f32666ecea58a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/texture-compressor"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "argparse",
+      "version": "1.0.10",
+      "bom-ref": "argparse@1.0.10",
+      "description": "Very powerful CLI arguments parser. Native port of argparse - python's options parsing library",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/argparse@1.0.10",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/nodeca/argparse.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/nodeca/argparse#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/nodeca/argparse/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/argparse/-/argparse-1.0.10.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a39468cbab4d1b848bfc53a408037a4738e26a4652db944b605adc32db49a9b75df015ab9c0f9f1b3e7b88de4f6f4ea9bc11af979810d01e3c74996c957be84e"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/argparse"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "sprintf-js",
+      "version": "1.0.3",
+      "bom-ref": "sprintf-js@1.0.3",
+      "author": "Alexandru Marasteanu",
+      "description": "JavaScript sprintf implementation",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/sprintf-js@1.0.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/alexei/sprintf.js.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/alexei/sprintf.js#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/alexei/sprintf.js/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/sprintf-js/-/sprintf-js-1.0.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "0fd70f824bcb955deddc8ccbd03d182ef180f40864e0f72f57051b3747521abd5a3f436bb780049d351bb86beab840b4980eb81aab757f38ab951b3989b5f1f2"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/sprintf-js"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "image-size",
+      "version": "0.7.5",
+      "bom-ref": "image-size@0.7.5",
+      "author": "netroy",
+      "description": "get dimensions of any image file",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/image-size@0.7.5",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/image-size/image-size.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/image-size/image-size#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/image-size/image-size/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/image-size/-/image-size-0.7.5.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "1e2caffa65c77c510fecbcd42ff96583d470171c58fa8f4ddc954b21e1b913b88520501a971bd153d519b6105d6031159f31cc8239ca24f3e96b2e4159fd60f6"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/image-size"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "core",
+      "group": "@math.gl",
+      "version": "4.1.0",
+      "bom-ref": "@math.gl/core@4.1.0",
+      "description": "Array-based 3D Math Classes optimized for WebGL applications",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40math.gl/core@4.1.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/math.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/math.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/math.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@math.gl/core/-/core-4.1.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "16b747042546dd076bc28af0ad44b35c868afbff4e0912ec731236394cbab0b387c878013327e7106b3df7f9b728dbecfbde41b2740b5a49557e929f4337f028"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@math.gl/core"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "las",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/las@4.4.3",
+      "description": "Framework-independent loader for the LAS and LAZ formats",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/las@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/las/-/las-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "662ebc55d2cf013c9c6d29543a97a091d295c486ddc0de5b9394339912e6495d5d4854a32dd257ae258dbd76d339232d866467e9377ff02a9739680800a523c1"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/las"
+        }
+      ],
+      "components": [
+        {
+          "type": "library",
+          "name": "laz-perf",
+          "version": "0.0.6",
+          "bom-ref": "@loaders.gl/las@4.4.3|laz-perf@0.0.6",
+          "description": "LAZ implementation compiled to WASM via Emscripten for LAZ support in a browser",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0",
+                "acknowledgement": "declared"
+              }
+            }
+          ],
+          "purl": "pkg:npm/laz-perf@0.0.6",
+          "externalReferences": [
+            {
+              "url": "https://github.com/hobuinc/laz-perf",
+              "type": "website",
+              "comment": "as detected from PackageJson property \"homepage\""
+            },
+            {
+              "url": "https://registry.npmjs.org/laz-perf/-/laz-perf-0.0.6.tgz",
+              "type": "distribution",
+              "hashes": [
+                {
+                  "alg": "SHA-512",
+                  "content": "641a82f81065a1fce70c863749f8d70c155d22161fcfb6eaf07007ced970e173a7bbefa71e25ad0863e0ce975e0213e407273af0368a372dc4deb6385eb751b5"
+                }
+              ],
+              "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+            }
+          ],
+          "properties": [
+            {
+              "name": "cdx:npm:package:path",
+              "value": "node_modules/@loaders.gl/las/node_modules/laz-perf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "obj",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/obj@4.4.3",
+      "description": "Framework-independent loader for the OBJ format",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/obj@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/obj/-/obj-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6796be470c343ce1f9c06118bb2f0d5b23aca183d3cd62fe558590c76fded044a78db2c94dc78b2db5fdb4e21fec56b34708068bc93ae8f04581f7418c74a52f"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/obj"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "ply",
+      "group": "@loaders.gl",
+      "version": "4.4.3",
+      "bom-ref": "@loaders.gl/ply@4.4.3",
+      "description": "Framework-independent loader for the PLY format",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/ply@4.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/ply/-/ply-4.4.3.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "ab4ec4c74457ad96e0b3cf686c03456fdfeb02f3fe40e1c3ac29268e278a38c7d7d534cb48a535ba48a79f53e2b1424679e950cdace1096ba3983e90c0562eaf"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/ply"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "proj4",
+      "group": "@types",
+      "version": "2.5.6",
+      "bom-ref": "@types/proj4@2.5.6",
+      "description": "TypeScript definitions for proj4",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40types/proj4@2.5.6#types/proj4",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/proj4",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/proj4",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@types/proj4/-/proj4-2.5.6.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "cdf32b3f2f5fc7ef03721a8cd2421419ebb6b53541e40a4ed4a18061c486152f06a2a4489322f8d71ab6c82c7f895dec38bce8eefe2112056248b4e23c8d4bd3"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@types/proj4"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "laz-perf",
+      "version": "0.0.7",
+      "bom-ref": "laz-perf@0.0.7",
+      "description": "LAZ implementation compiled to WASM via Emscripten for LAZ support in a browser",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/laz-perf@0.0.7",
+      "externalReferences": [
+        {
+          "url": "https://github.com/hobuinc/laz-perf",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://registry.npmjs.org/laz-perf/-/laz-perf-0.0.7.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "db146a9bf7ffd94a834b9aaa9233b20dbeae5488e4570e921a64253284d096255691984f7c86d4253b9b525de64e5a1a5aa29c8e54bfbab98fd42628c5e96c12"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/laz-perf"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pdf-lib",
+      "version": "1.17.1",
+      "bom-ref": "pdf-lib@1.17.1",
+      "author": "Andrew Dillon",
+      "description": "Create and modify PDF files with JavaScript",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/pdf-lib@1.17.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/Hopding/pdf-lib.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://pdf-lib.js.org",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/Hopding/pdf-lib/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/pdf-lib/-/pdf-lib-1.17.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "57f9a9c890284ec3787273f7d6f734c1f340d7ea76d1ebeaaa76a9d0a2e8454374624fe9df0379d83384b0be2804570b75befa865a4a3edcc9220a3aee3fd72f"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/pdf-lib"
+        }
+      ],
+      "components": [
+        {
+          "type": "library",
+          "name": "tslib",
+          "version": "1.14.1",
+          "bom-ref": "pdf-lib@1.17.1|tslib@1.14.1",
+          "author": "Microsoft Corp.",
+          "description": "Runtime library for TypeScript helper functions",
+          "licenses": [
+            {
+              "license": {
+                "id": "0BSD",
+                "acknowledgement": "declared"
+              }
+            }
+          ],
+          "purl": "pkg:npm/tslib@1.14.1",
+          "externalReferences": [
+            {
+              "url": "git+https://github.com/Microsoft/tslib.git",
+              "type": "vcs",
+              "comment": "as detected from PackageJson property \"repository.url\""
+            },
+            {
+              "url": "https://www.typescriptlang.org/",
+              "type": "website",
+              "comment": "as detected from PackageJson property \"homepage\""
+            },
+            {
+              "url": "https://github.com/Microsoft/TypeScript/issues",
+              "type": "issue-tracker",
+              "comment": "as detected from PackageJson property \"bugs.url\""
+            },
+            {
+              "url": "https://registry.npmjs.org/tslib/-/tslib-1.14.1.tgz",
+              "type": "distribution",
+              "hashes": [
+                {
+                  "alg": "SHA-512",
+                  "content": "5e78b7e4d2b38e032bc1ebf2b074c202bb4b0e93efc9ef3357fd04e04c989f8dcfeffeeabd0c0f87d0469077b06ccba5567b5b8a099c4fbadd5f704da3dc1126"
+                }
+              ],
+              "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+            }
+          ],
+          "properties": [
+            {
+              "name": "cdx:npm:package:path",
+              "value": "node_modules/pdf-lib/node_modules/tslib"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "standard-fonts",
+      "group": "@pdf-lib",
+      "version": "1.0.0",
+      "bom-ref": "@pdf-lib/standard-fonts@1.0.0",
+      "author": "Andrew Dillon",
+      "description": "Metrics for the Standard 14 PDF fonts and their encodings",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40pdf-lib/standard-fonts@1.0.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/Hopding/standard-fonts.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/Hopding/standard-fonts",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/Hopding/standard-fonts/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@pdf-lib/standard-fonts/-/standard-fonts-1.0.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "854df404af4850dfecbb4327f5576554ab16052e86ca155faa3c25d458d93784f13fa702c348cfdb0ed5dc77f9b97eccd00649d7abdecbdc84d27cbb49ae7d64"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@pdf-lib/standard-fonts"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pako",
+      "version": "1.0.11",
+      "bom-ref": "pako@1.0.11",
+      "description": "zlib port to javascript - fast, modularized, with browser support",
+      "licenses": [
+        {
+          "expression": "(MIT AND Zlib)",
+          "acknowledgement": "declared"
+        }
+      ],
+      "purl": "pkg:npm/pako@1.0.11",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/nodeca/pako.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/nodeca/pako",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/nodeca/pako/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/pako/-/pako-1.0.11.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e212c1f0fcb8cd971ee6ce3277d5f3a29ab056fff218d855d4197c353982ab5efadc778adbe130553bfe95e19e2f5dc39e1db07dbaa8c153d70883b4cf8b5a63"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/pako"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "upng",
+      "group": "@pdf-lib",
+      "version": "1.0.1",
+      "bom-ref": "@pdf-lib/upng@1.0.1",
+      "author": "photopea",
+      "description": "Small, fast and advanced PNG / APNG encoder and decoder",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40pdf-lib/upng@1.0.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/Hopding/upng.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/Hopding/upng#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/Hopding/upng/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@pdf-lib/upng/-/upng-1.0.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "7502b6154310b68c153f4d26b4892cae56617455d064f0beb5a8a1d6ae02bcf679bea77147f2ca05a160d2801fcddd469476575d23dd41fcd09edf95886bc421"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@pdf-lib/upng"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "proj4",
+      "version": "2.20.9",
+      "bom-ref": "proj4@2.20.9",
+      "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/proj4@2.20.9",
+      "externalReferences": [
+        {
+          "url": "git://github.com/proj4js/proj4js.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://proj4js.github.io/proj4js/",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/proj4js/proj4js/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/proj4/-/proj4-2.20.9.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "18b046a9769371d5a7a69adede8d6c326cb80dc306486abf9e0fbd93631335d75aad12ba4af78836a96a6338b7c445eecb4ea58d8d534eb0ba1fd0b87f7eb421"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/proj4"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "mgrs",
+      "version": "1.0.0",
+      "bom-ref": "mgrs@1.0.0",
+      "author": "proj4 team",
+      "description": "Utility for converting between WGS84 lat/lng and MGRS coordinates",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/mgrs@1.0.0",
+      "externalReferences": [
+        {
+          "url": "git://github.com/proj4js/mgrs.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/proj4js/mgrs#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/proj4js/mgrs/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/mgrs/-/mgrs-1.0.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6b035b4cea82c4ad430468da94adf1a9622cb4166037a7f1b0c4a25cbb3dfeca6a5a4176a4085bdabad80854acaf5fed4fb3e17031a3667746f125989f46f260"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/mgrs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wkt-parser",
+      "version": "1.5.5",
+      "bom-ref": "wkt-parser@1.5.5",
+      "description": "wkt-parser ===",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/wkt-parser@1.5.5",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/proj4js/wkt-parser.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/proj4js/wkt-parser#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/proj4js/wkt-parser/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/wkt-parser/-/wkt-parser-1.5.5.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "ff33188bde3fec3edfc5c3929559969fabe738c8f71aae5dd71bd58da60e4bd9fa874a8e27823b61857105661c1f5beaf7eb2e86acd7927d39631e3bcd035420"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/wkt-parser"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "three",
+      "version": "0.184.0",
+      "bom-ref": "three@0.184.0",
+      "author": "mrdoob",
+      "description": "JavaScript 3D library",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/three@0.184.0",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/mrdoob/three.js.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://threejs.org/",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/mrdoob/three.js/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/three/-/three-0.184.0.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "c2d4d18c6f76a4ce5e520fcab949c7b2a48094f336f7a6eb4ce70b80c46a11eca561387f09db6f294bc2cb20904f316e4ad89e5b1bd96fc9954ccbdd3f2529c6"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/three"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "openlidarviewer@0.5.9",
+      "dependsOn": [
+        "@fontsource-variable/inter@5.2.8",
+        "@fontsource/jetbrains-mono@5.2.8",
+        "@fontsource/manrope@5.2.8",
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/gltf@4.4.3",
+        "@loaders.gl/las@4.4.3",
+        "@loaders.gl/obj@4.4.3",
+        "@loaders.gl/ply@4.4.3",
+        "@types/proj4@2.5.6",
+        "laz-perf@0.0.7",
+        "pdf-lib@1.17.1",
+        "proj4@2.20.9",
+        "three@0.184.0"
+      ]
+    },
+    {
+      "ref": "@fontsource-variable/inter@5.2.8"
+    },
+    {
+      "ref": "@fontsource/jetbrains-mono@5.2.8"
+    },
+    {
+      "ref": "@fontsource/manrope@5.2.8"
+    },
+    {
+      "ref": "@loaders.gl/core@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/loader-utils@4.4.3",
+        "@loaders.gl/schema-utils@4.4.3",
+        "@loaders.gl/schema@4.4.3",
+        "@loaders.gl/worker-utils@4.4.3",
+        "@probe.gl/log@4.1.1"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/loader-utils@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/schema@4.4.3",
+        "@loaders.gl/worker-utils@4.4.3",
+        "@probe.gl/log@4.1.1",
+        "@probe.gl/stats@4.1.1"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/schema@4.4.3",
+      "dependsOn": [
+        "@types/geojson@7946.0.16",
+        "apache-arrow@21.1.0"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/worker-utils@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3"
+      ]
+    },
+    {
+      "ref": "@probe.gl/log@4.1.1",
+      "dependsOn": [
+        "@probe.gl/env@4.1.1"
+      ]
+    },
+    {
+      "ref": "@probe.gl/stats@4.1.1"
+    },
+    {
+      "ref": "@loaders.gl/schema-utils@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/schema@4.4.3",
+        "@types/geojson@7946.0.16",
+        "apache-arrow@21.1.0"
+      ]
+    },
+    {
+      "ref": "@types/geojson@7946.0.16"
+    },
+    {
+      "ref": "apache-arrow@21.1.0",
+      "dependsOn": [
+        "@swc/helpers@0.5.23",
+        "@types/command-line-args@5.2.3",
+        "@types/command-line-usage@5.0.4",
+        "@types/node@24.13.2",
+        "command-line-args@6.0.2",
+        "command-line-usage@7.0.4",
+        "flatbuffers@25.9.23",
+        "json-bignum@0.0.3",
+        "tslib@2.8.1"
+      ]
+    },
+    {
+      "ref": "@swc/helpers@0.5.23",
+      "dependsOn": [
+        "tslib@2.8.1"
+      ]
+    },
+    {
+      "ref": "tslib@2.8.1"
+    },
+    {
+      "ref": "@types/command-line-args@5.2.3"
+    },
+    {
+      "ref": "@types/command-line-usage@5.0.4"
+    },
+    {
+      "ref": "@types/node@24.13.2",
+      "dependsOn": [
+        "undici-types@7.18.2"
+      ]
+    },
+    {
+      "ref": "undici-types@7.18.2"
+    },
+    {
+      "ref": "command-line-args@6.0.2",
+      "dependsOn": [
+        "array-back@6.2.3",
+        "find-replace@5.0.2",
+        "lodash.camelcase@4.3.0",
+        "typical@7.3.0"
+      ]
+    },
+    {
+      "ref": "array-back@6.2.3"
+    },
+    {
+      "ref": "find-replace@5.0.2"
+    },
+    {
+      "ref": "lodash.camelcase@4.3.0"
+    },
+    {
+      "ref": "typical@7.3.0"
+    },
+    {
+      "ref": "command-line-usage@7.0.4",
+      "dependsOn": [
+        "array-back@6.2.3",
+        "chalk-template@0.4.0",
+        "table-layout@4.1.1",
+        "typical@7.3.0"
+      ]
+    },
+    {
+      "ref": "chalk-template@0.4.0",
+      "dependsOn": [
+        "chalk@4.1.2"
+      ]
+    },
+    {
+      "ref": "chalk@4.1.2",
+      "dependsOn": [
+        "ansi-styles@4.3.0",
+        "supports-color@7.2.0"
+      ]
+    },
+    {
+      "ref": "ansi-styles@4.3.0",
+      "dependsOn": [
+        "color-convert@2.0.1"
+      ]
+    },
+    {
+      "ref": "color-convert@2.0.1",
+      "dependsOn": [
+        "color-name@1.1.4"
+      ]
+    },
+    {
+      "ref": "color-name@1.1.4"
+    },
+    {
+      "ref": "supports-color@7.2.0",
+      "dependsOn": [
+        "has-flag@4.0.0"
+      ]
+    },
+    {
+      "ref": "has-flag@4.0.0"
+    },
+    {
+      "ref": "table-layout@4.1.1",
+      "dependsOn": [
+        "array-back@6.2.3",
+        "wordwrapjs@5.1.1"
+      ]
+    },
+    {
+      "ref": "wordwrapjs@5.1.1"
+    },
+    {
+      "ref": "flatbuffers@25.9.23"
+    },
+    {
+      "ref": "json-bignum@0.0.3"
+    },
+    {
+      "ref": "@probe.gl/env@4.1.1"
+    },
+    {
+      "ref": "@loaders.gl/gltf@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/draco@4.4.3",
+        "@loaders.gl/images@4.4.3",
+        "@loaders.gl/loader-utils@4.4.3",
+        "@loaders.gl/schema@4.4.3",
+        "@loaders.gl/textures@4.4.3",
+        "@math.gl/core@4.1.0"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/draco@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/loader-utils@4.4.3",
+        "@loaders.gl/schema-utils@4.4.3",
+        "@loaders.gl/schema@4.4.3",
+        "@loaders.gl/worker-utils@4.4.3",
+        "draco3d@1.5.7"
+      ]
+    },
+    {
+      "ref": "draco3d@1.5.7"
+    },
+    {
+      "ref": "@loaders.gl/images@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/loader-utils@4.4.3"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/textures@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/images@4.4.3",
+        "@loaders.gl/loader-utils@4.4.3",
+        "@loaders.gl/schema@4.4.3",
+        "@loaders.gl/worker-utils@4.4.3",
+        "@math.gl/types@4.1.0",
+        "ktx-parse@0.7.1",
+        "texture-compressor@1.0.2"
+      ]
+    },
+    {
+      "ref": "@math.gl/types@4.1.0"
+    },
+    {
+      "ref": "ktx-parse@0.7.1"
+    },
+    {
+      "ref": "texture-compressor@1.0.2",
+      "dependsOn": [
+        "argparse@1.0.10",
+        "image-size@0.7.5"
+      ]
+    },
+    {
+      "ref": "argparse@1.0.10",
+      "dependsOn": [
+        "sprintf-js@1.0.3"
+      ]
+    },
+    {
+      "ref": "sprintf-js@1.0.3"
+    },
+    {
+      "ref": "image-size@0.7.5"
+    },
+    {
+      "ref": "@math.gl/core@4.1.0",
+      "dependsOn": [
+        "@math.gl/types@4.1.0"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/las@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/loader-utils@4.4.3",
+        "@loaders.gl/schema-utils@4.4.3",
+        "@loaders.gl/schema@4.4.3",
+        "@loaders.gl/las@4.4.3|laz-perf@0.0.6"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/las@4.4.3|laz-perf@0.0.6"
+    },
+    {
+      "ref": "@loaders.gl/obj@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/loader-utils@4.4.3",
+        "@loaders.gl/schema-utils@4.4.3",
+        "@loaders.gl/schema@4.4.3"
+      ]
+    },
+    {
+      "ref": "@loaders.gl/ply@4.4.3",
+      "dependsOn": [
+        "@loaders.gl/core@4.4.3",
+        "@loaders.gl/loader-utils@4.4.3",
+        "@loaders.gl/schema-utils@4.4.3",
+        "@loaders.gl/schema@4.4.3"
+      ]
+    },
+    {
+      "ref": "@types/proj4@2.5.6"
+    },
+    {
+      "ref": "laz-perf@0.0.7"
+    },
+    {
+      "ref": "pdf-lib@1.17.1",
+      "dependsOn": [
+        "@pdf-lib/standard-fonts@1.0.0",
+        "@pdf-lib/upng@1.0.1",
+        "pako@1.0.11",
+        "pdf-lib@1.17.1|tslib@1.14.1"
+      ]
+    },
+    {
+      "ref": "pdf-lib@1.17.1|tslib@1.14.1"
+    },
+    {
+      "ref": "@pdf-lib/standard-fonts@1.0.0",
+      "dependsOn": [
+        "pako@1.0.11"
+      ]
+    },
+    {
+      "ref": "pako@1.0.11"
+    },
+    {
+      "ref": "@pdf-lib/upng@1.0.1",
+      "dependsOn": [
+        "pako@1.0.11"
+      ]
+    },
+    {
+      "ref": "proj4@2.20.9",
+      "dependsOn": [
+        "mgrs@1.0.0",
+        "wkt-parser@1.5.5"
+      ]
+    },
+    {
+      "ref": "mgrs@1.0.0"
+    },
+    {
+      "ref": "wkt-parser@1.5.5"
+    },
+    {
+      "ref": "three@0.184.0"
+    }
+  ]
+}
