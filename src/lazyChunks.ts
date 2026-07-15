@@ -271,7 +271,8 @@ export const loadEpt = () =>
     import('./io/ept/EptChunkDecoder'),
     import('./io/ept/eptUrlValidation'),
     import('./io/ept/eptTransport'),
-  ]).then(([detect, cloud, decoder, urlValidation, transport]) => ({
+    import('./io/ept/eptUrls'),
+  ]).then(([detect, cloud, decoder, urlValidation, transport, urls]) => ({
     parseEptMetadata: detect.parseEptMetadata,
     detectEptUrl: detect.detectEptUrl,
     EptStreamingPointCloud: cloud.EptStreamingPointCloud,
@@ -283,6 +284,9 @@ export const loadEpt = () =>
     // hardened remote transport (retry + per-attempt timeout +
     // typed error messages the describer already classifies).
     createEptTransport: transport.createEptTransport,
+    // auth-query extractor so a signed manifest URL's `?token=…` rides every
+    // derived hierarchy/tile request (eptUrls is already in this chunk).
+    eptUrlSearch: urls.eptUrlSearch,
   }));
 
 /**

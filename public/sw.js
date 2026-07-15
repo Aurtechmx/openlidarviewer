@@ -78,15 +78,30 @@ function isShellNavigation(url) {
 }
 
 /**
+ * A build-emitted, content-hashed application bundle: `<name>-<hash>.<ext>` under
+ * `assets/`, where `<ext>` is a known application asset type. Vite fingerprints
+ * every bundle it emits (`Viewer-BdLwXtsu.js`, `index-DaDnDjF_.css`,
+ * `manrope-latin-400-normal-8tf8FM3T.woff2`), so this shape is what an immutable
+ * app asset looks like — and, crucially, what a user's DATASET never looks like.
+ */
+const HASHED_APP_ASSET = /(^|\/)assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?)$/i;
+
+/**
  * The ONLY same-origin responses this worker stores: the build's content-hashed
  * /assets/* bundles (immutable) and the precached shell files. Anything else
  * same-origin — including a dataset a user happens to host under this origin (an
- * EPT ept.json / hierarchy / .laz tile) — must go straight to the network and is
- * never cached, per the privacy contract at the top of this file.
+ * EPT ept.json / hierarchy / .laz / .copc.laz / .bin / .zst tile) — must go
+ * straight to the network and is never cached, per the privacy contract at the
+ * top of this file.
+ *
+ * The directory name alone is NOT proof: `assets/` is a natural place to drop a
+ * self-hosted point cloud, so the predicate requires the Vite content-hash AND a
+ * known application extension. Without both, a dataset placed under `assets/`
+ * would otherwise be cached — enforcing the contract, not just asserting it.
  */
 function isCacheableAsset(url) {
   const root = scopeRoot();
-  if (url.pathname.startsWith(root + 'assets/')) return true;
+  if (url.pathname.startsWith(root + 'assets/')) return HASHED_APP_ASSET.test(url.pathname);
   return SHELL.some((s) => url.pathname === root + s.replace(/^\.\//, ''));
 }
 

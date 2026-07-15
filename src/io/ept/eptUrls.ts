@@ -48,14 +48,33 @@ export function eptBaseUrl(manifestUrl: string): string {
   return origin + pathname;
 }
 
+/**
+ * The auth/query string (e.g. `?token=abc`) carried on the manifest URL, to be
+ * re-attached to every derived hierarchy / tile request. {@link eptBaseUrl}
+ * strips the query when computing the dataset directory, so without this a
+ * signed EPT dataset (Azure SAS, a CDN `?token`, or any prefix-scoped
+ * credential) loads its `ept.json` and then 401/403s on the first hierarchy
+ * fetch. Returns `''` when there is no query. (A per-OBJECT presigned signature
+ * is bound to `ept.json` alone and still cannot authorise the hierarchy files —
+ * that case surfaces as an honest hierarchy-fetch error, by design.)
+ */
+export function eptUrlSearch(manifestUrl: string): string {
+  try {
+    return new URL(manifestUrl).search;
+  } catch {
+    const q = manifestUrl.indexOf('?');
+    return q < 0 ? '' : manifestUrl.slice(q).split('#')[0];
+  }
+}
+
 /** URL for the root hierarchy file (always `0-0-0-0.json`). */
-export function eptRootHierarchyUrl(baseUrl: string): string {
-  return `${baseUrl}ept-hierarchy/0-0-0-0.json`;
+export function eptRootHierarchyUrl(baseUrl: string, search = ''): string {
+  return `${baseUrl}ept-hierarchy/0-0-0-0.json${search}`;
 }
 
 /** URL for a linked hierarchy file at the given key. */
-export function eptHierarchyUrl(baseUrl: string, key: EptKey): string {
-  return `${baseUrl}ept-hierarchy/${eptKeyToString(key)}.json`;
+export function eptHierarchyUrl(baseUrl: string, key: EptKey, search = ''): string {
+  return `${baseUrl}ept-hierarchy/${eptKeyToString(key)}.json${search}`;
 }
 
 /**
@@ -64,10 +83,12 @@ export function eptHierarchyUrl(baseUrl: string, key: EptKey): string {
  *   • laszip    → `.laz`
  *   • binary    → `.bin`
  *   • zstandard → `.zst`
+ *
+ * `search` re-attaches the manifest's auth query (see {@link eptUrlSearch}).
  */
-export function eptTileUrl(baseUrl: string, key: EptKey, dataType: EptDataType): string {
+export function eptTileUrl(baseUrl: string, key: EptKey, dataType: EptDataType, search = ''): string {
   const ext = tileExtensionFor(dataType);
-  return `${baseUrl}ept-data/${eptKeyToString(key)}.${ext}`;
+  return `${baseUrl}ept-data/${eptKeyToString(key)}.${ext}${search}`;
 }
 
 /** Tile filename extension for an EPT dataType. */

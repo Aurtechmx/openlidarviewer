@@ -6283,6 +6283,13 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     // Compute the dataset base URL by stripping the ept.json filename;
     // the source uses it to build hierarchy + tile URLs.
     const baseUrl = url.replace(/ept\.json(?:\?.*)?(?:#.*)?$/i, '');
+    // The base URL drops the manifest's query, so re-attach the auth query
+    // (e.g. an Azure SAS / CDN `?token=…`) to every derived hierarchy + tile
+    // request — otherwise a signed dataset validates, loads ept.json, then
+    // 401/403s on the first hierarchy fetch. (A per-object presigned signature
+    // bound to ept.json alone still can't authorise the hierarchy — that stays
+    // an honest hierarchy-fetch error.)
+    const eptSearch = eptUrlMod.eptUrlSearch(url);
 
     // hardened EPT transport: retry-with-backoff (3 retries),
     // per-attempt timeout (20 s), abort discipline composed with the outer
@@ -6297,6 +6304,7 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
       remoteEptName(url),
       transport,
       controller.signal,
+      eptSearch,
     );
     if (controller.signal.aborted) throw new LoadCancelledError();
 

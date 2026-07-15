@@ -34,6 +34,7 @@ import {
   eptHierarchyUrl,
   eptRootHierarchyUrl,
   eptTileUrl,
+  eptUrlSearch,
   tileExtensionFor,
 } from '../src/io/ept/eptUrls';
 import {
@@ -336,6 +337,32 @@ test('tileExtensionFor returns the canonical extension per dataType', () => {
   expect(tileExtensionFor('laszip')).toBe('laz');
   expect(tileExtensionFor('binary')).toBe('bin');
   expect(tileExtensionFor('zstandard')).toBe('zst');
+});
+
+// Signed EPT: the manifest URL's auth query must ride every derived request.
+// The base URL strips the query (it names the directory), so without eptUrlSearch
+// a signed dataset loads ept.json and then 401/403s on the first hierarchy fetch.
+test('eptUrlSearch extracts the manifest auth query (and nothing when absent)', () => {
+  expect(eptUrlSearch('https://d/ept.json?sig=SECRET&expires=123')).toBe('?sig=SECRET&expires=123');
+  expect(eptUrlSearch('https://d/ept.json?token=abc#frag')).toBe('?token=abc');
+  expect(eptUrlSearch('https://d/ept.json')).toBe('');
+  // Relative / non-absolute manifest URLs (URL() throws) still parse.
+  expect(eptUrlSearch('/local/ept.json?token=abc')).toBe('?token=abc');
+  expect(eptUrlSearch('/local/ept.json')).toBe('');
+});
+
+test('hierarchy + tile URLs re-attach the auth query so signed datasets keep streaming', () => {
+  const base = 'https://d/path/';
+  const search = eptUrlSearch('https://d/path/ept.json?sig=SECRET&expires=123');
+  expect(eptRootHierarchyUrl(base, search))
+    .toBe('https://d/path/ept-hierarchy/0-0-0-0.json?sig=SECRET&expires=123');
+  expect(eptHierarchyUrl(base, { d: 2, x: 1, y: 0, z: 1 }, search))
+    .toBe('https://d/path/ept-hierarchy/2-1-0-1.json?sig=SECRET&expires=123');
+  expect(eptTileUrl(base, { d: 0, x: 0, y: 0, z: 0 }, 'laszip', search))
+    .toBe('https://d/path/ept-data/0-0-0-0.laz?sig=SECRET&expires=123');
+  // Unsigned dataset (no query) is byte-for-byte unchanged from the old builders.
+  expect(eptHierarchyUrl(base, { d: 2, x: 1, y: 0, z: 1 }))
+    .toBe('https://d/path/ept-hierarchy/2-1-0-1.json');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

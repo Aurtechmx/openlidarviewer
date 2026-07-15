@@ -93,10 +93,14 @@ class FakeCaches {
 interface Harness {
   /** Fire the captured 'fetch' listener with a navigation for `url`. */
   navigate(url: string): Promise<FakeResponse | undefined>;
+  /** Fire the captured 'fetch' listener with a non-navigation GET for `url`. */
+  asset(url: string, opts?: { range?: boolean; mode?: string }): Promise<FakeResponse | undefined>;
   /** Swap what the stubbed network returns (or rejects with, for offline). */
   setFetch(impl: (req: unknown) => Promise<FakeResponse>): void;
   /** The response currently cached under the app-shell key, if any. */
   cachedShell(): FakeResponse | undefined;
+  /** The response currently cached under `key` in any cache, if any. */
+  cached(key: string): FakeResponse | undefined;
 }
 
 /**
@@ -153,9 +157,33 @@ async function bootWorker(scope = 'https://viewer.example/'): Promise<Harness> {
       await flush();
       return out;
     },
+    async asset(url, opts = {}) {
+      let responded: Promise<FakeResponse | undefined> | undefined;
+      listeners.get('fetch')?.({
+        request: {
+          method: 'GET',
+          mode: opts.mode ?? 'cors',
+          url,
+          headers: { has: (h: string) => h === 'range' && !!opts.range },
+        },
+        respondWith(p: Promise<FakeResponse | undefined>) {
+          responded = Promise.resolve(p);
+        },
+      });
+      const out = responded ? await responded : undefined;
+      await flush();
+      return out;
+    },
     cachedShell() {
       for (const c of cachesObj.caches.values()) {
         const hit = c.store.get('./index.html');
+        if (hit) return hit;
+      }
+      return undefined;
+    },
+    cached(key) {
+      for (const c of cachesObj.caches.values()) {
+        const hit = c.store.get(key);
         if (hit) return hit;
       }
       return undefined;
@@ -217,5 +245,72 @@ describe('sw.js — navigation handler must not poison the cached app shell', ()
     sw.setFetch(() => Promise.reject(new Error('offline')));
     const out = await sw.navigate('https://viewer.example/');
     expect(out?.marker).toBe('precached:./index.html');
+  });
+});
+
+describe('sw.js — asset cache stores ONLY content-hashed app bundles, never datasets', () => {
+  // What the build actually emits under /assets/ (Vite `<name>-<hash>.<ext>`).
+  const BUNDLES = [
+    '/assets/Viewer-BdLwXtsu.js',
+    '/assets/index-DaDnDjF_.css',
+    '/assets/three.core-BR74sD8Y.js',
+    '/assets/vendor-three-webgpu-BI7fE5Nu.js',
+    '/assets/manrope-latin-400-normal-8tf8FM3T.woff2',
+    '/assets/jetbrains-mono-latin-400-normal-6-qcROiO.woff',
+  ];
+  // Datasets a self-hoster might place anywhere — must NEVER be cached, even
+  // when they sit under /assets/ (the folder name is not proof of an app asset).
+  const DATASETS = [
+    '/assets/user.laz',
+    '/assets/scan.copc.laz',
+    '/assets/points.las',
+    '/assets/tile.bin',
+    '/assets/tile.zst',
+    '/assets/ept.json',
+    '/assets/ept-hierarchy/0-0-0-0.json',
+    '/assets/ept-data/0-0-0-0.laz',
+    '/data/user.laz',
+    '/user.copc.laz',
+  ];
+
+  it('caches every content-hashed application bundle under /assets/', async () => {
+    const sw = await bootWorker();
+    for (const path of BUNDLES) {
+      const url = `https://viewer.example${path}`;
+      sw.setFetch(() => Promise.resolve(res(`bytes:${path}`)));
+      await sw.asset(url);
+      expect(sw.cached(url)?.marker).toBe(`bytes:${path}`);
+    }
+  });
+
+  it('NEVER caches a dataset, regardless of extension or directory (incl. under /assets/)', async () => {
+    const sw = await bootWorker();
+    for (const path of DATASETS) {
+      const url = `https://viewer.example${path}`;
+      sw.setFetch(() => Promise.resolve(res(`bytes:${path}`)));
+      await sw.asset(url);
+      expect(sw.cached(url)).toBeUndefined();
+    }
+  });
+
+  it('does not cache even a hashed bundle when requested with a Range header', async () => {
+    // Partial reads pass straight to the network (top-of-handler range guard).
+    const sw = await bootWorker();
+    const url = 'https://viewer.example/assets/Viewer-BdLwXtsu.js';
+    sw.setFetch(() => Promise.resolve(res('ranged')));
+    await sw.asset(url, { range: true });
+    expect(sw.cached(url)).toBeUndefined();
+  });
+
+  it('honours the registration scope for a sub-path deploy', async () => {
+    const sw = await bootWorker('https://host.example/app/');
+    const bundle = 'https://host.example/app/assets/Viewer-BdLwXtsu.js';
+    const dataset = 'https://host.example/app/assets/user.laz';
+    sw.setFetch(() => Promise.resolve(res('sub-bundle')));
+    await sw.asset(bundle);
+    expect(sw.cached(bundle)?.marker).toBe('sub-bundle');
+    sw.setFetch(() => Promise.resolve(res('sub-dataset')));
+    await sw.asset(dataset);
+    expect(sw.cached(dataset)).toBeUndefined();
   });
 });

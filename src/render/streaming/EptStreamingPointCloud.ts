@@ -78,6 +78,13 @@ export class EptStreamingPointCloud implements StreamingSource {
   readonly metadata: EptMetadata;
   /** Dataset base URL — every tile + hierarchy URL builds from this. */
   readonly baseUrl: string;
+  /**
+   * Auth query string (e.g. `?token=…`) carried from the manifest URL and
+   * re-attached to every derived hierarchy + tile request, so a signed EPT
+   * dataset (Azure SAS / CDN token / prefix-scoped credential) keeps its
+   * credential past the manifest fetch. `''` for an unsigned dataset.
+   */
+  private readonly _search: string;
   private readonly _transport: EptTransport;
   /** Dataset-level RGB bit-depth, captured from the first decoded RGB tile;
    *  see {@link noteDecodedRgbDepth}. Undefined until the first colour tile
@@ -91,6 +98,7 @@ export class EptStreamingPointCloud implements StreamingSource {
     renderOrigin: [number, number, number],
     octree: EptOctree,
     transport: EptTransport,
+    search: string,
   ) {
     this.metadata = metadata;
     this.baseUrl = baseUrl;
@@ -98,6 +106,7 @@ export class EptStreamingPointCloud implements StreamingSource {
     this.renderOrigin = renderOrigin;
     this.octree = octree;
     this._transport = transport;
+    this._search = search;
   }
 
   /**
@@ -111,14 +120,15 @@ export class EptStreamingPointCloud implements StreamingSource {
     name: string,
     transport: EptTransport,
     signal?: AbortSignal,
+    search = '',
   ): Promise<EptStreamingPointCloud> {
     const renderOrigin = pickRenderOriginFromCube(metadata.bounds.cubic as Box6);
     const fetcher = (key: EptKey, s?: AbortSignal): Promise<string> =>
-      transport.fetchText(eptHierarchyUrl(baseUrl, key), s);
+      transport.fetchText(eptHierarchyUrl(baseUrl, key, search), s);
     const octree = new EptOctree(metadata, renderOrigin, fetcher);
     await octree.loadFullHierarchy(signal);
     return new EptStreamingPointCloud(
-      metadata, baseUrl, name, renderOrigin, octree, transport,
+      metadata, baseUrl, name, renderOrigin, octree, transport, search,
     );
   }
 
@@ -229,7 +239,7 @@ export class EptStreamingPointCloud implements StreamingSource {
         new Error(`EPT readNodeChunk: bad node id "${record.id}"`),
       );
     }
-    const url = eptTileUrl(this.baseUrl, key, this.metadata.dataType);
+    const url = eptTileUrl(this.baseUrl, key, this.metadata.dataType, this._search);
     return this._transport.fetchBytes(url, signal);
   }
 
