@@ -2592,6 +2592,17 @@ const analysePanel = new AnalysePanel({
       // "unitless" rather than asserting metres. Undefined before a CRS
       // resolves ⇒ serializeContours keeps its standing metre default.
       linearUnit: cur?.linearUnit,
+      // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
+      // it declares one, else the horizontal linear factor when the frame is
+      // actually resolved (GeoTIFF default: vertical follows the model's linear
+      // unit — so a metre CRS reads "m", a foot CRS "ft"). A local / unknown
+      // frame (linearUnit 'unknown') leaves this undefined so the contour
+      // interval / relief show an honest "unverified" unit rather than a false
+      // metre. The Analyse panel's readiness, recommend, and map-sheet notes
+      // read this seam.
+      verticalUnitToMetres:
+        cur?.verticalUnitToMetres ??
+        (cur && cur.linearUnit !== 'unknown' ? cur.linearUnitToMetres : undefined),
     };
   },
 });

@@ -24,6 +24,7 @@
  */
 
 import type { AnalyseContoursResult } from './analyseContours';
+import { verticalUnitSuffix } from '../../units/units';
 
 /** Ordered ratings, best → worst. `unavailable` = could not assess. */
 export type ReadinessRating =
@@ -102,8 +103,18 @@ function demote(r: ReadinessRating): ReadinessRating {
 
 const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
 
-/** Compute the readiness indicators from an analysis result. */
-export function computeTerrainReadiness(result: AnalyseContoursResult): TerrainReadiness {
+/**
+ * Compute the readiness indicators from an analysis result. `opts.verticalUnitToMetres`
+ * is metres per source VERTICAL (Z) unit — the recommended contour interval and
+ * relief are carried in that unit, so a foot / geographic frame is labelled 'ft'
+ * / 'units' and an unresolved vertical shows an honest "unverified" suffix rather
+ * than a false 'm'. Omitted ⇒ the vertical unit is treated as unknown.
+ */
+export function computeTerrainReadiness(
+  result: AnalyseContoursResult,
+  opts?: { readonly verticalUnitToMetres?: number | null },
+): TerrainReadiness {
+  const vSuffix = verticalUnitSuffix(opts?.verticalUnitToMetres);
   const cov = tallyCoverage(result.dtm.coverage);
   const meanConf = result.dtm.meanConfidence;
   const measuredFrac = cov.covered > 0 ? cov.measured / cov.covered : 0;
@@ -166,9 +177,9 @@ export function computeTerrainReadiness(result: AnalyseContoursResult): TerrainR
   const contourReadiness: ReadinessIndicator = {
     label: 'Contour readiness',
     rating: contourRating,
-    value: contoursRecommended ? `${recommended} m` : 'Not ready',
+    value: contoursRecommended ? `${recommended}${vSuffix}` : 'Not ready',
     detail: contoursRecommended
-      ? `Coverage ${pct(coverageFrac)} · relief ${result.elevationRangeM.toFixed(1)} m`
+      ? `Coverage ${pct(coverageFrac)} · relief ${result.elevationRangeM.toFixed(1)}${vSuffix}`
       : 'No reliable contour interval — the scan is too sparse or the vertical error is too high for honest contours.',
   };
 

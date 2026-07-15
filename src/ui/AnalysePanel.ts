@@ -109,6 +109,7 @@ import {
 } from './scanTypeControl';
 import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFitness';
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
+import { horizontalUnitLabel, verticalUnitSuffix } from '../units/units';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -178,6 +179,14 @@ export interface AnalysePanelCallbacks {
      * metre default. Omitted ⇒ serializeContours' standing metre assumption.
      */
     linearUnit?: DxfLinearUnit;
+    /**
+     * Metres per source VERTICAL (Z) unit, when the frame resolves one. Drives
+     * the unit label on the recommended contour interval, the relief / contour
+     * readiness figures, and the map-sheet interval note. Absent / non-finite ⇒
+     * the value is shown in an honest "unverified" form, NEVER asserted as
+     * metres (unlike the horizontal default, a false vertical metre is a bug).
+     */
+    verticalUnitToMetres?: number | null;
   };
 }
 
@@ -1327,7 +1336,12 @@ export class AnalysePanel {
   private _renderReadiness(): void {
     this._readinessRow.replaceChildren();
     if (!this._result) return;
-    const readiness = computeTerrainReadiness(this._result);
+    // Thread the source vertical-unit scale so the contour-readiness value /
+    // relief carry the CRS's real unit (or an honest "unverified") instead of a
+    // hard-coded metre.
+    const readiness = computeTerrainReadiness(this._result, {
+      verticalUnitToMetres: this._cb.getMapContext?.()?.verticalUnitToMetres,
+    });
     for (const ind of [
       readiness.groundConfidence,
       readiness.dtmQuality,
@@ -1784,6 +1798,7 @@ export class AnalysePanel {
     try {
       const { buildTerrainReportPdf } = await loadTerrainReportPdf();
       const basename = this._cb.getExportBasename?.() ?? 'terrain';
+      const mapCtx = this._cb.getMapContext?.() ?? {};
       // The renderer assembles the content from the SAME result the panel shows,
       // stamping the unified provenance via these options — so the report's
       // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
@@ -1797,6 +1812,10 @@ export class AnalysePanel {
         // Dataset Statistics rows must be the card's own strings, never a
         // re-derivation that could disagree with what the user saw on screen.
         intelligence: this._cb.getDatasetIntelligence?.() ?? null,
+        // The source horizontal unit so the Footprint (extent) reads the CRS's
+        // real unit ('ft' / 'degrees') instead of a hard-coded metre.
+        linearUnit: mapCtx.linearUnit,
+        isGeographic: mapCtx.isGeographic,
       });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${basename}-terrain-report.pdf`);
     } catch (err) {
@@ -1860,7 +1879,15 @@ export class AnalysePanel {
     notesInput.className = 'olv-modal-input olv-modal-textarea';
     notesInput.rows = 3;
     notesInput.value =
-      lastNotes ?? defaultMapNotes({ basename, intervalM: currentInterval, crs: r.model.crs });
+      lastNotes ??
+      defaultMapNotes({
+        basename,
+        intervalM: currentInterval,
+        crs: r.model.crs,
+        // The interval is a source VERTICAL-unit value — label it from the CRS so
+        // a foot / unresolved frame never seeds a false 'm'.
+        verticalUnitToMetres: ctx.verticalUnitToMetres,
+      });
 
     const sheetSel = document.createElement('select');
     sheetSel.className = 'olv-modal-input';
@@ -2202,9 +2229,22 @@ export class AnalysePanel {
   private _renderRecommend(): void {
     this._recommendRow.replaceChildren();
     const g = this._result!.gridRecommendation;
+    // The grid cell size is in the source HORIZONTAL unit and the contour
+    // interval in the source VERTICAL unit — neither is guaranteed metres. Label
+    // each from the resolved CRS so a foot / geographic frame never reads a false
+    // "m", and an unresolved vertical shows an honest "unverified" form.
+    const ctx = this._cb.getMapContext?.() ?? {};
+    const gridUnit = horizontalUnitLabel({
+      isGeographic: ctx.isGeographic,
+      linearUnit: ctx.linearUnit,
+    });
+    const intervalSuffix = verticalUnitSuffix(ctx.verticalUnitToMetres);
     this._recommendRow.append(
-      el('div', { className: 'olv-analyse-reco', text: `Recommended grid: ${g.cellSizeM} m` }),
-      el('div', { className: 'olv-analyse-reco', text: `Recommended contour interval: ${g.contourIntervalM} m` }),
+      el('div', { className: 'olv-analyse-reco', text: `Recommended grid: ${g.cellSizeM} ${gridUnit}` }),
+      el('div', {
+        className: 'olv-analyse-reco',
+        text: `Recommended contour interval: ${g.contourIntervalM}${intervalSuffix}`,
+      }),
     );
   }
 

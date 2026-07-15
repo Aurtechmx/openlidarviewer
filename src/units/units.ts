@@ -113,6 +113,54 @@ export function toMetresIfKnown(v: SourceUnits, scale: LinearUnitScale): Metres 
 export const radToDeg = (r: Radians): Degrees => degrees(raw(r) * DEG_PER_RAD);
 export const degToRad = (d: Degrees): Radians => radians(raw(d) / DEG_PER_RAD);
 
+// ── Display labels for values carried in a source frame's OWN unit. ──────────
+/**
+ * Horizontal-unit label for a value carried in a source frame's OWN linear unit
+ * (grid cell size, footprint extent), NOT in metres. A geographic frame reads
+ * `'degrees'`; a projected foot CRS (international or US survey) reads `'ft'`;
+ * every other case keeps the standing `'m'` default for back-compat, mirroring
+ * the DEM / DXF seams (`unitToMetres` defaults to 1). Horizontal is the one axis
+ * where an unresolved frame keeps `'m'` — the honest "never assert metres" rule
+ * applies to the VERTICAL label below.
+ */
+export function horizontalUnitLabel(opts: {
+  readonly isGeographic?: boolean | null;
+  readonly linearUnit?: string | null;
+}): string {
+  if (opts.isGeographic) return 'degrees';
+  return opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+}
+
+/**
+ * Vertical-unit label for a value carried in the source VERTICAL (Z) unit —
+ * relief, contour interval — given its metres-per-Z-unit scale. A metre axis
+ * (scale ≈ 1) reads `'m'`; an international / US-survey foot reads `'ft'`; any
+ * other KNOWN scale reads `'units'` (honest — not metres). An absent /
+ * non-finite / non-positive scale is UNKNOWN: returns `null` so the caller
+ * shows an explicit "unverified" form and NEVER a false `'m'`.
+ */
+export function verticalUnitLabel(
+  metresPerUnit: number | null | undefined,
+): 'm' | 'ft' | 'units' | null {
+  if (metresPerUnit == null || !Number.isFinite(metresPerUnit) || metresPerUnit <= 0) return null;
+  if (Math.abs(metresPerUnit - 1) < 1e-6) return 'm';
+  if (Math.abs(metresPerUnit - M_PER_FT) < 1e-4 || Math.abs(metresPerUnit - M_PER_US_FT) < 1e-4) {
+    return 'ft';
+  }
+  return 'units';
+}
+
+/**
+ * Suffix (with a leading space) for a value in the source vertical unit:
+ * `' m'` | `' ft'` | `' units'` when the scale is known, and
+ * `' (vertical unit unverified)'` when it is not. The single formatting seam so
+ * no call site accidentally stamps a false `'m'` on an unknown-unit value.
+ */
+export function verticalUnitSuffix(metresPerUnit: number | null | undefined): string {
+  const label = verticalUnitLabel(metresPerUnit);
+  return label ? ` ${label}` : ' (vertical unit unverified)';
+}
+
 // ── Area / volume, derived from the exact linear factor. ─────────────────────
 export const sqMetresToSqFeet = (a: SqMetres): number => raw(a) / (M_PER_FT * M_PER_FT);
 export const cubicMetresToCubicFeet = (v: CubicMetres): number =>

@@ -47,6 +47,7 @@ import { recommendedWorkflows, type WorkflowItem } from '../contour/recommendedW
 import { terrainProducts } from '../contour/terrainProducts';
 import { explainLimitations } from '../contour/whyNotReasons';
 import type { DatasetIntelligence } from '../datasetIntelligence';
+import { horizontalUnitLabel } from '../../units/units';
 import {
   buildExportProvenance,
   provenanceLines,
@@ -96,6 +97,15 @@ export interface TerrainReportProduct {
  */
 export interface TerrainReportContentOptions extends ExportProvenanceOptions {
   readonly intelligence?: DatasetIntelligence | null;
+  /**
+   * Resolved horizontal linear unit of the source CRS. The DTM grid's cell size
+   * and the Footprint (extent) it derives are carried in the source HORIZONTAL
+   * unit, so a foot CRS's footprint reads 'ft'. Omitted / metre / unknown keeps
+   * the standing metre default (back-compat with metre-CRS reports).
+   */
+  readonly linearUnit?: 'metre' | 'foot' | 'us-survey-foot' | 'unknown' | null;
+  /** True when the horizontal CRS is geographic — the footprint reads 'degrees'. */
+  readonly isGeographic?: boolean | null;
 }
 
 /** The complete, pure content model the PDF renderer lays out. */
@@ -197,9 +207,16 @@ export function buildTerrainReportContent(
   const cols = Number.isFinite(dtm?.cols) ? dtm.cols : null;
   const rows = Number.isFinite(dtm?.rows) ? dtm.rows : null;
   const cell = Number.isFinite(dtm?.cellSizeM) && dtm.cellSizeM > 0 ? dtm.cellSizeM : null;
+  // The cell size (and thus cols·cell × rows·cell) is in the source HORIZONTAL
+  // unit, not necessarily metres — label it from the CRS so a foot / geographic
+  // frame's footprint reads 'ft' / 'degrees' instead of a false 'm'.
+  const footprintUnit = horizontalUnitLabel({
+    isGeographic: opts.isGeographic,
+    linearUnit: opts.linearUnit,
+  });
   const footprint =
     cols != null && rows != null && cell != null
-      ? `${Math.round(cols * cell).toLocaleString()} × ${Math.round(rows * cell).toLocaleString()} m`
+      ? `${Math.round(cols * cell).toLocaleString()} × ${Math.round(rows * cell).toLocaleString()} ${footprintUnit}`
       : DASH;
   const density = provenance.pointDensityPerM2;
   const classified =

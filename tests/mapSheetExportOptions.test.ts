@@ -69,10 +69,30 @@ describe('defaultMapTitle', () => {
 });
 
 describe('defaultMapNotes', () => {
-  it('describes source, interval, and CRS', () => {
-    expect(defaultMapNotes({ basename: 'picacho', intervalM: 10, crs: 'WGS 84 / UTM zone 11N' })).toBe(
-      'Contours from picacho · interval 10 m · WGS 84 / UTM zone 11N',
-    );
+  it('describes source, interval, and CRS — metre vertical reads "m"', () => {
+    expect(
+      defaultMapNotes({
+        basename: 'picacho',
+        intervalM: 10,
+        crs: 'WGS 84 / UTM zone 11N',
+        verticalUnitToMetres: 1,
+      }),
+    ).toBe('Contours from picacho · interval 10 m · WGS 84 / UTM zone 11N');
+  });
+  it('labels a foot vertical unit as "ft"', () => {
+    expect(
+      defaultMapNotes({
+        basename: 'picacho',
+        intervalM: 2,
+        crs: 'NAD83 / California zone 6 (ftUS)',
+        verticalUnitToMetres: 1200 / 3937,
+      }),
+    ).toBe('Contours from picacho · interval 2 ft · NAD83 / California zone 6 (ftUS)');
+  });
+  it('marks the interval "unverified" when the vertical unit is unknown — never a false "m"', () => {
+    const notes = defaultMapNotes({ basename: 'picacho', intervalM: 10, crs: 'no CRS' });
+    expect(notes).toBe('Contours from picacho · interval 10 (vertical unit unverified) · no CRS');
+    expect(notes).not.toMatch(/interval 10 m\b/);
   });
   it('says "no CRS" when unknown and "auto" when no interval', () => {
     expect(defaultMapNotes({ basename: 'scan', intervalM: null, crs: null })).toBe(
