@@ -98,9 +98,7 @@ ELITE_*.md
 *.copc.laz
 *.copc.laz.*
 
-# Serena project metadata (local tooling)
-.serena/
-.claude/
+# Local tooling / editor metadata (ignored via .git/info/exclude, not shipped)
 
 # Generated reproducibility artifacts (regenerate with npm run repro)
 benchmarks/out/
