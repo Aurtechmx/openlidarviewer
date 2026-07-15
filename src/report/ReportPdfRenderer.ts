@@ -118,7 +118,19 @@ export async function renderReportPdf(
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await doc.embedFont(StandardFonts.HelveticaBold);
   const branding = effectiveBranding(inputs.branding);
-  const accent = parseAccentColor(branding.accentColor);
+  // Per-template cover / section accent. `effectiveBranding` backfills
+  // `accentColor` with the single app default whenever the caller supplied
+  // none — which quietly erased each template's design DNA, so every template
+  // rendered the SAME accent and only the cover tag chip changed. Seed the
+  // effective accent from the template's design key (survey-summary → green,
+  // technical-report → blue) UNLESS the user explicitly supplied an
+  // `accentColor`, in which case their choice always wins. A blank / whitespace
+  // value counts as "not supplied" and falls through to the template default.
+  const userAccent = inputs.branding.accentColor;
+  const accent =
+    typeof userAccent === 'string' && userAccent.trim().length > 0
+      ? parseAccentColor(userAccent)
+      : designKeyFor(inputs.templateId).defaultAccent;
   // Resolved theme palette: page background, body/muted text, rule colour,
   // row tint, accent-stripe toggle. The renderer reads these instead of
   // hard-coded RGB values.
