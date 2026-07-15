@@ -60,11 +60,13 @@ export function classifyLoadError(message: string): LoadErrorCategory {
   // A failed code-chunk fetch — not a problem with the file. Browsers phrase
   // it as "failed to fetch dynamically imported module" (Chromium), "error
   // loading dynamically imported module" (Firefox), "importing a module
-  // script failed" (Safari), or "loading chunk … failed".
+  // script failed" (Safari), or "loading chunk … failed"; Vite's module
+  // preloader phrases a failed preload as "unable to preload CSS/…".
   if (
     m.includes('dynamically imported module') ||
     m.includes('importing a module script') ||
-    m.includes('loading chunk')
+    m.includes('loading chunk') ||
+    m.includes('unable to preload')
   ) {
     return 'resource-load';
   }
