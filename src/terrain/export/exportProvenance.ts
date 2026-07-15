@@ -65,6 +65,7 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  * `export ... from`, which would not create a usable local binding).
  */
 import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
+import { verticalUnitLabel } from '../../units/units';
 export { NOT_SURVEY_GRADE_NOTE };
 
 /**
@@ -179,6 +180,8 @@ export interface ExportProvenance {
   readonly coverageMode: string;
   /** Contour interval (source units), or null when none was chosen. */
   readonly contourIntervalM: number | null;
+  /** Vertical-unit label for the interval ('m' | 'ft' | 'units'); absent/'unknown' ⇒ unverified. */
+  readonly contourIntervalUnit?: string;
   /** Contour shape style the geometry was produced with, or null when unknown. */
   readonly contourStyle: ContourShapeStyle | null;
   /** Human label for {@link contourStyle}, or 'unknown'. */
@@ -244,6 +247,13 @@ export interface ExportProvenanceOptions {
   readonly contourMethod?: string | null;
   /** Contour Studio purpose that produced this deliverable, or null. */
   readonly deliverablePurpose?: string | null;
+  /**
+   * Metres-per-unit of the Z (elevation) axis, when the CRS resolves one. Lets
+   * the provenance label the contour interval in the REAL vertical unit
+   * (m / ft) instead of a hard-coded metre; absent ⇒ the interval is labelled
+   * "vertical unit unverified" rather than falsely stamped metres.
+   */
+  readonly verticalUnitToMetres?: number | null;
   /**
    * The evidence-gate permit the export was minted under (from
    * `resolveContourExportPermit`). Stamped into the file so the artifact records
@@ -343,6 +353,14 @@ export function buildExportProvenance(
     datumKnown: datum != null,
     coverageMode,
     contourIntervalM: intervalM,
+    // The interval is in the SOURCE vertical unit; label it from the resolved
+    // Z-axis scale (never a hard-coded metre) and say "unknown" when unresolved.
+    contourIntervalUnit:
+      opts.verticalUnitToMetres != null &&
+      Number.isFinite(opts.verticalUnitToMetres) &&
+      opts.verticalUnitToMetres > 0
+        ? verticalUnitLabel(opts.verticalUnitToMetres)
+        : 'unknown',
     contourStyle: style,
     contourStyleLabel: style ? contourShapeStyleLabel(style) : 'unknown',
     contourMethod: opts.contourMethod ?? null,
@@ -548,7 +566,14 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Horizontal CRS', p.horizontalCrs),
     kv('Vertical datum', p.verticalDatum),
     kv('Coverage', p.coverageMode),
-    kv('Contour interval', p.contourIntervalM != null ? `${p.contourIntervalM} m` : 'none'),
+    kv(
+      'Contour interval',
+      p.contourIntervalM != null
+        ? p.contourIntervalUnit && p.contourIntervalUnit !== 'unknown'
+          ? `${p.contourIntervalM} ${p.contourIntervalUnit}`
+          : `${p.contourIntervalM} (vertical unit unverified)`
+        : 'none',
+    ),
     kv('Contour style', p.contourStyleLabel),
     kv('Surface quality', p.surfaceQuality),
     // The "Tier — reason" formatting is the readiness engine's, so this stamp
@@ -638,6 +663,7 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     datumKnown: p.datumKnown,
     coverageMode: p.coverageMode,
     contourIntervalM: p.contourIntervalM,
+    contourIntervalUnit: p.contourIntervalUnit ?? null,
     contourStyle: p.contourStyle,
     contourStyleLabel: p.contourStyleLabel,
     contourMethod: p.contourMethod,

@@ -50,7 +50,16 @@ function readyResult(): AnalyseContoursResult {
   } as unknown as AnalyseContoursResult;
 }
 
-const OPTS = { basename: 'site', generatedAt: '2026-06-05T00:00:00.000Z', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' } as const;
+const OPTS = { basename: 'site', generatedAt: '2026-06-05T00:00:00.000Z', softwareVersion: '9.9.9', metricVersion: 'v0.4.1', verticalUnitToMetres: 1 } as const;
+
+it('labels the contour interval in the resolved vertical unit, never a hard-coded metre', () => {
+  const metre = provenanceLines(buildExportProvenance(readyResult(), OPTS)).join('\n');
+  expect(metre).toMatch(/Contour interval\s+1 m\b/);
+  const foot = provenanceLines(buildExportProvenance(readyResult(), { ...OPTS, verticalUnitToMetres: 0.3048 })).join('\n');
+  expect(foot).toMatch(/Contour interval\s+1 ft\b/);
+  const unknown = provenanceLines(buildExportProvenance(readyResult(), { basename: 'site', softwareVersion: '9.9.9', metricVersion: 'v0.4.1' })).join('\n');
+  expect(unknown).toMatch(/Contour interval\s+1 \(vertical unit unverified\)/);
+});
 
 describe('buildExportProvenance — field derivation', () => {
   it('derives software + version + metric version + date + source', () => {

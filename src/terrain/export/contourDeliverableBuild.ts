@@ -134,6 +134,8 @@ function gatherDeliverable(
     // self-describes what it holds and which purpose produced it.
     contourMethod: opts.contourMethod ?? null,
     deliverablePurpose: opts.deliverablePurpose ?? null,
+    // Label the contour interval in the real vertical unit, not a hard-coded metre.
+    verticalUnitToMetres: opts.verticalUnitToMetres,
   });
 
   // Honest geometry role: label the bundled GeoJSON by its ACTUAL style, so a
