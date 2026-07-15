@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.5.9] - 2026-07-14
+## [0.5.9] - 2026-07-15
 
 v0.5.9 launches Contour Studio — a post-analysis workflow that turns a correctly analysed LiDAR scan into an evidence-aware terrain deliverable, kept out of the crowded analysis panel — alongside scientific-correctness, unit, evidence-gate, provenance, and registration fixes that stand on their own. Headline additions: a verifiable hash-chained processing manifest, a labelled colorbar legend (live and burned into figures), named restorable view states (session schema v7), GPS-time and return-number colour modes, and purpose-driven contour exports whose geometry differs by purpose.
 

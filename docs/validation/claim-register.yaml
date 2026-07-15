@@ -29,7 +29,7 @@
 
 schemaVersion: 1
 softwareVersion: 0.5.9            # package.json version at last review
-generated: 2026-07-14
+generated: 2026-07-15
 validationOwner: A. Urias / Aurtech
 
 claims:
