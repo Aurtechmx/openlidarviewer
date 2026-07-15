@@ -63,7 +63,11 @@ import {
   matchTerrainWorkflowPreset,
 } from './render/terrainWorkflowPresets';
 import { AnnotationPanel } from './ui/AnnotationPanel';
-import { AnalysePanel } from './ui/AnalysePanel';
+// AnalysePanel is lazy-mounted on first scan load (v0.6 P1): only the TYPE is
+// imported here (erased at compile time — pulls nothing into the shell), and the
+// class itself arrives through `loadAnalysePanel()` (see lazyChunks import below)
+// inside `ensureAnalysePanel()`.
+import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
@@ -223,6 +227,7 @@ import {
   loadChangeRaster,
   loadApplyDisplayProfile,
   loadColorbarOverlay,
+  loadAnalysePanel,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -1045,8 +1050,13 @@ function showInstantAnswer(scanLabel: string): void {
     onClick: () => {
       switch (answer.action) {
         case 'terrain':
-          analysePanel.expand();
-          void terrainRunner.run();
+          // Ensure the (lazy) panel is mounted before expanding + running, so
+          // the busy state and result have somewhere to land.
+          analyseExpanded = true;
+          void ensureAnalysePanel().then((p) => {
+            p.expand();
+            void terrainRunner.run();
+          });
           break;
         case 'compare':
           void compareLoadedLayers();
@@ -1252,8 +1262,10 @@ const inspector = new Inspector({
     currentColorMode = mode;
     if (activeId) viewer.setColorMode(activeId, mode);
     // Keep the analyse-panel confidence toggle in sync when the user changes
-    // colour from the COLOR BY rail instead of the toggle button.
-    analysePanel.setConfidenceColorActive(mode === 'confidence');
+    // colour from the COLOR BY rail instead of the toggle button. Null-safe: the
+    // panel is lazy-mounted, and `hydrateAnalysePanel()` re-derives this from
+    // `currentColorMode` when it does mount.
+    analysePanel?.setConfidenceColorActive(mode === 'confidence');
     // Workflow rail (v0.4.5): a colour-mode change can enter/leave a preset.
     syncInspectorVisuals();
   },
@@ -1889,7 +1901,9 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
   const cloud = activeId ? viewer.getCloud(activeId) : null;
   const streaming = viewer.streamingCloud;
   let facts: ReturnType<typeof analysePanel.storyFacts> = null;
-  try { facts = analysePanel.storyFacts(); } catch { /* not analysed */ }
+  // Null-safe: the panel is lazy-mounted, so a story built before the first scan
+  // (or before its chunk resolves) simply has no analysis facts yet.
+  try { facts = analysePanel?.storyFacts() ?? null; } catch { /* not analysed */ }
   let di: ReturnType<() => typeof inspector.datasetIntelligence> | null = null;
   try { di = inspector.datasetIntelligence; } catch { /* no intelligence yet */ }
 
@@ -2449,12 +2463,21 @@ const dock = new ToolDock({
     // Re-open (or hide) the terrain analysis panel. If an object scan had
     // demoted it behind the Object panel, opening Analyse takes over —
     // the "run terrain anyway" path, reachable from one obvious place.
-    const show = !analysePanel.isVisible();
+    // Lazy-mount aware: the panel may not exist yet (import in flight), so the
+    // toggle reads/writes the tracked desired-visibility and mounts on demand.
+    const show = analysePanel ? !analysePanel.isVisible() : !analyseDesiredVisible;
     // A manual Analyse toggle is a user override — stop auto-rerouting so a
     // late streaming node can't yank the panel away.
     scanRouteOverridden = true;
-    analysePanel.setVisible(show);
-    if (show) objectPanel.setVisible(false);
+    analyseDesiredVisible = show;
+    if (show) {
+      // Opening: ensure the panel is mounted, then show it.
+      void ensureAnalysePanel().then((p) => p.setVisible(true));
+      objectPanel.setVisible(false);
+    } else {
+      // Hiding: no need to construct just to hide — no-op when not yet mounted.
+      analysePanel?.setVisible(false);
+    }
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
@@ -2632,105 +2655,170 @@ let lastCloudName = 'contours';
 // up just below, once `analysePanel` exists. The panel callbacks reference
 // `terrainRunner` lazily — they only fire on user input, long after the
 // runner is constructed.
-const analysePanel = new AnalysePanel({
-  onRun: () => void terrainRunner.run(),
-  onScanTypeChange: (override) => setScanTypeOverride(override),
-  onSelectInterval: (m) => void terrainRunner.run(m),
-  // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
-  // the SAME cached terrain core the runner uses — never mutates the panel.
-  buildResultAtInterval: (m) => terrainRunner.buildResultAtInterval(m),
-  // Same cached-core rebuild, generalised with the contour shape-style picker so
-  // an export reflects the user's chosen interval AND line shape.
-  buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-  getExportBasename: () => lastCloudName,
-  // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
-  // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
-  // are the card's own strings (null when the card is empty — the report
-  // then omits those rows rather than re-deriving them).
-  getDatasetIntelligence: () => inspector.datasetIntelligence,
-  // Confidence overlay (v0.4.5): the coverage tile's "Colour 3D by confidence"
-  // link switches the loaded cloud to the colourblind-safe 'confidence' colour
-  // mode — the same DTM-confidence grid the tile renders — and re-syncs the
-  // Inspector's COLOR BY rail so the matching chip lights up. Guarded on a
-  // grid existing (the link only renders after an analysis, but the scan may
-  // have been closed since).
-  onColorByConfidence: () => {
-    if (!activeId || !viewer.hasCoverageGrid()) return;
-    const cloud = viewer.getCloud(activeId);
-    if (!cloud) return;
-    // Toggle: if the confidence overlay is already on, clicking again restores
-    // the colour mode that was active before it (RGB on a coloured scan), so the
-    // button is always a round trip — the user is never stranded in yellow.
-    if (currentColorMode === 'confidence') {
-      const restore = confidenceColorPrev ?? defaultMode(cloud);
-      currentColorMode = restore;
-      viewer.setColorMode(activeId, restore);
-      inspector.setColorModes(availableModes(cloud), restore);
+// --- Lazy Analyse-panel mount (v0.6 P1) ---------------------------------------
+// The Analyse panel is constructed on the FIRST scan load, not at boot, so its
+// whole terrain-assessment DOM-builder chain stays out of the empty-state shell.
+// Until then `analysePanel` is a null sentinel: every call site is null-guarded
+// (or routes through `ensureAnalysePanel()`), and the synchronous scan-route
+// pass that runs during reveal records its intent in the tracking vars below so
+// `hydrateAnalysePanel()` can replay it the instant the panel mounts.
+let analysePanel: AnalysePanel = null as unknown as AnalysePanel;
+// Desired panel state, mirrored so a panel mounted a beat AFTER the scan route
+// was computed (the dynamic import resolves later) replays the correct state.
+let analyseDesiredVisible = false;
+let analyseExpanded = false;
+let analyseScanTypeArgs: Parameters<AnalysePanel['setScanType']> | null = null;
+// Memoised first-mount promise so concurrent first-loads share one construction.
+let _analyseReady: Promise<AnalysePanel> | null = null;
+
+/**
+ * Construct the Analyse panel with the SAME callbacks the eager version used.
+ * Split out only so the (large) opts object keeps a shallow indentation; called
+ * exactly once, from `ensureAnalysePanel()`.
+ */
+function newAnalysePanel(
+  Ctor: Awaited<ReturnType<typeof loadAnalysePanel>>['AnalysePanel'],
+): AnalysePanel {
+  return new Ctor({
+    onRun: () => void terrainRunner.run(),
+    onScanTypeChange: (override) => setScanTypeOverride(override),
+    onSelectInterval: (m) => void terrainRunner.run(m),
+    // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
+    // the SAME cached terrain core the runner uses — never mutates the panel.
+    buildResultAtInterval: (m) => terrainRunner.buildResultAtInterval(m),
+    // Same cached-core rebuild, generalised with the contour shape-style picker so
+    // an export reflects the user's chosen interval AND line shape.
+    buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
+    getExportBasename: () => lastCloudName,
+    // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
+    // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
+    // are the card's own strings (null when the card is empty — the report
+    // then omits those rows rather than re-deriving them).
+    getDatasetIntelligence: () => inspector.datasetIntelligence,
+    // Confidence overlay (v0.4.5): the coverage tile's "Colour 3D by confidence"
+    // link switches the loaded cloud to the colourblind-safe 'confidence' colour
+    // mode — the same DTM-confidence grid the tile renders — and re-syncs the
+    // Inspector's COLOR BY rail so the matching chip lights up. Guarded on a
+    // grid existing (the link only renders after an analysis, but the scan may
+    // have been closed since).
+    onColorByConfidence: () => {
+      if (!activeId || !viewer.hasCoverageGrid()) return;
+      const cloud = viewer.getCloud(activeId);
+      if (!cloud) return;
+      // Toggle: if the confidence overlay is already on, clicking again restores
+      // the colour mode that was active before it (RGB on a coloured scan), so the
+      // button is always a round trip — the user is never stranded in yellow.
+      if (currentColorMode === 'confidence') {
+        const restore = confidenceColorPrev ?? defaultMode(cloud);
+        currentColorMode = restore;
+        viewer.setColorMode(activeId, restore);
+        inspector.setColorModes(availableModes(cloud), restore);
+        syncInspectorVisuals();
+        analysePanel?.setConfidenceColorActive(false);
+        return;
+      }
+      confidenceColorPrev = currentColorMode ?? defaultMode(cloud);
+      currentColorMode = 'confidence';
+      viewer.setColorMode(activeId, 'confidence');
+      inspector.setColorModes(availableModes(cloud), 'confidence');
       syncInspectorVisuals();
-      analysePanel.setConfidenceColorActive(false);
-      return;
+      analysePanel?.setConfidenceColorActive(true);
+      // The 3D overlay tints each point by the trust of the ground beneath it.
+      // Points cluster over MEASURED ground, so a surface that is largely
+      // interpolated still paints mostly "strong" in 3D — the interpolated share
+      // sits in point-sparse voids that have little to colour. Say so, and point
+      // the user at the 2D Coverage tile, which shows every cell. Only caption
+      // when interpolation is a meaningful share, so a clean scan stays quiet.
+      const summary = viewer.coverageGridCellSummary();
+      if (summary && summary.interpFrac >= 0.2) {
+        const pct = Math.round(summary.interpFrac * 100);
+        showLassoToast(
+          `Confidence colour shows ground-survey trust under each point. ${pct}% of the ` +
+            `surface is interpolated and point-sparse, so 3D reads mostly strong — see the ` +
+            `2D Coverage tile for the full per-cell map.`,
+        );
+      }
+    },
+    getMapContext: () => {
+      const cloud = activeId ? viewer.getCloud(activeId) : null;
+      // Streamed COPC / EPT scans never enter `viewer.getCloud` — their
+      // recentre offset lives on the streaming source (`renderOrigin`) and
+      // their CRS on `crs()`. Fall back to those when no static cloud is
+      // active, so a contour export from a streamed scan keeps its world
+      // origin and EPSG stamp instead of silently degrading to local frame.
+      const streaming = cloud ? null : viewer.streamingCloud;
+      const origin = cloud?.origin ?? streaming?.renderOrigin;
+      const cur = crsService.current();
+      return {
+        // All three axes: contour serialization shifts elevations by `z` so
+        // exported contour levels read in real-world (e.g. orthometric) height
+        // rather than the recentred local frame.
+        worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
+        title: `${lastCloudName} — Contours`,
+        sheet: 'letter',
+        isGeographic: cur?.kind === 'geographic',
+        wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
+        // The resolved CRS's linear unit (same seam every other unit consumer
+        // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
+        // scale note says ft — and a local/unresolved frame stamps an honest
+        // "unitless" rather than asserting metres. Undefined before a CRS
+        // resolves ⇒ serializeContours keeps its standing metre default.
+        linearUnit: cur?.linearUnit,
+        // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
+        // it declares one, else the horizontal linear factor when the frame is
+        // actually resolved (GeoTIFF default: vertical follows the model's linear
+        // unit — so a metre CRS reads "m", a foot CRS "ft"). A local / unknown
+        // frame (linearUnit 'unknown') leaves this undefined so the deliverable
+        // elevation unit + the contour interval / relief show an honest
+        // "unverified" unit rather than a false metre. The complete deliverable,
+        // and the Analyse panel's readiness / recommend / map-sheet notes, read this.
+        verticalUnitToMetres:
+          cur?.verticalUnitToMetres ??
+          (cur && cur.linearUnit !== 'unknown' ? cur.linearUnitToMetres : undefined),
+      };
+    },
+  });
+}
+
+/**
+ * Construct + mount the Analyse panel exactly once, pulling its chunk through
+ * `loadAnalysePanel()`. Idempotent and memoised: concurrent first-mounts share
+ * the single in-flight promise, and the double-construct guard means only one
+ * panel is ever built. After construction it inserts into the DOM (desktop left
+ * column, or the mobile sheet when that layout is active) and hydrates the
+ * tracked state.
+ */
+function ensureAnalysePanel(): Promise<AnalysePanel> {
+  if (analysePanel) return Promise.resolve(analysePanel);
+  if (_analyseReady) return _analyseReady;
+  _analyseReady = loadAnalysePanel().then(({ AnalysePanel: Ctor }) => {
+    // A concurrent caller may have won the race while the import was in flight.
+    if (!analysePanel) {
+      analysePanel = newAnalysePanel(Ctor);
+      // Insert into the DOM in its canonical spot; no-op in bare/embed mode
+      // where no left column was built.
+      mountAnalysePanelElement?.(analysePanel.element);
+      // Replay whatever state the (already-run) scan route asked for.
+      hydrateAnalysePanel();
     }
-    confidenceColorPrev = currentColorMode ?? defaultMode(cloud);
-    currentColorMode = 'confidence';
-    viewer.setColorMode(activeId, 'confidence');
-    inspector.setColorModes(availableModes(cloud), 'confidence');
-    syncInspectorVisuals();
-    analysePanel.setConfidenceColorActive(true);
-    // The 3D overlay tints each point by the trust of the ground beneath it.
-    // Points cluster over MEASURED ground, so a surface that is largely
-    // interpolated still paints mostly "strong" in 3D — the interpolated share
-    // sits in point-sparse voids that have little to colour. Say so, and point
-    // the user at the 2D Coverage tile, which shows every cell. Only caption
-    // when interpolation is a meaningful share, so a clean scan stays quiet.
-    const summary = viewer.coverageGridCellSummary();
-    if (summary && summary.interpFrac >= 0.2) {
-      const pct = Math.round(summary.interpFrac * 100);
-      showLassoToast(
-        `Confidence colour shows ground-survey trust under each point. ${pct}% of the ` +
-          `surface is interpolated and point-sparse, so 3D reads mostly strong — see the ` +
-          `2D Coverage tile for the full per-cell map.`,
-      );
-    }
-  },
-  getMapContext: () => {
-    const cloud = activeId ? viewer.getCloud(activeId) : null;
-    // Streamed COPC / EPT scans never enter `viewer.getCloud` — their
-    // recentre offset lives on the streaming source (`renderOrigin`) and
-    // their CRS on `crs()`. Fall back to those when no static cloud is
-    // active, so a contour export from a streamed scan keeps its world
-    // origin and EPSG stamp instead of silently degrading to local frame.
-    const streaming = cloud ? null : viewer.streamingCloud;
-    const origin = cloud?.origin ?? streaming?.renderOrigin;
-    const cur = crsService.current();
-    return {
-      // All three axes: contour serialization shifts elevations by `z` so
-      // exported contour levels read in real-world (e.g. orthometric) height
-      // rather than the recentred local frame.
-      worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
-      title: `${lastCloudName} — Contours`,
-      sheet: 'letter',
-      isGeographic: cur?.kind === 'geographic',
-      wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
-      // The resolved CRS's linear unit (same seam every other unit consumer
-      // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
-      // scale note says ft — and a local/unresolved frame stamps an honest
-      // "unitless" rather than asserting metres. Undefined before a CRS
-      // resolves ⇒ serializeContours keeps its standing metre default.
-      linearUnit: cur?.linearUnit,
-      // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
-      // it declares one, else the horizontal linear factor when the frame is
-      // actually resolved (GeoTIFF default: vertical follows the model's linear
-      // unit — so a metre CRS reads "m", a foot CRS "ft"). A local / unknown
-      // frame (linearUnit 'unknown') leaves this undefined so the deliverable
-      // elevation unit + the contour interval / relief show an honest
-      // "unverified" unit rather than a false metre. The complete deliverable,
-      // and the Analyse panel's readiness / recommend / map-sheet notes, read this.
-      verticalUnitToMetres:
-        cur?.verticalUnitToMetres ??
-        (cur && cur.linearUnit !== 'unknown' ? cur.linearUnitToMetres : undefined),
-    };
-  },
-});
+    return analysePanel;
+  });
+  return _analyseReady;
+}
+
+/**
+ * Replay the tracked Analyse-panel state onto the freshly-mounted panel — the
+ * "Treat as" control, visibility, expand state, and confidence-colour toggle —
+ * so a panel that mounted a beat after the scan route was computed shows exactly
+ * what the route asked for. Called once from `ensureAnalysePanel()`.
+ */
+function hydrateAnalysePanel(): void {
+  if (!analysePanel) return;
+  if (analyseScanTypeArgs) analysePanel.setScanType(...analyseScanTypeArgs);
+  analysePanel.setVisible(analyseDesiredVisible);
+  if (analyseExpanded) analysePanel.expand();
+  analysePanel.setConfidenceColorActive(currentColorMode === 'confidence');
+}
 
 // Classification legend — one row per ASPRS class present in the scan, with a
 // colour swatch (matching "colour by class"), a live "shown" point count, and a
@@ -3038,7 +3126,11 @@ const objectPanel = new ObjectPanel({
 // selection through getters so no top-level `viewer.*` dereference is added.
 const terrainRunner = createTerrainAnalysisRunner({
   getViewer: () => viewer,
-  analysePanel,
+  // The panel is lazy-mounted (ensureAnalysePanel), so the runner reads it
+  // through a getter — never captures the boot-time null sentinel. Every runner
+  // entry point (onRun / onSelectInterval callbacks, the "run anyway" hatches)
+  // fires only after the panel has mounted, so this always resolves non-null.
+  getAnalysePanel: () => analysePanel,
   getActiveId: () => activeId,
   crsService,
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
@@ -3090,7 +3182,7 @@ void viewerLoaded.then((v) => {
     // The cache is gone but the RENDERED result/contours are not — without a
     // caveat they read as current while reflecting the previous classes. The
     // panel no-ops when nothing is on screen; a completed re-run clears it.
-    analysePanel.setStaleNotice(
+    analysePanel?.setStaleNotice(
       'Classification edited — results reflect the previous classification. Re-run Analyse to refresh.',
     );
   };
@@ -3569,7 +3661,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     if (plan.commitDetected !== null) {
       const committedDisabled = treatAsDisabledFor(detected);
       objectPanel.setScanType(scanTypeOverride, plan.commitDetected, committedDisabled, true);
-      analysePanel.setScanType(scanTypeOverride, plan.commitDetected, committedDisabled, true);
+      // Track for hydration + apply (no-op while the panel's chunk is in flight).
+      analyseScanTypeArgs = [scanTypeOverride, plan.commitDetected, committedDisabled, true];
+      analysePanel?.setScanType(...analyseScanTypeArgs);
     }
     return oneShotSpent;
   }
@@ -3642,7 +3736,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     lastSpaceExport = null;
   }
   objectPanel.setVisible(plan.showObjectPanel);
-  analysePanel.setVisible(plan.showAnalysePanel);
+  // Track desired visibility for hydration; apply now (no-op if not yet mounted).
+  analyseDesiredVisible = plan.showAnalysePanel;
+  analysePanel?.setVisible(plan.showAnalysePanel);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(plan.showAnalysePanel);
   // When DETECTION says the scan is an interior / compact object, the Terrain
@@ -3659,7 +3755,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   // manual override displays the override pill regardless.
   const committed = scanTypeOverride === 'auto' && scanDetectionCommitted;
   objectPanel.setScanType(scanTypeOverride, effective, treatAsDisabled, committed);
-  analysePanel.setScanType(scanTypeOverride, effective, treatAsDisabled, committed);
+  // Track for hydration + apply (no-op while the panel's chunk is in flight).
+  analyseScanTypeArgs = [scanTypeOverride, effective, treatAsDisabled, committed];
+  analysePanel?.setScanType(...analyseScanTypeArgs);
   // Forcing terrain is the explicit "run anyway": surface the Analyse panel
   // AND kick the pipeline, matching the old escape hatch. The panel must also
   // EXPAND out of its collapsed-chip state — it is built collapsed, and routing
@@ -3668,8 +3766,14 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   // true ONLY for the manual 'terrain' override — a detected-terrain route
   // shows the collapsed panel but NEVER starts the analysis by itself.
   if (plan.runTerrain) {
-    analysePanel.expand();
-    void terrainRunner.run();
+    // The explicit "run terrain anyway" hatch: mount the panel (if the import is
+    // still in flight), expand it out of its collapsed chip, then run. Mounting
+    // first guarantees the busy state + result have somewhere to land.
+    analyseExpanded = true;
+    void ensureAnalysePanel().then((p) => {
+      p.expand();
+      void terrainRunner.run();
+    });
   }
   return oneShotSpent;
 }
@@ -3689,6 +3793,15 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
 // lifecycle (reveal / reset) re-evaluate whether the phone sheet should show,
 // without main.ts holding a direct reference to the sheet instance.
 let syncMobileSheet: (() => void) | null = null;
+
+// Set once the desktop left-panel column (and mobile sheet) are built (full app
+// only). Lets the lazily-mounted Analyse panel insert itself into the DOM in its
+// canonical spot the instant its chunk resolves — the column is built before any
+// scan (thus before the panel exists), so it can't be appended eagerly. The
+// closure routes into the mobile sheet's Analyse slot when that layout is active,
+// else between the class-legend and export panels in the left column. Null in
+// bare/embed mode (no column), where the panel simply stays detached as before.
+let mountAnalysePanelElement: ((el: HTMLElement) => void) | null = null;
 
 function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name);
@@ -3722,6 +3835,12 @@ function revealAnalysePanel(name: string, settled = true): void {
   // Streaming callers pass false: their open-time verdict runs on a sparse
   // coarse frame, so the "Treat as" commit waits for the settle one-shot.
   applyScanRoute(true, settled);
+  // Mount the Analyse panel on this scan load (v0.6 P1 lazy seam). The route
+  // above ran synchronously against the not-yet-mounted panel, recording its
+  // intent in the tracking vars; once the chunk resolves the panel constructs,
+  // mounts, and `hydrateAnalysePanel()` replays that intent. Fire-and-forget:
+  // nothing here awaits the panel.
+  void ensureAnalysePanel();
   // A scan is now loaded — let the phone sheet show (no-op on desktop).
   syncMobileSheet?.();
 }
@@ -3815,7 +3934,10 @@ void viewerLoaded.then(() => {
   // the profile chart has room and the focus is unambiguous.
   viewer.measure.setOnKindChange((kind) => {
     if (kind === 'profile') {
-      analysePanel.setVisible(false);
+      // Null-safe: profile selection needs a scan (panel mounted), but track the
+      // desired-hidden state too so a not-yet-mounted panel hydrates hidden.
+      analyseDesiredVisible = false;
+      analysePanel?.setVisible(false);
       dock.setAnalyseActive(false);
       measurePanel.setVisible(true);
     }
@@ -4182,7 +4304,10 @@ void viewerLoaded.then(() => {
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
     leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
-    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element, clipPanel.element);
+    // NOTE: analysePanel.element is intentionally ABSENT here — the panel is
+    // lazy-mounted on first scan load (v0.6 P1) and inserts itself between the
+    // class-legend and export panels via `mountAnalysePanelElement` below.
+    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
     // reach the camera. Stop it here (passive — this is plain scrolling, never a
@@ -4257,7 +4382,12 @@ void viewerLoaded.then(() => {
 
     const toMobileLayout = (): void => {
       mobileSheet.slot('view').append(inspector.element);
-      mobileSheet.slot('analyse').append(analysePanel.element, objectPanel.element);
+      // The Analyse panel is lazy-mounted, so re-parent it only once it exists
+      // (analyse first, then object). A mobile boot BEFORE any scan runs this
+      // with the panel still null — objectPanel alone goes in, and the panel
+      // slots ahead of it via `mountAnalysePanelElement` when it later mounts.
+      if (analysePanel) mobileSheet.slot('analyse').append(analysePanel.element);
+      mobileSheet.slot('analyse').append(objectPanel.element);
       mobileSheet
         .slot('layers')
         .append(
@@ -4268,7 +4398,7 @@ void viewerLoaded.then(() => {
         );
       // Drop the desktop collapsed state so mobile users don't see a nested
       // collapsed header inside the sheet's own collapse chrome.
-      analysePanel.element.classList.remove('olv-collapsed');
+      analysePanel?.element.classList.remove('olv-collapsed');
       exportPanel.element.classList.remove('olv-collapsed');
       // The now-empty left column would still capture touches over its band —
       // hide it. The Inspector's standalone "Scan Info" launcher is superseded.
@@ -4279,21 +4409,24 @@ void viewerLoaded.then(() => {
       // Restore the desktop default collapsed state we dropped for the mobile
       // sheet, so a device that crosses the breakpoint (rotate / resize) gets the
       // compact desktop panels back rather than fully-expanded ones.
-      analysePanel.element.classList.add('olv-collapsed');
+      analysePanel?.element.classList.add('olv-collapsed');
       exportPanel.element.classList.add('olv-collapsed');
       leftPanels.classList.remove('olv-hidden');
       inspector.sheetToggle.classList.remove('olv-hidden');
       // Inspector returns to the overlay in its original slot (just before the
-      // streaming panel); the left column is rebuilt in its original order.
+      // streaming panel); the left column is rebuilt in its original order. The
+      // Analyse panel is included only once it has lazily mounted (it slots
+      // between the class-legend and export panels via mountAnalysePanelElement).
       stage.overlay.insertBefore(inspector.element, streamingPanel.element);
-      leftPanels.append(
+      const desktopPanels: HTMLElement[] = [
         measurePanel.element,
         annotationPanel.element,
         objectPanel.element,
         classLegendPanel.element,
-        analysePanel.element,
-        exportPanel.element,
-      );
+      ];
+      if (analysePanel) desktopPanels.push(analysePanel.element);
+      desktopPanels.push(exportPanel.element);
+      leftPanels.append(...desktopPanels);
     };
 
     // Layout swap stays keyed to the WIDTH breakpoint so JS layout and the CSS
@@ -4318,6 +4451,28 @@ void viewerLoaded.then(() => {
     syncMobileSheet = applyMobileSheet;
     mobileMql?.addEventListener('change', applyMobileSheet);
     applyMobileSheet();
+
+    // The lazy Analyse panel inserts itself here once its chunk resolves. When
+    // the mobile sheet is active it goes into the Analyse slot ahead of the
+    // object panel; otherwise between the class-legend and export panels in the
+    // left column. Robust to either target panel not being where we expect
+    // (falls back to append) so a mid-flip mount can never throw.
+    mountAnalysePanelElement = (el: HTMLElement): void => {
+      if (mobileApplied) {
+        const slot = mobileSheet.slot('analyse');
+        // insertBefore(firstChild) puts Analyse first (object panel follows);
+        // acts as append when the slot is empty.
+        slot.insertBefore(el, slot.firstChild);
+        el.classList.remove('olv-collapsed');
+      } else if (exportPanel.element.parentElement === leftPanels) {
+        leftPanels.insertBefore(el, exportPanel.element);
+      } else {
+        leftPanels.append(el);
+      }
+    };
+    // If the panel already mounted before this wiring ran (possible only if a
+    // scan's import resolved between column build and here), place it now.
+    if (analysePanel) mountAnalysePanelElement(analysePanel.element);
 
     // The help overlay is a modal — appended last so it sits above everything.
     stage.overlay.append(helpOverlay.element);
@@ -5460,7 +5615,9 @@ async function exportSession(): Promise<void> {
   // provenance/manifest modules ride the lazy terrain-export chunk — loaded
   // here on demand via lazyChunks so the eager shell stays manifest-free.
   let processingManifest: unknown;
-  const analysed = analysePanel.currentResult();
+  // Null-safe: saving a session before any scan (or before the panel's chunk
+  // resolves) simply carries no analysis manifest.
+  const analysed = analysePanel?.currentResult() ?? null;
   if (analysed) {
     const { buildExportProvenance, processingManifestFromProvenance } =
       await loadExportProvenance();
@@ -6816,9 +6973,15 @@ function resetToEmptyState(): void {
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
   clipPanel.setVisible(false);
   // Hide + clear the Analyse panel so it doesn't linger with stale
-  // terrain results after the scan is closed. v0.4.0.
-  analysePanel.update(null);
-  analysePanel.setVisible(false);
+  // terrain results after the scan is closed. v0.4.0. Null-safe: the panel is
+  // lazy-mounted, so a reset before any scan simply has nothing to clear. Also
+  // reset the tracked desired state so a fresh open starts hidden/collapsed.
+  if (analysePanel) {
+    analysePanel.update(null);
+    analysePanel.setVisible(false);
+  }
+  analyseDesiredVisible = false;
+  analyseExpanded = false;
   // Hide the Space / Object (non-terrain) panel too — it was added after this
   // reset path and a closed 360 / object scan would otherwise leave its report
   // lingering over the empty state. v0.4.3.

@@ -63,7 +63,7 @@ function makeRunner(
   const fakeCrs = { current: () => null } as unknown as CrsService;
   return createTerrainAnalysisRunner({
     getViewer: () => fakeViewer,
-    analysePanel: fakePanel,
+    getAnalysePanel: () => fakePanel,
     getActiveId: () => 'scan-1',
     crsService: fakeCrs,
     onResult,
