@@ -25,8 +25,6 @@ import type {
 import { runStudioExport } from './BaseExportMode';
 import { formatLinear, linearUnitOf } from './ScanReportRenderer';
 
-const DEFAULT_RAMP: HeightMapRamp = 'terrain';
-
 /** Default resolution presets used by the Studio panel. */
 export const HEIGHT_MAP_RESOLUTIONS = [1024, 2048, 4096] as const;
 
@@ -67,10 +65,19 @@ export const heightMapExporter: ExportFactory = {
     if (!aabb) {
       throw new Error('HeightMap: no cloud loaded — cannot describe the export.');
     }
-    const ramp: HeightMapRamp = options.ramp ?? DEFAULT_RAMP;
     // Native CRS units — Min/Max Z must carry the real unit (ft for foot CRSs).
     const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
 
+    // Honesty: `options.ramp` is accepted for API / preset compatibility but is
+    // NOT applied to the raster. The export forces the runtime into its fixed
+    // `elevation` colour mode and captures that via `adapter.snapshot()`; the
+    // chosen ramp never reaches the shader, so every ramp value yields
+    // byte-identical pixels. Stamping a "Ramp: <x>" card row and a `ramp`
+    // metadata field would describe a palette the image was never coloured
+    // with — an overclaim. We therefore omit both and record only the honest
+    // Min/Max Z elevation range the coloured raster genuinely spans. (Wiring
+    // the ramp into the elevation palette would mean plumbing it through the
+    // Viewer's colour-mode shader, out of scope for this exporter.)
     return runStudioExport(
       context,
       'height-map',
@@ -78,12 +85,10 @@ export const heightMapExporter: ExportFactory = {
       'elevation',
       options,
       [
-        { label: 'Ramp',  value: ramp },
         { label: 'Min Z', value: formatLinear(aabb[2], unit) },
         { label: 'Max Z', value: formatLinear(aabb[5], unit) },
       ],
       {
-        ramp,
         minZ: aabb[2],
         maxZ: aabb[5],
       },

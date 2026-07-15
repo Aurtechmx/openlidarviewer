@@ -376,3 +376,93 @@ describe('technical-report — keep-with-next pagination', () => {
     }
   }, 30_000);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Per-template cover accent — the template's design DNA reaches the PDF
+//
+// Regression: choosing a different report template used to change only the
+// cover tag chip. The per-template `defaultAccent` never reached the render —
+// `effectiveBranding` backfilled `accentColor` with the single app default, so
+// every template drew the SAME accent. These pins extract the non-stroking
+// fill colours (`r g b rg`) pdf-lib writes for the cover rail / accent rules /
+// section-header text and confirm the accent actually differs per template.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FillColor {
+  page: number;
+  r: number;
+  g: number;
+  b: number;
+}
+
+async function renderFills(inputs: ReportInputs): Promise<FillColor[]> {
+  const result = await generateReport(inputs);
+  const bytes = Buffer.from(await result.blob.arrayBuffer());
+  const fills: FillColor[] = [];
+  let page = 0;
+  for (const seg of bytes.toString('latin1').split(/stream\r?\n/).slice(1)) {
+    const raw = seg.split('endstream')[0];
+    let content: string;
+    try {
+      content = inflateSync(Buffer.from(raw, 'latin1')).toString('latin1');
+    } catch {
+      continue; // not a flate stream (xref etc.)
+    }
+    if (!content.includes('BT')) continue;
+    page++;
+    // pdf-lib emits the non-stroking (fill) colour as `<r> <g> <b> rg`.
+    for (const m of content.matchAll(/([\d.]+) ([\d.]+) ([\d.]+) rg\b/g)) {
+      fills.push({ page, r: Number(m[1]), g: Number(m[2]), b: Number(m[3]) });
+    }
+  }
+  return fills;
+}
+
+function surveySummaryInputs(): ReportInputs {
+  return composeReportInputs({
+    templateId: 'survey-summary',
+    title: 'Survey Summary',
+    subtitle: TIKAL_METADATA.fileName,
+    metadata: TIKAL_METADATA,
+    visuals: [],
+    annotations: [],
+    measurements: [],
+    unitSystem: 'metric' as never,
+    provenance: droneProvenance(),
+  });
+}
+
+describe('cover accent — per-template design DNA reaches the PDF', () => {
+  // Tolerance is well under the 0.04 gap between the surveyor green and the
+  // nearest status-dot tier colour, so finding dots never masquerade as the
+  // cover accent.
+  const near = (c: FillColor, r: number, g: number, b: number): boolean =>
+    Math.abs(c.r - r) < 0.02 && Math.abs(c.g - g) < 0.02 && Math.abs(c.b - b) < 0.02;
+
+  // The two template design keys (ReportPdfRenderer.TEMPLATE_DESIGN_KEYS).
+  const SURVEY_GREEN = [0.20, 0.55, 0.32] as const;
+  const TECHNICAL_BLUE = [0.13, 0.45, 0.78] as const;
+
+  it('renders survey-summary green and technical-report blue when no accent is user-supplied', async () => {
+    const surveyP1 = (await renderFills(surveySummaryInputs())).filter((c) => c.page === 1);
+    const techP1 = (await renderFills(tikalInputs())).filter((c) => c.page === 1);
+
+    // survey-summary → surveyor green, and NOT the technical blue.
+    expect(surveyP1.some((c) => near(c, ...SURVEY_GREEN))).toBe(true);
+    expect(surveyP1.some((c) => near(c, ...TECHNICAL_BLUE))).toBe(false);
+
+    // technical-report → engineer blue, and NOT the survey green.
+    expect(techP1.some((c) => near(c, ...TECHNICAL_BLUE))).toBe(true);
+    expect(techP1.some((c) => near(c, ...SURVEY_GREEN))).toBe(false);
+  });
+
+  it('lets an explicit user accentColor override the template default', async () => {
+    const p1 = (
+      await renderFills({ ...tikalInputs(), branding: { accentColor: '#ff0000' } })
+    ).filter((c) => c.page === 1);
+    // The user's red is used…
+    expect(p1.some((c) => near(c, 1, 0, 0))).toBe(true);
+    // …and the template's blue default no longer appears.
+    expect(p1.some((c) => near(c, ...TECHNICAL_BLUE))).toBe(false);
+  });
+});
