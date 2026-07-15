@@ -173,10 +173,21 @@ function gatherDeliverable(
   if (dtm != null) {
     const ox = opts.worldOrigin?.x ?? 0;
     const oy = opts.worldOrigin?.y ?? 0;
+    // Add the dropped vertical origin back so the packaged DTM raster reads real
+    // source heights, matching the contour geometry in the SAME ZIP (which
+    // serializeContours already shifts). Shifted COPY of covered cells only —
+    // never mutate result.dtm.z; NODATA stays coverage-gated by the writer.
+    const oz = opts.worldOrigin?.z ?? 0;
+    let dtmValues: ArrayLike<number> = dtm.z;
+    if (oz !== 0) {
+      const shifted = Float64Array.from(dtm.z as ArrayLike<number>);
+      for (let i = 0; i < shifted.length; i++) if (dtm.coverage[i] !== 0) shifted[i] += oz;
+      dtmValues = shifted;
+    }
     bytes.set(
       'dtm-raster',
       writeGeoTiff({
-        values: dtm.z,
+        values: dtmValues,
         coverage: dtm.coverage,
         cols: dtm.cols,
         rows: dtm.rows,

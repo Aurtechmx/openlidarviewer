@@ -2384,7 +2384,7 @@ export class AnalysePanel {
       sheet: SheetSize;
       orientation: SheetOrientation;
       filename: string;
-      worldOrigin: { x: number; y: number } | null;
+      worldOrigin: { x: number; y: number; z?: number } | null;
       generatedAt: Date;
     },
   ): Promise<void> {

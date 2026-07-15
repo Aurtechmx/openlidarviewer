@@ -66,8 +66,13 @@ function verticalUnitLabel(unit: DemLinearUnit | undefined): string {
 }
 
 export interface DemPackageOptions {
-  /** Absolute world origin (cloud origin x/y) added to the grid frame. */
-  readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
+  /**
+   * Absolute world origin (cloud origin). `x`/`y` shift the grid frame; `z` (the
+   * dropped vertical origin) is added back to the DTM and DSM elevation values so
+   * a recentred scan writes real source heights, not the recentred-negative
+   * local frame. CHM is a height DIFFERENCE (DSM−DTM) and is never shifted.
+   */
+  readonly worldOrigin?: { readonly x: number; readonly y: number; readonly z?: number } | null;
   /** Base filename (no extension) for the entries. Default 'terrain'. */
   readonly basename?: string;
   /** CRS WKT for the .prj sidecar, when available. */
@@ -350,9 +355,22 @@ export function buildDemPackage(
   const chm = result.surface.canopy.heightM;
   const { dsmZ, dsmCov, chmCov } = reconstructDsmChm(dtm.z, dtm.coverage, chm);
 
+  // Add the dropped vertical origin back to the ABSOLUTE-elevation grids (DTM,
+  // DSM) so they write real source heights. A shifted COPY of covered cells only
+  // (never mutate result.dtm.z — it backs the live viewer and later exports; and
+  // NODATA is coverage-gated by the writers, so uncovered cells are untouched).
+  // CHM is a height difference and is written exactly as-is.
+  const oz = options.worldOrigin?.z ?? 0;
+  const shiftZ = (values: ArrayLike<number>, coverage: ArrayLike<number>): ArrayLike<number> => {
+    if (oz === 0) return values;
+    const out = Float64Array.from(values as ArrayLike<number>);
+    for (let i = 0; i < out.length; i++) if (coverage[i] !== 0) out[i] += oz;
+    return out;
+  };
+
   const grids: Array<{ key: string; values: ArrayLike<number>; coverage: ArrayLike<number> }> = [
-    { key: 'dtm', values: dtm.z, coverage: dtm.coverage },
-    { key: 'dsm', values: dsmZ, coverage: dsmCov },
+    { key: 'dtm', values: shiftZ(dtm.z, dtm.coverage), coverage: dtm.coverage },
+    { key: 'dsm', values: shiftZ(dsmZ, dsmCov), coverage: dsmCov },
     { key: 'chm', values: chm, coverage: chmCov },
   ];
 

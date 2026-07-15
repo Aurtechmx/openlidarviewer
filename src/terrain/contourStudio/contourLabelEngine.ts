@@ -61,6 +61,14 @@ export interface LabelEngineParams {
   readonly indexOnly?: boolean;
   /** Optional hard cap on labels placed. */
   readonly maxLabels?: number;
+  /**
+   * When set (> 0), REPEAT labels along each contour: instead of one label at
+   * the single best run, place a label every ~`repeatEveryLen` map units on the
+   * feature's low-curvature, supported runs (collision-avoided). This is the
+   * printed-map convention (an index line reads its height wherever you look).
+   * Unset ⇒ the single-best-run behaviour (one label per contour) is unchanged.
+   */
+  readonly repeatEveryLen?: number;
   /** Elevation → label text. Default: the number as-is. Inject a locale format. */
   readonly formatValue?: (value: number) => string;
 }
@@ -129,6 +137,43 @@ function bestRun(
   return { x: mid.x, y: mid.y, angle: uprightAngle(mid.angle), peakCurvature: bestPeak };
 }
 
+/**
+ * Every low-curvature run of length ≥ `minStraightLen`, each yielding one or
+ * more upright label placements: a short run gets a single midpoint label; a
+ * long run gets labels spaced ~`repeatEveryLen` apart so a long index contour
+ * reads its height along its whole length. The placements are candidates —
+ * collision + edge + support gating happens in the caller.
+ */
+function runPlacements(
+  pts: ReadonlyArray<Pt>,
+  minStraightLen: number,
+  maxCurvature: number,
+  repeatEveryLen: number,
+): Array<{ x: number; y: number; angle: number }> {
+  if (pts.length < 2) return [];
+  const runs: Array<readonly [number, number]> = [];
+  let runStart = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    if (turnAt(pts, i) > maxCurvature) {
+      runs.push([runStart, i]);
+      runStart = i;
+    }
+  }
+  runs.push([runStart, pts.length - 1]);
+  const out: Array<{ x: number; y: number; angle: number }> = [];
+  for (const [a, b] of runs) {
+    const run = pts.slice(a, b + 1);
+    const len = polylineLength(run);
+    if (len < minStraightLen) continue;
+    const n = repeatEveryLen > 0 ? Math.max(1, Math.floor(len / repeatEveryLen)) : 1;
+    for (let k = 0; k < n; k++) {
+      const p = pointAtFraction(run, (k + 0.5) / n);
+      out.push({ x: p.x, y: p.y, angle: uprightAngle(p.angle) });
+    }
+  }
+  return out;
+}
+
 function pointAtFraction(pts: ReadonlyArray<Pt>, frac: number): { x: number; y: number; angle: number } {
   const total = polylineLength(pts);
   const target = total * frac;
@@ -189,6 +234,28 @@ export function placeContourLabels(
     if (params.maxLabels != null && placed.length >= params.maxLabels) break;
 
     if (len < params.minFeatureLenForScale) { suppressedByScale++; continue; }
+
+    // REPEAT MODE (printed map): multiple labels per contour along its straight,
+    // supported runs. Opt-in via repeatEveryLen; the single-best-run path below
+    // is untouched when it is unset.
+    if (params.repeatEveryLen && params.repeatEveryLen > 0) {
+      const support = supportOf(f);
+      if (support === 'unsupported') { suppressedBySupport++; continue; }
+      const positions = runPlacements(f.coordinates, params.minStraightLen, params.maxCurvature, params.repeatEveryLen);
+      if (positions.length === 0) { suppressedByCurvature++; continue; }
+      candidates++;
+      const text = fmt(f.value);
+      const w = Math.max(1, text.length) * params.charWidth;
+      for (const pos of positions) {
+        if (params.maxLabels != null && placed.length >= params.maxLabels) break;
+        const box = labelBox(pos.x, pos.y, w, params.labelHeight);
+        if (!withinEdge(box, params.page, params.edgeMargin)) { suppressedByPageEdge++; continue; }
+        if (placedBoxes.some((b) => overlaps(b, box))) { suppressedByCollision++; continue; }
+        placed.push({ value: f.value, text, x: pos.x, y: pos.y, angle: pos.angle, support, isIndex: f.isIndex });
+        placedBoxes.push(box);
+      }
+      continue;
+    }
 
     const run = bestRun(f.coordinates, params.minStraightLen, params.maxCurvature);
     if (!run) { suppressedByCurvature++; continue; }

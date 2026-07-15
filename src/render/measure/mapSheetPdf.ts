@@ -15,8 +15,9 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
-import type { ContourFeatureModel } from '../../terrain/contour/contourFeatureModel';
-import type { ContourLabel } from '../../terrain/contour/labelPlacement';
+import type { ContourFeatureModel, ContourFeature } from '../../terrain/contour/contourFeatureModel';
+import { decimalsForInterval, type ContourLabel } from '../../terrain/contour/labelPlacement';
+import { placeContourLabels } from '../../terrain/contourStudio/contourLabelEngine';
 import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle';
 import type { DemAccuracyStandards } from '../../terrain/quality/demAccuracyStandards';
 import type { ExportProvenance } from '../../terrain/export/exportProvenance';
@@ -72,8 +73,16 @@ export interface MapSheetInput {
   readonly labels: ReadonlyArray<ContourLabel>;
   /** Cell size (source units) — only used for a provenance note. */
   readonly cellSizeM?: number;
-  /** Add to local coords to recover world (CRS) coords for the graticule. */
-  readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
+  /**
+   * Add to local coords to recover world coords. `x`/`y` georeference the
+   * graticule; `z` (the dropped vertical origin) is added back to DISPLAYED
+   * contour-elevation labels so a recentred scan reads real heights (e.g.
+   * +210..+450 m) instead of the recentred-negative local frame — the same
+   * additive restore the measurement and vector-export paths already apply. Map
+   * GEOMETRY (x/y, the graticule) stays in the local frame; only the label
+   * VALUE is shifted. Absent/zero `z` ⇒ labels read the local frame unchanged.
+   */
+  readonly worldOrigin?: { readonly x: number; readonly y: number; readonly z?: number } | null;
   readonly crs?: string | null;
   readonly verticalDatum?: string | null;
   /**
@@ -112,8 +121,41 @@ const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
 const FRAME = rgb(0.2, 0.22, 0.26);
 const SEPIA = rgb(0.36, 0.24, 0.13);
-const SEPIA_INDEX = rgb(0.26, 0.16, 0.07);
+const SEPIA_INDEX = rgb(0.24, 0.14, 0.05);
+// A lighter sepia for INTERPOLATED contours: still continuous (it is a real
+// estimate between measured ground), but visibly weaker than a measured line so
+// the ~96%-interpolated preview reads as signal, not noise. Gap (unsupported)
+// runs stay broken — the strongest "do not trust this line" signal.
+const SEPIA_LIGHT = rgb(0.58, 0.47, 0.36);
 const WHITE = rgb(1, 1, 1);
+
+/**
+ * One place that maps a contour feature's index/grade to its drawn style, so the
+ * plotting loop and the legend swatches can never disagree. Honest by
+ * construction: a MEASURED line is full-ink and continuous; an INTERPOLATED line
+ * is a lighter continuous tint; a low-confidence GAP is broken. INDEX contours
+ * are always drawn continuous (the map's structural skeleton) and carry weight;
+ * their evidence shows as a lighter ink when interpolated rather than a dash that
+ * would fight the index hierarchy.
+ */
+export interface ContourDrawStyle {
+  readonly color: ReturnType<typeof rgb>;
+  readonly width: number;
+  readonly dash: number[] | null;
+  readonly opacity: number;
+}
+export function contourDrawStyle(isIndex: boolean, grade: ContourFeature['grade']): ContourDrawStyle {
+  if (isIndex) {
+    const w = 1.2;
+    if (grade === 'solid') return { color: SEPIA_INDEX, width: w, dash: null, opacity: 1 };
+    if (grade === 'dashed') return { color: SEPIA_INDEX, width: w, dash: null, opacity: 0.72 };
+    return { color: SEPIA_INDEX, width: w * 0.92, dash: [w * 1.6, w * 2.2], opacity: 0.6 };
+  }
+  const w = 0.55;
+  if (grade === 'solid') return { color: SEPIA, width: w, dash: null, opacity: 1 };
+  if (grade === 'dashed') return { color: SEPIA_LIGHT, width: w * 0.92, dash: null, opacity: 0.9 };
+  return { color: SEPIA_LIGHT, width: w * 0.82, dash: [1.4, 2.4], opacity: 0.6 };
+}
 
 /**
  * The readiness note printed in the title block. Pure and exported so it can be
@@ -264,6 +306,13 @@ export async function buildMapSheetPdf(input: MapSheetInput): Promise<Uint8Array
   // ── title block ──────────────────────────────────────────────────────────
   drawTitleBlock(page, PW, M, TB, frame, bbox, input, font, bold, text, rightText);
 
+  // ── neatlines ────────────────────────────────────────────────────────────
+  // A double map-frame border (a hairline just outside the 1pt frame) and an
+  // outer sheet neatline around the whole printable area — the finished-map
+  // convention that reads as a deliverable rather than a screenshot.
+  page.drawRectangle({ x: frame.x - 3, y: frame.y - 3, width: frame.w + 6, height: frame.h + 6, borderColor: FRAME, borderWidth: 0.4 });
+  page.drawRectangle({ x: M - 4, y: M - 4, width: PW - 2 * M + 8, height: PH - 2 * M + 8, borderColor: FRAME, borderWidth: 0.6 });
+
   return doc.save();
 }
 
@@ -288,7 +337,7 @@ function drawMap(
   // page point py is written as the svg-y (PH - py) with the origin at (0, PH).
   const svgY = (py: number): number => PH - py;
 
-  // ── graticule (UTM-style ticks) ──────────────────────────────────────────
+  // ── graticule ────────────────────────────────────────────────────────────
   const origin = input.worldOrigin ?? { x: 0, y: 0 };
   const worldMinX = bbox.minX + origin.x;
   const worldMaxX = bbox.maxX + origin.x;
@@ -299,80 +348,141 @@ function drawMap(
   const labelGrid = input.worldOrigin != null;
   // Only a truly georeferenced scan has a real east/north + true north. When it
   // isn't, the graticule labels drop the "E"/"N" compass suffix (the numbers
-  // are local-frame coordinates) and the north arrow is omitted — claiming a
-  // compass direction on ungeoreferenced data would be an overclaim.
+  // are local-frame coordinates) and the north arrow is replaced by an explicit
+  // "local grid up" note — claiming a compass direction on ungeoreferenced data
+  // would be an overclaim.
   const prov = input.provenance;
   const georef = prov
     ? prov.crsKnown
     : input.crs != null && input.crs.trim() !== '' && !/not\s*georef/i.test(input.crs);
-  for (const wx of gridTicks(worldMinX, worldMaxX, stepX)) {
-    const px = pageX(wx - origin.x);
-    if (px < inner.x || px > inner.x + inner.w) continue;
-    page.drawLine({ start: { x: px, y: frame.y }, end: { x: px, y: frame.y + 6 }, thickness: 0.5, color: FRAME });
-    page.drawLine({ start: { x: px, y: frame.y + frame.h }, end: { x: px, y: frame.y + frame.h - 6 }, thickness: 0.5, color: FRAME });
-    if (labelGrid) {
-      const s = georef ? `${Math.round(wx)}E` : `${Math.round(wx)}`;
-      page.drawText(safe(s), { x: px - font.widthOfTextAtSize(s, 6) / 2, y: frame.y + frame.h + 2, size: 6, font, color: DIM });
+
+  const ticksX = gridTicks(worldMinX, worldMaxX, stepX)
+    .map((w) => ({ w, px: pageX(w - origin.x) }))
+    .filter((tk) => tk.px >= inner.x && tk.px <= inner.x + inner.w);
+  const ticksY = gridTicks(worldMinY, worldMaxY, stepY)
+    .map((w) => ({ w, py: pageY(w - origin.y) }))
+    .filter((tk) => tk.py >= inner.y && tk.py <= inner.y + inner.h);
+
+  // Interior graticule as faint tick-crosses at each grid intersection — the
+  // survey-sheet convention that reads position without a heavy grid obscuring
+  // the terrain.
+  for (const tx of ticksX) {
+    for (const ty of ticksY) {
+      page.drawLine({ start: { x: tx.px - 2.5, y: ty.py }, end: { x: tx.px + 2.5, y: ty.py }, thickness: 0.3, color: FRAME, opacity: 0.5 });
+      page.drawLine({ start: { x: tx.px, y: ty.py - 2.5 }, end: { x: tx.px, y: ty.py + 2.5 }, thickness: 0.3, color: FRAME, opacity: 0.5 });
     }
   }
-  for (const wy of gridTicks(worldMinY, worldMaxY, stepY)) {
-    const py = pageY(wy - origin.y);
-    if (py < inner.y || py > inner.y + inner.h) continue;
-    page.drawLine({ start: { x: frame.x, y: py }, end: { x: frame.x + 6, y: py }, thickness: 0.5, color: FRAME });
-    page.drawLine({ start: { x: frame.x + frame.w, y: py }, end: { x: frame.x + frame.w - 6, y: py }, thickness: 0.5, color: FRAME });
+  // Edge ticks + coordinate labels (top edge for eastings, left edge for northings).
+  for (const tx of ticksX) {
+    page.drawLine({ start: { x: tx.px, y: frame.y }, end: { x: tx.px, y: frame.y + 6 }, thickness: 0.5, color: FRAME });
+    page.drawLine({ start: { x: tx.px, y: frame.y + frame.h }, end: { x: tx.px, y: frame.y + frame.h - 6 }, thickness: 0.5, color: FRAME });
     if (labelGrid) {
-      const s = georef ? `${Math.round(wy)}N` : `${Math.round(wy)}`;
-      page.drawText(safe(s), { x: frame.x - 2 - font.widthOfTextAtSize(s, 6), y: py - 3, size: 6, font, color: DIM });
+      const s = georef ? `${Math.round(tx.w)}E` : `${Math.round(tx.w)}`;
+      page.drawText(safe(s), { x: tx.px - font.widthOfTextAtSize(s, 6) / 2, y: frame.y + frame.h + 3, size: 6, font, color: DIM });
+    }
+  }
+  for (const ty of ticksY) {
+    page.drawLine({ start: { x: frame.x, y: ty.py }, end: { x: frame.x + 6, y: ty.py }, thickness: 0.5, color: FRAME });
+    page.drawLine({ start: { x: frame.x + frame.w, y: ty.py }, end: { x: frame.x + frame.w - 6, y: ty.py }, thickness: 0.5, color: FRAME });
+    if (labelGrid) {
+      const s = georef ? `${Math.round(ty.w)}N` : `${Math.round(ty.w)}`;
+      page.drawText(safe(s), { x: frame.x - 3 - font.widthOfTextAtSize(s, 6), y: ty.py - 3, size: 6, font, color: DIM });
     }
   }
 
-  // ── contours ─────────────────────────────────────────────────────────────
-  for (const f of input.model.features) {
-    if (f.coordinates.length < 2) continue;
+  // ── contours (intermediate first, index on top so structure never hides) ──
+  const drawFeature = (f: ContourFeature): void => {
+    if (f.coordinates.length < 2) return;
     let d = '';
     for (let i = 0; i < f.coordinates.length; i++) {
       const [wx, wy] = f.coordinates[i];
-      const cx = pageX(wx).toFixed(2);
-      const cy = svgY(pageY(wy)).toFixed(2);
-      d += `${i === 0 ? 'M' : 'L'}${cx} ${cy} `;
+      d += `${i === 0 ? 'M' : 'L'}${pageX(wx).toFixed(2)} ${svgY(pageY(wy)).toFixed(2)} `;
     }
     if (f.closed) d += 'Z';
-    const width = f.isIndex ? 1.1 : 0.45;
-    const color = f.isIndex ? SEPIA_INDEX : SEPIA;
+    const st = contourDrawStyle(f.isIndex, f.grade);
     const opts: Parameters<PDFPage['drawSvgPath']>[1] = {
-      x: 0,
-      y: PH,
-      borderColor: color,
-      borderWidth: width,
+      x: 0, y: PH, borderColor: st.color, borderWidth: st.width, borderOpacity: st.opacity,
     };
-    if (f.grade === 'dashed') opts.borderDashArray = [width * 5, width * 4];
-    else if (f.grade === 'gap') { opts.borderDashArray = [width * 2, width * 5]; opts.borderOpacity = 0.5; }
+    if (st.dash) opts.borderDashArray = st.dash;
     page.drawSvgPath(d, opts);
-  }
+  };
+  for (const f of input.model.features) if (!f.isIndex) drawFeature(f);
+  for (const f of input.model.features) if (f.isIndex) drawFeature(f);
 
-  // ── index-contour elevation labels (with a white knock-out behind) ───────
-  for (const lab of input.labels) {
+  // ── index-contour elevation labels ───────────────────────────────────────
+  // Placed by the print-aware §17 engine: upright, on the straightest supported
+  // run of each index contour, collision-avoided, and never stamped on an
+  // unsupported (gap) span. Values carry the vertical-origin add-back so a
+  // recentred scan reads real heights (geometry stays local; only the VALUE
+  // shifts) at the interval's own precision. Falls back to the pre-placed
+  // `input.labels` only if the engine has no geometry to work from.
+  const labelOz = input.worldOrigin?.z ?? 0;
+  const labelDecimals = decimalsForInterval(input.provenance?.contourIntervalM ?? input.model.intervalM);
+  const sz = 6.5;
+  const extent = Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY) || 1;
+  const engineLabels = input.model.features.length
+    ? placeContourLabels(input.model.features, {
+        page: { minX: bbox.minX, minY: bbox.minY, maxX: bbox.maxX, maxY: bbox.maxY },
+        minStraightLen: extent * 0.03,
+        maxCurvature: 0.5,
+        edgeMargin: extent * 0.015,
+        labelHeight: (sz + 2) / t.scale,
+        charWidth: 3.7 / t.scale,
+        minFeatureLenForScale: extent * 0.04,
+        indexOnly: true,
+        maxLabels: 60,
+        // Repeat labels along each index contour (~every 28% of the map extent)
+        // so a long line reads its height wherever the eye lands — the printed
+        // topo-sheet convention.
+        repeatEveryLen: extent * 0.28,
+        formatValue: (v) => (v + labelOz).toFixed(labelDecimals),
+      }).labels
+    : [];
+  const drawn = engineLabels.length
+    ? engineLabels.map((l) => ({ x: l.x, y: l.y, angle: l.angle, text: l.text }))
+    : input.labels.map((l) => {
+        let deg = (l.angleRad * 180) / Math.PI;
+        if (deg > 90) deg -= 180;
+        else if (deg < -90) deg += 180;
+        return { x: l.x, y: l.y, angle: (deg * Math.PI) / 180, text: (l.value + labelOz).toFixed(labelDecimals) };
+      });
+  for (const lab of drawn) {
     const px = pageX(lab.x);
     const py = pageY(lab.y);
     if (px < inner.x || px > inner.x + inner.w || py < inner.y || py > inner.y + inner.h) continue;
-    let deg = (lab.angleRad * 180) / Math.PI;
-    if (deg > 90) deg -= 180; else if (deg < -90) deg += 180;
-    const s = `${Math.round(lab.value)}`;
-    const sz = 6.5;
+    const s = lab.text;
     const w = bold.widthOfTextAtSize(s, sz);
-    // knock-out box (rotation-agnostic, slightly padded)
-    page.drawRectangle({ x: px - w / 2 - 1.5, y: py - sz / 2, width: w + 3, height: sz + 1, color: WHITE, opacity: 0.85 });
-    page.drawText(s, { x: px - w / 2, y: py - sz / 2 + 1, size: sz, font: bold, color: SEPIA_INDEX, rotate: degrees(deg) });
+    // Knock-out sized to the ROTATED text's footprint so a steep label is never
+    // clipped by an axis-aligned box (a diagonal number needs both extents).
+    const bw = Math.abs(w * Math.cos(lab.angle)) + Math.abs(sz * Math.sin(lab.angle)) + 3;
+    const bh = Math.abs(w * Math.sin(lab.angle)) + Math.abs(sz * Math.cos(lab.angle)) + 2;
+    page.drawRectangle({ x: px - bw / 2, y: py - bh / 2, width: bw, height: bh, color: WHITE, opacity: 0.82 });
+    page.drawText(s, { x: px - w / 2, y: py - sz / 2 + 1, size: sz, font: bold, color: SEPIA_INDEX, rotate: degrees((lab.angle * 180) / Math.PI) });
   }
 
-  // ── north arrow (top-right inside frame) — only when georeferenced ────────
+  // ── orientation (top-right inside frame) ─────────────────────────────────
   if (georef) {
+    // True north — a georeferenced frame has a real bearing.
     const nx = frame.x + frame.w - 22;
     const ny = frame.y + frame.h - 30;
+    page.drawRectangle({ x: nx - 12, y: ny - 22, width: 24, height: 40, color: WHITE, opacity: 0.82 });
     page.drawSvgPath(`M ${nx} ${PH - (ny + 14)} L ${nx - 5} ${PH - (ny - 6)} L ${nx} ${PH - (ny - 2)} L ${nx + 5} ${PH - (ny - 6)} Z`, {
       x: 0, y: PH, color: INK, borderColor: INK, borderWidth: 0.5,
     });
     page.drawText('N', { x: nx - bold.widthOfTextAtSize('N', 8) / 2, y: ny - 18, size: 8, font: bold, color: INK });
+  } else {
+    // Ungeoreferenced: the sheet's +Y IS up (pageY maps world +Y to page +Y),
+    // but that is a LOCAL grid axis, not a compass bearing. State it explicitly
+    // rather than leave the corner blank or imply north.
+    const gx = frame.x + frame.w - 62;
+    const gy = frame.y + frame.h - 12;
+    page.drawRectangle({ x: gx - 6, y: gy - 24, width: 66, height: 30, color: WHITE, opacity: 0.82 });
+    page.drawSvgPath(`M ${gx} ${PH - (gy + 3)} L ${gx - 3.5} ${PH - (gy - 8)} L ${gx + 3.5} ${PH - (gy - 8)} Z`, {
+      x: 0, y: PH, color: DIM, borderColor: DIM, borderWidth: 0.4,
+    });
+    page.drawLine({ start: { x: gx, y: gy - 8 }, end: { x: gx, y: gy - 18 }, thickness: 0.5, color: DIM });
+    page.drawText('local grid up', { x: gx + 8, y: gy - 8, size: 5.5, font: bold, color: DIM });
+    page.drawText('true north unknown', { x: gx + 8, y: gy - 16, size: 5.5, font, color: DIM });
   }
 
   // ── scale bar (bottom-left inside frame) ─────────────────────────────────
@@ -415,6 +525,14 @@ function drawTitleBlock(
   const topY = M + TB;
   page.drawLine({ start: { x: M, y: topY }, end: { x: PW - M, y: topY }, thickness: 1, color: FRAME });
 
+  // Three ruled columns: identity | legend | survey accuracy. The separators
+  // fix the boundaries so no column's text can bleed into the next (the PREVIEW
+  // verdict and the interpolated-% line used to overlap on a letter sheet).
+  const mxx = M + (PW - 2 * M) * 0.46; // legend column start
+  const rcx = M + (PW - 2 * M) * 0.72; // survey-accuracy column start
+  page.drawLine({ start: { x: mxx - 10, y: topY - 6 }, end: { x: mxx - 10, y: M + 4 }, thickness: 0.4, color: FRAME, opacity: 0.55 });
+  page.drawLine({ start: { x: rcx - 10, y: topY - 6 }, end: { x: rcx - 10, y: M + 4 }, thickness: 0.4, color: FRAME, opacity: 0.55 });
+
   // Single-source the title-block strings from the unified provenance when it is
   // supplied, so the sheet's CRS / datum / interval / style / accuracy / date /
   // export-readiness can never drift from the other exports of the same scan. The
@@ -444,6 +562,12 @@ function drawTitleBlock(
       titleStr;
   }
   text(titleDraw, lx, topY - 16, titleSize, bold);
+  // Rule under the title — the finished-sheet convention that anchors the block.
+  page.drawLine({
+    start: { x: lx, y: topY - 21 },
+    end: { x: lx + Math.max(60, bold.widthOfTextAtSize(safe(titleDraw), titleSize)), y: topY - 21 },
+    thickness: 0.8, color: FRAME,
+  });
   const interval = prov?.contourIntervalM ?? input.model.intervalM;
   // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
   // on a foot CRS (the map is drawn in source units). 1 for metric / unknown.
@@ -476,9 +600,7 @@ function drawTitleBlock(
     text(r[1], lx + 86, y, 7.5, font, INK);
   });
 
-  // Middle column — legend.
-  const mxx = M + (PW - 2 * M) * 0.46;
-
+  // Middle column — legend (mxx defined with the column separators above).
   // Project / Notes — a small wrapped block UNDER the identity rows (which end
   // at topY-99) and LEFT of the legend column (mxx), so it never collides with
   // either. Width is bounded by the legend column start; lines are capped so
@@ -498,22 +620,28 @@ function drawTitleBlock(
     noteLines.forEach((ln, i) => text(ln, notesX, topY - 120 - i * 8.5, 6.5, font, INK));
   }
   text('Legend', mxx, topY - 16, 9, bold);
-  const sample = (y: number, label: string, dash: number[] | null, w: number, c = SEPIA): void => {
-    const opts: Parameters<PDFPage['drawLine']>[0] = { start: { x: mxx, y: y + 2 }, end: { x: mxx + 26, y: y + 2 }, thickness: w, color: c };
-    if (dash) opts.dashArray = dash;
+  page.drawLine({ start: { x: mxx, y: topY - 21 }, end: { x: mxx + 26, y: topY - 21 }, thickness: 0.6, color: FRAME });
+  const sample = (y: number, label: string, st: ContourDrawStyle): void => {
+    const opts: Parameters<PDFPage['drawLine']>[0] = {
+      start: { x: mxx, y: y + 2 }, end: { x: mxx + 26, y: y + 2 },
+      thickness: st.width, color: st.color, opacity: st.opacity,
+    };
+    if (st.dash) opts.dashArray = st.dash;
     page.drawLine(opts);
     text(label, mxx + 32, y, 7, font, INK);
   };
-  sample(topY - 32, 'Index contour (labelled)', null, 1.1, SEPIA_INDEX);
-  sample(topY - 45, 'Intermediate contour', null, 0.5);
-  sample(topY - 58, 'Interpolated (uncertain)', [4, 3], 0.5);
-  sample(topY - 71, 'Low-confidence gap', [2, 4], 0.5);
+  // Swatches drawn from the SAME contourDrawStyle the map plots, so the legend
+  // can never describe a line weight/tint the sheet doesn't use.
+  sample(topY - 32, 'Index contour (labelled)', contourDrawStyle(true, 'solid'));
+  sample(topY - 45, 'Intermediate contour', contourDrawStyle(false, 'solid'));
+  sample(topY - 58, 'Interpolated (uncertain)', contourDrawStyle(false, 'dashed'));
+  sample(topY - 71, 'Low-confidence gap', contourDrawStyle(false, 'gap'));
   // Interpolated fraction is NaN when there is no contour length to measure
   // against (an empty contour set). Report that honestly rather than collapsing
   // it to a fabricated 0%.
   const interpFraction = input.model.interpolatedFraction;
   const interpLine = Number.isFinite(interpFraction)
-    ? `${Math.round(interpFraction * 100)}% of contour length is interpolated`
+    ? `${Math.round(interpFraction * 100)}% interpolated (by length)`
     : 'Interpolated fraction — not measured (no contours)';
   text(interpLine, mxx, topY - 88, 6.5, font, DIM);
   // Honest stamp of the shape style applied to the plotted contours (sourced
@@ -524,6 +652,7 @@ function drawTitleBlock(
   // Right column — accuracy + readiness + provenance.
   const rxr = PW - M - 4;
   rightText('Survey accuracy', rxr, topY - 16, 9, bold);
+  page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize('Survey accuracy', 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
   const fmtM = (v: number | null | undefined): string => (v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—');
   // Accuracy rows, single-sourced from provenance when present (its accuracy
   // block is null when the run measured none, in which case every figure reads
@@ -561,21 +690,21 @@ function drawTitleBlock(
         ? 'blocked'
         : 'previewOnly'
     : input.readiness ?? 'previewOnly';
+  // Export-readiness + evidence verdict, wrapped WITHIN the accuracy column
+  // (rcx..rxr) so the honest PREVIEW / exploratory banner can never bleed into
+  // the legend column. Both stay the SAME central-gate strings every other
+  // export stamps, so a printed sheet can never read as a validated deliverable.
+  const warn = rgb(0.6, 0.2, 0.1);
+  const rcw = rxr - rcx;
+  const measure = (s: string, sz: number): number => font.widthOfTextAtSize(safe(s), sz);
+  const boldMeasure = (s: string, sz: number): number => bold.widthOfTextAtSize(safe(s), sz);
   const note = readinessNote(readiness);
-  rightText(note, rxr, topY - 90, 6.5, bold, readiness === 'ready' ? INK : rgb(0.6, 0.2, 0.1));
-  // Evidence-gate verdict (§19) — the SAME central gate the other exports stamp,
-  // so a printed sheet carries the honest claim status (exploratory for CONTOURS
-  // today) and can never read as a validated deliverable. Drawn beneath the
-  // readiness note; wrapped so a long verdict degrades gracefully in the strip.
+  const noteWrapped = wrapTextToWidth(note, rcw, 6.5, boldMeasure, 3);
+  noteWrapped.forEach((ln, i) => rightText(ln, rxr, topY - 84 - i * 8, 6.5, bold, readiness === 'ready' ? INK : warn));
   const evLine = mapSheetEvidenceLine();
-  const evColor = evidenceStatus(MAP_SHEET_CLAIM) === 'validated' ? DIM : rgb(0.6, 0.2, 0.1);
-  const evWrapped = wrapTextToWidth(
-    evLine,
-    (PW - M - 4) - (M + (PW - 2 * M) * 0.46),
-    6,
-    (s, sz) => font.widthOfTextAtSize(safe(s), sz),
-    2,
-  );
-  evWrapped.forEach((ln, i) => rightText(ln, rxr, topY - 101 - i * 8, 6, font, evColor));
-  rightText('OpenLiDARViewer - terrain analysis', rxr, M - 10 + 2, 6, font, DIM);
+  const evColor = evidenceStatus(MAP_SHEET_CLAIM) === 'validated' ? DIM : warn;
+  const evWrapped = wrapTextToWidth(evLine, rcw, 6, measure, 3);
+  const evStartY = topY - 84 - noteWrapped.length * 8 - 5;
+  evWrapped.forEach((ln, i) => rightText(ln, rxr, evStartY - i * 8, 6, font, evColor));
+  rightText('OpenLiDARViewer - terrain analysis', rxr, M - 9, 6, font, DIM);
 }

@@ -232,6 +232,25 @@ describe('buildDemPackage', () => {
     expect(hasName(zip, 'site-README.txt')).toBe(true);
   });
 
+  it('adds worldOrigin.z back to DTM/DSM elevations but never to CHM (source-height restore)', () => {
+    // A recentred scan carries a nonzero vertical origin. Adding it back turns the
+    // recentred-local DTM into real source heights; CHM (DSM−DTM, a height
+    // difference) must stay invariant. Covered-cell-only shift never touches NODATA.
+    const dec = (u: Uint8Array | null): string => new TextDecoder().decode(u!);
+    const base = buildDemPackage(fixtureResult(), { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
+    const shifted = buildDemPackage(fixtureResult(), { worldOrigin: { x: 600000, y: 4000000, z: 100 }, basename: 'site' });
+
+    const dtm0 = dec(extractEntry(base, 'site-dtm.asc'));
+    const dtm1 = dec(extractEntry(shifted, 'site-dtm.asc'));
+    expect(dtm0).toContain('10.000 20.000'); // covered ground row, local frame
+    expect(dtm1).toContain('110.000 120.000'); // same row, +100 source height
+    expect(dtm1).toContain('130.000 -9999'); // covered cell +100; empty cell stays NODATA
+    expect(dtm1).not.toContain('10.000 20.000');
+
+    // CHM is a height DIFFERENCE — byte-identical regardless of the vertical origin.
+    expect(dec(extractEntry(shifted, 'site-chm.asc'))).toBe(dec(extractEntry(base, 'site-chm.asc')));
+  });
+
   it('builds the complete deliverable ZIP: DTM + provenance + README + verifying SHA256SUMS', () => {
     const zip = buildContourDeliverableFromResult(fixtureResult(), {
       decision: { status: 'validated', badge: 'Internal validation', caveats: [] },

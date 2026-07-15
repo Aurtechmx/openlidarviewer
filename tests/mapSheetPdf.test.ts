@@ -140,6 +140,24 @@ describe('buildMapSheetPdf', () => {
     expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
   });
 
+  it('accepts a vertical origin (z) on a recentred (negative) model and renders', async () => {
+    // A recentred scan's contour values are negative in the local frame; the map
+    // adds worldOrigin.z back to the DISPLAYED labels (geometry stays local). The
+    // binary PDF can't be text-asserted, but the z path must render cleanly.
+    const recentred: ContourFeatureModel = {
+      ...model,
+      features: model.features.map((f: ContourFeature) => ({ ...f, value: f.value - 1000 })),
+    };
+    const bytes = await buildMapSheetPdf({
+      model: recentred,
+      labels: [{ x: 50, y: 10, value: -900, angleRad: 0.1 }],
+      worldOrigin: { x: 585000, y: 3386000, z: 1000 },
+      provenance: PROV,
+      title: 'Recentred scan',
+    });
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
+  });
+
   it('still produces a PDF when there are no contours', async () => {
     const empty: ContourFeatureModel = { ...model, features: [], bbox: null };
     const bytes = await buildMapSheetPdf({ model: empty, labels: [], sheet: 'a4' });

@@ -221,8 +221,12 @@ function verdictOnly(lineValue: string): string {
 
 /** Map the sheet's printed readiness note back onto the provenance verdict. */
 function mapSheetVerdict(text: string): string {
-  const ready = text.includes('not a survey certification');
-  const preview = text.includes('PREVIEW - not survey-grade');
+  // The note wraps across lines in the title-block column, so collapse
+  // whitespace before matching — the verdict is about which note is present,
+  // not where its line breaks fall.
+  const flat = text.replace(/\s+/g, ' ');
+  const ready = flat.includes('not a survey certification');
+  const preview = flat.includes('PREVIEW - not survey-grade');
   if (ready && !preview) return 'Ready';
   if (preview && !ready) return 'Preview';
   return '(missing)';
@@ -584,8 +588,11 @@ describe('provenance consistency — un-georeferenced (Preview) run', () => {
 
   it('the map sheet prints the negated PREVIEW note and the honest CRS, never the ready note', async () => {
     const { mapSheetText } = await previewOutputs();
-    expect(mapSheetText).toContain('PREVIEW - not survey-grade until validated against control.');
-    expect(mapSheetText).not.toContain('not a survey certification');
+    // The readiness/evidence notes wrap within the title-block column; collapse
+    // whitespace so the contiguous note is matched regardless of line breaks.
+    const flat = mapSheetText.replace(/\s+/g, ' ');
+    expect(flat).toContain('PREVIEW - not survey-grade until validated against control.');
+    expect(flat).not.toContain('not a survey certification');
     expect(mapSheetText).toContain('not georeferenced');
   });
 
