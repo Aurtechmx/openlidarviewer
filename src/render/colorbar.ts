@@ -144,14 +144,14 @@ export function buildColorbarSvg(spec: ColorbarSpec): string {
     const tickEls = ticks
       .map((v) => {
         const x = x0 + posOf(v) * barW;
-        return `<line x1="${x.toFixed(1)}" y1="${y0 + barH}" x2="${x.toFixed(1)}" y2="${y0 + barH + 4}" stroke="#666" stroke-width="1"/>` +
-          `<text x="${x.toFixed(1)}" y="${y0 + barH + 15}" font-size="9" text-anchor="middle" fill="#333">${formatColorbarValue(v)}</text>`;
+        return `<line x1="${x.toFixed(1)}" y1="${y0 + barH}" x2="${x.toFixed(1)}" y2="${y0 + barH + 4}" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>` +
+          `<text x="${x.toFixed(1)}" y="${y0 + barH + 15}" font-size="9" text-anchor="middle" fill="currentColor">${formatColorbarValue(v)}</text>`;
       })
       .join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="52" viewBox="0 0 ${W} 52" role="img" aria-label="${label}${unit} colour scale">` +
       `<defs><linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="0%">${stopEls}</linearGradient></defs>` +
-      `<text x="${x0}" y="14" font-size="11" font-weight="600" fill="#222">${label}${unit}</text>` +
-      `<rect x="${x0}" y="${y0}" width="${barW}" height="${barH}" fill="url(#${gradId})" stroke="#999" stroke-width="0.5"/>` +
+      `<text x="${x0}" y="14" font-size="11" font-weight="600" fill="currentColor">${label}${unit}</text>` +
+      `<rect x="${x0}" y="${y0}" width="${barW}" height="${barH}" fill="url(#${gradId})" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.5"/>` +
       `${tickEls}</svg>`;
   }
 
@@ -161,13 +161,13 @@ export function buildColorbarSvg(spec: ColorbarSpec): string {
   const tickEls = ticks
     .map((v) => {
       const y = yOf(v);
-      return `<line x1="${x0 + barW}" y1="${y.toFixed(1)}" x2="${x0 + barW + 4}" y2="${y.toFixed(1)}" stroke="#666" stroke-width="1"/>` +
-        `<text x="${x0 + barW + 7}" y="${(y + 3).toFixed(1)}" font-size="9" text-anchor="start" fill="#333">${formatColorbarValue(v)}</text>`;
+      return `<line x1="${x0 + barW}" y1="${y.toFixed(1)}" x2="${x0 + barW + 4}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-opacity="0.55" stroke-width="1"/>` +
+        `<text x="${x0 + barW + 7}" y="${(y + 3).toFixed(1)}" font-size="9" text-anchor="start" fill="currentColor">${formatColorbarValue(v)}</text>`;
     })
     .join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="70" height="${H}" viewBox="0 0 70 ${H}" role="img" aria-label="${label}${unit} colour scale">` +
     `<defs><linearGradient id="${gradId}" x1="0%" y1="100%" x2="0%" y2="0%">${stopEls}</linearGradient></defs>` +
-    `<text x="${x0}" y="14" font-size="11" font-weight="600" fill="#222">${label}${unit}</text>` +
-    `<rect x="${x0}" y="${y0}" width="${barW}" height="${barH}" fill="url(#${gradId})" stroke="#999" stroke-width="0.5"/>` +
+    `<text x="${x0}" y="14" font-size="11" font-weight="600" fill="currentColor">${label}${unit}</text>` +
+    `<rect x="${x0}" y="${y0}" width="${barW}" height="${barH}" fill="url(#${gradId})" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.5"/>` +
     `${tickEls}</svg>`;
 }

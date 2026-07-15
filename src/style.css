@@ -7551,11 +7551,11 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   z-index: 60;
   display: flex; flex-direction: column; gap: 2px;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 0.5px solid rgba(0, 0, 0, 0.18);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md, 8px);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-  color: #1a2230;
+  color: var(--text);
   pointer-events: auto;
 }
 .olv-colorbar-head {
@@ -7565,12 +7565,12 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .olv-colorbar-close {
-  border: none; background: none; color: #444; cursor: pointer;
+  border: none; background: none; color: var(--text-dim); cursor: pointer;
   font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 4px;
 }
-.olv-colorbar-close:hover { background: rgba(0, 0, 0, 0.08); color: #111; }
+.olv-colorbar-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .olv-colorbar-svg { line-height: 0; }
-.olv-colorbar-note { font-size: 10px; color: #555; max-width: 150px; }
+.olv-colorbar-note { font-size: var(--text-2xs); color: var(--text-dim); max-width: 150px; }
 @media (max-width: 768px) {
   .olv-colorbar { right: 14px; }
 }
