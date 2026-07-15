@@ -266,6 +266,7 @@ import { CrsService } from './geo/CrsService';
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
+import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
@@ -505,8 +506,14 @@ async function openBatchConverter(): Promise<void> {
  * any user-driven scan-open, but it does.
  */
 let viewer: Viewer = null as unknown as Viewer;
+// v0.6 P3: recover from a stale lazy chunk after a deploy. If the first big
+// dynamic import (the Viewer) fails because its content-hashed asset was
+// replaced by a newer build while this tab was open, do ONE guarded reload
+// (sessionStorage cooldown, URL preserved) instead of a hard boot failure.
+// Ordinary Viewer exceptions are NOT classified as stale and never reload.
+const { importOrReload } = installStaleChunkRecovery();
 const viewerLoaded: Promise<Viewer> = (async () => {
-  const { Viewer: ViewerCtor } = await loadViewer();
+  const { Viewer: ViewerCtor } = await importOrReload(loadViewer);
   viewer = new ViewerCtor(stage.canvas);
   return viewer;
 })();
