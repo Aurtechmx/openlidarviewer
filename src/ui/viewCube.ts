@@ -39,8 +39,8 @@ function faceButton(label: string, view: StandardView, onView: (v: StandardView)
   b.setAttribute('data-testid', `viewcube-${label.toLowerCase()}`);
   b.style.cssText =
     'position:absolute;width:20px;height:20px;border:0;border-radius:50%;cursor:pointer;' +
-    'font:600 11px/20px system-ui,sans-serif;color:var(--olv-fg,#e8eef5);' +
-    'background:var(--olv-surface-2,rgba(255,255,255,0.08));padding:0;';
+    'font:600 11px/20px system-ui,sans-serif;color:var(--text);' +
+    'background:var(--panel-raised);padding:0;';
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     onView(view);
@@ -58,7 +58,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   // the Inspector, the centred nav widget, and the bottom dock.
   root.style.cssText =
     'position:absolute;bottom:96px;left:18px;width:76px;height:76px;' +
-    'border-radius:50%;background:var(--olv-surface,rgba(20,24,30,0.72));' +
+    'border-radius:50%;background:var(--panel-recessive);' +
     'box-shadow:0 2px 10px rgba(0,0,0,0.35);z-index:12;pointer-events:auto;' +
     'backdrop-filter:blur(4px);';
 
@@ -66,7 +66,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   const rose = document.createElement('div');
   rose.className = 'olv-viewcube-rose';
   rose.style.cssText =
-    'position:absolute;inset:8px;border-radius:50%;border:1px solid var(--olv-border,rgba(255,255,255,0.16));' +
+    'position:absolute;inset:8px;border-radius:50%;border:1px solid var(--hairline);' +
     'transition:transform 120ms ease-out;';
 
   // Place each cardinal around the rose: N top, E right, S bottom, W left.
@@ -80,7 +80,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     const b = faceButton(f.label, f.view, opts.onView);
     b.style.cssText += placements[f.label] ?? '';
     // The N marker reads as the accent so "which way is north" is obvious.
-    if (f.label === 'N') b.style.color = 'var(--olv-accent,#5ab0ff)';
+    if (f.label === 'N') b.style.color = 'var(--accent)';
     rose.appendChild(b);
   }
   root.appendChild(rose);
@@ -93,7 +93,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   top.title = 'Top view';
   top.style.cssText +=
     'left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;' +
-    'background:var(--olv-accent,#5ab0ff);';
+    'background:var(--accent);';
   root.appendChild(top);
 
   opts.host.appendChild(root);

@@ -1357,29 +1357,29 @@ function renderProfileChart(
   const minorGridParts = minorTicks
     .map((c) => {
       const x = plotLeft + (c / xSpan) * plotW;
-      return `<line x1="${x.toFixed(2)}" y1="${plotTop}" x2="${x.toFixed(2)}" y2="${plotBottom}" stroke="rgba(255,255,255,0.04)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
+      return `<line x1="${x.toFixed(2)}" y1="${plotTop}" x2="${x.toFixed(2)}" y2="${plotBottom}" stroke="currentColor" stroke-opacity="0.04" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
   const majorGridParts = stations
     .map((c) => {
       const x = plotLeft + (c / xSpan) * plotW;
-      return `<line x1="${x.toFixed(2)}" y1="${plotTop}" x2="${x.toFixed(2)}" y2="${plotBottom}" stroke="rgba(255,255,255,0.10)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
+      return `<line x1="${x.toFixed(2)}" y1="${plotTop}" x2="${x.toFixed(2)}" y2="${plotBottom}" stroke="currentColor" stroke-opacity="0.10" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
   // Horizontal gridlines at the nice elevation ticks.
   const yGridParts = yTicks
     .map((v) => {
       const y = plotTop + plotH * 0.5 - ((v - midY) / ySpan) * plotH;
-      return `<line x1="${plotLeft}" y1="${y.toFixed(2)}" x2="${plotRight}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.07)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
+      return `<line x1="${plotLeft}" y1="${y.toFixed(2)}" x2="${plotRight}" y2="${y.toFixed(2)}" stroke="currentColor" stroke-opacity="0.07" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
   const yAxisRules =
-    `<line x1="${plotLeft}" y1="${plotTop}" x2="${plotRight}" y2="${plotTop}" stroke="rgba(255,255,255,0.10)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>` +
-    `<line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="rgba(255,255,255,0.18)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
+    `<line x1="${plotLeft}" y1="${plotTop}" x2="${plotRight}" y2="${plotTop}" stroke="currentColor" stroke-opacity="0.10" stroke-width="0.5" vector-effect="non-scaling-stroke"/>` +
+    `<line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="currentColor" stroke-opacity="0.18" stroke-width="0.5" vector-effect="non-scaling-stroke"/>`;
   const stationCaps = stations
     .map((c) => {
       const x = plotLeft + (c / xSpan) * plotW;
-      return `<line x1="${x.toFixed(2)}" y1="${plotBottom - 2}" x2="${x.toFixed(2)}" y2="${plotBottom + 1}" stroke="rgba(255,255,255,0.4)" stroke-width="0.7" vector-effect="non-scaling-stroke"/>`;
+      return `<line x1="${x.toFixed(2)}" y1="${plotBottom - 2}" x2="${x.toFixed(2)}" y2="${plotBottom + 1}" stroke="currentColor" stroke-opacity="0.4" stroke-width="0.7" vector-effect="non-scaling-stroke"/>`;
     })
     .join('');
   const pathParts = paths
