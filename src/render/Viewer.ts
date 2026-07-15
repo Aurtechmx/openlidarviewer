@@ -85,6 +85,7 @@ import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
+import { shouldRunProbePick } from './hoverPickGate';
 import { angularVelocity } from './angularVelocity';
 import {
   targetPixelRatio,
@@ -6688,7 +6689,16 @@ export class Viewer {
       }
       // Live probe — at most one detailed pick per frame, only when the
       // pointer actually moved, so a hover readout costs no idle frame budget.
-      if (this._toolMode === 'probe' && this._pointerMoved) {
+      // v0.6 P6: skip the detailed GPU pick while the user is actively driving
+      // the camera (orbit/pan drag) — during a drag you are navigating, not
+      // reading a hover value, so the readback is wasted. `_pointerMoved` is NOT
+      // consumed here, so the probe fires once as soon as the drag settles.
+      // (No separate camera-tween flag exists, so only active interaction gates.)
+      if (
+        this._toolMode === 'probe' &&
+        this._pointerMoved &&
+        shouldRunProbePick({ userInteracting: this._userInteracting, tweening: false })
+      ) {
         this._pointerMoved = false;
         let info: PointInfo | null = null;
         if (this._pointerOnCanvas) {
