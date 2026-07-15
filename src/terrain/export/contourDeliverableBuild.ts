@@ -62,6 +62,18 @@ export interface DeliverableBuildOptions {
   readonly generatedAt: Date;
   /** The evidence-gate permit stamp, threaded into every file's provenance. */
   readonly exportPermit: ExportPermitStamp | null;
+  /**
+   * The contour geometry method actually bundled, as `id@version` (from the
+   * Contour Studio export intent). Stamped into provenance so the deliverable
+   * self-describes its geometry. Null ⇒ not set by Contour Studio.
+   */
+  readonly contourMethod?: string | null;
+  /**
+   * The Contour Studio purpose that produced this deliverable (e.g.
+   * `presentation-map`). Stamped into provenance so a bundle records the purpose
+   * it was built for. Null ⇒ no purpose context.
+   */
+  readonly deliverablePurpose?: string | null;
 }
 
 /** Honest one-line reasons for the products this curated package omits. */
@@ -103,6 +115,10 @@ function gatherDeliverable(
     softwareVersion: opts.softwareVersion,
     metricVersion: opts.metricVersion,
     exportPermit: opts.exportPermit,
+    // Contour Studio stamps the geometry method + purpose so the bundle
+    // self-describes what it holds and which purpose produced it.
+    contourMethod: opts.contourMethod ?? null,
+    deliverablePurpose: opts.deliverablePurpose ?? null,
   });
 
   // Honest geometry role: label the bundled GeoJSON by its ACTUAL style, so a

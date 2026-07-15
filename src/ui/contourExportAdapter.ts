@@ -58,7 +58,7 @@ export interface ContourExportHost {
    * Run the complete deliverable ZIP export (curated contours + DTM + provenance
    * + README + SHA256SUMS), gated + stamped by the resolved permit.
    */
-  exportCompletePackage(permit: ContourExportPermit): Promise<void>;
+  exportCompletePackage(permit: ContourExportPermit, intent: ContourExportIntent): Promise<void>;
   /**
    * Run the terrain intelligence report export, stamped with the evidence-gate
    * permit the adapter resolved (or null when unavailable). The report keeps its
@@ -128,7 +128,7 @@ export class ContourExportAdapter {
         this._flashBlocked(srcBtn, product, permit.reasons);
         return;
       }
-      void this._busy(srcBtn, () => this.host.exportCompletePackage(permit));
+      void this._busy(srcBtn, () => this.host.exportCompletePackage(permit, intent));
       return;
     }
     // Terrain intelligence report: routed through the SAME resolver (DTM claim,

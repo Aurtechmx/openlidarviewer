@@ -4,7 +4,23 @@ import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
 import { sha256Hex } from '../src/terrain/export/sha256';
 import { buildContourDeliverableFromResult } from '../src/terrain/export/contourDeliverableBuild';
+import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
+import type { TerrainPoint } from '../src/terrain/TerrainContracts';
+
+/** A small Gaussian hill — dense, all-ground — that yields real contour rings. */
+function hillPoints(n = 32, amp = 6): TerrainPoint[] {
+  const pts: TerrainPoint[] = [];
+  const c = (n - 1) / 2;
+  const s = (n - 1) / 3;
+  const twoS2 = 2 * s * s;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      pts.push({ x: i, y: j, z: amp * Math.exp(-(((i - c) ** 2 + (j - c) ** 2) / twoS2)) });
+    }
+  }
+  return pts;
+}
 
 // A 2×2 grid, row-major (row 0 = south). Values rise to the north-east.
 //   row1 (north): 30 40
@@ -272,6 +288,55 @@ describe('buildDemPackage', () => {
     const readme = new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
     expect(readme).toMatch(/Horizontal unit: ft/);
     expect(readme).toMatch(/Vertical unit: m/);
+  });
+
+  it('bundles the selected cartographic purpose geometry and stamps purpose + method + tolerance', () => {
+    const core = computeTerrainCore(hillPoints(), { cellSizeM: 1, crs: 'EPSG:32610' });
+    const cart = contoursFromCore(core, { intervalM: 1, shapeStyle: 'generalized', generalizeToleranceCells: 1.0 });
+    const zip = buildContourDeliverableFromResult(cart, {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      contourMethod: 'olv.contour.generalize@1',
+      deliverablePurpose: 'presentation-map',
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-14T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    // A cartographic purpose bundles the GENERALIZED geometry (not analytical).
+    expect(extractEntry(zip, 'site_Contours_Cartographic.geojson')).not.toBeNull();
+    expect(extractEntry(zip, 'site_Contours_Analytical.geojson')).toBeNull();
+    // …and the deliverable self-describes the purpose it was built for.
+    const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
+    expect(prov.deliverablePurpose).toBe('presentation-map');
+    expect(prov.contourMethod).toBe('olv.contour.generalize@1');
+    // The exact generalization tolerance is captured in the verifiable
+    // processing manifest, so the bundle names the epsilon it used.
+    expect(JSON.stringify(prov.processingManifest)).toContain('"generalizeToleranceCells":1');
+  });
+
+  it('Survey Review bundles the exact analytical geometry, stamped analytical', () => {
+    const core = computeTerrainCore(hillPoints(), { cellSizeM: 1, crs: 'EPSG:32610' });
+    const crisp = contoursFromCore(core, { intervalM: 1, shapeStyle: 'crisp' });
+    const zip = buildContourDeliverableFromResult(crisp, {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      contourMethod: 'olv.contour.analytical@1',
+      deliverablePurpose: 'survey-review',
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-14T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    expect(extractEntry(zip, 'site_Contours_Analytical.geojson')).not.toBeNull();
+    expect(extractEntry(zip, 'site_Contours_Cartographic.geojson')).toBeNull();
+    const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
+    expect(prov.deliverablePurpose).toBe('survey-review');
+    expect(prov.contourMethod).toBe('olv.contour.analytical@1');
   });
 
   it('includes a SHA256SUMS.txt whose digests verify every other file in the package', () => {

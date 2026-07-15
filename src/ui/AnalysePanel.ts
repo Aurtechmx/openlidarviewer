@@ -646,7 +646,7 @@ export class AnalysePanel {
               this._studioExportBtns.get('pdf')?.click();
             },
             exportDemPackage: (stamp) => this._exportDemPackage(this._demButton, stamp),
-            exportCompletePackage: (permit) => this._exportCompletePackage(permit),
+            exportCompletePackage: (permit, intent) => this._exportCompletePackage(permit, intent),
             exportTerrainReport: (stamp) => this._exportTerrainReport(this._reportButton, stamp),
           };
           this._contourExportAdapter = new ContourExportAdapter(host);
@@ -2001,19 +2001,29 @@ export class AnalysePanel {
   /**
    * Build + download the complete deliverable ZIP (curated contours + DTM +
    * provenance + README + SHA256SUMS), gated by the resolved permit. The contour
-   * geometry is regenerated at the exact analytical style so the bundled GeoJSON
-   * is the canonical, reproducible one; the permit decision + stamp travel into
-   * every file's provenance.
+   * geometry is regenerated at the SELECTED PURPOSE's style (Survey Review = exact
+   * analytical; a cartographic purpose = generalized at its tolerance), so the
+   * bundle matches the chosen purpose and stamps the geometry method + purpose;
+   * the permit decision + stamp travel into every file's provenance.
    */
-  private async _exportCompletePackage(permit: ContourExportPermit): Promise<void> {
+  private async _exportCompletePackage(
+    permit: ContourExportPermit,
+    intent: ContourExportIntent,
+  ): Promise<void> {
     if (!permit.ok || !this._result) return;
     try {
-      // Canonical analytical geometry for the bundle (regenerate to crisp when
-      // the host can; otherwise use the on-screen result honestly labelled).
-      const result = this._cb.buildResultForExport
-        ? await this._cb.buildResultForExport({
+      // Regenerate the bundled geometry at the SELECTED PURPOSE's style + tolerance
+      // (Survey Review = exact analytical; a cartographic purpose = generalized at
+      // its tolerance), so the Complete ZIP matches the purpose the user chose and
+      // is labelled analytical/cartographic by its actual style.
+      // Regeneration is what makes the stamped method/purpose truthful: without it
+      // we fall back to the on-screen result, whose style may not match the intent.
+      const canRegen = !!this._cb.buildResultForExport;
+      const result = canRegen
+        ? await this._cb.buildResultForExport!({
             intervalM: this._result.model.intervalM,
-            shapeStyle: 'crisp',
+            shapeStyle: intent.shapeStyle,
+            generalizeToleranceCells: intent.generalizeToleranceCells,
           })
         : this._result;
       const [{ buildContourDeliverableFromResultAsync }] = await Promise.all([
@@ -2034,6 +2044,12 @@ export class AnalysePanel {
         metricVersion: TERRAIN_METRIC_VERSION,
         generatedAt: new Date(),
         exportPermit: permitStamp(permit),
+        // Stamp the geometry method + purpose so the bundle self-describes what it
+        // holds — but ONLY when we regenerated at the intent's style, so a fallback
+        // to the on-screen result never stamps a method that mismatches the bytes.
+        // The geometry role is labelled by the actual result style regardless.
+        contourMethod: canRegen ? intent.methodTag : null,
+        deliverablePurpose: canRegen ? intent.purpose : null,
       });
       triggerDownload(
         new Blob([bytes as BlobPart], { type: 'application/zip' }),
