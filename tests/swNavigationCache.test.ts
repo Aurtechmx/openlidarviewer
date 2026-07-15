@@ -271,7 +271,33 @@ describe('sw.js — asset cache stores ONLY content-hashed app bundles, never da
     '/assets/ept-data/0-0-0-0.laz',
     '/data/user.laz',
     '/user.copc.laz',
+    // Every other point-cloud / mesh format the viewer's own loaders accept
+    // (sniffFormat.ts: .obj/.ply/.las/.laz/.glb/.gltf/.xyz/.csv, plus .e57,
+    // the 3D-Tiles .pnts + tileset.json). A self-hoster may drop any of these
+    // under /assets/; none carries a Vite content-hash, so none is cacheable.
+    '/assets/cloud.ply',
+    '/assets/survey.xyz',
+    '/assets/points.csv',
+    '/assets/scan.e57',
+    '/assets/tile.pnts',
+    '/assets/tileset.json',
+    '/assets/mesh.glb',
+    '/assets/model.gltf',
+    '/assets/scan.obj',
+    // Hashed-LOOKING dataset names: the `<name>-<hash>` shape of a real Vite
+    // bundle, but a DATASET extension. These prove the predicate rejects on the
+    // EXTENSION, not merely on the filename shape — a point cloud (or mesh)
+    // deliberately named to mimic a content hash is still never cached.
+    '/assets/scan-A1b2C3d4.laz',
+    '/assets/model-Xy9Zk2mn.copc.laz',
+    '/assets/mesh-Q7rT3v9W.glb',
   ];
+  // A genuinely content-hashed .js bundle — the positive control that keeps the
+  // absent-from-cache assertions below honest: it proves the SW's cache write
+  // path is live (the datasets are rejected by the predicate, not because
+  // caching happens to be broken), so the hashed-name datasets above fail the
+  // EXTENSION gate specifically.
+  const HASHED_JS_BUNDLE = '/assets/model-Xy9Zk2mn.js';
 
   it('caches every content-hashed application bundle under /assets/', async () => {
     const sw = await bootWorker();
@@ -283,7 +309,7 @@ describe('sw.js — asset cache stores ONLY content-hashed app bundles, never da
     }
   });
 
-  it('NEVER caches a dataset, regardless of extension or directory (incl. under /assets/)', async () => {
+  it('NEVER caches a dataset, regardless of extension or directory (incl. hashed-looking names under /assets/)', async () => {
     const sw = await bootWorker();
     for (const path of DATASETS) {
       const url = `https://viewer.example${path}`;
@@ -291,6 +317,14 @@ describe('sw.js — asset cache stores ONLY content-hashed app bundles, never da
       await sw.asset(url);
       expect(sw.cached(url)).toBeUndefined();
     }
+    // Positive control in the same run: a genuinely-hashed .js bundle whose
+    // name matches a rejected dataset above char-for-char except the extension
+    // IS cached — so the misses above are the EXTENSION gate doing its job, not
+    // a dead cache-write path making every assertion vacuously pass.
+    const bundleUrl = `https://viewer.example${HASHED_JS_BUNDLE}`;
+    sw.setFetch(() => Promise.resolve(res('bytes:hashed-js')));
+    await sw.asset(bundleUrl);
+    expect(sw.cached(bundleUrl)?.marker).toBe('bytes:hashed-js');
   });
 
   it('does not cache even a hashed bundle when requested with a Range header', async () => {

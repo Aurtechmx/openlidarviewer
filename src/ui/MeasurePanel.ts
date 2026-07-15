@@ -1034,21 +1034,35 @@ export class MeasurePanel {
         th.setAttribute('scope', 'col');
         return th;
       });
+      // Lazy <tbody> (v0.6 perf): the station table is collapsed by default
+      // and most measurements are never expanded, yet a dense profile carries
+      // one row per sample — building every <tr>/<td> up front spends DOM work
+      // (and the browser's layout/style cost) on a table the user usually never
+      // opens. Defer the row build until the <details> is first opened, then
+      // cache it (build exactly once). Only the DOM construction moves: the row
+      // MODEL (`stationRows`) is still computed eagerly above so the summary
+      // count, the CSV and the PDF stay in lockstep — the measurement math and
+      // exported data are untouched.
       const tbody = el('tbody');
-      for (const r of stationRows) {
-        // The row model uses '' for honest gaps (CSV blanks); the table
-        // shows an em dash so a gap is visibly "no data", not an empty cell.
-        const dash = (v: string) => (v === '' ? '—' : v);
-        tbody.append(
-          el('tr', {}, [
-            el('td', { className: 'olv-mp-stations-td', text: r.station }),
-            el('td', { className: 'olv-mp-stations-td', text: dash(r.chainage) }),
-            el('td', { className: 'olv-mp-stations-td', text: dash(r.elevation) }),
-            el('td', { className: 'olv-mp-stations-td', text: dash(r.points) }),
-            el('td', { className: 'olv-mp-stations-td', text: dash(r.grade) }),
-          ]),
-        );
-      }
+      let stationsBuilt = false;
+      const buildStationRows = (): void => {
+        if (stationsBuilt) return;
+        stationsBuilt = true;
+        for (const r of stationRows) {
+          // The row model uses '' for honest gaps (CSV blanks); the table
+          // shows an em dash so a gap is visibly "no data", not an empty cell.
+          const dash = (v: string) => (v === '' ? '—' : v);
+          tbody.append(
+            el('tr', {}, [
+              el('td', { className: 'olv-mp-stations-td', text: r.station }),
+              el('td', { className: 'olv-mp-stations-td', text: dash(r.chainage) }),
+              el('td', { className: 'olv-mp-stations-td', text: dash(r.elevation) }),
+              el('td', { className: 'olv-mp-stations-td', text: dash(r.points) }),
+              el('td', { className: 'olv-mp-stations-td', text: dash(r.grade) }),
+            ]),
+          );
+        }
+      };
       const stationTable = el(
         'table',
         {
@@ -1065,6 +1079,14 @@ export class MeasurePanel {
         }),
         el('div', { className: 'olv-mp-stations-wrap' }, [stationTable]),
       ]);
+      // `toggle` fires on both open and close; guard on `.open` so a close is a
+      // no-op, and `buildStationRows` self-guards so the body is built exactly
+      // once and then cached for every later open. A collapsed <details> hides
+      // its contents from the accessibility tree anyway, so deferring the rows
+      // costs no screen-reader access — they exist by the time the table is read.
+      stationDetails.addEventListener('toggle', () => {
+        if (stationDetails.open) buildStationRows();
+      });
 
       const children: HTMLElement[] = [
         headRow,
