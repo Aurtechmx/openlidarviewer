@@ -9,8 +9,8 @@ remains. It complements [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.m
 - Version: 0.5.9 (consistent across package.json, lockfile, UI, service-worker
   cache name, manifest, docs, changelog, release notes, CITATION.cff — enforced by
   `lint:release-sync`).
-- Code-complete commit: `c8e4ef0`. Documentation/metadata commits follow it; the
-  tag is (re)created on the final commit by the release commands below.
+- The release is tagged `v0.5.9`; the tag points at the final commit on `main`,
+  which the release commands below (re)create and verify.
 - Toolchain of record: Node v26.0.0, npm 11.12.1. `package.json` pins
   `npm@10.9.2` via `packageManager`; either resolves the same lockfile.
 - Checksums are generated from the final archives by `npm run package`
@@ -28,9 +28,9 @@ Full `npm run test:release` was green on the code-complete commit. Counts:
 | unit / export / terrain / ui / slow buckets | 2495 / 539 / 1149 / 428 / 451 pass (34 skipped by design) |
 | e2e smoke / smoke:live / smoke:mobile (320, 375) | 4 / 4 / 8 pass |
 
-The commits after `c8e4ef0` change documentation and code comments only. Re-run
-the full gate on the final commit before publishing (the commands below do this);
-a browser gate is only valid on the exact commit being published.
+The final commits change documentation and code comments only. Re-run the full
+gate on the tagged commit before publishing (the commands below do this); a
+browser gate is only valid on the exact commit being published.
 
 ## Dependency and license
 
