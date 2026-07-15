@@ -14,7 +14,11 @@
  * Honesty note: the default digest is SHA-256 (v3) — a cryptographic-strength
  * content hash, computed synchronously (see `sha256` in auditLog.ts). It is
  * tamper-EVIDENT: change a number but not the digest and verification fails, and
- * forging a matching digest for altered content is computationally infeasible.
+ * forging a matching SHA-256 digest for altered content is computationally
+ * infeasible. This holds ONLY for SHA-256 — the legacy FNV-1a digest is a fast,
+ * forgeable checksum, so `verifyReport` never trusts the file-named algorithm to
+ * downgrade the guarantee: an FNV-1a match is reported as "matches but not
+ * tamper-proof", not "intact".
  * It is still NOT a secret-keyed signature — it proves integrity, not identity,
  * so it can't tell you WHO produced the report. The `digestAlgorithm` field
  * names the algorithm so the output is self-describing; a caller may inject the

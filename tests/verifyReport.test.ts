@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { verifyReportFile } from '../src/export/verifyReport';
 import { buildReportManifest, type ReportManifestInput } from '../src/render/measure/reportManifest';
-import { fnv1a } from '../src/render/measure/auditLog';
+import { fnv1a, canonicalize } from '../src/render/measure/auditLog';
 
 function reportInput(over: Partial<ReportManifestInput> = {}): ReportManifestInput {
   return {
@@ -25,6 +25,25 @@ describe('verifyReportFile', () => {
     expect(r.classificationEpoch).toBe(3);
     expect(r.findingsCount).toBe(1);
     expect(r.reason).toMatch(/intact/i);
+    expect(r.cryptographic).toBe(true);
+  });
+
+  test('a forged FNV-1a downgrade is NOT affirmed as tamper-evident (algorithm-confusion)', () => {
+    // Attacker alters a value, swaps the digest algorithm to the forgeable
+    // legacy FNV-1a, and recomputes a MATCHING FNV-1a digest over the new body.
+    const tampered: Record<string, unknown> = { ...buildReportManifest(reportInput()) };
+    tampered.findings = [{ label: 'Stockpile volume', value: 9999, unit: 'm³', sigma: 41, confidence: 'medium' }];
+    tampered.digestAlgorithm = 'FNV-1a-32';
+    const { digest: _drop, ...body } = tampered as { digest: string };
+    tampered.digest = fnv1a(canonicalize(body));
+
+    const r = verifyReportFile(JSON.stringify(tampered));
+    // The forged checksum DOES match (the attacker recomputed it) …
+    expect(r.valid).toBe(true);
+    // … but it must NOT be reported as intact/tamper-evident.
+    expect(r.cryptographic).toBe(false);
+    expect(r.reason).not.toMatch(/intact/i);
+    expect(r.reason).toMatch(/not tamper-proof|forge|unverified/i);
   });
 
   test('pretty-printed JSON still verifies (canonical re-hash)', () => {

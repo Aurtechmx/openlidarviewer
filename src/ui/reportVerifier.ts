@@ -13,7 +13,7 @@ import { verifyReportFile, type VerifyReportResult } from '../export/verifyRepor
 
 function row(label: string, value: string): HTMLElement {
   const r = document.createElement('div');
-  r.style.cssText = 'display:flex;justify-content:space-between;gap:16px;font:12px system-ui,sans-serif;color:var(--olv-fg,#e8eef5);';
+  r.style.cssText = 'display:flex;justify-content:space-between;gap:16px;font:12px system-ui,sans-serif;color:var(--text);';
   const l = document.createElement('span');
   l.textContent = label;
   l.style.cssText = 'opacity:0.7;';
@@ -36,30 +36,38 @@ export function showReportVerification(result: VerifyReportResult): void {
   const card = document.createElement('div');
   card.style.cssText =
     'min-width:300px;max-width:440px;padding:18px 20px;border-radius:12px;' +
-    'background:var(--olv-surface,#141820);border:1px solid var(--olv-border,rgba(255,255,255,0.16));' +
+    'background:var(--panel);border:1px solid var(--hairline);color:var(--text);' +
     'box-shadow:0 8px 30px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:10px;';
 
-  // Status headline — colour carries the verdict, the WORD carries it too.
+  // Status headline — colour carries the verdict, the WORD carries it too. A
+  // digest match with a NON-cryptographic (FNV-1a) checksum is forgeable, so it
+  // is an amber caution, never a green "intact".
   const ok = result.valid;
+  const weak = ok && result.cryptographic === false;
   const status = document.createElement('div');
-  status.setAttribute('data-testid', ok ? 'report-verify-valid' : 'report-verify-invalid');
+  status.setAttribute(
+    'data-testid',
+    !ok ? 'report-verify-invalid' : weak ? 'report-verify-weak' : 'report-verify-valid',
+  );
   status.textContent = !result.recognised
     ? 'Not a report'
-    : ok
-      ? 'Report is intact'
-      : 'Report has been modified';
-  status.style.cssText =
-    `font:600 16px system-ui,sans-serif;color:${ok ? 'var(--olv-ok,#46c08a)' : 'var(--olv-bad,#ff6b6b)'};`;
+    : !ok
+      ? 'Report has been modified'
+      : weak
+        ? 'Checksum matches — not tamper-proof'
+        : 'Report is intact';
+  const statusColor = !ok ? 'var(--rating-weak)' : weak ? 'var(--rating-good)' : 'var(--rating-excellent)';
+  status.style.cssText = `font:600 16px system-ui,sans-serif;color:${statusColor};`;
   card.append(status);
 
   const reason = document.createElement('div');
   reason.textContent = result.reason;
-  reason.style.cssText = 'font:12px system-ui,sans-serif;color:var(--olv-fg,#e8eef5);opacity:0.85;';
+  reason.style.cssText = 'font:12px system-ui,sans-serif;color:var(--text);opacity:0.85;';
   card.append(reason);
 
   if (result.recognised) {
     const meta = document.createElement('div');
-    meta.style.cssText = 'display:flex;flex-direction:column;gap:5px;margin-top:4px;padding-top:8px;border-top:1px solid var(--olv-border,rgba(255,255,255,0.12));';
+    meta.style.cssText = 'display:flex;flex-direction:column;gap:5px;margin-top:4px;padding-top:8px;border-top:1px solid var(--hairline);';
     if (result.algorithm) meta.append(row('Digest', result.algorithm));
     if (result.software) meta.append(row('Produced by', `OpenLiDARViewer ${result.software}`));
     if (result.classificationEpoch !== undefined) meta.append(row('Classification epoch', String(result.classificationEpoch)));
@@ -73,7 +81,7 @@ export function showReportVerification(result: VerifyReportResult): void {
   close.setAttribute('data-testid', 'report-verify-close');
   close.style.cssText =
     'align-self:flex-end;margin-top:6px;padding:6px 14px;border:0;border-radius:8px;cursor:pointer;' +
-    'font:600 12px system-ui,sans-serif;color:#0b0e13;background:var(--olv-accent,#5ab0ff);';
+    'font:600 12px system-ui,sans-serif;color:var(--on-accent);background:var(--accent);';
   const esc = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') dismiss();
   };
