@@ -41,7 +41,7 @@ WebGPU feature support varies by browser. Where it is unavailable, the viewer us
 
 Eye Dome Lighting is a screen-space depth cue, not physically-based lighting — it shades depth discontinuities to make structure readable, and does not model real light, shadows, or materials. It runs as a post-processing pass and is off by default on the WebGL 2 fallback and on mobile, where it can still be enabled by hand.
 
-OBJ and glTF meshes are shown as their vertices. Faces and materials are not rendered.
+OBJ and glTF meshes are shown as their vertices. Faces and materials are not rendered. glTF must be **GLB or self-contained** (a `.gltf` with embedded/data-URI buffers) — a `.gltf` that references external files (a separate `buffer.bin`) can't be resolved from a single-file open, and reports a clear error asking for GLB or an embedded glTF.
 
 ## Not in scope, for now
 

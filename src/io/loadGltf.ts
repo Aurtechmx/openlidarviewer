@@ -144,7 +144,19 @@ export async function loadGltf(
   sourceFormat: 'glb' | 'gltf',
   name = `cloud.${sourceFormat}`,
 ): Promise<PointCloud> {
-  const raw = await parse(buffer, GLTFLoader);
+  const raw = await parse(buffer, GLTFLoader).catch((err: unknown) => {
+    // A standard multi-file .gltf that references an external buffer (e.g.
+    // buffer.bin) can't be resolved from a single in-page file — the browser
+    // hands us one file, not the sibling. Surface a precise, actionable message
+    // instead of loaders.gl's internal "'baseUrl' must be provided…" error.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/baseUrl/i.test(msg)) {
+      throw new Error(
+        'This glTF references external files (e.g. buffer.bin) that a single-file open cannot resolve. Export as GLB, or a self-contained .gltf with embedded/data-URI buffers.',
+      );
+    }
+    throw err;
+  });
   const gltf = postProcessGLTF(raw) as unknown as {
     scenes?: { nodes?: GltfNode[] }[];
     nodes?: GltfNode[];

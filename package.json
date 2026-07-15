@@ -50,7 +50,7 @@
     "repro": "REPRO=1 vitest run tests/reproPack.test.ts && python3 benchmarks/plots.py",
     "test:smoke": "playwright test tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:live": "SMOKE_LIVE=1 playwright test tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
-    "test:release": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:layer-boundaries && npm run lint:claim-register && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke:live",
+    "test:release": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:layer-boundaries && npm run lint:claim-register && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live",
     "lint:main-deferral": "node scripts/lint-main-deferral.mjs",
     "lint:inline-imports": "node scripts/lint-inline-imports.mjs",
     "lint:unsafe-html": "node scripts/lint-unsafe-html.mjs",

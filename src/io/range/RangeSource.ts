@@ -162,6 +162,21 @@ export function isBlockedHost(hostname: string): boolean {
   if (h === '::1' || h === '::') return true;
   if (/^fe[89ab][0-9a-f]:/i.test(h)) return true; // fe80::/10
   if (/^f[cd][0-9a-f]{2}:/i.test(h)) return true; // fc00::/7
+  // IPv4-mapped IPv6 (::ffff:127.0.0.1 and its canonical hex form
+  // ::ffff:7f00:1). The URL parser rewrites the dotted form to hex, so both
+  // must map back to the embedded IPv4 and re-run the private/loopback checks —
+  // otherwise [::ffff:127.0.0.1] slips past the dotted-quad regex below.
+  const mapped = /^::ffff:(.+)$/i.exec(h);
+  if (mapped) {
+    const tail = mapped[1];
+    const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(tail);
+    if (hex) {
+      const hi = parseInt(hex[1], 16);
+      const lo = parseInt(hex[2], 16);
+      return isBlockedHost(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+    }
+    return isBlockedHost(tail); // already-dotted mapped form
+  }
   // IPv4 literals.
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
   if (m) {

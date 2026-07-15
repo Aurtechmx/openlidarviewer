@@ -26,7 +26,7 @@ Format support is still evolving. This page separates what works today from what
 
 ## iPhone and mobile scan exports
 
-OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format. `PLY`, `OBJ`, `GLB`/`GLTF`, `XYZ`, and `CSV` all work today. `USDZ` exports need conversion to a supported format first. What works depends on the app's export format, the file structure, browser memory, and the current implementation.
+OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format. `PLY`, `OBJ`, `GLB` (and self-contained `.gltf` with embedded buffers), `XYZ`, and `CSV` all work today. A `.gltf` that references an external `buffer.bin` needs to be exported as GLB or an embedded glTF instead. `USDZ` exports need conversion to a supported format first. What works depends on the app's export format, the file structure, browser memory, and the current implementation.
 
 ## Terrestrial laser scanners (E57)
 

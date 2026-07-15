@@ -19,7 +19,10 @@
  *     /assets/* files are content-hashed and immutable, so this is safe.
  */
 
-const VERSION = 'olv-shell-v1';
+// Bump on every release: `activate` deletes any cache whose name !== VERSION,
+// so changing the name is what prunes the previous release's cached bundles.
+// Tied to the app version so a tagged release prunes automatically.
+const VERSION = 'olv-shell-0.5.9';
 const SHELL = [
   './',
   './index.html',
@@ -74,6 +77,19 @@ function isShellNavigation(url) {
   return url.pathname === root || url.pathname === root + 'index.html';
 }
 
+/**
+ * The ONLY same-origin responses this worker stores: the build's content-hashed
+ * /assets/* bundles (immutable) and the precached shell files. Anything else
+ * same-origin — including a dataset a user happens to host under this origin (an
+ * EPT ept.json / hierarchy / .laz tile) — must go straight to the network and is
+ * never cached, per the privacy contract at the top of this file.
+ */
+function isCacheableAsset(url) {
+  const root = scopeRoot();
+  if (url.pathname.startsWith(root + 'assets/')) return true;
+  return SHELL.some((s) => url.pathname === root + s.replace(/^\.\//, ''));
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return; // never cache writes/uploads
@@ -115,6 +131,10 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+
+  // Non-asset same-origin GETs — e.g. a dataset a user happens to host under
+  // this origin — go straight to the network and are never stored.
+  if (!isCacheableAsset(url)) return;
 
   // Same-origin static assets: serve from cache, refresh in the background.
   event.respondWith(

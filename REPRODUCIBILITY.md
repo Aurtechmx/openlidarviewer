@@ -21,11 +21,11 @@ npm ci
 | Plain build + chunk-isolation contract | `npm run test:build` |
 | Production (obfuscated) build | `npm run build:live` |
 | Bundle budget check | `npm run check:bundle` |
-| Full release gate (all of the above + lints + smoke) | `npm run test:release` |
+| Full release gate (all of the above + lints + plain & live smoke) | `npm run test:release` |
 | Regenerate analysis/benchmark figures | `npm run repro` |
 | Package source + deploy archives | `npm run package` |
 
-The authoritative gate is `npm run test:release`; `RELEASE_CHECKLIST.md` lists the same battery for a tagged release.
+The authoritative deterministic gate is `npm run test:release` (typecheck, lints, all test buckets, both builds, bundle budget, plus plain and live-obfuscated smoke). The broader browser matrix that a device varies — the full end-to-end suite and the mobile responsive job — runs in CI (`.github/workflows/ci.yml`), not in `test:release`; `RELEASE_CHECKLIST.md` lists that browser battery for a tagged release.
 
 ## Determinism
 

@@ -4397,18 +4397,20 @@ void viewerLoaded.then(() => {
 // the cross-frame control bridge is now lazy-loaded.
 // `?embed=1` is a minority of traffic; non-embed loads should not pay
 // the ~5 KB embed-bridge cost.
-async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge').startEmbedBridge> {
-  const m = await loadEmbedBridge();
-  return m.startEmbedBridge;
+async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge')> {
+  return loadEmbedBridge();
 }
 
 if (embed) {
-  void startEmbedBridgeLazy().then((startEmbedBridge) => startEmbedBridge({
+  // Wire the origin allow-list off the page URL (?embedParent / ?embedOrigins):
+  // when a deployer relaxes X-Frame-Options for cross-origin embedding, inbound
+  // commands are then gated to the configured origin(s) instead of any parent.
+  void startEmbedBridgeLazy().then((m) => m.startEmbedBridge({
     onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
     onJumpCamera: (camera) => viewer.applyCameraState(camera),
     onToggleLayer: (id, visible) => viewer.setCloudVisible(id, visible),
     onFocusAnnotation: (id) => viewer.jumpToAnnotation(id),
-  }));
+  }, m.embedBridgeOptionsFromUrl(window.location.search)));
 }
 
 // `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).
@@ -6237,11 +6239,21 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     dropZone.setCancelHandler(() => controller.abort());
     const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
 
-    // Fetch the manifest. We use plain `fetch` rather than the
-    // HttpRangeSource: ept.json is a small JSON document, not a range-
-    // served binary. The same retry / cancellation discipline still
-    // applies via the abort controller.
-    const manifestResponse = await fetch(url, { signal: controller.signal });
+    // Fetch the manifest. We use plain `fetch` rather than the HttpRangeSource:
+    // ept.json is a small JSON document, not a range-served binary. It gets the
+    // same per-request TIMEOUT as the hardened hierarchy/tile transport (20 s),
+    // so a stalled manifest aborts instead of hanging until the user cancels;
+    // the timeout is composed with the outer load-cancel signal. Single attempt
+    // (no retry) — a failed manifest surfaces an error and the user re-opens.
+    const MANIFEST_TIMEOUT_MS = 20_000;
+    const manifestTimeout = new AbortController();
+    const manifestTimer = setTimeout(() => manifestTimeout.abort(), MANIFEST_TIMEOUT_MS);
+    const onOuterAbort = () => manifestTimeout.abort();
+    controller.signal.addEventListener('abort', onOuterAbort, { once: true });
+    const manifestResponse = await fetch(url, { signal: manifestTimeout.signal }).finally(() => {
+      clearTimeout(manifestTimer);
+      controller.signal.removeEventListener('abort', onOuterAbort);
+    });
     if (!manifestResponse.ok) {
       throw new Error(
         `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,

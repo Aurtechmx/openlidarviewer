@@ -447,6 +447,12 @@ test('validateRemoteCopcUrl blocks localhost and private/link-local hosts (SSRF)
     'http://printer.local/scan.copc.laz',
     'http://[::1]/scan.copc.laz',
     'http://[fe80::1]/scan.copc.laz',
+    // IPv4-mapped IPv6 — the URL parser canonicalises these to hex
+    // (::ffff:7f00:1 etc.), which must still resolve back to the private IPv4.
+    'http://[::ffff:127.0.0.1]/scan.copc.laz',
+    'http://[::ffff:10.0.0.1]/scan.copc.laz',
+    'http://[::ffff:192.168.1.1]/scan.copc.laz',
+    'http://[::ffff:169.254.169.254]/latest/meta-data',
   ];
   for (const url of blocked) {
     const res = validateRemoteCopcUrl(url);

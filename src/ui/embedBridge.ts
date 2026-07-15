@@ -182,6 +182,9 @@ export function startEmbedBridge(
   }
 
   const onMessage = (event: MessageEvent): void => {
+    // Only the actual embedding parent may drive the viewer — never a sibling
+    // iframe, an opener, or a popup that postMessages into this window.
+    if (window.parent !== window && event.source !== window.parent) return;
     if (allow && allow.length > 0 && !allow.includes(event.origin)) return;
     const command = interpretEmbedMessage(event.data);
     if (!command) return;
