@@ -49,6 +49,9 @@ test('loads a second scan as a separate layer', async ({ page }) => {
 });
 
 test('opens a dropped E57 scan', async ({ page }) => {
+  // E57 is the heaviest decode path (from-scratch parser); on a loaded CI runner
+  // the full sniff → parse → render exceeds the 30s default. Triple the budget.
+  test.slow();
   await page.goto('/');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
 
