@@ -85,7 +85,11 @@ import { renderDatasetStoryCard, renderExportHealthPanel } from './ui/scanStoryV
 import { openModal } from './ui/Modal';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
-import { ObjectPanel } from './ui/ObjectPanel';
+// ObjectPanel is lazy-mounted on first scan load (v0.6 P1, step 2): only the
+// TYPE is imported here (erased at compile time — pulls nothing into the shell),
+// and the class itself arrives through `loadObjectPanel()` (see lazyChunks import
+// above) inside `ensureObjectPanel()`.
+import type { ObjectPanel } from './ui/ObjectPanel';
 import { MobileSheet } from './ui/MobileSheet';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
@@ -228,6 +232,7 @@ import {
   loadApplyDisplayProfile,
   loadColorbarOverlay,
   loadAnalysePanel,
+  loadObjectPanel,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -1065,7 +1070,11 @@ function showInstantAnswer(scanLabel: string): void {
           lassoVolumeTool.enable();
           break;
         case 'floorplan':
-          objectPanel.setVisible(true);
+          // Ensure the (lazy) Object panel is mounted before revealing it, so
+          // there is somewhere for the floor-plan controls to land. Track the
+          // desired visibility too, so a mount still in flight replays it.
+          objectDesiredVisible = true;
+          void ensureObjectPanel().then((p) => p.setVisible(true));
           break;
       }
     },
@@ -2473,7 +2482,10 @@ const dock = new ToolDock({
     if (show) {
       // Opening: ensure the panel is mounted, then show it.
       void ensureAnalysePanel().then((p) => p.setVisible(true));
-      objectPanel.setVisible(false);
+      // Opening Analyse demotes the Object panel — track the intent (so a still-
+      // mounting Object panel replays hidden) and hide it now (no-op if unmounted).
+      objectDesiredVisible = false;
+      objectPanel?.setVisible(false);
     } else {
       // Hiding: no need to construct just to hide — no-op when not yet mounted.
       analysePanel?.setVisible(false);
@@ -3042,11 +3054,41 @@ function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
 }
 
 
+// --- Lazy Object/Space-panel mount (v0.6 P1, step 2) --------------------------
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
-// pipeline if the shape detector misjudged the scan.
-const objectPanel = new ObjectPanel({
-  onRunTerrainAnyway: () => {
+// pipeline if the shape detector misjudged the scan. Constructed on the FIRST
+// scan load, not at boot, so its DOM-builder chain — and the `scanTypeControl`
+// it shares only with the (now-lazy) Analyse panel — stay out of the empty-state
+// shell. Until then `objectPanel` is a null sentinel: every call site is
+// null-guarded (or routes through `ensureObjectPanel()`), and the synchronous
+// scan-route pass records its intent in the tracking vars below so
+// `hydrateObjectPanel()` can replay it the instant the panel mounts.
+let objectPanel: ObjectPanel = null as unknown as ObjectPanel;
+// Desired panel state, mirrored so a panel mounted a beat AFTER the scan route
+// was computed (the dynamic import resolves later) replays the correct state.
+let objectDesiredVisible = false;
+let objectScanTypeArgs: Parameters<ObjectPanel['setScanType']> | null = null;
+// The last content the route asked the panel to render (showSpace / showObject),
+// captured verbatim so a panel that mounts after the route ran shows the same
+// report — not a stale empty state. Null before any non-terrain route.
+let objectContent:
+  | { readonly kind: 'space'; readonly args: Parameters<ObjectPanel['showSpace']> }
+  | { readonly kind: 'object'; readonly args: Parameters<ObjectPanel['showObject']> }
+  | null = null;
+// Memoised first-mount promise so concurrent first-loads share one construction.
+let _objectReady: Promise<ObjectPanel> | null = null;
+
+/**
+ * Construct the Object/Space panel with the SAME callbacks the eager version
+ * used. Split out only so the (large) opts object keeps a shallow indentation;
+ * called exactly once, from `ensureObjectPanel()`.
+ */
+function newObjectPanel(
+  Ctor: Awaited<ReturnType<typeof loadObjectPanel>>['ObjectPanel'],
+): ObjectPanel {
+  return new Ctor({
+    onRunTerrainAnyway: () => {
     // "Run terrain contours anyway" is the explicit, equivalent twin of the
     // "Treat as: Terrain" override — route both through the same path so the
     // control, the panels, and the streaming pin stay in sync.
@@ -3118,7 +3160,50 @@ const objectPanel = new ObjectPanel({
     const { floorPlanConfidence } = await loadFloorPlanConfidence();
     objectPanel.showFloorPlanSummary(floorPlanConfidence(plan));
   },
-});
+  });
+}
+
+/**
+ * Construct + mount the Object panel exactly once, pulling its chunk through
+ * `loadObjectPanel()`. Idempotent and memoised: concurrent first-mounts share
+ * the single in-flight promise, and the double-construct guard means only one
+ * panel is ever built. After construction it inserts into the DOM (desktop left
+ * column, or the mobile sheet when that layout is active) and hydrates the
+ * tracked state. Mirrors `ensureAnalysePanel`.
+ */
+function ensureObjectPanel(): Promise<ObjectPanel> {
+  if (objectPanel) return Promise.resolve(objectPanel);
+  if (_objectReady) return _objectReady;
+  _objectReady = loadObjectPanel().then(({ ObjectPanel: Ctor }) => {
+    // A concurrent caller may have won the race while the import was in flight.
+    if (!objectPanel) {
+      objectPanel = newObjectPanel(Ctor);
+      // Insert into the DOM in its canonical spot; no-op in bare/embed mode
+      // where no left column was built.
+      mountObjectPanelElement?.(objectPanel.element);
+      // Replay whatever state the (already-run) scan route asked for.
+      hydrateObjectPanel();
+    }
+    return objectPanel;
+  });
+  return _objectReady;
+}
+
+/**
+ * Replay the tracked Object-panel state onto the freshly-mounted panel — the
+ * "Treat as" control, the last space/object report content, and visibility — so
+ * a panel that mounted a beat after the scan route was computed shows exactly
+ * what the route asked for. Called once from `ensureObjectPanel()`.
+ */
+function hydrateObjectPanel(): void {
+  if (!objectPanel) return;
+  if (objectScanTypeArgs) objectPanel.setScanType(...objectScanTypeArgs);
+  if (objectContent) {
+    if (objectContent.kind === 'space') objectPanel.showSpace(...objectContent.args);
+    else objectPanel.showObject(...objectContent.args);
+  }
+  objectPanel.setVisible(objectDesiredVisible);
+}
 
 // Terrain-analysis runner — extracted into `src/app/`. Constructed here, after
 // `analysePanel`, so the panel/object-panel callbacks above (which fire only on
@@ -3660,8 +3745,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   if (!plan.apply) {
     if (plan.commitDetected !== null) {
       const committedDisabled = treatAsDisabledFor(detected);
-      objectPanel.setScanType(scanTypeOverride, plan.commitDetected, committedDisabled, true);
       // Track for hydration + apply (no-op while the panel's chunk is in flight).
+      objectScanTypeArgs = [scanTypeOverride, plan.commitDetected, committedDisabled, true];
+      objectPanel?.setScanType(...objectScanTypeArgs);
       analyseScanTypeArgs = [scanTypeOverride, plan.commitDetected, committedDisabled, true];
       analysePanel?.setScanType(...analyseScanTypeArgs);
     }
@@ -3707,10 +3793,13 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       spaceKind === 'object'
         ? objectMetrics(gathered.positions, { sourcePointCount: gathered.totalPoints })
         : null;
+    // Track the content for hydration; apply now (no-op if not yet mounted).
     if (spaceKind === 'interior') {
-      objectPanel.showSpace(space, shape);
+      objectContent = { kind: 'space', args: [space, shape] };
+      objectPanel?.showSpace(space, shape);
     } else {
-      objectPanel.showObject(object, space, shape);
+      objectContent = { kind: 'object', args: [object, space, shape] };
+      objectPanel?.showObject(object, space, shape);
     }
     // Cache the EXACT inputs behind the on-screen report so the panel's export
     // buttons (Report PDF / Floor plan preview) build from the same positions + metrics +
@@ -3730,13 +3819,19 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     // with its honest empty state — which still carries the "Treat as" control
     // and the run-anyway hatch — instead of tearing it down. Never a dead panel.
     lastSpaceExport = null;
-    if (effective === 'interior') objectPanel.showSpace(null, null);
-    else objectPanel.showObject(null, null, null);
+    if (effective === 'interior') {
+      objectContent = { kind: 'space', args: [null, null] };
+      objectPanel?.showSpace(null, null);
+    } else {
+      objectContent = { kind: 'object', args: [null, null, null] };
+      objectPanel?.showObject(null, null, null);
+    }
   } else {
     lastSpaceExport = null;
   }
-  objectPanel.setVisible(plan.showObjectPanel);
   // Track desired visibility for hydration; apply now (no-op if not yet mounted).
+  objectDesiredVisible = plan.showObjectPanel;
+  objectPanel?.setVisible(plan.showObjectPanel);
   analyseDesiredVisible = plan.showAnalysePanel;
   analysePanel?.setVisible(plan.showAnalysePanel);
   dock.setAnalyseEnabled(true);
@@ -3754,8 +3849,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   // flag (settled-verdict soft commit) only ever shows under auto mode — a
   // manual override displays the override pill regardless.
   const committed = scanTypeOverride === 'auto' && scanDetectionCommitted;
-  objectPanel.setScanType(scanTypeOverride, effective, treatAsDisabled, committed);
   // Track for hydration + apply (no-op while the panel's chunk is in flight).
+  objectScanTypeArgs = [scanTypeOverride, effective, treatAsDisabled, committed];
+  objectPanel?.setScanType(...objectScanTypeArgs);
   analyseScanTypeArgs = [scanTypeOverride, effective, treatAsDisabled, committed];
   analysePanel?.setScanType(...analyseScanTypeArgs);
   // Forcing terrain is the explicit "run anyway": surface the Analyse panel
@@ -3802,6 +3898,10 @@ let syncMobileSheet: (() => void) | null = null;
 // else between the class-legend and export panels in the left column. Null in
 // bare/embed mode (no column), where the panel simply stays detached as before.
 let mountAnalysePanelElement: ((el: HTMLElement) => void) | null = null;
+// Same seam for the (also lazy) Object panel — inserts it just before the
+// class-legend panel in the left column, or into the mobile Analyse slot (after
+// the Analyse panel) when that layout is active. Null in bare/embed mode.
+let mountObjectPanelElement: ((el: HTMLElement) => void) | null = null;
 
 function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name);
@@ -3835,12 +3935,13 @@ function revealAnalysePanel(name: string, settled = true): void {
   // Streaming callers pass false: their open-time verdict runs on a sparse
   // coarse frame, so the "Treat as" commit waits for the settle one-shot.
   applyScanRoute(true, settled);
-  // Mount the Analyse panel on this scan load (v0.6 P1 lazy seam). The route
-  // above ran synchronously against the not-yet-mounted panel, recording its
-  // intent in the tracking vars; once the chunk resolves the panel constructs,
-  // mounts, and `hydrateAnalysePanel()` replays that intent. Fire-and-forget:
-  // nothing here awaits the panel.
+  // Mount the Analyse + Object panels on this scan load (v0.6 P1 lazy seam). The
+  // route above ran synchronously against the not-yet-mounted panels, recording
+  // their intent in the tracking vars; once each chunk resolves the panel
+  // constructs, mounts, and `hydrate{Analyse,Object}Panel()` replays that intent.
+  // Fire-and-forget: nothing here awaits the panels.
   void ensureAnalysePanel();
+  void ensureObjectPanel();
   // A scan is now loaded — let the phone sheet show (no-op on desktop).
   syncMobileSheet?.();
 }
@@ -4304,10 +4405,12 @@ void viewerLoaded.then(() => {
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
     leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
-    // NOTE: analysePanel.element is intentionally ABSENT here — the panel is
-    // lazy-mounted on first scan load (v0.6 P1) and inserts itself between the
-    // class-legend and export panels via `mountAnalysePanelElement` below.
-    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, exportPanel.element, clipPanel.element);
+    // NOTE: analysePanel.element AND objectPanel.element are intentionally ABSENT
+    // here — both panels are lazy-mounted on first scan load (v0.6 P1). The Object
+    // panel inserts itself just before the class-legend panel, and the Analyse
+    // panel between the class-legend and export panels, via
+    // `mountObjectPanelElement` / `mountAnalysePanelElement` below.
+    leftPanels.append(measurePanel.element, annotationPanel.element, classLegendPanel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
     // reach the camera. Stop it here (passive — this is plain scrolling, never a
@@ -4382,12 +4485,13 @@ void viewerLoaded.then(() => {
 
     const toMobileLayout = (): void => {
       mobileSheet.slot('view').append(inspector.element);
-      // The Analyse panel is lazy-mounted, so re-parent it only once it exists
-      // (analyse first, then object). A mobile boot BEFORE any scan runs this
-      // with the panel still null — objectPanel alone goes in, and the panel
-      // slots ahead of it via `mountAnalysePanelElement` when it later mounts.
+      // Both the Analyse and Object panels are lazy-mounted, so re-parent each
+      // only once it exists (analyse first, then object). A mobile empty-state
+      // boot BEFORE any scan runs this with BOTH still null — the slot stays
+      // empty, and each panel slots itself in via `mountAnalysePanelElement` /
+      // `mountObjectPanelElement` when it later mounts.
       if (analysePanel) mobileSheet.slot('analyse').append(analysePanel.element);
-      mobileSheet.slot('analyse').append(objectPanel.element);
+      if (objectPanel) mobileSheet.slot('analyse').append(objectPanel.element);
       mobileSheet
         .slot('layers')
         .append(
@@ -4415,15 +4519,16 @@ void viewerLoaded.then(() => {
       inspector.sheetToggle.classList.remove('olv-hidden');
       // Inspector returns to the overlay in its original slot (just before the
       // streaming panel); the left column is rebuilt in its original order. The
-      // Analyse panel is included only once it has lazily mounted (it slots
-      // between the class-legend and export panels via mountAnalysePanelElement).
+      // Object and Analyse panels are included only once each has lazily mounted
+      // (Object before the class-legend panel, Analyse between the class-legend
+      // and export panels — via mountObjectPanelElement / mountAnalysePanelElement).
       stage.overlay.insertBefore(inspector.element, streamingPanel.element);
       const desktopPanels: HTMLElement[] = [
         measurePanel.element,
         annotationPanel.element,
-        objectPanel.element,
-        classLegendPanel.element,
       ];
+      if (objectPanel) desktopPanels.push(objectPanel.element);
+      desktopPanels.push(classLegendPanel.element);
       if (analysePanel) desktopPanels.push(analysePanel.element);
       desktopPanels.push(exportPanel.element);
       leftPanels.append(...desktopPanels);
@@ -4470,9 +4575,25 @@ void viewerLoaded.then(() => {
         leftPanels.append(el);
       }
     };
-    // If the panel already mounted before this wiring ran (possible only if a
+    // The lazy Object panel inserts itself here once its chunk resolves. When
+    // the mobile sheet is active it goes into the Analyse slot AFTER the Analyse
+    // panel; otherwise just before the class-legend panel in the left column.
+    // Robust to the target panel not being where we expect (falls back to
+    // append) so a mid-flip mount can never throw.
+    mountObjectPanelElement = (el: HTMLElement): void => {
+      if (mobileApplied) {
+        // append puts Object after the Analyse panel in the shared Analyse slot.
+        mobileSheet.slot('analyse').append(el);
+      } else if (classLegendPanel.element.parentElement === leftPanels) {
+        leftPanels.insertBefore(el, classLegendPanel.element);
+      } else {
+        leftPanels.append(el);
+      }
+    };
+    // If either panel already mounted before this wiring ran (possible only if a
     // scan's import resolved between column build and here), place it now.
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
+    if (objectPanel) mountObjectPanelElement(objectPanel.element);
 
     // The help overlay is a modal — appended last so it sits above everything.
     stage.overlay.append(helpOverlay.element);
@@ -6984,8 +7105,12 @@ function resetToEmptyState(): void {
   analyseExpanded = false;
   // Hide the Space / Object (non-terrain) panel too — it was added after this
   // reset path and a closed 360 / object scan would otherwise leave its report
-  // lingering over the empty state. v0.4.3.
-  objectPanel.setVisible(false);
+  // lingering over the empty state. v0.4.3. Null-safe: the panel is lazy-mounted,
+  // so a reset before any scan simply has nothing to clear. Drop the tracked
+  // content + desired state so a fresh open starts hidden with no stale report.
+  objectPanel?.setVisible(false);
+  objectDesiredVisible = false;
+  objectContent = null;
   // No scan → hide the phone bottom-sheet (no-op on desktop).
   syncMobileSheet?.();
   // Abort any in-flight terrain compute (worker job + its reply) so a result
