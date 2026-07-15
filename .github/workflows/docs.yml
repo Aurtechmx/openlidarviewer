@@ -70,5 +70,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      # Turn Pages on from the workflow itself, so a fresh repo (or one whose
+      # Pages source isn't set to GitHub Actions) deploys without a manual
+      # Settings step — deploy-pages 404s otherwise. Idempotent when already on.
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - id: deployment
         uses: actions/deploy-pages@v4
