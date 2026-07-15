@@ -74,7 +74,7 @@ export function showContextMenu(clientX: number, clientY: number, items: Context
     ].join(';');
     if (!item.disabled) {
       row.addEventListener('mouseenter', () => {
-        row.style.background = 'var(--accent-weak,rgba(255,255,255,0.08))';
+        row.style.background = 'var(--accent-soft)';
       });
       row.addEventListener('mouseleave', () => {
         row.style.background = 'transparent';
