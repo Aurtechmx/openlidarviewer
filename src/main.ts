@@ -2717,11 +2717,17 @@ const analysePanel = new AnalysePanel({
       // "unitless" rather than asserting metres. Undefined before a CRS
       // resolves ⇒ serializeContours keeps its standing metre default.
       linearUnit: cur?.linearUnit,
-      // Metres-per-unit of the Z axis when the CRS declares a vertical unit
-      // SEPARATELY (compound / vertical CRS). Undefined for the common
-      // horizontal-only capture ⇒ the deliverable reports elevation unit as
-      // unknown instead of assuming it equals the horizontal unit.
-      verticalUnitToMetres: cur?.verticalUnitToMetres,
+      // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
+      // it declares one, else the horizontal linear factor when the frame is
+      // actually resolved (GeoTIFF default: vertical follows the model's linear
+      // unit — so a metre CRS reads "m", a foot CRS "ft"). A local / unknown
+      // frame (linearUnit 'unknown') leaves this undefined so the deliverable
+      // elevation unit + the contour interval / relief show an honest
+      // "unverified" unit rather than a false metre. The complete deliverable,
+      // and the Analyse panel's readiness / recommend / map-sheet notes, read this.
+      verticalUnitToMetres:
+        cur?.verticalUnitToMetres ??
+        (cur && cur.linearUnit !== 'unknown' ? cur.linearUnitToMetres : undefined),
     };
   },
 });

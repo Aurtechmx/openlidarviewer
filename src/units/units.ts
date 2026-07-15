@@ -136,6 +136,39 @@ export function toMetresIfKnown(v: SourceUnits, scale: LinearUnitScale): Metres 
 export const radToDeg = (r: Radians): Degrees => degrees(raw(r) * DEG_PER_RAD);
 export const degToRad = (d: Degrees): Radians => radians(raw(d) / DEG_PER_RAD);
 
+// ── Display labels for values carried in a source frame's OWN unit. ──────────
+/**
+ * Horizontal-unit label for a value carried in a source frame's OWN linear unit
+ * (grid cell size, footprint extent), NOT in metres. A geographic frame reads
+ * `'degrees'`; a projected foot CRS (international or US survey) reads `'ft'`;
+ * every other case keeps the standing `'m'` default for back-compat, mirroring
+ * the DEM / DXF seams (`unitToMetres` defaults to 1). Horizontal is the one axis
+ * where an unresolved frame keeps `'m'` — the honest "never assert metres" rule
+ * applies to the VERTICAL label below.
+ */
+export function horizontalUnitLabel(opts: {
+  readonly isGeographic?: boolean | null;
+  readonly linearUnit?: string | null;
+}): string {
+  if (opts.isGeographic) return 'degrees';
+  return opts.linearUnit === 'foot' || opts.linearUnit === 'us-survey-foot' ? 'ft' : 'm';
+}
+
+/**
+ * Suffix (with a leading space) for a value in the source vertical unit:
+ * `' m'` | `' ft'` | `' units'` when the scale is known, and
+ * `' (vertical unit unverified)'` when it is not. The single formatting seam so
+ * no call site accidentally stamps a false `'m'` on an unknown-unit value.
+ */
+export function verticalUnitSuffix(metresPerUnit: number | null | undefined): string {
+  // Own unknown-check: verticalUnitLabel returns 'units' (not null) for an
+  // absent/invalid scale, so the "unverified" case is distinguished here.
+  if (metresPerUnit == null || !Number.isFinite(metresPerUnit) || metresPerUnit <= 0) {
+    return ' (vertical unit unverified)';
+  }
+  return ` ${verticalUnitLabel(metresPerUnit)}`;
+}
+
 // ── Area / volume, derived from the exact linear factor. ─────────────────────
 export const sqMetresToSqFeet = (a: SqMetres): number => raw(a) / (M_PER_FT * M_PER_FT);
 export const cubicMetresToCubicFeet = (v: CubicMetres): number =>

@@ -13,6 +13,7 @@
  */
 
 import type { SheetSize, SheetOrientation } from './mapSheetPdf';
+import { verticalUnitSuffix } from '../../units/units';
 
 /** Sheet-size choices offered in the dialog (value drives {@link SheetSize}). */
 export const SHEET_OPTIONS: ReadonlyArray<{ value: SheetSize; label: string }> = [
@@ -67,17 +68,24 @@ export function defaultMapTitle(p: { title?: string | null; basename: string }):
 
 /**
  * Default Project / Notes description derived from the scan:
- * `Contours from <basename> · interval <N> m · <CRS or 'no CRS'>`. The user can
- * edit it freely; this only seeds the field.
+ * `Contours from <basename> · interval <N> <unit> · <CRS or 'no CRS'>`. The user
+ * can edit it freely; this only seeds the field. The contour interval is in the
+ * source VERTICAL unit — `verticalUnitToMetres` labels it honestly ('m' / 'ft' /
+ * 'units'), and an absent / unknown scale yields "(vertical unit unverified)"
+ * rather than a false 'm'.
  */
 export function defaultMapNotes(p: {
   basename: string;
   intervalM: number | null;
   crs?: string | null;
+  /** Metres per source vertical (Z) unit, for the interval's unit label. */
+  verticalUnitToMetres?: number | null;
 }): string {
   const base = (p.basename ?? '').trim() || 'scan';
   const interval =
-    p.intervalM != null && Number.isFinite(p.intervalM) ? `${p.intervalM} m` : 'auto';
+    p.intervalM != null && Number.isFinite(p.intervalM)
+      ? `${p.intervalM}${verticalUnitSuffix(p.verticalUnitToMetres)}`
+      : 'auto';
   const crs = p.crs && p.crs.trim() ? p.crs.trim() : 'no CRS';
   return `Contours from ${base} · interval ${interval} · ${crs}`;
 }
