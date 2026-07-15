@@ -98,17 +98,26 @@ if (files.length === 0) {
 //             isolation: raise the timeout so parallel contention can't tip a
 //             genuine 14 s test past the strict 15 s global limit.
 // The fast buckets (unit/export/ui) keep the strict 15 s global timeout, so a
-// real regression there still trips it. They also pin an absolute worker cap so
-// a high-core machine can't over-subscribe the pool and hang at shutdown
-// (EPIPE / "Worker exited unexpectedly") even when every assertion passes.
+// real regression there still trips it. Every bucket pins a worker cap so a
+// high-core machine can't over-subscribe the pool and hang at shutdown
+// (EPIPE / "Worker exited unexpectedly") even when every assertion passes; 2
+// also matches the ~2-core GitHub-hosted runners for reproducibility.
+//
+// --maxWorkers is a SINGLE-VALUE vitest option — passing it twice makes vitest
+// reject the run ("Expected a single value … received [4, 2]") before a single
+// test loads. So this script is the ONE source of the cap: if the caller already
+// supplied --maxWorkers (a dev override), ours steps aside and theirs wins,
+// never appended on top.
+const callerSetsWorkers = rest.some((a) => a === '--maxWorkers' || a.startsWith('--maxWorkers='));
+const WORKERS = callerSetsWorkers ? [] : ['--maxWorkers=2'];
 const BUCKET_ARGS = {
-  unit: ['--maxWorkers=4'],
-  export: ['--maxWorkers=4'],
-  ui: ['--maxWorkers=4'],
-  slow: ['--maxWorkers=2', '--testTimeout=60000'],
-  terrain: ['--testTimeout=45000', '--maxWorkers=4'],
+  unit: [...WORKERS],
+  export: [...WORKERS],
+  ui: [...WORKERS],
+  terrain: [...WORKERS, '--testTimeout=45000'],
+  slow: [...WORKERS, '--testTimeout=60000'],
 };
-const bucketArgs = BUCKET_ARGS[arg] ?? [];
+const bucketArgs = BUCKET_ARGS[arg] ?? [...WORKERS];
 
 const result = spawnSync('npx', ['vitest', 'run', ...files, ...bucketArgs, ...rest], {
   cwd: ROOT,

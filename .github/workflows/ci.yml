@@ -3,7 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   pull_request:
+  workflow_dispatch:
 
 # Least privilege: every job only needs to read the checked-out code. Matches
 # the security workflow; tighten here so a compromised action can't write to the
@@ -34,6 +37,14 @@ jobs:
         run: npm run lint:unsafe-html
       - name: Release sync (version/lock/README/CHANGELOG/notes consistent)
         run: npm run lint:release-sync
+      - name: Layer-boundary lint (science/core imports no UI or three.js)
+        run: npm run lint:layer-boundaries
+      - name: Claim-register lint (YAML ↔ runtime registry in sync, no banned wording)
+        run: npm run lint:claim-register
+      - name: No source files git-ignored
+        run: npm run lint:no-ignored-src
+      - name: Generated claim registry is committed (regenerate → no diff)
+        run: npm run gen:claim-registry && git diff --exit-code
       - name: Bucket partition integrity (every test file in exactly one bucket)
         run: npm run test:buckets:verify
       # Two DISTINCT size contracts, both enforced:
@@ -67,11 +78,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Cap workers: GitHub-hosted runners have ~2 cores, so an uncapped vitest
-      # oversubscribes and the large unit bucket can stall/OOM. --reporter=dot
-      # keeps the log small so a failure is easy to locate.
+      # scripts/test-bucket.mjs is the SINGLE source of the worker cap (2, to
+      # match these ~2-core runners): passing --maxWorkers here as well would
+      # make vitest reject a duplicate single-value option before any test runs.
+      # --reporter=dot keeps the log small so a failure is easy to locate.
       - name: Test bucket — ${{ matrix.bucket }}
-        run: npm run test:${{ matrix.bucket }} -- --maxWorkers=2 --reporter=dot
+        run: npm run test:${{ matrix.bucket }} -- --reporter=dot
 
   smoke:
     runs-on: ubuntu-latest
@@ -97,6 +109,11 @@ jobs:
         # the plain build can 404 only on the live build. This is the gate that
         # catches that class of live-only breakage.
         run: npm run test:smoke:live
+      - name: Mobile responsive smoke (320 / 375 viewports — blocking)
+        # Deterministic layout/touch-target checks at the smallest viewports —
+        # no GPU-variable paths, so unlike the advisory e2e job below this one
+        # BLOCKS. Backs the mobile-usability claims in the release notes.
+        run: npx playwright test tests/e2e/visualsStudioMobile.spec.ts
 
   e2e:
     runs-on: ubuntu-latest
