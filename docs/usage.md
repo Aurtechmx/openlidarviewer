@@ -143,6 +143,17 @@ In embed mode the viewer posts one `ready` message to the host page once the ren
 | Toggle a layer | `{ type: 'toggle-layer', id: string, visible: boolean }` |
 | Focus an annotation | `{ type: 'focus-annotation', id: string }` |
 
+### Embedding origin and security
+
+The shipped deploy headers set `X-Frame-Options: SAMEORIGIN`, so out of the box the viewer only embeds in a page on the **same origin**. To embed it cross-origin, the deployer removes that header and sets a deliberate `Content-Security-Policy: frame-ancestors …` allow-list instead.
+
+The bridge accepts commands only from the actual embedding parent frame. To restrict which origins may drive a cross-origin embed, pass an allow-list on the viewer URL:
+
+- `?embedParent=https://host.example.com` — sets both the `ready` target and the inbound allow-list to that one origin.
+- `?embedOrigins=https://a.example.com,https://b.example.com` — a comma-separated inbound allow-list.
+
+Without an allow-list the bridge still shape-validates every message and rejects any not sent by the parent frame, but it does not filter by origin — so configure one for any cross-origin deployment.
+
 ## Developer diagnostics
 
 Two URL flags surface developer diagnostics; neither appears in a normal session.
