@@ -684,9 +684,9 @@ button:disabled { cursor: not-allowed; }
 .olv-url-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-url-hint { font-size: var(--text-xs); color: var(--text-faint); max-width: 360px; line-height: 1.5; }
 
-/* Catalog panel — verified public LiDAR dataset picker on the empty
- * state. Surfaces the curated dropdown (every URL probed at release time)
- * and the optional Planetary Computer "Search by location" disclosure.
+/* Catalog panel — curated public LiDAR dataset picker on the empty
+ * state. Surfaces the curated dropdown (each URL hand-vetted) and the
+ * optional Planetary Computer "Search by location" disclosure.
  * Mirrors the URL row visually (input + button + hint) and adds a status
  * line plus a scrollable result list for the STAC search results. */
 .olv-catalog {

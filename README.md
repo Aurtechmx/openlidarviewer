@@ -74,9 +74,9 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 ### Core viewer
 - Browser-based point-cloud visualization, no install
 - Local-first scan inspection — nothing is uploaded
-- WebGPU rendering with an automatic, fully tested WebGL 2 fallback
+- WebGPU rendering with an automatic WebGL 2 fallback
 - Import: LAS, LAZ, E57, PLY, OBJ, GLB, GLTF, XYZ, CSV, PCD, PTX, PTS
-- Export: PLY, OBJ, XYZ, CSV, and PNG snapshots
+- Export: LAS (1.2 / 1.4), PLY, OBJ, XYZ, CSV, and PNG snapshots
 - Budget-aware fast loading of large LAS/LAZ surveys — header preflight, stride decoding, a memory-safety guard, staged progress, and a load that can be cancelled mid-flight
 - Chunked, bounded-memory reading of large text point clouds (XYZ, CSV, PTS); graceful degradation on weak devices so a large survey reduces in density instead of crashing
 - A universal file-open summary and clear, categorised load-error messages
@@ -85,7 +85,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - COPC streaming — a `.copc.laz` file, on disk or hosted at a URL, opens through progressive, octree-based, view-dependent streaming with worker-based decoding and bounded memory; never a full-file load. A remote scan opens from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link
 - EPT (Entwine Point Tile) streaming — local and remote, `binary` and `laszip` tiles
 - 3D Tiles / `.pnts` (experimental, not yet user-facing) — parser foundations exist for Cesium-style tilesets, but dropping a `.pnts` file or a `tileset.json` URL does not open them yet; treat the format as planned, not shipped
-- A verified public-LiDAR catalog of 18+ hand-vetted COPC / EPT URLs, every one probed at release time
+- A curated catalog of 14 hand-vetted public COPC / EPT datasets
 
 ### Navigation & camera
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look

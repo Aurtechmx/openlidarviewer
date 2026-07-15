@@ -1,11 +1,10 @@
 /**
  * src/ui/CatalogPanel.ts
  *
- * The verified-public-LiDAR-dataset picker that lives in the empty
+ * The curated-public-LiDAR-dataset picker that lives in the empty
  * state. It owns two responsibilities and two only:
- *   1. Surface a curated dropdown of verified public COPC / EPT URLs.
- *      Every entry was probed at release time and has a known-working
- *      stream.
+ *   1. Surface a curated dropdown of hand-vetted public COPC / EPT URLs.
+ *      Each entry is hand-vetted against a known-working stream.
  *   2. On Open click, hand the selected URL to `onPickUrl`. The caller
  *      (main.ts) routes the URL through `handleRemoteUrl`, which
  *      detects the format (COPC file vs. EPT manifest) and dispatches
