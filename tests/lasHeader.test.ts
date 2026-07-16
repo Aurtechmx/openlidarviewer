@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseLasHeader } from '../src/io/lasHeader';
+import { LoadError } from '../src/io/loadErrors';
 
 const fixturePath = fileURLToPath(new URL('./fixtures/tiny.las', import.meta.url));
 
@@ -65,5 +66,52 @@ describe('parseLasHeader — validation', () => {
 
   test('throws a clear error on a buffer too small to hold a header', () => {
     expect(() => parseLasHeader(new ArrayBuffer(100))).toThrow(/too small/i);
+  });
+});
+
+describe('parseLasHeader — corrupted numeric header fields', () => {
+  // Scale, offset and bounds feed computeOrigin and the per-record decode
+  // (`local = (int * scale + offset) - origin`). A single non-finite value
+  // would turn every coordinate NaN and the load would "succeed" into an
+  // empty scene, so the parser must refuse the file with the typed error the
+  // pipeline maps to a clear message.
+
+  test('a NaN min-X bound raises a typed malformed-file error', () => {
+    const buf = loadFixture();
+    new Uint8Array(buf).fill(0xff, 187, 195); // min-X float64 → NaN
+    let caught: unknown;
+    try {
+      parseLasHeader(buf);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(LoadError);
+    expect((caught as LoadError).category).toBe('malformed-file');
+  });
+
+  test('a zero X scale factor is rejected', () => {
+    const buf = loadFixture();
+    new Uint8Array(buf).fill(0x00, 131, 139); // scale-X float64 → 0
+    expect(() => parseLasHeader(buf)).toThrow(LoadError);
+  });
+
+  test('a negative X scale factor is rejected as malformed', () => {
+    // No LAS writer emits a negative scale — it would mirror the axis.
+    const buf = loadFixture();
+    new DataView(buf).setFloat64(131, -0.001, true); // scale-X float64 → -0.001
+    let caught: unknown;
+    try {
+      parseLasHeader(buf);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(LoadError);
+    expect((caught as LoadError).category).toBe('malformed-file');
+  });
+
+  test('a NaN X offset is rejected', () => {
+    const buf = loadFixture();
+    new Uint8Array(buf).fill(0xff, 155, 163); // offset-X float64 → NaN
+    expect(() => parseLasHeader(buf)).toThrow(LoadError);
   });
 });
