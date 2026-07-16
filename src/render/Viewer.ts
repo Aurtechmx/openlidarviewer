@@ -3029,6 +3029,10 @@ export class Viewer {
     polygon: ReadonlyArray<[number, number, number]>,
     newClass: number,
     includeIf?: (currentClass: number) => boolean,
+    // World up of the cloud's frame. Omit for the Z-up convention; a
+    // non-Z-up layer transform (v0.6 layer model) passes its true up so the
+    // polygon and points project onto the same basis.
+    up?: Vec3,
   ): ClassEditResult {
     const entry = this._clouds.get(id);
     if (!entry || !entry.cloud.classification) {
@@ -3043,6 +3047,7 @@ export class Viewer {
         polygon,
         newClass,
         includeIf,
+        up,
       });
     });
     if (result.changedCount > 0) {

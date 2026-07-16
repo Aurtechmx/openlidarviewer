@@ -100,10 +100,12 @@ export function applyIndexReclassify(
 /**
  * Apply a polygon-based re-classification. Every point whose horizontal
  * projection falls inside the polygon gets its class set to `newClass`
- * (regardless of its current class). The horizontal projection uses Z as
- * the height axis when `up === [0, 0, 1]` (the OpenLiDARViewer
- * convention); for any other up axis, the caller projects the polygon
- * vertices into 2D themselves and passes the projected ring.
+ * (regardless of its current class). When `up === [0, 0, 1]` (the
+ * OpenLiDARViewer convention) the horizontal projection is world XY. For any
+ * other `up`, the polygon vertices AND the points are projected onto the same
+ * (east, north) orthonormal basis of the plane perpendicular to `up`, so the
+ * height axis is ignored consistently — rotated, Y-up, tilted and non-origin
+ * scans reclassify the geometrically correct points.
  *
  * Optionally honours an inclusion predicate — when supplied, only points
  * for which `includeIf(currentClass)` returns true are rewritten. The
@@ -136,49 +138,65 @@ export function applyPolygonReclassify(input: PolygonReclassifyInput): ClassEdit
   const isZUp =
     Math.abs(up[2] - 1) < 1e-6 && Math.abs(up[0]) < 1e-6 && Math.abs(up[1]) < 1e-6;
 
-  // Project polygon onto the horizontal plane once.
+  // Build the horizontal basis ONCE. For the Z-up convention the horizontal
+  // plane is world XY (east = X, north = Y). For any other up axis, project
+  // onto the plane perpendicular to `up` using an (east, north) orthonormal
+  // basis — and the points MUST use this same basis, not raw XY, or the
+  // point-in-polygon test compares mismatched coordinate spaces.
+  let ex = 1;
+  let ey = 0;
+  let ez = 0;
+  let nx = 0;
+  let ny = 1;
+  let nz = 0;
+  if (!isZUp) {
+    const ux = up[0];
+    const uy = up[1];
+    const uz = up[2];
+    // aux: a vector far from parallel to up, so up × aux is well-conditioned.
+    const auxAlongZ = Math.abs(uz) < 0.99;
+    const auxX = auxAlongZ ? 0 : 1;
+    const auxY = 0;
+    const auxZ = auxAlongZ ? 1 : 0;
+    // east = normalize(up × aux)
+    const eastX = uy * auxZ - uz * auxY;
+    const eastY = uz * auxX - ux * auxZ;
+    const eastZ = ux * auxY - uy * auxX;
+    const eastLen = Math.hypot(eastX, eastY, eastZ) || 1;
+    ex = eastX / eastLen;
+    ey = eastY / eastLen;
+    ez = eastZ / eastLen;
+    // north = up × east (already unit: up and east are orthonormal)
+    nx = uy * ez - uz * ey;
+    ny = uz * ex - ux * ez;
+    nz = ux * ey - uy * ex;
+  }
+
+  // Project the polygon ring onto the basis once.
   const polyXY: { x: number; y: number }[] = [];
   for (const p of input.polygon) {
-    if (isZUp) {
-      polyXY.push({ x: p[0], y: p[1] });
-    } else {
-      // For non Z-up, project onto the plane perpendicular to up.
-      // Pick east as the first basis vector that's not nearly parallel to up.
-      const ux = up[0];
-      const uy = up[1];
-      const uz = up[2];
-      const auxAlongZ = Math.abs(uz) < 0.99;
-      const auxX = auxAlongZ ? 0 : 1;
-      const auxY = 0;
-      const auxZ = auxAlongZ ? 1 : 0;
-      // east = normalize(up × aux)
-      const eastX = uy * auxZ - uz * auxY;
-      const eastY = uz * auxX - ux * auxZ;
-      const eastZ = ux * auxY - uy * auxX;
-      const eastLen = Math.hypot(eastX, eastY, eastZ);
-      const ex = eastX / eastLen;
-      const ey = eastY / eastLen;
-      const ez = eastZ / eastLen;
-      // north = up × east
-      const northX = uy * ez - uz * ey;
-      const northY = uz * ex - ux * ez;
-      const northZ = ux * ey - uy * ex;
-      polyXY.push({
-        x: p[0] * ex + p[1] * ey + p[2] * ez,
-        y: p[0] * northX + p[1] * northY + p[2] * northZ,
-      });
-    }
+    polyXY.push(
+      isZUp
+        ? { x: p[0], y: p[1] }
+        : {
+            x: p[0] * ex + p[1] * ey + p[2] * ez,
+            y: p[0] * nx + p[1] * ny + p[2] * nz,
+          },
+    );
   }
 
   const filter = input.includeIf;
+  const pos = input.positions;
   let changed = 0;
 
   for (let i = 0; i < n; i++) {
-    const px = input.positions[i * 3];
-    const py = input.positions[i * 3 + 1];
-    // Fast-path Z-up: the XY of the point is just (px, py).
-    const hx = isZUp ? px : px /* general case: project below */;
-    const hy = isZUp ? py : py;
+    const px = pos[i * 3];
+    const py = pos[i * 3 + 1];
+    const pz = pos[i * 3 + 2];
+    // Z-up fast path: horizontal = (px, py). Otherwise project onto the same
+    // (east, north) basis as the polygon, height included.
+    const hx = isZUp ? px : px * ex + py * ey + pz * ez;
+    const hy = isZUp ? py : px * nx + py * ny + pz * nz;
     if (!pointInPolygon2D(hx, hy, polyXY)) continue;
     const current = input.classification[i];
     if (filter && !filter(current)) continue;
