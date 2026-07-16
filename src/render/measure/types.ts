@@ -118,6 +118,15 @@ export interface VolumeRecord {
    * first when scanning the report.
    */
   confidence: 'high' | 'medium' | 'low';
+  /**
+   * Points inside the footprint whose height was non-finite
+   * (organized-cloud invalid points, loader sentinels) and was excluded
+   * from the integration — see `VolumeResult.skippedNonFinite`. The
+   * fill/cut figures could not see these returns, so the record carries
+   * the count instead of presenting full coverage. Absent (treat as 0)
+   * for fully-finite clouds and for records from older session files.
+   */
+  skippedNonFinite?: number;
 }
 
 /** A single placed measurement. */

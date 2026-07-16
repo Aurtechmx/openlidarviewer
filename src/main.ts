@@ -671,7 +671,7 @@ function deriveVolumeRecord(
   const inPoly = result.pointsInPolygon;
   const confidence: 'high' | 'medium' | 'low' =
     inPoly >= 1000 ? 'high' : inPoly >= 100 ? 'medium' : 'low';
-  return {
+  const record: import('./render/measure/types').VolumeRecord = {
     fill: result.fill,
     cut: result.cut,
     net: result.net,
@@ -681,6 +681,12 @@ function deriveVolumeRecord(
     density: result.density,
     confidence,
   };
+  // Non-finite returns inside the footprint were excluded from the
+  // integration — keep the count on the record so the partial coverage
+  // stays disclosed.
+  const skippedNonFinite = result.skippedNonFinite ?? 0;
+  if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
+  return record;
 }
 
 // ── Lasso volume button in the measure dock ──────────────────────────────

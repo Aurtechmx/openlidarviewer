@@ -593,7 +593,7 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
     || !VOLUME_CONFIDENCE.includes(v.confidence as VolumeRecord['confidence'])) {
     return undefined;
   }
-  return {
+  const record: VolumeRecord = {
     fill: v.fill as number,
     cut: v.cut as number,
     net: v.net as number,
@@ -603,6 +603,12 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
     density: v.density as number,
     confidence: v.confidence as VolumeRecord['confidence'],
   };
+  // Optional partial-coverage disclosure (points inside the footprint the
+  // integration had to skip). Round-trips when present; older files omit it.
+  if (isFiniteNum(v.skippedNonFinite) && v.skippedNonFinite > 0) {
+    record.skippedNonFinite = v.skippedNonFinite;
+  }
+  return record;
 }
 
 const TRUST_GRADES: readonly TrustGrade[] = ['green', 'yellow', 'red'];
