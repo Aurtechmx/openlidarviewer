@@ -383,6 +383,56 @@ export function parseSession(text: string): InspectionSession {
   return out;
 }
 
+/** A session's geometry rebased into a target cloud's local frame. */
+export interface RebasedSessionGeometry {
+  /** Measurements with vertices shifted into the target frame. */
+  measurements: Measurement[];
+  /** Annotations with local positions shifted into the target frame. */
+  annotations: Annotation[];
+  /** `session.origin − cloudOrigin`, in f64. All-zero when the frames match. */
+  delta: Vec3;
+}
+
+/**
+ * Rebase a session's LOCAL measurement/annotation vertices from the frame they
+ * were CAPTURED in (`session.origin`) into the frame of the cloud they are being
+ * IMPORTED onto (`cloudOrigin`), so they land at the SAME world position.
+ *
+ * Both stores keep vertices as `local = world − origin`. A session saved over
+ * tile A (origin Oa) imported onto tile B (origin Ob) must shift every vertex by
+ * `delta = Oa − Ob`: then `local_b + Ob = local_a + Oa` — identical world
+ * coordinates — instead of being displaced by the two origins' difference (the
+ * verbatim-load bug, which the exporter would then compound by adding Ob).
+ *
+ * Pure: returns fresh arrays and vertex copies, never mutating the session. A
+ * zero delta (matching frames, or a session/cloud both at the origin) copies
+ * the geometry through unchanged.
+ */
+export function rebaseSessionGeometry(
+  session: InspectionSession,
+  cloudOrigin: readonly number[],
+): RebasedSessionGeometry {
+  const dx = session.origin[0] - (cloudOrigin[0] ?? 0);
+  const dy = session.origin[1] - (cloudOrigin[1] ?? 0);
+  const dz = session.origin[2] - (cloudOrigin[2] ?? 0);
+  const measurements = session.measurements.map((m) => ({
+    ...m,
+    points: m.points.map((p): Vec3 => [p[0] + dx, p[1] + dy, p[2] + dz]),
+  }));
+  const annotations = session.annotations.map((a) => ({
+    ...a,
+    localPosition: {
+      x: a.localPosition.x + dx,
+      y: a.localPosition.y + dy,
+      z: a.localPosition.z + dz,
+    },
+    // Drop the cached world position — it was derived against the OLD frame and
+    // the viewer recomputes it from the rebased local plus the active origin.
+    worldPosition: undefined,
+  }));
+  return { measurements, annotations, delta: [dx, dy, dz] };
+}
+
 // --- validation helpers ----------------------------------------------------
 
 const CLIP_MODES: readonly ClipMode[] = ['keep-inside', 'keep-outside'];
