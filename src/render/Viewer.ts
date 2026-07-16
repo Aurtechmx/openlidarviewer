@@ -43,6 +43,8 @@ import {
   uniformArray,
   attribute,
   materialPointSize,
+  instanceIndex,
+  fract,
   screenUV,
   screenSize,
   log2,
@@ -62,6 +64,7 @@ import {
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
+import { PHI_CONJUGATE } from './streaming/fadeDither';
 import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
 import {
@@ -1063,6 +1066,19 @@ export class Viewer {
    * is a silent no-op there, exactly like the class mask.
    */
   private readonly _materialsWithInten = new WeakSet<THREE.PointsNodeMaterial>();
+
+  // Streaming node dissolve (COPC/EPT LOD transition). A fading node folds a
+  // per-point OPAQUE screen-door dither into its size graph — a hidden point's
+  // sprite size is multiplied by 0, exactly like the class/elevation masks, so
+  // there is no transparency, no depth-sort z-fight, and EDL stays exact. Each
+  // fading material has its own `fadeProgress` uniform (0 = fully dissolved …
+  // 1 = fully materialised); the fold is dropped again the moment the node
+  // settles, so a settled node keeps the plain graph (no per-frame dither cost).
+  private readonly _materialsWithFade = new WeakSet<THREE.PointsNodeMaterial>();
+  private readonly _fadeUniforms = new WeakMap<
+    THREE.PointsNodeMaterial,
+    ReturnType<typeof uniform>
+  >();
 
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
@@ -5510,7 +5526,10 @@ export class Viewer {
     const foldClass = this._materialsWithClass.has(material) && this._classFiltered;
     const foldElev = this._materialsWithElev.has(material) && this._elevFilterEnabled.value !== 0;
     const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
-    if (!foldClass && !foldElev && !foldInten) {
+    // A streaming node mid-dissolve folds a per-point opaque dither (same
+    // size×mask shape as the filters); dropped again the moment it settles.
+    const foldFade = this._materialsWithFade.has(material);
+    if (!foldClass && !foldElev && !foldInten && !foldFade) {
       material.sizeNode = (
         adaptive ? this._adaptiveSizeNode : null
       ) as typeof material.sizeNode;
@@ -5523,7 +5542,61 @@ export class Viewer {
     if (foldElev) node = node.mul(this._elevMaskMultiplier());
     if (foldClass) node = node.mul(this._classMaskMultiplier());
     if (foldInten) node = node.mul(this._intenMaskMultiplier());
+    if (foldFade) node = node.mul(this._fadeMaskMultiplier(material));
     material.sizeNode = node as typeof material.sizeNode;
+  }
+
+  /**
+   * The per-point dissolve multiplier for a fading streaming node. A stable
+   * Weyl hash of the instance index (mirrors `fadeHashUnit` in fadeDither.ts)
+   * is compared against the node's `fadeProgress` uniform: `step(hash, progress)`
+   * is `1` (keep) when `hash <= progress`, else `0` — a dissolved-out point's
+   * sprite size is multiplied by 0, so the node materialises/disappears fully
+   * OPAQUE (no transparency, no depth-sort z-fight, EDL exact).
+   */
+  private _fadeMaskMultiplier(material: THREE.PointsNodeMaterial): TslNode {
+    const progress = this._fadeUniforms.get(material) as TslNode;
+    const hash: TslNode = fract(float(instanceIndex).mul(PHI_CONJUGATE));
+    return step(hash, progress);
+  }
+
+  /**
+   * Begin a streaming node's opaque dissolve: fold the per-point dither into its
+   * size graph, then recompile (a NodeMaterial keeps its old shader until
+   * `needsUpdate`, so without this an already-compiled node never picks up the
+   * fold). Returns the progress the dissolve starts from. A fresh/settled node
+   * seeds at `startProgress`; a node whose dissolve is already in flight (a
+   * fade-in interrupted by eviction) KEEPS its current progress, so it dissolves
+   * out from where it got to rather than snapping to full density.
+   */
+  beginNodeDissolve(material: THREE.PointsNodeMaterial, startProgress: number): number {
+    const existing = this._fadeUniforms.get(material);
+    const u = existing ?? uniform(startProgress);
+    if (!existing) u.value = startProgress;
+    this._fadeUniforms.set(material, u);
+    this._materialsWithFade.add(material);
+    this._applySizeMode(material);
+    material.needsUpdate = true;
+    return u.value as number;
+  }
+
+  /** Advance a dissolving node's progress (0 = fully dissolved … 1 = fully shown). */
+  setNodeDissolveProgress(material: THREE.PointsNodeMaterial, progress: number): void {
+    const u = this._fadeUniforms.get(material);
+    if (u) u.value = progress;
+  }
+
+  /**
+   * End a node's dissolve: drop the dither fold so the settled mesh reverts to
+   * the plain size graph (no per-frame dither cost once materialised), then
+   * recompile so the GPU actually runs the plain graph.
+   */
+  endNodeDissolve(material: THREE.PointsNodeMaterial): void {
+    if (!this._materialsWithFade.has(material)) return;
+    this._materialsWithFade.delete(material);
+    this._fadeUniforms.delete(material);
+    this._applySizeMode(material);
+    material.needsUpdate = true;
   }
 
   /**
