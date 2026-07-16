@@ -33,7 +33,7 @@ OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. Yo
 
 The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that LiDAR work needs.
 
-It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is a browser-native LiDAR inspection and terrain-analysis platform focused on transparency, validation, and local-first processing.
+It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is honesty-first: every result discloses its coverage, method, and uncertainty, and its terrain and contour exports are evidence-gated so they refuse to over-claim.
 
 ## Live Demo
 
@@ -182,6 +182,33 @@ See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md)
 for the contract definitions and the honesty fields every result must carry,
 and [`docs/validation/terrain-validation-matrix.md`](docs/validation/terrain-validation-matrix.md)
 for how each terrain product is validated.
+
+## Contour Studio
+
+Contour Studio is the post-analysis step that turns an analysed scan into a
+contour deliverable, kept out of the Analyse panel so the map-making doesn't
+crowd the terrain work. Once a scan is analysed, a Terrain Products launcher
+appears; its state — hidden, unavailable, exploratory, or available — is read
+from the analysis result, and opening it reveals the Studio workspace.
+
+You pick a purpose: Engineering Plan, Survey Review, Terrain Research,
+Presentation Map, or Custom. A purpose only bundles presentation defaults for
+settings you haven't overridden; because the state carries no evidence field,
+switching purpose cannot raise a claim. The geometry keeps two forms apart —
+analytical contours are the exact isolines of the grid, while cartographic
+contours are generalised for legibility, reference the analytical geometry's
+hash, and are never labelled exact.
+
+Every export routes through one evidence gate that can only downgrade —
+validated, exploratory, or blocked. A blocked product returns a diagnostic
+instead of a polished file, an exploratory one is watermarked, and the permit
+decision is stamped into each artifact's provenance. Exports cover contour
+vectors (GeoJSON, DXF, SVG), a map-sheet PDF, a DEM raster package, a terrain
+intelligence report, and a complete ZIP with a SHA256SUMS checksum manifest.
+Validation is internal hold-out only: nothing is survey-grade, and no output
+asserts certification.
+
+Full detail is in [`docs/contour-studio.md`](docs/contour-studio.md).
 
 ## Screenshots
 
@@ -466,6 +493,16 @@ OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 **Standards & formats** — ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems).
 
 Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-perf, COPC, and Entwine this viewer relies on.
+
+## Validation & Reproducibility
+
+For reviewers, and anyone who wants to check the claims above rather than take them on trust:
+
+- [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md) — install and run the offline test suite from a clean clone in about two minutes.
+- [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md) — what each terrain and measurement claim validates, what it does not, and the evidence ceiling behind it.
+- [REPRODUCIBILITY.md](REPRODUCIBILITY.md) — the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
+- [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md) — how to evaluate the software artifact without special hardware or private data.
+- [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md) — where the test fixtures and streamed sample datasets come from, and how they are licensed.
 
 ## License
 
