@@ -313,7 +313,7 @@ export class StreamingRenderer {
       decoded.classification,
       decoded.intensity,
     );
-    this._viewer.addStreamingMesh(handle.mesh, decoded, node.record.key.depth);
+    this._viewer.addStreamingMesh(handle.mesh, decoded, node.record.key.depth, node.record.id);
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,
       colorAttr: handle.colorAttr,

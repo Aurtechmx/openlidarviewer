@@ -190,6 +190,11 @@ import {
   DEFAULT_PROFILE_SAMPLE_COUNT,
 } from './measure/profileSampler';
 import { volumeCutFill } from './measure/volume';
+import { integrableClouds, isIntegrable } from './integrableClouds';
+import {
+  sampleStridedTerrain,
+  type KeyedTerrainStreamBuffer,
+} from './terrainStreamSample';
 import {
   applyClassSwap,
   applyPolygonReclassify,
@@ -339,6 +344,12 @@ interface StreamingPickEntry {
   decoded: DecodedChunk;
   /** Octree depth — feeds the "still refining" hint via `selectStreamingPick`. */
   depth: number;
+  /**
+   * Deterministic octree node id (`"depth-x-y-z"`). Nodes populate this map in
+   * decode-completion (arrival) order, so terrain sampling sorts by this stable
+   * key to stay reproducible across runs regardless of streaming timing.
+   */
+  key: string;
 }
 
 /** UI-facing navigation events the app can subscribe to. */
@@ -1361,7 +1372,9 @@ export class Viewer {
           c: ArrayLike<number> | null | undefined,
           pos: Float32Array,
         ): ArrayLike<number> | undefined => (c && c.length === pos.length / 3 ? c : undefined);
-        for (const { cloud } of this._clouds.values()) {
+        // Only clouds the picker would place profile vertices on — visible and
+        // unlocked — feed the sample, so a hidden or locked layer can't skew it.
+        for (const { cloud } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
             const cls = aligned(cloud.classification, cloud.positions);
             if (cls) anyClass = true;
@@ -1440,7 +1453,9 @@ export class Viewer {
         let total = 0;
         let staticPoints = 0;
         let streamingPoints = 0;
-        for (const { cloud } of this._clouds.values()) {
+        // Match the picker: only visible, unlocked clouds feed the cut/fill, so
+        // a soloed epoch's volume never absorbs a hidden epoch's points behind it.
+        for (const { cloud } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
             buffers.push(cloud.positions);
             total += cloud.positions.length;
@@ -1910,12 +1925,13 @@ export class Viewer {
    * pick points and read their per-point attributes on streaming nodes. The
    * node's octree `depth` is recorded too so the inspector can show a
    * "still refining" hint when a pick lands on a coarse node that still has
-   * deeper siblings loading.
+   * deeper siblings loading. The node's stable `key` is recorded so terrain
+   * sampling can order nodes reproducibly regardless of arrival order.
    */
-  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk, depth: number): void {
+  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk, depth: number, key: string): void {
     this._scene.add(mesh);
     this._streamingMeshes.add(mesh);
-    this._streamingPickData.set(mesh, { decoded, depth });
+    this._streamingPickData.set(mesh, { decoded, depth, key });
   }
 
   /**
@@ -2357,7 +2373,8 @@ export class Viewer {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
     // and buildings before contouring.
-    const buffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+    const staticBuffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+    const streamingBuffers: KeyedTerrainStreamBuffer[] = [];
     let staticPoints = 0;
     let streamingPoints = 0;
     let anyClass = false;
@@ -2367,55 +2384,40 @@ export class Viewer {
       pos: Float32Array,
     ): ArrayLike<number> | undefined =>
       cls && cls.length === pos.length / 3 ? cls : undefined;
-    for (const { cloud } of this._clouds.values()) {
+    // Match the picker: only visible, unlocked clouds contribute to the surface.
+    for (const { cloud } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
         const cls = alignedClass(cloud.classification, cloud.positions);
         if (cls) anyClass = true;
-        buffers.push({ pos: cloud.positions, cls });
+        staticBuffers.push({ pos: cloud.positions, cls });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
       }
     }
-    for (const { decoded } of this._streamingPickData.values()) {
+    for (const { decoded, key } of this._streamingPickData.values()) {
       if (decoded.positions && decoded.positions.length > 0) {
         const cls = alignedClass(decoded.classification, decoded.positions);
         if (cls) anyClass = true;
-        buffers.push({ pos: decoded.positions, cls });
+        streamingBuffers.push({ key, pos: decoded.positions, cls });
         streamingPoints += decoded.positions.length / 3;
       }
     }
     const totalPoints = staticPoints + streamingPoints;
     if (totalPoints === 0) return null;
 
-    // Stride DURING the walk so a multi-million-point cloud is never fully
-    // copied into one giant intermediate buffer (that allocation could
-    // OOM). Non-finite points are skipped. The global counter `gi` keeps
-    // the stride consistent across buffer boundaries.
-    const stride = Math.max(1, Math.ceil(totalPoints / maxPoints));
-    const cap = Math.ceil(totalPoints / stride);
-    const positions = new Float32Array(cap * 3);
-    // 255 = "no class channel" sentinel; terrain treats it as "keep".
-    const classification = anyClass ? new Uint8Array(cap).fill(255) : undefined;
-    let gi = 0;
-    let oi = 0;
-    for (const { pos, cls } of buffers) {
-      const pts = (pos.length / 3) | 0;
-      for (let i = 0; i < pts; i++, gi++) {
-        if (gi % stride !== 0 || oi >= cap) continue;
-        const s = i * 3;
-        const x = pos[s];
-        const y = pos[s + 1];
-        const z = pos[s + 2];
-        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
-          positions[oi * 3] = x;
-          positions[oi * 3 + 1] = y;
-          positions[oi * 3 + 2] = z;
-          if (classification && cls) classification[oi] = cls[i];
-          oi++;
-        }
-      }
-    }
-    if (oi === 0) return null;
+    // Subsample deterministically: static clouds keep their stable Map order and
+    // streaming nodes are ordered by octree key, so the same resident set yields
+    // the same points regardless of decode/network arrival timing — the exported
+    // grade and contour geometry must not drift run-to-run. Striding happens
+    // inside so a multi-million-point cloud is never copied whole.
+    const sample = sampleStridedTerrain(
+      staticBuffers,
+      streamingBuffers,
+      totalPoints,
+      maxPoints,
+      anyClass,
+    );
+    if (!sample) return null;
     // `residentOnly` means a PARTIAL stream — only some octree nodes are
     // resident, so the surface assessment must stay a "Preview". Previously
     // this was hard-wired true for ANY streaming scan, so a fully-streamed COPC
@@ -2430,10 +2432,10 @@ export class Viewer {
       if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
     }
     return {
-      positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
-      classification: classification ? (oi === cap ? classification : classification.subarray(0, oi)) : undefined,
+      positions: sample.positions,
+      classification: sample.classification,
       residentOnly,
-      sampled: stride > 1,
+      sampled: sample.sampled,
       totalPoints,
       verticalAxisHint: verticalAxisHintForSources(staticFormats, streamingPoints > 0),
     };
@@ -3882,7 +3884,7 @@ export class Viewer {
     // attached to the result so the inspector caption reads
     // "estimated (sampled — n%)" when the stride > 1.
     let candidatePointCount = 0;
-    for (const [, entry] of this._clouds) {
+    for (const entry of integrableClouds(this._clouds.values())) {
       candidatePointCount += entry.cloud.positions.length / 3;
     }
     if (this._streaming) {
@@ -3910,6 +3912,9 @@ export class Viewer {
     // sample. (See `_cloudWasReduced`.)
     let anySourceReduced = false;
     for (const [id, entry] of this._clouds) {
+      // Skip hidden / locked layers — the picker won't place vertices on them,
+      // so the lasso volume must not select through them either.
+      if (!isIntegrable(entry)) continue;
       const positions =
         stride === 1
           ? entry.cloud.positions
