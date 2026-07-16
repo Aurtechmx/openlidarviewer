@@ -8,6 +8,7 @@
  */
 
 import type { PointAttributes } from './loadPlan';
+import { LoadError } from './loadErrors';
 import { parseCrsFromVlrs } from './crs';
 import type { CrsInfo } from './crs';
 
@@ -165,6 +166,23 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
     view.getFloat64(OFFSET_MAX_Y, true),
     view.getFloat64(OFFSET_MAX_Z, true),
   ];
+
+  // Every coordinate the viewer produces flows from these fields —
+  // `local = (int * scale + offset) - origin`, with the origin floored from
+  // `min`. A single non-finite value (or a non-positive scale — no LAS
+  // writer emits one) from a truncated or corrupt header would quietly turn
+  // the whole cloud into NaNs: the load "succeeds" into an empty scene, and
+  // the NaN origin leaks into measurements and exports. Refuse the file here
+  // instead, with the typed error the load pipeline maps to a clear message.
+  if (scale.some((v) => !Number.isFinite(v) || v <= 0)) {
+    throw new LoadError('malformed-file', 'LAS header scale factor is invalid.');
+  }
+  if (offset.some((v) => !Number.isFinite(v))) {
+    throw new LoadError('malformed-file', 'LAS header offset is invalid.');
+  }
+  if (min.some((v) => !Number.isFinite(v)) || max.some((v) => !Number.isFinite(v))) {
+    throw new LoadError('malformed-file', 'LAS header bounds are invalid.');
+  }
 
   // Provenance fields — present in the header for every LAS version.
   const systemIdentifier = readAscii(view, OFFSET_SYSTEM_IDENTIFIER, CHAR_FIELD_LENGTH);

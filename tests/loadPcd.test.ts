@@ -70,6 +70,59 @@ describe('loadPcd — binary', () => {
   });
 });
 
+/** Build a minimal binary PCD whose `x y z` fields are 8-byte floats. */
+function makeDoubleBinaryPcd(points: [number, number, number][]): ArrayBuffer {
+  const header =
+    `# .PCD v0.7\nVERSION 0.7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\n` +
+    `COUNT 1 1 1\nWIDTH ${points.length}\nHEIGHT 1\n` +
+    `VIEWPOINT 0 0 0 1 0 0 0\nPOINTS ${points.length}\nDATA binary\n`;
+  const headerBytes = new TextEncoder().encode(header);
+  const buf = new ArrayBuffer(headerBytes.length + points.length * 24);
+  new Uint8Array(buf).set(headerBytes, 0);
+  const view = new DataView(buf);
+  points.forEach((p, i) => {
+    const base = headerBytes.length + i * 24;
+    view.setFloat64(base, p[0], true);
+    view.setFloat64(base + 8, p[1], true);
+    view.setFloat64(base + 16, p[2], true);
+  });
+  return buf;
+}
+
+describe('loadPcd — UTM-scale coordinates keep sub-millimetre precision', () => {
+  // A bare f32 snaps 500000.123 to a ~3 cm grid and 4000000.123 to ~25 cm —
+  // the origin subtraction must happen in f64, BEFORE the f32 narrowing, for
+  // the coordinate-bridge contract to mean anything.
+  const utmPoints: [number, number, number][] = [
+    [500000.123, 4000000.123, 210.25],
+    [500010.623, 4000010.623, 215.75],
+  ];
+
+  test('ascii body: origin + local position reconstructs within 1 mm', async () => {
+    const pcd =
+      `# .PCD v0.7\nVERSION 0.7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\n` +
+      `COUNT 1 1 1\nWIDTH 2\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 2\nDATA ascii\n` +
+      utmPoints.map((p) => p.join(' ')).join('\n') + '\n';
+    const pc = await loadPcd(new TextEncoder().encode(pcd).buffer, 'utm.pcd');
+    expect(pc.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      expect(Math.abs(pc.positions[i * 3] + pc.origin[0] - utmPoints[i][0])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 1] + pc.origin[1] - utmPoints[i][1])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 2] + pc.origin[2] - utmPoints[i][2])).toBeLessThan(0.001);
+    }
+  });
+
+  test('binary body with 8-byte float fields: reconstructs within 1 mm', async () => {
+    const pc = await loadPcd(makeDoubleBinaryPcd(utmPoints), 'utm-f64.pcd');
+    expect(pc.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      expect(Math.abs(pc.positions[i * 3] + pc.origin[0] - utmPoints[i][0])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 1] + pc.origin[1] - utmPoints[i][1])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 2] + pc.origin[2] - utmPoints[i][2])).toBeLessThan(0.001);
+    }
+  });
+});
+
 describe('loadPcd — malformed input', () => {
   test('a non-PCD buffer throws a clear, caught error', async () => {
     const junk = new TextEncoder().encode('not a pcd file at all').buffer;
