@@ -112,6 +112,8 @@ export interface StreamingRendererOptions {
    * never affects EDL or the post-pipeline.
    */
   fadeIn?: boolean;
+  /** Monotonic millisecond clock, injected for deterministic fade tests. */
+  now?: () => number;
 }
 
 /** Manages the per-node meshes of a streaming COPC cloud. */
@@ -143,6 +145,8 @@ export class StreamingRenderer {
    */
   private _rgbAppearance: RgbAppearance | undefined;
   private readonly _fadeIn: boolean;
+  /** Monotonic millisecond clock — `performance.now()` unless injected. */
+  private readonly _now: () => number;
   /** Active fade animations keyed by mesh; the value is its start wall time. */
   /**
    * Active dissolves. Direction `'in'` is a newly-resident node whose dissolve
@@ -174,6 +178,7 @@ export class StreamingRenderer {
     this._viewer = viewer;
     this._mode = mode;
     this._fadeIn = options.fadeIn ?? false;
+    this._now = options.now ?? nowMs;
     // Elevation range from the COPC cube; the per-field scalar ranges
     // (intensity, gpsTime, returnNumber) are seeded once the coarse root
     // node arrives. Their 0..1 placeholders are never painted from in
@@ -226,7 +231,26 @@ export class StreamingRenderer {
 
   /** A decoded node is ready — build its mesh and add it to the scene. */
   onNodeReady(node: StreamingNode, decoded: DecodedChunk): void {
-    if (this._meshes.has(node.record.id)) return; // already resident
+    const existing = this._meshes.get(node.record.id);
+    if (existing) {
+      const fade = this._fades.get(existing.mesh);
+      if (fade && fade.direction === 'out') {
+        // The node was evicted and is mid-fade-OUT, but its chunk arrived
+        // again inside the fade window — it is current once more. Bailing here
+        // (the old "already resident" guard) let the fade completion later
+        // strip this now-current mesh (node vanishes) or strand the node
+        // resident-in-store with no mesh. Cancel the fade-out, drop the stale
+        // mesh immediately, and fall through to build a fresh one. Clearing the
+        // fade entry keeps `_stepFades` from ever re-removing this id — the new
+        // mesh is a distinct object with its own (fade-in) entry.
+        this._fades.delete(existing.mesh);
+        this._viewer.endNodeDissolve(fade.mat);
+        this._viewer.removeStreamingMesh(existing.mesh);
+        this._meshes.delete(node.record.id);
+      } else {
+        return; // settled or fading in — already the current mesh
+      }
+    }
     // Seed the global intensity + elevation ranges from the COARSEST node seen
     // so far — see _rangeSeedDepth. Re-seeding from a strictly shallower node
     // converges the ramp to the depth-0 root's whole-cloud percentile band
@@ -413,7 +437,7 @@ export class StreamingRenderer {
     // The material stays fully opaque, so there is no transparent-pass z-fight
     // against depthWrite and EDL/depth stay exact throughout the transition.
     this._viewer.beginNodeDissolve(mat, 0);
-    this._fades.set(mesh, { start: nowMs(), mat, direction: 'in' });
+    this._fades.set(mesh, { start: this._now(), mat, direction: 'in' });
     this._scheduleFadeTick();
   }
 
@@ -428,7 +452,7 @@ export class StreamingRenderer {
     // node seeds at 1; a node still materialising dissolves out from where it
     // got to (beginNodeDissolve returns that), never snapping to full density.
     const fromProgress = this._viewer.beginNodeDissolve(mat, 1);
-    this._fades.set(mesh, { start: nowMs(), mat, direction: 'out', nodeId, fromProgress });
+    this._fades.set(mesh, { start: this._now(), mat, direction: 'out', nodeId, fromProgress });
     this._scheduleFadeTick();
   }
 
@@ -437,7 +461,7 @@ export class StreamingRenderer {
     if (this._fadeRafHandle !== null) return;
     const onTick = (): void => {
       this._fadeRafHandle = null;
-      this._stepFades(nowMs());
+      this._stepFades(this._now());
       if (this._fades.size > 0) this._scheduleFadeTick();
     };
     if (typeof requestAnimationFrame !== 'undefined') {

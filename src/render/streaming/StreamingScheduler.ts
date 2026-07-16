@@ -191,6 +191,19 @@ const FPS_BUDGET_FLOOR = 0.5;            // never below half-budget
  */
 const FORCED_RESCORE_INTERVAL_TICKS = 60;
 
+/**
+ * Error-node retry policy. A chunk that fails to decode is retried with
+ * exponential backoff up to `MAX_DECODE_RETRIES` times; past the cap the node
+ * stays terminally `error` and is never re-enqueued. Without this an `error`
+ * node was re-enqueued on every rescore — an unbounded fetch/decode storm that
+ * also pinned the queued "busy" signal high, so the idle-render throttle never
+ * quiesced. The retry deadline is `RETRY_BACKOFF_BASE_MS · 2^(failures-1)`,
+ * clamped to `RETRY_BACKOFF_MAX_MS`.
+ */
+const MAX_DECODE_RETRIES = 4;
+const RETRY_BACKOFF_BASE_MS = 500;
+const RETRY_BACKOFF_MAX_MS = 30_000;
+
 /** Per-scheduler tunables — defaulted, injected for unit tests. */
 export interface SchedulerOptions {
   /** Hysteresis window for eviction, ms. */
@@ -288,6 +301,11 @@ export class StreamingScheduler {
   private _paused = false;
   private _lastTickMs = 0;
   private _lastVisible = 0;
+
+  /** Per-node decode-failure count, for the retry cap + backoff. */
+  private readonly _decodeFailures = new Map<string, number>();
+  /** Node id → wall-clock time before which a failed node must not retry. */
+  private readonly _retryReadyAt = new Map<string, number>();
 
   /** Hysteresis state — node id → wall-clock deadline (ms) past which it may evict. */
   private readonly _deferredEvictAt = new Map<string, number>();
@@ -869,6 +887,12 @@ export class StreamingScheduler {
         node.state !== 'resident' &&
         node.state !== 'loading'
       ) {
+        // A permanently-failing node stays terminally `error` once it has
+        // exhausted its retries or is still inside its backoff window — skip
+        // it so it neither storms the decoder nor pins the busy signal.
+        if (node.state === 'error' && !this._errorRetryEligible(node.record.id, wallNow)) {
+          continue;
+        }
         store.setState(node, 'queued');
         this._queue.push(node);
       }
@@ -878,6 +902,17 @@ export class StreamingScheduler {
     this._lastTickMs = nowMs() - startedAt;
     this._callbacks.onTick?.(this._lastTickMs);
     this._callbacks.onChange?.();
+  }
+
+  /**
+   * Whether a node currently in the `error` state may be retried: it has not
+   * exhausted its retry cap and its exponential-backoff deadline has passed.
+   */
+  private _errorRetryEligible(id: string, now: number): boolean {
+    const failures = this._decodeFailures.get(id) ?? 0;
+    if (failures >= MAX_DECODE_RETRIES) return false;
+    const readyAt = this._retryReadyAt.get(id);
+    return readyAt === undefined || now >= readyAt;
   }
 
   /** The current point budget — used by the streaming benchmark for the refined-stable threshold. */
@@ -910,6 +945,8 @@ export class StreamingScheduler {
     }
     this._queue.length = 0;
     this._deferredEvictAt.clear();
+    this._decodeFailures.clear();
+    this._retryReadyAt.clear();
     // Free the compressed-chunk cache eagerly (tens of MB of ArrayBuffers)
     // instead of waiting for the stopped scheduler to be GC'd — so detaching or
     // replacing a streaming scan doesn't leave stale chunks resident exactly
@@ -998,6 +1035,11 @@ export class StreamingScheduler {
           // every later node narrows colour the same way (see decodeMeta).
           this._cloud.noteDecodedRgbDepth?.(decoded.rgbEightBit);
           store.setState(node, 'resident', decoded.pointCount);
+          // A clean decode clears any prior failure history so a node that
+          // recovered (transient read error, then success) isn't held back by
+          // a stale backoff on a later re-decode.
+          this._decodeFailures.delete(id);
+          this._retryReadyAt.delete(id);
           this._callbacks.onNodeReady(node, decoded);
         }
         this._dispatch();
@@ -1009,6 +1051,15 @@ export class StreamingScheduler {
           store.setState(node, 'unloaded');
         } else {
           store.setError(node, err instanceof Error ? err.message : String(err));
+          // Count the failure and arm an exponential backoff before the node
+          // is eligible to retry; past the cap it is never re-enqueued.
+          const failures = (this._decodeFailures.get(id) ?? 0) + 1;
+          this._decodeFailures.set(id, failures);
+          const backoff = Math.min(
+            RETRY_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_BASE_MS * 2 ** (failures - 1),
+          );
+          this._retryReadyAt.set(id, this._now() + backoff);
         }
         this._dispatch();
         this._callbacks.onChange?.();
