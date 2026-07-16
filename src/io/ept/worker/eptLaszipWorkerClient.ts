@@ -60,6 +60,7 @@ export class EptLaszipWorkerClient {
   private readonly _pending = new Map<number, PendingRequest>();
   private _nextRequestId = 0;
   private _disposed = false;
+  private _broken = false;
 
   /**
    * Optional hook called after each successful decode with the wall-time
@@ -73,7 +74,12 @@ export class EptLaszipWorkerClient {
       this._onMessage(event.data as WorkerReply);
     };
     this._worker.onerror = (): void => {
+      // The worker died. Tear it down and mark the client broken so a later
+      // decode rejects at once instead of posting into a corpse that never
+      // replies — a promise that would otherwise hang forever.
+      this._broken = true;
       this._failAll(new Error('The EPT laszip decode worker failed.'));
+      this._worker.terminate();
     };
   }
 
@@ -95,6 +101,10 @@ export class EptLaszipWorkerClient {
     return new Promise<DecodedChunk>((resolve, reject) => {
       if (this._disposed) {
         reject(new Error('The EPT laszip decode worker has been disposed.'));
+        return;
+      }
+      if (this._broken) {
+        reject(new Error('The EPT laszip decode worker failed.'));
         return;
       }
       if (signal?.aborted) {

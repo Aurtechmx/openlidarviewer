@@ -138,7 +138,13 @@ export class TerrainCoreWorkerClient {
       this._onMessage(event.data);
     };
     worker.onerror = (): void => {
+      // The worker died. Reject the in-flight job (so the async wrapper's
+      // main-thread fallback fires) and DROP the dead worker so the next job
+      // respawns a fresh one — leaving it installed would post into a corpse
+      // that never replies, hanging the promise and defeating the fallback.
       this._failAll(new Error('The terrain-core worker failed.'));
+      worker.terminate();
+      if (this._worker === worker) this._worker = null;
     };
     this._worker = worker;
     return worker;
