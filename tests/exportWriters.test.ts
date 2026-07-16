@@ -169,6 +169,22 @@ describe('svgContours', () => {
     expect(svg).toMatch(/not survey-grade/i);
   });
 
+  it('labels the vertical RMSEz in metres even on a feet-unit sheet', () => {
+    // rmseZM is metre-denominated (the *M contract; holdoutRmse scales by
+    // verticalUnitToMetres), while unitLabel is the sheet's linear unit. A
+    // foot-CRS sheet stamping "0.10 ft" on a 0.10 m figure overstates the
+    // accuracy 3.28× — the title block must say metres.
+    const svg = svgContours(model([feat('solid', [[0, 0], [10, 0]], 10, true)]), {
+      provenance: {
+        ...PROV,
+        accuracy: { rmseZM: 0.1, nvaM: 0.2, vvaM: 0.3, usgsQualityLevel: 'QL2' },
+      },
+      unitLabel: 'ft',
+    });
+    expect(svg).toContain('Vertical RMSEz: 0.10 m');
+    expect(svg).not.toContain('Vertical RMSEz: 0.10 ft');
+  });
+
   it('flips Y so larger world-Y maps nearer the top (smaller svg-Y)', () => {
     // Two horizontal lines at world y=0 and y=10. North-up means the y=10
     // line renders at a SMALLER svg-Y (nearer the top) than the y=0 line.
