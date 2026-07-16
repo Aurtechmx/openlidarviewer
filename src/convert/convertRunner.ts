@@ -29,8 +29,13 @@ export interface BatchInput {
   readonly bytes: () => Promise<ArrayBuffer>;
 }
 
-/** Decode a file's bytes into a full-resolution PointCloud. */
-export type DecodeFn = (buffer: ArrayBuffer, name: string) => Promise<PointCloud>;
+/** Decode a file's bytes into a full-resolution PointCloud. An optional signal
+ *  cancels a decode routed through a worker (see {@link runBatch}). */
+export type DecodeFn = (
+  buffer: ArrayBuffer,
+  name: string,
+  signal?: AbortSignal,
+) => Promise<PointCloud>;
 
 /** Result for one input. */
 export interface BatchItemResult {
@@ -73,18 +78,26 @@ export function dedupeName(name: string, seen: Set<string>): string {
 /**
  * Convert every input. Resolves with one result per input (in order). Never
  * rejects — failures are captured in each item's report.
+ *
+ * `signal` cancels the batch: it's forwarded to each decode (a worker-routed
+ * decode aborts mid-flight) and checked before every file, so an aborted batch
+ * stops before starting the next one rather than only between files.
  */
 export async function runBatch(
   inputs: ReadonlyArray<BatchInput>,
   options: ConvertOptions,
   decode: DecodeFn,
   onProgress?: (p: BatchProgress) => void,
+  signal?: AbortSignal,
 ): Promise<BatchItemResult[]> {
   const results: BatchItemResult[] = [];
   const seen = new Set<string>();
   const total = inputs.length;
 
   for (let index = 0; index < total; index++) {
+    // Stop the batch before touching the next file once cancelled — the decode
+    // in flight is aborted through the same signal below.
+    if (signal?.aborted) break;
     const input = inputs[index];
     const emit = (phase: BatchPhase): void =>
       onProgress?.({ index, total, source: input.name, phase });
@@ -94,7 +107,7 @@ export async function runBatch(
       // Read this file's bytes only now, and let `buffer` fall out of scope at
       // the end of the iteration so it's collected before the next file is read.
       const buffer = await input.bytes();
-      const cloud = await decode(buffer, input.name);
+      const cloud = await decode(buffer, input.name, signal);
       emit('converting');
       const { file, report } = convertCloud(cloud, options);
       const finalFile = file
