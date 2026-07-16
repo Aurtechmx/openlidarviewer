@@ -2622,6 +2622,15 @@ const measurePanel = new MeasurePanel({
 void viewerLoaded.then(() => {
   crsService.subscribe((resolved) => {
     viewer.measure.setUnitToMetres(resolved?.linearUnitToMetres ?? 1);
+    // Compound CRS: the height axis may carry its OWN linear unit (e.g. UTM
+    // metres + a NAVD88 height in US survey feet). Feed the vertical factor so
+    // heights / box height / cut-fill thickness scale by it — the same seam the
+    // Inspector probe and terrain already honour. Absent an explicit vertical
+    // unit, fall back to the horizontal factor so single-unit CRSs are
+    // unchanged (no mismatch, byte-identical readouts).
+    viewer.measure.setVerticalUnitToMetres(
+      resolved?.verticalUnitToMetres ?? resolved?.linearUnitToMetres ?? 1,
+    );
     // A CRS is "known" for the measurement trust grade when one resolved with a
     // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
     // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
@@ -5803,7 +5812,7 @@ async function importSession(file: File): Promise<void> {
     // access below is safe (measure/annotate are built in the Viewer ctor, so
     // no GPU backend is needed — just a non-null instance).
     await viewerLoaded;
-    const { parseSession } = await loadSession();
+    const { parseSession, rebaseSessionGeometry } = await loadSession();
     const session = parseSession(await file.text());
     // If an older build wrote this session, a newer one may grade or label the
     // scan differently — surface that so the user can re-save. Absent stamp
@@ -5812,8 +5821,20 @@ async function importSession(file: File): Promise<void> {
       const note = staleExportReason(session.software, __APP_VERSION__);
       if (note) showLassoToast(note);
     }
-    viewer.measure.loadMeasurements(session.measurements);
-    viewer.annotate.loadAnnotations(session.annotations);
+    // Session vertices are LOCAL to the origin of the scan they were captured
+    // against. Imported onto a DIFFERENT loaded cloud (a different floored
+    // origin), they must be rebased into that cloud's frame or they land
+    // displaced by the two origins' difference — and a later export would
+    // compound the error by adding the new origin. With no cloud loaded there
+    // is nothing to rebase against; keep the verbatim geometry (the missing-
+    // scan toast below already tells the user to drop the scan).
+    const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    const geo = haveCloud
+      ? rebaseSessionGeometry(session, exportGeoContext().origin)
+      : { measurements: session.measurements, annotations: session.annotations, delta: [0, 0, 0] as const };
+    const rebased = geo.delta[0] !== 0 || geo.delta[1] !== 0 || geo.delta[2] !== 0;
+    viewer.measure.loadMeasurements(geo.measurements);
+    viewer.annotate.loadAnnotations(geo.annotations);
     // v7 — a view may carry a display bundle beyond its camera; hydrate it
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
@@ -5865,7 +5886,12 @@ async function importSession(file: File): Promise<void> {
     const restored =
       session.measurements.length + session.annotations.length + session.views.length;
     const wantFile = session.scanSummary?.fileName;
-    const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // Disclosure when the session was captured in a different scan's frame and
+    // its geometry was shifted to line up with the loaded cloud — an honest
+    // note that a non-obvious transform happened, not a silent relocation.
+    const frameNote = rebased
+      ? ' Its measurements were realigned to the loaded scan’s origin.'
+      : '';
     // Evidence Capsule: lead with the honesty roll-up when the shared session
     // carries graded measurements — the recipient sees the trust picture, not
     // just a count.
@@ -5875,11 +5901,11 @@ async function importSession(file: File): Promise<void> {
       showLassoToast(lead ?? `Session restored — drop “${wantFile}” to view its scan.`,
         lead ? { label: 'Need the scan', onClick: () => showLassoToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
     } else if (lead) {
-      showLassoToast(lead);
+      showLassoToast(`${lead}${frameNote}`);
     } else {
       showLassoToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).`,
+          `(measurements, annotations, views).${frameNote}`,
       );
     }
   } catch (err) {

@@ -29,6 +29,22 @@ export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
   'areas, grades and profiles are NOT reliable distances. Reproject to a ' +
   'projected CRS for measurement work.';
 
+/**
+ * The measurement stack's honest limitation on a COMPOUND CRS whose vertical
+ * (height) unit differs from its horizontal linear unit — e.g. UTM metres with
+ * a NAVD88 height in US survey feet. Pure-vertical readouts (heights, box
+ * height, cut/fill thickness) are scaled by the vertical factor and stay
+ * honest, but a 3D length, a tilted planar area, or a grade combines the two
+ * units and no single factor makes it a true distance. Rather than dress up a
+ * figure that is off by the units' ratio, the stack refuses those kinds and
+ * states why — the same red-grade + caveat pattern as the geographic case, so
+ * the wording cannot fork.
+ */
+export const VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE =
+  'Compound CRS: the height unit differs from the horizontal unit, so 3D ' +
+  'lengths, areas and grades mix units and are NOT reliable distances. ' +
+  'Heights are scaled correctly; use them, or reproject to a single unit.';
+
 const FEET_PER_METRE = 3.280839895013123;
 const SQFT_PER_SQM = FEET_PER_METRE * FEET_PER_METRE;
 const SQFT_PER_ACRE = 43_560;
