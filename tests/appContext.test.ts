@@ -38,6 +38,27 @@ describe('createAppContext — layer cluster defaults', () => {
   });
 });
 
+describe('createAppContext — scan cluster', () => {
+  it('starts with no active scan', () => {
+    expect(createAppContext().scan.activeId).toBeNull();
+  });
+
+  it('carries the active-scan selection (the migrated main.ts assignments write through)', () => {
+    const ctx = createAppContext();
+    ctx.scan.activeId = 'cloud-1';
+    expect(ctx.scan.activeId).toBe('cloud-1');
+    ctx.scan.activeId = null;
+    expect(ctx.scan.activeId).toBeNull();
+  });
+
+  it('isolates the active scan per context', () => {
+    const a = createAppContext();
+    const b = createAppContext();
+    a.scan.activeId = 'x';
+    expect(b.scan.activeId).toBeNull();
+  });
+});
+
 describe('createAppRuntime — composition root', () => {
   it('exposes a fresh AppContext with the layer cluster', () => {
     const runtime = createAppRuntime();

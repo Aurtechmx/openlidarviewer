@@ -26,9 +26,19 @@ export interface LayerViewState {
   lastDifference: { readonly stem: string; readonly asc: () => string } | null;
 }
 
+/** The active-scan selection state. */
+export interface ScanState {
+  /**
+   * Viewer id of the cloud the Inspector currently controls (the most recent
+   * one added), or null when no scan is loaded.
+   */
+  activeId: string | null;
+}
+
 /** The shared, mutable application state, grouped by cluster. */
 export interface AppContext {
   readonly layers: LayerViewState;
+  readonly scan: ScanState;
 }
 
 /** Construct a fresh AppContext with empty defaults. */
@@ -38,6 +48,9 @@ export function createAppContext(): AppContext {
       visible: new Map<string, boolean>(),
       solo: null,
       lastDifference: null,
+    },
+    scan: {
+      activeId: null,
     },
   };
 }
