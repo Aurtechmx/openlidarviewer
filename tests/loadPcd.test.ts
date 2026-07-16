@@ -121,6 +121,28 @@ describe('loadPcd — UTM-scale coordinates keep sub-millimetre precision', () =
       expect(Math.abs(pc.positions[i * 3 + 2] + pc.origin[2] - utmPoints[i][2])).toBeLessThan(0.001);
     }
   });
+
+  // x/y/z are not required to lead the record, and a multi-count field can sit
+  // before them — the f64 column extractor must locate x/y/z by name and sum
+  // the COUNT-widths ahead of each. A leading 3-wide `normal` + trailing `rgb`
+  // put x/y/z at token columns 3/4/5, out of field order (z before x/y is not
+  // used here but the index math is identical).
+  test('ascii body with a reordered, multi-count field layout stays sub-mm', async () => {
+    const pcd =
+      `# .PCD v0.7\nVERSION 0.7\nFIELDS normal x y z rgb\nSIZE 4 8 8 8 4\n` +
+      `TYPE F F F F U\nCOUNT 3 1 1 1 1\nWIDTH 2\nHEIGHT 1\n` +
+      `VIEWPOINT 0 0 0 1 0 0 0\nPOINTS 2\nDATA ascii\n` +
+      utmPoints
+        .map((p) => `0 0 1 ${p[0]} ${p[1]} ${p[2]} 4278190080`)
+        .join('\n') + '\n';
+    const pc = await loadPcd(new TextEncoder().encode(pcd).buffer, 'reordered.pcd');
+    expect(pc.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      expect(Math.abs(pc.positions[i * 3] + pc.origin[0] - utmPoints[i][0])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 1] + pc.origin[1] - utmPoints[i][1])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 2] + pc.origin[2] - utmPoints[i][2])).toBeLessThan(0.001);
+    }
+  });
 });
 
 describe('loadPcd — malformed input', () => {
