@@ -59,6 +59,34 @@ describe('createAppContext — scan cluster', () => {
   });
 });
 
+describe('createAppContext — view-bookmarks cluster', () => {
+  it('starts with no saved views and a zeroed counter', () => {
+    const ctx = createAppContext();
+    expect(ctx.viewBookmarks.savedViews).toEqual([]);
+    expect(ctx.viewBookmarks.viewCounter).toBe(0);
+  });
+
+  it('carries saved views and the counter (the migrated main.ts state)', () => {
+    const ctx = createAppContext();
+    ctx.viewBookmarks.savedViews.push({
+      name: 'View 1',
+      pose: { position: [0, 0, 0], target: [1, 1, 1], up: [0, 0, 1] } as never,
+    });
+    ctx.viewBookmarks.viewCounter += 1;
+    expect(ctx.viewBookmarks.savedViews).toHaveLength(1);
+    expect(ctx.viewBookmarks.savedViews[0].name).toBe('View 1');
+    expect(ctx.viewBookmarks.viewCounter).toBe(1);
+  });
+
+  it('isolates view bookmarks per context', () => {
+    const a = createAppContext();
+    const b = createAppContext();
+    a.viewBookmarks.viewCounter = 5;
+    expect(b.viewBookmarks.viewCounter).toBe(0);
+    expect(b.viewBookmarks.savedViews).toEqual([]);
+  });
+});
+
 describe('createAppRuntime — composition root', () => {
   it('exposes a fresh AppContext with the layer cluster', () => {
     const runtime = createAppRuntime();

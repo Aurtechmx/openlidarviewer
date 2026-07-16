@@ -10,7 +10,6 @@ import './style.css';
 // so OBJ/PLY/glTF never fetch executable code from a third-party CDN.
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
-import type { CameraPose } from './render/NavController';
 import { isMobileDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
@@ -1118,25 +1117,9 @@ registry.register(scanReport);
 const runtime = createAppRuntime();
 const layers = runtime.context.layers;
 const scan = runtime.context.scan;
+const viewBookmarks = runtime.context.viewBookmarks;
 /** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
 const layerVisible = layers.visible;
-/**
- * An in-memory saved view: the pose the camera glides to plus (v7) the
- * optional display-state bundle captured with it — clip, colour mode, class
- * filter, point filters, render settings. `pose` keeps the v6 camera-bookmark
- * shape the panels and the KML exporter read; the bundle rides alongside and
- * serialises into the per-view `.olvsession` fields. A view restored from a
- * pre-v7 file has no bundle and behaves exactly as it always did.
- */
-interface StoredView {
-  name: string;
-  pose: CameraPose;
-  state?: ViewStateBundle;
-}
-
-/** Saved camera viewpoints (v7: view states) for the current scan. */
-let savedViews: StoredView[] = [];
-let viewCounter = 0;
 /** True while a file load is in flight — one load at a time (see `handleFile`). */
 let loading = false;
 
@@ -1430,15 +1413,15 @@ const inspector = new Inspector({
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
-    const view = savedViews[index];
+    const view = viewBookmarks.savedViews[index];
     if (view) {
       view.name = name;
-      inspector.setViews(savedViews.map((v) => v.name));
+      inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
     }
   },
   onDeleteView: (index) => {
-    savedViews.splice(index, 1);
-    inspector.setViews(savedViews.map((v) => v.name));
+    viewBookmarks.savedViews.splice(index, 1);
+    inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
   },
   onEdlToggle: (on) => {
     viewer.setEdlEnabled(on);
@@ -2282,7 +2265,7 @@ function buildActionRegistry(): Action[] {
           return;
         }
         saveCurrentView();
-        const name = savedViews[savedViews.length - 1]?.name ?? 'View';
+        const name = viewBookmarks.savedViews[viewBookmarks.savedViews.length - 1]?.name ?? 'View';
         showLassoToast(`View state saved — “${name}” (rename it in the panel list).`);
       },
     },
@@ -2293,11 +2276,11 @@ function buildActionRegistry(): Action[] {
       hint: 'Reapply the most recently saved view state — the panel list restores any of them by name.',
       keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'apply', 'go to'],
       run: () => {
-        if (savedViews.length === 0) {
+        if (viewBookmarks.savedViews.length === 0) {
           showLassoToast('No saved view states yet — save one first (V).');
           return;
         }
-        applyView(savedViews.length - 1);
+        applyView(viewBookmarks.savedViews.length - 1);
       },
     },
   );
@@ -3466,7 +3449,7 @@ const exportPanel = new ExportPanel({
       measurements: viewer.measure.getMeasurements(),
       // Saved views become <LookAt> placemarks — same LOCAL render frame as the
       // measurements, so the injected transform places them correctly.
-      viewpoints: savedViews.map((v) => ({
+      viewpoints: viewBookmarks.savedViews.map((v) => ({
         name: v.name,
         position: v.pose.position,
         target: v.pose.target,
@@ -5608,8 +5591,8 @@ function applyViewState(vs: ViewStateBundle): void {
  */
 function saveCurrentView(): void {
   const { camera, ...rest } = captureViewState();
-  savedViews.push({
-    name: `View ${++viewCounter}`,
+  viewBookmarks.savedViews.push({
+    name: `View ${++viewBookmarks.viewCounter}`,
     // `getCameraState` (not the bare pose) so a non-default FOV or nav mode
     // is part of what the view restores; the empty-state fallback keeps the
     // old bare-pose behaviour when no scan gates the capture.
@@ -5621,14 +5604,14 @@ function saveCurrentView(): void {
 
 /** Push the saved-view names to whichever panel is currently shown. */
 function refreshViewsUI(): void {
-  const names = savedViews.map((v) => v.name);
+  const names = viewBookmarks.savedViews.map((v) => v.name);
   if (viewer.hasStreamingCloud) streamingPanel.setViews(names);
   else inspector.setViews(names);
 }
 
 /** Glide the camera to a saved view — and (v7) restore its display state. */
 function applyView(index: number): void {
-  const view = savedViews[index];
+  const view = viewBookmarks.savedViews[index];
   if (!view) return;
   if (!view.state) {
     // A pre-v7 (camera-only) view keeps its exact old behaviour: glide the
@@ -5644,7 +5627,7 @@ function applyView(index: number): void {
 
 /** Delete a saved view and refresh the list. */
 function deleteView(index: number): void {
-  savedViews.splice(index, 1);
+  viewBookmarks.savedViews.splice(index, 1);
   refreshViewsUI();
 }
 
@@ -5779,7 +5762,7 @@ async function exportSession(): Promise<void> {
     // v7 — a view with a captured bundle serialises it per-view; a camera-only
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
     // v6 byte-shape.
-    views: savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
+    views: viewBookmarks.savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
     measurements: viewer.measure.getMeasurements(),
     annotations: viewer.annotate.getAnnotations(),
     camera: viewState.camera,
@@ -5829,12 +5812,12 @@ async function importSession(file: File): Promise<void> {
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
     // undefined and they stay exactly the camera-only bookmarks they were.
-    savedViews = session.views.map((v) => {
+    viewBookmarks.savedViews = session.views.map((v) => {
       const { name, camera, ...state } = v;
       return { name, pose: camera, state: buildViewState(state) };
     });
-    viewCounter = savedViews.length;
-    inspector.setViews(savedViews.map((v) => v.name));
+    viewBookmarks.viewCounter = viewBookmarks.savedViews.length;
+    inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
     refreshMeasurePanel();
     refreshAnnotationPanel();
 
@@ -6039,8 +6022,8 @@ async function handleFile(file: File): Promise<void> {
     if (isPhone()) navBar.flashTouchHint();
 
     // A new scan resets the saved viewpoints and annotations.
-    savedViews = [];
-    viewCounter = 0;
+    viewBookmarks.savedViews = [];
+    viewBookmarks.viewCounter = 0;
     viewer.annotate.clear();
     refreshAnnotationPanel();
 
@@ -6393,8 +6376,8 @@ async function openStreamingCopc(
     // "COPC LAZ · PDRF N" for COPC and "EPT · binary · N attrs" for EPT.
     format: 'copc',
   });
-  savedViews = [];
-  viewCounter = 0;
+  viewBookmarks.savedViews = [];
+  viewBookmarks.viewCounter = 0;
   refreshViewsUI();
 
   // Measure, annotate, inspect, probe and close all work on a streaming scan:
@@ -7209,8 +7192,8 @@ function resetToEmptyState(): void {
   // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
   document.body.classList.remove('olv-has-scan');
   scan.activeId = null;
-  savedViews = [];
-  viewCounter = 0;
+  viewBookmarks.savedViews = [];
+  viewBookmarks.viewCounter = 0;
   viewer.annotate.clear();
   // Drop the snap index so a future scan can't snap to the previous cloud.
   viewer.measure.setSnapSource(null);

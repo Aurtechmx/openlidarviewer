@@ -10,6 +10,9 @@
  * the layer / comparison view state.
  */
 
+import type { CameraPose } from '../render/NavController';
+import type { ViewStateBundle } from '../io/session';
+
 /** Per-cloud view state plus the latest exportable elevation comparison. */
 export interface LayerViewState {
   /**
@@ -35,10 +38,31 @@ export interface ScanState {
   activeId: string | null;
 }
 
+/**
+ * An in-memory saved view: the camera pose plus (v7) an optional display-state
+ * bundle (clip, colour mode, class/point filters, render settings). `pose` keeps
+ * the v6 camera-bookmark shape the panels and the KML exporter read; a pre-v7
+ * view has no bundle and behaves exactly as it always did.
+ */
+export interface StoredView {
+  name: string;
+  pose: CameraPose;
+  state?: ViewStateBundle;
+}
+
+/** Saved camera viewpoints (v7: view states) for the current scan. */
+export interface ViewBookmarksState {
+  /** The saved views, in creation order. */
+  savedViews: StoredView[];
+  /** Monotonic counter behind default view names. */
+  viewCounter: number;
+}
+
 /** The shared, mutable application state, grouped by cluster. */
 export interface AppContext {
   readonly layers: LayerViewState;
   readonly scan: ScanState;
+  readonly viewBookmarks: ViewBookmarksState;
 }
 
 /** Construct a fresh AppContext with empty defaults. */
@@ -51,6 +75,10 @@ export function createAppContext(): AppContext {
     },
     scan: {
       activeId: null,
+    },
+    viewBookmarks: {
+      savedViews: [],
+      viewCounter: 0,
     },
   };
 }
