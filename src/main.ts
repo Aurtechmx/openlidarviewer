@@ -106,7 +106,6 @@ import { ExportPanel } from './ui/ExportPanel';
 import type { MeasurementExportContext } from './export/measurementExport';
 import type { KmlExportInput } from './export/kmlExport';
 import { utmConverter } from './geo/UtmConverter';
-import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -271,6 +270,7 @@ import { createCrsCoordinator } from './app/crsCoordinator';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { createAppRuntime } from './app/AppRuntime';
+import { createLayerService } from './app/LayerService';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -1279,6 +1279,13 @@ function seedStreamingFilterExtents(): void {
   streamingFilterSeeded = true;
 }
 
+const layerService = createLayerService({
+  getViewer: () => viewer,
+  getInspector: () => inspector,
+  context: runtime.context,
+  refreshCompass,
+});
+
 const inspector = new Inspector({
   onColorMode: (mode) => {
     currentColorMode = mode;
@@ -1308,15 +1315,9 @@ const inspector = new Inspector({
     syncInspectorVisuals();
     persistPrefs();
   },
-  onToggleVisible: (id, visible) => {
-    layerVisible.set(id, visible);
-    applyLayerVisibility();
-  },
+  onToggleVisible: (id, visible) => layerService.setVisible(id, visible),
   onRemove: (id) => removeCloud(id),
-  onToggleSolo: (id) => {
-    layers.solo = nextSolo(layers.solo, id);
-    applyLayerVisibility();
-  },
+  onToggleSolo: (id) => layerService.toggleSolo(id),
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: () => compareLoadedLayers(),
   onExportDifference: () => exportDifferenceRaster(),
@@ -6058,7 +6059,7 @@ async function handleFile(file: File): Promise<void> {
           : result.cloud.pointCount;
       inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null);
       layerVisible.set(id, true);
-      refreshLayerCrsFlags();
+      layerService.refreshCrsFlags();
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspector.setElevationExtent(viewer.elevationExtent());
@@ -7219,41 +7220,6 @@ function resetToEmptyState(): void {
 }
 
 /** Remove a cloud from the scene and the Inspector. */
-/** Snapshot every loaded layer as a plain record for the pure layer model. */
-function buildLayerInfos(): LayerInfo[] {
-  return viewer.clouds().map((id) => {
-    const c = viewer.getCloud(id);
-    const crs = c?.metadata?.crs ?? null;
-    return {
-      id,
-      name: c?.name ?? id,
-      pointCount: c?.pointCount ?? 0,
-      visible: layerVisible.get(id) ?? true,
-      locked: viewer.isCloudLocked(id),
-      epsg: crs?.epsg,
-      crsName: crs?.name,
-      verticalDatum: crs?.verticalDatum,
-      isGeographic: crs?.isGeographic,
-    };
-  });
-}
-
-/** Push the model's effective visibility (intent + isolate) to the viewer + UI. */
-function applyLayerVisibility(): void {
-  const eff = resolveVisibility(buildLayerInfos(), layers.solo);
-  for (const [id, on] of eff) viewer.setCloudVisible(id, on);
-  inspector.setLayerSolo(layers.solo);
-}
-
-/** Recompute and surface cross-layer CRS mismatches (overlay alignment guard). */
-function refreshLayerCrsFlags(): void {
-  const m = detectCrsMismatch(buildLayerInfos());
-  inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
-  // The two-epoch compare needs exactly two loaded layers.
-  inspector.setLayerCompareAvailable(viewer.clouds().length === 2);
-  // Show the compass once a scan is open; hide it again when the last layer goes.
-  refreshCompass();
-}
 
 /**
  * Two-epoch change detection over the two loaded layers (first = before,
@@ -7397,8 +7363,8 @@ function removeCloud(id: string): void {
   if (activeId === id) activeId = null;
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
-    refreshLayerCrsFlags();
-    applyLayerVisibility();
+    layerService.refreshCrsFlags();
+    layerService.applyVisibility();
     inspector.setElevationExtent(viewer.elevationExtent());
     inspector.setIntensityExtent(viewer.intensityExtent());
   }
