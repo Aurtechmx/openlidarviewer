@@ -146,7 +146,12 @@ function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefin
     lines.push(`Vertical datum: ${prov.datumKnown ? prov.verticalDatum : 'unknown'}`);
     lines.push(`Horizontal CRS: ${prov.crsKnown ? prov.horizontalCrs : 'not georeferenced'}`);
     if (prov.accuracy && prov.accuracy.rmseZM != null) {
-      lines.push(`Vertical RMSEz: ${prov.accuracy.rmseZM.toFixed(2)} ${unit}`);
+      // rmseZM is metre-denominated (the *M contract) whatever the sheet's
+      // linear unit, and the provenance carries no unit factor to convert it
+      // with — so stamp it 'm', matching the <metadata> block. Labelling a
+      // 0.10 m figure "0.10 ft" on a foot-CRS sheet would overstate the
+      // deliverable's accuracy 3.28×.
+      lines.push(`Vertical RMSEz: ${prov.accuracy.rmseZM.toFixed(2)} m`);
     }
     lines.push(`Surface quality: ${prov.surfaceQuality}`);
     lines.push(prov.notSurveyGrade);

@@ -29,7 +29,9 @@
  *      square structuring element of growing radius; at each radius a
  *      cell is cut to the opened height when the drop exceeds a
  *      slope-scaled threshold `dh = elevationThresholdM + slope · b ·
- *      cellSizeM`. This is the heart shared by SMRF and Zhang's PMF.
+ *      cellSize` (the cell run in z's unit — see
+ *      `GroundFilterParams.cellSizeZUnits`). This is the heart shared by
+ *      SMRF and Zhang's PMF.
  *   4. Point classification — a return is ground when it sits within a
  *      slope-scaled tolerance of the final opened surface beneath it.
  *
@@ -95,6 +97,17 @@ export interface GroundFilterParams {
    * more there). Defaults to 0 (flat tolerance). In source linear units.
    */
   readonly scalingFactorM?: number;
+  /**
+   * Grid cell size expressed in the unit of the VERTICAL axis, for the
+   * slope-scaled threshold growth. That growth multiplies a rise/run slope by
+   * a horizontal run (`slope · b · cellSize`) and compares the product against
+   * Δz, so the run must share z's unit: in a geographic frame the horizontal
+   * cell is in DEGREES while z is metric, and the raw degree value starves the
+   * growth term by ~1/111,320 — the threshold never rises above its base and
+   * legitimate slope ground is rejected. Defaults to `cellSizeM` (projected
+   * frames, where the horizontal and vertical units agree).
+   */
+  readonly cellSizeZUnits?: number;
   /**
    * Hard cap on the slope-scaled elevation threshold, source linear units.
    * Classic SMRF caps the threshold so a large window on steep ground cannot
@@ -184,6 +197,15 @@ export function classifyGroundSmrf(
   const vertical: VerticalAxis = params.verticalAxis ?? 'z';
 
   const cellSizeM = finitePositive(params.cellSizeM, 1, 'cellSizeM', warnings);
+  // The cell run the slope-scaled threshold grows by, in z's unit (see the
+  // param doc) — identical to cellSizeM whenever horizontal and vertical
+  // units agree, so projected frames are untouched.
+  const cellSizeZUnits = finitePositive(
+    params.cellSizeZUnits ?? cellSizeM,
+    cellSizeM,
+    'cellSizeZUnits',
+    warnings,
+  );
   const maxWindowCells = Math.max(
     1,
     Math.floor(finitePositive(params.maxWindowCells, 1, 'maxWindowCells', warnings)),
@@ -303,7 +325,9 @@ export function classifyGroundSmrf(
     const opened = morphOpen(work, cols, rows, b);
     // Cap the slope-scaled threshold so a large window on steep ground can't
     // grow the tolerance high enough to admit low objects (SMRF hard cap).
-    const dh = Math.min(maxElevationThresholdM, elevationThresholdM + slope * b * cellSizeM);
+    // The growth term takes the z-unit cell run: slope · run compares against
+    // a Δz, so a degree-valued run would pin dh at the base threshold.
+    const dh = Math.min(maxElevationThresholdM, elevationThresholdM + slope * b * cellSizeZUnits);
     for (let i = 0; i < nCells; i++) {
       if (work[i] - opened[i] > dh) work[i] = opened[i];
     }
