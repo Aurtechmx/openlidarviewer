@@ -51,6 +51,9 @@ export class BatchConverter {
   private _sourceEpsg = '';
   private _busy = false;
   private _produced: { filename: string; bytes: Uint8Array }[] = [];
+  // Aborts the in-flight batch (worker decode + the between-files loop) when the
+  // modal is dismissed, so closing mid-convert doesn't leave a decode running.
+  private _abort?: AbortController;
 
   constructor(host: HTMLElement) {
     this.element = el('div', { className: 'olv-bc-overlay olv-bc-hidden' });
@@ -114,6 +117,8 @@ export class BatchConverter {
   }
 
   close(): void {
+    // Cancel any batch still running so a dismissed modal doesn't keep decoding.
+    this._abort?.abort();
     this.element.classList.add('olv-bc-hidden');
   }
 
@@ -308,13 +313,22 @@ export class BatchConverter {
       sourceEpsg: parseEpsg(this._sourceEpsg),
     };
 
+    this._abort = new AbortController();
     let results: BatchItemResult[] = [];
     try {
-      results = await runBatch(this._files, options, decodeFull, (p) => {
-        this._convertBtn.textContent = `Converting ${p.index + 1}/${p.total}…`;
-      });
+      results = await runBatch(
+        this._files,
+        options,
+        decodeFull,
+        (p) => {
+          this._convertBtn.textContent = `Converting ${p.index + 1}/${p.total}…`;
+        },
+        this._abort.signal,
+      );
     } catch (err) {
       this._results.append(el('p', { className: 'olv-bc-row-error', text: `Conversion stopped: ${err instanceof Error ? err.message : String(err)}` }));
+    } finally {
+      this._abort = undefined;
     }
 
     this._produced = results.flatMap((r) => {
