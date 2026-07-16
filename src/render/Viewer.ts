@@ -1484,19 +1484,22 @@ export class Viewer {
         // were in the walk and no fully-loaded static cloud sat beside
         // them — same rationale as the profile sampler.
         const residentOnly = streamingPoints > 0 && staticPoints === 0;
-        return {
-          record: {
-            fill: result.fill,
-            cut: result.cut,
-            net: result.net,
-            referenceZ,
-            footprintArea: result.footprintArea,
-            pointsInPolygon: result.pointsInPolygon,
-            density: result.density,
-            confidence,
-          },
-          residentOnly,
+        const record: VolumeRecord = {
+          fill: result.fill,
+          cut: result.cut,
+          net: result.net,
+          referenceZ,
+          footprintArea: result.footprintArea,
+          pointsInPolygon: result.pointsInPolygon,
+          density: result.density,
+          confidence,
         };
+        // Non-finite returns inside the footprint were excluded from the
+        // integration — carry the count so the record discloses the
+        // partial coverage instead of presenting a clean number.
+        const skippedNonFinite = result.skippedNonFinite ?? 0;
+        if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
+        return { record, residentOnly };
       },
     );
     this._inspect = new InspectTool(this._camera, canvas, {

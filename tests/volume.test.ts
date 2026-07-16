@@ -11,6 +11,7 @@ import {
   volumeCutFill,
   pointInPolygon2D,
   polygonHorizontalArea,
+  horizontalProjection,
   autoReferenceZ,
 } from '../src/render/measure/volume';
 
@@ -254,6 +255,159 @@ describe('volumeCutFill — Y-up clouds (phone-scan axis)', () => {
       positions: packYUpGrid(11, 2),
     });
     expect(result.fill).not.toBeCloseTo(2, 1);
+  });
+});
+
+describe('volumeCutFill — non-finite heights (invalid points)', () => {
+  // Organized-cloud PCD files mark invalid returns as NaN per spec, and
+  // loaders use the same sentinel for missing attributes. A point with a
+  // finite footprint position but no usable elevation must never reach
+  // the Δz accumulator — one NaN poisons cut and net for the whole
+  // footprint while the result still reads as trustworthy.
+  const unitSquare: ReadonlyArray<[number, number, number]> = [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [0, 1, 0],
+  ];
+
+  it('keeps cut/net finite when an inside point carries a NaN Z, and discloses the skip', () => {
+    const r = volumeCutFill({
+      polygon: unitSquare,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: Float32Array.of(0.5, 0.5, NaN, 0.5, 0.4, -2),
+    });
+    expect(Number.isFinite(r.cut)).toBe(true);
+    expect(Number.isFinite(r.net)).toBe(true);
+    // The one real point sits 2 m below the reference under a 1 m² footprint.
+    expect(r.fill).toBe(0);
+    expect(r.cut).toBeCloseTo(2, 5);
+    expect(r.net).toBeCloseTo(-2, 5);
+    // The NaN point is not evidence — it must not inflate the inside count.
+    expect(r.pointsInPolygon).toBe(1);
+    expect(r.skippedNonFinite).toBe(1);
+  });
+
+  it('reports zero skips for a fully-finite cloud', () => {
+    const r = volumeCutFill({
+      polygon: unitSquare,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: packGrid(5, [0.1, 0.9], [0.1, 0.9], 1),
+    });
+    expect(r.skippedNonFinite).toBe(0);
+    expect(r.fill).toBeCloseTo(1, 5);
+  });
+
+  it('discloses when every inside point was non-finite instead of reporting a clean zero', () => {
+    const r = volumeCutFill({
+      polygon: unitSquare,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: Float32Array.of(0.5, 0.5, NaN, 0.4, 0.6, NaN),
+    });
+    expect(r.fill).toBe(0);
+    expect(r.cut).toBe(0);
+    expect(r.pointsInPolygon).toBe(0);
+    expect(r.skippedNonFinite).toBe(2);
+  });
+});
+
+describe('volumeCutFill — general-up walk matches the per-point projection', () => {
+  // The hot loop derives the horizontal basis once and inlines the dot
+  // products on scalars. This pins the walk to the reference form — one
+  // `horizontalProjection` plus a normalized-up dot per point — so the
+  // loop-invariant math can never drift the numbers.
+
+  /** Deterministic xorshift positions in a box, both above and below z = 0. */
+  function scatter(count: number): Float32Array {
+    let s = 0x2545f491 | 0;
+    const next = (): number => {
+      s ^= s << 13;
+      s ^= s >>> 17;
+      s ^= s << 5;
+      return (s >>> 0) / 4294967296;
+    };
+    const out = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      out[i * 3] = next() * 2 - 0.5;
+      out[i * 3 + 1] = next() * 2 - 0.5;
+      out[i * 3 + 2] = next() * 2 - 1.5;
+    }
+    return out;
+  }
+
+  /** Reference fill/cut sums — naive per-point projection, same walk order. */
+  function naiveCutFill(
+    polygon: ReadonlyArray<[number, number, number]>,
+    referenceZ: number,
+    up: [number, number, number],
+    positions: Float32Array,
+  ): { fillSum: number; cutSum: number; inCount: number } {
+    const len = Math.hypot(up[0], up[1], up[2]);
+    const u: [number, number, number] = [up[0] / len, up[1] / len, up[2] / len];
+    const poly = polygon.map((p) => horizontalProjection(p, up));
+    let fillSum = 0;
+    let cutSum = 0;
+    let inCount = 0;
+    for (let i = 0; i < positions.length / 3; i++) {
+      const p: [number, number, number] = [
+        positions[i * 3],
+        positions[i * 3 + 1],
+        positions[i * 3 + 2],
+      ];
+      const h = horizontalProjection(p, up);
+      if (!pointInPolygon2D(h.x, h.y, poly)) continue;
+      const dz = p[0] * u[0] + p[1] * u[1] + p[2] * u[2] - referenceZ;
+      if (dz >= 0) fillSum += dz;
+      else cutSum += -dz;
+      inCount++;
+    }
+    return { fillSum, cutSum, inCount };
+  }
+
+  function expectMatchesNaive(
+    polygon: ReadonlyArray<[number, number, number]>,
+    up: [number, number, number],
+  ): void {
+    const positions = scatter(2000);
+    const r = volumeCutFill({ polygon, referenceZ: 0, up, positions });
+    const ref = naiveCutFill(polygon, 0, up, positions);
+    // The fixture must actually exercise both buckets, or the comparison
+    // proves nothing.
+    expect(ref.inCount).toBeGreaterThan(100);
+    expect(ref.fillSum).toBeGreaterThan(0);
+    expect(ref.cutSum).toBeGreaterThan(0);
+    expect(r.pointsInPolygon).toBe(ref.inCount);
+    expect(r.fill).toBe(ref.fillSum * (r.footprintArea / ref.inCount));
+    expect(r.cut).toBe(ref.cutSum * (r.footprintArea / ref.inCount));
+    expect(r.net).toBe(r.fill - r.cut);
+  }
+
+  it('matches on a Y-up cloud (phone-scan axis)', () => {
+    // Footprint on the y = 0 plane; heights are the Y coordinate.
+    expectMatchesNaive(
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+        [1, 0, 1],
+        [0, 0, 1],
+      ],
+      [0, 1, 0],
+    );
+  });
+
+  it('matches on a tilted (non-axis) up vector', () => {
+    expectMatchesNaive(
+      [
+        [0, 0, 0],
+        [1, 0, 0],
+        [1, 1, -1],
+        [0, 1, -1],
+      ],
+      [0, 1, 1],
+    );
   });
 });
 

@@ -39,6 +39,7 @@
 
 import type { Vec3 } from '../navMath';
 import {
+  horizontalBasis,
   horizontalProjection,
   pointInPolygon2D,
   volumeCutFill,
@@ -175,16 +176,29 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   // and to estimate its uncertainty before we can integrate thickness.
   const zUp = isZUp(up);
   const projPoly = input.polygon.map((p) => horizontalProjection(p, up));
+  // Projection basis and up length are loop-invariant; hoist them so the
+  // gather below inlines the general-up projection as scalar dot products
+  // instead of allocating per point.
+  const basis = horizontalBasis(up);
+  const upLen = Math.hypot(up[0], up[1], up[2]) || 1;
   const n = input.positions.length / 3;
   const insideHeights: number[] = [];
   for (let i = 0; i < n; i++) {
     const px = input.positions[i * 3];
     const py = input.positions[i * 3 + 1];
     const pz = input.positions[i * 3 + 2];
-    const h = zUp ? { x: px, y: py } : horizontalProjection([px, py, pz], up);
     if (!Number.isFinite(pz)) continue;
-    if (!pointInPolygon2D(h.x, h.y, projPoly)) continue;
-    insideHeights.push(zUp ? pz : projectedHeight([px, py, pz], up));
+    let hx: number;
+    let hy: number;
+    if (zUp || basis.zAligned) {
+      hx = px;
+      hy = py;
+    } else {
+      hx = px * basis.east[0] + py * basis.east[1] + pz * basis.east[2];
+      hy = px * basis.north[0] + py * basis.north[1] + pz * basis.north[2];
+    }
+    if (!pointInPolygon2D(hx, hy, projPoly)) continue;
+    insideHeights.push(zUp ? pz : (px * up[0] + py * up[1] + pz * up[2]) / upLen);
   }
 
   // Choose the base height.
@@ -259,9 +273,9 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   const area = v.footprintArea;
   // Standard error of the mean thickness × area. The √N must be taken over the
   // SAME population the thickness σ was computed on — the `m` finite inside
-  // heights — not `inN` (volumeCutFill's count, which would also include any
-  // non-finite-z inside points). They coincide for finite clouds, but using `m`
-  // keeps σ and √N self-consistent regardless of how volumeCutFill counts.
+  // heights — not `inN`. The two coincide (volumeCutFill also excludes
+  // non-finite-z inside points), but using `m` keeps σ and √N self-consistent
+  // regardless of how volumeCutFill counts.
   const samplingError = m > 0 ? (area * stdThk) / Math.sqrt(m) : 0;
   const basePlaneError = area * baseUncertainty;
   const sigma = Math.hypot(samplingError, basePlaneError);
@@ -301,12 +315,6 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     validity: 'ok',
     caveats,
   };
-}
-
-/** Height of a point along the up axis (general-up case). */
-function projectedHeight(p: Vec3, up: Vec3): number {
-  const len = Math.hypot(up[0], up[1], up[2]) || 1;
-  return (p[0] * up[0] + p[1] * up[1] + p[2] * up[2]) / len;
 }
 
 function stdDev(values: ArrayLike<number>): number {

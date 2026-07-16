@@ -472,3 +472,27 @@ describe('encode/decodeSamplerParams — the B7/B8 persistence seam', () => {
     expect(normaliseResampleParams(decoded, 1).corridorWidth).toBe(MAX_CORRIDOR_HALF_WIDTH_M);
   });
 });
+
+describe('sampleProfile — non-finite points (organized-cloud invalid returns)', () => {
+  it('ignores an all-NaN point instead of throwing', () => {
+    // Binary PCD organized clouds mark invalid points as NaN per spec, and
+    // the Viewer's profile path concatenates raw positions. A NaN point
+    // sails past both corridor rejections (NaN comparisons are false) —
+    // it must be dropped before the bin lookup, not crash the sampler.
+    const out = sampleProfile({
+      a: [0, 0, 0],
+      b: [10, 0, 0],
+      up: Z_UP,
+      positions: Float32Array.of(5, 0, 1, NaN, NaN, NaN),
+      samples: 8,
+    });
+    expect(out).toHaveLength(8);
+    // The real point still feeds its bin…
+    const hit = out.find((s) => Number.isFinite(s.height));
+    expect(hit).toBeDefined();
+    expect(hit!.height).toBeCloseTo(1, 6);
+    // …and the NaN point contributed evidence to none.
+    const totalCount = out.reduce((acc, s) => acc + (s.count ?? 0), 0);
+    expect(totalCount).toBe(1);
+  });
+});

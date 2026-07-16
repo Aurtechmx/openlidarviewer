@@ -168,3 +168,34 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(r.volume).toBe(0);
   });
 });
+
+describe('stockpileVolume — general-up clouds', () => {
+  test('a Y-up slab against an explicit base gives area×thickness, like the Z-up case', () => {
+    // The first test's slab with the axes swapped to the phone-scan
+    // convention: footprint on the y = 0 plane, thickness along +Y. Pins
+    // the general-up gather path to the same analytic answer.
+    const polygon: Vec3[] = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 0, 10],
+      [0, 0, 10],
+    ];
+    const pts: number[] = [];
+    for (let x = 0.25; x < 10; x += 0.25) {
+      for (let z = 0.25; z < 10; z += 0.25) {
+        pts.push(x, 2, z);
+      }
+    }
+    const r = stockpileVolume({
+      polygon,
+      positions: Float32Array.from(pts),
+      up: [0, 1, 0],
+      base: { mode: 'explicit', z: 0 },
+    });
+    expect(r.validity).toBe('ok');
+    expect(r.volume).toBeCloseTo(200, 1);
+    expect(r.cut).toBeCloseTo(0, 6);
+    expect(r.breakdown.footprintArea).toBeCloseTo(100, 1);
+    expect(r.breakdown.meanThickness).toBeCloseTo(2, 6);
+  });
+});
