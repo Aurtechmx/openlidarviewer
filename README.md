@@ -410,7 +410,7 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.9**. The full, dated history is in
+The current release is **v0.6.0-alpha.1**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md), and the per-release highlights live in the
 [Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/)
 (source: the `RELEASE_NOTES_v*.md` files in this repository).

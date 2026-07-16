@@ -42,9 +42,11 @@ try {
   problems.push('package-lock.json missing or unparseable.');
 }
 
-// 2. README current-release line.
+// 2. README current-release line. The capture accepts semver prereleases
+// (e.g. v0.6.0-alpha.1) — a plain [0-9.]* stopped at the hyphen and reported a
+// spurious mismatch for any prerelease cut.
 const readme = read('README.md');
-const m = readme.match(/current release is \*\*v([0-9][0-9.]*)\*\*/i);
+const m = readme.match(/current release is \*\*v([0-9][0-9A-Za-z.\-]*)\*\*/i);
 if (!m) problems.push('README.md has no "current release is **vX.Y.Z**" line to check.');
 else if (m[1] !== version) problems.push(`README.md says current release v${m[1]}, expected v${version}.`);
 

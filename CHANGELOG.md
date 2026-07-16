@@ -2,6 +2,30 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.0-alpha.1] - 2026-07-16
+
+First alpha of the v0.6 cycle: startup and streaming performance, two rendering-correctness fixes, and the start of the internal restructuring that the v0.6 workflow features build on. Alpha caveat: this cut is for evaluation; interfaces and internals may still change before v0.6.0.
+
+### Added
+
+- **Stale-chunk recovery.** A tab left open across a deploy no longer breaks the first action that touches a swept-away code chunk: the failed dynamic import is classified (across Chromium/Firefox/Safari/Vite phrasings) and the page reloads once, guarded by a per-tab cooldown so a persistent failure surfaces an error instead of a reload loop. URL and query are preserved.
+- **Dependency-singleton guard.** `npm run check:deps` fails the release gate if a second copy of three, laz-perf, proj4, or pdf-lib ever enters the tree (duplicate decoder/geometry state is a correctness risk, not just bloat); Vite dedupe backs it up at resolve time. A real duplicate laz-perf was collapsed by removing the unused `@loaders.gl/las` dependency.
+
+### Changed
+
+- **Startup bundle −15 %.** The Analyse and Object panels now mount on first scan load instead of at boot, cutting the live entry chunk from 792 KiB to ~678 KiB; the bundle-budget guard's ceiling drops 800 → 720 KiB with an early-warning threshold at 680 so the win cannot silently erode.
+- **Live probe pauses during camera drags.** The hover readout's detailed GPU pick is skipped while the user is actively orbiting or panning — you are navigating, not reading a value — and fires once as soon as the drag settles.
+- **Measurement station tables build lazily.** Station rows render when their section is first expanded; exports are byte-identical.
+
+### Fixed
+
+- **Polygon reclassification on non-Z-up scans.** For a non-Z-up up-axis, the polygon was projected onto an (east, north) basis while each point was tested in raw XY — mismatched spaces that reclassified the wrong points on rotated, Y-up, tilted, or non-origin clouds. Points now project through the same basis, height included; the Z-up fast path is unchanged.
+- **COPC/EPT refinement flicker.** Streaming LOD transitions cross-faded with `transparent: true` while keeping depth writes for EDL, so overlapping coarse/fine layers z-fought and refining regions pulsed while a cloud streamed in. Transitions are now an opaque per-point dither dissolve driven through the size graph — no transparency, no z-fight, EDL stays exact — and an evicted node dissolves out from its current density instead of snapping to full.
+
+### Internal
+
+- **Composition root.** New `AppRuntime`/`AppContext` own the shared application state (layer visibility/solo/comparison, active-scan selection, saved views) that previously lived in module-level mutables, and the first extracted service (`LayerService`) manages the layer list against it. Behaviour-preserving; groundwork for the v0.6 decomposition.
+
 ## [0.5.9] - 2026-07-15
 
 v0.5.9 launches Contour Studio — a post-analysis workflow that turns a correctly analysed LiDAR scan into an evidence-aware terrain deliverable, kept out of the crowded analysis panel — alongside scientific-correctness, unit, evidence-gate, provenance, and registration fixes that stand on their own. Headline additions: a verifiable hash-chained processing manifest, a labelled colorbar legend (live and burned into figures), named restorable view states (session schema v7), GPS-time and return-number colour modes, and purpose-driven contour exports whose geometry differs by purpose.
