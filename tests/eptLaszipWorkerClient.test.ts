@@ -146,6 +146,20 @@ describe('EptLaszipWorkerClient protocol', () => {
     await expect(promise).rejects.toThrow(/worker failed/i);
   });
 
+  test('a decode after a worker onerror settles instead of hanging on the dead worker', async () => {
+    const { client, worker } = mkClient();
+    const inflight = client.decodeTile(new ArrayBuffer(8), [0, 0, 0]);
+    worker.onerror?.(new Event('error'));
+    await expect(inflight).rejects.toThrow(/worker failed/i);
+    // The dead worker is terminated, not left installed.
+    expect(worker.terminated).toBe(true);
+    // A NEW decode must not post to the dead worker (which would never reply) —
+    // it rejects promptly so the caller's error path runs.
+    const after = client.decodeTile(new ArrayBuffer(8), [0, 0, 0]);
+    expect(worker.posted).toHaveLength(1); // no second decode posted
+    await expect(after).rejects.toThrow(/worker failed/i);
+  });
+
   test('onDecodeMs fires once per successful decode', async () => {
     const { client, worker } = mkClient();
     const spy = vi.fn();

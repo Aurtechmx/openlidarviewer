@@ -45,6 +45,7 @@ export class CopcWorkerClient implements ChunkDecoder {
   private readonly _pending = new Map<number, PendingRequest>();
   private _nextRequestId = 0;
   private _disposed = false;
+  private _broken = false;
 
   /**
    * Optional hook called after each successful decode with the wall-time
@@ -60,7 +61,12 @@ export class CopcWorkerClient implements ChunkDecoder {
       this._onMessage(event.data);
     };
     this._worker.onerror = (): void => {
+      // The worker died. Tear it down and mark the client broken so a later
+      // decode rejects at once instead of posting into a corpse that never
+      // replies — which would leave the scheduler's node stuck 'loading'.
+      this._broken = true;
       this._failAll(new Error('The COPC decode worker failed.'));
+      this._worker.terminate();
     };
   }
 
@@ -77,6 +83,10 @@ export class CopcWorkerClient implements ChunkDecoder {
     return new Promise<DecodedChunk>((resolve, reject) => {
       if (this._disposed) {
         reject(new Error('The COPC decode worker has been disposed.'));
+        return;
+      }
+      if (this._broken) {
+        reject(new Error('The COPC decode worker failed.'));
         return;
       }
       if (signal?.aborted) {
