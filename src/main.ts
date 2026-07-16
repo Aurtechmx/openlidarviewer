@@ -270,6 +270,7 @@ import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
+import { createAppRuntime } from './app/AppRuntime';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -1111,10 +1112,15 @@ registry.register(scanReport);
 
 /** Viewer id of the cloud the Inspector currently controls (the most recent). */
 let activeId: string | null = null;
-/** The isolated (soloed) layer id, or null when no layer is isolated. */
-let soloLayer: string | null = null;
+// The composition root owns the shared app state. v0.6 migrates main.ts's
+// module-level mutables onto it one cluster at a time; the layer/comparison
+// cluster (visibility intent, solo, last comparison) moves first. `layers` is a
+// terse local handle onto that cluster — mutating its fields writes through to
+// the context.
+const runtime = createAppRuntime();
+const layers = runtime.context.layers;
 /** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
-const layerVisible = new Map<string, boolean>();
+const layerVisible = layers.visible;
 /**
  * An in-memory saved view: the pose the camera glides to plus (v7) the
  * optional display-state bundle captured with it — clip, colour mode, class
@@ -1308,7 +1314,7 @@ const inspector = new Inspector({
   },
   onRemove: (id) => removeCloud(id),
   onToggleSolo: (id) => {
-    soloLayer = nextSolo(soloLayer, id);
+    layers.solo = nextSolo(layers.solo, id);
     applyLayerVisibility();
   },
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
@@ -7234,9 +7240,9 @@ function buildLayerInfos(): LayerInfo[] {
 
 /** Push the model's effective visibility (intent + isolate) to the viewer + UI. */
 function applyLayerVisibility(): void {
-  const eff = resolveVisibility(buildLayerInfos(), soloLayer);
+  const eff = resolveVisibility(buildLayerInfos(), layers.solo);
   for (const [id, on] of eff) viewer.setCloudVisible(id, on);
-  inspector.setLayerSolo(soloLayer);
+  inspector.setLayerSolo(layers.solo);
 }
 
 /** Recompute and surface cross-layer CRS mismatches (overlay alignment guard). */
@@ -7256,8 +7262,6 @@ function refreshLayerCrsFlags(): void {
  * thread, so it's deferred a frame to let the "working" line paint; large
  * clouds may take a moment.
  */
-/** A georeferenced .asc of the most recent comparison, ready to download. */
-let lastDifference: { stem: string; asc: () => string } | null = null;
 
 /**
  * The larger of a cloud's X/Y world-frame spans, from a strided sample — a cheap
@@ -7291,7 +7295,7 @@ function compareLoadedLayers(): void {
   if (!a || !b) return;
   inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
   inspector.setDifferenceAvailable(false);
-  lastDifference = null;
+  layers.lastDifference = null;
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
@@ -7358,7 +7362,7 @@ function compareLoadedLayers(): void {
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
-      lastDifference = {
+      layers.lastDifference = {
         stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
         asc: () =>
           changeToEsriAscii({
@@ -7379,7 +7383,8 @@ function compareLoadedLayers(): void {
 
 /** Download the most recent elevation difference as an ESRI ASCII grid. */
 function exportDifferenceRaster(): void {
-  if (lastDifference) downloadText(`${lastDifference.stem}.asc`, lastDifference.asc());
+  const diff = layers.lastDifference;
+  if (diff) downloadText(`${diff.stem}.asc`, diff.asc());
 }
 
 function removeCloud(id: string): void {
@@ -7388,7 +7393,7 @@ function removeCloud(id: string): void {
   sourceFileById.delete(id);
   reducedById.delete(id);
   layerVisible.delete(id);
-  if (soloLayer === id) soloLayer = null;
+  if (layers.solo === id) layers.solo = null;
   if (activeId === id) activeId = null;
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
@@ -7418,7 +7423,7 @@ function clearOpenStaticLayers(): void {
     if (activeId === id) activeId = null;
   }
   layerVisible.clear();
-  soloLayer = null;
+  layers.solo = null;
 }
 
 /**
@@ -7432,7 +7437,7 @@ function closeScan(): void {
     inspector.removeCloud(id);
   }
   layerVisible.clear();
-  soloLayer = null;
+  layers.solo = null;
   resetToEmptyState();
 }
 
