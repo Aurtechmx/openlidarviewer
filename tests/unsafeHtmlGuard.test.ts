@@ -96,6 +96,9 @@ const ALLOWLIST: readonly string[] = [
   'src/ui/NavBar.ts::olv-mode-pan-icon',
   'src/ui/ThemeToggle.ts::ICON_SVG[name]',
   'src/ui/MeasurePanel.ts::svg + overlay',
+  // The profile row's expand-to-focus control: `ICON_EXPAND`, a module-level
+  // literal SVG string from `dockIcons.svg()`, same house style as the dock.
+  'src/ui/MeasurePanel.ts::ICON_EXPAND',
   'src/ui/Stage.ts::olv-capture-chip-icon',
   // v0.4.6 icon-system pass (hand-verified 2026-06-14). Every entry below
   // injects a module-level literal SVG icon string; any accompanying label is

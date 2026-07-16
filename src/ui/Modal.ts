@@ -27,6 +27,14 @@ export interface ModalOptions {
   readonly returnFocusTo?: HTMLElement | null;
   /** Called once, after the modal is torn down. */
   readonly onClose?: () => void;
+  /**
+   * Keep the backdrop mounted this many ms after close so a caller can play a
+   * CSS exit transition — the backdrop gets `olv-modal-closing` for the wait,
+   * then is removed. Focus restore + `onClose` still fire synchronously, so the
+   * dismissal semantics are unchanged; only the DOM removal is deferred. Omit
+   * (the default) to remove immediately, byte-for-byte the prior behaviour.
+   */
+  readonly exitMs?: number;
 }
 
 export interface ModalHandle {
@@ -80,7 +88,15 @@ export function openModal(opts: ModalOptions): ModalHandle {
     if (closed) return;
     closed = true;
     window.removeEventListener('keydown', onKeyDown, true);
-    backdrop.remove();
+    const exitMs = opts.exitMs ?? 0;
+    if (exitMs > 0) {
+      // Keep the surface painted for the exit transition, but immediately inert
+      // so it cannot take input while it fades; drop it once the wait elapses.
+      backdrop.classList.add('olv-modal-closing');
+      window.setTimeout(() => backdrop.remove(), exitMs);
+    } else {
+      backdrop.remove();
+    }
     // Restore focus to the trigger so keyboard users land back where they were.
     if (restoreTo && document.contains(restoreTo)) restoreTo.focus();
     opts.onClose?.();

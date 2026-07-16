@@ -8,6 +8,8 @@
  */
 
 import { el } from './dom';
+import { ICON_EXPAND } from './dockIcons';
+import { openResultFocus } from './ResultFocus';
 import { triggerDownload } from '../io/download';
 // Guarded localStorage access — bare getItem/setItem throws in sandboxed
 // iframes (the embed path) and some privacy modes; see safeStorage.ts.
@@ -33,6 +35,7 @@ import {
   computeProfileSummary,
   profileStationRows,
   profileSummaryRows,
+  type ProfileStationRow,
 } from '../render/measure/profileSummary';
 // Δh in the chart tooltip goes through the shared formatter so it carries
 // its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
@@ -95,6 +98,17 @@ export const PROFILE_CHART_MAX_HEIGHT_PX = 640;
  */
 export const PROFILE_VEX_OPTIONS = [1, 2, 5, 10] as const;
 const PROFILE_VEX_KEY = 'olv:measure:profile:vex:v1';
+
+/**
+ * Disclosure state for the two collapsible profile sections, remembered so the
+ * panel doesn't reset a reader's chosen layout on every re-render. One key each,
+ * panel-wide (the same "consistent reading state, not per-profile memory" rule
+ * the chart-height and VEX keys follow). The Summary defaults OPEN — it is the
+ * glanceable headline — and the station table defaults CLOSED so a 64-row table
+ * never dominates the dock until asked for.
+ */
+const PROFILE_SUMMARY_OPEN_KEY = 'olv:measure:profile:summaryOpen:v1';
+const PROFILE_STATIONS_OPEN_KEY = 'olv:measure:profile:stationsOpen:v1';
 
 /**
  * Trailing-edge debounce for the sampler controls (B7/B8). Long enough to
@@ -392,7 +406,79 @@ export class MeasurePanel {
         fileInput,
       ]),
     ]);
+    // Explicit SE resize grip. The native `resize: horizontal` corner sits under
+    // the rail's collapse tab (a z-index:20 handle pinned flush to the shared
+    // right edge), which swallows the pointer-down before the drag can engage —
+    // so the panel looked resizable but wasn't. This grip rides ABOVE the tab
+    // and drives the same width the ResizeObserver already persists.
+    this.element.append(this._buildResizeHandle());
     this._restorePanelWidth();
+  }
+
+  /**
+   * The panel's own south-east resize grip, raised above the rail collapse tab
+   * that covers the native handle. A pointer drag (or arrow keys) rewrites the
+   * panel width within the CSS bounds; the width observer in `_restorePanelWidth`
+   * picks up the change and persists it, so no separate save path is needed.
+   */
+  private _buildResizeHandle(): HTMLElement {
+    const handle = el('div', {
+      className: 'olv-mp-resize',
+      title: 'Drag to resize the panel (← / → to nudge)',
+      ariaLabel: 'Resize measurements panel',
+    });
+    handle.setAttribute('role', 'separator');
+    handle.setAttribute('aria-orientation', 'vertical');
+    handle.tabIndex = 0;
+
+    const clamp = (w: number): number =>
+      Math.min(
+        MEASURE_PANEL_MAX_WIDTH_PX,
+        Math.max(MEASURE_PANEL_MIN_WIDTH_PX, Math.round(w)),
+      );
+
+    let startX = 0;
+    let startW = 0;
+    const onMove = (e: PointerEvent): void => {
+      this.element.style.width = `${clamp(startW + (e.clientX - startX))}px`;
+    };
+    const onUp = (e: PointerEvent): void => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer was never captured (older engines) — nothing to release. */
+      }
+      handle.classList.remove('olv-mp-resize-active');
+    };
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return; // primary button / pen / touch only
+      startX = e.clientX;
+      startW = this.element.offsetWidth;
+      handle.classList.add('olv-mp-resize-active');
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch {
+        /* setPointerCapture unavailable — window listeners still track the drag. */
+      }
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      e.preventDefault();
+    });
+    // Keyboard parity — the native grip offers none, and a survey tool should be
+    // driveable without a mouse. Shift takes a coarser step.
+    handle.addEventListener('keydown', (e) => {
+      const step = e.shiftKey ? 32 : 8;
+      if (e.key === 'ArrowLeft') {
+        this.element.style.width = `${clamp(this.element.offsetWidth - step)}px`;
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight') {
+        this.element.style.width = `${clamp(this.element.offsetWidth + step)}px`;
+        e.preventDefault();
+      }
+    });
+    return handle;
   }
 
   /**
@@ -627,6 +713,96 @@ export class MeasurePanel {
     const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
     const csv = buildProfileCsv(s.profileChart, system);
     triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
+  }
+
+  /**
+   * Escalate a profile result into the shared focus surface — the same chart,
+   * stats and full station table the dock renders, given room to read. Pure
+   * presentation: every node comes from the existing renderers/builders
+   * (`renderProfileChart`, `profileSummaryRows`, `buildStationTable`) and the
+   * export buttons reuse the panel's own CSV / PDF paths, so nothing here can
+   * disagree with the in-dock numbers. `ResultFocus` owns the chrome + a11y.
+   */
+  private _openProfileFocus(s: MeasurementSummary, trigger: HTMLElement): void {
+    if (!s.profileChart || s.profileChart.length < 2) return;
+    const samples = s.profileChart;
+    const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+    const storedVex = Number(storageGet(PROFILE_VEX_KEY));
+    const vex = PROFILE_VEX_OPTIONS.includes(storedVex as 1 | 2 | 5 | 10) ? storedVex : 1;
+
+    openResultFocus({
+      title: s.name,
+      triggerEl: trigger,
+      render: (container) => {
+        // Chart — the SAME renderer, given the surface's larger reading height.
+        const chart = renderProfileChart(samples, vex, system);
+        chart.classList.add('olv-rf-chart');
+
+        // Stats — the same summary rows, as a clean multi-column grid.
+        const stats = el('dl', {
+          className: 'olv-rf-stats',
+          ariaLabel: `Profile summary for ${s.name}`,
+        });
+        for (const row of profileSummaryRows(computeProfileSummary(samples), system)) {
+          stats.append(
+            el('div', { className: 'olv-rf-stat' }, [
+              el('dt', { className: 'olv-rf-stat-label', text: row.label }),
+              el('dd', { className: 'olv-rf-stat-value', text: row.value }),
+            ]),
+          );
+        }
+
+        // Station table — the same builder, materialised eagerly (the reader
+        // opened the focus view precisely to read the whole table).
+        const unitLabel = system === 'metric' ? 'm' : 'ft';
+        const stationRows = profileStationRows(samples, system);
+        const { table, build } = buildStationTable(stationRows, unitLabel, s.name);
+        build();
+        const stations = el('div', { className: 'olv-rf-stations' }, [
+          el('div', {
+            className: 'olv-rf-section-label',
+            text: `Station table (${stationRows.length})`,
+          }),
+          el('div', { className: 'olv-mp-stations-wrap olv-rf-stations-wrap' }, [table]),
+        ]);
+
+        container.append(chart, stats, stations);
+
+        // Streaming-resident caveat — the same honest coverage line as the dock.
+        if (s.profileChartResidentOnly) {
+          container.append(
+            el('div', {
+              className: 'olv-mp-chart-caveat',
+              text: 'Resident-node analysis only — profile may refine as streaming loads.',
+            }),
+          );
+        }
+
+        // Export actions reuse the panel's own builders (CSV → buildProfileCsv,
+        // PDF → the scaled sheet), so the focus view is a place to work.
+        const csvBtn = el('button', {
+          className: 'olv-mp-profile-pdf',
+          text: 'CSV',
+          title: `Export ${s.name} station data as CSV`,
+          ariaLabel: `Export profile ${s.name} station data as CSV`,
+        });
+        csvBtn.addEventListener('click', () => {
+          csvBtn.blur();
+          this._exportProfileCsv(s);
+        });
+        const pdfBtn = el('button', {
+          className: 'olv-mp-profile-pdf',
+          text: 'Export PDF',
+          title: `Export ${s.name} as a scaled profile sheet (PDF)`,
+          ariaLabel: `Export profile ${s.name} as PDF`,
+        });
+        pdfBtn.addEventListener('click', () => {
+          pdfBtn.blur();
+          void this._exportProfilePdf(s, pdfBtn);
+        });
+        container.append(el('div', { className: 'olv-rf-actions' }, [csvBtn, pdfBtn]));
+      },
+    });
   }
 
   /**
@@ -1023,53 +1199,17 @@ export class MeasurePanel {
       // a real table in the DOM acting as the accessible source of truth.
       const stationRows = profileStationRows(s.profileChart, system);
       const unitLabel = system === 'metric' ? 'm' : 'ft';
-      const headerCells = [
-        'Station',
-        `Chainage (${unitLabel})`,
-        `Elevation (${unitLabel})`,
-        'Points',
-        'Grade (%)',
-      ].map((h) => {
-        const th = el('th', { className: 'olv-mp-stations-th', text: h });
-        th.setAttribute('scope', 'col');
-        return th;
-      });
-      // Lazy <tbody> (v0.6 perf): the station table is collapsed by default
-      // and most measurements are never expanded, yet a dense profile carries
-      // one row per sample — building every <tr>/<td> up front spends DOM work
-      // (and the browser's layout/style cost) on a table the user usually never
-      // opens. Defer the row build until the <details> is first opened, then
-      // cache it (build exactly once). Only the DOM construction moves: the row
-      // MODEL (`stationRows`) is still computed eagerly above so the summary
-      // count, the CSV and the PDF stay in lockstep — the measurement math and
-      // exported data are untouched.
-      const tbody = el('tbody');
-      let stationsBuilt = false;
-      const buildStationRows = (): void => {
-        if (stationsBuilt) return;
-        stationsBuilt = true;
-        for (const r of stationRows) {
-          // The row model uses '' for honest gaps (CSV blanks); the table
-          // shows an em dash so a gap is visibly "no data", not an empty cell.
-          const dash = (v: string) => (v === '' ? '—' : v);
-          tbody.append(
-            el('tr', {}, [
-              el('td', { className: 'olv-mp-stations-td', text: r.station }),
-              el('td', { className: 'olv-mp-stations-td', text: dash(r.chainage) }),
-              el('td', { className: 'olv-mp-stations-td', text: dash(r.elevation) }),
-              el('td', { className: 'olv-mp-stations-td', text: dash(r.points) }),
-              el('td', { className: 'olv-mp-stations-td', text: dash(r.grade) }),
-            ]),
-          );
-        }
-      };
-      const stationTable = el(
-        'table',
-        {
-          className: 'olv-mp-stations-table',
-          ariaLabel: `Station table for ${s.name}`,
-        },
-        [el('thead', {}, [el('tr', {}, headerCells)]), tbody],
+      // Lazy <tbody> (v0.6 perf): the station table is collapsed by default and
+      // most measurements are never expanded, yet a dense profile carries one
+      // row per sample — building every <tr>/<td> up front spends DOM work on a
+      // table the user usually never opens. The shared builder defers the row
+      // build until the disclosure is first opened, then caches it (build
+      // exactly once). The row MODEL (`stationRows`) is still computed eagerly
+      // above so the summary count, the CSV and the PDF stay in lockstep.
+      const { table: stationTable, build: buildStationRows } = buildStationTable(
+        stationRows,
+        unitLabel,
+        s.name,
       );
       const stationDetails = el('details', { className: 'olv-mp-stations' }, [
         el('summary', {
@@ -1079,21 +1219,60 @@ export class MeasurePanel {
         }),
         el('div', { className: 'olv-mp-stations-wrap' }, [stationTable]),
       ]);
-      // `toggle` fires on both open and close; guard on `.open` so a close is a
-      // no-op, and `buildStationRows` self-guards so the body is built exactly
-      // once and then cached for every later open. A collapsed <details> hides
-      // its contents from the accessibility tree anyway, so deferring the rows
-      // costs no screen-reader access — they exist by the time the table is read.
+      // Restore the reader's last disclosure state (default CLOSED). Setting
+      // `.open` directly does not always dispatch `toggle` synchronously, so the
+      // rows are built here rather than waited for.
+      if (storageGet(PROFILE_STATIONS_OPEN_KEY) === '1') {
+        stationDetails.open = true;
+        buildStationRows();
+      }
+      // `toggle` fires on both open and close; build on open (self-guarded so the
+      // body is materialised exactly once), and remember the state so a re-render
+      // doesn't reset the reader's chosen layout. A collapsed <details> hides its
+      // contents from the accessibility tree anyway, so deferring the rows costs
+      // no screen-reader access — they exist by the time the table is read.
       stationDetails.addEventListener('toggle', () => {
         if (stationDetails.open) buildStationRows();
+        storageSet(PROFILE_STATIONS_OPEN_KEY, stationDetails.open ? '1' : '0');
       });
+
+      // Progressive disclosure: the Summary is the glanceable headline (open by
+      // default), the station table the on-demand detail (closed). Both remember
+      // their state per session so the panel reopens the way it was left.
+      const summaryDetails = el('details', { className: 'olv-mp-summary-sec' }, [
+        el('summary', {
+          className: 'olv-mp-summary-sec-toggle',
+          text: 'Summary',
+          title: 'Length, gain and steepest section — the glanceable profile headline.',
+        }),
+        summaryList,
+      ]);
+      summaryDetails.open = storageGet(PROFILE_SUMMARY_OPEN_KEY) !== '0';
+      summaryDetails.addEventListener('toggle', () => {
+        storageSet(PROFILE_SUMMARY_OPEN_KEY, summaryDetails.open ? '1' : '0');
+      });
+
+      // Escalate the whole result into the shared focus surface. The trigger
+      // lives in the row header; the surface reuses the chart renderer, the
+      // summary rows and the station table verbatim (see `_openProfileFocus`).
+      const expandBtn = el('button', {
+        className: 'olv-mp-expand',
+        unsafeHtml: ICON_EXPAND,
+        title: `Expand ${s.name} to a focus view`,
+        ariaLabel: `Expand profile ${s.name} to a focus view`,
+      });
+      expandBtn.addEventListener('click', () => {
+        expandBtn.blur();
+        this._openProfileFocus(s, expandBtn);
+      });
+      headRow.append(expandBtn);
 
       const children: HTMLElement[] = [
         headRow,
         chart,
         vexStrip,
         ...(samplerBlock ? [samplerBlock] : []),
-        summaryList,
+        summaryDetails,
         stationDetails,
       ];
       // Streaming-resident caveat: surface a coverage caption beneath the
@@ -1217,6 +1396,58 @@ export class MeasurePanel {
  * browser resolves first.
  */
 let chartClipSeq = 0;
+
+/**
+ * Build the station table — a `<thead>` plus a lazily-populated `<tbody>` —
+ * shared by the in-panel disclosure and the focus surface so both render the
+ * identical rows from `profileStationRows` (the same model the CSV writes).
+ * `build()` fills the body exactly once: the in-panel path defers it to the
+ * first open (dense profiles carry one row per sample), the focus surface — a
+ * deliberate "read the whole table" gesture — calls it eagerly.
+ */
+function buildStationTable(
+  stationRows: readonly ProfileStationRow[],
+  unitLabel: string,
+  name: string,
+): { table: HTMLElement; build: () => void } {
+  const headerCells = [
+    'Station',
+    `Chainage (${unitLabel})`,
+    `Elevation (${unitLabel})`,
+    'Points',
+    'Grade (%)',
+  ].map((h) => {
+    const th = el('th', { className: 'olv-mp-stations-th', text: h });
+    th.setAttribute('scope', 'col');
+    return th;
+  });
+  const tbody = el('tbody');
+  let built = false;
+  const build = (): void => {
+    if (built) return;
+    built = true;
+    for (const r of stationRows) {
+      // '' is an honest gap (blank in the CSV); the table shows an em dash so a
+      // gap reads as "no data", not an empty cell.
+      const dash = (v: string): string => (v === '' ? '—' : v);
+      tbody.append(
+        el('tr', {}, [
+          el('td', { className: 'olv-mp-stations-td', text: r.station }),
+          el('td', { className: 'olv-mp-stations-td', text: dash(r.chainage) }),
+          el('td', { className: 'olv-mp-stations-td', text: dash(r.elevation) }),
+          el('td', { className: 'olv-mp-stations-td', text: dash(r.points) }),
+          el('td', { className: 'olv-mp-stations-td', text: dash(r.grade) }),
+        ]),
+      );
+    }
+  };
+  const table = el(
+    'table',
+    { className: 'olv-mp-stations-table', ariaLabel: `Station table for ${name}` },
+    [el('thead', {}, [el('tr', {}, headerCells)]), tbody],
+  );
+  return { table, build };
+}
 
 function renderProfileChart(
   samples: readonly { distance: number; height: number }[],

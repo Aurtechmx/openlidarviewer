@@ -3510,14 +3510,63 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-measure-panel {
   width: 218px; box-sizing: border-box;
-  /* Drag the south-east handle to widen the panel (and the profile chart
-   * inside it) rightward into the canvas. `overflow: auto` is required for
-   * the native resize handle to engage; the chosen width is persisted. */
+  /* Drag the south-east grip (`.olv-mp-resize`) to widen the panel (and the
+   * profile chart inside it) rightward into the canvas. `overflow: auto` keeps
+   * the native `resize: horizontal` as a fallback; the chosen width is
+   * persisted. `position: relative` anchors the explicit grip, which rides
+   * ABOVE the rail collapse tab that otherwise covers the native corner. */
+  position: relative;
   min-width: 218px; max-width: 760px;
   resize: horizontal; overflow: auto;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
+/* Explicit SE resize grip — a quiet corner chevron in the hairline vocabulary.
+ * z-index 21 lifts it over the rail collapse tab (`.olv-rail-tab`, z-index 20)
+ * that sits flush on the shared right edge and swallowed the native handle's
+ * pointer-down, so the panel LOOKED resizable but never engaged. */
+.olv-mp-resize {
+  position: absolute; right: 0; bottom: 0;
+  width: 16px; height: 16px; z-index: 21;
+  cursor: ew-resize; touch-action: none;
+  color: var(--text-faint); opacity: 0.5;
+  border-bottom-right-radius: var(--radius-lg);
+  background: linear-gradient(
+    135deg,
+    transparent 0 46%, currentColor 46% 53%,
+    transparent 53% 69%, currentColor 69% 76%, transparent 76%
+  );
+  transition: opacity var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-resize:hover, .olv-mp-resize-active { opacity: 1; color: var(--text-dim); }
+.olv-mp-resize:focus-visible {
+  outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) { .olv-mp-resize { transition: none; } }
+
+/* Expand-to-focus control in a profile row header — unobtrusive icon button in
+ * the same house line-icon family as the dock glyphs. Opens the focus surface. */
+.olv-mp-expand {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0;
+  color: var(--text-faint); background: none;
+  border: 0.5px solid transparent; border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-expand svg { width: 15px; height: 15px; }
+.olv-mp-expand:hover {
+  color: var(--text); border-color: var(--hairline-strong);
+  background: rgba(255, 255, 255, 0.04);
+}
+.olv-mp-expand:focus-visible {
+  outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
+}
+@media (prefers-reduced-motion: reduce) { .olv-mp-expand { transition: none; } }
 .olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 .olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
 /* Geographic-CRS honesty notice: sits between the panel head and the list;
@@ -3739,6 +3788,33 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   margin: 0; font-family: var(--mono); font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums; color: var(--text-dim);
   overflow-wrap: anywhere;
+}
+
+/* Collapsible "Summary" section — the glanceable headline, open by default, in
+ * the same disclosure vocabulary as the station table and witness sections so
+ * the two profile sections read as a matched pair. */
+.olv-mp-summary-sec { margin: var(--space-2xs) var(--space-xs) 0 var(--space-xs); }
+.olv-mp-summary-sec-toggle {
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-faint);
+  padding: var(--space-2xs) 0;
+  list-style: none; user-select: none;
+}
+.olv-mp-summary-sec-toggle::-webkit-details-marker { display: none; }
+.olv-mp-summary-sec-toggle::before {
+  content: '\25B8';
+  display: inline-block; margin-right: var(--space-xs);
+  transition: transform var(--dur-fast) ease-out;
+}
+.olv-mp-summary-sec[open] .olv-mp-summary-sec-toggle::before { transform: rotate(90deg); }
+/* Nested in the disclosure now, so drop the standalone top/side margin. */
+.olv-mp-summary-sec > .olv-mp-profile-summary {
+  margin: var(--space-xs) 0 var(--space-2xs) var(--space-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-mp-summary-sec-toggle::before { transition: none; }
 }
 
 /* Profile sampler controls (v0.4.5, B7/B8) — a collapsed <details> directly
@@ -4709,6 +4785,82 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-modal-x:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .olv-modal-body { padding: var(--space-2xl); overflow-y: auto; }
 .olv-modal-foot { padding: var(--space-lg) var(--space-2xl) var(--space-2xl); }
+
+/* Deferred teardown for callers that pass `exitMs` to openModal — the backdrop
+ * carries this class while its exit transition plays, then is removed. Inert so
+ * a fading surface can't take input. No-op for callers that don't opt in. */
+.olv-modal-closing { pointer-events: none; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Result focus surface (olv-result-focus) — a large, isolated presentation of a
+   rich result (today: a MEASURE profile), built on the openModal chrome so it
+   inherits the focus trap, Escape, backdrop-click dismissal and focus restore.
+   Only the sizing, the scrim, the motion, and the content grid differ.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-result-focus {
+  /* A lighter, blurred scrim than the confirm modal so the isolated result
+     still reads against a hint of the cloud behind it. */
+  background: rgba(6, 10, 20, 0.5);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.olv-result-focus .olv-modal {
+  width: min(1040px, 92vw);
+  max-height: min(88vh, 900px);
+  /* The surface lives OUTSIDE the measure panel, so it opts into tabular
+     figures itself — every survey number stays column-aligned. */
+  font-variant-numeric: tabular-nums;
+  /* Scale + fade in, grown from the trigger (transform-origin set inline in JS).
+     `backwards` fill (not `both`) so the finished animation releases the
+     transform and the exit transition below can take over. */
+  animation: olv-rf-in var(--dur-base) var(--ease-spring) backwards;
+}
+@keyframes olv-rf-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+/* Exit — faster than the entrance, ease-in. Driven by `.olv-modal-closing`,
+   which openModal adds for `exitMs` before it removes the node. */
+.olv-result-focus.olv-modal-closing { opacity: 0; transition: opacity 130ms ease-in; }
+.olv-result-focus.olv-modal-closing .olv-modal {
+  opacity: 0; transform: scale(0.96);
+  transition: opacity 130ms ease-in, transform 130ms ease-in;
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-result-focus .olv-modal { animation: none; }
+  .olv-result-focus.olv-modal-closing,
+  .olv-result-focus.olv-modal-closing .olv-modal { transition: none; }
+}
+
+.olv-result-focus-body { display: flex; flex-direction: column; gap: var(--space-2xl); }
+/* The chart — same renderer as the dock, given the surface's reading height. */
+.olv-result-focus .olv-rf-chart { height: min(46vh, 460px); }
+/* Stats — a clean multi-column grid of the same summary rows. */
+.olv-rf-stats {
+  display: grid; margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-md) var(--space-2xl);
+}
+.olv-rf-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-sm) 0; border-top: 0.5px solid var(--hairline);
+}
+.olv-rf-stat-label {
+  font-size: var(--text-2xs); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-rf-stat-value {
+  margin: 0; font-family: var(--mono); font-size: var(--text-md);
+  color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+/* Station table — reuses the in-panel scroll wrap + sticky header, with room to
+   read more rows at once than the 220px dock cap allows. */
+.olv-rf-stations { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-rf-section-label {
+  font-size: var(--text-2xs); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-rf-stations-wrap { max-height: 40vh; }
+.olv-rf-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 
 .olv-modal-form { display: flex; flex-direction: column; gap: var(--space-2xl); }
 .olv-modal-grid { display: flex; flex-direction: column; gap: var(--space-lg); }
