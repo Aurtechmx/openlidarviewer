@@ -52,6 +52,13 @@ export function sampleStridedTerrain(
   maxPoints: number,
   anyClass: boolean,
 ): StridedTerrainSample | null {
+  // A budget or total we can't read can't be honoured. A negative `maxPoints`
+  // in particular makes the stride collapse to 1 and would allocate the FULL
+  // cloud — silently ignoring the very cap the caller asked for. Refuse rather
+  // than over-allocate; a non-finite total has no sample size to derive.
+  if (!Number.isFinite(totalPoints) || totalPoints <= 0) return null;
+  if (!Number.isFinite(maxPoints) || maxPoints < 1) return null;
+
   // Static clouds keep their stable order; streaming nodes are ordered by their
   // octree key so arrival timing can't reshuffle the walk.
   const sortedStreaming = [...streamingBuffers].sort((a, b) =>
@@ -78,7 +85,14 @@ export function sampleStridedTerrain(
         positions[oi * 3] = x;
         positions[oi * 3 + 1] = y;
         positions[oi * 3 + 2] = z;
-        if (classification && cls) classification[oi] = cls[i];
+        // A class array shorter than its position array must leave the 255
+        // "no class channel" sentinel standing: `cls[i]` would read undefined
+        // and narrow to 0 on write — ASPRS "never classified", which terrain
+        // treats as a real class rather than as absent.
+        if (classification && cls) {
+          const c = cls[i];
+          if (c !== undefined) classification[oi] = c;
+        }
         oi++;
       }
     }

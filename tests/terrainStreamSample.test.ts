@@ -62,4 +62,35 @@ describe('sampleStridedTerrain', () => {
     };
     expect(sampleStridedTerrain([], [nan], 1, 300_000, false)).toBeNull();
   });
+
+  it('refuses a budget it cannot honour instead of allocating the full cloud', () => {
+    const a = node('2-0-0-0', 100);
+    // A negative budget makes ceil(total/max) negative, so the stride clamps to
+    // 1 and the walk would keep EVERY point — the opposite of a cap. Refuse.
+    expect(sampleStridedTerrain([], [a], 4, -5, false)).toBeNull();
+    expect(sampleStridedTerrain([], [a], 4, 0, false)).toBeNull();
+    expect(sampleStridedTerrain([], [a], 4, Number.NaN, false)).toBeNull();
+    expect(sampleStridedTerrain([], [a], 4, Number.POSITIVE_INFINITY, false)).toBeNull();
+  });
+
+  it('refuses a non-finite or empty total', () => {
+    const a = node('2-0-0-0', 100);
+    expect(sampleStridedTerrain([], [a], Number.NaN, 10, false)).toBeNull();
+    expect(sampleStridedTerrain([], [a], 0, 10, false)).toBeNull();
+    expect(sampleStridedTerrain([], [a], -4, 10, false)).toBeNull();
+  });
+
+  it('leaves the 255 no-class sentinel where the class array runs short', () => {
+    // A node whose class array is shorter than its point array: the missing
+    // entries must stay 255 ("no class channel"), not narrow to 0, which is the
+    // real ASPRS code for "never classified" and is filtered differently.
+    const short: KeyedTerrainStreamBuffer = {
+      key: '2-0-0-0',
+      pos: new Float32Array([0, 0, 0, 1, 1, 1, 2, 2, 2]), // 3 points
+      cls: new Uint8Array([2]), // only 1 class value
+    };
+    const out = sampleStridedTerrain([], [short], 3, 300_000, true);
+    expect(out).not.toBeNull();
+    expect(Array.from(out!.classification!)).toEqual([2, 255, 255]);
+  });
 });
