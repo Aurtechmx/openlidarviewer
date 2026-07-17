@@ -82,4 +82,43 @@ describe('CopcWorkerClient protocol', () => {
     expect(worker.posted).toHaveLength(1); // no second decode posted
     await expect(after).rejects.toThrow(/worker failed/i);
   });
+
+  test('a synchronous postMessage failure rejects and leaves no pending state', async () => {
+    const { client, worker } = mkClient();
+    let throwOnPost = true;
+    worker.postMessage = (message: unknown): void => {
+      if (throwOnPost) throw new Error('DataCloneError: could not be cloned');
+      worker.posted.push(message as Record<string, unknown>);
+    };
+    const ctrl = new AbortController();
+    const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
+
+    await expect(client.decode(new ArrayBuffer(8), META, ctrl.signal)).rejects.toThrow(
+      /DataCloneError/,
+    );
+    expect(client.pendingCount).toBe(0);
+    expect(removeSpy).toHaveBeenCalled();
+    expect(() => ctrl.abort()).not.toThrow();
+
+    // Not wedged: a later decode still completes.
+    throwOnPost = false;
+    const ok = client.decode(new ArrayBuffer(8), META);
+    const id = (worker.posted[worker.posted.length - 1] as { requestId: number }).requestId;
+    worker.reply({ type: 'decoded', requestId: id, decoded: { pointCount: 3 } as DecodedChunk });
+    expect((await ok).pointCount).toBe(3);
+    expect(client.pendingCount).toBe(0);
+  });
+
+  test('dispose detaches abort listeners, so a later abort is inert', async () => {
+    const { client, worker } = mkClient();
+    const ctrl = new AbortController();
+    const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
+    const promise = client.decode(new ArrayBuffer(8), META, ctrl.signal);
+    client.dispose();
+    await expect(promise).rejects.toThrow(/disposed/i);
+    expect(client.pendingCount).toBe(0);
+    expect(removeSpy).toHaveBeenCalled();
+    expect(() => ctrl.abort()).not.toThrow();
+    expect(worker.posted.some((m) => m.type === 'cancel')).toBe(false);
+  });
 });

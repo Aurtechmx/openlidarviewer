@@ -171,4 +171,51 @@ describe('EptLaszipWorkerClient protocol', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(typeof spy.mock.calls[0][0]).toBe('number');
   });
+
+  test('a synchronous postMessage failure rejects and leaves no pending state', async () => {
+    // A detached/untransferable buffer makes postMessage throw synchronously
+    // (DataCloneError). The promise must reject AND the request must not linger
+    // in `_pending` with a stranded abort listener — otherwise the map (and the
+    // signal's listener list) leaks one entry per failed post.
+    const worker = new FakeWorker();
+    let throwOnPost = true;
+    const realPost = worker.postMessage.bind(worker);
+    worker.postMessage = (m: unknown, t?: Transferable[]): void => {
+      if (throwOnPost) throw new Error('DataCloneError: could not be cloned');
+      realPost(m, t);
+    };
+    const client = new EptLaszipWorkerClient(() => worker);
+    const ctrl = new AbortController();
+    const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
+
+    await expect(
+      client.decodeTile(new ArrayBuffer(8), [0, 0, 0], ctrl.signal),
+    ).rejects.toThrow(/DataCloneError/);
+    expect(client.pendingCount).toBe(0);
+    expect(removeSpy).toHaveBeenCalled();
+
+    // Firing the abort after the failed post is a no-op — the listener is gone.
+    expect(() => ctrl.abort()).not.toThrow();
+
+    // The client is not wedged: a subsequent decode still completes.
+    throwOnPost = false;
+    const ok = client.decodeTile(new ArrayBuffer(8), [1, 2, 3]);
+    const id = worker.posted[worker.posted.length - 1].requestId;
+    worker.reply({ type: 'decoded', requestId: id, decoded: fakeDecoded(3) });
+    expect((await ok).pointCount).toBe(3);
+    expect(client.pendingCount).toBe(0);
+  });
+
+  test('_failAll (dispose) detaches abort listeners, so a later abort is inert', async () => {
+    const { client, worker } = mkClient();
+    const ctrl = new AbortController();
+    const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
+    const promise = client.decodeTile(new ArrayBuffer(8), [0, 0, 0], ctrl.signal);
+    client.dispose();
+    await expect(promise).rejects.toThrow(/disposed/i);
+    expect(client.pendingCount).toBe(0);
+    expect(removeSpy).toHaveBeenCalled();
+    expect(() => ctrl.abort()).not.toThrow();
+    expect(worker.posted.some((m) => m.type === 'cancel')).toBe(false);
+  });
 });

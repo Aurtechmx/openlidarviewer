@@ -53,6 +53,11 @@ export class CopcWorkerClient implements ChunkDecoder {
    */
   onDecodeMs: ((ms: number) => void) | undefined;
 
+  /** In-flight request count. Diagnostic — mirrors the EPT client's contract. */
+  get pendingCount(): number {
+    return this._pending.size;
+  }
+
   constructor() {
     this._worker = new Worker(new URL('./copcWorker.ts', import.meta.url), {
       type: 'module',
@@ -103,7 +108,16 @@ export class CopcWorkerClient implements ChunkDecoder {
         signal.addEventListener('abort', pending.onAbort, { once: true });
       }
       this._pending.set(requestId, pending);
-      this._worker.postMessage({ type: 'decode', requestId, chunk, meta }, [chunk]);
+      try {
+        this._worker.postMessage({ type: 'decode', requestId, chunk, meta }, [chunk]);
+      } catch (err) {
+        // A synchronous post failure (e.g. DataCloneError on a detached buffer,
+        // or a terminated worker) would otherwise strand this request in
+        // `_pending` with its abort listener attached. Settle it and surface
+        // the error to the caller.
+        this._settle(requestId);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
@@ -115,12 +129,8 @@ export class CopcWorkerClient implements ChunkDecoder {
   }
 
   private _onMessage(reply: WorkerReply): void {
-    const pending = this._pending.get(reply.requestId);
+    const pending = this._settle(reply.requestId);
     if (!pending) return; // cancelled or already settled — drop the stale reply
-    this._pending.delete(reply.requestId);
-    if (pending.onAbort && pending.signal) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-    }
     if (reply.type === 'decoded') {
       this.onDecodeMs?.(nowMs() - pending.startedAt);
       pending.resolve(reply.decoded);
@@ -129,8 +139,28 @@ export class CopcWorkerClient implements ChunkDecoder {
     }
   }
 
+  /**
+   * Remove a request from `_pending` and detach its abort listener, returning
+   * it (or undefined if already gone). The single teardown path, so a reply, a
+   * sync post failure, and a fail-all all clean up identically.
+   */
+  private _settle(requestId: number): PendingRequest | undefined {
+    const pending = this._pending.get(requestId);
+    if (!pending) return undefined;
+    this._pending.delete(requestId);
+    if (pending.onAbort && pending.signal) {
+      pending.signal.removeEventListener('abort', pending.onAbort);
+    }
+    return pending;
+  }
+
   private _failAll(error: Error): void {
-    for (const pending of this._pending.values()) pending.reject(error);
+    for (const pending of this._pending.values()) {
+      if (pending.onAbort && pending.signal) {
+        pending.signal.removeEventListener('abort', pending.onAbort);
+      }
+      pending.reject(error);
+    }
     this._pending.clear();
   }
 }
