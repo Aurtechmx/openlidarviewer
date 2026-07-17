@@ -1038,8 +1038,27 @@ export class MeasureController {
    * travels to the display surfaces as `profileDatumKnown: false`.
    */
   setContext(ctx: { worldUp: Vec3; origin: Vec3 | null }): void {
+    const nextUp = ctx.origin ? elevationDatumOffset(ctx.origin, ctx.worldUp) : null;
+    // Guarded like every other presentational setter here: the viewer re-asks
+    // for the datum on every change to the cloud set, and most of those leave
+    // the frame alone — an unconditional emit would repaint the panel for a
+    // colour change. Only the up axis and the datum itself are compared,
+    // because only they can alter what a stored height MEANS; a cloud that
+    // shifts east has not moved anyone's elevations.
+    const changed =
+      nextUp !== this._originUp ||
+      ctx.worldUp[0] !== this._worldUp[0] ||
+      ctx.worldUp[1] !== this._worldUp[1] ||
+      ctx.worldUp[2] !== this._worldUp[2];
     this._worldUp = ctx.worldUp;
-    this._originUp = ctx.origin ? elevationDatumOffset(ctx.origin, ctx.worldUp) : null;
+    this._originUp = nextUp;
+    if (!changed) return;
+    // Datum-known → refused renames the profile's columns and raises a caveat;
+    // refused → known takes them away. That is the same class of change as a
+    // late CRS resolve, and the panel repaints on THIS callback alone — without
+    // it the gate reaches the screen only when some unrelated event happens to
+    // repaint first, which is no guarantee at all.
+    this._emitChange();
   }
 
   /** Switch the unit system; every label re-formats on the next frame. */
