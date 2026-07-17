@@ -59,13 +59,54 @@ function matrixIsFinite(m: Mat4): boolean {
 }
 
 /**
+ * A random-access view over the lines of `text` that never materialises them.
+ *
+ * PTX is read by index — a block header is ten lines deep, and the walk looks
+ * ahead — so the lines cannot simply be streamed. Splitting the file instead
+ * held one JS string per line, and a scan with millions of points pays tens of
+ * bytes of per-string object overhead on top of the characters themselves,
+ * dwarfing the text it came from. An offset table costs four bytes a line and
+ * slices only the line actually being read.
+ */
+class LineIndex {
+  private readonly _text: string;
+  private readonly _starts: Int32Array;
+  readonly length: number;
+
+  constructor(text: string) {
+    this._text = text;
+    let breaks = 0;
+    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) breaks++;
+    // One more line than there are breaks, plus a sentinel so the last line's
+    // end needs no special case. This mirrors `split(/\r?\n/)`, which yields a
+    // trailing empty entry for a file that ends in a newline.
+    this._starts = new Int32Array(breaks + 2);
+    let k = 1;
+    for (let i = 0; i < text.length; i++) {
+      if (text.charCodeAt(i) === 10) this._starts[k++] = i + 1;
+    }
+    this._starts[k] = text.length + 1;
+    this.length = breaks + 1;
+  }
+
+  at(i: number): string {
+    if (i < 0 || i >= this.length) return '';
+    const start = this._starts[i];
+    let end = this._starts[i + 1] - 1;
+    // Drop the CR of a CRLF pair, matching the `\r?\n` split this replaced.
+    if (end > start && this._text.charCodeAt(end - 1) === 13) end--;
+    return this._text.slice(start, end);
+  }
+}
+
+/**
  * Load a `.ptx` point cloud into a `PointCloud`.
  *
  * @param buffer Raw file bytes.
  * @param name   Display name (defaults to `"cloud.ptx"`).
  */
 export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<PointCloud> {
-  const lines = new TextDecoder().decode(buffer).split(/\r?\n/);
+  const lines = new LineIndex(new TextDecoder().decode(buffer));
 
   const xs: number[] = [];
   const ys: number[] = [];
@@ -79,12 +120,12 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   let i = 0;
   while (i < lines.length) {
     // Skip blank lines between blocks and any trailing newline.
-    while (i < lines.length && lines[i].trim() === '') i++;
+    while (i < lines.length && lines.at(i).trim() === '') i++;
     if (i >= lines.length) break;
 
     // Block header — columns and rows.
-    const cols = Number(tokenize(lines[i])[0]);
-    const rows = Number(tokenize(lines[i + 1] ?? '')[0]);
+    const cols = Number(tokenize(lines.at(i))[0]);
+    const rows = Number(tokenize(lines.at(i + 1))[0]);
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 0 || rows < 0) {
       break; // not a valid block header — stop, keeping the blocks already read
     }
@@ -93,10 +134,10 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     // The 4×4 transform sits in header lines 7–10 (after the two count lines
     // and four pose lines). PTX stores it row-major with translation in row 4.
     const parsed: Mat4 = [
-      parseRow4(lines[i + 6]),
-      parseRow4(lines[i + 7]),
-      parseRow4(lines[i + 8]),
-      parseRow4(lines[i + 9]),
+      parseRow4(lines.at(i + 6)),
+      parseRow4(lines.at(i + 7)),
+      parseRow4(lines.at(i + 8)),
+      parseRow4(lines.at(i + 9)),
     ];
     const m = matrixIsFinite(parsed) ? parsed : IDENTITY;
     if (!scannerOrigin) {
@@ -107,7 +148,7 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
 
     const total = cols * rows;
     for (let p = 0; p < total && i < lines.length; p++, i++) {
-      const tok = tokenize(lines[i]);
+      const tok = tokenize(lines.at(i));
       if (tok.length < 4) continue; // malformed point line — skip it
       const lx = Number(tok[0]);
       const ly = Number(tok[1]);
