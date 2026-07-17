@@ -48,6 +48,27 @@ test('out-of-range voxel indices use a collision-free key (no silent merge)', ()
   expect(out.pointCount).toBe(2);
 });
 
+test('non-finite input coordinates are dropped, never emitted as a point', () => {
+  // bounds() already ignores non-finite coords for the camera, but the reduced
+  // cloud itself must carry only finite points — otherwise a NaN centroid rides
+  // through into rendering and downstream analysis (a real defect: NaN in → NaN
+  // point out, in its own bucket).
+  const out = voxelDownsample(
+    makeCloud([
+      0.1, 0.1, 0.1, // valid
+      NaN, 0.2, 0.2, // NaN x
+      0.3, Infinity, 0.3, // +Inf y
+      0.4, 0.4, -Infinity, // -Inf z
+      5.5, 5.5, 5.5, // valid, separate voxel
+    ]),
+    1.0,
+  );
+  expect(out.pointCount).toBe(2);
+  for (let i = 0; i < out.positions.length; i++) {
+    expect(Number.isFinite(out.positions[i])).toBe(true);
+  }
+});
+
 test('colours are averaged within a voxel', () => {
   const out = voxelDownsample(
     makeCloud([0.1, 0.1, 0.1, 0.2, 0.2, 0.2], [0, 0, 0, 100, 100, 100]),

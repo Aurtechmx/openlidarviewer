@@ -74,6 +74,11 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     const x = pos[i * 3];
     const y = pos[i * 3 + 1];
     const z = pos[i * 3 + 2];
+    // Drop non-finite points before they reach a voxel. `bounds()` already
+    // ignores them for the camera, but the reduced cloud must not carry them
+    // either: a NaN/Inf coordinate falls into its own key, sums to NaN, and
+    // emits a NaN centroid that would ride through into rendering and analysis.
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
     // Pack the voxel's 3-D grid index into a single numeric key — far cheaper
     // than concatenating a string key for every point.
     const gx = Math.floor(x / voxelSize);
