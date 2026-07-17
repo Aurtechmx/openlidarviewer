@@ -19,7 +19,7 @@
 
 import { PCDLoader } from 'three/addons/loaders/PCDLoader.js';
 import { PointCloud } from '../model/PointCloud';
-import { computeOrigin, recenter } from './coordinateBridge';
+import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 
 /** Round and clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
@@ -213,41 +213,20 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
   //    origin subtraction happens in double precision; `recenter` narrows to
   //    f32 only on the small local residuals.
   //  - f32 binary and binary_compressed bodies have no extra precision to
-  //    save, so PCDLoader's values are used as-is with the origin subtracted
-  //    post-parse to keep the coordinate-bridge contract.
+  //    save, so PCDLoader's values are widened verbatim — nothing is gained or
+  //    lost by staging them, and both encodings then share one recentring path.
   // The row-count guard keeps the f64 re-read honest: if it ever disagrees
   // with what PCDLoader decoded, PCDLoader's rows win.
-  const global = extractPcdPositionsF64(buffer);
-  let origin: [number, number, number];
-  let positions: Float32Array;
-  if (global && global.length === count * 3) {
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    for (let i = 0; i < count; i++) {
-      const x = global[i * 3];
-      const y = global[i * 3 + 1];
-      const z = global[i * 3 + 2];
-      if (x < min[0]) min[0] = x;
-      if (y < min[1]) min[1] = y;
-      if (z < min[2]) min[2] = z;
-    }
-    origin = computeOrigin(min);
-    positions = recenter(global, origin);
+  const reread = extractPcdPositionsF64(buffer);
+  let global: Float64Array;
+  if (reread && reread.length === count * 3) {
+    global = reread;
   } else {
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    global = new Float64Array(count * 3);
     for (let i = 0; i < count; i++) {
-      const x = posAttr.getX(i);
-      const y = posAttr.getY(i);
-      const z = posAttr.getZ(i);
-      if (x < min[0]) min[0] = x;
-      if (y < min[1]) min[1] = y;
-      if (z < min[2]) min[2] = z;
-    }
-    origin = computeOrigin(min);
-    positions = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = posAttr.getX(i) - origin[0];
-      positions[i * 3 + 1] = posAttr.getY(i) - origin[1];
-      positions[i * 3 + 2] = posAttr.getZ(i) - origin[2];
+      global[i * 3] = posAttr.getX(i);
+      global[i * 3 + 1] = posAttr.getY(i);
+      global[i * 3 + 2] = posAttr.getZ(i);
     }
   }
 
@@ -296,16 +275,23 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
     for (let i = 0; i < count; i++) classification[i] = clampByte(labelAttr.getX(i));
   }
 
+  // Drop unplaceable points — a binary body can carry a NaN bit pattern, an
+  // ascii one the literal token — and recentre the survivors. `count` stays the
+  // DECODED count: the file really did hold that many records, and the warning
+  // is where the exclusion is reported.
+  const clean = sanitizeAndRecenter(global, { colors, intensity, classification, normals });
+
   return new PointCloud({
-    positions,
-    colors,
-    intensity,
-    classification,
-    normals,
-    origin,
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    intensity: clean.attributes.intensity,
+    classification: clean.attributes.classification,
+    normals: clean.attributes.normals,
+    origin: clean.origin,
     sourceFormat: 'pcd',
     name,
     decodedPointCount: count,
+    metadata: withLoadWarning(undefined, clean.warning),
   });
 }
 

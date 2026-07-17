@@ -15,7 +15,7 @@
  */
 
 import { PointCloud } from '../model/PointCloud';
-import { computeOrigin, recenter } from './coordinateBridge';
+import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 import { readTextLines } from './textChunkReader';
 import type { ProgressUpdate } from './loadProgress';
 
@@ -43,7 +43,6 @@ export async function loadXyz(
   // `null` until the first data line decides whether the file carries colour.
   let hasColor: boolean | null = null;
   let colorMax = 0;
-  const min: [number, number, number] = [Infinity, Infinity, Infinity];
 
   readTextLines(
     buffer,
@@ -69,9 +68,6 @@ export async function loadXyz(
       xs.push(x);
       ys.push(y);
       zs.push(z);
-      if (x < min[0]) min[0] = x;
-      if (y < min[1]) min[1] = y;
-      if (z < min[2]) min[2] = z;
 
       if (hasColor) {
         const r = Number(tok[3]);
@@ -109,8 +105,6 @@ export async function loadXyz(
   xs.length = 0;
   ys.length = 0;
   zs.length = 0;
-  const origin = computeOrigin(min);
-  const positions = recenter(global, origin);
 
   let colors: Uint8Array | undefined;
   if (hasColor) {
@@ -125,12 +119,18 @@ export async function loadXyz(
   // Colour now lives in the typed `colors` array; release the JS accumulator.
   rgb.length = 0;
 
+  // The line reader already refuses a non-numeric x/y/z, so this is the shared
+  // policy standing behind it rather than a second filter: it computes the
+  // floored-min origin the survivors deserve and recentres in float64.
+  const clean = sanitizeAndRecenter(global, { colors });
+
   return new PointCloud({
-    positions,
-    colors,
-    origin,
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    origin: clean.origin,
     sourceFormat: 'xyz',
     name,
     decodedPointCount: count,
+    metadata: withLoadWarning(undefined, clean.warning),
   });
 }

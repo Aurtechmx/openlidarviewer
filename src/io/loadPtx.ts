@@ -16,7 +16,7 @@
 
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
-import { computeOrigin, recenter } from './coordinateBridge';
+import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 
 /** A parsed 4×4 PTX transform — four rows of four numbers. */
 type Mat4 = [number[], number[], number[], number[]];
@@ -74,7 +74,6 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   const rgb: number[] = [];
   // `null` until the first point decides whether the file carries colour.
   let hasColor: boolean | null = null;
-  const min: [number, number, number] = [Infinity, Infinity, Infinity];
   let scannerOrigin: [number, number, number] | undefined;
 
   let i = 0;
@@ -125,9 +124,6 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       xs.push(wx);
       ys.push(wy);
       zs.push(wz);
-      if (wx < min[0]) min[0] = wx;
-      if (wy < min[1]) min[1] = wy;
-      if (wz < min[2]) min[2] = wz;
 
       const it = Number(tok[3]);
       intensityVals.push(Number.isFinite(it) ? it : 0);
@@ -149,8 +145,6 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     global[p * 3 + 1] = ys[p];
     global[p * 3 + 2] = zs[p];
   }
-  const origin = computeOrigin(min);
-  const positions = recenter(global, origin);
 
   // Intensity — PTX intensity is conventionally a 0–1 float; that range is
   // rescaled to the full Uint16 span, otherwise it is taken as a raw value.
@@ -182,14 +176,20 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
 
   const metadata: CloudMetadata | undefined = scannerOrigin ? { scannerOrigin } : undefined;
 
+  // The point reader already refuses a non-numeric x/y/z, but the registration
+  // transform is applied after that check, so this is where a world coordinate
+  // that overflowed the block's matrix is caught — and where the survivors get
+  // their floored-min origin.
+  const clean = sanitizeAndRecenter(global, { colors, intensity });
+
   return new PointCloud({
-    positions,
-    colors,
-    intensity,
-    origin,
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    intensity: clean.attributes.intensity,
+    origin: clean.origin,
     sourceFormat: 'ptx',
     name,
     decodedPointCount: count,
-    metadata,
+    metadata: withLoadWarning(metadata, clean.warning),
   });
 }

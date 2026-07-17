@@ -17,7 +17,7 @@
 import { parse } from '@loaders.gl/core';
 import { PLYLoader } from '@loaders.gl/ply';
 import { PointCloud } from '../model/PointCloud';
-import { computeOrigin, recenter } from './coordinateBridge';
+import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 
 /** The slice of the loaders.gl PLY header this loader relies on. */
 interface PlyHeaderData {
@@ -110,22 +110,9 @@ export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<
       : (readAsciiVertices(buffer, mesh.loaderData as PlyHeaderData | undefined, pointCount) ??
         Float64Array.from(positionAttr.value));
 
-  // Recentre about a floored-min origin (float64 subtraction, then float32).
-  // Non-finite coordinates are kept but excluded from the minimum.
-  const min: [number, number, number] = [Infinity, Infinity, Infinity];
-  for (let i = 0; i < global.length; i += 3) {
-    if (global[i] < min[0]) min[0] = global[i];
-    if (global[i + 1] < min[1]) min[1] = global[i + 1];
-    if (global[i + 2] < min[2]) min[2] = global[i + 2];
-  }
-  const origin: [number, number, number] =
-    Number.isFinite(min[0]) && Number.isFinite(min[1]) && Number.isFinite(min[2])
-      ? computeOrigin(min)
-      : [0, 0, 0];
-  const positions = recenter(global, origin);
-
   // COLOR_0 is optional. PLY commonly stores rgb (size 3) or rgba (size 4);
-  // keep only the three colour channels regardless.
+  // keep only the three colour channels regardless. Built before sanitation so
+  // the colours are filtered by the same index set as the positions.
   let colors: Uint8Array | undefined;
   const colorAttr = attributes.COLOR_0;
   if (colorAttr) {
@@ -139,11 +126,16 @@ export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<
     }
   }
 
+  // Drop unplaceable vertices (a binary body can hold a NaN bit pattern; an
+  // ASCII one can spell it out), then recentre about a floored-min origin.
+  const clean = sanitizeAndRecenter(global, { colors });
+
   return new PointCloud({
-    positions,
-    colors,
-    origin,
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    origin: clean.origin,
     sourceFormat: 'ply',
     name,
+    metadata: withLoadWarning(undefined, clean.warning),
   });
 }
