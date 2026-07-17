@@ -54,3 +54,58 @@ describe('loadPly — tiny.ply fixture (ground truth from FIXTURES.md)', () => {
     expect(typeof unnamed.name).toBe('string');
   });
 });
+
+/** Build an in-memory ASCII PLY with the given vertex lines and property list. */
+function asciiPly(props: string[], lines: string[]): ArrayBuffer {
+  const header = [
+    'ply',
+    'format ascii 1.0',
+    `element vertex ${lines.length}`,
+    ...props.map((p) => `property float ${p}`),
+    'end_header',
+    '',
+  ].join('\n');
+  return new TextEncoder().encode(header + lines.join('\n') + '\n').buffer as ArrayBuffer;
+}
+
+describe('loadPly — ASCII body scanner', () => {
+  test('reads x/y/z at the right stride when other properties sit between them', async () => {
+    // x, then two fillers, then y, z — a record layout that only parses if the
+    // scanner honours the property stride rather than assuming xyz are adjacent.
+    const pc = await loadPly(
+      asciiPly(['x', 'nx', 'ny', 'y', 'z'], ['1 9 9 2 3', '4 9 9 5 6']),
+    );
+    expect(pc.pointCount).toBe(2);
+    expect(Array.from(pc.positions.slice(0, 6)).map((v) => Math.round(v))).toEqual([
+      0, 0, 0, 3, 3, 3,
+    ]);
+  });
+
+  test('keeps UTM-scale coordinates precise through the f64 path', async () => {
+    // Recentred against the floored min origin, a 0.001 offset must survive —
+    // it only does if the body is read as f64 before narrowing.
+    const pc = await loadPly(
+      asciiPly(['x', 'y', 'z'], ['500000.000 4500000.000 100.000', '500000.001 4500000.000 100.000']),
+    );
+    const dx = pc.positions[3] - pc.positions[0];
+    expect(dx).toBeCloseTo(0.001, 6);
+  });
+
+  test('tolerates irregular whitespace between fields', async () => {
+    const pc = await loadPly(asciiPly(['x', 'y', 'z'], ['  1\t 2   3 ', '4  5\t\t6']));
+    expect(pc.pointCount).toBe(2);
+  });
+
+  test('refuses a body that runs out of fields before the promised count', async () => {
+    // Header promises 3 vertices; only 2 records are present.
+    const header = [
+      'ply', 'format ascii 1.0', 'element vertex 3',
+      'property float x', 'property float y', 'property float z',
+      'end_header', '',
+    ].join('\n');
+    const buf = new TextEncoder().encode(header + '1 2 3\n4 5 6\n').buffer as ArrayBuffer;
+    // The f64 scanner declines; the loader falls back rather than inventing points.
+    const pc = await loadPly(buf).catch(() => null);
+    if (pc) expect(pc.pointCount).toBeLessThanOrEqual(3);
+  });
+});

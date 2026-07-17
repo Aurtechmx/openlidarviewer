@@ -57,16 +57,33 @@ function readAsciiVertices(
   // whole buffer the same way), so slicing there lands exactly on the body.
   const body = new TextDecoder().decode(buffer).slice(header.headerLength);
   const stride = props.length;
-  const tokens = body.split(/\s+/).filter((t) => t.length > 0);
-  if (tokens.length < expectedCount * stride) return null;
 
+  // Walk the body once, pulling each record's fields in place. Splitting it into
+  // a token array first would materialise `expectedCount × stride` strings — tens
+  // of millions for a large ASCII cloud, all live at the same time — where the
+  // scanner only ever holds the three it needs for the current record.
   const out = new Float64Array(expectedCount * 3);
+  const n = body.length;
+  let pos = 0;
   for (let i = 0; i < expectedCount; i++) {
-    out[i * 3] = Number(tokens[i * stride + xi]);
-    out[i * 3 + 1] = Number(tokens[i * stride + yi]);
-    out[i * 3 + 2] = Number(tokens[i * stride + zi]);
+    for (let f = 0; f < stride; f++) {
+      while (pos < n && isAsciiSpace(body.charCodeAt(pos))) pos++;
+      const start = pos;
+      while (pos < n && !isAsciiSpace(body.charCodeAt(pos))) pos++;
+      // Ran out of fields before the header's promised count — same refusal the
+      // old length check made, just detected as it happens.
+      if (start === pos) return null;
+      if (f === xi) out[i * 3] = Number(body.slice(start, pos));
+      else if (f === yi) out[i * 3 + 1] = Number(body.slice(start, pos));
+      else if (f === zi) out[i * 3 + 2] = Number(body.slice(start, pos));
+    }
   }
   return out;
+}
+
+/** Space, tab, LF, VT, FF, CR — the whitespace an ASCII PLY body separates on. */
+function isAsciiSpace(c: number): boolean {
+  return c === 32 || (c >= 9 && c <= 13);
 }
 
 /**
