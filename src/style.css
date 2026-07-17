@@ -585,6 +585,41 @@ button:disabled { cursor: not-allowed; }
 .olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 
 /* Empty state */
+/* The empty state is the whole page's drop target, so it gets one focal point
+ * and everything else defers to it. The depth cue below is a single wide radial
+ * behind the hero: the canvas is otherwise flat black, and a flat field makes a
+ * centred column read as floating rather than placed. It is a background, not
+ * an effect — no animation, nothing to interrupt. */
+.olv-empty::before {
+  content: '';
+  position: absolute;
+  top: -10%;
+  left: 50%;
+  width: min(1100px, 140vw);
+  height: min(1100px, 140vw);
+  transform: translateX(-50%);
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 178, 255, 0.10) 0%,
+    rgba(0, 178, 255, 0.045) 32%,
+    transparent 68%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+/* Every child sits above the wash; the wash must never eat a click. */
+.olv-empty > * { position: relative; z-index: 1; }
+/* On the light theme the same wash reads as a smudge on near-white rather than
+ * depth, so it drops to a trace — enough to seat the hero, not enough to tint. */
+body.olv-theme-light .olv-empty::before {
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 130, 200, 0.055) 0%,
+    rgba(0, 130, 200, 0.022) 32%,
+    transparent 68%
+  );
+}
+
 .olv-empty {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center;
@@ -621,7 +656,16 @@ button:disabled { cursor: not-allowed; }
   background: var(--brand-gradient);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.olv-empty-sub { font-size: var(--text-md); color: var(--text-dim); max-width: 440px; line-height: 1.6; }
+/* The subtitle carries the privacy promise, which is the single most important
+ * first-paint signal this product has — a local-first viewer competing with
+ * upload-first tools. It reads at body weight rather than as fine print, and
+ * `text-wrap: balance` keeps the two lines close to even instead of leaving a
+ * lone orphaned word under a full line. */
+.olv-empty-sub {
+  font-size: var(--text-md); color: var(--text-dim);
+  max-width: 46ch; line-height: 1.6;
+  text-wrap: balance;
+}
 /* Format-support note — secondary, demoted below the primary CTA so
  * format jargon doesn't compete with the action label. */
 .olv-empty-formats {
@@ -2501,14 +2545,24 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* "Open scan from device" — the primary file-picker action on the empty
    state. Visible everywhere; it is the touch-friendly path on phones. */
+/* The single primary action on the page. It earns its weight from a resting
+ * lift the other surfaces don't have — the empty state offers three ways in
+ * (device, public dataset, URL) and only this one should read as the answer. */
 .olv-open-btn {
   display: inline-flex; align-items: center; justify-content: center;
   font-size: var(--text-md); font-weight: 600; color: #04121f;
   background: var(--brand-gradient);
   border: none; border-radius: var(--radius-md); padding: var(--space-xl) var(--space-3xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 4px 16px rgba(0, 178, 255, 0.20);
   transition: box-shadow var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-open-btn:hover { box-shadow: 0 6px 22px rgba(0, 178, 255, 0.32); }
+.olv-open-btn:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 8px 30px rgba(0, 178, 255, 0.38);
+}
 .olv-open-btn:active { transform: scale(0.97); }
 .olv-open-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -6763,8 +6817,12 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    * the full viewport width on desktop (it lives in a full-width flex column). */
   width: 100%; max-width: 460px; box-sizing: border-box;
   margin: var(--space-md) auto; padding: var(--space-2xl) 14px;
+  /* Deliberately hairline-led with no fill. Enclosure is the strongest grouping
+   * cue on a page, and a filled bordered box was making the SECONDARY way in
+   * (browse a public dataset) outweigh the primary one (open your own file).
+   * The demoted panel token exists for exactly this — a lane, not a card. */
   border: 0.5px solid var(--hairline); border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  background: var(--panel-recessive);
 }
 .olv-explore-card > .olv-empty-section-label { margin: 0; }
 
