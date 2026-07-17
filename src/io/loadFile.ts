@@ -437,7 +437,25 @@ export async function loadFile(
 
     // The ArrayBuffer is transferred (not copied) into the worker.
     postedAt = performance.now();
-    worker.postMessage({ buffer, format, name: file.name, budget, plan }, [buffer]);
+    try {
+      worker.postMessage({ buffer, format, name: file.name, budget, plan }, [buffer]);
+    } catch (err) {
+      // A synchronous post failure — a DataCloneError on an unclonable or
+      // already-detached buffer. Left unguarded the throw escapes this executor
+      // and rejects the caller, but `detach` never runs, so `onAbort` stays on
+      // the signal still holding the *shared* worker. A later abort of this
+      // signal would then null the handlers of and terminate the worker that
+      // whichever load owns it by then is decoding on, hanging that load
+      // forever. Settle here like any other failure instead.
+      //
+      // The worker is deliberately not dropped: a throw here means the message
+      // never left the main thread, so the worker never saw it and is still
+      // idle and warm — and its laz-perf module staying warm across loads is
+      // the whole reason it is long-lived. A worker that actually died fires
+      // `onerror`, which drops it there.
+      detach();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
     });
   } finally {
     releaseGate();
@@ -535,10 +553,18 @@ export async function decodeFullViaWorker(
       // Full resolution: no plan, unbounded budget — every point is kept, and
       // the budget voxel-reduce is a no-op. The source buffer is transferred
       // (not copied) into the worker.
-      worker.postMessage(
-        { buffer, format, name, budget: Number.MAX_SAFE_INTEGER },
-        [buffer],
-      );
+      try {
+        worker.postMessage(
+          { buffer, format, name, budget: Number.MAX_SAFE_INTEGER },
+          [buffer],
+        );
+      } catch (err) {
+        // Same guard as the load path: a synchronous post failure must run the
+        // teardown, or the leaked `onAbort` outlives this decode still holding
+        // the shared worker and terminates it under a later one.
+        detach();
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   } finally {
     releaseGate();
