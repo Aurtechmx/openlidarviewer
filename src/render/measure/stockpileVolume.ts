@@ -77,6 +77,14 @@ export interface StockpileInput {
    * honesty caveat; the ± band already widens with the smaller resident N.
    */
   readonly sourceReduced?: boolean;
+  /**
+   * Horizontal `linearUnitToMetres` for the source CRS (feet ⇒ 0.3048). Used
+   * ONLY to evaluate the density confidence bar in points/m² — the footprint,
+   * volume and band figures stay in native units and are converted for display
+   * downstream. Defaults to 1 (already metres), so a metric project is
+   * unchanged.
+   */
+  readonly linearUnitToMetres?: number;
 }
 
 /**
@@ -282,7 +290,13 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
 
   const volume = v.fill;
   const relativeError = volume > 0 ? sigma / volume : 0;
-  const confidence = gradeConfidence(relativeError, inN, v.density);
+  // `v.density` is points per NATIVE horizontal-unit². The confidence bar is a
+  // points/m² threshold, so convert before grading — otherwise a dense foot
+  // survey (≈11 pts/m² per pt/ft²) is graded as if 1 pt/ft² were 1 pt/m² and
+  // wrongly downgraded. m² per native² = linearUnitToMetres².
+  const lin = input.linearUnitToMetres ?? 1;
+  const densityPerM2 = lin > 0 ? v.density / (lin * lin) : v.density;
+  const confidence = gradeConfidence(relativeError, inN, densityPerM2);
   const caveats = buildCaveats(
     confidence,
     inN,
@@ -334,10 +348,10 @@ function stdDev(values: ArrayLike<number>): number {
 function gradeConfidence(
   relErr: number,
   pointsInPolygon: number,
-  density: number,
+  densityPerM2: number,
 ): StockpileConfidence {
   if (pointsInPolygon < MIN_RELIABLE_POINTS) return 'low';
-  if (relErr <= 0.05 && density >= 5) return 'high';
+  if (relErr <= 0.05 && densityPerM2 >= 5) return 'high';
   if (relErr <= 0.15) return 'medium';
   return 'low';
 }

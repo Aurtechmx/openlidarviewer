@@ -42,6 +42,29 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(r.confidence).toBe('high');
   });
 
+  test('the density confidence bar is evaluated in points/m², not native units', () => {
+    // A dense foot-unit survey — 121 pts over a 100 ft² footprint ≈ 1.2 pts/ft²
+    // ≈ 13 pts/m² — clears the pts/m² density bar for HIGH confidence. Grading
+    // the RAW native density (1.2) against the same >=5 threshold wrongly
+    // downgrades a genuinely dense survey.
+    const footprint = squareFootprint(10);
+    const positions = grid(10, 0.9, () => 2); // flat top ⇒ ~zero band ⇒ relErr≈0
+    const base = { mode: 'explicit', z: 0 } as const;
+
+    const foot = stockpileVolume({
+      polygon: footprint,
+      positions,
+      base,
+      linearUnitToMetres: 0.3048,
+    });
+    expect(foot.confidence).toBe('high');
+
+    // The identical native density read as metres IS genuinely sparse (~1.2
+    // pts/m²) and must NOT reach high — the threshold is unit-aware, not gone.
+    const metric = stockpileVolume({ polygon: footprint, positions, base });
+    expect(metric.confidence).not.toBe('high');
+  });
+
   test('every result carries the spatial-correlation caveat (√N assumes independence)', () => {
     // The sampling-error term divides by √N under an independence assumption
     // scan noise routinely violates — the caveat must say so, mirroring

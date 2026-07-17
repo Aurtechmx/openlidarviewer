@@ -118,6 +118,8 @@ export function stockpileToastSuffix(
     positions,
     base: { mode: 'lowest-percentile', percentile: 0.05 },
     sourceReduced,
+    // Grade the density bar in points/m² for foot-unit projects, not native ft².
+    linearUnitToMetres: lin,
   });
   if (stock.validity !== 'ok' || stock.volume <= 0) return '';
   return ` · ${stockpileToastLine(presentStockpile(stock, { lin }))}`;
