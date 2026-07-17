@@ -109,8 +109,27 @@ if (existsSync(resolve(ROOT, 'READINESS_REPORT.md'))) {
   }
 }
 
+// 7. The service worker names its cache after the release, and its `activate`
+// deletes any cache whose name !== that. If the name doesn't move with the app
+// version, a returning user's browser never prunes the previous release's
+// cached shell — the worker itself says "Bump on every release". It drifted to
+// 0.5.9 while the app moved to 0.6 precisely because nothing checked it.
+try {
+  const sw = read('public/sw.js');
+  const swVer = /const\s+VERSION\s*=\s*['"]olv-shell-([^'"]+)['"]/.exec(sw);
+  if (!swVer) {
+    problems.push("public/sw.js has no \"const VERSION = 'olv-shell-X.Y.Z'\" to check.");
+  } else if (swVer[1] !== version) {
+    problems.push(
+      `public/sw.js cache VERSION is olv-shell-${swVer[1]}, expected olv-shell-${version} — bump it so the previous release's cache is pruned on activate.`,
+    );
+  }
+} catch {
+  problems.push('public/sw.js missing or unreadable.');
+}
+
 if (problems.length === 0) {
-  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, and CITATION.cff all on v${version}.`);
+  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, CITATION.cff, and the service-worker cache all on v${version}.`);
   process.exit(0);
 }
 
