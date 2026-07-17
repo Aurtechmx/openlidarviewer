@@ -60,8 +60,16 @@ export function sampleStridedTerrain(
   if (!Number.isFinite(maxPoints) || maxPoints < 1) return null;
 
   // Static clouds keep their stable order; streaming nodes are ordered by their
-  // octree key so arrival timing can't reshuffle the walk.
-  const sortedStreaming = [...streamingBuffers].sort((a, b) =>
+  // octree key so arrival timing can't reshuffle the walk. The determinism only
+  // holds if the keys are unique: two buffers sharing a key would both survive
+  // the sort (its comparator returns 0 for equal keys, and a stable sort then
+  // preserves arrival order) and each would contribute the SAME node's points,
+  // double-counting it. A resident node maps to one octree id, so a duplicate is
+  // a caller bug rather than a real second node; keep the first and drop the
+  // rest, which makes the order a total function of the keys alone.
+  const byKey = new Map<string, KeyedTerrainStreamBuffer>();
+  for (const b of streamingBuffers) if (!byKey.has(b.key)) byKey.set(b.key, b);
+  const sortedStreaming = [...byKey.values()].sort((a, b) =>
     a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
   );
   const buffers: TerrainStreamBuffer[] = [...staticBuffers, ...sortedStreaming];

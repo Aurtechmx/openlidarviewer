@@ -93,4 +93,29 @@ describe('sampleStridedTerrain', () => {
     expect(out).not.toBeNull();
     expect(Array.from(out!.classification!)).toEqual([2, 255, 255]);
   });
+
+  it('de-duplicates a repeated node key instead of counting it twice', () => {
+    // Two buffers under one octree key is a caller bug (a resident node has one
+    // id). Sampling both would count that node's four points twice; the sampler
+    // keeps one, so the count is a node's worth regardless of arrival order.
+    // Which duplicate wins is left unspecified — a genuine collision means the
+    // two are the same node, so the only guarantee that matters is "not twice".
+    const a = node('2-0-0-0', 100);
+    const dup = node('2-0-0-0', 900); // same key
+    const forward = sampleStridedTerrain([], [a, dup], 8, 300_000, false);
+    const reverse = sampleStridedTerrain([], [dup, a], 8, 300_000, false);
+    expect(forward!.positions.length / 3).toBe(4);
+    expect(reverse!.positions.length / 3).toBe(4);
+  });
+
+  it('keeps unique keys arrival-independent alongside the dedup', () => {
+    // The real contract: distinct nodes, sampled identically whatever order they
+    // arrive in. The dedup must not disturb this.
+    const a = node('2-0-0-0', 100);
+    const b = node('2-1-0-0', 200);
+    const c = node('2-0-1-0', 300);
+    const one = sampleStridedTerrain([], [a, b, c], 12, 300_000, false);
+    const two = sampleStridedTerrain([], [c, a, b], 12, 300_000, false);
+    expect(Array.from(one!.positions)).toEqual(Array.from(two!.positions));
+  });
 });
