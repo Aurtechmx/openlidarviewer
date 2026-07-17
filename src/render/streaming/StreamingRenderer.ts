@@ -179,12 +179,17 @@ export class StreamingRenderer {
     this._mode = mode;
     this._fadeIn = options.fadeIn ?? false;
     this._now = options.now ?? nowMs;
-    // Elevation range from the COPC cube; the per-field scalar ranges
-    // (intensity, gpsTime, returnNumber) are seeded once the coarse root
-    // node arrives. Their 0..1 placeholders are never painted from in
-    // practice — `onNodeReady` reseeds from the first arriving node BEFORE
-    // computing that node's colours.
-    const local = cloud.localBounds();
+    // Elevation range from the TIGHT data bounds, not the octree cube. A COPC
+    // cube barely over-reports, but an EPT cube is cubic around a thin terrain
+    // slab, so its Z can be tens of thousands of metres tall while the data
+    // spans a few hundred — seeding the legend off the cube stretched it across
+    // empty space (a real dataset showed a −60000..60000 m legend for ~1800 m
+    // of terrain). `dataBounds` is the true extent; the source interface points
+    // here for exactly this. The per-field scalar ranges (intensity, gpsTime,
+    // returnNumber) still seed once the coarse root node arrives; their 0..1
+    // placeholders are never painted from — `onNodeReady` reseeds from the first
+    // arriving node BEFORE computing its colours.
+    const local = cloud.dataBounds();
     this._ranges = {
       minZ: local[2],
       maxZ: local[5],
@@ -215,7 +220,7 @@ export class StreamingRenderer {
 
   /**
    * Whether a decoded node has seeded the scalar ranges. Before the first
-   * seed, `minZ`/`maxZ` hold the honest header cube extent (usable for an
+   * seed, `minZ`/`maxZ` hold the tight data-bounds Z extent (usable for an
    * elevation legend, with no percentile trim to disclose) while the
    * intensity / gpsTime / returnNumber fields are 0..1 placeholders that
    * describe nothing — a legend must not label them.

@@ -76,7 +76,10 @@ function viewerCapture(): { viewer: Viewer; captured: Uint8Array[] } {
 }
 
 function sourceStub(): StreamingSource {
-  return { localBounds: () => [0, 0, 0, 1, 1, 1] } as unknown as StreamingSource;
+  return {
+    localBounds: () => [0, 0, 0, 1, 1, 1],
+    dataBounds: () => [0, 0, 0, 1, 1, 1],
+  } as unknown as StreamingSource;
 }
 
 function nodeAt(depth: number, id: string): StreamingNode {
@@ -109,5 +112,31 @@ describe('onNodeReady gpsTime window seeding', () => {
     expect([colors[0], colors[1], colors[2]]).toEqual([0, 0, 0]);
     expect([colors[3], colors[4], colors[5]]).toEqual([0, 32, 76]);
     expect([colors[6], colors[7], colors[8]]).toEqual([253, 231, 37]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Elevation seed — tight data bounds, not the octree cube
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('StreamingRenderer elevation seed', () => {
+  it('seeds the pre-node elevation window from the data bounds, not the cube', () => {
+    const { viewer } = viewerCapture();
+    // An EPT-shaped source: the octree cube is cubic around a thin terrain slab,
+    // so its Z spans ~160000 while the real data spans ~1860 (the Denver DRCOG
+    // numbers). Seeding off the cube stretches the legend across empty space.
+    const cubeZ: [number, number] = [-76977, 81705];
+    const dataZ: [number, number] = [1434, 3293];
+    const source = {
+      localBounds: () => [-79341, 4747121, cubeZ[0], 79341, 4905803, cubeZ[1]],
+      dataBounds: () => [-64707, 4747122, dataZ[0], 64707, 4905801, dataZ[1]],
+    } as unknown as StreamingSource;
+
+    const renderer = new StreamingRenderer(viewer, source, 'elevation');
+    const r = renderer.colorRanges;
+    expect(r.minZ).toBe(dataZ[0]);
+    expect(r.maxZ).toBe(dataZ[1]);
+    // The cube would have made the window ~85x too tall — assert we didn't.
+    expect(r.maxZ - r.minZ).toBeLessThan(2000);
   });
 });

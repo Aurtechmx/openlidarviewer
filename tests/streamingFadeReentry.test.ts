@@ -74,6 +74,7 @@ function makeFakeViewer(rec: Recorder): { viewer: Viewer; meshes: () => FakeMesh
 
 const fakeSource = {
   localBounds: () => [0, 0, 0, 10, 10, 10] as const,
+  dataBounds: () => [0, 0, 0, 10, 10, 10] as const,
 } as unknown as StreamingSource;
 
 function makeNode(id: string, depth: number): StreamingNode {
