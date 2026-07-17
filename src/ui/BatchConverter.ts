@@ -79,7 +79,13 @@ export class BatchConverter {
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
     this._convertBtn = el('button', { className: 'olv-bc-convert', type: 'button' }) as HTMLButtonElement;
-    this._convertBtn.addEventListener('click', () => void this._convert());
+    // While a batch runs the same button is its stop control — clicking it aborts
+    // rather than starting a second run, so a long conversion can be abandoned
+    // without dismissing the modal and losing the queued files.
+    this._convertBtn.addEventListener('click', () => {
+      if (this._abort) this._abort.abort();
+      else void this._convert();
+    });
     this._results = el('div', { className: 'olv-bc-results' });
 
     this._dialog.append(
@@ -120,6 +126,12 @@ export class BatchConverter {
     // Cancel any batch still running so a dismissed modal doesn't keep decoding.
     this._abort?.abort();
     this.element.classList.add('olv-bc-hidden');
+    // Release the converted output. A finished batch can hold hundreds of
+    // megabytes of encoded files, and dropping both the array and the result
+    // rows lets the per-file download closures that captured those bytes be
+    // collected too. The queued source list is kept, so reopening can re-run.
+    this._produced = [];
+    this._results.replaceChildren();
   }
 
   // ── sections ────────────────────────────────────────────────────────────
@@ -292,10 +304,19 @@ export class BatchConverter {
 
   private _refresh(): void {
     const n = this._files.length;
-    this._convertBtn.textContent = this._busy ? 'Converting…' : `Convert ${n || ''} file${n === 1 ? '' : 's'}`.replace('  ', ' ');
+    if (this._busy) {
+      // Running: the button stays enabled as the stop control. Its label is the
+      // live progress text set by the run's onProgress; leave it untouched here.
+      this._convertBtn.disabled = false;
+      this._convertBtn.classList.add('olv-bc-convert--running');
+      this._hint.textContent = '';
+      return;
+    }
+    this._convertBtn.classList.remove('olv-bc-convert--running');
+    this._convertBtn.textContent = `Convert ${n || ''} file${n === 1 ? '' : 's'}`.replace('  ', ' ');
     const v = this._validate();
-    this._convertBtn.disabled = this._busy || !v.ok;
-    this._hint.textContent = this._busy ? '' : v.reason;
+    this._convertBtn.disabled = !v.ok;
+    this._hint.textContent = v.reason;
     this._hint.className = `olv-bc-hint${v.ok ? '' : ' is-blocked'}`;
   }
 
@@ -321,7 +342,8 @@ export class BatchConverter {
         options,
         decodeFull,
         (p) => {
-          this._convertBtn.textContent = `Converting ${p.index + 1}/${p.total}…`;
+          // The label doubles as the stop affordance while the batch runs.
+          this._convertBtn.textContent = `Cancel · converting ${p.index + 1}/${p.total}…`;
         },
         this._abort.signal,
       );

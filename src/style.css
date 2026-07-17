@@ -6192,6 +6192,20 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   flex: 0 0 auto;
 }
 .olv-bc-convert:disabled { opacity: 0.4; cursor: not-allowed; }
+/* While a batch runs the primary button is the stop control, so it sheds the
+   accent fill (that reads "go") for a quiet outlined danger surface (reads
+   "stop"), and stays fully interactive. */
+.olv-bc-convert--running,
+.olv-bc-convert--running:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  border: 0.5px solid var(--hairline-strong);
+}
+.olv-bc-convert--running:not(:disabled):hover {
+  background: rgba(255, 90, 90, 0.10);
+  border-color: rgba(255, 120, 120, 0.5);
+  color: #ff8a8a;
+}
 .olv-bc-hint { font-size: var(--text-xs); color: var(--text-dim); margin: 0; }
 .olv-bc-hint.is-blocked { color: var(--rating-moderate); }
 /* Visible reason for a disabled format pill (LAZ not yet available) — touch
