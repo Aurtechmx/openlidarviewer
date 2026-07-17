@@ -5831,7 +5831,14 @@ async function importSession(file: File): Promise<void> {
     const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
     const geo = haveCloud
       ? rebaseSessionGeometry(session, exportGeoContext().origin)
-      : { measurements: session.measurements, annotations: session.annotations, delta: [0, 0, 0] as const };
+      : {
+          measurements: session.measurements,
+          annotations: session.annotations,
+          views: session.views,
+          camera: session.camera,
+          clip: session.clip,
+          delta: [0, 0, 0] as const,
+        };
     const rebased = geo.delta[0] !== 0 || geo.delta[1] !== 0 || geo.delta[2] !== 0;
     viewer.measure.loadMeasurements(geo.measurements);
     viewer.annotate.loadAnnotations(geo.annotations);
@@ -5839,7 +5846,7 @@ async function importSession(file: File): Promise<void> {
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
     // undefined and they stay exactly the camera-only bookmarks they were.
-    viewBookmarks.savedViews = session.views.map((v) => {
+    viewBookmarks.savedViews = geo.views.map((v) => {
       const { name, camera, ...state } = v;
       return { name, pose: camera, state: buildViewState(state) };
     });
@@ -5860,8 +5867,8 @@ async function importSession(file: File): Promise<void> {
       colorMode: session.colorMode,
       classFilter: session.classFilter,
       pointFilters: session.pointFilters,
-      clip: session.clip,
-      camera: session.camera,
+      clip: geo.clip,
+      camera: geo.camera,
     });
     if (
       session.crs &&

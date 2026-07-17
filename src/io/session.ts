@@ -385,10 +385,23 @@ export function parseSession(text: string): InspectionSession {
 
 /** A session's geometry rebased into a target cloud's local frame. */
 export interface RebasedSessionGeometry {
-  /** Measurements with vertices shifted into the target frame. */
+  /**
+   * Measurements with vertices shifted into the target frame — including the
+   * elevation-only scalars a bare vertex shift misses: profile-chart heights
+   * and each volume's reference plane.
+   */
   measurements: Measurement[];
-  /** Annotations with local positions shifted into the target frame. */
+  /**
+   * Annotations with local positions AND their jump-to-view camera shifted into
+   * the target frame.
+   */
   annotations: Annotation[];
+  /** Saved views with their camera (and per-view clip) shifted into the frame. */
+  views: SavedView[];
+  /** The live camera shifted into the target frame, when the session had one. */
+  camera?: SavedCameraState;
+  /** The global clip box shifted into the target frame, when present. */
+  clip?: ClipBox;
   /** `session.origin − cloudOrigin`, in f64. All-zero when the frames match. */
   delta: Vec3;
 }
@@ -415,22 +428,67 @@ export function rebaseSessionGeometry(
   const dx = session.origin[0] - (cloudOrigin[0] ?? 0);
   const dy = session.origin[1] - (cloudOrigin[1] ?? 0);
   const dz = session.origin[2] - (cloudOrigin[2] ?? 0);
-  const measurements = session.measurements.map((m) => ({
-    ...m,
-    points: m.points.map((p): Vec3 => [p[0] + dx, p[1] + dy, p[2] + dz]),
-  }));
-  const annotations = session.annotations.map((a) => ({
-    ...a,
-    localPosition: {
-      x: a.localPosition.x + dx,
-      y: a.localPosition.y + dy,
-      z: a.localPosition.z + dz,
-    },
-    // Drop the cached world position — it was derived against the OLD frame and
-    // the viewer recomputes it from the rebased local plus the active origin.
-    worldPosition: undefined,
-  }));
-  return { measurements, annotations, delta: [dx, dy, dz] };
+  // Elevation-only scalars (profile-chart heights, a volume reference plane)
+  // move by the UP-axis component of the shift, not the full vector.
+  const elevDelta = session.upAxis === 'z' ? dz : dy;
+  const shiftVec = (v: readonly [number, number, number]): Vec3 => [
+    v[0] + dx,
+    v[1] + dy,
+    v[2] + dz,
+  ];
+  const shiftCamera = (c: SavedCameraState): SavedCameraState => ({
+    ...c,
+    position: shiftVec(c.position),
+    target: shiftVec(c.target),
+  });
+  const shiftClip = (c: ClipBox): ClipBox => ({
+    ...c,
+    box: { min: shiftVec(c.box.min), max: shiftVec(c.box.max) },
+  });
+
+  const measurements = session.measurements.map((m) => {
+    const next: Measurement = { ...m, points: m.points.map(shiftVec) };
+    if (m.profileChart) {
+      next.profileChart = m.profileChart.map((s) => ({
+        ...s,
+        // A corridor gap serialises as NaN — leave it; only finite heights move.
+        height: Number.isFinite(s.height) ? s.height + elevDelta : s.height,
+      }));
+    }
+    if (m.volume) {
+      next.volume = { ...m.volume, referenceZ: m.volume.referenceZ + elevDelta };
+    }
+    return next;
+  });
+  const annotations = session.annotations.map((a) => {
+    const next: Annotation = {
+      ...a,
+      localPosition: {
+        x: a.localPosition.x + dx,
+        y: a.localPosition.y + dy,
+        z: a.localPosition.z + dz,
+      },
+      // Drop the cached world position — it was derived against the OLD frame and
+      // the viewer recomputes it from the rebased local plus the active origin.
+      worldPosition: undefined,
+    };
+    // The jump-to-view camera is in the same local frame as the vertices.
+    if (a.cameraState) next.cameraState = shiftCamera(a.cameraState);
+    return next;
+  });
+  const views = session.views.map((v) => {
+    const next: SavedView = { ...v, camera: shiftCamera(v.camera) };
+    if (v.clip) next.clip = shiftClip(v.clip);
+    return next;
+  });
+  return {
+    measurements,
+    annotations,
+    views,
+    camera: session.camera ? shiftCamera(session.camera) : undefined,
+    clip: session.clip ? shiftClip(session.clip) : undefined,
+    delta: [dx, dy, dz],
+  };
 }
 
 // --- validation helpers ----------------------------------------------------
