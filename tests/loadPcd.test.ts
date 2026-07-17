@@ -151,3 +151,45 @@ describe('loadPcd — malformed input', () => {
     await expect(loadPcd(junk)).rejects.toThrow();
   });
 });
+
+/** Build an in-memory ASCII PCD with the given field names and rows. */
+function asciiPcd(fields: string[], rows: string[]): ArrayBuffer {
+  const header = [
+    '# .PCD v0.7 - Point Cloud Data file format',
+    'VERSION 0.7',
+    `FIELDS ${fields.join(' ')}`,
+    `SIZE ${fields.map(() => 4).join(' ')}`,
+    `TYPE ${fields.map(() => 'F').join(' ')}`,
+    `COUNT ${fields.map(() => 1).join(' ')}`,
+    `WIDTH ${rows.length}`,
+    'HEIGHT 1',
+    'VIEWPOINT 0 0 0 1 0 0 0',
+    `POINTS ${rows.length}`,
+    'DATA ascii',
+    '',
+  ].join('\n');
+  return new TextEncoder().encode(header + rows.join('\n') + '\n').buffer as ArrayBuffer;
+}
+
+describe('loadPcd — ASCII body scanner', () => {
+  test('reads x/y/z at the right column when other fields sit between them', async () => {
+    const pc = await loadPcd(asciiPcd(['x', 'intensity', 'y', 'z'], ['1 9 2 3', '4 9 5 6']));
+    expect(pc.pointCount).toBe(2);
+    // Recentred on the floored min origin [1,2,3] ⇒ [0,0,0] and [3,3,3].
+    expect(Array.from(pc.positions.slice(0, 6)).map((v) => Math.round(v))).toEqual([
+      0, 0, 0, 3, 3, 3,
+    ]);
+  });
+
+  test('keeps UTM-scale coordinates precise through the f64 path', async () => {
+    const pc = await loadPcd(
+      asciiPcd(['x', 'y', 'z'], ['500000.000 4500000.000 100.000', '500000.001 4500000.000 100.000']),
+    );
+    expect(pc.positions[3] - pc.positions[0]).toBeCloseTo(0.001, 6);
+  });
+
+  test('skips blank lines and tolerates irregular spacing', async () => {
+    const pc = await loadPcd(asciiPcd(['x', 'y', 'z'], ['  1\t 2   3 ', '', '4  5\t\t6']));
+    expect(pc.pointCount).toBe(2);
+  });
+});

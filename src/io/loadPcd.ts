@@ -118,14 +118,40 @@ function extractPcdPositionsF64(buffer: ArrayBuffer): Float64Array | null {
     const cy = colOf(yi);
     const cz = colOf(zi);
     const body = new TextDecoder().decode(buffer).slice(facts.bodyOffset);
-    const rows: number[] = [];
-    for (const raw of body.split('\n')) {
-      const line = raw.trim();
-      if (line === '') continue;
-      const tok = line.split(/\s+/);
-      rows.push(Number(tok[cx]), Number(tok[cy]), Number(tok[cz]));
+    // Walk the body once into a preallocated buffer. Splitting it into lines and
+    // each line into tokens held one string per line plus a growing number[]
+    // that was then copied again into the typed array — four live copies of the
+    // cloud at the peak, to read three columns per row.
+    const maxRows = facts.points > 0 ? facts.points : countPcdRows(body);
+    const out = new Float64Array(maxRows * 3);
+    const n = body.length;
+    let pos = 0;
+    let row = 0;
+    while (pos < n && row < maxRows) {
+      // Skip blank lines, then read the row's fields in place.
+      while (pos < n && isPcdSpace(body.charCodeAt(pos))) pos++;
+      if (pos >= n) break;
+      let col = 0;
+      let wrote = false;
+      while (pos < n) {
+        const c = body.charCodeAt(pos);
+        if (c === 10 || c === 13) break; // end of row
+        if (c === 32 || c === 9) {
+          pos++;
+          continue;
+        }
+        const start = pos;
+        while (pos < n && !isPcdSpace(body.charCodeAt(pos))) pos++;
+        if (col === cx) {
+          out[row * 3] = Number(body.slice(start, pos));
+          wrote = true;
+        } else if (col === cy) out[row * 3 + 1] = Number(body.slice(start, pos));
+        else if (col === cz) out[row * 3 + 2] = Number(body.slice(start, pos));
+        col++;
+      }
+      if (wrote) row++;
     }
-    return Float64Array.from(rows);
+    return row * 3 === out.length ? out : out.subarray(0, row * 3);
   }
 
   if (facts.data === 'binary') {
@@ -281,4 +307,29 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
     name,
     decodedPointCount: count,
   });
+}
+
+/** Space, tab, LF, VT, FF, CR — the whitespace an ASCII PCD row separates on. */
+function isPcdSpace(c: number): boolean {
+  return c === 32 || (c >= 9 && c <= 13);
+}
+
+/**
+ * Count non-blank rows in an ASCII PCD body. Only used when the header's POINTS
+ * is missing or zero — the scanner needs a size to preallocate, and counting
+ * newlines is far cheaper than materialising every line as a string.
+ */
+function countPcdRows(body: string): number {
+  let rows = 0;
+  let inRow = false;
+  for (let i = 0; i < body.length; i++) {
+    const c = body.charCodeAt(i);
+    if (c === 10 || c === 13) {
+      if (inRow) rows++;
+      inRow = false;
+    } else if (!isPcdSpace(c)) {
+      inRow = true;
+    }
+  }
+  return inRow ? rows + 1 : rows;
 }
