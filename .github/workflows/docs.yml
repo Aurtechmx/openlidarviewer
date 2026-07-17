@@ -51,7 +51,7 @@ jobs:
       - run: npm ci
       - name: Build docs site (renders claim register, then verifies the publish allowlist)
         run: npm run docs:build
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs-site/.vitepress/dist
 
