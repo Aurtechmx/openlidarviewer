@@ -11,6 +11,7 @@ import { parse } from '@loaders.gl/core';
 import { GLTFLoader, postProcessGLTF } from '@loaders.gl/gltf';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { PointCloud } from '../model/PointCloud';
+import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import type { SourceFormat } from './sniffFormat';
 
 /** A postprocessed glTF node — only the fields this loader touches. */
@@ -209,19 +210,29 @@ export async function loadGltf(
     throw new Error('glTF asset contains no mesh POSITION data');
   }
 
-  return new PointCloud({
-    positions: new Float32Array(positions),
+  // glTF vertices are already local — the asset carries no georeferencing, so
+  // the origin stays zero and there is no origin to protect. A node transform
+  // can still produce an unplaceable vertex from placeable inputs (a degenerate
+  // or non-finite matrix multiplies through), so the same policy every other
+  // loader answers to applies here too.
+  const clean = sanitizeLocalCloud(new Float32Array(positions), {
     colors: colorSeen.any ? new Uint8Array(colors) : undefined,
+  });
+
+  const declared =
+    generator || hasTexture
+      ? {
+          ...(generator ? { sourceSoftware: generator } : {}),
+          ...(hasTexture ? { hasTexture: true } : {}),
+        }
+      : undefined;
+
+  return new PointCloud({
+    positions: clean.positions,
+    colors: clean.attributes.colors,
     origin: [0, 0, 0],
     sourceFormat: sourceFormat as SourceFormat,
     name,
-    ...(generator || hasTexture
-      ? {
-          metadata: {
-            ...(generator ? { sourceSoftware: generator } : {}),
-            ...(hasTexture ? { hasTexture: true } : {}),
-          },
-        }
-      : {}),
+    metadata: withLoadWarning(declared, clean.warning),
   });
 }
