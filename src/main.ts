@@ -5703,7 +5703,14 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
 async function exportSession(): Promise<void> {
   const { serializeSession } = await loadSession();
   const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
-  const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
+  // A streaming-only session has no static cloud. Its frame still exists — the
+  // streaming source's renderOrigin — and streaming COPC/EPT are LAS-derived,
+  // hence Z-up. Deriving origin/upAxis from the (absent) static cloud wrote
+  // [0,0,0] + Y-up, so the session reopened displaced by the whole render origin
+  // and mis-oriented.
+  const upAxis: 'y' | 'z' = cloud
+    ? isZUpFormat(cloud.sourceFormat) ? 'z' : 'y'
+    : viewer.streamingCloud ? 'z' : 'y';
 
   // populate the v3 fields so the .olvsession captures
   // the full working state, not just the inspection annotations. The
@@ -5775,7 +5782,9 @@ async function exportSession(): Promise<void> {
   const viewState = captureViewState();
   const json = serializeSession({
     upAxis,
-    origin: cloud ? cloud.origin : [0, 0, 0],
+    // The scene's real frame, static OR streaming — exportGeoContext resolves the
+    // static cloud's origin, else the streaming renderOrigin, else zero.
+    origin: [...exportGeoContext().origin],
     unitSystem: viewer.measure.unitSystem,
     // v7 — a view with a captured bundle serialises it per-view; a camera-only
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
