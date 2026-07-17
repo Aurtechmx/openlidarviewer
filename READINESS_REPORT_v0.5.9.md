@@ -1,7 +1,15 @@
 # v0.5.9 publication-readiness report
 
-Recorded 2026-07-15. This is a point-in-time record of what was checked and what
-remains. It complements [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md)
+Recorded 2026-07-15, and kept as the historical record for that release — every
+statement below describes v0.5.9 and is not re-asserted for any later version.
+The file carries its version in its name for the same reason its sibling reports
+do: an unversioned readiness report reads as a claim about the current tree, and
+this one stopped being that the moment the version moved on.
+
+For the readiness of the current pre-release, see
+[docs/_audit/v0.6-hardening-report.md](docs/_audit/v0.6-hardening-report.md).
+
+It complements [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md)
 (scientific evidence ceiling) and [DEPENDENCIES.md](DEPENDENCIES.md) (audit + SBOM).
 
 ## Release identity

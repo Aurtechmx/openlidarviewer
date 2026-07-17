@@ -92,6 +92,23 @@ try {
   problems.push('CITATION.cff missing or unreadable.');
 }
 
+// 6. An UNVERSIONED readiness report is a claim about the current tree, so it
+// has to name the current version. The v0.5.9 one drifted for exactly this
+// reason: nothing checked it, and its filename carried no version to give the
+// staleness away. A report for an older release belongs in
+// READINESS_REPORT_vX.Y.Z.md, which this check deliberately ignores.
+if (existsSync(resolve(ROOT, 'READINESS_REPORT.md'))) {
+  const readiness = read('READINESS_REPORT.md');
+  const claimed = /^#\s*v([0-9][0-9A-Za-z.\-]*)\s+publication-readiness report/im.exec(readiness);
+  if (!claimed) {
+    problems.push('READINESS_REPORT.md has no "# vX.Y.Z publication-readiness report" heading to check.');
+  } else if (claimed[1] !== version) {
+    problems.push(
+      `READINESS_REPORT.md describes v${claimed[1]}, expected v${version} — rename it to READINESS_REPORT_v${claimed[1]}.md if it is the record for that release.`,
+    );
+  }
+}
+
 if (problems.length === 0) {
   console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, and CITATION.cff all on v${version}.`);
   process.exit(0);
