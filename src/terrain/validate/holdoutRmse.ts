@@ -23,6 +23,7 @@
 
 import type { TerrainPoint } from '../TerrainContracts';
 import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
+import { NeumaierSum } from '../../process/numerics';
 import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence';
 import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
 import type { VerticalAxis } from '../ground/groundFilter';
@@ -312,7 +313,8 @@ export function holdoutValidateDtm(
   // uniformly 8 cm low has a large bias but its RMSE alone looks like noise.
   const allSigned: number[] = [];
   let sumSigned = 0;
-  let sumSq = 0;
+  // Compensated so the aggregate RMSE stays accurate over a large held-out set.
+  const sumSqAcc = new NeumaierSum();
   let sumAbs = 0;
   let covered = 0;
   let uncovered = 0;
@@ -370,7 +372,7 @@ export function holdoutValidateDtm(
     allAbs.push(abs);
     allSigned.push(residual);
     sumSigned += residual;
-    sumSq += sq;
+    sumSqAcc.add(sq);
     sumAbs += abs;
     covered++;
     const grade = gradeForConfidence(predConf);
@@ -401,7 +403,7 @@ export function holdoutValidateDtm(
     return { ...emptyReport(holdoutFraction, warnings), uncoveredCount: uncovered };
   }
 
-  const rmse = Math.sqrt(sumSq / covered);
+  const rmse = Math.sqrt(sumSqAcc.total / covered);
   const mae = sumAbs / covered;
   allAbs.sort((a, b) => a - b);
   // Project-wide type-7 quantile (was nearest-rank — one of the three

@@ -45,6 +45,7 @@ import {
   volumeCutFill,
 } from './volume';
 import type { PolygonValidity } from './polygonHygiene';
+import { WelfordStats } from '../../process/numerics';
 
 /** How the base (reference) height under the pile is chosen. */
 export type BasePlaneMode =
@@ -265,18 +266,15 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   }
 
   // Per-point thickness above the base (clamped at 0 — the fill contribution),
-  // mean and std, for the sampling-error term. fill = area · mean(thickness).
-  let sum = 0;
-  let sumSq = 0;
-  for (const z of insideHeights) {
-    const t = Math.max(0, z - baseZ);
-    sum += t;
-    sumSq += t * t;
-  }
+  // mean and std for the sampling-error term. Welford streams both in one pass
+  // with no cancellation — the naive Σt²/n − mean² form loses the variance
+  // entirely for a tall pile with a smooth top (spread tiny next to the mean).
+  // fill = area · mean(thickness).
+  const thickness = new WelfordStats();
+  for (const z of insideHeights) thickness.push(Math.max(0, z - baseZ));
   const m = insideHeights.length || 1;
-  const meanThk = sum / m;
-  const varThk = Math.max(0, sumSq / m - meanThk * meanThk);
-  const stdThk = Math.sqrt(varThk);
+  const meanThk = thickness.mean;
+  const stdThk = thickness.populationStd;
 
   const area = v.footprintArea;
   // Standard error of the mean thickness × area. The √N must be taken over the
