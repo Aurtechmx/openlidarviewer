@@ -3367,7 +3367,10 @@ const exportPanel = new ExportPanel({
     if (!sc) return null;
     const crs = sc.crs();
     return {
-      pointCount: viewer.residentPointTotal(),
+      // The frontier total, not the resident total: an export drops ancestor
+      // nodes that have a resident descendant, so counting every resident point
+      // promised roughly twice the points and bytes the write delivered.
+      pointCount: viewer.exportFrontierPointTotal(),
       hasRgb: sc.availableColorModes().includes('rgb'),
       // COPC/EPT point records (PDRF 6/7/8) carry GPS time.
       hasGpsTime: true,

@@ -3602,15 +3602,23 @@ export class Viewer {
    * available for a range-read streaming source, so this snapshot is exactly
    * what the viewer holds; positions carry the render origin as their shift.
    */
-  snapshotResidentCloud(): PointCloud | null {
+  /**
+   * The resident nodes an export would actually write: the deterministic leaf
+   * frontier (Gate 5) — the deepest resident node per octree path, with
+   * ancestors that have a resident descendant and anything mid-fade dropped, so
+   * an export never carries overlapping coarse+fine LOD samples of one region.
+   *
+   * Both the snapshot and the Export panel's estimate read this, because they
+   * have to agree: the estimate previously counted every resident point and the
+   * write then dropped the ancestors, so the panel promised roughly twice the
+   * points and bytes it delivered. Deriving both from one decision makes that
+   * particular lie unrepresentable.
+   */
+  private _exportFrontierChunks(): DecodedChunk[] {
     const s = this._streaming;
-    if (!s) return null;
-    // Reduce the resident set to the deterministic leaf frontier (Gate 5): keep
-    // the deepest resident node per octree path and drop ancestors that have a
-    // resident descendant, plus any node fading out, so a mid-cross-fade export
-    // doesn't carry overlapping coarse+fine LOD samples of the same region.
+    if (!s) return [];
     const entries = s.renderer.residentFrontierEntries();
-    if (entries.length === 0) return null;
+    if (entries.length === 0) return [];
     const frontierNodes: FrontierNode[] = [];
     for (const e of entries) {
       const key = keyFromId(e.id);
@@ -3620,9 +3628,26 @@ export class Viewer {
     // An unparseable id can't be reasoned about; keep it rather than silently
     // dropping its points. Parseable ids obey the frontier keep-set.
     const parseable = new Set(frontierNodes.map((n) => n.id));
-    const chunks = entries
+    return entries
       .filter((e) => (parseable.has(e.id) ? keep.has(e.id) : true))
       .map((e) => e.decoded);
+  }
+
+  /**
+   * How many points an export of the resident set would write. Counts the same
+   * frontier the snapshot builds, without copying any buffers, so the Export
+   * panel can state a figure it will honour while a scan is still streaming.
+   */
+  exportFrontierPointTotal(): number {
+    let total = 0;
+    for (const c of this._exportFrontierChunks()) total += c.pointCount;
+    return total;
+  }
+
+  snapshotResidentCloud(): PointCloud | null {
+    const s = this._streaming;
+    if (!s) return null;
+    const chunks = this._exportFrontierChunks();
     if (chunks.length === 0) return null;
     const crs = s.cloud.crs();
     return buildResidentSnapshot(chunks, {
