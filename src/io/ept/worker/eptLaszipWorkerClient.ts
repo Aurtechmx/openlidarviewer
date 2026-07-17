@@ -120,8 +120,17 @@ export class EptLaszipWorkerClient {
       if (signal) {
         pending.onAbort = (): void => {
           if (!this._pending.delete(requestId)) return;
-          this._worker.postMessage({ type: 'cancel', requestId });
+          // Reject first, then post the cancel best-effort. If the worker is
+          // dying in the same tick the abort fires, postMessage throws — and if
+          // that ran before the reject, this promise would never settle. The
+          // cancel is only an optimisation (skip a not-yet-started decode), so
+          // losing it to a dead worker costs nothing.
           reject(new Error('EPT decode aborted'));
+          try {
+            this._worker.postMessage({ type: 'cancel', requestId });
+          } catch {
+            /* worker already gone — the request is settled, the cancel is moot */
+          }
         };
         signal.addEventListener('abort', pending.onAbort, { once: true });
       }

@@ -118,6 +118,23 @@ describe('EptLaszipWorkerClient protocol', () => {
     await expect(promise).rejects.toThrow(/abort/i);
   });
 
+  test('an abort still settles when the cancel post throws (worker dying)', async () => {
+    // If the worker is being torn down in the same tick the signal aborts, the
+    // cancel postMessage throws. That must not leave the decode promise hanging —
+    // the reject has to win regardless of the cancel.
+    const worker = new FakeWorker();
+    const client = new EptLaszipWorkerClient(() => worker);
+    const ctrl = new AbortController();
+    const promise = client.decodeTile(new ArrayBuffer(8), [0, 0, 0], ctrl.signal);
+    // The decode posted fine; only the LATER cancel post throws.
+    worker.postMessage = (): void => {
+      throw new Error('worker terminated');
+    };
+    ctrl.abort();
+    await expect(promise).rejects.toThrow(/abort/i);
+    expect(client.pendingCount).toBe(0);
+  });
+
   test('an already-aborted signal rejects without posting a decode', async () => {
     const { client, worker } = mkClient();
     const ctrl = new AbortController();
