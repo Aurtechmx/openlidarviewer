@@ -83,7 +83,10 @@ const covered = (h: number | undefined): h is number =>
  *
  * Heights arrive RENDER-LOCAL — recentred clouds store `local = world −
  * origin` — so `datumOffset`, the up-axis component of that origin, is added
- * back to make each height the elevation the source file describes. It belongs
+ * back to make each height the elevation the source file describes. A `null`
+ * offset is the scene REFUSING a datum it cannot assert (clouds with
+ * conflicting origins): the heights stay local and the surfaces say so, which
+ * is why the refusal changes no number here — only what the number is called. It belongs
  * at this seam and not in storage: `rebaseSessionGeometry` shifts stored
  * profile heights by an origin delta when a session is imported onto a
  * different-origin cloud, which only holds while what is stored is local. The
@@ -101,10 +104,10 @@ const covered = (h: number | undefined): h is number =>
 export function scaleProfileSamples(
   samples: ReadonlyArray<ProfileChartSample>,
   unitToMetres: number,
-  datumOffset = 0,
+  datumOffset: number | null = 0,
 ): ProfileChartSample[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
-  const d = Number.isFinite(datumOffset) ? datumOffset : 0;
+  const d = datumOffset != null && Number.isFinite(datumOffset) ? datumOffset : 0;
   return samples.map((s) => {
     const out: ProfileChartSample = {
       distance: s.distance * f,
@@ -228,7 +231,14 @@ export interface ProfileSummaryRow {
 export function profileSummaryRows(
   s: ProfileSummaryData,
   system: UnitSystem,
+  datumKnown = true,
 ): ProfileSummaryRow[] {
+  // Without a datum the figure is a local render height, so the row says that
+  // rather than calling it an elevation. The number is unchanged and still
+  // useful — every row above these two is a difference, and a difference never
+  // needed the datum.
+  const point = (which: string): string =>
+    datumKnown ? `${which} point` : `${which} point (local height)`;
   const len = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
   const extreme = (e: ProfileExtreme | null): string => formatProfileExtreme(e, system);
   return [
@@ -248,8 +258,8 @@ export function profileSummaryRows(
             `${formatStation(s.steepest.toChainage, system)} ` +
             `(${formatGradePercent(s.steepest.grade)})`,
     },
-    { label: 'Highest point', value: extreme(s.highest) },
-    { label: 'Lowest point', value: extreme(s.lowest) },
+    { label: point('Highest'), value: extreme(s.highest) },
+    { label: point('Lowest'), value: extreme(s.lowest) },
   ];
 }
 
@@ -321,10 +331,15 @@ export function profileStationRows(
 export function buildProfileCsv(
   samples: ReadonlyArray<ProfileChartSample>,
   system: UnitSystem,
+  datumKnown = true,
 ): string {
   const unit = system === 'metric' ? 'm' : 'ft';
+  // A refused datum renames the column; it must NOT blank it. A blank already
+  // means "the corridor saw no points here", and spending that signal on a
+  // different problem would trade one silent wrong answer for another.
+  const heightCol = datumKnown ? `elevation_${unit}` : `local_height_${unit}`;
   const lines: string[] = [
-    `station,chainage_${unit},elevation_${unit},points,grade_to_next_pct`,
+    `station,chainage_${unit},${heightCol},points,grade_to_next_pct`,
   ];
   for (const r of profileStationRows(samples, system)) {
     lines.push(`${r.station},${r.chainage},${r.elevation},${r.points},${r.grade}`);

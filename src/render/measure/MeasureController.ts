@@ -271,6 +271,15 @@ export interface MeasurementSummary {
    */
   profileChartResidentOnly?: boolean;
   /**
+   * Profile only — false when the scene could not assert a vertical datum
+   * (clouds recentred on conflicting origins), so `profileChart` heights are
+   * LOCAL render heights rather than source elevations. Every consumer that
+   * PRINTS an absolute height must name it accordingly; deltas are unaffected.
+   * Absent on a summary built before the gate, which reads as "known" — the
+   * pre-gate behaviour.
+   */
+  profileDatumKnown?: boolean;
+  /**
    * Profile only — the corridor half-width the sampler actually used, in
    * METRES (already through the B2 unit factor). Feeds the PDF's provenance
    * rows/header so the sheet stops printing "auto (5 % of length)" when the
@@ -379,14 +388,18 @@ export class MeasureController {
   private _active = false;
   private _worldUp: Vec3 = [0, 0, 1];
   /**
-   * The up-axis component of the scan's render origin — what a render-local
+   * The up-axis component of the scene's render origin — what a render-local
    * height must regain to become a source elevation (see
    * `elevationDatumOffset`). Applied at the `getSummaries` display boundary
    * only: measurement geometry stays local so the session importer's rebase
-   * keeps working. 0 until a cloud arrives, which is also the honest answer
-   * for a scan rendered at the world origin.
+   * keeps working.
+   *
+   * `null` is the scene REFUSING a datum: clouds recentred on conflicting
+   * origins share no frame, so no absolute elevation is defensible and the
+   * profile surfaces fall back to naming their heights local. 0 until a cloud
+   * arrives, which is also the honest answer for a scan at the world origin.
    */
-  private _originUp = 0;
+  private _originUp: number | null = 0;
   private _units: UnitSystem = 'metric';
   /**
    * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
@@ -780,6 +793,7 @@ export class MeasureController {
       profileChart: m.profileChart
         ? scaleProfileSamples(m.profileChart, f, this._originUp)
         : undefined,
+      profileDatumKnown: this._originUp !== null,
       profileChartResidentOnly: m.profileChartResidentOnly,
       profileCorridorWidthM:
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
@@ -1016,14 +1030,16 @@ export class MeasureController {
   }
 
   /**
-   * Provide the scan's up-axis and render origin. The origin is what turns a
-   * stored local height back into the elevation the source file describes;
-   * only its up-axis component matters, so it is reduced once here rather than
-   * kept as a vector nothing else reads.
+   * Provide the scan's up-axis and the scene's render origin. The origin is
+   * what turns a stored local height back into the elevation the source file
+   * describes; only its up-axis component matters, so it is reduced once here
+   * rather than kept as a vector nothing else reads. A `null` origin is the
+   * caller reporting that the loaded clouds share no frame, and the refusal
+   * travels to the display surfaces as `profileDatumKnown: false`.
    */
-  setContext(ctx: { worldUp: Vec3; origin: Vec3 }): void {
+  setContext(ctx: { worldUp: Vec3; origin: Vec3 | null }): void {
     this._worldUp = ctx.worldUp;
-    this._originUp = elevationDatumOffset(ctx.origin, ctx.worldUp);
+    this._originUp = ctx.origin ? elevationDatumOffset(ctx.origin, ctx.worldUp) : null;
   }
 
   /** Switch the unit system; every label re-formats on the next frame. */

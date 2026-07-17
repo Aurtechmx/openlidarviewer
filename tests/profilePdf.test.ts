@@ -181,3 +181,37 @@ describe('the sheet prints the same source elevations as the panel', () => {
     expect(text).not.toContain('41186.5');
   });
 });
+
+describe('the sheet refuses a datum it cannot assert', () => {
+  it('prints local heights and names the reason in the Vertical datum row', async () => {
+    // Local heights from a scene whose clouds hold conflicting origins.
+    const samples: ProfileChartSample[] = [
+      { distance: 0, height: -481.103, count: 12 },
+      { distance: 171.99, height: -449.53, count: 4 },
+      { distance: 343.98, height: -411.865, count: 9 },
+    ];
+    const text = drawnPdfText(
+      await buildProfilePdf({ name: 'Unresolved datum', samples, datumKnown: false }),
+    );
+    // Nothing on the sheet may call these elevations.
+    expect(text).toContain('Local height (m)');
+    expect(text).toContain('Min / Max local height');
+    expect(text).not.toContain('Elevation (m)');
+    // The sheet's existing datum row is where a reader looks for exactly this.
+    expect(text).toContain('conflicting cloud origins');
+    // And it agrees with the panel, refusal or not.
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(samples), 'metric', false).map((r) => [
+        r.label,
+        r.value,
+      ]),
+    );
+    expect(text).toContain(byLabel.get('Highest point (local height)'));
+  });
+
+  it('a resolvable datum leaves the sheet exactly as it was', async () => {
+    const text = drawnPdfText(await buildProfilePdf({ name: 'Metric section', samples: ramp(16) }));
+    expect(text).toContain('Elevation (m)');
+    expect(text).not.toContain('Local height (m)');
+  });
+});

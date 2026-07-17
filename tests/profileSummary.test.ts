@@ -408,3 +408,93 @@ describe('profile display surfaces print SOURCE elevations', () => {
     expect(s.lowest!.chainage).toBeLessThanOrEqual(s.lengthM);
   });
 });
+
+/**
+ * The datum honesty gate. Clouds are recentred on their own `floor(min)`, so
+ * two loaded files can hold different origins — and since nothing re-places a
+ * mesh by an origin delta, such a scene has no single frame to speak of. The
+ * viewer refuses to assert a datum there (`resolveSceneOrigin` → null), and
+ * the profile surfaces must then present LOCAL heights and say so, rather than
+ * hand one cloud's datum to points that were never in its frame.
+ *
+ * Every DELTA survives the refusal untouched: a constant offset cancels in a
+ * subtraction, so gain, loss, grades and the steepest section are exactly as
+ * correct without a datum as with one. Only absolutes lose their meaning.
+ */
+describe('a refused datum degrades to local heights, visibly', () => {
+  const LOCAL: ProfileChartSample[] = [
+    { distance: 0, height: -481.103, count: 12 },
+    { distance: 171.99, height: NaN, count: 0 },
+    { distance: 343.98, height: -411.865, count: 9 },
+  ];
+
+  it('a null offset leaves the heights exactly local — no datum is invented', () => {
+    expect(scaleProfileSamples(LOCAL, 1, null)).toEqual(LOCAL);
+  });
+
+  it('a null offset still converts units — the datum is refused, not the scale', () => {
+    const out = scaleProfileSamples([{ distance: 10, height: 100 }], 0.3048, null);
+    expect(out[0].height).toBeCloseTo(30.48, 12);
+    expect(out[0].distance).toBeCloseTo(3.048, 12);
+  });
+
+  it('the summary names the extremes as local heights instead of elevations', () => {
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(LOCAL), 'metric', false).map((r) => [
+        r.label,
+        r.value,
+      ]),
+    );
+    expect(byLabel.get('Highest point (local height)')).toBe('-411.87 m @ 0+343.98');
+    expect(byLabel.get('Lowest point (local height)')).toBe('-481.10 m @ 0+000.00');
+    // The elevation wording must be gone — that is the whole visible signal.
+    expect(byLabel.has('Highest point')).toBe(false);
+    expect(byLabel.has('Lowest point')).toBe(false);
+  });
+
+  it('every delta reads identically with and without a datum', () => {
+    const withDatum = computeProfileSummary(scaleProfileSamples(LOCAL, 1, 830.03));
+    const without = computeProfileSummary(scaleProfileSamples(LOCAL, 1, null));
+    const deltas = (s: ReturnType<typeof computeProfileSummary>) => [
+      s.gainM,
+      s.lossM,
+      s.averageGrade,
+      s.maxGrade,
+      s.lengthM,
+    ];
+    expect(deltas(without)).toEqual(deltas(withDatum));
+    const rowsOf = (known: boolean, samples: ProfileChartSample[]) =>
+      new Map(profileSummaryRows(computeProfileSummary(samples), 'metric', known).map((r) => [r.label, r.value]));
+    const a = rowsOf(true, scaleProfileSamples(LOCAL, 1, 830.03));
+    const b = rowsOf(false, scaleProfileSamples(LOCAL, 1, null));
+    for (const label of ['Length', 'Elevation gain / loss', 'Avg grade', 'Max grade', 'Steepest section']) {
+      expect(b.get(label)).toBe(a.get(label));
+    }
+  });
+
+  it('the CSV renames the column rather than blanking it — a blank means no coverage', () => {
+    const csv = buildProfileCsv(LOCAL, 'metric', false);
+    const lines = csv.trimEnd().split('\n');
+    expect(lines[0]).toBe('station,chainage_m,local_height_m,points,grade_to_next_pct');
+    // The values are real and must stay: blanking them would claim the corridor
+    // saw no points, which is a different lie.
+    expect(lines[1]).toBe('0+000.00,0.00,-481.103,12,');
+    expect(lines[2]).toBe('0+171.99,171.99,,0,'); // the genuine gap, still blank
+  });
+
+  it('a known datum keeps every label and header exactly as it was', () => {
+    const known = scaleProfileSamples(LOCAL, 1, 830.03);
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(known), 'metric', true).map((r) => [r.label, r.value]),
+    );
+    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
+    expect(buildProfileCsv(known, 'metric', true).split('\n')[0]).toBe(
+      'station,chainage_m,elevation_m,points,grade_to_next_pct',
+    );
+    // Defaulted, the surfaces behave exactly as they did before the gate.
+    expect(profileSummaryRows(computeProfileSummary(known), 'metric')).toEqual(
+      profileSummaryRows(computeProfileSummary(known), 'metric', true),
+    );
+    expect(buildProfileCsv(known, 'metric')).toBe(buildProfileCsv(known, 'metric', true));
+  });
+});

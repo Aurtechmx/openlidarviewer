@@ -1,4 +1,4 @@
-import { computeOrigin, recenter } from '../src/io/coordinateBridge';
+import { computeOrigin, recenter, resolveSceneOrigin } from '../src/io/coordinateBridge';
 
 describe('computeOrigin', () => {
   test('floors each component', () => {
@@ -53,5 +53,46 @@ describe('recenter', () => {
     expect(out[3] - out[0]).toBeCloseTo(dxOrig, 3);
     expect(out[4] - out[1]).toBeCloseTo(dyOrig, 3);
     expect(out[5] - out[2]).toBeCloseTo(dzOrig, 3);
+  });
+});
+
+describe('resolveSceneOrigin', () => {
+  const A: [number, number, number] = [514233, 2105887, 830];
+  const B: [number, number, number] = [514233, 2105887, 0];
+
+  test('one cloud gives its own origin', () => {
+    expect(resolveSceneOrigin([A])).toEqual(A);
+  });
+
+  test('clouds that agree give the origin they share', () => {
+    expect(resolveSceneOrigin([A, [...A], [...A]])).toEqual(A);
+  });
+
+  test('clouds that disagree resolve to no origin at all', () => {
+    // Each cloud is recentred on its OWN floor(min), so two files can differ.
+    // Nothing then describes the scene: picking either one would hand cloud A's
+    // frame to points that were never in it.
+    expect(resolveSceneOrigin([A, B])).toBeNull();
+  });
+
+  test('the answer does not depend on load order', () => {
+    // The bug this replaces: whichever cloud loaded LAST became the frame, so
+    // the same scene resolved differently depending on the order of two clicks.
+    expect(resolveSceneOrigin([A, B])).toBe(resolveSceneOrigin([B, A]));
+    expect(resolveSceneOrigin([A, [...A]])).toEqual(resolveSceneOrigin([[...A], A]));
+  });
+
+  test('a disagreement on any single axis is a disagreement', () => {
+    expect(resolveSceneOrigin([A, [A[0] + 1, A[1], A[2]]])).toBeNull();
+    expect(resolveSceneOrigin([A, [A[0], A[1] + 1, A[2]]])).toBeNull();
+  });
+
+  test('an empty scene has no origin to assert', () => {
+    expect(resolveSceneOrigin([])).toBeNull();
+  });
+
+  test('a cloud with no origin at all makes the scene unresolvable', () => {
+    expect(resolveSceneOrigin([A, null])).toBeNull();
+    expect(resolveSceneOrigin([null])).toBeNull();
   });
 });

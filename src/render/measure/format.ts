@@ -45,6 +45,23 @@ export const VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE =
   'lengths, areas and grades mix units and are NOT reliable distances. ' +
   'Heights are scaled correctly; use them, or reproject to a single unit.';
 
+/**
+ * The measurement stack's honest limitation when the loaded clouds hold
+ * CONFLICTING render origins. Each cloud is recentred on its own origin, so a
+ * scene whose origins differ has no single frame — and no single vertical
+ * datum — to read absolute elevations against. Rather than hand one cloud's
+ * datum to points that were never in its frame, the profile surfaces present
+ * the local render height and name it that. Differences survive intact (a
+ * constant offset cancels in a subtraction), which is why the caveat points at
+ * what still holds instead of only what does not. ONE string, shared by the
+ * panel caveat and the PDF's datum row, so the wording cannot fork.
+ */
+export const DATUM_CONFLICT_MEASURE_NOTICE =
+  'Local heights, not elevations: conflicting cloud origins mean no single ' +
+  'vertical datum describes this scene. Height differences, grades and ' +
+  'gain/loss are unaffected; absolute values are not elevations. Load the ' +
+  'clouds one at a time to read true elevations.';
+
 const FEET_PER_METRE = 3.280839895013123;
 const SQFT_PER_SQM = FEET_PER_METRE * FEET_PER_METRE;
 const SQFT_PER_ACRE = 43_560;

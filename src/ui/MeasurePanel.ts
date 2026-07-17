@@ -40,7 +40,11 @@ import {
 // Δh in the chart tooltip goes through the shared formatter so it carries
 // its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
 // imperial mode).
-import { formatLength, GEOGRAPHIC_CRS_MEASURE_NOTICE } from '../render/measure/format';
+import {
+  DATUM_CONFLICT_MEASURE_NOTICE,
+  formatLength,
+  GEOGRAPHIC_CRS_MEASURE_NOTICE,
+} from '../render/measure/format';
 // B7/B8 (v0.4.5) — sampler-control defaults + bounds, read from the sampler
 // module so the inputs, the controller clamp and the tests share one rule.
 import {
@@ -683,6 +687,7 @@ export class MeasurePanel {
         // sweep, but this call site never passed it, so every sheet printed
         // metric regardless of the toggle. Same source the chart/CSV read.
         unitSystem: this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
+        datumKnown: s.profileDatumKnown !== false,
       });
       triggerDownload(
         new Blob([bytes as BlobPart], { type: 'application/pdf' }),
@@ -711,7 +716,7 @@ export class MeasurePanel {
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
-    const csv = buildProfileCsv(s.profileChart, system);
+    const csv = buildProfileCsv(s.profileChart, system, s.profileDatumKnown !== false);
     triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
   }
 
@@ -727,6 +732,7 @@ export class MeasurePanel {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const samples = s.profileChart;
     const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+    const datumKnown = s.profileDatumKnown !== false;
     const storedVex = Number(storageGet(PROFILE_VEX_KEY));
     const vex = PROFILE_VEX_OPTIONS.includes(storedVex as 1 | 2 | 5 | 10) ? storedVex : 1;
 
@@ -743,7 +749,7 @@ export class MeasurePanel {
           className: 'olv-rf-stats',
           ariaLabel: `Profile summary for ${s.name}`,
         });
-        for (const row of profileSummaryRows(computeProfileSummary(samples), system)) {
+        for (const row of profileSummaryRows(computeProfileSummary(samples), system, datumKnown)) {
           stats.append(
             el('div', { className: 'olv-rf-stat' }, [
               el('dt', { className: 'olv-rf-stat-label', text: row.label }),
@@ -756,7 +762,12 @@ export class MeasurePanel {
         // opened the focus view precisely to read the whole table).
         const unitLabel = system === 'metric' ? 'm' : 'ft';
         const stationRows = profileStationRows(samples, system);
-        const { table, build } = buildStationTable(stationRows, unitLabel, s.name);
+        const { table, build } = buildStationTable(
+          stationRows,
+          unitLabel,
+          s.name,
+          datumKnown ? 'Elevation' : 'Local height',
+        );
         build();
         const stations = el('div', { className: 'olv-rf-stations' }, [
           el('div', {
@@ -775,6 +786,11 @@ export class MeasurePanel {
               className: 'olv-mp-chart-caveat',
               text: 'Resident-node analysis only — profile may refine as streaming loads.',
             }),
+          );
+        }
+        if (!datumKnown) {
+          container.append(
+            el('div', { className: 'olv-mp-chart-caveat', text: DATUM_CONFLICT_MEASURE_NOTICE }),
           );
         }
 
@@ -1208,11 +1224,12 @@ export class MeasurePanel {
       // Description-list semantics so a screen reader pairs each label with
       // its value (the chart itself stays decorative/aria-hidden).
       const summary = computeProfileSummary(s.profileChart);
+      const datumKnown = s.profileDatumKnown !== false;
       const summaryList = el('dl', {
         className: 'olv-mp-profile-summary',
         ariaLabel: `Profile summary for ${s.name}`,
       });
-      for (const row of profileSummaryRows(summary, system)) {
+      for (const row of profileSummaryRows(summary, system, datumKnown)) {
         summaryList.append(
           el('div', { className: 'olv-mp-summary-row' }, [
             el('dt', { className: 'olv-mp-summary-label', text: row.label }),
@@ -1229,6 +1246,7 @@ export class MeasurePanel {
       // a real table in the DOM acting as the accessible source of truth.
       const stationRows = profileStationRows(s.profileChart, system);
       const unitLabel = system === 'metric' ? 'm' : 'ft';
+      const heightHeader = datumKnown ? 'Elevation' : 'Local height';
       // Lazy <tbody> (v0.6 perf): the station table is collapsed by default and
       // most measurements are never expanded, yet a dense profile carries one
       // row per sample — building every <tr>/<td> up front spends DOM work on a
@@ -1240,6 +1258,7 @@ export class MeasurePanel {
         stationRows,
         unitLabel,
         s.name,
+        heightHeader,
       );
       const stationDetails = el('details', { className: 'olv-mp-stations' }, [
         el('summary', {
@@ -1299,6 +1318,17 @@ export class MeasurePanel {
           el('div', {
             className: 'olv-mp-chart-caveat',
             text: 'Resident-node analysis only — profile may refine as streaming loads.',
+          }),
+        );
+      }
+      // A chart of local heights looks exactly like a chart of elevations, so
+      // the only thing standing between the reader and a wrong number is this
+      // line. Same slot and voice as the resident-node caveat above.
+      if (!datumKnown) {
+        children.push(
+          el('div', {
+            className: 'olv-mp-chart-caveat',
+            text: DATUM_CONFLICT_MEASURE_NOTICE,
           }),
         );
       }
@@ -1424,11 +1454,12 @@ function buildStationTable(
   stationRows: readonly ProfileStationRow[],
   unitLabel: string,
   name: string,
+  heightHeader = 'Elevation',
 ): { table: HTMLElement; build: () => void } {
   const headerCells = [
     'Station',
     `Chainage (${unitLabel})`,
-    `Elevation (${unitLabel})`,
+    `${heightHeader} (${unitLabel})`,
     'Points',
     'Grade (%)',
   ].map((h) => {
@@ -1606,7 +1637,10 @@ function renderProfileChart(
     }
     return 1;
   })();
-  const formatElevation = (m: number): string => {
+  // Named for its job, not its shape: this is the CHART TICK label, which
+  // picks its decimals from the axis step. It is deliberately not the shared
+  // `formatElevation` — a name it once shadowed by coincidence.
+  const elevTickLabel = (m: number): string => {
     if (system === 'imperial') return `${(m * 3.28084).toFixed(elevDecimalsFt)} ft`;
     return `${m.toFixed(elevDecimals)} m`;
   };
@@ -1696,7 +1730,7 @@ function renderProfileChart(
   const yLabelHtml = yTicks
     .map(
       (v) =>
-        `<span class="olv-mp-axis olv-mp-axis-y" style="top:${yPct(v).toFixed(2)}%">${formatElevation(v)}</span>`,
+        `<span class="olv-mp-axis olv-mp-axis-y" style="top:${yPct(v).toFixed(2)}%">${elevTickLabel(v)}</span>`,
     )
     .join('');
   // Honest badge (B3): "VEX 5:1" implied a true paper ratio the resizable,

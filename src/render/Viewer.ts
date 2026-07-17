@@ -62,6 +62,7 @@ import {
 } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
+import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
 import { PHI_CONJUGATE } from './streaming/fadeDither';
@@ -2053,6 +2054,31 @@ export class Viewer {
     this._notifyColorContextChanged();
   }
 
+  /**
+   * Hand the measure stack the datum the CURRENTLY loaded clouds support.
+   *
+   * Every caller that changes the cloud set routes through here rather than
+   * pushing its own cloud's origin, because a datum is a property of the SCENE,
+   * not of whichever file loaded most recently. Resolving over the whole set
+   * each time is also what keeps the answer from depending on load order: two
+   * clouds that disagree yield no datum whichever arrived first, and removing
+   * the odd one out restores it.
+   *
+   * `resolveSceneOrigin` is the same unanimity rule the georeference seam
+   * applies before emitting a world file — an absolute elevation is the same
+   * kind of claim about the same frame, so it answers to the same gate.
+   */
+  private _refreshMeasureDatum(): void {
+    const origins: Array<readonly number[] | null> = [];
+    if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
+    for (const { cloud } of this._clouds.values()) origins.push(cloud.origin ?? null);
+    const origin = resolveSceneOrigin(origins);
+    this._measure.setContext({
+      worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+      origin: origin ? [origin[0], origin[1], origin[2]] : null,
+    });
+  }
+
   /** Detach and fully dispose the current streaming cloud, if any. */
   detachStreamingCloud(): void {
     if (!this._streaming) return;
@@ -2070,6 +2096,9 @@ export class Viewer {
     // cloud's bounds after detach.
     this._orbitClampAabb = this._visibleCloudAabb();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    // Dropping a cloud can RESOLVE an origin conflict as easily as adding one
+    // created it — re-ask rather than leave a refusal outliving its cause.
+    this._refreshMeasureDatum();
     // The streaming legend (if shown) no longer describes anything.
     this._notifyColorContextChanged();
   }
@@ -2159,7 +2188,7 @@ export class Viewer {
     this._attnRef.value = (radius / Math.sin(fovRad / 2)) * 1.2;
     this._applyOrbitBounds(radius);
 
-    this._measure.setContext({ worldUp: [0, 0, 1], origin: cloud.renderOrigin });
+    this._refreshMeasureDatum();
     // Initial streaming orbit pivot = metadata bounds centre. Bounds rarely
     // shift after this (COPC carries the full extent in its header) — when
     // they do, the per-frame refinement lerps the pivot toward the new
@@ -2335,6 +2364,9 @@ export class Viewer {
     // Refresh the orbit-clamp envelope so removing the last static cloud
     // doesn't leave the camera clamping to its ghost bounds.
     this._orbitClampAabb = this._visibleCloudAabb();
+    // Same reason as the streaming detach: the scene's datum is whatever the
+    // REMAINING clouds agree on.
+    this._refreshMeasureDatum();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
     // Removing the active cloud can hide (or re-target) the legend.
     this._notifyColorContextChanged();
@@ -5693,10 +5725,7 @@ export class Viewer {
     this._worldUp.set(0, 0, zUp ? 1 : 0);
     if (!zUp) this._worldUp.set(0, 1, 0);
     this._nav.setWorldUp(this._worldUp);
-    this._measure.setContext({
-      worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
-      origin: latest.origin,
-    });
+    this._refreshMeasureDatum();
 
     const sphere = this._visibleBoundingSphere();
     const size = sphere ? sphere.radius * 2 : 100;
