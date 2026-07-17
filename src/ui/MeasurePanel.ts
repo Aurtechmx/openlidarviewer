@@ -1067,6 +1067,36 @@ export class MeasurePanel {
         : 1;
       const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
       const chart = renderProfileChart(s.profileChart, vex, system);
+      // The chart is where the eye lands, so it carries the primary "expand"
+      // affordance: click (or Enter / Space) anywhere on it to open the whole
+      // result in the shared focus surface. An always-visible corner badge marks
+      // it interactive — the faint header-row icon it replaces stayed invisible
+      // until hovered, so nobody found it.
+      const chartWrap = el(
+        'div',
+        {
+          className: 'olv-mp-chart-wrap',
+          title: `Expand ${s.name} to a focus view`,
+          ariaLabel: `Expand profile ${s.name} to a focus view`,
+        },
+        [chart],
+      );
+      chartWrap.setAttribute('role', 'button');
+      chartWrap.tabIndex = 0;
+      const openProfileFocus = (): void => this._openProfileFocus(s, chartWrap);
+      chartWrap.addEventListener('click', openProfileFocus);
+      chartWrap.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openProfileFocus();
+        }
+      });
+      const chartExpand = el('span', {
+        className: 'olv-mp-chart-expand',
+        unsafeHtml: ICON_EXPAND,
+      });
+      chartExpand.setAttribute('aria-hidden', 'true');
+      chartWrap.append(chartExpand);
       // VEX chip strip — sits beneath the chart wrapper. Clicking a
       // chip writes the new VEX to localStorage and triggers a
       // re-render of the whole measurements list, so every profile
@@ -1252,24 +1282,9 @@ export class MeasurePanel {
         storageSet(PROFILE_SUMMARY_OPEN_KEY, summaryDetails.open ? '1' : '0');
       });
 
-      // Escalate the whole result into the shared focus surface. The trigger
-      // lives in the row header; the surface reuses the chart renderer, the
-      // summary rows and the station table verbatim (see `_openProfileFocus`).
-      const expandBtn = el('button', {
-        className: 'olv-mp-expand',
-        unsafeHtml: ICON_EXPAND,
-        title: `Expand ${s.name} to a focus view`,
-        ariaLabel: `Expand profile ${s.name} to a focus view`,
-      });
-      expandBtn.addEventListener('click', () => {
-        expandBtn.blur();
-        this._openProfileFocus(s, expandBtn);
-      });
-      headRow.append(expandBtn);
-
       const children: HTMLElement[] = [
         headRow,
-        chart,
+        chartWrap,
         vexStrip,
         ...(samplerBlock ? [samplerBlock] : []),
         summaryDetails,

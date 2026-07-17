@@ -3547,26 +3547,34 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* Expand-to-focus control in a profile row header — unobtrusive icon button in
  * the same house line-icon family as the dock glyphs. Opens the focus surface. */
-.olv-mp-expand {
-  flex: 0 0 auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; padding: 0;
-  color: var(--text-faint); background: none;
-  border: 0.5px solid transparent; border-radius: var(--radius-sm);
+/* The profile chart is the click target for the focus surface. A hairline
+   ring on hover/focus confirms the whole chart is interactive. */
+.olv-mp-chart-wrap {
+  position: relative;
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-standard),
-    border-color var(--dur-fast) var(--ease-standard),
-    background var(--dur-fast) var(--ease-standard);
+  border-radius: var(--radius-sm);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
 }
-.olv-mp-expand svg { width: 15px; height: 15px; }
-.olv-mp-expand:hover {
-  color: var(--text); border-color: var(--hairline-strong);
-  background: rgba(255, 255, 255, 0.04);
-}
-.olv-mp-expand:focus-visible {
+.olv-mp-chart-wrap:hover { box-shadow: 0 0 0 1px var(--hairline-strong); }
+.olv-mp-chart-wrap:focus-visible {
   outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
 }
-@media (prefers-reduced-motion: reduce) { .olv-mp-expand { transition: none; } }
+/* Always-visible badge in the corner the eye lands on — the pill fill and
+   border are what make it discoverable (the icon it replaces was
+   transparent until hovered). The wrap owns the click, so the badge is inert. */
+.olv-mp-chart-expand {
+  position: absolute; top: 6px; right: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline-strong); border-radius: var(--radius-sm);
+  pointer-events: none;
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-chart-expand svg { width: 15px; height: 15px; }
+.olv-mp-chart-wrap:hover .olv-mp-chart-expand { color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .olv-mp-chart-wrap { transition: none; } }
 .olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 .olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
 /* Geographic-CRS honesty notice: sits between the panel head and the list;
