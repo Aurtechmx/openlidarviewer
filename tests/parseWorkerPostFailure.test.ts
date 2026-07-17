@@ -2,10 +2,10 @@
  * parseWorkerPostFailure.test.ts
  *
  * `postMessage` can throw synchronously — a DataCloneError on an unclonable or
- * already-detached buffer, or an invalid-state throw against a worker that has
- * been terminated. Both worker-routed paths in `loadFile.ts` post outside any
- * guard, so the throw escaped the Promise executor and rejected the caller
- * while the abort listener registered just above stayed attached.
+ * already-detached buffer, raised while serialising, before the message reaches
+ * the port. Both worker-routed paths in `loadFile.ts` post outside any guard, so
+ * the throw escaped the Promise executor and rejected the caller while the abort
+ * listener registered just above stayed attached.
  *
  * That leaked listener closes over the SHARED parse worker. When its signal
  * later aborts, it nulls the handlers of and terminates the worker that a
