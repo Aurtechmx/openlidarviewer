@@ -45,6 +45,7 @@ import {
   boxMetrics,
   boxCorners,
   BOX_EDGES,
+  elevationDatumOffset,
 } from './geometry';
 import {
   buildPointSnapIndex,
@@ -377,6 +378,15 @@ export class MeasureController {
   private _cursor: Vec3 | null = null;
   private _active = false;
   private _worldUp: Vec3 = [0, 0, 1];
+  /**
+   * The up-axis component of the scan's render origin — what a render-local
+   * height must regain to become a source elevation (see
+   * `elevationDatumOffset`). Applied at the `getSummaries` display boundary
+   * only: measurement geometry stays local so the session importer's rebase
+   * keeps working. 0 until a cloud arrives, which is also the honest answer
+   * for a scan rendered at the world origin.
+   */
+  private _originUp = 0;
   private _units: UnitSystem = 'metric';
   /**
    * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
@@ -754,9 +764,11 @@ export class MeasureController {
 
   /** Compact per-measurement summaries for the Measurements panel. */
   getSummaries(): MeasurementSummary[] {
-    // B2 — the ONE place the profile series crosses from render units into
-    // metres. Every consumer past this line (chart axes, summary <dl>, CSV,
-    // PDF) speaks metres, so the factor can never be applied twice or
+    // B2 — the ONE place the profile series crosses from render space into the
+    // numbers a reader is owed: local heights regain the scan's datum, then
+    // everything crosses from render units into metres. Every consumer past
+    // this line (chart axes, summary <dl>, station table, CSV, PDF) speaks
+    // source elevations in metres, so neither step can be applied twice or
     // forgotten by one of them. Re-derived per call: a late CRS resolve or
     // user override re-emits change and the next refresh re-scales.
     const f = this._unitToMetres;
@@ -765,7 +777,9 @@ export class MeasureController {
       kind: m.kind,
       name: m.name,
       value: this._headlineText(m),
-      profileChart: m.profileChart ? scaleProfileSamples(m.profileChart, f) : undefined,
+      profileChart: m.profileChart
+        ? scaleProfileSamples(m.profileChart, f, this._originUp)
+        : undefined,
       profileChartResidentOnly: m.profileChartResidentOnly,
       profileCorridorWidthM:
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
@@ -1001,9 +1015,15 @@ export class MeasureController {
     this._onKindChange?.(kind);
   }
 
-  /** Provide the scan's up-axis and origin (origin reserved for later phases). */
+  /**
+   * Provide the scan's up-axis and render origin. The origin is what turns a
+   * stored local height back into the elevation the source file describes;
+   * only its up-axis component matters, so it is reduced once here rather than
+   * kept as a vector nothing else reads.
+   */
   setContext(ctx: { worldUp: Vec3; origin: Vec3 }): void {
     this._worldUp = ctx.worldUp;
+    this._originUp = elevationDatumOffset(ctx.origin, ctx.worldUp);
   }
 
   /** Switch the unit system; every label re-formats on the next frame. */

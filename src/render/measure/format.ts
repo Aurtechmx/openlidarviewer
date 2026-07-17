@@ -70,6 +70,23 @@ export function formatLength(metres: number, system: UnitSystem): string {
   return `${(feet / FEET_PER_MILE).toFixed(3)} mi`;
 }
 
+/**
+ * Format an elevation given in metres for the active unit system.
+ *
+ * An elevation is not a length, and formatting it like one misreads it twice.
+ * A length is a magnitude, so it may drop to centimetres or climb to
+ * kilometres as it shrinks and grows; an elevation is a signed reading against
+ * a datum, and a survey states every one of them in the same working unit — a
+ * ground at 1200 m is "1200.00 m", never "1.200 km", and a 0.4 m benchmark is
+ * not "40.0 cm". Holding one unit is also what makes a column of elevations
+ * comparable at a glance, which is the whole point of printing them.
+ */
+export function formatElevation(metres: number, system: UnitSystem): string {
+  if (!Number.isFinite(metres)) return '—';
+  if (system === 'metric') return `${metres.toFixed(2)} m`;
+  return `${(metres * FEET_PER_METRE).toFixed(2)} ft`;
+}
+
 /** Format an area given in square metres for the active unit system. */
 export function formatArea(squareMetres: number, system: UnitSystem): string {
   if (!Number.isFinite(squareMetres) || squareMetres < 0) return '—';

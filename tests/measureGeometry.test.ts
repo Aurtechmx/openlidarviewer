@@ -12,6 +12,7 @@ import {
   slopeBetween,
   verticalDelta,
   profileMetrics,
+  elevationDatumOffset,
 } from '../src/render/measure/geometry';
 import type { Vec3 } from '../src/render/navMath';
 
@@ -247,5 +248,30 @@ describe('bearingDegrees (compass azimuth, Z-up)', () => {
     // due north (0°) and a horizontal step stays finite (bearing is defined).
     expect(bearingDegrees(v(0, 0, 0), v(0, 0, 1), UP_Y)).toBeCloseTo(0, 6);
     expect(Number.isFinite(bearingDegrees(v(0, 0, 0), v(1, 0, 0), UP_Y))).toBe(true);
+  });
+});
+
+describe('elevationDatumOffset', () => {
+  // The render origin of the user's streaming COPC: the octree cube centre,
+  // ~830 m up the Z axis. Its up-axis component is what a local height must
+  // regain to become the elevation the LAS header describes.
+  const ORIGIN: Vec3 = [514_233.5, 2_105_887.25, 830.03];
+
+  it('takes the origin z for a Z-up scan and the origin y for a Y-up scan', () => {
+    expect(elevationDatumOffset(ORIGIN, UP_Z)).toBeCloseTo(830.03, 9);
+    expect(elevationDatumOffset(ORIGIN, UP_Y)).toBeCloseTo(2_105_887.25, 9);
+  });
+
+  it('a cloud rendered at the world origin needs no datum restore', () => {
+    expect(elevationDatumOffset(v(0, 0, 0), UP_Z)).toBe(0);
+  });
+
+  it('normalises the up axis rather than trusting its length', () => {
+    expect(elevationDatumOffset(ORIGIN, v(0, 0, 3))).toBeCloseTo(830.03, 9);
+  });
+
+  it('a degenerate or non-finite input shifts nothing instead of poisoning the series', () => {
+    expect(elevationDatumOffset(ORIGIN, v(0, 0, 0))).toBe(0);
+    expect(elevationDatumOffset(v(0, 0, NaN), UP_Z)).toBe(0);
   });
 });

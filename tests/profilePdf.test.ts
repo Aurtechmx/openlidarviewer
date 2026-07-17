@@ -7,6 +7,11 @@
 import { describe, it, expect } from 'vitest';
 import { inflateSync } from 'node:zlib';
 import { buildProfilePdf } from '../src/render/measure/profilePdf';
+import {
+  computeProfileSummary,
+  profileSummaryRows,
+  scaleProfileSamples,
+} from '../src/render/measure/profileSummary';
 import type { ProfileChartSample } from '../src/render/measure/types';
 
 function ramp(n: number): ProfileChartSample[] {
@@ -144,5 +149,35 @@ describe('unit system (v0.4.5, B9) — the sheet honours the active toggle end-t
     expect(text).toContain('Chainage (station km+m)');
     expect(text).toContain('elevation (m)');
     expect(text).not.toContain('Elevation (ft)');
+  });
+});
+
+describe('the sheet prints the same source elevations as the panel', () => {
+  it('the extremes row matches profileSummaryRows verbatim', async () => {
+    // The user's real streaming COPC: heights stored render-local against an
+    // octree-cube origin 830.03 m up the Z axis. Both surfaces are fed from
+    // the datum seam, exactly as the controller feeds them, and both are
+    // asked for the same row model — so a reviewer checking the sheet against
+    // the screen can never find two answers.
+    const samples = scaleProfileSamples(
+      [
+        { distance: 0, height: -481.103, count: 12 },
+        { distance: 171.99, height: -449.53, count: 4 },
+        { distance: 343.98, height: -411.865, count: 9 },
+      ],
+      1,
+      830.03,
+    );
+    const text = drawnPdfText(await buildProfilePdf({ name: 'Datum section', samples }));
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(samples), 'metric').map((r) => [r.label, r.value]),
+    );
+    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
+    expect(text).toContain(byLabel.get('Highest point'));
+    expect(text).toContain(byLabel.get('Lowest point'));
+    // The elevations that reach the sheet are the header's, not the render
+    // origin's — and never the centimetres a length formatter made of them.
+    expect(text).toContain('348.93 m');
+    expect(text).not.toContain('41186.5');
   });
 });

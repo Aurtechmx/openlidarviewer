@@ -36,10 +36,10 @@ import {
 // sheet and the on-screen summary can never disagree. `formatStation` is the
 // unit-aware civil stationing (metric km+m / imperial 100-ft stations) the
 // panel's station table already prints.
-import { computeProfileSummary, formatStation } from './profileSummary';
+import { computeProfileSummary, formatProfileExtreme, formatStation } from './profileSummary';
 // Unit-aware length formatting — the SAME formatter every panel readout uses,
 // so the sheet and the screen can never disagree on a number's unit.
-import { formatLength } from './format';
+import { formatElevation, formatLength } from './format';
 
 /** Same constant the format/summary modules keep module-local. */
 const FEET_PER_METRE = 3.280839895013123;
@@ -148,6 +148,8 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const k = system === 'metric' ? 1 : FEET_PER_METRE;
   const unit = system === 'metric' ? 'm' : 'ft';
   const lenStr = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
+  // An elevation is a datum reading, not a magnitude — see `formatElevation`.
+  const elevStr = (m: number | null): string => (m == null ? '—' : formatElevation(m, system));
 
   // ── Page 1: chart + summary ────────────────────────────────────────────
   const page = doc.addPage([PAGE_W, PAGE_H]);
@@ -312,7 +314,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const rows: Array<[string, string]> = [
     ['Length (horizontal)', lenStr(len)],
     ['Relief (height change)', stats.reliefSpan == null ? '-' : lenStr(stats.reliefSpan)],
-    ['Min / Max elevation', `${lenStr(stats.minElevation)}  /  ${lenStr(stats.maxElevation)}`],
+    ['Min / Max elevation', `${elevStr(stats.minElevation)}  /  ${elevStr(stats.maxElevation)}`],
     [
       'Elevation gain / loss',
       intel.gainM == null || intel.lossM == null
@@ -339,8 +341,8 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       'Highest / Lowest point',
       intel.highest == null || intel.lowest == null
         ? '—'
-        : `${lenStr(intel.highest.elevation)} @ ${formatStation(intel.highest.chainage, system)}  /  ` +
-          `${lenStr(intel.lowest.elevation)} @ ${formatStation(intel.lowest.chainage, system)}`,
+        : `${formatProfileExtreme(intel.highest, system)}  /  ` +
+          `${formatProfileExtreme(intel.lowest, system)}`,
     ],
     ['Samples · coverage', `${stats.sampleCount}  ·  ${(stats.coverage * 100).toFixed(0)}%`],
     [

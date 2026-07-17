@@ -287,3 +287,124 @@ describe('profileStationRows (v0.4.5, B5 — shared row model)', () => {
     });
   });
 });
+
+/**
+ * The datum seam (the v0.6 profile-elevation fix). Profile heights are stored
+ * RENDER-LOCAL (`local = world − origin`) because that is what the session
+ * importer's rebase assumes; the source datum is restored HERE, at the same
+ * display boundary that applies the unit factor, so every printing surface
+ * gets it and storage stays rebaseable.
+ *
+ * The fixture is the user's real streaming COPC: a LAS header Z range of
+ * 330.030 .. 467.150 rendered against an octree-cube origin 830.03 m up the
+ * Z axis, so the panel was reading elevations of −481.103 and −411.865.
+ */
+const REAL_ORIGIN_UP = 830.03;
+const REAL_LOCAL: ProfileChartSample[] = [
+  { distance: 0, height: -481.103, count: 12 },
+  { distance: 171.99, height: NaN, count: 0 },
+  { distance: 343.98, height: -411.865, count: 9 },
+];
+
+describe('scaleProfileSamples — datum restore', () => {
+  it('adds the render origin back so a local height reads as a source elevation', () => {
+    const out = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+    // 830.03 − 481.103 = 348.927 and 830.03 − 411.865 = 418.165: both inside
+    // the header's 330.030 .. 467.150 window, which the local values were not.
+    expect(out[0].height).toBeCloseTo(348.927, 9);
+    expect(out[2].height).toBeCloseTo(418.165, 9);
+  });
+
+  it('offsets the height only — chainage is measured from the line, not the datum', () => {
+    const out = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+    expect(out[0].distance).toBe(0);
+    expect(out[2].distance).toBeCloseTo(343.98, 9);
+  });
+
+  it('restores the datum BEFORE the unit factor — both are render-unit quantities', () => {
+    // A foot-CRS scan: origin and height are both feet, so the sum converts
+    // once. Adding metres to feet (or converting the offset separately) would
+    // be off by the ratio.
+    const out = scaleProfileSamples([{ distance: 0, height: 100 }], 0.3048, 900);
+    expect(out[0].height).toBeCloseTo(1000 * 0.3048, 12);
+  });
+
+  it('a gap stays a gap — a datum cannot fill in a bin that saw no points', () => {
+    const out = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+    expect(Number.isNaN(out[1].height)).toBe(true);
+  });
+
+  it('an absent or zero offset leaves the series exactly as before', () => {
+    const src: ProfileChartSample[] = [{ distance: 7, height: 3, count: 1 }];
+    expect(scaleProfileSamples(src, 1, 0)).toEqual(src);
+    expect(scaleProfileSamples(src, 1)).toEqual(src);
+  });
+
+  it('a garbage offset shifts nothing rather than erasing the series', () => {
+    for (const bad of [Number.NaN, Infinity]) {
+      const out = scaleProfileSamples([{ distance: 0, height: 3 }], 1, bad);
+      expect(out[0].height).toBe(3);
+    }
+  });
+});
+
+describe('profile display surfaces print SOURCE elevations', () => {
+  const SOURCE = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+
+  it('the summary rows locate the extremes at their real elevations', () => {
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(SOURCE), 'metric').map((r) => [r.label, r.value]),
+    );
+    expect(byLabel.get('Lowest point')).toBe('348.93 m @ 0+000.00');
+    // 418.165 is an exact decimal tie that IEEE-754 holds as 418.16499…, so
+    // it rounds down. The elevation is right; the last digit is arithmetic.
+    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
+  });
+
+  it('an elevation never degrades into centimetres or kilometres', () => {
+    // A length switches unit by magnitude; an elevation is a datum reading and
+    // always belongs in the survey's working unit. The pre-fix rows sent
+    // −411.865 through the length formatter and printed "-41186.5 cm".
+    const rows = profileSummaryRows(
+      computeProfileSummary([
+        { distance: 0, height: 0.4 },
+        { distance: 10, height: 1200 },
+      ]),
+      'metric',
+    );
+    const byLabel = new Map(rows.map((r) => [r.label, r.value]));
+    expect(byLabel.get('Lowest point')).toBe('0.40 m @ 0+000.00');
+    expect(byLabel.get('Highest point')).toBe('1200.00 m @ 0+010.00');
+  });
+
+  it('the station table and the CSV agree with the panel', () => {
+    const rows = profileStationRows(SOURCE, 'metric');
+    expect(rows[0].elevation).toBe('348.927');
+    expect(rows[1].elevation).toBe(''); // the gap
+    expect(rows[2].elevation).toBe('418.165');
+    const lines = buildProfileCsv(SOURCE, 'metric').trimEnd().split('\n');
+    expect(lines[1]).toBe(`0+000.00,0.00,${rows[0].elevation},12,`);
+    expect(lines[3]).toBe(`0+343.98,343.98,${rows[2].elevation},9,`);
+  });
+
+  it('imperial converts the restored elevation, it does not re-datum it', () => {
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(SOURCE), 'imperial').map((r) => [r.label, r.value]),
+    );
+    // 348.927 m = 1144.77 ft; 418.165 m = 1371.93 ft.
+    expect(byLabel.get('Lowest point')).toBe('1144.77 ft @ 0+00.00');
+    expect(byLabel.get('Highest point')).toBe('1371.93 ft @ 11+28.54');
+  });
+
+  it('an extreme is always located at one of the series own stations', () => {
+    // The station a located extreme reports can only ever be a chainage the
+    // sampler emitted — it is read straight off the sample. Pinned because a
+    // field report showed an extreme outside its own profile length.
+    const s = computeProfileSummary(SOURCE);
+    const stations = SOURCE.map((x) => x.distance);
+    expect(stations).toContain(s.highest?.chainage);
+    expect(stations).toContain(s.lowest?.chainage);
+    expect(s.highest!.chainage).toBeLessThanOrEqual(s.lengthM);
+    expect(s.lowest!.chainage).toBeLessThanOrEqual(s.lengthM);
+  });
+});

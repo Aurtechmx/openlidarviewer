@@ -192,11 +192,19 @@ export function orbitOffset(
 /**
  * Format a distance in metres for a measurement label: centimetres below a
  * metre, metres up to a kilometre, kilometres beyond.
+ *
+ * The band is chosen by MAGNITUDE. Most callers pass a true distance, which is
+ * never negative, but some pass a signed reading — an elevation below its
+ * datum, a downward delta — and comparing the raw value against the thresholds
+ * put every negative in the centimetre band, so a −411.865 m elevation printed
+ * as "-41186.5 cm". Which side of zero a number sits on says nothing about how
+ * large it is; `format.ts`'s imperial branch has always read it that way.
  */
 export function formatDistance(meters: number): string {
   if (!Number.isFinite(meters)) return '—';
-  if (meters < 1) return `${(meters * 100).toFixed(1)} cm`;
-  if (meters < 1000) return `${meters.toFixed(2)} m`;
+  const abs = Math.abs(meters);
+  if (abs < 1) return `${(meters * 100).toFixed(1)} cm`;
+  if (abs < 1000) return `${meters.toFixed(2)} m`;
   return `${(meters / 1000).toFixed(3)} km`;
 }
 

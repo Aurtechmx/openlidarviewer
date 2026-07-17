@@ -21,7 +21,7 @@
 
 import type { ProfileChartSample, UnitSystem } from './types';
 import { formatStationing, formatGradePercent } from './civilProfileStats';
-import { formatLength } from './format';
+import { formatElevation, formatLength } from './format';
 
 const FEET_PER_METRE = 3.280839895013123;
 
@@ -72,26 +72,44 @@ const covered = (h: number | undefined): h is number =>
   typeof h === 'number' && Number.isFinite(h);
 
 /**
- * Scale a sampled profile from render (source) units into metres — the B2
- * unit seam (v0.4.5). Render space keeps the scan's SOURCE units (a foot-CRS
- * LAS stores feet), but every profile consumer downstream of the controller
- * (chart axes, summary, CSV, PDF) is written in metres; applying the CRS's
- * `linearUnitToMetres` once here, before the series fans out, is what keeps
- * the chart's raw numerals and the formatted labels in lockstep.
+ * Take a sampled profile from render space to the numbers a reader is owed —
+ * the B2 unit seam (v0.4.5), which is also where the datum comes back (v0.6).
  *
- * Distances AND heights scale (both are lengths). NaN gaps survive
- * untouched (NaN × f = NaN). The corridor `count` is a point tally, not a
- * length — copied verbatim, and an absent count stays absent so the CSV's
- * "blank means pre-count session" contract holds. An invalid factor falls
- * back to 1 (same rationale as `format.ts`).
+ * Render space keeps the scan's SOURCE units (a foot-CRS LAS stores feet), but
+ * every profile consumer downstream of the controller (chart axes, summary,
+ * CSV, PDF) is written in metres; applying the CRS's `linearUnitToMetres` once
+ * here, before the series fans out, is what keeps the chart's raw numerals and
+ * the formatted labels in lockstep.
+ *
+ * Heights arrive RENDER-LOCAL — recentred clouds store `local = world −
+ * origin` — so `datumOffset`, the up-axis component of that origin, is added
+ * back to make each height the elevation the source file describes. It belongs
+ * at this seam and not in storage: `rebaseSessionGeometry` shifts stored
+ * profile heights by an origin delta when a session is imported onto a
+ * different-origin cloud, which only holds while what is stored is local. The
+ * offset is in render units, so it goes on BEFORE the factor — converting the
+ * two separately would leave the sum off by the units' ratio.
+ *
+ * Distances scale but never shift: chainage is measured from the profile line,
+ * which has no datum. NaN gaps survive untouched (a datum cannot fill in a bin
+ * that saw no points). The corridor `count` is a point tally, not a length —
+ * copied verbatim, and an absent count stays absent so the CSV's "blank means
+ * pre-count session" contract holds. An invalid factor falls back to 1 and an
+ * invalid offset to 0 (same rationale as `format.ts`): a mislabelled scan is
+ * the status quo, a series multiplied or shifted by garbage is strictly worse.
  */
 export function scaleProfileSamples(
   samples: ReadonlyArray<ProfileChartSample>,
   unitToMetres: number,
+  datumOffset = 0,
 ): ProfileChartSample[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
+  const d = Number.isFinite(datumOffset) ? datumOffset : 0;
   return samples.map((s) => {
-    const out: ProfileChartSample = { distance: s.distance * f, height: s.height * f };
+    const out: ProfileChartSample = {
+      distance: s.distance * f,
+      height: (s.height + d) * f,
+    };
     if (s.count !== undefined) out.count = s.count;
     return out;
   });
@@ -183,6 +201,19 @@ export function formatStation(chainageM: number, system: UnitSystem): string {
   return `${sign}${sta}+${rem.toFixed(2).padStart(5, '0')}`;
 }
 
+/**
+ * Format a located extreme as `elevation @ station` — the shared model behind
+ * the panel's Highest/Lowest rows and the PDF's, so the sheet an engineer
+ * checks against the screen cannot quote a different point. The elevation goes
+ * through `formatElevation`, not the length formatter: it is a signed datum
+ * reading, and treating it as a magnitude is what once printed a 418 m ground
+ * as "-41186.5 cm".
+ */
+export function formatProfileExtreme(e: ProfileExtreme | null, system: UnitSystem): string {
+  if (e == null) return '—';
+  return `${formatElevation(e.elevation, system)} @ ${formatStation(e.chainage, system)}`;
+}
+
 /** One display row of the summary block. */
 export interface ProfileSummaryRow {
   readonly label: string;
@@ -199,8 +230,7 @@ export function profileSummaryRows(
   system: UnitSystem,
 ): ProfileSummaryRow[] {
   const len = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
-  const extreme = (e: ProfileExtreme | null): string =>
-    e == null ? '—' : `${len(e.elevation)} @ ${formatStation(e.chainage, system)}`;
+  const extreme = (e: ProfileExtreme | null): string => formatProfileExtreme(e, system);
   return [
     { label: 'Length', value: len(s.lengthM) },
     {
