@@ -26,6 +26,8 @@
  * Pure data: no DOM, no three.js, no I/O.
  */
 
+import { NeumaierSum } from '../../process/numerics';
+
 export interface XYZ {
   readonly x: number;
   readonly y: number;
@@ -95,9 +97,9 @@ function mulberry32(seed: number): () => number {
 
 function rmseOf(residuals: readonly number[]): number {
   if (residuals.length === 0) return Number.NaN;
-  let s = 0;
-  for (const r of residuals) s += r * r;
-  return Math.sqrt(s / residuals.length);
+  const s = new NeumaierSum();
+  for (const r of residuals) s.add(r * r);
+  return Math.sqrt(s.total / residuals.length);
 }
 
 /** Percentile of a pre-sorted array by linear interpolation (type-7). */
@@ -223,16 +225,16 @@ export function spatialBlockHoldout(
     const nb = residualsByBlock.length;
     const boot = new Array<number>(B);
     for (let b = 0; b < B; b++) {
-      let s = 0;
+      const s = new NeumaierSum();
       let cnt = 0;
       for (let k = 0; k < nb; k++) {
         const blk = residualsByBlock[Math.floor(rng() * nb)];
         for (const r of blk) {
-          s += r * r;
+          s.add(r * r);
           cnt++;
         }
       }
-      boot[b] = cnt > 0 ? Math.sqrt(s / cnt) : 0;
+      boot[b] = cnt > 0 ? Math.sqrt(s.total / cnt) : 0;
     }
     boot.sort((a, b) => a - b);
     const alpha = (1 - ciLevel) / 2;
