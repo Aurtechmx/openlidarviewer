@@ -86,6 +86,16 @@ export interface StockpileInput {
    * unchanged.
    */
   readonly linearUnitToMetres?: number;
+  /**
+   * Whether the horizontal unit is actually KNOWN, so a points/m² density is a
+   * real figure rather than an assumption. Defaults to true — a metric project
+   * or any caller that has resolved its CRS. Pass false for an unknown CRS:
+   * `linearUnitToMetres` still defaults to 1 for the display conversion, but the
+   * density bar is then only an assumed points/m², so it must not be allowed to
+   * award HIGH confidence. Omission cannot be read as "unknown" — most callers
+   * omit it precisely because they mean known metres.
+   */
+  readonly densityUnitKnown?: boolean;
 }
 
 /**
@@ -145,6 +155,12 @@ export interface StockpileVolumeResult {
   readonly relativeError: number;
   /** Confidence tier. */
   readonly confidence: StockpileConfidence;
+  /**
+   * Whether the horizontal unit was known when grading. When false the density
+   * bar is an assumed points/m², so HIGH confidence was withheld and the
+   * presenter labels the density row as unit-unknown rather than claiming m².
+   */
+  readonly densityUnitKnown: boolean;
   /** The auditable input breakdown. */
   readonly breakdown: StockpileBreakdown;
   /** Polygon-hygiene verdict; non-`ok` returns zeros. */
@@ -183,6 +199,9 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   const up = input.up ?? ([0, 0, 1] as Vec3);
   const baseMode: BasePlaneMode = input.base?.mode ?? 'lowest-percentile';
   const basePct = input.base?.percentile ?? 0.05;
+  // Known unless the caller explicitly says the unit is unknown (see the input
+  // field's contract — omission means known metres, not unknown).
+  const densityUnitKnown = input.densityUnitKnown ?? true;
 
   // First gather the inside heights — we need them to choose the base plane
   // and to estimate its uncertainty before we can integrate thickness.
@@ -265,7 +284,7 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
 
   const inN = v.pointsInPolygon;
   if (v.validity !== 'ok' || inN === 0) {
-    return zeroResult(v.validity ?? 'ok', v.footprintArea, baseMode, baseZ);
+    return zeroResult(v.validity ?? 'ok', v.footprintArea, baseMode, baseZ, densityUnitKnown);
   }
 
   // Per-point thickness above the base (clamped at 0 — the fill contribution),
@@ -297,7 +316,7 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   // wrongly downgraded. m² per native² = linearUnitToMetres².
   const lin = input.linearUnitToMetres ?? 1;
   const densityPerM2 = lin > 0 ? v.densityNative / (lin * lin) : v.densityNative;
-  const confidence = gradeConfidence(relativeError, inN, densityPerM2);
+  const confidence = gradeConfidence(relativeError, inN, densityPerM2, densityUnitKnown);
   const caveats = buildCaveats(
     confidence,
     inN,
@@ -315,6 +334,7 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     high: volume + sigma,
     relativeError,
     confidence,
+    densityUnitKnown,
     breakdown: {
       footprintArea: area,
       pointsInPolygon: inN,
@@ -350,9 +370,14 @@ function gradeConfidence(
   relErr: number,
   pointsInPolygon: number,
   densityPerM2: number,
+  densityUnitKnown: boolean,
 ): StockpileConfidence {
   if (pointsInPolygon < MIN_RELIABLE_POINTS) return 'low';
-  if (relErr <= 0.05 && densityPerM2 >= 5) return 'high';
+  // HIGH is the only tier that rests on the points/m² density bar. When the
+  // horizontal unit is unknown that figure is an assumption (native² read as
+  // m²), so it cannot earn HIGH — the grade falls back to the relative-error
+  // tiers, which need no unit.
+  if (densityUnitKnown && relErr <= 0.05 && densityPerM2 >= 5) return 'high';
   if (relErr <= 0.15) return 'medium';
   return 'low';
 }
@@ -404,6 +429,7 @@ function zeroResult(
   footprintArea: number,
   baseMode: BasePlaneMode,
   baseZ: number,
+  densityUnitKnown: boolean,
 ): StockpileVolumeResult {
   return {
     volume: 0,
@@ -413,6 +439,7 @@ function zeroResult(
     high: 0,
     relativeError: 0,
     confidence: 'low',
+    densityUnitKnown,
     breakdown: {
       footprintArea,
       pointsInPolygon: 0,

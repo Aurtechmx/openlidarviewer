@@ -65,6 +65,31 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(metric.confidence).not.toBe('high');
   });
 
+  test('an unknown unit withholds HIGH — a pts/m² grade needs a known unit', () => {
+    // The same dense foot survey that earns HIGH when the unit is known.
+    const footprint = squareFootprint(10);
+    const positions = grid(10, 0.9, () => 2);
+    const base = { mode: 'explicit', z: 0 } as const;
+
+    const known = stockpileVolume({ polygon: footprint, positions, base, linearUnitToMetres: 0.3048 });
+    expect(known.confidence).toBe('high');
+    expect(known.densityUnitKnown).toBe(true);
+
+    // Unit unknown: lin still defaults to 1 for display, but the density bar is
+    // now an assumption, so HIGH is withheld and the tier falls back to the
+    // relative-error grade (tight band ⇒ medium, never high).
+    const unknown = stockpileVolume({
+      polygon: footprint,
+      positions,
+      base,
+      linearUnitToMetres: 0.3048,
+      densityUnitKnown: false,
+    });
+    expect(unknown.densityUnitKnown).toBe(false);
+    expect(unknown.confidence).not.toBe('high');
+    expect(unknown.confidence).toBe('medium');
+  });
+
   test('every result carries the spatial-correlation caveat (√N assumes independence)', () => {
     // The sampling-error term divides by √N under an independence assumption
     // scan noise routinely violates — the caveat must say so, mirroring

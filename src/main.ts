@@ -542,8 +542,13 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // Native→metre factor for the source CRS (feet for a state-plane-feet
     // cloud). Handed to computeLassoVolume so the stockpile band it returns is
     // already converted to metres, and reused below for the m³/m² readout.
-    const lin = crsService.current()?.linearUnitToMetres ?? 1;
-    const out = viewer.computeLassoVolume(lasso, 0.05, lin);
+    const crsForLasso = crsService.current();
+    const lin = crsForLasso?.linearUnitToMetres ?? 1;
+    // Whether that factor is real or an assumed 1: an unknown CRS still yields
+    // lin = 1 for display, but its points/m² density is then an assumption, so
+    // the stockpile grade must not claim it.
+    const densityUnitKnown = crsForLasso != null && crsForLasso.linearUnit !== 'unknown';
+    const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown);
     if (out === null) {
       pendingLassoSave = null;
       showLassoToast('Lasso volume — no points selected. Draw around a denser region.');

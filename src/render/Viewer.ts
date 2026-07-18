@@ -3907,11 +3907,15 @@ export class Viewer {
    * @param lin - `linearUnitToMetres` for the source CRS, used to convert the
    *   returned {@link LassoVolumeReturn.stockpileSuffix} band into metres.
    *   Defaults to 1 (native units already metres).
+   * @param densityUnitKnown - whether the horizontal unit is actually known, so
+   *   the stockpile density can be claimed in points/m². Defaults to true; pass
+   *   false for an unknown CRS so the density bar can't award HIGH confidence.
    */
   computeLassoVolume(
     lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>,
     percentile: number = 0.05,
     lin: number = 1,
+    densityUnitKnown: boolean = true,
   ): LassoVolumeReturn | null {
     if (lasso.length < 3) return null;
 
@@ -4056,6 +4060,7 @@ export class Viewer {
         selectedPositions,
         lin,
         anySourceReduced,
+        densityUnitKnown,
       ),
       selectedCount: totalSelected,
       lasso,
