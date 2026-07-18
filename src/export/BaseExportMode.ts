@@ -194,7 +194,9 @@ export function baseReportRows(
     // Density — points per square unit on the XY footprint.
     if (w > 0 && d > 0) {
       const density = adapter.sourcePointCount() / (w * d);
-      rows.push({ label: 'Density', value: `${density.toFixed(0)} pts/${uLabel}²` });
+      // One decimal, matching the Scan Report panel (`toFixed(0)` rounded
+      // 2.586 pts/m² up to "3", disagreeing with the panel's "2.6").
+      rows.push({ label: 'Density', value: `${density.toFixed(1)} pts/${uLabel}²` });
     }
   }
   // Capability summary — which channels the export can honour. Matches the

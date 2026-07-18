@@ -140,7 +140,10 @@ function densityFinding(
       tier: 'unknown',
     };
   }
-  const value = `${d.toFixed(0)} pts/m²`;
+  // One decimal, matching the on-screen Scan Report panel. Integer rounding
+  // pushed 2.586 pts/m² to "3", overstating density in a report whose header
+  // promise is honest provenance (and disagreeing with the panel's "2.6").
+  const value = `${d.toFixed(1)} pts/m²`;
   if (!qlApplies) {
     // No capture-type density standard applies — state the number, claim nothing.
     return {
