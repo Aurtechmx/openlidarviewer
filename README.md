@@ -129,7 +129,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Annotations — drop categorised, titled markers with notes, browse and search them in a panel, capture the camera viewpoint with each, and undo/redo changes; the panel and the PDF report open with a grouping summary (totals, per-category counts, and how many areas the notes fall across)
 - Inspection sessions — export measurements, annotations, and named views to one JSON file and reload them later
 - Workflow recorder — record and replay `.olvworkflow` files of camera moves and tool actions, with a settings popup for file format, save destination, start/stop shortcut, replay speed, a pre-record countdown, captured action families, and loop replay; records actions only, never scan data, so a recipient needs the same scan open to replay
-- Multi-page PDF technical reports — six built-in templates with branding and unit-system awareness
+- Multi-page PDF technical reports — two built-in templates with branding and unit-system awareness
 - Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, and contour map exports
 - Screenshot export that burns in placed measurements and annotations as inspection evidence
 
@@ -280,7 +280,7 @@ Measurement is meant for visual inspection and research, not survey-grade use. T
 
 **Current import formats:** `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTX`, `PTS`.
 
-**Current export targets:** `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
+**Current export targets:** `LAS` (1.2 / 1.4), `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
 
 That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (ASTM E2807, tested against Trimble exports) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings. Large `COPC` and `EPT` datasets stream progressively — locally or over HTTP range requests from a URL — with bounded memory and no full-file load; see [`docs/streaming.md`](docs/streaming.md).
 
@@ -418,7 +418,7 @@ A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 A short list of practical workflows the current toolkit is well-suited for. Each one assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
 
 - **Large streaming dataset review.** Open COPC (`.copc.laz`) or EPT (`ept.json`) datasets directly — local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
-- **Inspection reporting.** Annotate findings → measure distances, areas, slopes, angles, or cross-section profiles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Five built-in templates and brand-aware accent + logo support.
+- **Inspection reporting.** Annotate findings → measure distances, areas, slopes, angles, or cross-section profiles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Two built-in templates (Survey Summary, Technical Report) and brand-aware accent + logo support.
 - **Terrain analysis.** Export height maps from drone LiDAR datasets with legend customisation and unit-system control. Useful for slope review, elevation comparison, and quick topographic figures. Cross-section profile measurements report 3D length, horizontal distance, vertical drop, and grade across any two picked points.
 - **Classification QA.** Export classification maps for validation workflows; toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession` for follow-up review.
 - **Mobile scan review.** Open lightweight datasets — `.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar iPhone/Android scanners — on tablets or phones. The viewer adapts rendering detail and Eye Dome Lighting defaults for weaker GPUs so a phone scan is readable from the first frame.

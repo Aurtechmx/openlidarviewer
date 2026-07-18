@@ -1,7 +1,7 @@
 /**
  * fitnessIcons.test.ts — the scorecard icon set stays in the house style and the
- * tone glyphs are shape-distinct (not colour-only), per the design-council
- * accessibility fix.
+ * tone glyphs are shape-distinct (not colour-only), the accessibility fix that
+ * keeps them legible without relying on colour.
  */
 
 import { describe, it, expect } from 'vitest';

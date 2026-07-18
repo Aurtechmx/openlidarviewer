@@ -46,7 +46,7 @@ Scan Intelligence report, and export the result.
 | FR-18 | Render with Eye Dome Lighting depth shading, adaptive or fixed point sizing, and antialiased round points — all tunable from the Rendering panel. |
 | FR-19 | Plan a LAS/LAZ load from its header — fast-load huge clouds by stride decoding, guard against out-of-memory, report staged progress, and allow the load to be cancelled mid-flight. |
 | FR-20 | Stream hierarchical point-cloud datasets (`COPC` `.copc.laz` and `EPT` `ept.json`) — local or remote — through a view-dependent scheduler with bounded residency. |
-| FR-21 | Generate multi-page PDF technical reports — five built-in templates, cover + dataset summary + image exports + annotations + measurements + technical notes, with branding (accent + logo) and metric/imperial unit awareness. |
+| FR-21 | Generate multi-page PDF technical reports — two built-in templates, cover + dataset summary + image exports + annotations + measurements + technical notes, with branding (accent + logo) and metric/imperial unit awareness. |
 | FR-22 | Round-trip the full working state (camera, render settings, colour mode, annotations, measurements, named views, scan metadata) through a `.olvsession` JSON package. |
 | FR-23 | Export the Visual Export Studio image modes — orthographic RGB, height map, intensity, classification, depth, normal, and contour — with legend customisation. |
 

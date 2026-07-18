@@ -22,7 +22,7 @@ Format support is still evolving. This page separates what works today from what
 
 ## Current export targets
 
-`PLY`, `OBJ`, `XYZ`, and `CSV`, re-exported in real-world (global) coordinates, plus `PNG` snapshots of the current view (orthographic RGB, height map, intensity, classification, depth, normal, contour with legend customisation). Multi-page **PDF technical reports** (cover page + dataset summary + embedded image exports + annotations + measurements + technical notes; five built-in templates) ship as of v0.3.3. Working state — camera, render settings, colour mode, annotations, measurements, scan metadata — round-trips through the `.olvsession` JSON package.
+`PLY`, `OBJ`, `XYZ`, and `CSV`, re-exported in real-world (global) coordinates, plus `PNG` snapshots of the current view (orthographic RGB, height map, intensity, classification, depth, normal, contour with legend customisation). Multi-page **PDF technical reports** (cover page + dataset summary + embedded image exports + annotations + measurements + technical notes; two built-in templates) ship as of v0.3.3. Working state — camera, render settings, colour mode, annotations, measurements, scan metadata — round-trips through the `.olvsession` JSON package.
 
 ## iPhone and mobile scan exports
 
