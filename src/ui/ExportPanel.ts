@@ -36,6 +36,11 @@ export interface ExportCloudSummary {
   hasGpsTime: boolean;
   crsName: string | null;
   hasWkt: boolean;
+  /**
+   * Classification provenance as scalar metadata, so the class row can render
+   * without materializing a streaming snapshot to inspect a `PointCloud`.
+   */
+  classProvenance: 'none' | 'source' | 'derived';
 }
 
 /** Fallback: derive a summary from an already-materialized cloud (no host summaryInfo). */
@@ -48,6 +53,9 @@ function cloudToSummary(cloud: PointCloud | null): ExportCloudSummary | null {
     hasGpsTime: cloud.gpsTime != null,
     crsName: crs?.name ?? null,
     hasWkt: crs?.wkt != null,
+    classProvenance: cloud.classificationIsDerived
+      ? 'derived'
+      : cloud.classification != null ? 'source' : 'none',
   };
 }
 
@@ -320,10 +328,13 @@ export class ExportPanel {
 
   /** Where the active cloud's classification came from. */
   private _classProvenance(): 'none' | 'source' | 'derived' {
-    const cloud = this._cb.getCloud();
-    if (!cloud) return 'none';
-    if (cloud.classificationIsDerived) return 'derived';
-    return cloud.classification != null ? 'source' : 'none';
+    // Read the allocation-free summary — materializing a streaming snapshot just
+    // to inspect its classification (which the class row is rendered from on
+    // panel construction) concatenated every resident node into a PointCloud
+    // before the user pressed Export. Fall back to a materialized cloud only
+    // when the host provides no summary.
+    const summary = this._cb.summaryInfo?.() ?? cloudToSummary(this._cb.getCloud());
+    return summary?.classProvenance ?? 'none';
   }
 
   /**

@@ -678,7 +678,7 @@ function deriveVolumeRecord(
     referenceZ,
     footprintArea: result.footprintArea,
     pointsInPolygon: result.pointsInPolygon,
-    density: result.density,
+    densityNative: result.densityNative,
     confidence,
   };
   // Non-finite returns inside the footprint were excluded from the
@@ -3294,27 +3294,18 @@ const reducedById = new Map<string, boolean>();
 // / ASC with the same CRS options as the splash batch converter. The engine
 // (proj4) is imported lazily on Export, so this panel adds nothing heavy.
 // Streaming export snapshot — the Convert lane exports the resident (decoded-
-// so-far) points of a streaming scan. Building the snapshot concatenates every
-// resident node, so memoise it and rebuild only when the resident count
-// changes: the panel calls `getCloud()` on every option toggle for its live
-// summary, which must stay cheap, while the export click still gets a snapshot
-// current as of the latest streamed-in nodes.
-let streamingSnapshot: { cloud: PointCloud; residentCount: number } | null = null;
+// so-far) points of a streaming scan. Building it concatenates every frontier
+// node, so it is materialised only at the actual Export click: the panel's live
+// summary reads the allocation-free `summaryInfo`, and the pending check uses
+// `exportFrontierPointTotal`, so nothing else reaches here. It is deliberately
+// NOT memoised — the old resident-count key returned a stale coarse snapshot
+// when the frontier changed composition (parent → children) at the same total
+// count. A fresh snapshot is always the current frontier.
 function streamingExportCloud(): PointCloud | null {
-  // `viewer` is null until the lazy Viewer chunk resolves; ExportPanel's
-  // constructor reaches this (via getCloud in _renderGzipRow/_renderSummary)
-  // during startup, before that. No viewer ⇒ no streaming cloud to snapshot.
+  // `viewer` is null until the lazy Viewer chunk resolves; guard the deref.
   const sc = viewer?.streamingCloud;
-  if (!sc) {
-    streamingSnapshot = null;
-    return null;
-  }
-  const rc = sc.residentPointCount;
-  if (!streamingSnapshot || streamingSnapshot.residentCount !== rc) {
-    const snap = viewer.snapshotResidentCloud();
-    streamingSnapshot = snap ? { cloud: snap, residentCount: rc } : null;
-  }
-  return streamingSnapshot?.cloud ?? null;
+  if (!sc) return null;
+  return viewer.snapshotResidentCloud();
 }
 
 /**
@@ -3361,6 +3352,9 @@ const exportPanel = new ExportPanel({
         hasGpsTime: c.gpsTime != null,
         crsName: crs?.name ?? null,
         hasWkt: crs?.wkt != null,
+        classProvenance: c.classificationIsDerived
+          ? 'derived'
+          : c.classification != null ? 'source' : 'none',
       };
     }
     const sc = viewer?.streamingCloud;
@@ -3376,10 +3370,17 @@ const exportPanel = new ExportPanel({
       hasGpsTime: true,
       crsName: crs?.name ?? null,
       hasWkt: crs?.wkt != null,
+      // Streaming classification is read straight from the source records — a
+      // decode never derives it — so it is 'source' when the schema carries it.
+      classProvenance: sc.availableColorModes().includes('classification') ? 'source' : 'none',
     };
   },
   getCloud: () => (scan.activeId ? viewer.getCloud(scan.activeId) ?? null : streamingExportCloud()),
-  isStreamingPending: () => viewer?.streamingCloud != null && streamingExportCloud() == null,
+  // Pending = a streaming cloud is attached but its export frontier is still
+  // empty. Read the allocation-free frontier count rather than materialising a
+  // snapshot just to test it for null.
+  isStreamingPending: () =>
+    viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(),
   hasFullSource: () => scan.activeId != null && sourceFileById.has(scan.activeId),
   // A streaming snapshot exports only the resident (streamed-in) points, so it
