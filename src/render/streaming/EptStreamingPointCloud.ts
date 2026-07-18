@@ -52,6 +52,16 @@ import { EptOctree } from './EptOctree';
 import type { CrsInfo } from '../../io/crs';
 import { resolveEptCrs } from './eptCrs';
 
+/**
+ * Hierarchy files to load before a streaming EPT scan attaches. The root file
+ * alone carries the shallow LODs that span the whole extent, so a small budget
+ * is already a full coarse octree; the deeper sub-files load in the background.
+ * Kept low so a billion-point dataset paints in a second or two rather than
+ * fetching thousands of files first. A dataset whose entire hierarchy fits under
+ * this attaches complete, exactly as the old full-load did.
+ */
+const FIRST_PAINT_HIERARCHY_FILES = 24;
+
 /** The injected HTTP layer — fetch a URL and return its bytes / text. */
 export interface EptTransport {
   fetchText: (url: string, signal?: AbortSignal) => Promise<string>;
@@ -126,10 +136,22 @@ export class EptStreamingPointCloud implements StreamingSource {
     const fetcher = (key: EptKey, s?: AbortSignal): Promise<string> =>
       transport.fetchText(eptHierarchyUrl(baseUrl, key, search), s);
     const octree = new EptOctree(metadata, renderOrigin, fetcher);
-    await octree.loadFullHierarchy(signal);
-    return new EptStreamingPointCloud(
+    // Load only enough hierarchy to render coarse geometry, then attach — a
+    // multi-billion-point EPT links to thousands of sub-files, and waiting for
+    // all of them looked like a hang. The root file alone spans the whole extent
+    // at shallow LOD, so a small first-paint budget is a full coarse octree; the
+    // rest deepen in the background and the scheduler refines as they arrive. A
+    // small dataset whose hierarchy fits the budget finishes here, unchanged.
+    await octree.loadInitialHierarchy(FIRST_PAINT_HIERARCHY_FILES, signal);
+    const cloud = new EptStreamingPointCloud(
       metadata, baseUrl, name, renderOrigin, octree, transport, search,
     );
+    if (!octree.fullyLoaded) {
+      // Fire-and-forget: the coarse cloud already renders, so a failed or
+      // aborted deepening just leaves the scheduler fewer deep nodes to choose.
+      void octree.continueHierarchy(signal).catch(() => {});
+    }
+    return cloud;
   }
 
   // ── StreamingSource surface ─────────────────────────────────────────────
