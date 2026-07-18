@@ -622,6 +622,13 @@ body.olv-theme-light .olv-empty::before {
 
 .olv-empty {
   position: absolute; inset: 0;
+  /* Opaque themed backdrop for the splash. The stage behind carries the dark
+   * "sky" preset (an inline style the renderer sets for point-cloud contrast),
+   * which is right behind a loaded cloud but leaves Light-theme text stranded
+   * on a dark field before any scan opens. The empty state is full-bleed and
+   * hidden the moment a scan loads, so painting it with the theme background
+   * makes the whole splash follow the theme without touching the viewer sky. */
+  background: var(--bg);
   display: flex; flex-direction: column; align-items: center;
   /* `safe center` keeps the column visually centered on tall viewports
    * but falls back to `flex-start` when the content is taller than the
