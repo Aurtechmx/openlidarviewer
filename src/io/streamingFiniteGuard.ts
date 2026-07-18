@@ -26,11 +26,12 @@
 import { LoadError } from './loadErrors';
 
 /**
- * Refuse a node whose coordinate transform is not fully finite. For an
- * integer-source decode (COPC / EPT-laszip: `int32 · scale + offset − origin`)
- * this is COMPLETE — a finite transform over an integer source can only produce
- * finite coordinates — so it is the whole guard, at O(1) cost with no per-point
- * work on the hot path.
+ * Refuse a node whose coordinate transform is outright non-finite (a NaN/Inf
+ * scale, offset, or render origin). O(1) and cheap, so it runs up front to fail
+ * a bad node before decoding it. It is NOT sufficient on its own: a transform
+ * that is finite but extreme can still overflow `int32 · scale + offset` to
+ * ±Infinity, so callers pair it with {@link assertFinitePositions} over the
+ * finished buffer as the backstop.
  */
 export function assertFiniteNodeTransform(
   scale: readonly [number, number, number],

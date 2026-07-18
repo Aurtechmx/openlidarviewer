@@ -84,6 +84,15 @@ test('decodeRecords refuses a node whose render origin is non-finite', () => {
   expect(err).toBeInstanceOf(LoadError);
 });
 
+test('decodeRecords refuses a finite-but-extreme transform that overflows to Infinity', () => {
+  // scale is finite (1e300) so the up-front transform check passes, but
+  // 2e9 · 1e300 overflows a coordinate to +Infinity — the position backstop
+  // must catch it.
+  const err = caught(() => decodeRecords(oneRecord(2_000_000_000, 1, 1), META6({ scale: [1e300, 1, 1] })));
+  expect(err).toBeInstanceOf(LoadError);
+  expect((err as LoadError).category).toBe('malformed-file');
+});
+
 test('decodeRecords still decodes a finite node unchanged (regression)', () => {
   const d = decodeRecords(oneRecord(1000, 2000, 3000), META6());
   expect(d.pointCount).toBe(1);
