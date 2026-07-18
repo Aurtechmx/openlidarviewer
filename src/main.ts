@@ -370,6 +370,19 @@ const testApi = urlParams.has('test');
 // carried no stated open licence, so it was removed.
 const SAMPLES: Sample[] = [];
 
+// The "Try a sample scan" ghost button under the primary CTA — the first
+// curated location (smallest, confirmed open licence, streams in seconds)
+// exposed as the one-click demo path. Same approval gate + streaming path
+// as the curated picker; only the entry point is promoted.
+const DEMO_SAMPLE: Sample = {
+  id: 'flai-ch-swisssurface3d-2022',
+  label: 'Switzerland, 84 MB',
+  detail: 'swisssurface3D (2022) · streams over your network',
+  url: 'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz',
+  name: 'swisssurface3D 2022',
+  sizeBytes: 83_800_000,
+};
+
 /**
  * Public-LiDAR picker for the empty-state. The picker is a curated
  * dropdown of direct EPT URLs — every entry is probed at build time and
@@ -451,6 +464,7 @@ const catalogPanel = new CatalogPanel({
 const stage = new Stage(app, {
   embed,
   samples: SAMPLES,
+  demoSample: DEMO_SAMPLE,
   onSample: loadFromUrl,
   onOpenFile: (file) => void handleFile(file),
   // Return the promise so Stage's inline error handler can show a

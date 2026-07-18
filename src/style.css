@@ -658,6 +658,41 @@ body.olv-theme-light .olv-empty::before {
   margin-bottom: var(--space-md);
 }
 .olv-empty-hero-mark { display: block; width: 104px; height: 104px; }
+/* One quiet motion on one element: the mark drifts ±4 px on an 9 s ease
+ * loop — enough to make the first paint feel alive, slow enough to never
+ * read as an animation. The wordmark and everything else stay still, and
+ * reduced-motion turns it off entirely. */
+@keyframes olv-hero-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.olv-empty-hero-mark { animation: olv-hero-drift 9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .olv-empty-hero-mark { animation: none; }
+}
+/* "Try a sample scan" — ghost companion to the primary CTA. Deliberately
+ * quieter than the gradient button (hairline border, dim text) but a real
+ * button, not a link: it is the one-click demo path for the visitor with
+ * no LiDAR file on hand. */
+.olv-try-sample {
+  font: inherit; font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-dim); background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill); padding: var(--space-sm) var(--space-xl);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+  white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  /* The empty state is a flex column that can overflow short viewports;
+   * overflow:hidden zeroes this button's automatic minimum size, so
+   * without this it gets crushed flat instead of scrolling. */
+  flex: 0 0 auto;
+}
+.olv-try-sample:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.olv-try-sample:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-empty-title {
   font-size: var(--text-3xl); font-weight: 600; letter-spacing: -0.01em;
   background: var(--brand-gradient);
@@ -6820,15 +6855,22 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   display: flex; align-items: center; justify-content: center;
   gap: var(--space-xl); flex-wrap: wrap; margin: var(--space-xs) 0 var(--space-2xs);
 }
+/* Demoted from an outlined pill to a quiet text link: as a pill it sat
+ * directly under the gradient CTA at near-equal visual weight, splitting
+ * the primary decision. It is a secondary utility — one accent-colored
+ * line with an underline on hover reads as exactly that. Padding kept for
+ * the 44 pt touch target. */
 .olv-convert-chip {
-  font: inherit; font-size: var(--text-md); font-weight: 600;
-  color: var(--accent); background: var(--accent-soft, rgba(0,178,255,0.10));
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  border-radius: var(--radius-pill); padding: 9px var(--space-2xl); cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+  font: inherit; font-size: var(--text-sm); font-weight: 500;
+  color: var(--accent); background: transparent;
+  border: none;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: text-decoration-color var(--dur-fast) var(--ease-standard);
   white-space: nowrap;
 }
-.olv-convert-chip:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.olv-convert-chip:hover { text-decoration-color: var(--accent); }
 .olv-convert-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Splash reorg: one bounded "Explore public LiDAR" card (Gestalt common region). */

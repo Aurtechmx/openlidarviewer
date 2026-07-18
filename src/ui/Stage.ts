@@ -28,6 +28,13 @@ export interface StageOptions {
   /** Called when a sample is chosen. */
   onSample?: (url: string, name: string) => void;
   /**
+   * One curated streaming dataset surfaced as the "Try a sample scan"
+   * ghost button directly under the primary CTA — the one-click demo for
+   * a visitor with no LiDAR file on hand. Uses the same approval gate and
+   * `onSample` path as the sample list.
+   */
+  demoSample?: Sample;
+  /**
    * Called when the user picks a file via the "Open scan from device"
    * button — the touch-friendly path for phones, where drag-and-drop is
    * unavailable.
@@ -354,6 +361,30 @@ export class Stage {
       window.addEventListener('scroll', stopPulse, { once: true, passive: true });
     }
 
+    // "Try a sample scan" — the zero-friction demo path, promoted from the
+    // Explore card below the fold to a ghost button directly under the
+    // primary CTA. A visitor with no LiDAR file on hand is the common case;
+    // one click streams a real dataset and shows the product working. Reuses
+    // the first streaming sample (and its approval gate) so there is exactly
+    // one consent path for remote data.
+    const demoSample =
+      options.demoSample ?? (options.samples ?? []).find((s) => s.url.startsWith('http'));
+    const tryButton = demoSample
+      ? el('button', {
+          className: 'olv-try-sample',
+          type: 'button',
+          text: `No file handy? Try a sample scan — ${demoSample.label}`,
+          title: `Open ${demoSample.label.toLowerCase()} — streams over your network, nothing uploaded`,
+        })
+      : null;
+    if (tryButton && demoSample) {
+      tryButton.addEventListener('click', () => {
+        void this._approveSample(demoSample).then((ok) => {
+          if (ok) options.onSample?.(demoSample.url, demoSample.name);
+        });
+      });
+    }
+
     // Item 5: format list collapses to a one-line summary with a tap-to-
     // expand. Reads cleanly on mobile instead of a wall of 10 extensions.
     const formats = el('details', { className: 'olv-empty-formats' });
@@ -562,10 +593,9 @@ export class Stage {
       sub,
       getStarted,
       openButton,
-      fileInput,
-      formats,
-      captureKinds,
     ];
+    if (tryButton) children.push(tryButton);
+    children.push(fileInput, formats, captureKinds);
     // Convert sits with the capture-type chips — it's the "or work with files"
     // companion to "what kinds of scans this opens".
     if (options.onBatchConvert) children.push(convertChip);
