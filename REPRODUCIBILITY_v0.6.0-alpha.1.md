@@ -11,7 +11,7 @@ The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](
 
 | Reported figure | Command |
 |---|---|
-| Unit 2,651 · export 550 · terrain 1,181 · ui 429 · slow 505 | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (CI runs the large buckets sub-sharded, e.g. `npm run test:unit -- --shard=1/3`) |
+| Unit 2,652 · export 550 · terrain 1,181 · ui 429 · slow 505 | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (CI runs the large buckets sub-sharded, e.g. `npm run test:unit -- --shard=1/3`) |
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Full e2e 161 passed / 5 fixture-skipped / 0 failed | `npm run test:e2e` |
 | Live entry 693 KiB (within the 720 KiB ceiling) | `npm run build:live && npm run check:bundle` |
