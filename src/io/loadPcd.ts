@@ -191,11 +191,27 @@ function extractPcdPositionsF64(buffer: ArrayBuffer): Float64Array | null {
  */
 export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<PointCloud> {
   let points;
+  // PCDLoader.parse computes a bounding sphere internally; on a file whose x/y/z
+  // carry a non-finite value that emits a redundant "computeBoundingSphere():
+  // Computed radius is NaN" console warning BEFORE we sanitise. We exclude those
+  // points below and report them through the app's own load-warning channel, so
+  // silence just that one three.js message for the duration of the parse — never
+  // globally, and restored in `finally`.
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]): void => {
+    const first = args[0];
+    if (typeof first === 'string' && first.includes('computeBoundingSphere') && first.includes('NaN')) {
+      return;
+    }
+    originalWarn.apply(console, args as []);
+  };
   try {
     points = new PCDLoader().parse(buffer);
   } catch (err) {
     const detail = err instanceof Error ? `: ${err.message}` : '';
     throw new Error(`This PCD file could not be read${detail}`);
+  } finally {
+    console.warn = originalWarn;
   }
   const geometry = points.geometry;
 

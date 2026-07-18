@@ -150,6 +150,27 @@ describe('loadPcd — malformed input', () => {
     const junk = new TextEncoder().encode('not a pcd file at all').buffer;
     await expect(loadPcd(junk)).rejects.toThrow();
   });
+
+  test('a non-finite point loads clean and suppresses the three.js NaN bounding-sphere warning', async () => {
+    const warnings: string[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]): void => {
+      warnings.push(String(args[0]));
+    };
+    let pc;
+    try {
+      // Middle point is non-finite: PCDLoader.parse computes a bounding sphere
+      // internally and would log "Computed radius is NaN" before we sanitise.
+      pc = await loadPcd(makeBinaryPcd([[1, 2, 3], [NaN, 5, 6], [7, 8, 9]]));
+    } finally {
+      console.warn = original;
+    }
+    // The unplaceable point is excluded; the two finite points survive, all finite.
+    expect(pc.positions.length).toBe(6);
+    for (const v of pc.positions) expect(Number.isFinite(v)).toBe(true);
+    // The redundant three.js bounding-sphere NaN warning never reached the console.
+    expect(warnings.some((w) => w.includes('computeBoundingSphere') && w.includes('NaN'))).toBe(false);
+  });
 });
 
 /** Build an in-memory ASCII PCD with the given field names and rows. */

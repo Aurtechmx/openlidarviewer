@@ -69,8 +69,23 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
+      # The large buckets are sub-sharded so no single vitest process runs the
+      # whole 231-file `unit` (or 105-file `terrain`) set — a big process is the
+      # one that can fail to terminate at shutdown on a constrained runner.
+      # vitest --shard=i/n splits deterministically by file, so the shards
+      # partition the bucket exactly (verified: unit 1/3+2/3+3/3 = the full
+      # count). Small buckets run whole (1/1).
       matrix:
-        bucket: [unit, export, terrain, ui, slow]
+        include:
+          - { bucket: unit, shard: "1/3" }
+          - { bucket: unit, shard: "2/3" }
+          - { bucket: unit, shard: "3/3" }
+          - { bucket: terrain, shard: "1/2" }
+          - { bucket: terrain, shard: "2/2" }
+          - { bucket: slow, shard: "1/2" }
+          - { bucket: slow, shard: "2/2" }
+          - { bucket: export, shard: "1/1" }
+          - { bucket: ui, shard: "1/1" }
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -82,8 +97,8 @@ jobs:
       # match these ~2-core runners): passing --maxWorkers here as well would
       # make vitest reject a duplicate single-value option before any test runs.
       # --reporter=dot keeps the log small so a failure is easy to locate.
-      - name: Test bucket — ${{ matrix.bucket }}
-        run: npm run test:${{ matrix.bucket }} -- --reporter=dot
+      - name: Test bucket — ${{ matrix.bucket }} (shard ${{ matrix.shard }})
+        run: npm run test:${{ matrix.bucket }} -- --shard=${{ matrix.shard }} --reporter=dot
 
   smoke:
     runs-on: ubuntu-latest

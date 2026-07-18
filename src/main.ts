@@ -5821,8 +5821,12 @@ async function exportSession(): Promise<void> {
   downloadText(`${stem}.olvsession`, json);
 }
 
-/** Import an inspection session: restore measurements, annotations and views. */
-async function importSession(file: File): Promise<void> {
+/**
+ * Import an inspection session: restore measurements, annotations and views.
+ * `skipScanConfirm` is set only by the "Apply anyway" action after a partial
+ * scan-identity match, so the same restore re-runs past the confirmation gate.
+ */
+async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<void> {
   try {
     // The session path's imports are light (no three.js), so a session restore
     // can finish before the lazily-imported Viewer chunk resolves — leaving
@@ -5852,8 +5856,7 @@ async function importSession(file: File): Promise<void> {
     // that IS its scan. Compare the session's stored fingerprint (built the same
     // way exportSession writes it) against the loaded scan. A clear conflict is
     // refused rather than silently realigned onto the wrong scan; a partial
-    // match applies but is disclosed.
-    let partialMatchNote = '';
+    // match asks the user to confirm before anything is applied.
     if (haveCloud) {
       const streamingCloud = viewer.streamingCloud;
       const staticCloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
@@ -5890,8 +5893,17 @@ async function importSession(file: File): Promise<void> {
           );
           return;
         }
-        if (match.verdict === 'partial' && match.reasons.length > 0) {
-          partialMatchNote = ` Its scan couldn’t be fully verified: ${match.reasons[0]}.`;
+        if (match.verdict === 'partial' && !opts.skipScanConfirm) {
+          // Not a clear conflict, but not a confirmed match — don't touch the
+          // scene until the user opts in. "Apply anyway" re-imports with the
+          // check skipped, so the same restore proceeds on their confirmation.
+          const why = match.reasons[0] ?? '';
+          showLassoToast(
+            `This session's scan couldn't be fully verified${why ? ` (${why})` : ''}. ` +
+              'Applying it may place its measurements on the wrong scan.',
+            { label: 'Apply anyway', onClick: () => void importSession(file, { skipScanConfirm: true }) },
+          );
+          return;
         }
       }
     }
@@ -5959,6 +5971,9 @@ async function importSession(file: File): Promise<void> {
     const restored =
       session.measurements.length + session.annotations.length + session.views.length;
     const wantFile = session.scanSummary?.fileName;
+    // When the user reached here via "Apply anyway", record that the restore
+    // proceeded on an unverified scan match rather than a confirmed one.
+    const appliedNote = opts.skipScanConfirm ? ' Applied despite an unverified scan match.' : '';
     // Disclosure when the session was captured in a different scan's frame and
     // its geometry was shifted to line up with the loaded cloud — an honest
     // note that a non-obvious transform happened, not a silent relocation.
@@ -5974,11 +5989,11 @@ async function importSession(file: File): Promise<void> {
       showLassoToast(lead ?? `Session restored — drop “${wantFile}” to view its scan.`,
         lead ? { label: 'Need the scan', onClick: () => showLassoToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
     } else if (lead) {
-      showLassoToast(`${lead}${frameNote}${partialMatchNote}`);
+      showLassoToast(`${lead}${frameNote}${appliedNote}`);
     } else {
       showLassoToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).${frameNote}${partialMatchNote}`,
+          `(measurements, annotations, views).${frameNote}${appliedNote}`,
       );
     }
   } catch (err) {

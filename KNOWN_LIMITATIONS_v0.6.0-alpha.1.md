@@ -11,14 +11,6 @@ This is an alpha for evaluation. The items below are known and deliberate — re
 - Results that depend on a common frame should be treated as indicative when common-frame compatibility can't be established.
 - Integrated Spatial Workflows are **not** claimed complete.
 
-## Partial session matches restore automatically
-
-The session source-identity guard **blocks** a clear conflict (a session captured over a different scan). A **partial** match — where the fingerprint neither clearly matches nor clearly conflicts — currently restores the session and shows a disclosure notice, rather than requiring explicit confirmation first. A confirmation gate before applying spatial measurements, views, clips, and annotations on a partial match is planned; until then, read the disclosure before trusting a partially-matched restore.
-
-## PCD load emits a benign bounding-sphere warning on malformed input
-
-The PCD loader routes decoded positions through the central non-finite sanitiser before building the point cloud, so no NaN reaches measurement, rendering, or export. However, the upstream `three` `PCDLoader.parse` computes a bounding sphere internally *before* that sanitation, so a PCD file containing non-finite coordinates produces a benign `THREE.BufferGeometry.computeBoundingSphere(): Computed radius is NaN` console warning during parse. The rendered and measured cloud is unaffected; only the console message is emitted. Pre-filtering before the upstream parse is a planned cleanup.
-
 ## Residual streaming flicker at the budget boundary
 
 An anti-thrash resident-stickiness option exists in the budget selector and is unit-tested, but it is **opt-in and not wired** into the live scheduler — enabling it must first reconcile with the scheduler's ancestor-protection and be verified visually in a browser. Some budget-boundary "regions pulsing" may remain in this build.

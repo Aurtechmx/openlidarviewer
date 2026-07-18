@@ -28,12 +28,15 @@ First alpha of the v0.6 cycle: startup and streaming performance, a correctness-
 - **Stockpile confidence is honest about units.** A points/m² density can no longer earn HIGH confidence when the horizontal CRS unit is unknown (an unknown unit was silently treated as metres); the density row is labelled accordingly.
 - **Profile elevations read against the right datum**, and the distance formatter no longer renders negative heights as centimetres.
 - **Central non-finite sanitation across every file loader**, PCD included, and streaming elevation ranges now read from decoded data bounds rather than the octree cube, so a tall cube can't inflate the elevation legend. Streaming-only session exports store the active geographic origin instead of `[0,0,0]`.
+- **Partial session matches now ask before applying.** A session whose scan fingerprint neither clearly matches nor clearly conflicts with the loaded scan no longer restores automatically — it surfaces an "Apply anyway" confirmation, so an unverified match can't quietly place measurements on the wrong scan.
+- **No spurious PCD console warning.** A PCD file with a non-finite coordinate no longer prints three's `computeBoundingSphere(): Computed radius is NaN` — that one redundant message is suppressed for the parse (the point is still excluded and reported through the loader's own warning channel).
 
 ### Internal
 
 - **Composition root.** New `AppRuntime`/`AppContext` own the shared application state (layer visibility/solo/comparison, active-scan selection, saved views) that previously lived in module-level mutables, and the first extracted service (`LayerService`) manages the layer list against it. Behaviour-preserving; groundwork for the v0.6 decomposition.
 - **Anti-thrash streaming selection (opt-in).** The budget selector can give an already-shown node a small score bonus so budget-boundary noise can't bump it out and force a re-fade — the "regions pulsing" flicker — with a node being refined away exempt so LOD never freezes. Unit-tested and off by default: enabling it live needs reconciling with eviction protection and visual verification in a browser, so no behaviour changes in this cut.
 - **Single-file test runner.** `npm run test:file <path>` mirrors the release buckets' terminating policy with a wall-clock watchdog and a greppable exit line, for fast red-to-green iteration without a full bucket.
+- **CI runs sub-sharded buckets.** The GitHub Actions test matrix splits the large `unit` and `terrain` buckets with `vitest --shard` so no single CI process runs hundreds of files — a big process is the one that can fail to terminate at shutdown on a constrained runner. The shards partition each bucket exactly.
 
 ## [0.5.9] - 2026-07-15
 
