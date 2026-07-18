@@ -17,7 +17,7 @@ An anti-thrash resident-stickiness option exists in the budget selector and is u
 
 ## Startup bundle above the early-warning line
 
-The live entry chunk measures 692 KiB — within the hard 720 KiB ceiling but above the 680 KiB early-warning threshold, which the bundle-budget guard flags. Trimming it (e.g. deferring the session-import fact-building off the eager path) is a follow-up.
+The live entry chunk measures 693 KiB — within the hard 720 KiB ceiling but above the 680 KiB early-warning threshold, which the bundle-budget guard flags. Trimming it (e.g. deferring the session-import fact-building off the eager path) is a follow-up.
 
 ## No cross-CRS reprojection
 

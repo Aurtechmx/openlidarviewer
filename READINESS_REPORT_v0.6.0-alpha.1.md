@@ -13,7 +13,7 @@ At the tagged commit, `npm run test:release` is green (`GATE EXIT: 0`):
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
 - Unit 2,651 (16 skipped) · export 550 · terrain 1,181 (18 skipped) · ui 429 · slow 505.
-- Build-contract 11; plain build and live/obfuscated build pass; bundle within the 720 KiB ceiling (692 KiB live entry, above the 680 KiB warning line).
+- Build-contract 11; plain build and live/obfuscated build pass; bundle within the 720 KiB ceiling (693 KiB live entry, above the 680 KiB warning line).
 - Full e2e (`npm run test:e2e`): 161 passed, 5 fixture-skipped (autzen COPC not on disk), 0 failed.
 - Documentation build (`npm run docs:build`) passes.
 
