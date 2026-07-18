@@ -46,6 +46,7 @@
     "test:ui": "node scripts/test-bucket.mjs ui",
     "test:slow": "node scripts/test-bucket.mjs slow",
     "test:buckets:verify": "node scripts/test-bucket.mjs --verify",
+    "test:file": "node scripts/test-file.mjs",
     "test:build": "npm run build && BUILD_CONTRACT=1 vitest run tests/chunkIsolation.test.ts tests/orbitSmoke.test.ts",
     "test:e2e": "playwright test",
     "repro": "REPRO=1 vitest run tests/reproPack.test.ts && python3 benchmarks/plots.py",
