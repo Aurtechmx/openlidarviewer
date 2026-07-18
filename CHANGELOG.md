@@ -15,7 +15,7 @@ First alpha of the v0.6 cycle: startup and streaming performance, a correctness-
 
 ### Changed
 
-- **Startup bundle −15 %.** The Analyse and Object panels now mount on first scan load instead of at boot, cutting the live entry chunk from 792 KiB to ~678 KiB; the bundle-budget guard's ceiling drops 800 → 720 KiB with an early-warning threshold at 680 so the win cannot silently erode.
+- **Startup bundle.** The Analyse and Object panels now mount on first scan load instead of at boot, cutting the live entry chunk from 792 KiB; the bundle-budget guard's ceiling drops 800 → 720 KiB with an early-warning threshold at 680 so the win cannot silently erode. After the alpha hardening the live entry measures 692 KiB — within the 720 ceiling, above the 680 warning line.
 - **Live probe pauses during camera drags.** The hover readout's detailed GPU pick is skipped while the user is actively orbiting or panning — you are navigating, not reading a value — and fires once as soon as the drag settles.
 - **Measurement station tables build lazily.** Station rows render when their section is first expanded; exports are byte-identical.
 

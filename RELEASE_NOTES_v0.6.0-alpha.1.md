@@ -6,7 +6,7 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 
 ## Faster first load
 
-The Analyse and Object panels — two of the heaviest interface modules — now mount when the first scan loads instead of at boot. The live entry chunk drops from 792 KiB to about 678 KiB (−15 %), and the bundle-budget guard's ceiling tightens from 800 to 720 KiB with an early-warning threshold at 680, so the win is locked in rather than left to erode.
+The Analyse and Object panels — two of the heaviest interface modules — now mount when the first scan loads instead of at boot, cutting the live entry chunk from 792 KiB, and the bundle-budget guard's ceiling tightens from 800 to 720 KiB with an early-warning threshold at 680. After the alpha correctness hardening the live entry measures **692 KiB** — within the 720 KiB ceiling, above the 680 KiB early-warning line, so the guard flags it for attention before the next cut.
 
 ## Streaming without flicker
 
