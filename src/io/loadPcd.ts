@@ -192,18 +192,24 @@ function extractPcdPositionsF64(buffer: ArrayBuffer): Float64Array | null {
 export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<PointCloud> {
   let points;
   // PCDLoader.parse computes a bounding sphere internally; on a file whose x/y/z
-  // carry a non-finite value that emits a redundant "computeBoundingSphere():
-  // Computed radius is NaN" console warning BEFORE we sanitise. We exclude those
-  // points below and report them through the app's own load-warning channel, so
-  // silence just that one three.js message for the duration of the parse — never
-  // globally, and restored in `finally`.
+  // carry a non-finite value, three's BufferGeometry logs "computeBoundingSphere():
+  // Computed radius is NaN" — through console.ERROR (its `error` helper), not warn —
+  // BEFORE we sanitise. We exclude those points below and report them through the
+  // loader's own warning channel, so silence just that one message on both console
+  // methods for the duration of the parse; never globally, restored in `finally`.
+  const isBoundingRadiusNaN = (args: unknown[]): boolean =>
+    typeof args[0] === 'string' &&
+    args[0].includes('computeBoundingSphere') &&
+    args[0].includes('NaN');
   const originalWarn = console.warn;
+  const originalError = console.error;
   console.warn = (...args: unknown[]): void => {
-    const first = args[0];
-    if (typeof first === 'string' && first.includes('computeBoundingSphere') && first.includes('NaN')) {
-      return;
-    }
+    if (isBoundingRadiusNaN(args)) return;
     originalWarn.apply(console, args as []);
+  };
+  console.error = (...args: unknown[]): void => {
+    if (isBoundingRadiusNaN(args)) return;
+    originalError.apply(console, args as []);
   };
   try {
     points = new PCDLoader().parse(buffer);
@@ -212,6 +218,7 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
     throw new Error(`This PCD file could not be read${detail}`);
   } finally {
     console.warn = originalWarn;
+    console.error = originalError;
   }
   const geometry = points.geometry;
 

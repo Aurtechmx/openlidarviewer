@@ -18,7 +18,7 @@ Run with `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, `test:sl
 - **Project-frame transform math.** `tests/projectSpatialFrame.test.ts` verifies the source↔project↔world round-trip and the Float32 sub-mm residual bound.
 - **Progressive EPT attach.** `tests/eptStreaming.test.ts` verifies first-paint-then-continue parity with the full walk and that a persistently-failing fetch terminates (no allocation loop).
 
-Whole-suite evidence at the tagged commit: unit 2,651 passed / 16 skipped, export 550, terrain 1,181 / 18 skipped, ui 429, slow 505; build-contract 11; live/obfuscated build passed; full e2e 161 passed / 5 fixture-skipped / 0 failed; production dependency audit 0 vulnerabilities.
+Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): unit 2,652 passed / 16 skipped, export 550, terrain 1,181 / 18 skipped, ui 429, slow 505; build-contract 11; live/obfuscated build passed; production dependency audit 0 vulnerabilities. The full e2e suite passed **locally** here (161 passed / 5 fixture-skipped / 0 failed) — the *gating* browser evidence is a green GitHub Actions run on the tagged commit, which is pending (see "What was NOT tested").
 
 ## What was NOT tested (and is staged, not claimed)
 

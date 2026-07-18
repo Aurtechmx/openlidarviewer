@@ -9,12 +9,12 @@ A sober account of what is ready and what remains before this alpha is published
 
 ## Test and build gate
 
-At the tagged commit, `npm run test:release` is green (`GATE EXIT: 0`):
+Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit), `npm run test:release` is green (`GATE EXIT: 0`):
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
-- Unit 2,651 (16 skipped) · export 550 · terrain 1,181 (18 skipped) · ui 429 · slow 505.
+- Unit 2,652 (16 skipped) · export 550 · terrain 1,181 (18 skipped) · ui 429 · slow 505.
 - Build-contract 11; plain build and live/obfuscated build pass; bundle within the 720 KiB ceiling (693 KiB live entry, above the 680 KiB warning line).
-- Full e2e (`npm run test:e2e`): 161 passed, 5 fixture-skipped (autzen COPC not on disk), 0 failed.
+- Full e2e (`npm run test:e2e`): 161 passed, 5 fixture-skipped (autzen COPC not on disk), 0 failed — **locally**. The gating browser evidence is the green GitHub Actions run required below, not this local run.
 - Documentation build (`npm run docs:build`) passes.
 
 ## Dependency and license

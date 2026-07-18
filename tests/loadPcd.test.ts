@@ -151,25 +151,28 @@ describe('loadPcd — malformed input', () => {
     await expect(loadPcd(junk)).rejects.toThrow();
   });
 
-  test('a non-finite point loads clean and suppresses the three.js NaN bounding-sphere warning', async () => {
-    const warnings: string[] = [];
-    const original = console.warn;
-    console.warn = (...args: unknown[]): void => {
-      warnings.push(String(args[0]));
-    };
+  test('a non-finite point loads clean and suppresses three\'s NaN bounding-sphere message on BOTH channels', async () => {
+    // three logs the message through console.error (BufferGeometry) — spy BOTH
+    // channels so this fails if it reaches either, not just console.warn.
+    const logged: string[] = [];
+    const origWarn = console.warn;
+    const origError = console.error;
+    console.warn = (...args: unknown[]): void => void logged.push(String(args[0]));
+    console.error = (...args: unknown[]): void => void logged.push(String(args[0]));
     let pc;
     try {
       // Middle point is non-finite: PCDLoader.parse computes a bounding sphere
       // internally and would log "Computed radius is NaN" before we sanitise.
       pc = await loadPcd(makeBinaryPcd([[1, 2, 3], [NaN, 5, 6], [7, 8, 9]]));
     } finally {
-      console.warn = original;
+      console.warn = origWarn;
+      console.error = origError;
     }
     // The unplaceable point is excluded; the two finite points survive, all finite.
     expect(pc.positions.length).toBe(6);
     for (const v of pc.positions) expect(Number.isFinite(v)).toBe(true);
-    // The redundant three.js bounding-sphere NaN warning never reached the console.
-    expect(warnings.some((w) => w.includes('computeBoundingSphere') && w.includes('NaN'))).toBe(false);
+    // The redundant three bounding-sphere NaN message reached neither console channel.
+    expect(logged.some((m) => m.includes('computeBoundingSphere') && m.includes('NaN'))).toBe(false);
   });
 });
 

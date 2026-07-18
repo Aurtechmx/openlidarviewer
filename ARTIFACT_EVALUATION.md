@@ -1,6 +1,6 @@
 # Artifact evaluation
 
-This guide lets a reviewer evaluate the OpenLiDARViewer software artifact without special hardware or private data. It complements `REVIEWER_QUICKSTART.md` (fast start) and `VALIDATION_REPORT_v0.5.9.md` (what is and is not validated).
+This guide lets a reviewer evaluate the OpenLiDARViewer software artifact without special hardware or private data. It complements `REVIEWER_QUICKSTART.md` (fast start) and `VALIDATION_REPORT_v0.6.0-alpha.1.md` (what is and is not validated for this alpha; terrain/measurement claims are inherited from `VALIDATION_REPORT_v0.5.9.md`).
 
 ## What the artifact is
 
@@ -28,7 +28,7 @@ npm run build:live && npm run check:bundle
 
 - Every scientific claim is registered in `docs/validation/claim-register.yaml` with its current evidence level, the level required to be called validated, the tests that support it, and the wording that is allowed or prohibited. `scripts/lint-claim-register.mjs` fails the build if the runtime registry drifts from that file or if prohibited wording appears.
 - The evidence ladder (E0–E6) is defined in `docs/validation/EVIDENCE_MODEL.md`. Nothing in this release is at or above E4 (cross-implementation independence). Synthetic known-truth checks are E3.
-- `VALIDATION_REPORT_v0.5.9.md` lists exactly what was and was not tested; `docs/validation/THREATS_TO_VALIDITY.md` aggregates the limitations.
+- `VALIDATION_REPORT_v0.6.0-alpha.1.md` lists exactly what was and was not tested for this alpha (inheriting the terrain/measurement evidence from `VALIDATION_REPORT_v0.5.9.md`); `docs/validation/THREATS_TO_VALIDITY.md` aggregates the limitations.
 
 ## Integrity
 
