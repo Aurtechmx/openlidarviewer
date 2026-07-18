@@ -105,13 +105,19 @@ export function scaleProfileSamples(
   samples: ReadonlyArray<ProfileChartSample>,
   unitToMetres: number,
   datumOffset: number | null = 0,
+  verticalToMetres: number = unitToMetres,
 ): ProfileChartSample[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
+  // Height rides the VERTICAL factor (a compound CRS can have metre eastings
+  // over foot heights); defaults to the horizontal factor so a single-unit CRS
+  // is byte-identical. Without this the chart gain/loss and grade disagreed
+  // with the profile's own headline Δh (which already used the vertical factor).
+  const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
   const d = datumOffset != null && Number.isFinite(datumOffset) ? datumOffset : 0;
   return samples.map((s) => {
     const out: ProfileChartSample = {
       distance: s.distance * f,
-      height: (s.height + d) * f,
+      height: (s.height + d) * vf,
     };
     if (s.count !== undefined) out.count = s.count;
     return out;

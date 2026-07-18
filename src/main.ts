@@ -7450,11 +7450,22 @@ function compareLoadedLayers(): void {
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
+      // The .asc grid geometry (cellsize + corners) is in the source LINEAR
+      // unit, but detectChange returns Δz in metres. Express the cell values in
+      // that same linear unit so the raster is internally consistent (a foot-CRS
+      // export otherwise carries foot geometry with metre values, and any GIS
+      // volume mixes ft² with m). Metre / compound-metre-horizontal CRS ⇒ 1, a
+      // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
+      const gridUnitToMetres = a.metadata?.crs?.linearUnitToMetres ?? 1;
+      const ascDiff =
+        gridUnitToMetres === 1
+          ? cmp.result.diff
+          : cmp.result.diff.map((v) => v / gridUnitToMetres);
       layers.lastDifference = {
         stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
         asc: () =>
           changeToEsriAscii({
-            diff: cmp.result.diff,
+            diff: ascDiff,
             ncols: dtms.cols,
             nrows: dtms.rows,
             cellSizeM: dtms.cellSizeM,

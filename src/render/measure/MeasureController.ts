@@ -791,7 +791,7 @@ export class MeasureController {
       name: m.name,
       value: this._headlineText(m),
       profileChart: m.profileChart
-        ? scaleProfileSamples(m.profileChart, f, this._originUp)
+        ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
         : undefined,
       profileDatumKnown: this._originUp !== null,
       profileChartResidentOnly: m.profileChartResidentOnly,

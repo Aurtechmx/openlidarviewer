@@ -221,6 +221,25 @@ describe('scaleProfileSamples (v0.4.5, B2 unit seam)', () => {
     expect(scaled[1].count).toBe(0);
   });
 
+  it('a compound CRS scales distance by the horizontal factor and height by the vertical', () => {
+    // Metre eastings (linear = 1) over US-survey-foot heights (vertical ≈ 0.3048):
+    // 10 m chainage stays 10 m, a 100 ft rise becomes 30.48 m — NOT 100 m.
+    const scaled = scaleProfileSamples(
+      [{ distance: 10, height: 100, count: 1 }],
+      1, // horizontal (distance) factor
+      0, // no datum
+      0.3048, // vertical (height) factor
+    );
+    expect(scaled[0].distance).toBeCloseTo(10, 12);
+    expect(scaled[0].height).toBeCloseTo(30.48, 12);
+  });
+
+  it('vertical factor defaults to the horizontal one (single-unit CRS unchanged)', () => {
+    const both = scaleProfileSamples([{ distance: 10, height: 100 }], 0.3048);
+    const explicit = scaleProfileSamples([{ distance: 10, height: 100 }], 0.3048, 0, 0.3048);
+    expect(both[0].height).toBeCloseTo(explicit[0].height, 12);
+  });
+
   it('NaN gaps survive scaling as gaps', () => {
     const scaled = scaleProfileSamples([{ distance: 5, height: NaN, count: 0 }], 0.3048);
     expect(scaled[0].distance).toBeCloseTo(1.524, 12);
