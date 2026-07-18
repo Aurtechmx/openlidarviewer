@@ -916,3 +916,46 @@ test('setBudgets invalidates the cache so the next tick rescores', async () => {
   scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
   expect(scheduler.stats().fullRescoreCount).toBe(baseline + 1);
 });
+
+// --- late hierarchy ingestion ------------------------------------------------
+// Both COPC (lazy child hierarchy pages) and EPT (the progressive hierarchy
+// walk) keep ADDING nodes to the store after the scheduler is constructed.
+// The scheduler used to precompute node bounds only in its constructor; a node
+// added later had no bounds entry, scored 0 (silently culled), and could never
+// stream — on a cold connection, where the hierarchy lands after attach, that
+// blanked entire datasets with no error anywhere. Bounds are now computed
+// lazily, so late nodes are scoreable the moment they appear.
+test('nodes ingested AFTER scheduler construction still stream (late hierarchy)', async () => {
+  const cloud = await openCloud();
+  const ready: StreamingNode[] = [];
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: (n) => ready.push(n), onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+  );
+  // First pass streams the 5 construction-time nodes.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(ready).toHaveLength(5);
+
+  // A node arrives late — the shape of a lazily-loaded COPC hierarchy page or
+  // a progressive-EPT continuation ingesting into the same store.
+  const base = cloud.octree.nodes().find((n) => n.record.id === '2-0-0-0')!;
+  cloud.octree.store.add({
+    id: '3-0-0-0',
+    key: { depth: 3, x: 0, y: 0, z: 0 },
+    bounds: [-128, -128, -128, -96, -96, -96],
+    pointCount: 200,
+    byteOffset: base.record.byteOffset,
+    byteSize: base.record.byteSize,
+    spacing: base.record.spacing / 2,
+    parentId: '2-0-0-0',
+  });
+
+  // The very next pass must see, score, and stream it — no reconstruction.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+  expect(ready.map((n) => n.record.id)).toContain('3-0-0-0');
+  expect(cloud.counts().resident).toBe(6);
+});

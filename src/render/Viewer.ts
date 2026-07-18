@@ -908,6 +908,17 @@ export class Viewer {
   private readonly _streamingPickData = new Map<THREE.Mesh, StreamingPickEntry>();
   /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
   private _streaming: StreamingSession | null = null;
+  /**
+   * Streaming heartbeat — a timer that ticks the scheduler INDEPENDENTLY of
+   * the render loop. The RAF loop is deliberately cancelled while the tab is
+   * hidden (thermal hardening), and it is also the loop that fed the
+   * scheduler — so opening a large dataset and switching tabs while it
+   * loaded froze streaming at 0 nodes, silently, and a missed resume left it
+   * frozen for good. The heartbeat makes the background-streaming promise
+   * real: node fetch/decode keeps flowing while hidden, and rendering alone
+   * stays RAF-gated.
+   */
+  private _streamingHeartbeat: ReturnType<typeof setInterval> | null = null;
   /** Frames since the streaming scheduler last ran — for throttling. */
   private _streamingFrame = 0;
   /**
@@ -2046,6 +2057,12 @@ export class Viewer {
     );
     this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null };
     this._streamingFrame = 0;
+    // Guaranteed scheduler cadence, render-loop-independent (see the field's
+    // contract). 200 ms is comfortably above a tick's sub-millisecond cost and
+    // close to the RAF path's every-6th-frame cadence; the RAF tick still runs
+    // when the loop is live, so a visible tab keeps its snappier reaction.
+    if (this._streamingHeartbeat !== null) clearInterval(this._streamingHeartbeat);
+    this._streamingHeartbeat = setInterval(() => this._tickStreaming(), 200);
     this._configureForStreaming(cloud);
     // A streaming open can land directly in a scalar default mode
     // (elevation on an RGB-less COPC) with no setStreamingColorMode call —
@@ -2081,6 +2098,10 @@ export class Viewer {
 
   /** Detach and fully dispose the current streaming cloud, if any. */
   detachStreamingCloud(): void {
+    if (this._streamingHeartbeat !== null) {
+      clearInterval(this._streamingHeartbeat);
+      this._streamingHeartbeat = null;
+    }
     if (!this._streaming) return;
     this._streaming.scheduler.stop();
     this._streaming.renderer.dispose();

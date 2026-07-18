@@ -285,6 +285,8 @@ export class StreamingScheduler {
   private readonly _decoder: ChunkDecoder;
   private readonly _callbacks: SchedulerCallbacks;
   private readonly _localBounds = new Map<string, Box6>();
+  /** The cloud's render origin, captured once for lazy bounds computation. */
+  private _renderOrigin: [number, number, number] = [0, 0, 0];
   private readonly _queue: StreamingNode[] = [];
   private readonly _inFlight = new Map<string, AbortController>();
   private readonly _cache: CompressedChunkCache;
@@ -370,6 +372,7 @@ export class StreamingScheduler {
   // move or the 60-tick forced rescore (~seconds of lag under exactly the
   // GPU-bound case the back-off targets).
   private _lastSigFpsFactor = -1;
+  private _lastSigStoreSize = -1;
   /** Last full rescore's wanted set (reused while the signature stays equal). */
   private _lastWanted: ReadonlySet<string> | null = null;
   /** Last full rescore's scored list (same lifecycle as `_lastWanted`). */
@@ -402,19 +405,36 @@ export class StreamingScheduler {
     // requirement and first-paint gets the full concurrent-decode
     // quota. Tests that inject a custom clock get the same treatment.
     this._stableSinceTs = this._now();
-    // Precompute each node's bounds in local render space (world − origin).
-    const [rx, ry, rz] = cloud.renderOrigin;
+    // Pre-warm each ALREADY-KNOWN node's bounds in local render space
+    // (world − origin). This is an optimisation only: `_localBoundsFor`
+    // computes and caches any node discovered later, because both COPC
+    // hierarchy pages and the progressive EPT hierarchy keep ingesting
+    // nodes AFTER this constructor runs. Treating this loop as the one
+    // source of bounds silently blanked whole datasets: a node without an
+    // entry scored 0 (culled) forever, so a scan whose hierarchy arrived
+    // after attach — the common case on a cold connection — never
+    // streamed a single point, with no error anywhere.
+    this._renderOrigin = [cloud.renderOrigin[0], cloud.renderOrigin[1], cloud.renderOrigin[2]];
     for (const node of cloud.octree.nodes()) {
-      const b = node.record.bounds;
-      this._localBounds.set(node.record.id, [
-        b[0] - rx,
-        b[1] - ry,
-        b[2] - rz,
-        b[3] - rx,
-        b[4] - ry,
-        b[5] - rz,
-      ]);
+      this._localBoundsFor(node);
     }
+  }
+
+  /**
+   * A node's bounds in local render space, computed on first use and cached.
+   * Lazy so nodes ingested after construction (lazy COPC hierarchy pages,
+   * the progressive EPT walk) are scoreable the moment they appear.
+   */
+  private _localBoundsFor(node: StreamingNode): Box6 {
+    const id = node.record.id;
+    let box = this._localBounds.get(id);
+    if (!box) {
+      const [rx, ry, rz] = this._renderOrigin;
+      const b = node.record.bounds;
+      box = [b[0] - rx, b[1] - ry, b[2] - rz, b[3] - rx, b[4] - ry, b[5] - rz];
+      this._localBounds.set(id, box);
+    }
+    return box;
   }
 
   /** Apply new point and concurrency budgets (a quality-preset change). */
@@ -686,7 +706,12 @@ export class StreamingScheduler {
       depthCap === this._lastSigDepthCap &&
       this._pointBudget === this._lastSigBudget &&
       this._pressureDepthReduction === this._lastSigPressureReduction &&
-      this._fpsBudgetFactor === this._lastSigFpsFactor;
+      this._fpsBudgetFactor === this._lastSigFpsFactor &&
+      // The store keeps growing while hierarchy loads (lazy COPC pages, the
+      // progressive EPT walk) — a new node must invalidate the cached wanted
+      // set even under a perfectly still camera, or it can't stream until the
+      // next forced rescore.
+      store.size === this._lastSigStoreSize;
     const forceRescore =
       this._tick - this._lastFullRescoreTick >= FORCED_RESCORE_INTERVAL_TICKS;
 
@@ -704,9 +729,9 @@ export class StreamingScheduler {
       // Walk the store's zero-allocation node iterator rather than `nodes()`,
       // which materialises a 28 k-element array on every rescore.
       for (const node of store.iterate()) {
-        const box = this._localBounds.get(node.record.id);
+        const box = this._localBoundsFor(node);
         let score = 0;
-        if (box && boxInFrustum(box, planes)) {
+        if (boxInFrustum(box, planes)) {
           score = nodeScore({
             bounds: box,
             depth: node.record.key.depth,
@@ -760,6 +785,7 @@ export class StreamingScheduler {
       this._lastSigBudget = this._pointBudget;
       this._lastSigPressureReduction = this._pressureDepthReduction;
       this._lastSigFpsFactor = this._fpsBudgetFactor;
+      this._lastSigStoreSize = store.size;
       this._lastScored = freshScored;
       this._lastWanted = freshWanted;
       this._lastFullRescoreTick = this._tick;
@@ -821,8 +847,7 @@ export class StreamingScheduler {
         this._deferredEvictAt.set(id, nowTs + this._evictDeferMs);
         continue;
       }
-      const box = this._localBounds.get(id);
-      const centre = box ? boxCentre(box) : ([0, 0, 0] as [number, number, number]);
+      const centre = boxCentre(this._localBoundsFor(node));
       const dist = distance(centre, view.cameraPosition);
       lapsed.push({ node, depth: node.record.key.depth, distance: dist });
     }
@@ -1025,7 +1050,9 @@ export class StreamingScheduler {
 
     const meta = this._cloud.decodeMeta(node.record);
     this._readChunk(node, controller.signal)
-      .then((chunk) => this._decoder.decode(chunk, meta, controller.signal))
+      .then((chunk) => {
+        return this._decoder.decode(chunk, meta, controller.signal);
+      })
       .then((decoded) => {
         this._inFlight.delete(id);
         if (controller.signal.aborted) {
@@ -1040,7 +1067,16 @@ export class StreamingScheduler {
           // a stale backoff on a later re-decode.
           this._decodeFailures.delete(id);
           this._retryReadyAt.delete(id);
-          this._callbacks.onNodeReady(node, decoded);
+          // The renderer callback is fenced so a synchronous throw there (a
+          // mesh-build or colour-seeding bug) can't fall through to the decode
+          // .catch below — which would silently un-do the residency just
+          // recorded and book a phantom decode failure with backoff. A failed
+          // mesh build is recorded as this node's error instead.
+          try {
+            this._callbacks.onNodeReady(node, decoded);
+          } catch (err) {
+            store.setError(node, err instanceof Error ? err.message : String(err));
+          }
         }
         this._dispatch();
         this._callbacks.onChange?.();
