@@ -2,14 +2,16 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.6.0-alpha.1] - 2026-07-16
+## [0.6.0-alpha.1] - 2026-07-18
 
-First alpha of the v0.6 cycle: startup and streaming performance, two rendering-correctness fixes, and the start of the internal restructuring that the v0.6 workflow features build on. Alpha caveat: this cut is for evaluation; interfaces and internals may still change before v0.6.0.
+First alpha of the v0.6 cycle: startup and streaming performance, a correctness-and-honesty hardening pass across the streaming, loader, and measurement paths, the foundation for a shared project coordinate frame, and the start of the internal restructuring that the v0.6 workflow features build on. Alpha caveat: this cut is for evaluation; interfaces and internals may still change before v0.6.0.
 
 ### Added
 
 - **Stale-chunk recovery.** A tab left open across a deploy no longer breaks the first action that touches a swept-away code chunk: the failed dynamic import is classified (across Chromium/Firefox/Safari/Vite phrasings) and the page reloads once, guarded by a per-tab cooldown so a persistent failure surfaces an error instead of a reload loop. URL and query are preserved.
 - **Dependency-singleton guard.** `npm run check:deps` fails the release gate if a second copy of three, laz-perf, proj4, or pdf-lib ever enters the tree (duplicate decoder/geometry state is a correctness risk, not just bloat); Vite dedupe backs it up at resolve time. A real duplicate laz-perf was collapsed by removing the unused `@loaders.gl/las` dependency.
+- **Progressive streaming hierarchy.** Large public EPT datasets expose thousands of hierarchy sub-files; loading them all before the first points render made big projects look hung. The walk is split into a bounded first-paint pass plus a resumable background continuation, and the frontier drops every attempted key so a persistently-failing fetch can't spin into an allocation loop.
+- **Shared project coordinate-frame foundation.** Value types (`ProjectSpatialFrame`, `LayerSpatialTransform`) and pure Float64 transform math for expressing multiple layers in one authoritative frame, so georeferenced scans with different origins can occupy their true relative positions rather than overlapping near local zero. The tested foundation ships; the scene wiring is staged and documented in `docs/architecture/project-spatial-frame.md`.
 
 ### Changed
 
@@ -21,10 +23,17 @@ First alpha of the v0.6 cycle: startup and streaming performance, two rendering-
 
 - **Polygon reclassification on non-Z-up scans.** For a non-Z-up up-axis, the polygon was projected onto an (east, north) basis while each point was tested in raw XY — mismatched spaces that reclassified the wrong points on rotated, Y-up, tilted, or non-origin clouds. Points now project through the same basis, height included; the Z-up fast path is unchanged.
 - **COPC/EPT refinement flicker.** Streaming LOD transitions cross-faded with `transparent: true` while keeping depth writes for EDL, so overlapping coarse/fine layers z-fought and refining regions pulsed while a cloud streamed in. Transitions are now an opaque per-point dither dissolve driven through the size graph — no transparency, no z-fight, EDL stays exact — and an evicted node dissolves out from its current density instead of snapping to full.
+- **Non-finite streaming nodes are refused.** The central sanitiser cleans file-loaded clouds but by contract skips streaming buffers; the COPC/EPT decoders now reject a node whose transform (a malformed header scale/offset/origin) or whose float source carries a NaN, with a structured error the scheduler backs off — instead of sending NaN to the GPU.
+- **Sessions no longer rebase onto the wrong scan.** Import checks a session's stored scan fingerprint (extents primary, point count corroborating, name/CRS disclosure) against the loaded scan before rebasing its geometry: a clear mismatch is refused, a partial match disclosed, rather than silently realigning one scan's analysis onto another.
+- **Stockpile confidence is honest about units.** A points/m² density can no longer earn HIGH confidence when the horizontal CRS unit is unknown (an unknown unit was silently treated as metres); the density row is labelled accordingly.
+- **Profile elevations read against the right datum**, and the distance formatter no longer renders negative heights as centimetres.
+- **Central non-finite sanitation across every file loader**, PCD included, and streaming elevation ranges now read from decoded data bounds rather than the octree cube, so a tall cube can't inflate the elevation legend. Streaming-only session exports store the active geographic origin instead of `[0,0,0]`.
 
 ### Internal
 
 - **Composition root.** New `AppRuntime`/`AppContext` own the shared application state (layer visibility/solo/comparison, active-scan selection, saved views) that previously lived in module-level mutables, and the first extracted service (`LayerService`) manages the layer list against it. Behaviour-preserving; groundwork for the v0.6 decomposition.
+- **Anti-thrash streaming selection (opt-in).** The budget selector can give an already-shown node a small score bonus so budget-boundary noise can't bump it out and force a re-fade — the "regions pulsing" flicker — with a node being refined away exempt so LOD never freezes. Unit-tested and off by default: enabling it live needs reconciling with eviction protection and visual verification in a browser, so no behaviour changes in this cut.
+- **Single-file test runner.** `npm run test:file <path>` mirrors the release buckets' terminating policy with a wall-clock watchdog and a greppable exit line, for fast red-to-green iteration without a full bucket.
 
 ## [0.5.9] - 2026-07-15
 
