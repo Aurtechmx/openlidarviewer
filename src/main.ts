@@ -5830,7 +5830,7 @@ async function importSession(file: File): Promise<void> {
     // access below is safe (measure/annotate are built in the Viewer ctor, so
     // no GPU backend is needed — just a non-null instance).
     await viewerLoaded;
-    const { parseSession, rebaseSessionGeometry } = await loadSession();
+    const { parseSession, rebaseSessionGeometry, matchSessionToScan } = await loadSession();
     const session = parseSession(await file.text());
     // If an older build wrote this session, a newer one may grade or label the
     // scan differently — surface that so the user can re-save. Absent stamp
@@ -5847,6 +5847,54 @@ async function importSession(file: File): Promise<void> {
     // is nothing to rebase against; keep the verbatim geometry (the missing-
     // scan toast below already tells the user to drop the scan).
     const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // Guard the rebase: a session's geometry is local to the scan it was
+    // captured over, so realigning it onto the loaded cloud is only correct when
+    // that IS its scan. Compare the session's stored fingerprint (built the same
+    // way exportSession writes it) against the loaded scan. A clear conflict is
+    // refused rather than silently realigned onto the wrong scan; a partial
+    // match applies but is disclosed.
+    let partialMatchNote = '';
+    if (haveCloud) {
+      const streamingCloud = viewer.streamingCloud;
+      const staticCloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
+      let loadedFacts: import('./io/session').ScanFacts | undefined;
+      if (streamingCloud) {
+        const b = streamingCloud.dataBounds();
+        loadedFacts = {
+          fileName: streamingCloud.name,
+          sourcePoints: streamingCloud.sourcePointCount,
+          width: b[3] - b[0],
+          depth: b[4] - b[1],
+          height: b[5] - b[2],
+          crs: streamingCloud.crs()?.name,
+        };
+      } else if (staticCloud) {
+        const b = staticCloud.bounds();
+        loadedFacts = {
+          fileName: staticCloud.name,
+          sourcePoints: staticCloud.pointCount,
+          width: b.max[0] - b.min[0],
+          depth: b.max[1] - b.min[1],
+          height: b.max[2] - b.min[2],
+          crs: staticCloud.metadata?.crs?.name,
+        };
+      }
+      if (loadedFacts) {
+        const match = matchSessionToScan(session.scanSummary, loadedFacts);
+        if (match.verdict === 'conflict') {
+          const why = match.reasons[0] ?? 'its scan fingerprint does not match';
+          const want = session.scanSummary?.fileName;
+          showLassoToast(
+            `This session was captured over a different scan (${why}) — it was not applied. ` +
+              (want ? `Load “${want}” to restore it on its own scan.` : 'Load its source scan to restore it.'),
+          );
+          return;
+        }
+        if (match.verdict === 'partial' && match.reasons.length > 0) {
+          partialMatchNote = ` Its scan couldn’t be fully verified: ${match.reasons[0]}.`;
+        }
+      }
+    }
     const geo = haveCloud
       ? rebaseSessionGeometry(session, exportGeoContext().origin)
       : {
@@ -5926,11 +5974,11 @@ async function importSession(file: File): Promise<void> {
       showLassoToast(lead ?? `Session restored — drop “${wantFile}” to view its scan.`,
         lead ? { label: 'Need the scan', onClick: () => showLassoToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
     } else if (lead) {
-      showLassoToast(`${lead}${frameNote}`);
+      showLassoToast(`${lead}${frameNote}${partialMatchNote}`);
     } else {
       showLassoToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).${frameNote}`,
+          `(measurements, annotations, views).${frameNote}${partialMatchNote}`,
       );
     }
   } catch (err) {

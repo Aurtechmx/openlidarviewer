@@ -491,6 +491,132 @@ export function rebaseSessionGeometry(
   };
 }
 
+// --- scan-identity guard ----------------------------------------------------
+
+/** The scan facts a session import compares against the loaded cloud. */
+export interface ScanFacts {
+  /** Source file display name. */
+  readonly fileName?: string;
+  /** Source point count. */
+  readonly sourcePoints?: number;
+  /** Source extents (span per axis), in the same units the summary stores. */
+  readonly width?: number;
+  readonly depth?: number;
+  readonly height?: number;
+  /** CRS label, when known. */
+  readonly crs?: string;
+}
+
+/**
+ * How confidently a session's stored scan fingerprint matches the loaded cloud.
+ *   strong   — apply the rebase silently.
+ *   partial  — apply, but disclose that the match couldn't be fully confirmed.
+ *   conflict — refuse: the session was captured over a different scan.
+ */
+export type ScanMatchVerdict = 'strong' | 'partial' | 'conflict';
+
+export interface ScanMatch {
+  readonly verdict: ScanMatchVerdict;
+  /** Human-readable evidence, most salient first; empty on a clean strong match. */
+  readonly reasons: readonly string[];
+}
+
+/** Largest relative difference across the three extent spans, or null if either side lacks them. */
+function extentRelDiff(a: ScanFacts, b: ScanFacts): number | null {
+  const pairs: Array<[number | undefined, number | undefined]> = [
+    [a.width, b.width],
+    [a.depth, b.depth],
+    [a.height, b.height],
+  ];
+  let worst = 0;
+  for (const [x, y] of pairs) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const denom = Math.max(Math.abs(x as number), Math.abs(y as number), 1e-6);
+    worst = Math.max(worst, Math.abs((x as number) - (y as number)) / denom);
+  }
+  return worst;
+}
+
+/**
+ * Decide whether a session's stored scan fingerprint matches the loaded cloud,
+ * BEFORE its geometry is rebased onto that cloud. Without this, a session
+ * captured over scan A is silently realigned onto an unrelated scan B.
+ *
+ * Extents (the source bounding-box spans) are the primary signal: they identify
+ * a scan spatially and are stable under the voxel reduction that fits a large
+ * cloud to a device, so a spans mismatch beyond a tolerance is a genuine
+ * conflict. Point count corroborates but is NOT a standalone conflict — the same
+ * scan reduced for a smaller device legitimately reports fewer points — so a
+ * point mismatch only downgrades a would-be strong match to partial. File name
+ * and CRS label are softer still (renames and equivalent CRS spellings are
+ * common), contributing disclosure reasons but never a verdict on their own.
+ *
+ * Pure — no DOM, no cloud objects — so it is fully unit-tested in Node.
+ */
+export function matchSessionToScan(
+  summary: SessionScanSummary | undefined,
+  loaded: ScanFacts,
+): ScanMatch {
+  if (!summary) {
+    return {
+      verdict: 'partial',
+      reasons: ['The session carries no scan fingerprint, so its source could not be verified.'],
+    };
+  }
+
+  const reasons: string[] = [];
+  const rel = extentRelDiff(summary, loaded);
+
+  // File name / CRS are disclosure-only signals.
+  if (
+    summary.fileName &&
+    loaded.fileName &&
+    summary.fileName.toLowerCase() !== loaded.fileName.toLowerCase()
+  ) {
+    reasons.push(`the session's scan was “${summary.fileName}”, the loaded scan is “${loaded.fileName}”`);
+  }
+  if (summary.crs && loaded.crs && summary.crs !== loaded.crs) {
+    // Textual CRS labels vary for the same system, so this is disclosure only —
+    // never a verdict — but worth surfacing alongside a stronger signal.
+    reasons.push(`CRS label differs (session “${summary.crs}”, loaded “${loaded.crs}”)`);
+  }
+
+  // Point count — corroborating, tolerant of device reduction.
+  let pointsDiffer = false;
+  if (
+    Number.isFinite(summary.sourcePoints) &&
+    Number.isFinite(loaded.sourcePoints) &&
+    (summary.sourcePoints as number) > 0 &&
+    (loaded.sourcePoints as number) > 0
+  ) {
+    const a = summary.sourcePoints as number;
+    const b = loaded.sourcePoints as number;
+    const pr = Math.abs(a - b) / Math.max(a, b);
+    if (pr > 0.005) {
+      pointsDiffer = true;
+      reasons.push(
+        `point count differs (session ${a.toLocaleString('en-US')} vs loaded ${b.toLocaleString('en-US')})`,
+      );
+    }
+  }
+
+  if (rel === null) {
+    // No comparable extents — fall back to whatever softer evidence we have.
+    return { verdict: 'partial', reasons };
+  }
+  if (rel > 0.05) {
+    reasons.unshift(`scan extents differ by ${(rel * 100).toFixed(0)}%`);
+    return { verdict: 'conflict', reasons };
+  }
+  if (rel <= 0.01 && !pointsDiffer) {
+    return { verdict: 'strong', reasons };
+  }
+  // Extents agree loosely (1–5%), or agree tightly but the point count moved —
+  // consistent with the same scan, not proof of it.
+  if (rel > 0.01) reasons.unshift(`scan extents differ by ${(rel * 100).toFixed(1)}%`);
+  return { verdict: 'partial', reasons };
+}
+
 // --- validation helpers ----------------------------------------------------
 
 const CLIP_MODES: readonly ClipMode[] = ['keep-inside', 'keep-outside'];
