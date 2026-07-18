@@ -15,6 +15,8 @@
  * in `worker/copcWorker.ts`; this module is fully unit-tested in Node.
  */
 
+import { assertFiniteNodeTransform } from '../streamingFiniteGuard';
+
 /** Per-chunk decode parameters. */
 export interface ChunkDecodeMetadata {
   /** LAS point data record format — 6, 7, or 8. */
@@ -98,6 +100,11 @@ export function decodeRecords(
   const len = meta.pointRecordLength;
   const n = Math.max(0, Math.min(meta.pointCount, Math.floor(raw.byteLength / len)));
   const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+  // Refuse a node whose transform is non-finite before decoding it. The source
+  // here is integer (`int32 · scale + offset − origin`), so a finite transform
+  // can only produce finite coordinates — this single O(1) check is the whole
+  // finiteness guard for the COPC / EPT-laszip path, with no per-point cost.
+  assertFiniteNodeTransform(meta.scale, meta.offset, meta.renderOrigin);
   const [sx, sy, sz] = meta.scale;
   const [ox, oy, oz] = meta.offset;
   const [rx, ry, rz] = meta.renderOrigin;
