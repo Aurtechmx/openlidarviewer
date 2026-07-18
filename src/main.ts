@@ -4961,6 +4961,7 @@ function runStreamingModules(cloud: {
     readonly captureSensor?: string;
     readonly sourceSoftware?: string;
   };
+  readonly crs?: () => { readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number } | null;
   readonly maxDepth?: () => number;
   readonly octree?: { nodes: () => readonly unknown[] };
 }, classFilterActive = false): AnalysisRow[] {
@@ -4991,9 +4992,16 @@ function runStreamingModules(cloud: {
   // panel's Extent row, which also reads the header.
   const header = cloud.metadata?.header;
   if (header) {
-    const w = header.max[0] - header.min[0];
-    const d = header.max[1] - header.min[1];
-    const h = header.max[2] - header.min[2];
+    // Convert the source-CRS units to metres before printing "m" / "pts/m²",
+    // exactly as the static Scan Report and the PDF do. A state-plane-FEET COPC
+    // otherwise over-reports extent ~3.28× and density ~10.8×, mislabelled as
+    // metres. COPC/EPT are Z-up by spec, so the horizontal pair is X·Y.
+    const crsInfo = cloud.crs?.() ?? null;
+    const mpu = crsInfo?.linearUnitToMetres ?? 1;
+    const vmpu = crsInfo?.verticalUnitToMetres ?? mpu;
+    const w = (header.max[0] - header.min[0]) * mpu;
+    const d = (header.max[1] - header.min[1]) * mpu;
+    const h = (header.max[2] - header.min[2]) * vmpu;
     rows.push(info('Width', `${w.toFixed(1)} m`));
     rows.push(info('Depth', `${d.toFixed(1)} m`));
     rows.push(info('Height', `${h.toFixed(1)} m`));
@@ -6180,9 +6188,7 @@ async function handleFile(file: File): Promise<void> {
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspector.setElevationExtent(viewer.elevationExtent());
       inspector.setIntensityExtent(viewer.intensityExtent());
-      inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
-        result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
-      );
+      inspectorCards.refreshDatasetIntelligenceFromStaticCloud(result.cloud);
       // v0.5.7 capability-driven card: derive the display profile from the
       // loaded scan and surface the declared-by-the-file provenance (E57 olv:
       // block, headline) + hide the CRS section for local-frame scans. Loaded

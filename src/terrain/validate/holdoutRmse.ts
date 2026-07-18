@@ -286,6 +286,7 @@ export function holdoutValidateDtm(
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
+    verticalUnitToMetres: params.verticalUnitToMetres,
   });
   // Residuals are reported in metres regardless of the source vertical unit.
   const vMetres =
@@ -304,7 +305,10 @@ export function holdoutValidateDtm(
     params.latitudeDeg ?? minH2 + (rows / 2) * cellSizeM,
     params.horizontalUnitToMetres,
   );
-  const slopeField = hornSlope(dtm.z, cols, rows, cellM.x, cellM.y);
+  // dtm.z is native vertical units; scale the rise to metres so the slope
+  // bands (flat/moderate/steep) stratify residuals by true angle, not a
+  // feet-over-metres ratio that would read ~3.28× too steep on foot data.
+  const slopeField = hornSlope(dtm.z, cols, rows, cellM.x, cellM.y, vMetres);
 
   // Residuals at held-out points.
   const allAbs: number[] = [];

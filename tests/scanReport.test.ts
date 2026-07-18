@@ -100,6 +100,29 @@ describe('scanReport module', () => {
     });
   });
 
+  describe('Y-up mesh formats measure footprint/height on the right axes', () => {
+    // A façade-style PLY: tall in Y (20 m), 10 m × 4 m on the ground. PLY/OBJ/
+    // GLB load Y-up, so height = Y-span and the ground footprint is X·Z. Treating
+    // it Z-up put the 20 m height into "Depth" and computed density over the
+    // vertical cross-section (X·Y = 200 m²) instead of the footprint (40 m²).
+    const cloud = new PointCloud({
+      positions: new Float32Array([0, 0, 0, 10, 0, 0, 0, 20, 0, 0, 0, 4]),
+      origin: [0, 0, 0],
+      sourceFormat: 'ply',
+      name: 'facade',
+    });
+    test('Height is the Y-span (20 m), not the Z-span', () => {
+      expect(parseFloat(rowByLabel(scanReport.run(cloud), 'Height').value)).toBeCloseTo(20, 3);
+    });
+    test('Width/Depth are the horizontal X and Z spans', () => {
+      expect(parseFloat(rowByLabel(scanReport.run(cloud), 'Width').value)).toBeCloseTo(10, 3);
+      expect(parseFloat(rowByLabel(scanReport.run(cloud), 'Depth').value)).toBeCloseTo(4, 3);
+    });
+    test('Density is over the ground footprint X·Z (4/40), not X·Y', () => {
+      expect(parseFloat(rowByLabel(scanReport.run(cloud), 'Density').value)).toBeCloseTo(0.1, 4);
+    });
+  });
+
   describe('strided (display-sampled) cloud reports the FILE, not the subset', () => {
     // 4 points loaded for display, but the file declared 40 — the loader strided
     // it 10×. The report must headline the file's count and density, disclose the

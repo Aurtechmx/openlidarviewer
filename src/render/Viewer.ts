@@ -5159,8 +5159,16 @@ export class Viewer {
       },
       sourcePointCount(): number {
         if (viewer._streaming) return viewer._streaming.cloud.sourcePointCount;
+        // The file's declared total, back-scaled when the loader strided a huge
+        // cloud for display — the honest headline the Scan Report and PDF use.
+        // Summing the strided `pointCount` under-reported "Points" and inflated
+        // the export card's density divisor disagreement with every other panel.
         let total = 0;
-        for (const { cloud } of viewer._clouds.values()) total += cloud.pointCount;
+        for (const { cloud } of viewer._clouds.values()) {
+          total += cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount
+            ? cloud.declaredPointCount
+            : cloud.pointCount;
+        }
         return total;
       },
       residentPointCount(): number {
@@ -5217,6 +5225,14 @@ export class Viewer {
           /* defensive — null falls back to "no Capture row" */
         }
         return null;
+      },
+      dataBoundsAabb(): readonly [number, number, number, number, number, number] | null {
+        // Tight data extent for the report metadata: for streaming the octree
+        // cube (localBounds) inflates height ~7× and deflates density, so the
+        // printed Width/Height/Density use dataBounds instead — matching the
+        // Scan Report panel and the PDF. Static clouds already report tight.
+        if (viewer._streaming) return viewer._streaming.cloud.dataBounds();
+        return this.localBoundsAabb();
       },
       localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
         // Streaming first — it has authoritative bounds from the COPC header.

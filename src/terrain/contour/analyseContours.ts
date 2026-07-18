@@ -594,6 +594,7 @@ export function computeTerrainCore(
     // E–W correction (the grid's own originH2 is render-recentred, ≈ 0).
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
+    verticalUnitToMetres: params.verticalUnitToMetres,
   });
   if (built.despikedCellCount > 0) {
     warnings.push(`Removed ${built.despikedCellCount} outlier ground cell(s) before building the surface.`);
@@ -872,7 +873,13 @@ export function computeTerrainCore(
   // entries are the GPU-eligible ones (per-session equivalence probe,
   // auto-fallback); the pipeline adopts them when this stage goes async.
   const engine = getTerrainRasterEngine();
-  const sa = engine.derivativesSync(dtm.z, dtm.cols, dtm.rows, horizCellEwM, horizCellNsM);
+  // `dtm.z` stays in native source vertical units (contours draw against it
+  // raw), so the slope/aspect stage converts the rise with verticalUnitToMetres
+  // to keep the rise/run ratio unit-consistent — a state-plane-feet DTM would
+  // otherwise report slope ~1/0.3048 ≈ 3.28× too steep.
+  const sa = engine.derivativesSync(
+    dtm.z, dtm.cols, dtm.rows, horizCellEwM, horizCellNsM, params.verticalUnitToMetres,
+  );
   const slopeDegField = new Float32Array(sa.slope.length);
   for (let i = 0; i < sa.slope.length; i++) {
     slopeDegField[i] = (Math.atan(sa.slope[i]) * 180) / Math.PI;

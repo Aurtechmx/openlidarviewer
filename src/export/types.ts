@@ -104,6 +104,14 @@ export interface ExportSceneAdapter {
    */
   localBoundsAabb(): readonly [number, number, number, number, number, number] | null;
   /**
+   * The TIGHT data AABB for report metadata (extent / density rows). Same as
+   * {@link localBoundsAabb} for static clouds, but for streaming it is the true
+   * data extent rather than the octree root cube — which over-reports height
+   * (~7×) and deflates density. Used only for the printed metadata, never for
+   * raster-export framing.
+   */
+  dataBoundsAabb(): readonly [number, number, number, number, number, number] | null;
+  /**
    * The live-snapshot pipeline — renders the scene through the active EDL
    * path (matching what the user sees) and optionally composites measurement
    * geometry and annotation markers as SVG overlays. Reused by every Studio

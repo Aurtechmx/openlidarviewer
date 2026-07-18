@@ -57,6 +57,7 @@ function figureAdapter(opts: {
     hasClassification: () => true,
     hasNormals: () => false,
     localBoundsAabb: () => [0, 0, 0, 10, 10, 5],
+    dataBoundsAabb: () => [0, 0, 0, 10, 10, 5],
     snapshot: async () => {
       calls.push('snapshot');
       return tinyPngBlob();

@@ -26,6 +26,24 @@ describe('hornSlopeAspect', () => {
     expect(hornSlope(z, 3, 3, 2)[4]).toBeCloseTo(1, 5); // half the slope at 2 m cells
   });
 
+  it('zScale converts a native-unit rise so a foot-CRS grid reports the true slope', () => {
+    // A plane rising 1 unit per 1 cell of X. If the cell size is expressed in
+    // METRES but the rise is in FEET (a state-plane-feet DTM), the raw ratio is
+    // feet/metre and reads 1/0.3048 ≈ 3.28× too steep. zScale = 0.3048 (feet→m)
+    // restores the true slope. aspect is a direction and must be untouched.
+    const z = new Float32Array(9);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) z[r * 3 + c] = c; // rise 1 per cell
+    const cellMetres = 1;
+    const native = hornSlope(z, 3, 3, cellMetres)[4]; // feet-over-metre, uncorrected
+    expect(native).toBeCloseTo(1, 5);
+    const feetToM = 0.3048;
+    const corrected = hornSlopeAspect(z, 3, 3, cellMetres, cellMetres, feetToM);
+    expect(corrected.slope[4]).toBeCloseTo(feetToM, 5); // true rise/run
+    // aspect (downslope, +x rise ⇒ points −x ⇒ math angle π) is unchanged by zScale.
+    const unscaled = hornSlopeAspect(z, 3, 3, cellMetres, cellMetres, 1);
+    expect(corrected.aspect[4]).toBeCloseTo(unscaled.aspect[4], 6);
+  });
+
   it('is isotropic: a diagonal ramp reads the same magnitude as an axis ramp', () => {
     const axis = new Float32Array(9);
     const diag = new Float32Array(9);

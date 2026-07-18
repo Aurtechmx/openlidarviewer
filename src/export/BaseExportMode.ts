@@ -184,10 +184,13 @@ export function baseReportRows(
   const rows: ScanReportRow[] = [
     { label: 'Points', value: formatInt(adapter.sourcePointCount()) },
   ];
-  if (aabb) {
-    const w = aabb[3] - aabb[0];
-    const d = aabb[4] - aabb[1];
-    const h = aabb[5] - aabb[2];
+  // Extent/density use the TIGHT data AABB (streaming's octree cube inflates
+  // height ~7× and deflates density); falls back to the passed AABB.
+  const box = adapter.dataBoundsAabb() ?? aabb;
+  if (box) {
+    const w = box[3] - box[0];
+    const d = box[4] - box[1];
+    const h = box[5] - box[2];
     rows.push({ label: 'Width',  value: formatLinear(w, unit) });
     rows.push({ label: 'Depth',  value: formatLinear(d, unit) });
     rows.push({ label: 'Height', value: formatLinear(h, unit) });

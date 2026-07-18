@@ -60,6 +60,7 @@ function stubAdapter(opts: {
     hasClassification: () => opts.hasClassification ?? false,
     hasNormals: () => opts.hasNormals ?? false,
     localBoundsAabb: () => (opts.aabb === undefined ? [0, 0, 0, 10, 10, 5] : opts.aabb),
+    dataBoundsAabb: () => (opts.aabb === undefined ? [0, 0, 0, 10, 10, 5] : opts.aabb),
     // v0.3.2-Studio additions — exporters now delegate the actual render +
     // overlay work to `adapter.snapshot()`, and the scan-report card reads
     // name + point count off the adapter. Tests that only touch

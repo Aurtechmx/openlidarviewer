@@ -132,7 +132,9 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     { label: 'Height', value: formatMetres(inputs.height) },
   );
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
-    rows.push({ label: 'Density', value: `${inputs.density.toFixed(0)} pts/m²` });
+    // One decimal — same as the Inspection-summary finding and the on-screen
+    // panel. Integer rounding printed 2.586 as "3", disagreeing with them.
+    rows.push({ label: 'Density', value: `${inputs.density.toFixed(1)} pts/m²` });
   }
   rows.push({ label: 'RGB',            value: inputs.hasRgb ? 'Yes' : 'No' });
   rows.push({ label: 'Intensity',      value: inputs.hasIntensity ? 'Yes' : 'No' });
