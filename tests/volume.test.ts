@@ -478,7 +478,7 @@ describe('volumeCutFill — confidence + density fields', () => {
       up: Z_UP,
       positions,
     });
-    expect(r.density).toBeCloseTo(100, 5);
+    expect(r.densityNative).toBeCloseTo(100, 5);
   });
 
   it('populates a finite medianAbsDelta when points landed inside', () => {

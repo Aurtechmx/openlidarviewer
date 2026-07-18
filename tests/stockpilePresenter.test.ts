@@ -14,7 +14,7 @@ function result(over: Partial<StockpileVolumeResult> = {}): StockpileVolumeResul
     breakdown: {
       footprintArea: 318.4,
       pointsInPolygon: 4200,
-      density: 13.2,
+      densityNative: 13.2,
       baseZ: 102.5,
       baseMode: 'lowest-percentile',
       baseUncertainty: 0.08,

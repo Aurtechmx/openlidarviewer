@@ -76,7 +76,7 @@ export function presentStockpile(
   const rows: StockpileViewRow[] = [
     { label: 'Footprint', value: `${(b.footprintArea * lin2).toFixed(1)} m²` },
     { label: 'Points in footprint', value: int(b.pointsInPolygon) },
-    { label: 'Density', value: `${(b.density / lin2).toFixed(1)} pts/m²` },
+    { label: 'Density', value: `${(b.densityNative / lin2).toFixed(1)} pts/m²` },
     { label: 'Base plane', value: baseLabel },
     { label: 'Mean thickness', value: `${(b.meanThickness * lin).toFixed(2)} m` },
     { label: 'Sampling error', value: `± ${int(b.samplingError * lin3)} m³` },

@@ -177,8 +177,11 @@ export interface VolumeResult {
   pointsInPolygon: number;
   /** Total cloud points considered (positions.length / 3). */
   sampleCount: number;
-  /** Sample density inside the polygon (points / m²). NaN when area = 0. */
-  density: number;
+  /**
+   * Sample density inside the polygon, points per NATIVE horizontal-unit²
+   * (divide by (linearUnitToMetres)² for pts/m²). NaN when area = 0.
+   */
+  densityNative: number;
   /**
    * Median absolute Δz inside the polygon, m — a useful "thickness"
    * scalar for the report card. NaN when no points landed inside.
@@ -249,7 +252,7 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
       footprintArea,
       pointsInPolygon: 0,
       sampleCount,
-      density: 0,
+      densityNative: 0,
       medianAbsDelta: Number.NaN,
       validity: validation.validity,
       skippedNonFinite: 0,
@@ -344,7 +347,7 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
       footprintArea,
       pointsInPolygon: 0,
       sampleCount,
-      density: 0,
+      densityNative: 0,
       medianAbsDelta: Number.NaN,
       validity: 'ok',
       skippedNonFinite,
@@ -369,7 +372,7 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
     footprintArea,
     pointsInPolygon: inCount,
     sampleCount,
-    density: inCount / footprintArea,
+    densityNative: inCount / footprintArea,
     medianAbsDelta: median,
     validity: 'ok',
     skippedNonFinite,

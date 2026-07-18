@@ -33,7 +33,7 @@ const BOX = mk('box', [[0, 0, 0], [2, 3, 4]]);
 const VOLUME = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
   volume: {
     fill: 120, cut: 30, net: 90, referenceZ: 0, footprintArea: 50,
-    pointsInPolygon: 800, density: 16, confidence: 'medium',
+    pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
   },
 });
 

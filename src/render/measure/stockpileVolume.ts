@@ -102,8 +102,11 @@ export interface StockpileBreakdown {
   readonly footprintArea: number;
   /** Points whose XY projection fell inside the footprint. */
   readonly pointsInPolygon: number;
-  /** Sample density inside the footprint, points / m². */
-  readonly density: number;
+  /**
+   * Sample density inside the footprint, points per NATIVE horizontal-unit²
+   * (divide by (linearUnitToMetres)² for pts/m²). The presenter converts.
+   */
+  readonly densityNative: number;
   /** Base reference height used, render-space metres. */
   readonly baseZ: number;
   /** How the base was chosen. */
@@ -288,12 +291,12 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
 
   const volume = v.fill;
   const relativeError = volume > 0 ? sigma / volume : 0;
-  // `v.density` is points per NATIVE horizontal-unit². The confidence bar is a
+  // `v.densityNative` is points per NATIVE horizontal-unit². The confidence bar is a
   // points/m² threshold, so convert before grading — otherwise a dense foot
   // survey (≈11 pts/m² per pt/ft²) is graded as if 1 pt/ft² were 1 pt/m² and
   // wrongly downgraded. m² per native² = linearUnitToMetres².
   const lin = input.linearUnitToMetres ?? 1;
-  const densityPerM2 = lin > 0 ? v.density / (lin * lin) : v.density;
+  const densityPerM2 = lin > 0 ? v.densityNative / (lin * lin) : v.densityNative;
   const confidence = gradeConfidence(relativeError, inN, densityPerM2);
   const caveats = buildCaveats(
     confidence,
@@ -315,7 +318,7 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     breakdown: {
       footprintArea: area,
       pointsInPolygon: inN,
-      density: v.density,
+      densityNative: v.densityNative,
       baseZ,
       baseMode,
       baseUncertainty,
@@ -413,7 +416,7 @@ function zeroResult(
     breakdown: {
       footprintArea,
       pointsInPolygon: 0,
-      density: 0,
+      densityNative: 0,
       baseZ,
       baseMode,
       baseUncertainty: 0,

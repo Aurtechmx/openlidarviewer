@@ -695,8 +695,17 @@ const VOLUME_CONFIDENCE: readonly VolumeRecord['confidence'][] = ['high', 'mediu
  */
 function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   if (!isRecord(v)) return undefined;
-  const nums = ['fill', 'cut', 'net', 'referenceZ', 'footprintArea', 'pointsInPolygon', 'density'] as const;
+  const nums = ['fill', 'cut', 'net', 'referenceZ', 'footprintArea', 'pointsInPolygon'] as const;
   for (const key of nums) if (!isFiniteNum(v[key])) return undefined;
+  // The field was renamed `density` → `densityNative` to stop calling a native
+  // horizontal-unit² figure "points/m²". Older files carry `density`, which held
+  // exactly the same native value, so migrating it across is lossless.
+  const densityNative = isFiniteNum(v.densityNative)
+    ? v.densityNative
+    : isFiniteNum(v.density)
+      ? v.density
+      : undefined;
+  if (densityNative === undefined) return undefined;
   if (typeof v.confidence !== 'string'
     || !VOLUME_CONFIDENCE.includes(v.confidence as VolumeRecord['confidence'])) {
     return undefined;
@@ -708,7 +717,7 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
     referenceZ: v.referenceZ as number,
     footprintArea: v.footprintArea as number,
     pointsInPolygon: v.pointsInPolygon as number,
-    density: v.density as number,
+    densityNative,
     confidence: v.confidence as VolumeRecord['confidence'],
   };
   // Optional partial-coverage disclosure (points inside the footprint the

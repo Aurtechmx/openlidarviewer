@@ -807,7 +807,7 @@ describe('v0.5.6 — profile / box / volume measurement kinds round-trip', () =>
         points: [p(0, 0, 0), p(1, 0, 0), p(1, 1, 0)],
         volume: {
           fill: 10, cut: 2, net: 8, referenceZ: 0.5,
-          footprintArea: 1, pointsInPolygon: 1200, density: 3.2, confidence: 'high',
+          footprintArea: 1, pointsInPolygon: 1200, densityNative: 3.2, confidence: 'high',
         },
         volumeResidentOnly: true,
       },
@@ -842,6 +842,18 @@ describe('v0.5.6 — profile / box / volume measurement kinds round-trip', () =>
     expect(vol?.volume?.net).toBe(8);
     expect(vol?.volume?.confidence).toBe('high');
     expect(vol?.volumeResidentOnly).toBe(true);
+  });
+
+  test('a legacy volume record migrates its old `density` field to `densityNative`', () => {
+    // Files written before the rename carry `density` (the same native value).
+    const raw = JSON.parse(serializeSession(withKinds())) as { measurements: Record<string, unknown>[] };
+    const vol = raw.measurements.find((m) => m.id === 'vol1')!;
+    const record = vol.volume as Record<string, unknown>;
+    record.density = record.densityNative; // as an old file would have it
+    delete record.densityNative;
+    const back = parseSession(JSON.stringify(raw)).measurements;
+    const parsed = back.find((m) => m.id === 'vol1');
+    expect(parsed?.volume?.densityNative).toBe(3.2);
   });
 
   test('a malformed volume record is dropped, but the measurement still imports', () => {

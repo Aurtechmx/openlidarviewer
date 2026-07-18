@@ -1507,7 +1507,7 @@ export class Viewer {
           referenceZ,
           footprintArea: result.footprintArea,
           pointsInPolygon: result.pointsInPolygon,
-          density: result.density,
+          densityNative: result.densityNative,
           confidence,
         };
         // Non-finite returns inside the footprint were excluded from the

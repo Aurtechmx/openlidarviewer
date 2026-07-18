@@ -103,8 +103,12 @@ export interface VolumeRecord {
   footprintArea: number;
   /** Cloud points whose XY projection lay inside the polygon. */
   pointsInPolygon: number;
-  /** Sample density inside the polygon (points / m²). */
-  density: number;
+  /**
+   * Sample density inside the polygon, points per NATIVE horizontal-unit²
+   * (divide by (linearUnitToMetres)² for pts/m²). Was `density`; renamed to stop
+   * a native figure being read as metric. Old sessions migrate their `density`.
+   */
+  densityNative: number;
   /**
    * Confidence band, derived from `pointsInPolygon`:
    *   - `'high'`   — ≥ 1 000 points

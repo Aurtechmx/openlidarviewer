@@ -176,6 +176,6 @@ describe('Volume confidence indicators populate as documented', () => {
     });
     expect(result.sampleCount).toBe(441);
     expect(result.pointsInPolygon).toBe(441);
-    expect(result.density).toBeCloseTo(4.41, 2);
+    expect(result.densityNative).toBeCloseTo(4.41, 2);
   });
 });
