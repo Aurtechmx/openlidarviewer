@@ -135,7 +135,7 @@ export class EptStreamingPointCloud implements StreamingSource {
     const renderOrigin = pickRenderOriginFromCube(metadata.bounds.cubic as Box6);
     const fetcher = (key: EptKey, s?: AbortSignal): Promise<string> =>
       transport.fetchText(eptHierarchyUrl(baseUrl, key, search), s);
-    const octree = new EptOctree(metadata, renderOrigin, fetcher);
+    const octree = new EptOctree(metadata, fetcher);
     // Load only enough hierarchy to render coarse geometry, then attach — a
     // multi-billion-point EPT links to thousands of sub-files, and waiting for
     // all of them looked like a hang. The root file alone spans the whole extent

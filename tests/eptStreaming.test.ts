@@ -127,8 +127,7 @@ test('decodeEptBinaryTile throws on a short buffer', () => {
 test('EptOctree loads the synthetic fixture and registers one root node', async () => {
   const meta = loadFixtureMetadata();
   const transport = fixtureTransport();
-  const renderOrigin: [number, number, number] = [500_050, 500_050, 1_525];
-  const octree = new EptOctree(meta, renderOrigin, (key, signal) =>
+  const octree = new EptOctree(meta, (key, signal) =>
     transport.fetchText(`fixture://ept-tiny/ept-hierarchy/${key.d}-${key.x}-${key.y}-${key.z}.json`, signal),
   );
   await octree.loadFullHierarchy();
@@ -140,6 +139,28 @@ test('EptOctree loads the synthetic fixture and registers one root node', async 
   expect(nodes[0].record.pointCount).toBe(100);
 });
 
+test('EptOctree node bounds are ABSOLUTE (render-origin-independent), matching the COPC contract', async () => {
+  // record.bounds must be in world space for BOTH formats: the shared
+  // StreamingScheduler localises them once (bounds − renderOrigin) before
+  // frustum culling. EptOctree used to pre-subtract the origin itself, so the
+  // scheduler subtracted it a second time and every EPT node landed one whole
+  // renderOrigin away from the near-origin camera — frustum-culled, visible=0,
+  // nothing ever streamed. The root node (depth 0) must span the full cube in
+  // ABSOLUTE coordinates regardless of the origin passed in.
+  const meta = loadFixtureMetadata();
+  const transport = fixtureTransport();
+  const cube = meta.bounds.cubic;
+  // A large non-zero origin — the value the render pipeline actually uses.
+  const octree = new EptOctree(meta, (key, signal) =>
+    transport.fetchText(`fixture://ept-tiny/ept-hierarchy/${key.d}-${key.x}-${key.y}-${key.z}.json`, signal),
+  );
+  await octree.loadFullHierarchy();
+  const root = octree.nodes()[0];
+  expect(root.record.bounds).toEqual([
+    cube[0], cube[1], cube[2], cube[3], cube[4], cube[5],
+  ]);
+});
+
 // A three-file hierarchy: root links to 1-1-0-0, which links to 2-2-0-0.
 // Value -1 marks a link (a further file to fetch); anything else is a node.
 const MULTI_FILE_HIERARCHY: Record<string, string> = {
@@ -149,7 +170,7 @@ const MULTI_FILE_HIERARCHY: Record<string, string> = {
 };
 function multiFileOctree(): EptOctree {
   const fetched: string[] = [];
-  const octree = new EptOctree(loadFixtureMetadata(), [0, 0, 0], (key) => {
+  const octree = new EptOctree(loadFixtureMetadata(), (key) => {
     const id = `${key.d}-${key.x}-${key.y}-${key.z}`;
     fetched.push(id);
     const text = MULTI_FILE_HIERARCHY[id];
@@ -203,7 +224,7 @@ test('the walk terminates when sub-file fetches fail — no retry loop', async (
   // files and finish (surfacing errors), not re-attempt them forever — a failed
   // file that stayed on the frontier while the file count never advanced would
   // spin an allocating loop until the heap died.
-  const octree = new EptOctree(loadFixtureMetadata(), [0, 0, 0], (key) => {
+  const octree = new EptOctree(loadFixtureMetadata(), (key) => {
     const id = `${key.d}-${key.x}-${key.y}-${key.z}`;
     if (id === '0-0-0-0') return Promise.resolve(MULTI_FILE_HIERARCHY['0-0-0-0']);
     return Promise.reject(new Error(`network down at ${id}`));
@@ -230,7 +251,7 @@ test('EptOctree.childKeysOf returns the 8 standard octree children', () => {
 test('EptOctree handles a fetcher failure without crashing — surfaces in errors', async () => {
   const meta = loadFixtureMetadata();
   const failingFetcher = (): Promise<string> => Promise.reject(new Error('network down'));
-  const octree = new EptOctree(meta, [0, 0, 0], failingFetcher);
+  const octree = new EptOctree(meta, failingFetcher);
   await octree.loadFullHierarchy();
   expect(octree.fullyLoaded).toBe(true);
   expect(octree.errors.length).toBeGreaterThan(0);

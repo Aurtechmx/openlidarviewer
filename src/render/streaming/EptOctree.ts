@@ -66,7 +66,6 @@ export class EptOctree implements StreamingOctreeView {
   /** EPT cube bounds in source-CRS space — used for per-node bounds derivation. */
   private readonly _cube: Box6;
   /** Render origin to subtract from per-node bounds before they hit the store. */
-  private readonly _renderOrigin: readonly [number, number, number];
   private readonly _fetcher: HierarchyFetcher;
   private readonly _loadedFiles = new Set<string>();
   private readonly _errors: string[] = [];
@@ -79,12 +78,10 @@ export class EptOctree implements StreamingOctreeView {
 
   constructor(
     meta: EptMetadata,
-    renderOrigin: readonly [number, number, number],
     fetcher: HierarchyFetcher,
   ) {
     this._meta = meta;
     this._cube = meta.bounds.cubic as Box6;
-    this._renderOrigin = renderOrigin;
     this._fetcher = fetcher;
   }
 
@@ -298,9 +295,12 @@ export class EptOctree implements StreamingOctreeView {
   }
 
   /**
-   * Compute the local-space (render-origin-subtracted) bounds of a node
-   * given its EPT key. The octree cube at depth 0 is `cube`; at depth d
-   * each side is `cube_side / 2^d`.
+   * Compute the ABSOLUTE (world-space) bounds of a node given its EPT key.
+   * The octree cube at depth 0 is `cube`; at depth d each side is
+   * `cube_side / 2^d`. Bounds are world-space to match the COPC contract —
+   * the shared StreamingScheduler localises them once against the render
+   * origin. Subtracting the origin here as well double-counted it and put
+   * every node one whole origin off, so all EPT nodes frustum-culled.
    */
   private _boundsForKey(k: EptKey): Box6 {
     const [minX, minY, minZ, maxX, maxY, maxZ] = this._cube;
@@ -310,15 +310,7 @@ export class EptOctree implements StreamingOctreeView {
     const nMinX = minX + k.x * sideX;
     const nMinY = minY + k.y * sideY;
     const nMinZ = minZ + k.z * sideZ;
-    const [rx, ry, rz] = this._renderOrigin;
-    return [
-      nMinX - rx,
-      nMinY - ry,
-      nMinZ - rz,
-      nMinX + sideX - rx,
-      nMinY + sideY - ry,
-      nMinZ + sideZ - rz,
-    ];
+    return [nMinX, nMinY, nMinZ, nMinX + sideX, nMinY + sideY, nMinZ + sideZ];
   }
 
   /**
