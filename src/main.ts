@@ -272,6 +272,7 @@ import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
 import { createScanService } from './app/ScanService';
+import { createScanRouteService } from './app/ScanRouteService';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -1146,6 +1147,7 @@ const layers = runtime.context.layers;
 const viewBookmarks = runtime.context.viewBookmarks;
 const bookmarks = createViewBookmarks(runtime.context);
 const scans = createScanService({ getViewer: () => viewer, context: runtime.context });
+const routing = createScanRouteService(runtime.context);
 /** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
 const layerVisible = layers.visible;
 /** True while a file load is in flight — one load at a time (see `handleFile`). */
@@ -2498,7 +2500,7 @@ const dock = new ToolDock({
     const show = analysePanel ? !analysePanel.isVisible() : !analyseDesiredVisible;
     // A manual Analyse toggle is a user override — stop auto-rerouting so a
     // late streaming node can't yank the panel away.
-    scanRouteOverridden = true;
+    routing.pin();
     analyseDesiredVisible = show;
     if (show) {
       // Opening: ensure the panel is mounted, then show it.
@@ -2998,15 +3000,11 @@ void viewerLoaded.then(() => {
     refreshColorbarOverlay();
     // A manual (non-auto) "Treat as" choice pins the routing exactly like the
     // "Run terrain anyway" override — a late streaming node must not flip it.
-    if (scanRouteOverridden || scanTypeOverride !== 'auto') return;
+    if (routing.pinned) return;
     const resident = viewer.residentPointTotal();
     if (resident < lastRouteResident * SCAN_REROUTE_GROWTH) return;
     lastRouteResident = resident;
-    if (scanRouteTimer != null) clearTimeout(scanRouteTimer);
-    scanRouteTimer = setTimeout(() => {
-      scanRouteTimer = null;
-      applyScanRoute(false);
-    }, 500);
+    routing.schedule(() => applyScanRoute(false), 500);
   };
   // GPU render-stage failures (shader-compile / pipeline-creation) surface on the
   // WebGPU device's uncaptured-error channel — AFTER a scan's decode + attach have
@@ -3610,20 +3608,17 @@ const clipPanel = new ClipPanel({
 // a sparse coarse level resident — a misread is likely. `applyScanRoute` is
 // re-run as the cloud fills in (debounced, growth-gated) and only flips panels
 // when the verdict actually changes, so it never thrashes. Once the user forces
-// a panel ("Run terrain anyway" / Analyse toggle) `scanRouteOverridden` pins it.
+// a panel ("Run terrain anyway" / Analyse toggle) `routing.overridden` pins it.
 let lastScanVerdict: SpaceKind | null = null;
-let scanRouteOverridden = false;
 let lastRouteResident = 0;
-let scanRouteTimer: ReturnType<typeof setTimeout> | null = null;
 /** Re-route only after the resident cloud grows by this factor (cheap gate). */
 const SCAN_REROUTE_GROWTH = 1.4;
 
 // ── Manual scan-type override ────────────────────────────────────────────────
 // The safety net for a misdetection: the user can FORCE the route via the
 // "Treat as" control in either panel. A non-auto choice WINS over the detected
-// verdict and pins the routing like `scanRouteOverridden` so a streaming
+// verdict and pins the routing like `routing.overridden` so a streaming
 // re-evaluation can't flip it. Per-session, reset to 'auto' on every new scan.
-let scanTypeOverride: ScanTypeOverride = 'auto';
 // One-shot guard: re-evaluate the scan type once the streaming cloud has fully
 // settled ("Streaming ready"), so a verdict decided on a sparse early frame is
 // corrected on representative geometry. Reset per scan.
@@ -3640,7 +3635,7 @@ let lastSettleUndecided = false;
 // True once a SETTLED auto-mode verdict soft-committed the "Treat as" control
 // to the detected pill (static-load detection or the streaming settle
 // one-shot — `plan.commitDetected`). Display-only state: routing still follows
-// `scanTypeOverride`/detection exactly as before, it never pins anything, and
+// `routing.typeOverride`/detection exactly as before, it never pins anything, and
 // it resets on every new scan and on any user click (a manual pick shows that
 // pick; clicking Auto returns to the uncommitted Auto presentation while
 // detection re-runs).
@@ -3652,7 +3647,7 @@ let scanDetectionCommitted = false;
  * until the user picks 'auto' (restore detection) or a new scan resets it.
  */
 function setScanTypeOverride(override: ScanTypeOverride): void {
-  scanTypeOverride = override;
+  routing.setTypeOverride(override);
   // Any user click clears the settled soft-commit: a manual pick shows that
   // pick, and clicking Auto means "re-detect" — the control returns to the
   // uncommitted Auto presentation until the next settled verdict (if any).
@@ -3707,10 +3702,10 @@ function treatAsDisabledFor(
  * SETTLE_RETRY_CAP). Non-settled callers ignore the value.
  */
 function applyScanRoute(initial: boolean, settled = false): boolean {
-  // A non-auto manual override pins the routing exactly like `scanRouteOverridden`:
+  // A non-auto manual override pins the routing exactly like `routing.overridden`:
   // a streaming re-evaluation must never flip a deliberate user choice. The
   // one-shot is spent: a pinned/manual session never soft-commits.
-  if (!initial && (scanRouteOverridden || scanTypeOverride !== 'auto')) return true;
+  if (!initial && (routing.pinned)) return true;
   let shape: ReturnType<typeof classifyScanShape> | null = null;
   let gathered: ReturnType<typeof viewer.gatherTerrainPositions> = null;
   try {
@@ -3750,10 +3745,10 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   const detected: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
   const plan = planScanRoute({
     detected,
-    override: scanTypeOverride,
+    override: routing.typeOverride,
     initial,
     lastVerdict: lastScanVerdict,
-    pinned: scanRouteOverridden,
+    pinned: routing.overridden,
     settled,
   });
   // A settled verdict soft-commits the "Treat as" pill to the detected type
@@ -3772,8 +3767,8 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   if (settled) lastSettleUndecided = detected === null;
   const oneShotSpent = settleOneShotSpent({
     detected,
-    override: scanTypeOverride,
-    pinned: scanRouteOverridden,
+    override: routing.typeOverride,
+    pinned: routing.overridden,
     applied: plan.apply,
     committed: plan.commitDetected !== null,
     attempts: settleAttempts,
@@ -3782,9 +3777,9 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     if (plan.commitDetected !== null) {
       const committedDisabled = treatAsDisabledFor(detected);
       // Track for hydration + apply (no-op while the panel's chunk is in flight).
-      objectScanTypeArgs = [scanTypeOverride, plan.commitDetected, committedDisabled, true];
+      objectScanTypeArgs = [routing.typeOverride, plan.commitDetected, committedDisabled, true];
       objectPanel?.setScanType(...objectScanTypeArgs);
-      analyseScanTypeArgs = [scanTypeOverride, plan.commitDetected, committedDisabled, true];
+      analyseScanTypeArgs = [routing.typeOverride, plan.commitDetected, committedDisabled, true];
       analysePanel?.setScanType(...analyseScanTypeArgs);
     }
     return oneShotSpent;
@@ -3884,11 +3879,11 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   // user can switch direction from whichever panel is showing. The committed
   // flag (settled-verdict soft commit) only ever shows under auto mode — a
   // manual override displays the override pill regardless.
-  const committed = scanTypeOverride === 'auto' && scanDetectionCommitted;
+  const committed = routing.typeOverride === 'auto' && scanDetectionCommitted;
   // Track for hydration + apply (no-op while the panel's chunk is in flight).
-  objectScanTypeArgs = [scanTypeOverride, effective, treatAsDisabled, committed];
+  objectScanTypeArgs = [routing.typeOverride, effective, treatAsDisabled, committed];
   objectPanel?.setScanType(...objectScanTypeArgs);
-  analyseScanTypeArgs = [scanTypeOverride, effective, treatAsDisabled, committed];
+  analyseScanTypeArgs = [routing.typeOverride, effective, treatAsDisabled, committed];
   analysePanel?.setScanType(...analyseScanTypeArgs);
   // Forcing terrain is the explicit "run anyway": surface the Analyse panel
   // AND kick the pipeline, matching the old escape hatch. The panel must also
@@ -3958,8 +3953,7 @@ function revealAnalysePanel(name: string, settled = true): void {
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
   // override is per-session-per-scan: a new scan returns to auto-detection,
   // and any settled soft-commit from the previous scan is forgotten.
-  scanRouteOverridden = false;
-  scanTypeOverride = 'auto';
+  routing.reset();
   streamingSettledRouted = false;
   settleAttempts = 0;
   lastSettleResident = -1;
@@ -7276,10 +7270,9 @@ function resetToEmptyState(): void {
   lastStreamingReportCloud = null;
   // Cancel any pending scan-type re-route + reset its state so a timer can't
   // fire against the now-closed scan, and the next open routes from scratch.
-  if (scanRouteTimer != null) { clearTimeout(scanRouteTimer); scanRouteTimer = null; }
+  routing.cancelScheduled();
   lastScanVerdict = null;
-  scanRouteOverridden = false;
-  scanTypeOverride = 'auto';
+  routing.reset();
   streamingSettledRouted = false;
   settleAttempts = 0;
   lastSettleResident = -1;

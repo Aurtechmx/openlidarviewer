@@ -9,7 +9,7 @@ floor. Feature work waits behind it.
 
 | Goal | Metric now | Target |
 |---|---|---|
-| 1. `AppRuntime` extraction | `AppContext`/`AppRuntime` + `LayerService`, `crsCoordinator`, `terrainAnalysisRunner`, `inspectorCardRefreshers`, `staleChunkReload` exist; `activeId` / `savedViews` / `scan-route` still module-level in `main.ts` | no module-level mutable app-state; each cluster owned by a service against `AppContext` |
+| 1. `AppRuntime` extraction | **Done.** `LayerService`, `viewBookmarks`, `ScanService`, `ScanRouteService` (plus `crsCoordinator`, `terrainAnalysisRunner`, `inspectorCardRefreshers`, `staleChunkReload`) all own their cluster against `AppContext`; no module-level mutable app-state remains in `main.ts` | no module-level mutable app-state; each cluster owned by a service against `AppContext` |
 | 2. `main.ts` | 7,587 lines | < 2,500, with a lint guard |
 | 3. `Viewer.ts` | 7,297 lines | < 2,000, with a lint guard |
 | 4. Project frame wired | foundation + wiring plan only (`project-spatial-frame.md`) | every layer mounts through `LayerSpatialTransform`; schema v8; two-scan browser proof |
@@ -33,9 +33,22 @@ where they belong.
    (numerics, quantile, terrain derivatives, measure, crs, streaming budget).
 3. **Architecture map (8)** — write the current-state map so the decomposition
    has a target shape, then keep every arch doc in step as modules move.
-4. **Finish `AppRuntime` (1)** — lift `activeId` / `savedViews` / `scan-route`
-   off module-level mutables in `main.ts` onto services against `AppContext`.
-   This is the mechanism that shrinks both monoliths.
+4. **Finish `AppRuntime` (1)** — *done.* `savedViews`, `activeId`, and
+   `scan-route` now live behind services against `AppContext`.
+
+   What it bought, stated honestly: the line count barely moved (7,587 → 7,574),
+   because the first two clusters were already on `AppContext`. The value is
+   coupling — every mutation goes through a service, eleven repeated
+   `activeId ? getCloud(activeId) : null` lookups collapsed into `activeCloud()`,
+   the duplicated `overridden || typeOverride !== 'auto'` predicate became
+   `routing.pinned`, and each cluster is unit-tested in isolation. That is the
+   prerequisite for steps 5 and 6: the orchestration blocks can now close over
+   services instead of file-scope mutables, which is what finally makes them
+   movable.
+
+   One pattern worth carrying forward: expose read state as **getters**, not
+   methods. Converting `activeId` to a method silently defeated TypeScript's
+   narrowing at every `if (activeId) use(activeId)` call site.
 5. **Shrink `main.ts` < 2,500 (2)** — move orchestration into the services from
    step 4 and into focused modules (export wiring, compare wiring, streaming
    panel builder), one gated extraction at a time; add the line-count guard when

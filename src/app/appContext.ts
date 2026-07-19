@@ -12,6 +12,7 @@
 
 import type { CameraPose } from '../render/NavController';
 import type { ViewStateBundle } from '../io/session';
+import type { ScanTypeOverride } from '../terrain/scanRoute';
 
 /** Per-cloud view state plus the latest exportable elevation comparison. */
 export interface LayerViewState {
@@ -58,11 +59,25 @@ export interface ViewBookmarksState {
   viewCounter: number;
 }
 
+/**
+ * How the scan-type routing (terrain / object / interior) was decided for the
+ * open scan. Detection runs automatically, but a panel ("Run terrain anyway",
+ * the Analyse toggle) or a manual scan-type choice pins it so later detection
+ * can't flip the route underneath the user. Reset to auto on every new scan.
+ */
+export interface ScanRouteState {
+  /** A panel pinned the routing. */
+  overridden: boolean;
+  /** Manual scan-type choice; `'auto'` leaves the route to detection. */
+  typeOverride: ScanTypeOverride;
+}
+
 /** The shared, mutable application state, grouped by cluster. */
 export interface AppContext {
   readonly layers: LayerViewState;
   readonly scan: ScanState;
   readonly viewBookmarks: ViewBookmarksState;
+  readonly scanRoute: ScanRouteState;
 }
 
 /** Construct a fresh AppContext with empty defaults. */
@@ -79,6 +94,10 @@ export function createAppContext(): AppContext {
     viewBookmarks: {
       savedViews: [],
       viewCounter: 0,
+    },
+    scanRoute: {
+      overridden: false,
+      typeOverride: 'auto',
     },
   };
 }
