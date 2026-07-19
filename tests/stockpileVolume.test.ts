@@ -42,6 +42,54 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(r.confidence).toBe('high');
   });
 
+  test('the density confidence bar is evaluated in points/m², not native units', () => {
+    // A dense foot-unit survey — 121 pts over a 100 ft² footprint ≈ 1.2 pts/ft²
+    // ≈ 13 pts/m² — clears the pts/m² density bar for HIGH confidence. Grading
+    // the RAW native density (1.2) against the same >=5 threshold wrongly
+    // downgrades a genuinely dense survey.
+    const footprint = squareFootprint(10);
+    const positions = grid(10, 0.9, () => 2); // flat top ⇒ ~zero band ⇒ relErr≈0
+    const base = { mode: 'explicit', z: 0 } as const;
+
+    const foot = stockpileVolume({
+      polygon: footprint,
+      positions,
+      base,
+      linearUnitToMetres: 0.3048,
+    });
+    expect(foot.confidence).toBe('high');
+
+    // The identical native density read as metres IS genuinely sparse (~1.2
+    // pts/m²) and must NOT reach high — the threshold is unit-aware, not gone.
+    const metric = stockpileVolume({ polygon: footprint, positions, base });
+    expect(metric.confidence).not.toBe('high');
+  });
+
+  test('an unknown unit withholds HIGH — a pts/m² grade needs a known unit', () => {
+    // The same dense foot survey that earns HIGH when the unit is known.
+    const footprint = squareFootprint(10);
+    const positions = grid(10, 0.9, () => 2);
+    const base = { mode: 'explicit', z: 0 } as const;
+
+    const known = stockpileVolume({ polygon: footprint, positions, base, linearUnitToMetres: 0.3048 });
+    expect(known.confidence).toBe('high');
+    expect(known.densityUnitKnown).toBe(true);
+
+    // Unit unknown: lin still defaults to 1 for display, but the density bar is
+    // now an assumption, so HIGH is withheld and the tier falls back to the
+    // relative-error grade (tight band ⇒ medium, never high).
+    const unknown = stockpileVolume({
+      polygon: footprint,
+      positions,
+      base,
+      linearUnitToMetres: 0.3048,
+      densityUnitKnown: false,
+    });
+    expect(unknown.densityUnitKnown).toBe(false);
+    expect(unknown.confidence).not.toBe('high');
+    expect(unknown.confidence).toBe('medium');
+  });
+
   test('every result carries the spatial-correlation caveat (√N assumes independence)', () => {
     // The sampling-error term divides by √N under an independence assumption
     // scan noise routinely violates — the caveat must say so, mirroring
@@ -166,5 +214,36 @@ describe('stockpileVolume — volume + auditable band', () => {
     });
     expect(r.validity).not.toBe('ok');
     expect(r.volume).toBe(0);
+  });
+});
+
+describe('stockpileVolume — general-up clouds', () => {
+  test('a Y-up slab against an explicit base gives area×thickness, like the Z-up case', () => {
+    // The first test's slab with the axes swapped to the phone-scan
+    // convention: footprint on the y = 0 plane, thickness along +Y. Pins
+    // the general-up gather path to the same analytic answer.
+    const polygon: Vec3[] = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 0, 10],
+      [0, 0, 10],
+    ];
+    const pts: number[] = [];
+    for (let x = 0.25; x < 10; x += 0.25) {
+      for (let z = 0.25; z < 10; z += 0.25) {
+        pts.push(x, 2, z);
+      }
+    }
+    const r = stockpileVolume({
+      polygon,
+      positions: Float32Array.from(pts),
+      up: [0, 1, 0],
+      base: { mode: 'explicit', z: 0 },
+    });
+    expect(r.validity).toBe('ok');
+    expect(r.volume).toBeCloseTo(200, 1);
+    expect(r.cut).toBeCloseTo(0, 6);
+    expect(r.breakdown.footprintArea).toBeCloseTo(100, 1);
+    expect(r.breakdown.meanThickness).toBeCloseTo(2, 6);
   });
 });

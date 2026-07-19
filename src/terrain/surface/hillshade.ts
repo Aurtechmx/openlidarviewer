@@ -25,8 +25,11 @@ export function computeSlopeDegrees(
   cols: number,
   rows: number,
   cellSizeM: number,
+  zScale = 1,
 ): Float32Array {
-  const slope = hornSlope(z, cols, rows, cellSizeM);
+  // `zScale` = verticalUnitToMetres, so a native-unit (e.g. feet) elevation
+  // grid produces a true slope angle against the metres cell size. Default 1.
+  const slope = hornSlope(z, cols, rows, cellSizeM, cellSizeM, zScale);
   const out = new Float32Array(slope.length);
   for (let i = 0; i < slope.length; i++) out[i] = (Math.atan(slope[i]) * 180) / Math.PI;
   return out;

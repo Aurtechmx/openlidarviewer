@@ -365,6 +365,14 @@ function bundleAnalyzer(): PluginOption {
 
 export default defineConfig(({ mode }) => ({
   base: './',
+  // Defense-in-depth against duplicate runtime copies. These packages are
+  // correctness-sensitive to being single-instance (three's WebGPU/TSL
+  // classes fail `instanceof` across two copies; proj4/laz-perf split state).
+  // The install tree is already single-copy today — this is a no-op that
+  // keeps it that way if a transitive bump ever nests a second copy. The CI
+  // guard `npm run check:deps` (scripts/check-dep-singletons.mjs) is the
+  // hard gate; this just biases Vite's resolver toward the hoisted copy.
+  resolve: { dedupe: ['three', 'proj4', 'laz-perf'] },
   // The worker build is left un-transformed: it is a separate Vite pass, and
   // transforming the worker-loading path breaks worker startup. The worker
   // carries the file-format parsers (open standards — E57/ASTM, LAS/ASPRS).

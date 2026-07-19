@@ -66,20 +66,22 @@ export class EptOctree implements StreamingOctreeView {
   /** EPT cube bounds in source-CRS space — used for per-node bounds derivation. */
   private readonly _cube: Box6;
   /** Render origin to subtract from per-node bounds before they hit the store. */
-  private readonly _renderOrigin: readonly [number, number, number];
   private readonly _fetcher: HierarchyFetcher;
   private readonly _loadedFiles = new Set<string>();
   private readonly _errors: string[] = [];
   private _fullyLoaded = false;
+  // Resumable-walk state: the frontier of hierarchy files still to fetch and the
+  // running file count, persisted so an initial (first-paint) load can stop at a
+  // budget and a later `continueHierarchy` picks up from exactly where it left.
+  private _frontier: EptKey[] | null = null;
+  private _filesLoaded = 0;
 
   constructor(
     meta: EptMetadata,
-    renderOrigin: readonly [number, number, number],
     fetcher: HierarchyFetcher,
   ) {
     this._meta = meta;
     this._cube = meta.bounds.cubic as Box6;
-    this._renderOrigin = renderOrigin;
     this._fetcher = fetcher;
   }
 
@@ -96,62 +98,76 @@ export class EptOctree implements StreamingOctreeView {
   }
 
   /**
-   * Load the root hierarchy file + every linked sub-file, ingesting all
-   * nodes into the store. Mirrors `StreamingOctree.loadFullHierarchy`'s
-   * breadth-first walk with cycle protection + a hard file-count cap.
+   * Load the whole hierarchy up front, ingesting every node. Kept for callers
+   * that want the complete index before rendering (small datasets, tests).
    */
   async loadFullHierarchy(signal?: AbortSignal): Promise<void> {
-    if (this._fullyLoaded) return;
-    const rootKey: EptKey = { d: 0, x: 0, y: 0, z: 0 };
-    let frontier: EptKey[] = [rootKey];
-    let filesLoaded = 0;
+    await this._walkHierarchy(MAX_HIERARCHY_FILES, signal);
+  }
 
-    // Per-wave concurrency for hierarchy file fetches. The original
-    // implementation walked the frontier with `await` in a `for` loop —
-    // serialising every file in the wave. For deep public EPT datasets
-    // (Grand Canyon 22B pts, LA 75B pts) a single wave can carry 8–32
-    // files and a wave at depth 4–6 dominates first-paint by several
-    // seconds at typical home-broadband RTTs. Parallelising the wave
-    // brings each one down to roughly one RTT.
-    //
-    // The cap (8) was bumped from 6 in v0.3.6 — the public USGS S3
-    // endpoints all speak HTTP/2, which multiplexes far more than the
-    // legacy HTTP/1.1 per-origin limit. 8 concurrent gives good
-    // first-paint throughput without saturating slow connections.
+  /**
+   * Load just enough hierarchy to render coarse geometry, then return so the
+   * scan can attach. The root file alone carries the shallow LODs that span the
+   * whole extent, so a handful of files is a full coarse octree. A
+   * multi-billion-point EPT links to thousands of sub-files, and fetching all of
+   * them before first paint took minutes of apparent hang; the rest arrive
+   * through {@link continueHierarchy}. A small dataset whose entire hierarchy
+   * fits inside `firstPaintFiles` finishes here — identical to a full load.
+   */
+  async loadInitialHierarchy(firstPaintFiles: number, signal?: AbortSignal): Promise<void> {
+    await this._walkHierarchy(Math.max(1, firstPaintFiles), signal);
+  }
+
+  /**
+   * Resume the walk to completion after an initial paint. The scheduler reads
+   * `store.all()` every tick, so nodes become selectable as they land and the
+   * cloud refines from coarse to full detail in the background.
+   */
+  async continueHierarchy(signal?: AbortSignal): Promise<void> {
+    await this._walkHierarchy(MAX_HIERARCHY_FILES, signal);
+  }
+
+  /**
+   * Breadth-first hierarchy walk, resumable across calls: it consumes at most
+   * `fileBudget` files total (counting files already fetched by earlier calls),
+   * persisting the frontier and file count so a later call continues from the
+   * exact point this one stopped.
+   *
+   * Concurrency: the original walk fetched each file serially with `await`; a
+   * deep public EPT (Grand Canyon 22B pts, LA 75B pts) carries 8–32 files in a
+   * wave, so serialising dominated first paint. Fetching a wave 8 at a time
+   * (the USGS S3 endpoints speak HTTP/2) brings each wave to roughly one RTT.
+   */
+  private async _walkHierarchy(fileBudget: number, signal?: AbortSignal): Promise<void> {
+    if (this._fullyLoaded) return;
+    if (this._frontier === null) this._frontier = [{ d: 0, x: 0, y: 0, z: 0 }];
+    const cap = Math.min(fileBudget, MAX_HIERARCHY_FILES);
     const PER_WAVE_CONCURRENCY = 8;
 
-    while (frontier.length > 0) {
-      const next: EptKey[] = [];
-
-      // Filter the wave to new files only, respecting the global cap.
+    while (this._frontier.length > 0 && this._filesLoaded < cap) {
+      // Pick this wave's new files, stopping at the budget. Entries left unfetched
+      // (already loaded, or beyond the budget) stay on the frontier for later.
       const toFetch: EptKey[] = [];
-      for (const fileKey of frontier) {
+      for (const fileKey of this._frontier) {
         if (signal?.aborted) throw new Error('EPT hierarchy load aborted');
         const fileId = eptKeyToString(fileKey);
         if (this._loadedFiles.has(fileId)) continue;
-        if (filesLoaded + toFetch.length >= MAX_HIERARCHY_FILES) {
-          this._errors.push(
-            `EPT hierarchy exceeded ${MAX_HIERARCHY_FILES} files — stopped`,
-          );
-          break;
-        }
+        if (this._filesLoaded + toFetch.length >= cap) break;
         toFetch.push(fileKey);
       }
 
-      // Fetch the wave in fixed-concurrency batches. Each batch resolves
-      // in ~1 RTT instead of N. Failures within a batch don't abort the
-      // rest of the wave — they accumulate in `_errors` exactly as
-      // before.
-      const fetched: { fileKey: EptKey; fileId: string; text: string }[] = [];
+      // Fetch the wave in fixed-concurrency batches. A failure within a batch
+      // doesn't abort the rest of the wave — it accumulates in `_errors`.
+      const fetched: { fileId: string; text: string }[] = [];
       for (let i = 0; i < toFetch.length; i += PER_WAVE_CONCURRENCY) {
         const batch = toFetch.slice(i, i + PER_WAVE_CONCURRENCY);
         const results = await Promise.all(
-          batch.map(async (fileKey): Promise<{ fileKey: EptKey; fileId: string; text: string } | null> => {
+          batch.map(async (fileKey): Promise<{ fileId: string; text: string } | null> => {
             if (signal?.aborted) return null;
             const fileId = eptKeyToString(fileKey);
             try {
               const text = await this._fetcher(fileKey, signal);
-              return { fileKey, fileId, text };
+              return { fileId, text };
             } catch (err) {
               this._errors.push(
                 `EPT hierarchy fetch failed at ${fileId}: ${
@@ -162,14 +178,16 @@ export class EptOctree implements StreamingOctreeView {
             }
           }),
         );
-        for (const r of results) {
-          if (r) fetched.push(r);
-        }
+        for (const r of results) if (r) fetched.push(r);
         if (signal?.aborted) throw new Error('EPT hierarchy load aborted');
       }
 
-      // Parse + ingest in deterministic key order so the resulting node
-      // store is identical to what the serial walk would have produced.
+      // Parse + ingest, collecting the ids ingested this wave. Their parents are
+      // in earlier waves (shallower files) or this wave, so linking after every
+      // node in the wave is ingested keeps child lists correct at each pause
+      // point without an O(N) rebuild per wave.
+      const next: EptKey[] = [];
+      const ingested: string[] = [];
       for (const { fileId, text } of fetched) {
         let parsed;
         try {
@@ -183,21 +201,44 @@ export class EptOctree implements StreamingOctreeView {
           continue;
         }
         this._loadedFiles.add(fileId);
-        filesLoaded++;
-        // Ingest every NODE entry — link entries (`value === -1`) just tell
-        // us which sub-file to fetch next; they're not nodes themselves.
-        for (const entry of parsed.nodes) this._ingestNode(entry);
+        this._filesLoaded++;
+        // NODE entries become nodes; link entries (`value === -1`) name the next
+        // sub-file to fetch — not nodes themselves.
+        for (const entry of parsed.nodes) {
+          const id = this._ingestNode(entry);
+          if (id) ingested.push(id);
+        }
         for (const link of parsed.links) next.push(link.key);
       }
-      frontier = next;
+      this._linkToParents(ingested);
+
+      // Drop every file we ATTEMPTED this round — not just the ones that loaded.
+      // A fetch or parse failure leaves a file out of `_loadedFiles`, and if such
+      // a file stayed on the frontier it would be retried every iteration while
+      // `_filesLoaded` never advanced: an infinite loop that allocates until the
+      // heap dies (the original walk avoided this by discarding the whole
+      // frontier each round). Attempted-and-failed files surface in `_errors`,
+      // exactly as before; only files beyond the budget stay for a later call.
+      const attempted = new Set(toFetch.map((k) => eptKeyToString(k)));
+      this._frontier = this._frontier.filter((k) => {
+        const id = eptKeyToString(k);
+        // Keep only files still worth fetching: not attempted this round (success
+        // or failure) and not already loaded by an earlier one. Anything else
+        // would spin the loop without advancing.
+        return !attempted.has(id) && !this._loadedFiles.has(id);
+      });
+      this._frontier.push(...next);
     }
 
-    this._resolveChildLinks();
-    this._fullyLoaded = true;
+    if (this._filesLoaded >= MAX_HIERARCHY_FILES && this._frontier.length > 0) {
+      this._errors.push(`EPT hierarchy exceeded ${MAX_HIERARCHY_FILES} files — stopped`);
+      this._frontier = [];
+    }
+    if (this._frontier.length === 0) this._fullyLoaded = true;
   }
 
   /** Add one EPT hierarchy node to the store as a {@link StreamingNodeRecord}. */
-  private _ingestNode(entry: EptHierarchyEntry): void {
+  private _ingestNode(entry: EptHierarchyEntry): string | undefined {
     // Practical-depth guard. EPT keys are 32-bit signed; at d >= 31 the
     // `x >> 1` parent-key arithmetic wraps into negative space and parent
     // links misroute silently. Real-world Entwine output rarely exceeds
@@ -208,7 +249,7 @@ export class EptOctree implements StreamingOctreeView {
         `[ept] skipping node at depth ${entry.key.d} (cap ${MAX_EPT_DEPTH}) — ` +
           'the EPT hierarchy is deeper than the supported maximum.',
       );
-      return;
+      return undefined;
     }
     const record: StreamingNodeRecord = {
       id: eptKeyToString(entry.key),
@@ -224,6 +265,7 @@ export class EptOctree implements StreamingOctreeView {
       parentId: this._parentIdOf(entry.key),
     };
     this.store.add(record);
+    return record.id;
   }
 
   /** EPT D-X-Y-Z address → COPC-style {depth,x,y,z} VoxelKey (identical shape). */
@@ -253,9 +295,12 @@ export class EptOctree implements StreamingOctreeView {
   }
 
   /**
-   * Compute the local-space (render-origin-subtracted) bounds of a node
-   * given its EPT key. The octree cube at depth 0 is `cube`; at depth d
-   * each side is `cube_side / 2^d`.
+   * Compute the ABSOLUTE (world-space) bounds of a node given its EPT key.
+   * The octree cube at depth 0 is `cube`; at depth d each side is
+   * `cube_side / 2^d`. Bounds are world-space to match the COPC contract —
+   * the shared StreamingScheduler localises them once against the render
+   * origin. Subtracting the origin here as well double-counted it and put
+   * every node one whole origin off, so all EPT nodes frustum-culled.
    */
   private _boundsForKey(k: EptKey): Box6 {
     const [minX, minY, minZ, maxX, maxY, maxZ] = this._cube;
@@ -265,24 +310,22 @@ export class EptOctree implements StreamingOctreeView {
     const nMinX = minX + k.x * sideX;
     const nMinY = minY + k.y * sideY;
     const nMinZ = minZ + k.z * sideZ;
-    const [rx, ry, rz] = this._renderOrigin;
-    return [
-      nMinX - rx,
-      nMinY - ry,
-      nMinZ - rz,
-      nMinX + sideX - rx,
-      nMinY + sideY - ry,
-      nMinZ + sideZ - rz,
-    ];
+    return [nMinX, nMinY, nMinZ, nMinX + sideX, nMinY + sideY, nMinZ + sideZ];
   }
 
   /**
-   * After every node is in the store, link each one into its parent's
-   * `childIds` so the scheduler can refine top-down. Mirrors the COPC
-   * StreamingOctree._resolveChildLinks contract.
+   * Link the given just-ingested nodes into their parents' `childIds` so the
+   * scheduler can refine top-down. Called once per wave with only that wave's
+   * nodes; a node's parent is always shallower — an earlier wave, or ingested
+   * earlier in this same wave — so it is already in the store. Each node links
+   * exactly once (it appears in one wave), so no child is duplicated even across
+   * the progressive initial + continue passes. Mirrors the COPC
+   * StreamingOctree child-link contract, made incremental.
    */
-  private _resolveChildLinks(): void {
-    for (const node of this.store.all()) {
+  private _linkToParents(ids: readonly string[]): void {
+    for (const id of ids) {
+      const node = this.store.get(id);
+      if (!node) continue;
       const parentId = node.record.parentId;
       if (!parentId) continue;
       const parent = this.store.get(parentId);

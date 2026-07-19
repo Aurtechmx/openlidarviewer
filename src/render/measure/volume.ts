@@ -67,6 +67,38 @@ function normalize(v: Vec3): Vec3 {
 }
 
 /**
+ * The loop-invariant pieces of `horizontalProjection`: the normalized up
+ * axis and the two horizontal basis vectors it induces. Hot per-point
+ * loops (the cut/fill walk here, the stockpile gather) hoist this once
+ * and inline the dot products on scalars, instead of re-deriving — and
+ * re-allocating — the basis for every point.
+ */
+export interface HorizontalBasis {
+  /** Normalized up axis. */
+  u: Vec3;
+  /** First horizontal basis vector ("east"). Canonical +X when `zAligned`. */
+  east: Vec3;
+  /** Second horizontal basis vector (u × east, "north"). Canonical +Y when `zAligned`. */
+  north: Vec3;
+  /** True when `u` is canonical +Z — the projection is the identity (x, y). */
+  zAligned: boolean;
+}
+
+/** Derive the horizontal basis for an up axis. See `HorizontalBasis`. */
+export function horizontalBasis(up: Vec3): HorizontalBasis {
+  const u = normalize(up);
+  // If up is close to canonical +Z, fast-path the common case.
+  if (Math.abs(u[2] - 1) < 1e-6 && Math.abs(u[0]) < 1e-6 && Math.abs(u[1]) < 1e-6) {
+    return { u, east: [1, 0, 0], north: [0, 1, 0], zAligned: true };
+  }
+  // General case: pick a stable "east" perpendicular to up, then "north"
+  // = up × east.
+  const east = normalize(cross(u, Math.abs(u[2]) < 0.99 ? [0, 0, 1] : [1, 0, 0]));
+  const north = cross(u, east);
+  return { u, east, north, zAligned: false };
+}
+
+/**
  * Project a point onto the horizontal plane perpendicular to `up` — i.e.
  * subtract the vertical component. The returned `Vec3` still has the
  * world coordinates, just with the height stripped to zero relative to
@@ -74,18 +106,11 @@ function normalize(v: Vec3): Vec3 {
  */
 export function horizontalProjection(p: Vec3, up: Vec3): { x: number; y: number } {
   // For Z-up world (the OpenLiDARViewer convention), this is just (px, py).
-  // The general form below works for any `up` axis by picking the two
-  // basis vectors that span the horizontal plane.
-  const u = normalize(up);
-  // If up is close to canonical +Z, fast-path the common case.
-  if (Math.abs(u[2] - 1) < 1e-6 && Math.abs(u[0]) < 1e-6 && Math.abs(u[1]) < 1e-6) {
-    return { x: p[0], y: p[1] };
-  }
-  // General case: pick a stable "east" perpendicular to up, then "north"
-  // = up × east. Project the point onto (east, north).
-  const east = normalize(cross(u, Math.abs(u[2]) < 0.99 ? [0, 0, 1] : [1, 0, 0]));
-  const north = cross(u, east);
-  return { x: dot(p, east), y: dot(p, north) };
+  // The general form works for any `up` axis by projecting onto the
+  // (east, north) basis the axis induces.
+  const b = horizontalBasis(up);
+  if (b.zAligned) return { x: p[0], y: p[1] };
+  return { x: dot(p, b.east), y: dot(p, b.north) };
 }
 
 /**
@@ -152,8 +177,11 @@ export interface VolumeResult {
   pointsInPolygon: number;
   /** Total cloud points considered (positions.length / 3). */
   sampleCount: number;
-  /** Sample density inside the polygon (points / m²). NaN when area = 0. */
-  density: number;
+  /**
+   * Sample density inside the polygon, points per NATIVE horizontal-unit²
+   * (divide by (linearUnitToMetres)² for pts/m²). NaN when area = 0.
+   */
+  densityNative: number;
   /**
    * Median absolute Δz inside the polygon, m — a useful "thickness"
    * scalar for the report card. NaN when no points landed inside.
@@ -169,6 +197,18 @@ export interface VolumeResult {
    * files that pre-date the hygiene layer; treat `undefined` as `'ok'`.
    */
   validity?: PolygonValidity;
+  /**
+   * Points whose XY projection lay inside the polygon but whose height
+   * was non-finite (organized-cloud invalid points, loader sentinels)
+   * and was therefore excluded from the integration. Zero for a fully
+   * finite cloud. Anything above zero means the footprint carries
+   * unmeasurable returns the fill/cut figures could not see — consumers
+   * should disclose the count rather than present full coverage.
+   *
+   * Optional for the same back-compat reason as `validity`; treat
+   * `undefined` as 0.
+   */
+  skippedNonFinite?: number;
 }
 
 /**
@@ -212,21 +252,27 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
       footprintArea,
       pointsInPolygon: 0,
       sampleCount,
-      density: 0,
+      densityNative: 0,
       medianAbsDelta: Number.NaN,
       validity: validation.validity,
+      skippedNonFinite: 0,
     };
   }
 
   // Walk every point and bucket its Δz when inside the polygon.
-  const ups = up; // pre-normalise inline
   const isZUp =
-    Math.abs(ups[2] - 1) < 1e-6 && Math.abs(ups[0]) < 1e-6 && Math.abs(ups[1]) < 1e-6;
+    Math.abs(up[2] - 1) < 1e-6 && Math.abs(up[0]) < 1e-6 && Math.abs(up[1]) < 1e-6;
+  // The general-up projection basis is loop-invariant, so derive it once
+  // here; the per-point work then inlines to three scalar dot products
+  // (the same shape profileSampler's corridor walk uses) instead of
+  // re-deriving and re-allocating `u` / `east` / `north` every point.
+  const basis = horizontalBasis(up);
   const refZ = input.referenceZ;
 
   let fillSum = 0;
   let cutSum = 0;
   let inCount = 0;
+  let skippedNonFinite = 0;
   // We collect inside Δz magnitudes for the median; cap the buffer at 10 000 to
   // bound allocation on a 100 M-point chunk. Filling it with the FIRST 10 000
   // inside points biases the median when the cloud is ordered by scanline,
@@ -255,13 +301,27 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
       hx = px;
       hy = py;
       height = pz;
+    } else if (basis.zAligned) {
+      // `up` normalises to canonical +Z (e.g. [0, 0, 2]) — the projection
+      // is the identity; only the height needs the normalized-up dot.
+      hx = px;
+      hy = py;
+      height = px * basis.u[0] + py * basis.u[1] + pz * basis.u[2];
     } else {
-      const h = horizontalProjection([px, py, pz], ups);
-      hx = h.x;
-      hy = h.y;
-      height = dot([px, py, pz], normalize(ups));
+      hx = px * basis.east[0] + py * basis.east[1] + pz * basis.east[2];
+      hy = px * basis.north[0] + py * basis.north[1] + pz * basis.north[2];
+      height = px * basis.u[0] + py * basis.u[1] + pz * basis.u[2];
     }
     if (!pointInPolygon2D(hx, hy, projectedPoly)) continue;
+    // A non-finite height (organized-cloud invalid point, loader
+    // sentinel) carries no elevation — folding one NaN into the sums
+    // would poison fill/cut/net for the whole footprint. Skip it, but
+    // keep the count so the result discloses how much of the footprint
+    // went unmeasured instead of pretending full coverage.
+    if (!Number.isFinite(height)) {
+      skippedNonFinite++;
+      continue;
+    }
     const dz = height - refZ;
     if (dz >= 0) fillSum += dz;
     else cutSum += -dz;
@@ -287,9 +347,10 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
       footprintArea,
       pointsInPolygon: 0,
       sampleCount,
-      density: 0,
+      densityNative: 0,
       medianAbsDelta: Number.NaN,
       validity: 'ok',
+      skippedNonFinite,
     };
   }
 
@@ -311,9 +372,10 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
     footprintArea,
     pointsInPolygon: inCount,
     sampleCount,
-    density: inCount / footprintArea,
+    densityNative: inCount / footprintArea,
     medianAbsDelta: median,
     validity: 'ok',
+    skippedNonFinite,
   };
 }
 

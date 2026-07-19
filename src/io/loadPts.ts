@@ -21,7 +21,7 @@
  */
 
 import { PointCloud } from '../model/PointCloud';
-import { computeOrigin, recenter } from './coordinateBridge';
+import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 import { readTextLines } from './textChunkReader';
 import type { ProgressUpdate } from './loadProgress';
 
@@ -53,7 +53,6 @@ export async function loadPts(
   let layoutDecided = false;
   let colorIndex = 3;
   let colorMax = 0;
-  const min: [number, number, number] = [Infinity, Infinity, Infinity];
   // PTS may begin with a lone integer point-count line; it is skipped once.
   let countLineConsumed = false;
 
@@ -89,9 +88,6 @@ export async function loadPts(
       xs.push(x);
       ys.push(y);
       zs.push(z);
-      if (x < min[0]) min[0] = x;
-      if (y < min[1]) min[1] = y;
-      if (z < min[2]) min[2] = z;
 
       if (hasIntensity) {
         const it = Number(tok[3]);
@@ -126,8 +122,6 @@ export async function loadPts(
     global[p * 3 + 1] = ys[p];
     global[p * 3 + 2] = zs[p];
   }
-  const origin = computeOrigin(min);
-  const positions = recenter(global, origin);
 
   // Intensity — PTS intensity has no fixed range and can be signed (some
   // scanners write −2048…2047). Shift any negative range up to start at 0,
@@ -168,13 +162,19 @@ export async function loadPts(
   xs.length = 0; ys.length = 0; zs.length = 0;
   intensityVals.length = 0; rgb.length = 0;
 
+  // The line reader already refuses a non-numeric x/y/z, so this is the shared
+  // policy standing behind it rather than a second filter: it computes the
+  // floored-min origin the survivors deserve and recentres in float64.
+  const clean = sanitizeAndRecenter(global, { colors, intensity });
+
   return new PointCloud({
-    positions,
-    colors,
-    intensity,
-    origin,
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    intensity: clean.attributes.intensity,
+    origin: clean.origin,
     sourceFormat: 'pts',
     name,
     decodedPointCount: count,
+    metadata: withLoadWarning(undefined, clean.warning),
   });
 }

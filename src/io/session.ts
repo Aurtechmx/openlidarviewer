@@ -383,6 +383,240 @@ export function parseSession(text: string): InspectionSession {
   return out;
 }
 
+/** A session's geometry rebased into a target cloud's local frame. */
+export interface RebasedSessionGeometry {
+  /**
+   * Measurements with vertices shifted into the target frame — including the
+   * elevation-only scalars a bare vertex shift misses: profile-chart heights
+   * and each volume's reference plane.
+   */
+  measurements: Measurement[];
+  /**
+   * Annotations with local positions AND their jump-to-view camera shifted into
+   * the target frame.
+   */
+  annotations: Annotation[];
+  /** Saved views with their camera (and per-view clip) shifted into the frame. */
+  views: SavedView[];
+  /** The live camera shifted into the target frame, when the session had one. */
+  camera?: SavedCameraState;
+  /** The global clip box shifted into the target frame, when present. */
+  clip?: ClipBox;
+  /** `session.origin − cloudOrigin`, in f64. All-zero when the frames match. */
+  delta: Vec3;
+}
+
+/**
+ * Rebase a session's LOCAL measurement/annotation vertices from the frame they
+ * were CAPTURED in (`session.origin`) into the frame of the cloud they are being
+ * IMPORTED onto (`cloudOrigin`), so they land at the SAME world position.
+ *
+ * Both stores keep vertices as `local = world − origin`. A session saved over
+ * tile A (origin Oa) imported onto tile B (origin Ob) must shift every vertex by
+ * `delta = Oa − Ob`: then `local_b + Ob = local_a + Oa` — identical world
+ * coordinates — instead of being displaced by the two origins' difference (the
+ * verbatim-load bug, which the exporter would then compound by adding Ob).
+ *
+ * Pure: returns fresh arrays and vertex copies, never mutating the session. A
+ * zero delta (matching frames, or a session/cloud both at the origin) copies
+ * the geometry through unchanged.
+ */
+export function rebaseSessionGeometry(
+  session: InspectionSession,
+  cloudOrigin: readonly number[],
+): RebasedSessionGeometry {
+  const dx = session.origin[0] - (cloudOrigin[0] ?? 0);
+  const dy = session.origin[1] - (cloudOrigin[1] ?? 0);
+  const dz = session.origin[2] - (cloudOrigin[2] ?? 0);
+  // Elevation-only scalars (profile-chart heights, a volume reference plane)
+  // move by the UP-axis component of the shift, not the full vector.
+  const elevDelta = session.upAxis === 'z' ? dz : dy;
+  const shiftVec = (v: readonly [number, number, number]): Vec3 => [
+    v[0] + dx,
+    v[1] + dy,
+    v[2] + dz,
+  ];
+  const shiftCamera = (c: SavedCameraState): SavedCameraState => ({
+    ...c,
+    position: shiftVec(c.position),
+    target: shiftVec(c.target),
+  });
+  const shiftClip = (c: ClipBox): ClipBox => ({
+    ...c,
+    box: { min: shiftVec(c.box.min), max: shiftVec(c.box.max) },
+  });
+
+  const measurements = session.measurements.map((m) => {
+    const next: Measurement = { ...m, points: m.points.map(shiftVec) };
+    if (m.profileChart) {
+      next.profileChart = m.profileChart.map((s) => ({
+        ...s,
+        // A corridor gap serialises as NaN — leave it; only finite heights move.
+        height: Number.isFinite(s.height) ? s.height + elevDelta : s.height,
+      }));
+    }
+    if (m.volume) {
+      next.volume = { ...m.volume, referenceZ: m.volume.referenceZ + elevDelta };
+    }
+    return next;
+  });
+  const annotations = session.annotations.map((a) => {
+    const next: Annotation = {
+      ...a,
+      localPosition: {
+        x: a.localPosition.x + dx,
+        y: a.localPosition.y + dy,
+        z: a.localPosition.z + dz,
+      },
+      // Drop the cached world position — it was derived against the OLD frame and
+      // the viewer recomputes it from the rebased local plus the active origin.
+      worldPosition: undefined,
+    };
+    // The jump-to-view camera is in the same local frame as the vertices.
+    if (a.cameraState) next.cameraState = shiftCamera(a.cameraState);
+    return next;
+  });
+  const views = session.views.map((v) => {
+    const next: SavedView = { ...v, camera: shiftCamera(v.camera) };
+    if (v.clip) next.clip = shiftClip(v.clip);
+    return next;
+  });
+  return {
+    measurements,
+    annotations,
+    views,
+    camera: session.camera ? shiftCamera(session.camera) : undefined,
+    clip: session.clip ? shiftClip(session.clip) : undefined,
+    delta: [dx, dy, dz],
+  };
+}
+
+// --- scan-identity guard ----------------------------------------------------
+
+/** The scan facts a session import compares against the loaded cloud. */
+export interface ScanFacts {
+  /** Source file display name. */
+  readonly fileName?: string;
+  /** Source point count. */
+  readonly sourcePoints?: number;
+  /** Source extents (span per axis), in the same units the summary stores. */
+  readonly width?: number;
+  readonly depth?: number;
+  readonly height?: number;
+  /** CRS label, when known. */
+  readonly crs?: string;
+}
+
+/**
+ * How confidently a session's stored scan fingerprint matches the loaded cloud.
+ *   strong   — apply the rebase silently.
+ *   partial  — apply, but disclose that the match couldn't be fully confirmed.
+ *   conflict — refuse: the session was captured over a different scan.
+ */
+export type ScanMatchVerdict = 'strong' | 'partial' | 'conflict';
+
+export interface ScanMatch {
+  readonly verdict: ScanMatchVerdict;
+  /** Human-readable evidence, most salient first; empty on a clean strong match. */
+  readonly reasons: readonly string[];
+}
+
+/** Largest relative difference across the three extent spans, or null if either side lacks them. */
+function extentRelDiff(a: ScanFacts, b: ScanFacts): number | null {
+  const pairs: Array<[number | undefined, number | undefined]> = [
+    [a.width, b.width],
+    [a.depth, b.depth],
+    [a.height, b.height],
+  ];
+  let worst = 0;
+  for (const [x, y] of pairs) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const denom = Math.max(Math.abs(x as number), Math.abs(y as number), 1e-6);
+    worst = Math.max(worst, Math.abs((x as number) - (y as number)) / denom);
+  }
+  return worst;
+}
+
+/**
+ * Decide whether a session's stored scan fingerprint matches the loaded cloud,
+ * BEFORE its geometry is rebased onto that cloud. Without this, a session
+ * captured over scan A is silently realigned onto an unrelated scan B.
+ *
+ * Extents (the source bounding-box spans) are the primary signal: they identify
+ * a scan spatially and are stable under the voxel reduction that fits a large
+ * cloud to a device, so a spans mismatch beyond a tolerance is a genuine
+ * conflict. Point count corroborates but is NOT a standalone conflict — the same
+ * scan reduced for a smaller device legitimately reports fewer points — so a
+ * point mismatch only downgrades a would-be strong match to partial. File name
+ * and CRS label are softer still (renames and equivalent CRS spellings are
+ * common), contributing disclosure reasons but never a verdict on their own.
+ *
+ * Pure — no DOM, no cloud objects — so it is fully unit-tested in Node.
+ */
+export function matchSessionToScan(
+  summary: SessionScanSummary | undefined,
+  loaded: ScanFacts,
+): ScanMatch {
+  if (!summary) {
+    return {
+      verdict: 'partial',
+      reasons: ['The session carries no scan fingerprint, so its source could not be verified.'],
+    };
+  }
+
+  const reasons: string[] = [];
+  const rel = extentRelDiff(summary, loaded);
+
+  // File name / CRS are disclosure-only signals.
+  if (
+    summary.fileName &&
+    loaded.fileName &&
+    summary.fileName.toLowerCase() !== loaded.fileName.toLowerCase()
+  ) {
+    reasons.push(`the session's scan was “${summary.fileName}”, the loaded scan is “${loaded.fileName}”`);
+  }
+  if (summary.crs && loaded.crs && summary.crs !== loaded.crs) {
+    // Textual CRS labels vary for the same system, so this is disclosure only —
+    // never a verdict — but worth surfacing alongside a stronger signal.
+    reasons.push(`CRS label differs (session “${summary.crs}”, loaded “${loaded.crs}”)`);
+  }
+
+  // Point count — corroborating, tolerant of device reduction.
+  let pointsDiffer = false;
+  if (
+    Number.isFinite(summary.sourcePoints) &&
+    Number.isFinite(loaded.sourcePoints) &&
+    (summary.sourcePoints as number) > 0 &&
+    (loaded.sourcePoints as number) > 0
+  ) {
+    const a = summary.sourcePoints as number;
+    const b = loaded.sourcePoints as number;
+    const pr = Math.abs(a - b) / Math.max(a, b);
+    if (pr > 0.005) {
+      pointsDiffer = true;
+      reasons.push(
+        `point count differs (session ${a.toLocaleString('en-US')} vs loaded ${b.toLocaleString('en-US')})`,
+      );
+    }
+  }
+
+  if (rel === null) {
+    // No comparable extents — fall back to whatever softer evidence we have.
+    return { verdict: 'partial', reasons };
+  }
+  if (rel > 0.05) {
+    reasons.unshift(`scan extents differ by ${(rel * 100).toFixed(0)}%`);
+    return { verdict: 'conflict', reasons };
+  }
+  if (rel <= 0.01 && !pointsDiffer) {
+    return { verdict: 'strong', reasons };
+  }
+  // Extents agree loosely (1–5%), or agree tightly but the point count moved —
+  // consistent with the same scan, not proof of it.
+  if (rel > 0.01) reasons.unshift(`scan extents differ by ${(rel * 100).toFixed(1)}%`);
+  return { verdict: 'partial', reasons };
+}
+
 // --- validation helpers ----------------------------------------------------
 
 const CLIP_MODES: readonly ClipMode[] = ['keep-inside', 'keep-outside'];
@@ -587,22 +821,37 @@ const VOLUME_CONFIDENCE: readonly VolumeRecord['confidence'][] = ['high', 'mediu
  */
 function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   if (!isRecord(v)) return undefined;
-  const nums = ['fill', 'cut', 'net', 'referenceZ', 'footprintArea', 'pointsInPolygon', 'density'] as const;
+  const nums = ['fill', 'cut', 'net', 'referenceZ', 'footprintArea', 'pointsInPolygon'] as const;
   for (const key of nums) if (!isFiniteNum(v[key])) return undefined;
+  // The field was renamed `density` → `densityNative` to stop calling a native
+  // horizontal-unit² figure "points/m²". Older files carry `density`, which held
+  // exactly the same native value, so migrating it across is lossless.
+  const densityNative = isFiniteNum(v.densityNative)
+    ? v.densityNative
+    : isFiniteNum(v.density)
+      ? v.density
+      : undefined;
+  if (densityNative === undefined) return undefined;
   if (typeof v.confidence !== 'string'
     || !VOLUME_CONFIDENCE.includes(v.confidence as VolumeRecord['confidence'])) {
     return undefined;
   }
-  return {
+  const record: VolumeRecord = {
     fill: v.fill as number,
     cut: v.cut as number,
     net: v.net as number,
     referenceZ: v.referenceZ as number,
     footprintArea: v.footprintArea as number,
     pointsInPolygon: v.pointsInPolygon as number,
-    density: v.density as number,
+    densityNative,
     confidence: v.confidence as VolumeRecord['confidence'],
   };
+  // Optional partial-coverage disclosure (points inside the footprint the
+  // integration had to skip). Round-trips when present; older files omit it.
+  if (isFiniteNum(v.skippedNonFinite) && v.skippedNonFinite > 0) {
+    record.skippedNonFinite = v.skippedNonFinite;
+  }
+  return record;
 }
 
 const TRUST_GRADES: readonly TrustGrade[] = ['green', 'yellow', 'red'];

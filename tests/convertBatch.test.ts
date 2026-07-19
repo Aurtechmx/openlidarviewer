@@ -122,6 +122,31 @@ describe('runBatch', () => {
     expect(reads).toEqual(['a.las', 'b.las', 'c.las']);
   });
 
+  it('stops before the next file when its AbortSignal fires', async () => {
+    const decoded: string[] = [];
+    const ctrl = new AbortController();
+    const decode: DecodeFn = async (_buf, name) => {
+      decoded.push(name);
+      // Abort right after the first file decodes — the batch must not start the
+      // second file.
+      ctrl.abort();
+      return tinyCloud(name);
+    };
+    const results = await runBatch(
+      [
+        { name: 'a.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) },
+        { name: 'b.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) },
+      ],
+      { format: 'las' },
+      decode,
+      undefined,
+      ctrl.signal,
+    );
+    expect(decoded).toEqual(['a.las']);
+    expect(results).toHaveLength(1);
+    expect(results[0].source).toBe('a.las');
+  });
+
   it('isolates a file whose bytes() read fails', async () => {
     const results = await runBatch(
       [

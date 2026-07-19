@@ -77,7 +77,7 @@ const CANONICAL_LINKS: Record<string, string> = {
  * from the files on disk (newest first) so a new release only adds a wrapper.
  */
 const releasePages = readdirSync(new URL('../releases', import.meta.url))
-  .filter((f) => /^v\d[\d.]*\.md$/.test(f))
+  .filter((f) => /^v\d[\w.-]*\.md$/.test(f))
   .map((f) => f.replace(/\.md$/, ''))
   .sort((a, b) => {
     const pa = a.slice(1).split('.').map(Number);

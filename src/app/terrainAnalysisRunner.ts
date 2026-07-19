@@ -121,8 +121,14 @@ export function deriveCoreParams(
 export interface TerrainAnalysisRunnerDeps {
   /** Returns the lazy Viewer instance (null-typed until its chunk resolves). */
   getViewer: () => Viewer;
-  /** The Analyse panel the winning run updates. */
-  analysePanel: AnalysePanel;
+  /**
+   * Returns the Analyse panel the winning run updates. A GETTER, not the panel
+   * itself, because the panel is lazy-mounted on first scan load — the runner is
+   * constructed at boot (before the panel exists) and must read the live
+   * reference, not a captured null sentinel. Every `run()` entry point fires only
+   * after the panel has mounted, so it resolves non-null when a run touches it.
+   */
+  getAnalysePanel: () => AnalysePanel;
   /** The active static cloud id, snapshotted per run for the stale-result guard. */
   getActiveId: () => string | null;
   /** The centralised CRS service — feeds the resolved CRS into the analysis. */
@@ -183,7 +189,7 @@ export interface TerrainAnalysisRunner {
 export function createTerrainAnalysisRunner(
   deps: TerrainAnalysisRunnerDeps,
 ): TerrainAnalysisRunner {
-  const { getViewer, analysePanel, getActiveId, crsService, onResult } = deps;
+  const { getViewer, getAnalysePanel, getActiveId, crsService, onResult } = deps;
 
   // Monotonic token for terrain-analysis runs. `run` is async (lazy chunk
   // import + a paint yield), so rapid interval clicks can overlap and resolve
@@ -224,6 +230,10 @@ export function createTerrainAnalysisRunner(
 
   async function run(intervalM?: number): Promise<void> {
     const viewer = getViewer();
+    // The panel is lazy-mounted; every run() caller fires post-mount, so this
+    // resolves to the live panel. Read once so the whole run (and its isStale
+    // closure) uses one stable reference.
+    const analysePanel = getAnalysePanel();
     const gathered = viewer.gatherTerrainPositions();
     if (!gathered) {
       analysePanel.setStatus('Load a scan first, then run terrain analysis.');

@@ -381,6 +381,12 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
 
     // Along-line scalar (distance along hDir from a's horizontal anchor).
     const along = dx * hDir[0] + dy * hDir[1] + dz * hDir[2];
+    // A point with any non-finite coordinate (organized-cloud invalid
+    // points are NaN per the PCD spec) surfaces here as a NaN `along`;
+    // both corridor rejections below compare false on NaN, so without
+    // this gate it would reach the bin array with a NaN index. No
+    // elevation can be read off such a point — drop it.
+    if (!Number.isFinite(along)) continue;
     if (along < -band || along > horizontalLen + band) continue;
 
     // Perpendicular distance (horizontal-plane, squared).

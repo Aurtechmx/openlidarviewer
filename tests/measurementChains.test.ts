@@ -87,7 +87,7 @@ function volumeM(footprintArea: number, fill: number, cut: number): Measurement 
       referenceZ: 0,
       footprintArea,
       pointsInPolygon: 1000,
-      density: 100,
+      densityNative: 100,
       confidence: 'high',
     },
   };

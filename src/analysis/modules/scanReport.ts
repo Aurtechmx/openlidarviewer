@@ -1,6 +1,7 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow, RunOptions } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
 import type { ClassScope } from '../../render/class/classScope';
+import { isZUpFormat } from '../../io/sniffFormat';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -104,9 +105,17 @@ export const scanReport: AnalysisModule = {
     // clouds resolve to factor 1 — byte-identical to before.
     const mpu = cloud.metadata?.crs?.linearUnitToMetres ?? 1;
     const vmpu = cloud.metadata?.crs?.verticalUnitToMetres ?? mpu;
-    const width = (maxX - minX) * mpu;
-    const depth = (maxY - minY) * mpu;
-    const height = (maxZ - minZ) * vmpu;
+    // Footprint and height are axis-aware. LAS-family (and COPC/EPT) are Z-up
+    // by spec, so the ground footprint is X·Y and height is Z. Mesh formats
+    // (PLY/OBJ/GLB/GLTF) load in their native Y-up frame — the same up-axis
+    // the renderer and elevation filter honour — so their footprint is X·Z and
+    // height is Y. Assuming Z-up for a Y-up façade scan put the building height
+    // into "Depth" and computed density/spacing over the vertical cross-section.
+    const spanX = maxX - minX, spanY = maxY - minY, spanZ = maxZ - minZ;
+    const zUp = isZUpFormat(cloud.sourceFormat);
+    const width = spanX * mpu;
+    const depth = (zUp ? spanY : spanZ) * mpu;
+    const height = (zUp ? spanZ : spanY) * vmpu;
     rows.push(withScope(rowInfo('Width', `${width.toFixed(1)} m`), scope));
     rows.push(withScope(rowInfo('Depth', `${depth.toFixed(1)} m`), scope));
     rows.push(withScope(rowInfo('Height', `${height.toFixed(1)} m`), scope));

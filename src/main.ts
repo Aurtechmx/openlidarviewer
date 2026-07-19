@@ -10,7 +10,6 @@ import './style.css';
 // so OBJ/PLY/glTF never fetch executable code from a third-party CDN.
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
-import type { CameraPose } from './render/NavController';
 import { isMobileDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
@@ -63,7 +62,11 @@ import {
   matchTerrainWorkflowPreset,
 } from './render/terrainWorkflowPresets';
 import { AnnotationPanel } from './ui/AnnotationPanel';
-import { AnalysePanel } from './ui/AnalysePanel';
+// AnalysePanel is lazy-mounted on first scan load (v0.6 P1): only the TYPE is
+// imported here (erased at compile time — pulls nothing into the shell), and the
+// class itself arrives through `loadAnalysePanel()` (see lazyChunks import below)
+// inside `ensureAnalysePanel()`.
+import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
@@ -81,7 +84,11 @@ import { renderDatasetStoryCard, renderExportHealthPanel } from './ui/scanStoryV
 import { openModal } from './ui/Modal';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
-import { ObjectPanel } from './ui/ObjectPanel';
+// ObjectPanel is lazy-mounted on first scan load (v0.6 P1, step 2): only the
+// TYPE is imported here (erased at compile time — pulls nothing into the shell),
+// and the class itself arrives through `loadObjectPanel()` (see lazyChunks import
+// above) inside `ensureObjectPanel()`.
+import type { ObjectPanel } from './ui/ObjectPanel';
 import { MobileSheet } from './ui/MobileSheet';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
@@ -98,7 +105,6 @@ import { ExportPanel } from './ui/ExportPanel';
 import type { MeasurementExportContext } from './export/measurementExport';
 import type { KmlExportInput } from './export/kmlExport';
 import { utmConverter } from './geo/UtmConverter';
-import { resolveVisibility, nextSolo, detectCrsMismatch, type LayerInfo } from './model/layerModel';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -223,6 +229,8 @@ import {
   loadChangeRaster,
   loadApplyDisplayProfile,
   loadColorbarOverlay,
+  loadAnalysePanel,
+  loadObjectPanel,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -256,9 +264,12 @@ import { CrsService } from './geo/CrsService';
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
+import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
+import { createAppRuntime } from './app/AppRuntime';
+import { createLayerService } from './app/LayerService';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -359,6 +370,19 @@ const testApi = urlParams.has('test');
 // carried no stated open licence, so it was removed.
 const SAMPLES: Sample[] = [];
 
+// The "Try a sample scan" ghost button under the primary CTA — the first
+// curated location (smallest, confirmed open licence, streams in seconds)
+// exposed as the one-click demo path. Same approval gate + streaming path
+// as the curated picker; only the entry point is promoted.
+const DEMO_SAMPLE: Sample = {
+  id: 'flai-ch-swisssurface3d-2022',
+  label: 'Switzerland, 84 MB',
+  detail: 'swisssurface3D (2022) · streams over your network',
+  url: 'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz',
+  name: 'swisssurface3D 2022',
+  sizeBytes: 83_800_000,
+};
+
 /**
  * Public-LiDAR picker for the empty-state. The picker is a curated
  * dropdown of direct EPT URLs — every entry is probed at build time and
@@ -440,6 +464,7 @@ const catalogPanel = new CatalogPanel({
 const stage = new Stage(app, {
   embed,
   samples: SAMPLES,
+  demoSample: DEMO_SAMPLE,
   onSample: loadFromUrl,
   onOpenFile: (file) => void handleFile(file),
   // Return the promise so Stage's inline error handler can show a
@@ -495,8 +520,14 @@ async function openBatchConverter(): Promise<void> {
  * any user-driven scan-open, but it does.
  */
 let viewer: Viewer = null as unknown as Viewer;
+// v0.6 P3: recover from a stale lazy chunk after a deploy. If the first big
+// dynamic import (the Viewer) fails because its content-hashed asset was
+// replaced by a newer build while this tab was open, do ONE guarded reload
+// (sessionStorage cooldown, URL preserved) instead of a hard boot failure.
+// Ordinary Viewer exceptions are NOT classified as stale and never reload.
+const { importOrReload } = installStaleChunkRecovery();
 const viewerLoaded: Promise<Viewer> = (async () => {
-  const { Viewer: ViewerCtor } = await loadViewer();
+  const { Viewer: ViewerCtor } = await importOrReload(loadViewer);
   viewer = new ViewerCtor(stage.canvas);
   return viewer;
 })();
@@ -525,8 +556,13 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // Native→metre factor for the source CRS (feet for a state-plane-feet
     // cloud). Handed to computeLassoVolume so the stockpile band it returns is
     // already converted to metres, and reused below for the m³/m² readout.
-    const lin = crsService.current()?.linearUnitToMetres ?? 1;
-    const out = viewer.computeLassoVolume(lasso, 0.05, lin);
+    const crsForLasso = crsService.current();
+    const lin = crsForLasso?.linearUnitToMetres ?? 1;
+    // Whether that factor is real or an assumed 1: an unknown CRS still yields
+    // lin = 1 for display, but its points/m² density is then an assumption, so
+    // the stockpile grade must not claim it.
+    const densityUnitKnown = crsForLasso != null && crsForLasso.linearUnit !== 'unknown';
+    const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown);
     if (out === null) {
       pendingLassoSave = null;
       showLassoToast('Lasso volume — no points selected. Draw around a denser region.');
@@ -654,16 +690,22 @@ function deriveVolumeRecord(
   const inPoly = result.pointsInPolygon;
   const confidence: 'high' | 'medium' | 'low' =
     inPoly >= 1000 ? 'high' : inPoly >= 100 ? 'medium' : 'low';
-  return {
+  const record: import('./render/measure/types').VolumeRecord = {
     fill: result.fill,
     cut: result.cut,
     net: result.net,
     referenceZ,
     footprintArea: result.footprintArea,
     pointsInPolygon: result.pointsInPolygon,
-    density: result.density,
+    densityNative: result.densityNative,
     confidence,
   };
+  // Non-finite returns inside the footprint were excluded from the
+  // integration — keep the count on the record so the partial coverage
+  // stays disclosed.
+  const skippedNonFinite = result.skippedNonFinite ?? 0;
+  if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
+  return record;
 }
 
 // ── Lasso volume button in the measure dock ──────────────────────────────
@@ -781,7 +823,7 @@ window.addEventListener('blur', () => viewer?.setToolPaused(false));
 // is lazy-loaded on first use, so it stays out of the startup shell. Only armed
 // once a scan is loaded — otherwise the browser's native menu is left alone.
 stage.canvas.addEventListener('contextmenu', (e) => {
-  if (!viewer || !activeId) return;
+  if (!viewer || !scan.activeId) return;
   e.preventDefault();
   const rect = stage.canvas.getBoundingClientRect();
   const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1045,8 +1087,13 @@ function showInstantAnswer(scanLabel: string): void {
     onClick: () => {
       switch (answer.action) {
         case 'terrain':
-          analysePanel.expand();
-          void terrainRunner.run();
+          // Ensure the (lazy) panel is mounted before expanding + running, so
+          // the busy state and result have somewhere to land.
+          analyseExpanded = true;
+          void ensureAnalysePanel().then((p) => {
+            p.expand();
+            void terrainRunner.run();
+          });
           break;
         case 'compare':
           void compareLoadedLayers();
@@ -1055,7 +1102,11 @@ function showInstantAnswer(scanLabel: string): void {
           lassoVolumeTool.enable();
           break;
         case 'floorplan':
-          objectPanel.setVisible(true);
+          // Ensure the (lazy) Object panel is mounted before revealing it, so
+          // there is somewhere for the floor-plan controls to land. Track the
+          // desired visibility too, so a mount still in flight replays it.
+          objectDesiredVisible = true;
+          void ensureObjectPanel().then((p) => p.setVisible(true));
           break;
       }
     },
@@ -1083,29 +1134,17 @@ const registry = new ModuleRegistry();
 registry.register(healthCheck);
 registry.register(scanReport);
 
-/** Viewer id of the cloud the Inspector currently controls (the most recent). */
-let activeId: string | null = null;
-/** The isolated (soloed) layer id, or null when no layer is isolated. */
-let soloLayer: string | null = null;
+// The composition root owns the shared app state. v0.6 migrates main.ts's
+// module-level mutables onto it one cluster at a time: the layer/comparison
+// cluster (visibility intent, solo, last comparison) and the active-scan
+// selection. The `layers`/`scan` locals are terse handles onto those clusters;
+// mutating their fields writes through to the context.
+const runtime = createAppRuntime();
+const layers = runtime.context.layers;
+const scan = runtime.context.scan;
+const viewBookmarks = runtime.context.viewBookmarks;
 /** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
-const layerVisible = new Map<string, boolean>();
-/**
- * An in-memory saved view: the pose the camera glides to plus (v7) the
- * optional display-state bundle captured with it — clip, colour mode, class
- * filter, point filters, render settings. `pose` keeps the v6 camera-bookmark
- * shape the panels and the KML exporter read; the bundle rides alongside and
- * serialises into the per-view `.olvsession` fields. A view restored from a
- * pre-v7 file has no bundle and behaves exactly as it always did.
- */
-interface StoredView {
-  name: string;
-  pose: CameraPose;
-  state?: ViewStateBundle;
-}
-
-/** Saved camera viewpoints (v7: view states) for the current scan. */
-let savedViews: StoredView[] = [];
-let viewCounter = 0;
+const layerVisible = layers.visible;
 /** True while a file load is in flight — one load at a time (see `handleFile`). */
 let loading = false;
 
@@ -1247,13 +1286,22 @@ function seedStreamingFilterExtents(): void {
   streamingFilterSeeded = true;
 }
 
+const layerService = createLayerService({
+  getViewer: () => viewer,
+  getInspector: () => inspector,
+  context: runtime.context,
+  refreshCompass,
+});
+
 const inspector = new Inspector({
   onColorMode: (mode) => {
     currentColorMode = mode;
-    if (activeId) viewer.setColorMode(activeId, mode);
+    if (scan.activeId) viewer.setColorMode(scan.activeId, mode);
     // Keep the analyse-panel confidence toggle in sync when the user changes
-    // colour from the COLOR BY rail instead of the toggle button.
-    analysePanel.setConfidenceColorActive(mode === 'confidence');
+    // colour from the COLOR BY rail instead of the toggle button. Null-safe: the
+    // panel is lazy-mounted, and `hydrateAnalysePanel()` re-derives this from
+    // `currentColorMode` when it does mount.
+    analysePanel?.setConfidenceColorActive(mode === 'confidence');
     // Workflow rail (v0.4.5): a colour-mode change can enter/leave a preset.
     syncInspectorVisuals();
   },
@@ -1274,20 +1322,14 @@ const inspector = new Inspector({
     syncInspectorVisuals();
     persistPrefs();
   },
-  onToggleVisible: (id, visible) => {
-    layerVisible.set(id, visible);
-    applyLayerVisibility();
-  },
+  onToggleVisible: (id, visible) => layerService.setVisible(id, visible),
   onRemove: (id) => removeCloud(id),
-  onToggleSolo: (id) => {
-    soloLayer = nextSolo(soloLayer, id);
-    applyLayerVisibility();
-  },
+  onToggleSolo: (id) => layerService.toggleSolo(id),
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: () => compareLoadedLayers(),
   onExportDifference: () => exportDifferenceRaster(),
   onExport: (format) => {
-    const cloud = activeId ? viewer.getCloud(activeId) : undefined;
+    const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
     if (!cloud) return;
     // The exporter is a lazy chunk; fetched on first export of the session.
     void loadExporters().then(({ exportCloud }) => {
@@ -1299,8 +1341,8 @@ const inspector = new Inspector({
     // pulled in by viewer.exportImage on the first invocation. The download
     // triggers off the returned Blob; an unsupported-on-this-cloud rejection
     // surfaces as a visible alert.
-    const sourceName = activeId
-      ? viewer.getCloud(activeId)?.name
+    const sourceName = scan.activeId
+      ? viewer.getCloud(scan.activeId)?.name
       : viewer.streamingCloud?.name;
     const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
     // surface a precise per-mode progress string while the lazy
@@ -1396,15 +1438,15 @@ const inspector = new Inspector({
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
-    const view = savedViews[index];
+    const view = viewBookmarks.savedViews[index];
     if (view) {
       view.name = name;
-      inspector.setViews(savedViews.map((v) => v.name));
+      inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
     }
   },
   onDeleteView: (index) => {
-    savedViews.splice(index, 1);
-    inspector.setViews(savedViews.map((v) => v.name));
+    viewBookmarks.savedViews.splice(index, 1);
+    inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
   },
   onEdlToggle: (on) => {
     viewer.setEdlEnabled(on);
@@ -1463,7 +1505,7 @@ const inspector = new Inspector({
     // Auto-normalize against the active cloud's RGB. No-op when the
     // active cloud has no RGB. Lazy-import keeps the analyser out of
     // the startup chunk.
-    const id = activeId;
+    const id = scan.activeId;
     if (!id) return;
     const cloud = viewer.getCloud(id);
     if (!cloud || !cloud.colors) return;
@@ -1496,9 +1538,9 @@ const inspector = new Inspector({
     // record `currentColorMode` once the guarded set actually applied
     // so the chip rail stays honest on channel-less clouds. Streaming
     // clouds recolour through their own seam.
-    if (activeId) {
+    if (scan.activeId) {
       try {
-        viewer.setColorMode(activeId, p.colorMode);
+        viewer.setColorMode(scan.activeId, p.colorMode);
         currentColorMode = p.colorMode;
       } catch (err) {
         console.warn(`[workflow-preset] colour mode ${p.colorMode} skipped:`, err);
@@ -1535,7 +1577,7 @@ crsService.subscribe((resolved) => {
 
 // Inspector load-time card refreshers (Provenance + Dataset Intelligence) and
 // the CRS coordinator (resolve + per-scan refresh + override handling) are
-// extracted into `src/app/`. They read the lazy `viewer` and the `activeId`
+// extracted into `src/app/`. They read the lazy `viewer` and the `scan.activeId`
 // selection through getters so no top-level `viewer.*` dereference is
 // introduced here — `viewer` is null until its chunk resolves.
 const inspectorCards = createInspectorCardRefreshers(inspector);
@@ -1543,7 +1585,7 @@ const crsCoordinator = createCrsCoordinator({
   crsService,
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
-  getActiveId: () => activeId,
+  getActiveId: () => scan.activeId,
   debug,
 });
 
@@ -1732,11 +1774,11 @@ let classifyRunning = false;
 let lastDerivedConfidence: number | null = null;
 async function runDeriveClassification(): Promise<void> {
   if (classifyRunning) return;
-  if (!activeId) {
+  if (!scan.activeId) {
     showLassoToast('Classify · open a scan first.');
     return;
   }
-  const cloud = viewer.getCloud(activeId);
+  const cloud = viewer.getCloud(scan.activeId);
   if (!cloud) {
     showLassoToast('Classify · this works on a loaded (non-streaming) scan.');
     return;
@@ -1764,7 +1806,7 @@ async function runDeriveClassification(): Promise<void> {
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
   try {
-    const id = activeId;
+    const id = scan.activeId;
     const result = await deriveClassificationAsync(
       cloud.positions,
       cloud.pointCount,
@@ -1775,7 +1817,7 @@ async function runDeriveClassification(): Promise<void> {
       // not a hang. (Off-thread, so the UI repaints between phases.)
       (phase) => showLassoToast(`Classify · ${phase}…`),
     );
-    if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scan.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -1820,11 +1862,11 @@ async function runDeriveClassification(): Promise<void> {
  */
 async function runFillUnclassified(): Promise<void> {
   if (classifyRunning) return;
-  if (!activeId) {
+  if (!scan.activeId) {
     showLassoToast('Fill unclassified · open a scan first.');
     return;
   }
-  const cloud = viewer.getCloud(activeId);
+  const cloud = viewer.getCloud(scan.activeId);
   if (!cloud) {
     showLassoToast('Fill unclassified · this works on a loaded (non-streaming) scan.');
     return;
@@ -1851,7 +1893,7 @@ async function runFillUnclassified(): Promise<void> {
   classifyRunning = true;
   showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
   try {
-    const id = activeId;
+    const id = scan.activeId;
     const result = await deriveClassificationAsync(
       cloud.positions,
       cloud.pointCount,
@@ -1860,7 +1902,7 @@ async function runFillUnclassified(): Promise<void> {
       undefined,
       (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
     );
-    if (id !== activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scan.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -1886,10 +1928,12 @@ async function runFillUnclassified(): Promise<void> {
  * but never wrong — story, so the card/health surfaces work pre-analysis too.
  */
 function buildCurrentStoryInputs(): ScanStoryInputs {
-  const cloud = activeId ? viewer.getCloud(activeId) : null;
+  const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
   const streaming = viewer.streamingCloud;
   let facts: ReturnType<typeof analysePanel.storyFacts> = null;
-  try { facts = analysePanel.storyFacts(); } catch { /* not analysed */ }
+  // Null-safe: the panel is lazy-mounted, so a story built before the first scan
+  // (or before its chunk resolves) simply has no analysis facts yet.
+  try { facts = analysePanel?.storyFacts() ?? null; } catch { /* not analysed */ }
   let di: ReturnType<() => typeof inspector.datasetIntelligence> | null = null;
   try { di = inspector.datasetIntelligence; } catch { /* no intelligence yet */ }
 
@@ -2246,7 +2290,7 @@ function buildActionRegistry(): Action[] {
           return;
         }
         saveCurrentView();
-        const name = savedViews[savedViews.length - 1]?.name ?? 'View';
+        const name = viewBookmarks.savedViews[viewBookmarks.savedViews.length - 1]?.name ?? 'View';
         showLassoToast(`View state saved — “${name}” (rename it in the panel list).`);
       },
     },
@@ -2257,11 +2301,11 @@ function buildActionRegistry(): Action[] {
       hint: 'Reapply the most recently saved view state — the panel list restores any of them by name.',
       keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'apply', 'go to'],
       run: () => {
-        if (savedViews.length === 0) {
+        if (viewBookmarks.savedViews.length === 0) {
           showLassoToast('No saved view states yet — save one first (V).');
           return;
         }
-        applyView(savedViews.length - 1);
+        applyView(viewBookmarks.savedViews.length - 1);
       },
     },
   );
@@ -2449,12 +2493,24 @@ const dock = new ToolDock({
     // Re-open (or hide) the terrain analysis panel. If an object scan had
     // demoted it behind the Object panel, opening Analyse takes over —
     // the "run terrain anyway" path, reachable from one obvious place.
-    const show = !analysePanel.isVisible();
+    // Lazy-mount aware: the panel may not exist yet (import in flight), so the
+    // toggle reads/writes the tracked desired-visibility and mounts on demand.
+    const show = analysePanel ? !analysePanel.isVisible() : !analyseDesiredVisible;
     // A manual Analyse toggle is a user override — stop auto-rerouting so a
     // late streaming node can't yank the panel away.
     scanRouteOverridden = true;
-    analysePanel.setVisible(show);
-    if (show) objectPanel.setVisible(false);
+    analyseDesiredVisible = show;
+    if (show) {
+      // Opening: ensure the panel is mounted, then show it.
+      void ensureAnalysePanel().then((p) => p.setVisible(true));
+      // Opening Analyse demotes the Object panel — track the intent (so a still-
+      // mounting Object panel replays hidden) and hide it now (no-op if unmounted).
+      objectDesiredVisible = false;
+      objectPanel?.setVisible(false);
+    } else {
+      // Hiding: no need to construct just to hide — no-op when not yet mounted.
+      analysePanel?.setVisible(false);
+    }
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
@@ -2585,6 +2641,15 @@ const measurePanel = new MeasurePanel({
 void viewerLoaded.then(() => {
   crsService.subscribe((resolved) => {
     viewer.measure.setUnitToMetres(resolved?.linearUnitToMetres ?? 1);
+    // Compound CRS: the height axis may carry its OWN linear unit (e.g. UTM
+    // metres + a NAVD88 height in US survey feet). Feed the vertical factor so
+    // heights / box height / cut-fill thickness scale by it — the same seam the
+    // Inspector probe and terrain already honour. Absent an explicit vertical
+    // unit, fall back to the horizontal factor so single-unit CRSs are
+    // unchanged (no mismatch, byte-identical readouts).
+    viewer.measure.setVerticalUnitToMetres(
+      resolved?.verticalUnitToMetres ?? resolved?.linearUnitToMetres ?? 1,
+    );
     // A CRS is "known" for the measurement trust grade when one resolved with a
     // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
     // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
@@ -2632,105 +2697,170 @@ let lastCloudName = 'contours';
 // up just below, once `analysePanel` exists. The panel callbacks reference
 // `terrainRunner` lazily — they only fire on user input, long after the
 // runner is constructed.
-const analysePanel = new AnalysePanel({
-  onRun: () => void terrainRunner.run(),
-  onScanTypeChange: (override) => setScanTypeOverride(override),
-  onSelectInterval: (m) => void terrainRunner.run(m),
-  // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
-  // the SAME cached terrain core the runner uses — never mutates the panel.
-  buildResultAtInterval: (m) => terrainRunner.buildResultAtInterval(m),
-  // Same cached-core rebuild, generalised with the contour shape-style picker so
-  // an export reflects the user's chosen interval AND line shape.
-  buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-  getExportBasename: () => lastCloudName,
-  // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
-  // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
-  // are the card's own strings (null when the card is empty — the report
-  // then omits those rows rather than re-deriving them).
-  getDatasetIntelligence: () => inspector.datasetIntelligence,
-  // Confidence overlay (v0.4.5): the coverage tile's "Colour 3D by confidence"
-  // link switches the loaded cloud to the colourblind-safe 'confidence' colour
-  // mode — the same DTM-confidence grid the tile renders — and re-syncs the
-  // Inspector's COLOR BY rail so the matching chip lights up. Guarded on a
-  // grid existing (the link only renders after an analysis, but the scan may
-  // have been closed since).
-  onColorByConfidence: () => {
-    if (!activeId || !viewer.hasCoverageGrid()) return;
-    const cloud = viewer.getCloud(activeId);
-    if (!cloud) return;
-    // Toggle: if the confidence overlay is already on, clicking again restores
-    // the colour mode that was active before it (RGB on a coloured scan), so the
-    // button is always a round trip — the user is never stranded in yellow.
-    if (currentColorMode === 'confidence') {
-      const restore = confidenceColorPrev ?? defaultMode(cloud);
-      currentColorMode = restore;
-      viewer.setColorMode(activeId, restore);
-      inspector.setColorModes(availableModes(cloud), restore);
+// --- Lazy Analyse-panel mount (v0.6 P1) ---------------------------------------
+// The Analyse panel is constructed on the FIRST scan load, not at boot, so its
+// whole terrain-assessment DOM-builder chain stays out of the empty-state shell.
+// Until then `analysePanel` is a null sentinel: every call site is null-guarded
+// (or routes through `ensureAnalysePanel()`), and the synchronous scan-route
+// pass that runs during reveal records its intent in the tracking vars below so
+// `hydrateAnalysePanel()` can replay it the instant the panel mounts.
+let analysePanel: AnalysePanel = null as unknown as AnalysePanel;
+// Desired panel state, mirrored so a panel mounted a beat AFTER the scan route
+// was computed (the dynamic import resolves later) replays the correct state.
+let analyseDesiredVisible = false;
+let analyseExpanded = false;
+let analyseScanTypeArgs: Parameters<AnalysePanel['setScanType']> | null = null;
+// Memoised first-mount promise so concurrent first-loads share one construction.
+let _analyseReady: Promise<AnalysePanel> | null = null;
+
+/**
+ * Construct the Analyse panel with the SAME callbacks the eager version used.
+ * Split out only so the (large) opts object keeps a shallow indentation; called
+ * exactly once, from `ensureAnalysePanel()`.
+ */
+function newAnalysePanel(
+  Ctor: Awaited<ReturnType<typeof loadAnalysePanel>>['AnalysePanel'],
+): AnalysePanel {
+  return new Ctor({
+    onRun: () => void terrainRunner.run(),
+    onScanTypeChange: (override) => setScanTypeOverride(override),
+    onSelectInterval: (m) => void terrainRunner.run(m),
+    // Side-effect-free contour rebuild at the dialog's chosen FINAL interval, over
+    // the SAME cached terrain core the runner uses — never mutates the panel.
+    buildResultAtInterval: (m) => terrainRunner.buildResultAtInterval(m),
+    // Same cached-core rebuild, generalised with the contour shape-style picker so
+    // an export reflects the user's chosen interval AND line shape.
+    buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
+    getExportBasename: () => lastCloudName,
+    // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
+    // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
+    // are the card's own strings (null when the card is empty — the report
+    // then omits those rows rather than re-deriving them).
+    getDatasetIntelligence: () => inspector.datasetIntelligence,
+    // Confidence overlay (v0.4.5): the coverage tile's "Colour 3D by confidence"
+    // link switches the loaded cloud to the colourblind-safe 'confidence' colour
+    // mode — the same DTM-confidence grid the tile renders — and re-syncs the
+    // Inspector's COLOR BY rail so the matching chip lights up. Guarded on a
+    // grid existing (the link only renders after an analysis, but the scan may
+    // have been closed since).
+    onColorByConfidence: () => {
+      if (!scan.activeId || !viewer.hasCoverageGrid()) return;
+      const cloud = viewer.getCloud(scan.activeId);
+      if (!cloud) return;
+      // Toggle: if the confidence overlay is already on, clicking again restores
+      // the colour mode that was active before it (RGB on a coloured scan), so the
+      // button is always a round trip — the user is never stranded in yellow.
+      if (currentColorMode === 'confidence') {
+        const restore = confidenceColorPrev ?? defaultMode(cloud);
+        currentColorMode = restore;
+        viewer.setColorMode(scan.activeId, restore);
+        inspector.setColorModes(availableModes(cloud), restore);
+        syncInspectorVisuals();
+        analysePanel?.setConfidenceColorActive(false);
+        return;
+      }
+      confidenceColorPrev = currentColorMode ?? defaultMode(cloud);
+      currentColorMode = 'confidence';
+      viewer.setColorMode(scan.activeId, 'confidence');
+      inspector.setColorModes(availableModes(cloud), 'confidence');
       syncInspectorVisuals();
-      analysePanel.setConfidenceColorActive(false);
-      return;
+      analysePanel?.setConfidenceColorActive(true);
+      // The 3D overlay tints each point by the trust of the ground beneath it.
+      // Points cluster over MEASURED ground, so a surface that is largely
+      // interpolated still paints mostly "strong" in 3D — the interpolated share
+      // sits in point-sparse voids that have little to colour. Say so, and point
+      // the user at the 2D Coverage tile, which shows every cell. Only caption
+      // when interpolation is a meaningful share, so a clean scan stays quiet.
+      const summary = viewer.coverageGridCellSummary();
+      if (summary && summary.interpFrac >= 0.2) {
+        const pct = Math.round(summary.interpFrac * 100);
+        showLassoToast(
+          `Confidence colour shows ground-survey trust under each point. ${pct}% of the ` +
+            `surface is interpolated and point-sparse, so 3D reads mostly strong — see the ` +
+            `2D Coverage tile for the full per-cell map.`,
+        );
+      }
+    },
+    getMapContext: () => {
+      const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
+      // Streamed COPC / EPT scans never enter `viewer.getCloud` — their
+      // recentre offset lives on the streaming source (`renderOrigin`) and
+      // their CRS on `crs()`. Fall back to those when no static cloud is
+      // active, so a contour export from a streamed scan keeps its world
+      // origin and EPSG stamp instead of silently degrading to local frame.
+      const streaming = cloud ? null : viewer.streamingCloud;
+      const origin = cloud?.origin ?? streaming?.renderOrigin;
+      const cur = crsService.current();
+      return {
+        // All three axes: contour serialization shifts elevations by `z` so
+        // exported contour levels read in real-world (e.g. orthometric) height
+        // rather than the recentred local frame.
+        worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
+        title: `${lastCloudName} — Contours`,
+        sheet: 'letter',
+        isGeographic: cur?.kind === 'geographic',
+        wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
+        // The resolved CRS's linear unit (same seam every other unit consumer
+        // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
+        // scale note says ft — and a local/unresolved frame stamps an honest
+        // "unitless" rather than asserting metres. Undefined before a CRS
+        // resolves ⇒ serializeContours keeps its standing metre default.
+        linearUnit: cur?.linearUnit,
+        // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
+        // it declares one, else the horizontal linear factor when the frame is
+        // actually resolved (GeoTIFF default: vertical follows the model's linear
+        // unit — so a metre CRS reads "m", a foot CRS "ft"). A local / unknown
+        // frame (linearUnit 'unknown') leaves this undefined so the deliverable
+        // elevation unit + the contour interval / relief show an honest
+        // "unverified" unit rather than a false metre. The complete deliverable,
+        // and the Analyse panel's readiness / recommend / map-sheet notes, read this.
+        verticalUnitToMetres:
+          cur?.verticalUnitToMetres ??
+          (cur && cur.linearUnit !== 'unknown' ? cur.linearUnitToMetres : undefined),
+      };
+    },
+  });
+}
+
+/**
+ * Construct + mount the Analyse panel exactly once, pulling its chunk through
+ * `loadAnalysePanel()`. Idempotent and memoised: concurrent first-mounts share
+ * the single in-flight promise, and the double-construct guard means only one
+ * panel is ever built. After construction it inserts into the DOM (desktop left
+ * column, or the mobile sheet when that layout is active) and hydrates the
+ * tracked state.
+ */
+function ensureAnalysePanel(): Promise<AnalysePanel> {
+  if (analysePanel) return Promise.resolve(analysePanel);
+  if (_analyseReady) return _analyseReady;
+  _analyseReady = loadAnalysePanel().then(({ AnalysePanel: Ctor }) => {
+    // A concurrent caller may have won the race while the import was in flight.
+    if (!analysePanel) {
+      analysePanel = newAnalysePanel(Ctor);
+      // Insert into the DOM in its canonical spot; no-op in bare/embed mode
+      // where no left column was built.
+      mountAnalysePanelElement?.(analysePanel.element);
+      // Replay whatever state the (already-run) scan route asked for.
+      hydrateAnalysePanel();
     }
-    confidenceColorPrev = currentColorMode ?? defaultMode(cloud);
-    currentColorMode = 'confidence';
-    viewer.setColorMode(activeId, 'confidence');
-    inspector.setColorModes(availableModes(cloud), 'confidence');
-    syncInspectorVisuals();
-    analysePanel.setConfidenceColorActive(true);
-    // The 3D overlay tints each point by the trust of the ground beneath it.
-    // Points cluster over MEASURED ground, so a surface that is largely
-    // interpolated still paints mostly "strong" in 3D — the interpolated share
-    // sits in point-sparse voids that have little to colour. Say so, and point
-    // the user at the 2D Coverage tile, which shows every cell. Only caption
-    // when interpolation is a meaningful share, so a clean scan stays quiet.
-    const summary = viewer.coverageGridCellSummary();
-    if (summary && summary.interpFrac >= 0.2) {
-      const pct = Math.round(summary.interpFrac * 100);
-      showLassoToast(
-        `Confidence colour shows ground-survey trust under each point. ${pct}% of the ` +
-          `surface is interpolated and point-sparse, so 3D reads mostly strong — see the ` +
-          `2D Coverage tile for the full per-cell map.`,
-      );
-    }
-  },
-  getMapContext: () => {
-    const cloud = activeId ? viewer.getCloud(activeId) : null;
-    // Streamed COPC / EPT scans never enter `viewer.getCloud` — their
-    // recentre offset lives on the streaming source (`renderOrigin`) and
-    // their CRS on `crs()`. Fall back to those when no static cloud is
-    // active, so a contour export from a streamed scan keeps its world
-    // origin and EPSG stamp instead of silently degrading to local frame.
-    const streaming = cloud ? null : viewer.streamingCloud;
-    const origin = cloud?.origin ?? streaming?.renderOrigin;
-    const cur = crsService.current();
-    return {
-      // All three axes: contour serialization shifts elevations by `z` so
-      // exported contour levels read in real-world (e.g. orthometric) height
-      // rather than the recentred local frame.
-      worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
-      title: `${lastCloudName} — Contours`,
-      sheet: 'letter',
-      isGeographic: cur?.kind === 'geographic',
-      wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
-      // The resolved CRS's linear unit (same seam every other unit consumer
-      // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
-      // scale note says ft — and a local/unresolved frame stamps an honest
-      // "unitless" rather than asserting metres. Undefined before a CRS
-      // resolves ⇒ serializeContours keeps its standing metre default.
-      linearUnit: cur?.linearUnit,
-      // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
-      // it declares one, else the horizontal linear factor when the frame is
-      // actually resolved (GeoTIFF default: vertical follows the model's linear
-      // unit — so a metre CRS reads "m", a foot CRS "ft"). A local / unknown
-      // frame (linearUnit 'unknown') leaves this undefined so the deliverable
-      // elevation unit + the contour interval / relief show an honest
-      // "unverified" unit rather than a false metre. The complete deliverable,
-      // and the Analyse panel's readiness / recommend / map-sheet notes, read this.
-      verticalUnitToMetres:
-        cur?.verticalUnitToMetres ??
-        (cur && cur.linearUnit !== 'unknown' ? cur.linearUnitToMetres : undefined),
-    };
-  },
-});
+    return analysePanel;
+  });
+  return _analyseReady;
+}
+
+/**
+ * Replay the tracked Analyse-panel state onto the freshly-mounted panel — the
+ * "Treat as" control, visibility, expand state, and confidence-colour toggle —
+ * so a panel that mounted a beat after the scan route was computed shows exactly
+ * what the route asked for. Called once from `ensureAnalysePanel()`.
+ */
+function hydrateAnalysePanel(): void {
+  if (!analysePanel) return;
+  if (analyseScanTypeArgs) analysePanel.setScanType(...analyseScanTypeArgs);
+  analysePanel.setVisible(analyseDesiredVisible);
+  if (analyseExpanded) analysePanel.expand();
+  analysePanel.setConfidenceColorActive(currentColorMode === 'confidence');
+}
 
 // Classification legend — one row per ASPRS class present in the scan, with a
 // colour swatch (matching "colour by class"), a live "shown" point count, and a
@@ -2763,7 +2893,7 @@ async function showReclassifyUi(): Promise<void> {
       const ui = createReclassifyUi({
         canvas: stage.canvas,
         getViewer: () => viewer,
-        getActiveId: () => activeId,
+        getActiveId: () => scan.activeId,
         onToast: showLassoToast,
       });
       classLegendPanel.element.after(ui.element);
@@ -2798,7 +2928,7 @@ classLegendPanel.onPaletteChange((on) => {
   // refresh; the legend repaints its own swatches.
   persistPrefs();
   if (currentColorMode === 'classification') {
-    if (activeId) viewer.setColorMode(activeId, 'classification');
+    if (scan.activeId) viewer.setColorMode(scan.activeId, 'classification');
     if (viewer.hasStreamingCloud) viewer.setStreamingColorMode('classification');
   }
 });
@@ -2822,7 +2952,7 @@ function refreshScopedReport(): void {
     }
     return;
   }
-  const cloud = activeId ? viewer.getCloud(activeId) : null;
+  const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
   if (cloud) inspector.setReport(runModules(cloud, currentClassScope(cloud)));
 }
 // Streaming node-ready: fold each newly-resident node's classification into the
@@ -2954,11 +3084,41 @@ function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
 }
 
 
+// --- Lazy Object/Space-panel mount (v0.6 P1, step 2) --------------------------
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
-// pipeline if the shape detector misjudged the scan.
-const objectPanel = new ObjectPanel({
-  onRunTerrainAnyway: () => {
+// pipeline if the shape detector misjudged the scan. Constructed on the FIRST
+// scan load, not at boot, so its DOM-builder chain — and the `scanTypeControl`
+// it shares only with the (now-lazy) Analyse panel — stay out of the empty-state
+// shell. Until then `objectPanel` is a null sentinel: every call site is
+// null-guarded (or routes through `ensureObjectPanel()`), and the synchronous
+// scan-route pass records its intent in the tracking vars below so
+// `hydrateObjectPanel()` can replay it the instant the panel mounts.
+let objectPanel: ObjectPanel = null as unknown as ObjectPanel;
+// Desired panel state, mirrored so a panel mounted a beat AFTER the scan route
+// was computed (the dynamic import resolves later) replays the correct state.
+let objectDesiredVisible = false;
+let objectScanTypeArgs: Parameters<ObjectPanel['setScanType']> | null = null;
+// The last content the route asked the panel to render (showSpace / showObject),
+// captured verbatim so a panel that mounts after the route ran shows the same
+// report — not a stale empty state. Null before any non-terrain route.
+let objectContent:
+  | { readonly kind: 'space'; readonly args: Parameters<ObjectPanel['showSpace']> }
+  | { readonly kind: 'object'; readonly args: Parameters<ObjectPanel['showObject']> }
+  | null = null;
+// Memoised first-mount promise so concurrent first-loads share one construction.
+let _objectReady: Promise<ObjectPanel> | null = null;
+
+/**
+ * Construct the Object/Space panel with the SAME callbacks the eager version
+ * used. Split out only so the (large) opts object keeps a shallow indentation;
+ * called exactly once, from `ensureObjectPanel()`.
+ */
+function newObjectPanel(
+  Ctor: Awaited<ReturnType<typeof loadObjectPanel>>['ObjectPanel'],
+): ObjectPanel {
+  return new Ctor({
+    onRunTerrainAnyway: () => {
     // "Run terrain contours anyway" is the explicit, equivalent twin of the
     // "Treat as: Terrain" override — route both through the same path so the
     // control, the panels, and the streaming pin stay in sync.
@@ -3030,16 +3190,63 @@ const objectPanel = new ObjectPanel({
     const { floorPlanConfidence } = await loadFloorPlanConfidence();
     objectPanel.showFloorPlanSummary(floorPlanConfidence(plan));
   },
-});
+  });
+}
+
+/**
+ * Construct + mount the Object panel exactly once, pulling its chunk through
+ * `loadObjectPanel()`. Idempotent and memoised: concurrent first-mounts share
+ * the single in-flight promise, and the double-construct guard means only one
+ * panel is ever built. After construction it inserts into the DOM (desktop left
+ * column, or the mobile sheet when that layout is active) and hydrates the
+ * tracked state. Mirrors `ensureAnalysePanel`.
+ */
+function ensureObjectPanel(): Promise<ObjectPanel> {
+  if (objectPanel) return Promise.resolve(objectPanel);
+  if (_objectReady) return _objectReady;
+  _objectReady = loadObjectPanel().then(({ ObjectPanel: Ctor }) => {
+    // A concurrent caller may have won the race while the import was in flight.
+    if (!objectPanel) {
+      objectPanel = newObjectPanel(Ctor);
+      // Insert into the DOM in its canonical spot; no-op in bare/embed mode
+      // where no left column was built.
+      mountObjectPanelElement?.(objectPanel.element);
+      // Replay whatever state the (already-run) scan route asked for.
+      hydrateObjectPanel();
+    }
+    return objectPanel;
+  });
+  return _objectReady;
+}
+
+/**
+ * Replay the tracked Object-panel state onto the freshly-mounted panel — the
+ * "Treat as" control, the last space/object report content, and visibility — so
+ * a panel that mounted a beat after the scan route was computed shows exactly
+ * what the route asked for. Called once from `ensureObjectPanel()`.
+ */
+function hydrateObjectPanel(): void {
+  if (!objectPanel) return;
+  if (objectScanTypeArgs) objectPanel.setScanType(...objectScanTypeArgs);
+  if (objectContent) {
+    if (objectContent.kind === 'space') objectPanel.showSpace(...objectContent.args);
+    else objectPanel.showObject(...objectContent.args);
+  }
+  objectPanel.setVisible(objectDesiredVisible);
+}
 
 // Terrain-analysis runner — extracted into `src/app/`. Constructed here, after
 // `analysePanel`, so the panel/object-panel callbacks above (which fire only on
-// user input) can drive it. Reads the lazy `viewer` and the `activeId`
+// user input) can drive it. Reads the lazy `viewer` and the `scan.activeId`
 // selection through getters so no top-level `viewer.*` dereference is added.
 const terrainRunner = createTerrainAnalysisRunner({
   getViewer: () => viewer,
-  analysePanel,
-  getActiveId: () => activeId,
+  // The panel is lazy-mounted (ensureAnalysePanel), so the runner reads it
+  // through a getter — never captures the boot-time null sentinel. Every runner
+  // entry point (onRun / onSelectInterval callbacks, the "run anyway" hatches)
+  // fires only after the panel has mounted, so this always resolves non-null.
+  getAnalysePanel: () => analysePanel,
+  getActiveId: () => scan.activeId,
   crsService,
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
   // so the 3D "Coverage" colour mode (and its colourblind-safe "Confidence"
@@ -3090,7 +3297,7 @@ void viewerLoaded.then((v) => {
     // The cache is gone but the RENDERED result/contours are not — without a
     // caveat they read as current while reflecting the previous classes. The
     // panel no-ops when nothing is on screen; a completed re-run clears it.
-    analysePanel.setStaleNotice(
+    analysePanel?.setStaleNotice(
       'Classification edited — results reflect the previous classification. Re-run Analyse to refresh.',
     );
   };
@@ -3106,34 +3313,25 @@ const reducedById = new Map<string, boolean>();
 // / ASC with the same CRS options as the splash batch converter. The engine
 // (proj4) is imported lazily on Export, so this panel adds nothing heavy.
 // Streaming export snapshot — the Convert lane exports the resident (decoded-
-// so-far) points of a streaming scan. Building the snapshot concatenates every
-// resident node, so memoise it and rebuild only when the resident count
-// changes: the panel calls `getCloud()` on every option toggle for its live
-// summary, which must stay cheap, while the export click still gets a snapshot
-// current as of the latest streamed-in nodes.
-let streamingSnapshot: { cloud: PointCloud; residentCount: number } | null = null;
+// so-far) points of a streaming scan. Building it concatenates every frontier
+// node, so it is materialised only at the actual Export click: the panel's live
+// summary reads the allocation-free `summaryInfo`, and the pending check uses
+// `exportFrontierPointTotal`, so nothing else reaches here. It is deliberately
+// NOT memoised — the old resident-count key returned a stale coarse snapshot
+// when the frontier changed composition (parent → children) at the same total
+// count. A fresh snapshot is always the current frontier.
 function streamingExportCloud(): PointCloud | null {
-  // `viewer` is null until the lazy Viewer chunk resolves; ExportPanel's
-  // constructor reaches this (via getCloud in _renderGzipRow/_renderSummary)
-  // during startup, before that. No viewer ⇒ no streaming cloud to snapshot.
+  // `viewer` is null until the lazy Viewer chunk resolves; guard the deref.
   const sc = viewer?.streamingCloud;
-  if (!sc) {
-    streamingSnapshot = null;
-    return null;
-  }
-  const rc = sc.residentPointCount;
-  if (!streamingSnapshot || streamingSnapshot.residentCount !== rc) {
-    const snap = viewer.snapshotResidentCloud();
-    streamingSnapshot = snap ? { cloud: snap, residentCount: rc } : null;
-  }
-  return streamingSnapshot?.cloud ?? null;
+  if (!sc) return null;
+  return viewer.snapshotResidentCloud();
 }
 
 /**
  * Origin + CRS + name for the ACTIVE scan, static OR streaming. The Products-
  * lane exporters (measurements / integrity report / KML) place local points
  * back into the source frame by adding the cloud origin — but streaming clouds
- * aren't tracked by `activeId`, so reading only the static cloud left them
+ * aren't tracked by `scan.activeId`, so reading only the static cloud left them
  * exporting at RENDER-frame coordinates (off by the whole `renderOrigin`) with
  * no CRS. This resolves the origin from the streaming source's `renderOrigin`
  * when no static cloud is active.
@@ -3143,8 +3341,8 @@ function exportGeoContext(): {
   crsName: string | undefined;
   name: string | null;
 } {
-  if (activeId) {
-    const c = viewer.getCloud(activeId);
+  if (scan.activeId) {
+    const c = viewer.getCloud(scan.activeId);
     if (c) return { origin: c.origin, crsName: c.metadata?.crs?.name, name: c.name };
   }
   const sc = viewer.streamingCloud;
@@ -3163,8 +3361,8 @@ const exportPanel = new ExportPanel({
     // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
     // an explicit `viewer == null` check would trip TS2367 (viewer is typed
     // non-null via a cast). No viewer ⇒ nothing exportable yet.
-    if (activeId != null) {
-      const c = viewer?.getCloud(activeId);
+    if (scan.activeId != null) {
+      const c = viewer?.getCloud(scan.activeId);
       if (!c) return null;
       const crs = c.metadata?.crs ?? null;
       return {
@@ -3173,29 +3371,42 @@ const exportPanel = new ExportPanel({
         hasGpsTime: c.gpsTime != null,
         crsName: crs?.name ?? null,
         hasWkt: crs?.wkt != null,
+        classProvenance: c.classificationIsDerived
+          ? 'derived'
+          : c.classification != null ? 'source' : 'none',
       };
     }
     const sc = viewer?.streamingCloud;
     if (!sc) return null;
     const crs = sc.crs();
     return {
-      pointCount: viewer.residentPointTotal(),
+      // The frontier total, not the resident total: an export drops ancestor
+      // nodes that have a resident descendant, so counting every resident point
+      // promised roughly twice the points and bytes the write delivered.
+      pointCount: viewer.exportFrontierPointTotal(),
       hasRgb: sc.availableColorModes().includes('rgb'),
       // COPC/EPT point records (PDRF 6/7/8) carry GPS time.
       hasGpsTime: true,
       crsName: crs?.name ?? null,
       hasWkt: crs?.wkt != null,
+      // Streaming classification is read straight from the source records — a
+      // decode never derives it — so it is 'source' when the schema carries it.
+      classProvenance: sc.availableColorModes().includes('classification') ? 'source' : 'none',
     };
   },
-  getCloud: () => (activeId ? viewer.getCloud(activeId) ?? null : streamingExportCloud()),
-  isStreamingPending: () => viewer?.streamingCloud != null && streamingExportCloud() == null,
+  getCloud: () => (scan.activeId ? viewer.getCloud(scan.activeId) ?? null : streamingExportCloud()),
+  // Pending = a streaming cloud is attached but its export frontier is still
+  // empty. Read the allocation-free frontier count rather than materialising a
+  // snapshot just to test it for null.
+  isStreamingPending: () =>
+    viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(),
-  hasFullSource: () => activeId != null && sourceFileById.has(activeId),
+  hasFullSource: () => scan.activeId != null && sourceFileById.has(scan.activeId),
   // A streaming snapshot exports only the resident (streamed-in) points, so it
   // is a reduced subset whenever the whole cloud hasn't landed yet — flag it so
   // the export status says "reduced view" and never reads as the full survey.
   isReduced: () => {
-    if (activeId != null) return reducedById.get(activeId) === true;
+    if (scan.activeId != null) return reducedById.get(scan.activeId) === true;
     // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
     // constructor calls this (via _renderFullResRow) during startup — before
     // that. Optional-chain the deref: with no viewer there is no streaming
@@ -3205,7 +3416,7 @@ const exportPanel = new ExportPanel({
     return sc != null && sc.residentPointCount < sc.sourcePointCount;
   },
   getFullCloud: async () => {
-    const f = activeId ? sourceFileById.get(activeId) : null;
+    const f = scan.activeId ? sourceFileById.get(scan.activeId) : null;
     if (!f) return null;
     // Full-resolution re-decode reads the whole file into memory and expands it
     // into typed attribute arrays — several × the file size at peak. A user can
@@ -3237,6 +3448,7 @@ const exportPanel = new ExportPanel({
       toOutput: (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
+      verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
       crsName: geo.crsName,
       geographic: false,
     };
@@ -3259,7 +3471,7 @@ const exportPanel = new ExportPanel({
       geo.name ? baseName(geo.name) : 'scan',
       geo.crsName,
       new Date().toISOString(),
-      activeId ? viewer.classificationEpoch(activeId) : 0,
+      scan.activeId ? viewer.classificationEpoch(scan.activeId) : 0,
       __APP_VERSION__,
     );
     downloadText(f.filename, f.text);
@@ -3276,7 +3488,7 @@ const exportPanel = new ExportPanel({
       measurements: viewer.measure.getMeasurements(),
       // Saved views become <LookAt> placemarks — same LOCAL render frame as the
       // measurements, so the injected transform places them correctly.
-      viewpoints: savedViews.map((v) => ({
+      viewpoints: viewBookmarks.savedViews.map((v) => ({
         name: v.name,
         position: v.pose.position,
         target: v.pose.target,
@@ -3287,6 +3499,7 @@ const exportPanel = new ExportPanel({
       unitLabel: 'm',
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
+      verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
       toLonLat,
       notSurveyGradeNote:
         'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',
@@ -3297,7 +3510,7 @@ const exportPanel = new ExportPanel({
   kmlStatus: () => {
     if (!viewer) return { ready: false, reason: 'Open a scan first.' };
     // Resolve origin/CRS for static AND streaming — a georeferenced streaming
-    // scan can place KML too; gating on the static `activeId` disabled it.
+    // scan can place KML too; gating on the static `scan.activeId` disabled it.
     const geo = exportGeoContext();
     if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
     const features =
@@ -3386,10 +3599,10 @@ const clipPanel = new ClipPanel({
   // is a no-op, so guard like every other boot-reachable viewer callback here.
   onApply: (clip: ClipBox | null) => viewer?.setClip(clip),
   fitBounds: () => {
-    const c = activeId ? viewer.getCloud(activeId) ?? null : null;
+    const c = scan.activeId ? viewer.getCloud(scan.activeId) ?? null : null;
     return c ? c.bounds() : null;
   },
-  keptCount: () => (activeId ? viewer.clipKeptCount(activeId) : null),
+  keptCount: () => (scan.activeId ? viewer.clipKeptCount(scan.activeId) : null),
 });
 
 // ── Scan-type routing state ─────────────────────────────────────────────────
@@ -3568,8 +3781,11 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   if (!plan.apply) {
     if (plan.commitDetected !== null) {
       const committedDisabled = treatAsDisabledFor(detected);
-      objectPanel.setScanType(scanTypeOverride, plan.commitDetected, committedDisabled, true);
-      analysePanel.setScanType(scanTypeOverride, plan.commitDetected, committedDisabled, true);
+      // Track for hydration + apply (no-op while the panel's chunk is in flight).
+      objectScanTypeArgs = [scanTypeOverride, plan.commitDetected, committedDisabled, true];
+      objectPanel?.setScanType(...objectScanTypeArgs);
+      analyseScanTypeArgs = [scanTypeOverride, plan.commitDetected, committedDisabled, true];
+      analysePanel?.setScanType(...analyseScanTypeArgs);
     }
     return oneShotSpent;
   }
@@ -3578,7 +3794,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
 
   const isNonTerrain = plan.showObjectPanel;
   if (isNonTerrain && shape && gathered) {
-    const activeCloud = activeId ? viewer.getCloud(activeId) : null;
+    const activeCloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
     // RGB presence: a STREAMING COPC/EPT carries its colours in the streamed
     // nodes, not the static `activeCloud.colors`, so checking the static buffer
     // reports "No" for a PDRF 7/8 colour scan. Ask the streaming cloud's own
@@ -3613,10 +3829,13 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       spaceKind === 'object'
         ? objectMetrics(gathered.positions, { sourcePointCount: gathered.totalPoints })
         : null;
+    // Track the content for hydration; apply now (no-op if not yet mounted).
     if (spaceKind === 'interior') {
-      objectPanel.showSpace(space, shape);
+      objectContent = { kind: 'space', args: [space, shape] };
+      objectPanel?.showSpace(space, shape);
     } else {
-      objectPanel.showObject(object, space, shape);
+      objectContent = { kind: 'object', args: [object, space, shape] };
+      objectPanel?.showObject(object, space, shape);
     }
     // Cache the EXACT inputs behind the on-screen report so the panel's export
     // buttons (Report PDF / Floor plan preview) build from the same positions + metrics +
@@ -3636,13 +3855,21 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     // with its honest empty state — which still carries the "Treat as" control
     // and the run-anyway hatch — instead of tearing it down. Never a dead panel.
     lastSpaceExport = null;
-    if (effective === 'interior') objectPanel.showSpace(null, null);
-    else objectPanel.showObject(null, null, null);
+    if (effective === 'interior') {
+      objectContent = { kind: 'space', args: [null, null] };
+      objectPanel?.showSpace(null, null);
+    } else {
+      objectContent = { kind: 'object', args: [null, null, null] };
+      objectPanel?.showObject(null, null, null);
+    }
   } else {
     lastSpaceExport = null;
   }
-  objectPanel.setVisible(plan.showObjectPanel);
-  analysePanel.setVisible(plan.showAnalysePanel);
+  // Track desired visibility for hydration; apply now (no-op if not yet mounted).
+  objectDesiredVisible = plan.showObjectPanel;
+  objectPanel?.setVisible(plan.showObjectPanel);
+  analyseDesiredVisible = plan.showAnalysePanel;
+  analysePanel?.setVisible(plan.showAnalysePanel);
   dock.setAnalyseEnabled(true);
   dock.setAnalyseActive(plan.showAnalysePanel);
   // When DETECTION says the scan is an interior / compact object, the Terrain
@@ -3658,8 +3885,11 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   // flag (settled-verdict soft commit) only ever shows under auto mode — a
   // manual override displays the override pill regardless.
   const committed = scanTypeOverride === 'auto' && scanDetectionCommitted;
-  objectPanel.setScanType(scanTypeOverride, effective, treatAsDisabled, committed);
-  analysePanel.setScanType(scanTypeOverride, effective, treatAsDisabled, committed);
+  // Track for hydration + apply (no-op while the panel's chunk is in flight).
+  objectScanTypeArgs = [scanTypeOverride, effective, treatAsDisabled, committed];
+  objectPanel?.setScanType(...objectScanTypeArgs);
+  analyseScanTypeArgs = [scanTypeOverride, effective, treatAsDisabled, committed];
+  analysePanel?.setScanType(...analyseScanTypeArgs);
   // Forcing terrain is the explicit "run anyway": surface the Analyse panel
   // AND kick the pipeline, matching the old escape hatch. The panel must also
   // EXPAND out of its collapsed-chip state — it is built collapsed, and routing
@@ -3668,8 +3898,14 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   // true ONLY for the manual 'terrain' override — a detected-terrain route
   // shows the collapsed panel but NEVER starts the analysis by itself.
   if (plan.runTerrain) {
-    analysePanel.expand();
-    void terrainRunner.run();
+    // The explicit "run terrain anyway" hatch: mount the panel (if the import is
+    // still in flight), expand it out of its collapsed chip, then run. Mounting
+    // first guarantees the busy state + result have somewhere to land.
+    analyseExpanded = true;
+    void ensureAnalysePanel().then((p) => {
+      p.expand();
+      void terrainRunner.run();
+    });
   }
   return oneShotSpent;
 }
@@ -3690,13 +3926,26 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
 // without main.ts holding a direct reference to the sheet instance.
 let syncMobileSheet: (() => void) | null = null;
 
+// Set once the desktop left-panel column (and mobile sheet) are built (full app
+// only). Lets the lazily-mounted Analyse panel insert itself into the DOM in its
+// canonical spot the instant its chunk resolves — the column is built before any
+// scan (thus before the panel exists), so it can't be appended eagerly. The
+// closure routes into the mobile sheet's Analyse slot when that layout is active,
+// else between the class-legend and export panels in the left column. Null in
+// bare/embed mode (no column), where the panel simply stays detached as before.
+let mountAnalysePanelElement: ((el: HTMLElement) => void) | null = null;
+// Same seam for the (also lazy) Object panel — inserts it just before the
+// class-legend panel in the left column, or into the mobile Analyse slot (after
+// the Analyse panel) when that layout is active. Null in bare/embed mode.
+let mountObjectPanelElement: ((el: HTMLElement) => void) | null = null;
+
 function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name);
   exportPanel.setVisible(true);
   exportPanel.refresh();
   // Build the measure snap index from the resident cloud (static scans only;
   // a streaming scan has no resident array, so snapping stays off and says so).
-  const snapCloud = activeId ? viewer.getCloud(activeId) ?? null : null;
+  const snapCloud = scan.activeId ? viewer.getCloud(scan.activeId) ?? null : null;
   viewer.measure.setSnapSource(snapCloud?.positions ?? null);
   // Reveal the clip control and seed its box from this scan's bounds (disabled
   // until the user enables it). Skip the reseed when the viewer already holds
@@ -3722,6 +3971,13 @@ function revealAnalysePanel(name: string, settled = true): void {
   // Streaming callers pass false: their open-time verdict runs on a sparse
   // coarse frame, so the "Treat as" commit waits for the settle one-shot.
   applyScanRoute(true, settled);
+  // Mount the Analyse + Object panels on this scan load (v0.6 P1 lazy seam). The
+  // route above ran synchronously against the not-yet-mounted panels, recording
+  // their intent in the tracking vars; once each chunk resolves the panel
+  // constructs, mounts, and `hydrate{Analyse,Object}Panel()` replays that intent.
+  // Fire-and-forget: nothing here awaits the panels.
+  void ensureAnalysePanel();
+  void ensureObjectPanel();
   // A scan is now loaded — let the phone sheet show (no-op on desktop).
   syncMobileSheet?.();
 }
@@ -3815,7 +4071,10 @@ void viewerLoaded.then(() => {
   // the profile chart has room and the focus is unambiguous.
   viewer.measure.setOnKindChange((kind) => {
     if (kind === 'profile') {
-      analysePanel.setVisible(false);
+      // Null-safe: profile selection needs a scan (panel mounted), but track the
+      // desired-hidden state too so a not-yet-mounted panel hydrates hidden.
+      analyseDesiredVisible = false;
+      analysePanel?.setVisible(false);
       dock.setAnalyseActive(false);
       measurePanel.setVisible(true);
     }
@@ -3942,19 +4201,19 @@ if (testApi) {
       // lasso, undo/redo, and read a point's class, so the reclassify tool's
       // full flow is e2e-verifiable without running the heavy classifier.
       seedUniformClass: (cls: number): number => {
-        if (!activeId) return 0;
-        const cloud = v.getCloud(activeId);
+        if (!scan.activeId) return 0;
+        const cloud = v.getCloud(scan.activeId);
         if (!cloud) return 0;
         const n = cloud.positions.length / 3;
-        v.applyDerivedClassification(activeId, new Uint8Array(n).fill(cls));
+        v.applyDerivedClassification(scan.activeId, new Uint8Array(n).fill(cls));
         return n;
       },
       reclassifyLasso: (lasso: ReadonlyArray<{ x: number; y: number }>, newClass: number): number =>
-        activeId ? v.reclassifyLasso(activeId, lasso, newClass).changedCount : 0,
-      undoClass: (): boolean => (activeId ? v.undoClassification(activeId) : false),
-      redoClass: (): boolean => (activeId ? v.redoClassification(activeId) : false),
+        scan.activeId ? v.reclassifyLasso(scan.activeId, lasso, newClass).changedCount : 0,
+      undoClass: (): boolean => (scan.activeId ? v.undoClassification(scan.activeId) : false),
+      redoClass: (): boolean => (scan.activeId ? v.redoClassification(scan.activeId) : false),
       classAt: (i: number): number => {
-        const c = activeId ? v.getCloud(activeId)?.classification : undefined;
+        const c = scan.activeId ? v.getCloud(scan.activeId)?.classification : undefined;
         return c ? c[i] : -1;
       },
       // Mount/show the reclassify panel (normally triggered when a
@@ -4182,7 +4441,12 @@ void viewerLoaded.then(() => {
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
     leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
-    leftPanels.append(measurePanel.element, annotationPanel.element, objectPanel.element, classLegendPanel.element, analysePanel.element, exportPanel.element, clipPanel.element);
+    // NOTE: analysePanel.element AND objectPanel.element are intentionally ABSENT
+    // here — both panels are lazy-mounted on first scan load (v0.6 P1). The Object
+    // panel inserts itself just before the class-legend panel, and the Analyse
+    // panel between the class-legend and export panels, via
+    // `mountObjectPanelElement` / `mountAnalysePanelElement` below.
+    leftPanels.append(measurePanel.element, annotationPanel.element, classLegendPanel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
     // reach the camera. Stop it here (passive — this is plain scrolling, never a
@@ -4257,7 +4521,13 @@ void viewerLoaded.then(() => {
 
     const toMobileLayout = (): void => {
       mobileSheet.slot('view').append(inspector.element);
-      mobileSheet.slot('analyse').append(analysePanel.element, objectPanel.element);
+      // Both the Analyse and Object panels are lazy-mounted, so re-parent each
+      // only once it exists (analyse first, then object). A mobile empty-state
+      // boot BEFORE any scan runs this with BOTH still null — the slot stays
+      // empty, and each panel slots itself in via `mountAnalysePanelElement` /
+      // `mountObjectPanelElement` when it later mounts.
+      if (analysePanel) mobileSheet.slot('analyse').append(analysePanel.element);
+      if (objectPanel) mobileSheet.slot('analyse').append(objectPanel.element);
       mobileSheet
         .slot('layers')
         .append(
@@ -4268,7 +4538,7 @@ void viewerLoaded.then(() => {
         );
       // Drop the desktop collapsed state so mobile users don't see a nested
       // collapsed header inside the sheet's own collapse chrome.
-      analysePanel.element.classList.remove('olv-collapsed');
+      analysePanel?.element.classList.remove('olv-collapsed');
       exportPanel.element.classList.remove('olv-collapsed');
       // The now-empty left column would still capture touches over its band —
       // hide it. The Inspector's standalone "Scan Info" launcher is superseded.
@@ -4279,21 +4549,25 @@ void viewerLoaded.then(() => {
       // Restore the desktop default collapsed state we dropped for the mobile
       // sheet, so a device that crosses the breakpoint (rotate / resize) gets the
       // compact desktop panels back rather than fully-expanded ones.
-      analysePanel.element.classList.add('olv-collapsed');
+      analysePanel?.element.classList.add('olv-collapsed');
       exportPanel.element.classList.add('olv-collapsed');
       leftPanels.classList.remove('olv-hidden');
       inspector.sheetToggle.classList.remove('olv-hidden');
       // Inspector returns to the overlay in its original slot (just before the
-      // streaming panel); the left column is rebuilt in its original order.
+      // streaming panel); the left column is rebuilt in its original order. The
+      // Object and Analyse panels are included only once each has lazily mounted
+      // (Object before the class-legend panel, Analyse between the class-legend
+      // and export panels — via mountObjectPanelElement / mountAnalysePanelElement).
       stage.overlay.insertBefore(inspector.element, streamingPanel.element);
-      leftPanels.append(
+      const desktopPanels: HTMLElement[] = [
         measurePanel.element,
         annotationPanel.element,
-        objectPanel.element,
-        classLegendPanel.element,
-        analysePanel.element,
-        exportPanel.element,
-      );
+      ];
+      if (objectPanel) desktopPanels.push(objectPanel.element);
+      desktopPanels.push(classLegendPanel.element);
+      if (analysePanel) desktopPanels.push(analysePanel.element);
+      desktopPanels.push(exportPanel.element);
+      leftPanels.append(...desktopPanels);
     };
 
     // Layout swap stays keyed to the WIDTH breakpoint so JS layout and the CSS
@@ -4318,6 +4592,44 @@ void viewerLoaded.then(() => {
     syncMobileSheet = applyMobileSheet;
     mobileMql?.addEventListener('change', applyMobileSheet);
     applyMobileSheet();
+
+    // The lazy Analyse panel inserts itself here once its chunk resolves. When
+    // the mobile sheet is active it goes into the Analyse slot ahead of the
+    // object panel; otherwise between the class-legend and export panels in the
+    // left column. Robust to either target panel not being where we expect
+    // (falls back to append) so a mid-flip mount can never throw.
+    mountAnalysePanelElement = (el: HTMLElement): void => {
+      if (mobileApplied) {
+        const slot = mobileSheet.slot('analyse');
+        // insertBefore(firstChild) puts Analyse first (object panel follows);
+        // acts as append when the slot is empty.
+        slot.insertBefore(el, slot.firstChild);
+        el.classList.remove('olv-collapsed');
+      } else if (exportPanel.element.parentElement === leftPanels) {
+        leftPanels.insertBefore(el, exportPanel.element);
+      } else {
+        leftPanels.append(el);
+      }
+    };
+    // The lazy Object panel inserts itself here once its chunk resolves. When
+    // the mobile sheet is active it goes into the Analyse slot AFTER the Analyse
+    // panel; otherwise just before the class-legend panel in the left column.
+    // Robust to the target panel not being where we expect (falls back to
+    // append) so a mid-flip mount can never throw.
+    mountObjectPanelElement = (el: HTMLElement): void => {
+      if (mobileApplied) {
+        // append puts Object after the Analyse panel in the shared Analyse slot.
+        mobileSheet.slot('analyse').append(el);
+      } else if (classLegendPanel.element.parentElement === leftPanels) {
+        leftPanels.insertBefore(el, classLegendPanel.element);
+      } else {
+        leftPanels.append(el);
+      }
+    };
+    // If either panel already mounted before this wiring ran (possible only if a
+    // scan's import resolved between column build and here), place it now.
+    if (analysePanel) mountAnalysePanelElement(analysePanel.element);
+    if (objectPanel) mountObjectPanelElement(objectPanel.element);
 
     // The help overlay is a modal — appended last so it sits above everything.
     stage.overlay.append(helpOverlay.element);
@@ -4346,7 +4658,7 @@ void viewerLoaded.then(() => {
       onToggleHelp: () => helpOverlay.toggle(),
       onUndo: () => {
         if (helpOverlay.isOpen) return;
-        const id = activeId;
+        const id = scan.activeId;
         const canClass = !!id && viewer.canUndoClassification(id);
         const pick = pickUndo(viewer.annotate.canUndo, canClass);
         if (!pick) return;
@@ -4358,7 +4670,7 @@ void viewerLoaded.then(() => {
       },
       onRedo: () => {
         if (helpOverlay.isOpen) return;
-        const id = activeId;
+        const id = scan.activeId;
         const canClass = !!id && viewer.canRedoClassification(id);
         const pick = pickRedo(viewer.annotate.canRedo, canClass);
         if (!pick) return;
@@ -4651,6 +4963,7 @@ function runStreamingModules(cloud: {
     readonly captureSensor?: string;
     readonly sourceSoftware?: string;
   };
+  readonly crs?: () => { readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number } | null;
   readonly maxDepth?: () => number;
   readonly octree?: { nodes: () => readonly unknown[] };
 }, classFilterActive = false): AnalysisRow[] {
@@ -4681,9 +4994,16 @@ function runStreamingModules(cloud: {
   // panel's Extent row, which also reads the header.
   const header = cloud.metadata?.header;
   if (header) {
-    const w = header.max[0] - header.min[0];
-    const d = header.max[1] - header.min[1];
-    const h = header.max[2] - header.min[2];
+    // Convert the source-CRS units to metres before printing "m" / "pts/m²",
+    // exactly as the static Scan Report and the PDF do. A state-plane-FEET COPC
+    // otherwise over-reports extent ~3.28× and density ~10.8×, mislabelled as
+    // metres. COPC/EPT are Z-up by spec, so the horizontal pair is X·Y.
+    const crsInfo = cloud.crs?.() ?? null;
+    const mpu = crsInfo?.linearUnitToMetres ?? 1;
+    const vmpu = crsInfo?.verticalUnitToMetres ?? mpu;
+    const w = (header.max[0] - header.min[0]) * mpu;
+    const d = (header.max[1] - header.min[1]) * mpu;
+    const h = (header.max[2] - header.min[2]) * vmpu;
     rows.push(info('Width', `${w.toFixed(1)} m`));
     rows.push(info('Depth', `${d.toFixed(1)} m`));
     rows.push(info('Height', `${h.toFixed(1)} m`));
@@ -4869,7 +5189,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
   await viewerLoaded;
   const report = await loadReportEngine();
   const streamingCloud = viewer.streamingCloud;
-  const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
+  const staticCloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
   if (!streamingCloud && !staticCloud) {
     throw new Error('Load a scan first.');
   }
@@ -4984,7 +5304,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
   // available" when the fingerprint is undefined.
   let provenanceFp: import('./report').ReportProvenanceFingerprint | undefined;
   try {
-    const activeCloud = activeId ? viewer.getCloud(activeId) : null;
+    const activeCloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
     const streamingCloud = viewer.streamingCloud;
     // The shape router's verdict rules out an aerial density guess for a
     // compact object / interior (v0.5.7 capture lens) — a temple is not drone
@@ -5067,10 +5387,10 @@ async function generateReportPdf(templateId: string): Promise<void> {
  * behind the renderer.
  */
 function syncColorModeForActive(): void {
-  if (!activeId) return;
-  const cloud = viewer.getCloud(activeId);
+  if (!scan.activeId) return;
+  const cloud = viewer.getCloud(scan.activeId);
   if (!cloud) return;
-  const mode = viewer.colorModeOf(activeId);
+  const mode = viewer.colorModeOf(scan.activeId);
   if (!mode) return;
   if (mode !== currentColorMode) currentColorMode = mode;
   inspector.setColorModes(availableModes(cloud), currentColorMode);
@@ -5278,7 +5598,7 @@ function applyViewState(vs: ViewStateBundle): void {
       // default axis, so the window would be wrong the moment a scan did
       // load. A view state is an overlay for an open scan, so "no scan ⇒
       // skip the filter" is the correct, non-surprising behaviour.
-      if (activeId == null && !viewer.hasStreamingCloud) return;
+      if (scan.activeId == null && !viewer.hasStreamingCloud) return;
       // The Inspector extents were seeded when the scan opened, so restoring
       // writes the window into the inputs and drives the GPU filter + cue.
       if (pf.elevation) {
@@ -5319,8 +5639,8 @@ function applyViewState(vs: ViewStateBundle): void {
  */
 function saveCurrentView(): void {
   const { camera, ...rest } = captureViewState();
-  savedViews.push({
-    name: `View ${++viewCounter}`,
+  viewBookmarks.savedViews.push({
+    name: `View ${++viewBookmarks.viewCounter}`,
     // `getCameraState` (not the bare pose) so a non-default FOV or nav mode
     // is part of what the view restores; the empty-state fallback keeps the
     // old bare-pose behaviour when no scan gates the capture.
@@ -5332,14 +5652,14 @@ function saveCurrentView(): void {
 
 /** Push the saved-view names to whichever panel is currently shown. */
 function refreshViewsUI(): void {
-  const names = savedViews.map((v) => v.name);
+  const names = viewBookmarks.savedViews.map((v) => v.name);
   if (viewer.hasStreamingCloud) streamingPanel.setViews(names);
   else inspector.setViews(names);
 }
 
 /** Glide the camera to a saved view — and (v7) restore its display state. */
 function applyView(index: number): void {
-  const view = savedViews[index];
+  const view = viewBookmarks.savedViews[index];
   if (!view) return;
   if (!view.state) {
     // A pre-v7 (camera-only) view keeps its exact old behaviour: glide the
@@ -5355,7 +5675,7 @@ function applyView(index: number): void {
 
 /** Delete a saved view and refresh the list. */
 function deleteView(index: number): void {
-  savedViews.splice(index, 1);
+  viewBookmarks.savedViews.splice(index, 1);
   refreshViewsUI();
 }
 
@@ -5391,11 +5711,11 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
   if (state.pointSizeMode === 'adaptive' || state.pointSizeMode === 'fixed') {
     viewer.setPointSizeMode(state.pointSizeMode);
   }
-  if (state.colorMode && activeId) {
+  if (state.colorMode && scan.activeId) {
     const modes = availableModes(cloud);
     if (modes.includes(state.colorMode as ColorMode)) {
       currentColorMode = state.colorMode as ColorMode;
-      viewer.setColorMode(activeId, currentColorMode);
+      viewer.setColorMode(scan.activeId, currentColorMode);
       inspector.setColorModes(modes, currentColorMode);
     }
   }
@@ -5412,8 +5732,15 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  */
 async function exportSession(): Promise<void> {
   const { serializeSession } = await loadSession();
-  const cloud = activeId ? viewer.getCloud(activeId) : undefined;
-  const upAxis: 'y' | 'z' = cloud && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
+  const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
+  // A streaming-only session has no static cloud. Its frame still exists — the
+  // streaming source's renderOrigin — and streaming COPC/EPT are LAS-derived,
+  // hence Z-up. Deriving origin/upAxis from the (absent) static cloud wrote
+  // [0,0,0] + Y-up, so the session reopened displaced by the whole render origin
+  // and mis-oriented.
+  const upAxis: 'y' | 'z' = cloud
+    ? isZUpFormat(cloud.sourceFormat) ? 'z' : 'y'
+    : viewer.streamingCloud ? 'z' : 'y';
 
   // populate the v3 fields so the .olvsession captures
   // the full working state, not just the inspection annotations. The
@@ -5460,7 +5787,9 @@ async function exportSession(): Promise<void> {
   // provenance/manifest modules ride the lazy terrain-export chunk — loaded
   // here on demand via lazyChunks so the eager shell stays manifest-free.
   let processingManifest: unknown;
-  const analysed = analysePanel.currentResult();
+  // Null-safe: saving a session before any scan (or before the panel's chunk
+  // resolves) simply carries no analysis manifest.
+  const analysed = analysePanel?.currentResult() ?? null;
   if (analysed) {
     const { buildExportProvenance, processingManifestFromProvenance } =
       await loadExportProvenance();
@@ -5483,12 +5812,14 @@ async function exportSession(): Promise<void> {
   const viewState = captureViewState();
   const json = serializeSession({
     upAxis,
-    origin: cloud ? cloud.origin : [0, 0, 0],
+    // The scene's real frame, static OR streaming — exportGeoContext resolves the
+    // static cloud's origin, else the streaming renderOrigin, else zero.
+    origin: [...exportGeoContext().origin],
     unitSystem: viewer.measure.unitSystem,
     // v7 — a view with a captured bundle serialises it per-view; a camera-only
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
     // v6 byte-shape.
-    views: savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
+    views: viewBookmarks.savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
     measurements: viewer.measure.getMeasurements(),
     annotations: viewer.annotate.getAnnotations(),
     camera: viewState.camera,
@@ -5514,8 +5845,12 @@ async function exportSession(): Promise<void> {
   downloadText(`${stem}.olvsession`, json);
 }
 
-/** Import an inspection session: restore measurements, annotations and views. */
-async function importSession(file: File): Promise<void> {
+/**
+ * Import an inspection session: restore measurements, annotations and views.
+ * `skipScanConfirm` is set only by the "Apply anyway" action after a partial
+ * scan-identity match, so the same restore re-runs past the confirmation gate.
+ */
+async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<void> {
   try {
     // The session path's imports are light (no three.js), so a session restore
     // can finish before the lazily-imported Viewer chunk resolves — leaving
@@ -5523,7 +5858,7 @@ async function importSession(file: File): Promise<void> {
     // access below is safe (measure/annotate are built in the Viewer ctor, so
     // no GPU backend is needed — just a non-null instance).
     await viewerLoaded;
-    const { parseSession } = await loadSession();
+    const { parseSession, rebaseSessionGeometry, matchSessionToScan } = await loadSession();
     const session = parseSession(await file.text());
     // If an older build wrote this session, a newer one may grade or label the
     // scan differently — surface that so the user can re-save. Absent stamp
@@ -5532,18 +5867,93 @@ async function importSession(file: File): Promise<void> {
       const note = staleExportReason(session.software, __APP_VERSION__);
       if (note) showLassoToast(note);
     }
-    viewer.measure.loadMeasurements(session.measurements);
-    viewer.annotate.loadAnnotations(session.annotations);
+    // Session vertices are LOCAL to the origin of the scan they were captured
+    // against. Imported onto a DIFFERENT loaded cloud (a different floored
+    // origin), they must be rebased into that cloud's frame or they land
+    // displaced by the two origins' difference — and a later export would
+    // compound the error by adding the new origin. With no cloud loaded there
+    // is nothing to rebase against; keep the verbatim geometry (the missing-
+    // scan toast below already tells the user to drop the scan).
+    const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // Guard the rebase: a session's geometry is local to the scan it was
+    // captured over, so realigning it onto the loaded cloud is only correct when
+    // that IS its scan. Compare the session's stored fingerprint (built the same
+    // way exportSession writes it) against the loaded scan. A clear conflict is
+    // refused rather than silently realigned onto the wrong scan; a partial
+    // match asks the user to confirm before anything is applied.
+    if (haveCloud) {
+      const streamingCloud = viewer.streamingCloud;
+      const staticCloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
+      let loadedFacts: import('./io/session').ScanFacts | undefined;
+      if (streamingCloud) {
+        const b = streamingCloud.dataBounds();
+        loadedFacts = {
+          fileName: streamingCloud.name,
+          sourcePoints: streamingCloud.sourcePointCount,
+          width: b[3] - b[0],
+          depth: b[4] - b[1],
+          height: b[5] - b[2],
+          crs: streamingCloud.crs()?.name,
+        };
+      } else if (staticCloud) {
+        const b = staticCloud.bounds();
+        loadedFacts = {
+          fileName: staticCloud.name,
+          sourcePoints: staticCloud.pointCount,
+          width: b.max[0] - b.min[0],
+          depth: b.max[1] - b.min[1],
+          height: b.max[2] - b.min[2],
+          crs: staticCloud.metadata?.crs?.name,
+        };
+      }
+      if (loadedFacts) {
+        const match = matchSessionToScan(session.scanSummary, loadedFacts);
+        if (match.verdict === 'conflict') {
+          const why = match.reasons[0] ?? 'its scan fingerprint does not match';
+          const want = session.scanSummary?.fileName;
+          showLassoToast(
+            `This session was captured over a different scan (${why}) — it was not applied. ` +
+              (want ? `Load “${want}” to restore it on its own scan.` : 'Load its source scan to restore it.'),
+          );
+          return;
+        }
+        if (match.verdict === 'partial' && !opts.skipScanConfirm) {
+          // Not a clear conflict, but not a confirmed match — don't touch the
+          // scene until the user opts in. "Apply anyway" re-imports with the
+          // check skipped, so the same restore proceeds on their confirmation.
+          const why = match.reasons[0] ?? '';
+          showLassoToast(
+            `This session's scan couldn't be fully verified${why ? ` (${why})` : ''}. ` +
+              'Applying it may place its measurements on the wrong scan.',
+            { label: 'Apply anyway', onClick: () => void importSession(file, { skipScanConfirm: true }) },
+          );
+          return;
+        }
+      }
+    }
+    const geo = haveCloud
+      ? rebaseSessionGeometry(session, exportGeoContext().origin)
+      : {
+          measurements: session.measurements,
+          annotations: session.annotations,
+          views: session.views,
+          camera: session.camera,
+          clip: session.clip,
+          delta: [0, 0, 0] as const,
+        };
+    const rebased = geo.delta[0] !== 0 || geo.delta[1] !== 0 || geo.delta[2] !== 0;
+    viewer.measure.loadMeasurements(geo.measurements);
+    viewer.annotate.loadAnnotations(geo.annotations);
     // v7 — a view may carry a display bundle beyond its camera; hydrate it
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
     // undefined and they stay exactly the camera-only bookmarks they were.
-    savedViews = session.views.map((v) => {
+    viewBookmarks.savedViews = geo.views.map((v) => {
       const { name, camera, ...state } = v;
       return { name, pose: camera, state: buildViewState(state) };
     });
-    viewCounter = savedViews.length;
-    inspector.setViews(savedViews.map((v) => v.name));
+    viewBookmarks.viewCounter = viewBookmarks.savedViews.length;
+    inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
     refreshMeasurePanel();
     refreshAnnotationPanel();
 
@@ -5559,8 +5969,8 @@ async function importSession(file: File): Promise<void> {
       colorMode: session.colorMode,
       classFilter: session.classFilter,
       pointFilters: session.pointFilters,
-      clip: session.clip,
-      camera: session.camera,
+      clip: geo.clip,
+      camera: geo.camera,
     });
     if (
       session.crs &&
@@ -5585,7 +5995,15 @@ async function importSession(file: File): Promise<void> {
     const restored =
       session.measurements.length + session.annotations.length + session.views.length;
     const wantFile = session.scanSummary?.fileName;
-    const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // When the user reached here via "Apply anyway", record that the restore
+    // proceeded on an unverified scan match rather than a confirmed one.
+    const appliedNote = opts.skipScanConfirm ? ' Applied despite an unverified scan match.' : '';
+    // Disclosure when the session was captured in a different scan's frame and
+    // its geometry was shifted to line up with the loaded cloud — an honest
+    // note that a non-obvious transform happened, not a silent relocation.
+    const frameNote = rebased
+      ? ' Its measurements were realigned to the loaded scan’s origin.'
+      : '';
     // Evidence Capsule: lead with the honesty roll-up when the shared session
     // carries graded measurements — the recipient sees the trust picture, not
     // just a count.
@@ -5595,11 +6013,11 @@ async function importSession(file: File): Promise<void> {
       showLassoToast(lead ?? `Session restored — drop “${wantFile}” to view its scan.`,
         lead ? { label: 'Need the scan', onClick: () => showLassoToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
     } else if (lead) {
-      showLassoToast(lead);
+      showLassoToast(`${lead}${frameNote}${appliedNote}`);
     } else {
       showLassoToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).`,
+          `(measurements, annotations, views).${frameNote}${appliedNote}`,
       );
     }
   } catch (err) {
@@ -5688,7 +6106,7 @@ async function handleFile(file: File): Promise<void> {
     const uploadStartedAt = performance.now();
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
-    activeId = id;
+    scan.activeId = id;
     // A freshly opened scan has no terrain analysis yet — drop any prior grid so
     // the Coverage colour chip starts disabled until this scan is analysed.
     viewer.setCoverageGrid(null);
@@ -5748,8 +6166,8 @@ async function handleFile(file: File): Promise<void> {
     if (isPhone()) navBar.flashTouchHint();
 
     // A new scan resets the saved viewpoints and annotations.
-    savedViews = [];
-    viewCounter = 0;
+    viewBookmarks.savedViews = [];
+    viewBookmarks.viewCounter = 0;
     viewer.annotate.clear();
     refreshAnnotationPanel();
 
@@ -5767,14 +6185,12 @@ async function handleFile(file: File): Promise<void> {
           : result.cloud.pointCount;
       inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null);
       layerVisible.set(id, true);
-      refreshLayerCrsFlags();
+      layerService.refreshCrsFlags();
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspector.setElevationExtent(viewer.elevationExtent());
       inspector.setIntensityExtent(viewer.intensityExtent());
-      inspectorCards.refreshDatasetIntelligenceFromStaticCloud(
-        result.cloud as { pointCount: number; bounds(): { min: [number, number, number]; max: [number, number, number] } },
-      );
+      inspectorCards.refreshDatasetIntelligenceFromStaticCloud(result.cloud);
       // v0.5.7 capability-driven card: derive the display profile from the
       // loaded scan and surface the declared-by-the-file provenance (E57 olv:
       // block, headline) + hide the CRS section for local-frame scans. Loaded
@@ -5808,7 +6224,7 @@ async function handleFile(file: File): Promise<void> {
     {
       const reportForId = id;
       const fillReport = (): void => {
-        if (activeId !== reportForId) return; // scan changed while we waited
+        if (scan.activeId !== reportForId) return; // scan changed while we waited
         try {
           inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
         } catch (err) {
@@ -6102,8 +6518,8 @@ async function openStreamingCopc(
     // "COPC LAZ · PDRF N" for COPC and "EPT · binary · N attrs" for EPT.
     format: 'copc',
   });
-  savedViews = [];
-  viewCounter = 0;
+  viewBookmarks.savedViews = [];
+  viewBookmarks.viewCounter = 0;
   refreshViewsUI();
 
   // Measure, annotate, inspect, probe and close all work on a streaming scan:
@@ -6816,13 +7232,23 @@ function resetToEmptyState(): void {
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
   clipPanel.setVisible(false);
   // Hide + clear the Analyse panel so it doesn't linger with stale
-  // terrain results after the scan is closed. v0.4.0.
-  analysePanel.update(null);
-  analysePanel.setVisible(false);
+  // terrain results after the scan is closed. v0.4.0. Null-safe: the panel is
+  // lazy-mounted, so a reset before any scan simply has nothing to clear. Also
+  // reset the tracked desired state so a fresh open starts hidden/collapsed.
+  if (analysePanel) {
+    analysePanel.update(null);
+    analysePanel.setVisible(false);
+  }
+  analyseDesiredVisible = false;
+  analyseExpanded = false;
   // Hide the Space / Object (non-terrain) panel too — it was added after this
   // reset path and a closed 360 / object scan would otherwise leave its report
-  // lingering over the empty state. v0.4.3.
-  objectPanel.setVisible(false);
+  // lingering over the empty state. v0.4.3. Null-safe: the panel is lazy-mounted,
+  // so a reset before any scan simply has nothing to clear. Drop the tracked
+  // content + desired state so a fresh open starts hidden with no stale report.
+  objectPanel?.setVisible(false);
+  objectDesiredVisible = false;
+  objectContent = null;
   // No scan → hide the phone bottom-sheet (no-op on desktop).
   syncMobileSheet?.();
   // Abort any in-flight terrain compute (worker job + its reply) so a result
@@ -6907,9 +7333,9 @@ function resetToEmptyState(): void {
   projectCard.hide();
   // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
   document.body.classList.remove('olv-has-scan');
-  activeId = null;
-  savedViews = [];
-  viewCounter = 0;
+  scan.activeId = null;
+  viewBookmarks.savedViews = [];
+  viewBookmarks.viewCounter = 0;
   viewer.annotate.clear();
   // Drop the snap index so a future scan can't snap to the previous cloud.
   viewer.measure.setSnapSource(null);
@@ -6918,41 +7344,6 @@ function resetToEmptyState(): void {
 }
 
 /** Remove a cloud from the scene and the Inspector. */
-/** Snapshot every loaded layer as a plain record for the pure layer model. */
-function buildLayerInfos(): LayerInfo[] {
-  return viewer.clouds().map((id) => {
-    const c = viewer.getCloud(id);
-    const crs = c?.metadata?.crs ?? null;
-    return {
-      id,
-      name: c?.name ?? id,
-      pointCount: c?.pointCount ?? 0,
-      visible: layerVisible.get(id) ?? true,
-      locked: viewer.isCloudLocked(id),
-      epsg: crs?.epsg,
-      crsName: crs?.name,
-      verticalDatum: crs?.verticalDatum,
-      isGeographic: crs?.isGeographic,
-    };
-  });
-}
-
-/** Push the model's effective visibility (intent + isolate) to the viewer + UI. */
-function applyLayerVisibility(): void {
-  const eff = resolveVisibility(buildLayerInfos(), soloLayer);
-  for (const [id, on] of eff) viewer.setCloudVisible(id, on);
-  inspector.setLayerSolo(soloLayer);
-}
-
-/** Recompute and surface cross-layer CRS mismatches (overlay alignment guard). */
-function refreshLayerCrsFlags(): void {
-  const m = detectCrsMismatch(buildLayerInfos());
-  inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
-  // The two-epoch compare needs exactly two loaded layers.
-  inspector.setLayerCompareAvailable(viewer.clouds().length === 2);
-  // Show the compass once a scan is open; hide it again when the last layer goes.
-  refreshCompass();
-}
 
 /**
  * Two-epoch change detection over the two loaded layers (first = before,
@@ -6961,8 +7352,6 @@ function refreshLayerCrsFlags(): void {
  * thread, so it's deferred a frame to let the "working" line paint; large
  * clouds may take a moment.
  */
-/** A georeferenced .asc of the most recent comparison, ready to download. */
-let lastDifference: { stem: string; asc: () => string } | null = null;
 
 /**
  * The larger of a cloud's X/Y world-frame spans, from a strided sample — a cheap
@@ -6996,7 +7385,7 @@ function compareLoadedLayers(): void {
   if (!a || !b) return;
   inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
   inspector.setDifferenceAvailable(false);
-  lastDifference = null;
+  layers.lastDifference = null;
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
@@ -7063,11 +7452,22 @@ function compareLoadedLayers(): void {
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
-      lastDifference = {
+      // The .asc grid geometry (cellsize + corners) is in the source LINEAR
+      // unit, but detectChange returns Δz in metres. Express the cell values in
+      // that same linear unit so the raster is internally consistent (a foot-CRS
+      // export otherwise carries foot geometry with metre values, and any GIS
+      // volume mixes ft² with m). Metre / compound-metre-horizontal CRS ⇒ 1, a
+      // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
+      const gridUnitToMetres = a.metadata?.crs?.linearUnitToMetres ?? 1;
+      const ascDiff =
+        gridUnitToMetres === 1
+          ? cmp.result.diff
+          : cmp.result.diff.map((v) => v / gridUnitToMetres);
+      layers.lastDifference = {
         stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
         asc: () =>
           changeToEsriAscii({
-            diff: cmp.result.diff,
+            diff: ascDiff,
             ncols: dtms.cols,
             nrows: dtms.rows,
             cellSizeM: dtms.cellSizeM,
@@ -7084,7 +7484,8 @@ function compareLoadedLayers(): void {
 
 /** Download the most recent elevation difference as an ESRI ASCII grid. */
 function exportDifferenceRaster(): void {
-  if (lastDifference) downloadText(`${lastDifference.stem}.asc`, lastDifference.asc());
+  const diff = layers.lastDifference;
+  if (diff) downloadText(`${diff.stem}.asc`, diff.asc());
 }
 
 function removeCloud(id: string): void {
@@ -7093,12 +7494,12 @@ function removeCloud(id: string): void {
   sourceFileById.delete(id);
   reducedById.delete(id);
   layerVisible.delete(id);
-  if (soloLayer === id) soloLayer = null;
-  if (activeId === id) activeId = null;
+  if (layers.solo === id) layers.solo = null;
+  if (scan.activeId === id) scan.activeId = null;
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
-    refreshLayerCrsFlags();
-    applyLayerVisibility();
+    layerService.refreshCrsFlags();
+    layerService.applyVisibility();
     inspector.setElevationExtent(viewer.elevationExtent());
     inspector.setIntensityExtent(viewer.intensityExtent());
   }
@@ -7109,7 +7510,7 @@ function removeCloud(id: string): void {
  * mesh's GPU buffers (geometry + material + colour/class attributes) AND the
  * retained source-file + reduced-flag map entries. A new open (static OR
  * streaming) replaces the previous scan, so without this the prior cloud's GPU
- * memory and File reference leak on every reopen (`activeId` is overwritten, so
+ * memory and File reference leak on every reopen (`scan.activeId` is overwritten, so
  * `removeCloud` could never reach the old id). Does NOT reset to the empty
  * state — the caller adds the replacement immediately.
  */
@@ -7120,10 +7521,10 @@ function clearOpenStaticLayers(): void {
     inspector.removeCloud(id);
     sourceFileById.delete(id);
     reducedById.delete(id);
-    if (activeId === id) activeId = null;
+    if (scan.activeId === id) scan.activeId = null;
   }
   layerVisible.clear();
-  soloLayer = null;
+  layers.solo = null;
 }
 
 /**
@@ -7137,7 +7538,7 @@ function closeScan(): void {
     inspector.removeCloud(id);
   }
   layerVisible.clear();
-  soloLayer = null;
+  layers.solo = null;
   resetToEmptyState();
 }
 

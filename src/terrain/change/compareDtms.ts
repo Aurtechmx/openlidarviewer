@@ -107,9 +107,16 @@ export function compareDtms(
   const dH1 = Math.abs(a.originH1 - b.originH1);
   const dH2 = Math.abs(a.originH2 - b.originH2);
   if (dH1 > tol || dH2 > tol) {
+    // Origins are in SOURCE units. Convert to metres for a projected CRS
+    // (a 30-ft offset must not print "30 m"); a geographic grid stays degrees.
     const off = Math.max(dH1, dH2);
+    const hUnit =
+      Number.isFinite(options.horizontalUnitToMetres) && (options.horizontalUnitToMetres as number) > 0
+        ? (options.horizontalUnitToMetres as number)
+        : 1;
+    const offLabel = options.isGeographic ? `${off.toFixed(5)}°` : `${(off * hUnit).toFixed(2)} m`;
     notes.push(
-      `The two epochs are offset by about ${off.toFixed(2)} m at the grid origin — ` +
+      `The two epochs are offset by about ${offLabel} at the grid origin — ` +
         `co-register them (align to common ground control) before trusting the difference.`,
     );
   }

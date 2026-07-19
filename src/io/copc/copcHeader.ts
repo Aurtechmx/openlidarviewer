@@ -74,6 +74,19 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
     view.getFloat64(203, true),
     view.getFloat64(219, true),
   ];
+  // Scale, offset and bounds seed every coordinate conversion downstream —
+  // the render origin, node bounds, camera framing. A non-finite value (or a
+  // non-positive scale) from a corrupt header would propagate NaN through all
+  // of them, so reject the file up front.
+  if (scale.some((v) => !Number.isFinite(v) || v <= 0)) {
+    throw new LoadError('malformed-file', 'LAS header scale factor is invalid.');
+  }
+  if (offset.some((v) => !Number.isFinite(v))) {
+    throw new LoadError('malformed-file', 'LAS header offset is invalid.');
+  }
+  if (min.some((v) => !Number.isFinite(v)) || max.some((v) => !Number.isFinite(v))) {
+    throw new LoadError('malformed-file', 'LAS header bounds are invalid.');
+  }
   const pointCount = Number(view.getBigUint64(247, true));
   if (!Number.isFinite(pointCount) || pointCount < 0) {
     throw new LoadError('malformed-file', 'LAS point count is invalid.');
@@ -120,6 +133,11 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
     ],
   };
 
+  // The octree center becomes the render origin (floored); a NaN here would
+  // survive into bounds and camera framing for the whole session.
+  if (info.center.some((v) => !Number.isFinite(v))) {
+    throw new LoadError('malformed-file', 'COPC octree center is invalid.');
+  }
   if (!Number.isFinite(info.halfsize) || info.halfsize <= 0) {
     throw new LoadError('malformed-file', 'COPC octree half-size is invalid.');
   }

@@ -17,7 +17,7 @@ import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
-import { computeOrigin, recenter } from './coordinateBridge';
+import { sanitizeAndRecenter } from './sanitizeCloud';
 
 /** Clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
@@ -235,22 +235,20 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
     );
   }
 
-  // Recenter about a floored-min origin (float64 subtraction, then float32).
-  const min = [Infinity, Infinity, Infinity];
-  for (let i = 0; i < global.length; i += 3) {
-    if (global[i] < min[0]) min[0] = global[i];
-    if (global[i + 1] < min[1]) min[1] = global[i + 1];
-    if (global[i + 2] < min[2]) min[2] = global[i + 2];
-  }
-  const origin = computeOrigin(min);
+  // Drop points the file marked valid but wrote non-finite — a truncated or
+  // corrupt CompressedVector reaches here as a NaN — then recentre the
+  // survivors about their floored-min origin. The exclusion joins the same
+  // warning list the skipped-scan and normalised-pose notes already use.
+  const clean = sanitizeAndRecenter(global, { colors, intensity, classification, normals });
+  if (clean.warning) warnings.push(clean.warning);
 
   return new PointCloud({
-    positions: recenter(global, origin),
-    colors,
-    intensity,
-    classification,
-    normals,
-    origin,
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    intensity: clean.attributes.intensity,
+    classification: clean.attributes.classification,
+    normals: clean.attributes.normals,
+    origin: clean.origin,
     sourceFormat: 'e57',
     name,
     declaredPointCount: total,

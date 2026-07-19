@@ -31,20 +31,22 @@ import type { StreamingColorRanges } from './streamingColors';
 import type { RgbAppearance } from '../rgbAppearance';
 
 /**
- * Node fade tunables. A freshly resident node starts at
- * `FADE_START_OPACITY` and lerps to 1.0 over `FADE_MS`, then drops the
- * transparency flag so EDL and the post-pipeline never see a `transparent:
- * true` material once the node has settled. Disabled on mobile and on the
- * low-tier device profile — see `attachStreamingCloud`.
+ * Node dissolve tunables. A freshly resident node materialises over `FADE_MS`
+ * via an OPAQUE screen-door dissolve (see fadeDither.ts): its per-point keep
+ * fraction ramps 0 → 1, and an evicted node dissolves 1 → 0 before removal. The
+ * material stays fully opaque throughout, so two overlapping LOD layers never
+ * enter the transparent pass to z-fight against depthWrite, and EDL/depth stay
+ * exact. Disabled on mobile and the low-tier device profile (hard add/remove) —
+ * see `attachStreamingCloud`.
  *
- * FADE_MS bumped 180 → 220 ms (the middle of the
- * 150-250 ms range that reads as smooth without dragging on long
- * enough to feel sluggish), and the eviction path now triggers a
- * symmetric fade-OUT instead of a hard remove. The result is a true
- * cross-fade between a parent node fading out and its higher-resolution
- * children fading in — no more "LOD pop" during refinement.
+ * FADE_MS is 220 ms (the middle of the 150-250 ms range that reads as smooth
+ * without dragging), and eviction dissolves out symmetrically rather than
+ * hard-popping — a coarse parent dissolves out while its higher-resolution
+ * children dissolve in, with no "LOD pop" and no flicker during refinement.
  */
 export const FADE_MS = 220;
+// Retained for the fadeOpacity unit tests (the pure ease curve is shared with
+// the dissolve-progress ramp, which starts from 0, not this value).
 export const FADE_START_OPACITY = 0.5;
 
 /**
@@ -77,13 +79,6 @@ export function fadeOutOpacity(elapsedMs: number, durationMs: number): number {
   return 1 - eased;
 }
 
-/** A Three.js material with the alpha-related fields we need to drive. */
-type FadeableMaterial = THREE.Material & {
-  opacity: number;
-  transparent: boolean;
-  depthWrite: boolean;
-};
-
 /**
  * Should this decoded node (re)seed the cloud-global colour ranges? Only a
  * non-empty node strictly shallower than the last seed qualifies, so the ramp
@@ -110,13 +105,15 @@ interface NodeMesh {
 /** Construction options for {@link StreamingRenderer}. */
 export interface StreamingRendererOptions {
   /**
-   * Enable the cheap node fade-in on `onNodeReady`. Off on mobile
-   * and the low-tier device profile; otherwise on by default. The animation
-   * never affects EDL or the post-pipeline: `transparent: true` is set only
-   * during the fade, with `depthWrite: true` explicitly preserved, and the
-   * material is restored to fully opaque the moment the fade completes.
+   * Enable the node dissolve on `onNodeReady`. Off on mobile and the low-tier
+   * device profile (hard add/remove); otherwise on by default. The dissolve is
+   * fully OPAQUE — it discards a per-point fraction of sprites via the size
+   * graph rather than blending — so it never touches the transparent pass and
+   * never affects EDL or the post-pipeline.
    */
   fadeIn?: boolean;
+  /** Monotonic millisecond clock, injected for deterministic fade tests. */
+  now?: () => number;
 }
 
 /** Manages the per-node meshes of a streaming COPC cloud. */
@@ -148,21 +145,25 @@ export class StreamingRenderer {
    */
   private _rgbAppearance: RgbAppearance | undefined;
   private readonly _fadeIn: boolean;
+  /** Monotonic millisecond clock — `performance.now()` unless injected. */
+  private readonly _now: () => number;
   /** Active fade animations keyed by mesh; the value is its start wall time. */
   /**
-   * Active fades. Direction `'in'` is a newly-resident node ramping from
-   * `FADE_START_OPACITY` to 1.0; `'out'` is an evicted node ramping from
-   * 1.0 to 0.0 before final removal. The `nodeId` is only set for fade-out
-   * entries — when their fade completes, the mesh is actually removed from
-   * the scene and the resident map is updated.
+   * Active dissolves. Direction `'in'` is a newly-resident node whose dissolve
+   * progress ramps 0 → 1 (points materialise); `'out'` is an evicted node
+   * ramping 1 → 0 before final removal. The `nodeId` is only set for fade-out
+   * entries — when their dissolve completes, the mesh is removed from the scene
+   * and the resident map is updated.
    */
   private readonly _fades = new Map<
     THREE.Mesh,
     {
       start: number;
-      mat: FadeableMaterial;
+      mat: THREE.PointsNodeMaterial;
       direction: 'in' | 'out';
       nodeId?: string;
+      /** For `'out'`, the progress the dissolve started from (ramps this → 0). */
+      fromProgress?: number;
     }
   >();
   /** Pending requestAnimationFrame handle for the next fade tick, if any. */
@@ -177,12 +178,18 @@ export class StreamingRenderer {
     this._viewer = viewer;
     this._mode = mode;
     this._fadeIn = options.fadeIn ?? false;
-    // Elevation range from the COPC cube; the per-field scalar ranges
-    // (intensity, gpsTime, returnNumber) are seeded once the coarse root
-    // node arrives. Their 0..1 placeholders are never painted from in
-    // practice — `onNodeReady` reseeds from the first arriving node BEFORE
-    // computing that node's colours.
-    const local = cloud.localBounds();
+    this._now = options.now ?? nowMs;
+    // Elevation range from the TIGHT data bounds, not the octree cube. A COPC
+    // cube barely over-reports, but an EPT cube is cubic around a thin terrain
+    // slab, so its Z can be tens of thousands of metres tall while the data
+    // spans a few hundred — seeding the legend off the cube stretched it across
+    // empty space (a real dataset showed a −60000..60000 m legend for ~1800 m
+    // of terrain). `dataBounds` is the true extent; the source interface points
+    // here for exactly this. The per-field scalar ranges (intensity, gpsTime,
+    // returnNumber) still seed once the coarse root node arrives; their 0..1
+    // placeholders are never painted from — `onNodeReady` reseeds from the first
+    // arriving node BEFORE computing its colours.
+    const local = cloud.dataBounds();
     this._ranges = {
       minZ: local[2],
       maxZ: local[5],
@@ -213,7 +220,7 @@ export class StreamingRenderer {
 
   /**
    * Whether a decoded node has seeded the scalar ranges. Before the first
-   * seed, `minZ`/`maxZ` hold the honest header cube extent (usable for an
+   * seed, `minZ`/`maxZ` hold the tight data-bounds Z extent (usable for an
    * elevation legend, with no percentile trim to disclose) while the
    * intensity / gpsTime / returnNumber fields are 0..1 placeholders that
    * describe nothing — a legend must not label them.
@@ -229,7 +236,26 @@ export class StreamingRenderer {
 
   /** A decoded node is ready — build its mesh and add it to the scene. */
   onNodeReady(node: StreamingNode, decoded: DecodedChunk): void {
-    if (this._meshes.has(node.record.id)) return; // already resident
+    const existing = this._meshes.get(node.record.id);
+    if (existing) {
+      const fade = this._fades.get(existing.mesh);
+      if (fade && fade.direction === 'out') {
+        // The node was evicted and is mid-fade-OUT, but its chunk arrived
+        // again inside the fade window — it is current once more. Bailing here
+        // (the old "already resident" guard) let the fade completion later
+        // strip this now-current mesh (node vanishes) or strand the node
+        // resident-in-store with no mesh. Cancel the fade-out, drop the stale
+        // mesh immediately, and fall through to build a fresh one. Clearing the
+        // fade entry keeps `_stepFades` from ever re-removing this id — the new
+        // mesh is a distinct object with its own (fade-in) entry.
+        this._fades.delete(existing.mesh);
+        this._viewer.endNodeDissolve(fade.mat);
+        this._viewer.removeStreamingMesh(existing.mesh);
+        this._meshes.delete(node.record.id);
+      } else {
+        return; // settled or fading in — already the current mesh
+      }
+    }
     // Seed the global intensity + elevation ranges from the COARSEST node seen
     // so far — see _rangeSeedDepth. Re-seeding from a strictly shallower node
     // converges the ramp to the depth-0 root's whole-cloud percentile band
@@ -292,14 +318,16 @@ export class StreamingRenderer {
       decoded.classification,
       decoded.intensity,
     );
-    this._viewer.addStreamingMesh(handle.mesh, decoded, node.record.key.depth);
+    this._viewer.addStreamingMesh(handle.mesh, decoded, node.record.key.depth, node.record.id);
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,
       colorAttr: handle.colorAttr,
       decoded,
     });
-    // Fade-in animation. The mesh is added at opacity 1.0 first
-    // so a synchronous skip-fade environment (no rAF) still renders fully.
+    // Opaque dissolve-in: the node starts fully dissolved (progress 0) and
+    // materialises over FADE_MS as the fade tick advances (a setTimeout(16)
+    // fallback covers a no-rAF environment). A settled node keeps the plain
+    // graph — the dither fold is dropped the moment it finishes.
     if (this._fadeIn) this._startFade(handle.mesh);
   }
 
@@ -405,16 +433,16 @@ export class StreamingRenderer {
   }
 
   /**
-   * Begin a fade-in for a newly-resident mesh. Sets `transparent: true` with
-   * `depthWrite: true` to keep EDL valid through the animation, then schedules
-   * the next tick.
+   * Begin the opaque dissolve-in for a newly-resident mesh, then schedule the
+   * next tick.
    */
   private _startFade(mesh: THREE.Mesh): void {
-    const mat = mesh.material as FadeableMaterial;
-    mat.opacity = FADE_START_OPACITY;
-    mat.transparent = true;
-    mat.depthWrite = true; // keep EDL valid — transparent defaults to no depth write
-    this._fades.set(mesh, { start: nowMs(), mat, direction: 'in' });
+    const mat = mesh.material as THREE.PointsNodeMaterial;
+    // Opaque screen-door dissolve: seed progress at 0 (hidden) and ramp to 1.
+    // The material stays fully opaque, so there is no transparent-pass z-fight
+    // against depthWrite and EDL/depth stay exact throughout the transition.
+    this._viewer.beginNodeDissolve(mat, 0);
+    this._fades.set(mesh, { start: this._now(), mat, direction: 'in' });
     this._scheduleFadeTick();
   }
 
@@ -424,11 +452,12 @@ export class StreamingRenderer {
    * completes, at which point `_stepFades` actually disposes it.
    */
   private _startFadeOut(mesh: THREE.Mesh, nodeId: string): void {
-    const mat = mesh.material as FadeableMaterial;
-    mat.opacity = 1;
-    mat.transparent = true;
-    mat.depthWrite = true;
-    this._fades.set(mesh, { start: nowMs(), mat, direction: 'out', nodeId });
+    const mat = mesh.material as THREE.PointsNodeMaterial;
+    // Dissolve OUT from the node's CURRENT density down to 0, opaque. A settled
+    // node seeds at 1; a node still materialising dissolves out from where it
+    // got to (beginNodeDissolve returns that), never snapping to full density.
+    const fromProgress = this._viewer.beginNodeDissolve(mat, 1);
+    this._fades.set(mesh, { start: this._now(), mat, direction: 'out', nodeId, fromProgress });
     this._scheduleFadeTick();
   }
 
@@ -437,7 +466,7 @@ export class StreamingRenderer {
     if (this._fadeRafHandle !== null) return;
     const onTick = (): void => {
       this._fadeRafHandle = null;
-      this._stepFades(nowMs());
+      this._stepFades(this._now());
       if (this._fades.size > 0) this._scheduleFadeTick();
     };
     if (typeof requestAnimationFrame !== 'undefined') {
@@ -452,17 +481,21 @@ export class StreamingRenderer {
     for (const [mesh, state] of this._fades) {
       const elapsed = now - state.start;
       if (state.direction === 'in') {
-        state.mat.opacity = fadeOpacity(elapsed, FADE_MS, FADE_START_OPACITY);
+        // Dissolve IN: progress 0 → 1 (ease-out), then settle to the plain graph.
+        this._viewer.setNodeDissolveProgress(state.mat, fadeOpacity(elapsed, FADE_MS, 0));
         if (elapsed >= FADE_MS) {
-          state.mat.opacity = 1;
-          state.mat.transparent = false;
+          this._viewer.endNodeDissolve(state.mat);
           this._fades.delete(mesh);
         }
       } else {
-        // direction === 'out' — the node was evicted; ramp opacity 1 → 0,
-        // then actually remove the mesh from the scene + resident map.
-        state.mat.opacity = fadeOutOpacity(elapsed, FADE_MS);
+        // direction === 'out' — the node was evicted; dissolve from its start
+        // density → 0 (fadeOutOpacity is 1 → 0), then remove the mesh + entry.
+        this._viewer.setNodeDissolveProgress(
+          state.mat,
+          (state.fromProgress ?? 1) * fadeOutOpacity(elapsed, FADE_MS),
+        );
         if (elapsed >= FADE_MS) {
+          this._viewer.endNodeDissolve(state.mat);
           this._fades.delete(mesh);
           this._viewer.removeStreamingMesh(mesh);
           if (state.nodeId) this._meshes.delete(state.nodeId);

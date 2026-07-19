@@ -11,10 +11,11 @@ function result(over: Partial<StockpileVolumeResult> = {}): StockpileVolumeResul
     high: 1295,
     relativeError: 0.0327,
     confidence: 'medium',
+    densityUnitKnown: true,
     breakdown: {
       footprintArea: 318.4,
       pointsInPolygon: 4200,
-      density: 13.2,
+      densityNative: 13.2,
       baseZ: 102.5,
       baseMode: 'lowest-percentile',
       baseUncertainty: 0.08,
@@ -45,9 +46,19 @@ describe('presentStockpile', () => {
     const byLabel = Object.fromEntries(v.rows.map((r) => [r.label, r.value]));
     expect(byLabel['Footprint']).toBe('318.4 m²');
     expect(byLabel['Points in footprint']).toBe('4,200');
+    expect(byLabel['Density']).toBe('13.2 pts/m²');
     expect(byLabel['Base plane']).toMatch(/lowest ground, ±0.08 m/);
     expect(byLabel['Sampling error']).toBe('± 18 m³');
     expect(byLabel['Base-plane error']).toBe('± 25 m³');
+  });
+
+  test('an unknown-unit result labels density honestly instead of claiming pts/m²', () => {
+    const v = presentStockpile(result({ densityUnitKnown: false }));
+    const density = v.rows.find((r) => r.label === 'Density')!.value;
+    expect(density).toMatch(/unit unknown/);
+    expect(density).not.toMatch(/pts\/m²/);
+    // The native density is still surfaced, just not dressed as metres.
+    expect(density).toMatch(/13\.2 pts\/unit²/);
   });
 
   test('a foot-CRS result converts to true metres (lin = 0.3048)', () => {

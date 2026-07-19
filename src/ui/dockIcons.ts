@@ -95,3 +95,10 @@ export const ICON_ANALYSE = svg(
 
 /** Close — an X (clear the scan). */
 export const ICON_CLOSE = svg(`<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>`);
+
+/** Expand — two arrows pushing to opposite corners (Material open_in_full):
+ *  escalate a result into the full-focus surface. */
+export const ICON_EXPAND = svg(
+  `<path d="M14 4h6v6"/><path d="M20 4l-7.5 7.5"/>` +
+    `<path d="M10 20H4v-6"/><path d="M4 20l7.5-7.5"/>`,
+);

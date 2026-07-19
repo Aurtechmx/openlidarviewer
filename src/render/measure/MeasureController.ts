@@ -45,6 +45,7 @@ import {
   boxMetrics,
   boxCorners,
   BOX_EDGES,
+  elevationDatumOffset,
 } from './geometry';
 import {
   buildPointSnapIndex,
@@ -59,13 +60,14 @@ import { gradeMeasurement, type MeasurementTrust } from './measurementTrust';
 import {
   formatLengthRender,
   formatAreaRender,
-  formatVolumeRender,
   formatAngle,
   formatBearing,
   formatGrade,
   formatProfileHeadline,
   formatBoxHeadline,
+  formatVolume,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
+  VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
 } from './format';
 // B2 (v0.4.5) — one unit seam: the chart series is converted render-units →
 // metres in `getSummaries` by the same module the panel/CSV/PDF read, so
@@ -269,6 +271,15 @@ export interface MeasurementSummary {
    */
   profileChartResidentOnly?: boolean;
   /**
+   * Profile only — false when the scene could not assert a vertical datum
+   * (clouds recentred on conflicting origins), so `profileChart` heights are
+   * LOCAL render heights rather than source elevations. Every consumer that
+   * PRINTS an absolute height must name it accordingly; deltas are unaffected.
+   * Absent on a summary built before the gate, which reads as "known" — the
+   * pre-gate behaviour.
+   */
+  profileDatumKnown?: boolean;
+  /**
    * Profile only — the corridor half-width the sampler actually used, in
    * METRES (already through the B2 unit factor). Feeds the PDF's provenance
    * rows/header so the sheet stops printing "auto (5 % of length)" when the
@@ -376,6 +387,19 @@ export class MeasureController {
   private _cursor: Vec3 | null = null;
   private _active = false;
   private _worldUp: Vec3 = [0, 0, 1];
+  /**
+   * The up-axis component of the scene's render origin — what a render-local
+   * height must regain to become a source elevation (see
+   * `elevationDatumOffset`). Applied at the `getSummaries` display boundary
+   * only: measurement geometry stays local so the session importer's rebase
+   * keeps working.
+   *
+   * `null` is the scene REFUSING a datum: clouds recentred on conflicting
+   * origins share no frame, so no absolute elevation is defensible and the
+   * profile surfaces fall back to naming their heights local. 0 until a cloud
+   * arrives, which is also the honest answer for a scan at the world origin.
+   */
+  private _originUp: number | null = 0;
   private _units: UnitSystem = 'metric';
   /**
    * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
@@ -386,6 +410,17 @@ export class MeasureController {
    * pre-B2 behaviour).
    */
   private _unitToMetres = 1;
+  /**
+   * Render-units → metres factor for the UP axis, from a COMPOUND CRS whose
+   * vertical (height) unit differs from its horizontal linear unit — e.g. UTM
+   * metres with a NAVD88 height in US survey feet. `null` means "no separate
+   * vertical unit was supplied", so the up axis rides the horizontal
+   * `_unitToMetres` exactly as before (the pre-fix behaviour, bit-identical).
+   * When set and different, pure-vertical readouts (heights, box height,
+   * cut/fill thickness) scale by THIS factor while the mixed 3D quantities
+   * refuse — see {@link _verticalUnitMismatch}.
+   */
+  private _verticalUnitToMetres: number | null = null;
   // ── Snap (A1) ──────────────────────────────────────────────────────────────
   // Snapping a placed vertex to the nearest real return (honest default) or to
   // existing measurement geometry. `_snapIndex` is built from the resident
@@ -614,6 +649,16 @@ export class MeasureController {
     return this._unitToMetres;
   }
 
+  /**
+   * The VERTICAL render-units → metres factor (up-axis height unit). Equals
+   * {@link unitToMetres} on a single-unit CRS; differs only for a compound CRS
+   * (e.g. metre eastings over foot heights). Exporters scale vertical
+   * quantities by this so a `.geojson`/`.csv`/`.kml` matches the panel headline.
+   */
+  get verticalUnitToMetres(): number {
+    return this._verticalUnitToMetres ?? this._unitToMetres;
+  }
+
   /** The world up vector measurements were placed against (for export derivations). */
   get worldUp(): Vec3 {
     return this._worldUp;
@@ -633,11 +678,59 @@ export class MeasureController {
     const f = Number.isFinite(factor) && factor > 0 ? factor : 1;
     if (f === this._unitToMetres) return;
     this._unitToMetres = f;
+    // A late horizontal resolve can change whether the vertical factor now
+    // mismatches, so re-grade alongside the label refresh.
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
     // Stored geometry is untouched (render units stay the source of truth);
     // re-emit so every label and the panel re-derive through the new factor.
     this._updateHint();
     this._emitChange();
   }
+
+  /**
+   * Inject the scan CRS's VERTICAL (up-axis) linear-unit → metres factor — the
+   * companion to {@link setUnitToMetres} for a COMPOUND CRS. On the common
+   * single-unit CRS this equals the horizontal factor and every readout is
+   * bit-identical to the pre-compound behaviour; when it differs, heights and
+   * other pure-vertical readouts scale by this factor and the mixed 3D
+   * quantities refuse (see {@link _gradeMeasurement}). Invalid factors (NaN, 0,
+   * negative) clear the override so the up axis rides the horizontal factor.
+   */
+  setVerticalUnitToMetres(factor: number): void {
+    const next = Number.isFinite(factor) && factor > 0 ? factor : null;
+    if (next === this._verticalUnitToMetres) return;
+    this._verticalUnitToMetres = next;
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._updateHint();
+    this._emitChange();
+  }
+
+  /** The effective up-axis factor — the vertical override, else the horizontal. */
+  private _effVertical(): number {
+    return this._verticalUnitToMetres ?? this._unitToMetres;
+  }
+
+  /**
+   * True when a separate vertical unit was supplied AND it differs from the
+   * horizontal one — the compound-CRS case where a 3D length / tilted area /
+   * grade mixes two linear units. Pure-vertical readouts stay honest via
+   * {@link _effVertical}; the mixed kinds refuse.
+   */
+  private _verticalUnitMismatch(): boolean {
+    const v = this._verticalUnitToMetres;
+    return v != null && Math.abs(v - this._unitToMetres) > 1e-12;
+  }
+
+  /**
+   * Kinds whose headline NUMBER combines horizontal and vertical extent, so a
+   * single vertical factor can't repair it under a compound CRS: 3D lengths
+   * (distance / polyline / profile), a tilted planar area, and a slope grade.
+   * Pure-vertical (height) and per-axis-monomial (box / volume) kinds are
+   * exactly rescaled instead, so they are absent here — mirrors how the
+   * geographic refusal spares heights and angles.
+   */
+  private static readonly VERTICAL_MISMATCH_KINDS: ReadonlySet<MeasurementKind> =
+    new Set<MeasurementKind>(['distance', 'polyline', 'area', 'slope', 'profile']);
 
   /**
    * Whether the active scan has a known CRS with real-world units. Drives the
@@ -694,9 +787,11 @@ export class MeasureController {
 
   /** Compact per-measurement summaries for the Measurements panel. */
   getSummaries(): MeasurementSummary[] {
-    // B2 — the ONE place the profile series crosses from render units into
-    // metres. Every consumer past this line (chart axes, summary <dl>, CSV,
-    // PDF) speaks metres, so the factor can never be applied twice or
+    // B2 — the ONE place the profile series crosses from render space into the
+    // numbers a reader is owed: local heights regain the scan's datum, then
+    // everything crosses from render units into metres. Every consumer past
+    // this line (chart axes, summary <dl>, station table, CSV, PDF) speaks
+    // source elevations in metres, so neither step can be applied twice or
     // forgotten by one of them. Re-derived per call: a late CRS resolve or
     // user override re-emits change and the next refresh re-scales.
     const f = this._unitToMetres;
@@ -705,7 +800,10 @@ export class MeasureController {
       kind: m.kind,
       name: m.name,
       value: this._headlineText(m),
-      profileChart: m.profileChart ? scaleProfileSamples(m.profileChart, f) : undefined,
+      profileChart: m.profileChart
+        ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
+        : undefined,
+      profileDatumKnown: this._originUp !== null,
       profileChartResidentOnly: m.profileChartResidentOnly,
       profileCorridorWidthM:
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
@@ -941,9 +1039,36 @@ export class MeasureController {
     this._onKindChange?.(kind);
   }
 
-  /** Provide the scan's up-axis and origin (origin reserved for later phases). */
-  setContext(ctx: { worldUp: Vec3; origin: Vec3 }): void {
+  /**
+   * Provide the scan's up-axis and the scene's render origin. The origin is
+   * what turns a stored local height back into the elevation the source file
+   * describes; only its up-axis component matters, so it is reduced once here
+   * rather than kept as a vector nothing else reads. A `null` origin is the
+   * caller reporting that the loaded clouds share no frame, and the refusal
+   * travels to the display surfaces as `profileDatumKnown: false`.
+   */
+  setContext(ctx: { worldUp: Vec3; origin: Vec3 | null }): void {
+    const nextUp = ctx.origin ? elevationDatumOffset(ctx.origin, ctx.worldUp) : null;
+    // Guarded like every other presentational setter here: the viewer re-asks
+    // for the datum on every change to the cloud set, and most of those leave
+    // the frame alone — an unconditional emit would repaint the panel for a
+    // colour change. Only the up axis and the datum itself are compared,
+    // because only they can alter what a stored height MEANS; a cloud that
+    // shifts east has not moved anyone's elevations.
+    const changed =
+      nextUp !== this._originUp ||
+      ctx.worldUp[0] !== this._worldUp[0] ||
+      ctx.worldUp[1] !== this._worldUp[1] ||
+      ctx.worldUp[2] !== this._worldUp[2];
     this._worldUp = ctx.worldUp;
+    this._originUp = nextUp;
+    if (!changed) return;
+    // Datum-known → refused renames the profile's columns and raises a caveat;
+    // refused → known takes them away. That is the same class of change as a
+    // late CRS resolve, and the panel repaints on THIS callback alone — without
+    // it the gate reaches the screen only when some unrelated event happens to
+    // repaint first, which is no guarantee at all.
+    this._emitChange();
   }
 
   /** Switch the unit system; every label re-formats on the next frame. */
@@ -1300,6 +1425,12 @@ export class MeasureController {
       // persistent caveat still covers them.
       geographicCrs:
         this._geographicCrs && m.kind !== 'height' && m.kind !== 'angle',
+      // Compound CRS (height unit ≠ horizontal unit): refuse the kinds whose
+      // number mixes the two axes. Heights, boxes and volumes are exactly
+      // rescaled by the vertical factor, so they keep their ordinary grade.
+      verticalUnitMismatch:
+        this._verticalUnitMismatch() &&
+        MeasureController.VERTICAL_MISMATCH_KINDS.has(m.kind),
     });
   }
 
@@ -1380,12 +1511,28 @@ export class MeasureController {
     return formatLengthRender(renderUnits, this._unitToMetres, this._units);
   }
 
-  private _fmtArea(renderUnitsSq: number): string {
-    return formatAreaRender(renderUnitsSq, this._unitToMetres, this._units);
+  /**
+   * Format a PURE-VERTICAL length (a height / drop / box height) through the
+   * up-axis factor. Equals {@link _fmtLen} on a single-unit CRS (bit-identical);
+   * on a compound CRS it honours the height unit the horizontal factor can't.
+   */
+  private _fmtVertical(renderUnits: number): string {
+    return formatLengthRender(renderUnits, this._effVertical(), this._units);
   }
 
-  private _fmtVol(renderUnitsCu: number): string {
-    return formatVolumeRender(renderUnitsCu, this._unitToMetres, this._units);
+  /**
+   * Format a cut/fill volume — a horizontal footprint (linear²) times a
+   * vertical thickness (up-axis unit). Scales linear²·vertical, so a compound
+   * CRS reads honest cubic metres; on a single-unit CRS this is exactly the
+   * uniform `f³` an equal vertical factor collapses to.
+   */
+  private _fmtCutFill(renderUnitsCu: number): string {
+    const f = this._unitToMetres;
+    return formatVolume(renderUnitsCu * f * f * this._effVertical(), this._units);
+  }
+
+  private _fmtArea(renderUnitsSq: number): string {
+    return formatAreaRender(renderUnitsSq, this._unitToMetres, this._units);
   }
 
   /** The headline value string for a measurement, shown in the panel. */
@@ -1407,7 +1554,7 @@ export class MeasureController {
         return p.length >= 3 ? this._fmtArea(polygonAreaPlanar(p)) : '—';
       case 'height':
         return p.length >= 2
-          ? this._fmtLen(Math.abs(verticalDelta(p[0], p[1], this._worldUp).vertical))
+          ? this._fmtVertical(Math.abs(verticalDelta(p[0], p[1], this._worldUp).vertical))
           : '—';
       case 'angle':
         return p.length >= 3 ? formatAngle(angleAtVertex(p[0], p[1], p[2])) : '—';
@@ -1420,9 +1567,10 @@ export class MeasureController {
         if (p.length < 2) return '—';
         const pm = profileMetrics(p[0], p[1], this._worldUp);
         return formatProfileHeadline(
-          // Lengths through the B2 unit factor; grade is dimensionless.
+          // Length through the horizontal factor; the vertical drop through the
+          // up-axis factor (compound CRS). Grade is dimensionless.
           pm.length3d * this._unitToMetres,
-          pm.verticalDrop * this._unitToMetres,
+          pm.verticalDrop * this._effVertical(),
           pm.gradePercent,
           this._units,
         );
@@ -1431,11 +1579,12 @@ export class MeasureController {
         if (p.length < 2) return '—';
         const m = boxMetrics(boxFromCorners(p[0], p[1]));
         return formatBoxHeadline(
-          // Axis lengths xf, volume xf^3 (B2).
+          // Horizontal axes ×f, the up axis (height) ×vertical factor, volume
+          // f²·vertical — each a pure monomial, so a compound CRS reads honest.
           m.width * this._unitToMetres,
           m.depth * this._unitToMetres,
-          m.height * this._unitToMetres,
-          m.volume * this._unitToMetres * this._unitToMetres * this._unitToMetres,
+          m.height * this._effVertical(),
+          m.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
           this._units,
         );
       }
@@ -1447,9 +1596,9 @@ export class MeasureController {
         const area = this._fmtArea(polygonAreaHorizontal(p, this._worldUp));
         const v = m.volume;
         if (!v) return `${area} footprint · cut/fill —`;
-        const fill = this._fmtVol(Math.max(0, v.fill));
-        const cut = this._fmtVol(Math.max(0, v.cut));
-        const net = this._fmtVol(Math.abs(v.net));
+        const fill = this._fmtCutFill(Math.max(0, v.fill));
+        const cut = this._fmtCutFill(Math.max(0, v.cut));
+        const net = this._fmtCutFill(Math.abs(v.net));
         const netSign = v.net < 0 ? 'cut' : 'fill';
         return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
       }
@@ -1460,10 +1609,16 @@ export class MeasureController {
     if (this._active) {
       // Honest units: a geographic scan measures degrees, not metres — every
       // hint carries the caveat so a raw number is never read as a distance.
-      const hint = this._snapHintPrefix() + this._composeHint();
-      this._setHintText(
-        this._geographicCrs ? `${hint} — ${GEOGRAPHIC_CRS_MEASURE_NOTICE}` : hint,
-      );
+      let hint = this._snapHintPrefix() + this._composeHint();
+      // Honest units: geographic degrees are the stronger caveat; a compound
+      // CRS's vertical/horizontal unit clash is the next — a raw number never
+      // reads as a trustworthy distance without its caveat.
+      if (this._geographicCrs) {
+        hint = `${hint} — ${GEOGRAPHIC_CRS_MEASURE_NOTICE}`;
+      } else if (this._verticalUnitMismatch()) {
+        hint = `${hint} — ${VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE}`;
+      }
+      this._setHintText(hint);
     }
     this._updateFinishBtnVisibility();
   }
@@ -1599,7 +1754,7 @@ export class MeasureController {
       E.push({ a: elbow, b, style: 'solid' });
       L.push({
         anchor: midpoint(elbow, b),
-        text: this._fmtLen(Math.abs(d.vertical)),
+        text: this._fmtVertical(Math.abs(d.vertical)),
         primary: true,
       });
       L.push({
@@ -1623,7 +1778,7 @@ export class MeasureController {
       });
       L.push({
         anchor: midpoint(elbow, b),
-        text: this._fmtLen(Math.abs(s.rise)),
+        text: this._fmtVertical(Math.abs(s.rise)),
         primary: false,
       });
       L.push({
@@ -1658,9 +1813,9 @@ export class MeasureController {
       L.push({
         anchor: midpoint(a, b),
         text: formatProfileHeadline(
-          // Lengths through the B2 unit factor; grade is dimensionless.
+          // Length ×horizontal factor; drop ×up-axis factor (compound CRS).
           pm.length3d * this._unitToMetres,
-          pm.verticalDrop * this._unitToMetres,
+          pm.verticalDrop * this._effVertical(),
           pm.gradePercent,
           this._units,
         ),
@@ -1668,7 +1823,7 @@ export class MeasureController {
       });
       L.push({
         anchor: midpoint(elbow, b),
-        text: this._fmtLen(Math.abs(pm.verticalDrop)),
+        text: this._fmtVertical(Math.abs(pm.verticalDrop)),
         primary: false,
       });
       L.push({
@@ -1720,11 +1875,11 @@ export class MeasureController {
       L.push({
         anchor: centre,
         text: formatBoxHeadline(
-          // Axis lengths xf, volume xf^3 (B2).
+          // Horizontal axes ×f, height ×vertical factor, volume f²·vertical.
           metrics.width * this._unitToMetres,
           metrics.depth * this._unitToMetres,
-          metrics.height * this._unitToMetres,
-          metrics.volume * this._unitToMetres * this._unitToMetres * this._unitToMetres,
+          metrics.height * this._effVertical(),
+          metrics.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
           this._units,
         ),
         primary: true,
@@ -1821,7 +1976,7 @@ export class MeasureController {
       E.push({ a: elbow, b: cur, style: 'preview' });
       L.push({
         anchor: midpoint(elbow, cur),
-        text: this._fmtLen(Math.abs(verticalDelta(pts[0], cur, this._worldUp).vertical)),
+        text: this._fmtVertical(Math.abs(verticalDelta(pts[0], cur, this._worldUp).vertical)),
         primary: true,
       });
       return;
@@ -1861,9 +2016,9 @@ export class MeasureController {
       L.push({
         anchor: midpoint(pts[0], cur),
         text: formatProfileHeadline(
-          // Lengths through the B2 unit factor; grade is dimensionless.
+          // Length ×horizontal factor; drop ×up-axis factor (compound CRS).
           pm.length3d * this._unitToMetres,
-          pm.verticalDrop * this._unitToMetres,
+          pm.verticalDrop * this._effVertical(),
           pm.gradePercent,
           this._units,
         ),
@@ -1888,11 +2043,11 @@ export class MeasureController {
       L.push({
         anchor: centre,
         text: formatBoxHeadline(
-          // Axis lengths xf, volume xf^3 (B2).
+          // Horizontal axes ×f, height ×vertical factor, volume f²·vertical.
           metrics.width * this._unitToMetres,
           metrics.depth * this._unitToMetres,
-          metrics.height * this._unitToMetres,
-          metrics.volume * this._unitToMetres * this._unitToMetres * this._unitToMetres,
+          metrics.height * this._effVertical(),
+          metrics.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
           this._units,
         ),
         primary: true,

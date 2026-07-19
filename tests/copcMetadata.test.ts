@@ -72,3 +72,33 @@ test('parseCopcMetadata rejects a too-short slice and a non-COPC point format', 
     /point data record format 6, 7, or 8/,
   );
 });
+
+test('parseCopcMetadata rejects a non-finite octree center', () => {
+  // headerMin/headerMax are pinned finite so the failure is attributable to
+  // the center alone (they default to center ± halfsize otherwise).
+  const fixture = buildSyntheticCopc({
+    center: [NaN, 480, 60],
+    headerMin: [0, 0, 0],
+    headerMax: [1280, 960, 120],
+  });
+  expect(() => parseCopcMetadata(fixture.buffer)).toThrow(LoadError);
+  expect(() => parseCopcMetadata(fixture.buffer)).toThrow(/center/i);
+});
+
+test('parseCopcMetadata rejects a non-finite or non-positive scale', () => {
+  expect(() =>
+    parseCopcMetadata(buildSyntheticCopc({ scale: [NaN, 0.001, 0.001] }).buffer),
+  ).toThrow(LoadError);
+  expect(() =>
+    parseCopcMetadata(buildSyntheticCopc({ scale: [0, 0.001, 0.001] }).buffer),
+  ).toThrow(LoadError);
+});
+
+test('parseCopcMetadata rejects non-finite offset and bounds', () => {
+  expect(() =>
+    parseCopcMetadata(buildSyntheticCopc({ offset: [NaN, 0, 0] }).buffer),
+  ).toThrow(LoadError);
+  expect(() =>
+    parseCopcMetadata(buildSyntheticCopc({ headerMin: [NaN, 0, 0] }).buffer),
+  ).toThrow(LoadError);
+});

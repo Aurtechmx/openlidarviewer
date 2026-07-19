@@ -20,6 +20,8 @@
  * Pure, deterministic, no IO. The caller loads both grids.
  */
 
+import { NeumaierSum } from '../process/numerics';
+
 /** Outcome of comparing our grid to an independent reference grid. */
 export type CrossCheckVerdict =
   /** Every compared cell is within tolerance — supports promotion to E4. */
@@ -114,7 +116,8 @@ export function crossCheck(
   let count = 0;
   let skipped = 0;
   let maxAbsDiff = 0;
-  let sumSq = 0;
+  // Compensated so the RMSE over a large grid doesn't drift on the Σd² term.
+  const sumSqAcc = new NeumaierSum();
   let sumDiff = 0;
   let within = 0;
 
@@ -129,14 +132,14 @@ export function crossCheck(
     const ad = Math.abs(d);
     count++;
     if (ad > maxAbsDiff) maxAbsDiff = ad;
-    sumSq += d * d;
+    sumSqAcc.add(d * d);
     sumDiff += d;
     if (ad <= tol) within++;
   }
   // Any length mismatch counts as skipped so the report is honest about coverage.
   skipped += Math.abs(ours.length - reference.length);
 
-  const rmse = count > 0 ? Math.sqrt(sumSq / count) : 0;
+  const rmse = count > 0 ? Math.sqrt(sumSqAcc.total / count) : 0;
   const meanDiff = count > 0 ? sumDiff / count : 0;
   const withinTolFraction = count > 0 ? within / count : 0;
 

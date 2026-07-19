@@ -589,9 +589,10 @@ export class TerrainRasterEngine {
     rows: number,
     cellSizeM: number,
     cellSizeYM?: number,
+    zScale = 1,
   ): TerrainDerivatives {
     this.lastCall = 'cpu';
-    return hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeYM);
+    return hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeYM, zScale);
   }
 
   /** Synchronous CPU reference hillshade — delegates to `shadeFromSlopeAspect`. */

@@ -4,7 +4,7 @@ import type { SourceFormat } from './sniffFormat';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import type { LoadResult } from './parseBuffer';
-import { POINT_BUDGET } from './parseBuffer';
+import { POINT_BUDGET, parseBuffer } from './parseBuffer';
 import { parseLasHeader, LAS_DECODED_ATTRIBUTES } from './lasHeader';
 import {
   planLoad,
@@ -279,11 +279,30 @@ let sharedWorker: Worker | undefined;
 // load waits its turn before touching the worker.
 const workerGate = createSerialGate();
 
+/** Builds the real module worker. Overridable so Node tests can inject a fake. */
+type ParseWorkerFactory = () => Worker;
+const defaultParseWorkerFactory: ParseWorkerFactory = () =>
+  new Worker(new URL('./parseWorker.ts', import.meta.url), { type: 'module' });
+let parseWorkerFactory: ParseWorkerFactory = defaultParseWorkerFactory;
+
 function parseWorkerInstance(): Worker {
-  if (!sharedWorker) {
-    sharedWorker = new Worker(new URL('./parseWorker.ts', import.meta.url), { type: 'module' });
-  }
+  if (!sharedWorker) sharedWorker = parseWorkerFactory();
   return sharedWorker;
+}
+
+/**
+ * Test seam: swap the parse-worker factory so the worker-routed paths
+ * (`loadFile`, `decodeFullViaWorker`) can be exercised with a fake worker in
+ * Node. Passing `undefined` restores the real module-worker factory. Drops any
+ * live shared worker so the next use spins one up from the new factory. Not
+ * used in production.
+ */
+export function __setParseWorkerFactoryForTests(factory?: ParseWorkerFactory): void {
+  parseWorkerFactory = factory ?? defaultParseWorkerFactory;
+  if (sharedWorker) {
+    sharedWorker.terminate();
+    sharedWorker = undefined;
+  }
 }
 
 /** Drop the shared worker (terminating it) so the next load starts fresh. */
@@ -418,7 +437,134 @@ export async function loadFile(
 
     // The ArrayBuffer is transferred (not copied) into the worker.
     postedAt = performance.now();
-    worker.postMessage({ buffer, format, name: file.name, budget, plan }, [buffer]);
+    try {
+      worker.postMessage({ buffer, format, name: file.name, budget, plan }, [buffer]);
+    } catch (err) {
+      // A synchronous post failure — a DataCloneError on an unclonable or
+      // already-detached buffer. Left unguarded the throw escapes this executor
+      // and rejects the caller, but `detach` never runs, so `onAbort` stays on
+      // the signal still holding the *shared* worker. A later abort of this
+      // signal would then null the handlers of and terminate the worker that
+      // whichever load owns it by then is decoding on, hanging that load
+      // forever. Settle here like any other failure instead.
+      //
+      // The worker is deliberately not dropped: a throw here means the message
+      // never left the main thread, so the worker never saw it and is still
+      // idle and warm — and its laz-perf module staying warm across loads is
+      // the whole reason it is long-lived. A worker that actually died fires
+      // `onerror`, which drops it there.
+      detach();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+    });
+  } finally {
+    releaseGate();
+  }
+}
+
+/**
+ * Decode a buffer to a FULL-RESOLUTION cloud through the shared parse worker.
+ *
+ * The converter keeps every point (unlike the viewer, which caps to a render
+ * budget), so this posts a plan-less, unbounded-budget request — the same
+ * worker `loadFile` uses, so the laz-perf WASM stays warm across a batch.
+ * Routing here keeps the loader's synchronous work — the laz-perf
+ * decompression loop for LAZ and the attribute-array expansion for every
+ * format — off the calling thread, so a full-res re-decode or a batch
+ * conversion no longer freezes the UI. Cancellable via `signal`.
+ *
+ * Throws `LoadError` for an unknown format and `LoadCancelledError` when the
+ * signal aborts; other decode failures reject with the worker's error.
+ */
+export async function decodeFullViaWorker(
+  buffer: ArrayBuffer,
+  name: string,
+  signal?: AbortSignal,
+): Promise<PointCloud> {
+  if (signal?.aborted) throw new LoadCancelledError();
+  const format = sniffFormat(buffer, name);
+  if (format === 'unknown') {
+    throw new LoadError('unsupported-format', `Unrecognised file format: ${name}`);
+  }
+
+  // No worker can be constructed here (Node/SSR) and no fake was injected —
+  // decode inline. The browser always has `Worker`, so production always routes
+  // off-thread; this fallback only runs where a worker is genuinely unavailable.
+  if (parseWorkerFactory === defaultParseWorkerFactory && typeof Worker === 'undefined') {
+    const { cloud } = await parseBuffer(buffer, format, name, Number.MAX_SAFE_INTEGER);
+    return cloud;
+  }
+
+  // Serialise with every other shared-worker user (see `workerGate`); release
+  // in `finally` so a throw below can't wedge the queue.
+  const releaseGate = await workerGate.acquire();
+  try {
+    if (signal?.aborted) throw new LoadCancelledError();
+    return await new Promise<PointCloud>((resolve, reject) => {
+      const worker = parseWorkerInstance();
+      let settled = false;
+
+      const onAbort = (): void => {
+        if (settled) return;
+        settled = true;
+        worker.onmessage = null;
+        worker.onerror = null;
+        signal?.removeEventListener('abort', onAbort);
+        // Terminate mid-decode — no orphan — and drop it so the next decode
+        // lazily spawns a fresh worker.
+        dropWorker(worker);
+        reject(new LoadCancelledError());
+      };
+      const detach = (): void => {
+        settled = true;
+        worker.onmessage = null;
+        worker.onerror = null;
+        signal?.removeEventListener('abort', onAbort);
+      };
+
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener('abort', onAbort);
+
+      worker.onmessage = (event: MessageEvent): void => {
+        if (settled) return;
+        const msg = event.data as WorkerReply;
+        // A full-res decode surfaces no UI progress — drop the progress frames.
+        if (msg.type === 'progress') return;
+        detach();
+        if (msg.type === 'error') {
+          reject(
+            msg.category ? new LoadError(msg.category, msg.error) : new Error(msg.error),
+          );
+          return;
+        }
+        resolve(new PointCloud(msg.cloud));
+      };
+
+      worker.onerror = (event: ErrorEvent): void => {
+        if (settled) return;
+        detach();
+        dropWorker(worker);
+        reject(new Error(event.message || 'Parse worker failed'));
+      };
+
+      // Full resolution: no plan, unbounded budget — every point is kept, and
+      // the budget voxel-reduce is a no-op. The source buffer is transferred
+      // (not copied) into the worker.
+      try {
+        worker.postMessage(
+          { buffer, format, name, budget: Number.MAX_SAFE_INTEGER },
+          [buffer],
+        );
+      } catch (err) {
+        // Same guard as the load path: a synchronous post failure must run the
+        // teardown, or the leaked `onAbort` outlives this decode still holding
+        // the shared worker and terminates it under a later one.
+        detach();
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   } finally {
     releaseGate();

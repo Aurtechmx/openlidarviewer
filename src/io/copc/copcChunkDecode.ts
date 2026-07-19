@@ -15,6 +15,8 @@
  * in `worker/copcWorker.ts`; this module is fully unit-tested in Node.
  */
 
+import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
+
 /** Per-chunk decode parameters. */
 export interface ChunkDecodeMetadata {
   /** LAS point data record format — 6, 7, or 8. */
@@ -98,6 +100,12 @@ export function decodeRecords(
   const len = meta.pointRecordLength;
   const n = Math.max(0, Math.min(meta.pointCount, Math.floor(raw.byteLength / len)));
   const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+  // Fail fast before decoding a whole node when its transform is outright
+  // non-finite (a NaN/Inf scale, offset, or render origin from a bad header).
+  // This is the cheap common case; it does NOT catch a transform that is finite
+  // but so extreme that `int32 · scale + offset` overflows to Infinity, so the
+  // finished positions are scanned once below as the backstop.
+  assertFiniteNodeTransform(meta.scale, meta.offset, meta.renderOrigin);
   const [sx, sy, sz] = meta.scale;
   const [ox, oy, oz] = meta.offset;
   const [rx, ry, rz] = meta.renderOrigin;
@@ -154,6 +162,10 @@ export function decodeRecords(
       rgb[i] = rgbEightBit ? rgb16[i] : rgb16[i] >> 8;
     }
   }
+
+  // Backstop the up-front transform check: a finite-but-extreme scale/offset can
+  // still overflow a coordinate to ±Infinity, so refuse the node if any did.
+  assertFinitePositions(positions);
 
   return {
     pointCount: n,

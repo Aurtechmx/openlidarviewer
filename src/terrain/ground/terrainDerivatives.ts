@@ -62,11 +62,19 @@ export function hornSlopeAspect(
   rows: number,
   cellMetresX: number,
   cellMetresY: number = cellMetresX,
+  zScale = 1,
 ): TerrainDerivatives {
   const n = cols * rows;
   const slope = new Float32Array(n);
   const aspect = new Float32Array(n);
   if (n === 0 || !(cellMetresX > 0) || !(cellMetresY > 0)) return { slope, aspect };
+  // Rise/run must share a unit. The cell sizes are metres, so the elevation
+  // (rise) must be too: `zScale` = verticalUnitToMetres converts a native-unit
+  // grid (e.g. a state-plane-FEET DTM) before the ratio. slope scales linearly
+  // in the rise, so multiplying the final tangent by `zScale` is exact; aspect
+  // is a direction and is invariant under a uniform positive scale, so it is
+  // left untouched. zScale 1 (metric, or Z already in metres) is a no-op.
+  const zs = Number.isFinite(zScale) && zScale > 0 ? zScale : 1;
 
   const at = (r: number, c: number, fallback: number): number => {
     const rr = r < 0 ? 0 : r >= rows ? rows - 1 : r;
@@ -98,7 +106,7 @@ export function hornSlopeAspect(
       // south, so dzdy is +∂z/∂northing.
       const dzdx = (c + 2 * f + ii - (a + 2 * d + g)) / (8 * cellMetresX);
       const dzdy = (g + 2 * h + ii - (a + 2 * b + c)) / (8 * cellMetresY);
-      slope[i] = Math.hypot(dzdx, dzdy);
+      slope[i] = Math.hypot(dzdx, dzdy) * zs;
       // Aspect = downslope direction −∇z in the math frame: negate BOTH
       // gradient components. atan2(+dzdy, −dzdx) (the image-row ESRI form)
       // mirrored aspect north–south on this northing-up grid.
@@ -115,6 +123,7 @@ export function hornSlope(
   rows: number,
   cellMetresX: number,
   cellMetresY: number = cellMetresX,
+  zScale = 1,
 ): Float32Array {
-  return hornSlopeAspect(z, cols, rows, cellMetresX, cellMetresY).slope;
+  return hornSlopeAspect(z, cols, rows, cellMetresX, cellMetresY, zScale).slope;
 }

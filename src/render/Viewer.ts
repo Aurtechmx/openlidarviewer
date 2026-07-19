@@ -43,6 +43,8 @@ import {
   uniformArray,
   attribute,
   materialPointSize,
+  instanceIndex,
+  fract,
   screenUV,
   screenSize,
   log2,
@@ -60,8 +62,10 @@ import {
 } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
+import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
+import { PHI_CONJUGATE } from './streaming/fadeDither';
 import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
 import {
@@ -85,6 +89,7 @@ import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
+import { shouldRunProbePick } from './hoverPickGate';
 import { angularVelocity } from './angularVelocity';
 import {
   targetPixelRatio,
@@ -186,6 +191,11 @@ import {
   DEFAULT_PROFILE_SAMPLE_COUNT,
 } from './measure/profileSampler';
 import { volumeCutFill } from './measure/volume';
+import { integrableClouds, isIntegrable } from './integrableClouds';
+import {
+  sampleStridedTerrain,
+  type KeyedTerrainStreamBuffer,
+} from './terrainStreamSample';
 import {
   applyClassSwap,
   applyPolygonReclassify,
@@ -335,6 +345,12 @@ interface StreamingPickEntry {
   decoded: DecodedChunk;
   /** Octree depth — feeds the "still refining" hint via `selectStreamingPick`. */
   depth: number;
+  /**
+   * Deterministic octree node id (`"depth-x-y-z"`). Nodes populate this map in
+   * decode-completion (arrival) order, so terrain sampling sorts by this stable
+   * key to stay reproducible across runs regardless of streaming timing.
+   */
+  key: string;
 }
 
 /** UI-facing navigation events the app can subscribe to. */
@@ -892,6 +908,17 @@ export class Viewer {
   private readonly _streamingPickData = new Map<THREE.Mesh, StreamingPickEntry>();
   /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
   private _streaming: StreamingSession | null = null;
+  /**
+   * Streaming heartbeat — a timer that ticks the scheduler INDEPENDENTLY of
+   * the render loop. The RAF loop is deliberately cancelled while the tab is
+   * hidden (thermal hardening), and it is also the loop that fed the
+   * scheduler — so opening a large dataset and switching tabs while it
+   * loaded froze streaming at 0 nodes, silently, and a missed resume left it
+   * frozen for good. The heartbeat makes the background-streaming promise
+   * real: node fetch/decode keeps flowing while hidden, and rendering alone
+   * stays RAF-gated.
+   */
+  private _streamingHeartbeat: ReturnType<typeof setInterval> | null = null;
   /** Frames since the streaming scheduler last ran — for throttling. */
   private _streamingFrame = 0;
   /**
@@ -1062,6 +1089,19 @@ export class Viewer {
    * is a silent no-op there, exactly like the class mask.
    */
   private readonly _materialsWithInten = new WeakSet<THREE.PointsNodeMaterial>();
+
+  // Streaming node dissolve (COPC/EPT LOD transition). A fading node folds a
+  // per-point OPAQUE screen-door dither into its size graph — a hidden point's
+  // sprite size is multiplied by 0, exactly like the class/elevation masks, so
+  // there is no transparency, no depth-sort z-fight, and EDL stays exact. Each
+  // fading material has its own `fadeProgress` uniform (0 = fully dissolved …
+  // 1 = fully materialised); the fold is dropped again the moment the node
+  // settles, so a settled node keeps the plain graph (no per-frame dither cost).
+  private readonly _materialsWithFade = new WeakSet<THREE.PointsNodeMaterial>();
+  private readonly _fadeUniforms = new WeakMap<
+    THREE.PointsNodeMaterial,
+    ReturnType<typeof uniform>
+  >();
 
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
@@ -1344,7 +1384,9 @@ export class Viewer {
           c: ArrayLike<number> | null | undefined,
           pos: Float32Array,
         ): ArrayLike<number> | undefined => (c && c.length === pos.length / 3 ? c : undefined);
-        for (const { cloud } of this._clouds.values()) {
+        // Only clouds the picker would place profile vertices on — visible and
+        // unlocked — feed the sample, so a hidden or locked layer can't skew it.
+        for (const { cloud } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
             const cls = aligned(cloud.classification, cloud.positions);
             if (cls) anyClass = true;
@@ -1423,7 +1465,9 @@ export class Viewer {
         let total = 0;
         let staticPoints = 0;
         let streamingPoints = 0;
-        for (const { cloud } of this._clouds.values()) {
+        // Match the picker: only visible, unlocked clouds feed the cut/fill, so
+        // a soloed epoch's volume never absorbs a hidden epoch's points behind it.
+        for (const { cloud } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
             buffers.push(cloud.positions);
             total += cloud.positions.length;
@@ -1467,19 +1511,22 @@ export class Viewer {
         // were in the walk and no fully-loaded static cloud sat beside
         // them — same rationale as the profile sampler.
         const residentOnly = streamingPoints > 0 && staticPoints === 0;
-        return {
-          record: {
-            fill: result.fill,
-            cut: result.cut,
-            net: result.net,
-            referenceZ,
-            footprintArea: result.footprintArea,
-            pointsInPolygon: result.pointsInPolygon,
-            density: result.density,
-            confidence,
-          },
-          residentOnly,
+        const record: VolumeRecord = {
+          fill: result.fill,
+          cut: result.cut,
+          net: result.net,
+          referenceZ,
+          footprintArea: result.footprintArea,
+          pointsInPolygon: result.pointsInPolygon,
+          densityNative: result.densityNative,
+          confidence,
         };
+        // Non-finite returns inside the footprint were excluded from the
+        // integration — carry the count so the record discloses the
+        // partial coverage instead of presenting a clean number.
+        const skippedNonFinite = result.skippedNonFinite ?? 0;
+        if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
+        return { record, residentOnly };
       },
     );
     this._inspect = new InspectTool(this._camera, canvas, {
@@ -1890,12 +1937,13 @@ export class Viewer {
    * pick points and read their per-point attributes on streaming nodes. The
    * node's octree `depth` is recorded too so the inspector can show a
    * "still refining" hint when a pick lands on a coarse node that still has
-   * deeper siblings loading.
+   * deeper siblings loading. The node's stable `key` is recorded so terrain
+   * sampling can order nodes reproducibly regardless of arrival order.
    */
-  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk, depth: number): void {
+  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk, depth: number, key: string): void {
     this._scene.add(mesh);
     this._streamingMeshes.add(mesh);
-    this._streamingPickData.set(mesh, { decoded, depth });
+    this._streamingPickData.set(mesh, { decoded, depth, key });
   }
 
   /**
@@ -2009,6 +2057,12 @@ export class Viewer {
     );
     this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null };
     this._streamingFrame = 0;
+    // Guaranteed scheduler cadence, render-loop-independent (see the field's
+    // contract). 200 ms is comfortably above a tick's sub-millisecond cost and
+    // close to the RAF path's every-6th-frame cadence; the RAF tick still runs
+    // when the loop is live, so a visible tab keeps its snappier reaction.
+    if (this._streamingHeartbeat !== null) clearInterval(this._streamingHeartbeat);
+    this._streamingHeartbeat = setInterval(() => this._tickStreaming(), 200);
     this._configureForStreaming(cloud);
     // A streaming open can land directly in a scalar default mode
     // (elevation on an RGB-less COPC) with no setStreamingColorMode call —
@@ -2017,8 +2071,37 @@ export class Viewer {
     this._notifyColorContextChanged();
   }
 
+  /**
+   * Hand the measure stack the datum the CURRENTLY loaded clouds support.
+   *
+   * Every caller that changes the cloud set routes through here rather than
+   * pushing its own cloud's origin, because a datum is a property of the SCENE,
+   * not of whichever file loaded most recently. Resolving over the whole set
+   * each time is also what keeps the answer from depending on load order: two
+   * clouds that disagree yield no datum whichever arrived first, and removing
+   * the odd one out restores it.
+   *
+   * `resolveSceneOrigin` is the same unanimity rule the georeference seam
+   * applies before emitting a world file — an absolute elevation is the same
+   * kind of claim about the same frame, so it answers to the same gate.
+   */
+  private _refreshMeasureDatum(): void {
+    const origins: Array<readonly number[] | null> = [];
+    if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
+    for (const { cloud } of this._clouds.values()) origins.push(cloud.origin ?? null);
+    const origin = resolveSceneOrigin(origins);
+    this._measure.setContext({
+      worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+      origin: origin ? [origin[0], origin[1], origin[2]] : null,
+    });
+  }
+
   /** Detach and fully dispose the current streaming cloud, if any. */
   detachStreamingCloud(): void {
+    if (this._streamingHeartbeat !== null) {
+      clearInterval(this._streamingHeartbeat);
+      this._streamingHeartbeat = null;
+    }
     if (!this._streaming) return;
     this._streaming.scheduler.stop();
     this._streaming.renderer.dispose();
@@ -2034,6 +2117,9 @@ export class Viewer {
     // cloud's bounds after detach.
     this._orbitClampAabb = this._visibleCloudAabb();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    // Dropping a cloud can RESOLVE an origin conflict as easily as adding one
+    // created it — re-ask rather than leave a refusal outliving its cause.
+    this._refreshMeasureDatum();
     // The streaming legend (if shown) no longer describes anything.
     this._notifyColorContextChanged();
   }
@@ -2123,7 +2209,7 @@ export class Viewer {
     this._attnRef.value = (radius / Math.sin(fovRad / 2)) * 1.2;
     this._applyOrbitBounds(radius);
 
-    this._measure.setContext({ worldUp: [0, 0, 1], origin: cloud.renderOrigin });
+    this._refreshMeasureDatum();
     // Initial streaming orbit pivot = metadata bounds centre. Bounds rarely
     // shift after this (COPC carries the full extent in its header) — when
     // they do, the per-frame refinement lerps the pivot toward the new
@@ -2299,6 +2385,9 @@ export class Viewer {
     // Refresh the orbit-clamp envelope so removing the last static cloud
     // doesn't leave the camera clamping to its ghost bounds.
     this._orbitClampAabb = this._visibleCloudAabb();
+    // Same reason as the streaming detach: the scene's datum is whatever the
+    // REMAINING clouds agree on.
+    this._refreshMeasureDatum();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
     // Removing the active cloud can hide (or re-target) the legend.
     this._notifyColorContextChanged();
@@ -2337,7 +2426,8 @@ export class Viewer {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
     // and buildings before contouring.
-    const buffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+    const staticBuffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+    const streamingBuffers: KeyedTerrainStreamBuffer[] = [];
     let staticPoints = 0;
     let streamingPoints = 0;
     let anyClass = false;
@@ -2347,55 +2437,40 @@ export class Viewer {
       pos: Float32Array,
     ): ArrayLike<number> | undefined =>
       cls && cls.length === pos.length / 3 ? cls : undefined;
-    for (const { cloud } of this._clouds.values()) {
+    // Match the picker: only visible, unlocked clouds contribute to the surface.
+    for (const { cloud } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
         const cls = alignedClass(cloud.classification, cloud.positions);
         if (cls) anyClass = true;
-        buffers.push({ pos: cloud.positions, cls });
+        staticBuffers.push({ pos: cloud.positions, cls });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
       }
     }
-    for (const { decoded } of this._streamingPickData.values()) {
+    for (const { decoded, key } of this._streamingPickData.values()) {
       if (decoded.positions && decoded.positions.length > 0) {
         const cls = alignedClass(decoded.classification, decoded.positions);
         if (cls) anyClass = true;
-        buffers.push({ pos: decoded.positions, cls });
+        streamingBuffers.push({ key, pos: decoded.positions, cls });
         streamingPoints += decoded.positions.length / 3;
       }
     }
     const totalPoints = staticPoints + streamingPoints;
     if (totalPoints === 0) return null;
 
-    // Stride DURING the walk so a multi-million-point cloud is never fully
-    // copied into one giant intermediate buffer (that allocation could
-    // OOM). Non-finite points are skipped. The global counter `gi` keeps
-    // the stride consistent across buffer boundaries.
-    const stride = Math.max(1, Math.ceil(totalPoints / maxPoints));
-    const cap = Math.ceil(totalPoints / stride);
-    const positions = new Float32Array(cap * 3);
-    // 255 = "no class channel" sentinel; terrain treats it as "keep".
-    const classification = anyClass ? new Uint8Array(cap).fill(255) : undefined;
-    let gi = 0;
-    let oi = 0;
-    for (const { pos, cls } of buffers) {
-      const pts = (pos.length / 3) | 0;
-      for (let i = 0; i < pts; i++, gi++) {
-        if (gi % stride !== 0 || oi >= cap) continue;
-        const s = i * 3;
-        const x = pos[s];
-        const y = pos[s + 1];
-        const z = pos[s + 2];
-        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
-          positions[oi * 3] = x;
-          positions[oi * 3 + 1] = y;
-          positions[oi * 3 + 2] = z;
-          if (classification && cls) classification[oi] = cls[i];
-          oi++;
-        }
-      }
-    }
-    if (oi === 0) return null;
+    // Subsample deterministically: static clouds keep their stable Map order and
+    // streaming nodes are ordered by octree key, so the same resident set yields
+    // the same points regardless of decode/network arrival timing — the exported
+    // grade and contour geometry must not drift run-to-run. Striding happens
+    // inside so a multi-million-point cloud is never copied whole.
+    const sample = sampleStridedTerrain(
+      staticBuffers,
+      streamingBuffers,
+      totalPoints,
+      maxPoints,
+      anyClass,
+    );
+    if (!sample) return null;
     // `residentOnly` means a PARTIAL stream — only some octree nodes are
     // resident, so the surface assessment must stay a "Preview". Previously
     // this was hard-wired true for ANY streaming scan, so a fully-streamed COPC
@@ -2410,10 +2485,10 @@ export class Viewer {
       if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
     }
     return {
-      positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
-      classification: classification ? (oi === cap ? classification : classification.subarray(0, oi)) : undefined,
+      positions: sample.positions,
+      classification: sample.classification,
       residentOnly,
-      sampled: stride > 1,
+      sampled: sample.sampled,
       totalPoints,
       verticalAxisHint: verticalAxisHintForSources(staticFormats, streamingPoints > 0),
     };
@@ -3028,6 +3103,10 @@ export class Viewer {
     polygon: ReadonlyArray<[number, number, number]>,
     newClass: number,
     includeIf?: (currentClass: number) => boolean,
+    // World up of the cloud's frame. Omit for the Z-up convention; a
+    // non-Z-up layer transform (v0.6 layer model) passes its true up so the
+    // polygon and points project onto the same basis.
+    up?: Vec3,
   ): ClassEditResult {
     const entry = this._clouds.get(id);
     if (!entry || !entry.cloud.classification) {
@@ -3042,6 +3121,7 @@ export class Viewer {
         polygon,
         newClass,
         includeIf,
+        up,
       });
     });
     if (result.changedCount > 0) {
@@ -3543,15 +3623,23 @@ export class Viewer {
    * available for a range-read streaming source, so this snapshot is exactly
    * what the viewer holds; positions carry the render origin as their shift.
    */
-  snapshotResidentCloud(): PointCloud | null {
+  /**
+   * The resident nodes an export would actually write: the deterministic leaf
+   * frontier (Gate 5) — the deepest resident node per octree path, with
+   * ancestors that have a resident descendant and anything mid-fade dropped, so
+   * an export never carries overlapping coarse+fine LOD samples of one region.
+   *
+   * Both the snapshot and the Export panel's estimate read this, because they
+   * have to agree: the estimate previously counted every resident point and the
+   * write then dropped the ancestors, so the panel promised roughly twice the
+   * points and bytes it delivered. Deriving both from one decision makes that
+   * particular lie unrepresentable.
+   */
+  private _exportFrontierChunks(): DecodedChunk[] {
     const s = this._streaming;
-    if (!s) return null;
-    // Reduce the resident set to the deterministic leaf frontier (Gate 5): keep
-    // the deepest resident node per octree path and drop ancestors that have a
-    // resident descendant, plus any node fading out, so a mid-cross-fade export
-    // doesn't carry overlapping coarse+fine LOD samples of the same region.
+    if (!s) return [];
     const entries = s.renderer.residentFrontierEntries();
-    if (entries.length === 0) return null;
+    if (entries.length === 0) return [];
     const frontierNodes: FrontierNode[] = [];
     for (const e of entries) {
       const key = keyFromId(e.id);
@@ -3561,9 +3649,26 @@ export class Viewer {
     // An unparseable id can't be reasoned about; keep it rather than silently
     // dropping its points. Parseable ids obey the frontier keep-set.
     const parseable = new Set(frontierNodes.map((n) => n.id));
-    const chunks = entries
+    return entries
       .filter((e) => (parseable.has(e.id) ? keep.has(e.id) : true))
       .map((e) => e.decoded);
+  }
+
+  /**
+   * How many points an export of the resident set would write. Counts the same
+   * frontier the snapshot builds, without copying any buffers, so the Export
+   * panel can state a figure it will honour while a scan is still streaming.
+   */
+  exportFrontierPointTotal(): number {
+    let total = 0;
+    for (const c of this._exportFrontierChunks()) total += c.pointCount;
+    return total;
+  }
+
+  snapshotResidentCloud(): PointCloud | null {
+    const s = this._streaming;
+    if (!s) return null;
+    const chunks = this._exportFrontierChunks();
     if (chunks.length === 0) return null;
     const crs = s.cloud.crs();
     return buildResidentSnapshot(chunks, {
@@ -3823,11 +3928,15 @@ export class Viewer {
    * @param lin - `linearUnitToMetres` for the source CRS, used to convert the
    *   returned {@link LassoVolumeReturn.stockpileSuffix} band into metres.
    *   Defaults to 1 (native units already metres).
+   * @param densityUnitKnown - whether the horizontal unit is actually known, so
+   *   the stockpile density can be claimed in points/m². Defaults to true; pass
+   *   false for an unknown CRS so the density bar can't award HIGH confidence.
    */
   computeLassoVolume(
     lasso: ReadonlyArray<{ readonly x: number; readonly y: number }>,
     percentile: number = 0.05,
     lin: number = 1,
+    densityUnitKnown: boolean = true,
   ): LassoVolumeReturn | null {
     if (lasso.length < 3) return null;
 
@@ -3857,7 +3966,7 @@ export class Viewer {
     // attached to the result so the inspector caption reads
     // "estimated (sampled — n%)" when the stride > 1.
     let candidatePointCount = 0;
-    for (const [, entry] of this._clouds) {
+    for (const entry of integrableClouds(this._clouds.values())) {
       candidatePointCount += entry.cloud.positions.length / 3;
     }
     if (this._streaming) {
@@ -3885,6 +3994,9 @@ export class Viewer {
     // sample. (See `_cloudWasReduced`.)
     let anySourceReduced = false;
     for (const [id, entry] of this._clouds) {
+      // Skip hidden / locked layers — the picker won't place vertices on them,
+      // so the lasso volume must not select through them either.
+      if (!isIntegrable(entry)) continue;
       const positions =
         stride === 1
           ? entry.cloud.positions
@@ -3969,6 +4081,7 @@ export class Viewer {
         selectedPositions,
         lin,
         anySourceReduced,
+        densityUnitKnown,
       ),
       selectedCount: totalSelected,
       lasso,
@@ -5046,8 +5159,16 @@ export class Viewer {
       },
       sourcePointCount(): number {
         if (viewer._streaming) return viewer._streaming.cloud.sourcePointCount;
+        // The file's declared total, back-scaled when the loader strided a huge
+        // cloud for display — the honest headline the Scan Report and PDF use.
+        // Summing the strided `pointCount` under-reported "Points" and inflated
+        // the export card's density divisor disagreement with every other panel.
         let total = 0;
-        for (const { cloud } of viewer._clouds.values()) total += cloud.pointCount;
+        for (const { cloud } of viewer._clouds.values()) {
+          total += cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount
+            ? cloud.declaredPointCount
+            : cloud.pointCount;
+        }
         return total;
       },
       residentPointCount(): number {
@@ -5104,6 +5225,14 @@ export class Viewer {
           /* defensive — null falls back to "no Capture row" */
         }
         return null;
+      },
+      dataBoundsAabb(): readonly [number, number, number, number, number, number] | null {
+        // Tight data extent for the report metadata: for streaming the octree
+        // cube (localBounds) inflates height ~7× and deflates density, so the
+        // printed Width/Height/Density use dataBounds instead — matching the
+        // Scan Report panel and the PDF. Static clouds already report tight.
+        if (viewer._streaming) return viewer._streaming.cloud.dataBounds();
+        return this.localBoundsAabb();
       },
       localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
         // Streaming first — it has authoritative bounds from the COPC header.
@@ -5504,7 +5633,10 @@ export class Viewer {
     const foldClass = this._materialsWithClass.has(material) && this._classFiltered;
     const foldElev = this._materialsWithElev.has(material) && this._elevFilterEnabled.value !== 0;
     const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
-    if (!foldClass && !foldElev && !foldInten) {
+    // A streaming node mid-dissolve folds a per-point opaque dither (same
+    // size×mask shape as the filters); dropped again the moment it settles.
+    const foldFade = this._materialsWithFade.has(material);
+    if (!foldClass && !foldElev && !foldInten && !foldFade) {
       material.sizeNode = (
         adaptive ? this._adaptiveSizeNode : null
       ) as typeof material.sizeNode;
@@ -5517,7 +5649,61 @@ export class Viewer {
     if (foldElev) node = node.mul(this._elevMaskMultiplier());
     if (foldClass) node = node.mul(this._classMaskMultiplier());
     if (foldInten) node = node.mul(this._intenMaskMultiplier());
+    if (foldFade) node = node.mul(this._fadeMaskMultiplier(material));
     material.sizeNode = node as typeof material.sizeNode;
+  }
+
+  /**
+   * The per-point dissolve multiplier for a fading streaming node. A stable
+   * Weyl hash of the instance index (mirrors `fadeHashUnit` in fadeDither.ts)
+   * is compared against the node's `fadeProgress` uniform: `step(hash, progress)`
+   * is `1` (keep) when `hash <= progress`, else `0` — a dissolved-out point's
+   * sprite size is multiplied by 0, so the node materialises/disappears fully
+   * OPAQUE (no transparency, no depth-sort z-fight, EDL exact).
+   */
+  private _fadeMaskMultiplier(material: THREE.PointsNodeMaterial): TslNode {
+    const progress = this._fadeUniforms.get(material) as TslNode;
+    const hash: TslNode = fract(float(instanceIndex).mul(PHI_CONJUGATE));
+    return step(hash, progress);
+  }
+
+  /**
+   * Begin a streaming node's opaque dissolve: fold the per-point dither into its
+   * size graph, then recompile (a NodeMaterial keeps its old shader until
+   * `needsUpdate`, so without this an already-compiled node never picks up the
+   * fold). Returns the progress the dissolve starts from. A fresh/settled node
+   * seeds at `startProgress`; a node whose dissolve is already in flight (a
+   * fade-in interrupted by eviction) KEEPS its current progress, so it dissolves
+   * out from where it got to rather than snapping to full density.
+   */
+  beginNodeDissolve(material: THREE.PointsNodeMaterial, startProgress: number): number {
+    const existing = this._fadeUniforms.get(material);
+    const u = existing ?? uniform(startProgress);
+    if (!existing) u.value = startProgress;
+    this._fadeUniforms.set(material, u);
+    this._materialsWithFade.add(material);
+    this._applySizeMode(material);
+    material.needsUpdate = true;
+    return u.value as number;
+  }
+
+  /** Advance a dissolving node's progress (0 = fully dissolved … 1 = fully shown). */
+  setNodeDissolveProgress(material: THREE.PointsNodeMaterial, progress: number): void {
+    const u = this._fadeUniforms.get(material);
+    if (u) u.value = progress;
+  }
+
+  /**
+   * End a node's dissolve: drop the dither fold so the settled mesh reverts to
+   * the plain size graph (no per-frame dither cost once materialised), then
+   * recompile so the GPU actually runs the plain graph.
+   */
+  endNodeDissolve(material: THREE.PointsNodeMaterial): void {
+    if (!this._materialsWithFade.has(material)) return;
+    this._materialsWithFade.delete(material);
+    this._fadeUniforms.delete(material);
+    this._applySizeMode(material);
+    material.needsUpdate = true;
   }
 
   /**
@@ -5606,10 +5792,7 @@ export class Viewer {
     this._worldUp.set(0, 0, zUp ? 1 : 0);
     if (!zUp) this._worldUp.set(0, 1, 0);
     this._nav.setWorldUp(this._worldUp);
-    this._measure.setContext({
-      worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
-      origin: latest.origin,
-    });
+    this._refreshMeasureDatum();
 
     const sphere = this._visibleBoundingSphere();
     const size = sphere ? sphere.radius * 2 : 100;
@@ -6688,7 +6871,16 @@ export class Viewer {
       }
       // Live probe — at most one detailed pick per frame, only when the
       // pointer actually moved, so a hover readout costs no idle frame budget.
-      if (this._toolMode === 'probe' && this._pointerMoved) {
+      // v0.6 P6: skip the detailed GPU pick while the user is actively driving
+      // the camera (orbit/pan drag) — during a drag you are navigating, not
+      // reading a hover value, so the readback is wasted. `_pointerMoved` is NOT
+      // consumed here, so the probe fires once as soon as the drag settles.
+      // (No separate camera-tween flag exists, so only active interaction gates.)
+      if (
+        this._toolMode === 'probe' &&
+        this._pointerMoved &&
+        shouldRunProbePick({ userInteracting: this._userInteracting, tweening: false })
+      ) {
         this._pointerMoved = false;
         let info: PointInfo | null = null;
         if (this._pointerOnCanvas) {

@@ -585,8 +585,50 @@ button:disabled { cursor: not-allowed; }
 .olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 
 /* Empty state */
+/* The empty state is the whole page's drop target, so it gets one focal point
+ * and everything else defers to it. The depth cue below is a single wide radial
+ * behind the hero: the canvas is otherwise flat black, and a flat field makes a
+ * centred column read as floating rather than placed. It is a background, not
+ * an effect — no animation, nothing to interrupt. */
+.olv-empty::before {
+  content: '';
+  position: absolute;
+  top: -10%;
+  left: 50%;
+  width: min(1100px, 140vw);
+  height: min(1100px, 140vw);
+  transform: translateX(-50%);
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 178, 255, 0.10) 0%,
+    rgba(0, 178, 255, 0.045) 32%,
+    transparent 68%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+/* Every child sits above the wash; the wash must never eat a click. */
+.olv-empty > * { position: relative; z-index: 1; }
+/* On the light theme the same wash reads as a smudge on near-white rather than
+ * depth, so it drops to a trace — enough to seat the hero, not enough to tint. */
+body.olv-theme-light .olv-empty::before {
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 130, 200, 0.055) 0%,
+    rgba(0, 130, 200, 0.022) 32%,
+    transparent 68%
+  );
+}
+
 .olv-empty {
   position: absolute; inset: 0;
+  /* Opaque themed backdrop for the splash. The stage behind carries the dark
+   * "sky" preset (an inline style the renderer sets for point-cloud contrast),
+   * which is right behind a loaded cloud but leaves Light-theme text stranded
+   * on a dark field before any scan opens. The empty state is full-bleed and
+   * hidden the moment a scan loads, so painting it with the theme background
+   * makes the whole splash follow the theme without touching the viewer sky. */
+  background: var(--bg);
   display: flex; flex-direction: column; align-items: center;
   /* `safe center` keeps the column visually centered on tall viewports
    * but falls back to `flex-start` when the content is taller than the
@@ -616,12 +658,56 @@ button:disabled { cursor: not-allowed; }
   margin-bottom: var(--space-md);
 }
 .olv-empty-hero-mark { display: block; width: 104px; height: 104px; }
+/* One quiet motion on one element: the mark drifts ±4 px on an 9 s ease
+ * loop — enough to make the first paint feel alive, slow enough to never
+ * read as an animation. The wordmark and everything else stay still, and
+ * reduced-motion turns it off entirely. */
+@keyframes olv-hero-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.olv-empty-hero-mark { animation: olv-hero-drift 9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .olv-empty-hero-mark { animation: none; }
+}
+/* "Try a sample scan" — ghost companion to the primary CTA. Deliberately
+ * quieter than the gradient button (hairline border, dim text) but a real
+ * button, not a link: it is the one-click demo path for the visitor with
+ * no LiDAR file on hand. */
+.olv-try-sample {
+  font: inherit; font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-dim); background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill); padding: var(--space-sm) var(--space-xl);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+  white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  /* The empty state is a flex column that can overflow short viewports;
+   * overflow:hidden zeroes this button's automatic minimum size, so
+   * without this it gets crushed flat instead of scrolling. */
+  flex: 0 0 auto;
+}
+.olv-try-sample:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.olv-try-sample:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-empty-title {
   font-size: var(--text-3xl); font-weight: 600; letter-spacing: -0.01em;
   background: var(--brand-gradient);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.olv-empty-sub { font-size: var(--text-md); color: var(--text-dim); max-width: 440px; line-height: 1.6; }
+/* The subtitle carries the privacy promise, which is the single most important
+ * first-paint signal this product has — a local-first viewer competing with
+ * upload-first tools. It reads at body weight rather than as fine print, and
+ * `text-wrap: balance` keeps the two lines close to even instead of leaving a
+ * lone orphaned word under a full line. */
+.olv-empty-sub {
+  font-size: var(--text-md); color: var(--text-dim);
+  max-width: 46ch; line-height: 1.6;
+  text-wrap: balance;
+}
 /* Format-support note — secondary, demoted below the primary CTA so
  * format jargon doesn't compete with the action label. */
 .olv-empty-formats {
@@ -2501,14 +2587,24 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* "Open scan from device" — the primary file-picker action on the empty
    state. Visible everywhere; it is the touch-friendly path on phones. */
+/* The single primary action on the page. It earns its weight from a resting
+ * lift the other surfaces don't have — the empty state offers three ways in
+ * (device, public dataset, URL) and only this one should read as the answer. */
 .olv-open-btn {
   display: inline-flex; align-items: center; justify-content: center;
   font-size: var(--text-md); font-weight: 600; color: #04121f;
   background: var(--brand-gradient);
   border: none; border-radius: var(--radius-md); padding: var(--space-xl) var(--space-3xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 4px 16px rgba(0, 178, 255, 0.20);
   transition: box-shadow var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-open-btn:hover { box-shadow: 0 6px 22px rgba(0, 178, 255, 0.32); }
+.olv-open-btn:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 8px 30px rgba(0, 178, 255, 0.38);
+}
 .olv-open-btn:active { transform: scale(0.97); }
 .olv-open-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -3510,14 +3606,71 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-measure-panel {
   width: 218px; box-sizing: border-box;
-  /* Drag the south-east handle to widen the panel (and the profile chart
-   * inside it) rightward into the canvas. `overflow: auto` is required for
-   * the native resize handle to engage; the chosen width is persisted. */
+  /* Drag the south-east grip (`.olv-mp-resize`) to widen the panel (and the
+   * profile chart inside it) rightward into the canvas. `overflow: auto` keeps
+   * the native `resize: horizontal` as a fallback; the chosen width is
+   * persisted. `position: relative` anchors the explicit grip, which rides
+   * ABOVE the rail collapse tab that otherwise covers the native corner. */
+  position: relative;
   min-width: 218px; max-width: 760px;
   resize: horizontal; overflow: auto;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
+/* Explicit SE resize grip — a quiet corner chevron in the hairline vocabulary.
+ * z-index 21 lifts it over the rail collapse tab (`.olv-rail-tab`, z-index 20)
+ * that sits flush on the shared right edge and swallowed the native handle's
+ * pointer-down, so the panel LOOKED resizable but never engaged. */
+.olv-mp-resize {
+  position: absolute; right: 0; bottom: 0;
+  width: 16px; height: 16px; z-index: 21;
+  cursor: ew-resize; touch-action: none;
+  color: var(--text-faint); opacity: 0.5;
+  border-bottom-right-radius: var(--radius-lg);
+  background: linear-gradient(
+    135deg,
+    transparent 0 46%, currentColor 46% 53%,
+    transparent 53% 69%, currentColor 69% 76%, transparent 76%
+  );
+  transition: opacity var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-resize:hover, .olv-mp-resize-active { opacity: 1; color: var(--text-dim); }
+.olv-mp-resize:focus-visible {
+  outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) { .olv-mp-resize { transition: none; } }
+
+/* Expand-to-focus control in a profile row header — unobtrusive icon button in
+ * the same house line-icon family as the dock glyphs. Opens the focus surface. */
+/* The profile chart is the click target for the focus surface. A hairline
+   ring on hover/focus confirms the whole chart is interactive. */
+.olv-mp-chart-wrap {
+  position: relative;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-chart-wrap:hover { box-shadow: 0 0 0 1px var(--hairline-strong); }
+.olv-mp-chart-wrap:focus-visible {
+  outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
+}
+/* Always-visible badge in the corner the eye lands on — the pill fill and
+   border are what make it discoverable (the icon it replaces was
+   transparent until hovered). The wrap owns the click, so the badge is inert. */
+.olv-mp-chart-expand {
+  position: absolute; top: 6px; right: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline-strong); border-radius: var(--radius-sm);
+  pointer-events: none;
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-chart-expand svg { width: 15px; height: 15px; }
+.olv-mp-chart-wrap:hover .olv-mp-chart-expand { color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .olv-mp-chart-wrap { transition: none; } }
 .olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 .olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
 /* Geographic-CRS honesty notice: sits between the panel head and the list;
@@ -3739,6 +3892,33 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   margin: 0; font-family: var(--mono); font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums; color: var(--text-dim);
   overflow-wrap: anywhere;
+}
+
+/* Collapsible "Summary" section — the glanceable headline, open by default, in
+ * the same disclosure vocabulary as the station table and witness sections so
+ * the two profile sections read as a matched pair. */
+.olv-mp-summary-sec { margin: var(--space-2xs) var(--space-xs) 0 var(--space-xs); }
+.olv-mp-summary-sec-toggle {
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-faint);
+  padding: var(--space-2xs) 0;
+  list-style: none; user-select: none;
+}
+.olv-mp-summary-sec-toggle::-webkit-details-marker { display: none; }
+.olv-mp-summary-sec-toggle::before {
+  content: '\25B8';
+  display: inline-block; margin-right: var(--space-xs);
+  transition: transform var(--dur-fast) ease-out;
+}
+.olv-mp-summary-sec[open] .olv-mp-summary-sec-toggle::before { transform: rotate(90deg); }
+/* Nested in the disclosure now, so drop the standalone top/side margin. */
+.olv-mp-summary-sec > .olv-mp-profile-summary {
+  margin: var(--space-xs) 0 var(--space-2xs) var(--space-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-mp-summary-sec-toggle::before { transition: none; }
 }
 
 /* Profile sampler controls (v0.4.5, B7/B8) — a collapsed <details> directly
@@ -4709,6 +4889,82 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-modal-x:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .olv-modal-body { padding: var(--space-2xl); overflow-y: auto; }
 .olv-modal-foot { padding: var(--space-lg) var(--space-2xl) var(--space-2xl); }
+
+/* Deferred teardown for callers that pass `exitMs` to openModal — the backdrop
+ * carries this class while its exit transition plays, then is removed. Inert so
+ * a fading surface can't take input. No-op for callers that don't opt in. */
+.olv-modal-closing { pointer-events: none; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Result focus surface (olv-result-focus) — a large, isolated presentation of a
+   rich result (today: a MEASURE profile), built on the openModal chrome so it
+   inherits the focus trap, Escape, backdrop-click dismissal and focus restore.
+   Only the sizing, the scrim, the motion, and the content grid differ.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-result-focus {
+  /* A lighter, blurred scrim than the confirm modal so the isolated result
+     still reads against a hint of the cloud behind it. */
+  background: rgba(6, 10, 20, 0.5);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.olv-result-focus .olv-modal {
+  width: min(1040px, 92vw);
+  max-height: min(88vh, 900px);
+  /* The surface lives OUTSIDE the measure panel, so it opts into tabular
+     figures itself — every survey number stays column-aligned. */
+  font-variant-numeric: tabular-nums;
+  /* Scale + fade in, grown from the trigger (transform-origin set inline in JS).
+     `backwards` fill (not `both`) so the finished animation releases the
+     transform and the exit transition below can take over. */
+  animation: olv-rf-in var(--dur-base) var(--ease-spring) backwards;
+}
+@keyframes olv-rf-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+/* Exit — faster than the entrance, ease-in. Driven by `.olv-modal-closing`,
+   which openModal adds for `exitMs` before it removes the node. */
+.olv-result-focus.olv-modal-closing { opacity: 0; transition: opacity 130ms ease-in; }
+.olv-result-focus.olv-modal-closing .olv-modal {
+  opacity: 0; transform: scale(0.96);
+  transition: opacity 130ms ease-in, transform 130ms ease-in;
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-result-focus .olv-modal { animation: none; }
+  .olv-result-focus.olv-modal-closing,
+  .olv-result-focus.olv-modal-closing .olv-modal { transition: none; }
+}
+
+.olv-result-focus-body { display: flex; flex-direction: column; gap: var(--space-2xl); }
+/* The chart — same renderer as the dock, given the surface's reading height. */
+.olv-result-focus .olv-rf-chart { height: min(46vh, 460px); }
+/* Stats — a clean multi-column grid of the same summary rows. */
+.olv-rf-stats {
+  display: grid; margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-md) var(--space-2xl);
+}
+.olv-rf-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-sm) 0; border-top: 0.5px solid var(--hairline);
+}
+.olv-rf-stat-label {
+  font-size: var(--text-2xs); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-rf-stat-value {
+  margin: 0; font-family: var(--mono); font-size: var(--text-md);
+  color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+/* Station table — reuses the in-panel scroll wrap + sticky header, with room to
+   read more rows at once than the 220px dock cap allows. */
+.olv-rf-stations { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-rf-section-label {
+  font-size: var(--text-2xs); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-rf-stations-wrap { max-height: 40vh; }
+.olv-rf-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 
 .olv-modal-form { display: flex; flex-direction: column; gap: var(--space-2xl); }
 .olv-modal-grid { display: flex; flex-direction: column; gap: var(--space-lg); }
@@ -5978,6 +6234,20 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   flex: 0 0 auto;
 }
 .olv-bc-convert:disabled { opacity: 0.4; cursor: not-allowed; }
+/* While a batch runs the primary button is the stop control, so it sheds the
+   accent fill (that reads "go") for a quiet outlined danger surface (reads
+   "stop"), and stays fully interactive. */
+.olv-bc-convert--running,
+.olv-bc-convert--running:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+  border: 0.5px solid var(--hairline-strong);
+}
+.olv-bc-convert--running:not(:disabled):hover {
+  background: rgba(255, 90, 90, 0.10);
+  border-color: rgba(255, 120, 120, 0.5);
+  color: #ff8a8a;
+}
 .olv-bc-hint { font-size: var(--text-xs); color: var(--text-dim); margin: 0; }
 .olv-bc-hint.is-blocked { color: var(--rating-moderate); }
 /* Visible reason for a disabled format pill (LAZ not yet available) — touch
@@ -6585,15 +6855,22 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   display: flex; align-items: center; justify-content: center;
   gap: var(--space-xl); flex-wrap: wrap; margin: var(--space-xs) 0 var(--space-2xs);
 }
+/* Demoted from an outlined pill to a quiet text link: as a pill it sat
+ * directly under the gradient CTA at near-equal visual weight, splitting
+ * the primary decision. It is a secondary utility — one accent-colored
+ * line with an underline on hover reads as exactly that. Padding kept for
+ * the 44 pt touch target. */
 .olv-convert-chip {
-  font: inherit; font-size: var(--text-md); font-weight: 600;
-  color: var(--accent); background: var(--accent-soft, rgba(0,178,255,0.10));
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  border-radius: var(--radius-pill); padding: 9px var(--space-2xl); cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+  font: inherit; font-size: var(--text-sm); font-weight: 500;
+  color: var(--accent); background: transparent;
+  border: none;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: text-decoration-color var(--dur-fast) var(--ease-standard);
   white-space: nowrap;
 }
-.olv-convert-chip:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.olv-convert-chip:hover { text-decoration-color: var(--accent); }
 .olv-convert-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Splash reorg: one bounded "Explore public LiDAR" card (Gestalt common region). */
@@ -6603,8 +6880,12 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    * the full viewport width on desktop (it lives in a full-width flex column). */
   width: 100%; max-width: 460px; box-sizing: border-box;
   margin: var(--space-md) auto; padding: var(--space-2xl) 14px;
+  /* Deliberately hairline-led with no fill. Enclosure is the strongest grouping
+   * cue on a page, and a filled bordered box was making the SECONDARY way in
+   * (browse a public dataset) outweigh the primary one (open your own file).
+   * The demoted panel token exists for exactly this — a lane, not a card. */
   border: 0.5px solid var(--hairline); border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  background: var(--panel-recessive);
 }
 .olv-explore-card > .olv-empty-section-label { margin: 0; }
 

@@ -33,7 +33,7 @@ OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. Yo
 
 The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that LiDAR work needs.
 
-It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is a browser-native LiDAR inspection and terrain-analysis platform focused on transparency, validation, and local-first processing.
+It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is honesty-first: every result discloses its coverage, method, and uncertainty, and its terrain and contour exports are evidence-gated so they refuse to over-claim.
 
 ## Live Demo
 
@@ -129,7 +129,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - Annotations — drop categorised, titled markers with notes, browse and search them in a panel, capture the camera viewpoint with each, and undo/redo changes; the panel and the PDF report open with a grouping summary (totals, per-category counts, and how many areas the notes fall across)
 - Inspection sessions — export measurements, annotations, and named views to one JSON file and reload them later
 - Workflow recorder — record and replay `.olvworkflow` files of camera moves and tool actions, with a settings popup for file format, save destination, start/stop shortcut, replay speed, a pre-record countdown, captured action families, and loop replay; records actions only, never scan data, so a recipient needs the same scan open to replay
-- Multi-page PDF technical reports — six built-in templates with branding and unit-system awareness
+- Multi-page PDF technical reports — two built-in templates with branding and unit-system awareness
 - Visual Export Studio — orthographic RGB, height map, intensity, classification, depth, normal, and contour map exports
 - Screenshot export that burns in placed measurements and annotations as inspection evidence
 
@@ -182,6 +182,33 @@ See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md)
 for the contract definitions and the honesty fields every result must carry,
 and [`docs/validation/terrain-validation-matrix.md`](docs/validation/terrain-validation-matrix.md)
 for how each terrain product is validated.
+
+## Contour Studio
+
+Contour Studio is the post-analysis step that turns an analysed scan into a
+contour deliverable, kept out of the Analyse panel so the map-making doesn't
+crowd the terrain work. Once a scan is analysed, a Terrain Products launcher
+appears; its state — hidden, unavailable, exploratory, or available — is read
+from the analysis result, and opening it reveals the Studio workspace.
+
+You pick a purpose: Engineering Plan, Survey Review, Terrain Research,
+Presentation Map, or Custom. A purpose only bundles presentation defaults for
+settings you haven't overridden; because the state carries no evidence field,
+switching purpose cannot raise a claim. The geometry keeps two forms apart —
+analytical contours are the exact isolines of the grid, while cartographic
+contours are generalised for legibility, reference the analytical geometry's
+hash, and are never labelled exact.
+
+Every export routes through one evidence gate that can only downgrade —
+validated, exploratory, or blocked. A blocked product returns a diagnostic
+instead of a polished file, an exploratory one is watermarked, and the permit
+decision is stamped into each artifact's provenance. Exports cover contour
+vectors (GeoJSON, DXF, SVG), a map-sheet PDF, a DEM raster package, a terrain
+intelligence report, and a complete ZIP with a SHA256SUMS checksum manifest.
+Validation is internal hold-out only: nothing is survey-grade, and no output
+asserts certification.
+
+Full detail is in [`docs/contour-studio.md`](docs/contour-studio.md).
 
 ## Screenshots
 
@@ -253,7 +280,7 @@ Measurement is meant for visual inspection and research, not survey-grade use. T
 
 **Current import formats:** `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTX`, `PTS`.
 
-**Current export targets:** `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
+**Current export targets:** `LAS` (1.2 / 1.4), `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
 
 That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (ASTM E2807, tested against Trimble exports) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings. Large `COPC` and `EPT` datasets stream progressively — locally or over HTTP range requests from a URL — with bounded memory and no full-file load; see [`docs/streaming.md`](docs/streaming.md).
 
@@ -391,7 +418,7 @@ A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 A short list of practical workflows the current toolkit is well-suited for. Each one assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
 
 - **Large streaming dataset review.** Open COPC (`.copc.laz`) or EPT (`ept.json`) datasets directly — local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
-- **Inspection reporting.** Annotate findings → measure distances, areas, slopes, angles, or cross-section profiles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Five built-in templates and brand-aware accent + logo support.
+- **Inspection reporting.** Annotate findings → measure distances, areas, slopes, angles, or cross-section profiles → export a multi-page PDF technical report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Two built-in templates (Survey Summary, Technical Report) and brand-aware accent + logo support.
 - **Terrain analysis.** Export height maps from drone LiDAR datasets with legend customisation and unit-system control. Useful for slope review, elevation comparison, and quick topographic figures. Cross-section profile measurements report 3D length, horizontal distance, vertical drop, and grade across any two picked points.
 - **Classification QA.** Export classification maps for validation workflows; toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession` for follow-up review.
 - **Mobile scan review.** Open lightweight datasets — `.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar iPhone/Android scanners — on tablets or phones. The viewer adapts rendering detail and Eye Dome Lighting defaults for weaker GPUs so a phone scan is readable from the first frame.
@@ -410,7 +437,7 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.5.9**. The full, dated history is in
+The current release is **v0.6.0-alpha.1**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md), and the per-release highlights live in the
 [Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/)
 (source: the `RELEASE_NOTES_v*.md` files in this repository).
@@ -466,6 +493,17 @@ OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 **Standards & formats** — ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems).
 
 Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-perf, COPC, and Entwine this viewer relies on.
+
+## Validation & Reproducibility
+
+For reviewers, and anyone who wants to check the claims above rather than take them on trust:
+
+- [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md) — install and run the offline test suite from a clean clone in about two minutes.
+- [VALIDATION_REPORT_v0.6.0-alpha.1.md](VALIDATION_REPORT_v0.6.0-alpha.1.md) — what this alpha validates and what it does not; terrain/measurement claims are inherited unchanged from [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md).
+- [KNOWN_LIMITATIONS_v0.6.0-alpha.1.md](KNOWN_LIMITATIONS_v0.6.0-alpha.1.md) — the deliberate limits of this alpha (project frame staged, residual streaming flicker, bundle above the early-warning line, no cross-CRS reprojection).
+- [REPRODUCIBILITY.md](REPRODUCIBILITY.md) — the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
+- [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md) — how to evaluate the software artifact without special hardware or private data.
+- [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md) — where the test fixtures and streamed sample datasets come from, and how they are licensed.
 
 ## License
 

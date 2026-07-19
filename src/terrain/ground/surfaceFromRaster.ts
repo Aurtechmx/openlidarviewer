@@ -54,6 +54,9 @@ export interface SurfaceFromRasterParams {
   readonly latitudeDeg?: number | null;
   /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
   readonly horizontalUnitToMetres?: number;
+  /** Metres per source vertical unit (~0.3048 for feet); scales the roughness
+   *  slope's rise to metres. Default 1. */
+  readonly verticalUnitToMetres?: number;
   /** Density (returns/cell) earning full confidence; default = scene median. */
   readonly targetCount?: number;
 }
@@ -118,6 +121,7 @@ export function buildSurfaceFromRaster(
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
+    verticalUnitToMetres: params.verticalUnitToMetres,
     interpolation: LIVE_INTERPOLATION,
     extrapolationGuard: LIVE_EXTRAPOLATION_GUARD,
   });

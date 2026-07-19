@@ -118,6 +118,23 @@ describe('EptLaszipWorkerClient protocol', () => {
     await expect(promise).rejects.toThrow(/abort/i);
   });
 
+  test('an abort still settles when the cancel post throws (worker dying)', async () => {
+    // If the worker is being torn down in the same tick the signal aborts, the
+    // cancel postMessage throws. That must not leave the decode promise hanging —
+    // the reject has to win regardless of the cancel.
+    const worker = new FakeWorker();
+    const client = new EptLaszipWorkerClient(() => worker);
+    const ctrl = new AbortController();
+    const promise = client.decodeTile(new ArrayBuffer(8), [0, 0, 0], ctrl.signal);
+    // The decode posted fine; only the LATER cancel post throws.
+    worker.postMessage = (): void => {
+      throw new Error('worker terminated');
+    };
+    ctrl.abort();
+    await expect(promise).rejects.toThrow(/abort/i);
+    expect(client.pendingCount).toBe(0);
+  });
+
   test('an already-aborted signal rejects without posting a decode', async () => {
     const { client, worker } = mkClient();
     const ctrl = new AbortController();
@@ -146,6 +163,20 @@ describe('EptLaszipWorkerClient protocol', () => {
     await expect(promise).rejects.toThrow(/worker failed/i);
   });
 
+  test('a decode after a worker onerror settles instead of hanging on the dead worker', async () => {
+    const { client, worker } = mkClient();
+    const inflight = client.decodeTile(new ArrayBuffer(8), [0, 0, 0]);
+    worker.onerror?.(new Event('error'));
+    await expect(inflight).rejects.toThrow(/worker failed/i);
+    // The dead worker is terminated, not left installed.
+    expect(worker.terminated).toBe(true);
+    // A NEW decode must not post to the dead worker (which would never reply) —
+    // it rejects promptly so the caller's error path runs.
+    const after = client.decodeTile(new ArrayBuffer(8), [0, 0, 0]);
+    expect(worker.posted).toHaveLength(1); // no second decode posted
+    await expect(after).rejects.toThrow(/worker failed/i);
+  });
+
   test('onDecodeMs fires once per successful decode', async () => {
     const { client, worker } = mkClient();
     const spy = vi.fn();
@@ -156,5 +187,52 @@ describe('EptLaszipWorkerClient protocol', () => {
     await promise;
     expect(spy).toHaveBeenCalledTimes(1);
     expect(typeof spy.mock.calls[0][0]).toBe('number');
+  });
+
+  test('a synchronous postMessage failure rejects and leaves no pending state', async () => {
+    // A detached/untransferable buffer makes postMessage throw synchronously
+    // (DataCloneError). The promise must reject AND the request must not linger
+    // in `_pending` with a stranded abort listener — otherwise the map (and the
+    // signal's listener list) leaks one entry per failed post.
+    const worker = new FakeWorker();
+    let throwOnPost = true;
+    const realPost = worker.postMessage.bind(worker);
+    worker.postMessage = (m: unknown, t?: Transferable[]): void => {
+      if (throwOnPost) throw new Error('DataCloneError: could not be cloned');
+      realPost(m, t);
+    };
+    const client = new EptLaszipWorkerClient(() => worker);
+    const ctrl = new AbortController();
+    const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
+
+    await expect(
+      client.decodeTile(new ArrayBuffer(8), [0, 0, 0], ctrl.signal),
+    ).rejects.toThrow(/DataCloneError/);
+    expect(client.pendingCount).toBe(0);
+    expect(removeSpy).toHaveBeenCalled();
+
+    // Firing the abort after the failed post is a no-op — the listener is gone.
+    expect(() => ctrl.abort()).not.toThrow();
+
+    // The client is not wedged: a subsequent decode still completes.
+    throwOnPost = false;
+    const ok = client.decodeTile(new ArrayBuffer(8), [1, 2, 3]);
+    const id = worker.posted[worker.posted.length - 1].requestId;
+    worker.reply({ type: 'decoded', requestId: id, decoded: fakeDecoded(3) });
+    expect((await ok).pointCount).toBe(3);
+    expect(client.pendingCount).toBe(0);
+  });
+
+  test('_failAll (dispose) detaches abort listeners, so a later abort is inert', async () => {
+    const { client, worker } = mkClient();
+    const ctrl = new AbortController();
+    const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
+    const promise = client.decodeTile(new ArrayBuffer(8), [0, 0, 0], ctrl.signal);
+    client.dispose();
+    await expect(promise).rejects.toThrow(/disposed/i);
+    expect(client.pendingCount).toBe(0);
+    expect(removeSpy).toHaveBeenCalled();
+    expect(() => ctrl.abort()).not.toThrow();
+    expect(worker.posted.some((m) => m.type === 'cancel')).toBe(false);
   });
 });

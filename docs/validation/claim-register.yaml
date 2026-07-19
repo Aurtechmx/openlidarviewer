@@ -28,8 +28,11 @@
 #     compile error at the measurement + CRS boundaries.
 
 schemaVersion: 1
-softwareVersion: 0.5.9            # package.json version at last review
-generated: 2026-07-15
+# Claims last reviewed at 0.5.9; the 0.6.0-alpha.1 wave (streaming decode, session
+# import, density units, project-frame foundation) did not touch these terrain /
+# measurement algorithms, so their evidence is inherited unchanged into the alpha.
+softwareVersion: 0.6.0-alpha.1
+generated: 2026-07-18
 validationOwner: A. Urias / Aurtech
 
 claims:

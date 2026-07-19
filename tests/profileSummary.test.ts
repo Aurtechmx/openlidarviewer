@@ -221,6 +221,25 @@ describe('scaleProfileSamples (v0.4.5, B2 unit seam)', () => {
     expect(scaled[1].count).toBe(0);
   });
 
+  it('a compound CRS scales distance by the horizontal factor and height by the vertical', () => {
+    // Metre eastings (linear = 1) over US-survey-foot heights (vertical ≈ 0.3048):
+    // 10 m chainage stays 10 m, a 100 ft rise becomes 30.48 m — NOT 100 m.
+    const scaled = scaleProfileSamples(
+      [{ distance: 10, height: 100, count: 1 }],
+      1, // horizontal (distance) factor
+      0, // no datum
+      0.3048, // vertical (height) factor
+    );
+    expect(scaled[0].distance).toBeCloseTo(10, 12);
+    expect(scaled[0].height).toBeCloseTo(30.48, 12);
+  });
+
+  it('vertical factor defaults to the horizontal one (single-unit CRS unchanged)', () => {
+    const both = scaleProfileSamples([{ distance: 10, height: 100 }], 0.3048);
+    const explicit = scaleProfileSamples([{ distance: 10, height: 100 }], 0.3048, 0, 0.3048);
+    expect(both[0].height).toBeCloseTo(explicit[0].height, 12);
+  });
+
   it('NaN gaps survive scaling as gaps', () => {
     const scaled = scaleProfileSamples([{ distance: 5, height: NaN, count: 0 }], 0.3048);
     expect(scaled[0].distance).toBeCloseTo(1.524, 12);
@@ -285,5 +304,216 @@ describe('profileStationRows (v0.4.5, B5 — shared row model)', () => {
         `${r.station},${r.chainage},${r.elevation},${r.points},${r.grade}`,
       );
     });
+  });
+});
+
+/**
+ * The datum seam (the v0.6 profile-elevation fix). Profile heights are stored
+ * RENDER-LOCAL (`local = world − origin`) because that is what the session
+ * importer's rebase assumes; the source datum is restored HERE, at the same
+ * display boundary that applies the unit factor, so every printing surface
+ * gets it and storage stays rebaseable.
+ *
+ * The fixture is the user's real streaming COPC: a LAS header Z range of
+ * 330.030 .. 467.150 rendered against an octree-cube origin 830.03 m up the
+ * Z axis, so the panel was reading elevations of −481.103 and −411.865.
+ */
+const REAL_ORIGIN_UP = 830.03;
+const REAL_LOCAL: ProfileChartSample[] = [
+  { distance: 0, height: -481.103, count: 12 },
+  { distance: 171.99, height: NaN, count: 0 },
+  { distance: 343.98, height: -411.865, count: 9 },
+];
+
+describe('scaleProfileSamples — datum restore', () => {
+  it('adds the render origin back so a local height reads as a source elevation', () => {
+    const out = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+    // 830.03 − 481.103 = 348.927 and 830.03 − 411.865 = 418.165: both inside
+    // the header's 330.030 .. 467.150 window, which the local values were not.
+    expect(out[0].height).toBeCloseTo(348.927, 9);
+    expect(out[2].height).toBeCloseTo(418.165, 9);
+  });
+
+  it('offsets the height only — chainage is measured from the line, not the datum', () => {
+    const out = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+    expect(out[0].distance).toBe(0);
+    expect(out[2].distance).toBeCloseTo(343.98, 9);
+  });
+
+  it('restores the datum BEFORE the unit factor — both are render-unit quantities', () => {
+    // A foot-CRS scan: origin and height are both feet, so the sum converts
+    // once. Adding metres to feet (or converting the offset separately) would
+    // be off by the ratio.
+    const out = scaleProfileSamples([{ distance: 0, height: 100 }], 0.3048, 900);
+    expect(out[0].height).toBeCloseTo(1000 * 0.3048, 12);
+  });
+
+  it('a gap stays a gap — a datum cannot fill in a bin that saw no points', () => {
+    const out = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+    expect(Number.isNaN(out[1].height)).toBe(true);
+  });
+
+  it('an absent or zero offset leaves the series exactly as before', () => {
+    const src: ProfileChartSample[] = [{ distance: 7, height: 3, count: 1 }];
+    expect(scaleProfileSamples(src, 1, 0)).toEqual(src);
+    expect(scaleProfileSamples(src, 1)).toEqual(src);
+  });
+
+  it('a garbage offset shifts nothing rather than erasing the series', () => {
+    for (const bad of [Number.NaN, Infinity]) {
+      const out = scaleProfileSamples([{ distance: 0, height: 3 }], 1, bad);
+      expect(out[0].height).toBe(3);
+    }
+  });
+});
+
+describe('profile display surfaces print SOURCE elevations', () => {
+  const SOURCE = scaleProfileSamples(REAL_LOCAL, 1, REAL_ORIGIN_UP);
+
+  it('the summary rows locate the extremes at their real elevations', () => {
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(SOURCE), 'metric').map((r) => [r.label, r.value]),
+    );
+    expect(byLabel.get('Lowest point')).toBe('348.93 m @ 0+000.00');
+    // 418.165 is an exact decimal tie that IEEE-754 holds as 418.16499…, so
+    // it rounds down. The elevation is right; the last digit is arithmetic.
+    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
+  });
+
+  it('an elevation never degrades into centimetres or kilometres', () => {
+    // A length switches unit by magnitude; an elevation is a datum reading and
+    // always belongs in the survey's working unit. The pre-fix rows sent
+    // −411.865 through the length formatter and printed "-41186.5 cm".
+    const rows = profileSummaryRows(
+      computeProfileSummary([
+        { distance: 0, height: 0.4 },
+        { distance: 10, height: 1200 },
+      ]),
+      'metric',
+    );
+    const byLabel = new Map(rows.map((r) => [r.label, r.value]));
+    expect(byLabel.get('Lowest point')).toBe('0.40 m @ 0+000.00');
+    expect(byLabel.get('Highest point')).toBe('1200.00 m @ 0+010.00');
+  });
+
+  it('the station table and the CSV agree with the panel', () => {
+    const rows = profileStationRows(SOURCE, 'metric');
+    expect(rows[0].elevation).toBe('348.927');
+    expect(rows[1].elevation).toBe(''); // the gap
+    expect(rows[2].elevation).toBe('418.165');
+    const lines = buildProfileCsv(SOURCE, 'metric').trimEnd().split('\n');
+    expect(lines[1]).toBe(`0+000.00,0.00,${rows[0].elevation},12,`);
+    expect(lines[3]).toBe(`0+343.98,343.98,${rows[2].elevation},9,`);
+  });
+
+  it('imperial converts the restored elevation, it does not re-datum it', () => {
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(SOURCE), 'imperial').map((r) => [r.label, r.value]),
+    );
+    // 348.927 m = 1144.77 ft; 418.165 m = 1371.93 ft.
+    expect(byLabel.get('Lowest point')).toBe('1144.77 ft @ 0+00.00');
+    expect(byLabel.get('Highest point')).toBe('1371.93 ft @ 11+28.54');
+  });
+
+  it('an extreme is always located at one of the series own stations', () => {
+    // The station a located extreme reports can only ever be a chainage the
+    // sampler emitted — it is read straight off the sample. Pinned because a
+    // field report showed an extreme outside its own profile length.
+    const s = computeProfileSummary(SOURCE);
+    const stations = SOURCE.map((x) => x.distance);
+    expect(stations).toContain(s.highest?.chainage);
+    expect(stations).toContain(s.lowest?.chainage);
+    expect(s.highest!.chainage).toBeLessThanOrEqual(s.lengthM);
+    expect(s.lowest!.chainage).toBeLessThanOrEqual(s.lengthM);
+  });
+});
+
+/**
+ * The datum honesty gate. Clouds are recentred on their own `floor(min)`, so
+ * two loaded files can hold different origins — and since nothing re-places a
+ * mesh by an origin delta, such a scene has no single frame to speak of. The
+ * viewer refuses to assert a datum there (`resolveSceneOrigin` → null), and
+ * the profile surfaces must then present LOCAL heights and say so, rather than
+ * hand one cloud's datum to points that were never in its frame.
+ *
+ * Every DELTA survives the refusal untouched: a constant offset cancels in a
+ * subtraction, so gain, loss, grades and the steepest section are exactly as
+ * correct without a datum as with one. Only absolutes lose their meaning.
+ */
+describe('a refused datum degrades to local heights, visibly', () => {
+  const LOCAL: ProfileChartSample[] = [
+    { distance: 0, height: -481.103, count: 12 },
+    { distance: 171.99, height: NaN, count: 0 },
+    { distance: 343.98, height: -411.865, count: 9 },
+  ];
+
+  it('a null offset leaves the heights exactly local — no datum is invented', () => {
+    expect(scaleProfileSamples(LOCAL, 1, null)).toEqual(LOCAL);
+  });
+
+  it('a null offset still converts units — the datum is refused, not the scale', () => {
+    const out = scaleProfileSamples([{ distance: 10, height: 100 }], 0.3048, null);
+    expect(out[0].height).toBeCloseTo(30.48, 12);
+    expect(out[0].distance).toBeCloseTo(3.048, 12);
+  });
+
+  it('the summary names the extremes as local heights instead of elevations', () => {
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(LOCAL), 'metric', false).map((r) => [
+        r.label,
+        r.value,
+      ]),
+    );
+    expect(byLabel.get('Highest point (local height)')).toBe('-411.87 m @ 0+343.98');
+    expect(byLabel.get('Lowest point (local height)')).toBe('-481.10 m @ 0+000.00');
+    // The elevation wording must be gone — that is the whole visible signal.
+    expect(byLabel.has('Highest point')).toBe(false);
+    expect(byLabel.has('Lowest point')).toBe(false);
+  });
+
+  it('every delta reads identically with and without a datum', () => {
+    const withDatum = computeProfileSummary(scaleProfileSamples(LOCAL, 1, 830.03));
+    const without = computeProfileSummary(scaleProfileSamples(LOCAL, 1, null));
+    const deltas = (s: ReturnType<typeof computeProfileSummary>) => [
+      s.gainM,
+      s.lossM,
+      s.averageGrade,
+      s.maxGrade,
+      s.lengthM,
+    ];
+    expect(deltas(without)).toEqual(deltas(withDatum));
+    const rowsOf = (known: boolean, samples: ProfileChartSample[]) =>
+      new Map(profileSummaryRows(computeProfileSummary(samples), 'metric', known).map((r) => [r.label, r.value]));
+    const a = rowsOf(true, scaleProfileSamples(LOCAL, 1, 830.03));
+    const b = rowsOf(false, scaleProfileSamples(LOCAL, 1, null));
+    for (const label of ['Length', 'Elevation gain / loss', 'Avg grade', 'Max grade', 'Steepest section']) {
+      expect(b.get(label)).toBe(a.get(label));
+    }
+  });
+
+  it('the CSV renames the column rather than blanking it — a blank means no coverage', () => {
+    const csv = buildProfileCsv(LOCAL, 'metric', false);
+    const lines = csv.trimEnd().split('\n');
+    expect(lines[0]).toBe('station,chainage_m,local_height_m,points,grade_to_next_pct');
+    // The values are real and must stay: blanking them would claim the corridor
+    // saw no points, which is a different lie.
+    expect(lines[1]).toBe('0+000.00,0.00,-481.103,12,');
+    expect(lines[2]).toBe('0+171.99,171.99,,0,'); // the genuine gap, still blank
+  });
+
+  it('a known datum keeps every label and header exactly as it was', () => {
+    const known = scaleProfileSamples(LOCAL, 1, 830.03);
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(known), 'metric', true).map((r) => [r.label, r.value]),
+    );
+    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
+    expect(buildProfileCsv(known, 'metric', true).split('\n')[0]).toBe(
+      'station,chainage_m,elevation_m,points,grade_to_next_pct',
+    );
+    // Defaulted, the surfaces behave exactly as they did before the gate.
+    expect(profileSummaryRows(computeProfileSummary(known), 'metric')).toEqual(
+      profileSummaryRows(computeProfileSummary(known), 'metric', true),
+    );
+    expect(buildProfileCsv(known, 'metric')).toBe(buildProfileCsv(known, 'metric', true));
   });
 });

@@ -29,6 +29,39 @@ export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
   'areas, grades and profiles are NOT reliable distances. Reproject to a ' +
   'projected CRS for measurement work.';
 
+/**
+ * The measurement stack's honest limitation on a COMPOUND CRS whose vertical
+ * (height) unit differs from its horizontal linear unit — e.g. UTM metres with
+ * a NAVD88 height in US survey feet. Pure-vertical readouts (heights, box
+ * height, cut/fill thickness) are scaled by the vertical factor and stay
+ * honest, but a 3D length, a tilted planar area, or a grade combines the two
+ * units and no single factor makes it a true distance. Rather than dress up a
+ * figure that is off by the units' ratio, the stack refuses those kinds and
+ * states why — the same red-grade + caveat pattern as the geographic case, so
+ * the wording cannot fork.
+ */
+export const VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE =
+  'Compound CRS: the height unit differs from the horizontal unit, so 3D ' +
+  'lengths, areas and grades mix units and are NOT reliable distances. ' +
+  'Heights are scaled correctly; use them, or reproject to a single unit.';
+
+/**
+ * The measurement stack's honest limitation when the loaded clouds hold
+ * CONFLICTING render origins. Each cloud is recentred on its own origin, so a
+ * scene whose origins differ has no single frame — and no single vertical
+ * datum — to read absolute elevations against. Rather than hand one cloud's
+ * datum to points that were never in its frame, the profile surfaces present
+ * the local render height and name it that. Differences survive intact (a
+ * constant offset cancels in a subtraction), which is why the caveat points at
+ * what still holds instead of only what does not. ONE string, shared by the
+ * panel caveat and the PDF's datum row, so the wording cannot fork.
+ */
+export const DATUM_CONFLICT_MEASURE_NOTICE =
+  'Local heights, not elevations: conflicting cloud origins mean no single ' +
+  'vertical datum describes this scene. Height differences, grades and ' +
+  'gain/loss are unaffected; absolute values are not elevations. Load the ' +
+  'clouds one at a time to read true elevations.';
+
 const FEET_PER_METRE = 3.280839895013123;
 const SQFT_PER_SQM = FEET_PER_METRE * FEET_PER_METRE;
 const SQFT_PER_ACRE = 43_560;
@@ -52,6 +85,23 @@ export function formatLength(metres: number, system: UnitSystem): string {
   if (abs < 1) return `${(feet * 12).toFixed(1)} in`;
   if (abs < FEET_PER_MILE) return `${feet.toFixed(2)} ft`;
   return `${(feet / FEET_PER_MILE).toFixed(3)} mi`;
+}
+
+/**
+ * Format an elevation given in metres for the active unit system.
+ *
+ * An elevation is not a length, and formatting it like one misreads it twice.
+ * A length is a magnitude, so it may drop to centimetres or climb to
+ * kilometres as it shrinks and grows; an elevation is a signed reading against
+ * a datum, and a survey states every one of them in the same working unit — a
+ * ground at 1200 m is "1200.00 m", never "1.200 km", and a 0.4 m benchmark is
+ * not "40.0 cm". Holding one unit is also what makes a column of elevations
+ * comparable at a glance, which is the whole point of printing them.
+ */
+export function formatElevation(metres: number, system: UnitSystem): string {
+  if (!Number.isFinite(metres)) return '—';
+  if (system === 'metric') return `${metres.toFixed(2)} m`;
+  return `${(metres * FEET_PER_METRE).toFixed(2)} ft`;
 }
 
 /** Format an area given in square metres for the active unit system. */

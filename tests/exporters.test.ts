@@ -1,5 +1,7 @@
 import { toXyz, toCsv, toPly, toObj, exportCloud } from '../src/io/exporters';
 import { loadXyz } from '../src/io/loadXyz';
+import { loadPly } from '../src/io/loadPly';
+import { loadObj } from '../src/io/loadObj';
 import { PointCloud } from '../src/model/PointCloud';
 import type { SourceMetadata } from '../src/model/PointCloud';
 
@@ -398,5 +400,88 @@ describe('honest channel-drop disclosure (v0.5.4)', () => {
     const plain = makeCloud([0, 0, 0], [0, 0, 0]);
     expect(toObj(plain)).not.toContain('omitted');
     expect(toPly(plain)).not.toContain('omitted');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.6.0: PLY/OBJ re-import recentring, double-precision PLY declarations,
+// and non-finite point disclosure.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PLY/OBJ re-import recentres survey coordinates (f64 bridge)', () => {
+  // UTM-scale origin with mm-scale local structure: a float32 holding the
+  // GLOBAL northing quantises onto a ~0.25 m grid, so the round-trip only
+  // survives if the importer recentres in float64 first.
+  const origin: [number, number, number] = [500000, 4100000, 1000];
+  const local = [0.123, 0.456, 0.789, 1.001, 2.002, 3.003];
+
+  const globalOf = (c: PointCloud, i: number, a: number): number =>
+    c.positions[i * 3 + a] + c.origin[a];
+
+  test('toPly → loadPly round-trips global coordinates to < 1 mm', async () => {
+    const cloud = makeCloud(local, origin);
+    const text = toPly(cloud);
+    const reloaded = await loadPly(new TextEncoder().encode(text).buffer as ArrayBuffer);
+    expect(reloaded.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      for (let a = 0; a < 3; a++) {
+        expect(Math.abs(globalOf(reloaded, i, a) - globalOf(cloud, i, a))).toBeLessThan(1e-3);
+      }
+    }
+  });
+
+  test('toObj → loadObj round-trips global coordinates to < 1 mm', async () => {
+    const cloud = makeCloud(local, origin);
+    const text = toObj(cloud);
+    const reloaded = await loadObj(new TextEncoder().encode(text).buffer as ArrayBuffer);
+    expect(reloaded.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      for (let a = 0; a < 3; a++) {
+        expect(Math.abs(globalOf(reloaded, i, a) - globalOf(cloud, i, a))).toBeLessThan(1e-3);
+      }
+    }
+  });
+});
+
+describe('PLY header declares double-precision coordinates', () => {
+  test('property double x/y/z — a float declaration tells conforming readers to quantise', () => {
+    const header = toPly(makeCloud([0.5, 0.5, 0.25], [500000, 4100000, 100])).split('end_header')[0];
+    expect(header).toContain('property double x');
+    expect(header).toContain('property double y');
+    expect(header).toContain('property double z');
+    expect(header).not.toContain('property float x');
+  });
+});
+
+describe('non-finite points are omitted and the omission is disclosed', () => {
+  const nanCloud = (): PointCloud =>
+    new PointCloud({
+      positions: Float32Array.of(0, 0, 0, NaN, NaN, NaN),
+      origin: [0, 0, 0],
+      sourceFormat: 'xyz',
+      name: 'test',
+    });
+
+  test('toXyz writes no NaN token and discloses the omission count', () => {
+    const text = toXyz(nanCloud());
+    expect(text).not.toContain('NaN');
+    expect(text).toContain('# 1 point with non-finite coordinates — omitted');
+    expect(text.trim().split('\n').filter((l) => !l.startsWith('#'))).toHaveLength(1);
+  });
+
+  test('toPly declares a vertex count consistent with the emitted rows', () => {
+    const text = toPly(nanCloud());
+    expect(text).not.toContain('NaN');
+    expect(text).toContain('element vertex 1');
+    expect(text).toContain('comment 1 point with non-finite coordinates — omitted');
+    expect(text.split('end_header\n')[1].trim().split('\n')).toHaveLength(1);
+  });
+
+  test('toObj writes no NaN token and discloses the omission count', () => {
+    const text = toObj(nanCloud());
+    expect(text).not.toContain('NaN');
+    expect(text).toContain('# 1 points');
+    expect(text).toContain('# 1 point with non-finite coordinates — omitted');
+    expect(text.split('\n').filter((l) => l.startsWith('v '))).toHaveLength(1);
   });
 });

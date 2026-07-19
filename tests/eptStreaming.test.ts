@@ -127,8 +127,7 @@ test('decodeEptBinaryTile throws on a short buffer', () => {
 test('EptOctree loads the synthetic fixture and registers one root node', async () => {
   const meta = loadFixtureMetadata();
   const transport = fixtureTransport();
-  const renderOrigin: [number, number, number] = [500_050, 500_050, 1_525];
-  const octree = new EptOctree(meta, renderOrigin, (key, signal) =>
+  const octree = new EptOctree(meta, (key, signal) =>
     transport.fetchText(`fixture://ept-tiny/ept-hierarchy/${key.d}-${key.x}-${key.y}-${key.z}.json`, signal),
   );
   await octree.loadFullHierarchy();
@@ -140,6 +139,110 @@ test('EptOctree loads the synthetic fixture and registers one root node', async 
   expect(nodes[0].record.pointCount).toBe(100);
 });
 
+test('EptOctree node bounds are ABSOLUTE (render-origin-independent), matching the COPC contract', async () => {
+  // record.bounds must be in world space for BOTH formats: the shared
+  // StreamingScheduler localises them once (bounds − renderOrigin) before
+  // frustum culling. EptOctree used to pre-subtract the origin itself, so the
+  // scheduler subtracted it a second time and every EPT node landed one whole
+  // renderOrigin away from the near-origin camera — frustum-culled, visible=0,
+  // nothing ever streamed. The root node (depth 0) must span the full cube in
+  // ABSOLUTE coordinates regardless of the origin passed in.
+  const meta = loadFixtureMetadata();
+  const transport = fixtureTransport();
+  const cube = meta.bounds.cubic;
+  // A large non-zero origin — the value the render pipeline actually uses.
+  const octree = new EptOctree(meta, (key, signal) =>
+    transport.fetchText(`fixture://ept-tiny/ept-hierarchy/${key.d}-${key.x}-${key.y}-${key.z}.json`, signal),
+  );
+  await octree.loadFullHierarchy();
+  const root = octree.nodes()[0];
+  expect(root.record.bounds).toEqual([
+    cube[0], cube[1], cube[2], cube[3], cube[4], cube[5],
+  ]);
+});
+
+// A three-file hierarchy: root links to 1-1-0-0, which links to 2-2-0-0.
+// Value -1 marks a link (a further file to fetch); anything else is a node.
+const MULTI_FILE_HIERARCHY: Record<string, string> = {
+  '0-0-0-0': JSON.stringify({ '0-0-0-0': 100, '1-0-0-0': 50, '1-1-0-0': -1 }),
+  '1-1-0-0': JSON.stringify({ '1-1-0-0': 30, '2-2-0-0': -1 }),
+  '2-2-0-0': JSON.stringify({ '2-2-0-0': 10 }),
+};
+function multiFileOctree(): EptOctree {
+  const fetched: string[] = [];
+  const octree = new EptOctree(loadFixtureMetadata(), (key) => {
+    const id = `${key.d}-${key.x}-${key.y}-${key.z}`;
+    fetched.push(id);
+    const text = MULTI_FILE_HIERARCHY[id];
+    return text ? Promise.resolve(text) : Promise.reject(new Error(`no file ${id}`));
+  });
+  return octree;
+}
+
+test('progressive hierarchy: an initial paint attaches before the full index loads', async () => {
+  const octree = multiFileOctree();
+  // Budget of one file: the root only.
+  await octree.loadInitialHierarchy(1);
+  expect(octree.fullyLoaded).toBe(false); // more to fetch in the background
+  const idsAfterInitial = octree.nodes().map((n) => n.record.id).sort();
+  expect(idsAfterInitial).toEqual(['0-0-0-0', '1-0-0-0']);
+  // The nodes that DID land already carry correct child links.
+  expect(octree.store.get('0-0-0-0')!.childIds).toEqual(['1-0-0-0']);
+
+  // Continue to completion — nodes arrive and refine.
+  await octree.continueHierarchy();
+  expect(octree.fullyLoaded).toBe(true);
+  expect(octree.nodes().map((n) => n.record.id).sort()).toEqual([
+    '0-0-0-0', '1-0-0-0', '1-1-0-0', '2-2-0-0',
+  ]);
+  // Child links are complete AND never duplicated across the two passes —
+  // the root gained 1-1-0-0 without re-adding 1-0-0-0.
+  expect(new Set(octree.store.get('0-0-0-0')!.childIds)).toEqual(new Set(['1-0-0-0', '1-1-0-0']));
+  expect(octree.store.get('0-0-0-0')!.childIds.length).toBe(2);
+  expect(octree.store.get('1-1-0-0')!.childIds).toEqual(['2-2-0-0']);
+});
+
+test('progressive and full load reach the same node set and child links', async () => {
+  const progressive = multiFileOctree();
+  await progressive.loadInitialHierarchy(1);
+  await progressive.continueHierarchy();
+
+  const full = multiFileOctree();
+  await full.loadFullHierarchy();
+
+  const ids = (o: EptOctree): string[] => o.nodes().map((n) => n.record.id).sort();
+  expect(ids(progressive)).toEqual(ids(full));
+  for (const id of ids(full)) {
+    expect(new Set(progressive.store.get(id)!.childIds)).toEqual(
+      new Set(full.store.get(id)!.childIds),
+    );
+  }
+});
+
+test('the walk terminates when sub-file fetches fail — no retry loop', async () => {
+  // The root loads; every linked sub-file rejects. The walk must drop the failed
+  // files and finish (surfacing errors), not re-attempt them forever — a failed
+  // file that stayed on the frontier while the file count never advanced would
+  // spin an allocating loop until the heap died.
+  const octree = new EptOctree(loadFixtureMetadata(), (key) => {
+    const id = `${key.d}-${key.x}-${key.y}-${key.z}`;
+    if (id === '0-0-0-0') return Promise.resolve(MULTI_FILE_HIERARCHY['0-0-0-0']);
+    return Promise.reject(new Error(`network down at ${id}`));
+  });
+  await octree.loadInitialHierarchy(1);
+  await octree.continueHierarchy(); // must return, not hang
+  expect(octree.fullyLoaded).toBe(true);
+  expect(octree.nodes().map((n) => n.record.id).sort()).toEqual(['0-0-0-0', '1-0-0-0']);
+  expect(octree.errors.some((e) => /network down/.test(e))).toBe(true);
+});
+
+test('a small hierarchy that fits the first-paint budget loads fully in one call', async () => {
+  const octree = multiFileOctree();
+  await octree.loadInitialHierarchy(64); // budget exceeds the 3 files
+  expect(octree.fullyLoaded).toBe(true);
+  expect(octree.nodes().length).toBe(4);
+});
+
 test('EptOctree.childKeysOf returns the 8 standard octree children', () => {
   const children = EptOctree.childKeysOf({ d: 0, x: 0, y: 0, z: 0 });
   expect(children.length).toBe(8);
@@ -148,7 +251,7 @@ test('EptOctree.childKeysOf returns the 8 standard octree children', () => {
 test('EptOctree handles a fetcher failure without crashing — surfaces in errors', async () => {
   const meta = loadFixtureMetadata();
   const failingFetcher = (): Promise<string> => Promise.reject(new Error('network down'));
-  const octree = new EptOctree(meta, [0, 0, 0], failingFetcher);
+  const octree = new EptOctree(meta, failingFetcher);
   await octree.loadFullHierarchy();
   expect(octree.fullyLoaded).toBe(true);
   expect(octree.errors.length).toBeGreaterThan(0);

@@ -104,6 +104,17 @@ describe('formatDistance', () => {
   test('shows kilometres beyond', () => {
     expect(formatDistance(2500)).toBe('2.500 km');
   });
+  test('the band is chosen by magnitude, so a negative reads in the same unit', () => {
+    // A signed value (a profile elevation below the render origin) used to
+    // pass `meters < 1` and print as centimetres — -411.865 m surfaced as
+    // "-41186.5 cm". The band belongs to how big the number is, not which
+    // side of zero it sits on.
+    expect(formatDistance(-411.865)).toBe('-411.87 m');
+    expect(formatDistance(-12.484)).toBe('-12.48 m');
+    expect(formatDistance(-0.5)).toBe('-50.0 cm');
+    expect(formatDistance(-2500)).toBe('-2.500 km');
+    expect(formatDistance(-5000)).toBe('-5.000 km');
+  });
 });
 
 describe('nearestPointAlongRay', () => {

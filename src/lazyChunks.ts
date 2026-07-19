@@ -219,6 +219,30 @@ export const loadFloorPlan = () =>
  */
 export const loadReclassifyUi = () => import('./ui/reclassifyUi');
 
+/**
+ * Load the Analyse panel (terrain readiness + contour/DEM export UI) on the
+ * first SCAN LOAD, never in the initial shell (v0.6 P1). The panel pulls in the
+ * whole terrain-assessment / recommended-workflow / hillshade render surface, so
+ * holding it behind this lazy boundary keeps that DOM-builder chain out of the
+ * empty-state boot bundle — the panel only materialises once a scan opens, and
+ * `main.ts` constructs it exactly once through `ensureAnalysePanel()`. MUST live
+ * here (not inlined in main.ts) so the live source-transform doesn't scramble
+ * the import() literal into a runtime 404.
+ */
+export const loadAnalysePanel = () => import('./ui/AnalysePanel');
+
+/**
+ * Load the Object / Space panel (non-terrain compact-scan analysis: object &
+ * interior metrics, floor-plan + space-report export UI) on the first SCAN
+ * LOAD, never in the initial shell (v0.6 P1, step 2). Like the Analyse panel it
+ * pulls in the shared `scanTypeControl`; holding BOTH panels behind their lazy
+ * boundaries is what finally releases that control from the eager index chunk.
+ * `main.ts` constructs the panel exactly once through `ensureObjectPanel()`.
+ * MUST live here (not inlined in main.ts) so the live source-transform doesn't
+ * scramble the import() literal into a runtime 404.
+ */
+export const loadObjectPanel = () => import('./ui/ObjectPanel');
+
 /** Load the `?debug=1` performance overlay. Diagnostics-only chunk. */
 export const loadDebugOverlay = () => import('./ui/DebugOverlay');
 

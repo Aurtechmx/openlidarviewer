@@ -114,8 +114,14 @@ import {
 export interface TerrainCoreParams {
   /** DTM / contour grid cell size, source linear units. Must be > 0. */
   readonly cellSizeM: number;
-  /** Ground-filter overrides (sensible defaults otherwise). */
-  readonly ground?: Partial<Omit<GroundFilterParams, 'cellSizeM' | 'verticalAxis'>>;
+  /**
+   * Ground-filter overrides (sensible defaults otherwise). Cell sizing stays
+   * pipeline-owned: `cellSizeZUnits` is derived from `cellSizeM` and the CRS
+   * units in {@link resolveGroundFilterParams}, never caller-supplied.
+   */
+  readonly ground?: Partial<
+    Omit<GroundFilterParams, 'cellSizeM' | 'cellSizeZUnits' | 'verticalAxis'>
+  >;
   /** Horizontal CRS (required for usable exports; warns when null). */
   readonly crs?: string | null;
   /**
@@ -471,8 +477,27 @@ export function resolveGroundFilterParams(
   params: TerrainCoreParams,
   verticalAxis: VerticalAxis,
 ): GroundFilterParams {
+  // The SMRF slope-scaled threshold multiplies a rise/run by the horizontal
+  // cell run and compares the product against Δz, so that run must be handed
+  // over in z's unit. Convert at this seam (metres per horizontal unit over
+  // metres per vertical unit) — the same convert-at-the-boundary rule the
+  // epoch alignment applies to ICP's metre-denominated gate. When both axes
+  // share one linear unit the ratio is exactly 1 and the filter sees the
+  // plain cell size; a geographic frame's degree-valued cell would otherwise
+  // starve the growth term by ~1/111,320, pinning the threshold at its base
+  // and rejecting legitimate slope ground.
+  const horizToMetres = params.isGeographic
+    ? METRES_PER_DEGREE
+    : params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0
+      ? params.horizontalUnitToMetres
+      : 1;
+  const vertToMetres =
+    params.verticalUnitToMetres && params.verticalUnitToMetres > 0
+      ? params.verticalUnitToMetres
+      : 1;
   return {
     cellSizeM: params.cellSizeM,
+    cellSizeZUnits: params.cellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: params.ground?.maxWindowCells ?? 8,
     slope: params.ground?.slope ?? 0.2,
     elevationThresholdM: params.ground?.elevationThresholdM ?? 0.5,
@@ -569,6 +594,7 @@ export function computeTerrainCore(
     // E–W correction (the grid's own originH2 is render-recentred, ≈ 0).
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
+    verticalUnitToMetres: params.verticalUnitToMetres,
   });
   if (built.despikedCellCount > 0) {
     warnings.push(`Removed ${built.despikedCellCount} outlier ground cell(s) before building the surface.`);
@@ -847,7 +873,13 @@ export function computeTerrainCore(
   // entries are the GPU-eligible ones (per-session equivalence probe,
   // auto-fallback); the pipeline adopts them when this stage goes async.
   const engine = getTerrainRasterEngine();
-  const sa = engine.derivativesSync(dtm.z, dtm.cols, dtm.rows, horizCellEwM, horizCellNsM);
+  // `dtm.z` stays in native source vertical units (contours draw against it
+  // raw), so the slope/aspect stage converts the rise with verticalUnitToMetres
+  // to keep the rise/run ratio unit-consistent — a state-plane-feet DTM would
+  // otherwise report slope ~1/0.3048 ≈ 3.28× too steep.
+  const sa = engine.derivativesSync(
+    dtm.z, dtm.cols, dtm.rows, horizCellEwM, horizCellNsM, params.verticalUnitToMetres,
+  );
   const slopeDegField = new Float32Array(sa.slope.length);
   for (let i = 0; i < sa.slope.length; i++) {
     slopeDegField[i] = (Math.atan(sa.slope[i]) * 180) / Math.PI;

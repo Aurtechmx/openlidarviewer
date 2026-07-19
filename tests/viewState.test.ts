@@ -125,8 +125,13 @@ describe('main.ts scan-lifecycle reset sites still clear saved views', () => {
     // close-to-empty-state — must all drop the saved views AND rewind the
     // name counter, or a stale "north-scarp" from the previous scan would
     // restore a state that was never captured against the open one.
+    // v0.6: the saved-views state moved onto the shared AppContext, so the
+    // reset sites now clear `viewBookmarks.savedViews` / `viewBookmarks.viewCounter`.
+    // The contract is unchanged — every reset still drops the views AND rewinds
+    // the counter, together.
     const src = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-    const resets = src.match(/savedViews = \[\];\s*\n\s*viewCounter = 0;/g) ?? [];
+    const resets =
+      src.match(/viewBookmarks\.savedViews = \[\];\s*\n\s*viewBookmarks\.viewCounter = 0;/g) ?? [];
     expect(resets.length).toBeGreaterThanOrEqual(3);
   });
 });

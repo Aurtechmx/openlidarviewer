@@ -423,10 +423,13 @@ export class InspectTool {
     // Local group — only when an origin shift exists; otherwise local ==
     // world and a second identical group would be noise.
     if (split.local) {
+      // Local is the render-recentred point in the SAME source units as the
+      // World group — so it must carry the same CRS-aware unit suffix, not a
+      // hardcoded "m" that reads "152.400 m" beside World's "500.00 ft".
       rows.push(coordGroupHeader('Local'));
-      rows.push(infoRow('X', `${split.local.x.toFixed(3)} m`));
-      rows.push(infoRow('Y', `${split.local.y.toFixed(3)} m`));
-      rows.push(infoRow('Z', `${split.local.z.toFixed(3)} m`));
+      rows.push(infoRow('X', `${split.local.x.toFixed(3)}${worldLabels.xUnit}`));
+      rows.push(infoRow('Y', `${split.local.y.toFixed(3)}${worldLabels.yUnit}`));
+      rows.push(infoRow('Z', `${split.local.z.toFixed(3)}${worldLabels.zUnit}`));
     }
 
     // ── Geographic coordinates — when CRS supports projection to WGS84 ────

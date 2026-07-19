@@ -35,6 +35,8 @@ export interface InspectorCardRefreshers {
   /** Push a cheap Dataset Intelligence summary from a static cloud's header. */
   refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
+    readonly declaredPointCount?: number;
+    readonly metadata?: { crs?: { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
   }): void;
   /** Push a cheap Dataset Intelligence summary from a streaming cloud's header. */
@@ -120,6 +122,8 @@ export function createInspectorCardRefreshers(
    */
   function refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
+    readonly declaredPointCount?: number;
+    readonly metadata?: { crs?: { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
   }): void {
     // A static summary supersedes any remembered streaming one.
@@ -129,14 +133,25 @@ export function createInspectorCardRefreshers(
       const dx = b.max[0] - b.min[0];
       const dy = b.max[1] - b.min[1];
       const dz = b.max[2] - b.min[2];
-      const bboxVolume = dx * dy * dz;
+      // Convert the bbox to cubic METRES before the per-m³ density bucketing —
+      // a state-plane-FEET tile is otherwise ~35× under-dense and a genuine QL1
+      // survey grades "sparse". Two axes are horizontal (×linear), one vertical
+      // (×vertical); the scalar factor mpu²·vmpu is order-independent.
+      const mpu = cloud.metadata?.crs?.linearUnitToMetres ?? 1;
+      const vmpu = cloud.metadata?.crs?.verticalUnitToMetres ?? mpu;
+      const bboxVolume = dx * dy * dz * mpu * mpu * vmpu;
+      // Density numerator is the file's declared total, back-scaled when the
+      // loader strided for display — matching the Scan Report, not the smaller
+      // in-memory sample that would under-report the tier.
+      const declared = cloud.declaredPointCount;
+      const n = declared !== undefined && declared > cloud.pointCount ? declared : cloud.pointCount;
       const summary: Parameters<Inspector['setDatasetIntelligence']>[0] = {
-        pointCount: cloud.pointCount,
+        pointCount: n,
         bboxVolume: Number.isFinite(bboxVolume) && bboxVolume > 0 ? bboxVolume : undefined,
         coverageMeta: {
           coverage: 'full',
-          sourcePointCount: cloud.pointCount,
-          analyzedPointCount: cloud.pointCount,
+          sourcePointCount: n,
+          analyzedPointCount: n,
           // v0.3.10 honesty pass — this path runs at load time from
           // header data ALONE. No terrain analysis has happened yet, so
           // we have nothing meaningful to say about confidence. The

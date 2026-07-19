@@ -29,7 +29,7 @@ const ASSETS = join(ROOT, 'dist', 'assets');
 
 /** prefix (before the -hash.js) → hard ceiling in KiB. */
 const BUDGETS = [
-  { prefix: 'index', maxKiB: 800 },                 // live ~776 KiB. Raised 776→800 (committed): the wired Contour Studio export dispatch + mobile sheet behavior (collapsed-default, tappable head, un-nest) landed the eager shell at exactly 776 KiB — zero headroom. Bumped to 800 so the pending premium panel redesign has room before it fails the gate. The Contour Studio workspace, launcher, state adapter, and strings still ride the lazy `contourStudioMount` chunk (§26.1), not the shell — verified: a separate contourStudioMount-*.js is emitted and the plain-build shell-leak fingerprint guard stays green.
+  { prefix: 'index', maxKiB: 720, warnKiB: 680 },   // live ~669 KiB after v0.6 P1 (AnalysePanel + ObjectPanel lazy-mounted on scan-load, was 792). Hard ceiling lowered 800→720 to lock in the win and fail a regression well before the old 800; warn at 680 flags creep early. The lazy panels ride their own AnalysePanel-*/ObjectPanel-* chunks — verified by the shell-leak fingerprint guard.
   { prefix: 'vendor-three-webgpu', maxKiB: 1100 },  // live ~978 KiB
   { prefix: 'vendor-pdf', maxKiB: 512 },            // live ~410 KiB
 ];
@@ -61,16 +61,25 @@ const files = listJs();
 let failed = false;
 
 console.log('Bundle budget (live build):');
-for (const { prefix, maxKiB } of BUDGETS) {
+let warned = false;
+for (const { prefix, maxKiB, warnKiB } of BUDGETS) {
   const matched = files.filter((f) => matchesPrefix(f.name, prefix));
   const total = matched.reduce((s, f) => s + f.kib, 0);
   const over = total > maxKiB;
   if (over) failed = true;
+  // A soft warning threshold below the hard ceiling: it does NOT fail the gate,
+  // it surfaces creep early so a regression is caught long before the ceiling.
+  const warn = !over && warnKiB != null && total > warnKiB;
+  if (warn) warned = true;
   const pct = Math.round((total / maxKiB) * 100);
-  const mark = matched.length === 0 ? '— (missing)' : over ? '✗ OVER' : '✓';
+  const mark = matched.length === 0 ? '— (missing)' : over ? '✗ OVER' : warn ? '⚠ WARN' : '✓';
+  const budgetStr = warnKiB != null ? `${maxKiB} KiB (warn ${warnKiB})` : `${maxKiB} KiB`;
   console.log(
-    `  ${mark.padEnd(11)} ${prefix.padEnd(22)} ${total.toFixed(0).padStart(5)} KiB / ${maxKiB} KiB  (${pct}%)`,
+    `  ${mark.padEnd(11)} ${prefix.padEnd(22)} ${total.toFixed(0).padStart(5)} KiB / ${budgetStr}  (${pct}%)`,
   );
+}
+if (warned) {
+  console.warn('\n⚠ A chunk crossed its warning threshold (below the hard ceiling) — investigate creep before it fails the gate.');
 }
 
 if (failed) {

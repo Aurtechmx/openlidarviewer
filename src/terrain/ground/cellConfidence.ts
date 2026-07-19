@@ -162,6 +162,13 @@ export interface CellConfidenceParams {
    */
   readonly horizontalUnitToMetres?: number;
   /**
+   * Metres per source VERTICAL unit (~0.3048 for feet). The roughness slope's
+   * rise is in native Z units, so it is scaled to metres to match the metres
+   * run — otherwise a foot-CRS DTM reads ~3.28× too rough and its confidence
+   * is understated. Default 1 (metric, or Z already in metres).
+   */
+  readonly verticalUnitToMetres?: number;
+  /**
    * Void interpolation method. `'geodesic'` measures distance along the
    * surface (won't fill a valley void from across a ridge); `'idw'` is the
    * plain Euclidean inverse-distance blend. Default `'idw'`.
@@ -268,7 +275,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
     params.latitudeDeg ?? originH2 + (rows / 2) * cellSizeM,
     params.horizontalUnitToMetres,
   );
-  const slope = hornSlope(z, cols, rows, cellM.x, cellM.y);
+  const slope = hornSlope(z, cols, rows, cellM.x, cellM.y, params.verticalUnitToMetres ?? 1);
 
   const confidence = new Float32Array(nCells);
   const coverage = new Uint8Array(nCells);

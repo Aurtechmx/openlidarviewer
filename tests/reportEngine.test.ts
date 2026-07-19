@@ -529,7 +529,7 @@ describe('buildMeasurementRows', () => {
             referenceZ: 0,
             footprintArea: 100,
             pointsInPolygon: 400,
-            density: 4,
+            densityNative: 4,
             confidence: 'medium',
           },
         },

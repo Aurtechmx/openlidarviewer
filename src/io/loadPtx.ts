@@ -16,7 +16,7 @@
 
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
-import { computeOrigin, recenter } from './coordinateBridge';
+import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 
 /** A parsed 4×4 PTX transform — four rows of four numbers. */
 type Mat4 = [number[], number[], number[], number[]];
@@ -59,13 +59,54 @@ function matrixIsFinite(m: Mat4): boolean {
 }
 
 /**
+ * A random-access view over the lines of `text` that never materialises them.
+ *
+ * PTX is read by index — a block header is ten lines deep, and the walk looks
+ * ahead — so the lines cannot simply be streamed. Splitting the file instead
+ * held one JS string per line, and a scan with millions of points pays tens of
+ * bytes of per-string object overhead on top of the characters themselves,
+ * dwarfing the text it came from. An offset table costs four bytes a line and
+ * slices only the line actually being read.
+ */
+class LineIndex {
+  private readonly _text: string;
+  private readonly _starts: Int32Array;
+  readonly length: number;
+
+  constructor(text: string) {
+    this._text = text;
+    let breaks = 0;
+    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) breaks++;
+    // One more line than there are breaks, plus a sentinel so the last line's
+    // end needs no special case. This mirrors `split(/\r?\n/)`, which yields a
+    // trailing empty entry for a file that ends in a newline.
+    this._starts = new Int32Array(breaks + 2);
+    let k = 1;
+    for (let i = 0; i < text.length; i++) {
+      if (text.charCodeAt(i) === 10) this._starts[k++] = i + 1;
+    }
+    this._starts[k] = text.length + 1;
+    this.length = breaks + 1;
+  }
+
+  at(i: number): string {
+    if (i < 0 || i >= this.length) return '';
+    const start = this._starts[i];
+    let end = this._starts[i + 1] - 1;
+    // Drop the CR of a CRLF pair, matching the `\r?\n` split this replaced.
+    if (end > start && this._text.charCodeAt(end - 1) === 13) end--;
+    return this._text.slice(start, end);
+  }
+}
+
+/**
  * Load a `.ptx` point cloud into a `PointCloud`.
  *
  * @param buffer Raw file bytes.
  * @param name   Display name (defaults to `"cloud.ptx"`).
  */
 export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<PointCloud> {
-  const lines = new TextDecoder().decode(buffer).split(/\r?\n/);
+  const lines = new LineIndex(new TextDecoder().decode(buffer));
 
   const xs: number[] = [];
   const ys: number[] = [];
@@ -74,18 +115,17 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   const rgb: number[] = [];
   // `null` until the first point decides whether the file carries colour.
   let hasColor: boolean | null = null;
-  const min: [number, number, number] = [Infinity, Infinity, Infinity];
   let scannerOrigin: [number, number, number] | undefined;
 
   let i = 0;
   while (i < lines.length) {
     // Skip blank lines between blocks and any trailing newline.
-    while (i < lines.length && lines[i].trim() === '') i++;
+    while (i < lines.length && lines.at(i).trim() === '') i++;
     if (i >= lines.length) break;
 
     // Block header — columns and rows.
-    const cols = Number(tokenize(lines[i])[0]);
-    const rows = Number(tokenize(lines[i + 1] ?? '')[0]);
+    const cols = Number(tokenize(lines.at(i))[0]);
+    const rows = Number(tokenize(lines.at(i + 1))[0]);
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 0 || rows < 0) {
       break; // not a valid block header — stop, keeping the blocks already read
     }
@@ -94,10 +134,10 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     // The 4×4 transform sits in header lines 7–10 (after the two count lines
     // and four pose lines). PTX stores it row-major with translation in row 4.
     const parsed: Mat4 = [
-      parseRow4(lines[i + 6]),
-      parseRow4(lines[i + 7]),
-      parseRow4(lines[i + 8]),
-      parseRow4(lines[i + 9]),
+      parseRow4(lines.at(i + 6)),
+      parseRow4(lines.at(i + 7)),
+      parseRow4(lines.at(i + 8)),
+      parseRow4(lines.at(i + 9)),
     ];
     const m = matrixIsFinite(parsed) ? parsed : IDENTITY;
     if (!scannerOrigin) {
@@ -108,7 +148,7 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
 
     const total = cols * rows;
     for (let p = 0; p < total && i < lines.length; p++, i++) {
-      const tok = tokenize(lines[i]);
+      const tok = tokenize(lines.at(i));
       if (tok.length < 4) continue; // malformed point line — skip it
       const lx = Number(tok[0]);
       const ly = Number(tok[1]);
@@ -125,9 +165,6 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       xs.push(wx);
       ys.push(wy);
       zs.push(wz);
-      if (wx < min[0]) min[0] = wx;
-      if (wy < min[1]) min[1] = wy;
-      if (wz < min[2]) min[2] = wz;
 
       const it = Number(tok[3]);
       intensityVals.push(Number.isFinite(it) ? it : 0);
@@ -149,8 +186,6 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     global[p * 3 + 1] = ys[p];
     global[p * 3 + 2] = zs[p];
   }
-  const origin = computeOrigin(min);
-  const positions = recenter(global, origin);
 
   // Intensity — PTX intensity is conventionally a 0–1 float; that range is
   // rescaled to the full Uint16 span, otherwise it is taken as a raw value.
@@ -182,14 +217,20 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
 
   const metadata: CloudMetadata | undefined = scannerOrigin ? { scannerOrigin } : undefined;
 
+  // The point reader already refuses a non-numeric x/y/z, but the registration
+  // transform is applied after that check, so this is where a world coordinate
+  // that overflowed the block's matrix is caught — and where the survivors get
+  // their floored-min origin.
+  const clean = sanitizeAndRecenter(global, { colors, intensity });
+
   return new PointCloud({
-    positions,
-    colors,
-    intensity,
-    origin,
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    intensity: clean.attributes.intensity,
+    origin: clean.origin,
     sourceFormat: 'ptx',
     name,
     decodedPointCount: count,
-    metadata,
+    metadata: withLoadWarning(metadata, clean.warning),
   });
 }

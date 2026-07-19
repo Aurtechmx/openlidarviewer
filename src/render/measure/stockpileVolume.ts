@@ -39,11 +39,13 @@
 
 import type { Vec3 } from '../navMath';
 import {
+  horizontalBasis,
   horizontalProjection,
   pointInPolygon2D,
   volumeCutFill,
 } from './volume';
 import type { PolygonValidity } from './polygonHygiene';
+import { WelfordStats } from '../../process/numerics';
 
 /** How the base (reference) height under the pile is chosen. */
 export type BasePlaneMode =
@@ -76,6 +78,24 @@ export interface StockpileInput {
    * honesty caveat; the ± band already widens with the smaller resident N.
    */
   readonly sourceReduced?: boolean;
+  /**
+   * Horizontal `linearUnitToMetres` for the source CRS (feet ⇒ 0.3048). Used
+   * ONLY to evaluate the density confidence bar in points/m² — the footprint,
+   * volume and band figures stay in native units and are converted for display
+   * downstream. Defaults to 1 (already metres), so a metric project is
+   * unchanged.
+   */
+  readonly linearUnitToMetres?: number;
+  /**
+   * Whether the horizontal unit is actually KNOWN, so a points/m² density is a
+   * real figure rather than an assumption. Defaults to true — a metric project
+   * or any caller that has resolved its CRS. Pass false for an unknown CRS:
+   * `linearUnitToMetres` still defaults to 1 for the display conversion, but the
+   * density bar is then only an assumed points/m², so it must not be allowed to
+   * award HIGH confidence. Omission cannot be read as "unknown" — most callers
+   * omit it precisely because they mean known metres.
+   */
+  readonly densityUnitKnown?: boolean;
 }
 
 /**
@@ -92,8 +112,11 @@ export interface StockpileBreakdown {
   readonly footprintArea: number;
   /** Points whose XY projection fell inside the footprint. */
   readonly pointsInPolygon: number;
-  /** Sample density inside the footprint, points / m². */
-  readonly density: number;
+  /**
+   * Sample density inside the footprint, points per NATIVE horizontal-unit²
+   * (divide by (linearUnitToMetres)² for pts/m²). The presenter converts.
+   */
+  readonly densityNative: number;
   /** Base reference height used, render-space metres. */
   readonly baseZ: number;
   /** How the base was chosen. */
@@ -132,6 +155,12 @@ export interface StockpileVolumeResult {
   readonly relativeError: number;
   /** Confidence tier. */
   readonly confidence: StockpileConfidence;
+  /**
+   * Whether the horizontal unit was known when grading. When false the density
+   * bar is an assumed points/m², so HIGH confidence was withheld and the
+   * presenter labels the density row as unit-unknown rather than claiming m².
+   */
+  readonly densityUnitKnown: boolean;
   /** The auditable input breakdown. */
   readonly breakdown: StockpileBreakdown;
   /** Polygon-hygiene verdict; non-`ok` returns zeros. */
@@ -170,21 +199,37 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   const up = input.up ?? ([0, 0, 1] as Vec3);
   const baseMode: BasePlaneMode = input.base?.mode ?? 'lowest-percentile';
   const basePct = input.base?.percentile ?? 0.05;
+  // Known unless the caller explicitly says the unit is unknown (see the input
+  // field's contract — omission means known metres, not unknown).
+  const densityUnitKnown = input.densityUnitKnown ?? true;
 
   // First gather the inside heights — we need them to choose the base plane
   // and to estimate its uncertainty before we can integrate thickness.
   const zUp = isZUp(up);
   const projPoly = input.polygon.map((p) => horizontalProjection(p, up));
+  // Projection basis and up length are loop-invariant; hoist them so the
+  // gather below inlines the general-up projection as scalar dot products
+  // instead of allocating per point.
+  const basis = horizontalBasis(up);
+  const upLen = Math.hypot(up[0], up[1], up[2]) || 1;
   const n = input.positions.length / 3;
   const insideHeights: number[] = [];
   for (let i = 0; i < n; i++) {
     const px = input.positions[i * 3];
     const py = input.positions[i * 3 + 1];
     const pz = input.positions[i * 3 + 2];
-    const h = zUp ? { x: px, y: py } : horizontalProjection([px, py, pz], up);
     if (!Number.isFinite(pz)) continue;
-    if (!pointInPolygon2D(h.x, h.y, projPoly)) continue;
-    insideHeights.push(zUp ? pz : projectedHeight([px, py, pz], up));
+    let hx: number;
+    let hy: number;
+    if (zUp || basis.zAligned) {
+      hx = px;
+      hy = py;
+    } else {
+      hx = px * basis.east[0] + py * basis.east[1] + pz * basis.east[2];
+      hy = px * basis.north[0] + py * basis.north[1] + pz * basis.north[2];
+    }
+    if (!pointInPolygon2D(hx, hy, projPoly)) continue;
+    insideHeights.push(zUp ? pz : (px * up[0] + py * up[1] + pz * up[2]) / upLen);
   }
 
   // Choose the base height.
@@ -239,36 +284,39 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
 
   const inN = v.pointsInPolygon;
   if (v.validity !== 'ok' || inN === 0) {
-    return zeroResult(v.validity ?? 'ok', v.footprintArea, baseMode, baseZ);
+    return zeroResult(v.validity ?? 'ok', v.footprintArea, baseMode, baseZ, densityUnitKnown);
   }
 
   // Per-point thickness above the base (clamped at 0 — the fill contribution),
-  // mean and std, for the sampling-error term. fill = area · mean(thickness).
-  let sum = 0;
-  let sumSq = 0;
-  for (const z of insideHeights) {
-    const t = Math.max(0, z - baseZ);
-    sum += t;
-    sumSq += t * t;
-  }
+  // mean and std for the sampling-error term. Welford streams both in one pass
+  // with no cancellation — the naive Σt²/n − mean² form loses the variance
+  // entirely for a tall pile with a smooth top (spread tiny next to the mean).
+  // fill = area · mean(thickness).
+  const thickness = new WelfordStats();
+  for (const z of insideHeights) thickness.push(Math.max(0, z - baseZ));
   const m = insideHeights.length || 1;
-  const meanThk = sum / m;
-  const varThk = Math.max(0, sumSq / m - meanThk * meanThk);
-  const stdThk = Math.sqrt(varThk);
+  const meanThk = thickness.mean;
+  const stdThk = thickness.populationStd;
 
   const area = v.footprintArea;
   // Standard error of the mean thickness × area. The √N must be taken over the
   // SAME population the thickness σ was computed on — the `m` finite inside
-  // heights — not `inN` (volumeCutFill's count, which would also include any
-  // non-finite-z inside points). They coincide for finite clouds, but using `m`
-  // keeps σ and √N self-consistent regardless of how volumeCutFill counts.
+  // heights — not `inN`. The two coincide (volumeCutFill also excludes
+  // non-finite-z inside points), but using `m` keeps σ and √N self-consistent
+  // regardless of how volumeCutFill counts.
   const samplingError = m > 0 ? (area * stdThk) / Math.sqrt(m) : 0;
   const basePlaneError = area * baseUncertainty;
   const sigma = Math.hypot(samplingError, basePlaneError);
 
   const volume = v.fill;
   const relativeError = volume > 0 ? sigma / volume : 0;
-  const confidence = gradeConfidence(relativeError, inN, v.density);
+  // `v.densityNative` is points per NATIVE horizontal-unit². The confidence bar is a
+  // points/m² threshold, so convert before grading — otherwise a dense foot
+  // survey (≈11 pts/m² per pt/ft²) is graded as if 1 pt/ft² were 1 pt/m² and
+  // wrongly downgraded. m² per native² = linearUnitToMetres².
+  const lin = input.linearUnitToMetres ?? 1;
+  const densityPerM2 = lin > 0 ? v.densityNative / (lin * lin) : v.densityNative;
+  const confidence = gradeConfidence(relativeError, inN, densityPerM2, densityUnitKnown);
   const caveats = buildCaveats(
     confidence,
     inN,
@@ -286,10 +334,11 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     high: volume + sigma,
     relativeError,
     confidence,
+    densityUnitKnown,
     breakdown: {
       footprintArea: area,
       pointsInPolygon: inN,
-      density: v.density,
+      densityNative: v.densityNative,
       baseZ,
       baseMode,
       baseUncertainty,
@@ -301,12 +350,6 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     validity: 'ok',
     caveats,
   };
-}
-
-/** Height of a point along the up axis (general-up case). */
-function projectedHeight(p: Vec3, up: Vec3): number {
-  const len = Math.hypot(up[0], up[1], up[2]) || 1;
-  return (p[0] * up[0] + p[1] * up[1] + p[2] * up[2]) / len;
 }
 
 function stdDev(values: ArrayLike<number>): number {
@@ -326,10 +369,15 @@ function stdDev(values: ArrayLike<number>): number {
 function gradeConfidence(
   relErr: number,
   pointsInPolygon: number,
-  density: number,
+  densityPerM2: number,
+  densityUnitKnown: boolean,
 ): StockpileConfidence {
   if (pointsInPolygon < MIN_RELIABLE_POINTS) return 'low';
-  if (relErr <= 0.05 && density >= 5) return 'high';
+  // HIGH is the only tier that rests on the points/m² density bar. When the
+  // horizontal unit is unknown that figure is an assumption (native² read as
+  // m²), so it cannot earn HIGH — the grade falls back to the relative-error
+  // tiers, which need no unit.
+  if (densityUnitKnown && relErr <= 0.05 && densityPerM2 >= 5) return 'high';
   if (relErr <= 0.15) return 'medium';
   return 'low';
 }
@@ -381,6 +429,7 @@ function zeroResult(
   footprintArea: number,
   baseMode: BasePlaneMode,
   baseZ: number,
+  densityUnitKnown: boolean,
 ): StockpileVolumeResult {
   return {
     volume: 0,
@@ -390,10 +439,11 @@ function zeroResult(
     high: 0,
     relativeError: 0,
     confidence: 'low',
+    densityUnitKnown,
     breakdown: {
       footprintArea,
       pointsInPolygon: 0,
-      density: 0,
+      densityNative: 0,
       baseZ,
       baseMode,
       baseUncertainty: 0,

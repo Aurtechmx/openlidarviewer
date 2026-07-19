@@ -25,6 +25,8 @@
  * clouds — the same way real ICP runs on a sampled subset.
  */
 
+import { NeumaierSum } from '../../process/numerics';
+
 /** A point as [x, y, z]. World up is +Z (the yaw axis). */
 export type Vec3 = readonly [number, number, number];
 
@@ -224,9 +226,11 @@ export function icpRegister(
     const kept = trimming ? order.slice(0, keepCount(order.length)) : order;
 
     // RMS over the KEPT set — the objective being minimised (see rmsResidual).
-    let sumD2 = 0;
-    for (const i of kept) sumD2 += d2s[i];
-    rms = Math.sqrt(sumD2 / kept.length);
+    // Compensated: the residual sum drives the convergence test, so drift here
+    // would show up as a false converge/refuse on a large correspondence set.
+    const sumD2 = new NeumaierSum();
+    for (const i of kept) sumD2.add(d2s[i]);
+    rms = Math.sqrt(sumD2.total / kept.length);
 
     // 3. Best incremental (yaw, translation) mapping the kept `moved` onto
     //    `corr`. Centre both sets; yaw is the closed-form 2-D rotation
@@ -286,13 +290,13 @@ export function icpRegister(
   if (trimming) {
     const sorted = finalD2.slice().sort((a, b) => a - b);
     const keep = keepCount(sorted.length);
-    let s = 0;
-    for (let i = 0; i < keep; i++) s += sorted[i];
-    finalRms = Math.sqrt(s / keep);
+    const s = new NeumaierSum();
+    for (let i = 0; i < keep; i++) s.add(sorted[i]);
+    finalRms = Math.sqrt(s.total / keep);
   } else {
-    let s = 0;
-    for (const d2 of finalD2) s += d2;
-    finalRms = Math.sqrt(s / finalD2.length);
+    const s = new NeumaierSum();
+    for (const d2 of finalD2) s.add(d2);
+    finalRms = Math.sqrt(s.total / finalD2.length);
   }
 
   // Normalise yaw to (−π, π].

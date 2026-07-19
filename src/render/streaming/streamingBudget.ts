@@ -80,20 +80,74 @@ export interface ScoredCandidate {
   score: number;
 }
 
+/** Tuning for the resident-stickiness pass; see {@link selectWithinBudget}. */
+export interface BudgetSelectionOptions {
+  /** Ids currently resident (already on the GPU). */
+  readonly resident?: ReadonlySet<string>;
+  /**
+   * Ids being REFINED away — a finer descendant of the node is ALSO a candidate
+   * this tick. These get NO stickiness, so replacing a coarse node with its
+   * children is never blocked. This exemption is what keeps stickiness from
+   * freezing LOD (the failure mode that reverted an earlier admission-hysteresis
+   * attempt): only nodes with no pending refinement can hold their slot.
+   */
+  readonly refining?: ReadonlySet<string>;
+  /**
+   * Fractional score bonus a resident, non-refining candidate keeps to hold its
+   * slot against a marginally-higher-scoring newcomer. 0 (the default) disables
+   * stickiness and reproduces the plain greedy fill exactly.
+   */
+  readonly stickyMargin?: number;
+}
+
 /**
  * Walk candidates in score order (highest first) and return the ids whose
  * cumulative point count fits `pointBudget`. Candidates with a score of 0
  * (culled or past the depth cap) are never selected. If the single
  * highest-priority node already exceeds the budget it is still selected, so a
  * coarse result always renders.
+ *
+ * With `stickyMargin > 0` and a `resident` set, an already-shown node keeps a
+ * small score bonus so budget-boundary score noise can't bump it out of the
+ * selection and force a costly evict → re-decode → re-fade cycle — the "regions
+ * pulsing" flicker. A node being refined away (in `refining`) is exempt, so this
+ * stabilises what's on screen WITHOUT blocking genuine refinement. With no
+ * options it is the plain greedy fill, unchanged.
+ *
+ * NOTE: the scheduler does NOT yet pass a margin, so this is currently inert in
+ * production — the pure anti-thrash behaviour is unit-tested here and ready to
+ * enable, but wiring it live must first reconcile the `refining` exemption with
+ * the scheduler's ancestor-protection (a refining ancestor stripped of its bonus
+ * can go unwanted yet stay resident, stalling eviction) and be verified visually
+ * in the browser, since flicker is not observable from Node.
  */
 export function selectWithinBudget(
   sortedByScoreDesc: readonly ScoredCandidate[],
   pointBudget: number,
+  options: BudgetSelectionOptions = {},
 ): Set<string> {
+  const margin = options.stickyMargin ?? 0;
+  const resident = options.resident;
+  if (margin > 0 && resident && resident.size > 0) {
+    const refining = options.refining;
+    // Effective score biases resident (non-refining) nodes upward, then a stable
+    // sort keeps the caller's raw-score order on ties. A newcomer must beat a
+    // resident node by more than `margin` to take its slot.
+    const effective = sortedByScoreDesc.map((c, i) => {
+      const sticky = c.score > 0 && resident.has(c.id) && !(refining?.has(c.id) ?? false);
+      return { c, i, eff: sticky ? c.score * (1 + margin) : c.score };
+    });
+    effective.sort((a, b) => b.eff - a.eff || a.i - b.i);
+    return greedyFill(effective.map((e) => e.c), pointBudget);
+  }
+  return greedyFill(sortedByScoreDesc, pointBudget);
+}
+
+/** The cumulative point-budget fill over an already score-ordered list. */
+function greedyFill(sorted: readonly ScoredCandidate[], pointBudget: number): Set<string> {
   const wanted = new Set<string>();
   let total = 0;
-  for (const candidate of sortedByScoreDesc) {
+  for (const candidate of sorted) {
     if (candidate.score <= 0) break;
     if (total + candidate.pointCount > pointBudget && wanted.size > 0) break;
     wanted.add(candidate.id);

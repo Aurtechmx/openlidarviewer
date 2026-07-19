@@ -263,6 +263,29 @@ export function profileMetrics(a: Vec3, b: Vec3, up: Vec3): ProfileMetrics {
   };
 }
 
+// ── datum ───────────────────────────────────────────────────────────────────
+
+/**
+ * How far a render-local height sits below the elevation the source file
+ * describes: the up-axis component of the cloud's render origin.
+ *
+ * Clouds are recentred on load (`local = world − origin`) so f32 render coords
+ * keep their precision, which means a stored local height is only an elevation
+ * once the origin is added back. The gap is a constant, so every DELTA taken
+ * over local heights (gain, loss, grade, relief) is already correct and needs
+ * no datum at all — only an ABSOLUTE reading does. A streaming COPC makes the
+ * size of it obvious: its origin is the octree cube centre, which put the
+ * user's 418 m ground at −412 render units.
+ *
+ * A degenerate up axis or a non-finite origin yields 0 — a scan whose datum
+ * cannot be established is better shown at its honest local height than shifted
+ * by a number nobody can defend.
+ */
+export function elevationDatumOffset(origin: Vec3, up: Vec3): number {
+  const offset = dot(origin, normalize(up));
+  return Number.isFinite(offset) ? offset : 0;
+}
+
 // ── vertical delta (height tool) ────────────────────────────────────────────
 
 /**

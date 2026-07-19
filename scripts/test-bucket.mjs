@@ -119,8 +119,41 @@ const BUCKET_ARGS = {
 };
 const bucketArgs = BUCKET_ARGS[arg] ?? [...WORKERS];
 
-const result = spawnSync('npx', ['vitest', 'run', ...files, ...bucketArgs, ...rest], {
-  cwd: ROOT,
-  stdio: 'inherit',
-});
+/** Run one vitest invocation over this bucket's files. */
+function runVitest(extra) {
+  return spawnSync('npx', ['vitest', 'run', ...files, ...bucketArgs, ...extra, ...passthrough], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+}
+
+// `--shards=N` (plural) runs the bucket as N SEQUENTIAL sub-shards, each a fresh
+// vitest process over a deterministic 1/N slice of the files (vitest --shard).
+// This is the canonical reliable runner used by `test:release`: no single
+// process holds hundreds of files, which is the shape that fails to terminate
+// ("Worker exited unexpectedly") at shutdown on a constrained machine. CI runs
+// the SAME script with `--shard=i/N` (singular) to run those slices in parallel;
+// a singular `--shard` always wins and our custom `--shards` is stripped before
+// vitest sees it, so `npm run test:unit -- --shard=1/3` does the right thing too.
+const singleShard = rest.some((a) => a === '--shard' || a.startsWith('--shard='));
+const multiShard = rest.find((a) => a === '--shards' || a.startsWith('--shards='));
+const passthrough = rest.filter((a) => a !== multiShard);
+
+if (multiShard && !singleShard) {
+  const n = Number(multiShard.includes('=') ? multiShard.split('=')[1] : NaN);
+  if (!Number.isInteger(n) || n < 1) {
+    console.error(`--shards expects a positive integer, got "${multiShard}"`);
+    process.exit(2);
+  }
+  let worst = 0;
+  for (let i = 1; i <= n; i++) {
+    console.log(`\n──── ${arg} shard ${i}/${n} ────`);
+    const r = runVitest([`--shard=${i}/${n}`]);
+    const code = r.status ?? 1;
+    if (code !== 0) worst = code;
+  }
+  process.exit(worst);
+}
+
+const result = runVitest([]);
 process.exit(result.status ?? 1);

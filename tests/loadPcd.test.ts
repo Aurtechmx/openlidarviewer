@@ -70,9 +70,150 @@ describe('loadPcd — binary', () => {
   });
 });
 
+/** Build a minimal binary PCD whose `x y z` fields are 8-byte floats. */
+function makeDoubleBinaryPcd(points: [number, number, number][]): ArrayBuffer {
+  const header =
+    `# .PCD v0.7\nVERSION 0.7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\n` +
+    `COUNT 1 1 1\nWIDTH ${points.length}\nHEIGHT 1\n` +
+    `VIEWPOINT 0 0 0 1 0 0 0\nPOINTS ${points.length}\nDATA binary\n`;
+  const headerBytes = new TextEncoder().encode(header);
+  const buf = new ArrayBuffer(headerBytes.length + points.length * 24);
+  new Uint8Array(buf).set(headerBytes, 0);
+  const view = new DataView(buf);
+  points.forEach((p, i) => {
+    const base = headerBytes.length + i * 24;
+    view.setFloat64(base, p[0], true);
+    view.setFloat64(base + 8, p[1], true);
+    view.setFloat64(base + 16, p[2], true);
+  });
+  return buf;
+}
+
+describe('loadPcd — UTM-scale coordinates keep sub-millimetre precision', () => {
+  // A bare f32 snaps 500000.123 to a ~3 cm grid and 4000000.123 to ~25 cm —
+  // the origin subtraction must happen in f64, BEFORE the f32 narrowing, for
+  // the coordinate-bridge contract to mean anything.
+  const utmPoints: [number, number, number][] = [
+    [500000.123, 4000000.123, 210.25],
+    [500010.623, 4000010.623, 215.75],
+  ];
+
+  test('ascii body: origin + local position reconstructs within 1 mm', async () => {
+    const pcd =
+      `# .PCD v0.7\nVERSION 0.7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\n` +
+      `COUNT 1 1 1\nWIDTH 2\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 2\nDATA ascii\n` +
+      utmPoints.map((p) => p.join(' ')).join('\n') + '\n';
+    const pc = await loadPcd(new TextEncoder().encode(pcd).buffer, 'utm.pcd');
+    expect(pc.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      expect(Math.abs(pc.positions[i * 3] + pc.origin[0] - utmPoints[i][0])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 1] + pc.origin[1] - utmPoints[i][1])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 2] + pc.origin[2] - utmPoints[i][2])).toBeLessThan(0.001);
+    }
+  });
+
+  test('binary body with 8-byte float fields: reconstructs within 1 mm', async () => {
+    const pc = await loadPcd(makeDoubleBinaryPcd(utmPoints), 'utm-f64.pcd');
+    expect(pc.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      expect(Math.abs(pc.positions[i * 3] + pc.origin[0] - utmPoints[i][0])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 1] + pc.origin[1] - utmPoints[i][1])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 2] + pc.origin[2] - utmPoints[i][2])).toBeLessThan(0.001);
+    }
+  });
+
+  // x/y/z are not required to lead the record, and a multi-count field can sit
+  // before them — the f64 column extractor must locate x/y/z by name and sum
+  // the COUNT-widths ahead of each. A leading 3-wide `normal` + trailing `rgb`
+  // put x/y/z at token columns 3/4/5, out of field order (z before x/y is not
+  // used here but the index math is identical).
+  test('ascii body with a reordered, multi-count field layout stays sub-mm', async () => {
+    const pcd =
+      `# .PCD v0.7\nVERSION 0.7\nFIELDS normal x y z rgb\nSIZE 4 8 8 8 4\n` +
+      `TYPE F F F F U\nCOUNT 3 1 1 1 1\nWIDTH 2\nHEIGHT 1\n` +
+      `VIEWPOINT 0 0 0 1 0 0 0\nPOINTS 2\nDATA ascii\n` +
+      utmPoints
+        .map((p) => `0 0 1 ${p[0]} ${p[1]} ${p[2]} 4278190080`)
+        .join('\n') + '\n';
+    const pc = await loadPcd(new TextEncoder().encode(pcd).buffer, 'reordered.pcd');
+    expect(pc.pointCount).toBe(2);
+    for (let i = 0; i < 2; i++) {
+      expect(Math.abs(pc.positions[i * 3] + pc.origin[0] - utmPoints[i][0])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 1] + pc.origin[1] - utmPoints[i][1])).toBeLessThan(0.001);
+      expect(Math.abs(pc.positions[i * 3 + 2] + pc.origin[2] - utmPoints[i][2])).toBeLessThan(0.001);
+    }
+  });
+});
+
 describe('loadPcd — malformed input', () => {
   test('a non-PCD buffer throws a clear, caught error', async () => {
     const junk = new TextEncoder().encode('not a pcd file at all').buffer;
     await expect(loadPcd(junk)).rejects.toThrow();
+  });
+
+  test('a non-finite point loads clean and suppresses three\'s NaN bounding-sphere message on BOTH channels', async () => {
+    // three logs the message through console.error (BufferGeometry) — spy BOTH
+    // channels so this fails if it reaches either, not just console.warn.
+    const logged: string[] = [];
+    const origWarn = console.warn;
+    const origError = console.error;
+    console.warn = (...args: unknown[]): void => void logged.push(String(args[0]));
+    console.error = (...args: unknown[]): void => void logged.push(String(args[0]));
+    let pc;
+    try {
+      // Middle point is non-finite: PCDLoader.parse computes a bounding sphere
+      // internally and would log "Computed radius is NaN" before we sanitise.
+      pc = await loadPcd(makeBinaryPcd([[1, 2, 3], [NaN, 5, 6], [7, 8, 9]]));
+    } finally {
+      console.warn = origWarn;
+      console.error = origError;
+    }
+    // The unplaceable point is excluded; the two finite points survive, all finite.
+    expect(pc.positions.length).toBe(6);
+    for (const v of pc.positions) expect(Number.isFinite(v)).toBe(true);
+    // The redundant three bounding-sphere NaN message reached neither console channel.
+    expect(logged.some((m) => m.includes('computeBoundingSphere') && m.includes('NaN'))).toBe(false);
+  });
+});
+
+/** Build an in-memory ASCII PCD with the given field names and rows. */
+function asciiPcd(fields: string[], rows: string[]): ArrayBuffer {
+  const header = [
+    '# .PCD v0.7 - Point Cloud Data file format',
+    'VERSION 0.7',
+    `FIELDS ${fields.join(' ')}`,
+    `SIZE ${fields.map(() => 4).join(' ')}`,
+    `TYPE ${fields.map(() => 'F').join(' ')}`,
+    `COUNT ${fields.map(() => 1).join(' ')}`,
+    `WIDTH ${rows.length}`,
+    'HEIGHT 1',
+    'VIEWPOINT 0 0 0 1 0 0 0',
+    `POINTS ${rows.length}`,
+    'DATA ascii',
+    '',
+  ].join('\n');
+  return new TextEncoder().encode(header + rows.join('\n') + '\n').buffer as ArrayBuffer;
+}
+
+describe('loadPcd — ASCII body scanner', () => {
+  test('reads x/y/z at the right column when other fields sit between them', async () => {
+    const pc = await loadPcd(asciiPcd(['x', 'intensity', 'y', 'z'], ['1 9 2 3', '4 9 5 6']));
+    expect(pc.pointCount).toBe(2);
+    // Recentred on the floored min origin [1,2,3] ⇒ [0,0,0] and [3,3,3].
+    expect(Array.from(pc.positions.slice(0, 6)).map((v) => Math.round(v))).toEqual([
+      0, 0, 0, 3, 3, 3,
+    ]);
+  });
+
+  test('keeps UTM-scale coordinates precise through the f64 path', async () => {
+    const pc = await loadPcd(
+      asciiPcd(['x', 'y', 'z'], ['500000.000 4500000.000 100.000', '500000.001 4500000.000 100.000']),
+    );
+    expect(pc.positions[3] - pc.positions[0]).toBeCloseTo(0.001, 6);
+  });
+
+  test('skips blank lines and tolerates irregular spacing', async () => {
+    const pc = await loadPcd(asciiPcd(['x', 'y', 'z'], ['  1\t 2   3 ', '', '4  5\t\t6']));
+    expect(pc.pointCount).toBe(2);
   });
 });

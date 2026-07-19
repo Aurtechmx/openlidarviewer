@@ -45,12 +45,18 @@ export class CopcWorkerClient implements ChunkDecoder {
   private readonly _pending = new Map<number, PendingRequest>();
   private _nextRequestId = 0;
   private _disposed = false;
+  private _broken = false;
 
   /**
    * Optional hook called after each successful decode with the wall-time
    * elapsed from postMessage to result. The streaming benchmark wires this.
    */
   onDecodeMs: ((ms: number) => void) | undefined;
+
+  /** In-flight request count. Diagnostic — mirrors the EPT client's contract. */
+  get pendingCount(): number {
+    return this._pending.size;
+  }
 
   constructor() {
     this._worker = new Worker(new URL('./copcWorker.ts', import.meta.url), {
@@ -60,7 +66,12 @@ export class CopcWorkerClient implements ChunkDecoder {
       this._onMessage(event.data);
     };
     this._worker.onerror = (): void => {
+      // The worker died. Tear it down and mark the client broken so a later
+      // decode rejects at once instead of posting into a corpse that never
+      // replies — which would leave the scheduler's node stuck 'loading'.
+      this._broken = true;
       this._failAll(new Error('The COPC decode worker failed.'));
+      this._worker.terminate();
     };
   }
 
@@ -79,6 +90,10 @@ export class CopcWorkerClient implements ChunkDecoder {
         reject(new Error('The COPC decode worker has been disposed.'));
         return;
       }
+      if (this._broken) {
+        reject(new Error('The COPC decode worker failed.'));
+        return;
+      }
       if (signal?.aborted) {
         reject(new Error('Decode aborted'));
         return;
@@ -87,13 +102,30 @@ export class CopcWorkerClient implements ChunkDecoder {
       if (signal) {
         pending.onAbort = (): void => {
           if (!this._pending.delete(requestId)) return;
-          this._worker.postMessage({ type: 'cancel', requestId });
+          // Reject first, then post the cancel best-effort — a worker dying in
+          // the same tick as the abort makes postMessage throw, and if that ran
+          // before the reject the promise would hang unsettled. The cancel only
+          // skips a not-yet-started decode, so losing it to a dead worker is fine.
           reject(new Error('Decode aborted'));
+          try {
+            this._worker.postMessage({ type: 'cancel', requestId });
+          } catch {
+            /* worker already gone — the request is settled, the cancel is moot */
+          }
         };
         signal.addEventListener('abort', pending.onAbort, { once: true });
       }
       this._pending.set(requestId, pending);
-      this._worker.postMessage({ type: 'decode', requestId, chunk, meta }, [chunk]);
+      try {
+        this._worker.postMessage({ type: 'decode', requestId, chunk, meta }, [chunk]);
+      } catch (err) {
+        // A synchronous post failure (e.g. DataCloneError on a detached buffer,
+        // or a terminated worker) would otherwise strand this request in
+        // `_pending` with its abort listener attached. Settle it and surface
+        // the error to the caller.
+        this._settle(requestId);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
@@ -105,12 +137,8 @@ export class CopcWorkerClient implements ChunkDecoder {
   }
 
   private _onMessage(reply: WorkerReply): void {
-    const pending = this._pending.get(reply.requestId);
+    const pending = this._settle(reply.requestId);
     if (!pending) return; // cancelled or already settled — drop the stale reply
-    this._pending.delete(reply.requestId);
-    if (pending.onAbort && pending.signal) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-    }
     if (reply.type === 'decoded') {
       this.onDecodeMs?.(nowMs() - pending.startedAt);
       pending.resolve(reply.decoded);
@@ -119,8 +147,28 @@ export class CopcWorkerClient implements ChunkDecoder {
     }
   }
 
+  /**
+   * Remove a request from `_pending` and detach its abort listener, returning
+   * it (or undefined if already gone). The single teardown path, so a reply, a
+   * sync post failure, and a fail-all all clean up identically.
+   */
+  private _settle(requestId: number): PendingRequest | undefined {
+    const pending = this._pending.get(requestId);
+    if (!pending) return undefined;
+    this._pending.delete(requestId);
+    if (pending.onAbort && pending.signal) {
+      pending.signal.removeEventListener('abort', pending.onAbort);
+    }
+    return pending;
+  }
+
   private _failAll(error: Error): void {
-    for (const pending of this._pending.values()) pending.reject(error);
+    for (const pending of this._pending.values()) {
+      if (pending.onAbort && pending.signal) {
+        pending.signal.removeEventListener('abort', pending.onAbort);
+      }
+      pending.reject(error);
+    }
     this._pending.clear();
   }
 }

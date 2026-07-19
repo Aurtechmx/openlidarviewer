@@ -36,10 +36,14 @@ import {
 // sheet and the on-screen summary can never disagree. `formatStation` is the
 // unit-aware civil stationing (metric km+m / imperial 100-ft stations) the
 // panel's station table already prints.
-import { computeProfileSummary, formatStation } from './profileSummary';
+import { computeProfileSummary, formatProfileExtreme, formatStation } from './profileSummary';
 // Unit-aware length formatting — the SAME formatter every panel readout uses,
 // so the sheet and the screen can never disagree on a number's unit.
-import { formatLength } from './format';
+import {
+  DATUM_CONFLICT_MEASURE_NOTICE,
+  formatElevation,
+  formatLength,
+} from './format';
 
 /** Same constant the format/summary modules keep module-local. */
 const FEET_PER_METRE = 3.280839895013123;
@@ -67,6 +71,14 @@ export interface ProfilePdfInput {
    * the chainage axis. Defaults to metric (the pre-v0.4.5 sheet).
    */
   readonly unitSystem?: UnitSystem;
+  /**
+   * Whether the scene could assert a vertical datum at all. False when the
+   * loaded clouds hold conflicting render origins, in which case the samples
+   * are LOCAL heights and the sheet must not print the word elevation against
+   * them — a printed sheet outlives the session that made it, so it is the
+   * last place a reader can discover the caveat. Defaults to true.
+   */
+  readonly datumKnown?: boolean;
 }
 
 const PAGE_W = 792; // US Letter landscape
@@ -147,7 +159,12 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const system: UnitSystem = input.unitSystem ?? 'metric';
   const k = system === 'metric' ? 1 : FEET_PER_METRE;
   const unit = system === 'metric' ? 'm' : 'ft';
+  const datumKnown = input.datumKnown !== false;
+  // Without a datum every height on this sheet is a local render height.
+  const heightWord = datumKnown ? 'Elevation' : 'Local height';
   const lenStr = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
+  // An elevation is a datum reading, not a magnitude — see `formatElevation`.
+  const elevStr = (m: number | null): string => (m == null ? '—' : formatElevation(m, system));
 
   // ── Page 1: chart + summary ────────────────────────────────────────────
   const page = doc.addPage([PAGE_W, PAGE_H]);
@@ -259,7 +276,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // Axis frame.
     page.drawLine({ start: { x: plotLeft, y: plotTopY }, end: { x: plotLeft, y: plotBotY }, thickness: 1, color: INK_DIM });
     page.drawLine({ start: { x: plotLeft, y: plotBotY }, end: { x: plotRight, y: plotBotY }, thickness: 1, color: INK_DIM });
-    text(page, `Elevation (${unit})`, M, plotTopY + 6, 8, bold, INK_DIM);
+    text(page, `${heightWord} (${unit})`, M, plotTopY + 6, 8, bold, INK_DIM);
     text(
       page,
       system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)',
@@ -312,7 +329,10 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const rows: Array<[string, string]> = [
     ['Length (horizontal)', lenStr(len)],
     ['Relief (height change)', stats.reliefSpan == null ? '-' : lenStr(stats.reliefSpan)],
-    ['Min / Max elevation', `${lenStr(stats.minElevation)}  /  ${lenStr(stats.maxElevation)}`],
+    [
+      datumKnown ? 'Min / Max elevation' : 'Min / Max local height',
+      `${elevStr(stats.minElevation)}  /  ${elevStr(stats.maxElevation)}`,
+    ],
     [
       'Elevation gain / loss',
       intel.gainM == null || intel.lossM == null
@@ -336,11 +356,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
           `(${formatGradePercent(intel.steepest.grade)})`,
     ],
     [
-      'Highest / Lowest point',
+      datumKnown ? 'Highest / Lowest point' : 'Highest / Lowest point (local height)',
       intel.highest == null || intel.lowest == null
         ? '—'
-        : `${lenStr(intel.highest.elevation)} @ ${formatStation(intel.highest.chainage, system)}  /  ` +
-          `${lenStr(intel.lowest.elevation)} @ ${formatStation(intel.lowest.chainage, system)}`,
+        : `${formatProfileExtreme(intel.highest, system)}  /  ` +
+          `${formatProfileExtreme(intel.lowest, system)}`,
     ],
     ['Samples · coverage', `${stats.sampleCount}  ·  ${(stats.coverage * 100).toFixed(0)}%`],
     [
@@ -352,7 +372,10 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       `bare-earth p${input.groundPercentile != null ? Math.round(input.groundPercentile) : 25} of corridor`,
     ],
     ['Horizontal CRS', input.crs ?? '— (not georeferenced)'],
-    ['Vertical datum', input.verticalDatum ?? '—'],
+    [
+      'Vertical datum',
+      datumKnown ? (input.verticalDatum ?? '—') : DATUM_CONFLICT_MEASURE_NOTICE,
+    ],
   ];
   const colW = (PAGE_W - 2 * M) / 2;
   rows.forEach((r, i) => {
@@ -371,7 +394,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   text(page, prov, M, M - 10, 8, font, INK_DIM);
 
   // ── Page 2+: station table ─────────────────────────────────────────────
-  renderStationTable(doc, font, bold, mono, stats.stations, input.name, system);
+  renderStationTable(doc, font, bold, mono, stats.stations, input.name, system, datumKnown);
 
   return doc.save();
 }
@@ -385,6 +408,7 @@ function renderStationTable(
   stations: ReturnType<typeof computeCivilProfileStats>['stations'],
   name: string,
   system: UnitSystem,
+  datumKnown: boolean,
 ): void {
   // B9: the table prints in the display unit; geometry stays metres.
   const k = system === 'metric' ? 1 : FEET_PER_METRE;
@@ -407,7 +431,8 @@ function renderStationTable(
     const put = (s: string, x: number, y: number, size: number, f: PDFFont, color = INK) =>
       page.drawText(winAnsiSafe(s), { x, y, size, font: f, color });
     put('Station table', M, PAGE_H - M - 4, 14, bold);
-    put(`${name} - STA, elevation (${unit}), grade to next`, M, PAGE_H - M - 20, 9, font, INK_DIM);
+    const heightWord = datumKnown ? 'elevation' : 'local height';
+    put(`${name} - STA, ${heightWord} (${unit}), grade to next`, M, PAGE_H - M - 20, 9, font, INK_DIM);
 
     for (let col = 0; col < colCount && idx < stations.length; col++) {
       const x = M + col * (colW + colGap);

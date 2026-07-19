@@ -144,6 +144,161 @@ describe('applyPolygonReclassify — spatial remap', () => {
   });
 });
 
+describe('applyPolygonReclassify — non-Z-up projection', () => {
+  // For a non-Z-up `up`, the polygon is projected onto an (east, north) basis
+  // perpendicular to `up`; every point MUST be projected onto that SAME basis
+  // (all three components, height included) before the point-in-polygon test.
+  // Testing a point with its raw (x, y) — ignoring the real projection and the
+  // z component — reclassifies the wrong points for rotated / Y-up / tilted /
+  // non-origin scans. These cases pin the correct, height-invariant behaviour.
+
+  it('is height-invariant for a Y-up scan (up = [0,1,0])', () => {
+    // up=[0,1,0] ⇒ projection is (x, -z); the height axis y must be ignored.
+    // A unit square in the XZ ground plane (any height H), projects to the
+    // square x∈[0,1], -z∈[-1,0] i.e. z∈[0,1].
+    const H = 5;
+    const polygon: [number, number, number][] = [
+      [0, H, 0],
+      [1, H, 0],
+      [1, H, 1],
+      [0, H, 1],
+    ];
+    const classification = new Uint8Array([1, 2, 3, 4]);
+    const positions = pack([
+      [0.5, 50, 0.5], // inside (x,z); height 50 must not matter
+      [0.25, -30, 0.75], // inside (x,z); height -30 must not matter
+      [10, 0, 0.5], // outside in x
+      [0.5, 0, 5], // outside in z (depth)
+    ]);
+    const r = applyPolygonReclassify({
+      classification,
+      positions,
+      polygon,
+      newClass: 9,
+      up: [0, 1, 0],
+    });
+    expect(Array.from(classification)).toEqual([9, 9, 3, 4]);
+    expect(r.changedCount).toBe(2);
+  });
+
+  it('projects points onto the tilted basis, not raw XY (up = [0, √½, √½])', () => {
+    // up=[0,s,s], s=1/√2 ⇒ east=[1,0,0], north=[0,s,-s]; projection is
+    // (x, s·(y−z)). The two points below share the SAME projection (0.5, 0.5)
+    // but very different raw y, so a raw-XY test would (wrongly) reject them.
+    const s = Math.SQRT1_2;
+    const d = 0.5 / s; // y−z that yields north-coord 0.5
+    const polygon: [number, number, number][] = [
+      [0, 0, 0], // → (0,0)
+      [1, 0, 0], // → (1,0)
+      [1, Math.SQRT2, 0], // → (1,1)
+      [0, Math.SQRT2, 0], // → (0,1)
+    ];
+    const classification = new Uint8Array([1, 2, 3]);
+    const positions = pack([
+      [0.5, d, 0], // inside, small height
+      [0.5, 100 + d, 100], // inside, large height (raw y≈100 would be rejected)
+      [2, d, 0], // outside in x
+    ]);
+    const r = applyPolygonReclassify({
+      classification,
+      positions,
+      polygon,
+      newClass: 9,
+      up: [0, s, s],
+    });
+    expect(Array.from(classification)).toEqual([9, 9, 3]);
+    expect(r.changedCount).toBe(2);
+  });
+
+  it('is translation-consistent when points and polygon share the frame (Y-up, non-origin)', () => {
+    // Same Y-up geometry as above, shifted by a large offset on every axis.
+    // Projection is linear, so shifting points AND polygon equally preserves
+    // membership — selection must be unchanged.
+    const T = [1000, 2000, 3000] as const;
+    const off = (p: readonly number[]): [number, number, number] => [
+      p[0] + T[0],
+      p[1] + T[1],
+      p[2] + T[2],
+    ];
+    const polygon: [number, number, number][] = [
+      [0, 5, 0],
+      [1, 5, 0],
+      [1, 5, 1],
+      [0, 5, 1],
+    ].map(off);
+    const classification = new Uint8Array([1, 2, 3, 4]);
+    const positions = pack(
+      [
+        [0.5, 50, 0.5],
+        [0.25, -30, 0.75],
+        [10, 0, 0.5],
+        [0.5, 0, 5],
+      ].map(off),
+    );
+    const r = applyPolygonReclassify({
+      classification,
+      positions,
+      polygon,
+      newClass: 9,
+      up: [0, 1, 0],
+    });
+    expect(Array.from(classification)).toEqual([9, 9, 3, 4]);
+    expect(r.changedCount).toBe(2);
+  });
+
+  it('handles a flipped up axis via the aux-branch fallback (up = [0,0,-1])', () => {
+    // |uz| ≥ 0.99 selects aux=[1,0,0]; up=[0,0,-1] ⇒ east=[0,-1,0],
+    // north=[-1,0,0], projection (−y, −x). The polygon below projects to the
+    // unit square [0,1]²; the point projects to (0.5,0.5) inside (raw XY would
+    // be (−0.5,−0.5), outside).
+    const polygon: [number, number, number][] = [
+      [0, 0, 0], // → (0,0)
+      [0, -1, 0], // → (1,0)
+      [-1, -1, 0], // → (1,1)
+      [-1, 0, 0], // → (0,1)
+    ];
+    const classification = new Uint8Array([1, 2]);
+    const positions = pack([
+      [-0.5, -0.5, 77], // → (0.5,0.5) inside; z ignored
+      [-0.5, -0.5, -3], // same horizontal → also inside (control on z-invariance)
+    ]);
+    const r = applyPolygonReclassify({
+      classification,
+      positions,
+      polygon,
+      newClass: 9,
+      up: [0, 0, -1],
+    });
+    expect(Array.from(classification)).toEqual([9, 9]);
+    expect(r.changedCount).toBe(2);
+  });
+
+  it('still honours includeIf and the already-target short-circuit under non-Z-up', () => {
+    const polygon: [number, number, number][] = [
+      [0, 5, 0],
+      [1, 5, 0],
+      [1, 5, 1],
+      [0, 5, 1],
+    ];
+    const classification = new Uint8Array([1, 2, 9]); // third already target
+    const positions = pack([
+      [0.5, 50, 0.5], // inside, class 1 → eligible
+      [0.25, -30, 0.75], // inside, class 2 → excluded by filter
+      [0.75, 10, 0.25], // inside, class 9 → already target, no change
+    ]);
+    const r = applyPolygonReclassify({
+      classification,
+      positions,
+      polygon,
+      newClass: 9,
+      up: [0, 1, 0],
+      includeIf: (cls) => cls === 1,
+    });
+    expect(Array.from(classification)).toEqual([9, 2, 9]);
+    expect(r.changedCount).toBe(1);
+  });
+});
+
 describe('snapshotClassification / restoreClassification — undo helpers', () => {
   it('round-trips an unmodified buffer byte-for-byte', () => {
     const before = new Uint8Array([1, 2, 3, 4, 5]);

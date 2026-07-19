@@ -43,3 +43,36 @@ export function recenter(coords: Float64Array, origin: [number, number, number])
   }
   return out;
 }
+
+/**
+ * The one origin a scene can honestly claim, or `null` when it has none.
+ *
+ * Every cloud is recentred on its OWN `computeOrigin(min)`, and nothing
+ * re-places a mesh by an origin delta afterwards — so two files whose origins
+ * differ are already drawn in frames that do not line up. There is then no
+ * single answer to "what world coordinate is local zero", and picking one
+ * cloud's (the newest, the first, the streaming one) would hand its frame to
+ * points that were never in it. Unanimity is the only defensible assertion:
+ * agree and the scene has a frame, differ and it has none.
+ *
+ * This is the rule the georeference seam already applies before it will emit a
+ * world file. An absolute elevation is the same kind of claim, so it answers to
+ * the same gate. A cloud carrying no origin at all is an unknown frame, which
+ * cannot be unanimous with anything.
+ *
+ * Order-independent by construction: the caller may pass clouds in any order.
+ */
+export function resolveSceneOrigin(
+  origins: Iterable<readonly number[] | null | undefined>,
+): [number, number, number] | null {
+  let agreed: [number, number, number] | null = null;
+  for (const o of origins) {
+    if (!o || o.length < 3) return null;
+    if (agreed === null) {
+      agreed = [o[0], o[1], o[2]];
+    } else if (agreed[0] !== o[0] || agreed[1] !== o[1] || agreed[2] !== o[2]) {
+      return null; // conflicting frames — honestly no scene origin
+    }
+  }
+  return agreed;
+}

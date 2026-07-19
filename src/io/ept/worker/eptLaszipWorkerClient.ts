@@ -60,6 +60,7 @@ export class EptLaszipWorkerClient {
   private readonly _pending = new Map<number, PendingRequest>();
   private _nextRequestId = 0;
   private _disposed = false;
+  private _broken = false;
 
   /**
    * Optional hook called after each successful decode with the wall-time
@@ -67,13 +68,23 @@ export class EptLaszipWorkerClient {
    */
   onDecodeMs: ((ms: number) => void) | undefined;
 
+  /** In-flight request count. Diagnostic — asserted by the settlement tests. */
+  get pendingCount(): number {
+    return this._pending.size;
+  }
+
   constructor(workerFactory: () => WorkerLike = defaultWorkerFactory) {
     this._worker = workerFactory();
     this._worker.onmessage = (event: MessageEvent): void => {
       this._onMessage(event.data as WorkerReply);
     };
     this._worker.onerror = (): void => {
+      // The worker died. Tear it down and mark the client broken so a later
+      // decode rejects at once instead of posting into a corpse that never
+      // replies — a promise that would otherwise hang forever.
+      this._broken = true;
       this._failAll(new Error('The EPT laszip decode worker failed.'));
+      this._worker.terminate();
     };
   }
 
@@ -97,6 +108,10 @@ export class EptLaszipWorkerClient {
         reject(new Error('The EPT laszip decode worker has been disposed.'));
         return;
       }
+      if (this._broken) {
+        reject(new Error('The EPT laszip decode worker failed.'));
+        return;
+      }
       if (signal?.aborted) {
         reject(new Error('EPT decode aborted'));
         return;
@@ -105,16 +120,34 @@ export class EptLaszipWorkerClient {
       if (signal) {
         pending.onAbort = (): void => {
           if (!this._pending.delete(requestId)) return;
-          this._worker.postMessage({ type: 'cancel', requestId });
+          // Reject first, then post the cancel best-effort. If the worker is
+          // dying in the same tick the abort fires, postMessage throws — and if
+          // that ran before the reject, this promise would never settle. The
+          // cancel is only an optimisation (skip a not-yet-started decode), so
+          // losing it to a dead worker costs nothing.
           reject(new Error('EPT decode aborted'));
+          try {
+            this._worker.postMessage({ type: 'cancel', requestId });
+          } catch {
+            /* worker already gone — the request is settled, the cancel is moot */
+          }
         };
         signal.addEventListener('abort', pending.onAbort, { once: true });
       }
       this._pending.set(requestId, pending);
-      this._worker.postMessage(
-        { type: 'decode', requestId, tile, renderOrigin: [...renderOrigin], rgbEightBit },
-        [tile],
-      );
+      try {
+        this._worker.postMessage(
+          { type: 'decode', requestId, tile, renderOrigin: [...renderOrigin], rgbEightBit },
+          [tile],
+        );
+      } catch (err) {
+        // A synchronous post failure (e.g. DataCloneError on a detached buffer,
+        // or a terminated worker) would otherwise leave this request stranded
+        // in `_pending` with its abort listener still attached. Settle it and
+        // surface the error so the caller's reject path runs.
+        this._settle(requestId);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
@@ -126,12 +159,8 @@ export class EptLaszipWorkerClient {
   }
 
   private _onMessage(reply: WorkerReply): void {
-    const pending = this._pending.get(reply.requestId);
+    const pending = this._settle(reply.requestId);
     if (!pending) return; // cancelled or already settled — drop the stale reply
-    this._pending.delete(reply.requestId);
-    if (pending.onAbort && pending.signal) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-    }
     if (reply.type === 'decoded') {
       this.onDecodeMs?.(nowMs() - pending.startedAt);
       pending.resolve(reply.decoded);
@@ -140,8 +169,29 @@ export class EptLaszipWorkerClient {
     }
   }
 
+  /**
+   * Remove a request from `_pending` and detach its abort listener, returning
+   * it (or undefined if already gone). The single place request state is torn
+   * down, so a reply, a sync post failure, and a fail-all all clean up
+   * identically — no map entry or signal listener is ever left behind.
+   */
+  private _settle(requestId: number): PendingRequest | undefined {
+    const pending = this._pending.get(requestId);
+    if (!pending) return undefined;
+    this._pending.delete(requestId);
+    if (pending.onAbort && pending.signal) {
+      pending.signal.removeEventListener('abort', pending.onAbort);
+    }
+    return pending;
+  }
+
   private _failAll(error: Error): void {
-    for (const pending of this._pending.values()) pending.reject(error);
+    for (const pending of this._pending.values()) {
+      if (pending.onAbort && pending.signal) {
+        pending.signal.removeEventListener('abort', pending.onAbort);
+      }
+      pending.reject(error);
+    }
     this._pending.clear();
   }
 }

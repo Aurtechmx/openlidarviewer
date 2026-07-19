@@ -23,6 +23,7 @@
 
 import type { TerrainPoint } from '../TerrainContracts';
 import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
+import { NeumaierSum } from '../../process/numerics';
 import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence';
 import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
 import type { VerticalAxis } from '../ground/groundFilter';
@@ -285,6 +286,7 @@ export function holdoutValidateDtm(
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
+    verticalUnitToMetres: params.verticalUnitToMetres,
   });
   // Residuals are reported in metres regardless of the source vertical unit.
   const vMetres =
@@ -303,7 +305,10 @@ export function holdoutValidateDtm(
     params.latitudeDeg ?? minH2 + (rows / 2) * cellSizeM,
     params.horizontalUnitToMetres,
   );
-  const slopeField = hornSlope(dtm.z, cols, rows, cellM.x, cellM.y);
+  // dtm.z is native vertical units; scale the rise to metres so the slope
+  // bands (flat/moderate/steep) stratify residuals by true angle, not a
+  // feet-over-metres ratio that would read ~3.28× too steep on foot data.
+  const slopeField = hornSlope(dtm.z, cols, rows, cellM.x, cellM.y, vMetres);
 
   // Residuals at held-out points.
   const allAbs: number[] = [];
@@ -312,19 +317,34 @@ export function holdoutValidateDtm(
   // uniformly 8 cm low has a large bias but its RMSE alone looks like noise.
   const allSigned: number[] = [];
   let sumSigned = 0;
-  let sumSq = 0;
+  // Compensated so the aggregate RMSE stays accurate over a large held-out set.
+  const sumSqAcc = new NeumaierSum();
   let sumAbs = 0;
   let covered = 0;
   let uncovered = 0;
-  const bandSumSq: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
-  const bandSumAbs: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
+  // Every residual aggregate is compensated, so a stratum's RMSE/MAE carries the
+  // same accuracy as the headline figure regardless of how many points land in it.
+  const bandSumSq: Record<EvidenceGrade, NeumaierSum> = {
+    solid: new NeumaierSum(), dashed: new NeumaierSum(), gap: new NeumaierSum(),
+  };
+  const bandSumAbs: Record<EvidenceGrade, NeumaierSum> = {
+    solid: new NeumaierSum(), dashed: new NeumaierSum(), gap: new NeumaierSum(),
+  };
   const bandCount: Record<EvidenceGrade, number> = { solid: 0, dashed: 0, gap: 0 };
   // Stratified accumulators: by slope band and by surface zone.
-  const slopeSq: Record<SlopeBand, number> = { flat: 0, moderate: 0, steep: 0 };
-  const slopeAbs: Record<SlopeBand, number> = { flat: 0, moderate: 0, steep: 0 };
+  const slopeSq: Record<SlopeBand, NeumaierSum> = {
+    flat: new NeumaierSum(), moderate: new NeumaierSum(), steep: new NeumaierSum(),
+  };
+  const slopeAbs: Record<SlopeBand, NeumaierSum> = {
+    flat: new NeumaierSum(), moderate: new NeumaierSum(), steep: new NeumaierSum(),
+  };
   const slopeCnt: Record<SlopeBand, number> = { flat: 0, moderate: 0, steep: 0 };
-  const zoneSq: Record<SurfaceZone, number> = { measured: 0, interpolated: 0 };
-  const zoneAbs: Record<SurfaceZone, number> = { measured: 0, interpolated: 0 };
+  const zoneSq: Record<SurfaceZone, NeumaierSum> = {
+    measured: new NeumaierSum(), interpolated: new NeumaierSum(),
+  };
+  const zoneAbs: Record<SurfaceZone, NeumaierSum> = {
+    measured: new NeumaierSum(), interpolated: new NeumaierSum(),
+  };
   const zoneCnt: Record<SurfaceZone, number> = { measured: 0, interpolated: 0 };
   const samples: ConfidenceSample[] | null = params.collectSamples ? [] : null;
 
@@ -370,12 +390,12 @@ export function holdoutValidateDtm(
     allAbs.push(abs);
     allSigned.push(residual);
     sumSigned += residual;
-    sumSq += sq;
+    sumSqAcc.add(sq);
     sumAbs += abs;
     covered++;
     const grade = gradeForConfidence(predConf);
-    bandSumSq[grade] += sq;
-    bandSumAbs[grade] += abs;
+    bandSumSq[grade].add(sq);
+    bandSumAbs[grade].add(abs);
     bandCount[grade] += 1;
     // Stratify by the CONTAINING cell's slope band and surface zone — floor
     // binning, the same convention the raster was built with. `Math.round`
@@ -386,12 +406,12 @@ export function holdoutValidateDtm(
     const nrow = clampRow(Math.floor((getH2(p) - minH2) / cellSizeM));
     const nci = nrow * cols + ncol;
     const sb = slopeBandFor(slopeField[nci]);
-    slopeSq[sb] += sq;
-    slopeAbs[sb] += abs;
+    slopeSq[sb].add(sq);
+    slopeAbs[sb].add(abs);
     slopeCnt[sb] += 1;
     const zone: SurfaceZone = dtm.coverage[nci] === 2 ? 'measured' : 'interpolated';
-    zoneSq[zone] += sq;
-    zoneAbs[zone] += abs;
+    zoneSq[zone].add(sq);
+    zoneAbs[zone].add(abs);
     zoneCnt[zone] += 1;
     if (samples) samples.push({ confidence: predConf, absError: abs, zone });
   }
@@ -401,7 +421,7 @@ export function holdoutValidateDtm(
     return { ...emptyReport(holdoutFraction, warnings), uncoveredCount: uncovered };
   }
 
-  const rmse = Math.sqrt(sumSq / covered);
+  const rmse = Math.sqrt(sumSqAcc.total / covered);
   const mae = sumAbs / covered;
   allAbs.sort((a, b) => a - b);
   // Project-wide type-7 quantile (was nearest-rank — one of the three
@@ -413,8 +433,8 @@ export function holdoutValidateDtm(
     return {
       grade,
       count: n,
-      rmse: n > 0 ? Math.sqrt(bandSumSq[grade] / n) : Number.NaN,
-      mae: n > 0 ? bandSumAbs[grade] / n : Number.NaN,
+      rmse: n > 0 ? Math.sqrt(bandSumSq[grade].total / n) : Number.NaN,
+      mae: n > 0 ? bandSumAbs[grade].total / n : Number.NaN,
     };
   });
 
@@ -423,8 +443,8 @@ export function holdoutValidateDtm(
     return {
       band,
       count: n,
-      rmse: n > 0 ? Math.sqrt(slopeSq[band] / n) : Number.NaN,
-      mae: n > 0 ? slopeAbs[band] / n : Number.NaN,
+      rmse: n > 0 ? Math.sqrt(slopeSq[band].total / n) : Number.NaN,
+      mae: n > 0 ? slopeAbs[band].total / n : Number.NaN,
     };
   });
 
@@ -433,8 +453,8 @@ export function holdoutValidateDtm(
     return {
       zone,
       count: n,
-      rmse: n > 0 ? Math.sqrt(zoneSq[zone] / n) : Number.NaN,
-      mae: n > 0 ? zoneAbs[zone] / n : Number.NaN,
+      rmse: n > 0 ? Math.sqrt(zoneSq[zone].total / n) : Number.NaN,
+      mae: n > 0 ? zoneAbs[zone].total / n : Number.NaN,
     };
   });
 

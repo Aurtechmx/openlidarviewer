@@ -42,9 +42,11 @@ try {
   problems.push('package-lock.json missing or unparseable.');
 }
 
-// 2. README current-release line.
+// 2. README current-release line. The capture accepts semver prereleases
+// (e.g. v0.6.0-alpha.1) — a plain [0-9.]* stopped at the hyphen and reported a
+// spurious mismatch for any prerelease cut.
 const readme = read('README.md');
-const m = readme.match(/current release is \*\*v([0-9][0-9.]*)\*\*/i);
+const m = readme.match(/current release is \*\*v([0-9][0-9A-Za-z.\-]*)\*\*/i);
 if (!m) problems.push('README.md has no "current release is **vX.Y.Z**" line to check.');
 else if (m[1] !== version) problems.push(`README.md says current release v${m[1]}, expected v${version}.`);
 
@@ -90,8 +92,44 @@ try {
   problems.push('CITATION.cff missing or unreadable.');
 }
 
+// 6. An UNVERSIONED readiness report is a claim about the current tree, so it
+// has to name the current version. The v0.5.9 one drifted for exactly this
+// reason: nothing checked it, and its filename carried no version to give the
+// staleness away. A report for an older release belongs in
+// READINESS_REPORT_vX.Y.Z.md, which this check deliberately ignores.
+if (existsSync(resolve(ROOT, 'READINESS_REPORT.md'))) {
+  const readiness = read('READINESS_REPORT.md');
+  const claimed = /^#\s*v([0-9][0-9A-Za-z.\-]*)\s+publication-readiness report/im.exec(readiness);
+  if (!claimed) {
+    problems.push('READINESS_REPORT.md has no "# vX.Y.Z publication-readiness report" heading to check.');
+  } else if (claimed[1] !== version) {
+    problems.push(
+      `READINESS_REPORT.md describes v${claimed[1]}, expected v${version} — rename it to READINESS_REPORT_v${claimed[1]}.md if it is the record for that release.`,
+    );
+  }
+}
+
+// 7. The service worker names its cache after the release, and its `activate`
+// deletes any cache whose name !== that. If the name doesn't move with the app
+// version, a returning user's browser never prunes the previous release's
+// cached shell — the worker itself says "Bump on every release". It drifted to
+// 0.5.9 while the app moved to 0.6 precisely because nothing checked it.
+try {
+  const sw = read('public/sw.js');
+  const swVer = /const\s+VERSION\s*=\s*['"]olv-shell-([^'"]+)['"]/.exec(sw);
+  if (!swVer) {
+    problems.push("public/sw.js has no \"const VERSION = 'olv-shell-X.Y.Z'\" to check.");
+  } else if (swVer[1] !== version) {
+    problems.push(
+      `public/sw.js cache VERSION is olv-shell-${swVer[1]}, expected olv-shell-${version} — bump it so the previous release's cache is pruned on activate.`,
+    );
+  }
+} catch {
+  problems.push('public/sw.js missing or unreadable.');
+}
+
 if (problems.length === 0) {
-  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, and CITATION.cff all on v${version}.`);
+  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, CITATION.cff, and the service-worker cache all on v${version}.`);
   process.exit(0);
 }
 

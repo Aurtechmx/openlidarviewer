@@ -184,17 +184,22 @@ export function baseReportRows(
   const rows: ScanReportRow[] = [
     { label: 'Points', value: formatInt(adapter.sourcePointCount()) },
   ];
-  if (aabb) {
-    const w = aabb[3] - aabb[0];
-    const d = aabb[4] - aabb[1];
-    const h = aabb[5] - aabb[2];
+  // Extent/density use the TIGHT data AABB (streaming's octree cube inflates
+  // height ~7× and deflates density); falls back to the passed AABB.
+  const box = adapter.dataBoundsAabb() ?? aabb;
+  if (box) {
+    const w = box[3] - box[0];
+    const d = box[4] - box[1];
+    const h = box[5] - box[2];
     rows.push({ label: 'Width',  value: formatLinear(w, unit) });
     rows.push({ label: 'Depth',  value: formatLinear(d, unit) });
     rows.push({ label: 'Height', value: formatLinear(h, unit) });
     // Density — points per square unit on the XY footprint.
     if (w > 0 && d > 0) {
       const density = adapter.sourcePointCount() / (w * d);
-      rows.push({ label: 'Density', value: `${density.toFixed(0)} pts/${uLabel}²` });
+      // One decimal, matching the Scan Report panel (`toFixed(0)` rounded
+      // 2.586 pts/m² up to "3", disagreeing with the panel's "2.6").
+      rows.push({ label: 'Density', value: `${density.toFixed(1)} pts/${uLabel}²` });
     }
   }
   // Capability summary — which channels the export can honour. Matches the

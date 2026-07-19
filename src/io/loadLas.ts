@@ -37,6 +37,7 @@ import type { CloudMetadata } from '../model/PointCloud';
 import { parseLasHeader } from './lasHeader';
 import type { LasHeader } from './lasHeader';
 import { computeOrigin } from './coordinateBridge';
+import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
 import {
@@ -182,8 +183,14 @@ export async function loadLas(
 
   const decodedPointCount = raw.positions.length / 3;
 
-  return new PointCloud({
-    positions: raw.positions,
+  // A LAS coordinate is `int * scale + offset`, and the header guard already
+  // refuses a non-finite scale or offset — but a finite, astronomically large
+  // scale still multiplies a big record out past the double range to ±Infinity.
+  // Records are decoded straight into local space about the header's origin, so
+  // there is no origin here to protect: only the points and their attributes.
+  // `decodedPointCount` stays what the decoder read, which is what the Health
+  // Check compares against the header; the warning reports the exclusion.
+  const clean = sanitizeLocalCloud(raw.positions, {
     colors: raw.colors ?? undefined,
     intensity: raw.intensity,
     classification: raw.classification,
@@ -191,6 +198,17 @@ export async function loadLas(
     returnCount: raw.returnCount,
     pointSourceId: raw.pointSourceId,
     gpsTime: raw.gpsTime ?? undefined,
+  });
+
+  return new PointCloud({
+    positions: clean.positions,
+    colors: clean.attributes.colors,
+    intensity: clean.attributes.intensity,
+    classification: clean.attributes.classification,
+    returnNumber: clean.attributes.returnNumber,
+    returnCount: clean.attributes.returnCount,
+    pointSourceId: clean.attributes.pointSourceId,
+    gpsTime: clean.attributes.gpsTime,
     origin,
     sourceFormat,
     name,
@@ -199,6 +217,6 @@ export async function loadLas(
     // Record the DELIBERATE decode stride (the display-sample cap) so the
     // Health Check can tell a capped load from genuine decode loss.
     loadStride: Math.max(1, Math.floor(stride)),
-    metadata: lasMetadata(header),
+    metadata: withLoadWarning(lasMetadata(header), clean.warning),
   });
 }

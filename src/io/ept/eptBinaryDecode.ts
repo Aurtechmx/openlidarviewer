@@ -28,6 +28,7 @@
 import type { EptSchemaField } from './eptTypes';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 import { LoadError } from '../loadErrors';
+import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
 
 /**
  * Thrown when an EPT binary tile arrives shorter than the schema
@@ -184,6 +185,13 @@ export function decodeEptBinaryTile(
   if (!xAttr || !yAttr || !zAttr) {
     throw new Error('EPT binary decode: schema is missing X/Y/Z.');
   }
+  // Fail before decoding a whole tile when its transform is non-finite (a bad
+  // scale/offset in the schema, or a non-finite render origin from the CRS).
+  assertFiniteNodeTransform(
+    [xAttr.scale, yAttr.scale, zAttr.scale],
+    [xAttr.offsetVal, yAttr.offsetVal, zAttr.offsetVal],
+    renderOrigin,
+  );
   const intensityAttr = findAttr(attrs, 'Intensity');
   const classAttr = findAttr(attrs, 'Classification');
   const rAttr = findAttr(attrs, 'Red');
@@ -269,6 +277,11 @@ export function decodeEptBinaryTile(
       rgb[i] = usedEightBit ? rgb16[i] & 0xff : rgb16[i] >> 8;
     }
   }
+
+  // Unlike the integer COPC path, an EPT X/Y/Z attribute can be a float that
+  // stores a literal NaN the transform can't remove, so the finished positions
+  // are scanned once (early-exit) before they leave for the GPU.
+  assertFinitePositions(positions);
 
   return {
     pointCount,

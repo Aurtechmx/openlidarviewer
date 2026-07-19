@@ -73,10 +73,17 @@ export function presentStockpile(
       ? `${(b.baseZ * lin).toFixed(2)} m (set)`
       : `${(b.baseZ * lin).toFixed(2)} m (lowest ground, ±${(b.baseUncertainty * lin).toFixed(2)} m)`;
 
+  // A points/m² density is only meaningful when the horizontal unit is known.
+  // With an unknown unit the figure is native points/unit² read as m² — label
+  // it honestly instead of printing a confident "pts/m²".
+  const densityRow: StockpileViewRow = r.densityUnitKnown
+    ? { label: 'Density', value: `${(b.densityNative / lin2).toFixed(1)} pts/m²` }
+    : { label: 'Density', value: `${b.densityNative.toFixed(1)} pts/unit² (unit unknown)` };
+
   const rows: StockpileViewRow[] = [
     { label: 'Footprint', value: `${(b.footprintArea * lin2).toFixed(1)} m²` },
     { label: 'Points in footprint', value: int(b.pointsInPolygon) },
-    { label: 'Density', value: `${(b.density / lin2).toFixed(1)} pts/m²` },
+    densityRow,
     { label: 'Base plane', value: baseLabel },
     { label: 'Mean thickness', value: `${(b.meanThickness * lin).toFixed(2)} m` },
     { label: 'Sampling error', value: `± ${int(b.samplingError * lin3)} m³` },
@@ -111,6 +118,7 @@ export function stockpileToastSuffix(
   positions: Float32Array,
   lin?: number,
   sourceReduced?: boolean,
+  densityUnitKnown?: boolean,
 ): string {
   if (polygon.length < 3 || positions.length < 9) return '';
   const stock = stockpileVolume({
@@ -118,6 +126,12 @@ export function stockpileToastSuffix(
     positions,
     base: { mode: 'lowest-percentile', percentile: 0.05 },
     sourceReduced,
+    // Grade the density bar in points/m² for foot-unit projects, not native ft².
+    linearUnitToMetres: lin,
+    // …but only claim a points/m² density when the unit is actually known; an
+    // unknown CRS still passes lin (defaulting to 1) for display, so the grade
+    // must be told separately not to trust it.
+    densityUnitKnown,
   });
   if (stock.validity !== 'ok' || stock.volume <= 0) return '';
   return ` · ${stockpileToastLine(presentStockpile(stock, { lin }))}`;

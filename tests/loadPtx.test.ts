@@ -77,3 +77,38 @@ describe('loadPtx — colour and malformed input', () => {
     await expect(loadPtx(ptx('not a ptx file'))).rejects.toThrow();
   });
 });
+
+/** A one-block PTX with the given point lines, joined by `eol`. */
+function ptxBlock(points: string[], eol: string): ArrayBuffer {
+  const lines = [
+    String(points.length), '1',        // cols, rows
+    '0 0 0', '1 0 0', '0 1 0', '0 0 1', // scanner pose
+    '1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1', // identity transform
+    ...points,
+  ];
+  return new TextEncoder().encode(lines.join(eol) + eol).buffer as ArrayBuffer;
+}
+
+describe('loadPtx — line indexing', () => {
+  test('reads a CRLF file identically to an LF one', async () => {
+    const pts = ['1 2 3 0.5', '4 5 6 0.25'];
+    const lf = await loadPtx(ptxBlock(pts, '\n'));
+    const crlf = await loadPtx(ptxBlock(pts, '\r\n'));
+    // A stray CR would poison Number() and drop the points entirely.
+    expect(crlf.pointCount).toBe(2);
+    expect(crlf.pointCount).toBe(lf.pointCount);
+    expect(Array.from(crlf.positions)).toEqual(Array.from(lf.positions));
+    expect(crlf.origin).toEqual(lf.origin);
+  });
+
+  test('a file with no trailing newline reads its last point', async () => {
+    const lines = [
+      '1', '1', '0 0 0', '1 0 0', '0 1 0', '0 0 1',
+      '1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1',
+      '7 8 9 0.5',
+    ];
+    const buf = new TextEncoder().encode(lines.join('\n')).buffer as ArrayBuffer;
+    const pc = await loadPtx(buf);
+    expect(pc.pointCount).toBe(1);
+  });
+});
