@@ -270,6 +270,7 @@ import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
+import { createViewBookmarks } from './app/viewBookmarks';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -1143,6 +1144,7 @@ const runtime = createAppRuntime();
 const layers = runtime.context.layers;
 const scan = runtime.context.scan;
 const viewBookmarks = runtime.context.viewBookmarks;
+const bookmarks = createViewBookmarks(runtime.context);
 /** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
 const layerVisible = layers.visible;
 /** True while a file load is in flight — one load at a time (see `handleFile`). */
@@ -1438,15 +1440,12 @@ const inspector = new Inspector({
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
-    const view = viewBookmarks.savedViews[index];
-    if (view) {
-      view.name = name;
-      inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
-    }
+    bookmarks.rename(index, name);
+    inspector.setViews(bookmarks.names());
   },
   onDeleteView: (index) => {
-    viewBookmarks.savedViews.splice(index, 1);
-    inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
+    bookmarks.remove(index);
+    inspector.setViews(bookmarks.names());
   },
   onEdlToggle: (on) => {
     viewer.setEdlEnabled(on);
@@ -2290,7 +2289,7 @@ function buildActionRegistry(): Action[] {
           return;
         }
         saveCurrentView();
-        const name = viewBookmarks.savedViews[viewBookmarks.savedViews.length - 1]?.name ?? 'View';
+        const name = bookmarks.get(bookmarks.count() - 1)?.name ?? 'View';
         showLassoToast(`View state saved — “${name}” (rename it in the panel list).`);
       },
     },
@@ -2301,11 +2300,11 @@ function buildActionRegistry(): Action[] {
       hint: 'Reapply the most recently saved view state — the panel list restores any of them by name.',
       keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'apply', 'go to'],
       run: () => {
-        if (viewBookmarks.savedViews.length === 0) {
+        if (bookmarks.count() === 0) {
           showLassoToast('No saved view states yet — save one first (V).');
           return;
         }
-        applyView(viewBookmarks.savedViews.length - 1);
+        applyView(bookmarks.count() - 1);
       },
     },
   );
@@ -5639,27 +5638,23 @@ function applyViewState(vs: ViewStateBundle): void {
  */
 function saveCurrentView(): void {
   const { camera, ...rest } = captureViewState();
-  viewBookmarks.savedViews.push({
-    name: `View ${++viewBookmarks.viewCounter}`,
-    // `getCameraState` (not the bare pose) so a non-default FOV or nav mode
-    // is part of what the view restores; the empty-state fallback keeps the
-    // old bare-pose behaviour when no scan gates the capture.
-    pose: camera ?? viewer.getCameraPose(),
-    state: buildViewState(rest),
-  });
+  // `getCameraState` (not the bare pose) so a non-default FOV or nav mode is
+  // part of what the view restores; the empty-state fallback keeps the old
+  // bare-pose behaviour when no scan gates the capture.
+  bookmarks.add({ pose: camera ?? viewer.getCameraPose(), state: buildViewState(rest) });
   refreshViewsUI();
 }
 
 /** Push the saved-view names to whichever panel is currently shown. */
 function refreshViewsUI(): void {
-  const names = viewBookmarks.savedViews.map((v) => v.name);
+  const names = bookmarks.names();
   if (viewer.hasStreamingCloud) streamingPanel.setViews(names);
   else inspector.setViews(names);
 }
 
 /** Glide the camera to a saved view — and (v7) restore its display state. */
 function applyView(index: number): void {
-  const view = viewBookmarks.savedViews[index];
+  const view = bookmarks.get(index);
   if (!view) return;
   if (!view.state) {
     // A pre-v7 (camera-only) view keeps its exact old behaviour: glide the
@@ -5675,7 +5670,7 @@ function applyView(index: number): void {
 
 /** Delete a saved view and refresh the list. */
 function deleteView(index: number): void {
-  viewBookmarks.savedViews.splice(index, 1);
+  bookmarks.remove(index);
   refreshViewsUI();
 }
 
@@ -5948,12 +5943,13 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
     // undefined and they stay exactly the camera-only bookmarks they were.
-    viewBookmarks.savedViews = geo.views.map((v) => {
-      const { name, camera, ...state } = v;
-      return { name, pose: camera, state: buildViewState(state) };
-    });
-    viewBookmarks.viewCounter = viewBookmarks.savedViews.length;
-    inspector.setViews(viewBookmarks.savedViews.map((v) => v.name));
+    bookmarks.restore(
+      geo.views.map((v) => {
+        const { name, camera, ...state } = v;
+        return { name, pose: camera, state: buildViewState(state) };
+      }),
+    );
+    inspector.setViews(bookmarks.names());
     refreshMeasurePanel();
     refreshAnnotationPanel();
 
@@ -6166,8 +6162,7 @@ async function handleFile(file: File): Promise<void> {
     if (isPhone()) navBar.flashTouchHint();
 
     // A new scan resets the saved viewpoints and annotations.
-    viewBookmarks.savedViews = [];
-    viewBookmarks.viewCounter = 0;
+    bookmarks.clear();
     viewer.annotate.clear();
     refreshAnnotationPanel();
 
@@ -6518,8 +6513,7 @@ async function openStreamingCopc(
     // "COPC LAZ · PDRF N" for COPC and "EPT · binary · N attrs" for EPT.
     format: 'copc',
   });
-  viewBookmarks.savedViews = [];
-  viewBookmarks.viewCounter = 0;
+  bookmarks.clear();
   refreshViewsUI();
 
   // Measure, annotate, inspect, probe and close all work on a streaming scan:
@@ -7334,8 +7328,7 @@ function resetToEmptyState(): void {
   // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
   document.body.classList.remove('olv-has-scan');
   scan.activeId = null;
-  viewBookmarks.savedViews = [];
-  viewBookmarks.viewCounter = 0;
+  bookmarks.clear();
   viewer.annotate.clear();
   // Drop the snap index so a future scan can't snap to the previous cloud.
   viewer.measure.setSnapSource(null);
