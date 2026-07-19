@@ -31,7 +31,17 @@ export default defineConfig({
       ],
     },
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // Two projects split the suite by whether a spec's result depends on the
+  // runner's GPU. `deterministic` is the BLOCKING gate: DOM, layout, routing,
+  // export and streaming-logic flows that must pass identically everywhere.
+  // `gpu` is advisory: specs whose outcome varies with the WebGPU adapter a CI
+  // runner happens to expose. Tag a spec into the advisory set by putting
+  // `@gpu` in its describe/test title — untagged specs block, which is the safe
+  // default (a new spec gates until proven GPU-variable).
+  projects: [
+    { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu/ },
+    { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/ },
+  ],
   webServer: {
     // SMOKE_LIVE boots the OBFUSCATED live artifact (the build users actually
     // get) so the smoke gate catches live-only breakage — scrambled

@@ -112,3 +112,4 @@ docs-site/.vitepress/cache/
 
 # Local Python virtualenv (docs/validation tooling) — never commit
 .venv/
+coverage/
