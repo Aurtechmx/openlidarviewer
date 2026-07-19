@@ -56,6 +56,9 @@ export interface KmlExportInput {
   readonly up: Vec3;
   /** Render-units → metres, so measured values report true metres (1 for metric scans; e.g. 0.3048 for US-foot). */
   readonly unitToMetres: number;
+  /** Vertical render-units → metres (up-axis). Defaults to `unitToMetres`; scales
+   *  heights/drops/volumes for a compound CRS to match the panel headline. */
+  readonly verticalUnitToMetres?: number;
   /** Map a LOCAL render-space point to geographic [lon, lat, altMetres]. */
   readonly toLonLat: (local: readonly [number, number, number]) => [number, number, number];
   /** The "not survey-grade" caveat, embedded in every description. */
@@ -128,7 +131,7 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
  * so a foot-based scan reports true metres rather than raw render units.
  */
 function metricsLine(m: Measurement, input: KmlExportInput): string {
-  const metrics = measurementMetrics(m, input.up, input.unitToMetres);
+  const metrics = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
   const parts = Object.entries(metrics).map(([k, v]) => `${k}=${v}`);
   if (parts.length === 0) return '';
   return `Measured (${input.unitLabel}): ${parts.join(', ')}`;

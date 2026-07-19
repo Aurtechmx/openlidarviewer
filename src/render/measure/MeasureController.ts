@@ -649,6 +649,16 @@ export class MeasureController {
     return this._unitToMetres;
   }
 
+  /**
+   * The VERTICAL render-units → metres factor (up-axis height unit). Equals
+   * {@link unitToMetres} on a single-unit CRS; differs only for a compound CRS
+   * (e.g. metre eastings over foot heights). Exporters scale vertical
+   * quantities by this so a `.geojson`/`.csv`/`.kml` matches the panel headline.
+   */
+  get verticalUnitToMetres(): number {
+    return this._verticalUnitToMetres ?? this._unitToMetres;
+  }
+
   /** The world up vector measurements were placed against (for export derivations). */
   get worldUp(): Vec3 {
     return this._worldUp;

@@ -104,6 +104,24 @@ describe('measurementMetrics', () => {
     expect(measurementMetrics(mk('area', [[0, 0, 0], [1, 0, 0]]), UP, 1)).toEqual({});
     expect(measurementMetrics(mk('distance', [[0, 0, 0]]), UP, 1)).toEqual({});
   });
+
+  it('a compound CRS scales vertical quantities by the vertical factor, horizontals by the linear', () => {
+    // Metre eastings (unitToMetres = 1) over US-survey-foot heights (vertical ≈
+    // 0.3048). Vertical quantities must match the panel headline, which already
+    // uses the vertical factor; horizontals stay in metres.
+    const box = measurementMetrics(BOX, UP, 1, 0.3048); // UP = +Z, so height is the Z span (4)
+    expect(box.width_m).toBeCloseTo(2, 3); // horizontal — linear factor (1)
+    expect(box.depth_m).toBeCloseTo(3, 3); // horizontal — linear factor (1)
+    expect(box.height_m).toBeCloseTo(4 * 0.3048, 3); // vertical — vertical factor
+    expect(box.volume_m3).toBeCloseTo(24 * 1 * 1 * 0.3048, 3); // linear²·vertical, NOT linear³
+    // cut/fill/net use the same linear²·vertical volume factor.
+    const vol = measurementMetrics(VOLUME, UP, 1, 0.3048);
+    expect(vol.cut_m3).toBeCloseTo(30 * 0.3048, 3);
+  });
+
+  it('the vertical factor defaults to unitToMetres (single-unit CRS byte-identical)', () => {
+    expect(measurementMetrics(BOX, UP, 0.3048)).toEqual(measurementMetrics(BOX, UP, 0.3048, 0.3048));
+  });
 });
 
 describe('measurementsToGeoJSON', () => {

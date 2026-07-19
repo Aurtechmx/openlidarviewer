@@ -41,6 +41,13 @@ export interface MeasurementExportContext {
   readonly up: Vec3;
   /** Render-units → metres (1 for metric scans; e.g. 0.3048 for US-foot scans). */
   readonly unitToMetres: number;
+  /**
+   * VERTICAL render-units → metres (up-axis height unit). Defaults to
+   * `unitToMetres`; differs only for a compound CRS (metre eastings over foot
+   * heights). Vertical quantities (height, rise, drop) and volumes scale by
+   * this so the export matches the on-screen headline, which already does.
+   */
+  readonly verticalUnitToMetres?: number;
   /** CRS label for the GeoJSON crs hint + per-feature provenance. */
   readonly crsName?: string;
   /** True when `toOutput` yields geographic WGS84 lon/lat (RFC 7946 default frame). */
@@ -63,6 +70,7 @@ export function measurementMetrics(
   m: Measurement,
   up: Vec3,
   unitToMetres: number,
+  verticalToMetres: number = unitToMetres,
 ): Record<string, number> {
   const out: Record<string, number> = {};
   const set = (k: string, v: number | null): void => {
@@ -71,6 +79,13 @@ export function measurementMetrics(
   const pts = m.points;
   const L = unitToMetres;
   const A = unitToMetres * unitToMetres;
+  // Vertical (up-axis) factor for heights/drops, and the volume factor
+  // linear²·vertical — matching the panel headline (_fmtVertical / _fmtCutFill).
+  // Defaults to L, so a single-unit CRS is byte-identical; a compound CRS
+  // (metre eastings over foot heights) no longer scales height by the
+  // horizontal factor and disagreeing with the on-screen value.
+  const Vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : L;
+  const Vol = A * Vv;
   if (!isComplete(m)) return out;
 
   switch (m.kind) {
@@ -82,7 +97,7 @@ export function measurementMetrics(
       break;
     case 'height': {
       const v = verticalDelta(pts[0], pts[1], up);
-      set('vertical_m', num(v.vertical * L));
+      set('vertical_m', num(v.vertical * Vv));
       set('horizontal_m', num(v.horizontal * L));
       break;
     }
@@ -93,7 +108,7 @@ export function measurementMetrics(
       const s = slopeBetween(pts[0], pts[1], up);
       set('grade_pct', num(s.gradePercent));
       set('angle_deg', num(s.angleDeg));
-      set('rise_m', num(s.rise * L));
+      set('rise_m', num(s.rise * Vv));
       set('run_m', num(s.run * L));
       break;
     }
@@ -101,7 +116,7 @@ export function measurementMetrics(
       const p = profileMetrics(pts[0], pts[1], up);
       set('length_m', num(p.length3d * L));
       set('horizontal_m', num(p.lengthHorizontal * L));
-      set('vertical_m', num(p.verticalDrop * L));
+      set('vertical_m', num(p.verticalDrop * Vv));
       set('grade_pct', num(p.gradePercent));
       break;
     }
@@ -113,22 +128,19 @@ export function measurementMetrics(
       const mb = boxMetrics(boxFromCorners(pts[0], pts[1]));
       set('width_m', num(mb.width * L));
       set('depth_m', num(mb.depth * L));
-      set('height_m', num(mb.height * L));
-      set('volume_m3', num(mb.volume * L * A));
+      set('height_m', num(mb.height * Vv));
+      set('volume_m3', num(mb.volume * Vol));
       break;
     }
     case 'volume':
       set('area_m2', num(polygonAreaHorizontal(pts, up) * A));
       if (m.volume) {
-        // cut/fill/net are stored in the cloud's native (render) linear units,
-        // exactly like every other measurement and like `formatVolumeRender` /
-        // the chain aggregator expect — so convert to cubic metres here, ×L·A
-        // (= unitToMetres³), the same factor the box-volume branch applies. For
-        // metric data L=A=1 so this is a no-op; for a foot-CRS it is the fix.
-        const V = L * A;
-        set('cut_m3', num(m.volume.cut * V));
-        set('fill_m3', num(m.volume.fill * V));
-        set('net_m3', num(m.volume.net * V));
+        // cut/fill/net are stored in the cloud's native (render) linear units.
+        // Convert to cubic metres with linear²·vertical (the box-volume factor
+        // and the panel's _fmtCutFill). Single-unit CRS collapses to L³.
+        set('cut_m3', num(m.volume.cut * Vol));
+        set('fill_m3', num(m.volume.fill * Vol));
+        set('net_m3', num(m.volume.net * Vol));
       }
       break;
   }
@@ -182,7 +194,7 @@ export function measurementsToGeoJSON(
         id: m.id,
         name: m.name,
         kind: m.kind,
-        ...measurementMetrics(m, ctx.up, ctx.unitToMetres),
+        ...measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres),
       };
       if (ctx.crsName) properties.crs = ctx.crsName;
       return { type: 'Feature' as const, geometry, properties };
@@ -248,7 +260,7 @@ export function measurementsToCsv(
   // the exploratory verdict rather than leaving with no gate stamp at all.
   const evidence = evidenceStatus('MEAS-DISTANCE');
   for (const m of measurements) {
-    const metrics = measurementMetrics(m, ctx.up, ctx.unitToMetres);
+    const metrics = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
     const base: Record<string, string | number> = {
       id: m.id,
       name: m.name,

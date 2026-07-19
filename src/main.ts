@@ -3448,6 +3448,7 @@ const exportPanel = new ExportPanel({
       toOutput: (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
+      verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
       crsName: geo.crsName,
       geographic: false,
     };
@@ -3498,6 +3499,7 @@ const exportPanel = new ExportPanel({
       unitLabel: 'm',
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
+      verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
       toLonLat,
       notSurveyGradeNote:
         'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',
