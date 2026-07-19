@@ -271,6 +271,7 @@ import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
+import { createScanService } from './app/ScanService';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -824,7 +825,7 @@ window.addEventListener('blur', () => viewer?.setToolPaused(false));
 // is lazy-loaded on first use, so it stays out of the startup shell. Only armed
 // once a scan is loaded — otherwise the browser's native menu is left alone.
 stage.canvas.addEventListener('contextmenu', (e) => {
-  if (!viewer || !scan.activeId) return;
+  if (!viewer || !scans.activeId) return;
   e.preventDefault();
   const rect = stage.canvas.getBoundingClientRect();
   const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1142,9 +1143,9 @@ registry.register(scanReport);
 // mutating their fields writes through to the context.
 const runtime = createAppRuntime();
 const layers = runtime.context.layers;
-const scan = runtime.context.scan;
 const viewBookmarks = runtime.context.viewBookmarks;
 const bookmarks = createViewBookmarks(runtime.context);
+const scans = createScanService({ getViewer: () => viewer, context: runtime.context });
 /** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
 const layerVisible = layers.visible;
 /** True while a file load is in flight — one load at a time (see `handleFile`). */
@@ -1298,7 +1299,7 @@ const layerService = createLayerService({
 const inspector = new Inspector({
   onColorMode: (mode) => {
     currentColorMode = mode;
-    if (scan.activeId) viewer.setColorMode(scan.activeId, mode);
+    if (scans.activeId) viewer.setColorMode(scans.activeId, mode);
     // Keep the analyse-panel confidence toggle in sync when the user changes
     // colour from the COLOR BY rail instead of the toggle button. Null-safe: the
     // panel is lazy-mounted, and `hydrateAnalysePanel()` re-derives this from
@@ -1331,7 +1332,7 @@ const inspector = new Inspector({
   onCompareLayers: () => compareLoadedLayers(),
   onExportDifference: () => exportDifferenceRaster(),
   onExport: (format) => {
-    const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
+    const cloud = scans.activeCloud() ?? undefined;
     if (!cloud) return;
     // The exporter is a lazy chunk; fetched on first export of the session.
     void loadExporters().then(({ exportCloud }) => {
@@ -1343,8 +1344,8 @@ const inspector = new Inspector({
     // pulled in by viewer.exportImage on the first invocation. The download
     // triggers off the returned Blob; an unsupported-on-this-cloud rejection
     // surfaces as a visible alert.
-    const sourceName = scan.activeId
-      ? viewer.getCloud(scan.activeId)?.name
+    const sourceName = scans.activeId
+      ? viewer.getCloud(scans.activeId)?.name
       : viewer.streamingCloud?.name;
     const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
     // surface a precise per-mode progress string while the lazy
@@ -1504,7 +1505,7 @@ const inspector = new Inspector({
     // Auto-normalize against the active cloud's RGB. No-op when the
     // active cloud has no RGB. Lazy-import keeps the analyser out of
     // the startup chunk.
-    const id = scan.activeId;
+    const id = scans.activeId;
     if (!id) return;
     const cloud = viewer.getCloud(id);
     if (!cloud || !cloud.colors) return;
@@ -1537,9 +1538,9 @@ const inspector = new Inspector({
     // record `currentColorMode` once the guarded set actually applied
     // so the chip rail stays honest on channel-less clouds. Streaming
     // clouds recolour through their own seam.
-    if (scan.activeId) {
+    if (scans.activeId) {
       try {
-        viewer.setColorMode(scan.activeId, p.colorMode);
+        viewer.setColorMode(scans.activeId, p.colorMode);
         currentColorMode = p.colorMode;
       } catch (err) {
         console.warn(`[workflow-preset] colour mode ${p.colorMode} skipped:`, err);
@@ -1576,7 +1577,7 @@ crsService.subscribe((resolved) => {
 
 // Inspector load-time card refreshers (Provenance + Dataset Intelligence) and
 // the CRS coordinator (resolve + per-scan refresh + override handling) are
-// extracted into `src/app/`. They read the lazy `viewer` and the `scan.activeId`
+// extracted into `src/app/`. They read the lazy `viewer` and the `scans.activeId`
 // selection through getters so no top-level `viewer.*` dereference is
 // introduced here — `viewer` is null until its chunk resolves.
 const inspectorCards = createInspectorCardRefreshers(inspector);
@@ -1584,7 +1585,7 @@ const crsCoordinator = createCrsCoordinator({
   crsService,
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
-  getActiveId: () => scan.activeId,
+  getActiveId: () => scans.activeId,
   debug,
 });
 
@@ -1773,11 +1774,11 @@ let classifyRunning = false;
 let lastDerivedConfidence: number | null = null;
 async function runDeriveClassification(): Promise<void> {
   if (classifyRunning) return;
-  if (!scan.activeId) {
+  if (!scans.activeId) {
     showLassoToast('Classify · open a scan first.');
     return;
   }
-  const cloud = viewer.getCloud(scan.activeId);
+  const cloud = viewer.getCloud(scans.activeId);
   if (!cloud) {
     showLassoToast('Classify · this works on a loaded (non-streaming) scan.');
     return;
@@ -1805,7 +1806,7 @@ async function runDeriveClassification(): Promise<void> {
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
   try {
-    const id = scan.activeId;
+    const id = scans.activeId;
     const result = await deriveClassificationAsync(
       cloud.positions,
       cloud.pointCount,
@@ -1816,7 +1817,7 @@ async function runDeriveClassification(): Promise<void> {
       // not a hang. (Off-thread, so the UI repaints between phases.)
       (phase) => showLassoToast(`Classify · ${phase}…`),
     );
-    if (id !== scan.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scans.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -1861,11 +1862,11 @@ async function runDeriveClassification(): Promise<void> {
  */
 async function runFillUnclassified(): Promise<void> {
   if (classifyRunning) return;
-  if (!scan.activeId) {
+  if (!scans.activeId) {
     showLassoToast('Fill unclassified · open a scan first.');
     return;
   }
-  const cloud = viewer.getCloud(scan.activeId);
+  const cloud = viewer.getCloud(scans.activeId);
   if (!cloud) {
     showLassoToast('Fill unclassified · this works on a loaded (non-streaming) scan.');
     return;
@@ -1892,7 +1893,7 @@ async function runFillUnclassified(): Promise<void> {
   classifyRunning = true;
   showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
   try {
-    const id = scan.activeId;
+    const id = scans.activeId;
     const result = await deriveClassificationAsync(
       cloud.positions,
       cloud.pointCount,
@@ -1901,7 +1902,7 @@ async function runFillUnclassified(): Promise<void> {
       undefined,
       (phase) => showLassoToast(`Fill unclassified · ${phase}…`),
     );
-    if (id !== scan.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
+    if (id !== scans.activeId || viewer.getCloud(id) !== cloud) return; // scan changed
     viewer.applyDerivedClassification(id, result.codes);
     noteEdit('classification');
     lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
@@ -1927,7 +1928,7 @@ async function runFillUnclassified(): Promise<void> {
  * but never wrong — story, so the card/health surfaces work pre-analysis too.
  */
 function buildCurrentStoryInputs(): ScanStoryInputs {
-  const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
+  const cloud = scans.activeCloud();
   const streaming = viewer.streamingCloud;
   let facts: ReturnType<typeof analysePanel.storyFacts> = null;
   // Null-safe: the panel is lazy-mounted, so a story built before the first scan
@@ -2743,8 +2744,8 @@ function newAnalysePanel(
     // grid existing (the link only renders after an analysis, but the scan may
     // have been closed since).
     onColorByConfidence: () => {
-      if (!scan.activeId || !viewer.hasCoverageGrid()) return;
-      const cloud = viewer.getCloud(scan.activeId);
+      if (!scans.activeId || !viewer.hasCoverageGrid()) return;
+      const cloud = viewer.getCloud(scans.activeId);
       if (!cloud) return;
       // Toggle: if the confidence overlay is already on, clicking again restores
       // the colour mode that was active before it (RGB on a coloured scan), so the
@@ -2752,7 +2753,7 @@ function newAnalysePanel(
       if (currentColorMode === 'confidence') {
         const restore = confidenceColorPrev ?? defaultMode(cloud);
         currentColorMode = restore;
-        viewer.setColorMode(scan.activeId, restore);
+        viewer.setColorMode(scans.activeId, restore);
         inspector.setColorModes(availableModes(cloud), restore);
         syncInspectorVisuals();
         analysePanel?.setConfidenceColorActive(false);
@@ -2760,7 +2761,7 @@ function newAnalysePanel(
       }
       confidenceColorPrev = currentColorMode ?? defaultMode(cloud);
       currentColorMode = 'confidence';
-      viewer.setColorMode(scan.activeId, 'confidence');
+      viewer.setColorMode(scans.activeId, 'confidence');
       inspector.setColorModes(availableModes(cloud), 'confidence');
       syncInspectorVisuals();
       analysePanel?.setConfidenceColorActive(true);
@@ -2781,7 +2782,7 @@ function newAnalysePanel(
       }
     },
     getMapContext: () => {
-      const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
+      const cloud = scans.activeCloud();
       // Streamed COPC / EPT scans never enter `viewer.getCloud` — their
       // recentre offset lives on the streaming source (`renderOrigin`) and
       // their CRS on `crs()`. Fall back to those when no static cloud is
@@ -2892,7 +2893,7 @@ async function showReclassifyUi(): Promise<void> {
       const ui = createReclassifyUi({
         canvas: stage.canvas,
         getViewer: () => viewer,
-        getActiveId: () => scan.activeId,
+        getActiveId: () => scans.activeId,
         onToast: showLassoToast,
       });
       classLegendPanel.element.after(ui.element);
@@ -2927,7 +2928,7 @@ classLegendPanel.onPaletteChange((on) => {
   // refresh; the legend repaints its own swatches.
   persistPrefs();
   if (currentColorMode === 'classification') {
-    if (scan.activeId) viewer.setColorMode(scan.activeId, 'classification');
+    if (scans.activeId) viewer.setColorMode(scans.activeId, 'classification');
     if (viewer.hasStreamingCloud) viewer.setStreamingColorMode('classification');
   }
 });
@@ -2951,7 +2952,7 @@ function refreshScopedReport(): void {
     }
     return;
   }
-  const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
+  const cloud = scans.activeCloud();
   if (cloud) inspector.setReport(runModules(cloud, currentClassScope(cloud)));
 }
 // Streaming node-ready: fold each newly-resident node's classification into the
@@ -3236,7 +3237,7 @@ function hydrateObjectPanel(): void {
 
 // Terrain-analysis runner — extracted into `src/app/`. Constructed here, after
 // `analysePanel`, so the panel/object-panel callbacks above (which fire only on
-// user input) can drive it. Reads the lazy `viewer` and the `scan.activeId`
+// user input) can drive it. Reads the lazy `viewer` and the `scans.activeId`
 // selection through getters so no top-level `viewer.*` dereference is added.
 const terrainRunner = createTerrainAnalysisRunner({
   getViewer: () => viewer,
@@ -3245,7 +3246,7 @@ const terrainRunner = createTerrainAnalysisRunner({
   // entry point (onRun / onSelectInterval callbacks, the "run anyway" hatches)
   // fires only after the panel has mounted, so this always resolves non-null.
   getAnalysePanel: () => analysePanel,
-  getActiveId: () => scan.activeId,
+  getActiveId: () => scans.activeId,
   crsService,
   // When a terrain analysis lands, adopt its DTM-confidence grid on the Viewer
   // so the 3D "Coverage" colour mode (and its colourblind-safe "Confidence"
@@ -3330,7 +3331,7 @@ function streamingExportCloud(): PointCloud | null {
  * Origin + CRS + name for the ACTIVE scan, static OR streaming. The Products-
  * lane exporters (measurements / integrity report / KML) place local points
  * back into the source frame by adding the cloud origin — but streaming clouds
- * aren't tracked by `scan.activeId`, so reading only the static cloud left them
+ * aren't tracked by `scans.activeId`, so reading only the static cloud left them
  * exporting at RENDER-frame coordinates (off by the whole `renderOrigin`) with
  * no CRS. This resolves the origin from the streaming source's `renderOrigin`
  * when no static cloud is active.
@@ -3340,8 +3341,8 @@ function exportGeoContext(): {
   crsName: string | undefined;
   name: string | null;
 } {
-  if (scan.activeId) {
-    const c = viewer.getCloud(scan.activeId);
+  if (scans.activeId) {
+    const c = viewer.getCloud(scans.activeId);
     if (c) return { origin: c.origin, crsName: c.metadata?.crs?.name, name: c.name };
   }
   const sc = viewer.streamingCloud;
@@ -3360,8 +3361,8 @@ const exportPanel = new ExportPanel({
     // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
     // an explicit `viewer == null` check would trip TS2367 (viewer is typed
     // non-null via a cast). No viewer ⇒ nothing exportable yet.
-    if (scan.activeId != null) {
-      const c = viewer?.getCloud(scan.activeId);
+    if (scans.activeId != null) {
+      const c = viewer?.getCloud(scans.activeId);
       if (!c) return null;
       const crs = c.metadata?.crs ?? null;
       return {
@@ -3393,19 +3394,19 @@ const exportPanel = new ExportPanel({
       classProvenance: sc.availableColorModes().includes('classification') ? 'source' : 'none',
     };
   },
-  getCloud: () => (scan.activeId ? viewer.getCloud(scan.activeId) ?? null : streamingExportCloud()),
+  getCloud: () => (scans.activeId ? viewer.getCloud(scans.activeId) ?? null : streamingExportCloud()),
   // Pending = a streaming cloud is attached but its export frontier is still
   // empty. Read the allocation-free frontier count rather than materialising a
   // snapshot just to test it for null.
   isStreamingPending: () =>
     viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(),
-  hasFullSource: () => scan.activeId != null && sourceFileById.has(scan.activeId),
+  hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
   // A streaming snapshot exports only the resident (streamed-in) points, so it
   // is a reduced subset whenever the whole cloud hasn't landed yet — flag it so
   // the export status says "reduced view" and never reads as the full survey.
   isReduced: () => {
-    if (scan.activeId != null) return reducedById.get(scan.activeId) === true;
+    if (scans.activeId != null) return reducedById.get(scans.activeId) === true;
     // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
     // constructor calls this (via _renderFullResRow) during startup — before
     // that. Optional-chain the deref: with no viewer there is no streaming
@@ -3415,7 +3416,7 @@ const exportPanel = new ExportPanel({
     return sc != null && sc.residentPointCount < sc.sourcePointCount;
   },
   getFullCloud: async () => {
-    const f = scan.activeId ? sourceFileById.get(scan.activeId) : null;
+    const f = scans.activeId ? sourceFileById.get(scans.activeId) : null;
     if (!f) return null;
     // Full-resolution re-decode reads the whole file into memory and expands it
     // into typed attribute arrays — several × the file size at peak. A user can
@@ -3470,7 +3471,7 @@ const exportPanel = new ExportPanel({
       geo.name ? baseName(geo.name) : 'scan',
       geo.crsName,
       new Date().toISOString(),
-      scan.activeId ? viewer.classificationEpoch(scan.activeId) : 0,
+      scans.activeId ? viewer.classificationEpoch(scans.activeId) : 0,
       __APP_VERSION__,
     );
     downloadText(f.filename, f.text);
@@ -3509,7 +3510,7 @@ const exportPanel = new ExportPanel({
   kmlStatus: () => {
     if (!viewer) return { ready: false, reason: 'Open a scan first.' };
     // Resolve origin/CRS for static AND streaming — a georeferenced streaming
-    // scan can place KML too; gating on the static `scan.activeId` disabled it.
+    // scan can place KML too; gating on the static `scans.activeId` disabled it.
     const geo = exportGeoContext();
     if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
     const features =
@@ -3598,10 +3599,10 @@ const clipPanel = new ClipPanel({
   // is a no-op, so guard like every other boot-reachable viewer callback here.
   onApply: (clip: ClipBox | null) => viewer?.setClip(clip),
   fitBounds: () => {
-    const c = scan.activeId ? viewer.getCloud(scan.activeId) ?? null : null;
+    const c = scans.activeCloud();
     return c ? c.bounds() : null;
   },
-  keptCount: () => (scan.activeId ? viewer.clipKeptCount(scan.activeId) : null),
+  keptCount: () => (scans.activeId ? viewer.clipKeptCount(scans.activeId) : null),
 });
 
 // ── Scan-type routing state ─────────────────────────────────────────────────
@@ -3793,7 +3794,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
 
   const isNonTerrain = plan.showObjectPanel;
   if (isNonTerrain && shape && gathered) {
-    const activeCloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
+    const activeCloud = scans.activeCloud();
     // RGB presence: a STREAMING COPC/EPT carries its colours in the streamed
     // nodes, not the static `activeCloud.colors`, so checking the static buffer
     // reports "No" for a PDRF 7/8 colour scan. Ask the streaming cloud's own
@@ -3944,7 +3945,7 @@ function revealAnalysePanel(name: string, settled = true): void {
   exportPanel.refresh();
   // Build the measure snap index from the resident cloud (static scans only;
   // a streaming scan has no resident array, so snapping stays off and says so).
-  const snapCloud = scan.activeId ? viewer.getCloud(scan.activeId) ?? null : null;
+  const snapCloud = scans.activeCloud();
   viewer.measure.setSnapSource(snapCloud?.positions ?? null);
   // Reveal the clip control and seed its box from this scan's bounds (disabled
   // until the user enables it). Skip the reseed when the viewer already holds
@@ -4200,19 +4201,19 @@ if (testApi) {
       // lasso, undo/redo, and read a point's class, so the reclassify tool's
       // full flow is e2e-verifiable without running the heavy classifier.
       seedUniformClass: (cls: number): number => {
-        if (!scan.activeId) return 0;
-        const cloud = v.getCloud(scan.activeId);
+        if (!scans.activeId) return 0;
+        const cloud = v.getCloud(scans.activeId);
         if (!cloud) return 0;
         const n = cloud.positions.length / 3;
-        v.applyDerivedClassification(scan.activeId, new Uint8Array(n).fill(cls));
+        v.applyDerivedClassification(scans.activeId, new Uint8Array(n).fill(cls));
         return n;
       },
       reclassifyLasso: (lasso: ReadonlyArray<{ x: number; y: number }>, newClass: number): number =>
-        scan.activeId ? v.reclassifyLasso(scan.activeId, lasso, newClass).changedCount : 0,
-      undoClass: (): boolean => (scan.activeId ? v.undoClassification(scan.activeId) : false),
-      redoClass: (): boolean => (scan.activeId ? v.redoClassification(scan.activeId) : false),
+        scans.activeId ? v.reclassifyLasso(scans.activeId, lasso, newClass).changedCount : 0,
+      undoClass: (): boolean => (scans.activeId ? v.undoClassification(scans.activeId) : false),
+      redoClass: (): boolean => (scans.activeId ? v.redoClassification(scans.activeId) : false),
       classAt: (i: number): number => {
-        const c = scan.activeId ? v.getCloud(scan.activeId)?.classification : undefined;
+        const c = scans.activeId ? v.getCloud(scans.activeId)?.classification : undefined;
         return c ? c[i] : -1;
       },
       // Mount/show the reclassify panel (normally triggered when a
@@ -4657,7 +4658,7 @@ void viewerLoaded.then(() => {
       onToggleHelp: () => helpOverlay.toggle(),
       onUndo: () => {
         if (helpOverlay.isOpen) return;
-        const id = scan.activeId;
+        const id = scans.activeId;
         const canClass = !!id && viewer.canUndoClassification(id);
         const pick = pickUndo(viewer.annotate.canUndo, canClass);
         if (!pick) return;
@@ -4669,7 +4670,7 @@ void viewerLoaded.then(() => {
       },
       onRedo: () => {
         if (helpOverlay.isOpen) return;
-        const id = scan.activeId;
+        const id = scans.activeId;
         const canClass = !!id && viewer.canRedoClassification(id);
         const pick = pickRedo(viewer.annotate.canRedo, canClass);
         if (!pick) return;
@@ -5188,7 +5189,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
   await viewerLoaded;
   const report = await loadReportEngine();
   const streamingCloud = viewer.streamingCloud;
-  const staticCloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
+  const staticCloud = scans.activeCloud() ?? undefined;
   if (!streamingCloud && !staticCloud) {
     throw new Error('Load a scan first.');
   }
@@ -5303,7 +5304,7 @@ async function generateReportPdf(templateId: string): Promise<void> {
   // available" when the fingerprint is undefined.
   let provenanceFp: import('./report').ReportProvenanceFingerprint | undefined;
   try {
-    const activeCloud = scan.activeId ? viewer.getCloud(scan.activeId) : null;
+    const activeCloud = scans.activeCloud();
     const streamingCloud = viewer.streamingCloud;
     // The shape router's verdict rules out an aerial density guess for a
     // compact object / interior (v0.5.7 capture lens) — a temple is not drone
@@ -5386,10 +5387,10 @@ async function generateReportPdf(templateId: string): Promise<void> {
  * behind the renderer.
  */
 function syncColorModeForActive(): void {
-  if (!scan.activeId) return;
-  const cloud = viewer.getCloud(scan.activeId);
+  if (!scans.activeId) return;
+  const cloud = viewer.getCloud(scans.activeId);
   if (!cloud) return;
-  const mode = viewer.colorModeOf(scan.activeId);
+  const mode = viewer.colorModeOf(scans.activeId);
   if (!mode) return;
   if (mode !== currentColorMode) currentColorMode = mode;
   inspector.setColorModes(availableModes(cloud), currentColorMode);
@@ -5597,7 +5598,7 @@ function applyViewState(vs: ViewStateBundle): void {
       // default axis, so the window would be wrong the moment a scan did
       // load. A view state is an overlay for an open scan, so "no scan ⇒
       // skip the filter" is the correct, non-surprising behaviour.
-      if (scan.activeId == null && !viewer.hasStreamingCloud) return;
+      if (scans.activeId == null && !viewer.hasStreamingCloud) return;
       // The Inspector extents were seeded when the scan opened, so restoring
       // writes the window into the inputs and drives the GPU filter + cue.
       if (pf.elevation) {
@@ -5706,11 +5707,11 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
   if (state.pointSizeMode === 'adaptive' || state.pointSizeMode === 'fixed') {
     viewer.setPointSizeMode(state.pointSizeMode);
   }
-  if (state.colorMode && scan.activeId) {
+  if (state.colorMode && scans.activeId) {
     const modes = availableModes(cloud);
     if (modes.includes(state.colorMode as ColorMode)) {
       currentColorMode = state.colorMode as ColorMode;
-      viewer.setColorMode(scan.activeId, currentColorMode);
+      viewer.setColorMode(scans.activeId, currentColorMode);
       inspector.setColorModes(modes, currentColorMode);
     }
   }
@@ -5727,7 +5728,7 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  */
 async function exportSession(): Promise<void> {
   const { serializeSession } = await loadSession();
-  const cloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
+  const cloud = scans.activeCloud() ?? undefined;
   // A streaming-only session has no static cloud. Its frame still exists — the
   // streaming source's renderOrigin — and streaming COPC/EPT are LAS-derived,
   // hence Z-up. Deriving origin/upAxis from the (absent) static cloud wrote
@@ -5878,7 +5879,7 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {
     // match asks the user to confirm before anything is applied.
     if (haveCloud) {
       const streamingCloud = viewer.streamingCloud;
-      const staticCloud = scan.activeId ? viewer.getCloud(scan.activeId) : undefined;
+      const staticCloud = scans.activeCloud() ?? undefined;
       let loadedFacts: import('./io/session').ScanFacts | undefined;
       if (streamingCloud) {
         const b = streamingCloud.dataBounds();
@@ -6102,7 +6103,7 @@ async function handleFile(file: File): Promise<void> {
     const uploadStartedAt = performance.now();
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
-    scan.activeId = id;
+    scans.setActive(id);
     // A freshly opened scan has no terrain analysis yet — drop any prior grid so
     // the Coverage colour chip starts disabled until this scan is analysed.
     viewer.setCoverageGrid(null);
@@ -6219,7 +6220,7 @@ async function handleFile(file: File): Promise<void> {
     {
       const reportForId = id;
       const fillReport = (): void => {
-        if (scan.activeId !== reportForId) return; // scan changed while we waited
+        if (scans.activeId !== reportForId) return; // scan changed while we waited
         try {
           inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
         } catch (err) {
@@ -7327,7 +7328,7 @@ function resetToEmptyState(): void {
   projectCard.hide();
   // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
   document.body.classList.remove('olv-has-scan');
-  scan.activeId = null;
+  scans.clear();
   bookmarks.clear();
   viewer.annotate.clear();
   // Drop the snap index so a future scan can't snap to the previous cloud.
@@ -7488,7 +7489,7 @@ function removeCloud(id: string): void {
   reducedById.delete(id);
   layerVisible.delete(id);
   if (layers.solo === id) layers.solo = null;
-  if (scan.activeId === id) scan.activeId = null;
+  scans.clearIf(id);
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
     layerService.refreshCrsFlags();
@@ -7503,7 +7504,7 @@ function removeCloud(id: string): void {
  * mesh's GPU buffers (geometry + material + colour/class attributes) AND the
  * retained source-file + reduced-flag map entries. A new open (static OR
  * streaming) replaces the previous scan, so without this the prior cloud's GPU
- * memory and File reference leak on every reopen (`scan.activeId` is overwritten, so
+ * memory and File reference leak on every reopen (`scans.activeId` is overwritten, so
  * `removeCloud` could never reach the old id). Does NOT reset to the empty
  * state — the caller adds the replacement immediately.
  */
@@ -7514,7 +7515,7 @@ function clearOpenStaticLayers(): void {
     inspector.removeCloud(id);
     sourceFileById.delete(id);
     reducedById.delete(id);
-    if (scan.activeId === id) scan.activeId = null;
+    scans.clearIf(id);
   }
   layerVisible.clear();
   layers.solo = null;
