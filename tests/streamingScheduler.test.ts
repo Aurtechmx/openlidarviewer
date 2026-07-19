@@ -143,6 +143,42 @@ test('the scheduler streams every visible node within budget', async () => {
   expect(cloud.residentPointCount).toBe(3100);
 });
 
+test('nodes at real UTM-scale coordinates still reach resident (origin-localisation guard)', async () => {
+  // Regression guard for the v0.6.0-alpha.1 EPT blank-render bug: node bounds
+  // were offset by the render origin twice, so every node at a large projected
+  // origin landed ~one whole origin from the near-origin camera and frustum-
+  // culled to visible=0 — the hierarchy loaded but nothing ever drew. Drive a
+  // cloud whose cube sits at UTM-scale coordinates through the shared scheduler.
+  // Correct localisation returns the node bounds near zero (where the render-
+  // space camera sits) and they stream normally; any regression in the shared
+  // renderOrigin / _localBoundsFor path culls them all and this drops to 0.
+  const fixture = buildSyntheticCopc({
+    center: [500_000, 5_000_000, 1_500],
+    halfsize: 128,
+    nodes: [
+      { key: [0, 0, 0, 0], pointCount: 1000 },
+      { key: [1, 0, 0, 0], pointCount: 800 },
+      { key: [1, 1, 0, 0], pointCount: 600 },
+    ],
+  });
+  const cloud = await StreamingPointCloud.open(
+    new ArrayBufferRangeSource(fixture.buffer),
+    'utm.copc.laz',
+  );
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+  );
+  // The live viewer feeds the camera and view-projection in render space; the
+  // origin is at the cube, so the camera sits at [0,0,0] here too.
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  expect(cloud.counts().resident).toBe(3);
+});
+
 // The scheduler reports `queued` from an O(1) counter maintained by the
 // node store at every state transition, rather than walking the whole
 // octree on each `stats()` call. This test drives the full lifecycle —
