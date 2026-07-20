@@ -6,14 +6,17 @@ This is an alpha for evaluation. The items below are known and deliberate — re
 
 `src/main.ts` is 7,574 lines and `src/render/Viewer.ts` is 7,297, against stated targets of 2,500 and 2,000. alpha.2 finished the composition root (no module-level mutable application state remains in `main.ts`) and wrote the architecture down with a drift check, but that is the scaffolding for the decomposition, not the decomposition. The ten blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
 
-## Shared project frame is a foundation, not an active system
+## Shared project frame is computed but not yet applied to the scene
 
-`ProjectSpatialFrame` / `LayerSpatialTransform` (value types + pure transform math) are tested and documented (`docs/architecture/project-spatial-frame.md`), and alpha.2 adds an ordered wiring plan, but the running viewer still does **not** mount layers through them. For this alpha:
+`ProjectSpatialFrame` / `LayerSpatialTransform` (value types + pure transform math) are tested and documented (`docs/architecture/project-spatial-frame.md`). alpha.2 lands **step 1** of the wiring plan: the app now owns a live project frame (`src/app/projectFrame.ts`, on `AppContext`), reseeded from the loaded layer set on every change, choosing one shared origin and deriving each layer's translation into it. A single layer anchors the frame at its own origin, so its transform is the identity and the single-scan path is unchanged.
 
-- Cross-layer operations require the layers to already share a compatible coordinate frame (same CRS, comparable origins). Two georeferenced scans with different origins still mount in their own local frames.
+What is **not** done: the viewer still mounts each layer at its own local zero rather than applying that translation (step 2). So the frame is currently correct and observable, but nothing renders differently yet. For this alpha:
+
+- Cross-layer operations require the layers to already share a compatible coordinate frame (same CRS, comparable origins). Two georeferenced scans with different origins still mount in their own local frames and still appear overlaid.
 - **Multi-dataset comparison is experimental.** Compare Studio, cross-layer measurement, shared clipping, and cross-layer picking are not backed by an authoritative project frame yet.
 - Results that depend on a common frame should be treated as indicative when common-frame compatibility can't be established.
 - Integrated Spatial Workflows are **not** claimed complete.
+- A layer whose declared CRS disagrees with the project's is excluded from the shared origin and reported as unaligned; it is never silently reprojected. Reprojection remains a downstream tool's job.
 
 ## Residual streaming flicker at the budget boundary
 

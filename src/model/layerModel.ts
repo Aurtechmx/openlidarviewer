@@ -68,7 +68,7 @@ export interface CrsMismatch {
 }
 
 /** A stable horizontal-CRS key for a layer, or null when none is declared. */
-function horizontalKey(layer: LayerInfo): string | null {
+export function horizontalKey(layer: LayerInfo): string | null {
   if (typeof layer.epsg === 'number') return `EPSG:${layer.epsg}`;
   if (layer.crsName && layer.crsName.trim().length > 0) return layer.crsName.trim();
   return null;

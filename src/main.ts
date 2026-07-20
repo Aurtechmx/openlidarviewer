@@ -273,6 +273,7 @@ import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
 import { createScanService } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
+import { createProjectFrameService } from './app/projectFrame';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -1148,6 +1149,9 @@ const viewBookmarks = runtime.context.viewBookmarks;
 const bookmarks = createViewBookmarks(runtime.context);
 const scans = createScanService({ getViewer: () => viewer, context: runtime.context });
 const routing = createScanRouteService(runtime.context);
+// The project's shared spatial frame. LayerService reseeds it from the loaded
+// layer set on every change; consumers read it through `runtime.context`.
+const projectFrame = createProjectFrameService(runtime.context);
 /** Each layer's explicit show/hide intent (solo overrides this without mutating it). */
 const layerVisible = layers.visible;
 /** True while a file load is in flight — one load at a time (see `handleFile`). */
@@ -1296,6 +1300,7 @@ const layerService = createLayerService({
   getInspector: () => inspector,
   context: runtime.context,
   refreshCompass,
+  projectFrame,
 });
 
 const inspector = new Inspector({

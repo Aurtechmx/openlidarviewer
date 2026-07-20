@@ -13,6 +13,11 @@
 import type { CameraPose } from '../render/NavController';
 import type { ViewStateBundle } from '../io/session';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
+import type {
+  ProjectSpatialFrame,
+  LayerSpatialTransform,
+} from '../geo/ProjectSpatialFrame';
+import type { ProjectFrameLayer } from './projectFrame';
 
 /** Per-cloud view state plus the latest exportable elevation comparison. */
 export interface LayerViewState {
@@ -72,12 +77,32 @@ export interface ScanRouteState {
   typeOverride: ScanTypeOverride;
 }
 
+/**
+ * The project's authoritative spatial frame and each layer's translation into
+ * it. Null while nothing is loaded; a single layer anchors the frame at its own
+ * origin, which makes its transform the identity and leaves the single-scan
+ * path unchanged. See `docs/architecture/project-spatial-frame.md`.
+ */
+export interface ProjectFrameState {
+  /** The shared frame, or null when no layer is registered. */
+  frame: ProjectSpatialFrame | null;
+  /** What each layer registered — the inputs the frame is derived from. */
+  readonly sources: Map<string, ProjectFrameLayer>;
+  /** Each layer's source-local → project-local transform, derived. */
+  readonly transforms: Map<string, LayerSpatialTransform>;
+  /** Layers excluded from the frame because their CRS disagrees with it. */
+  unaligned: string[];
+  /** Layers carrying no declared CRS — included, but worth disclosing. */
+  unknownCrs: string[];
+}
+
 /** The shared, mutable application state, grouped by cluster. */
 export interface AppContext {
   readonly layers: LayerViewState;
   readonly scan: ScanState;
   readonly viewBookmarks: ViewBookmarksState;
   readonly scanRoute: ScanRouteState;
+  readonly projectFrame: ProjectFrameState;
 }
 
 /** Construct a fresh AppContext with empty defaults. */
@@ -98,6 +123,13 @@ export function createAppContext(): AppContext {
     scanRoute: {
       overridden: false,
       typeOverride: 'auto',
+    },
+    projectFrame: {
+      frame: null,
+      sources: new Map<string, ProjectFrameLayer>(),
+      transforms: new Map<string, LayerSpatialTransform>(),
+      unaligned: [],
+      unknownCrs: [],
     },
   };
 }

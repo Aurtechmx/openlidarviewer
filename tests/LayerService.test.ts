@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { createLayerService } from '../src/app/LayerService';
 import { createAppContext } from '../src/app/appContext';
+import { createProjectFrameService } from '../src/app/projectFrame';
 import type { Viewer } from '../src/render/Viewer';
 import type { Inspector } from '../src/ui/Inspector';
 
@@ -24,6 +25,8 @@ interface FakeCloud {
   name?: string;
   pointCount?: number;
   metadata?: { crs?: FakeCrs | null } | null;
+  /** The cloud's `floor(min)` recentre origin, when it is georeferenced. */
+  origin?: readonly [number, number, number];
 }
 
 function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set()) {
@@ -55,6 +58,8 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     },
   } as unknown as Inspector;
 
+  const projectFrame = createProjectFrameService(context);
+
   const service = createLayerService({
     getViewer: () => viewer,
     getInspector: () => inspector,
@@ -62,11 +67,13 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     refreshCompass: () => {
       compassRefreshes += 1;
     },
+    projectFrame,
   });
 
   return {
     service,
     context,
+    projectFrame,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -145,5 +152,68 @@ describe('LayerService — refreshCrsFlags', () => {
     const one = setup({ a: twoClouds.a });
     one.service.refreshCrsFlags();
     expect(one.compareCalls.at(-1)).toBe(false);
+  });
+});
+
+
+/**
+ * The project frame is seeded HERE, from the same layer-set reconciliation that
+ * refreshes the CRS flags, rather than from the add/remove call sites in
+ * main.ts. These pin that wiring: without it the frame stays null forever and
+ * the shared-frame work is dead code — which is exactly what it was before.
+ */
+describe('LayerService seeds the shared project frame', () => {
+  const utm = { epsg: 32612 };
+
+  it('anchors the frame at the lowest origin across the loaded layers', () => {
+    const t = setup({
+      east: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
+      west: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+    expect(t.projectFrame.transformFor('east')!.sourceToProject).toEqual([1_000, 0, 20]);
+  });
+
+  it('leaves a single layer on the identity transform', () => {
+    const t = setup({ only: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } } });
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.transformFor('only')!.sourceToProject).toEqual([0, 0, 0]);
+  });
+
+  it('skips a cloud with no origin instead of anchoring the project at zero', () => {
+    // An unreferenced mesh at implicit zero would drag the anchor to 0 and push
+    // the georeferenced scan 500 km out of frame.
+    const t = setup({
+      mesh: { metadata: { crs: null } },
+      scan: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+    expect(t.projectFrame.transformFor('mesh')).toBeNull();
+    expect(t.projectFrame.transformFor('scan')!.sourceToProject).toEqual([0, 0, 0]);
+  });
+
+  it('re-anchors when a layer is removed and the set is refreshed', () => {
+    const clouds: Record<string, FakeCloud> = {
+      low: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      high: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    delete clouds.low;
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([501_000, 4_500_000, 120]);
+    expect(t.projectFrame.transformFor('low')).toBeNull();
+  });
+
+  it('excludes a foreign-CRS layer from the anchor and flags it', () => {
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      b: { origin: [300_000, 3_000_000, 10], metadata: { crs: { epsg: 32613 } } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.unaligned).toEqual(['b']);
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
   });
 });

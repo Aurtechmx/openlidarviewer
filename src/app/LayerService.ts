@@ -16,9 +16,11 @@ import {
   resolveVisibility,
   nextSolo,
   detectCrsMismatch,
+  horizontalKey,
   type LayerInfo,
 } from '../model/layerModel';
 import type { AppContext } from './appContext';
+import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
 
 export interface LayerServiceDeps {
   /** The lazily-assigned viewer — read through a getter, never captured. */
@@ -29,6 +31,8 @@ export interface LayerServiceDeps {
   context: AppContext;
   /** Refresh the compass overlay after a layer-set change. */
   refreshCompass: () => void;
+  /** The project's shared spatial frame, reseeded on every layer-set change. */
+  projectFrame: ProjectFrameService;
 }
 
 export interface LayerService {
@@ -74,8 +78,40 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     getInspector().setLayerSolo(layers.solo);
   }
 
+  /**
+   * Rebuild the shared project frame from the layers currently loaded.
+   *
+   * Driven from `refreshCrsFlags` because that is the one place the app already
+   * reconciles the whole layer set on every change — seeding the frame from
+   * scattered add/remove call sites would eventually miss one, and a frame
+   * holding a departed layer's origin is worse than no frame.
+   *
+   * A cloud with no declared origin is skipped rather than treated as origin
+   * zero: mixing an unreferenced mesh into the anchor would drag it to zero and
+   * push a georeferenced scan hundreds of kilometres out. Such a layer is not in
+   * a shared spatial frame at all, which is exactly what "skip" says.
+   */
+  function syncProjectFrame(infos: readonly LayerInfo[]): void {
+    const viewer = getViewer();
+    const layers: ProjectFrameLayer[] = [];
+    for (const info of infos) {
+      const origin = viewer.getCloud(info.id)?.origin;
+      if (!origin) continue;
+      layers.push({
+        id: info.id,
+        sourceOrigin: [origin[0], origin[1], origin[2]],
+        // The SAME key the mismatch check uses, so the layer panel and the
+        // frame can never disagree about which scans share a CRS.
+        crsKey: horizontalKey(info),
+      });
+    }
+    deps.projectFrame.reconcile(layers);
+  }
+
   function refreshCrsFlags(): void {
-    const m = detectCrsMismatch(buildLayerInfos());
+    const infos = buildLayerInfos();
+    syncProjectFrame(infos);
+    const m = detectCrsMismatch(infos);
     const inspector = getInspector();
     inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
     // The two-epoch compare needs exactly two loaded layers.

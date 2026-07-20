@@ -44,6 +44,7 @@ mutation:
 | `viewBookmarks` | `viewBookmarks` | Saved views: add / get / remove / rename / restore / clear |
 | `scan` | `ScanService` | Active-scan selection, and the `activeCloud()` lookup |
 | `scanRoute` | `ScanRouteService` | Route pinning, manual scan type, re-route debounce |
+| `projectFrame` | `projectFrame` | The shared project origin and each layer's transform into it |
 
 Supporting services in the same layer: `crsCoordinator`, `terrainAnalysisRunner`,
 `inspectorCardRefreshers`, `staleChunkReload`.

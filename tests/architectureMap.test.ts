@@ -143,6 +143,7 @@ describe('architecture map stays in step with the tree', () => {
       'src/app/viewBookmarks.ts',
       'src/app/ScanService.ts',
       'src/app/ScanRouteService.ts',
+      'src/app/projectFrame.ts',
     ]) {
       expect(existsSync(root + svc), `${svc} is missing`).toBe(true);
     }
