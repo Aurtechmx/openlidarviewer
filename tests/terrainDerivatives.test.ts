@@ -80,3 +80,52 @@ describe('hornSlopeAspect', () => {
     expect(Array.from(scalar.aspect)).toEqual(Array.from(explicit.aspect));
   });
 });
+
+// Mutation-testing follow-up: the degenerate-input guard
+// `if (n === 0 || !(cellMetresX > 0) || !(cellMetresY > 0)) return` accounted for
+// 17 surviving mutants — every clause could be flipped or dropped without a test
+// noticing. A bad cell size must yield a zero field, never a divide-by-zero
+// Infinity/NaN slope that would propagate into confidence, RMSE bands and VRM.
+describe('hornSlopeAspect — degenerate inputs return a zero field, never NaN/Infinity', () => {
+  const ramp = () => {
+    const z = new Float32Array(9);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) z[r * 3 + c] = c;
+    return z;
+  };
+  const allFinite = (a: Float32Array) => Array.from(a).every((v) => Number.isFinite(v));
+
+  it('an empty grid (cols or rows 0) yields empty fields', () => {
+    const a = hornSlopeAspect(new Float32Array(0), 0, 0, 1);
+    expect(a.slope).toHaveLength(0);
+    expect(a.aspect).toHaveLength(0);
+    expect(hornSlopeAspect(new Float32Array(0), 0, 5, 1).slope).toHaveLength(0);
+    expect(hornSlopeAspect(new Float32Array(0), 5, 0, 1).slope).toHaveLength(0);
+  });
+
+  it('a zero or negative X cell size yields all-zero slope, not Infinity', () => {
+    for (const bad of [0, -1]) {
+      const { slope } = hornSlopeAspect(ramp(), 3, 3, bad);
+      expect(allFinite(slope)).toBe(true);
+      expect(Array.from(slope).every((v) => v === 0)).toBe(true);
+    }
+  });
+
+  it('a zero or negative Y cell size yields all-zero slope, not Infinity', () => {
+    for (const bad of [0, -1]) {
+      const { slope } = hornSlopeAspect(ramp(), 3, 3, 1, bad);
+      expect(allFinite(slope)).toBe(true);
+      expect(Array.from(slope).every((v) => v === 0)).toBe(true);
+    }
+  });
+
+  it('a NaN cell size is rejected by the same guard', () => {
+    const { slope } = hornSlopeAspect(ramp(), 3, 3, Number.NaN);
+    expect(allFinite(slope)).toBe(true);
+    expect(Array.from(slope).every((v) => v === 0)).toBe(true);
+  });
+
+  it('a valid grid still computes a non-zero slope (the guard is not over-eager)', () => {
+    const { slope } = hornSlopeAspect(ramp(), 3, 3, 1);
+    expect(slope[4]).toBeCloseTo(1, 5);
+  });
+});
