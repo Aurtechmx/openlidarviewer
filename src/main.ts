@@ -566,7 +566,8 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // lin = 1 for display, but its points/m² density is then an assumption, so
     // the stockpile grade must not claim it.
     const densityUnitKnown = crsForLasso != null && crsForLasso.linearUnit !== 'unknown';
-    const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown);
+    const vert = crsForLasso?.verticalUnitToMetres ?? lin;
+    const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown, vert);
     if (out === null) {
       pendingLassoSave = null;
       showLassoToast('Lasso volume — no points selected. Draw around a denser region.');
@@ -587,10 +588,12 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // geographic / unknown; this corrects the projected-feet case it lets
     // through.)
     const lin2 = lin * lin;
-    const lin3 = lin2 * lin;
-    const fillM3 = (out.result.fill * lin3).toFixed(2);
-    const cutM3 = (out.result.cut * lin3).toFixed(2);
-    const netM3 = (out.result.net * lin3).toFixed(2);
+    // Volume factor is linear²·vertical, matching the measure tool and the
+    // exports. Plain lin³ applied the HORIZONTAL unit to the vertical axis.
+    const vol = lin2 * vert;
+    const fillM3 = (out.result.fill * vol).toFixed(2);
+    const cutM3 = (out.result.cut * vol).toFixed(2);
+    const netM3 = (out.result.net * vol).toFixed(2);
     const areaM2 = (out.result.footprintArea * lin2).toFixed(1);
     // Stage the result for the toast's Save button. The polygon3D
     // is the convex-hull footprint at the integration reference
@@ -3471,6 +3474,7 @@ const exportPanel = new ExportPanel({
       ms,
       viewer.measure.worldUp,
       viewer.measure.unitToMetres,
+      viewer.measure.verticalUnitToMetres,
       geo.name ? baseName(geo.name) : 'scan',
       geo.crsName,
       new Date().toISOString(),

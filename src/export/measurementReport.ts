@@ -64,10 +64,16 @@ export function measurementsToFindings(
   measurements: readonly Measurement[],
   up: Vec3,
   unitToMetres: number,
+  /**
+   * VERTICAL render-units → metres. Defaults to `unitToMetres`, so a
+   * single-unit CRS is unchanged; it differs only for a compound CRS (metre
+   * eastings over foot heights), where one factor cannot describe both axes.
+   */
+  verticalToMetres: number = unitToMetres,
 ): ReportFinding[] {
   const findings: ReportFinding[] = [];
   measurements.forEach((m, i) => {
-    const metrics = measurementMetrics(m, up, unitToMetres);
+    const metrics = measurementMetrics(m, up, unitToMetres, verticalToMetres);
     const primary = PRIMARY[m.kind];
     let value: number | null = null;
     let unit = '';
@@ -90,7 +96,10 @@ export function measurementsToFindings(
     // shows the whole earthwork, not just the fill, and reads its own honesty.
     if (m.kind === 'volume' && m.volume) {
       const L = unitToMetres;
-      const V = L * L * L; // native render units³ → m³ (see VolumeRecord contract)
+      // Cubic factor is linear²·vertical, matching `measurementExport`'s `Vol`.
+      // Plain L³ applied the HORIZONTAL unit to the vertical axis, overstating
+      // a metre/US-foot compound volume by 3.28×.
+      const V = L * L * verticalToMetres; // native render units³ → m³
       const net = m.volume.net * V;
       const caveats = [
         `Cut ${(m.volume.cut * V).toFixed(2)} m³ / fill ${(m.volume.fill * V).toFixed(2)} m³ over ${(m.volume.footprintArea * L * L).toFixed(2)} m² footprint.`,
@@ -135,6 +144,8 @@ export function integrityReportFile(
   measurements: readonly Measurement[],
   up: Vec3,
   unitToMetres: number,
+  /** VERTICAL render-units → metres; pass `unitToMetres` for a single-unit CRS. */
+  verticalToMetres: number,
   datasetId: string,
   crsName: string | undefined,
   generatedAt: string,
@@ -155,7 +166,7 @@ export function integrityReportFile(
     generatedAt,
     classificationEpoch,
     software,
-  });
+  }, verticalToMetres);
   return {
     filename: `${datasetId}-report.json`,
     text: JSON.stringify(manifest, null, 2),
@@ -171,6 +182,7 @@ export function measurementsToReportManifest(
   up: Vec3,
   unitToMetres: number,
   provenance: ReportProvenance,
+  verticalToMetres: number = unitToMetres,
   hashFn?: HashFn,
 ): ReportManifest {
   return buildReportManifest(
@@ -183,7 +195,7 @@ export function measurementsToReportManifest(
       generatedAt: provenance.generatedAt,
       software: provenance.software,
       classificationEpoch: provenance.classificationEpoch,
-      findings: measurementsToFindings(measurements, up, unitToMetres),
+      findings: measurementsToFindings(measurements, up, unitToMetres, verticalToMetres),
     },
     hashFn,
   );

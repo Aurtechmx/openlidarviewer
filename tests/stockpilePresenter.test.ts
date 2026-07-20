@@ -88,3 +88,48 @@ describe('presentStockpile', () => {
     expect(v.caveats).toEqual(['only 12 points — indicative']);
   });
 });
+
+/**
+ * A compound CRS — metre eastings over US-survey-foot heights — needs two
+ * factors. The presenter had only `lin` and scaled volume by lin³, so a
+ * stockpile on a NAD83(2011) / NAVD88-foot site was overstated by 3.28×, and
+ * base plane and mean thickness (both VERTICAL) were scaled by the horizontal
+ * unit. `measurementExport` has used linear²·vertical for volume since the
+ * vertical-unit pass; this path never got it.
+ */
+describe('presentStockpile — compound CRS vertical factor', () => {
+  const US_FOOT = 1200 / 3937;
+
+  test('volume uses linear squared times vertical, not linear cubed', () => {
+    // 1254 native (m²·ft) → 1254 × 1 × 1 × 0.3048006 = 382.2 m³.
+    const v = presentStockpile(result(), { lin: 1, vert: US_FOOT });
+    expect(v.headline).toContain('382');
+  });
+
+  test('a single-unit CRS is unchanged when no vertical factor is given', () => {
+    expect(presentStockpile(result(), { lin: 1 }).headline).toContain('1,254');
+  });
+
+  test('base plane and mean thickness use the VERTICAL factor', () => {
+    const v = presentStockpile(result(), { lin: 1, vert: US_FOOT });
+    const row = (label: string) => v.rows.find((r) => r.label === label)?.value ?? '';
+    // 102.5 ft → 31.24 m; 3.94 ft → 1.20 m.
+    expect(row('Base plane')).toContain('31.2');
+    expect(row('Mean thickness')).toContain('1.20');
+  });
+
+  test('footprint area and density stay on the HORIZONTAL factor', () => {
+    // Mixing the vertical factor into an area would be the mirror-image bug.
+    const v = presentStockpile(result(), { lin: 1, vert: US_FOOT });
+    const row = (label: string) => v.rows.find((r) => r.label === label)?.value ?? '';
+    expect(row('Footprint')).toContain('318.4');
+    expect(row('Density')).toContain('13.2');
+  });
+
+  test('the error bands scale with the same cubic factor as the volume', () => {
+    const v = presentStockpile(result(), { lin: 1, vert: US_FOOT });
+    const row = (label: string) => v.rows.find((r) => r.label === label)?.value ?? '';
+    expect(row('Sampling error')).toContain('5'); // 18 × 0.3048 = 5.49
+    expect(row('Base-plane error')).toContain('8'); // 25 × 0.3048 = 7.62
+  });
+});

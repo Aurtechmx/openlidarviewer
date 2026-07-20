@@ -81,8 +81,16 @@ export interface CrsMismatch {
 /** A stable horizontal-CRS key for a layer, or null when none is declared. */
 export function horizontalKey(layer: LayerInfo): string | null {
   if (typeof layer.epsg === 'number') return `EPSG:${layer.epsg}`;
-  if (layer.crsName && layer.crsName.trim().length > 0) return layer.crsName.trim();
-  return null;
+  const name = layer.crsName?.trim();
+  if (!name) return null;
+  // The CRS parsers emit "Unknown CRS" (and "Unknown CRS (truncated …)") as a
+  // DISPLAY name when nothing could be parsed. Falling back to it here turned a
+  // placeholder into an identity, so two un-georeferenced layers compared equal:
+  // reported as sharing a coordinate system, absent from the `unknown` list, and
+  // merged into the project frame as aligned. A placeholder is the absence of a
+  // CRS, not one — "can't compare" stays distinct from "matches".
+  if (/^Unknown CRS\b/i.test(name)) return null;
+  return name;
 }
 
 /** A readable label for a layer's horizontal CRS. */

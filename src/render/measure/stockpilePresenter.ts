@@ -44,6 +44,12 @@ export interface StockpileView {
 export interface StockpilePresentOptions {
   /** `linearUnitToMetres` for the source CRS. Defaults to 1 (already metres). */
   readonly lin?: number;
+  /**
+   * `verticalUnitToMetres` for the source CRS. Defaults to {@link lin}, so a
+   * single-unit CRS is unchanged; it differs only for a compound CRS (metre
+   * eastings over foot heights), where one factor cannot describe both axes.
+   */
+  readonly vert?: number;
 }
 
 const CONFIDENCE_LABEL: Record<StockpileConfidence, string> = {
@@ -61,17 +67,21 @@ export function presentStockpile(
   options: StockpilePresentOptions = {},
 ): StockpileView {
   const lin = options.lin ?? 1;
+  const vert = options.vert ?? lin;
   const lin2 = lin * lin;
-  const lin3 = lin2 * lin;
+  // A volume is an area times a height, so its factor is linear²·vertical —
+  // the same `Vol` measurementExport uses. Plain lin³ applied the HORIZONTAL
+  // unit to the vertical axis, overstating a metre/US-foot pile by 3.28×.
+  const vol = lin2 * vert;
   const b = r.breakdown;
 
-  const headline = `${int(r.volume * lin3)} m³ ± ${int(r.sigma * lin3)} m³ (1σ)`;
+  const headline = `${int(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (1σ)`;
   const relative = `±${(r.relativeError * 100).toFixed(1)}%`;
 
   const baseLabel =
     b.baseMode === 'explicit'
-      ? `${(b.baseZ * lin).toFixed(2)} m (set)`
-      : `${(b.baseZ * lin).toFixed(2)} m (lowest ground, ±${(b.baseUncertainty * lin).toFixed(2)} m)`;
+      ? `${(b.baseZ * vert).toFixed(2)} m (set)`
+      : `${(b.baseZ * vert).toFixed(2)} m (lowest ground, ±${(b.baseUncertainty * vert).toFixed(2)} m)`;
 
   // A points/m² density is only meaningful when the horizontal unit is known.
   // With an unknown unit the figure is native points/unit² read as m² — label
@@ -85,9 +95,9 @@ export function presentStockpile(
     { label: 'Points in footprint', value: int(b.pointsInPolygon) },
     densityRow,
     { label: 'Base plane', value: baseLabel },
-    { label: 'Mean thickness', value: `${(b.meanThickness * lin).toFixed(2)} m` },
-    { label: 'Sampling error', value: `± ${int(b.samplingError * lin3)} m³` },
-    { label: 'Base-plane error', value: `± ${int(b.basePlaneError * lin3)} m³` },
+    { label: 'Mean thickness', value: `${(b.meanThickness * vert).toFixed(2)} m` },
+    { label: 'Sampling error', value: `± ${int(b.samplingError * vol)} m³` },
+    { label: 'Base-plane error', value: `± ${int(b.basePlaneError * vol)} m³` },
   ];
 
   return {
@@ -119,6 +129,8 @@ export function stockpileToastSuffix(
   lin?: number,
   sourceReduced?: boolean,
   densityUnitKnown?: boolean,
+  /** `verticalUnitToMetres`; defaults to `lin` for a single-unit CRS. */
+  vert?: number,
 ): string {
   if (polygon.length < 3 || positions.length < 9) return '';
   const stock = stockpileVolume({
@@ -134,5 +146,5 @@ export function stockpileToastSuffix(
     densityUnitKnown,
   });
   if (stock.validity !== 'ok' || stock.volume <= 0) return '';
-  return ` · ${stockpileToastLine(presentStockpile(stock, { lin }))}`;
+  return ` · ${stockpileToastLine(presentStockpile(stock, { lin, vert }))}`;
 }

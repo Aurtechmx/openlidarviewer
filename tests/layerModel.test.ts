@@ -153,6 +153,44 @@ describe('detectCrsMismatch', () => {
     expect(r.verticalUnconfirmed).toEqual([]);
   });
 
+  /**
+   * The CRS parsers emit the literal string "Unknown CRS" as a DISPLAY name
+   * when nothing could be parsed. `horizontalKey` fell back to that name, so
+   * the placeholder became a valid identity and two un-georeferenced layers
+   * compared EQUAL — reported as sharing a coordinate system, absent from the
+   * `unknown` list, and merged into the project frame as aligned.
+   *
+   * That inverts this module's stated contract: "can't compare" is a distinct
+   * state from "matches". A placeholder is the absence of a CRS, not one.
+   */
+  it('does not treat the "Unknown CRS" placeholder as a shared coordinate system', () => {
+    const r = detectCrsMismatch([
+      layer({ id: 'a', crsName: 'Unknown CRS' }),
+      layer({ id: 'b', crsName: 'Unknown CRS' }),
+    ]);
+    expect(r.unknown).toEqual(['a', 'b']);
+    expect(r.mismatched).toEqual([]);
+    expect(r.summary).toContain("without a declared CRS");
+  });
+
+  it('treats the parser\'s truncated-VLR placeholders as undeclared too', () => {
+    const r = detectCrsMismatch([
+      layer({ id: 'a', crsName: 'Unknown CRS (truncated GeoTIFF VLR)' }),
+      layer({ id: 'b', crsName: 'Unknown CRS (truncated GeoTIFF keys)' }),
+    ]);
+    expect(r.unknown).toEqual(['a', 'b']);
+  });
+
+  it('still treats a real CRS name as an identity when no EPSG is declared', () => {
+    // Named-but-codeless CRSs are legitimate; only the placeholder is not.
+    const r = detectCrsMismatch([
+      layer({ id: 'a', crsName: 'NAD83 / Utah Central' }),
+      layer({ id: 'b', crsName: 'NAD83 / Utah Central' }),
+    ]);
+    expect(r.unknown).toEqual([]);
+    expect(r.hasMismatch).toBe(false);
+  });
+
   it('lists layers without a declared CRS as unknown, not mismatched', () => {
     const r = detectCrsMismatch([
       layer({ id: 'a', epsg: 32612 }),
