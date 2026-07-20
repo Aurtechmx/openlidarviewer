@@ -3512,7 +3512,21 @@ const exportPanel = new ExportPanel({
         'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',
     };
     const stem = geo.name ? baseName(geo.name) : 'site';
-    downloadText(`${stem}.kml`, buildKml(input));
+    let text: string;
+    try {
+      text = buildKml(input);
+    } catch (err) {
+      // Every KML coordinate is geographic by specification, so one
+      // unconvertible point makes the whole file wrong. Decline it.
+      if (err instanceof LonLatConversionError) {
+        dropZone.setError(
+          `KML export stopped: a point could not be placed in longitude/latitude. ${err.message}`,
+        );
+        return;
+      }
+      throw err;
+    }
+    downloadText(`${stem}.kml`, text);
   },
   kmlStatus: () => {
     if (!viewer) return { ready: false, reason: 'Open a scan first.' };
@@ -3557,6 +3571,12 @@ function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
  * lands them in the source frame — already lon/lat for a geographic CRS, or the
  * projected easting/northing that the UTM converter takes to WGS84.
  */
+/**
+ * Raised when a point cannot be expressed in longitude/latitude. Carries the
+ * converter's own reason so the refusal the user sees names the cause.
+ */
+class LonLatConversionError extends Error {}
+
 function makeLocalToLonLat(
   resolved: ReturnType<typeof crsService.current>,
   origin: readonly number[],
@@ -3578,9 +3598,13 @@ function makeLocalToLonLat(
         { x: p[0] + ox, y: p[1] + oy, z: p[2] + oz },
         resolved,
       );
-      return r.ok
-        ? [r.value.lon, r.value.lat, r.value.elevation ?? p[2] + oz]
-        : [p[0] + ox, p[1] + oy, p[2] + oz];
+      // A failed conversion must NOT fall back to the projected coordinate:
+      // writing easting 500000 into a KML <coordinates> element claims
+      // longitude 500000, which is not a degraded answer but a corrupt file.
+      // The origin probe above only proves the origin converts; a point far
+      // enough from it can still leave the grid, so this is reachable.
+      if (!r.ok) throw new LonLatConversionError(r.reason);
+      return [r.value.lon, r.value.lat, r.value.elevation ?? p[2] + oz];
     };
   }
   return null;

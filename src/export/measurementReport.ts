@@ -96,10 +96,15 @@ export function measurementsToFindings(
     // shows the whole earthwork, not just the fill, and reads its own honesty.
     if (m.kind === 'volume' && m.volume) {
       const L = unitToMetres;
+      // Guard the vertical factor exactly as `measurementExport` does; a zero,
+      // NaN or negative value would otherwise make this report and the CSV
+      // disagree about the same volume — the divergence this file exists to end.
+      const Vv =
+        Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : L;
       // Cubic factor is linear²·vertical, matching `measurementExport`'s `Vol`.
       // Plain L³ applied the HORIZONTAL unit to the vertical axis, overstating
       // a metre/US-foot compound volume by 3.28×.
-      const V = L * L * verticalToMetres; // native render units³ → m³
+      const V = L * L * Vv; // native render units³ → m³
       const net = m.volume.net * V;
       const caveats = [
         `Cut ${(m.volume.cut * V).toFixed(2)} m³ / fill ${(m.volume.fill * V).toFixed(2)} m³ over ${(m.volume.footprintArea * L * L).toFixed(2)} m² footprint.`,

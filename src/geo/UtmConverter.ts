@@ -73,8 +73,14 @@ const FALSE_NORTHING_SOUTH = 10000000;
  */
 const MIN_EASTING = 100000;
 const MAX_EASTING = 900000;
-const MIN_NORTHING = 0;
-const MAX_NORTHING = 10000000;
+// Northings get a ~100 km overlap either side of the nominal span. A survey
+// straddling the equator keeps ONE zone/hemisphere code for the whole tile, so
+// a southern (327xx) northing legitimately passes 10 000 000 and a northern
+// (326xx) one goes negative. Hard bounds at 0 and 10 000 000 refused real data
+// from Ecuador, Colombia, Kenya and Indonesia.
+const NORTHING_OVERLAP = 100000;
+const MIN_NORTHING = -NORTHING_OVERLAP;
+const MAX_NORTHING = 10000000 + NORTHING_OVERLAP;
 
 /**
  * Refuse a grid coordinate the converter cannot honestly interpret.

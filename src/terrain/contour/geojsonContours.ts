@@ -28,10 +28,7 @@ import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
 import { crsUrn as sharedCrsUrn } from '../../export/crsIdentifier';
 
-/** Convert a CRS label to an OGC URN; pass through anything with no code. */
-function crsUrn(crs: string): string {
-  return sharedCrsUrn(crs) ?? crs;
-}
+
 
 /**
  * Build the GeoJSON object (foreign members included for provenance). When the
@@ -112,8 +109,15 @@ export function toGeoJSON(
   // local-frame model into the world frame first — or for nulling `crs`
   // when no world origin is known — so this writer never georeferences
   // recentred local coordinates.
-  if (model.crs) {
-    obj.crs = { type: 'name', properties: { name: crsUrn(model.crs) } };
+  // The name must be a resolvable IDENTIFIER. `model.crs` is the parser's
+  // DISPLAY label, and a reader that cannot resolve it falls back to the RFC
+  // default of WGS84 — placing projected contours in the ocean rather than
+  // failing. When no code can be recovered the member is omitted, which makes a
+  // reader ask instead of quietly assuming. The measurement exporter already
+  // works this way; this writer kept a pass-through that defeated it.
+  const urn = model.crs ? sharedCrsUrn(model.crs) : null;
+  if (urn) {
+    obj.crs = { type: 'name', properties: { name: urn } };
   }
   return obj;
 }

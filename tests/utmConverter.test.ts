@@ -263,9 +263,11 @@ describe('utmConverter — toGeographic', () => {
       if (!r.ok) expect(r.reason).toMatch(/northing/i);
     });
 
-    it('refuses a negative northing', () => {
-      const r = utmConverter.toGeographic({ x: 500_000, y: -1, z: 0 }, utm(12));
-      expect(r.ok).toBe(false);
+    it('accepts a slightly negative northing, which is just south of the equator', () => {
+      // Superseded an earlier assertion that ANY negative northing is invalid.
+      // It is not: a northern-zone tile straddling the equator has them, and
+      // refusing them rejected real equatorial surveys.
+      expect(utmConverter.toGeographic({ x: 500_000, y: -1, z: 0 }, utm(12)).ok).toBe(true);
     });
 
     it('refuses lat/lon values handed in as if they were UTM metres', () => {
@@ -287,6 +289,23 @@ describe('utmConverter — toGeographic', () => {
       );
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.code).toBe('out-of-bounds');
+    });
+
+    it('accepts a southern-zone point just NORTH of the equator', () => {
+      // A survey straddling the equator keeps ONE zone/hemisphere code for the
+      // whole tile, so a 327xx northing legitimately passes 10 000 000. An
+      // inclusive cap there refuses real data from Ecuador, Kenya, Indonesia.
+      expect(utmConverter.toGeographic({ x: 500_000, y: 10_000_500, z: 0 }, utm(18, 'S')).ok).toBe(true);
+    });
+
+    it('accepts a northern-zone point just SOUTH of the equator', () => {
+      // The mirror case: a 326xx northing goes slightly negative.
+      expect(utmConverter.toGeographic({ x: 500_000, y: -500, z: 0 }, utm(18)).ok).toBe(true);
+    });
+
+    it('still refuses a northing far past the overlap allowance', () => {
+      expect(utmConverter.toGeographic({ x: 500_000, y: 12_000_000, z: 0 }, utm(12)).ok).toBe(false);
+      expect(utmConverter.toGeographic({ x: 500_000, y: -500_000, z: 0 }, utm(12)).ok).toBe(false);
     });
 
     it('accepts the range boundaries themselves', () => {

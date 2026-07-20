@@ -20,12 +20,13 @@ function fmt(v: number, precision: number): string {
  * Decimals for the HORIZONTAL axes. Three is millimetres in a projected CRS and
  * about 110 m in a geographic one, so a reprojected WGS84 export was snapping
  * every point to a lattice roughly 55 m across. Seven decimals is ~1.1 cm at the
- * equator, the survey convention — and the same rule `exporters.ts` and
- * `writeLas.ts` already apply. Z is unaffected: a height is a linear unit even
+ * equator, the survey convention — and the same rule `src/io/exporters.ts` and
+ * `src/convert/writeLas.ts` already apply. Z is unaffected: a height is a linear unit even
  * when the horizontal frame is degrees.
  */
 function horizontalPrecision(precision: number, geographic?: boolean): number {
-  return geographic === true ? 7 : precision;
+  // max, not a swap: a caller asking for MORE decimals must not be reduced.
+  return geographic === true ? Math.max(precision, 7) : precision;
 }
 
 /** Write space-delimited `x y z` (+ `r g b` when the cloud has colour). */
