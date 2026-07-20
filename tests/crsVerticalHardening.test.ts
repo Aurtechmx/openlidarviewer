@@ -176,3 +176,101 @@ describe('runBatch — .prj sidecar for kept ASCII with WKT', () => {
     expect(r2[0].sidecar).toBeUndefined();
   });
 });
+
+/**
+ * GTModelTypeGeoKey (1024) is OPTIONAL in the wild — GeographicTypeGeoKey (2048)
+ * alone is a legal georeference. Deriving "is this geographic?" from key 1024
+ * alone therefore misread a lat/lon file as projected metres, and because the
+ * measurement guard keys off that, distances over DEGREES were reported in
+ * metres and saved. 0.001 deg of latitude is ~111 m on the ground.
+ *
+ * The kind is recoverable without key 1024: 3072 is ProjectedCSTypeGeoKey and
+ * 2048 is GeographicTypeGeoKey, so whichever key CARRIES the code already says
+ * which kind it is.
+ */
+describe('crsFromGeoTiff — CRS kind without GTModelTypeGeoKey', () => {
+  it('reads a geographic CRS declared only by GeographicTypeGeoKey', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[2048, 4326]]), null, null);
+    expect(crs.epsg).toBe(4326);
+    expect(crs.isGeographic).toBe(true);
+    // Degrees are not a linear unit, so no metre factor may be asserted.
+    expect(crs.linearUnit).toBe('unknown');
+  });
+
+  it('reads a projected CRS declared only by ProjectedCSTypeGeoKey', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[3072, 26913]]), null, null);
+    expect(crs.epsg).toBe(26913);
+    expect(crs.isGeographic).toBe(false);
+  });
+
+  it('still trusts GTModelTypeGeoKey when it IS present', () => {
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 2], [2048, 4326]]), null, null).isGeographic).toBe(true);
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26913]]), null, null).isGeographic).toBe(false);
+  });
+
+  it('prefers the projected key when a file carries both', () => {
+    // A projected CRS names its base geographic CRS in 2048; that does not make
+    // the file geographic.
+    const crs = crsFromGeoTiff(geoKeyBytes([[2048, 4269], [3072, 26913]]), null, null);
+    expect(crs.epsg).toBe(26913);
+    expect(crs.isGeographic).toBe(false);
+  });
+
+  it('refuses the user-defined sentinel rather than printing it as a code', () => {
+    // 32767 means "user-defined" — the file declared NO code, so reporting
+    // EPSG:32767 invents an identity. The vertical path already rejects it.
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 32767]]), null, null).epsg).toBeUndefined();
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 2], [2048, 32767]]), null, null).epsg).toBeUndefined();
+  });
+});
+
+/**
+ * A WKT body carries many AUTHORITY clauses — datum, spheroid, primem, axis and
+ * unit all have their own. Taking the LAST one in the EPSG range worked only
+ * because well-formed WKT happens to put the CRS's own authority last; a PROJCS
+ * with no top-level authority (older / non-GDAL writers) latched onto
+ * UNIT[...AUTHORITY["EPSG","9001"]] and reported the scan's CRS as EPSG:9001 —
+ * a unit of measure presented as a coordinate system.
+ *
+ * The CRS's authority is the one at the OUTERMOST node; a nested clause's is
+ * not a candidate at all.
+ */
+describe('crsFromWkt — the CRS authority, not a nested one', () => {
+  it('ignores a unit authority when the CRS declares none', () => {
+    const crs = crsFromWkt(
+      'PROJCS["Custom Zone",GEOGCS["WGS 84",DATUM["WGS_1984",' +
+        'SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],' +
+        'AUTHORITY["EPSG","6326"]],AUTHORITY["EPSG","4326"]],' +
+        'UNIT["metre",1,AUTHORITY["EPSG","9001"]]]',
+    );
+    // No authority on the PROJCS itself, so no code is claimed at all.
+    expect(crs.epsg).toBeUndefined();
+    expect(crs.name).not.toContain('9001');
+  });
+
+  it('still reads a well-formed PROJCS authority', () => {
+    const crs = crsFromWkt(
+      'PROJCS["NAD83 / UTM zone 13N",GEOGCS["NAD83",AUTHORITY["EPSG","4269"]],' +
+        'UNIT["metre",1,AUTHORITY["EPSG","9001"]],AUTHORITY["EPSG","26913"]]',
+    );
+    expect(crs.epsg).toBe(26913);
+  });
+
+  it('reads a bare GEOGCS authority', () => {
+    const crs = crsFromWkt(
+      'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,' +
+        'AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' +
+        'UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]',
+    );
+    expect(crs.epsg).toBe(4326);
+  });
+
+  it('does not mistake a datum authority for the CRS authority', () => {
+    // 6326 (datum) sits at depth 2; with no CRS authority nothing is claimed.
+    const crs = crsFromWkt(
+      'GEOGCS["Unnamed",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563],' +
+        'AUTHORITY["EPSG","6326"]]]',
+    );
+    expect(crs.epsg).toBeUndefined();
+  });
+});

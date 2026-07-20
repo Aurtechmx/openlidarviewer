@@ -374,19 +374,51 @@ function verticalEpsgFromName(name: string): number | undefined {
  * 32768-99999 for newer codes) so we don't latch onto a random integer.
  */
 function extractEpsgFromWkt(text: string): number | undefined {
-  // WKT can carry many AUTHORITY/ID clauses (datum, primem, axis...).
-  // The TOP-LEVEL CRS's authority is conventionally the LAST one in the
-  // PROJCS/GEOGCS body that points to EPSG, so we walk all matches and
-  // keep the last one inside the EPSG range.
-  const matches = text.matchAll(
-    /(?:AUTHORITY|ID)\s*\[\s*"EPSG"\s*,\s*"?(\d+)"?\s*\]/gi,
-  );
-  let last: number | undefined;
-  for (const m of matches) {
+  /*
+   * WKT carries many AUTHORITY/ID clauses — datum, spheroid, primem, axis and
+   * unit each have their own — and only the one on the OUTERMOST node names the
+   * CRS. Taking the last match in the EPSG range worked only because
+   * well-formed WKT happens to put the CRS's authority last; a PROJCS with no
+   * top-level authority (older / non-GDAL writers) then latched onto
+   * UNIT[...AUTHORITY["EPSG","9001"]] and reported the scan's CRS as EPSG:9001,
+   * a unit of measure presented as a coordinate system. Every nested code —
+   * 9001/9002/9003 (units), 6326/7030 (datum, spheroid) — sits inside that
+   * range, so no numeric filter can separate them.
+   *
+   * So match on STRUCTURE instead: track bracket depth and accept only a clause
+   * that is a direct child of the root node. When the root declares no
+   * authority, the honest answer is that the file names no code — not the
+   * nearest number that happens to look like one.
+   */
+  // Anchor on the CRS node itself rather than on the outermost bracket: a
+  // compound CRS wraps the horizontal CRS in COMPD_CS, so its authority sits one
+  // level deeper than a plain PROJCS's would.
+  const node = /\b(?:PROJCS|PROJCRS|GEOGCS|GEOGCRS|VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
+
+  /** Unclosed brackets before `index` — the nesting depth at that point. */
+  const depthAt = (index: number): number => {
+    let depth = 0;
+    for (let i = 0; i < index; i++) {
+      const c = text[i];
+      if (c === '[') depth++;
+      else if (c === ']') depth--;
+    }
+    return depth;
+  };
+
+  // The node's own children sit one level inside it. With no keyword present the
+  // caller handed us a node's bracket block directly (the vertical path slices
+  // one out), so its children are already at depth 1.
+  const childDepth = node ? depthAt(node.index) + 1 : 1;
+
+  const clause = /(?:AUTHORITY|ID)\s*\[\s*"EPSG"\s*,\s*"?(\d+)"?\s*\]/gi;
+  let found: number | undefined;
+  for (const m of text.matchAll(clause)) {
+    if (depthAt(m.index) !== childDepth) continue;
     const n = Number(m[1]);
-    if (Number.isFinite(n) && n >= 1024 && n <= 99999) last = n;
+    if (Number.isFinite(n) && n >= 1024 && n <= 99999) found = n;
   }
-  return last;
+  return found;
 }
 
 /**
@@ -514,8 +546,34 @@ export function crsFromGeoTiff(
     }
   }
 
-  const isGeographic = modelType === 2;
-  const epsg = projectedCrs || geodeticCrs;
+  // GeoTIFF codes 0 and 32767 are placeholders meaning "none" and
+  // "user-defined": in both cases the file declared NO code, so surfacing one
+  // invents an identity. `verticalDatumLabel` already rejects the same pair on
+  // the vertical axis; the horizontal axis never got the check, and printed
+  // `EPSG:32767` as though it were a real CRS.
+  const realCode = (v: number | undefined): number | undefined =>
+    v !== undefined && v > 0 && v !== 32767 ? v : undefined;
+  const projected = realCode(projectedCrs);
+  const geodetic = realCode(geodeticCrs);
+
+  /*
+   * GTModelTypeGeoKey (1024) is OPTIONAL — a GeographicTypeGeoKey on its own is
+   * a legal georeference, and plenty of writers emit exactly that. Treating its
+   * absence as "not geographic" made a lat/lon file resolve as PROJECTED with a
+   * metre factor, which is not a labelling problem: the measurement guard reads
+   * that kind, so distances computed over degrees were displayed in metres and
+   * saved (0.001 deg of latitude is ~111 m).
+   *
+   * The kind is recoverable without key 1024, because the key that CARRIES the
+   * code already states it: 3072 is ProjectedCSTypeGeoKey, 2048 is
+   * GeographicTypeGeoKey. A projected CRS commonly names its base geographic
+   * CRS in 2048 as well, so the projected key wins when both are present.
+   */
+  const isGeographic =
+    modelType !== undefined
+      ? modelType === 2
+      : projected === undefined && geodetic !== undefined;
+  const epsg = projected ?? geodetic;
   const citation = readGeoTiffCitation(
     geoAsciiBytes,
     projectedCitationOffset ?? geodeticCitationOffset,
