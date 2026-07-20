@@ -31,7 +31,7 @@ Two things are genuinely solid and worth not re-litigating:
 
 ## P0 — before alpha.2 can claim coordinate correctness
 
-### 1. EPSG codes parsed out of display names — verified
+### 1. EPSG codes parsed out of display names — FIXED (b51d510)
 
 `parseEpsg` in `src/terrain/export/demPackage.ts` makes the `EPSG:` prefix
 optional, so it returns the first 3–6 digit run in any string. It is fed
@@ -73,7 +73,7 @@ cache fingerprints, and the exporters.
 interface TerrainAxes { h1: 0 | 1 | 2; h2: 0 | 1 | 2; vertical: 0 | 1 | 2 }
 ```
 
-### 3. KML substitutes zero for a value it cannot format — verified
+### 3. KML substitutes zero for a value it cannot format — FIXED (b51d510)
 
 `fmt` in `src/export/kmlExport.ts` returns `'0'` for any non-finite number, so a
 failed conversion places a feature at 0°N 0°E instead of failing.
@@ -85,7 +85,7 @@ easting/northing, which the grid-range gate made reachable; it now refuses. The
 Fix: conversion returns a result type; on failure abort the export or omit the
 feature and disclose it. Never substitute.
 
-### 4. Session up-axis defaults silently to Y — verified
+### 4. Session up-axis defaults silently to Y — FIXED (b51d510)
 
 `src/io/session.ts:343` — `upAxis: raw.upAxis === 'z' ? 'z' : 'y'`. A missing,
 misspelled or corrupted value becomes Y-up with no warning, reinterpreting every
@@ -176,9 +176,9 @@ effective reference for coordinates, labels and embedded metadata.
 
 ## Sequencing
 
-Items 1, 3 and 4 above are contained and independently testable — each is a small
-diff with a clear failing test, and each currently produces a permanently wrong
-artifact. They should land first.
+Items 1, 3 and 4 are **done** (`b51d510`): each was a small diff with a failing
+test first and a killed mutant after, and each was producing a permanently wrong
+artifact. Item 2 (terrain axes) is next and is the largest remaining P0.
 
 Item 2 (terrain axes) is the largest P0: it changes a contract threaded through
 analysis, caching and three exporters, and it should land as one reviewed change
