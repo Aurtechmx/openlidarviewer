@@ -16,7 +16,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { yUpToCanonicalZUp, yUpOriginToCanonicalZUp } from '../src/terrain/canonicalFrame';
-import { sceneUpAxisForSources } from '../src/io/sniffFormat';
+import { sceneUpAxisPolicy } from '../src/io/sniffFormat';
 
 describe('yUpToCanonicalZUp', () => {
   it('moves the Y-up elevation into the canonical Z slot', () => {
@@ -95,28 +95,30 @@ describe('yUpOriginToCanonicalZUp', () => {
   });
 });
 
-describe('sceneUpAxisForSources', () => {
-  it('reports z for survey formats', () => {
-    expect(sceneUpAxisForSources(['las', 'laz', 'e57'], false)).toBe('z');
+describe('sceneUpAxisPolicy', () => {
+  it('needs no detection for survey formats — Z-up by spec', () => {
+    expect(sceneUpAxisPolicy(['las', 'laz', 'e57'], false)).toEqual({ kind: 'z' });
   });
 
-  it('reports y for phone-scan mesh formats', () => {
-    expect(sceneUpAxisForSources(['ply', 'glb'], false)).toBe('y');
+  it('needs no detection for a streaming-only gather', () => {
+    // COPC/EPT are LAS-family, Z-up by spec.
+    expect(sceneUpAxisPolicy([], true)).toEqual({ kind: 'z' });
   });
 
-  it('reports z for a streaming-only gather', () => {
-    // COPC/EPT are LAS-family, z-up by spec.
-    expect(sceneUpAxisForSources([], true)).toBe('z');
+  it('demands DETECTION for mesh formats instead of assuming an axis', () => {
+    // PLY carries no mandated up-axis: photogrammetry writes Y-up, while
+    // CloudCompare/PDAL-style tools write Z-up PLYs. An earlier revision
+    // hard-classified PLY as Y-up and rotated genuinely Z-up output into a
+    // vertical wall — which the analyse-panel e2e caught.
+    expect(sceneUpAxisPolicy(['ply', 'glb'], false)).toEqual({ kind: 'detect', hasSpecZ: false });
   });
 
-  it('refuses a MIXED gather rather than picking a side', () => {
-    // A Y-up mesh and a Z-up scan are in different frames, so a buffer holding
-    // both describes no single surface and no rotation reconciles it.
-    expect(sceneUpAxisForSources(['las', 'ply'], false)).toBeNull();
-    expect(sceneUpAxisForSources(['ply'], true)).toBeNull();
+  it('flags a mesh + survey mix so a detected-Y-up mesh declines', () => {
+    expect(sceneUpAxisPolicy(['las', 'ply'], false)).toEqual({ kind: 'detect', hasSpecZ: true });
+    expect(sceneUpAxisPolicy(['ply'], true)).toEqual({ kind: 'detect', hasSpecZ: true });
   });
 
   it('reports nothing for an empty gather', () => {
-    expect(sceneUpAxisForSources([], false)).toBeNull();
+    expect(sceneUpAxisPolicy([], false)).toBeNull();
   });
 });

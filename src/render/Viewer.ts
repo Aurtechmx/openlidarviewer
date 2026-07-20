@@ -77,7 +77,8 @@ import {
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { keyFromId } from '../io/copc/voxelKey';
 import { intensityFilterUniform } from './intensityFilterUniform';
-import { isZUpFormat, sceneUpAxisForSources } from '../io/sniffFormat';
+import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
+import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode, rampRangeForMode } from './colorModes';
@@ -2411,25 +2412,6 @@ export class Viewer {
    * and confidence reflect exactly the points passed in. Returns null
    * when nothing is loaded. v0.4.0.
    */
-  /**
-   * The frame the terrain buffer's SOURCES are in, or null when they disagree.
-   *
-   * Exposed because the caller must rotate the recentre origin exactly as
-   * {@link gatherTerrainPositions} rotates the points; deriving it twice from
-   * two different places is how the two would drift apart.
-   */
-  gatherTerrainSourceUpAxis(): 'z' | 'y' | null {
-    const staticFormats: SourceFormat[] = [];
-    for (const { cloud } of integrableClouds(this._clouds.values())) {
-      if (cloud.positions && cloud.positions.length > 0) staticFormats.push(cloud.sourceFormat);
-    }
-    let streamingPoints = 0;
-    for (const { decoded } of this._streamingPickData.values()) {
-      if (decoded.positions) streamingPoints += decoded.positions.length / 3;
-    }
-    return sceneUpAxisForSources(staticFormats, streamingPoints > 0);
-  }
-
   gatherTerrainPositions(
     maxPoints = 300_000,
   ): {
@@ -2526,8 +2508,20 @@ export class Viewer {
     // A MIXED gather has no single frame — a Y-up mesh and a Z-up scan are not
     // in the same space, so their union describes no surface. Decline it rather
     // than analyse a meaningless combination.
-    const sceneUp = this.gatherTerrainSourceUpAxis();
-    if (sceneUp === null) return null;
+    const policy = sceneUpAxisPolicy(staticFormats, streamingPoints > 0);
+    if (policy === null) return null;
+    let sceneUp: 'z' | 'y' = 'z';
+    if (policy.kind === 'detect') {
+      // Mesh formats carry no mandated up-axis (photogrammetry writes Y-up,
+      // CloudCompare/PDAL-style tools write Z-up PLYs), so the DATA decides:
+      // the same up-axis detection the scan-shape router uses, one authority.
+      sceneUp = classifyScanShape(sample.positions).up === 'y' ? 'y' : 'z';
+      if (sceneUp === 'y' && policy.hasSpecZ) {
+        // A detected-Y-up mesh beside Z-up-by-spec sources is two provably
+        // different frames; their union describes no surface. Decline.
+        return null;
+      }
+    }
     if (sceneUp === 'y') yUpToCanonicalZUp(sample.positions);
     return {
       positions: sample.positions,

@@ -219,7 +219,10 @@ export function createTerrainAnalysisRunner(
   // deriveCoreParams only reads it for geographic frames, and read
   // identically by run() and the export builders so the core-cache
   // fingerprint never forks.
-  const worldOriginY = (): number | null => {
+  // Takes the axis the gather ACTUALLY applied (its `sourceUpAxis` result) so
+  // the origin and the points can never rotate differently — a second, separate
+  // derivation of the frame is exactly how the two would drift apart.
+  const worldOriginY = (sourceUpAxis: 'z' | 'y' | undefined) => (): number | null => {
     const viewer = getViewer();
     const id = getActiveId();
     const origin =
@@ -233,7 +236,7 @@ export function createTerrainAnalysisRunner(
     // leaving it as the source's Y would scale a correctly-rotated surface by a
     // latitude taken from an elevation.
     const canonical =
-      viewer.gatherTerrainSourceUpAxis() === 'y'
+      sourceUpAxis === 'y'
         ? yUpOriginToCanonicalZUp([origin[0], origin[1], origin[2]])
         : origin;
     return Number.isFinite(canonical[1]) ? canonical[1] : null;
@@ -298,7 +301,7 @@ export function createTerrainAnalysisRunner(
         crsService,
         gathered.totalPoints,
         gathered.residentOnly,
-        worldOriginY,
+        worldOriginY(gathered.sourceUpAxis),
       );
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
@@ -384,7 +387,7 @@ export function createTerrainAnalysisRunner(
       crsService,
       gathered.totalPoints,
       gathered.residentOnly,
-      worldOriginY,
+      worldOriginY(gathered.sourceUpAxis),
     );
     const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
       computeTerrainCoreAsync(
