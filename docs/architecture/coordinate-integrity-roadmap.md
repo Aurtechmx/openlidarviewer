@@ -48,7 +48,7 @@ Fix: carry the code as a number from the resolver rather than recovering it from
 prose. Where a string must be accepted, anchor it (`/^EPSG:(\d{4,6})$/i`) and
 treat it as a defensive fallback, never a primary source.
 
-### 2. Terrain analysis has no axis input — verified
+### 2. Terrain analysis has no axis input — FIXED (cf19b96)
 
 `gatherTerrainPositions` hands positions through unrotated, `ScanShape` does not
 expose the up-axis it detects internally, and `terrainAnalysisRunner` has no axis
@@ -66,12 +66,15 @@ and the latitude correction. The export origin mapping (`demPackage`,
 `contourDeliverableBuild`, `contourFeatureModel`) is the same defect surfaced one
 layer later — fixing analysis without the exports leaves the package wrong.
 
-Fix: one explicit axis contract threaded through the terrain contracts, their
-cache fingerprints, and the exporters.
-
-```ts
-interface TerrainAxes { h1: 0 | 1 | 2; h2: 0 | 1 | 2; vertical: 0 | 1 | 2 }
-```
+Fixed by normalising at the gather boundary rather than threading an axis
+contract: a Y-up buffer is rotated into the canonical Z-up frame (`(x, y, z) →
+(x, −z, y)`, a rotation, not a mirroring swap) before anything reads it, and
+the recentre origin makes the same trip through a shared accessor. Analysis,
+cache fingerprints and all three exporters stay correct with no changes of
+their own. A mixed Y-up + Z-up gather declines — the union describes no single
+surface. The equivalence suite runs the real Horn derivatives over one
+analytic hill authored in both frames and requires identical slope AND aspect;
+a reflection passes the elevation check and fails the aspect one.
 
 ### 3. KML substitutes zero for a value it cannot format — FIXED (b51d510)
 
@@ -176,9 +179,10 @@ effective reference for coordinates, labels and embedded metadata.
 
 ## Sequencing
 
-Items 1, 3 and 4 are **done** (`b51d510`): each was a small diff with a failing
-test first and a killed mutant after, and each was producing a permanently wrong
-artifact. Item 2 (terrain axes) is next and is the largest remaining P0.
+Items 1, 3 and 4 are done (`b51d510`), and item 2 is done (`cf19b96`) via the
+boundary rotation. The remaining P0 items are 5/6 (the axis-blind converter and
+the LAS vertical unit — the same normalise-at-the-boundary approach applies) and
+the three still marked `reported`, which need verification before fixing.
 
 Item 2 (terrain axes) is the largest P0: it changes a contract threaded through
 analysis, caching and three exporters, and it should land as one reviewed change
