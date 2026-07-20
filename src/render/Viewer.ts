@@ -77,7 +77,8 @@ import {
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { keyFromId } from '../io/copc/voxelKey';
 import { intensityFilterUniform } from './intensityFilterUniform';
-import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
+import { isZUpFormat, sceneUpAxisForSources } from '../io/sniffFormat';
+import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode, rampRangeForMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
@@ -2408,6 +2409,25 @@ export class Viewer {
    * and confidence reflect exactly the points passed in. Returns null
    * when nothing is loaded. v0.4.0.
    */
+  /**
+   * The frame the terrain buffer's SOURCES are in, or null when they disagree.
+   *
+   * Exposed because the caller must rotate the recentre origin exactly as
+   * {@link gatherTerrainPositions} rotates the points; deriving it twice from
+   * two different places is how the two would drift apart.
+   */
+  gatherTerrainSourceUpAxis(): 'z' | 'y' | null {
+    const staticFormats: SourceFormat[] = [];
+    for (const { cloud } of integrableClouds(this._clouds.values())) {
+      if (cloud.positions && cloud.positions.length > 0) staticFormats.push(cloud.sourceFormat);
+    }
+    let streamingPoints = 0;
+    for (const { decoded } of this._streamingPickData.values()) {
+      if (decoded.positions) streamingPoints += decoded.positions.length / 3;
+    }
+    return sceneUpAxisForSources(staticFormats, streamingPoints > 0);
+  }
+
   gatherTerrainPositions(
     maxPoints = 300_000,
   ): {
@@ -2423,6 +2443,13 @@ export class Viewer {
      * and the frame is genuinely ambiguous. v0.4.5 — see scanShape.ts header.
      */
     verticalAxisHint?: 'z';
+    /**
+     * The frame the SOURCE was in, before normalisation. The caller needs it to
+     * rotate the recentre origin the same way — terrain reads the origin's
+     * second component as a northing, so an origin left in the source frame
+     * would georeference a correctly-rotated surface to the wrong place.
+     */
+    sourceUpAxis?: 'z' | 'y';
   } | null {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
@@ -2485,13 +2512,31 @@ export class Viewer {
       const totalNodes = this._streaming.cloud.octree.nodes().length;
       if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
     }
+    // Normalise the buffer into the canonical Z-up survey frame BEFORE anything
+    // reads it. Nine modules under `src/terrain` index positions as "X/Y
+    // horizontal, Z elevation", which is wrong for the Y-up mesh formats, and a
+    // Y-up height field reaches terrain analysis easily — drone photogrammetry
+    // exported as OBJ or glTF classifies as terrain. Rotating once here keeps
+    // the analysis, the core-cache fingerprints and all three exporters correct
+    // with no changes of their own, and cannot be half-applied the way an axis
+    // parameter threaded through every consumer could.
+    //
+    // A MIXED gather has no single frame — a Y-up mesh and a Z-up scan are not
+    // in the same space, so their union describes no surface. Decline it rather
+    // than analyse a meaningless combination.
+    const sceneUp = this.gatherTerrainSourceUpAxis();
+    if (sceneUp === null) return null;
+    if (sceneUp === 'y') yUpToCanonicalZUp(sample.positions);
     return {
       positions: sample.positions,
       classification: sample.classification,
       residentOnly,
       sampled: sample.sampled,
       totalPoints,
-      verticalAxisHint: verticalAxisHintForSources(staticFormats, streamingPoints > 0),
+      sourceUpAxis: sceneUp,
+      // Always 'z': the buffer above is canonical now, so scan-shape detection
+      // has nothing left to guess at.
+      verticalAxisHint: 'z',
     };
   }
 

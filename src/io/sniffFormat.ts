@@ -175,3 +175,37 @@ export function is3dTilesName(filename: string): boolean {
   const base = lower.split('/').pop() ?? lower;
   return base.endsWith('.pnts') || base === 'tileset.json';
 }
+
+/**
+ * The scene's native vertical axis, or `null` when the contributing sources
+ * disagree about it.
+ *
+ * Terrain analysis reads a buffer as "X/Y horizontal, Z elevation". That is
+ * true of the survey formats and of the COPC/EPT streams built on them, and
+ * false of the phone-scan mesh formats, whose native frame is Y-up. Nothing
+ * previously told the pipeline which it had, so a Y-up height field was
+ * analysed with a horizontal axis standing in for elevation.
+ *
+ * `null` for a MIXED gather is the honest answer, not a defensive one: a Y-up
+ * mesh and a Z-up scan are in different frames, so a buffer holding both
+ * describes no single surface and no rotation can reconcile it. The caller
+ * declines rather than analysing a meaningless union.
+ *
+ * Pure seam for `Viewer.gatherTerrainPositions`, unit-tested directly.
+ */
+export function sceneUpAxisForSources(
+  staticFormats: ReadonlyArray<SourceFormat>,
+  hasStreaming: boolean,
+): 'z' | 'y' | null {
+  if (staticFormats.length === 0) return hasStreaming ? 'z' : null;
+  // Streaming sources are COPC/EPT — LAS-family, z-up by spec — so any static
+  // Y-up contributor alongside one is already a mixed frame.
+  let sawZ = hasStreaming;
+  let sawY = false;
+  for (const f of staticFormats) {
+    if (isZUpFormat(f)) sawZ = true;
+    else sawY = true;
+  }
+  if (sawZ && sawY) return null;
+  return sawY ? 'y' : 'z';
+}
