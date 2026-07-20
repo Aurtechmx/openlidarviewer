@@ -106,7 +106,7 @@ as height.
 Fix: normalise to a canonical east/north/up basis before reprojection; exporters
 receive canonical axes, never raw storage order.
 
-### 6. LAS vertical unit inferred from the horizontal one — traced
+### 6. LAS vertical unit inferred from the horizontal one — FIXED (9d937ba)
 
 `writeLas.ts` derives GeoKey 4099 from 3076. Reprojecting horizontally to metres
 while leaving Z in feet writes "400 metres" over a Z of 400 feet. Independently
@@ -115,14 +115,19 @@ confirmed by two audit passes.
 Fix: vertical unit is independent input, derived from or checked against the
 vertical CRS. Unknown ⇒ omit the key rather than guess.
 
-### 7. Geographic point inspection rounds before converting — reported
+### 7. Geographic point inspection rounds before converting — FIXED (644f959)
 
 `src/render/pointInfo.ts` rounds world coordinates to 3 decimals immediately, then
 feeds them to display, UTM conversion, clipboard and JSON. Three decimals is
 millimetres in metres and ~111 m in degrees.
 
-Not yet independently verified. If it holds, the fix is to keep Float64 through
-the pipeline and round only at render, with precision chosen per unit.
+Verified with a narrower shape than reported: the projected path was fine (3 dp
+is millimetres), but a GEOGRAPHIC source's world Y — latitude — was rounded to
+3 dp (~111 m) and then fed to the UTM derivation, printed at millimetre
+formatting, and carried into clipboard and JSON. Fixed by rounding the
+horizontal axes to 7 dp (~1.1 cm) when the frame is geographic; elevation stays
+at 3 dp, a height being a linear unit either way. The Viewer captures the frame
+kind in the `setInspectCoordinateContext` pass-through it already owns.
 
 ### 8. Change detection computes before checking compatibility — reported
 
@@ -179,10 +184,11 @@ effective reference for coordinates, labels and embedded metadata.
 
 ## Sequencing
 
-Items 1, 3 and 4 are done (`b51d510`), and item 2 is done (`cf19b96`) via the
-boundary rotation. The remaining P0 items are 5/6 (the axis-blind converter and
-the LAS vertical unit — the same normalise-at-the-boundary approach applies) and
-the three still marked `reported`, which need verification before fixing.
+Items 1–4 are done (`b51d510`, `cf19b96`), item 6 is done (`9d937ba`) and
+item 7 is done (`644f959`, verified narrower than reported — the projected path
+was fine). Remaining P0: item 5 (the axis-blind converter — the terrain-style
+boundary normalisation applies) and items 8/9, still `reported` and needing
+verification before any fix.
 
 Item 2 (terrain axes) is the largest P0: it changes a contract threaded through
 analysis, caching and three exporters, and it should land as one reviewed change
