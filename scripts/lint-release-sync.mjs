@@ -128,8 +128,107 @@ try {
   problems.push('public/sw.js missing or unreadable.');
 }
 
+// 8. The VERSIONED evidence set. Checks 1-7 all watch metadata that carries the
+// version in its own text, so drift there is self-announcing. The evidence
+// reports are the opposite: each release gets a NEW file, the previous one stays
+// on disk, and every prose reference to it keeps resolving — so a stale link is
+// silent and points a reviewer at the wrong release's evidence. That is exactly
+// what happened at alpha.2: README, AI_ASSISTANCE, ARTIFACT_EVALUATION and the
+// docs-site include all still named the alpha.1 validation report.
+const EVIDENCE = [
+  'VALIDATION_REPORT',
+  'KNOWN_LIMITATIONS',
+  'REPRODUCIBILITY',
+  'READINESS_REPORT',
+];
+for (const name of EVIDENCE) {
+  const path = `${name}_v${version}.md`;
+  if (!existsSync(resolve(ROOT, path))) {
+    problems.push(`${path} is missing — every release needs its own ${name} file.`);
+  }
+}
+
+// A docs-site release page per release; the site's release list stops dead
+// without one, so the newest release is the one a reader cannot find.
+const releasePage = `docs-site/releases/v${version}.md`;
+if (!existsSync(resolve(ROOT, releasePage))) {
+  problems.push(`${releasePage} is missing — the docs site needs a page for this release.`);
+}
+
+// Any prose that names a versioned evidence file must name THIS version's.
+// Scanning for the older-version filename is what catches the silent case: the
+// link still resolves, so nothing else can notice it is pointing backwards.
+const REFERRERS = [
+  'README.md',
+  'AI_ASSISTANCE.md',
+  'ARTIFACT_EVALUATION.md',
+  'docs-site/reproducibility/validation-report.md',
+];
+for (const file of REFERRERS) {
+  let text;
+  try {
+    text = read(file);
+  } catch {
+    problems.push(`${file} missing or unreadable.`);
+    continue;
+  }
+  for (const name of EVIDENCE) {
+    // Every versioned mention of this evidence family in this file...
+    const mentions = [...text.matchAll(new RegExp(`${name}_v([0-9][0-9A-Za-z.\\-]*)\\.md`, 'g'))];
+    if (mentions.length === 0) continue;
+    // ...must include the current one. An older report may still be cited
+    // deliberately (alpha.2 inherits terrain evidence from v0.5.9), so the rule
+    // is "the current release is named", not "no older release is named".
+    if (!mentions.some((m) => m[1] === version)) {
+      const seen = [...new Set(mentions.map((m) => m[1]))].join(', ');
+      problems.push(
+        `${file} cites ${name}_v${seen}.md but never ${name}_v${version}.md — ` +
+          `the link still resolves, so it silently sends a reviewer to the wrong release's evidence.`,
+      );
+    }
+  }
+}
+
+// 9. The evidence files each restate the same suite totals in their own prose.
+// A reviewer receiving three permanent documents that disagree about how many
+// tests ran cannot tell which is the record — and unlike a stale link, nothing
+// about the wrong number looks wrong. At alpha.2 the validation report carried
+// the alpha.1 figures while the reproducibility file carried the current ones,
+// and a later fix updated two of the three files, leaving a fresh disagreement.
+// So: extract the tuple wherever it appears and require the files to agree.
+// The counts are written with thousands separators and followed by varying
+// punctuation ("export 567," vs "export 567 ·"), so capture the NUMBER only —
+// a greedy [\d,]+ swallows the trailing comma and reports a phantom mismatch
+// between two files that actually agree.
+const NUM = String.raw`(\d{1,3}(?:,\d{3})*)`;
+const COUNT_RE = new RegExp(
+  `[Uu]nit ${NUM}[^\\n]*?export ${NUM}[^\\n]*?terrain ${NUM}[^\\n]*?ui ${NUM}[^\\n]*?slow ${NUM}`,
+);
+const counted = [];
+for (const name of EVIDENCE) {
+  const path = `${name}_v${version}.md`;
+  let text;
+  try {
+    text = read(path);
+  } catch {
+    continue; // absence is already reported by check 8
+  }
+  const m = COUNT_RE.exec(text);
+  if (m) counted.push({ path, tuple: m.slice(1, 6).join(' / ') });
+}
+if (counted.length > 1) {
+  const distinct = [...new Set(counted.map((c) => c.tuple))];
+  if (distinct.length > 1) {
+    problems.push(
+      `the v${version} evidence files disagree about the suite totals (unit / export / terrain / ui / slow):\n` +
+        counted.map((c) => `      - ${c.path}: ${c.tuple}`).join('\n') +
+        `\n    Re-run the buckets and write the SAME measured figures into each.`,
+    );
+  }
+}
+
 if (problems.length === 0) {
-  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, CITATION.cff, and the service-worker cache all on v${version}.`);
+  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, CITATION.cff, the service-worker cache, and the versioned evidence set all on v${version}.`);
   process.exit(0);
 }
 
