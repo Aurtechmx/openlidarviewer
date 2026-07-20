@@ -35,6 +35,7 @@ import type {
   Vec3,
 } from './CoordinateTypes';
 import type {
+  ConversionFailure,
   ConversionResult,
   CoordinateConverter,
 } from './CoordinateConverter';
@@ -63,6 +64,59 @@ const K0 = 0.9996;
 const FALSE_EASTING = 500000;
 /** UTM false northing in the southern hemisphere, metres. */
 const FALSE_NORTHING_SOUTH = 10000000;
+
+/**
+ * The UTM grid's valid coordinate range, metres. A zone spans 6° of longitude
+ * (about 667 km at the equator) about a false easting of 500 000, so real
+ * eastings sit inside 100 000–900 000; northings run pole to pole once the
+ * southern false northing is applied.
+ */
+const MIN_EASTING = 100000;
+const MAX_EASTING = 900000;
+const MIN_NORTHING = 0;
+const MAX_NORTHING = 10000000;
+
+/**
+ * Refuse a grid coordinate the converter cannot honestly interpret.
+ *
+ * The series maths returns a confident lat/lon for ANY pair of numbers: easting
+ * 5 000 000 in zone 12N used to resolve to lat 27.677 / lon -66.801 — a point in
+ * the Atlantic — with `ok: true`, and the KML export wrote a placemark there.
+ * `out-of-bounds` has been in the {@link ConversionFailure} contract since the
+ * interface was written and nothing had ever emitted it.
+ *
+ * This catches GROSS implausibility: garbage, a unit confusion (feet read as
+ * metres), or geographic degrees handed in as projected metres — the shape a
+ * lat/lon cloud takes when its CRS is overridden to a UTM code. It cannot catch
+ * an adjacent-zone mislabel, because an easting valid in one zone is valid in
+ * every zone: a true zone-12 point at easting 500 000 labelled zone 13 stays in
+ * range and still resolves about 500 km east. Detecting that needs a second
+ * signal — a catalog EPSG, or a declared geographic bounding box — rather than
+ * a range test, and none is available on a plain LAS.
+ */
+function utmRangeFailure(easting: number, northing: number): ConversionFailure | null {
+  if (easting < MIN_EASTING || easting > MAX_EASTING) {
+    return {
+      ok: false,
+      code: 'out-of-bounds',
+      reason:
+        `Easting ${easting} is outside the UTM grid range ` +
+        `(${MIN_EASTING}–${MAX_EASTING} m), so this scan's coordinates don't ` +
+        `match the declared UTM zone.`,
+    };
+  }
+  if (northing < MIN_NORTHING || northing > MAX_NORTHING) {
+    return {
+      ok: false,
+      code: 'out-of-bounds',
+      reason:
+        `Northing ${northing} is outside the UTM grid range ` +
+        `(${MIN_NORTHING}–${MAX_NORTHING} m), so this scan's coordinates don't ` +
+        `match the declared UTM zone.`,
+    };
+  }
+  return null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTM EPSG code mapping
@@ -298,6 +352,11 @@ export const utmConverter: CoordinateConverter = {
     if (isSupportedUtm(from) && isWgs84LatLon(to)) {
       const fromEpsg = decodeUtmEpsg(from.epsg as number);
       if (!fromEpsg) return unsupportedPairFailure(from, to);
+      // Same gate as `toGeographic` — this is the path the Inspector reads, so
+      // leaving it open would still surface a confident lat/lon for a
+      // coordinate the converter cannot interpret.
+      const range = utmRangeFailure(point.x, point.y);
+      if (range) return range;
       const { lat, lon } = utmToGeographic(
         point.x,
         point.y,
@@ -350,6 +409,8 @@ export const utmConverter: CoordinateConverter = {
         reason: `EPSG:${from.epsg} is not a supported UTM zone.`,
       };
     }
+    const range = utmRangeFailure(point.x, point.y);
+    if (range) return range;
     const { lat, lon } = utmToGeographic(
       point.x,
       point.y,

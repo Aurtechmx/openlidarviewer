@@ -219,6 +219,82 @@ describe('utmConverter — toGeographic', () => {
     }
   });
 
+  /**
+   * A UTM easting/northing outside the grid's valid range is not a coordinate
+   * the converter can honestly interpret, but the maths happily returns a
+   * lat/lon for any pair of numbers. Before this gate, easting 5,000,000 in
+   * zone 12N returned `ok: true` with lat 27.677 / lon -66.801 — a confident
+   * answer in the Atlantic — and the KML export wrote placemarks there.
+   *
+   * The `out-of-bounds` failure code has been in the contract since the
+   * converter interface was written; nothing had ever emitted it.
+   *
+   * SCOPE, deliberately stated: this catches GROSS implausibility — garbage,
+   * unit confusion (feet read as metres), and geographic coordinates fed in as
+   * projected ones. It CANNOT catch an adjacent-zone mislabel, because a valid
+   * easting is valid in every zone: a true zone-12 point at easting 500,000
+   * labelled zone 13 stays in range and still resolves ~500 km east. Detecting
+   * that needs a second signal (a catalog EPSG, a declared geographic bbox),
+   * not a range check.
+   */
+  describe('implausible grid coordinates are refused, not interpreted', () => {
+    it('accepts a coordinate inside the UTM grid range', () => {
+      expect(utmConverter.toGeographic({ x: 500000, y: 4500000, z: 0 }, utm(12)).ok).toBe(true);
+    });
+
+    it('refuses an easting far outside any zone', () => {
+      const r = utmConverter.toGeographic({ x: 5_000_000, y: 4_500_000, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.code).toBe('out-of-bounds');
+        expect(r.reason).toMatch(/easting/i);
+      }
+    });
+
+    it('refuses an easting below the zone minimum', () => {
+      const r = utmConverter.toGeographic({ x: 50_000, y: 4_500_000, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe('out-of-bounds');
+    });
+
+    it('refuses a northing beyond the pole', () => {
+      const r = utmConverter.toGeographic({ x: 500_000, y: 12_000_000, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toMatch(/northing/i);
+    });
+
+    it('refuses a negative northing', () => {
+      const r = utmConverter.toGeographic({ x: 500_000, y: -1, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+    });
+
+    it('refuses lat/lon values handed in as if they were UTM metres', () => {
+      // The realistic confusion this catches: a geographic cloud whose CRS was
+      // overridden to a UTM code. Degrees are nowhere near grid metres.
+      const r = utmConverter.toGeographic({ x: -111.05, y: 40.02, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe('out-of-bounds');
+    });
+
+    it('refuses the same coordinate through convertPoint, not just toGeographic', () => {
+      // convertPoint is the path the Inspector reads. Gating only the
+      // convenience wrapper would leave the readout showing a confident
+      // lat/lon for a coordinate the converter cannot interpret.
+      const r = utmConverter.convertPoint(
+        { x: 5_000_000, y: 4_500_000, z: 0 },
+        utm(12),
+        WGS84_LATLON,
+      );
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe('out-of-bounds');
+    });
+
+    it('accepts the range boundaries themselves', () => {
+      expect(utmConverter.toGeographic({ x: 100_000, y: 0, z: 0 }, utm(12)).ok).toBe(true);
+      expect(utmConverter.toGeographic({ x: 900_000, y: 10_000_000, z: 0 }, utm(12)).ok).toBe(true);
+    });
+  });
+
   it('rejects a non-UTM source with unsupported-pair', () => {
     const result = utmConverter.toGeographic(
       { x: 0, y: 0, z: 0 },
