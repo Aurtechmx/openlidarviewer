@@ -221,6 +221,14 @@ export interface RawPointInfo {
    */
   origin: [number, number, number];
   distance: number;
+  /**
+   * True when the horizontal frame is geographic (lon/lat degrees). Three
+   * decimals is millimetres in metres and ~111 m in degrees, and this rounding
+   * happens BEFORE the inspector's conversions, clipboard and JSON read the
+   * value — so a degree frame keeps 7 decimals (~1.1 cm, the survey
+   * convention). Elevation stays at 3: a height is a linear unit either way.
+   */
+  geographicHorizontal?: boolean;
   intensity: number | null;
   classification: number | null;
   rgb: [number, number, number] | null;
@@ -253,8 +261,8 @@ export function makePointInfo(raw: RawPointInfo): PointInfo {
   const info: PointInfo = {
     layer: raw.layer,
     index: raw.index,
-    x: round(raw.local[0] + raw.origin[0], 3),
-    y: round(raw.local[1] + raw.origin[1], 3),
+    x: round(raw.local[0] + raw.origin[0], raw.geographicHorizontal ? 7 : 3),
+    y: round(raw.local[1] + raw.origin[1], raw.geographicHorizontal ? 7 : 3),
     z: round(raw.local[2] + raw.origin[2], 3),
     distance: round(raw.distance, 2),
     intensity: raw.intensity,

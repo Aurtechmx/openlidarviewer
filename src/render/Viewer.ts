@@ -1184,6 +1184,8 @@ export class Viewer {
   private _toolPaused = false;
   private _measureListeners: MeasureListeners = {};
   private _inspectListeners: InspectListeners = {};
+  /** True when the inspect frame's horizontal axes are lon/lat degrees. */
+  private _inspectGeographicHorizontal = false;
   private _annotateListeners: AnnotateListeners = {};
   private _probeListeners: ProbeListeners = {};
   /** Last pointer position over the canvas, in NDC, for the measure preview. */
@@ -4320,6 +4322,11 @@ export class Viewer {
   setInspectCoordinateContext(
     ctx: import('./InspectTool').CoordinateContext,
   ): void {
+    // Remember whether the horizontal frame is degrees: `_infoForHit` rounds
+    // coordinates before anything reads them, and 3 decimals is millimetres in
+    // metres but ~111 m in degrees — the inspector's UTM derivation, clipboard
+    // and JSON all inherited that loss for lat/lon scans.
+    this._inspectGeographicHorizontal = ctx.crs?.kind === 'geographic';
     this._inspect.setCoordinateContext(ctx);
   }
 
@@ -6395,6 +6402,7 @@ export class Viewer {
       : null;
     const normals = cloud.normals;
     return makePointInfo({
+      geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud.name,
       index,
       // `point` is in local space; the cloud's origin restores real-world
@@ -6434,6 +6442,7 @@ export class Viewer {
       ? [decoded.rgb[index * 3], decoded.rgb[index * 3 + 1], decoded.rgb[index * 3 + 2]]
       : null;
     return makePointInfo({
+      geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud ? cloud.name : 'COPC',
       index,
       local: [point.x, point.y, point.z],
