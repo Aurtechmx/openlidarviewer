@@ -141,7 +141,13 @@ describe('project frame — the layer set changing', () => {
   });
 });
 
-describe('project frame — mixed CRS is flagged, never silently reprojected', () => {
+describe('project frame — a layer the caller marks foreign is excluded', () => {
+  // Whether two layers share a frame is decided by the layer model, which weighs
+  // the horizontal CRS AND the vertical datum together; this service is told the
+  // verdict. It used to compare horizontal keys itself, which let the layer panel
+  // flag a pair as mismatched while the frame quietly folded both their Z origins
+  // into one anchor.
+  //
   // The foreign layer sits BELOW the aligned one on every axis, so if it were
   // wrongly included the shared anchor would move to it. A fixture where the
   // foreign origin is larger cannot detect that — `min` returns the same answer
@@ -149,17 +155,23 @@ describe('project frame — mixed CRS is flagged, never silently reprojected', (
   const mixed = () => {
     const s = svc();
     s.register({ id: 'a', sourceOrigin: [500_000, 4_500_000, 100], crsKey: 'EPSG:32612' });
-    s.register({ id: 'b', sourceOrigin: [300_000, 3_000_000, 10], crsKey: 'EPSG:32613' });
+    s.register({
+      id: 'b',
+      sourceOrigin: [300_000, 3_000_000, 10],
+      crsKey: 'EPSG:32613',
+      alignedToProject: false,
+    });
     return s;
   };
 
-  it('excludes a layer whose CRS disagrees and reports it', () => {
-    const s = mixed();
-    expect(s.unaligned).toEqual(['b']);
-    // The frame ignores the foreign layer's origin entirely — otherwise one
-    // CRS's easting would drag the shared anchor into meaningless territory,
-    // describing neither layer.
-    expect(s.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+  it('reports the excluded layer', () => {
+    expect(mixed().unaligned).toEqual(['b']);
+  });
+
+  it('ignores the foreign origin when anchoring', () => {
+    // Otherwise one CRS's easting drags the shared anchor into territory that
+    // describes neither layer.
+    expect(mixed().frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
   });
 
   it('keeps the aligned layer at identity despite the foreign layer being lower', () => {
@@ -168,20 +180,22 @@ describe('project frame — mixed CRS is flagged, never silently reprojected', (
     expect(mixed().transformFor('a')!.sourceToProject).toEqual([0, 0, 0]);
   });
 
-  it('mounts the disagreeing layer in its OWN frame (identity), not a wrong one', () => {
-    const s = mixed();
+  it('mounts the foreign layer in its OWN frame (identity), not a wrong one', () => {
     // Reprojection is out of scope, so the honest placement is where it already
-    // was — displaced, but not asserted into the project's frame.
-    expect(s.transformFor('b')!.sourceToProject).toEqual([0, 0, 0]);
+    // was — displaced, but not asserted into a frame it does not belong to.
+    expect(mixed().transformFor('b')!.sourceToProject).toEqual([0, 0, 0]);
   });
 
-  it('adopts the majority CRS as the reference, matching the layer model', () => {
+  it('labels the frame from the layers that belong to it, not the foreign one', () => {
+    expect(mixed().frame?.crs).toBe('EPSG:32612');
+  });
+
+  it('has no shared frame when EVERY layer is foreign', () => {
     const s = svc();
-    s.register({ id: 'odd', sourceOrigin: [700_000, 0, 0], crsKey: 'EPSG:32613' });
-    s.register({ id: 'a', sourceOrigin: [500_000, 0, 0], crsKey: 'EPSG:32612' });
-    s.register({ id: 'b', sourceOrigin: [501_000, 0, 0], crsKey: 'EPSG:32612' });
-    expect(s.frame?.crs).toBe('EPSG:32612');
-    expect(s.unaligned).toEqual(['odd']);
+    s.register({ id: 'a', sourceOrigin: [1, 2, 3], alignedToProject: false });
+    expect(s.frame).toBeNull();
+    // Each still mounts where it was, rather than vanishing.
+    expect(s.transformFor('a')!.sourceToProject).toEqual([0, 0, 0]);
   });
 
   it('treats an undeclared CRS as alignable — absence of evidence is not disagreement', () => {

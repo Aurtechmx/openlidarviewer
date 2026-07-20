@@ -39,12 +39,26 @@ export interface ProjectFrameLayer {
   /** The layer's own `floor(min)` origin, in source-CRS units (Float64). */
   readonly sourceOrigin: Vec3;
   /**
-   * An opaque key identifying the layer's horizontal CRS. Two layers are
-   * comparable when their keys are equal; `null`/absent means the source
-   * declared none. The caller decides how to build it (see `layerModel`), so
-   * this module never parses a CRS.
+   * A label for the project's CRS, surfaced on the frame. This is presentation
+   * only — it does NOT decide alignment (see {@link alignedToProject}).
    */
   readonly crsKey?: string | null;
+  /**
+   * False when the caller has determined this layer does not share the
+   * project's coordinate frame.
+   *
+   * The decision lives with the caller on purpose. Comparing CRSs means
+   * weighing the horizontal CRS *and* the vertical datum — heights do not align
+   * across datums even when the horizontal frame matches — and the layer model's
+   * `detectCrsMismatch` already implements exactly that rule for the layer
+   * panel. An earlier version of this module compared horizontal keys itself,
+   * which let the panel flag a pair as mismatched while the frame quietly folded
+   * both their Z origins into one anchor. One authority, not two.
+   *
+   * Defaults to true, so a caller that has no CRS information at all still gets
+   * a shared frame.
+   */
+  readonly alignedToProject?: boolean;
 }
 
 export interface ProjectFrameService {
@@ -75,15 +89,14 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
   const state = context.projectFrame;
 
   /**
-   * The project's reference CRS: the most common declared key, ties broken by
-   * first registration. This mirrors `detectCrsMismatch` in the layer model
-   * deliberately — two different answers to "which CRS is this project in?"
-   * would let the layer panel and the scene disagree about the same scans.
+   * The project's CRS LABEL: the most common key among the layers that belong to
+   * the frame, ties broken by first registration. Presentation only — which
+   * layers belong is the caller's decision (see `alignedToProject`).
    */
-  function referenceCrs(): string | null {
+  function frameCrsLabel(aligned: readonly ProjectFrameLayer[]): string | null {
     const counts = new Map<string, number>();
     const firstSeen: string[] = [];
-    for (const layer of state.sources.values()) {
+    for (const layer of aligned) {
       const key = layer.crsKey;
       if (!key) continue;
       if (!counts.has(key)) firstSeen.push(key);
@@ -108,27 +121,35 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
       return;
     }
 
-    const reference = referenceCrs();
     const aligned: ProjectFrameLayer[] = [];
     for (const layer of state.sources.values()) {
-      if (!layer.crsKey) {
-        // No declared CRS: absence of evidence is not disagreement. Excluding
-        // these would mean two meshes from one capture (PLY/OBJ declare no CRS)
-        // could never share a frame — the ordinary case, not the exotic one.
-        state.unknownCrs.push(layer.id);
-        aligned.push(layer);
-      } else if (reference === null || layer.crsKey === reference) {
-        aligned.push(layer);
-      } else {
-        state.unaligned.push(layer.id);
+      // A layer with no declared CRS is still noted, because the UI discloses
+      // it — but absence of evidence is not disagreement, so it stays in the
+      // frame. Excluding it would mean two meshes from one capture (PLY/OBJ
+      // declare no CRS) could never share a frame: the ordinary case.
+      if (!layer.crsKey) state.unknownCrs.push(layer.id);
+      if (layer.alignedToProject === false) state.unaligned.push(layer.id);
+      else aligned.push(layer);
+    }
+
+    if (aligned.length === 0) {
+      // Every layer disagrees with the project, so there is no shared frame to
+      // anchor. Each still mounts in its own frame below.
+      state.frame = null;
+      for (const layer of state.sources.values()) {
+        state.transforms.set(
+          layer.id,
+          layerTransform(createProjectFrame(layer.sourceOrigin), layer.sourceOrigin),
+        );
       }
+      return;
     }
 
     // The shared anchor is derived ONLY from layers that belong to the frame; a
     // foreign CRS's easting would otherwise drag the origin somewhere that
     // describes neither layer.
     const origin = chooseProjectOrigin(aligned.map((l) => l.sourceOrigin));
-    state.frame = createProjectFrame(origin, { crs: reference ?? undefined });
+    state.frame = createProjectFrame(origin, { crs: frameCrsLabel(aligned) ?? undefined });
 
     for (const layer of state.sources.values()) {
       // An unaligned layer is not reprojected, so it keeps its own frame: its

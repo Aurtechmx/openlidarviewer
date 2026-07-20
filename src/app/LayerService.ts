@@ -18,6 +18,7 @@ import {
   detectCrsMismatch,
   horizontalKey,
   type LayerInfo,
+  type CrsMismatch,
 } from '../model/layerModel';
 import type { AppContext } from './appContext';
 import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
@@ -91,8 +92,14 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
    * push a georeferenced scan hundreds of kilometres out. Such a layer is not in
    * a shared spatial frame at all, which is exactly what "skip" says.
    */
-  function syncProjectFrame(infos: readonly LayerInfo[]): void {
+  function syncProjectFrame(infos: readonly LayerInfo[], mismatch: CrsMismatch): void {
     const viewer = getViewer();
+    // `detectCrsMismatch` is the ONE authority on whether two layers share a
+    // frame: it weighs the horizontal CRS and the vertical datum together,
+    // because heights do not align across datums even when the horizontal
+    // frame matches. Passing its verdict straight through is what keeps the
+    // layer panel and the scene from disagreeing about the same two scans.
+    const foreign = new Set(mismatch.mismatched.map((x) => x.id));
     const layers: ProjectFrameLayer[] = [];
     for (const info of infos) {
       const origin = viewer.getCloud(info.id)?.origin;
@@ -100,9 +107,8 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       layers.push({
         id: info.id,
         sourceOrigin: [origin[0], origin[1], origin[2]],
-        // The SAME key the mismatch check uses, so the layer panel and the
-        // frame can never disagree about which scans share a CRS.
         crsKey: horizontalKey(info),
+        alignedToProject: !foreign.has(info.id),
       });
     }
     deps.projectFrame.reconcile(layers);
@@ -110,8 +116,8 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
 
   function refreshCrsFlags(): void {
     const infos = buildLayerInfos();
-    syncProjectFrame(infos);
     const m = detectCrsMismatch(infos);
+    syncProjectFrame(infos, m);
     const inspector = getInspector();
     inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
     // The two-epoch compare needs exactly two loaded layers.

@@ -207,6 +207,33 @@ describe('LayerService seeds the shared project frame', () => {
     expect(t.projectFrame.transformFor('low')).toBeNull();
   });
 
+  it('excludes a layer on a DIFFERENT VERTICAL DATUM, matching the panel', () => {
+    // Same horizontal CRS, different vertical datum. Heights do not align across
+    // datums (NAVD88 vs ellipsoidal differ by tens of metres), so folding both Z
+    // origins into one anchor asserts a shared vertical frame that does not
+    // exist — and the layer panel already flags this pair as mismatched. The
+    // frame and the panel must not disagree about the same two scans.
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: { epsg: 32612, verticalDatum: 'NAVD88' } } },
+      b: { origin: [500_100, 4_500_000, 10], metadata: { crs: { epsg: 32612, verticalDatum: 'EPSG:4979' } } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.unaligned).toEqual(['b']);
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+    expect(t.projectFrame.transformFor('b')!.sourceToProject).toEqual([0, 0, 0]);
+  });
+
+  it('still shares a frame when only ONE layer declares a vertical datum', () => {
+    // Absence of evidence is not disagreement — the same rule the panel applies.
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: { epsg: 32612, verticalDatum: 'NAVD88' } } },
+      b: { origin: [500_100, 4_500_000, 110], metadata: { crs: { epsg: 32612 } } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.unaligned).toEqual([]);
+    expect(t.projectFrame.transformFor('b')!.sourceToProject).toEqual([100, 0, 10]);
+  });
+
   it('excludes a foreign-CRS layer from the anchor and flags it', () => {
     const t = setup({
       a: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
