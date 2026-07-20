@@ -2094,7 +2094,13 @@ export class Viewer {
     const origins: Array<readonly number[] | null> = [];
     if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
     for (const { cloud } of this._clouds.values()) origins.push(cloud.origin ?? null);
-    const origin = resolveSceneOrigin(origins);
+    // Frame-mounted scenes have ONE datum by construction — see
+    // `setProjectFrameOrigin`. The unanimity rule stays as the fallback for
+    // everything else (streaming, partial frames, no frame).
+    const origin =
+      this._projectFrameOrigin !== null && !this._streaming
+        ? this._projectFrameOrigin
+        : resolveSceneOrigin(origins);
     this._measure.setContext({
       worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
       origin: origin ? [origin[0], origin[1], origin[2]] : null,
@@ -2146,6 +2152,35 @@ export class Viewer {
    * orbit clamp fold the same offset in `_visibleBoundingBox` /
    * `_visibleCloudAabb`.
    */
+  /**
+   * The shared project origin, when EVERY loaded layer is mounted through the
+   * frame — null otherwise. Set by the layer service alongside the mounts.
+   *
+   * With layers mounted at their `sourceToProject` offsets, render space IS
+   * project-local, so a picked point on ANY layer recovers its absolute
+   * position as `point + projectOrigin`. The per-cloud unanimity rule in
+   * `_refreshMeasureDatum` predates the frame: it could only assert a datum
+   * when every cloud declared the SAME origin, which the frame's whole purpose
+   * is to make unnecessary. The caller only supplies this when every loaded
+   * cloud is in the frame — a georeferenced scan beside an unreferenced mesh,
+   * or beside a foreign-CRS layer, keeps the old refusal, because those
+   * layers' points do NOT recover through the project origin.
+   */
+  private _projectFrameOrigin: readonly [number, number, number] | null = null;
+
+  setProjectFrameOrigin(origin: readonly [number, number, number] | null): void {
+    const same =
+      (origin === null && this._projectFrameOrigin === null) ||
+      (origin !== null &&
+        this._projectFrameOrigin !== null &&
+        origin[0] === this._projectFrameOrigin[0] &&
+        origin[1] === this._projectFrameOrigin[1] &&
+        origin[2] === this._projectFrameOrigin[2]);
+    if (same) return;
+    this._projectFrameOrigin = origin;
+    this._refreshMeasureDatum();
+  }
+
   setCloudFrameOffset(id: string, offset: readonly [number, number, number]): void {
     const entry = this._clouds.get(id);
     if (!entry) return;

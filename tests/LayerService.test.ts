@@ -38,6 +38,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
   let compassRefreshes = 0;
 
   const frameOffsets = new Map<string, readonly [number, number, number]>();
+  const frameOriginCalls: Array<readonly [number, number, number] | null> = [];
   const viewer = {
     clouds: () => Object.keys(clouds),
     getCloud: (id: string) => clouds[id] ?? null,
@@ -47,6 +48,9 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     },
     setCloudFrameOffset: (id: string, offset: readonly [number, number, number]) => {
       frameOffsets.set(id, offset);
+    },
+    setProjectFrameOrigin: (origin: readonly [number, number, number] | null) => {
+      frameOriginCalls.push(origin);
     },
   } as unknown as Viewer;
 
@@ -79,6 +83,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     context,
     projectFrame,
     frameOffsets,
+    frameOriginCalls,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -301,5 +306,61 @@ describe('LayerService mounts each layer at its project-frame offset', () => {
     delete clouds.low;
     t.service.refreshCrsFlags();
     expect(t.frameOffsets.get('high')).toEqual([0, 0, 0]);
+  });
+});
+
+
+/**
+ * Step 4: the measurement datum under the frame. When EVERY loaded layer is
+ * mounted through it, render space is project-local and absolute positions
+ * recover as point + projectOrigin — so the datum is the project origin. The
+ * condition is strict: any layer outside the frame (no origin, foreign CRS)
+ * does not recover through that origin, so its presence keeps the pre-frame
+ * unanimity rule, which refuses honestly instead of mislabelling points.
+ */
+describe('LayerService pushes the frame origin as the measurement datum', () => {
+  const utm = { epsg: 32612 };
+  const last = (t: { frameOriginCalls: Array<readonly [number, number, number] | null> }) =>
+    t.frameOriginCalls[t.frameOriginCalls.length - 1];
+
+  it('supplies the project origin when every layer is in the frame', () => {
+    const t = setup({
+      west: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      east: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
+    });
+    t.service.refreshCrsFlags();
+    expect(last(t)).toEqual([500_000, 4_500_000, 100]);
+  });
+
+  it('withholds it when an unreferenced mesh shares the scene', () => {
+    // The mesh's points do not recover through the project origin; asserting
+    // the datum would mislabel them.
+    const t = setup({
+      scan: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      mesh: { metadata: { crs: null } },
+    });
+    t.service.refreshCrsFlags();
+    expect(last(t)).toBeNull();
+  });
+
+  it('withholds it when a foreign-CRS layer shares the scene', () => {
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      b: { origin: [300_000, 3_000_000, 10], metadata: { crs: { epsg: 32613 } } },
+    });
+    t.service.refreshCrsFlags();
+    expect(last(t)).toBeNull();
+  });
+
+  it('clears it when the scene empties', () => {
+    const clouds: Record<string, FakeCloud> = {
+      only: { origin: [1, 2, 3], metadata: { crs: utm } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    expect(last(t)).toEqual([1, 2, 3]);
+    delete clouds.only;
+    t.service.refreshCrsFlags();
+    expect(last(t)).toBeNull();
   });
 });

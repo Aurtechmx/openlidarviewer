@@ -131,6 +131,20 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         t ? t.sourceToProject : [0, 0, 0],
       );
     }
+    // Step 4: the measurement datum. With every loaded layer mounted through
+    // the frame, render space IS project-local and every picked point recovers
+    // its absolute position as point + projectOrigin — so the datum is the
+    // project origin. The condition is strict on purpose: an unreferenced mesh
+    // or a foreign-CRS layer in the scene does NOT recover through the project
+    // origin, so any such layer keeps the pre-frame unanimity rule (which
+    // refuses honestly) rather than mislabelling its points.
+    const frame = deps.projectFrame.frame;
+    const everyLayerInFrame =
+      frame !== null &&
+      infos.length > 0 &&
+      deps.projectFrame.unaligned.length === 0 &&
+      infos.every((info) => deps.projectFrame.transformFor(info.id) !== null);
+    viewer.setProjectFrameOrigin(everyLayerInFrame ? frame.projectOrigin : null);
   }
 
   function refreshCrsFlags(): void {
