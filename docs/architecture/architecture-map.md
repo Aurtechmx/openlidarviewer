@@ -63,7 +63,7 @@ candidates:
 
 | Block | ~Lines | Extraction target |
 |---|---:|---|
-| `buildActionRegistry` | 424 | `src/app/actionRegistry.ts` *(planned)* — command/action definitions |
+| `buildActionRegistry` | 424 | `src/app/actionDefinitions.ts` *(planned)* — command/action definitions |
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `handleFile` | 336 | `src/app/openScan.ts` *(planned)* — the open/load pipeline |
 | `containPanelWheel` | 293 | `src/ui/` behaviour helper |

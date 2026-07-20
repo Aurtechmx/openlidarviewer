@@ -53,6 +53,32 @@ where they belong.
    step 4 and into focused modules (export wiring, compare wiring, streaming
    panel builder), one gated extraction at a time; add the line-count guard when
    the target is reached.
+
+   **First extraction, already scoped: `buildActionRegistry`** (`main.ts`
+   1997–2345, 424 lines, called once at 2346). Its dependency surface was
+   measured rather than guessed — 23 top-level bindings — and only three of them
+   need indirection:
+
+   - `viewer` — a `let` assigned after boot, so pass `getViewer()`.
+   - `compassEnabled` — a mutable `let` read by a toggle action, so pass
+     `isCompassEnabled()`.
+   - `dock` — a `const` declared at 2486, i.e. **after** the call site. Passing
+     it by value throws on the temporal dead zone; pass `getDock()`.
+
+   The remaining twenty are hoisted `function` declarations or `const`s already
+   initialised above the call site, so they pass directly. Name the module
+   `src/app/actionDefinitions.ts`, not `actionRegistry.ts`: `src/ui/actionRegistry.ts`
+   already owns the pure `Action` model (`rankActions`, `groupBySection`,
+   `findDuplicateIds`), and two files with one name is how a boundary rots.
+
+   Verify with the deterministic e2e project — `commandPalette.spec.ts` and the
+   keyboard-shortcut specs cover this block, which is why it is a safe first
+   move despite touching every shortcut.
+
+   A 23-member dependency object is not a tidy result; it is an honest one. It
+   measures how much of the shell one block reaches into. The follow-up is
+   splitting the registry by section (Camera / View / Tools / Workflow) so each
+   group carries only the handful of collaborators it actually needs.
 6. **Shrink `Viewer.ts` < 2,000 (3)** — extract the streaming attach/tick, the
    pick/measure adapters, the colorbar/range logic, and the export adapter into
    collaborators the viewer composes; add the line-count guard when reached.
