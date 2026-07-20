@@ -35,7 +35,12 @@ export function createViewBookmarks(context: AppContext): ViewBookmarksService {
   const state = context.viewBookmarks;
   return {
     add(view) {
-      const name = `View ${++state.viewCounter}`;
+      // Skip past any name already in use, not just past the counter: a user can
+      // rename a view TO `View 7`, or a restored session can carry one, and a
+      // bare counter would hand out that name a second time.
+      const taken = new Set(state.savedViews.map((v) => v.name));
+      let name = `View ${++state.viewCounter}`;
+      while (taken.has(name)) name = `View ${++state.viewCounter}`;
       state.savedViews.push({ name, ...view });
       return name;
     },
@@ -58,10 +63,17 @@ export function createViewBookmarks(context: AppContext): ViewBookmarksService {
       return state.savedViews.length;
     },
     restore(views) {
-      // A restored session's views become the list; the counter continues past
-      // them so a newly saved view never reuses a restored name.
       state.savedViews = [...views];
-      state.viewCounter = state.savedViews.length;
+      // Seed from the highest `View N` present, NOT the count. A restored set of
+      // ["View 3", "North"] has length 2, so counting would regenerate "View 3"
+      // and collide with the view already sitting in the list. Non-matching
+      // names (renamed views) simply do not raise the floor.
+      let highest = 0;
+      for (const v of state.savedViews) {
+        const m = /^View (\d+)$/.exec(v.name);
+        if (m) highest = Math.max(highest, Number(m[1]));
+      }
+      state.viewCounter = highest;
     },
     clear() {
       state.savedViews = [];

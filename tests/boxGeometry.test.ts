@@ -16,6 +16,7 @@ import {
   pointInBox,
   countPointsInBox,
 } from '../src/render/measure/geometry';
+import type { Vec3 } from '../src/render/measure/types';
 
 const Z = (n: number): [number, number, number] => [0, 0, n];
 
@@ -138,5 +139,50 @@ describe('countPointsInBox', () => {
   it('returns 0 on an empty buffer', () => {
     const box = boxFromCorners([0, 0, 0], [1, 1, 1]);
     expect(countPointsInBox(new Float32Array(0), box)).toBe(0);
+  });
+});
+
+// Review finding: box metrics hardcoded X=width / Y=depth / Z=height, which is
+// wrong on a Y-up frame (phone-scan meshes: PLY/OBJ/GLB/glTF). It also made the
+// export scale the WRONG extent by the vertical unit factor, and trace a
+// vertical slice instead of the ground footprint.
+describe('box measurements follow the scan up-axis', () => {
+  // 2 wide (X), 3 deep (Z), 4 tall (Y) in a Y-up frame.
+  const YUP: Vec3 = [0, 1, 0];
+  const box = boxFromCorners([0, 0, 0], [2, 4, 3]);
+
+  it('Z-up is unchanged: X=width, Y=depth, Z=height', () => {
+    const m = boxMetrics(boxFromCorners([0, 0, 0], [2, 3, 4]));
+    expect([m.width, m.depth, m.height]).toEqual([2, 3, 4]);
+  });
+
+  it('Y-up reads height off Y and the footprint off X and Z', () => {
+    const m = boxMetrics(box, YUP);
+    expect(m.height).toBe(4); // the Y span, not the Z span
+    expect(m.width).toBe(2);
+    expect(m.depth).toBe(3);
+    expect(m.volume).toBe(24); // unchanged: the product is axis-order agnostic
+  });
+
+  it('the footprint ring is the low face along the up-axis', () => {
+    // Corners 0..3 are what the GeoJSON/KML exporters trace as the footprint.
+    const ring = boxCorners(box, YUP).slice(0, 4);
+    // Every footprint corner sits at the BOTTOM of the Y span.
+    expect(ring.every((c) => c[1] === 0)).toBe(true);
+    // And it spans the two horizontal axes, X and Z.
+    expect(new Set(ring.map((c) => c[0]))).toEqual(new Set([0, 2]));
+    expect(new Set(ring.map((c) => c[2]))).toEqual(new Set([0, 3]));
+  });
+
+  it('Z-up corner order is byte-identical to the historical output', () => {
+    const unit = boxFromCorners([0, 0, 0], [1, 1, 1]);
+    expect(boxCorners(unit)).toEqual(boxCorners(unit, [0, 0, 1]));
+    expect(boxCorners(unit)[0]).toEqual([0, 0, 0]);
+    expect(boxCorners(unit)[2]).toEqual([1, 1, 0]);
+  });
+
+  it('a tilted up vector resolves to its dominant axis', () => {
+    const m = boxMetrics(box, [0.1, 0.97, 0.2]);
+    expect(m.height).toBe(4);
   });
 });

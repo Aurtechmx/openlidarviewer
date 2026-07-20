@@ -13,7 +13,6 @@ end of the file.
 | three | ^0.184.0 | MIT | https://github.com/mrdoob/three.js |
 | @loaders.gl/core | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/gltf | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/las | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/obj | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/ply | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
 | laz-perf | ^0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
@@ -38,10 +37,14 @@ here for transparency.
 | @playwright/test | ^1.60.0 | Apache-2.0 | https://github.com/microsoft/playwright |
 | @types/three | ^0.184.1 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | rollup-plugin-visualizer | ^7.0.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
+| @vitest/coverage-v8 | ^4.1.10 | MIT | https://github.com/vitest-dev/vitest |
+| @stryker-mutator/core | ^9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
+| @stryker-mutator/vitest-runner | ^9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
+| @types/proj4 | ^2.5.6 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 
 ## License texts
 
-### MIT License (applies to: three, @loaders.gl/*, pdf-lib, proj4, vite, vitest, rollup-plugin-visualizer, @types/three)
+### MIT License (applies to: three, @loaders.gl/*, pdf-lib, proj4, vite, vitest, @vitest/coverage-v8, rollup-plugin-visualizer, @types/three, @types/proj4)
 
 ```
 MIT License
@@ -68,7 +71,7 @@ THE SOFTWARE.
 Each MIT-licensed package retains its own copyright notice in its
 upstream repository (see the "Upstream" column above).
 
-### Apache License 2.0 (applies to: laz-perf, typescript, @playwright/test)
+### Apache License 2.0 (applies to: laz-perf, typescript, @playwright/test, @stryker-mutator/*)
 
 The Apache 2.0 license text is reproduced at:
 https://www.apache.org/licenses/LICENSE-2.0

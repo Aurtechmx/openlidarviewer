@@ -125,7 +125,7 @@ export function measurementMetrics(
       set('perimeter_m', num(polygonPerimeter(pts) * L));
       break;
     case 'box': {
-      const mb = boxMetrics(boxFromCorners(pts[0], pts[1]));
+      const mb = boxMetrics(boxFromCorners(pts[0], pts[1]), up);
       set('width_m', num(mb.width * L));
       set('depth_m', num(mb.depth * L));
       set('height_m', num(mb.height * Vv));
@@ -173,7 +173,7 @@ function geometryFor(
     case 'box': {
       if (m.points.length < 2) return null;
       // Footprint = the four bottom corners (indices 0..3 of boxCorners).
-      const corners = boxCorners(boxFromCorners(m.points[0], m.points[1]));
+      const corners = boxCorners(boxFromCorners(m.points[0], m.points[1]), ctx.up);
       const ring = [corners[0], corners[1], corners[2], corners[3]].map(t);
       ring.push(ring[0]);
       return { type: 'Polygon', coordinates: [ring] };

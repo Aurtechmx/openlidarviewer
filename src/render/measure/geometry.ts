@@ -354,10 +354,42 @@ export function boxFromCorners(a: Vec3, b: Vec3): BoxBounds {
  * collapse the corresponding scalar to zero; the calling measurement card
  * shows that explicitly rather than silently treating it as a thin slab.
  */
-export function boxMetrics(box: BoxBounds): BoxMetrics {
-  const width = Math.max(0, box.max[0] - box.min[0]);
-  const depth = Math.max(0, box.max[1] - box.min[1]);
-  const height = Math.max(0, box.max[2] - box.min[2]);
+/**
+ * Index of the axis the `up` vector points along (the dominant component).
+ * The measurement boxes are axis-aligned in render space, so a scan whose
+ * vertical axis is Y needs its HEIGHT read off Y, not Z.
+ */
+export function upAxisIndex(up: Vec3): 0 | 1 | 2 {
+  const ax = Math.abs(up[0]);
+  const ay = Math.abs(up[1]);
+  const az = Math.abs(up[2]);
+  if (ay > ax && ay >= az) return 1;
+  if (ax > ay && ax >= az) return 0;
+  return 2;
+}
+
+/** The two non-vertical axes, ascending, for a given up-axis. */
+function horizontalAxes(upAxis: 0 | 1 | 2): [0 | 1 | 2, 0 | 1 | 2] {
+  if (upAxis === 0) return [1, 2];
+  if (upAxis === 1) return [0, 2];
+  return [0, 1];
+}
+
+/**
+ * Box dimensions with HEIGHT measured along the scan's up-axis.
+ *
+ * `up` defaults to +Z, which reproduces the historical X=width / Y=depth /
+ * Z=height behaviour exactly. It matters for a Y-up frame (phone-scan meshes:
+ * PLY, OBJ, GLB/glTF): reading height off Z there reports a horizontal span as
+ * the height, and — since the export scales height by the VERTICAL unit factor
+ * — would apply a vertical conversion to a horizontal extent on a compound CRS.
+ */
+export function boxMetrics(box: BoxBounds, up: Vec3 = [0, 0, 1]): BoxMetrics {
+  const upAxis = upAxisIndex(up);
+  const [h1, h2] = horizontalAxes(upAxis);
+  const width = Math.max(0, box.max[h1] - box.min[h1]);
+  const depth = Math.max(0, box.max[h2] - box.min[h2]);
+  const height = Math.max(0, box.max[upAxis] - box.min[upAxis]);
   const volume = width * depth * height;
   const surfaceArea = 2 * (width * depth + depth * height + width * height);
   return { width, depth, height, volume, surfaceArea };
@@ -371,18 +403,30 @@ export function boxMetrics(box: BoxBounds): BoxMetrics {
  *     bottom: 0  (-,-,-)  1  (+,-,-)  2  (+,+,-)  3  (-,+,-)
  *     top:    4  (-,-,+)  5  (+,-,+)  6  (+,+,+)  7  (-,+,+)
  */
-export function boxCorners(box: BoxBounds): Vec3[] {
-  const [xa, ya, za] = box.min;
-  const [xb, yb, zb] = box.max;
+export function boxCorners(box: BoxBounds, up: Vec3 = [0, 0, 1]): Vec3[] {
+  // The FIRST four corners are the footprint ring the GeoJSON/KML exporters
+  // trace, so "bottom" has to mean the low side along the scan's up-axis. With
+  // the default +Z this emits the historical order byte-for-byte; on a Y-up
+  // frame it traces the true ground footprint instead of a vertical slice.
+  const upAxis = upAxisIndex(up);
+  const [h1, h2] = horizontalAxes(upAxis);
+  const at = (u: number, a: number, b: number): Vec3 => {
+    const p: [number, number, number] = [0, 0, 0];
+    p[upAxis] = u;
+    p[h1] = a;
+    p[h2] = b;
+    return p;
+  };
+  const lo = box.min[upAxis];
+  const hi = box.max[upAxis];
+  const a0 = box.min[h1];
+  const a1 = box.max[h1];
+  const b0 = box.min[h2];
+  const b1 = box.max[h2];
+  // Each face traversed CCW from (min-h1, min-h2), low face first.
   return [
-    [xa, ya, za],
-    [xb, ya, za],
-    [xb, yb, za],
-    [xa, yb, za],
-    [xa, ya, zb],
-    [xb, ya, zb],
-    [xb, yb, zb],
-    [xa, yb, zb],
+    at(lo, a0, b0), at(lo, a1, b0), at(lo, a1, b1), at(lo, a0, b1),
+    at(hi, a0, b0), at(hi, a1, b0), at(hi, a1, b1), at(hi, a0, b1),
   ];
 }
 

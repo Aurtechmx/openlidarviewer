@@ -41,15 +41,60 @@ describe('viewBookmarks service', () => {
     expect(svc.names()).toEqual(['north scarp']);
   });
 
-  it('restore replaces the list and reseeds the counter so the next name never collides', () => {
+  it('restore replaces the list and reseeds from the highest View N, not the count', () => {
     const svc = createViewBookmarks(createAppContext());
     svc.restore([
       { name: 'A', pose: POSE },
       { name: 'B', pose: POSE },
     ]);
     expect(svc.names()).toEqual(['A', 'B']);
-    // Counter continues past the restored count — the next save is View 3, not View 1.
+    // No `View N` among the restored names, so numbering starts fresh.
+    expect(svc.add({ pose: POSE })).toBe('View 1');
+  });
+
+  // Regression: restore() used to seed the counter from the LIST LENGTH, so a
+  // session carrying ["View 3", "North"] (length 2) regenerated "View 3" and
+  // collided with the entry already in the list.
+  it('a sparse restored set does not regenerate a name already present', () => {
+    const svc = createViewBookmarks(createAppContext());
+    svc.restore([
+      { name: 'View 3', pose: POSE },
+      { name: 'North', pose: POSE },
+    ]);
+    const next = svc.add({ pose: POSE });
+    expect(next).toBe('View 4');
+    expect(new Set(svc.names()).size).toBe(svc.count());
+  });
+
+  it('a high-numbered restored view pushes numbering past it', () => {
+    const svc = createViewBookmarks(createAppContext());
+    svc.restore([{ name: 'View 41', pose: POSE }]);
+    expect(svc.add({ pose: POSE })).toBe('View 42');
+  });
+
+  it('renaming a view TO an unused View N is not handed out again', () => {
+    const svc = createViewBookmarks(createAppContext());
+    svc.add({ pose: POSE }); // View 1
+    svc.rename(0, 'View 2'); // the counter has not reached 2 yet
     expect(svc.add({ pose: POSE })).toBe('View 3');
+    expect(new Set(svc.names()).size).toBe(svc.count());
+  });
+
+  it('duplicate imported names survive restore without breaking numbering', () => {
+    const svc = createViewBookmarks(createAppContext());
+    svc.restore([
+      { name: 'Site', pose: POSE },
+      { name: 'Site', pose: POSE },
+    ]);
+    expect(svc.count()).toBe(2);
+    expect(svc.add({ pose: POSE })).toBe('View 1');
+  });
+
+  it('an empty imported name is preserved and does not affect numbering', () => {
+    const svc = createViewBookmarks(createAppContext());
+    svc.restore([{ name: '', pose: POSE }]);
+    expect(svc.names()).toEqual(['']);
+    expect(svc.add({ pose: POSE })).toBe('View 1');
   });
 
   it('clear drops every view and resets the counter', () => {

@@ -379,8 +379,8 @@ const SAMPLES: Sample[] = [];
 // as the curated picker; only the entry point is promoted.
 const DEMO_SAMPLE: Sample = {
   id: 'flai-ch-swisssurface3d-2022',
-  label: 'Switzerland, 84 MB',
-  detail: 'swisssurface3D (2022) · streams over your network',
+  label: 'Switzerland · swisstopo, 84 MB',
+  detail: 'swissSURFACE3D (2022), via FLAI · streams over your network, nothing uploaded',
   url: 'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz',
   name: 'swisssurface3D 2022',
   sizeBytes: 83_800_000,
