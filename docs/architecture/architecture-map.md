@@ -77,19 +77,35 @@ candidates:
 **`src/render/Viewer.ts` (7,297)** — the constructor and a handful of large
 methods dominate:
 
-| Block | ~Lines | Extraction target |
+Spans below are the symbol's real extent, read from the TypeScript symbol graph
+rather than estimated by pattern-matching — an earlier revision of this table
+overstated `_onResize` by 10× and listed a colour-write block that had already
+been extracted, and both errors pointed the decomposition at the wrong work.
+
+| Block | Lines | Extraction target |
 |---|---:|---|
-| `constructor` | 579 | staged scene/pipeline builders |
-| colour-write helpers | 551 | `src/render/colorWrite.ts` *(planned)* |
-| `_onResize` | 314 | `src/render/resize.ts` *(planned)* |
-| `_buildExportAdapter` | 283 | `src/render/exportAdapter.ts` *(planned)* |
-| `computeLassoVolume` | 169 | `src/render/measure/` |
-| `snapshot` | 145 | `src/render/snapshot.ts` *(planned)* |
-| `_startLoop` | 115 | `src/render/renderLoop.ts` *(planned)* |
+| `constructor` | 564 | staged scene/pipeline builders |
+| `_buildExportAdapter` | 265 | `src/render/exportAdapter.ts` *(planned)* |
+| `computeLassoVolume` | 159 | `src/render/measure/` |
+| `snapshot` | 143 | `src/render/snapshot.ts` *(planned)* |
+| `_startLoop` | 107 | `src/render/renderLoop.ts` *(planned)* |
 
 Each extraction is one gated step: move the block, have it take its collaborators
 as parameters, keep the deterministic e2e project green, and re-run the coverage
 ratchet. Behaviour does not change; only where the code lives.
+
+**These five blocks total ~1,238 lines**, so extracting all of them leaves
+`Viewer.ts` near 6,050 — the file is long because of breadth (roughly 110 fields
+and 200 methods), not because a few blocks are large. A sub-2,000 target needs
+whole *clusters* to move, not the largest methods. The cohesive candidates, by
+field prefix, are streaming (`_streaming*`), filters (`_classFiltered`,
+`_elevFilter*`, `_intenFilter*`, `_materialsWith*`), EDL (`_edl*`),
+classification (`_classEpochs`, `_classHistory`), input (`_pointer*`,
+`_activeTouches`, `_onCanvas*`), and the render loop (`_rafId`, `_frame*`,
+`_adaptiveDpr`). Note that the streaming cluster is cohesive in *state* but not
+in *behaviour*: `attachStreamingCloud` passes the Viewer itself to
+`StreamingRenderer` as host and reaches into nav, camera, measure-datum and
+colour-context, so it cannot move without an explicit host interface.
 
 ## Test and gate topology
 
