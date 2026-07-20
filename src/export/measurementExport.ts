@@ -20,6 +20,7 @@
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
 import { evidenceNote, evidenceStatus } from '../validation/exportEvidenceNote';
+import { crsUrn } from './crsIdentifier';
 import {
   distance,
   polylineLength,
@@ -205,8 +206,15 @@ export function measurementsToGeoJSON(
   // Pre-RFC-7946 named-CRS member — non-standard but QGIS and others read it, so
   // a PROJECTED export lands in the right place. Geographic output is the RFC
   // default (WGS84) and carries no crs member.
-  if (!ctx.geographic && ctx.crsName) {
-    fc.crs = { type: 'name', properties: { name: ctx.crsName } };
+  //
+  // The name must be an IDENTIFIER, not the display label `crsName` carries
+  // (`NAD83 / UTM zone 13N (EPSG:26913)`): a reader that can't resolve it falls
+  // back to WGS84 and reads easting 500000 as longitude 500000. When no code can
+  // be recovered the member is omitted — an absent CRS makes a reader ask, a
+  // wrong one makes it place the geometry in the ocean.
+  const urn = ctx.geographic ? null : crsUrn(ctx.crsName);
+  if (urn) {
+    fc.crs = { type: 'name', properties: { name: urn } };
   }
   // Route the export through the ONE evidence gate (PR6): measurements sit below
   // their required evidence level, so the file carries the exploratory verdict

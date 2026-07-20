@@ -26,11 +26,11 @@
 import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
+import { crsUrn as sharedCrsUrn } from '../../export/crsIdentifier';
 
-/** Convert "EPSG:32610" → an OGC URN; pass through anything else. */
+/** Convert a CRS label to an OGC URN; pass through anything with no code. */
 function crsUrn(crs: string): string {
-  const m = /^EPSG:(\d+)$/i.exec(crs.trim());
-  return m ? `urn:ogc:def:crs:EPSG::${m[1]}` : crs;
+  return sharedCrsUrn(crs) ?? crs;
 }
 
 /**
