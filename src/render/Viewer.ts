@@ -62,6 +62,7 @@ import {
 } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
+import { buildExportAdapter } from './exportAdapter';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
@@ -5050,269 +5051,16 @@ export class Viewer {
    * adapter always reflects the current loaded clouds without bookkeeping.
    */
   private _buildExportAdapter(): ExportSceneAdapter {
-    const viewer = this;
-    return {
-      setExportColorMode(mode: ColorMode): void {
-        // Apply to every loaded cloud + the streaming subsystem so every
-        // resident mesh recolours in lockstep. Wrap each cloud's setColorMode
-        // individually: if one cloud lacks the channel for `mode` (e.g.
-        // classification on a PLY), `colorForMode` throws — we catch + skip
-        // so the other clouds (and the streaming cloud, if any) still
-        // recolour, and the export proceeds against whatever data IS valid.
-        // Without this guard, a single channel-missing cloud poisoned the
-        // whole export and left the UI half-recoloured.
-        for (const id of viewer._clouds.keys()) {
-          try {
-            viewer.setColorMode(id, mode);
-          } catch (err) {
-            // Swallow per-cloud capability mismatches — the orchestrator's
-            // `isAvailable` gate is the source of truth for whether the
-            // export *should* run. This catch only protects mid-loop state.
-            console.warn(`[export] setColorMode(${mode}) on cloud "${id}" skipped:`, err);
-          }
-        }
-        try {
-          viewer.setStreamingColorMode(mode);
-        } catch (err) {
-          console.warn(`[export] setStreamingColorMode(${mode}) skipped:`, err);
-        }
-      },
-      currentColorMode(): ColorMode {
-        // Prefer the streaming cloud's mode when present — otherwise the
-        // first static cloud's mode, otherwise the runtime default.
-        if (viewer._streaming) return viewer._streaming.renderer.colorMode;
-        const first = viewer._clouds.values().next().value;
-        return first ? first.mode : 'rgb';
-      },
-      hasRgb(): boolean {
-        if (viewer._streaming) {
-          // read off the abstract `availableColorModes` so this
-          // works uniformly for COPC + EPT. The cloud's own implementation
-          // knows whether it carries RGB (COPC: PDRF 7/8; EPT: schema has
-          // Red/Green/Blue attrs).
-          return viewer._streaming.cloud.availableColorModes().includes('rgb');
-        }
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.colors) return true;
-        }
-        return false;
-      },
-      hasIntensity(): boolean {
-        // Streaming COPC clouds always carry intensity (PDRF 6/7/8).
-        if (viewer._streaming) return true;
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.intensity) return true;
-        }
-        return false;
-      },
-      hasClassification(): boolean {
-        // dispatch on the abstract `availableColorModes()` so
-        // COPC and EPT route uniformly. Static clouds fall through to
-        // the explicit field check.
-        if (viewer._streaming) {
-          return viewer._streaming.cloud.availableColorModes().includes('classification');
-        }
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.classification) return true;
-        }
-        return false;
-      },
-      hasNormals(): boolean {
-        // COPC + EPT streaming sources never carry normals in
-        // production (LAS reserves no field for them; EPT writers rarely
-        // emit Normal X/Y/Z attrs). Static loaders (PCD, PTX, GLTF)
-        // sometimes do — check the field explicitly.
-        if (viewer._streaming) return false;
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.normals) return true;
-        }
-        return false;
-      },
-      snapshot(options: {
-        measurements: boolean;
-        annotations: boolean;
-        inspector: boolean;
-        probe: boolean;
-        colorbar?: boolean;
-      }): Promise<Blob> {
-        // Delegate to the live snapshot pipeline so the export matches the
-        // on-screen view EXACTLY — EDL, perspective camera, overlays, all
-        // baked through the same code path the Save-view feature
-        // uses. The inspector + probe flags add the Studio bakes:
-        // active Inspect tool's marker + info card, and LiveProbe's last-
-        // known readout. Together they capture every on-canvas data overlay
-        // the user might have been working with when they clicked Export.
-        return viewer.snapshot({
-          measurements: options.measurements,
-          annotations: options.annotations,
-          inspector: options.inspector,
-          probe: options.probe,
-          // Colorbar legend for continuous scalar exports; self-gating
-          // inside snapshot(), so categorical modes are untouched.
-          colorbar: options.colorbar === true,
-        });
-      },
-      sourceName(): string {
-        if (viewer._streaming) return viewer._streaming.cloud.name;
-        const first = viewer._clouds.values().next().value;
-        return first?.cloud.name ?? 'scan';
-      },
-      sourcePointCount(): number {
-        if (viewer._streaming) return viewer._streaming.cloud.sourcePointCount;
-        // The file's declared total, back-scaled when the loader strided a huge
-        // cloud for display — the honest headline the Scan Report and PDF use.
-        // Summing the strided `pointCount` under-reported "Points" and inflated
-        // the export card's density divisor disagreement with every other panel.
-        let total = 0;
-        for (const { cloud } of viewer._clouds.values()) {
-          total += cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount
-            ? cloud.declaredPointCount
-            : cloud.pointCount;
-        }
-        return total;
-      },
-      residentPointCount(): number {
-        if (viewer._streaming) return viewer._streaming.cloud.residentPointCount;
-        // Static clouds: every loaded point is resident.
-        return this.sourcePointCount();
-      },
-      crsLabel(): { name: string; unit: string; epsg?: number } | null {
-        // read off the abstract `cloud.crs()` so both COPC and
-        // EPT surface consistently. COPC pulls from the LAS VLRs the
-        // header parser walked; EPT pulls from `ept.json`'s `srs.wkt`.
-        // Static clouds carry CRS through `CloudMetadata.crs`.
-        const fromStreaming = viewer._streaming?.cloud.crs();
-        if (fromStreaming) {
-          return {
-            name: fromStreaming.name,
-            unit: linearUnitLabel(fromStreaming.linearUnit),
-            epsg: fromStreaming.epsg,
-          };
-        }
-        for (const { cloud } of viewer._clouds.values()) {
-          const crs = cloud.metadata?.crs;
-          if (crs) {
-            return {
-              name: crs.name,
-              unit: linearUnitLabel(crs.linearUnit),
-              epsg: crs.epsg,
-            };
-          }
-        }
-        return null;
-      },
-      captureLabel(): { label: string; confidence: 'low' | 'medium' | 'high' } | null {
-        // Compute the same provenance fingerprint the Inspector + PDF
-        // Provenance section surface. Auto-computed, varies per scan;
-        // exporters get it via `baseReportRows` without any per-mode
-        // code. Wrapped because a malformed cloud shape shouldn't sink
-        // the export — null is a clean no-op in the renderer.
-        try {
-          if (viewer._streaming) {
-            const f = classifyProvenance(
-              signalsForStreamingCloud(viewer._streaming.cloud as never),
-            );
-            return { label: f.label, confidence: f.confidence };
-          }
-          const first = viewer._clouds.values().next().value;
-          if (first) {
-            const f = classifyProvenance(
-              signalsForStaticCloud(first.cloud as never),
-            );
-            return { label: f.label, confidence: f.confidence };
-          }
-        } catch {
-          /* defensive — null falls back to "no Capture row" */
-        }
-        return null;
-      },
-      dataBoundsAabb(): readonly [number, number, number, number, number, number] | null {
-        // Tight data extent for the report metadata: for streaming the octree
-        // cube (localBounds) inflates height ~7× and deflates density, so the
-        // printed Width/Height/Density use dataBounds instead — matching the
-        // Scan Report panel and the PDF. Static clouds already report tight.
-        if (viewer._streaming) return viewer._streaming.cloud.dataBounds();
-        return this.localBoundsAabb();
-      },
-      localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
-        // Streaming first — it has authoritative bounds from the COPC header.
-        if (viewer._streaming) {
-          return viewer._streaming.cloud.localBounds();
-        }
-        // Fold every static cloud's bounds into a combined AABB.
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-        let any = false;
-        for (const { cloud } of viewer._clouds.values()) {
-          const bb = cloud.bounds();
-          any = true;
-          if (bb.min[0] < minX) minX = bb.min[0];
-          if (bb.min[1] < minY) minY = bb.min[1];
-          if (bb.min[2] < minZ) minZ = bb.min[2];
-          if (bb.max[0] > maxX) maxX = bb.max[0];
-          if (bb.max[1] > maxY) maxY = bb.max[1];
-          if (bb.max[2] > maxZ) maxZ = bb.max[2];
-        }
-        return any ? [minX, minY, minZ, maxX, maxY, maxZ] : null;
-      },
-      georefContext(): {
-        worldOrigin: { x: number; y: number } | null;
-        wkt: string | null;
-      } | null {
-        // Mirrors main.ts's `getMapContext` (the contour/DEM seam): the
-        // streaming cloud's recentre offset lives on `renderOrigin` and its
-        // CRS on `crs()`; static clouds carry both on the cloud record.
-        if (viewer._streaming) {
-          const origin = viewer._streaming.cloud.renderOrigin;
-          return {
-            worldOrigin: origin ? { x: origin[0], y: origin[1] } : null,
-            wkt: viewer._streaming.cloud.crs()?.wkt ?? null,
-          };
-        }
-        // Static path: only assert a single, unambiguous frame. With several
-        // clouds loaded the per-cloud origins can differ — a world file in
-        // one cloud's frame would silently misplace the others, so we only
-        // georeference when every loaded cloud shares the SAME origin.
-        let worldOrigin: { x: number; y: number } | null = null;
-        let wkt: string | null = null;
-        let any = false;
-        for (const { cloud } of viewer._clouds.values()) {
-          any = true;
-          const o = cloud.origin;
-          if (!o) return null;
-          if (worldOrigin === null) {
-            worldOrigin = { x: o[0], y: o[1] };
-          } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
-            return null; // conflicting frames — honestly not georeferenceable
-          }
-          if (wkt == null) wkt = cloud.metadata?.crs?.wkt ?? null;
-        }
-        return any ? { worldOrigin, wkt } : null;
-      },
-      async framedTopDownSnapshot(options: { widthPx?: number }): Promise<{
-        blob: Blob;
-        widthPx: number;
-        heightPx: number;
-        extent: { minX: number; minY: number; maxX: number; maxY: number };
-      } | null> {
-        const aabb = this.localBoundsAabb();
-        if (!aabb) return null;
-        return viewer._renderFramedTopDown(aabb, options.widthPx);
-      },
-      renderFigure(options: { widthPx?: number; heightPx?: number }): Promise<{
-        blob: Blob;
-        widthPx: number;
-        heightPx: number;
-      } | null> {
-        // The honest-resolution seam: `runStudioExport` routes explicit
-        // width/height requests here so "2048 px" means 2048 rendered
-        // pixels, not an upscaled copy of the live canvas.
-        return viewer.renderFigure(options);
-      },
-      figureViewContext(): FigureViewContext {
-        return viewer.figureViewContext();
-      },
-    };
+    return buildExportAdapter({
+      clouds: () => this._clouds,
+      streaming: () => this._streaming,
+      setColorMode: (id, mode) => this.setColorMode(id, mode),
+      setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
+      snapshot: (options) => this.snapshot(options),
+      renderFramedTopDown: (aabb, widthPx) => this._renderFramedTopDown(aabb, widthPx),
+      renderFigure: (options) => this.renderFigure(options),
+      figureViewContext: () => this.figureViewContext(),
+    });
   }
 
   /**
@@ -6966,15 +6714,6 @@ export class Viewer {
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { classificationText, intensityText, rgbText } from './pointInfo';
-import { linearUnitLabel } from '../io/crs';
-// Provenance classifier for the export adapter's `captureLabel` —
-// surfaces capture-type + confidence into every exported image's
-// scan-report card. Same path the Inspector + PDF report use.
-import { classify as classifyProvenance } from '../diagnostics/provenance';
-import {
-  signalsForStaticCloud,
-  signalsForStreamingCloud,
-} from '../diagnostics/provenanceSignals';
 
 /**
  * Draw the InspectTool's "Point Info" card directly onto a 2-D canvas next
