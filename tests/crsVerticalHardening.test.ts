@@ -110,8 +110,12 @@ function cloud(): PointCloud {
 
 describe('writeLas — linear-unit + vertical GeoKeys', () => {
   it('writes ProjLinearUnits (3076) and VerticalCSType (4096)+Units (4099)', () => {
+    // verticalUnitCode is now explicit — the writer no longer infers it from
+    // the horizontal, because Z never moves during conversion and a foot
+    // horizontal over metre heights (or the reverse) was being relabelled.
     const las = writeLas(cloudToGlobal(cloud()), {
-      epsg: 26911, isGeographic: false, linearUnitCode: 9002, verticalEpsg: 5703,
+      epsg: 26911, isGeographic: false, linearUnitCode: 9002,
+      verticalEpsg: 5703, verticalUnitCode: 9002,
     });
     const view = new DataView(las.buffer);
     expect(view.getUint32(100, true)).toBe(1); // 1 VLR
@@ -126,7 +130,7 @@ describe('writeLas — linear-unit + vertical GeoKeys', () => {
     expect(map.get(3072)).toBe(26911); // ProjectedCSType
     expect(map.get(3076)).toBe(9002); // linear unit = international foot
     expect(map.get(4096)).toBe(5703); // vertical CRS
-    expect(map.get(4099)).toBe(9002); // vertical unit matches the foot horizontal
+    expect(map.get(4099)).toBe(9002); // the explicitly-passed vertical unit
   });
 });
 

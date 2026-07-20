@@ -268,3 +268,71 @@ describe('LAS 1.2 classification clamp warning (convertCloud)', () => {
     expect(view.getUint16(6, true) & 0x10).toBe(0x10); // WKT bit carried through
   });
 });
+
+/**
+ * The vertical unit is independent of the horizontal one.
+ *
+ * `buildGeoKeys` derived VerticalUnits (4099) from ProjLinearUnits (3076):
+ * "match a projected foot horizontal, else metres". But no convert mode moves
+ * Z, so after a horizontal reprojection to metres a foot-height source kept
+ * its foot Z values — and the file claimed they were metres. EPSG defines
+ * separate NAVD88 CRSs for metres and feet precisely because the two must not
+ * be conflated.
+ */
+describe('GeoKeys — the vertical unit comes from the source, not the horizontal', () => {
+  /** All [keyId, value] entries of the first GeoKey directory in the bytes. */
+  function geoKeys(bytes: Uint8Array): Array<[number, number]> {
+    const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    // The directory header is the uint16 run 1,1,0,N. Step by ONE byte: the
+    // payload sits after the 375-byte header + 54-byte VLR header = offset 429,
+    // which is odd, so an even-only stride never sees it.
+    for (let p = 0; p + 8 <= bytes.length; p += 1) {
+      if (v.getUint16(p, true) === 1 && v.getUint16(p + 2, true) === 1 && v.getUint16(p + 4, true) === 0) {
+        const n = v.getUint16(p + 6, true);
+        if (n < 1 || n > 32) continue;
+        const out: Array<[number, number]> = [];
+        for (let k = 0; k < n; k++) {
+          const at = p + 8 + k * 8;
+          out.push([v.getUint16(at, true), v.getUint16(at + 6, true)]);
+        }
+        return out;
+      }
+    }
+    return [];
+  }
+  const key = (bytes: Uint8Array, id: number) => geoKeys(bytes).find(([k]) => k === id)?.[1];
+  const g = (): GlobalPoints => ({
+    count: 1,
+    x: Float64Array.from([500000]),
+    y: Float64Array.from([4400000]),
+    z: Float64Array.from([400]),
+  });
+
+  it('writes the SOURCE vertical unit over a metre horizontal', () => {
+    // Foot heights reprojected horizontally to metres: Z is still feet.
+    const bytes = writeLas14(g(), {
+      epsg: 26913, isGeographic: false, linearUnitCode: 9001,
+      verticalEpsg: 5703, verticalUnitCode: 9003,
+    });
+    expect(key(bytes, 3076)).toBe(9001);
+    expect(key(bytes, 4099)).toBe(9003);
+  });
+
+  it('omits VerticalUnits rather than guessing when the source unit is unknown', () => {
+    const bytes = writeLas14(g(), {
+      epsg: 26913, isGeographic: false, linearUnitCode: 9001,
+      verticalEpsg: 5703, verticalUnitCode: null,
+    });
+    expect(key(bytes, 4096)).toBe(5703);
+    expect(key(bytes, 4099)).toBeUndefined();
+  });
+
+  it('no longer copies a foot horizontal into the vertical slot', () => {
+    // The old derivation: foot horizontal ⇒ foot vertical, even for metre Z.
+    const bytes = writeLas14(g(), {
+      epsg: 2231, isGeographic: false, linearUnitCode: 9003,
+      verticalEpsg: 5703, verticalUnitCode: 9001,
+    });
+    expect(key(bytes, 4099)).toBe(9001);
+  });
+});

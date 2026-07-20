@@ -56,6 +56,14 @@ export interface WriteLasOptions {
   readonly linearUnitCode?: number | null;
   /** Vertical (height) datum EPSG (e.g. 5703 NAVD88) → VerticalCSTypeGeoKey. */
   readonly verticalEpsg?: number | null;
+  /**
+   * GeoTIFF unit code for the VERTICAL axis (9001 metre / 9002 ft / 9003 US
+   * ft), independent of the horizontal one. No convert mode moves Z, so this
+   * is the SOURCE's vertical unit; null/absent omits VerticalUnitsGeoKey
+   * rather than guessing — a wrong vertical unit relabels every elevation by
+   * 3.28×.
+   */
+  readonly verticalUnitCode?: number | null;
   /** Quantisation scale per axis. Defaults: projected 0.001, geographic 1e-7. */
   readonly scale?: [number, number, number];
   /**
@@ -147,13 +155,15 @@ function buildGeoKeys(opts: WriteLasOptions, geo: boolean): Array<[number, numbe
       geoKeys.push([3076, opts.linearUnitCode]); // ProjLinearUnits (metre/foot/US ft)
     }
     if (opts.verticalEpsg != null && opts.verticalEpsg > 0 && opts.verticalEpsg <= 65535) {
-      // Vertical height datum + its unit (match a projected foot horizontal,
-      // else metres — elevation is metres for geographic horizontals).
-      const vUnit = !geo && (opts.linearUnitCode === 9002 || opts.linearUnitCode === 9003)
-        ? opts.linearUnitCode
-        : 9001;
       geoKeys.push([4096, opts.verticalEpsg]); // VerticalCSType
-      geoKeys.push([4099, vUnit]); // VerticalUnits
+      // VerticalUnits is the SOURCE's vertical unit, never derived from the
+      // horizontal: no convert mode moves Z, so after a horizontal reprojection
+      // to metres a foot-height source still carries foot Z values — the old
+      // "match the horizontal, else metres" rule stamped those as metres.
+      // Unknown ⇒ omit the key rather than guess.
+      if (opts.verticalUnitCode != null && opts.verticalUnitCode > 0) {
+        geoKeys.push([4099, opts.verticalUnitCode]); // VerticalUnits
+      }
     }
   }
   return geoKeys;

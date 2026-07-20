@@ -165,6 +165,14 @@ export function convertCloud(
       mode === 'reproject' && reprojectApplied ? 9001
       : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCrs.linearUnit)
       : null;
+    // Vertical unit: Z is untouched by every mode, so its unit is the SOURCE's
+    // declared vertical unit — falling back to the source's horizontal family
+    // (the GeoTIFF convention that vertical tracks the model's units), never
+    // the OUTPUT horizontal. Reprojecting a foot-height file to metre eastings
+    // used to relabel its unchanged Z as metres.
+    const verticalUnitCode = srcCrs
+      ? unitToGeoTiff(srcCrs.verticalLinearUnit ?? srcCrs.linearUnit)
+      : null;
     if (opts.format === 'las14') {
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
         log.push({
@@ -177,6 +185,7 @@ export function convertCloud(
         isGeographic: geo,
         linearUnitCode,
         verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalUnitCode,
         wkt,
       });
     } else {
@@ -199,6 +208,7 @@ export function convertCloud(
         isGeographic: geo,
         linearUnitCode,
         verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalUnitCode,
       });
     }
   } else {
