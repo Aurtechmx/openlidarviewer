@@ -97,7 +97,7 @@ stored measurement.
 Fix: parse to `'z' | 'y' | null`; a null must refuse the restore or prompt,
 not guess.
 
-### 5. Converter and LAS writer are axis-blind — traced
+### 5. Converter and LAS writer are axis-blind — FIXED (a094859)
 
 `globalPoints` / `reproject` / `writeLas` treat storage X/Y/Z as easting/
 northing/elevation. For a Y-up source, elevation is written as northing and depth
@@ -129,17 +129,19 @@ horizontal axes to 7 dp (~1.1 cm) when the frame is geographic; elevation stays
 at 3 dp, a height being a linear unit either way. The Viewer captures the frame
 kind in the `setInspectCoordinateContext` pass-through it already owns.
 
-### 8. Change detection computes before checking compatibility — reported
+### 8. Change detection computes before checking compatibility — FIXED (a094859), verified narrower than reported
 
-ICP, rasterisation and differencing reportedly run before CRS/datum/unit warnings
-are attached, using the first epoch's unit factor, comparing CRS as strings, on a
-hardcoded Z-up path.
+Verified narrower than reported: `compareDtms` already ran a substantial
+preflight (geographic volumes refused, origin offset, CRS, vertical datum, all
+with unknown-side handling) — the genuine defect was that a PROVEN mismatch
+still computed and shipped its figures under a caveat. Fixed: a differing
+horizontal CRS or vertical datum is `frameIncompatible` — the summary leads with
+the refusal and withholds every number while keeping the diagnosis, and the
+difference raster is not offered. An unknown frame stays indicative-with-caveats,
+so two undeclared scans still compare. The Z-up assumption is closed upstream by
+the gather normalisation (`cf19b96`).
 
-Fix: a frame-compatibility preflight that must succeed before any computation;
-refuse rather than warn afterwards. A warning attached to a completed computation
-does not make it valid.
-
-### 9. Exports can label coordinates with a different CRS than they used — reported
+### 9. Exports can label coordinates with a different CRS than they used — FIXED (a094859)
 
 `exportGeoContext` takes its label from source metadata while KML transforms via
 `crsService.current()`, so after an override a file can carry coordinates in one
@@ -184,11 +186,11 @@ effective reference for coordinates, labels and embedded metadata.
 
 ## Sequencing
 
-Items 1–4 are done (`b51d510`, `cf19b96`), item 6 is done (`9d937ba`) and
-item 7 is done (`644f959`, verified narrower than reported — the projected path
-was fine). Remaining P0: item 5 (the axis-blind converter — the terrain-style
-boundary normalisation applies) and items 8/9, still `reported` and needing
-verification before any fix.
+**All nine P0 items are closed** (`b51d510`, `cf19b96`, `9d937ba`, `644f959`,
+`a094859`). Three of the reported items (7, 8) verified narrower than the
+external audit described, and the fixes were scoped to what was actually true.
+What remains is the P1 list — led by the project-frame scene mount (browser
+gated) and the cross-implementation reference fixtures.
 
 Item 2 (terrain axes) is the largest P0: it changes a contract threaded through
 analysis, caching and three exporters, and it should land as one reviewed change
