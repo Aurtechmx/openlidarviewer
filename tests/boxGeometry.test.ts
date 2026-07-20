@@ -181,8 +181,57 @@ describe('box measurements follow the scan up-axis', () => {
     expect(boxCorners(unit)[2]).toEqual([1, 1, 0]);
   });
 
-  it('a tilted up vector resolves to its dominant axis', () => {
-    const m = boxMetrics(box, [0.1, 0.97, 0.2]);
-    expect(m.height).toBe(4);
+  /**
+   * A box is axis-aligned by construction — it is stored as min/max corners, so
+   * "height" can only mean the extent along one of X, Y, Z. Given a genuinely
+   * tilted up vector there is no honest answer: the previous behaviour picked
+   * the dominant component, which silently reported the extent along the
+   * NEAREST axis as the height, and fed that number into the footprint ring,
+   * the GeoJSON and KML polygons, and the compound-CRS vertical conversion.
+   *
+   * Refusing is the honest option until oriented boxes exist. Nothing in the
+   * app can currently reach this — every `_worldUp` write is exactly (0,±1,0)
+   * or (0,0,±1) — so the throw guards the contract, it does not gate a feature.
+   */
+  describe('a tilted frame is refused, not approximated', () => {
+    const TILTED: Vec3 = [0.1, 0.97, 0.2];
+
+    it('boxMetrics refuses a tilted up vector', () => {
+      expect(() => boxMetrics(box, TILTED)).toThrow(/axis-aligned/i);
+    });
+
+    it('boxCorners refuses a tilted up vector', () => {
+      expect(() => boxCorners(box, TILTED)).toThrow(/axis-aligned/i);
+    });
+
+    it('the message names the offending vector so a caller can see why', () => {
+      expect(() => boxMetrics(box, TILTED)).toThrow(/0\.1/);
+    });
+
+    it('refuses a zero or non-finite up vector rather than dividing by its length', () => {
+      expect(() => boxMetrics(box, [0, 0, 0])).toThrow(/axis-aligned/i);
+      expect(() => boxMetrics(box, [0, NaN, 0])).toThrow(/axis-aligned/i);
+    });
+
+    it('accepts every exact axis, in both directions', () => {
+      for (const up of [
+        [1, 0, 0], [0, 1, 0], [0, 0, 1],
+        [-1, 0, 0], [0, -1, 0], [0, 0, -1],
+      ] as Vec3[]) {
+        expect(() => boxMetrics(box, up)).not.toThrow();
+        expect(() => boxCorners(box, up)).not.toThrow();
+      }
+    });
+
+    it('accepts a normalised axis carrying float noise', () => {
+      // Real up vectors arrive through matrix maths, so an exact 0 is not
+      // guaranteed; a hair off-axis is still unambiguously that axis.
+      expect(() => boxMetrics(box, [1e-9, 1e-9, 0.9999999999])).not.toThrow();
+    });
+
+    it('a 45-degree vector is ambiguous and refused, not rounded to one side', () => {
+      const r = Math.SQRT1_2;
+      expect(() => boxMetrics(box, [0, r, r])).toThrow(/axis-aligned/i);
+    });
   });
 });

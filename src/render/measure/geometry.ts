@@ -359,13 +359,49 @@ export function boxFromCorners(a: Vec3, b: Vec3): BoxBounds {
  * The measurement boxes are axis-aligned in render space, so a scan whose
  * vertical axis is Y needs its HEIGHT read off Y, not Z.
  */
+/**
+ * How far off-axis an up vector may sit and still name an axis unambiguously.
+ * Up vectors arrive through matrix maths, so an exact 0 in the other two
+ * components is not guaranteed; 1e-6 admits that float noise (a ~0.00006°
+ * deviation) while rejecting any tilt a scan could actually carry.
+ */
+const AXIS_EPS = 1e-6;
+
+/**
+ * The index of the axis an up vector names — 0 = X, 1 = Y, 2 = Z.
+ *
+ * Throws on a genuinely tilted vector. A {@link BoxBounds} is stored as min/max
+ * corners, so it is axis-aligned by construction and its "height" can only be
+ * the extent along one of X, Y, Z. This previously returned the DOMINANT
+ * component, which meant a tilted frame silently got the extent along the
+ * nearest axis reported as its height — and that number flows on into the
+ * footprint ring, the exported GeoJSON and KML polygons, and the compound-CRS
+ * vertical unit conversion. Every one of those would be quietly wrong rather
+ * than visibly absent.
+ *
+ * Supporting tilted frames needs an oriented box (a basis, not an index), which
+ * is a change to the measurement's stored shape rather than to this helper. So
+ * until that exists the honest answer is a refusal. Nothing in the app reaches
+ * it today: every write to the viewer's world-up is exactly (0, ±1, 0) or
+ * (0, 0, ±1), chosen by source format.
+ */
 export function upAxisIndex(up: Vec3): 0 | 1 | 2 {
   const ax = Math.abs(up[0]);
   const ay = Math.abs(up[1]);
   const az = Math.abs(up[2]);
-  if (ay > ax && ay >= az) return 1;
-  if (ax > ay && ax >= az) return 0;
-  return 2;
+  const len = Math.hypot(ax, ay, az);
+  const axis: 0 | 1 | 2 = ay > ax && ay >= az ? 1 : ax > ay && ax >= az ? 0 : 2;
+  // A zero or non-finite vector names no axis, and normalising it would divide
+  // by zero — refuse before the ratio test rather than propagate a NaN.
+  if (Number.isFinite(len) && len > 0) {
+    const dominant = axis === 0 ? ax : axis === 1 ? ay : az;
+    if (dominant / len >= 1 - AXIS_EPS) return axis;
+  }
+  throw new Error(
+    `Box measurements need an axis-aligned up vector (X, Y or Z); got [${up.join(', ')}]. ` +
+      `A box is stored as min/max corners, so a tilted frame has no honest height — ` +
+      `measuring it would report the extent along the nearest axis instead.`,
+  );
 }
 
 /** The two non-vertical axes, ascending, for a given up-axis. */
