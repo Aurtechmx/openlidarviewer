@@ -6,11 +6,16 @@ This is an alpha for evaluation. The items below are known and deliberate — re
 
 `src/main.ts` is 7,574 lines and `src/render/Viewer.ts` is 7,297, against stated targets of 2,500 and 2,000. alpha.2 finished the composition root (no module-level mutable application state remains in `main.ts`) and wrote the architecture down with a drift check, but that is the scaffolding for the decomposition, not the decomposition. The ten blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
 
-## Shared project frame is computed but not yet applied to the scene
+## Shared project frame is applied to static layers; browser confirmation pending
 
 `ProjectSpatialFrame` / `LayerSpatialTransform` (value types + pure transform math) are tested and documented (`docs/architecture/project-spatial-frame.md`). alpha.2 lands **step 1** of the wiring plan: the app now owns a live project frame (`src/app/projectFrame.ts`, on `AppContext`), reseeded from the loaded layer set on every change, choosing one shared origin and deriving each layer's translation into it. A single layer anchors the frame at its own origin, so its transform is the identity and the single-scan path is unchanged.
 
-What is **not** done: the viewer still mounts each layer at its own local zero rather than applying that translation (step 2). So the frame is currently correct and observable, but nothing renders differently yet. For this alpha:
+Step 2 has landed: static layers now MOUNT at their `sourceToProject` translation, so two same-CRS georeferenced scans with different origins place at their true relative positions. A lone layer is the identity (single-scan path unchanged by construction; the full e2e suite passes untouched). Still staged for this alpha:
+
+- **Two-scan placement is verified in Node, not yet in a browser** with real georeferenced fixtures — treat multi-layer placement as needing that one visual confirmation.
+- Elevation colour ramps and the measurement datum do not yet account for per-layer offsets (steps 3–4 of the plan); with offset layers loaded, treat elevation-coloured views and cross-layer measurements as indicative.
+
+For this alpha:
 
 - Cross-layer operations require the layers to already share a compatible coordinate frame (same CRS, comparable origins). Two georeferenced scans with different origins still mount in their own local frames and still appear overlaid.
 - **Multi-dataset comparison is experimental.** Compare Studio, cross-layer measurement, shared clipping, and cross-layer picking are not backed by an authoritative project frame yet.

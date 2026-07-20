@@ -153,10 +153,11 @@ effective reference for coordinates, labels and embedded metadata.
 
 ## P1 — before a stable v0.6 research release
 
-1. **Activate the project frame in the scene.** The frame is computed and live on
-   `AppContext` (landed), but layers still mount at their own local zero, so two
-   georeferenced scans still overlay. This is step 2 of
-   `project-spatial-frame.md` and needs a two-scan browser check.
+1. **Activate the project frame in the scene — DONE for static layers (9b0ddf7).**
+   Layers mount at their `sourceToProject` translation; the lone-layer identity
+   keeps the single-scan path byte-identical (full e2e untouched). Remaining:
+   the two-scan browser confirmation with real fixtures, and steps 3–4
+   (elevation ramps + measure datum under offsets).
 2. **Replace regex WKT parsing with an AST parser.** The current parser survives
    realistic WKT1 and WKT2 (verified against six shapes including `PROJCRS` with
    nested `BASEGEOGCRS`, `COMPD_CS`, and bracketed names), so this is
@@ -178,8 +179,9 @@ effective reference for coordinates, labels and embedded metadata.
    local / unknown).
 6. **Model datum realization and coordinate epoch**, and carry operation
    provenance and accuracy on every transform result.
-7. **CHM must not carry an absolute vertical CRS.** It is DSM − DTM, a height
-   above ground, not a coordinate in NAVD88 or EGM2008.
+7. **CHM must not carry an absolute vertical CRS — DONE (9b0ddf7).** The DTM and
+   DSM keep the VerticalCSType stamp; the CHM, a height above ground, carries
+   none.
 8. **Reference fixtures from PROJ/PDAL/GDAL**, so coordinate claims are checked
    against an independent implementation rather than internal self-consistency.
 9. **Fail closed** whenever a coordinate operation is unresolved.
