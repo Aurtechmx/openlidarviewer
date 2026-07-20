@@ -5,7 +5,7 @@
  * is the active scan in?" Before this module, CRS state was spread
  * across four orthogonal seams:
  *
- *   - `CrsDetection.detectCrs(signals)` resolved per-load.
+ *   - a per-load signal resolver that was never wired in (removed).
  *   - `CrsRegistry` carried the well-known EPSG catalogue.
  *   - `CrsOverrideStore` persisted user choices.
  *   - `main.ts` glued them via `resolveCloudCrs` + a `_currentResolvedCrs`

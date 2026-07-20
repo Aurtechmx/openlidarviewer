@@ -16,8 +16,6 @@ import { type CrsSource } from '../geo/CoordinateTypes';
 import type { CrsService } from '../geo/CrsService';
 import {
   keyForDataset as crsKeyForDataset,
-  setOverride as setCrsOverrideForDataset,
-  clearOverride as clearCrsOverrideForDataset,
 } from '../geo/CrsOverrideStore';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 
@@ -152,30 +150,21 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     kind: 'projected' | 'geographic' | 'local';
   }): void {
     if (!currentCrsDatasetKey) return;
-    // epsg === null with kind === 'local' (tag for "use detected") is the
-    // sentinel the Inspector sends when the user picks "Use detected" or
-    // "Reset to detected". Clear the persisted override and re-derive.
-    if (override.epsg === null && override.kind === 'local') {
-      // Distinguish the two "epsg === null" cases. The Inspector emits the
-      // SAME shape for both — "local coordinates" and "reset to detected".
-      // Treat the no-EPSG override as "clear and re-derive"; the user gets
-      // the detected CRS back, which is the safer fallback. An explicit
-      // local-coordinates choice is rare in practice and can be added as
-      // a follow-up button.
-      clearCrsOverrideForDataset(currentCrsDatasetKey);
-    } else {
-      // Record what the file itself declares, so this entry can be told apart
-      // from one belonging to an unrelated file with the same name — overrides
-      // are keyed by dataset name alone. See `CrsService.resolveForScan`.
-      const active = getActiveId();
-      const declared =
-        getViewer().streamingCloud?.crs()?.epsg
-        ?? (active ? getViewer().getCloud(active)?.metadata?.crs?.epsg : undefined);
-      setCrsOverrideForDataset(currentCrsDatasetKey, {
-        epsg: override.epsg,
-        kind: override.kind,
-        detectedEpsg: declared,
-      });
+    // ONE writer: the override goes through `crsService.setOverride`, which
+    // persists it, records the file's own declaration (`detectedEpsg`, the
+    // guard that keeps a stored choice with its file), handles the
+    // "reset to detected" sentinel by clearing, and re-resolves. This
+    // coordinator used to write the store directly with its own copy of that
+    // logic — the same split that once let two resolvers disagree about the
+    // same scan's units.
+    const vw = getViewer();
+    const act = getActiveId();
+    const sc = vw.streamingCloud;
+    const detected =
+      (sc ? sc.crs() : act ? vw.getCloud(act)?.metadata?.crs : undefined) ?? undefined;
+    const source: CrsSource = sc ? (sc.kind === 'ept' ? 'ept-srs' : 'copc-meta') : 'las-vlr';
+    crsService.setOverride({ override, detected, source });
+    if (!(override.epsg === null && override.kind === 'local')) {
       recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);
     }
     // Re-run resolution and refresh — uses whichever cloud is currently active.

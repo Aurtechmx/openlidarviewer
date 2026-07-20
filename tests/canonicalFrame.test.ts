@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { yUpToCanonicalZUp, yUpOriginToCanonicalZUp } from '../src/terrain/canonicalFrame';
+import { yUpToCanonicalZUp, yUpOriginToCanonicalZUp, canonicalZUpToYUp } from '../src/terrain/canonicalFrame';
 import { sceneUpAxisPolicy } from '../src/io/sniffFormat';
 
 describe('yUpToCanonicalZUp', () => {
@@ -120,5 +120,27 @@ describe('sceneUpAxisPolicy', () => {
 
   it('reports nothing for an empty gather', () => {
     expect(sceneUpAxisPolicy([], false)).toBeNull();
+  });
+});
+
+describe('canonicalZUpToYUp', () => {
+  it('is the exact inverse of the forward rotation', () => {
+    const p = Float32Array.from([3, 7, -5, 1.5, -2.25, 8]);
+    const original = [...p];
+    canonicalZUpToYUp(yUpToCanonicalZUp(p));
+    expect([...p]).toEqual(original);
+  });
+
+  it('inverts in the other order too', () => {
+    const p = Float32Array.from([500_000, 4_400_000, 120]);
+    const original = [...p];
+    yUpToCanonicalZUp(canonicalZUpToYUp(p));
+    expect([...p]).toEqual(original);
+  });
+
+  it('is a rotation, not the elevation-only move the seam warns against', () => {
+    // Northing 5 in canonical becomes scene −Z; the naive (x, z, y) swap would
+    // put it at +Z and mirror the map.
+    expect([...canonicalZUpToYUp(Float32Array.from([0, 5, 0]))]).toEqual([0, 0, -5]);
   });
 });

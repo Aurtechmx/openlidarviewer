@@ -60,3 +60,23 @@ export function yUpOriginToCanonicalZUp(
 ): [number, number, number] {
   return [origin[0], -origin[2], origin[1]];
 }
+
+/**
+ * The exact inverse: express a canonical Z-up position in the Y-up scene frame,
+ * `(x, y, z) → (x, z, −y)`.
+ *
+ * This exists so the contour-overlay wiring cannot take the tempting shortcut
+ * of "move the elevation into Y": that alone mirrors the northing and draws
+ * every contour flipped — wrong in a way that still looks like a contour map,
+ * because the lines are real, just on the wrong side. See the caution on
+ * `OverlayVerticalAxis` in `contourOverlayGeometry.ts`.
+ */
+export function canonicalZUpToYUp(positions: Float32Array): Float32Array {
+  for (let i = 0; i + 2 < positions.length; i += 3) {
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+    positions[i + 1] = z;
+    positions[i + 2] = -y;
+  }
+  return positions;
+}

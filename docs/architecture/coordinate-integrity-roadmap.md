@@ -168,8 +168,11 @@ effective reference for coordinates, labels and embedded metadata.
 3. **One authoritative EPSG/operation catalog** shared by the picker, type
    detection, unit and datum lookup, projection definitions and area of use. Do
    not offer a reprojection target with no operation definition. `CrsDetection.ts`
-   is currently dead code and must be either wired in or deleted — it is not
-   acceptable to leave a documented, tested precedence engine that nothing calls.
+   has been DELETED rather than wired in: it misled two audits into citing its
+   documented precedence as live behaviour, dead code passing tests is actively
+   deceptive, and wiring it in would have changed live resolution pre-release
+   with no fixture demanding it. Its catalog-tier and conflict-demotion design
+   stays recoverable from history if the stable-v0.6 catalog work wants it.
 4. **Per-layer session spatial metadata**, replacing the single global
    origin/up-axis/CRS. A session must never silently redefine the active scan's
    CRS, and a CRS/axis/unit mismatch must be a conflict, not a disclosure.

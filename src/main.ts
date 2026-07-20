@@ -104,7 +104,7 @@ import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import type { MeasurementExportContext } from './export/measurementExport';
 import type { KmlExportInput } from './export/kmlExport';
-import { utmConverter } from './geo/UtmConverter';
+import { makeLocalToLonLat, LonLatConversionError } from './export/lonLatMapper';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -3588,44 +3588,6 @@ function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
  * lands them in the source frame — already lon/lat for a geographic CRS, or the
  * projected easting/northing that the UTM converter takes to WGS84.
  */
-/**
- * Raised when a point cannot be expressed in longitude/latitude. Carries the
- * converter's own reason so the refusal the user sees names the cause.
- */
-class LonLatConversionError extends Error {}
-
-function makeLocalToLonLat(
-  resolved: ReturnType<typeof crsService.current>,
-  origin: readonly number[],
-): ((p: readonly [number, number, number]) => [number, number, number]) | null {
-  if (!resolved) return null;
-  const ox = origin[0] ?? 0;
-  const oy = origin[1] ?? 0;
-  const oz = origin[2] ?? 0;
-  if (resolved.kind === 'geographic') {
-    return (p) => [p[0] + ox, p[1] + oy, p[2] + oz];
-  }
-  if (resolved.kind === 'projected') {
-    // Probe once: a non-UTM projected CRS returns a tagged failure here, so the
-    // caller can decline the export rather than emit wrong coordinates.
-    const probe = utmConverter.toGeographic({ x: ox, y: oy, z: oz }, resolved);
-    if (!probe.ok) return null;
-    return (p) => {
-      const r = utmConverter.toGeographic(
-        { x: p[0] + ox, y: p[1] + oy, z: p[2] + oz },
-        resolved,
-      );
-      // A failed conversion must NOT fall back to the projected coordinate:
-      // writing easting 500000 into a KML <coordinates> element claims
-      // longitude 500000, which is not a degraded answer but a corrupt file.
-      // The origin probe above only proves the origin converts; a point far
-      // enough from it can still leave the grid, so this is reachable.
-      if (!r.ok) throw new LonLatConversionError(r.reason);
-      return [r.value.lon, r.value.lat, r.value.elevation ?? p[2] + oz];
-    };
-  }
-  return null;
-}
 
 // Drive the Export panel's Coordinate-System auto-collapse from the CRS service:
 // an ungeoreferenced (local / unknown) scan has no real-world CRS to keep /

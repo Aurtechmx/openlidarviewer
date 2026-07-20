@@ -24,7 +24,8 @@ import type { EvidenceGrade } from '../ground/cellConfidence';
  * WIRING CAUTION: contours are computed in the canonical Z-up frame (the
  * terrain gather rotates Y-up sources — see `terrain/canonicalFrame.ts`), so
  * placing them into a Y-up SCENE needs the full inverse rotation
- * `(x, y, z) → (x, z, −y)`, not just "put the elevation in Y". Moving the
+ * `(x, y, z) → (x, z, −y)` — `canonicalZUpToYUp` in `terrain/canonicalFrame.ts` is
+ * that inverse, ready-made — not just "put the elevation in Y". Moving the
  * elevation axis alone mirrors the northing and draws every contour flipped —
  * wrong in a way that still looks like a contour map.
  */
