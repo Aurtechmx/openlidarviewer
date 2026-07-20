@@ -320,6 +320,26 @@ function serializeSavedView(view: SavedView): SavedView {
  * measurements or annotations are dropped rather than failing the whole
  * import. Schema v1 (measurement-only) and v2 are both accepted.
  */
+/**
+ * Read the session's vertical axis, refusing anything else.
+ *
+ * This decides which component of a rebase delta is elevation (`elevDelta`
+ * below), so a wrong value silently reinterprets the height of every restored
+ * measurement. The previous `=== 'z' ? 'z' : 'y'` turned a missing, misspelled
+ * or corrupted value into Y-up with no warning. Every session this app writes
+ * carries an explicit 'y' or 'z', so anything else means the file was
+ * hand-edited, truncated or written by something else — none of which is a
+ * reason to guess at the vertical axis.
+ */
+function parseUpAxis(raw: unknown): 'y' | 'z' {
+  if (raw === 'z' || raw === 'y') return raw;
+  throw new Error(
+    `Session up-axis is ${JSON.stringify(raw)}; expected "y" or "z". ` +
+      `Refusing rather than guessing, because the up-axis decides which ` +
+      `direction every restored measurement treats as elevation.`,
+  );
+}
+
 export function parseSession(text: string): InspectionSession {
   let raw: unknown;
   try {
@@ -340,7 +360,7 @@ export function parseSession(text: string): InspectionSession {
     app: 'OpenLiDARViewer',
     kind: 'measurement-session',
     version: SESSION_VERSION,
-    upAxis: raw.upAxis === 'z' ? 'z' : 'y',
+    upAxis: parseUpAxis(raw.upAxis),
     origin: parseVec3(raw.origin),
     unitSystem: raw.unitSystem === 'imperial' ? 'imperial' : 'metric',
     views: parseViews(raw.views),

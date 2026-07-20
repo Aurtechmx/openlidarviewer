@@ -198,3 +198,49 @@ describe('buildKml — empty input', () => {
     expect(kml).toContain('unknown CRS');
   });
 });
+
+/**
+ * A KML <coordinates> element is geographic by specification, so a value the
+ * exporter cannot express as a real longitude/latitude has no honest
+ * representation. Substituting '0' placed the feature at 0°N 0°E — Null Island,
+ * in the Gulf of Guinea — which reads as a successful export of a real place.
+ *
+ * The sibling defect (the mapper returning raw easting/northing when conversion
+ * failed) was closed separately; this is the same class one layer down, where
+ * the number is already non-finite by the time it reaches formatting.
+ */
+describe('buildKml — a coordinate it cannot express is refused', () => {
+  const nonFinite = (bad: number) => (): [number, number, number] => [bad, 40, 100];
+
+  it('refuses NaN rather than writing 0,0', () => {
+    expect(() => buildKml(input({ toLonLat: nonFinite(NaN) }))).toThrow(/coordinate/i);
+  });
+
+  it('refuses Infinity', () => {
+    expect(() => buildKml(input({ toLonLat: nonFinite(Infinity) }))).toThrow(/coordinate/i);
+  });
+
+  it('never emits the Null Island coordinate for a bad input', () => {
+    let text = '';
+    try {
+      text = buildKml(input({ toLonLat: nonFinite(NaN) }));
+    } catch {
+      text = '';
+    }
+    expect(text).not.toContain('0,0,');
+  });
+
+  it('still builds normally when every coordinate is finite', () => {
+    expect(buildKml(input())).toContain('<kml');
+  });
+
+  it('refuses a longitude outside the geographic domain', () => {
+    // An easting that slipped through as a longitude is finite but impossible;
+    // the domain check is what catches that shape.
+    expect(() => buildKml(input({ toLonLat: () => [500000, 40, 0] }))).toThrow(/longitude/i);
+  });
+
+  it('refuses a latitude outside the geographic domain', () => {
+    expect(() => buildKml(input({ toLonLat: () => [-111, 4400000, 0] }))).toThrow(/latitude/i);
+  });
+});

@@ -232,11 +232,19 @@ describe('parseSession — tolerance', () => {
   });
 
   it('falls back to safe defaults for bad top-level fields', () => {
+    // Tolerance is deliberate for a display preference or a malformed list: the
+    // worst case is a wrong label or an empty panel, and refusing the whole file
+    // over one would lose the user's work for nothing.
+    //
+    // `upAxis` is NOT in that set, and this case previously asserted it was —
+    // 'sideways' resolved to 'y'. It decides which component of a rebase delta
+    // is elevation, so guessing it silently reinterprets the height of every
+    // restored measurement. It now refuses; see the up-axis suite below.
     const doc = {
       app: 'OpenLiDARViewer',
       kind: 'measurement-session',
       version: SESSION_VERSION,
-      upAxis: 'sideways',
+      upAxis: 'z',
       origin: 'nope',
       unitSystem: 'cubits',
       views: 'no',
@@ -244,7 +252,6 @@ describe('parseSession — tolerance', () => {
       annotations: 'no',
     };
     const back = parseSession(JSON.stringify(doc));
-    expect(back.upAxis).toBe('y');
     expect(back.origin).toEqual([0, 0, 0]);
     expect(back.unitSystem).toBe('metric');
     expect(back.views).toEqual([]);
@@ -1082,5 +1089,54 @@ describe('v7 — reserved processingManifest passthrough', () => {
     expect(back.processingManifest).toEqual(manifest);
     expect(verifyProcessingManifest(back.processingManifest as ProcessingManifest))
       .toEqual({ ok: true });
+  });
+});
+
+/**
+ * `upAxis` decides which component of a rebase delta is elevation
+ * (`session.ts` — `elevDelta = upAxis === 'z' ? dz : dy`), so a wrong value
+ * silently reinterprets the height of every restored measurement.
+ *
+ * It used to be parsed as `raw.upAxis === 'z' ? 'z' : 'y'`, so a missing,
+ * misspelled or corrupted value became Y-up with no warning. Every session this
+ * app has ever written carries an explicit 'y' or 'z', so an unrecognised value
+ * means the file was hand-edited, truncated or produced by something else —
+ * none of which is a reason to guess at the vertical axis.
+ */
+describe('parseSession — the up-axis is read, never assumed', () => {
+  const base = {
+    app: 'OpenLiDARViewer',
+    kind: 'measurement-session',
+    version: 7,
+    origin: [0, 0, 0],
+    unitSystem: 'metric',
+    views: [],
+    measurements: [],
+    annotations: [],
+  };
+  const parse = (upAxis: unknown) => () => parseSession(JSON.stringify({ ...base, upAxis }));
+
+  it('reads an explicit z', () => {
+    expect(parse('z')().upAxis).toBe('z');
+  });
+
+  it('reads an explicit y', () => {
+    expect(parse('y')().upAxis).toBe('y');
+  });
+
+  it('refuses a missing up-axis instead of assuming Y', () => {
+    expect(parse(undefined)).toThrow(/up-axis/i);
+  });
+
+  it('refuses a misspelled up-axis', () => {
+    expect(parse('Z ')).toThrow(/up-axis/i);
+  });
+
+  it('refuses a non-string up-axis', () => {
+    expect(parse(2)).toThrow(/up-axis/i);
+  });
+
+  it('names the offending value so the file can be repaired', () => {
+    expect(parse('up')).toThrow(/up/);
   });
 });

@@ -20,6 +20,7 @@
  */
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
+import { epsgFromCrsLabel } from '../../export/crsIdentifier';
 import { buildExportProvenance, provenanceLines, type ExportPermitStamp } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff } from './demGeoTiff';
@@ -102,11 +103,24 @@ export interface DemPackageOptions {
   readonly exportPermit?: ExportPermitStamp | null;
 }
 
-/** Parse an "EPSG:1234" identifier to its numeric code, or null. */
+/**
+ * Parse an authority code from a CRS identifier, or null.
+ *
+ * This is fed the CRS DISPLAY label (`terrainAnalysisRunner` passes the
+ * resolver's `name` through as `dtm.crs`; `verticalDatum` is a datum name), and
+ * it previously matched any 3–6 digit run with the `EPSG:` prefix OPTIONAL. So
+ * every CRS whose name carries a year stamped its GeoTIFF with that year:
+ * `CH1903+ / LV95` wrote 1903 instead of 2056, `Mexico ITRF2008 / LCC` wrote
+ * 2008 instead of 6362, `Baltic 1977` wrote 1977 instead of 5705. A raster
+ * asserting the wrong CRS is worse than one asserting none, because a reader
+ * places it confidently rather than asking.
+ *
+ * Delegates to the shared identifier helper so the rule for "does this label
+ * name a code" lives in one place — it requires an explicit `EPSG:` token and
+ * accepts both the bare form and the parenthesised form the parsers build.
+ */
 export function parseEpsg(id: string | null | undefined): number | null {
-  if (!id) return null;
-  const m = /(?:EPSG:)?(\d{3,6})/i.exec(id);
-  return m ? Number(m[1]) : null;
+  return epsgFromCrsLabel(id);
 }
 
 const NO_DATA = -9999;

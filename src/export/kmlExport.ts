@@ -75,15 +75,47 @@ function esc(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/**
+ * Raised when a coordinate cannot be expressed as a real longitude/latitude.
+ * Exported so the caller can decline the whole export: KML coordinates are
+ * geographic BY SPECIFICATION, so one unplaceable feature makes the file wrong
+ * rather than incomplete.
+ */
+export class KmlCoordinateError extends Error {}
+
 /** Format a finite number to at most 6 decimals (trailing zeros trimmed). */
 function fmt(n: number): string {
-  if (!Number.isFinite(n)) return '0';
   return String(Math.round(n * 1e6) / 1e6);
 }
 
-/** A single "lon,lat,alt" tuple in KML order. */
+/**
+ * A single "lon,lat,alt" tuple in KML order, refusing anything that is not a
+ * real geographic position.
+ *
+ * A non-finite value used to format as `'0'`, which placed the feature at 0°N
+ * 0°E — a point in the Gulf of Guinea — and read as a successful export of a
+ * real place. The domain check catches the other shape of the same mistake: a
+ * projected easting that reached here as a longitude is perfectly finite and
+ * still impossible.
+ */
 function coord(lonLatAlt: [number, number, number]): string {
-  return `${fmt(lonLatAlt[0])},${fmt(lonLatAlt[1])},${fmt(lonLatAlt[2])}`;
+  const [lon, lat, alt] = lonLatAlt;
+  if (!Number.isFinite(lon) || !Number.isFinite(lat) || !Number.isFinite(alt)) {
+    throw new KmlCoordinateError(
+      `A coordinate is not a finite number (${lon}, ${lat}, ${alt}), so it cannot be placed on the map.`,
+    );
+  }
+  if (lon < -180 || lon > 180) {
+    throw new KmlCoordinateError(
+      `Longitude ${lon} is outside -180..180 — these look like projected coordinates, not degrees.`,
+    );
+  }
+  if (lat < -90 || lat > 90) {
+    throw new KmlCoordinateError(
+      `Latitude ${lat} is outside -90..90 — these look like projected coordinates, not degrees.`,
+    );
+  }
+  return `${fmt(lon)},${fmt(lat)},${fmt(alt)}`;
 }
 
 /** Map LOCAL points to a space-separated KML <coordinates> string. */

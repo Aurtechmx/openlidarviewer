@@ -3489,7 +3489,7 @@ const exportPanel = new ExportPanel({
     const origin = geo.origin;
     const toLonLat = makeLocalToLonLat(crsService.current(), origin);
     if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
-    const { buildKml } = await loadKmlExport();
+    const { buildKml, KmlCoordinateError } = await loadKmlExport();
     const input: KmlExportInput = {
       annotations: viewer.annotate.getAnnotations(),
       measurements: viewer.measure.getMeasurements(),
@@ -3518,7 +3518,11 @@ const exportPanel = new ExportPanel({
     } catch (err) {
       // Every KML coordinate is geographic by specification, so one
       // unconvertible point makes the whole file wrong. Decline it.
-      if (err instanceof LonLatConversionError) {
+      // Both refusals mean the same thing to the user: something in this scan
+      // has no honest place on a map. The mapper raises the first when a point
+      // leaves the projection's domain; the exporter raises the second when a
+      // value reaches it that is not a real geographic position.
+      if (err instanceof LonLatConversionError || err instanceof KmlCoordinateError) {
         dropZone.setError(
           `KML export stopped: a point could not be placed in longitude/latitude. ${err.message}`,
         );

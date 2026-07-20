@@ -21,7 +21,12 @@
  */
 export function epsgFromCrsLabel(label: string | null | undefined): number | null {
   if (!label) return null;
-  const m = /(?:^|\()\s*EPSG\s*:\s*(\d+)\s*\)?\s*$/i.exec(label.trim());
+  const text = label.trim();
+  // A string that is ENTIRELY digits can only be a code — unlike a number
+  // embedded in prose, which is how `CH1903+ / LV95` came to be read as 1903.
+  // Callers that hand this a user-typed code field rely on the bare form.
+  const bare = /^(\d{3,6})$/.exec(text);
+  const m = bare ?? /(?:^|\()\s*EPSG\s*:\s*(\d+)\s*\)?\s*$/i.exec(text);
   if (!m) return null;
   const code = Number(m[1]);
   return Number.isInteger(code) && code > 0 ? code : null;
