@@ -174,3 +174,54 @@ describe('convertCloud — omitClassification guard', () => {
     expect(report.log.some((l) => /omitted/i.test(l.message))).toBe(true);
   });
 });
+
+/**
+ * The converter reads storage X/Y/Z as easting/northing/elevation — true for
+ * every survey format and false for the Y-up mesh formats, whose elevation is
+ * Y and whose depth is Z. Writing a phone scan to LAS or XYZ therefore put its
+ * elevation in the northing column and its depth in the height column: a file
+ * whose numbers all look plausible and whose axes are scrambled.
+ *
+ * Same remedy as the terrain pipeline (`terrain/canonicalFrame.ts`): rotate at
+ * the boundary, once, so every writer stays axis-ignorant and correct.
+ */
+describe('convertCloud — Y-up sources are rotated into the survey frame', () => {
+  function yUpMesh(): PointCloud {
+    // One point 7 up and 5 north of origin in the glTF/OBJ frame:
+    // east 3, elevation 7 (Y), north 5 (−Z).
+    return new PointCloud({
+      positions: Float32Array.from([3, 7, -5]),
+      origin: [0, 0, 0],
+      sourceFormat: 'ply',
+      name: 'room.ply',
+    });
+  }
+
+  it('writes elevation into the Z column of an XYZ export', () => {
+    const out = convertCloud(yUpMesh(), { format: 'xyz' });
+    expect(out.file).not.toBeNull();
+    const text = new TextDecoder().decode(out.file!.bytes).trim();
+    // east 3, north 5, up 7 — not the raw storage order 3, 7, −5.
+    expect(text).toBe('3.000 5.000 7.000');
+  });
+
+  it('says so in the report, since the coordinates no longer match the source bytes', () => {
+    const out = convertCloud(yUpMesh(), { format: 'xyz' });
+    expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(true);
+  });
+
+  it('leaves a Z-up survey source byte-identical', () => {
+    const out = convertCloud(
+      new PointCloud({
+        positions: Float32Array.from([3, 5, 7]),
+        origin: [0, 0, 0],
+        sourceFormat: 'las',
+        name: 's.las',
+      }),
+      { format: 'xyz' },
+    );
+    const text = new TextDecoder().decode(out.file!.bytes).trim();
+    expect(text).toBe('3.000 5.000 7.000');
+    expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(false);
+  });
+});

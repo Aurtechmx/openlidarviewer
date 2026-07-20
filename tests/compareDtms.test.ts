@@ -123,8 +123,12 @@ describe('compareDtms', () => {
 
 describe('summarizeChange', () => {
   it('leads with the not-co-registered warning when alignment fails', () => {
-    const a = grid([1, 1], 2, 1, { crs: 'EPSG:32612' });
-    const b = grid([2, 2], 2, 1, { crs: 'EPSG:32613' });
+    // Triggered by an ORIGIN OFFSET — an indicative case where the numbers
+    // still print with a caveat. This test previously used a CRS mismatch as
+    // the trigger and asserted the numbers printed anyway; a PROVEN mismatch
+    // now refuses them (see the frame-incompatibility suite below).
+    const a = grid([1, 1], 2, 1);
+    const b = grid([2, 2], 2, 1, { originH1: 10 });
     const lines = summarizeChange(compareDtms(a, b));
     expect(lines[0]).toContain('Not co-registered');
     expect(lines.some((l) => l.includes('Net volume change'))).toBe(true);
@@ -140,8 +144,8 @@ describe('summarizeChange', () => {
   });
 
   it('spells out the co-registration checklist when not co-registered', () => {
-    const a = grid([1, 1], 2, 1, { crs: 'EPSG:32612' });
-    const b = grid([2, 2], 2, 1, { crs: 'EPSG:32613' });
+    const a = grid([1, 1], 2, 1);
+    const b = grid([2, 2], 2, 1, { originH1: 10 });
     const lines = summarizeChange(compareDtms(a, b));
     const checklist = lines.find((l) => /Needs for a measured result/.test(l));
     expect(checklist).toBeDefined();
@@ -149,5 +153,59 @@ describe('summarizeChange', () => {
     expect(checklist).toMatch(/datum/);
     expect(checklist).toMatch(/units/);
     expect(checklist).toMatch(/ground control/);
+  });
+});
+
+/**
+ * A PROVEN frame mismatch is refused, not annotated.
+ *
+ * The preflight already diagnosed a differing horizontal CRS or vertical datum,
+ * but the numeric comparison ran anyway and the numbers shipped with a caveat
+ * attached. "Indicative" is the right posture for an UNKNOWN frame; a proven
+ * mismatch is different in kind — a Δz between UTM 12N and 13N, or between
+ * NAVD88 and ellipsoidal heights, describes nothing, and a warning under a
+ * confident number does not make the number meaningful.
+ */
+describe('compareDtms — a proven frame mismatch refuses the numbers', () => {
+  const flat = [1, 1, 1, 1];
+
+  it('flags a differing horizontal CRS as frame-incompatible', () => {
+    const cmp = compareDtms(grid(flat, 2, 2), grid(flat, 2, 2, { crs: 'EPSG:32613' }));
+    expect(cmp.frameIncompatible).toBe(true);
+  });
+
+  it('flags a differing vertical datum as frame-incompatible', () => {
+    const cmp = compareDtms(
+      grid(flat, 2, 2, { verticalDatum: 'NAVD88' }),
+      grid(flat, 2, 2, { verticalDatum: 'EPSG:4979' }),
+    );
+    expect(cmp.frameIncompatible).toBe(true);
+  });
+
+  it('does NOT flag an unknown frame — that stays indicative, not refused', () => {
+    // Refusing on absence of evidence would block the ordinary case of two
+    // scans whose files simply declare nothing.
+    const cmp = compareDtms(grid(flat, 2, 2, { crs: null }), grid(flat, 2, 2, { crs: null }));
+    expect(cmp.frameIncompatible).toBe(false);
+  });
+
+  it('does not flag matching frames', () => {
+    expect(compareDtms(grid(flat, 2, 2), grid(flat, 2, 2)).frameIncompatible).toBe(false);
+  });
+
+  it('summarizeChange leads with the refusal and withholds every number', () => {
+    const cmp = compareDtms(grid(flat, 2, 2), grid(flat, 2, 2, { crs: 'EPSG:32613' }));
+    const lines = summarizeChange(cmp);
+    expect(lines[0]).toMatch(/not comparable/i);
+    const text = lines.join('\n');
+    expect(text).not.toContain('Net volume');
+    expect(text).not.toContain('Largest gain');
+    // The diagnosis still travels, so the user can see WHY.
+    expect(text).toContain('Horizontal CRS differs');
+  });
+
+  it('summarizeChange still prints numbers for merely-unknown frames', () => {
+    const cmp = compareDtms(grid(flat, 2, 2, { crs: null }), grid(flat, 2, 2, { crs: null }));
+    expect(summarizeChange(cmp).join('\n')).toContain('Net volume');
   });
 });

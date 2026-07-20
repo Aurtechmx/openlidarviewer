@@ -3347,12 +3347,25 @@ function exportGeoContext(): {
   crsName: string | undefined;
   name: string | null;
 } {
+  // The label must come from the RESOLVED CRS — the same one every conversion,
+  // unit factor and validation gate uses — not from the raw source metadata.
+  // After a user override (the picker exists precisely because files declare
+  // wrong CRSs), the source label names the CRS the user rejected: a KML whose
+  // coordinates were converted under the override then carried metadata naming
+  // the old CRS, which places confidently in the wrong frame — worse than no
+  // label. The raw source name stays available on the cloud for provenance.
+  const effectiveCrsName = (): string | undefined => {
+    const cur = crsService.current();
+    return cur && (cur.kind === 'projected' || cur.kind === 'geographic')
+      ? cur.name
+      : undefined;
+  };
   if (scans.activeId) {
     const c = viewer.getCloud(scans.activeId);
-    if (c) return { origin: c.origin, crsName: c.metadata?.crs?.name, name: c.name };
+    if (c) return { origin: c.origin, crsName: effectiveCrsName() ?? c.metadata?.crs?.name, name: c.name };
   }
   const sc = viewer.streamingCloud;
-  if (sc) return { origin: sc.renderOrigin, crsName: sc.crs()?.name ?? undefined, name: sc.name };
+  if (sc) return { origin: sc.renderOrigin, crsName: effectiveCrsName() ?? sc.crs()?.name ?? undefined, name: sc.name };
   return { origin: [0, 0, 0], crsName: undefined, name: null };
 }
 
@@ -7482,6 +7495,12 @@ function compareLoadedLayers(): void {
       // export otherwise carries foot geometry with metre values, and any GIS
       // volume mixes ft² with m). Metre / compound-metre-horizontal CRS ⇒ 1, a
       // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
+      // A provably frame-incompatible pair reports no numbers, so it must not
+      // hand out a difference raster either.
+      if (cmp.frameIncompatible) {
+        inspector.setDifferenceAvailable(false);
+        return;
+      }
       const gridUnitToMetres = a.metadata?.crs?.linearUnitToMetres ?? 1;
       const ascDiff =
         gridUnitToMetres === 1

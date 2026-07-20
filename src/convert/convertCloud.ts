@@ -10,6 +10,7 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { isZUpFormat } from '../io/sniffFormat';
 import { cloudToGlobal } from './globalPoints';
 import { writeLas, writeLas14 } from './writeLas';
 import { writeXyz, writeAsc } from './writeAscii';
@@ -74,6 +75,27 @@ export function convertCloud(
   const mode = opts.crsMode ?? 'keep';
   const sourceEpsg = cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null;
   let g = cloudToGlobal(cloud);
+  // Every output format here reads Z as elevation (LAS by spec; the ASCII
+  // writers by the same convention), which is wrong for the Y-up mesh formats:
+  // raw storage order would put the mesh's elevation in the northing column and
+  // its depth in the height column — plausible numbers, scrambled axes. Same
+  // remedy as the terrain pipeline (`terrain/canonicalFrame.ts`): one rotation
+  // at the boundary, (x, y, z) → (x, −z, y), so every writer stays
+  // axis-ignorant. Disclosed in the report because the written coordinates no
+  // longer match the source bytes.
+  if (!isZUpFormat(cloud.sourceFormat)) {
+    const { y, z } = g;
+    for (let i = 0; i < g.count; i++) {
+      const yv = y[i];
+      y[i] = -z[i];
+      z[i] = yv;
+    }
+    log.push({
+      level: 'info',
+      message:
+        'Y-up source rotated into the Z-up survey frame (elevation → Z, north → Y) so the output axes mean what the format says they mean.',
+    });
+  }
   let outEpsg: number | null = sourceEpsg;
   let crsNote: string;
   // True only when a reproject ACTUALLY moved coordinates into the target CRS.
