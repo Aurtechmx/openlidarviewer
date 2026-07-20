@@ -94,6 +94,65 @@ describe('detectCrsMismatch', () => {
     expect(r.mismatched[0].reason).toContain('vertical datum');
   });
 
+  /**
+   * The overwhelmingly common real mix: one tile declares NAVD88 (orthometric),
+   * the other is a plain LAS whose Z is GNSS ellipsoidal height and declares no
+   * vertical datum at all. The two are tens of metres apart vertically — geoid
+   * separation is about -17 m in northern Utah — yet the old rule only fired
+   * when BOTH sides declared a datum, so this pair reported no mismatch, no
+   * unknown, and an empty summary. Silence read as "these agree".
+   *
+   * It is NOT a mismatch: nothing proves the datums differ. It is a third
+   * state — unconfirmable — which is the distinction this module already draws
+   * for horizontal CRS, and which `compareDtms` already draws for elevation
+   * differencing.
+   */
+  it('cannot confirm heights when only ONE layer declares a vertical datum', () => {
+    const r = detectCrsMismatch([
+      layer({ id: 'a', epsg: 26912, verticalDatum: 'NAVD88' }),
+      layer({ id: 'b', epsg: 26912 }),
+    ]);
+    expect(r.verticalUnconfirmed).toEqual(['b']);
+    // Not a mismatch — an unproven difference must not read as a proven one.
+    expect(r.mismatched).toEqual([]);
+    expect(r.summary).toMatch(/height/i);
+  });
+
+  it('cannot confirm heights when NEITHER layer declares a vertical datum', () => {
+    // One could be orthometric and the other ellipsoidal; nothing says otherwise.
+    const r = detectCrsMismatch([
+      layer({ id: 'a', epsg: 26912 }),
+      layer({ id: 'b', epsg: 26912 }),
+    ]);
+    expect(r.verticalUnconfirmed).toEqual(['a', 'b']);
+    expect(r.summary).toMatch(/height/i);
+  });
+
+  it('is silent about heights when both layers agree on a datum', () => {
+    const r = detectCrsMismatch([
+      layer({ id: 'a', epsg: 26912, verticalDatum: 'NAVD88' }),
+      layer({ id: 'b', epsg: 26912, verticalDatum: 'NAVD88' }),
+    ]);
+    expect(r.verticalUnconfirmed).toEqual([]);
+    expect(r.summary).toBe('');
+  });
+
+  it('says nothing about heights for a single layer', () => {
+    // Nothing to compare against, so there is no claim to qualify.
+    const r = detectCrsMismatch([layer({ id: 'a', epsg: 26912 })]);
+    expect(r.verticalUnconfirmed).toEqual([]);
+    expect(r.summary).toBe('');
+  });
+
+  it('reports a proven vertical difference as a mismatch, not as unconfirmed', () => {
+    const r = detectCrsMismatch([
+      layer({ id: 'a', epsg: 26912, verticalDatum: 'NAVD88' }),
+      layer({ id: 'b', epsg: 26912, verticalDatum: 'EGM2008' }),
+    ]);
+    expect(r.mismatched.map((m) => m.id)).toEqual(['b']);
+    expect(r.verticalUnconfirmed).toEqual([]);
+  });
+
   it('lists layers without a declared CRS as unknown, not mismatched', () => {
     const r = detectCrsMismatch([
       layer({ id: 'a', epsg: 32612 }),

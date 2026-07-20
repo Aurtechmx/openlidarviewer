@@ -99,6 +99,14 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // because heights do not align across datums even when the horizontal
     // frame matches. Passing its verdict straight through is what keeps the
     // layer panel and the scene from disagreeing about the same two scans.
+    //
+    // `verticalUnconfirmed` is deliberately NOT treated as foreign. Those layers
+    // share the reference's horizontal CRS — that alignment is real and worth
+    // keeping — and nothing proves their heights disagree; the datum is simply
+    // undeclared. Excluding them would discard valid horizontal alignment over
+    // an unproven vertical doubt. The doubt is surfaced instead, through the
+    // layer note. Revisit when the frame starts driving elevation comparisons,
+    // where "unconfirmed" should gate the product rather than the mount.
     const foreign = new Set(mismatch.mismatched.map((x) => x.id));
     const layers: ProjectFrameLayer[] = [];
     for (const info of infos) {
