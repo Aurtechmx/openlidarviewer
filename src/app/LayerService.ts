@@ -120,6 +120,17 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       });
     }
     deps.projectFrame.reconcile(layers);
+    // Step 2 of the wiring plan: MOUNT each layer at its transform, not just
+    // compute it. A lone layer's transform is the identity, so the single-scan
+    // path is unchanged by construction; a cloud outside the frame (no declared
+    // origin, or a foreign CRS) mounts at its own zero exactly as before.
+    for (const info of infos) {
+      const t = deps.projectFrame.transformFor(info.id);
+      viewer.setCloudFrameOffset(
+        info.id,
+        t ? t.sourceToProject : [0, 0, 0],
+      );
+    }
   }
 
   function refreshCrsFlags(): void {

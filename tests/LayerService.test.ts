@@ -37,12 +37,16 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
   const compareCalls: boolean[] = [];
   let compassRefreshes = 0;
 
+  const frameOffsets = new Map<string, readonly [number, number, number]>();
   const viewer = {
     clouds: () => Object.keys(clouds),
     getCloud: (id: string) => clouds[id] ?? null,
     isCloudLocked: (id: string) => locked.has(id),
     setCloudVisible: (id: string, on: boolean) => {
       visibleCalls.push([id, on]);
+    },
+    setCloudFrameOffset: (id: string, offset: readonly [number, number, number]) => {
+      frameOffsets.set(id, offset);
     },
   } as unknown as Viewer;
 
@@ -74,6 +78,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     service,
     context,
     projectFrame,
+    frameOffsets,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -242,5 +247,59 @@ describe('LayerService seeds the shared project frame', () => {
     t.service.refreshCrsFlags();
     expect(t.projectFrame.unaligned).toEqual(['b']);
     expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+  });
+});
+
+
+/**
+ * Step 2 of the wiring plan: the frame is MOUNTED, not just computed. Every
+ * cloud is recentred about its own origin at load, so without the mount two
+ * georeferenced scans a kilometre apart rendered overlaid at local zero — the
+ * frame existed and changed nothing on screen.
+ */
+describe('LayerService mounts each layer at its project-frame offset', () => {
+  const utm = { epsg: 32612 };
+
+  it('offsets the non-anchor layer by its true separation', () => {
+    const t = setup({
+      west: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      east: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.frameOffsets.get('west')).toEqual([0, 0, 0]);
+    expect(t.frameOffsets.get('east')).toEqual([1_000, 0, 20]);
+  });
+
+  it('mounts a lone layer at the identity — the single-scan path is unchanged', () => {
+    const t = setup({ only: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } } });
+    t.service.refreshCrsFlags();
+    expect(t.frameOffsets.get('only')).toEqual([0, 0, 0]);
+  });
+
+  it('mounts a cloud outside the frame at its own zero, exactly as before', () => {
+    // No declared origin ⇒ not in the frame; a foreign CRS ⇒ excluded from it.
+    // Both keep the pre-frame placement rather than being pushed anywhere.
+    const t = setup({
+      mesh: { metadata: { crs: null } },
+      scan: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      foreign: { origin: [300_000, 3_000_000, 10], metadata: { crs: { epsg: 32613 } } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.frameOffsets.get('mesh')).toEqual([0, 0, 0]);
+    expect(t.frameOffsets.get('foreign')).toEqual([0, 0, 0]);
+    expect(t.frameOffsets.get('scan')).toEqual([0, 0, 0]);
+  });
+
+  it('re-mounts to the identity when the other layer is removed', () => {
+    const clouds: Record<string, FakeCloud> = {
+      low: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
+      high: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    expect(t.frameOffsets.get('high')).toEqual([1_000, 0, 20]);
+    delete clouds.low;
+    t.service.refreshCrsFlags();
+    expect(t.frameOffsets.get('high')).toEqual([0, 0, 0]);
   });
 });

@@ -111,6 +111,30 @@ function readTiffCrsEpsg(bytes: Uint8Array): number | null {
   return null;
 }
 
+/** Read VerticalCSTypeGeoKey (4096) from a TIFF's GeoKeyDirectory, or null. */
+function readTiffVerticalEpsg(bytes: Uint8Array): number | null {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ifd = dv.getUint32(4, true);
+  const n = dv.getUint16(ifd, true);
+  let geoDirOffset = -1;
+  let geoDirCount = 0;
+  for (let i = 0; i < n; i++) {
+    const p = ifd + 2 + i * 12;
+    if (dv.getUint16(p, true) === 34735) {
+      geoDirCount = dv.getUint32(p + 4, true);
+      geoDirOffset = dv.getUint32(p + 8, true);
+      break;
+    }
+  }
+  if (geoDirOffset < 0) return null;
+  for (let i = 4; i + 4 <= geoDirCount; i += 4) {
+    const keyId = dv.getUint16(geoDirOffset + i * 2, true);
+    const value = dv.getUint16(geoDirOffset + (i + 3) * 2, true);
+    if (keyId === 4096) return value;
+  }
+  return null;
+}
+
 describe('writeGeoTiff (Float32 GeoTIFF)', () => {
   it('produces a valid TIFF with the expected raster + geo tags', () => {
     const tif = writeGeoTiff({
@@ -429,5 +453,22 @@ describe('buildDemPackage', () => {
     expect(readme).toMatch(/not survey-grade/i);
     // A full + ready result must NOT carry the preliminary caveat.
     expect(readme).not.toMatch(/PRELIMINARY/);
+  });
+
+  /**
+   * CHM is DSM − DTM: a height ABOVE GROUND, not a coordinate in any absolute
+   * vertical CRS. Stamping it with the same VerticalCSType as the DTM/DSM told
+   * a GIS its canopy heights were NAVD88 elevations — a semantic lie a reader
+   * acts on (geoid corrections, benchmark comparisons). The absolute grids
+   * keep the stamp; the relative one must not carry it. The fixture's DTM
+   * declares `verticalDatum: 'EPSG:5703'`, so the stamp path is the real one.
+   */
+  it('stamps the DTM and DSM with the vertical CRS but leaves the CHM unstamped', () => {
+    const zip = buildDemPackage(fixtureResult(), {
+      worldOrigin: { x: 600000, y: 4000000 }, basename: 'site',
+    });
+    expect(readTiffVerticalEpsg(extractEntry(zip, 'site-dtm.tif')!)).toBe(5703);
+    expect(readTiffVerticalEpsg(extractEntry(zip, 'site-dsm.tif')!)).toBe(5703);
+    expect(readTiffVerticalEpsg(extractEntry(zip, 'site-chm.tif')!)).toBeNull();
   });
 });

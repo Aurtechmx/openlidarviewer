@@ -2129,6 +2129,40 @@ export class Viewer {
     this._notifyColorContextChanged();
   }
 
+  /**
+   * Mount a cloud at its project-frame offset (step 2 of the wiring plan in
+   * `docs/architecture/project-spatial-frame.md`).
+   *
+   * Every cloud's positions are recentred about its OWN origin at load, so two
+   * georeferenced scans a kilometre apart both sat at local zero and rendered
+   * overlaid. The offset is the layer's `sourceToProject` translation; applying
+   * it to the mesh places the layer at its true position in the shared
+   * project-local frame. The single-layer case is the identity (a lone layer
+   * anchors the frame at its own origin), so the existing single-scan path is
+   * unchanged by construction.
+   *
+   * Picking needs no changes — the raycaster works in world space, so hits on
+   * an offset mesh already come back project-local. Camera framing and the
+   * orbit clamp fold the same offset in `_visibleBoundingBox` /
+   * `_visibleCloudAabb`.
+   */
+  setCloudFrameOffset(id: string, offset: readonly [number, number, number]): void {
+    const entry = this._clouds.get(id);
+    if (!entry) return;
+    if (
+      entry.mesh.position.x === offset[0] &&
+      entry.mesh.position.y === offset[1] &&
+      entry.mesh.position.z === offset[2]
+    ) {
+      return;
+    }
+    entry.mesh.position.set(offset[0], offset[1], offset[2]);
+    entry.mesh.updateMatrixWorld();
+    // The clamp envelope and orbit centre described the un-offset layout.
+    this._orbitClampAabb = this._visibleCloudAabb();
+    this.requestFrame();
+  }
+
   /** Whether a streaming COPC cloud is currently open. */
   get hasStreamingCloud(): boolean {
     return this._streaming !== null;
@@ -5655,8 +5689,12 @@ export class Viewer {
     for (const { mesh, cloud } of this._clouds.values()) {
       if (!mesh.visible) continue;
       const b = cloud.bounds();
-      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
-      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
+      // The mesh's position is the layer's project-frame offset; bounds are in
+      // cloud data space, so the offset must ride along or framing and the
+      // orbit clamp describe the un-mounted layout.
+      const { x: fx, y: fy, z: fz } = mesh.position;
+      box.expandByPoint(new THREE.Vector3(b.min[0] + fx, b.min[1] + fy, b.min[2] + fz));
+      box.expandByPoint(new THREE.Vector3(b.max[0] + fx, b.max[1] + fy, b.max[2] + fz));
       any = true;
     }
     // A streaming COPC contributes its whole octree extent so framing works
@@ -5689,8 +5727,12 @@ export class Viewer {
     for (const { mesh, cloud } of this._clouds.values()) {
       if (!mesh.visible) continue;
       const b = cloud.bounds();
-      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
-      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
+      // The mesh's position is the layer's project-frame offset; bounds are in
+      // cloud data space, so the offset must ride along or framing and the
+      // orbit clamp describe the un-mounted layout.
+      const { x: fx, y: fy, z: fz } = mesh.position;
+      box.expandByPoint(new THREE.Vector3(b.min[0] + fx, b.min[1] + fy, b.min[2] + fz));
+      box.expandByPoint(new THREE.Vector3(b.max[0] + fx, b.max[1] + fy, b.max[2] + fz));
       any = true;
     }
     if (this._streaming) {

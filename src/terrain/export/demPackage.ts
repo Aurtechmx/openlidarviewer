@@ -382,10 +382,20 @@ export function buildDemPackage(
     return out;
   };
 
-  const grids: Array<{ key: string; values: ArrayLike<number>; coverage: ArrayLike<number> }> = [
-    { key: 'dtm', values: shiftZ(dtm.z, dtm.coverage), coverage: dtm.coverage },
-    { key: 'dsm', values: shiftZ(dsmZ, dsmCov), coverage: dsmCov },
-    { key: 'chm', values: chm, coverage: chmCov },
+  const grids: Array<{
+    key: string;
+    values: ArrayLike<number>;
+    coverage: ArrayLike<number>;
+    verticalEpsg: number | null;
+  }> = [
+    // CHM is DSM − DTM: a height ABOVE GROUND, not a coordinate in any absolute
+    // vertical CRS. Stamping it with the DTM/DSM's VerticalCSType told a GIS
+    // its canopy heights were NAVD88 elevations — a claim a reader acts on
+    // (geoid corrections, benchmark comparisons). Only the absolute grids
+    // carry the stamp; the relative one states no vertical reference.
+    { key: 'dtm', values: shiftZ(dtm.z, dtm.coverage), coverage: dtm.coverage, verticalEpsg },
+    { key: 'dsm', values: shiftZ(dsmZ, dsmCov), coverage: dsmCov, verticalEpsg },
+    { key: 'chm', values: chm, coverage: chmCov, verticalEpsg: null },
   ];
 
   const entries: ZipEntry[] = [];
@@ -400,7 +410,7 @@ export function buildDemPackage(
     });
     entries.push({
       name: `${basename}-${g.key}.tif`,
-      bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg }),
+      bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg }),
     });
   }
 
