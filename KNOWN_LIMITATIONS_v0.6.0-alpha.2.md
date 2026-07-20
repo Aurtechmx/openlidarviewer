@@ -17,8 +17,8 @@ Step 2 has landed: static layers now MOUNT at their `sourceToProject` translatio
 
 For this alpha:
 
-- Cross-layer operations require the layers to already share a compatible coordinate frame (same CRS, comparable origins). Two georeferenced scans with different origins still mount in their own local frames and still appear overlaid.
-- **Multi-dataset comparison is experimental.** Compare Studio, cross-layer measurement, shared clipping, and cross-layer picking are not backed by an authoritative project frame yet.
+- Cross-layer operations still require a shared CRS: a layer whose declared CRS disagrees is excluded from the frame and mounts where it always did.
+- **Multi-dataset comparison is experimental.** Compare Studio, cross-layer measurement, shared clipping and elevation ramps do not yet read the frame's offsets (steps 3–5 of the plan).
 - Results that depend on a common frame should be treated as indicative when common-frame compatibility can't be established.
 - Integrated Spatial Workflows are **not** claimed complete.
 - A layer whose declared CRS disagrees with the project's is excluded from the shared origin and reported as unaligned; it is never silently reprojected. Reprojection remains a downstream tool's job.
