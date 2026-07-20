@@ -2,6 +2,62 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.0-alpha.2] - 2026-07-19
+
+A stabilization cut. Almost nothing here is visible in the viewer: it makes the
+test gates mean what they claim, starts the decomposition of the two monoliths,
+and writes down the architecture so the rest of the work has a target. Alpha
+caveat unchanged: this cut is for evaluation, and interfaces may still move
+before v0.6.0.
+
+### Changed
+
+- **The end-to-end suite actually gates now.** 161 of the 166 e2e specs ran under
+  `continue-on-error`, so only the smoke and mobile specs (about twelve tests)
+  could ever block a build — a regression in any of the rest shipped green, which
+  is the shape of gap that let a streaming blank-render bug reach a release.
+  Playwright now has two projects: `deterministic` (blocking) and `gpu`
+  (advisory, `@gpu`-tagged). 165 specs block; only the real-WebGPU equivalence
+  probe stays advisory, because it legitimately falls back on a headless runner.
+  An untagged spec blocks by default, so a new spec gates until it is shown to be
+  GPU-variable.
+- **No module-level mutable application state remains in `main.ts`.** The saved
+  views, active-scan selection and scan-route clusters moved onto `AppContext`
+  behind services (`viewBookmarks`, `ScanService`, `ScanRouteService`), joining
+  `LayerService`. Eleven copies of `activeId ? getCloud(activeId) : null` became
+  one `activeCloud()`, and the twice-spelled route-pinned predicate became one
+  getter. This is a coupling change, not a size one — `main.ts` moved 7,587 to
+  7,574 lines. Its value is that the orchestration blocks can now close over
+  services instead of file-scope `let`s, which is what makes them movable at all.
+
+### Added
+
+- **A coverage ratchet over the pure modules** (`npm run coverage`): the numeric,
+  geometric and model code a unit test can genuinely pin, deliberately excluding
+  the render and UI layers and the two monoliths, where a repo-wide percentage is
+  a number nobody acts on. Baseline lines 90.57 / statements 89.19 / functions
+  87.75 / branches 82.73, with thresholds just underneath.
+- **A mutation gate over the numeric core** (`npm run mutation`, advisory): the
+  formulas where a wrong number is a silent scientific error rather than a crash.
+  It earned its place immediately — `hornSlopeAspect`'s degenerate-input guard had
+  17 surviving mutants, meaning a zero or NaN cell size could have produced an
+  Infinity slope that propagates into confidence grades, RMSE bands and terrain
+  ruggedness. Coverage rated that file ~90% because the lines *ran*. Now pinned;
+  score 85.11 to 87.23.
+- **An architecture map** (`docs/architecture/architecture-map.md`) with a drift
+  check: every module path it names must resolve, or the test fails and the page
+  moves in the same change. It caught itself on the first run.
+- **A streaming origin-localisation guard.** The scheduler tests only ever used a
+  cube at the origin, where subtracting the render origin is a no-op — so the
+  alpha.1 EPT blank-render bug could not have been caught there. A case at
+  UTM-scale coordinates now fails if that path regresses.
+
+### Internal
+
+- The stabilization plan (`docs/architecture/stabilization-release-plan.md`)
+  records the goals, the measured baselines, and which work is provable in a
+  sandbox versus needing a browser or a workstation.
+
 ## [0.6.0-alpha.1] - 2026-07-18
 
 First alpha of the v0.6 cycle: startup and streaming performance, a correctness-and-honesty hardening pass across the streaming, loader, and measurement paths, the foundation for a shared project coordinate frame, and the start of the internal restructuring that the v0.6 workflow features build on. Alpha caveat: this cut is for evaluation; interfaces and internals may still change before v0.6.0.
