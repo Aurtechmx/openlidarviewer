@@ -12,20 +12,13 @@
 // sees current values without a top-level `viewer.*` dereference in main.ts.
 import type { Viewer } from '../render/Viewer';
 import type { CrsInfo } from '../io/crs';
-import {
-  resolvedFromCrsInfo,
-  unknownCrs,
-  type CrsSource,
-  type ResolvedCrs,
-} from '../geo/CoordinateTypes';
+import { type CrsSource } from '../geo/CoordinateTypes';
 import type { CrsService } from '../geo/CrsService';
 import {
-  getOverride as getCrsOverrideForDataset,
   keyForDataset as crsKeyForDataset,
   setOverride as setCrsOverrideForDataset,
   clearOverride as clearCrsOverrideForDataset,
 } from '../geo/CrsOverrideStore';
-import { getCrsEntry } from '../geo/CrsRegistry';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 
 export interface CrsCoordinatorDeps {
@@ -51,11 +44,6 @@ export interface CrsCoordinator {
    *  2. Otherwise the detected `CrsInfo` is used.
    *  3. Otherwise we surface "unknown".
    */
-  resolveCloudCrs(
-    cloudName: string,
-    detected: CrsInfo | undefined,
-    detectionSource: CrsSource,
-  ): ResolvedCrs;
   /** Refresh the Inspector's CRS section after a static-cloud load. */
   refreshCrsForStaticCloud(cloud: {
     readonly name: string;
@@ -92,42 +80,16 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   /** The dataset key (per-scan key for the CRS override store) currently in scope. */
   let currentCrsDatasetKey: string | undefined;
 
-  function resolveCloudCrs(
-    cloudName: string,
-    detected: CrsInfo | undefined,
-    detectionSource: CrsSource,
-  ): ResolvedCrs {
-    const datasetKey = crsKeyForDataset(cloudName);
-    currentCrsDatasetKey = datasetKey;
-    const override = getCrsOverrideForDataset(datasetKey);
-    if (override) {
-      if (override.kind === 'local') {
-        return {
-          kind: 'local',
-          name: 'Local coordinates (no CRS)',
-          linearUnit: 'unknown',
-          linearUnitToMetres: 1,
-          source: 'user-override',
-          confidence: 'high',
-          userConfirmed: true,
-        };
-      }
-      if (typeof override.epsg === 'number') {
-        const entry = getCrsEntry(override.epsg);
-        return {
-          kind: override.kind,
-          name: entry?.label ?? `EPSG:${override.epsg}`,
-          epsg: override.epsg,
-          linearUnit: override.kind === 'geographic' ? 'unknown' : 'metre',
-          linearUnitToMetres: 1,
-          source: 'user-override',
-          confidence: 'high',
-          userConfirmed: true,
-        };
-      }
-    }
-    const fromDetected = resolvedFromCrsInfo(detected, detectionSource);
-    return fromDetected ?? unknownCrs();
+  /**
+   * Remember which dataset the override panel is editing. The CRS itself is
+   * resolved by `crsService`; this coordinator used to run a second copy of
+   * that logic which wrote `linearUnitToMetres: 1` for every projected
+   * override, and ITS value is what reached the point inspector — so the
+   * inspector and the measurement HUD disagreed by 3.28x on a foot-based scan
+   * whose own CRS the user had merely confirmed. One resolver now.
+   */
+  function trackDataset(cloudName: string): void {
+    currentCrsDatasetKey = crsKeyForDataset(cloudName);
   }
 
   function refreshCrsForStaticCloud(cloud: {
@@ -135,11 +97,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     readonly origin?: readonly [number, number, number];
     readonly metadata?: { readonly crs?: CrsInfo | null };
   }): void {
-    const resolved = resolveCloudCrs(
-      cloud.name,
-      cloud.metadata?.crs ?? undefined,
-      'las-vlr',
-    );
+    trackDataset(cloud.name);
     // Publish to the central service so subscribers (today: the lasso
     // volume gate via `crsService.validation()`; tomorrow: the inspector
     // override panel via `crsService.subscribe`) see the same value
@@ -147,7 +105,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     // VLR; any override has already been applied inside resolveCloudCrs.
     // The inspector listens via `crsService.subscribe` (wired at boot);
     // publishing here is the single notification path.
-    crsService.resolveForScan({
+    const resolved = crsService.resolveForScan({
       name: cloud.name,
       detected: cloud.metadata?.crs ?? undefined,
       source: 'las-vlr',
@@ -169,10 +127,10 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     crs(): CrsInfo | undefined;
   }): void {
     const source: CrsSource = cloud.kind === 'ept' ? 'ept-srs' : 'copc-meta';
-    const resolved = resolveCloudCrs(cloud.name, cloud.crs(), source);
+    trackDataset(cloud.name);
     // Inspector listens via the boot-time `crsService.subscribe`; no
     // direct push needed.
-    crsService.resolveForScan({
+    const resolved = crsService.resolveForScan({
       name: cloud.name,
       detected: cloud.crs(),
       source,
@@ -206,9 +164,17 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       // a follow-up button.
       clearCrsOverrideForDataset(currentCrsDatasetKey);
     } else {
+      // Record what the file itself declares, so this entry can be told apart
+      // from one belonging to an unrelated file with the same name — overrides
+      // are keyed by dataset name alone. See `CrsService.resolveForScan`.
+      const active = getActiveId();
+      const declared =
+        getViewer().streamingCloud?.crs()?.epsg
+        ?? (active ? getViewer().getCloud(active)?.metadata?.crs?.epsg : undefined);
       setCrsOverrideForDataset(currentCrsDatasetKey, {
         epsg: override.epsg,
         kind: override.kind,
+        detectedEpsg: declared,
       });
       recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);
     }
@@ -235,7 +201,6 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   }
 
   return {
-    resolveCloudCrs,
     refreshCrsForStaticCloud,
     refreshCrsForStreamingCloud,
     handleCrsOverride,
