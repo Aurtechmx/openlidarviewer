@@ -13,7 +13,7 @@ This is an alpha for evaluation. The items below are known and deliberate — re
 Step 2 has landed: static layers now MOUNT at their `sourceToProject` translation, so two same-CRS georeferenced scans with different origins place at their true relative positions. A lone layer is the identity (single-scan path unchanged by construction; the full e2e suite passes untouched). Still staged for this alpha:
 
 - **Two-scan placement is verified in Node, not yet in a browser** with real georeferenced fixtures — treat multi-layer placement as needing that one visual confirmation.
-- Elevation colour ramps and the measurement datum do not yet account for per-layer offsets (steps 3–4 of the plan); with offset layers loaded, treat elevation-coloured views and cross-layer measurements as indicative.
+- Elevation colour ramps do not yet account for per-layer offsets; with offset layers loaded, treat elevation-coloured views as indicative. The measurement datum DOES follow the frame when every loaded layer is in it (step 4), and falls back to the pre-frame unanimity rule otherwise.
 
 For this alpha:
 
