@@ -67,3 +67,53 @@ Recommendations:
 - Close unused browser tabs.
 - Keep hardware acceleration enabled when available.
 - WebGPU support may vary; the WebGL 2 fallback should remain reliable.
+
+## Startup entry composition (measured 2026-07-21, v0.6.0-alpha.2)
+
+The live entry is 710 KiB against a 720 KiB ceiling and a 680 KiB warning
+line. Attribution below comes from a sourcemap build (`vite build
+--sourcemap`, then aggregating `sourcesContent` per module), not from
+reading the import list — two rounds of guessing from imports were wrong,
+both in the optimistic direction.
+
+Entry: **175 modules, 1 910 KiB of source → 477 KiB minified → 710 KiB after
+the live transform.** The transform applies only to `src/**/*.ts`, so source
+removed from the entry pays back roughly 1.5x in the shipped figure.
+
+| Source | KiB | Note |
+|---|---:|---|
+| `src/main.ts` | 343.4 | 18% of the entry on its own |
+| `src/ui/Inspector.ts` | 95.3 | |
+| `src/ui/MeasurePanel.ts` | 74.4 | |
+| `src/ui/Stage.ts` | 40.3 | |
+| `src/render/colorModes.ts` | 36.9 | |
+| `src/io/crs.ts` | 32.5 | |
+| `src/terrain/scanShape.ts` | 29.0 | also imported by `convertCloud` |
+| `src/render/class/deriveClassification.ts` | 27.5 | |
+| `src/ui/ExportPanel.ts` | 27.5 | |
+| `src/terrain/space/floorplan/wallSlice.ts` | 25.1 | interior scans only |
+| `src/terrain/spaceMetrics.ts` | 25.0 | interior/object scans only |
+
+### What is NOT worth deferring, and why
+
+Checked and rejected, so the next person does not re-derive them:
+
+- **`kmlExport`, `measurementExport`** — `main.ts` imports these as `import
+  type` only. They are erased at compile time and contribute nothing. The
+  import list makes them look eager; they are not.
+- **`spaceMetrics` / `wallSlice`** — called synchronously inside
+  `applyScanRoute(): boolean`. Deferring means making scan routing async and
+  changing every caller's contract, for ~25 KiB. Bad trade against the risk
+  of a routing regression.
+- **`benchmark`, `streamingBenchmark`** — 30 and 22 references through
+  `main.ts`. Too woven to move without decomposing their callers first.
+
+### Where the real reduction is
+
+`main.ts` at 343 KiB is the entry's single largest contributor, and the
+`Inspector` + `MeasurePanel` + `Stage` + `ExportPanel` UI cluster is another
+238 KiB. Getting under 680 KiB by shaving leaf modules means finding 20 KiB
+of plain source among modules that are mostly already justified; the
+decomposition tracked in `docs/architecture/architecture-map.md` moves an
+order of magnitude more. Treat the ceiling as a reason to decompose, not a
+reason to hunt leaves.
