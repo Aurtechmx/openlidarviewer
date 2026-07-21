@@ -12,7 +12,7 @@ A sober account of what is ready and what remains before this alpha is published
 Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate command is not reliably green" for why that is not the whole story:
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
-- Unit 2,868 (16 skipped) · export 591 · terrain 1,218 (18 skipped) · ui 429 · slow 508.
+- Unit 2,882 (16 skipped) · export 591 · terrain 1,218 (18 skipped) · ui 429 · slow 508.
 - Build-contract 11; plain build and live/obfuscated build pass; bundle within the 720 KiB ceiling (699 KiB live entry, above the 680 KiB warning line).
 - Full e2e (`npm run test:e2e`): 161 passed, 4 fixture-skipped (autzen COPC not on disk), 0 failed — **locally**. The gating browser evidence is the green GitHub Actions run required below, not this local run.
 - Documentation build (`npm run docs:build`) passes.
@@ -32,20 +32,20 @@ Run locally at the alpha head commit (**not yet a Git tag** — the published ta
 - Evidence package: [VALIDATION_REPORT_v0.6.0-alpha.2.md](VALIDATION_REPORT_v0.6.0-alpha.2.md), [KNOWN_LIMITATIONS_v0.6.0-alpha.2.md](KNOWN_LIMITATIONS_v0.6.0-alpha.2.md), and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`). Terrain/measurement claims inherited unchanged from v0.5.9.
 - Claim register (`docs/validation/claim-register.yaml`) version stamp advanced to `0.6.0-alpha.2` with the inheritance noted; `lint:claim-register` passes.
 
-## The gate command is not reliably green
+## The gate runner now reports why it failed
 
-`npm run test:release` passed with a literal `GATE EXIT: 0` twice in four
-consecutive runs at this commit. The other two died with no test failure and no
-diagnostic: one was terminated during the plain build (exit 143), one exited 1
-on entering the `ui` bucket having printed nothing. The `ui` bucket run on its
-own passed three times out of three, so the instability is in the wrapper's
-long chain rather than in any test — an external review reported the same
-symptom independently as `Worker exited unexpectedly`.
+`npm run test:release` previously exited 1 with no output on some runs, and was
+terminated during the build on others. The cause was in the runner, not the
+tests: `spawnSync` reports a signal-killed process as `status: null`, and
+`status ?? 1` collapsed that into a bare failure indistinguishable from a red
+suite. Signal deaths, spawn failures and a per-shard timeout are now reported
+distinctly (137 / 2 / 124) with an explanation, and a wedged shard is killed
+rather than left to hang the gate.
 
-Every figure quoted in this report comes from a run that reached `GATE EXIT: 0`.
-That is not the same as the command being dependable, and a release command
-that fails half the time cannot gate a tag. **Treat this as a release blocker
-in its own right**: the runner needs to either succeed or say why it did not.
+That makes the failure legible; it does not prove the underlying pool-shutdown
+hang is gone. Treat a 124 or 137 from this gate as a runner fault to
+investigate, never as a test result — and note that every figure in this report
+comes from a run that reached a literal `GATE EXIT: 0`.
 
 ## Remaining items before publishing
 

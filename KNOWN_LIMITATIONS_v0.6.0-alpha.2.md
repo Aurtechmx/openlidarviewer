@@ -50,6 +50,15 @@ unit before that judgement, an undeclared unit refuses rather than assuming
 metres, and **geographic (degree) frames are refused outright** — a degree is
 not a length, and what it stands for depends on latitude.
 
+**Streaming sources meet the same bar.** COPC/EPT resident nodes are gated
+exactly as static clouds are, with the same single-source carve-out.
+
+**The vertical anchor comes only from verified layers.** A horizontal-only
+layer helps set the horizontal origin and never the Z origin.
+
+**Excluded layers say so** in the layer panel, with the reason — a silent
+exclusion would leave a figure computed from fewer inputs than it appears.
+
 **Single layers are exempt.** Proof of a shared frame is required to MERGE
 layers; one visible layer is analysed in its own frame, whatever its
 compatibility state, because no combination is taking place.
