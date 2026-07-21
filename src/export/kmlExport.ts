@@ -113,7 +113,16 @@ export function kmlAltitudeMode(
   verticalDatum: string | null | undefined,
   verticalUnitToMetres: number | undefined,
 ): { mode: 'absolute' | 'clampToGround'; reason: string } {
-  const metric = verticalUnitToMetres === undefined || Math.abs(verticalUnitToMetres - 1) < 1e-9;
+  // Fail closed. This read `=== undefined || ≈1`, so a source that declared a
+  // recognised orthometric datum but never declared its vertical UNIT was
+  // written as absolute metres above sea level. Absence of a unit is not
+  // evidence of metres, and the value arriving here comes through a path that
+  // can fall back to the HORIZONTAL factor — so a foot-based scan could
+  // present as metric. The unit must be stated, finite, and one.
+  const metric =
+    verticalUnitToMetres !== undefined
+    && Number.isFinite(verticalUnitToMetres)
+    && Math.abs(verticalUnitToMetres - 1) < 1e-9;
   const declared = verticalDatum?.trim();
   if (!declared) {
     return {
@@ -127,8 +136,8 @@ export function kmlAltitudeMode(
     return {
       mode: 'clampToGround',
       reason:
-        'Heights are clamped to ground: the source vertical unit is not metres, and KML absolute '
-        + 'altitude is defined in metres. Altitudes in this file are not authoritative.',
+        'Heights are clamped to ground: the source vertical unit is not stated as metres, and KML '
+        + 'absolute altitude is defined in metres. Altitudes in this file are not authoritative.',
     };
   }
   if (!ORTHOMETRIC_METRIC_VERTICAL.has(verticalReferenceKey({ id: 'kml', verticalDatum: declared }) ?? '')) {

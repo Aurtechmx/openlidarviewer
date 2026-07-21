@@ -11,11 +11,11 @@ The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](
 
 | Reported figure | Command |
 |---|---|
-| Unit 2,946 (16 skipped) · export 597 · terrain 1,227 (18 skipped) · ui 429 · slow 508 — 5,680 passed / 34 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
+| Unit 2,927 (16 skipped) · export 598 · terrain 1,218 (18 skipped) · ui 429 · slow 508 — 5,680 passed / 34 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
-| Live entry 699 KiB (within the 720 KiB ceiling, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
+| Live entry 715 KiB (within the 720 KiB ceiling, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
 | Coverage — lines 90.57 / statements 89.19 / functions 87.75 / branches 82.73 | `npm run coverage` |
 | Mutation score 87.23 % over the numeric core | `npm run mutation` |
 | Documentation build | `npm run docs:build` |

@@ -3535,7 +3535,12 @@ const exportPanel = new ExportPanel({
       unitLabel: 'm',
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
-      verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
+      // The RESOLVED vertical unit, not the measurement controller's — that one
+      // falls back to the horizontal factor when the CRS declares no vertical
+      // unit of its own. Harmless for on-screen measurement, wrong for a
+      // published file: it would let a foot-based scan look metric and be
+      // stamped as absolute metres above sea level.
+      verticalUnitToMetres: crsService.current()?.verticalUnitToMetres,
       // Drives the geometry's altitudeMode: absolute only for a declared
       // metric vertical datum, otherwise clamped with the reason stated.
       verticalDatum: crsService.current()?.verticalDatum ?? null,
