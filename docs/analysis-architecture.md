@@ -234,6 +234,22 @@ The worker implementation will live at `src/analysis/runtime/analysisWorker.ts` 
 
 The following contracts are encoded as skipped test cases in `tests/analysis-seam-contract.test.ts`. Each analysis must pass the relevant contracts (un-skip the tests) before it ships.
 
+> **Implementation status.** These contracts are DESIGN, not shipped code.
+> There is no `PointSampler` implementation and no sampler seam in the
+> application; analyses read cloud types directly.
+>
+> An earlier attempt expressed this as a `PointSampler.ts` interface plus
+> eighteen skipped contract tests. That looked machine-enforced and enforced
+> nothing: the interface named `StaticPointSampler.ts` and
+> `StreamingPointSampler.ts`, neither of which was ever written, and the only
+> thing importing the interface was the test file skipping its own
+> assertions. Five releases later the tests were still skipped and their
+> prose still said "the next release". Both were removed — a permanent
+> placeholder shaped like a gate is worse than an honest paragraph, because
+> a reader counts it as coverage.
+>
+> The contracts below remain the specification for whoever builds the seam.
+
 ### Contract C1 — Determinism
 
 For the same `(sampler, parameters, coverage snapshot)`, the analysis returns bit-identical output across runs. Concretely:
