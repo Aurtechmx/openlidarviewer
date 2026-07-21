@@ -12,16 +12,37 @@
  * Kept as one pure predicate so every walk shares the decision instead of each
  * re-deriving it (and drifting from `_pickDetailed`).
  */
+import {
+  participatesInSharedAnalysis,
+  type LayerCompatibility,
+} from '../model/layerCompatibility';
+
 export interface IntegrableEntry {
   /** The mesh that draws this cloud; `visible` mirrors the layer toggle. */
   mesh: { visible: boolean };
   /** Locked layers are excluded from picking and measuring. */
   locked?: boolean;
+  /**
+   * What this layer has PROVEN about sharing the project's frame. Absent is
+   * treated as `verified` so the single-scan path — which has no set to be
+   * classified against — is unchanged.
+   */
+  compatibility?: LayerCompatibility;
 }
 
-/** Whether one entry is eligible to feed an integration walk. */
+/**
+ * Whether one entry is eligible to feed an integration walk.
+ *
+ * Visibility and lock decide what the user is working with; compatibility
+ * decides whether the points are even in the same space. Both matter: a
+ * visible layer in an unproven frame contributes coordinates that mean
+ * something else, and an estimator cannot average across that. Refusing is
+ * the honest result — a warning printed beside a computed figure is not,
+ * because the figure is what leaves the building.
+ */
 export function isIntegrable(entry: IntegrableEntry): boolean {
-  return entry.mesh.visible && !entry.locked;
+  if (!entry.mesh.visible || entry.locked) return false;
+  return participatesInSharedAnalysis(entry.compatibility ?? 'verified');
 }
 
 /** The subset of `entries` an integration walk may feed to its estimator. */

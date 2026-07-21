@@ -29,6 +29,8 @@ interface FakeCloud {
   origin?: readonly [number, number, number];
   /** The origin the FILE declared — fixed, whatever the frame does to `origin`. */
   sourceOrigin?: readonly [number, number, number];
+  /** Float32 step a mount would land on; fixtures are close together, so 0. */
+  rebaseQuantum?: number;
 }
 
 function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set()) {
@@ -47,9 +49,16 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
 
   const rebaseCalls = new Map<string, readonly [number, number, number]>();
   const restoreCalls: string[] = [];
+  const compatCalls = new Map<string, string>();
   const viewer = {
     clouds: () => Object.keys(clouds),
-    getCloud: (id: string) => clouds[id] ?? null,
+    getCloud: (id: string) => {
+      const c = clouds[id];
+      if (!c) return null;
+      // The real PointCloud exposes this; a mount consults it before moving
+      // geometry. Tiny fixtures sit close together, so it is effectively zero.
+      return { ...c, rebaseQuantum: () => c.rebaseQuantum ?? 0 };
+    },
     isCloudLocked: (id: string) => locked.has(id),
     setCloudVisible: (id: string, on: boolean) => {
       visibleCalls.push([id, on]);
@@ -61,6 +70,9 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
       // field is that a rebase cannot reach it.
       const c = clouds[id];
       if (c?.origin) c.origin = [target[0], target[1], target[2]];
+    },
+    setCloudCompatibility: (id: string, c: string) => {
+      compatCalls.set(id, c);
     },
     restoreCloudSourceFrame: (id: string) => {
       restoreCalls.push(id);
@@ -99,6 +111,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     projectFrame,
     rebaseCalls,
     restoreCalls,
+    compatCalls,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -236,20 +249,23 @@ describe('LayerService seeds the shared project frame', () => {
     expect(t.projectFrame.transformFor('low')).toBeNull();
   });
 
-  it('excludes a layer on a DIFFERENT VERTICAL DATUM, matching the panel', () => {
-    // Same horizontal CRS, different vertical datum. Heights do not align across
-    // datums (NAVD88 vs ellipsoidal differ by tens of metres), so folding both Z
-    // origins into one anchor asserts a shared vertical frame that does not
-    // exist — and the layer panel already flags this pair as mismatched. The
-    // frame and the panel must not disagree about the same two scans.
+  it('places a DIFFERENT-VERTICAL-DATUM layer in X/Y and leaves its height alone', () => {
+    // Same horizontal CRS, different vertical datum. The horizontal agreement
+    // is real and worth using; the heights are not comparable — NAVD88 and
+    // ellipsoidal differ by tens of metres — so Z must not be folded onto the
+    // shared anchor. Earlier this pair was excluded from the frame entirely,
+    // which threw away a true alignment, AND both layers still fed the same
+    // combined estimators. Now: aligned in plan, untouched in height, and out
+    // of every merged result.
     const t = setup({
       a: { origin: [500_000, 4_500_000, 100], metadata: { crs: { epsg: 32612, verticalDatum: 'NAVD88' } } },
       b: { origin: [500_100, 4_500_000, 10], metadata: { crs: { epsg: 32612, verticalDatum: 'EPSG:4979' } } },
     });
     t.service.refreshCrsFlags();
-    expect(t.projectFrame.unaligned).toEqual(['b']);
-    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
-    expect(t.projectFrame.transformFor('b')!.sourceToProject).toEqual([0, 0, 0]);
+    expect(t.compatCalls.get('b')).toBe('horizontal-only');
+    // X/Y onto the project anchor, Z left on the layer's own origin.
+    expect(t.rebaseCalls.get('b')).toEqual([500_000, 4_500_000, 10]);
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 10]);
   });
 
   it('still shares a frame when only ONE layer declares a vertical datum', () => {
@@ -285,14 +301,55 @@ describe('LayerService seeds the shared project frame', () => {
 describe('LayerService rebases each aligned layer onto the project origin', () => {
   const utm = { epsg: 32612 };
 
-  it('rebases every aligned layer to the ONE project origin', () => {
+  it('rebases every VERIFIED layer to the ONE project origin, all three axes', () => {
+    const withDatum = { epsg: 32612, verticalDatum: 'EPSG:5703' };
+    const t = setup({
+      west: { origin: [500_000, 4_500_000, 100], metadata: { crs: withDatum } },
+      east: { origin: [501_000, 4_500_000, 120], metadata: { crs: withDatum } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.compatCalls.get('east')).toBe('verified');
+    expect(t.rebaseCalls.get('west')).toEqual([500_000, 4_500_000, 100]);
+    expect(t.rebaseCalls.get('east')).toEqual([500_000, 4_500_000, 100]);
+  });
+
+  it('does NOT fold Z when neither layer declares a vertical datum', () => {
+    // Undeclared is not agreed. Two scans can share a UTM zone and still be
+    // metres against feet, or orthometric against ellipsoidal.
     const t = setup({
       west: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
       east: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
     });
     t.service.refreshCrsFlags();
-    expect(t.rebaseCalls.get('west')).toEqual([500_000, 4_500_000, 100]);
-    expect(t.rebaseCalls.get('east')).toEqual([500_000, 4_500_000, 100]);
+    expect(t.compatCalls.get('east')).toBe('horizontal-only');
+    expect(t.rebaseCalls.get('east')).toEqual([500_000, 4_500_000, 120]);
+  });
+
+  it('keeps an UNDECLARED-CRS layer out of the frame entirely', () => {
+    // The reported defect: a mesh with no CRS mounted beside a georeferenced
+    // scan because nothing had contradicted it.
+    const t = setup({
+      scan: { origin: [500_000, 4_500_000, 100], metadata: { crs: { epsg: 32612, verticalDatum: 'EPSG:5703' } } },
+      mesh: { origin: [0, 0, 0], metadata: null },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.compatCalls.get('mesh')).toBe('unknown');
+    expect(t.rebaseCalls.has('mesh')).toBe(false);
+    expect(t.restoreCalls).toContain('mesh');
+  });
+
+  it('refuses a mount that would cost more than a millimetre of Float32', () => {
+    // Distant layers are placed correctly only by spending the mantissa the
+    // residual was using. Past the budget the layer keeps its own frame and
+    // is reported as not in the project's.
+    const withDatum = { epsg: 32612, verticalDatum: 'EPSG:5703' };
+    const t = setup({
+      near: { origin: [500_000, 4_500_000, 0], metadata: { crs: withDatum } },
+      far: { origin: [600_000, 4_500_000, 0], metadata: { crs: withDatum }, rebaseQuantum: 0.0078 },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.compatCalls.get('far')).toBe('incompatible');
+    expect(t.rebaseCalls.has('far')).toBe(false);
   });
 
   it('a lone layer rebases to its own origin — the identity, single-scan path unchanged', () => {

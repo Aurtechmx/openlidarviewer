@@ -195,6 +195,7 @@ import {
 } from './measure/profileSampler';
 import { volumeCutFill } from './measure/volume';
 import { integrableClouds, isIntegrable } from './integrableClouds';
+import type { LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
@@ -315,6 +316,11 @@ function clipBoxPlanes(clip: ClipBox): THREE.Plane[] {
 
 interface CloudEntry {
   cloud: PointCloud;
+  /**
+   * What this layer has proven about sharing the project frame. Drives whether
+   * it may be merged into a combined estimator (`integrableClouds`).
+   */
+  compatibility?: LayerCompatibility;
   /** The instanced-quad mesh that draws this cloud. */
   mesh: THREE.Mesh;
   /** The cloud's point material (one per cloud so colours are independent). */
@@ -2194,6 +2200,19 @@ export class Viewer {
     if (attr) attr.needsUpdate = true;
     this._orbitClampAabb = this._visibleCloudAabb();
     this._refreshMeasureDatum();
+    this.requestFrame();
+  }
+
+  /**
+   * Record what a layer has proven about the project frame. Combined
+   * estimators — terrain, profile, cut/fill volume, lasso — read this and
+   * refuse anything not `verified`, because points from an unproven frame do
+   * not mean the same thing as the ones they would be averaged with.
+   */
+  setCloudCompatibility(id: string, compatibility: LayerCompatibility): void {
+    const entry = this._clouds.get(id);
+    if (!entry || entry.compatibility === compatibility) return;
+    entry.compatibility = compatibility;
     this.requestFrame();
   }
 
