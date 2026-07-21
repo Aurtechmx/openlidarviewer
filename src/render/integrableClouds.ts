@@ -86,3 +86,22 @@ export function streamingMayCombine(
   if (staticIntegrableCount === 0) return true;
   return participatesInSharedAnalysis(streamingCompatibility);
 }
+
+/** ASPRS class 2. Class 0 means "created, never classified" — not ground. */
+const ASPRS_GROUND = 2;
+
+/**
+ * Whether a source classification actually classifies any point as ground.
+ *
+ * "Classified ground" is a claim about the FILE. The provenance flag used to
+ * ask whether the viewer had ATTACHED a derived classification, so a LAS
+ * carrying an array of all zeros — class 0, "created, never classified" — had
+ * attached nothing, read as not-derived, and was announced as classified
+ * ground while the same scan's report said `unclassified (0.0 % coverage)`.
+ * An array full of zeros is the absence of a classification, not one.
+ */
+export function sourceClassifiesGround(cls: ArrayLike<number> | undefined | null): boolean {
+  if (!cls) return false;
+  for (let i = 0; i < cls.length; i++) if (cls[i] === ASPRS_GROUND) return true;
+  return false;
+}

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { integrableClouds, isIntegrable, streamingMayCombine } from '../src/render/integrableClouds';
+import { integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround } from '../src/render/integrableClouds';
 
 const entry = (visible: boolean, locked?: boolean) => ({
   mesh: { visible },
@@ -173,5 +173,43 @@ describe('streamingMayCombine', () => {
   it('scales past a single static layer', () => {
     expect(streamingMayCombine(5, 'unknown')).toBe(false);
     expect(streamingMayCombine(5, 'verified')).toBe(true);
+  });
+});
+
+/**
+ * "Classified ground" is a claim about the FILE, not about our own filter.
+ *
+ * The provenance flag asked whether the viewer had ATTACHED a derived
+ * classification. A LAS that carries a classification array of all zeros —
+ * ASPRS class 0, "created, never classified" — has attached nothing, so the
+ * flag read false and the review panel announced "Classified ground" for a
+ * scan whose own report said `unclassified (0.0 % coverage)` and whose banner
+ * said "points aren't classified to ground". Three surfaces, one file, two
+ * contradicting answers.
+ *
+ * The question that matters is whether any source point is actually
+ * classified as ground. An array full of zeros is the absence of a
+ * classification, not the presence of one.
+ */
+describe('sourceClassifiesGround', () => {
+  const GROUND = 2;
+
+  it('is false for an all-zeros array — class 0 is "never classified"', () => {
+    expect(sourceClassifiesGround(new Uint8Array(64))).toBe(false);
+  });
+
+  it('is false when nothing is ground, even with other classes present', () => {
+    // Vegetation and buildings are classified; ground is not.
+    expect(sourceClassifiesGround(Uint8Array.from([1, 3, 4, 5, 6, 6, 5]))).toBe(false);
+  });
+
+  it('is true as soon as one point is ground', () => {
+    expect(sourceClassifiesGround(Uint8Array.from([1, 1, GROUND, 5]))).toBe(true);
+    expect(sourceClassifiesGround(Uint8Array.from([GROUND]))).toBe(true);
+  });
+
+  it('is false for an absent array', () => {
+    expect(sourceClassifiesGround(undefined)).toBe(false);
+    expect(sourceClassifiesGround(new Uint8Array(0))).toBe(false);
   });
 });

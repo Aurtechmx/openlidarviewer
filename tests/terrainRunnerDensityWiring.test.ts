@@ -43,13 +43,13 @@ function makeRunner(
   positions: Float32Array,
   totalPoints: number,
   onResult: (r: AnalyseContoursResult) => void,
-  opts: { classificationIsDerived?: boolean; onFrame?: (f: unknown) => void } = {},
+  opts: { groundIsDerived?: boolean; onFrame?: (f: unknown) => void } = {},
 ) {
   const fakeViewer = {
     gatherTerrainPositions: () => ({
       positions,
       classification: undefined,
-      classificationIsDerived: opts.classificationIsDerived ?? false,
+      groundIsDerived: opts.groundIsDerived ?? false,
       residentOnly: false,
       sampled: totalPoints > positions.length / 3,
       totalPoints,
@@ -151,11 +151,11 @@ describe('terrainAnalysisRunner ground provenance wiring', () => {
 
   const plane = densePlane();
 
-  it.each([[true], [false]])('forwards classificationIsDerived=%s to the contour frame', async (derived) => {
+  it.each([[true], [false]])('forwards groundIsDerived=%s to the contour frame', async (derived) => {
     clearTerrainCoreCache();
     let frame: { groundIsDerived?: boolean } | null = null;
     const runner = makeRunner(plane, plane.length / 3, () => {}, {
-      classificationIsDerived: derived,
+      groundIsDerived: derived,
       onFrame: (f) => { frame = f as { groundIsDerived?: boolean }; },
     });
     await runner.run();

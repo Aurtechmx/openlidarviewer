@@ -347,7 +347,7 @@ export function createTerrainAnalysisRunner(
         verticalUnitsKnown: vUnitKnown,
         verticalUnitToMetres: vUnitKnown ? vScale : null,
         verticalUnitLabel: vUnitKnown ? verticalUnitLabel(vScale) : null,
-        groundIsDerived: gathered.classificationIsDerived,
+        groundIsDerived: gathered.groundIsDerived,
       });
       // Hand the fresh result to the host AFTER the panel adopts it, so any
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the

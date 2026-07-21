@@ -194,7 +194,12 @@ import {
   DEFAULT_PROFILE_SAMPLE_COUNT,
 } from './measure/profileSampler';
 import { volumeCutFill } from './measure/volume';
-import { integrableClouds, isIntegrable, streamingMayCombine } from './integrableClouds';
+import {
+  integrableClouds,
+  isIntegrable,
+  streamingMayCombine,
+  sourceClassifiesGround,
+} from './integrableClouds';
 import { classifyLayerCompatibility, type LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
@@ -2547,12 +2552,13 @@ export class Viewer {
     positions: Float32Array;
     classification?: Uint8Array;
     /**
-     * Whether any contributing classification was DERIVED by the viewer rather
-     * than read from the source file. The review panel keys the ground-source
-     * label off this so derived ground is never presented as a producer's
-     * survey classification.
+     * True unless some contributing SOURCE file classifies points as ground.
+     * The review panel keys its ground-source label off this, so ground the
+     * viewer worked out for itself is never presented as a producer's survey
+     * classification — including when the file carries a classification array
+     * that classifies nothing (all class 0, "created, never classified").
      */
-    classificationIsDerived: boolean;
+    groundIsDerived: boolean;
     residentOnly: boolean;
     sampled: boolean;
     totalPoints: number;
@@ -2583,7 +2589,12 @@ export class Viewer {
     // heuristic classifier rather than its file. Deliberately pessimistic: one
     // derived source is enough to stop the review panel calling the resulting
     // ground a producer's survey classification.
-    let anyDerivedClass = false;
+    // Whether any contributing SOURCE actually classifies ground. Asking
+    // instead whether we had attached a derived classification meant a file
+    // with an all-zeros class array — class 0, never classified — read as
+    // "the file classified this", and the review panel announced classified
+    // ground for a scan its own report called unclassified.
+    let sourceGround = false;
     const staticFormats: SourceFormat[] = [];
     const alignedClass = (
       cls: ArrayLike<number> | null | undefined,
@@ -2596,7 +2607,9 @@ export class Viewer {
         const cls = alignedClass(cloud.classification, cloud.positions);
         if (cls) {
           anyClass = true;
-          if (cloud.classificationIsDerived) anyDerivedClass = true;
+          if (!cloud.classificationIsDerived && sourceClassifiesGround(cls)) {
+            sourceGround = true;
+          }
         }
         staticBuffers.push({ pos: cloud.positions, cls });
         staticPoints += cloud.positions.length / 3;
@@ -2674,7 +2687,7 @@ export class Viewer {
     return {
       positions: sample.positions,
       classification: sample.classification,
-      classificationIsDerived: anyDerivedClass,
+      groundIsDerived: !sourceGround,
       residentOnly,
       sampled: sample.sampled,
       totalPoints,
