@@ -326,6 +326,8 @@ interface CloudEntry {
    * it may be merged into a combined estimator (`integrableClouds`).
    */
   compatibility?: LayerCompatibility;
+  /** Whether this layer is actually mounted in the shared project frame. */
+  mounted?: boolean;
   /** The instanced-quad mesh that draws this cloud. */
   mesh: THREE.Mesh;
   /** The cloud's point material (one per cloud so colours are independent). */
@@ -2223,6 +2225,19 @@ export class Viewer {
     const entry = this._clouds.get(id);
     if (!entry || entry.compatibility === compatibility) return;
     entry.compatibility = compatibility;
+    this.requestFrame();
+  }
+
+  /**
+   * Record whether a layer is actually mounted in the shared project frame.
+   *
+   * Combined estimators require this as well as compatibility: being ABLE to
+   * share a frame is not the same as being in one.
+   */
+  setCloudMounted(id: string, mounted: boolean): void {
+    const entry = this._clouds.get(id);
+    if (!entry || entry.mounted === mounted) return;
+    entry.mounted = mounted;
     this.requestFrame();
   }
 

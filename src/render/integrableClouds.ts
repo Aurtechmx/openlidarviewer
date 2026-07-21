@@ -28,6 +28,18 @@ export interface IntegrableEntry {
    * classified against — is unchanged.
    */
   compatibility?: LayerCompatibility;
+  /**
+   * Whether this layer was actually mounted into the shared project frame.
+   *
+   * Compatibility says two layers COULD share a frame; mounting is what puts
+   * them there. The two came apart when multi-layer rebasing became
+   * switchable — with the mount off, two `verified` layers still passed the
+   * compatibility gate while sitting at their own origins, and a combined
+   * estimator would have averaged points a kilometre apart as neighbours.
+   * Absent counts as mounted, so callers that predate the distinction are
+   * unaffected.
+   */
+  mounted?: boolean;
 }
 
 /**
@@ -62,7 +74,9 @@ export function integrableClouds<T extends IntegrableEntry>(entries: Iterable<T>
     if (entry.mesh.visible && !entry.locked) available.push(entry);
   }
   if (available.length <= 1) return available;
-  return available.filter((e) => participatesInSharedAnalysis(e.compatibility ?? 'verified'));
+  return available.filter(
+    (e) => participatesInSharedAnalysis(e.compatibility ?? 'verified') && e.mounted !== false,
+  );
 }
 
 /**

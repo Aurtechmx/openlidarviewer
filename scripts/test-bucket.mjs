@@ -124,6 +124,10 @@ const bucketArgs = BUCKET_ARGS[arg] ?? [...WORKERS];
 // minutes. Killing it with a message beats inheriting a hang that the release
 // gate reports as a nondescript failure ten minutes later.
 const SHARD_TIMEOUT_MS = Number(process.env.OLV_SHARD_TIMEOUT_MS ?? 8 * 60 * 1000);
+// How long `close` gets to arrive after the group is killed before the wait is
+// abandoned. Short: by this point the shard is already over its budget, and a
+// gate that hangs is worse than one that reports a kill it could not confirm.
+const TIMEOUT_GRACE_MS = 2000;
 
 // Run the LOCAL vitest binary, never `npx vitest`: npx interposes an extra
 // process, so a kill lands on the wrapper while the real vitest and its whole
@@ -152,6 +156,21 @@ function runVitest(extra, label) {
 
     let timedOut = false;
     let settled = false;
+    /**
+     * The timeout must END THE WAIT, not merely ask the child to stop.
+     *
+     * The first version killed the group and then resolved only from
+     * `child.on('close')`. `close` fires when every inherited stdio stream has
+     * been released — so anything that survived the kill and still held the
+     * pipe (a grandchild that escaped the group, a handle the signal did not
+     * reach) meant `close` never fired, `finish` was never called, and the
+     * promise hung forever. A reviewer saw exactly that: an eight-minute
+     * timeout that did not recover a shard inside twelve minutes. The timer
+     * had fired and had no way to say so.
+     *
+     * So: kill the group, then give `close` a brief grace period to arrive
+     * naturally, and settle regardless when it does not.
+     */
     const timer = setTimeout(() => {
       timedOut = true;
       try {
@@ -161,6 +180,13 @@ function runVitest(extra, label) {
       } catch {
         /* group already reaped */
       }
+      setTimeout(() => {
+        finish({
+          error: Object.assign(new Error('shard timed out'), { code: 'ETIMEDOUT' }),
+          status: null,
+          signal: null,
+        });
+      }, TIMEOUT_GRACE_MS).unref();
     }, SHARD_TIMEOUT_MS);
 
     const finish = (r) => {

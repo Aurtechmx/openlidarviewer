@@ -44,7 +44,14 @@ interface FakeCloud {
   rebaseQuantum?: number | { horizontal: number; vertical: number };
 }
 
-function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set()) {
+function setup(
+  clouds: Record<string, FakeCloud>,
+  locked: Set<string> = new Set(),
+  // These specs describe what mounting DOES, so they exercise it explicitly.
+  // The shipped default is off for this alpha; `mount disabled` below pins
+  // that side, so neither state is left unverified.
+  multiLayerMount = true,
+) {
   // A freshly loaded cloud's source origin IS its origin — the constructor
   // copies it. Defaulting here (as a COPY, so the rebase cannot reach it)
   // keeps every fixture honest about the real object's shape.
@@ -74,6 +81,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
   const rebaseCalls = new Map<string, readonly [number, number, number]>();
   const restoreCalls: string[] = [];
   const compatCalls = new Map<string, string>();
+  const mountCalls = new Map<string, boolean>();
   const viewer = {
     clouds: () => Object.keys(clouds),
     getCloud: (id: string) => {
@@ -99,6 +107,9 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     },
     setCloudCompatibility: (id: string, c: string) => {
       compatCalls.set(id, c);
+    },
+    setCloudMounted: (id: string, m: boolean) => {
+      mountCalls.set(id, m);
     },
     restoreCloudSourceFrame: (id: string) => {
       restoreCalls.push(id);
@@ -129,6 +140,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
       compassRefreshes += 1;
     },
     projectFrame,
+    multiLayerMount,
   });
 
   return {
@@ -138,6 +150,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     rebaseCalls,
     restoreCalls,
     compatCalls,
+    mountCalls,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -640,5 +653,56 @@ describe('LayerService frame gate corrections', () => {
     });
     t.service.refreshCrsFlags();
     expect(t.rebaseCalls.has('b')).toBe(false);
+  });
+});
+
+/**
+ * The shipped default: multi-layer mounting is OFF for this alpha.
+ *
+ * The mount writes the project offset into the Float32 position array, so it
+ * permanently edits the only copy of the source values — bounded by the
+ * precision gate, refused past a millimetre, but the wrong trade to make by
+ * default before the transform is held in Float64 beside source-local
+ * vertices.
+ *
+ * Turning it off is only safe because the merge gate asks for BOTH proven
+ * compatibility and an actual mount. Without that second condition, disabling
+ * the mount would leave two `verified` layers sitting at their own origins and
+ * still eligible to be averaged together — a worse error than the precision
+ * cost being avoided.
+ */
+describe('multi-layer mount is disabled by default', () => {
+  const utm = { epsg: 32612, verticalDatum: 'EPSG:5703' };
+  const pair = () => ({
+    a: { origin: [500_000, 4_500_000, 100] as readonly [number, number, number], metadata: { crs: { ...utm } } },
+    b: { origin: [501_000, 4_500_000, 100] as readonly [number, number, number], metadata: { crs: { ...utm } } },
+  });
+
+  it('does not move any layer when the mount is off', () => {
+    const t = setup(pair(), new Set(), false);
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.size).toBe(0);
+  });
+
+  it('reports both layers as NOT mounted, so estimators refuse to merge them', () => {
+    const t = setup(pair(), new Set(), false);
+    t.service.refreshCrsFlags();
+    expect(t.mountCalls.get('a')).toBe(false);
+    expect(t.mountCalls.get('b')).toBe(false);
+  });
+
+  it('still classifies compatibility honestly — the frame is carried, not claimed', () => {
+    const t = setup(pair(), new Set(), false);
+    t.service.refreshCrsFlags();
+    expect(t.compatCalls.get('a')).toBe('verified');
+    expect(t.compatCalls.get('b')).toBe('verified');
+  });
+
+  it('leaves the single-layer path completely untouched', () => {
+    // A lone layer's mount was always the identity, so nothing changes for it.
+    const one = { only: { origin: [500_000, 4_500_000, 100] as readonly [number, number, number], metadata: { crs: { ...utm } } } };
+    const t = setup(one, new Set(), false);
+    t.service.refreshCrsFlags();
+    expect(t.mountCalls.get('only')).toBe(true);
   });
 });

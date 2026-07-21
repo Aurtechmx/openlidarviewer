@@ -213,3 +213,41 @@ describe('sourceClassifiesGround', () => {
     expect(sourceClassifiesGround(new Uint8Array(0))).toBe(false);
   });
 });
+
+/**
+ * Merging requires layers to be IN one frame, not merely compatible with it.
+ *
+ * Compatibility says two layers COULD share a frame. Mounting is what actually
+ * puts them there. Those came apart the moment multi-layer rebasing was made
+ * switchable: with the mount disabled, two `verified` layers still satisfied
+ * the compatibility gate while sitting at their own separate origins, so a
+ * combined estimator would have averaged points a kilometre apart as though
+ * they were neighbours — a worse failure than the precision cost the switch
+ * exists to avoid.
+ *
+ * So a merge needs both: proven compatibility AND an actual mount.
+ */
+describe('merging requires an actual mount', () => {
+  const layer = (over: Partial<{ mounted: boolean; compatibility: string }> = {}) => ({
+    mesh: { visible: true },
+    compatibility: (over.compatibility ?? 'verified') as never,
+    mounted: over.mounted,
+  });
+
+  it('merges two verified layers that are mounted', () => {
+    expect(integrableClouds([layer({ mounted: true }), layer({ mounted: true })])).toHaveLength(2);
+  });
+
+  it('REFUSES to merge verified layers that were never mounted', () => {
+    expect(integrableClouds([layer({ mounted: false }), layer({ mounted: false })])).toHaveLength(0);
+  });
+
+  it('treats an unstated mount as mounted, leaving existing callers alone', () => {
+    expect(integrableClouds([layer(), layer()])).toHaveLength(2);
+  });
+
+  it('still analyses a lone unmounted layer in its own frame', () => {
+    // Nothing is being combined, so there is nothing to be in one frame with.
+    expect(integrableClouds([layer({ mounted: false })])).toHaveLength(1);
+  });
+});

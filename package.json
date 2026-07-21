@@ -70,7 +70,8 @@
     "coverage": "vitest run --coverage --testTimeout=60000 --exclude='tests/terrainRunnerDensityWiring.test.ts'",
     "mutation": "stryker run",
     "evidence": "bash -c 'set -o pipefail; npm run test:release > release/gate.log 2>&1; code=$?; node scripts/collect-evidence.mjs release/gate.log \"$code\"'",
-    "lint:evidence": "node scripts/lint-evidence.mjs"
+    "lint:evidence": "node scripts/lint-evidence.mjs",
+    "package:source": "bash scripts/package.sh --source-only"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

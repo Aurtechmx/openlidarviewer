@@ -24,6 +24,31 @@ For this alpha:
 - Integrated Spatial Workflows are **not** claimed complete.
 - A layer whose declared CRS disagrees with the project's is excluded from the shared origin and reported as unaligned; it is never silently reprojected. Reprojection remains a downstream tool's job.
 
+## Multi-layer mounting is OFF in this alpha
+
+`MULTI_LAYER_MOUNT_ENABLED` is `false`. Layers are classified, the project
+frame is computed, and every transform is tested — but no layer's geometry is
+physically moved onto a shared origin.
+
+The mount writes the project offset into the Float32 position array, which
+permanently edits the only copy of the source values. The precision gate below
+bounds that and refuses anything past a millimetre, but bounding a destructive
+edit is not the same as not making one, and it is the wrong default for a
+research tool before the transform is held in Float64 beside source-local
+vertices (coordinate-integrity roadmap, P1 item 2).
+
+Turning it off is only safe because a combined estimator requires BOTH proven
+compatibility and an actual mount. Without that second condition, disabling the
+mount would have left two `verified` layers sitting at their own origins and
+still eligible to be averaged together — a worse error than the precision cost
+being avoided.
+
+**What this means in practice:** single-scan work is completely unaffected — a
+lone layer's mount was always the identity. Multiple layers load, display and
+can each be analysed on their own; they are not co-registered and are not
+combined into one estimate. Treat the project frame as a tested foundation
+being carried, not a feature being claimed.
+
 ## Cross-layer results require PROVEN frame compatibility
 
 Each layer carries what it has established about the project frame:

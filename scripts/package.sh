@@ -10,7 +10,7 @@
 # 403s once deployed; this script normalises them every time.
 #
 # Usage:
-#   scripts/package.sh [OUT_DIR]
+#   scripts/package.sh [OUT_DIR] [--source-only]
 #
 #   OUT_DIR  Where the .zip files are written. Defaults to ./release.
 #
@@ -28,6 +28,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+# `--source-only` is stripped here, before the positional OUT_DIR is read —
+# otherwise the flag was taken as the output directory and mkdir choked on it.
+SOURCE_ONLY=0
+ARGS=()
+for arg in "$@"; do
+  if [ "$arg" = "--source-only" ]; then SOURCE_ONLY=1; else ARGS+=("$arg"); fi
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 OUT_DIR="${1:-$ROOT/release}"
 mkdir -p "$OUT_DIR"
@@ -52,23 +61,39 @@ verify_zip() {
   echo "  ✓ verified $(basename "$f")"
 }
 
-echo "→ Building production (live) bundle…"
-npm run build:live
+# ── Scholarly source archive first, and independent of the site build ─────
+#
+# The source archive comes from `git archive HEAD` and needs no build output at
+# all, but it used to be sequenced BEHIND the obfuscated bundle — so a build
+# that wedged in the obfuscator (observed: one attempt still "transforming"
+# after ten minutes, the next finishing in fifteen seconds) blocked an archive
+# that never depended on it. A citable source deposit should not be hostage to
+# how the hosted site is minified.
+#
+# `--source-only` produces just that archive, for a Zenodo/archival cut.
+if [ "$SOURCE_ONLY" = "1" ]; then
+  echo "→ Source-only packaging: skipping the live/obfuscated build."
+else
+  echo "→ Building production (live) bundle…"
+  npm run build:live
+fi
 
-# Guard against silent bundle growth before we ship the artifact.
-echo "→ Checking bundle budget…"
-node "$ROOT/scripts/check-bundle-budget.mjs"
+if [ "$SOURCE_ONLY" != "1" ]; then
+  # Guard against silent bundle growth before we ship the artifact.
+  echo "→ Checking bundle budget…"
+  node "$ROOT/scripts/check-bundle-budget.mjs"
 
-# ── Deploy archive: dist contents at the zip root, web-safe modes ──────────
-echo "→ Normalising deploy modes (644 files / 755 dirs)…"
-cp -R dist "$TMP/deploy"
-find "$TMP/deploy" -type d -exec chmod 755 {} +
-find "$TMP/deploy" -type f -exec chmod 644 {} +
+  # ── Deploy archive: dist contents at the zip root, web-safe modes ────────
+  echo "→ Normalising deploy modes (644 files / 755 dirs)…"
+  cp -R dist "$TMP/deploy"
+  find "$TMP/deploy" -type d -exec chmod 755 {} +
+  find "$TMP/deploy" -type f -exec chmod 644 {} +
 
-DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"
-( cd "$TMP/deploy" && zip -rqX "$TMP/$DEPLOY" . )
-cp "$TMP/$DEPLOY" "$OUT_DIR/$DEPLOY"
-verify_zip "$OUT_DIR/$DEPLOY"
+  DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"
+  ( cd "$TMP/deploy" && zip -rqX "$TMP/$DEPLOY" . )
+  cp "$TMP/$DEPLOY" "$OUT_DIR/$DEPLOY"
+  verify_zip "$OUT_DIR/$DEPLOY"
+fi
 
 # ── Source archive: working tree minus build/vcs/deps, web-safe modes ──────
 # The source archive extracts into ONE clean top-level folder
@@ -122,9 +147,17 @@ fi
 NODE_V="$(node -v 2>/dev/null || echo unknown)"
 (
   cd "$OUT_DIR"
-  shasum -a 256 "$DEPLOY" "$SOURCE" > SHA256SUMS
-  DEPLOY_SHA="$(shasum -a 256 "$DEPLOY" | cut -d' ' -f1)"
   SOURCE_SHA="$(shasum -a 256 "$SOURCE" | cut -d' ' -f1)"
+  if [ "$SOURCE_ONLY" = "1" ]; then
+    # A source-only cut states plainly that no deploy artifact exists, rather
+    # than leaving an empty field a reader could mistake for one.
+    shasum -a 256 "$SOURCE" > SHA256SUMS
+    DEPLOY_ENTRY='null'
+  else
+    shasum -a 256 "$DEPLOY" "$SOURCE" > SHA256SUMS
+    DEPLOY_SHA="$(shasum -a 256 "$DEPLOY" | cut -d' ' -f1)"
+    DEPLOY_ENTRY="{ \"file\": \"${DEPLOY}\", \"sha256\": \"${DEPLOY_SHA}\" }"
+  fi
   cat > "release-manifest-v${VERSION}.json" <<JSON
 {
   "project": "openlidarviewer",
@@ -135,8 +168,9 @@ NODE_V="$(node -v 2>/dev/null || echo unknown)"
   "dirtyWorkingTree": ${DIRTY},
   "nodeVersion": "${NODE_V}",
   "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "packagedArtifacts": $([ "$SOURCE_ONLY" = "1" ] && echo '"source-only"' || echo '"deploy+source"'),
   "artifacts": {
-    "deploy": { "file": "${DEPLOY}", "sha256": "${DEPLOY_SHA}" },
+    "deploy": ${DEPLOY_ENTRY},
     "source": { "file": "${SOURCE}", "sha256": "${SOURCE_SHA}" }
   }
 }
@@ -145,7 +179,7 @@ JSON
 
 echo
 echo "✓ Packaged v${VERSION}:"
-echo "    $OUT_DIR/$DEPLOY"
+[ "$SOURCE_ONLY" = "1" ] || echo "    $OUT_DIR/$DEPLOY"
 echo "    $OUT_DIR/$SOURCE"
 echo "    $OUT_DIR/SHA256SUMS"
 echo "    $OUT_DIR/release-manifest-v${VERSION}.json"

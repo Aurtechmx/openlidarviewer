@@ -39,6 +39,12 @@ export interface LayerServiceDeps {
   refreshCompass: () => void;
   /** The project's shared spatial frame, reseeded on every layer-set change. */
   projectFrame: ProjectFrameService;
+  /**
+   * Override {@link MULTI_LAYER_MOUNT_ENABLED}. Exists so both states stay
+   * under test: the mount is off by default for this alpha, and its behaviour
+   * still has to be pinned rather than left to rot behind a false constant.
+   */
+  multiLayerMount?: boolean;
 }
 
 export interface LayerService {
@@ -64,6 +70,28 @@ export interface LayerService {
  * accept 9.5e-7 degrees, about 10.6 cm.
  */
 export const REBASE_QUANTUM_BUDGET_M = 0.001;
+
+/**
+ * Whether layers are physically rebased onto a shared project origin.
+ *
+ * OFF for this alpha. The mount writes the project offset into the Float32
+ * position array, so the residual a layer keeps depends on how far it moved —
+ * bounded by the precision gate above, refused past a millimetre, but a
+ * permanent edit to the only copy of the source values. That is the wrong
+ * trade for a research tool to make by default before the transform is held
+ * in Float64 beside source-local vertices (coordinate-integrity roadmap, P1
+ * item 2).
+ *
+ * With it off, every layer stays in its own frame and nothing is merged
+ * across layers — `mounted: false` makes the combined estimators refuse, so
+ * disabling the mount cannot leave unaligned layers being averaged together.
+ * Single-layer work is completely unaffected: a lone layer's mount was always
+ * the identity.
+ *
+ * The frame service still runs, still classifies, and is still tested. It is
+ * a foundation being carried, not a feature being claimed.
+ */
+export const MULTI_LAYER_MOUNT_ENABLED = false;
 
 /**
  * What a mount would cost this layer, expressed in metres — or null when that
@@ -235,7 +263,13 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       const precisionSafe = precision.errorMetres !== null
         && precision.errorMetres <= REBASE_QUANTUM_BUDGET_M;
 
-      if (aligned && precisionSafe && deps.projectFrame.transformFor(info.id)) {
+      const mountable = aligned && precisionSafe && deps.projectFrame.transformFor(info.id) != null;
+      const willMount = mountable && (deps.multiLayerMount ?? MULTI_LAYER_MOUNT_ENABLED);
+      // Combined estimators need to know whether this layer is genuinely IN
+      // the frame, not merely eligible for it.
+      viewer.setCloudMounted(info.id, willMount || infos.length <= 1);
+
+      if (willMount) {
         // A horizontal-only layer is placed in X/Y and keeps its OWN vertical
         // origin. Rebasing its Z would assert a shared vertical datum nobody
         // established — the heights would line up on screen and mean nothing.
