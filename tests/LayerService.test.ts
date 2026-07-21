@@ -82,6 +82,7 @@ function setup(
   const restoreCalls: string[] = [];
   const compatCalls = new Map<string, string>();
   const mountCalls = new Map<string, boolean>();
+  const unmountedCalls: string[][] = [];
   const viewer = {
     clouds: () => Object.keys(clouds),
     getCloud: (id: string) => {
@@ -122,8 +123,9 @@ function setup(
     setLayerSolo: (s: string | null) => {
       soloCalls.push(s);
     },
-    setLayerCrsFlags: (ids: Set<string>, summary: unknown) => {
+    setLayerCrsFlags: (ids: Set<string>, summary: unknown, _c?: unknown, unmounted?: ReadonlySet<string>) => {
       crsFlagCalls.push({ ids: [...ids], summary });
+      unmountedCalls.push([...(unmounted ?? [])].sort());
     },
     setLayerCompareAvailable: (b: boolean) => {
       compareCalls.push(b);
@@ -151,6 +153,7 @@ function setup(
     restoreCalls,
     compatCalls,
     mountCalls,
+    unmountedCalls,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -704,5 +707,47 @@ describe('multi-layer mount is disabled by default', () => {
     const t = setup(one, new Set(), false);
     t.service.refreshCrsFlags();
     expect(t.mountCalls.get('only')).toBe(true);
+  });
+});
+
+/**
+ * A layer excluded for NOT BEING MOUNTED must say so too.
+ *
+ * The panel explains exclusion by compatibility state. With mounting disabled,
+ * two layers that are perfectly compatible are both `verified` — so nothing is
+ * flagged — yet neither can enter a combined estimator, because merging
+ * requires an actual mount. Terrain, profile and volume then return nothing
+ * with the layer list showing no problem at all.
+ *
+ * That is the same silent-exclusion failure the compatibility note was written
+ * to prevent, reintroduced through the other half of the rule.
+ */
+describe('unmounted layers are disclosed, not silently dropped', () => {
+  const utm = { epsg: 32612, verticalDatum: 'EPSG:5703' };
+  const pair = () => ({
+    a: { origin: [500_000, 4_500_000, 100] as readonly [number, number, number], metadata: { crs: { ...utm } } },
+    b: { origin: [501_000, 4_500_000, 100] as readonly [number, number, number], metadata: { crs: { ...utm } } },
+  });
+
+  it('reports compatible-but-unmounted layers to the panel', () => {
+    const t = setup(pair(), new Set(), false);
+    t.service.refreshCrsFlags();
+    // Both are genuinely verified — that is the point. Compatibility alone
+    // would tell the user nothing is wrong while nothing works.
+    expect(t.compatCalls.get('a')).toBe('verified');
+    expect(t.unmountedCalls.at(-1)).toEqual(['a', 'b']);
+  });
+
+  it('reports nothing unmounted when the mount is enabled', () => {
+    const t = setup(pair(), new Set(), true);
+    t.service.refreshCrsFlags();
+    expect(t.unmountedCalls.at(-1)).toEqual([]);
+  });
+
+  it('does not flag a lone layer, which needs no mount', () => {
+    const one = { only: { origin: [500_000, 4_500_000, 100] as readonly [number, number, number], metadata: { crs: { ...utm } } } };
+    const t = setup(one, new Set(), false);
+    t.service.refreshCrsFlags();
+    expect(t.unmountedCalls.at(-1)).toEqual([]);
   });
 });

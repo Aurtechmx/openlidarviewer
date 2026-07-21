@@ -62,10 +62,30 @@ if (summedSkipped !== evidence.total.skipped) {
     `${EVIDENCE}: skipped counts sum to ${summedSkipped} but total says ${evidence.total.skipped}.`,
   );
 }
-// A bucket that never ran contributes zero and looks like a pass.
+// A bucket that never ran contributes zero and looks like a pass — and a
+// bucket that ran FEWER shards than it should silently under-reports, which
+// `runs > 0` alone would not catch. The sharding is declared in package.json
+// (`--shards=N`), so the expected count is derivable rather than a magic
+// number that could drift away from the runner.
+const EXPECTED_RUNS = (() => {
+  const scripts = JSON.parse(read('package.json')).scripts ?? {};
+  const out = {};
+  for (const name of Object.keys(evidence.buckets)) {
+    const cmd = scripts[`test:${name}`] ?? '';
+    const m = /--shards=(\d+)/.exec(cmd);
+    out[name] = m ? Number(m[1]) : 1;
+  }
+  return out;
+})();
 for (const [name, b] of Object.entries(evidence.buckets)) {
-  if (!(b.runs > 0)) problems.push(`${EVIDENCE}: bucket "${name}" records no runs — the gate did not execute it.`);
   if (!(b.passed > 0)) problems.push(`${EVIDENCE}: bucket "${name}" passed ${b.passed} tests.`);
+  const want = EXPECTED_RUNS[name];
+  if (b.runs !== want) {
+    problems.push(
+      `${EVIDENCE}: bucket "${name}" recorded ${b.runs} run(s); package.json declares ${want}. `
+      + 'A dropped shard under-reports without failing anything.',
+    );
+  }
 }
 if (evidence.gateExit !== 0) {
   problems.push(`${EVIDENCE} records gateExit ${evidence.gateExit}; figures may only come from a passing run.`);

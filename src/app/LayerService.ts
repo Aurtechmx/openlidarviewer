@@ -184,6 +184,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
    * a shared spatial frame at all, which is exactly what "skip" says.
    */
   let lastCompatibility = new Map<string, LayerCompatibility>();
+  let lastUnmounted: string[] = [];
 
   function syncProjectFrame(infos: readonly LayerInfo[]): void {
     const viewer = getViewer();
@@ -239,6 +240,13 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // presence makes unanimity refuse the datum honestly, exactly as before
     // the frame existed.
     const frame = deps.projectFrame.frame;
+    // Layers held out of combined results because nothing is MOUNTED, as
+    // distinct from those held out for incompatibility. Two perfectly
+    // compatible layers are both `verified` and both excluded while mounting
+    // is off, so a panel that explains only compatibility shows nothing wrong
+    // while nothing works — the same silent exclusion the compatibility note
+    // exists to prevent, arriving through the other half of the rule.
+    const unmounted: string[] = [];
     for (const info of infos) {
       const state = stateOf(info.id);
       const cloud = viewer.getCloud(info.id);
@@ -267,7 +275,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       const willMount = mountable && (deps.multiLayerMount ?? MULTI_LAYER_MOUNT_ENABLED);
       // Combined estimators need to know whether this layer is genuinely IN
       // the frame, not merely eligible for it.
-      viewer.setCloudMounted(info.id, willMount || infos.length <= 1);
+      const mounted = willMount || infos.length <= 1;
+      viewer.setCloudMounted(info.id, mounted);
+      if (!mounted) unmounted.push(info.id);
 
       if (willMount) {
         // A horizontal-only layer is placed in X/Y and keeps its OWN vertical
@@ -302,6 +312,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         aligned && !precisionSafe ? 'incompatible' : state,
       );
     }
+    lastUnmounted = unmounted;
   }
 
   function refreshCrsFlags(): void {
@@ -311,7 +322,12 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     const inspector = getInspector();
     // The compatibility map rides along so the panel can say WHY a layer is
     // out of the combined results, instead of it just quietly not being there.
-    inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary, lastCompatibility);
+    inspector.setLayerCrsFlags(
+      new Set(m.mismatched.map((x) => x.id)),
+      m.summary,
+      lastCompatibility,
+      new Set(lastUnmounted),
+    );
     // The two-epoch compare needs exactly two loaded layers.
     inspector.setLayerCompareAvailable(getViewer().clouds().length === 2);
     // Show the compass once a scan is open; hide it again when the last layer goes.

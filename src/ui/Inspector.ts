@@ -1384,6 +1384,7 @@ export class Inspector {
     mismatched: ReadonlySet<string>,
     summary: string,
     compatibility?: ReadonlyMap<string, LayerCompatibility>,
+    unmounted?: ReadonlySet<string>,
   ): void {
     for (const [id, row] of this._layerRows) {
       const bad = mismatched.has(id);
@@ -1393,11 +1394,20 @@ export class Inspector {
       // fewer inputs than they believe, which is worse than the merge the
       // exclusion prevents — that at least looked wrong eventually.
       const state = compatibility?.get(id);
-      row.classList.toggle(
-        'olv-layer-frame-excluded',
-        state !== undefined && state !== 'verified',
-      );
+      // Two reasons a layer sits out of combined results: it is not COMPATIBLE
+      // with the frame, or it is not MOUNTED in one. The second was invisible —
+      // a compatible pair reads `verified`, so nothing was flagged, while
+      // neither could enter an estimator.
+      const notMounted = unmounted?.has(id) === true;
+      const excluded = (state !== undefined && state !== 'verified') || notMounted;
+      row.classList.toggle('olv-layer-frame-excluded', excluded);
       if (state !== undefined && state !== 'verified') row.title = compatibilityNote(state);
+      else if (notMounted) {
+        row.title =
+          'Shares the project’s reference, but layers are not co-registered in this build, '
+          + 'so this layer is excluded from combined terrain, profile and volume results. '
+          + 'Analyse it on its own by soloing it.';
+      }
       else if (bad) row.title = 'This layer does not share the others’ coordinate system.';
       else row.removeAttribute('title');
     }
