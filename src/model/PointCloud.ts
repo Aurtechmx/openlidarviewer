@@ -277,6 +277,46 @@ export class PointCloud {
    * The scan is computed once and cached; each call returns a fresh copy, so a
    * caller can never corrupt the cached value.
    */
+  /**
+   * Move this cloud onto a different world origin, keeping every point at the
+   * SAME world position: `local + origin` is identical before and after.
+   *
+   * This is how a layer mounts into the shared project frame. Translating the
+   * three.js MESH instead (the first implementation) split the scene in two —
+   * rendering saw project space while picking, terrain gather, lasso, profiles,
+   * volumes and export bounds all still read these positions cloud-local, so
+   * layers LOOKED aligned while every calculation used a different frame.
+   * Rebasing the data makes every consumer of `positions` project-local with no
+   * changes of their own. The cached bounds shift rather than invalidate — a
+   * translation moves a box without changing its shape.
+   *
+   * The caller re-uploads the GPU attribute; this class has no three.js.
+   * Returns false (and touches nothing) when the origin already matches.
+   */
+  rebaseOrigin(target: readonly [number, number, number]): boolean {
+    const dx = this.origin[0] - target[0];
+    const dy = this.origin[1] - target[1];
+    const dz = this.origin[2] - target[2];
+    if (dx === 0 && dy === 0 && dz === 0) return false;
+    const p = this.positions;
+    for (let i = 0; i + 2 < p.length; i += 3) {
+      p[i] += dx;
+      p[i + 1] += dy;
+      p[i + 2] += dz;
+    }
+    if (this._bounds !== null) {
+      const b = this._bounds;
+      this._bounds = {
+        min: [b.min[0] + dx, b.min[1] + dy, b.min[2] + dz],
+        max: [b.max[0] + dx, b.max[1] + dy, b.max[2] + dz],
+      };
+    }
+    this.origin[0] = target[0];
+    this.origin[1] = target[1];
+    this.origin[2] = target[2];
+    return true;
+  }
+
   bounds(): { min: [number, number, number]; max: [number, number, number] } {
     if (this._bounds === null) {
       // No points to span. A min/max reduction over zero elements would leave

@@ -37,8 +37,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
   const compareCalls: boolean[] = [];
   let compassRefreshes = 0;
 
-  const frameOffsets = new Map<string, readonly [number, number, number]>();
-  const frameOriginCalls: Array<readonly [number, number, number] | null> = [];
+  const rebaseCalls = new Map<string, readonly [number, number, number]>();
   const viewer = {
     clouds: () => Object.keys(clouds),
     getCloud: (id: string) => clouds[id] ?? null,
@@ -46,11 +45,11 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     setCloudVisible: (id: string, on: boolean) => {
       visibleCalls.push([id, on]);
     },
-    setCloudFrameOffset: (id: string, offset: readonly [number, number, number]) => {
-      frameOffsets.set(id, offset);
-    },
-    setProjectFrameOrigin: (origin: readonly [number, number, number] | null) => {
-      frameOriginCalls.push(origin);
+    rebaseCloudToOrigin: (id: string, target: readonly [number, number, number]) => {
+      rebaseCalls.set(id, target);
+      // Mirror the real behaviour so a second refresh sees the moved origin.
+      const c = clouds[id];
+      if (c?.origin) c.origin = [target[0], target[1], target[2]];
     },
   } as unknown as Viewer;
 
@@ -82,8 +81,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     service,
     context,
     projectFrame,
-    frameOffsets,
-    frameOriginCalls,
+    rebaseCalls,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -213,7 +211,11 @@ describe('LayerService seeds the shared project frame', () => {
     t.service.refreshCrsFlags();
     delete clouds.low;
     t.service.refreshCrsFlags();
-    expect(t.projectFrame.frame?.projectOrigin).toEqual([501_000, 4_500_000, 120]);
+    // The survivor's origin IS the shared anchor now — the mount rebased its
+    // data there — so the recomputed frame anchors at the CURRENT origin, not
+    // the one the file was loaded with. That is the point: closing a sibling
+    // must not move a mounted layer again.
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
     expect(t.projectFrame.transformFor('low')).toBeNull();
   });
 
@@ -257,110 +259,57 @@ describe('LayerService seeds the shared project frame', () => {
 
 
 /**
- * Step 2 of the wiring plan: the frame is MOUNTED, not just computed. Every
- * cloud is recentred about its own origin at load, so without the mount two
- * georeferenced scans a kilometre apart rendered overlaid at local zero — the
- * frame existed and changed nothing on screen.
+ * Steps 2 + 4 as one mechanism: every aligned layer's DATA is rebased onto the
+ * project origin. The first implementation translated the MESH instead, which
+ * split the scene — rendering saw project space while picking, terrain, lasso,
+ * volumes and export bounds still read cloud-local positions, so layers LOOKED
+ * aligned while every calculation used a different frame.
  */
-describe('LayerService mounts each layer at its project-frame offset', () => {
+describe('LayerService rebases each aligned layer onto the project origin', () => {
   const utm = { epsg: 32612 };
 
-  it('offsets the non-anchor layer by its true separation', () => {
+  it('rebases every aligned layer to the ONE project origin', () => {
     const t = setup({
       west: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
       east: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
     });
     t.service.refreshCrsFlags();
-    expect(t.frameOffsets.get('west')).toEqual([0, 0, 0]);
-    expect(t.frameOffsets.get('east')).toEqual([1_000, 0, 20]);
+    expect(t.rebaseCalls.get('west')).toEqual([500_000, 4_500_000, 100]);
+    expect(t.rebaseCalls.get('east')).toEqual([500_000, 4_500_000, 100]);
   });
 
-  it('mounts a lone layer at the identity — the single-scan path is unchanged', () => {
+  it('a lone layer rebases to its own origin — the identity, single-scan path unchanged', () => {
     const t = setup({ only: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } } });
     t.service.refreshCrsFlags();
-    expect(t.frameOffsets.get('only')).toEqual([0, 0, 0]);
+    expect(t.rebaseCalls.get('only')).toEqual([500_000, 4_500_000, 100]);
   });
 
-  it('mounts a cloud outside the frame at its own zero, exactly as before', () => {
-    // No declared origin ⇒ not in the frame; a foreign CRS ⇒ excluded from it.
-    // Both keep the pre-frame placement rather than being pushed anywhere.
+  it('never rebases a layer outside the frame', () => {
+    // An unreferenced mesh has no origin to rebase; a foreign-CRS layer must
+    // not be dragged onto an origin computed in a different CRS.
     const t = setup({
       mesh: { metadata: { crs: null } },
       scan: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
       foreign: { origin: [300_000, 3_000_000, 10], metadata: { crs: { epsg: 32613 } } },
     });
     t.service.refreshCrsFlags();
-    expect(t.frameOffsets.get('mesh')).toEqual([0, 0, 0]);
-    expect(t.frameOffsets.get('foreign')).toEqual([0, 0, 0]);
-    expect(t.frameOffsets.get('scan')).toEqual([0, 0, 0]);
+    expect(t.rebaseCalls.has('mesh')).toBe(false);
+    expect(t.rebaseCalls.has('foreign')).toBe(false);
+    expect(t.rebaseCalls.get('scan')).toEqual([500_000, 4_500_000, 100]);
   });
 
-  it('re-mounts to the identity when the other layer is removed', () => {
+  it('re-anchors survivors when the anchor layer is removed', () => {
     const clouds: Record<string, FakeCloud> = {
       low: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
       high: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
     };
     const t = setup(clouds);
     t.service.refreshCrsFlags();
-    expect(t.frameOffsets.get('high')).toEqual([1_000, 0, 20]);
+    // Both now sit at the shared anchor (the harness mirrors the origin move).
     delete clouds.low;
     t.service.refreshCrsFlags();
-    expect(t.frameOffsets.get('high')).toEqual([0, 0, 0]);
-  });
-});
-
-
-/**
- * Step 4: the measurement datum under the frame. When EVERY loaded layer is
- * mounted through it, render space is project-local and absolute positions
- * recover as point + projectOrigin — so the datum is the project origin. The
- * condition is strict: any layer outside the frame (no origin, foreign CRS)
- * does not recover through that origin, so its presence keeps the pre-frame
- * unanimity rule, which refuses honestly instead of mislabelling points.
- */
-describe('LayerService pushes the frame origin as the measurement datum', () => {
-  const utm = { epsg: 32612 };
-  const last = (t: { frameOriginCalls: Array<readonly [number, number, number] | null> }) =>
-    t.frameOriginCalls[t.frameOriginCalls.length - 1];
-
-  it('supplies the project origin when every layer is in the frame', () => {
-    const t = setup({
-      west: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
-      east: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
-    });
-    t.service.refreshCrsFlags();
-    expect(last(t)).toEqual([500_000, 4_500_000, 100]);
-  });
-
-  it('withholds it when an unreferenced mesh shares the scene', () => {
-    // The mesh's points do not recover through the project origin; asserting
-    // the datum would mislabel them.
-    const t = setup({
-      scan: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
-      mesh: { metadata: { crs: null } },
-    });
-    t.service.refreshCrsFlags();
-    expect(last(t)).toBeNull();
-  });
-
-  it('withholds it when a foreign-CRS layer shares the scene', () => {
-    const t = setup({
-      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
-      b: { origin: [300_000, 3_000_000, 10], metadata: { crs: { epsg: 32613 } } },
-    });
-    t.service.refreshCrsFlags();
-    expect(last(t)).toBeNull();
-  });
-
-  it('clears it when the scene empties', () => {
-    const clouds: Record<string, FakeCloud> = {
-      only: { origin: [1, 2, 3], metadata: { crs: utm } },
-    };
-    const t = setup(clouds);
-    t.service.refreshCrsFlags();
-    expect(last(t)).toEqual([1, 2, 3]);
-    delete clouds.only;
-    t.service.refreshCrsFlags();
-    expect(last(t)).toBeNull();
+    // The survivor's origin IS the old anchor now; the new frame anchors there,
+    // so the rebase is the identity — no spurious movement on layer close.
+    expect(t.rebaseCalls.get('high')).toEqual([500_000, 4_500_000, 100]);
   });
 });

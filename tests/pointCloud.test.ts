@@ -159,3 +159,60 @@ describe('PointCloud — bounds()', () => {
     expect(pc.bounds()).toEqual({ min: [0, 0, 0], max: [0, 0, 0] });
   });
 });
+
+/**
+ * Origin rebase — the mechanism that mounts a layer into the shared project
+ * frame at the DATA level.
+ *
+ * The first mount implementation translated the MESH instead, which split the
+ * scene in two: rendering and camera bounds saw project space while picking
+ * (`nearestPointAlongRay` over raw positions), terrain gather, lasso, profiles,
+ * volumes and export bounds all still read cloud-local coordinates — layers
+ * LOOKED aligned while every calculation used a different frame. Rebasing the
+ * positions themselves makes every consumer of `cloud.positions` project-local
+ * automatically, and keeps the world invariant exact: local + origin is the
+ * same point before and after.
+ */
+describe('PointCloud.rebaseOrigin', () => {
+  const make = () =>
+    new PointCloud({
+      positions: Float32Array.from([0, 0, 0, 10, 20, 5]),
+      origin: [500_000, 4_500_000, 100],
+      sourceFormat: 'las',
+      name: 'a.las',
+    });
+
+  it('keeps every point at the same WORLD position', () => {
+    const c = make();
+    const worldBefore = [c.positions[3] + c.origin[0], c.positions[4] + c.origin[1], c.positions[5] + c.origin[2]];
+    c.rebaseOrigin([499_000, 4_500_000, 80]);
+    const worldAfter = [c.positions[3] + c.origin[0], c.positions[4] + c.origin[1], c.positions[5] + c.origin[2]];
+    expect(worldAfter).toEqual(worldBefore);
+  });
+
+  it('shifts the local positions by the origin delta', () => {
+    const c = make();
+    c.rebaseOrigin([499_000, 4_500_000, 80]);
+    expect([...c.positions.slice(0, 3)]).toEqual([1000, 0, 20]);
+    expect(c.origin).toEqual([499_000, 4_500_000, 80]);
+  });
+
+  it('keeps bounds() consistent with the shifted positions', () => {
+    const c = make();
+    const before = c.bounds(); // prime the cache — the stale-cache case is the trap
+    c.rebaseOrigin([499_000, 4_500_000, 80]);
+    const after = c.bounds();
+    expect(after.min).toEqual([before.min[0] + 1000, before.min[1], before.min[2] + 20]);
+    expect(after.max).toEqual([before.max[0] + 1000, before.max[1], before.max[2] + 20]);
+  });
+
+  it('returns false and touches nothing for an identity rebase', () => {
+    const c = make();
+    expect(c.rebaseOrigin([500_000, 4_500_000, 100])).toBe(false);
+    expect([...c.positions.slice(0, 3)]).toEqual([0, 0, 0]);
+  });
+
+  it('returns true when it moved', () => {
+    expect(make().rebaseOrigin([499_000, 4_500_000, 80])).toBe(true);
+  });
+});

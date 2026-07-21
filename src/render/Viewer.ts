@@ -2094,13 +2094,10 @@ export class Viewer {
     const origins: Array<readonly number[] | null> = [];
     if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
     for (const { cloud } of this._clouds.values()) origins.push(cloud.origin ?? null);
-    // Frame-mounted scenes have ONE datum by construction — see
-    // `setProjectFrameOrigin`. The unanimity rule stays as the fallback for
-    // everything else (streaming, partial frames, no frame).
-    const origin =
-      this._projectFrameOrigin !== null && !this._streaming
-        ? this._projectFrameOrigin
-        : resolveSceneOrigin(origins);
+    // Frame-mounted layers literally share one origin after the data rebase
+    // (`rebaseCloudToOrigin`), so unanimity resolves the datum naturally — and
+    // keeps refusing when an unreferenced mesh or foreign-CRS layer is present.
+    const origin = resolveSceneOrigin(origins);
     this._measure.setContext({
       worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
       origin: origin ? [origin[0], origin[1], origin[2]] : null,
@@ -2153,48 +2150,32 @@ export class Viewer {
    * `_visibleCloudAabb`.
    */
   /**
-   * The shared project origin, when EVERY loaded layer is mounted through the
-   * frame — null otherwise. Set by the layer service alongside the mounts.
+   * Mount a cloud into the shared project frame by REBASING ITS DATA onto the
+   * project origin — `PointCloud.rebaseOrigin` shifts the positions and origin
+   * together so every world position is unchanged.
    *
-   * With layers mounted at their `sourceToProject` offsets, render space IS
-   * project-local, so a picked point on ANY layer recovers its absolute
-   * position as `point + projectOrigin`. The per-cloud unanimity rule in
-   * `_refreshMeasureDatum` predates the frame: it could only assert a datum
-   * when every cloud declared the SAME origin, which the frame's whole purpose
-   * is to make unnecessary. The caller only supplies this when every loaded
-   * cloud is in the frame — a georeferenced scan beside an unreferenced mesh,
-   * or beside a foreign-CRS layer, keeps the old refusal, because those
-   * layers' points do NOT recover through the project origin.
+   * The first implementation translated the MESH instead, which split the
+   * scene: rendering and camera bounds saw project space while picking
+   * (`nearestPointAlongRay` over raw positions), the terrain gather, lasso,
+   * profiles, volumes and export bounds all still read cloud-local data —
+   * layers LOOKED aligned while every calculation used a different frame.
+   * With the data itself rebased, every one of those consumers is
+   * project-local automatically, and the measurement datum needs no special
+   * case: all mounted layers share one literal origin, so the existing
+   * unanimity rule in `_refreshMeasureDatum` resolves it naturally — and keeps
+   * refusing honestly when an unreferenced mesh or foreign-CRS layer is
+   * present, exactly as before.
    */
-  private _projectFrameOrigin: readonly [number, number, number] | null = null;
-
-  setProjectFrameOrigin(origin: readonly [number, number, number] | null): void {
-    const same =
-      (origin === null && this._projectFrameOrigin === null) ||
-      (origin !== null &&
-        this._projectFrameOrigin !== null &&
-        origin[0] === this._projectFrameOrigin[0] &&
-        origin[1] === this._projectFrameOrigin[1] &&
-        origin[2] === this._projectFrameOrigin[2]);
-    if (same) return;
-    this._projectFrameOrigin = origin;
-    this._refreshMeasureDatum();
-  }
-
-  setCloudFrameOffset(id: string, offset: readonly [number, number, number]): void {
+  rebaseCloudToOrigin(id: string, target: readonly [number, number, number]): void {
     const entry = this._clouds.get(id);
     if (!entry) return;
-    if (
-      entry.mesh.position.x === offset[0] &&
-      entry.mesh.position.y === offset[1] &&
-      entry.mesh.position.z === offset[2]
-    ) {
-      return;
-    }
-    entry.mesh.position.set(offset[0], offset[1], offset[2]);
-    entry.mesh.updateMatrixWorld();
-    // The clamp envelope and orbit centre described the un-offset layout.
+    if (!entry.cloud.rebaseOrigin(target)) return;
+    // The GPU attribute wraps the SAME Float32Array the rebase just shifted —
+    // it only needs the re-upload flag, not a rebuild.
+    const attr = entry.mesh.geometry.getAttribute('aPos');
+    if (attr) attr.needsUpdate = true;
     this._orbitClampAabb = this._visibleCloudAabb();
+    this._refreshMeasureDatum();
     this.requestFrame();
   }
 
@@ -5724,12 +5705,8 @@ export class Viewer {
     for (const { mesh, cloud } of this._clouds.values()) {
       if (!mesh.visible) continue;
       const b = cloud.bounds();
-      // The mesh's position is the layer's project-frame offset; bounds are in
-      // cloud data space, so the offset must ride along or framing and the
-      // orbit clamp describe the un-mounted layout.
-      const { x: fx, y: fy, z: fz } = mesh.position;
-      box.expandByPoint(new THREE.Vector3(b.min[0] + fx, b.min[1] + fy, b.min[2] + fz));
-      box.expandByPoint(new THREE.Vector3(b.max[0] + fx, b.max[1] + fy, b.max[2] + fz));
+      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
+      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
       any = true;
     }
     // A streaming COPC contributes its whole octree extent so framing works
@@ -5762,12 +5739,8 @@ export class Viewer {
     for (const { mesh, cloud } of this._clouds.values()) {
       if (!mesh.visible) continue;
       const b = cloud.bounds();
-      // The mesh's position is the layer's project-frame offset; bounds are in
-      // cloud data space, so the offset must ride along or framing and the
-      // orbit clamp describe the un-mounted layout.
-      const { x: fx, y: fy, z: fz } = mesh.position;
-      box.expandByPoint(new THREE.Vector3(b.min[0] + fx, b.min[1] + fy, b.min[2] + fz));
-      box.expandByPoint(new THREE.Vector3(b.max[0] + fx, b.max[1] + fy, b.max[2] + fz));
+      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
+      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
       any = true;
     }
     if (this._streaming) {

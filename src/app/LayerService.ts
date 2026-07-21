@@ -120,31 +120,26 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       });
     }
     deps.projectFrame.reconcile(layers);
-    // Step 2 of the wiring plan: MOUNT each layer at its transform, not just
-    // compute it. A lone layer's transform is the identity, so the single-scan
-    // path is unchanged by construction; a cloud outside the frame (no declared
-    // origin, or a foreign CRS) mounts at its own zero exactly as before.
-    for (const info of infos) {
-      const t = deps.projectFrame.transformFor(info.id);
-      viewer.setCloudFrameOffset(
-        info.id,
-        t ? t.sourceToProject : [0, 0, 0],
-      );
-    }
-    // Step 4: the measurement datum. With every loaded layer mounted through
-    // the frame, render space IS project-local and every picked point recovers
-    // its absolute position as point + projectOrigin — so the datum is the
-    // project origin. The condition is strict on purpose: an unreferenced mesh
-    // or a foreign-CRS layer in the scene does NOT recover through the project
-    // origin, so any such layer keeps the pre-frame unanimity rule (which
-    // refuses honestly) rather than mislabelling its points.
+    // Steps 2 + 4 of the wiring plan, as ONE mechanism: every aligned layer's
+    // DATA is rebased onto the project origin (`rebaseCloudToOrigin`), which
+    // mounts it — rendering, picking, terrain, lasso, volumes and exports all
+    // read the same rebased positions — and gives the scene one literal origin,
+    // so the measurement datum resolves through the existing unanimity rule
+    // with no special case. A layer outside the frame (no declared origin, or a
+    // foreign CRS) keeps its own origin: it stays where it was, and its
+    // presence makes unanimity refuse the datum honestly, exactly as before
+    // the frame existed.
     const frame = deps.projectFrame.frame;
-    const everyLayerInFrame =
-      frame !== null &&
-      infos.length > 0 &&
-      deps.projectFrame.unaligned.length === 0 &&
-      infos.every((info) => deps.projectFrame.transformFor(info.id) !== null);
-    viewer.setProjectFrameOrigin(everyLayerInFrame ? frame.projectOrigin : null);
+    if (frame) {
+      for (const info of infos) {
+        const t = deps.projectFrame.transformFor(info.id);
+        // Only aligned layers move; a foreign layer's transform is its own
+        // identity frame and must not be dragged onto the project origin.
+        if (t && !deps.projectFrame.unaligned.includes(info.id)) {
+          viewer.rebaseCloudToOrigin(info.id, frame.projectOrigin);
+        }
+      }
+    }
   }
 
   function refreshCrsFlags(): void {

@@ -88,6 +88,8 @@ else
         --exclude 'release' --exclude '*.log' \
         --exclude 'test-results' --exclude 'playwright-report' \
         --exclude 'coverage' --exclude '.tmp' --exclude '.cache' \
+        --exclude '.stryker-tmp' --exclude 'stryker.log' \
+        --exclude '.nyc_output' --exclude '.vitest' \
         --exclude '.DS_Store' \
         ./ "$TMP/source/$SRC_PREFIX/"
 fi
