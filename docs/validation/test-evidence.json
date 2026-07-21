@@ -1,0 +1,40 @@
+{
+  "version": "0.6.0-alpha.2",
+  "commit": "cd72db84dc131d08260cf42bf6d052030cd2669a",
+  "collectedFrom": "/tmp/gQ1.log",
+  "buckets": {
+    "unit": {
+      "passed": 2935,
+      "skipped": 16,
+      "runs": 3
+    },
+    "export": {
+      "passed": 602,
+      "skipped": 0,
+      "runs": 1
+    },
+    "terrain": {
+      "passed": 1218,
+      "skipped": 18,
+      "runs": 2
+    },
+    "ui": {
+      "passed": 429,
+      "skipped": 0,
+      "runs": 1
+    },
+    "slow": {
+      "passed": 508,
+      "skipped": 0,
+      "runs": 2
+    }
+  },
+  "total": {
+    "passed": 5692,
+    "skipped": 34
+  },
+  "bundle": {
+    "liveEntryKiB": 715,
+    "ceilingKiB": 720
+  }
+}

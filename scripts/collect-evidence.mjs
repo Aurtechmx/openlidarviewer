@@ -21,7 +21,7 @@
  * The exit code is passed in rather than sniffed from the log: the gate emits
  * no success banner, so grepping for one would be a check that always passes
  * — a guard that cannot fail is worse than none, because it reads like
- * protection. Writes `release/test-evidence.json`.
+ * protection. Writes `docs/validation/test-evidence.json`.
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -110,8 +110,8 @@ function main() {
     bundle: { liveEntryKiB, ceilingKiB },
   };
 
-  mkdirSync(resolve(ROOT, 'release'), { recursive: true });
-  const out = resolve(ROOT, 'release/test-evidence.json');
+  mkdirSync(resolve(ROOT, 'docs/validation'), { recursive: true });
+  const out = resolve(ROOT, 'docs/validation/test-evidence.json');
   writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(`test-evidence.json written: ${BUCKETS.map((b) => `${b} ${buckets[b].passed}`).join(' · ')}`);
   console.log(`total ${totalPassed} passed / ${totalSkipped} skipped`);

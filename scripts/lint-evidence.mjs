@@ -8,7 +8,7 @@
  * total right — the total came from a script, the components were typed in —
  * and no check in the repository could see it. A reviewer added them up.
  *
- * So this compares every published figure against `release/test-evidence.json`,
+ * So this compares every published figure against `docs/validation/test-evidence.json`,
  * which is machine-derived from a passing gate run, and separately checks that
  * the components add up to the stated total. Either could be wrong on its own;
  * both wrong in the same direction is the case that got through last time.
@@ -22,12 +22,18 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
 const problems = [];
 
-const EVIDENCE = 'release/test-evidence.json';
+const EVIDENCE = 'docs/validation/test-evidence.json';
 if (!existsSync(resolve(ROOT, EVIDENCE))) {
-  console.log(
-    `lint:evidence SKIPPED — no ${EVIDENCE}. Run "npm run evidence" to derive it from a passing gate.`,
+  // A FAILURE, not a skip. The first version wrote this file into the
+  // gitignored release/ directory, so it never reached the source archive and
+  // the check silently passed on every fresh clone — a guard that cannot fail,
+  // which is the exact shape this whole mechanism exists to prevent. The file
+  // is tracked now; its absence means someone removed it.
+  console.error(
+    `lint:evidence FAILED — ${EVIDENCE} is missing. It is tracked in the repository; `
+    + 'restore it, or run "npm run evidence" against a passing gate to regenerate it.',
   );
-  process.exit(0);
+  process.exit(1);
 }
 
 const evidence = JSON.parse(read(EVIDENCE));
