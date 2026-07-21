@@ -59,7 +59,7 @@ place.
 These are the decomposition targets. `main.ts` must reach < 2,500 lines and
 `Viewer.ts` < 2,000, each with a lint guard once achieved.
 
-**`src/main.ts` (7,574)** — the largest blocks, which are the extraction
+**`src/main.ts` (7,611)** — the largest blocks, which are the extraction
 candidates:
 
 | Block | ~Lines | Extraction target |
@@ -75,7 +75,7 @@ candidates:
 | `generateReportPdf` / `exportGeoContext` | 402 | export/report wiring module |
 | `importSession` | 177 | `src/app/sessionIo.ts` *(planned)* |
 
-**`src/render/Viewer.ts` (7,036)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (7,181)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph

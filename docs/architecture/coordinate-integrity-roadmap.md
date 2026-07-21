@@ -158,14 +158,36 @@ effective reference for coordinates, labels and embedded metadata.
    keeps the single-scan path byte-identical (full e2e untouched). Remaining:
    the two-scan browser confirmation with real fixtures, and steps 3–4
    (elevation ramps + measure datum under offsets).
-2. **Replace regex WKT parsing with an AST parser.** The current parser survives
+
+   Membership is now REVERSIBLE (bac535f). A cloud keeps `sourceOrigin` for its
+   lifetime and `restoreSourceFrame()` returns it there; the frame seeds its
+   anchor from file origins instead of from origins it had itself written, and
+   the anchor persists only while it still describes the current layer set.
+
+2. **Stop writing project offsets into Float32 vertices.** Mounting adds the
+   offset to the position array, so the residual precision a layer keeps is set
+   by how far it moves. Measured with `PointCloud.rebaseQuantum`: a lone
+   georeferenced scan anchors on its own origin and loses nothing (~1e-8 m);
+   1 km of separation costs ~0.02 mm; 100 km costs a full millimetre. That is
+   acceptable for the single- and neighbouring-tile cases this alpha targets and
+   NOT acceptable as an end state.
+
+   The destination is the shape an external review named: keep vertices
+   source-local, carry `sourceToProject` in Float64, apply it in Float64 for CPU
+   work, and render camera-relative (or high/low split) on the GPU. The reason
+   it is not done here is that picking, terrain gather, lasso, profiles, volumes
+   and export bounds all read `cloud.positions` directly — the transform has to
+   land in every one of them at once or the scene splits in two again, which is
+   the exact defect the data rebase was introduced to close. Until then,
+   disclose the quantum rather than round survey data quietly.
+3. **Replace regex WKT parsing with an AST parser.** The current parser survives
    realistic WKT1 and WKT2 (verified against six shapes including `PROJCRS` with
    nested `BASEGEOGCRS`, `COMPD_CS`, and bracketed names), so this is
    robustness rather than a live defect — but `LENGTHUNIT`/`ANGLEUNIT`, per-axis
    units, axis order, datum ensembles and coordinate epoch are all discarded.
    Until then, an unknown projected unit should resolve to `unknown` with metric
    claims blocked, not silently to metre.
-3. **One authoritative EPSG/operation catalog** shared by the picker, type
+4. **One authoritative EPSG/operation catalog** shared by the picker, type
    detection, unit and datum lookup, projection definitions and area of use. Do
    not offer a reprojection target with no operation definition. `CrsDetection.ts`
    has been DELETED rather than wired in: it misled two audits into citing its
@@ -173,21 +195,21 @@ effective reference for coordinates, labels and embedded metadata.
    deceptive, and wiring it in would have changed live resolution pre-release
    with no fixture demanding it. Its catalog-tier and conflict-demotion design
    stays recoverable from history if the stable-v0.6 catalog work wants it.
-4. **Per-layer session spatial metadata**, replacing the single global
+5. **Per-layer session spatial metadata**, replacing the single global
    origin/up-axis/CRS. A session must never silently redefine the active scan's
    CRS, and a CRS/axis/unit mismatch must be a conflict, not a disclosure.
-5. **Separate horizontal and vertical operations.** A horizontal conversion must
+6. **Separate horizontal and vertical operations.** A horizontal conversion must
    not pass Z through and let a downstream field call it `altMetres`. Heights need
    an explicit value + unit + reference (ellipsoidal / orthometric / depth /
    local / unknown).
-6. **Model datum realization and coordinate epoch**, and carry operation
+7. **Model datum realization and coordinate epoch**, and carry operation
    provenance and accuracy on every transform result.
-7. **CHM must not carry an absolute vertical CRS — DONE (9b0ddf7).** The DTM and
+8. **CHM must not carry an absolute vertical CRS — DONE (9b0ddf7).** The DTM and
    DSM keep the VerticalCSType stamp; the CHM, a height above ground, carries
    none.
-8. **Reference fixtures from PROJ/PDAL/GDAL**, so coordinate claims are checked
+9. **Reference fixtures from PROJ/PDAL/GDAL**, so coordinate claims are checked
    against an independent implementation rather than internal self-consistency.
-9. **Fail closed** whenever a coordinate operation is unresolved.
+10. **Fail closed** whenever a coordinate operation is unresolved.
 
 ## Sequencing
 
