@@ -56,8 +56,6 @@ Cite OpenLiDARViewer with the metadata in `CITATION.cff`:
 * Release date: 2026-07-21
 * License: MIT
 
-When the tagged release is archived on Zenodo, cite the version DOI assigned to that snapshot.
-
 Live demo: [https://lidar.aurtech.mx/](https://lidar.aurtech.mx/)  
 GitHub: [https://github.com/Aurtechmx/openlidarviewer](https://github.com/Aurtechmx/openlidarviewer)
 
