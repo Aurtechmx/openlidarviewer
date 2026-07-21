@@ -251,3 +251,38 @@ describe('buildDtmGrid extrapolation guard', () => {
     expect(isHonestDtm(g)).toBe(true);
   });
 });
+
+/**
+ * The vertical unit survives a NON-EMPTY grid.
+ *
+ * `buildDtmGrid`'s empty-grid early return carried `verticalUnitToMetres`
+ * while the standard return dropped it, so every real surface reported the
+ * unit as undefined. The GeoTIFF writer reads that field to emit
+ * VerticalUnitsGeoKey (4099), which meant a foot-based DTM or DSM shipped
+ * with no vertical unit declared at all — the reader then assumes metres and
+ * a 100 ft hill becomes a 100 m hill. The empty grid is the one case nobody
+ * exports, which is exactly why the gap survived.
+ */
+describe('buildDtmGrid vertical unit propagation', () => {
+  const nonEmpty = () => raster({ z: [5, 6], counts: [4, 4], cols: 2, rows: 1 });
+
+  it.each([
+    ['metre', 1],
+    ['international foot', 0.3048],
+    ['US survey foot', 1200 / 3937],
+  ])('carries the %s factor through a non-empty grid', (_label, factor) => {
+    const g = buildDtmGrid(nonEmpty(), { crs: 'EPSG:32610', verticalUnitToMetres: factor });
+    expect(g.verticalUnitToMetres).toBe(factor);
+  });
+
+  it('reports an undeclared vertical unit as null, never undefined', () => {
+    const g = buildDtmGrid(nonEmpty(), { crs: 'EPSG:32610' });
+    expect(g.verticalUnitToMetres).toBeNull();
+  });
+
+  it('agrees with the empty-grid return on the same input', () => {
+    const params = { crs: 'EPSG:32610', verticalUnitToMetres: 0.3048 };
+    const empty = buildDtmGrid(raster({ z: [], counts: [], cols: 0, rows: 0 }), params);
+    expect(buildDtmGrid(nonEmpty(), params).verticalUnitToMetres).toBe(empty.verticalUnitToMetres);
+  });
+});

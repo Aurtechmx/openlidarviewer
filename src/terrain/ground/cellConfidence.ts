@@ -374,6 +374,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
     horizontalEpsg: params.horizontalEpsg ?? null,
     verticalDatum: params.verticalDatum ?? null,
     verticalEpsg: params.verticalEpsg ?? null,
+    verticalUnitToMetres: params.verticalUnitToMetres ?? null,
     coverageMode: raster.coverage,
     sourcePointCount: raster.sourcePointCount,
     analyzedPointCount: raster.analyzedPointCount,

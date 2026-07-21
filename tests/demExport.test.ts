@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
 import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
+import { buildDtmGrid } from '../src/terrain/ground/cellConfidence';
 import { sha256Hex } from '../src/terrain/export/sha256';
 import { buildContourDeliverableFromResult, deliverableGridLabel } from '../src/terrain/export/contourDeliverableBuild';
 import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
@@ -494,6 +495,28 @@ describe('buildDemPackage', () => {
     // CHM carries neither the vertical CRS nor its unit — it is a height
     // difference, not a coordinate.
     expect(readTiffGeoKey(extractEntry(zip, 'site-chm.tif')!, 4099)).toBeNull();
+  });
+
+  it('carries the vertical unit from a REAL analysis grid into key 4099', () => {
+    // The other 4099 test sets `verticalUnitToMetres` on a hand-written dtm
+    // literal, so it proved the writer chain while the PRODUCER silently
+    // dropped the field — a foot DTM shipped with no vertical unit declared
+    // and a reader was entitled to read metres. Building the grid through
+    // `buildDtmGrid` is what makes this fixture unable to lie.
+    const grid = buildDtmGrid(
+      {
+        z: Float32Array.from([10, 20, 30, 40]),
+        counts: Uint32Array.from([6, 6, 6, 6]),
+        cols: 2, rows: 2, cellSizeM: 1, originH1: 10, originH2: 20,
+        coverage: 'full', sourcePointCount: 24, analyzedPointCount: 24,
+        filledCellCount: 4, warnings: [],
+      },
+      { crs: 'EPSG:32610', verticalEpsg: 5703, verticalUnitToMetres: 0.3048 },
+    );
+    const r = fixtureResult();
+    (r as { dtm: unknown }).dtm = grid;
+    const zip = buildDemPackage(r, { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
+    expect(readTiffGeoKey(extractEntry(zip, 'site-dtm.tif')!, 4099)).toBe(9002);
   });
 
   it('stamps the DTM and DSM with the vertical CRS but leaves the CHM unstamped', () => {
