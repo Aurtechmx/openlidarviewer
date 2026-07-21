@@ -1,4 +1,8 @@
 import { el, formatCount } from './dom';
+import {
+  compatibilityNote,
+  type LayerCompatibility,
+} from '../model/layerCompatibility';
 import { openConfirm } from './Modal';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
 import type {
@@ -1376,11 +1380,35 @@ export class Inspector {
    * Flag layers whose CRS doesn't match the others and show a one-line note.
    * Honest overlay guard: a silently mismatched frame is called out, not trusted.
    */
-  setLayerCrsFlags(mismatched: ReadonlySet<string>, summary: string): void {
+  setLayerCrsFlags(
+    mismatched: ReadonlySet<string>,
+    summary: string,
+    compatibility?: ReadonlyMap<string, LayerCompatibility>,
+    unmounted?: ReadonlySet<string>,
+  ): void {
     for (const [id, row] of this._layerRows) {
       const bad = mismatched.has(id);
       row.classList.toggle('olv-layer-crs-mismatch', bad);
-      if (bad) row.title = 'This layer does not share the others’ coordinate system.';
+      // A layer excluded from combined results has to SAY it is excluded.
+      // Dropping it silently means the user reads a figure computed from
+      // fewer inputs than they believe, which is worse than the merge the
+      // exclusion prevents — that at least looked wrong eventually.
+      const state = compatibility?.get(id);
+      // Two reasons a layer sits out of combined results: it is not COMPATIBLE
+      // with the frame, or it is not MOUNTED in one. The second was invisible —
+      // a compatible pair reads `verified`, so nothing was flagged, while
+      // neither could enter an estimator.
+      const notMounted = unmounted?.has(id) === true;
+      const excluded = (state !== undefined && state !== 'verified') || notMounted;
+      row.classList.toggle('olv-layer-frame-excluded', excluded);
+      if (state !== undefined && state !== 'verified') row.title = compatibilityNote(state);
+      else if (notMounted) {
+        row.title =
+          'Shares the project’s reference, but layers are not co-registered in this build, '
+          + 'so this layer is excluded from combined terrain, profile and volume results. '
+          + 'Analyse it on its own by soloing it.';
+      }
+      else if (bad) row.title = 'This layer does not share the others’ coordinate system.';
       else row.removeAttribute('title');
     }
     if (!this._layerNote) {

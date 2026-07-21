@@ -94,6 +94,7 @@ export type PackageRole =
   | 'contour-map-pdf'
   | 'contours-analytical-geojson'
   | 'contours-cartographic-geojson'
+  | 'contours-native-geojson'
   | 'contours-cartographic-dxf'
   | 'dtm-raster'
   | 'hillshade-raster'
@@ -126,6 +127,8 @@ export interface PackageAvailability {
   readonly pdf: boolean;
   readonly analyticalGeojson: boolean;
   readonly cartographicGeojson: boolean;
+  /** The source-CRS sibling, present only when the RFC 7946 file could be written. */
+  readonly nativeGeojson?: boolean;
   readonly cartographicDxf: boolean;
   readonly dtm: boolean;
   readonly hillshade: boolean;
@@ -159,6 +162,7 @@ interface FileSpec { role: PackageRole; ext: string; label: string; available: (
 const FILE_SPECS: readonly FileSpec[] = [
   { role: 'contour-map-pdf', ext: 'Contour_Report.pdf', label: 'Contour report (PDF)', available: (a) => a.pdf, desc: 'Multipage technical report — contour summary, surface support, validation, method and provenance. Text pages, not a rendered map sheet.' },
   { role: 'contours-analytical-geojson', ext: 'Contours_Analytical.geojson', label: 'Analytical contours (GeoJSON)', available: (a) => a.analyticalGeojson, desc: 'Exact isolines of the terrain surface — for GIS and reproducibility.' },
+  { role: 'contours-native-geojson', ext: 'Contours_SourceCRS.geojson', label: 'Contours in the source CRS (GeoJSON)', available: (a) => a.nativeGeojson === true, desc: 'The same lines in the scan’s own projected CRS, declared with the pre-RFC crs member. For GIS that wants the survey grid; not RFC 7946.' },
   { role: 'contours-cartographic-geojson', ext: 'Contours_Cartographic.geojson', label: 'Cartographic contours (GeoJSON)', available: (a) => a.cartographicGeojson, desc: 'Generalized, labelled lines for presentation — derived from the analytical geometry.' },
   { role: 'contours-cartographic-dxf', ext: 'Contours_Cartographic.dxf', label: 'Cartographic contours (DXF)', available: (a) => a.cartographicDxf, desc: 'The cartographic contours for CAD.' },
   { role: 'dtm-raster', ext: 'DTM.tif', label: 'DTM raster', available: (a) => a.dtm, desc: 'The digital terrain model grid.' },

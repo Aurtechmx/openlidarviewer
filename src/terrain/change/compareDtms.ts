@@ -72,6 +72,15 @@ export interface EpochComparison {
    * volumes are in m³ as documented. `summarizeChange` honours this.
    */
   readonly volumesComputable?: boolean;
+  /**
+   * True when the two grids PROVABLY sit in different frames — a differing
+   * horizontal CRS, or a differing vertical datum. Different in kind from an
+   * unknown frame: absence of evidence stays "indicative, not measured", but a
+   * Δz between UTM 12N and 13N, or between NAVD88 and ellipsoidal heights,
+   * describes nothing, and `summarizeChange` withholds the numbers rather than
+   * captioning them.
+   */
+  readonly frameIncompatible: boolean;
 }
 
 /**
@@ -124,8 +133,10 @@ export function compareDtms(
   // Horizontal CRS: a known mismatch is the worst case, but an UNKNOWN CRS on
   // either side is also a caution — without it we can't confirm the two epochs
   // share a frame, so the difference is unverified rather than measured.
+  let frameIncompatible = false;
   if (a.crs && b.crs) {
     if (a.crs !== b.crs) {
+      frameIncompatible = true;
       notes.push(
         `Horizontal CRS differs (${a.crs} vs ${b.crs}) — the grids aren't in the same frame.`,
       );
@@ -142,6 +153,7 @@ export function compareDtms(
   // references; an unknown datum means we can't confirm they share one.
   if (a.verticalDatum && b.verticalDatum) {
     if (a.verticalDatum !== b.verticalDatum) {
+      frameIncompatible = true;
       notes.push(
         `Vertical datum differs (${a.verticalDatum} vs ${b.verticalDatum}) — ` +
           `heights aren't on a common reference, so the elevation difference is unreliable.`,
@@ -160,7 +172,7 @@ export function compareDtms(
   // overall co-registration verdict folds those in too.
   const coregistered = result.aligned && notes.length === 0;
   const levelOfDetectionM = Math.max(0, options.levelOfDetectionM ?? DEFAULT_LOD_M);
-  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable };
+  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable, frameIncompatible };
 }
 
 /**
@@ -173,6 +185,17 @@ export function summarizeChange(comparison: EpochComparison): string[] {
   const s = result.stats;
   const lines: string[] = [];
 
+  if (comparison.frameIncompatible) {
+    // A PROVEN frame mismatch: the numbers describe nothing, so none are
+    // printed — a warning under a confident figure does not make it
+    // meaningful. The diagnosis lines below still say exactly why.
+    lines.push(
+      '✗ Not comparable — the two epochs are in provably different frames, so no ' +
+        'difference is reported. Reproject them to a common CRS and vertical datum first.',
+    );
+    for (const note of coregistrationNotes) lines.push(`• ${note}`);
+    return lines;
+  }
   if (!coregistered) {
     lines.push('⚠ Not co-registered — treat the difference as indicative, not measured.');
   }

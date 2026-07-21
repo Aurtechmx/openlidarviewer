@@ -276,3 +276,46 @@ test('makePointInfo carries the streamingRefining flag through unchanged', () =>
   const explicitFalse = makePointInfo({ ...fullRaw(), streamingRefining: false });
   expect(explicitFalse.streamingRefining).toBeUndefined();
 });
+
+/**
+ * Coordinate precision follows the unit. Three decimals is millimetres in a
+ * projected CRS and ~111 m in a geographic one, and `makePointInfo` rounded
+ * BEFORE anything read the value — so for a lat/lon scan the inspector's
+ * Geographic rows, the derived UTM easting/northing (printed at .toFixed(3),
+ * millimetre formatting on a ~111 m-quantized position), the clipboard and the
+ * JSON all carried a point displaced by up to a city block.
+ */
+describe('makePointInfo — geographic horizontal precision', () => {
+  const raw = (over: Partial<RawPointInfo> = {}): RawPointInfo => ({
+    layer: 'scan',
+    index: 0,
+    local: [0.00000004, 0.00000006, 1.2344],
+    origin: [-111.0446912, 40.0233457, 1500],
+    distance: 5,
+    intensity: null,
+    classification: null,
+    rgb: null,
+    ...over,
+  });
+
+  it('keeps ~1 cm of a degree when the horizontal frame is geographic', () => {
+    const info = makePointInfo({ ...raw(), geographicHorizontal: true });
+    expect(info.x).toBeCloseTo(-111.0446912, 7);
+    expect(info.y).toBeCloseTo(40.0233458, 7);
+  });
+
+  it('keeps elevation at linear precision even when horizontal is degrees', () => {
+    expect(makePointInfo({ ...raw(), geographicHorizontal: true }).z).toBe(1501.234);
+  });
+
+  it('keeps the tidy millimetre rounding for projected coordinates', () => {
+    const info = makePointInfo(raw({ origin: [500000.1234567, 4400000.7654321, 1500] }));
+    expect(info.x).toBe(500000.123);
+    expect(info.y).toBe(4400000.765);
+  });
+
+  it('shows the defect scale without the flag: the 7th decimal is destroyed', () => {
+    const info = makePointInfo(raw());
+    expect(info.x).toBe(-111.045); // ~40 m of longitude gone at this latitude
+  });
+});

@@ -150,7 +150,13 @@ describe('measurementsToGeoJSON', () => {
 
   it('projected export carries a named-CRS member; geographic does not', () => {
     const projected = JSON.parse(measurementsToGeoJSON([DISTANCE], CTX));
-    expect(projected.crs).toMatchObject({ type: 'name', properties: { name: 'EPSG:32612' } });
+    // The member carries a resolvable IDENTIFIER, not the label: emitting the
+    // raw name left a reader unable to resolve it and silently defaulting to
+    // WGS84. The per-feature `crs` property above keeps the human label.
+    expect(projected.crs).toMatchObject({
+      type: 'name',
+      properties: { name: 'urn:ogc:def:crs:EPSG::32612' },
+    });
     const geo = JSON.parse(
       measurementsToGeoJSON([DISTANCE], { ...CTX, geographic: true }),
     );
@@ -191,5 +197,46 @@ describe('measurementsToCsv', () => {
   it('escapes a name containing a comma', () => {
     const csv = measurementsToCsv([mk('distance', [[0, 0, 0], [1, 0, 0]], { name: 'A, B' })], CTX);
     expect(csv).toContain('"A, B"');
+  });
+});
+
+/**
+ * The named-CRS member must carry an identifier a reader can resolve, not a
+ * label a human can read. `ctx.crsName` in production is the display string the
+ * CRS parsers build — "NAD83 / UTM zone 13N (EPSG:26913)" — and emitting that
+ * as the crs name left QGIS/OGR unable to resolve it, falling back to RFC 7946's
+ * default WGS84: easting 500000 read as longitude 500000. The earlier test
+ * injected an idealized 'EPSG:32612', which is why this survived.
+ */
+describe('measurementsToGeoJSON — a resolvable CRS identifier', () => {
+  const ctx = (crsName?: string) => ({
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    up: [0, 0, 1] as [number, number, number],
+    unitToMetres: 1,
+    crsName,
+    geographic: false,
+  });
+  const m = [{ id: 'm1', kind: 'distance', name: '', points: [[0, 0, 0], [3, 0, 0]] }] as never;
+
+  it('emits an OGC URN for the display string the parsers actually build', () => {
+    const fc = JSON.parse(measurementsToGeoJSON(m, ctx('NAD83 / UTM zone 13N (EPSG:26913)') as never));
+    expect(fc.crs.properties.name).toBe('urn:ogc:def:crs:EPSG::26913');
+  });
+
+  it('emits an OGC URN for a bare authority string too', () => {
+    const fc = JSON.parse(measurementsToGeoJSON(m, ctx('EPSG:32612') as never));
+    expect(fc.crs.properties.name).toBe('urn:ogc:def:crs:EPSG::32612');
+  });
+
+  it('omits the crs member when no code can be recovered', () => {
+    // Naming an unresolvable CRS is worse than naming none: a reader silently
+    // falls back to WGS84 and places projected coordinates in the ocean.
+    const fc = JSON.parse(measurementsToGeoJSON(m, ctx('Some unnamed local grid') as never));
+    expect(fc.crs).toBeUndefined();
+  });
+
+  it('still omits the crs member for geographic output', () => {
+    const fc = JSON.parse(measurementsToGeoJSON(m, { ...ctx('EPSG:4326'), geographic: true } as never));
+    expect(fc.crs).toBeUndefined();
   });
 });

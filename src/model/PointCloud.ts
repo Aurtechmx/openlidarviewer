@@ -168,6 +168,17 @@ export class PointCloud {
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
   readonly origin: [number, number, number];
+  /**
+   * The origin this cloud was LOADED with, fixed for the object's life.
+   *
+   * `origin` moves when the cloud mounts into a shared project frame; this
+   * does not. Project membership has to be reversible — a layer can have its
+   * CRS overridden to something incompatible, be dropped from the frame,
+   * moved to another project, exported in source coordinates, restored from a
+   * session, or audited against its file — and every one of those needs the
+   * frame the file actually declared, not the frame it currently sits in.
+   */
+  readonly sourceOrigin: readonly [number, number, number];
   readonly sourceFormat: SourceFormat;
   readonly name: string;
   readonly declaredPointCount?: number;
@@ -227,6 +238,10 @@ export class PointCloud {
     this.pointSourceId = options.pointSourceId;
     this.gpsTime = options.gpsTime;
     this.origin = options.origin;
+    // A COPY, deliberately. `origin` is mutated in place by `rebaseOrigin`, so
+    // sharing the caller's array here would let a rebase silently rewrite the
+    // very record that exists to survive it.
+    this.sourceOrigin = [options.origin[0], options.origin[1], options.origin[2]];
     this.sourceFormat = options.sourceFormat;
     this.name = options.name;
     this.declaredPointCount = options.declaredPointCount;
@@ -277,6 +292,106 @@ export class PointCloud {
    * The scan is computed once and cached; each call returns a fresh copy, so a
    * caller can never corrupt the cached value.
    */
+  /**
+   * Move this cloud onto a different world origin, keeping every point at the
+   * SAME world position: `local + origin` is identical before and after.
+   *
+   * This is how a layer mounts into the shared project frame. Translating the
+   * three.js MESH instead (the first implementation) split the scene in two —
+   * rendering saw project space while picking, terrain gather, lasso, profiles,
+   * volumes and export bounds all still read these positions cloud-local, so
+   * layers LOOKED aligned while every calculation used a different frame.
+   * Rebasing the data makes every consumer of `positions` project-local with no
+   * changes of their own. The cached bounds shift rather than invalidate — a
+   * translation moves a box without changing its shape.
+   *
+   * The caller re-uploads the GPU attribute; this class has no three.js.
+   * Returns false (and touches nothing) when the origin already matches.
+   */
+  rebaseOrigin(target: readonly [number, number, number]): boolean {
+    const dx = this.origin[0] - target[0];
+    const dy = this.origin[1] - target[1];
+    const dz = this.origin[2] - target[2];
+    if (dx === 0 && dy === 0 && dz === 0) return false;
+    const p = this.positions;
+    for (let i = 0; i + 2 < p.length; i += 3) {
+      p[i] += dx;
+      p[i + 1] += dy;
+      p[i + 2] += dz;
+    }
+    if (this._bounds !== null) {
+      const b = this._bounds;
+      this._bounds = {
+        min: [b.min[0] + dx, b.min[1] + dy, b.min[2] + dz],
+        max: [b.max[0] + dx, b.max[1] + dy, b.max[2] + dz],
+      };
+    }
+    this.origin[0] = target[0];
+    this.origin[1] = target[1];
+    this.origin[2] = target[2];
+    return true;
+  }
+
+  /** Whether this cloud currently sits on an origin other than its file's. */
+  get isRebased(): boolean {
+    return (
+      this.origin[0] !== this.sourceOrigin[0] ||
+      this.origin[1] !== this.sourceOrigin[1] ||
+      this.origin[2] !== this.sourceOrigin[2]
+    );
+  }
+
+  /**
+   * Return this cloud to the frame its file declared.
+   *
+   * The exit from project membership: a layer whose CRS is overridden to
+   * something incompatible, or that leaves the frame for any other reason,
+   * must go back where it came from rather than stay parked on an origin that
+   * describes a different layer. Returns false when it never left.
+   */
+  restoreSourceFrame(): boolean {
+    return this.rebaseOrigin([
+      this.sourceOrigin[0],
+      this.sourceOrigin[1],
+      this.sourceOrigin[2],
+    ]);
+  }
+
+  /**
+   * The worst-case Float32 step size this cloud's coordinates would land on
+   * if rebased onto `target`, in source units, split by axis group.
+   *
+   * Positions are Float32, so an offset written into them spends mantissa the
+   * residual was using. The cost is set by how far the layer moves plus its
+   * own extent — NOT by the absolute coordinate — so a lone georeferenced
+   * scan anchored on its own origin pays nothing, while layers 100 km apart
+   * give up a millimetre. Callers disclose this rather than let a research
+   * tool quietly round survey data.
+   *
+   * Horizontal (worst of X/Y) and vertical (Z) are reported SEPARATELY because
+   * a compound CRS measures them in different units — feet across, metres up.
+   * Collapsing them to one worst number left the caller converting a Z step
+   * through the horizontal unit: on feet-over-metres a 1.95 mm height error
+   * read as 0.6 mm and passed a gate named for a millimetre.
+   */
+  rebaseQuantum(target: readonly [number, number, number]): {
+    horizontal: number;
+    vertical: number;
+  } {
+    const b = this.bounds();
+    const stepOn = (a: number): number => {
+      const shift = this.origin[a] - target[a];
+      const reach = Math.max(Math.abs(b.min[a] + shift), Math.abs(b.max[a] + shift));
+      // Float32 carries a 24-bit significand: the step at magnitude m is
+      // 2^(floor(log2 m) - 23). Zero magnitude has no step to speak of.
+      return reach > 0 ? 2 ** (Math.floor(Math.log2(reach)) - 23) : 0;
+    };
+    return {
+      horizontal: Math.max(stepOn(0), stepOn(1)),
+      vertical: stepOn(2),
+    };
+  }
+
   bounds(): { min: [number, number, number]; max: [number, number, number] } {
     if (this._bounds === null) {
       // No points to span. A min/max reduction over zero elements would leave

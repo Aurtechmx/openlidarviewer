@@ -110,8 +110,12 @@ function cloud(): PointCloud {
 
 describe('writeLas — linear-unit + vertical GeoKeys', () => {
   it('writes ProjLinearUnits (3076) and VerticalCSType (4096)+Units (4099)', () => {
+    // verticalUnitCode is now explicit — the writer no longer infers it from
+    // the horizontal, because Z never moves during conversion and a foot
+    // horizontal over metre heights (or the reverse) was being relabelled.
     const las = writeLas(cloudToGlobal(cloud()), {
-      epsg: 26911, isGeographic: false, linearUnitCode: 9002, verticalEpsg: 5703,
+      epsg: 26911, isGeographic: false, linearUnitCode: 9002,
+      verticalEpsg: 5703, verticalUnitCode: 9002,
     });
     const view = new DataView(las.buffer);
     expect(view.getUint32(100, true)).toBe(1); // 1 VLR
@@ -126,7 +130,7 @@ describe('writeLas — linear-unit + vertical GeoKeys', () => {
     expect(map.get(3072)).toBe(26911); // ProjectedCSType
     expect(map.get(3076)).toBe(9002); // linear unit = international foot
     expect(map.get(4096)).toBe(5703); // vertical CRS
-    expect(map.get(4099)).toBe(9002); // vertical unit matches the foot horizontal
+    expect(map.get(4099)).toBe(9002); // the explicitly-passed vertical unit
   });
 });
 
@@ -174,5 +178,163 @@ describe('runBatch — .prj sidecar for kept ASCII with WKT', () => {
     expect(r1[0].sidecar).toBeUndefined();
     const r2 = await runBatch([{ name: 's.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }], { format: 'xyz', crsMode: 'reproject', targetEpsg: 4326 }, decode);
     expect(r2[0].sidecar).toBeUndefined();
+  });
+});
+
+/**
+ * GTModelTypeGeoKey (1024) is OPTIONAL in the wild — GeographicTypeGeoKey (2048)
+ * alone is a legal georeference. Deriving "is this geographic?" from key 1024
+ * alone therefore misread a lat/lon file as projected metres, and because the
+ * measurement guard keys off that, distances over DEGREES were reported in
+ * metres and saved. 0.001 deg of latitude is ~111 m on the ground.
+ *
+ * The kind is recoverable without key 1024: 3072 is ProjectedCSTypeGeoKey and
+ * 2048 is GeographicTypeGeoKey, so whichever key CARRIES the code already says
+ * which kind it is.
+ */
+describe('crsFromGeoTiff — CRS kind without GTModelTypeGeoKey', () => {
+  it('reads a geographic CRS declared only by GeographicTypeGeoKey', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[2048, 4326]]), null, null);
+    expect(crs.epsg).toBe(4326);
+    expect(crs.isGeographic).toBe(true);
+    // Degrees are not a linear unit, so no metre factor may be asserted.
+    expect(crs.linearUnit).toBe('unknown');
+  });
+
+  it('reads a projected CRS declared only by ProjectedCSTypeGeoKey', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[3072, 26913]]), null, null);
+    expect(crs.epsg).toBe(26913);
+    expect(crs.isGeographic).toBe(false);
+  });
+
+  it('still trusts GTModelTypeGeoKey when it IS present', () => {
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 2], [2048, 4326]]), null, null).isGeographic).toBe(true);
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26913]]), null, null).isGeographic).toBe(false);
+  });
+
+  it('prefers the projected key when a file carries both', () => {
+    // A projected CRS names its base geographic CRS in 2048; that does not make
+    // the file geographic.
+    const crs = crsFromGeoTiff(geoKeyBytes([[2048, 4269], [3072, 26913]]), null, null);
+    expect(crs.epsg).toBe(26913);
+    expect(crs.isGeographic).toBe(false);
+  });
+
+  it('refuses the user-defined sentinel rather than printing it as a code', () => {
+    // 32767 means "user-defined" — the file declared NO code, so reporting
+    // EPSG:32767 invents an identity. The vertical path already rejects it.
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 32767]]), null, null).epsg).toBeUndefined();
+    expect(crsFromGeoTiff(geoKeyBytes([[1024, 2], [2048, 32767]]), null, null).epsg).toBeUndefined();
+  });
+});
+
+/**
+ * A WKT body carries many AUTHORITY clauses — datum, spheroid, primem, axis and
+ * unit all have their own. Taking the LAST one in the EPSG range worked only
+ * because well-formed WKT happens to put the CRS's own authority last; a PROJCS
+ * with no top-level authority (older / non-GDAL writers) latched onto
+ * UNIT[...AUTHORITY["EPSG","9001"]] and reported the scan's CRS as EPSG:9001 —
+ * a unit of measure presented as a coordinate system.
+ *
+ * The CRS's authority is the one at the OUTERMOST node; a nested clause's is
+ * not a candidate at all.
+ */
+describe('crsFromWkt — the CRS authority, not a nested one', () => {
+  it('ignores a unit authority when the CRS declares none', () => {
+    const crs = crsFromWkt(
+      'PROJCS["Custom Zone",GEOGCS["WGS 84",DATUM["WGS_1984",' +
+        'SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],' +
+        'AUTHORITY["EPSG","6326"]],AUTHORITY["EPSG","4326"]],' +
+        'UNIT["metre",1,AUTHORITY["EPSG","9001"]]]',
+    );
+    // No authority on the PROJCS itself, so no code is claimed at all.
+    expect(crs.epsg).toBeUndefined();
+    expect(crs.name).not.toContain('9001');
+  });
+
+  it('still reads a well-formed PROJCS authority', () => {
+    const crs = crsFromWkt(
+      'PROJCS["NAD83 / UTM zone 13N",GEOGCS["NAD83",AUTHORITY["EPSG","4269"]],' +
+        'UNIT["metre",1,AUTHORITY["EPSG","9001"]],AUTHORITY["EPSG","26913"]]',
+    );
+    expect(crs.epsg).toBe(26913);
+  });
+
+  it('reads a bare GEOGCS authority', () => {
+    const crs = crsFromWkt(
+      'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,' +
+        'AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],' +
+        'UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]',
+    );
+    expect(crs.epsg).toBe(4326);
+  });
+
+  it('does not mistake a datum authority for the CRS authority', () => {
+    // 6326 (datum) sits at depth 2; with no CRS authority nothing is claimed.
+    const crs = crsFromWkt(
+      'GEOGCS["Unnamed",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563],' +
+        'AUTHORITY["EPSG","6326"]]]',
+    );
+    expect(crs.epsg).toBeUndefined();
+  });
+});
+
+/**
+ * A projected CRS must not be NAMED by its base geographic CRS.
+ *
+ * GeoTIFF citations are free text and writers fill them in loosely. When a
+ * file carries ProjectedCSTypeGeoKey 32629 but only a GeogCitation of
+ * "WGS 84", the resolver used that citation as the CRS name — so a UTM zone
+ * 29N scan displayed as "WGS 84 (EPSG:32629)". A reader who sees "WGS 84"
+ * reasonably concludes EPSG:4326 and degrees, which is the wrong frame, the
+ * wrong units, and the wrong idea of what the numbers mean. Observed on a
+ * PDAL-written survey with eastings around 517,000.
+ */
+function geoKeyBytesWithAscii(
+  keys: Array<[number, number, number?, number?]>,
+): Uint8Array {
+  const u16 = new Uint16Array(4 + keys.length * 4);
+  u16[0] = 1; u16[1] = 1; u16[2] = 0; u16[3] = keys.length;
+  keys.forEach(([k, v, loc, count], i) => {
+    const o = 4 + i * 4;
+    u16[o] = k; u16[o + 1] = loc ?? 0; u16[o + 2] = count ?? 1; u16[o + 3] = v;
+  });
+  return new Uint8Array(u16.buffer);
+}
+const ascii = (s: string) => new TextEncoder().encode(s);
+
+describe('crsFromGeoTiff — projected CRS naming', () => {
+  it('does not adopt a geographic citation as a projected CRS’s name', () => {
+    // 3072 = 32629 (projected), and the ONLY citation is 2049 = "WGS 84".
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [3072, 32629], [2049, 0, 34737, 7]]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84|'), null);
+    expect(crs.epsg).toBe(32629);
+    expect(crs.isGeographic).toBe(false);
+    expect(crs.name).not.toBe('WGS 84');
+    expect(crs.name).not.toBe('WGS 84 (EPSG:32629)');
+  });
+
+  it('names a WGS 84 UTM zone from its code, which fully determines it', () => {
+    // The app's convention is "Name (EPSG:code)" — both halves must be there.
+    const north = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 32629]]), null, null);
+    expect(north.name).toBe('WGS 84 / UTM zone 29N (EPSG:32629)');
+    const south = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 32733]]), null, null);
+    expect(south.name).toBe('WGS 84 / UTM zone 33S (EPSG:32733)');
+    // A code outside the systematic ranges must NOT be invented into a name.
+    const other = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 2056]]), null, null);
+    expect(other.name).toBe('EPSG:2056');
+  });
+
+  it('still prefers a PROJECTED citation, which does describe this CRS', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [3072, 32629], [3073, 0, 34737, 22]]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84 / UTM zone 29N|'), null);
+    expect(crs.name).toContain('UTM zone 29N');
+  });
+
+  it('leaves a geographic CRS free to use its geographic citation', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 2], [2048, 4326], [2049, 0, 34737, 7]]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84|'), null);
+    expect(crs.isGeographic).toBe(true);
+    expect(crs.name).toContain('WGS 84');
   });
 });

@@ -39,6 +39,14 @@ export interface CrsOverride {
   readonly kind: CrsKind;
   /** Timestamp (ms since epoch) of the most recent set; drives LRU eviction. */
   readonly updatedAt: number;
+  /**
+   * The EPSG the FILE declared when this override was made, when it declared
+   * one. Entries are keyed by dataset name alone, so an unrelated file with the
+   * same name collides; this records enough to tell the two apart. Absent on
+   * entries written before the field existed, and on files that declared no CRS
+   * — in both cases there is no evidence either way and the override applies.
+   */
+  readonly detectedEpsg?: number;
 }
 
 interface StoredEnvelope {

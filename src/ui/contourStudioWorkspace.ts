@@ -45,6 +45,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 export type ContourStudioExportProduct =
   | 'pdf'
   | 'geojson'
+  | 'geojson-native'
   | 'dxf'
   | 'svg'
   | 'package'

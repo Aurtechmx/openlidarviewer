@@ -40,6 +40,9 @@ export const LIVE_DESPIKE = { madThreshold: 6, minDeviationM: 0.3 } as const;
 export interface SurfaceFromRasterParams {
   /** Horizontal CRS, passed through to the grid. */
   readonly crs?: string | null;
+  /** Numeric EPSG codes from the resolver, passed through to the grid. */
+  readonly horizontalEpsg?: number | null;
+  readonly verticalEpsg?: number | null;
   /** Vertical datum, passed through to the grid. */
   readonly verticalDatum?: string | null;
   /** True when the horizontal frame is geographic (degree cells). */
@@ -116,7 +119,9 @@ export function buildSurfaceFromRaster(
 
   const dtm = buildDtmGrid(workingRaster, {
     crs: params.crs,
+    horizontalEpsg: params.horizontalEpsg,
     verticalDatum: params.verticalDatum,
+    verticalEpsg: params.verticalEpsg,
     targetCount: params.targetCount,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,

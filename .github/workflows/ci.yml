@@ -125,19 +125,43 @@ jobs:
         # catches that class of live-only breakage.
         run: npm run test:smoke:live
       - name: Mobile responsive smoke (320 / 375 viewports — blocking)
-        # Deterministic layout/touch-target checks at the smallest viewports —
-        # no GPU-variable paths, so unlike the advisory e2e job below this one
-        # BLOCKS. Backs the mobile-usability claims in the release notes.
-        run: npx playwright test tests/e2e/visualsStudioMobile.spec.ts
+        # Deterministic layout/touch-target checks at the smallest viewports.
+        # Backs the mobile-usability claims in the release notes.
+        run: npm run test:smoke:mobile
 
-  e2e:
+  e2e-deterministic:
     runs-on: ubuntu-latest
     needs: verify
-    # Advisory: the broader end-to-end suite drives a headless browser
-    # through real rendering flows, and GPU-backed paths vary across CI
-    # runners. A failure here is reported but does not block the build —
-    # the smoke gate above is the structural hard gate for browser
-    # correctness.
+    # BLOCKING. Everything in the suite whose result does not depend on the
+    # runner's GPU: DOM, layout, routing, export, and streaming-logic flows.
+    # This used to ride the advisory job below, which meant a real regression in
+    # any of ~160 specs could ship green — the class of gap that let a streaming
+    # blank-render bug reach a release. Untagged specs land here by default.
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Deterministic end-to-end tests (blocking)
+        run: npm run test:e2e
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-deterministic
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-gpu:
+    runs-on: ubuntu-latest
+    needs: verify
+    # Advisory: specs tagged `@gpu`, whose outcome varies with the WebGPU
+    # adapter a runner exposes (the equivalence probe legitimately falls back on
+    # a headless sandbox). Reported, never blocking.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
@@ -148,12 +172,12 @@ jobs:
       - run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: End-to-end tests
-        run: npm run test:e2e
+      - name: GPU-variable end-to-end tests (advisory)
+        run: npm run test:e2e:gpu
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-gpu
           path: playwright-report/
           retention-days: 7

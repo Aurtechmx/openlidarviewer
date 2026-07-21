@@ -2,6 +2,63 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.0-alpha.2] - 2026-07-21
+
+A stabilization cut. Almost nothing here is visible in the viewer: it makes the
+test gates mean what they claim, starts the decomposition of the two monoliths,
+and writes down the architecture so the rest of the work has a target. Alpha
+caveat unchanged: this cut is for evaluation, and interfaces may still move
+before v0.6.0.
+
+### Changed
+
+- **The end-to-end suite actually gates now.** 161 of the 166 e2e specs ran under
+  `continue-on-error`, so only the smoke and mobile specs (about twelve tests)
+  could ever block a build — a regression in any of the rest shipped green, which
+  is the shape of gap that let a streaming blank-render bug reach a release.
+  Playwright now has two projects: `deterministic` (blocking) and `gpu`
+  (advisory, `@gpu`-tagged). 165 specs block; only the real-WebGPU equivalence
+  probe stays advisory, because it legitimately falls back on a headless runner.
+  An untagged spec blocks by default, so a new spec gates until it is shown to be
+  GPU-variable.
+- **No module-level mutable application state remains in `main.ts`.** The saved
+  views, active-scan selection and scan-route clusters moved onto `AppContext`
+  behind services (`viewBookmarks`, `ScanService`, `ScanRouteService`), joining
+  `LayerService`. Eleven copies of `activeId ? getCloud(activeId) : null` became
+  one `activeCloud()`, and the twice-spelled route-pinned predicate became one
+  getter. This is a coupling change, not a size one — `main.ts` moved 7,587 to
+  7,574 lines. Its value is that the orchestration blocks can now close over
+  services instead of file-scope `let`s, which is what makes them movable at all.
+
+### Added
+
+- **A coverage ratchet over the pure modules** (`npm run coverage`): the numeric,
+  geometric and model code a unit test can genuinely pin, deliberately excluding
+  the render and UI layers and the two monoliths, where a repo-wide percentage is
+  a number nobody acts on. Baseline lines 90.57 / statements 89.19 / functions
+  87.75 / branches 82.73, with thresholds just underneath.
+- **A mutation gate over the numeric core** (`npm run mutation`, advisory): the
+  formulas where a wrong number is a silent scientific error rather than a crash.
+  It earned its place immediately — `hornSlopeAspect`'s degenerate-input guard had
+  17 surviving mutants, meaning a zero or NaN cell size could have produced an
+  Infinity slope that propagates into confidence grades, RMSE bands and terrain
+  ruggedness. Coverage rated that file ~90% because the lines *ran*. Now pinned;
+  score 85.11 to 87.23.
+- **An architecture map** (`docs/architecture/architecture-map.md`) with a drift
+  check: every module path it names must resolve, or the test fails and the page
+  moves in the same change. It caught itself on the first run.
+- **A streaming origin-localisation guard.** The scheduler tests only ever used a
+  cube at the origin, where subtracting the render origin is a no-op — so the
+  alpha.1 EPT blank-render bug could not have been caught there. A case at
+  UTM-scale coordinates now fails if that path regresses.
+
+### Internal
+
+- The stabilization work is tracked against measured baselines, separating
+  what is provable in a sandbox from what needs a browser or a workstation.
+  `docs/architecture/architecture-map.md` carries the module graph and the
+  decomposition targets.
+
 ## [0.6.0-alpha.1] - 2026-07-18
 
 First alpha of the v0.6 cycle: startup and streaming performance, a correctness-and-honesty hardening pass across the streaming, loader, and measurement paths, the foundation for a shared project coordinate frame, and the start of the internal restructuring that the v0.6 workflow features build on. Alpha caveat: this cut is for evaluation; interfaces and internals may still change before v0.6.0.
@@ -18,9 +75,12 @@ First alpha of the v0.6 cycle: startup and streaming performance, a correctness-
 - **Startup bundle.** The Analyse and Object panels now mount on first scan load instead of at boot, cutting the live entry chunk from 792 KiB; the bundle-budget guard's ceiling drops 800 → 720 KiB with an early-warning threshold at 680 so the win cannot silently erode. After the alpha hardening the live entry measures 693 KiB — within the 720 ceiling, above the 680 warning line.
 - **Live probe pauses during camera drags.** The hover readout's detailed GPU pick is skipped while the user is actively orbiting or panning — you are navigating, not reading a value — and fires once as soon as the drag settles.
 - **Measurement station tables build lazily.** Station rows render when their section is first expanded; exports are byte-identical.
+- **Start-screen theming and layout.** The start-screen backdrop follows the selected theme, so Light and High-contrast re-theme the whole page rather than only the centre panel. A "Try a sample scan" action sits under the primary button for a visitor with no file on hand, the brand mark carries one slow drift that respects reduced-motion, and the format converter is a secondary link rather than a competing button.
 
 ### Fixed
 
+- **Public COPC and EPT datasets open reliably.** Two separate causes could leave the viewer on "Streaming coarse geometry" with nothing drawn. The scheduler was advanced only by the render loop, which the browser pauses for a background or throttled tab, so a dataset opened in that state sat at zero resident nodes with no error; a steady heartbeat now drives the scheduler independently of the render loop. Separately, every EPT node's bounds were shifted by the render origin twice — once when the node was built and again in the shared scheduler — so every node fell one whole origin from the camera and was culled before it could draw; EPT node bounds are now world-space, matching the COPC contract, and the origin is applied once.
+- **Consistent values across panel, report, and export.** A metric computed in more than one place no longer disagrees with itself on a foot-based, compound, or non-Z-up dataset: slope no longer reads about 3.28× too steep, a Y-up mesh (PLY/OBJ/GLB/glTF) is measured on its ground plane and height, the streaming scan panel and Dataset Intelligence convert source units to metres before printing, point density prints at the same precision everywhere, the export card reports the declared point count and tight data extent rather than a strided sample or the octree cube, and the change-detection raster, measurement GeoJSON/CSV/KML, and profile chart carry the file's own linear and vertical units. Single-unit metre datasets are byte-identical.
 - **Polygon reclassification on non-Z-up scans.** For a non-Z-up up-axis, the polygon was projected onto an (east, north) basis while each point was tested in raw XY — mismatched spaces that reclassified the wrong points on rotated, Y-up, tilted, or non-origin clouds. Points now project through the same basis, height included; the Z-up fast path is unchanged.
 - **COPC/EPT refinement flicker.** Streaming LOD transitions cross-faded with `transparent: true` while keeping depth writes for EDL, so overlapping coarse/fine layers z-fought and refining regions pulsed while a cloud streamed in. Transitions are now an opaque per-point dither dissolve driven through the size graph — no transparency, no z-fight, EDL stays exact — and an evicted node dissolves out from its current density instead of snapping to full.
 - **Non-finite streaming nodes are refused.** The central sanitiser cleans file-loaded clouds but by contract skips streaming buffers; the COPC/EPT decoders now reject a node whose transform (a malformed header scale/offset/origin) or whose float source carries a NaN, with a structured error the scheduler backs off — instead of sending NaN to the GPU.

@@ -49,3 +49,31 @@ describe('quantile (unsorted, finite-filtered)', () => {
     expect(Number.isNaN(quantile([], 0.5))).toBe(true);
   });
 });
+
+// Mutation-testing follow-up: the p-clamp boundaries survived mutation because
+// nothing pinned an OUT-OF-RANGE p. `p < 0 ? 0 : p > 1 ? 1 : p` must clamp, so
+// a negative p reads the minimum and a p above 1 reads the maximum rather than
+// indexing past the array (NaN) or extrapolating.
+describe('quantileSorted — p clamping at and beyond the boundaries', () => {
+  const S = [10, 20, 30, 40];
+  it('clamps a negative p to the minimum', () => {
+    expect(quantileSorted(S, -0.5)).toBe(10);
+    expect(quantileSorted(S, -1e9)).toBe(10);
+  });
+  it('clamps a p above 1 to the maximum', () => {
+    expect(quantileSorted(S, 1.5)).toBe(40);
+    expect(quantileSorted(S, 1e9)).toBe(40);
+  });
+  it('p exactly 0 and exactly 1 hit the endpoints, not an interpolation', () => {
+    expect(quantileSorted(S, 0)).toBe(10);
+    expect(quantileSorted(S, 1)).toBe(40);
+  });
+  it('a single-element input returns that element for any p', () => {
+    expect(quantileSorted([42], 0)).toBe(42);
+    expect(quantileSorted([42], 0.5)).toBe(42);
+    expect(quantileSorted([42], 1)).toBe(42);
+  });
+  it('an empty input is NaN, never 0', () => {
+    expect(Number.isNaN(quantileSorted([], 0.5))).toBe(true);
+  });
+});

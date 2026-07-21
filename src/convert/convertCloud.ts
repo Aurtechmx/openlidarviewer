@@ -10,6 +10,9 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { classifyScanShape } from '../terrain/scanShape';
+import { isZUpFormat } from '../io/sniffFormat';
+import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
 import { writeLas, writeLas14 } from './writeLas';
 import { writeXyz, writeAsc } from './writeAscii';
@@ -74,6 +77,32 @@ export function convertCloud(
   const mode = opts.crsMode ?? 'keep';
   const sourceEpsg = cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null;
   let g = cloudToGlobal(cloud);
+  // Every output format here reads Z as elevation (LAS by spec; the ASCII
+  // writers by the same convention), which is wrong for the Y-up mesh formats:
+  // raw storage order would put the mesh's elevation in the northing column and
+  // its depth in the height column — plausible numbers, scrambled axes. Same
+  // remedy as the terrain pipeline (`terrain/canonicalFrame.ts`): one rotation
+  // at the boundary, (x, y, z) → (x, −z, y), so every writer stays
+  // axis-ignorant. Disclosed in the report because the written coordinates no
+  // longer match the source bytes.
+  // Mesh formats carry no mandated up-axis (photogrammetry writes Y-up,
+  // CloudCompare/PDAL-style tools write Z-up PLYs), so the DATA decides via the
+  // same detection the terrain gather uses — a format table alone rotated
+  // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
+  // identically here. Survey formats skip detection: Z-up by spec.
+  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(cloud.positions).up === 'y') {
+    const { y, z } = g;
+    for (let i = 0; i < g.count; i++) {
+      const yv = y[i];
+      y[i] = -z[i];
+      z[i] = yv;
+    }
+    log.push({
+      level: 'info',
+      message:
+        'Y-up source rotated into the Z-up survey frame (elevation → Z, north → Y) so the output axes mean what the format says they mean.',
+    });
+  }
   let outEpsg: number | null = sourceEpsg;
   let crsNote: string;
   // True only when a reproject ACTUALLY moved coordinates into the target CRS.
@@ -148,7 +177,13 @@ export function convertCloud(
     // exists when the source carried one AND nothing changed (keep mode) —
     // after assign/reproject the source WKT would describe the wrong CRS,
     // so those modes fall back to a GeoKey tag built from the EPSG.
-    const wkt = opts.format === 'las14' && mode === 'keep' ? (srcCrs?.wkt ?? null) : null;
+    const sourceWkt = opts.format === 'las14' && mode === 'keep' ? (srcCrs?.wkt ?? null) : null;
+    // Falling back to a WKT derived from the OUTPUT code covers the modes the
+    // source WKT cannot: after assign or reproject the source WKT describes
+    // the wrong CRS, but a derived one describes outEpsg by construction. It
+    // also covers keep mode for the common case of a source georeferenced by
+    // GeoKeys alone, which is what left LAS 1.4 files with bit 4 clear.
+    const wkt = opts.format === 'las14' ? (sourceWkt ?? wktForEpsg(outEpsg)) : null;
     if (outEpsg != null && outEpsg > 65535 && wkt == null) {
       log.push({
         level: 'warn',
@@ -165,6 +200,14 @@ export function convertCloud(
       mode === 'reproject' && reprojectApplied ? 9001
       : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCrs.linearUnit)
       : null;
+    // Vertical unit: Z is untouched by every mode, so its unit is the SOURCE's
+    // declared vertical unit — falling back to the source's horizontal family
+    // (the GeoTIFF convention that vertical tracks the model's units), never
+    // the OUTPUT horizontal. Reprojecting a foot-height file to metre eastings
+    // used to relabel its unchanged Z as metres.
+    const verticalUnitCode = srcCrs
+      ? unitToGeoTiff(srcCrs.verticalLinearUnit ?? srcCrs.linearUnit)
+      : null;
     if (opts.format === 'las14') {
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
         log.push({
@@ -177,6 +220,7 @@ export function convertCloud(
         isGeographic: geo,
         linearUnitCode,
         verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalUnitCode,
         wkt,
       });
     } else {
@@ -199,13 +243,14 @@ export function convertCloud(
         isGeographic: geo,
         linearUnitCode,
         verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalUnitCode,
       });
     }
   } else {
     const text =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null })
-        : writeXyz(g, opts.asciiPrecision ?? 3);
+        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null, geographic: geo })
+        : writeXyz(g, opts.asciiPrecision ?? 3, geo);
     bytes = new TextEncoder().encode(text);
   }
 

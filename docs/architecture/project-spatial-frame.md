@@ -111,3 +111,54 @@ Each staged step changes what the user sees and must be validated in the
 browser, the same way the streaming dissolve and flicker work is — so it is
 called out here as ready-to-wire against a tested foundation, not folded blindly
 into a release build.
+
+## Wiring plan (v0.6.0-alpha.2)
+
+Ordered so each step is independently verifiable and the single-layer path stays
+byte-identical throughout. Node-gated steps land with a unit test; browser steps
+ship behind the existing "experimental" disclosure until confirmed on a
+two-scan fixture, and only then does the `KNOWN_LIMITATIONS` entry flip from
+"foundation, not an active system" to active.
+
+1. **Frame ownership in `AppContext`** (Node-gated). The composition root from
+   alpha.1 (`AppRuntime`/`AppContext`) holds a `ProjectSpatialFrame | null`.
+   Null is the single-cloud degenerate case. The first georeferenced layer seeds
+   it via `chooseProjectOrigin` over the layers' `sourceOrigin`s; adding or
+   removing a layer recomputes it. Pure state, no scene change. Gate: a reducer
+   test for seed / recompute / clear.
+
+2. **Per-layer transform at mount** (browser-verified). Each layer applies its
+   `LayerSpatialTransform.sourceToProject` (a translation today) to its
+   scene-graph group instead of sitting at its own local zero. A single layer
+   resolves to `projectOrigin = sourceOrigin` → identity → byte-identical, held
+   by a degenerate-case no-op test. Verify: two georeferenced scans with
+   different source origins render at their true relative offset instead of
+   overlaid at zero.
+
+3. **Camera framing reads the frame** (browser-verified, math Node-gated).
+   `frame all` / reset fits the union project bounds in project-local, so it
+   frames the whole project rather than one layer. Gate the bounds-union math;
+   verify the framing visually.
+
+4. **Cross-layer measurement and picking** (math Node-gated, visual browser).
+   A pick resolves to a project-local point; two endpoints on different layers
+   share `projectOrigin`, so the distance between them is correct, and the
+   coordinate readout recovers absolute as `projectLocal + projectOrigin`. Gate:
+   a measurement test with two layers at different origins asserting the true
+   distance; verify a cross-layer measurement in the browser.
+
+5. **Shared clipping and Compare Studio** (browser-verified). The clip box and
+   Compare operate in project-local, so they apply consistently across layers.
+
+6. **Persist the frame** (Node-gated, schema bump). Store `projectOrigin` and
+   each layer's `sourceOrigin` in the session/project schema (v8) so reopening
+   restores the same frame; the `matchSessionToScan` source-identity guard
+   already validates each layer before rebase. Gate: a v7→v8 round-trip and a
+   migration test (a v7 single-layer session opens as the degenerate frame).
+
+**Mixed-CRS safety.** A layer whose CRS disagrees with the frame's CRS is not
+reprojected (still out of scope). It mounts in its own frame and is flagged,
+rather than silently mislocated — the documented no-reprojection limitation,
+made explicit at the seam. Because the frame carries the authoritative up-axis
+and units, this step also removes the mixed-format multi-cloud divergence where
+the colorbar and inspector read elevation off different axes.

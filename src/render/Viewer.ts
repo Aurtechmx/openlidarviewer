@@ -62,6 +62,7 @@ import {
 } from 'three/tsl';
 
 import type { PointCloud } from '../model/PointCloud';
+import { buildExportAdapter } from './exportAdapter';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
@@ -76,7 +77,9 @@ import {
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { keyFromId } from '../io/copc/voxelKey';
 import { intensityFilterUniform } from './intensityFilterUniform';
-import { isZUpFormat, verticalAxisHintForSources } from '../io/sniffFormat';
+import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
+import { classifyScanShape } from '../terrain/scanShape';
+import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode, rampRangeForMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
@@ -191,7 +194,13 @@ import {
   DEFAULT_PROFILE_SAMPLE_COUNT,
 } from './measure/profileSampler';
 import { volumeCutFill } from './measure/volume';
-import { integrableClouds, isIntegrable } from './integrableClouds';
+import {
+  integrableClouds,
+  isIntegrable,
+  streamingMayCombine,
+  sourceClassifiesGround,
+} from './integrableClouds';
+import { classifyLayerCompatibility, type LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
@@ -312,6 +321,13 @@ function clipBoxPlanes(clip: ClipBox): THREE.Plane[] {
 
 interface CloudEntry {
   cloud: PointCloud;
+  /**
+   * What this layer has proven about sharing the project frame. Drives whether
+   * it may be merged into a combined estimator (`integrableClouds`).
+   */
+  compatibility?: LayerCompatibility;
+  /** Whether this layer is actually mounted in the shared project frame. */
+  mounted?: boolean;
   /** The instanced-quad mesh that draws this cloud. */
   mesh: THREE.Mesh;
   /** The cloud's point material (one per cloud so colours are independent). */
@@ -1182,6 +1198,8 @@ export class Viewer {
   private _toolPaused = false;
   private _measureListeners: MeasureListeners = {};
   private _inspectListeners: InspectListeners = {};
+  /** True when the inspect frame's horizontal axes are lon/lat degrees. */
+  private _inspectGeographicHorizontal = false;
   private _annotateListeners: AnnotateListeners = {};
   private _probeListeners: ProbeListeners = {};
   /** Last pointer position over the canvas, in NDC, for the measure preview. */
@@ -1395,7 +1413,11 @@ export class Viewer {
             staticPoints += cloud.positions.length;
           }
         }
-        for (const { decoded } of this._streamingPickData.values()) {
+        // A stream joins the estimate only on the terms a static cloud would
+        // have to meet. Appending it unconditionally merged frames that were
+        // never shown to correspond.
+        const streamOk = this._streamingMayCombine(buffers.length);
+        for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
           if (decoded.positions && decoded.positions.length > 0) {
             const cls = aligned(decoded.classification, decoded.positions);
             if (cls) anyClass = true;
@@ -1474,7 +1496,8 @@ export class Viewer {
             staticPoints += cloud.positions.length;
           }
         }
-        for (const { decoded } of this._streamingPickData.values()) {
+        const streamOk = this._streamingMayCombine(buffers.length);
+        for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
           if (decoded.positions && decoded.positions.length > 0) {
             buffers.push(decoded.positions);
             total += decoded.positions.length;
@@ -2089,6 +2112,9 @@ export class Viewer {
     const origins: Array<readonly number[] | null> = [];
     if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
     for (const { cloud } of this._clouds.values()) origins.push(cloud.origin ?? null);
+    // Frame-mounted layers literally share one origin after the data rebase
+    // (`rebaseCloudToOrigin`), so unanimity resolves the datum naturally — and
+    // keeps refusing when an unreferenced mesh or foreign-CRS layer is present.
     const origin = resolveSceneOrigin(origins);
     this._measure.setContext({
       worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
@@ -2122,6 +2148,139 @@ export class Viewer {
     this._refreshMeasureDatum();
     // The streaming legend (if shown) no longer describes anything.
     this._notifyColorContextChanged();
+  }
+
+  /**
+   * Mount a cloud at its project-frame offset (step 2 of the wiring plan in
+   * `docs/architecture/project-spatial-frame.md`).
+   *
+   * Every cloud's positions are recentred about its OWN origin at load, so two
+   * georeferenced scans a kilometre apart both sat at local zero and rendered
+   * overlaid. The offset is the layer's `sourceToProject` translation; applying
+   * it to the mesh places the layer at its true position in the shared
+   * project-local frame. The single-layer case is the identity (a lone layer
+   * anchors the frame at its own origin), so the existing single-scan path is
+   * unchanged by construction.
+   *
+   * Picking needs no changes — the raycaster works in world space, so hits on
+   * an offset mesh already come back project-local. Camera framing and the
+   * orbit clamp fold the same offset in `_visibleBoundingBox` /
+   * `_visibleCloudAabb`.
+   */
+  /**
+   * Mount a cloud into the shared project frame by REBASING ITS DATA onto the
+   * project origin — `PointCloud.rebaseOrigin` shifts the positions and origin
+   * together so every world position is unchanged.
+   *
+   * The first implementation translated the MESH instead, which split the
+   * scene: rendering and camera bounds saw project space while picking
+   * (`nearestPointAlongRay` over raw positions), the terrain gather, lasso,
+   * profiles, volumes and export bounds all still read cloud-local data —
+   * layers LOOKED aligned while every calculation used a different frame.
+   * With the data itself rebased, every one of those consumers is
+   * project-local automatically, and the measurement datum needs no special
+   * case: all mounted layers share one literal origin, so the existing
+   * unanimity rule in `_refreshMeasureDatum` resolves it naturally — and keeps
+   * refusing honestly when an unreferenced mesh or foreign-CRS layer is
+   * present, exactly as before.
+   */
+  rebaseCloudToOrigin(id: string, target: readonly [number, number, number]): void {
+    const entry = this._clouds.get(id);
+    if (!entry) return;
+    if (!entry.cloud.rebaseOrigin(target)) return;
+    this._afterCloudRebase(entry);
+  }
+
+  /**
+   * Put a cloud back on the origin its file declared, undoing a project-frame
+   * mount. The exit a layer takes when its CRS is overridden to something
+   * incompatible, or when it otherwise leaves the shared frame. No-op for a
+   * cloud that never moved.
+   */
+  restoreCloudSourceFrame(id: string): void {
+    const entry = this._clouds.get(id);
+    if (!entry) return;
+    if (!entry.cloud.restoreSourceFrame()) return;
+    this._afterCloudRebase(entry);
+  }
+
+  /** Re-sync GPU, camera clamp and measurement datum after a cloud moved frame. */
+  private _afterCloudRebase(entry: CloudEntry): void {
+    // The GPU attribute wraps the SAME Float32Array the rebase just shifted —
+    // it only needs the re-upload flag, not a rebuild.
+    const attr = entry.mesh.geometry.getAttribute('aPos');
+    if (attr) attr.needsUpdate = true;
+    this._orbitClampAabb = this._visibleCloudAabb();
+    this._refreshMeasureDatum();
+    this.requestFrame();
+  }
+
+  /**
+   * Record what a layer has proven about the project frame. Combined
+   * estimators — terrain, profile, cut/fill volume, lasso — read this and
+   * refuse anything not `verified`, because points from an unproven frame do
+   * not mean the same thing as the ones they would be averaged with.
+   */
+  setCloudCompatibility(id: string, compatibility: LayerCompatibility): void {
+    const entry = this._clouds.get(id);
+    if (!entry || entry.compatibility === compatibility) return;
+    entry.compatibility = compatibility;
+    this.requestFrame();
+  }
+
+  /**
+   * Record whether a layer is actually mounted in the shared project frame.
+   *
+   * Combined estimators require this as well as compatibility: being ABLE to
+   * share a frame is not the same as being in one.
+   */
+  setCloudMounted(id: string, mounted: boolean): void {
+    const entry = this._clouds.get(id);
+    if (!entry || entry.mounted === mounted) return;
+    entry.mounted = mounted;
+    this.requestFrame();
+  }
+
+  /**
+   * What the open streaming source has proven about the project frame.
+   *
+   * Classified against the same static layers it would be merged with, using
+   * the same rule, so a stream cannot get into a combined estimate on terms a
+   * static cloud would be refused on. Null when nothing is streaming.
+   */
+  private _streamingCompatibility(): LayerCompatibility | null {
+    const stream = this._streaming?.cloud;
+    if (!stream) return null;
+    const scrs = stream.crs?.() ?? null;
+    const statics = integrableClouds(this._clouds.values()).map(({ cloud }) => ({
+      id: cloud.name,
+      epsg: cloud.metadata?.crs?.epsg,
+      crsName: cloud.metadata?.crs?.name,
+      verticalDatum: cloud.metadata?.crs?.verticalDatum,
+      verticalEpsg: cloud.metadata?.crs?.verticalEpsg,
+    }));
+    const STREAM_ID = '\u0000stream';
+    const states = classifyLayerCompatibility([
+      ...statics,
+      {
+        id: STREAM_ID, epsg: scrs?.epsg, crsName: scrs?.name,
+        verticalDatum: scrs?.verticalDatum, verticalEpsg: scrs?.verticalEpsg,
+      },
+    ]);
+    return states.get(STREAM_ID) ?? 'unknown';
+  }
+
+  /**
+   * Whether resident streaming nodes may join a combined estimator alongside
+   * `staticCount` static clouds the walk has already accepted.
+   */
+  private _streamingMayCombine(staticCount: number): boolean {
+    // Streaming sources are never mounted into the project frame in this
+    // alpha — `MULTI_LAYER_MOUNT_ENABLED` is off and no mount path exists for
+    // resident nodes at all — so this is `false` today and the predicate
+    // refuses. It is passed rather than hardcoded so that turning mounting on
+    // does not silently re-open the gap.
+    return streamingMayCombine(staticCount, this._streamingCompatibility(), false);
   }
 
   /** Whether a streaming COPC cloud is currently open. */
@@ -2412,6 +2571,14 @@ export class Viewer {
   ): {
     positions: Float32Array;
     classification?: Uint8Array;
+    /**
+     * True unless some contributing SOURCE file classifies points as ground.
+     * The review panel keys its ground-source label off this, so ground the
+     * viewer worked out for itself is never presented as a producer's survey
+     * classification — including when the file carries a classification array
+     * that classifies nothing (all class 0, "created, never classified").
+     */
+    groundIsDerived: boolean;
     residentOnly: boolean;
     sampled: boolean;
     totalPoints: number;
@@ -2422,6 +2589,13 @@ export class Viewer {
      * and the frame is genuinely ambiguous. v0.4.5 — see scanShape.ts header.
      */
     verticalAxisHint?: 'z';
+    /**
+     * The frame the SOURCE was in, before normalisation. The caller needs it to
+     * rotate the recentre origin the same way — terrain reads the origin's
+     * second component as a northing, so an origin left in the source frame
+     * would georeference a correctly-rotated surface to the wrong place.
+     */
+    sourceUpAxis?: 'z' | 'y';
   } | null {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
@@ -2431,6 +2605,16 @@ export class Viewer {
     let staticPoints = 0;
     let streamingPoints = 0;
     let anyClass = false;
+    // True when ANY contributing cloud's classification came from the viewer's
+    // heuristic classifier rather than its file. Deliberately pessimistic: one
+    // derived source is enough to stop the review panel calling the resulting
+    // ground a producer's survey classification.
+    // Whether any contributing SOURCE actually classifies ground. Asking
+    // instead whether we had attached a derived classification meant a file
+    // with an all-zeros class array — class 0, never classified — read as
+    // "the file classified this", and the review panel announced classified
+    // ground for a scan its own report called unclassified.
+    let sourceGround = false;
     const staticFormats: SourceFormat[] = [];
     const alignedClass = (
       cls: ArrayLike<number> | null | undefined,
@@ -2441,13 +2625,22 @@ export class Viewer {
     for (const { cloud } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
         const cls = alignedClass(cloud.classification, cloud.positions);
-        if (cls) anyClass = true;
+        if (cls) {
+          anyClass = true;
+          if (!cloud.classificationIsDerived && sourceClassifiesGround(cls)) {
+            sourceGround = true;
+          }
+        }
         staticBuffers.push({ pos: cloud.positions, cls });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
       }
     }
-    for (const { decoded, key } of this._streamingPickData.values()) {
+    // Terrain is the estimator with the most to lose from a frame it cannot
+    // vouch for: a surface averaged across two unrelated frames looks like a
+    // surface. The stream joins only on the terms a static cloud would meet.
+    const streamOk = this._streamingMayCombine(staticBuffers.length);
+    for (const { decoded, key } of streamOk ? this._streamingPickData.values() : []) {
       if (decoded.positions && decoded.positions.length > 0) {
         const cls = alignedClass(decoded.classification, decoded.positions);
         if (cls) anyClass = true;
@@ -2484,13 +2677,44 @@ export class Viewer {
       const totalNodes = this._streaming.cloud.octree.nodes().length;
       if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
     }
+    // Normalise the buffer into the canonical Z-up survey frame BEFORE anything
+    // reads it. Nine modules under `src/terrain` index positions as "X/Y
+    // horizontal, Z elevation", which is wrong for the Y-up mesh formats, and a
+    // Y-up height field reaches terrain analysis easily — drone photogrammetry
+    // exported as OBJ or glTF classifies as terrain. Rotating once here keeps
+    // the analysis, the core-cache fingerprints and all three exporters correct
+    // with no changes of their own, and cannot be half-applied the way an axis
+    // parameter threaded through every consumer could.
+    //
+    // A MIXED gather has no single frame — a Y-up mesh and a Z-up scan are not
+    // in the same space, so their union describes no surface. Decline it rather
+    // than analyse a meaningless combination.
+    const policy = sceneUpAxisPolicy(staticFormats, streamingPoints > 0);
+    if (policy === null) return null;
+    let sceneUp: 'z' | 'y' = 'z';
+    if (policy.kind === 'detect') {
+      // Mesh formats carry no mandated up-axis (photogrammetry writes Y-up,
+      // CloudCompare/PDAL-style tools write Z-up PLYs), so the DATA decides:
+      // the same up-axis detection the scan-shape router uses, one authority.
+      sceneUp = classifyScanShape(sample.positions).up === 'y' ? 'y' : 'z';
+      if (sceneUp === 'y' && policy.hasSpecZ) {
+        // A detected-Y-up mesh beside Z-up-by-spec sources is two provably
+        // different frames; their union describes no surface. Decline.
+        return null;
+      }
+    }
+    if (sceneUp === 'y') yUpToCanonicalZUp(sample.positions);
     return {
       positions: sample.positions,
       classification: sample.classification,
+      groundIsDerived: !sourceGround,
       residentOnly,
       sampled: sample.sampled,
       totalPoints,
-      verticalAxisHint: verticalAxisHintForSources(staticFormats, streamingPoints > 0),
+      sourceUpAxis: sceneUp,
+      // Always 'z': the buffer above is canonical now, so scan-shape detection
+      // has nothing left to guess at.
+      verticalAxisHint: 'z',
     };
   }
 
@@ -3937,6 +4161,12 @@ export class Viewer {
     percentile: number = 0.05,
     lin: number = 1,
     densityUnitKnown: boolean = true,
+    /**
+     * `verticalUnitToMetres`; defaults to `lin`. A stockpile volume is an area
+     * times a height, so a compound CRS (metre eastings over foot heights)
+     * needs both factors — one alone overstates the pile by 3.28×.
+     */
+    vert: number = lin,
   ): LassoVolumeReturn | null {
     if (lasso.length < 3) return null;
 
@@ -4082,6 +4312,7 @@ export class Viewer {
         lin,
         anySourceReduced,
         densityUnitKnown,
+        vert,
       ),
       selectedCount: totalSelected,
       lasso,
@@ -4267,6 +4498,11 @@ export class Viewer {
   setInspectCoordinateContext(
     ctx: import('./InspectTool').CoordinateContext,
   ): void {
+    // Remember whether the horizontal frame is degrees: `_infoForHit` rounds
+    // coordinates before anything reads them, and 3 decimals is millimetres in
+    // metres but ~111 m in degrees — the inspector's UTM derivation, clipboard
+    // and JSON all inherited that loss for lat/lon scans.
+    this._inspectGeographicHorizontal = ctx.crs?.kind === 'geographic';
     this._inspect.setCoordinateContext(ctx);
   }
 
@@ -5050,269 +5286,16 @@ export class Viewer {
    * adapter always reflects the current loaded clouds without bookkeeping.
    */
   private _buildExportAdapter(): ExportSceneAdapter {
-    const viewer = this;
-    return {
-      setExportColorMode(mode: ColorMode): void {
-        // Apply to every loaded cloud + the streaming subsystem so every
-        // resident mesh recolours in lockstep. Wrap each cloud's setColorMode
-        // individually: if one cloud lacks the channel for `mode` (e.g.
-        // classification on a PLY), `colorForMode` throws — we catch + skip
-        // so the other clouds (and the streaming cloud, if any) still
-        // recolour, and the export proceeds against whatever data IS valid.
-        // Without this guard, a single channel-missing cloud poisoned the
-        // whole export and left the UI half-recoloured.
-        for (const id of viewer._clouds.keys()) {
-          try {
-            viewer.setColorMode(id, mode);
-          } catch (err) {
-            // Swallow per-cloud capability mismatches — the orchestrator's
-            // `isAvailable` gate is the source of truth for whether the
-            // export *should* run. This catch only protects mid-loop state.
-            console.warn(`[export] setColorMode(${mode}) on cloud "${id}" skipped:`, err);
-          }
-        }
-        try {
-          viewer.setStreamingColorMode(mode);
-        } catch (err) {
-          console.warn(`[export] setStreamingColorMode(${mode}) skipped:`, err);
-        }
-      },
-      currentColorMode(): ColorMode {
-        // Prefer the streaming cloud's mode when present — otherwise the
-        // first static cloud's mode, otherwise the runtime default.
-        if (viewer._streaming) return viewer._streaming.renderer.colorMode;
-        const first = viewer._clouds.values().next().value;
-        return first ? first.mode : 'rgb';
-      },
-      hasRgb(): boolean {
-        if (viewer._streaming) {
-          // read off the abstract `availableColorModes` so this
-          // works uniformly for COPC + EPT. The cloud's own implementation
-          // knows whether it carries RGB (COPC: PDRF 7/8; EPT: schema has
-          // Red/Green/Blue attrs).
-          return viewer._streaming.cloud.availableColorModes().includes('rgb');
-        }
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.colors) return true;
-        }
-        return false;
-      },
-      hasIntensity(): boolean {
-        // Streaming COPC clouds always carry intensity (PDRF 6/7/8).
-        if (viewer._streaming) return true;
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.intensity) return true;
-        }
-        return false;
-      },
-      hasClassification(): boolean {
-        // dispatch on the abstract `availableColorModes()` so
-        // COPC and EPT route uniformly. Static clouds fall through to
-        // the explicit field check.
-        if (viewer._streaming) {
-          return viewer._streaming.cloud.availableColorModes().includes('classification');
-        }
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.classification) return true;
-        }
-        return false;
-      },
-      hasNormals(): boolean {
-        // COPC + EPT streaming sources never carry normals in
-        // production (LAS reserves no field for them; EPT writers rarely
-        // emit Normal X/Y/Z attrs). Static loaders (PCD, PTX, GLTF)
-        // sometimes do — check the field explicitly.
-        if (viewer._streaming) return false;
-        for (const { cloud } of viewer._clouds.values()) {
-          if (cloud.normals) return true;
-        }
-        return false;
-      },
-      snapshot(options: {
-        measurements: boolean;
-        annotations: boolean;
-        inspector: boolean;
-        probe: boolean;
-        colorbar?: boolean;
-      }): Promise<Blob> {
-        // Delegate to the live snapshot pipeline so the export matches the
-        // on-screen view EXACTLY — EDL, perspective camera, overlays, all
-        // baked through the same code path the Save-view feature
-        // uses. The inspector + probe flags add the Studio bakes:
-        // active Inspect tool's marker + info card, and LiveProbe's last-
-        // known readout. Together they capture every on-canvas data overlay
-        // the user might have been working with when they clicked Export.
-        return viewer.snapshot({
-          measurements: options.measurements,
-          annotations: options.annotations,
-          inspector: options.inspector,
-          probe: options.probe,
-          // Colorbar legend for continuous scalar exports; self-gating
-          // inside snapshot(), so categorical modes are untouched.
-          colorbar: options.colorbar === true,
-        });
-      },
-      sourceName(): string {
-        if (viewer._streaming) return viewer._streaming.cloud.name;
-        const first = viewer._clouds.values().next().value;
-        return first?.cloud.name ?? 'scan';
-      },
-      sourcePointCount(): number {
-        if (viewer._streaming) return viewer._streaming.cloud.sourcePointCount;
-        // The file's declared total, back-scaled when the loader strided a huge
-        // cloud for display — the honest headline the Scan Report and PDF use.
-        // Summing the strided `pointCount` under-reported "Points" and inflated
-        // the export card's density divisor disagreement with every other panel.
-        let total = 0;
-        for (const { cloud } of viewer._clouds.values()) {
-          total += cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount
-            ? cloud.declaredPointCount
-            : cloud.pointCount;
-        }
-        return total;
-      },
-      residentPointCount(): number {
-        if (viewer._streaming) return viewer._streaming.cloud.residentPointCount;
-        // Static clouds: every loaded point is resident.
-        return this.sourcePointCount();
-      },
-      crsLabel(): { name: string; unit: string; epsg?: number } | null {
-        // read off the abstract `cloud.crs()` so both COPC and
-        // EPT surface consistently. COPC pulls from the LAS VLRs the
-        // header parser walked; EPT pulls from `ept.json`'s `srs.wkt`.
-        // Static clouds carry CRS through `CloudMetadata.crs`.
-        const fromStreaming = viewer._streaming?.cloud.crs();
-        if (fromStreaming) {
-          return {
-            name: fromStreaming.name,
-            unit: linearUnitLabel(fromStreaming.linearUnit),
-            epsg: fromStreaming.epsg,
-          };
-        }
-        for (const { cloud } of viewer._clouds.values()) {
-          const crs = cloud.metadata?.crs;
-          if (crs) {
-            return {
-              name: crs.name,
-              unit: linearUnitLabel(crs.linearUnit),
-              epsg: crs.epsg,
-            };
-          }
-        }
-        return null;
-      },
-      captureLabel(): { label: string; confidence: 'low' | 'medium' | 'high' } | null {
-        // Compute the same provenance fingerprint the Inspector + PDF
-        // Provenance section surface. Auto-computed, varies per scan;
-        // exporters get it via `baseReportRows` without any per-mode
-        // code. Wrapped because a malformed cloud shape shouldn't sink
-        // the export — null is a clean no-op in the renderer.
-        try {
-          if (viewer._streaming) {
-            const f = classifyProvenance(
-              signalsForStreamingCloud(viewer._streaming.cloud as never),
-            );
-            return { label: f.label, confidence: f.confidence };
-          }
-          const first = viewer._clouds.values().next().value;
-          if (first) {
-            const f = classifyProvenance(
-              signalsForStaticCloud(first.cloud as never),
-            );
-            return { label: f.label, confidence: f.confidence };
-          }
-        } catch {
-          /* defensive — null falls back to "no Capture row" */
-        }
-        return null;
-      },
-      dataBoundsAabb(): readonly [number, number, number, number, number, number] | null {
-        // Tight data extent for the report metadata: for streaming the octree
-        // cube (localBounds) inflates height ~7× and deflates density, so the
-        // printed Width/Height/Density use dataBounds instead — matching the
-        // Scan Report panel and the PDF. Static clouds already report tight.
-        if (viewer._streaming) return viewer._streaming.cloud.dataBounds();
-        return this.localBoundsAabb();
-      },
-      localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
-        // Streaming first — it has authoritative bounds from the COPC header.
-        if (viewer._streaming) {
-          return viewer._streaming.cloud.localBounds();
-        }
-        // Fold every static cloud's bounds into a combined AABB.
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-        let any = false;
-        for (const { cloud } of viewer._clouds.values()) {
-          const bb = cloud.bounds();
-          any = true;
-          if (bb.min[0] < minX) minX = bb.min[0];
-          if (bb.min[1] < minY) minY = bb.min[1];
-          if (bb.min[2] < minZ) minZ = bb.min[2];
-          if (bb.max[0] > maxX) maxX = bb.max[0];
-          if (bb.max[1] > maxY) maxY = bb.max[1];
-          if (bb.max[2] > maxZ) maxZ = bb.max[2];
-        }
-        return any ? [minX, minY, minZ, maxX, maxY, maxZ] : null;
-      },
-      georefContext(): {
-        worldOrigin: { x: number; y: number } | null;
-        wkt: string | null;
-      } | null {
-        // Mirrors main.ts's `getMapContext` (the contour/DEM seam): the
-        // streaming cloud's recentre offset lives on `renderOrigin` and its
-        // CRS on `crs()`; static clouds carry both on the cloud record.
-        if (viewer._streaming) {
-          const origin = viewer._streaming.cloud.renderOrigin;
-          return {
-            worldOrigin: origin ? { x: origin[0], y: origin[1] } : null,
-            wkt: viewer._streaming.cloud.crs()?.wkt ?? null,
-          };
-        }
-        // Static path: only assert a single, unambiguous frame. With several
-        // clouds loaded the per-cloud origins can differ — a world file in
-        // one cloud's frame would silently misplace the others, so we only
-        // georeference when every loaded cloud shares the SAME origin.
-        let worldOrigin: { x: number; y: number } | null = null;
-        let wkt: string | null = null;
-        let any = false;
-        for (const { cloud } of viewer._clouds.values()) {
-          any = true;
-          const o = cloud.origin;
-          if (!o) return null;
-          if (worldOrigin === null) {
-            worldOrigin = { x: o[0], y: o[1] };
-          } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
-            return null; // conflicting frames — honestly not georeferenceable
-          }
-          if (wkt == null) wkt = cloud.metadata?.crs?.wkt ?? null;
-        }
-        return any ? { worldOrigin, wkt } : null;
-      },
-      async framedTopDownSnapshot(options: { widthPx?: number }): Promise<{
-        blob: Blob;
-        widthPx: number;
-        heightPx: number;
-        extent: { minX: number; minY: number; maxX: number; maxY: number };
-      } | null> {
-        const aabb = this.localBoundsAabb();
-        if (!aabb) return null;
-        return viewer._renderFramedTopDown(aabb, options.widthPx);
-      },
-      renderFigure(options: { widthPx?: number; heightPx?: number }): Promise<{
-        blob: Blob;
-        widthPx: number;
-        heightPx: number;
-      } | null> {
-        // The honest-resolution seam: `runStudioExport` routes explicit
-        // width/height requests here so "2048 px" means 2048 rendered
-        // pixels, not an upscaled copy of the live canvas.
-        return viewer.renderFigure(options);
-      },
-      figureViewContext(): FigureViewContext {
-        return viewer.figureViewContext();
-      },
-    };
+    return buildExportAdapter({
+      clouds: () => this._clouds,
+      streaming: () => this._streaming,
+      setColorMode: (id, mode) => this.setColorMode(id, mode),
+      setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
+      snapshot: (options) => this.snapshot(options),
+      renderFramedTopDown: (aabb, widthPx) => this._renderFramedTopDown(aabb, widthPx),
+      renderFigure: (options) => this.renderFigure(options),
+      figureViewContext: () => this.figureViewContext(),
+    });
   }
 
   /**
@@ -5341,6 +5324,12 @@ export class Viewer {
     heightPx: number;
     extent: { minX: number; minY: number; maxX: number; maxY: number };
   } | null> {
+    // A "top-down" framed render points the ortho camera down −Z and pairs the
+    // raster with a north-up world file — X easting, Y northing. In a Y-up
+    // scene −Z is HORIZONTAL, so the same code would render a side elevation
+    // and georeference it as a map: structurally valid, spatially nonsense.
+    // Refusing here kills both the raster and its sidecar in one place.
+    if (this._worldUp.y === 1) return null;
     await this.ready;
     // All numbers come from the pure, unit-tested framing planner — the
     // extent it returns is DERIVED from the camera pose + frustum
@@ -6595,6 +6584,7 @@ export class Viewer {
       : null;
     const normals = cloud.normals;
     return makePointInfo({
+      geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud.name,
       index,
       // `point` is in local space; the cloud's origin restores real-world
@@ -6634,6 +6624,7 @@ export class Viewer {
       ? [decoded.rgb[index * 3], decoded.rgb[index * 3 + 1], decoded.rgb[index * 3 + 2]]
       : null;
     return makePointInfo({
+      geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud ? cloud.name : 'COPC',
       index,
       local: [point.x, point.y, point.z],
@@ -6966,15 +6957,6 @@ export class Viewer {
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { classificationText, intensityText, rgbText } from './pointInfo';
-import { linearUnitLabel } from '../io/crs';
-// Provenance classifier for the export adapter's `captureLabel` —
-// surfaces capture-type + confidence into every exported image's
-// scan-report card. Same path the Inspector + PDF report use.
-import { classify as classifyProvenance } from '../diagnostics/provenance';
-import {
-  signalsForStaticCloud,
-  signalsForStreamingCloud,
-} from '../diagnostics/provenanceSignals';
 
 /**
  * Draw the InspectTool's "Point Info" card directly onto a 2-D canvas next

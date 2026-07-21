@@ -44,7 +44,10 @@ declare global {
   }
 }
 
-test.describe('TerrainRasterEngine — real-WebGPU equivalence probe', () => {
+// @gpu — the outcome depends on the WebGPU adapter the runner exposes (the
+// probe legitimately falls back on a headless sandbox), so this rides the
+// advisory project rather than blocking the build.
+test.describe('TerrainRasterEngine — real-WebGPU equivalence probe @gpu', () => {
   test('the per-session probe passes on a real device (or falls back for a recorded reason)', async ({
     page,
   }) => {

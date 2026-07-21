@@ -175,3 +175,37 @@ export function is3dTilesName(filename: string): boolean {
   const base = lower.split('/').pop() ?? lower;
   return base.endsWith('.pnts') || base === 'tileset.json';
 }
+
+/**
+ * How the terrain gather should establish the buffer's vertical axis.
+ *
+ * `'z'` — every contributing source is Z-up BY SPEC (survey formats, COPC/EPT
+ * streams): nothing to decide, no detection needed.
+ *
+ * `'detect'` — at least one mesh-format contributor. PLY/OBJ/glTF carry no
+ * mandated up-axis in practice: photogrammetry pipelines write Y-up, while
+ * CloudCompare/PDAL-style tools write Z-up PLYs routinely. A format table
+ * cannot answer this — an earlier revision hard-classified PLY as Y-up and
+ * rotated genuinely Z-up test and tool output into a vertical wall — so the
+ * caller must run up-axis DETECTION on the actual points and rotate only when
+ * the data says Y-up. `hasSpecZ` says whether Z-up-by-spec sources are also in
+ * the mix: if detection then says Y-up, the gather holds two provably
+ * different frames and must decline rather than analyse the union.
+ *
+ * `null` — nothing gathered.
+ *
+ * Pure seam for `Viewer.gatherTerrainPositions`, unit-tested directly.
+ */
+export function sceneUpAxisPolicy(
+  staticFormats: ReadonlyArray<SourceFormat>,
+  hasStreaming: boolean,
+): { kind: 'z' } | { kind: 'detect'; hasSpecZ: boolean } | null {
+  if (staticFormats.length === 0 && !hasStreaming) return null;
+  let hasSpecZ = hasStreaming; // COPC/EPT are LAS-family, Z-up by spec.
+  let hasMesh = false;
+  for (const f of staticFormats) {
+    if (isZUpFormat(f)) hasSpecZ = true;
+    else hasMesh = true;
+  }
+  return hasMesh ? { kind: 'detect', hasSpecZ } : { kind: 'z' };
+}

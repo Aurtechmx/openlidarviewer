@@ -223,3 +223,113 @@ describe('summarizeAlignment', () => {
     expect(skipped).toMatch(/skipped/i);
   });
 });
+
+/**
+ * Alignment must not run before the two epochs are shown to share a frame.
+ *
+ * ICP fits a rigid transform between two point sets. Given two epochs in
+ * different CRSs — or on different vertical datums — it will still converge on
+ * something and report a residual, because a residual is just a number about
+ * the fit, not about whether the fit was meaningful. That residual then reads
+ * as a quality figure for a comparison that never had a common frame.
+ *
+ * The frame check therefore happens BEFORE any sampling or fitting, in the
+ * function itself rather than at a call site, so no caller can reach the fit
+ * without passing it.
+ */
+describe('spatial preflight precedes the fit', () => {
+  const cloud = (over: Partial<EpochCloud> = {}): EpochCloud => ({
+    positions: Float32Array.from([0, 0, 0, 10, 0, 0, 0, 10, 0, 5, 5, 1]),
+    origin: [0, 0, 0],
+    crs: 'EPSG:32612',
+    verticalDatum: 'EPSG:5703',
+    ...over,
+  });
+
+  test('refuses a different horizontal CRS and reports no fit', () => {
+    const r = alignEpochClouds(cloud(), cloud({ crs: 'EPSG:25829' }));
+    expect(r.alignment.frameIncompatible).toBe(true);
+    expect(r.alignment.applied).toBe(false);
+    expect(r.after).toBe(r.after); // the after cloud is returned untouched
+  });
+
+  test('refuses a different vertical datum', () => {
+    const r = alignEpochClouds(cloud(), cloud({ verticalDatum: 'EPSG:4979' }));
+    expect(r.alignment.frameIncompatible).toBe(true);
+    expect(r.alignment.applied).toBe(false);
+  });
+
+  test('reports no residual for a refused pair — there is no fit to score', () => {
+    const r = alignEpochClouds(cloud(), cloud({ crs: 'EPSG:25829' }));
+    // Infinity, never 0 — a zero residual reads as a PERFECT fit, which is
+    // the opposite of what "no fit was attempted" means.
+    expect(r.alignment.rmsResidualM).toBe(Infinity);
+    expect(r.alignment.attempted).toBe(false);
+  });
+
+  test('states the reason', () => {
+    const r = alignEpochClouds(cloud(), cloud({ crs: 'EPSG:25829' }));
+    expect(r.alignment.frameReason ?? '').toMatch(/CRS|frame|datum/i);
+  });
+
+  test('proceeds normally when both epochs share the frame', () => {
+    const r = alignEpochClouds(cloud(), cloud());
+    expect(r.alignment.frameIncompatible).not.toBe(true);
+  });
+
+  test('still compares two UNDECLARED scans — silence is not contradiction', () => {
+    // Two local scans with no CRS is a real workflow. The comparison path
+    // already treats that pair as indicative rather than measured; refusing
+    // it here would forbid the case instead of qualifying it, and would put
+    // this gate at odds with the one downstream.
+    const r = alignEpochClouds(
+      cloud({ crs: null, verticalDatum: null }),
+      cloud({ crs: null, verticalDatum: null }),
+    );
+    expect(r.alignment.frameIncompatible).not.toBe(true);
+  });
+
+  test('matches NAVD88 against EPSG:5703 rather than refusing on spelling', () => {
+    const r = alignEpochClouds(cloud({ verticalDatum: 'NAVD88' }), cloud({ verticalDatum: 'EPSG:5703' }));
+    expect(r.alignment.frameIncompatible).not.toBe(true);
+  });
+});
+
+/**
+ * An alignment over undeclared frames must say so in its own summary.
+ *
+ * The preflight lets two silent epochs through on purpose — comparing local
+ * scans is a real workflow — but the summary then reported "Aligned the after
+ * cloud horizontally (0.03 m shift, 0.01 m residual)" with no hint that
+ * neither epoch had ever declared a frame. Those figures describe the fit
+ * accurately and describe the RELATIONSHIP not at all, and a reader takes a
+ * residual in metres as evidence of georeferenced agreement.
+ */
+describe('undeclared frames are labelled indicative', () => {
+  const local = (): EpochCloud => ({
+    positions: Float32Array.from([0, 0, 0, 10, 0, 0.1, 0, 10, 0.2, 5, 5, 1]),
+    origin: [0, 0, 0],
+    crs: null,
+    verticalDatum: null,
+  });
+  const referenced = (over: Partial<EpochCloud> = {}): EpochCloud => ({
+    ...local(), crs: 'EPSG:32612', verticalDatum: 'EPSG:5703', ...over,
+  });
+
+  test('flags a pair where neither epoch declared a frame', () => {
+    const r = alignEpochClouds(local(), local());
+    expect(r.alignment.frameUnverified).toBe(true);
+    expect(summarizeAlignment(r.alignment)).toMatch(/indicative|local frame|not georeferenced/i);
+  });
+
+  test('flags a pair where only one epoch declared a frame', () => {
+    const r = alignEpochClouds(referenced(), local());
+    expect(r.alignment.frameUnverified).toBe(true);
+  });
+
+  test('does NOT flag a pair that both declared and agreed', () => {
+    const r = alignEpochClouds(referenced(), referenced());
+    expect(r.alignment.frameUnverified).not.toBe(true);
+    expect(summarizeAlignment(r.alignment)).not.toMatch(/indicative/i);
+  });
+});

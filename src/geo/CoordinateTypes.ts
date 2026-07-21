@@ -80,7 +80,7 @@ export type CrsConfidence = 'high' | 'medium' | 'low' | 'none';
  * encoder, and the converter all key against.
  *
  * Build one with `resolveCrs(detected, override?, formatHint?)` from
- * `CrsDetection.ts`. Consumers should NEVER assemble a `ResolvedCrs`
+ * `CrsService.ts`. Consumers should NEVER assemble a `ResolvedCrs`
  * by hand — the rules for combining detection + override + format-
  * default belong in one place.
  */
@@ -168,7 +168,7 @@ export interface Bounds3 {
  * Translate the existing `CrsInfo` (LAS/LAZ-flavored, extracted by
  * `src/io/crs.ts`) into a `ResolvedCrs`. The conversion is
  * mechanical — no inference, no override, no confidence-mixing.
- * Higher layers (`CrsDetection.ts`) combine multiple sources and
+ * Higher layers (`CrsService.ts`) combine multiple sources and
  * decide the final confidence.
  *
  * Returns `null` when `info` is `undefined` so callers can chain it

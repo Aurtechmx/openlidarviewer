@@ -7,6 +7,12 @@ name: security
 on:
   push:
     branches: ["**"]
+    # Tags too. The audit ran on every branch push and on a weekly schedule
+    # but not on the ref that actually gets published, so a tag could be cut
+    # and released without the production dependency tree ever being checked
+    # at that commit — the one moment the answer is load-bearing.
+    tags:
+      - 'v*'
   pull_request:
   schedule:
     # Weekly, so newly-disclosed CVEs in pinned deps surface even without a push.

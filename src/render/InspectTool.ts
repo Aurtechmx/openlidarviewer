@@ -30,7 +30,7 @@ import {
   worldCoordLabels,
 } from './pointInfo';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
-import { latLonToUtm, utmConverter } from '../geo/UtmConverter';
+import { latLonToUtm, utmLatitudeFailure, utmConverter } from '../geo/UtmConverter';
 import { buildPatchView } from './patchView';
 import { colorProvenance, formatColorProvenance } from './colorProvenance';
 
@@ -477,14 +477,25 @@ export class InspectTool {
       // UTM grid — always shown when a geographic position exists.
       // The zone is derived from the position so the row is correct
       // regardless of the source CRS.
-      const utm = latLonToUtm(lat, lon, elev);
-      rows.push(
-        coordGroupHeader(`UTM (zone ${utm.zone}${utm.hemisphere})`),
-      );
-      rows.push(infoRow('Easting', `${utm.easting.toFixed(3)} m`));
-      rows.push(infoRow('Northing', `${utm.northing.toFixed(3)} m`));
-      if (typeof utm.elevation === 'number') {
-        rows.push(infoRow('Elevation', `${utm.elevation.toFixed(3)} m`));
+      // UTM covers 80°S to 84°N. Past those limits the maths still returns
+      // finite numbers, so a polar point used to show an easting and northing
+      // that look ordinary and match no other tool. Say there is no UTM grid
+      // here instead of printing a coordinate from outside the system.
+      const outsideUtm = utmLatitudeFailure(lat);
+      if (outsideUtm) {
+        rows.push(coordGroupHeader('UTM'));
+        rows.push(infoRow('Grid', 'not defined at this latitude'));
+        rows.push(infoRow('Reason', outsideUtm));
+      } else {
+        const utm = latLonToUtm(lat, lon, elev);
+        rows.push(
+          coordGroupHeader(`UTM (zone ${utm.zone}${utm.hemisphere})`),
+        );
+        rows.push(infoRow('Easting', `${utm.easting.toFixed(3)} m`));
+        rows.push(infoRow('Northing', `${utm.northing.toFixed(3)} m`));
+        if (typeof utm.elevation === 'number') {
+          rows.push(infoRow('Elevation', `${utm.elevation.toFixed(3)} m`));
+        }
       }
     }
 

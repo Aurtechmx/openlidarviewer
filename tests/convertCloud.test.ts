@@ -174,3 +174,64 @@ describe('convertCloud — omitClassification guard', () => {
     expect(report.log.some((l) => /omitted/i.test(l.message))).toBe(true);
   });
 });
+
+describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
+  const N = 40;
+  /** A height field authored in the given frame — enough surface to detect. */
+  function field(up: 'y' | 'z'): PointCloud {
+    const pts: number[] = [];
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) {
+        // A clear hill: wide footprint, modest height — unambiguously a
+        // surface, so up-axis detection has something to decide with.
+        const e = 5 * Math.exp(-(((i - 20) ** 2 + (j - 20) ** 2) / 180));
+        if (up === 'y') pts.push(i * 2, e, j * 2);
+        else pts.push(i * 2, j * 2, e);
+      }
+    }
+    return new PointCloud({
+      positions: Float32Array.from(pts),
+      origin: [0, 0, 0],
+      sourceFormat: 'ply',
+      name: 'field.ply',
+    });
+  }
+  it('rotates a DETECTED Y-up mesh so elevation lands in the Z column', () => {
+    // First authored point is (0, e, 0): east 0, elevation e (Y), north 0 (−Z)
+    // — the XYZ line must read 0, 0, e, not the raw storage order.
+    const out = convertCloud(field('y'), { format: 'xyz' });
+    const e = 0;
+    const second = '';
+    expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(true);
+    // Decisive coordinate check: authored point (3, sin(1)cos(0), 0) is line 3*N.
+    // Authored point at grid (3, 0): (6, e30, 0) → east 6, north 0, up e30.
+    const line = new TextDecoder().decode(out.file!.bytes).trim().split('\n')[3 * N];
+    const elev = 5 * Math.exp(-((3 - 20) ** 2 + (0 - 20) ** 2) / 180);
+    expect(line).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
+    void e; void second;
+  });
+
+  it('leaves a Z-up-AUTHORED ply untouched — the format table alone was wrong', () => {
+    // CloudCompare/PDAL-style tools write Z-up PLYs; hard-classifying the
+    // format as Y-up rotated real terrain into vertical walls in the terrain
+    // gather, caught by e2e. The converter uses the same detection.
+    const out = convertCloud(field('z'), { format: 'xyz' });
+    const line = new TextDecoder().decode(out.file!.bytes).trim().split('\n')[3 * N];
+    const elev = 5 * Math.exp(-((3 - 20) ** 2 + (0 - 20) ** 2) / 180);
+    expect(line).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
+    expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(false);
+  });
+
+  it('never second-guesses a survey format', () => {
+    const out = convertCloud(
+      new PointCloud({
+        positions: Float32Array.from([3, 5, 7]),
+        origin: [0, 0, 0],
+        sourceFormat: 'las',
+        name: 's.las',
+      }),
+      { format: 'xyz' },
+    );
+    expect(new TextDecoder().decode(out.file!.bytes).trim()).toBe('3.000 5.000 7.000');
+  });
+});

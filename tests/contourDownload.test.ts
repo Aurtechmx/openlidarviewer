@@ -42,8 +42,8 @@ function model(): ContourFeatureModel {
 
 describe('serializeContours', () => {
   it('names and types a GeoJSON file and emits valid JSON', () => {
-    const f = serializeContours(model(), 'geojson');
-    expect(f.filename).toBe('contours.geojson');
+    const f = serializeContours(model(), 'geojson-native');
+    expect(f.filename).toBe('contours-native.geojson');
     expect(f.mime).toBe('application/geo+json');
     expect(() => JSON.parse(f.content)).not.toThrow();
   });
@@ -59,13 +59,13 @@ describe('serializeContours', () => {
   });
 
   it('honours a custom basename', () => {
-    const f = serializeContours(model(), 'geojson', { basename: 'site-A-contours' });
-    expect(f.filename).toBe('site-A-contours.geojson');
+    const f = serializeContours(model(), 'geojson-native', { basename: 'site-A-contours' });
+    expect(f.filename).toBe('site-A-contours-native.geojson');
   });
 
   it('stamps the contour shape style into every serialized format', () => {
     const m: ContourFeatureModel = { ...model(), contourStyle: 'semi-geometric' };
-    const geo = JSON.parse(serializeContours(m, 'geojson').content) as {
+    const geo = JSON.parse(serializeContours(m, 'geojson-native').content) as {
       metadata: { contourStyle: string; contourStyleLabel: string };
     };
     expect(geo.metadata.contourStyle).toBe('semi-geometric');
@@ -113,7 +113,7 @@ describe('serializeContours', () => {
 
   it('threads the unified provenance into every format identically', () => {
     const m = model();
-    const geo = JSON.parse(serializeContours(m, 'geojson', { provenance: PROV }).content) as {
+    const geo = JSON.parse(serializeContours(m, 'geojson-native', { provenance: PROV }).content) as {
       metadata: { horizontalCrs: string; exportReadiness: string; softwareVersion: string };
     };
     expect(geo.metadata.horizontalCrs).toBe('EPSG:32610');
@@ -127,5 +127,130 @@ describe('serializeContours', () => {
     const dxf = serializeContours(m, 'dxf', { provenance: PROV }).content;
     expect(dxf).toMatch(/999\nHorizontal CRS\s+EPSG:32610/);
     expect(dxf).toMatch(/999\nExport readiness\s+Ready/);
+  });
+});
+
+/**
+ * The `.geojson` extension must mean what RFC 7946 says it means.
+ *
+ * The contour export wrote projected eastings/northings into a `.geojson`
+ * and declared them with the pre-RFC top-level `crs` member. RFC 7946
+ * requires WGS 84 longitude/latitude and REMOVED that member, so a
+ * compliant reader drops the only thing identifying the frame and then
+ * reads an easting of 517,047 as a longitude. It does not error — it puts
+ * the data somewhere impossible. Observed on a UTM zone 29N vineyard scan.
+ *
+ * Two files now: the standard extension carries the standard thing, and the
+ * native projected frame gets its own clearly-named sibling.
+ */
+function utmModel(): ContourFeatureModel {
+  return {
+    ...model(),
+    crs: 'EPSG:32629',
+    features: [
+      { value: 65.5, isIndex: true, grade: 'solid', meanConfidence: 90, closed: false,
+        coordinates: [[517047.74, 4644881.40], [517000.0, 4644800.0]] },
+    ],
+    bbox: { minX: 517000, minY: 4644800, maxX: 517047.74, maxY: 4644881.4 },
+  };
+}
+
+// A stand-in for the real UTM→lon/lat conversion the caller supplies.
+/** The model's coordinates are already world, so the shift is a no-op. */
+const WORLD = { x: 0, y: 0, z: 0 };
+const toLonLat = (p: readonly [number, number, number]): [number, number, number] =>
+  [-8.5 + (p[0] - 517000) / 100000, 41.9 + (p[1] - 4644800) / 100000, p[2]];
+
+describe('serializeContours — RFC 7946 vs native frame', () => {
+  it('writes degrees and NO crs member for the standard .geojson', () => {
+    const f = serializeContours(utmModel(), 'geojson', { toLonLat, worldOrigin: WORLD });
+    const gj = JSON.parse(f.content);
+    expect(f.filename).toBe('contours.geojson');
+    expect(gj.crs).toBeUndefined(); // RFC 7946 removed it
+    const [lon, lat] = gj.features[0].geometry.coordinates[0];
+    expect(lon).toBeGreaterThan(-180); expect(lon).toBeLessThan(180);
+    expect(lat).toBeGreaterThan(-90); expect(lat).toBeLessThan(90);
+  });
+
+  it('records the frame it came from, since the crs member cannot', () => {
+    const gj = JSON.parse(serializeContours(utmModel(), 'geojson', { toLonLat, worldOrigin: WORLD }).content);
+    expect(JSON.stringify(gj.metadata)).toContain('32629');
+  });
+
+  it('REFUSES to write a standard .geojson it cannot convert', () => {
+    // Without a conversion the only honest options are refusing or emitting
+    // projected numbers as degrees. It must refuse.
+    expect(() => serializeContours(utmModel(), 'geojson', { worldOrigin: WORLD })).toThrow(/convert|lon|lat|degrees/i);
+  });
+
+  it('keeps projected coordinates and the crs member in the native sibling', () => {
+    const f = serializeContours(utmModel(), 'geojson-native', { worldOrigin: WORLD });
+    const gj = JSON.parse(f.content);
+    expect(f.filename).toContain('EPSG32629');
+    expect(f.filename.endsWith('.geojson')).toBe(true);
+    expect(gj.crs.properties.name).toBe('urn:ogc:def:crs:EPSG::32629');
+    expect(gj.features[0].geometry.coordinates[0][0]).toBeCloseTo(517047.74, 2);
+  });
+
+  it('needs no conversion for the native sibling', () => {
+    expect(() => serializeContours(utmModel(), 'geojson-native', { worldOrigin: WORLD })).not.toThrow();
+  });
+});
+
+/**
+ * RFC 7946's third ordinate is a specific claim, not a spare slot.
+ *
+ * The spec defines it as height in metres above the WGS 84 ellipsoid. Contour
+ * elevations are almost never that: they are orthometric heights on a local
+ * vertical datum, sometimes in feet, often on no declared datum at all.
+ * Writing them into position[2] tells every reader they are ellipsoidal
+ * metres, and nothing in the file contradicts it — a 65 m orthometric contour
+ * silently becomes a 65 m ellipsoidal one, tens of metres from where it is.
+ *
+ * So the ordinate is written only when the vertical reference is proven, and
+ * the elevation always survives as a property carrying its own unit and datum.
+ */
+describe('RFC 7946 third ordinate', () => {
+  const withVertical = (verticalDatum: string | null) => ({
+    ...utmModel(), verticalDatum,
+  });
+
+  it('omits the Z ordinate when the vertical datum is undeclared', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical(null), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(2);
+  });
+
+  it('omits it for an orthometric datum, which is not ellipsoidal height', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:5703'), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(2);
+  });
+
+  it('keeps the elevation as a property with its unit and reference', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:5703'), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    const p = gj.features[0].properties;
+    expect(p.elevation).toBeCloseTo(65.5, 6);
+    expect(p.elevationDatum).toBe('EPSG:5703');
+    expect(p.elevationUnit).toBe('metre');
+  });
+
+  it('writes the Z ordinate for a proven WGS 84 ellipsoidal height', () => {
+    // EPSG:4979 IS WGS 84 3D — ellipsoidal metres, exactly what RFC 7946 means.
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:4979'), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(3);
+  });
+
+  it('leaves the NATIVE file 3D — it is not making an RFC claim', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:5703'), 'geojson-native', { worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(3);
   });
 });

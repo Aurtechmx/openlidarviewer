@@ -110,10 +110,10 @@ function resultForPurpose(purpose: ContourStudioPurpose): {
 /** The exact serialized GeoJSON a purpose export downloads (geometry only). */
 function geojsonBytes(purpose: ContourStudioPurpose): string {
   const { result } = resultForPurpose(purpose);
-  return serializeContours(result.model, 'geojson', { basename: 'contours' }).content;
+  return serializeContours(result.model, 'geojson-native', { basename: 'contours' }).content;
 }
 
-const defaultBytes = serializeContours(onScreen.model, 'geojson', {
+const defaultBytes = serializeContours(onScreen.model, 'geojson-native', {
   basename: 'contours',
 }).content;
 

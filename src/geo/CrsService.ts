@@ -5,7 +5,7 @@
  * is the active scan in?" Before this module, CRS state was spread
  * across four orthogonal seams:
  *
- *   - `CrsDetection.detectCrs(signals)` resolved per-load.
+ *   - a per-load signal resolver that was never wired in (removed).
  *   - `CrsRegistry` carried the well-known EPSG catalogue.
  *   - `CrsOverrideStore` persisted user choices.
  *   - `main.ts` glued them via `resolveCloudCrs` + a `_currentResolvedCrs`
@@ -128,8 +128,19 @@ export class CrsService {
     const datasetKey = keyForDataset(input.name);
     this._currentDatasetKey = datasetKey;
     const override = this._port.get(datasetKey);
-    const resolved = this._resolveDatum(override
-      ? this._fromOverride(override, input.detected)
+    // An override belongs to the file it was made for. The key is the dataset
+    // NAME, so `site-a/points.laz` and an unrelated `site-b/points.laz` collide
+    // and the stored choice would outrank the second file's own correct
+    // declaration, at high confidence. Comparing the declaration recorded with
+    // the override tells them apart — and still lets a user override a file's
+    // own wrong CRS, because that file declares the same thing every reopen.
+    const belongsToThisFile =
+      override?.detectedEpsg === undefined ||
+      input.detected?.epsg === undefined ||
+      override.detectedEpsg === input.detected.epsg;
+    const applicable = override && belongsToThisFile ? override : undefined;
+    const resolved = this._resolveDatum(applicable
+      ? this._fromOverride(applicable, input.detected)
       : (resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs()));
     this._setCurrent(resolved);
     return resolved;
@@ -169,6 +180,10 @@ export class CrsService {
     this._port.set(this._currentDatasetKey, {
       epsg: args.override.epsg,
       kind: args.override.kind,
+      // What this file declared when the choice was made — see resolveForScan.
+      // Without it the entry cannot be told apart from one belonging to an
+      // unrelated file that happens to share a name.
+      detectedEpsg: args.detected?.epsg,
     });
     const override = this._port.get(this._currentDatasetKey);
     if (!override) return this._current;

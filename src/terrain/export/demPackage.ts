@@ -20,6 +20,7 @@
  */
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
+import { epsgFromCrsLabel } from '../../export/crsIdentifier';
 import { buildExportProvenance, provenanceLines, type ExportPermitStamp } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff } from './demGeoTiff';
@@ -102,11 +103,24 @@ export interface DemPackageOptions {
   readonly exportPermit?: ExportPermitStamp | null;
 }
 
-/** Parse an "EPSG:1234" identifier to its numeric code, or null. */
+/**
+ * Parse an authority code from a CRS identifier, or null.
+ *
+ * This is fed the CRS DISPLAY label (`terrainAnalysisRunner` passes the
+ * resolver's `name` through as `dtm.crs`; `verticalDatum` is a datum name), and
+ * it previously matched any 3–6 digit run with the `EPSG:` prefix OPTIONAL. So
+ * every CRS whose name carries a year stamped its GeoTIFF with that year:
+ * `CH1903+ / LV95` wrote 1903 instead of 2056, `Mexico ITRF2008 / LCC` wrote
+ * 2008 instead of 6362, `Baltic 1977` wrote 1977 instead of 5705. A raster
+ * asserting the wrong CRS is worse than one asserting none, because a reader
+ * places it confidently rather than asking.
+ *
+ * Delegates to the shared identifier helper so the rule for "does this label
+ * name a code" lives in one place — it requires an explicit `EPSG:` token and
+ * accepts both the bare form and the parenthesised form the parsers build.
+ */
 export function parseEpsg(id: string | null | undefined): number | null {
-  if (!id) return null;
-  const m = /(?:EPSG:)?(\d{3,6})/i.exec(id);
-  return m ? Number(m[1]) : null;
+  return epsgFromCrsLabel(id);
 }
 
 const NO_DATA = -9999;
@@ -339,8 +353,20 @@ export function buildDemPackage(
   const xll = ox + dtm.originH1;
   const yll = oy + dtm.originH2;
   const cellSize = dtm.cellSizeM;
-  const epsg = parseEpsg(dtm.crs);
-  const verticalEpsg = parseEpsg(dtm.verticalDatum);
+  // Numeric codes from the resolver are authoritative; the label parse is the
+  // defensive fallback for grids built before the codes travelled.
+  const epsg = dtm.horizontalEpsg ?? parseEpsg(dtm.crs);
+  const verticalEpsg = dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum);
+  // GeoTIFF unit code for the Z values, from the factor the analysis carried.
+  // Matched by value (1e-9 tolerance separates the two foot definitions);
+  // an unrecognised factor writes NO unit key rather than a wrong one.
+  const vUm = dtm.verticalUnitToMetres;
+  const verticalUnitCode =
+    vUm == null ? null
+    : Math.abs(vUm - 1) < 1e-9 ? 9001
+    : Math.abs(vUm - 0.3048) < 1e-9 ? 9002
+    : Math.abs(vUm - 1200 / 3937) < 1e-9 ? 9003
+    : null;
   const isGeographic = options.isGeographic ?? false;
 
   // Bounds extent in CRS units: lower-left corner of the lower-left cell to the
@@ -368,10 +394,20 @@ export function buildDemPackage(
     return out;
   };
 
-  const grids: Array<{ key: string; values: ArrayLike<number>; coverage: ArrayLike<number> }> = [
-    { key: 'dtm', values: shiftZ(dtm.z, dtm.coverage), coverage: dtm.coverage },
-    { key: 'dsm', values: shiftZ(dsmZ, dsmCov), coverage: dsmCov },
-    { key: 'chm', values: chm, coverage: chmCov },
+  const grids: Array<{
+    key: string;
+    values: ArrayLike<number>;
+    coverage: ArrayLike<number>;
+    verticalEpsg: number | null;
+  }> = [
+    // CHM is DSM − DTM: a height ABOVE GROUND, not a coordinate in any absolute
+    // vertical CRS. Stamping it with the DTM/DSM's VerticalCSType told a GIS
+    // its canopy heights were NAVD88 elevations — a claim a reader acts on
+    // (geoid corrections, benchmark comparisons). Only the absolute grids
+    // carry the stamp; the relative one states no vertical reference.
+    { key: 'dtm', values: shiftZ(dtm.z, dtm.coverage), coverage: dtm.coverage, verticalEpsg },
+    { key: 'dsm', values: shiftZ(dsmZ, dsmCov), coverage: dsmCov, verticalEpsg },
+    { key: 'chm', values: chm, coverage: chmCov, verticalEpsg: null },
   ];
 
   const entries: ZipEntry[] = [];
@@ -386,7 +422,7 @@ export function buildDemPackage(
     });
     entries.push({
       name: `${basename}-${g.key}.tif`,
-      bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg }),
+      bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg, verticalUnitCode: g.verticalEpsg != null ? verticalUnitCode : null }),
     });
   }
 

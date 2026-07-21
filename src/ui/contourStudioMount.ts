@@ -102,6 +102,7 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
     verticalUnit: unitKnown ? knownUnit(scale) : unknownUnit(),
     sourceUnitLabel: (unitKnown ? opts.ctx.verticalUnitLabel : null) ?? '',
     crsProjected: opts.ctx.crsProjected,
+    groundIsDerived: opts.ctx.groundIsDerived,
   });
   // Stable per-frame gate facts for the §19 export permit: the launch status
   // plus the CRS unit facts. Computed ONCE here (from the same launch state the

@@ -28,11 +28,15 @@
 #     compile error at the measurement + CRS boundaries.
 
 schemaVersion: 1
-# Claims last reviewed at 0.5.9; the 0.6.0-alpha.1 wave (streaming decode, session
-# import, density units, project-frame foundation) did not touch these terrain /
-# measurement algorithms, so their evidence is inherited unchanged into the alpha.
-softwareVersion: 0.6.0-alpha.1
-generated: 2026-07-18
+# Claims last reviewed at 0.5.9. Neither the 0.6.0-alpha.1 wave (streaming decode,
+# session import, density units, project-frame foundation) nor alpha.2 (test gates,
+# composition root, architecture map) changed what these terrain / measurement
+# algorithms compute, so their evidence is inherited unchanged into the alpha.
+# alpha.2 DID correct two unit/axis defects at the reporting boundary — box height
+# now follows the scan up-axis, and the Horn slope guard rejects a non-positive
+# cell size — but neither alters an algorithm's evidence level.
+softwareVersion: 0.6.0-alpha.2
+generated: 2026-07-19
 validationOwner: A. Urias / Aurtech
 
 claims:

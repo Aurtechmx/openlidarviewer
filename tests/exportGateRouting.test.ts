@@ -104,6 +104,7 @@ describe('integrityReportFile — routed through the gate', () => {
       [dist('m1', 5)],
       UP,
       1,
+      1,
       'site-a',
       'EPSG:6433',
       '2026-06-27T00:00:00Z',

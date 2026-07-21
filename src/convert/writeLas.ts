@@ -56,6 +56,14 @@ export interface WriteLasOptions {
   readonly linearUnitCode?: number | null;
   /** Vertical (height) datum EPSG (e.g. 5703 NAVD88) → VerticalCSTypeGeoKey. */
   readonly verticalEpsg?: number | null;
+  /**
+   * GeoTIFF unit code for the VERTICAL axis (9001 metre / 9002 ft / 9003 US
+   * ft), independent of the horizontal one. No convert mode moves Z, so this
+   * is the SOURCE's vertical unit; null/absent omits VerticalUnitsGeoKey
+   * rather than guessing — a wrong vertical unit relabels every elevation by
+   * 3.28×.
+   */
+  readonly verticalUnitCode?: number | null;
   /** Quantisation scale per axis. Defaults: projected 0.001, geographic 1e-7. */
   readonly scale?: [number, number, number];
   /**
@@ -72,10 +80,15 @@ export interface WriteLas14Options extends WriteLasOptions {
   /**
    * OGC WKT describing the CRS. LAS 1.4 requires the CRS as WKT for point
    * formats 6+ (global-encoding bit 4); when this is present it is written
-   * as a LASF_Projection/2112 VLR and the bit is set. When only an EPSG code
-   * is known we fall back to the same GeoKey VLR the 1.2 writer emits (bit 4
-   * clear) — honest about the encoding actually in the file, rather than
-   * fabricating a parameterless WKT downstream tools could not use.
+   * as a LASF_Projection/2112 VLR and the bit is set. Callers should pass the
+   * source's WKT when there is one and otherwise try `wktForEpsg`, which
+   * derives it for the codes whose parameters are exactly determined; a scan
+   * georeferenced by GeoKeys alone used to arrive here with nothing and
+   * produce a file no strict 1.4 reader would accept the CRS from.
+   *
+   * A null WKT still falls back to the same GeoKey VLR the 1.2 writer emits
+   * (bit 4 clear) — honest about the encoding actually in the file, rather
+   * than fabricating a parameterless WKT downstream tools could not use.
    */
   readonly wkt?: string | null;
 }
@@ -147,13 +160,15 @@ function buildGeoKeys(opts: WriteLasOptions, geo: boolean): Array<[number, numbe
       geoKeys.push([3076, opts.linearUnitCode]); // ProjLinearUnits (metre/foot/US ft)
     }
     if (opts.verticalEpsg != null && opts.verticalEpsg > 0 && opts.verticalEpsg <= 65535) {
-      // Vertical height datum + its unit (match a projected foot horizontal,
-      // else metres — elevation is metres for geographic horizontals).
-      const vUnit = !geo && (opts.linearUnitCode === 9002 || opts.linearUnitCode === 9003)
-        ? opts.linearUnitCode
-        : 9001;
       geoKeys.push([4096, opts.verticalEpsg]); // VerticalCSType
-      geoKeys.push([4099, vUnit]); // VerticalUnits
+      // VerticalUnits is the SOURCE's vertical unit, never derived from the
+      // horizontal: no convert mode moves Z, so after a horizontal reprojection
+      // to metres a foot-height source still carries foot Z values — the old
+      // "match the horizontal, else metres" rule stamped those as metres.
+      // Unknown ⇒ omit the key rather than guess.
+      if (opts.verticalUnitCode != null && opts.verticalUnitCode > 0) {
+        geoKeys.push([4099, opts.verticalUnitCode]); // VerticalUnits
+      }
     }
   }
   return geoKeys;

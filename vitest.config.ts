@@ -54,5 +54,36 @@ export default defineConfig({
     // (Vitest 4 dropped the top-level `minWorkers` option; a floor of 1 is
     // already guaranteed by the Math.max(1, …) clamp on `maxWorkers` above.)
     maxWorkers,
+    /**
+     * Coverage is scoped to the PURE modules — the numeric, geometric and
+     * model code whose behaviour a unit test can actually pin. Deliberately
+     * excluded: the render layer (WebGPU/three, exercised by the e2e suite),
+     * the UI/panel layer (DOM wiring), workers, and the two orchestration
+     * monoliths (main.ts / Viewer.ts) whose decomposition is in progress —
+     * a repo-wide percentage there would be a number nobody acts on.
+     * Thresholds are a ratchet: raise them as the decomposition lands, never
+     * lower them to make a build pass.
+     */
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'json-summary'],
+      include: [
+        'src/process/**/*.ts',
+        'src/terrain/**/*.ts',
+        'src/render/measure/**/*.ts',
+        'src/io/crs.ts',
+        'src/model/**/*.ts',
+        'src/app/**/*.ts',
+        'src/analysis/**/*.ts',
+        'src/export/measurementExport.ts',
+        'src/report/**/*.ts',
+      ],
+      exclude: ['**/*.d.ts', '**/worker/**', '**/*.generated.ts'],
+      // Set just under the measured baseline (lines 90.57 / statements 89.19 /
+      // functions 87.75 / branches 82.73), so a real regression fails the gate
+      // while an incidental point of drift does not. Ratchet these UP as the
+      // decomposition adds tested modules; never down to make a build pass.
+      thresholds: { lines: 89, functions: 86, statements: 88, branches: 81 },
+    },
   },
 });

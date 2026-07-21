@@ -187,6 +187,12 @@ export interface AnalysePanelCallbacks {
     sheet?: 'letter' | 'a4' | 'a3';
     /** True when the horizontal CRS is geographic (degree cells). */
     isGeographic?: boolean;
+    /**
+     * Source frame → WGS 84 lon/lat for the RFC 7946 contour GeoJSON.
+     * Undefined when the CRS cannot be converted; the export then refuses
+     * rather than writing projected numbers into degree fields.
+     */
+    toLonLat?: (p: readonly [number, number, number]) => [number, number, number];
     /** CRS WKT for the DEM export's .prj sidecar, when known. */
     wkt?: string | null;
     /**
@@ -1470,9 +1476,20 @@ export class AnalysePanel {
    * Returns null when there are too few cells to be meaningful.
    */
   private _elevationHistogram(dtm: { z: Float32Array; coverage: Uint8Array }): HTMLElement | null {
+    // The analysis runs in the cloud's RECENTRED frame, so `dtm.z` is local —
+    // the DEM package adds the load-time vertical origin back before writing
+    // absolute grids, and this panel must do the same or it labels a local
+    // residual "Bare-earth elevation … m". On a Swiss LV95 scan whose true
+    // ground sits at 330–467 m, the un-restored read showed −498.9 – −388.8:
+    // the right SHAPE at the wrong datum, which is exactly the kind of wrong
+    // that survives a glance. No origin ⇒ the frame is local anyway, so the
+    // caption says so rather than implying an elevation.
+    const oz = this._cb.getMapContext?.()?.worldOrigin?.z;
+    const shift = Number.isFinite(oz) ? (oz as number) : 0;
+    const absolute = shift !== 0;
     const covered: number[] = [];
     for (let i = 0; i < dtm.z.length; i++) {
-      if (dtm.coverage[i] !== 0 && Number.isFinite(dtm.z[i])) covered.push(dtm.z[i]);
+      if (dtm.coverage[i] !== 0 && Number.isFinite(dtm.z[i])) covered.push(dtm.z[i] + shift);
     }
     if (covered.length < 16) return null;
     const hist = histogramBins(covered, 24);
@@ -1484,7 +1501,9 @@ export class AnalysePanel {
     const fmt = (v: number): string => (Number.isFinite(v) ? v.toFixed(1) : '—');
     wrap.append(el('div', {
       className: 'olv-analyse-caption',
-      text: `${fmt(hist.min)} – ${fmt(hist.max)} m · ${hist.total.toLocaleString()} cells`,
+      text:
+        `${fmt(hist.min)} – ${fmt(hist.max)} m · ${hist.total.toLocaleString()} cells` +
+        (absolute ? '' : ' · local frame (no vertical origin)'),
     }));
     return wrap;
   }
@@ -1893,6 +1912,7 @@ export class AnalysePanel {
           // Resolved CRS unit → DXF $INSUNITS + the SVG scale note, so a
           // foot-based CRS stamps feet instead of the metre default.
           linearUnit: mapCtx?.linearUnit,
+          toLonLat: mapCtx?.toLonLat,
         }),
       );
     } catch (err) {
@@ -1908,9 +1928,19 @@ export class AnalysePanel {
 
   private _buildExportRow(): HTMLElement {
     const row = el('div', { className: 'olv-analyse-export' });
-    const formats: ContourFormat[] = ['geojson', 'svg', 'dxf'];
+    const formats: ContourFormat[] = ['geojson', 'geojson-native', 'svg', 'dxf'];
+    // Both GeoJSON frames are offered side by side: the standard one for
+    // anything that reads RFC 7946, the native one for GIS that wants the
+    // survey grid. Labelling them apart is the point — the failure mode is
+    // loading the wrong frame without noticing.
+    const LABEL: Record<ContourFormat, string> = {
+      geojson: 'GEOJSON (WGS 84)',
+      'geojson-native': 'GEOJSON (SOURCE CRS)',
+      svg: 'SVG',
+      dxf: 'DXF',
+    };
     for (const fmt of formats) {
-      const btn = el('button', { className: 'olv-analyse-dl', text: fmt.toUpperCase() });
+      const btn = el('button', { className: 'olv-analyse-dl', text: LABEL[fmt] });
       btn.addEventListener('click', () => void this._exportContourFormat(fmt, btn));
       this._exportButtons.push(btn);
       this._studioExportBtns.set(fmt, btn);

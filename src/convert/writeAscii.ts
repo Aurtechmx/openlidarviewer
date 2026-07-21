@@ -16,12 +16,26 @@ function fmt(v: number, precision: number): string {
   return v.toFixed(precision);
 }
 
+/**
+ * Decimals for the HORIZONTAL axes. Three is millimetres in a projected CRS and
+ * about 110 m in a geographic one, so a reprojected WGS84 export was snapping
+ * every point to a lattice roughly 55 m across. Seven decimals is ~1.1 cm at the
+ * equator, the survey convention — and the same rule `src/io/exporters.ts` and
+ * `src/convert/writeLas.ts` already apply. Z is unaffected: a height is a linear unit even
+ * when the horizontal frame is degrees.
+ */
+function horizontalPrecision(precision: number, geographic?: boolean): number {
+  // max, not a swap: a caller asking for MORE decimals must not be reduced.
+  return geographic === true ? Math.max(precision, 7) : precision;
+}
+
 /** Write space-delimited `x y z` (+ `r g b` when the cloud has colour). */
-export function writeXyz(g: GlobalPoints, precision = 3): string {
+export function writeXyz(g: GlobalPoints, precision = 3, geographic?: boolean): string {
   const lines: string[] = [];
   const c = g.colors;
+  const h = horizontalPrecision(precision, geographic);
   for (let i = 0; i < g.count; i++) {
-    const base = `${fmt(g.x[i], precision)} ${fmt(g.y[i], precision)} ${fmt(g.z[i], precision)}`;
+    const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
     if (c) {
       lines.push(`${base} ${c[i * 3]} ${c[i * 3 + 1]} ${c[i * 3 + 2]}`);
     } else {
@@ -38,9 +52,16 @@ export function writeXyz(g: GlobalPoints, precision = 3): string {
  */
 export function writeAsc(
   g: GlobalPoints,
-  opts: { precision?: number; crsName?: string | null; epsg?: number | null } = {},
+  opts: {
+    precision?: number;
+    crsName?: string | null;
+    epsg?: number | null;
+    /** True when the output frame is geographic (lon/lat degrees). */
+    geographic?: boolean;
+  } = {},
 ): string {
   const precision = opts.precision ?? 3;
+  const h = horizontalPrecision(precision, opts.geographic);
   const hasI = g.intensity != null;
   const header: string[] = ['# OpenLiDARViewer ASC export'];
   if (opts.epsg != null) header.push(`# crs: EPSG:${opts.epsg}`);
@@ -51,7 +72,7 @@ export function writeAsc(
   const lines: string[] = [header.join('\n')];
   const it = g.intensity;
   for (let i = 0; i < g.count; i++) {
-    const base = `${fmt(g.x[i], precision)} ${fmt(g.y[i], precision)} ${fmt(g.z[i], precision)}`;
+    const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
     lines.push(it ? `${base} ${it[i]}` : base);
   }
   return lines.join('\n') + '\n';

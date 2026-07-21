@@ -273,7 +273,7 @@ async function buildAll(
   // Zero world origin: the geometry stays put but the frame contract is kept
   // (a zero shift returns the model unchanged, CRS stamp included).
   const serOpts = { basename: OPTS.basename, provenance: prov, worldOrigin: { x: 0, y: 0 } };
-  const geojson = JSON.parse(serializeContours(model, 'geojson', serOpts).content) as Record<string, any>;
+  const geojson = JSON.parse(serializeContours(model, 'geojson-native', serOpts).content) as Record<string, any>;
   const dxf = serializeContours(model, 'dxf', serOpts).content;
   const svg = serializeContours(model, 'svg', serOpts).content;
 

@@ -119,6 +119,87 @@ describe('CrsService.resolveForScan — override precedence', () => {
     expect(resolved.userConfirmed).toBe(true);
   });
 
+  /**
+   * Confirming a file's own CRS in the picker must not change its units. The
+   * coordinator used to run a second, weaker copy of this resolution that wrote
+   * `linearUnitToMetres: 1` for every projected override, and ITS value is what
+   * reached the point inspector — so the inspector and the measurement HUD
+   * disagreed by 3.28x on the same foot-based scan.
+   */
+  /**
+   * Overrides are keyed by the dataset NAME alone, so `site-a/points.laz` and an
+   * unrelated `site-b/points.laz` collide. The stored override then outranks the
+   * second file's own correct declaration and it is displayed under someone
+   * else's CRS, at `confidence: 'high'`.
+   *
+   * The override records what the file it was made for had DECLARED. When that
+   * no longer matches, the entry belongs to a different file and is ignored —
+   * which still lets the user override a file's own wrong CRS, because the
+   * recorded declaration matches on every reopen of that same file.
+   */
+  it('ignores an override recorded against a different declared CRS', () => {
+    const port = makePort();
+    port.store.set('points.laz', {
+      epsg: 32612, kind: 'projected', updatedAt: Date.now(), detectedEpsg: 26913,
+    });
+    const resolved = new CrsService(port).resolveForScan({
+      name: 'points.laz',
+      detected: { ...NAD83_UTM_18N, epsg: 2276 },
+      source: 'las-vlr',
+    });
+    expect(resolved.epsg).toBe(2276);
+    expect(resolved.source).not.toBe('user-override');
+  });
+
+  it('still applies the override when the file declares what it declared before', () => {
+    const port = makePort();
+    port.store.set('points.laz', {
+      epsg: 32612, kind: 'projected', updatedAt: Date.now(), detectedEpsg: 26913,
+    });
+    const resolved = new CrsService(port).resolveForScan({
+      name: 'points.laz',
+      detected: { ...NAD83_UTM_18N, epsg: 26913 },
+      source: 'las-vlr',
+    });
+    expect(resolved.epsg).toBe(32612);
+    expect(resolved.source).toBe('user-override');
+  });
+
+  it('applies an override with no recorded declaration, as before', () => {
+    // Entries stored before this field existed carry no evidence either way;
+    // discarding them would silently drop a user's saved choice.
+    const port = makePort();
+    port.store.set('points.laz', { epsg: 32612, kind: 'projected', updatedAt: Date.now() });
+    const resolved = new CrsService(port).resolveForScan({
+      name: 'points.laz',
+      detected: { ...NAD83_UTM_18N, epsg: 2276 },
+      source: 'las-vlr',
+    });
+    expect(resolved.epsg).toBe(32612);
+  });
+
+  it('keeps the detected foot unit when the override names the SAME EPSG', () => {
+    const US_FOOT = 1200 / 3937;
+    const detectedFeet: CrsInfo = {
+      source: 'wkt',
+      name: 'NAD83 / Colorado Central (ftUS)',
+      epsg: 2231,
+      linearUnit: 'us-survey-foot',
+      linearUnitToMetres: US_FOOT,
+      isGeographic: false,
+    };
+    const port = makePort();
+    port.store.set('site.laz', { epsg: 2231, kind: 'projected', updatedAt: Date.now() });
+    const resolved = new CrsService(port).resolveForScan({
+      name: 'site.laz',
+      detected: detectedFeet,
+      source: 'las-vlr',
+    });
+    expect(resolved.epsg).toBe(2231);
+    expect(resolved.linearUnitToMetres).toBeCloseTo(US_FOOT, 9);
+    expect(resolved.linearUnit).toBe('us-survey-foot');
+  });
+
   it('borrows the detector\'s WKT when the override matches its EPSG', () => {
     const detected: CrsInfo = {
       ...NAD83_UTM_18N,

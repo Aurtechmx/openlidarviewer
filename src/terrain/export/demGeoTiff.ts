@@ -33,6 +33,13 @@ export interface DemGeoTiffInput {
   readonly isGeographic?: boolean;
   /** Vertical CRS EPSG code, or null. */
   readonly verticalEpsg?: number | null;
+  /**
+   * GeoTIFF vertical unit code (9001/9002/9003) for VerticalUnitsGeoKey 4099.
+   * Written only when known — GeoTIFF 1.1 defines 4096 and 4099 as separate
+   * keys, and omitting 4099 left a compound-CRS raster's heights ambiguous
+   * between metres and feet. Never derived from the horizontal unit.
+   */
+  readonly verticalUnitCode?: number | null;
 }
 
 // TIFF field types.
@@ -74,6 +81,10 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
     else keys.push(3072, 0, 1, epsg); // ProjectedCSTypeGeoKey
   }
   if (verticalEpsg != null) keys.push(4096, 0, 1, verticalEpsg); // VerticalCSTypeGeoKey
+  const verticalUnitCode = input.verticalUnitCode ?? null;
+  if (verticalEpsg != null && verticalUnitCode != null && verticalUnitCode > 0) {
+    keys.push(4099, 0, 1, verticalUnitCode); // VerticalUnitsGeoKey — see options doc
+  }
   const numKeys = keys.length / 4;
   const geoDir = [1, 1, 0, numKeys, ...keys]; // uint16[]
 

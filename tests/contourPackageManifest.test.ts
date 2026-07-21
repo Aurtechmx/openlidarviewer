@@ -22,7 +22,7 @@ const exploratory: ScientificExportDecision = { status: 'exploratory', badge: 'E
 const blocked: ScientificExportDecision = { status: 'blocked', reasons: ['no surface'] };
 
 const allAvailable = {
-  pdf: true, analyticalGeojson: true, cartographicGeojson: true, cartographicDxf: true,
+  pdf: true, analyticalGeojson: true, cartographicGeojson: true, nativeGeojson: true, cartographicDxf: true,
   dtm: true, hillshade: true, support: true, uncertainty: true,
   validationJson: true, provenanceJson: true, studioJson: true,
 };

@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { utmConverter } from '../src/geo/UtmConverter';
+import { utmConverter, utmZoneFor, utmLatitudeFailure } from '../src/geo/UtmConverter';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,6 +219,101 @@ describe('utmConverter — toGeographic', () => {
     }
   });
 
+  /**
+   * A UTM easting/northing outside the grid's valid range is not a coordinate
+   * the converter can honestly interpret, but the maths happily returns a
+   * lat/lon for any pair of numbers. Before this gate, easting 5,000,000 in
+   * zone 12N returned `ok: true` with lat 27.677 / lon -66.801 — a confident
+   * answer in the Atlantic — and the KML export wrote placemarks there.
+   *
+   * The `out-of-bounds` failure code has been in the contract since the
+   * converter interface was written; nothing had ever emitted it.
+   *
+   * SCOPE, deliberately stated: this catches GROSS implausibility — garbage,
+   * unit confusion (feet read as metres), and geographic coordinates fed in as
+   * projected ones. It CANNOT catch an adjacent-zone mislabel, because a valid
+   * easting is valid in every zone: a true zone-12 point at easting 500,000
+   * labelled zone 13 stays in range and still resolves ~500 km east. Detecting
+   * that needs a second signal (a catalog EPSG, a declared geographic bbox),
+   * not a range check.
+   */
+  describe('implausible grid coordinates are refused, not interpreted', () => {
+    it('accepts a coordinate inside the UTM grid range', () => {
+      expect(utmConverter.toGeographic({ x: 500000, y: 4500000, z: 0 }, utm(12)).ok).toBe(true);
+    });
+
+    it('refuses an easting far outside any zone', () => {
+      const r = utmConverter.toGeographic({ x: 5_000_000, y: 4_500_000, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.code).toBe('out-of-bounds');
+        expect(r.reason).toMatch(/easting/i);
+      }
+    });
+
+    it('refuses an easting below the zone minimum', () => {
+      const r = utmConverter.toGeographic({ x: 50_000, y: 4_500_000, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe('out-of-bounds');
+    });
+
+    it('refuses a northing beyond the pole', () => {
+      const r = utmConverter.toGeographic({ x: 500_000, y: 12_000_000, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toMatch(/northing/i);
+    });
+
+    it('accepts a slightly negative northing, which is just south of the equator', () => {
+      // Superseded an earlier assertion that ANY negative northing is invalid.
+      // It is not: a northern-zone tile straddling the equator has them, and
+      // refusing them rejected real equatorial surveys.
+      expect(utmConverter.toGeographic({ x: 500_000, y: -1, z: 0 }, utm(12)).ok).toBe(true);
+    });
+
+    it('refuses lat/lon values handed in as if they were UTM metres', () => {
+      // The realistic confusion this catches: a geographic cloud whose CRS was
+      // overridden to a UTM code. Degrees are nowhere near grid metres.
+      const r = utmConverter.toGeographic({ x: -111.05, y: 40.02, z: 0 }, utm(12));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe('out-of-bounds');
+    });
+
+    it('refuses the same coordinate through convertPoint, not just toGeographic', () => {
+      // convertPoint is the path the Inspector reads. Gating only the
+      // convenience wrapper would leave the readout showing a confident
+      // lat/lon for a coordinate the converter cannot interpret.
+      const r = utmConverter.convertPoint(
+        { x: 5_000_000, y: 4_500_000, z: 0 },
+        utm(12),
+        WGS84_LATLON,
+      );
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe('out-of-bounds');
+    });
+
+    it('accepts a southern-zone point just NORTH of the equator', () => {
+      // A survey straddling the equator keeps ONE zone/hemisphere code for the
+      // whole tile, so a 327xx northing legitimately passes 10 000 000. An
+      // inclusive cap there refuses real data from Ecuador, Kenya, Indonesia.
+      expect(utmConverter.toGeographic({ x: 500_000, y: 10_000_500, z: 0 }, utm(18, 'S')).ok).toBe(true);
+    });
+
+    it('accepts a northern-zone point just SOUTH of the equator', () => {
+      // The mirror case: a 326xx northing goes slightly negative.
+      expect(utmConverter.toGeographic({ x: 500_000, y: -500, z: 0 }, utm(18)).ok).toBe(true);
+    });
+
+    it('still refuses a northing far past the overlap allowance', () => {
+      expect(utmConverter.toGeographic({ x: 500_000, y: 12_000_000, z: 0 }, utm(12)).ok).toBe(false);
+      expect(utmConverter.toGeographic({ x: 500_000, y: -500_000, z: 0 }, utm(12)).ok).toBe(false);
+    });
+
+    it('accepts the range boundaries themselves', () => {
+      expect(utmConverter.toGeographic({ x: 100_000, y: 0, z: 0 }, utm(12)).ok).toBe(true);
+      expect(utmConverter.toGeographic({ x: 900_000, y: 10_000_000, z: 0 }, utm(12)).ok).toBe(true);
+    });
+  });
+
   it('rejects a non-UTM source with unsupported-pair', () => {
     const result = utmConverter.toGeographic(
       { x: 0, y: 0, z: 0 },
@@ -295,5 +390,63 @@ describe('utmConverter — convertBounds', () => {
       WGS84_LATLON,
     );
     expect(result.ok).toBe(false);
+  });
+});
+
+/**
+ * UTM is not defined everywhere, and two regions do not follow the formula.
+ *
+ * The zone came straight from longitude, so the grid was reported for
+ * latitudes UTM does not cover — a point at 85°N got a finite easting and
+ * northing that no other tool would agree with — and the two documented
+ * irregular zones were computed wrong:
+ *
+ *   - South-west Norway: zone 32 is widened to cover 3°E–12°E at 56°–64°N,
+ *     so a point at 60°N 5°E belongs to 32V, not the 31 the formula gives.
+ *   - Svalbard: zones 31, 33, 35 and 37 are widened at 72°–84°N, so 78°N 15°E
+ *     belongs to 33X, not 33 by luck and 34 by formula.
+ *
+ * These are in the EPSG/UTM definition, not local convention, so a tool that
+ * ignores them silently disagrees with PROJ over real survey areas.
+ */
+describe('UTM zone irregularities and validity', () => {
+  it('refuses latitudes outside the UTM band', () => {
+    expect(utmLatitudeFailure(85)).not.toBeNull();
+    expect(utmLatitudeFailure(-81)).not.toBeNull();
+    expect(utmLatitudeFailure(90)).not.toBeNull();
+  });
+
+  it('accepts the band UTM actually covers', () => {
+    expect(utmLatitudeFailure(84)).toBeNull();
+    expect(utmLatitudeFailure(-80)).toBeNull();
+    expect(utmLatitudeFailure(0)).toBeNull();
+  });
+
+  it('says WHY it refused, naming the band', () => {
+    expect(utmLatitudeFailure(85)).toMatch(/84|80|UTM/i);
+  });
+
+  it('widens zone 32 over south-west Norway', () => {
+    expect(utmZoneFor(60, 5).zone).toBe(32);   // would be 31 by formula
+    expect(utmZoneFor(62, 11).zone).toBe(32);
+    // Just outside the exception, the formula stands.
+    expect(utmZoneFor(55, 5).zone).toBe(31);
+    expect(utmZoneFor(60, 13).zone).toBe(33);
+  });
+
+  it('applies the Svalbard zone widenings', () => {
+    expect(utmZoneFor(78, 5).zone).toBe(31);
+    expect(utmZoneFor(78, 15).zone).toBe(33);
+    expect(utmZoneFor(78, 25).zone).toBe(35);
+    expect(utmZoneFor(78, 35).zone).toBe(37);
+    // Below 72°N the widenings do not apply.
+    expect(utmZoneFor(70, 15).zone).toBe(33);
+    expect(utmZoneFor(70, 20).zone).toBe(34);
+  });
+
+  it('leaves ordinary zones untouched', () => {
+    expect(utmZoneFor(40, -111).zone).toBe(12);
+    expect(utmZoneFor(-33, 151).zone).toBe(56);
+    expect(utmZoneFor(41.9, -8.5).zone).toBe(29);
   });
 });

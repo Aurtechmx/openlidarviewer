@@ -1577,7 +1577,7 @@ export class MeasureController {
       }
       case 'box': {
         if (p.length < 2) return '—';
-        const m = boxMetrics(boxFromCorners(p[0], p[1]));
+        const m = boxMetrics(boxFromCorners(p[0], p[1]), this._worldUp);
         return formatBoxHeadline(
           // Horizontal axes ×f, the up axis (height) ×vertical factor, volume
           // f²·vertical — each a pure monomial, so a compound CRS reads honest.
@@ -1862,11 +1862,11 @@ export class MeasureController {
       // stable index order so this overlay (and the future renderer
       // clipping uniform) read from one source of truth.
       const box = boxFromCorners(pts[0], pts[1]);
-      const corners = boxCorners(box);
+      const corners = boxCorners(box, this._worldUp);
       for (const [aI, bI] of BOX_EDGES) {
         E.push({ a: corners[aI], b: corners[bI], style: 'solid' });
       }
-      const metrics = boxMetrics(box);
+      const metrics = boxMetrics(box, this._worldUp);
       const centre: Vec3 = [
         (box.min[0] + box.max[0]) * 0.5,
         (box.min[1] + box.max[1]) * 0.5,
@@ -2030,11 +2030,11 @@ export class MeasureController {
       // are drawn in the same `preview` style as other in-progress tools
       // so the user sees the box take shape as they sweep the diagonal.
       const box = boxFromCorners(pts[0], cur);
-      const corners = boxCorners(box);
+      const corners = boxCorners(box, this._worldUp);
       for (const [aI, bI] of BOX_EDGES) {
         E.push({ a: corners[aI], b: corners[bI], style: 'preview' });
       }
-      const metrics = boxMetrics(box);
+      const metrics = boxMetrics(box, this._worldUp);
       const centre: Vec3 = [
         (box.min[0] + box.max[0]) * 0.5,
         (box.min[1] + box.max[1]) * 0.5,

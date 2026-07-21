@@ -40,6 +40,7 @@ import {
 export type ContourPermitProduct =
   | 'pdf'
   | 'geojson'
+  | 'geojson-native'
   | 'dxf'
   | 'svg'
   | 'dem'
@@ -108,6 +109,9 @@ export function exporterIdForContourProduct(
     case 'pdf':
       return 'contour.pdf';
     case 'geojson':
+    // The native-frame sibling carries the same geometry under the same
+    // claim; only its coordinate frame and filename differ.
+    case 'geojson-native':
       return analyticalGeometry ? 'contour.geojson.analytical' : 'contour.geojson.cartographic';
     case 'dxf':
       return 'contour.dxf.cartographic';

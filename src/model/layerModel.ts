@@ -29,7 +29,24 @@ export interface LayerInfo {
   /** Vertical datum label or `EPSG:<code>`, when the source declares one. */
   readonly verticalDatum?: string;
   /** True when the CRS is geographic (lat/lon). */
+  /** Vertical CRS EPSG code, when declared — authoritative over the label. */
+  readonly verticalEpsg?: number;
   readonly isGeographic?: boolean;
+  /**
+   * Metres per horizontal linear unit, when the CRS declares one. The frame's
+   * precision gate converts the Float32 quantum through this before judging it
+   * against a budget in metres; absent means the cost cannot be bounded, and
+   * an unbounded cost refuses the mount rather than assuming metres.
+   */
+  readonly linearUnitToMetres?: number;
+  /**
+   * Metres per VERTICAL unit, when the CRS declares one. A compound CRS can
+   * measure height in a different unit from the horizontal plane, so the Z
+   * quantum has to be converted through this one. Absent means the vertical
+   * cost cannot be bounded and the mount is refused — it must NOT fall back to
+   * `linearUnitToMetres`, which would restate a feet-scaled error as metres.
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 /**
@@ -63,15 +80,34 @@ export interface CrsMismatch {
   readonly mismatched: ReadonlyArray<{ readonly id: string; readonly reason: string }>;
   /** Layers carrying no declarable CRS — can't be compared (distinct from mismatching). */
   readonly unknown: readonly string[];
+  /**
+   * Layers whose heights can't be confirmed to sit on the reference's vertical
+   * datum, because a datum is missing on one side or on both.
+   *
+   * Deliberately NOT folded into {@link mismatched}: nothing proves these
+   * disagree, and callers treat `mismatched` as a proven difference. The common
+   * case is one tile declaring NAVD88 (orthometric) beside a plain LAS whose Z
+   * is GNSS ellipsoidal height — tens of metres apart, with no declaration
+   * either way. Silence there read as agreement.
+   */
+  readonly verticalUnconfirmed: readonly string[];
   /** One-line plain-language summary; empty when nothing actionable. */
   readonly summary: string;
 }
 
 /** A stable horizontal-CRS key for a layer, or null when none is declared. */
-function horizontalKey(layer: LayerInfo): string | null {
+export function horizontalKey(layer: LayerInfo): string | null {
   if (typeof layer.epsg === 'number') return `EPSG:${layer.epsg}`;
-  if (layer.crsName && layer.crsName.trim().length > 0) return layer.crsName.trim();
-  return null;
+  const name = layer.crsName?.trim();
+  if (!name) return null;
+  // The CRS parsers emit "Unknown CRS" (and "Unknown CRS (truncated …)") as a
+  // DISPLAY name when nothing could be parsed. Falling back to it here turned a
+  // placeholder into an identity, so two un-georeferenced layers compared equal:
+  // reported as sharing a coordinate system, absent from the `unknown` list, and
+  // merged into the project frame as aligned. A placeholder is the absence of a
+  // CRS, not one — "can't compare" stays distinct from "matches".
+  if (/^Unknown CRS\b/i.test(name)) return null;
+  return name;
 }
 
 /** A readable label for a layer's horizontal CRS. */
@@ -95,13 +131,19 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
     else known.push({ layer, key });
   }
 
-  const empty = (summary: string): CrsMismatch => ({
+  const empty = (summary: string, verticalUnconfirmed: string[] = []): CrsMismatch => ({
     hasMismatch: false,
     referenceLabel: null,
     mismatched: [],
     unknown,
+    verticalUnconfirmed,
     summary,
   });
+
+  /** Plain-language note for heights that can't be put on a common reference. */
+  const heightNote = (n: number): string =>
+    `${n} layer${n === 1 ? '' : 's'} without a declared vertical datum — ` +
+    `heights can't be confirmed on a common reference.`;
 
   if (known.length < 2) {
     // Nothing to compare against — surface only an "unknown CRS" note if any.
@@ -129,6 +171,11 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
   const referenceLabel = horizontalLabel(referenceEntry.layer);
 
   const mismatched: { id: string; reason: string }[] = [];
+  // Heights that can't be placed on the reference's datum — see the field doc.
+  // A layer is unconfirmable when IT declares no datum, or when the reference
+  // declares none (nothing to compare against, so no layer's heights can be
+  // confirmed). Both are "don't know", never "differ".
+  const verticalUnconfirmed: string[] = [];
   for (const { layer, key } of known) {
     if (key !== referenceKey) {
       mismatched.push({
@@ -140,28 +187,43 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
     // Same horizontal CRS — check the vertical datum too (heights won't align
     // across different vertical datums even when the horizontal frame matches).
     const vertical = layer.verticalDatum ?? null;
-    if (referenceVertical !== null && vertical !== null && vertical !== referenceVertical) {
-      mismatched.push({
-        id: layer.id,
-        reason: `vertical datum ${vertical} differs from ${referenceVertical}`,
-      });
+    if (referenceVertical !== null && vertical !== null) {
+      if (vertical !== referenceVertical) {
+        mismatched.push({
+          id: layer.id,
+          reason: `vertical datum ${vertical} differs from ${referenceVertical}`,
+        });
+      }
+      continue;
     }
+    // Missing on one side or both. The dangerous mix is orthometric against
+    // GNSS ellipsoidal height — tens of metres apart, and neither file has to
+    // say so. Reported, never inferred.
+    verticalUnconfirmed.push(layer.id);
   }
 
-  if (mismatched.length === 0) return empty('');
+  if (mismatched.length === 0) {
+    return empty(
+      verticalUnconfirmed.length > 0 ? heightNote(verticalUnconfirmed.length) : '',
+      verticalUnconfirmed,
+    );
+  }
 
   const n = mismatched.length;
   const unknownNote =
     unknown.length > 0
       ? ` ${unknown.length} more without a declared CRS.`
       : '';
+  const heightSuffix =
+    verticalUnconfirmed.length > 0 ? ` ${heightNote(verticalUnconfirmed.length)}` : '';
   return {
     hasMismatch: true,
     referenceLabel,
     mismatched,
     unknown,
+    verticalUnconfirmed,
     summary:
       `${n} layer${n === 1 ? '' : 's'} don't share the reference CRS ` +
-      `(${referenceLabel}) — an overlay may be misaligned.${unknownNote}`,
+      `(${referenceLabel}) — an overlay may be misaligned.${unknownNote}${heightSuffix}`,
   };
 }

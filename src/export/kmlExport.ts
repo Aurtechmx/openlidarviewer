@@ -25,6 +25,8 @@ import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
 import { measurementMetrics } from './measurementExport';
+import { verticalReferenceKey } from '../model/layerCompatibility';
+import type { LocalToLonLatSourceZ } from './lonLatMapper';
 
 /**
  * A saved camera viewpoint to serialise as a KML <LookAt> placemark.
@@ -59,10 +61,98 @@ export interface KmlExportInput {
   /** Vertical render-units → metres (up-axis). Defaults to `unitToMetres`; scales
    *  heights/drops/volumes for a compound CRS to match the panel headline. */
   readonly verticalUnitToMetres?: number;
-  /** Map a LOCAL render-space point to geographic [lon, lat, altMetres]. */
-  readonly toLonLat: (local: readonly [number, number, number]) => [number, number, number];
+  /**
+   * Map a LOCAL render-space point to [lon, lat, sourceZ]. Only the first two
+   * are converted; the third is the SOURCE height, in the source's own unit
+   * and on the source's own vertical reference — see {@link LocalToLonLatSourceZ}.
+   */
+  readonly toLonLat: LocalToLonLatSourceZ;
   /** The "not survey-grade" caveat, embedded in every description. */
   readonly notSurveyGradeNote: string;
+  /**
+   * Declared vertical datum of the source heights, or null when undeclared.
+   * Decides the geometry's `<altitudeMode>`: KML's `absolute` means metres
+   * above mean sea level, so it may only be claimed for a metric orthometric
+   * datum. Anything else clamps to ground and says why.
+   */
+  readonly verticalDatum?: string | null;
+}
+
+/**
+ * The vertical references for which KML `absolute` is a TRUE statement.
+ *
+ * `absolute` in KML 2.2 means metres above MEAN SEA LEVEL specifically. The
+ * gate here used to be "a datum string exists and the unit factor is 1", which
+ * a WGS 84 ellipsoidal height passes — and an ellipsoidal height is not a
+ * sea-level height, it is off by the geoid separation, tens of metres in
+ * places. A depth axis passes that gate too and is sign-flipped as well.
+ *
+ * So this is an allow-list, not a deny-list: an unrecognised reference does
+ * not qualify. Keys are {@link verticalReferenceKey} identities, so a datum
+ * that arrives as a catalog name ("NAVD88") and one that arrives as a code
+ * ("EPSG:5703") are the same entry.
+ */
+const ORTHOMETRIC_METRIC_VERTICAL: ReadonlySet<string> = new Set([
+  'epsg:5703', // NAVD88 height (metres)
+  'epsg:5714', // MSL height (metres) — the definition itself
+  'epsg:3855', // EGM2008 geoid height (metres)
+  'epsg:5773', // EGM96 geoid height (metres)
+]);
+
+/**
+ * KML altitude mode for a set of heights, and the reason for it.
+ *
+ * With no `<altitudeMode>` a reader applies the default, `clampToGround`, and
+ * the altitude in `<coordinates>` is silently discarded — the geometry drapes
+ * onto whatever terrain the viewer has. That is not wrong, but it is invisible:
+ * nothing tells the reader the heights were dropped. Declaring the mode makes
+ * the treatment explicit either way, and `absolute` is claimed only for a
+ * vertical reference that actually means metres above sea level.
+ */
+export function kmlAltitudeMode(
+  verticalDatum: string | null | undefined,
+  verticalUnitToMetres: number | undefined,
+): { mode: 'absolute' | 'clampToGround'; reason: string } {
+  // Fail closed. This read `=== undefined || ≈1`, so a source that declared a
+  // recognised orthometric datum but never declared its vertical UNIT was
+  // written as absolute metres above sea level. Absence of a unit is not
+  // evidence of metres, and the value arriving here comes through a path that
+  // can fall back to the HORIZONTAL factor — so a foot-based scan could
+  // present as metric. The unit must be stated, finite, and one.
+  const metric =
+    verticalUnitToMetres !== undefined
+    && Number.isFinite(verticalUnitToMetres)
+    && Math.abs(verticalUnitToMetres - 1) < 1e-9;
+  const declared = verticalDatum?.trim();
+  if (!declared) {
+    return {
+      mode: 'clampToGround',
+      reason:
+        'Heights are clamped to ground: the source declares no vertical datum, so no absolute '
+        + 'elevation can be claimed. Altitudes in this file are not authoritative.',
+    };
+  }
+  if (!metric) {
+    return {
+      mode: 'clampToGround',
+      reason:
+        'Heights are clamped to ground: the source vertical unit is not stated as metres, and KML '
+        + 'absolute altitude is defined in metres. Altitudes in this file are not authoritative.',
+    };
+  }
+  if (!ORTHOMETRIC_METRIC_VERTICAL.has(verticalReferenceKey({ id: 'kml', verticalDatum: declared }) ?? '')) {
+    return {
+      mode: 'clampToGround',
+      reason:
+        `Heights are clamped to ground: ${declared} is not a recognised metric height above mean `
+        + 'sea level, so KML absolute altitude cannot be claimed for it. Altitudes in this file '
+        + 'are not authoritative.',
+    };
+  }
+  return {
+    mode: 'absolute',
+    reason: `Altitudes are absolute metres above mean sea level on ${declared}.`,
+  };
 }
 
 /** Escape text for XML content / attribute values (& < > " '). */
@@ -75,29 +165,97 @@ function esc(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/**
+ * Raised when a coordinate cannot be expressed as a real longitude/latitude.
+ * Exported so the caller can decline the whole export: KML coordinates are
+ * geographic BY SPECIFICATION, so one unplaceable feature makes the file wrong
+ * rather than incomplete.
+ */
+export class KmlCoordinateError extends Error {}
+
 /** Format a finite number to at most 6 decimals (trailing zeros trimmed). */
 function fmt(n: number): string {
-  if (!Number.isFinite(n)) return '0';
   return String(Math.round(n * 1e6) / 1e6);
 }
 
-/** A single "lon,lat,alt" tuple in KML order. */
-function coord(lonLatAlt: [number, number, number]): string {
-  return `${fmt(lonLatAlt[0])},${fmt(lonLatAlt[1])},${fmt(lonLatAlt[2])}`;
+/**
+ * A single "lon,lat,alt" tuple in KML order, refusing anything that is not a
+ * real geographic position.
+ *
+ * A non-finite value used to format as `'0'`, which placed the feature at 0°N
+ * 0°E — a point in the Gulf of Guinea — and read as a successful export of a
+ * real place. The domain check catches the other shape of the same mistake: a
+ * projected easting that reached here as a longitude is perfectly finite and
+ * still impossible.
+ */
+function coord(lonLatAlt: readonly [number, number, number], withAltitude: boolean): string {
+  const [lon, lat, alt] = lonLatAlt;
+  if (!Number.isFinite(lon) || !Number.isFinite(lat) || !Number.isFinite(alt)) {
+    throw new KmlCoordinateError(
+      `A coordinate is not a finite number (${lon}, ${lat}, ${alt}), so it cannot be placed on the map.`,
+    );
+  }
+  if (lon < -180 || lon > 180) {
+    throw new KmlCoordinateError(
+      `Longitude ${lon} is outside -180..180 — these look like projected coordinates, not degrees.`,
+    );
+  }
+  if (lat < -90 || lat > 90) {
+    throw new KmlCoordinateError(
+      `Latitude ${lat} is outside -90..90 — these look like projected coordinates, not degrees.`,
+    );
+  }
+  // A 2D tuple when the vertical reference is unproven: `clampToGround` tells
+  // a compliant reader to ignore the ordinate, but writing it anyway leaves a
+  // number in the file that another tool will happily read back as a height.
+  // Omitting it is the only form that cannot be mistaken for a claim.
+  return withAltitude ? `${fmt(lon)},${fmt(lat)},${fmt(alt)}` : `${fmt(lon)},${fmt(lat)}`;
 }
 
 /** Map LOCAL points to a space-separated KML <coordinates> string. */
 function coordsOf(
   points: readonly Vec3[],
   toLonLat: KmlExportInput['toLonLat'],
+  withAltitude: boolean,
 ): string {
-  return points.map((p) => coord(toLonLat(p))).join(' ');
+  return points.map((p) => coord(toLonLat(p), withAltitude)).join(' ');
 }
 
 /** The shared provenance + caveat block appended to every description. */
+function altMode(input: KmlExportInput) {
+  return kmlAltitudeMode(input.verticalDatum, input.verticalUnitToMetres);
+}
+
+/**
+ * The source height as a stated value — magnitude, unit, vertical reference.
+ *
+ * The geometry drops the ordinate whenever the vertical reference is unproven,
+ * and dropping it silently would destroy the one number the reader might still
+ * be able to use with their own knowledge of the site. So it is disclosed here
+ * instead, labelled with everything needed to interpret it and with nothing
+ * asserted about sea level.
+ */
+function sourceElevationLine(input: KmlExportInput, sourceZ: number): string {
+  const f = input.verticalUnitToMetres;
+  // Unknown is its own answer. Folding it in with "metres" meant the one case
+  // where the scale is NOT known printed the height as metres — beside
+  // geometry that had correctly refused to carry an altitude at all. The
+  // reader takes the number and its unit together, so an honest ordinate and
+  // a guessed unit is not half right.
+  const unit =
+    f === undefined ? 'source vertical units (scale unknown)'
+    : Math.abs(f - 1) < 1e-9 ? 'metres'
+    : `source vertical units (1 unit = ${fmt(f)} m)`;
+  const datum = input.verticalDatum?.trim() || 'undeclared';
+  return `Source elevation: ${fmt(sourceZ)} ${unit}, vertical datum: ${datum}.`;
+}
+
 function caveatBlock(input: KmlExportInput): string {
+  // The altitude treatment belongs in the human-readable block too — a mode
+  // tag is invisible in Google Earth's UI, and a dropped height should not be
+  // something the reader has to open the XML to discover.
   const crs = input.crsName ?? 'unknown CRS';
-  return `CRS: ${crs}. Units: ${input.unitLabel}. ${input.notSurveyGradeNote}`;
+  return `CRS: ${crs}. Units: ${input.unitLabel}. ${altMode(input).reason} ${input.notSurveyGradeNote}`;
 }
 
 /** Build an escaped <description> from plain text lines. */
@@ -113,13 +271,19 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
     a.localPosition.y,
     a.localPosition.z,
   ]);
-  const lines = [a.note ?? '', `Category: ${a.type}`, caveatBlock(input)];
+  const lines = [
+    a.note ?? '',
+    `Category: ${a.type}`,
+    sourceElevationLine(input, lonLatAlt[2]),
+    caveatBlock(input),
+  ];
   return [
     '<Placemark>',
     `<name>${esc(a.title)}</name>`,
     description(lines),
     '<Point>',
-    `<coordinates>${coord(lonLatAlt)}</coordinates>`,
+    `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
+    `<coordinates>${coord(lonLatAlt, altMode(input).mode === 'absolute')}</coordinates>`,
     '</Point>',
     '</Placemark>',
   ].join('');
@@ -145,8 +309,17 @@ function isAreaKind(kind: Measurement['kind']): boolean {
 /** One measurement → a <LineString> or <Polygon> placemark, or null. */
 function measurementPlacemark(m: Measurement, input: KmlExportInput): string | null {
   if (!isComplete(m)) return null;
-  const lines = [metricsLine(m, input), `Kind: ${m.kind}`, caveatBlock(input)];
+  // Guarded: the degenerate-geometry checks below run after this, and a
+  // zero-point measurement would otherwise be converted here.
+  const first = m.points.length > 0 ? input.toLonLat(m.points[0]) : null;
+  const lines = [
+    metricsLine(m, input),
+    `Kind: ${m.kind}`,
+    first ? sourceElevationLine(input, first[2]) : '',
+    caveatBlock(input),
+  ];
   const desc = description(lines);
+  const withAltitude = altMode(input).mode === 'absolute';
 
   if (isAreaKind(m.kind)) {
     if (m.points.length < 3) return null;
@@ -159,7 +332,8 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
       '<Polygon>',
       '<outerBoundaryIs>',
       '<LinearRing>',
-      `<coordinates>${coordsOf(ring, input.toLonLat)}</coordinates>`,
+      `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
+      `<coordinates>${coordsOf(ring, input.toLonLat, withAltitude)}</coordinates>`,
       '</LinearRing>',
       '</outerBoundaryIs>',
       '</Polygon>',
@@ -173,7 +347,8 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
     `<name>${esc(m.name)}</name>`,
     desc,
     '<LineString>',
-    `<coordinates>${coordsOf(m.points, input.toLonLat)}</coordinates>`,
+    `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
+    `<coordinates>${coordsOf(m.points, input.toLonLat, withAltitude)}</coordinates>`,
     '</LineString>',
     '</Placemark>',
   ].join('');
@@ -193,15 +368,21 @@ function viewpointPlacemark(v: KmlViewpoint, input: KmlExportInput): string {
   return [
     '<Placemark>',
     `<name>${esc(v.name)}</name>`,
-    description(['Saved viewpoint', caveatBlock(input)]),
+    description(['Saved viewpoint', sourceElevationLine(input, anchor[2]), caveatBlock(input)]),
     '<LookAt>',
     `<longitude>${fmt(anchor[0])}</longitude>`,
     `<latitude>${fmt(anchor[1])}</latitude>`,
-    `<altitude>${fmt(anchor[2])}</altitude>`,
+    // Zero unless the height is a proven sea-level metre value — the same
+    // policy the geometry applies, so the camera cannot restate a claim the
+    // features were denied.
+    `<altitude>${altMode(input).mode === 'absolute' ? fmt(anchor[2]) : '0'}</altitude>`,
     '<heading>0</heading>',
     '<tilt>45</tilt>',
     `<range>${fmt(range)}</range>`,
-    '<altitudeMode>absolute</altitudeMode>',
+    // The same policy the geometry uses. Hardcoding `absolute` here put the
+    // camera on a sea-level altitude in the very files whose features were
+    // deliberately clamped because their vertical reference was unproven.
+    `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
     '</LookAt>',
     '</Placemark>',
   ].join('');

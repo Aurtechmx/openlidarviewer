@@ -354,10 +354,78 @@ export function boxFromCorners(a: Vec3, b: Vec3): BoxBounds {
  * collapse the corresponding scalar to zero; the calling measurement card
  * shows that explicitly rather than silently treating it as a thin slab.
  */
-export function boxMetrics(box: BoxBounds): BoxMetrics {
-  const width = Math.max(0, box.max[0] - box.min[0]);
-  const depth = Math.max(0, box.max[1] - box.min[1]);
-  const height = Math.max(0, box.max[2] - box.min[2]);
+/**
+ * Index of the axis the `up` vector points along (the dominant component).
+ * The measurement boxes are axis-aligned in render space, so a scan whose
+ * vertical axis is Y needs its HEIGHT read off Y, not Z.
+ */
+/**
+ * How far off-axis an up vector may sit and still name an axis unambiguously.
+ * Up vectors arrive through matrix maths, so an exact 0 in the other two
+ * components is not guaranteed; 1e-6 admits that float noise (a ~0.00006°
+ * deviation) while rejecting any tilt a scan could actually carry.
+ */
+const AXIS_EPS = 1e-6;
+
+/**
+ * The index of the axis an up vector names — 0 = X, 1 = Y, 2 = Z.
+ *
+ * Throws on a genuinely tilted vector. A {@link BoxBounds} is stored as min/max
+ * corners, so it is axis-aligned by construction and its "height" can only be
+ * the extent along one of X, Y, Z. This previously returned the DOMINANT
+ * component, which meant a tilted frame silently got the extent along the
+ * nearest axis reported as its height — and that number flows on into the
+ * footprint ring, the exported GeoJSON and KML polygons, and the compound-CRS
+ * vertical unit conversion. Every one of those would be quietly wrong rather
+ * than visibly absent.
+ *
+ * Supporting tilted frames needs an oriented box (a basis, not an index), which
+ * is a change to the measurement's stored shape rather than to this helper. So
+ * until that exists the honest answer is a refusal. Nothing in the app reaches
+ * it today: every write to the viewer's world-up is exactly (0, ±1, 0) or
+ * (0, 0, ±1), chosen by source format.
+ */
+export function upAxisIndex(up: Vec3): 0 | 1 | 2 {
+  const ax = Math.abs(up[0]);
+  const ay = Math.abs(up[1]);
+  const az = Math.abs(up[2]);
+  const len = Math.hypot(ax, ay, az);
+  const axis: 0 | 1 | 2 = ay > ax && ay >= az ? 1 : ax > ay && ax >= az ? 0 : 2;
+  // A zero or non-finite vector names no axis, and normalising it would divide
+  // by zero — refuse before the ratio test rather than propagate a NaN.
+  if (Number.isFinite(len) && len > 0) {
+    const dominant = axis === 0 ? ax : axis === 1 ? ay : az;
+    if (dominant / len >= 1 - AXIS_EPS) return axis;
+  }
+  throw new Error(
+    `Box measurements need an axis-aligned up vector (X, Y or Z); got [${up.join(', ')}]. ` +
+      `A box is stored as min/max corners, so a tilted frame has no honest height — ` +
+      `measuring it would report the extent along the nearest axis instead.`,
+  );
+}
+
+/** The two non-vertical axes, ascending, for a given up-axis. */
+function horizontalAxes(upAxis: 0 | 1 | 2): [0 | 1 | 2, 0 | 1 | 2] {
+  if (upAxis === 0) return [1, 2];
+  if (upAxis === 1) return [0, 2];
+  return [0, 1];
+}
+
+/**
+ * Box dimensions with HEIGHT measured along the scan's up-axis.
+ *
+ * `up` defaults to +Z, which reproduces the historical X=width / Y=depth /
+ * Z=height behaviour exactly. It matters for a Y-up frame (phone-scan meshes:
+ * PLY, OBJ, GLB/glTF): reading height off Z there reports a horizontal span as
+ * the height, and — since the export scales height by the VERTICAL unit factor
+ * — would apply a vertical conversion to a horizontal extent on a compound CRS.
+ */
+export function boxMetrics(box: BoxBounds, up: Vec3 = [0, 0, 1]): BoxMetrics {
+  const upAxis = upAxisIndex(up);
+  const [h1, h2] = horizontalAxes(upAxis);
+  const width = Math.max(0, box.max[h1] - box.min[h1]);
+  const depth = Math.max(0, box.max[h2] - box.min[h2]);
+  const height = Math.max(0, box.max[upAxis] - box.min[upAxis]);
   const volume = width * depth * height;
   const surfaceArea = 2 * (width * depth + depth * height + width * height);
   return { width, depth, height, volume, surfaceArea };
@@ -371,18 +439,30 @@ export function boxMetrics(box: BoxBounds): BoxMetrics {
  *     bottom: 0  (-,-,-)  1  (+,-,-)  2  (+,+,-)  3  (-,+,-)
  *     top:    4  (-,-,+)  5  (+,-,+)  6  (+,+,+)  7  (-,+,+)
  */
-export function boxCorners(box: BoxBounds): Vec3[] {
-  const [xa, ya, za] = box.min;
-  const [xb, yb, zb] = box.max;
+export function boxCorners(box: BoxBounds, up: Vec3 = [0, 0, 1]): Vec3[] {
+  // The FIRST four corners are the footprint ring the GeoJSON/KML exporters
+  // trace, so "bottom" has to mean the low side along the scan's up-axis. With
+  // the default +Z this emits the historical order byte-for-byte; on a Y-up
+  // frame it traces the true ground footprint instead of a vertical slice.
+  const upAxis = upAxisIndex(up);
+  const [h1, h2] = horizontalAxes(upAxis);
+  const at = (u: number, a: number, b: number): Vec3 => {
+    const p: [number, number, number] = [0, 0, 0];
+    p[upAxis] = u;
+    p[h1] = a;
+    p[h2] = b;
+    return p;
+  };
+  const lo = box.min[upAxis];
+  const hi = box.max[upAxis];
+  const a0 = box.min[h1];
+  const a1 = box.max[h1];
+  const b0 = box.min[h2];
+  const b1 = box.max[h2];
+  // Each face traversed CCW from (min-h1, min-h2), low face first.
   return [
-    [xa, ya, za],
-    [xb, ya, za],
-    [xb, yb, za],
-    [xa, yb, za],
-    [xa, ya, zb],
-    [xb, ya, zb],
-    [xb, yb, zb],
-    [xa, yb, zb],
+    at(lo, a0, b0), at(lo, a1, b0), at(lo, a1, b1), at(lo, a0, b1),
+    at(hi, a0, b0), at(hi, a1, b0), at(hi, a1, b1), at(hi, a0, b1),
   ];
 }
 

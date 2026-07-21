@@ -101,6 +101,16 @@ function liveSourceTransformPlugin() {
     // The plugin's stringArray transform rewrites those literals, which
     // breaks Vite's static analysis and the chunk/worker never gets emitted.
     // Everything else in the project's own source is transformed.
+    // POSITIVE allow-list: only this project's own TypeScript is transformed.
+    //
+    // The exclusions below are a deny-list that grew one entry at a time,
+    // each added after something broke. That is the wrong shape here: a new
+    // vendor dependency, a generated registry or a WASM shim is transformed
+    // BY DEFAULT and only stops once someone notices. Naming the project's
+    // own sources up front means anything else — vendor code, three.js,
+    // pdf-lib, the LAZ WASM shim, generated output — is never a candidate,
+    // and the entries below narrow that further for the reasons each gives.
+    include: [/src\/.*\.ts$/],
     exclude: [
       /node_modules/,
       /loadFile\.ts/,

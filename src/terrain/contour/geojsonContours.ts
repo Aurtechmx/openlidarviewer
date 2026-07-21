@@ -26,12 +26,9 @@
 import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
+import { crsUrn as sharedCrsUrn } from '../../export/crsIdentifier';
 
-/** Convert "EPSG:32610" → an OGC URN; pass through anything else. */
-function crsUrn(crs: string): string {
-  const m = /^EPSG:(\d+)$/i.exec(crs.trim());
-  return m ? `urn:ogc:def:crs:EPSG::${m[1]}` : crs;
-}
+
 
 /**
  * Build the GeoJSON object (foreign members included for provenance). When the
@@ -112,8 +109,15 @@ export function toGeoJSON(
   // local-frame model into the world frame first — or for nulling `crs`
   // when no world origin is known — so this writer never georeferences
   // recentred local coordinates.
-  if (model.crs) {
-    obj.crs = { type: 'name', properties: { name: crsUrn(model.crs) } };
+  // The name must be a resolvable IDENTIFIER. `model.crs` is the parser's
+  // DISPLAY label, and a reader that cannot resolve it falls back to the RFC
+  // default of WGS84 — placing projected contours in the ocean rather than
+  // failing. When no code can be recovered the member is omitted, which makes a
+  // reader ask instead of quietly assuming. The measurement exporter already
+  // works this way; this writer kept a pass-through that defeated it.
+  const urn = model.crs ? sharedCrsUrn(model.crs) : null;
+  if (urn) {
+    obj.crs = { type: 'name', properties: { name: urn } };
   }
   return obj;
 }
@@ -125,4 +129,114 @@ export function geojsonString(
   provenance?: ExportProvenance,
 ): string {
   return JSON.stringify(toGeoJSON(model, provenance), null, pretty ? 2 : 0);
+}
+
+/**
+ * Whether a declared vertical datum IS WGS 84 ellipsoidal height — the only
+ * thing RFC 7946 allows in a position's third element.
+ *
+ * Deliberately a short allow-list rather than a pattern: EPSG:4979 is WGS 84
+ * 3D and EPSG:7662 / "WGS 84 (ellipsoid)" name the same surface. Anything
+ * else — an orthometric datum, a local one, or silence — is NOT this, and
+ * guessing in the permissive direction is what puts a contour tens of metres
+ * out with nothing in the file to reveal it.
+ */
+function isWgs84EllipsoidalHeight(verticalDatum: string | null | undefined): boolean {
+  const v = verticalDatum?.trim().toLowerCase();
+  if (!v) return false;
+  // EPSG:4979 only. An earlier version of this list also accepted 7662, which
+  // is a GEOCENTRIC Cartesian CRS, not a geographic 3D one — its "height" is a
+  // Z axis from the Earth's centre, roughly 6,371 km from the ellipsoidal
+  // height RFC 7946 asks for. That was a guess dressed as an allow-list, and a
+  // guess in the permissive direction is exactly what this function exists to
+  // prevent. Free-text names are gone for the same reason: "WGS 84
+  // (ellipsoid)" is written by humans and means whatever they meant.
+  return v === 'epsg:4979' || v === '4979';
+}
+
+/** Thrown when a standards-compliant GeoJSON cannot be produced honestly. */
+export class GeoJsonFrameError extends Error {}
+
+/**
+ * A point in the source frame → WGS 84 `[lon, lat, elevation]`.
+ * Throws (rather than approximating) for a point it cannot convert.
+ */
+export type ToLonLat = (p: readonly [number, number, number]) => [number, number, number];
+
+/**
+ * Build an RFC 7946 GeoJSON: WGS 84 longitude/latitude, and NO `crs` member.
+ *
+ * The native writer above emits projected coordinates and declares them with
+ * the pre-RFC top-level `crs` member. RFC 7946 requires WGS 84 lon/lat and
+ * REMOVED that member, so a compliant reader discards the only thing naming
+ * the frame and then reads an easting of 517,047 as a longitude — it does not
+ * error, it just puts the data somewhere impossible. Since the member cannot
+ * carry the source frame any more, the source CRS is recorded in `metadata`
+ * instead, where it is provenance rather than a positioning instruction.
+ */
+export function toGeoJSONWgs84(
+  model: ContourFeatureModel,
+  toLonLat: ToLonLat,
+  provenance?: ExportProvenance,
+): Record<string, unknown> {
+  const obj = toGeoJSON(model, provenance);
+  // The frame is degrees now, so the projected stamp would be a lie.
+  delete obj.crs;
+  const metadata = { ...(obj.metadata as Record<string, unknown>) };
+  metadata.sourceCrs = model.crs ?? null;
+  metadata.coordinateFrame =
+    'WGS 84 longitude/latitude (RFC 7946). Reprojected from the source CRS named in sourceCrs; '
+    + 'the native projected coordinates ship in the companion -native file.';
+  obj.metadata = metadata;
+
+  // RFC 7946 §3.1.1 defines the third position element as height in metres
+  // above the WGS 84 ellipsoid. A contour elevation is almost never that: it
+  // is an orthometric height on a local vertical datum, sometimes in feet,
+  // often on no declared datum at all. Writing it there tells every reader it
+  // IS ellipsoidal metres and nothing in the file says otherwise, so a 65 m
+  // orthometric contour quietly becomes a 65 m ellipsoidal one — tens of
+  // metres from where it belongs. The ordinate is written only when the
+  // vertical reference is proven to be WGS 84 ellipsoidal height; otherwise
+  // the geometry is 2D and the elevation survives as a property that states
+  // its own unit and reference, which cannot be mistaken for a coordinate.
+  const ellipsoidal = isWgs84EllipsoidalHeight(model.verticalDatum);
+  metadata.elevationIn3d = ellipsoidal;
+  if (!ellipsoidal) {
+    metadata.elevationNote =
+      'Geometry is 2D: the source vertical reference is not WGS 84 ellipsoidal height, '
+      + 'which is the only thing RFC 7946 permits in the third position element. '
+      + 'Elevations are carried per feature as elevation / elevationUnit / elevationDatum.';
+  }
+
+  obj.features = (obj.features as Array<Record<string, unknown>>).map((f) => {
+    const geom = f.geometry as { type: string; coordinates: number[][] };
+    return {
+      ...f,
+      properties: {
+        ...(f.properties as Record<string, unknown>),
+        // Stated on every feature, so the height cannot be read without its
+        // reference — including when a reader keeps only the properties.
+        elevationUnit: 'metre',
+        elevationDatum: model.verticalDatum ?? null,
+      },
+      geometry: {
+        ...geom,
+        coordinates: geom.coordinates.map((c) => {
+          const p = toLonLat([c[0], c[1], c[2] ?? 0]);
+          return ellipsoidal ? p : [p[0], p[1]];
+        }),
+      },
+    };
+  });
+  return obj;
+}
+
+/** Serialise the model as RFC 7946 GeoJSON (WGS 84 degrees). */
+export function geojsonStringWgs84(
+  model: ContourFeatureModel,
+  toLonLat: ToLonLat,
+  pretty = true,
+  provenance?: ExportProvenance,
+): string {
+  return JSON.stringify(toGeoJSONWgs84(model, toLonLat, provenance), null, pretty ? 2 : 0);
 }

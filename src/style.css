@@ -957,6 +957,16 @@ body.olv-theme-light .olv-empty::before {
 .olv-layer-x:hover { color: var(--text); }
 /* A layer whose CRS differs from the others — flag the row + badge. */
 .olv-layer-crs-mismatch .olv-layer-crs { color: var(--warn, #e0a030); }
+/* A layer excluded from combined results reads as set-aside, not broken —
+   it is still shown, still measurable on its own, just not merged. The row
+   title carries the reason. */
+.olv-layer-frame-excluded .olv-layer-name { opacity: 0.72; font-style: italic; }
+.olv-layer-frame-excluded .olv-layer-name::after {
+  content: ' · own frame';
+  font-style: normal;
+  font-size: 0.85em;
+  color: var(--warn, #e0a030);
+}
 .olv-layer-note { margin: var(--space-sm) 0 0; font-size: var(--text-xs); color: var(--warn, #e0a030); }
 .olv-layer-compare { margin-top: var(--space-sm); }
 .olv-layer-compare-result {

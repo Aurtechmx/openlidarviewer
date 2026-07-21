@@ -18,6 +18,7 @@
 // runner always sees current values without a top-level `viewer.*` dereference
 // in main.ts.
 import type { Viewer } from '../render/Viewer';
+import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 import type { CrsService } from '../geo/CrsService';
 import type {
@@ -104,6 +105,10 @@ export function deriveCoreParams(
   return {
     cellSizeM,
     crs: crsName,
+    // Numeric codes travel beside the label so no export ever recovers a code
+    // from display prose again.
+    horizontalEpsg: cur?.epsg ?? null,
+    verticalEpsg: cur?.verticalEpsg ?? null,
     isGeographic,
     latitudeDeg,
     // Elevation converts by the Z-axis's OWN unit when the file declares one
@@ -218,14 +223,27 @@ export function createTerrainAnalysisRunner(
   // deriveCoreParams only reads it for geographic frames, and read
   // identically by run() and the export builders so the core-cache
   // fingerprint never forks.
-  const worldOriginY = (): number | null => {
+  // Takes the axis the gather ACTUALLY applied (its `sourceUpAxis` result) so
+  // the origin and the points can never rotate differently — a second, separate
+  // derivation of the frame is exactly how the two would drift apart.
+  const worldOriginY = (sourceUpAxis: 'z' | 'y' | undefined) => (): number | null => {
     const viewer = getViewer();
     const id = getActiveId();
     const origin =
       (id ? viewer.getCloud(id)?.origin : null) ??
       viewer.streamingCloud?.renderOrigin ??
       null;
-    return origin && Number.isFinite(origin[1]) ? origin[1] : null;
+    if (!origin) return null;
+    // The gather rotates a Y-up buffer into the canonical Z-up frame, so the
+    // origin has to make the same trip. Terrain reads this as the NORTHING that
+    // drives the geographic cos φ scale; a Y-up source's northing is its −Z, and
+    // leaving it as the source's Y would scale a correctly-rotated surface by a
+    // latitude taken from an elevation.
+    const canonical =
+      sourceUpAxis === 'y'
+        ? yUpOriginToCanonicalZUp([origin[0], origin[1], origin[2]])
+        : origin;
+    return Number.isFinite(canonical[1]) ? canonical[1] : null;
   };
 
   async function run(intervalM?: number): Promise<void> {
@@ -287,7 +305,7 @@ export function createTerrainAnalysisRunner(
         crsService,
         gathered.totalPoints,
         gathered.residentOnly,
-        worldOriginY,
+        worldOriginY(gathered.sourceUpAxis),
       );
       // Compute (or reuse) the heavy core. On a cache hit no worker runs; on a
       // miss the worker computes it off-thread (or the fallback does on-thread if
@@ -329,6 +347,7 @@ export function createTerrainAnalysisRunner(
         verticalUnitsKnown: vUnitKnown,
         verticalUnitToMetres: vUnitKnown ? vScale : null,
         verticalUnitLabel: vUnitKnown ? verticalUnitLabel(vScale) : null,
+        groundIsDerived: gathered.groundIsDerived,
       });
       // Hand the fresh result to the host AFTER the panel adopts it, so any
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the
@@ -373,7 +392,7 @@ export function createTerrainAnalysisRunner(
       crsService,
       gathered.totalPoints,
       gathered.residentOnly,
-      worldOriginY,
+      worldOriginY(gathered.sourceUpAxis),
     );
     const core = await getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
       computeTerrainCoreAsync(

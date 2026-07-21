@@ -4,7 +4,7 @@
  * Pins the shared sRGB EOTF/OETF seam in `colorEncode.ts`. The encode
  * direction (`linearToSrgbScalar`) was converged here in v0.5.0 from two
  * byte-identical inline copies in `patchView.ts` and `colorProvenance.ts`
- * (QualityRevision v0.4.4 item 5); these tests lock the curve so the seam
+ * during a v0.4.4 review pass; these tests lock the curve so the seam
  * can never silently drift from the bulk upload path or three.js.
  */
 

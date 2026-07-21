@@ -26,7 +26,7 @@
  */
 
 import { readdirSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -119,12 +119,131 @@ const BUCKET_ARGS = {
 };
 const bucketArgs = BUCKET_ARGS[arg] ?? [...WORKERS];
 
-/** Run one vitest invocation over this bucket's files. */
-function runVitest(extra) {
-  return spawnSync('npx', ['vitest', 'run', ...files, ...bucketArgs, ...extra, ...passthrough], {
-    cwd: ROOT,
-    stdio: 'inherit',
+// A shard that has not finished in this long is wedged, not slow: the whole
+// unit bucket runs in seconds and the slowest (streaming) in a couple of
+// minutes. Killing it with a message beats inheriting a hang that the release
+// gate reports as a nondescript failure ten minutes later.
+const SHARD_TIMEOUT_MS = Number(process.env.OLV_SHARD_TIMEOUT_MS ?? 8 * 60 * 1000);
+// How long `close` gets to arrive after the group is killed before the wait is
+// abandoned. Short: by this point the shard is already over its budget, and a
+// gate that hangs is worse than one that reports a kill it could not confirm.
+const TIMEOUT_GRACE_MS = 2000;
+
+// Run the LOCAL vitest binary, never `npx vitest`: npx interposes an extra
+// process, so a kill lands on the wrapper while the real vitest and its whole
+// worker pool survive, holding the inherited stdio pipe open forever. That is
+// the shape of the release-gate hang where every shard printed "N passed" and
+// the run still never returned.
+const VITEST_BIN = resolve(ROOT, 'node_modules/.bin/vitest');
+
+/**
+ * Run one vitest invocation over this bucket's files.
+ *
+ * Async `spawn` + `detached` makes each shard its own PROCESS GROUP LEADER, so
+ * a timeout can kill the group (-pid) and reclaim the orphaned workers.
+ * `spawnSync`'s own `timeout` only ever signalled the direct child, which is
+ * why wedged workers kept the pipe open and the parent waited forever.
+ * Resolves the same {status, signal, error} shape `resolveExit` expects.
+ */
+function runVitest(extra, label) {
+  return new Promise((res) => {
+    const started = Date.now();
+    const child = spawn(
+      VITEST_BIN,
+      ['run', ...files, ...bucketArgs, ...extra, ...passthrough],
+      { cwd: ROOT, stdio: 'inherit', detached: true },
+    );
+
+    let timedOut = false;
+    let settled = false;
+    /**
+     * The timeout must END THE WAIT, not merely ask the child to stop.
+     *
+     * The first version killed the group and then resolved only from
+     * `child.on('close')`. `close` fires when every inherited stdio stream has
+     * been released — so anything that survived the kill and still held the
+     * pipe (a grandchild that escaped the group, a handle the signal did not
+     * reach) meant `close` never fired, `finish` was never called, and the
+     * promise hung forever. A reviewer saw exactly that: an eight-minute
+     * timeout that did not recover a shard inside twelve minutes. The timer
+     * had fired and had no way to say so.
+     *
+     * So: kill the group, then give `close` a brief grace period to arrive
+     * naturally, and settle regardless when it does not.
+     */
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        // Negative pid = the whole group. The group may already be gone (the
+        // race between the timer firing and a normal exit), hence the guard.
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        /* group already reaped */
+      }
+      setTimeout(() => {
+        finish({
+          error: Object.assign(new Error('shard timed out'), { code: 'ETIMEDOUT' }),
+          status: null,
+          signal: null,
+        });
+      }, TIMEOUT_GRACE_MS).unref();
+    }, SHARD_TIMEOUT_MS);
+
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const secs = ((Date.now() - started) / 1000).toFixed(1);
+      console.log(
+        `[${label}] pid=${child.pid} elapsed=${secs}s code=${r.status ?? '-'} signal=${r.signal ?? '-'}`,
+      );
+      res(r);
+    };
+
+    child.on('error', (error) => finish({ error, status: null, signal: null }));
+    // `close` (not `exit`) so inherited stdio is fully drained before we move on.
+    child.on('close', (status, signal) => {
+      if (timedOut) {
+        finish({ error: Object.assign(new Error('shard timed out'), { code: 'ETIMEDOUT' }), status: null, signal: null });
+        return;
+      }
+      finish({ status, signal, error: undefined });
+    });
   });
+}
+
+/**
+ * Turn a spawn result into an exit code, SAYING what happened.
+ *
+ * `spawnSync` reports a signal death as `status: null`, and collapsing that
+ * with `?? 1` produced the exact failure this runner was accused of: an exit
+ * 1 with no output and no reason, indistinguishable from a test failure. A
+ * release gate has to either succeed or state why it did not.
+ */
+function resolveExit(r, label) {
+  if (r.error) {
+    const timedOut = r.error.code === 'ETIMEDOUT';
+    console.error(
+      timedOut
+        ? `\n✗ ${label} exceeded ${Math.round(SHARD_TIMEOUT_MS / 1000)}s and was killed. `
+          + 'The assertions may all pass; this is the runner failing to terminate. '
+          + 'Re-run that bucket alone to confirm, and raise OLV_SHARD_TIMEOUT_MS if the machine is slow.'
+        : `\n✗ ${label} could not be started: ${r.error.message}`,
+    );
+    return timedOut ? 124 : 2;
+  }
+  if (r.signal) {
+    console.error(
+      `\n✗ ${label} was killed by ${r.signal} — no test failure was reported. `
+      + 'This is a runner/environment fault, not a red suite.',
+    );
+    return 137;
+  }
+  if (r.status === null || r.status === undefined) {
+    console.error(`\n✗ ${label} exited without a status code.`);
+    return 1;
+  }
+  return r.status;
 }
 
 // `--shards=N` (plural) runs the bucket as N SEQUENTIAL sub-shards, each a fresh
@@ -148,12 +267,12 @@ if (multiShard && !singleShard) {
   let worst = 0;
   for (let i = 1; i <= n; i++) {
     console.log(`\n──── ${arg} shard ${i}/${n} ────`);
-    const r = runVitest([`--shard=${i}/${n}`]);
-    const code = r.status ?? 1;
+    const r = await runVitest([`--shard=${i}/${n}`], `${arg} shard ${i}/${n}`);
+    const code = resolveExit(r, `${arg} shard ${i}/${n}`);
     if (code !== 0) worst = code;
   }
   process.exit(worst);
 }
 
-const result = runVitest([]);
-process.exit(result.status ?? 1);
+const result = await runVitest([], `${arg} bucket`);
+process.exit(resolveExit(result, `${arg} bucket`));
