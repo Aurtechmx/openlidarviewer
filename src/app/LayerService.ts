@@ -110,7 +110,11 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     const foreign = new Set(mismatch.mismatched.map((x) => x.id));
     const layers: ProjectFrameLayer[] = [];
     for (const info of infos) {
-      const origin = viewer.getCloud(info.id)?.origin;
+      // The FILE's origin, never the live one. Reading `origin` here meant that
+      // one reconcile after a rebase the frame was re-seeded from the origin it
+      // had itself just written — so the anchor drifted onto its own output and
+      // the true source frame was gone.
+      const origin = viewer.getCloud(info.id)?.sourceOrigin;
       if (!origin) continue;
       layers.push({
         id: info.id,
@@ -130,14 +134,17 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // presence makes unanimity refuse the datum honestly, exactly as before
     // the frame existed.
     const frame = deps.projectFrame.frame;
-    if (frame) {
-      for (const info of infos) {
-        const t = deps.projectFrame.transformFor(info.id);
-        // Only aligned layers move; a foreign layer's transform is its own
-        // identity frame and must not be dragged onto the project origin.
-        if (t && !deps.projectFrame.unaligned.includes(info.id)) {
-          viewer.rebaseCloudToOrigin(info.id, frame.projectOrigin);
-        }
+    for (const info of infos) {
+      const aligned = frame != null && !deps.projectFrame.unaligned.includes(info.id);
+      if (aligned && deps.projectFrame.transformFor(info.id)) {
+        viewer.rebaseCloudToOrigin(info.id, frame.projectOrigin);
+      } else {
+        // Membership is reversible. A layer that is not (or is no longer) in
+        // the frame goes back to the origin its FILE declared instead of
+        // staying parked on an origin that describes a different layer —
+        // which is what happened when a CRS override turned an aligned layer
+        // foreign. No-ops for a layer that never moved.
+        viewer.restoreCloudSourceFrame(info.id);
       }
     }
   }

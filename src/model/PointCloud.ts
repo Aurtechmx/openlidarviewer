@@ -168,6 +168,17 @@ export class PointCloud {
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
   readonly origin: [number, number, number];
+  /**
+   * The origin this cloud was LOADED with, fixed for the object's life.
+   *
+   * `origin` moves when the cloud mounts into a shared project frame; this
+   * does not. Project membership has to be reversible — a layer can have its
+   * CRS overridden to something incompatible, be dropped from the frame,
+   * moved to another project, exported in source coordinates, restored from a
+   * session, or audited against its file — and every one of those needs the
+   * frame the file actually declared, not the frame it currently sits in.
+   */
+  readonly sourceOrigin: readonly [number, number, number];
   readonly sourceFormat: SourceFormat;
   readonly name: string;
   readonly declaredPointCount?: number;
@@ -227,6 +238,10 @@ export class PointCloud {
     this.pointSourceId = options.pointSourceId;
     this.gpsTime = options.gpsTime;
     this.origin = options.origin;
+    // A COPY, deliberately. `origin` is mutated in place by `rebaseOrigin`, so
+    // sharing the caller's array here would let a rebase silently rewrite the
+    // very record that exists to survive it.
+    this.sourceOrigin = [options.origin[0], options.origin[1], options.origin[2]];
     this.sourceFormat = options.sourceFormat;
     this.name = options.name;
     this.declaredPointCount = options.declaredPointCount;
@@ -315,6 +330,55 @@ export class PointCloud {
     this.origin[1] = target[1];
     this.origin[2] = target[2];
     return true;
+  }
+
+  /** Whether this cloud currently sits on an origin other than its file's. */
+  get isRebased(): boolean {
+    return (
+      this.origin[0] !== this.sourceOrigin[0] ||
+      this.origin[1] !== this.sourceOrigin[1] ||
+      this.origin[2] !== this.sourceOrigin[2]
+    );
+  }
+
+  /**
+   * Return this cloud to the frame its file declared.
+   *
+   * The exit from project membership: a layer whose CRS is overridden to
+   * something incompatible, or that leaves the frame for any other reason,
+   * must go back where it came from rather than stay parked on an origin that
+   * describes a different layer. Returns false when it never left.
+   */
+  restoreSourceFrame(): boolean {
+    return this.rebaseOrigin([
+      this.sourceOrigin[0],
+      this.sourceOrigin[1],
+      this.sourceOrigin[2],
+    ]);
+  }
+
+  /**
+   * The worst-case Float32 step size this cloud's coordinates would land on
+   * if rebased onto `target`, in source units.
+   *
+   * Positions are Float32, so an offset written into them spends mantissa the
+   * residual was using. The cost is set by how far the layer moves plus its
+   * own extent — NOT by the absolute coordinate — so a lone georeferenced
+   * scan anchored on its own origin pays nothing, while layers 100 km apart
+   * give up a millimetre. Callers disclose this rather than let a research
+   * tool quietly round survey data.
+   */
+  rebaseQuantum(target: readonly [number, number, number]): number {
+    const b = this.bounds();
+    let worst = 0;
+    for (let a = 0; a < 3; a++) {
+      const shift = this.origin[a] - target[a];
+      const reach = Math.max(Math.abs(b.min[a] + shift), Math.abs(b.max[a] + shift));
+      // Float32 carries a 24-bit significand: the step at magnitude m is
+      // 2^(floor(log2 m) - 23). Zero magnitude has no step to speak of.
+      if (reach > 0) worst = Math.max(worst, 2 ** (Math.floor(Math.log2(reach)) - 23));
+    }
+    return worst;
   }
 
   bounds(): { min: [number, number, number]; max: [number, number, number] } {

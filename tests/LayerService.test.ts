@@ -27,9 +27,17 @@ interface FakeCloud {
   metadata?: { crs?: FakeCrs | null } | null;
   /** The cloud's `floor(min)` recentre origin, when it is georeferenced. */
   origin?: readonly [number, number, number];
+  /** The origin the FILE declared — fixed, whatever the frame does to `origin`. */
+  sourceOrigin?: readonly [number, number, number];
 }
 
 function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set()) {
+  // A freshly loaded cloud's source origin IS its origin — the constructor
+  // copies it. Defaulting here (as a COPY, so the rebase cannot reach it)
+  // keeps every fixture honest about the real object's shape.
+  for (const c of Object.values(clouds)) {
+    if (c.origin && !c.sourceOrigin) c.sourceOrigin = [c.origin[0], c.origin[1], c.origin[2]];
+  }
   const context = createAppContext();
   const visibleCalls: Array<[string, boolean]> = [];
   const soloCalls: Array<string | null> = [];
@@ -38,6 +46,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
   let compassRefreshes = 0;
 
   const rebaseCalls = new Map<string, readonly [number, number, number]>();
+  const restoreCalls: string[] = [];
   const viewer = {
     clouds: () => Object.keys(clouds),
     getCloud: (id: string) => clouds[id] ?? null,
@@ -48,8 +57,15 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     rebaseCloudToOrigin: (id: string, target: readonly [number, number, number]) => {
       rebaseCalls.set(id, target);
       // Mirror the real behaviour so a second refresh sees the moved origin.
+      // `sourceOrigin` deliberately does NOT move: the whole point of the
+      // field is that a rebase cannot reach it.
       const c = clouds[id];
       if (c?.origin) c.origin = [target[0], target[1], target[2]];
+    },
+    restoreCloudSourceFrame: (id: string) => {
+      restoreCalls.push(id);
+      const c = clouds[id];
+      if (c?.sourceOrigin) c.origin = [c.sourceOrigin[0], c.sourceOrigin[1], c.sourceOrigin[2]];
     },
   } as unknown as Viewer;
 
@@ -82,6 +98,7 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     context,
     projectFrame,
     rebaseCalls,
+    restoreCalls,
     visibleCalls,
     soloCalls,
     crsFlagCalls,
@@ -311,5 +328,92 @@ describe('LayerService rebases each aligned layer onto the project origin', () =
     // The survivor's origin IS the old anchor now; the new frame anchors there,
     // so the rebase is the identity — no spurious movement on layer close.
     expect(t.rebaseCalls.get('high')).toEqual([500_000, 4_500_000, 100]);
+  });
+});
+
+/**
+ * Leaving the project frame puts a layer back where its file said it was.
+ *
+ * `rebaseOrigin` overwrote `origin`, and this service re-read that same live
+ * `origin` as the layer's "source origin" on every reconcile — so one refresh
+ * after a rebase the frame had overwritten its own record of where the layer
+ * came from. A layer later found incompatible stayed parked on the project
+ * origin with nothing left that could put it back.
+ */
+describe('LayerService project-frame reversibility', () => {
+  const utm13 = { epsg: 32613, name: 'UTM13N' };
+  const alignedPair = () => ({
+    a: {
+      name: 'A', pointCount: 10, metadata: { crs: { ...utm13 } },
+      origin: [500_000, 4_500_000, 0] as readonly [number, number, number],
+      sourceOrigin: [500_000, 4_500_000, 0] as readonly [number, number, number],
+    },
+    b: {
+      name: 'B', pointCount: 20, metadata: { crs: { ...utm13 } },
+      origin: [501_000, 4_500_000, 0] as readonly [number, number, number],
+      sourceOrigin: [501_000, 4_500_000, 0] as readonly [number, number, number],
+    },
+  });
+
+  it('anchors both layers on the shared origin while they agree', () => {
+    const clouds = alignedPair();
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 0]);
+    expect(clouds.b.origin).toEqual([500_000, 4_500_000, 0]);
+  });
+
+  it('restores a layer whose CRS turns out to be incompatible', () => {
+    const clouds = alignedPair();
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    expect(clouds.b.origin).toEqual([500_000, 4_500_000, 0]); // mounted
+
+    // The override the audit describes: B is now a different frame entirely.
+    clouds.b.metadata = { crs: { epsg: 25832, name: 'ETRS89 / UTM32N' } };
+    t.service.refreshCrsFlags();
+
+    expect(t.restoreCalls).toContain('b');
+    expect(clouds.b.origin).toEqual([501_000, 4_500_000, 0]);
+  });
+
+  it('keeps describing B by its FILE offset after B has been mounted', () => {
+    // The discriminating assertion. Seeding from the LIVE origin made B's
+    // offset collapse to zero the moment it mounted — the frame forgot that B
+    // came from 1 km east, which is precisely the relationship a
+    // source-coordinate export or an audit needs to read back.
+    const clouds = alignedPair();
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 0]);
+    expect(t.projectFrame.transformFor('b')!.sourceToProject).toEqual([1_000, 0, 0]);
+    expect(clouds.b.sourceOrigin).toEqual([501_000, 4_500_000, 0]);
+  });
+
+  it('re-anchors when the layer set is replaced wholesale', () => {
+    // The anchor persists only while it still describes the set. A different
+    // project's layers must not inherit the previous one's origin.
+    const clouds: Record<string, FakeCloud> = alignedPair();
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 0]);
+
+    delete clouds.a;
+    delete clouds.b;
+    clouds.c = {
+      name: 'C', pointCount: 5, metadata: { crs: { ...utm13 } },
+      origin: [700_000, 4_500_000, 0], sourceOrigin: [700_000, 4_500_000, 0],
+    };
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([700_000, 4_500_000, 0]);
+  });
+
+  it('does not restore a layer that is still aligned', () => {
+    const clouds = alignedPair();
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    t.service.refreshCrsFlags();
+    expect(t.restoreCalls).toEqual([]);
   });
 });

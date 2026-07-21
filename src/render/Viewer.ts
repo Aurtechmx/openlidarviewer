@@ -2170,6 +2170,24 @@ export class Viewer {
     const entry = this._clouds.get(id);
     if (!entry) return;
     if (!entry.cloud.rebaseOrigin(target)) return;
+    this._afterCloudRebase(entry);
+  }
+
+  /**
+   * Put a cloud back on the origin its file declared, undoing a project-frame
+   * mount. The exit a layer takes when its CRS is overridden to something
+   * incompatible, or when it otherwise leaves the shared frame. No-op for a
+   * cloud that never moved.
+   */
+  restoreCloudSourceFrame(id: string): void {
+    const entry = this._clouds.get(id);
+    if (!entry) return;
+    if (!entry.cloud.restoreSourceFrame()) return;
+    this._afterCloudRebase(entry);
+  }
+
+  /** Re-sync GPU, camera clamp and measurement datum after a cloud moved frame. */
+  private _afterCloudRebase(entry: CloudEntry): void {
     // The GPU attribute wraps the SAME Float32Array the rebase just shifted —
     // it only needs the re-upload flag, not a rebuild.
     const attr = entry.mesh.geometry.getAttribute('aPos');

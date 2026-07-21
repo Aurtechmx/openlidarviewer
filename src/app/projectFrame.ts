@@ -89,6 +89,15 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
   const state = context.projectFrame;
 
   /**
+   * The layers the current anchor was chosen from, as `id → source origin`.
+   * Lets the anchor persist while it still describes the set (see below); a
+   * layer re-registered at a different origin, or a wholesale set change,
+   * no longer matches and re-anchors.
+   */
+  let anchoredFrom = new Map<string, string>();
+  const originKey = (o: readonly [number, number, number]): string => `${o[0]},${o[1]},${o[2]}`;
+
+  /**
    * The project's CRS LABEL: the most common key among the layers that belong to
    * the frame, ties broken by first registration. Presentation only — which
    * layers belong is the caller's decision (see `alignedToProject`).
@@ -148,7 +157,24 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     // The shared anchor is derived ONLY from layers that belong to the frame; a
     // foreign CRS's easting would otherwise drag the origin somewhere that
     // describes neither layer.
-    const origin = chooseProjectOrigin(aligned.map((l) => l.sourceOrigin));
+    //
+    // The anchor persists while it still DESCRIBES this set — that is, while
+    // some layer it was chosen from is still here, unchanged. Layers are seeded
+    // from their FILE origins, so recomputing the minimum on every change would
+    // walk the anchor whenever a sibling closed, and nothing compensates the
+    // camera for a rebase: already-mounted data would visibly jump for no
+    // reason the user caused. A layer re-registered at a new origin, or a set
+    // replaced wholesale, matches nothing and re-anchors as it should.
+    const stillDescribed = aligned.some(
+      (l) => anchoredFrom.get(l.id) === originKey(l.sourceOrigin),
+    );
+    const origin =
+      stillDescribed && state.frame
+        ? state.frame.projectOrigin
+        : chooseProjectOrigin(aligned.map((l) => l.sourceOrigin));
+    if (!stillDescribed) {
+      anchoredFrom = new Map(aligned.map((l) => [l.id, originKey(l.sourceOrigin)]));
+    }
     state.frame = createProjectFrame(origin, { crs: frameCrsLabel(aligned) ?? undefined });
 
     for (const layer of state.sources.values()) {

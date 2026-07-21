@@ -216,3 +216,99 @@ describe('PointCloud.rebaseOrigin', () => {
     expect(make().rebaseOrigin([499_000, 4_500_000, 80])).toBe(true);
   });
 });
+
+/**
+ * The file frame survives project membership.
+ *
+ * `rebaseOrigin` overwrote `origin` in place, so once a layer joined the
+ * project frame there was no record of where its file said it was. A layer
+ * whose CRS was later overridden to something incompatible stayed parked on
+ * the project origin with no way back, and source-coordinate export,
+ * provenance, session restore and audit all had nothing true to read.
+ */
+describe('PointCloud source frame', () => {
+  const make = () =>
+    new PointCloud({
+      positions: Float32Array.from([0, 0, 0, 10, 20, 5]),
+      origin: [501_000, 4_500_000, 100],
+      sourceFormat: 'las',
+      name: 'b.las',
+    });
+
+  it('remembers the file origin after a rebase', () => {
+    const c = make();
+    c.rebaseOrigin([500_000, 4_500_000, 80]);
+    expect(c.origin).toEqual([500_000, 4_500_000, 80]);
+    expect(c.sourceOrigin).toEqual([501_000, 4_500_000, 100]);
+  });
+
+  it('does not alias the caller’s origin array', () => {
+    // `origin` is mutated in place, so a shared reference would let the
+    // rebase quietly rewrite the source origin too — the exact bug this
+    // field exists to prevent.
+    const origin: [number, number, number] = [501_000, 4_500_000, 100];
+    const c = new PointCloud({ positions: Float32Array.from([0, 0, 0]), origin, sourceFormat: 'las', name: 'c.las' });
+    c.rebaseOrigin([500_000, 4_500_000, 80]);
+    expect(c.sourceOrigin).toEqual([501_000, 4_500_000, 100]);
+  });
+
+  it('reports whether it currently sits in a foreign frame', () => {
+    const c = make();
+    expect(c.isRebased).toBe(false);
+    c.rebaseOrigin([500_000, 4_500_000, 80]);
+    expect(c.isRebased).toBe(true);
+  });
+
+  it('returns to the file frame on demand', () => {
+    // The reproduction from the audit: a layer rebased into the project and
+    // then found incompatible must be able to go home.
+    const c = make();
+    const before = Array.from(c.positions);
+    c.rebaseOrigin([500_000, 4_500_000, 80]);
+    expect(c.restoreSourceFrame()).toBe(true);
+    expect(c.origin).toEqual([501_000, 4_500_000, 100]);
+    expect(Array.from(c.positions)).toEqual(before);
+    expect(c.isRebased).toBe(false);
+  });
+
+  it('restoring an unrebased cloud is a no-op', () => {
+    expect(make().restoreSourceFrame()).toBe(false);
+  });
+
+  it('keeps world positions identical across a round trip', () => {
+    const c = make();
+    const world = (i: number) => [
+      c.positions[i] + c.origin[0], c.positions[i + 1] + c.origin[1], c.positions[i + 2] + c.origin[2],
+    ];
+    const before = world(3);
+    c.rebaseOrigin([500_000, 4_500_000, 80]);
+    c.restoreSourceFrame();
+    expect(world(3)).toEqual(before);
+  });
+});
+
+/**
+ * A rebase that would cost real precision is disclosed, not hidden.
+ *
+ * Positions are Float32, so writing a large offset into them consumes
+ * mantissa the residual was using: at a 100 km separation a millimetre is
+ * simply gone. That is bounded by how far apart the layers are, not by the
+ * absolute coordinate — a lone georeferenced scan anchors on its own origin
+ * and loses nothing — but the far case must be visible rather than silent.
+ */
+describe('PointCloud.rebaseQuantum', () => {
+  const make = (origin: [number, number, number]) =>
+    new PointCloud({ positions: Float32Array.from([0, 0, 0]), origin, sourceFormat: 'las', name: 'd.las' });
+
+  it('is sub-micron when a layer anchors on its own origin', () => {
+    const c = make([2_485_000, 1_109_000, 330]);
+    expect(c.rebaseQuantum([2_485_000, 1_109_000, 330])).toBeLessThan(1e-6);
+  });
+
+  it('grows with separation, not with absolute coordinate magnitude', () => {
+    const near = make([2_485_000, 1_109_000, 330]).rebaseQuantum([2_484_000, 1_109_000, 330]);
+    const far = make([600_000, 4_500_000, 0]).rebaseQuantum([500_000, 4_500_000, 0]);
+    expect(near).toBeLessThan(far);
+    expect(far).toBeGreaterThanOrEqual(0.001); // 100 km costs a millimetre
+  });
+});
