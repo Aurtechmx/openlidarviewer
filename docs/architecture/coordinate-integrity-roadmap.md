@@ -168,18 +168,37 @@ effective reference for coordinates, labels and embedded metadata.
    offset to the position array, so the residual precision a layer keeps is set
    by how far it moves. Measured with `PointCloud.rebaseQuantum`: a lone
    georeferenced scan anchors on its own origin and loses nothing (~1e-8 m);
-   1 km of separation costs ~0.02 mm; 100 km costs a full millimetre. That is
-   acceptable for the single- and neighbouring-tile cases this alpha targets and
-   NOT acceptable as an end state.
+   1 km of separation costs ~0.02 mm; 100 km costs a full millimetre. The gates
+   in `LayerService` refuse a mount past 1 mm (converted through the CRS's
+   linear unit; geographic frames refused outright), so the loss is bounded and
+   disclosed rather than silent — but bounded is not absent.
 
-   The destination is the shape an external review named: keep vertices
-   source-local, carry `sourceToProject` in Float64, apply it in Float64 for CPU
-   work, and render camera-relative (or high/low split) on the GPU. The reason
-   it is not done here is that picking, terrain gather, lasso, profiles, volumes
-   and export bounds all read `cloud.positions` directly — the transform has to
-   land in every one of them at once or the scene splits in two again, which is
-   the exact defect the data rebase was introduced to close. Until then,
-   disclose the quantum rather than round survey data quietly.
+   The destination is the shape every review has named: vertices stay
+   source-local, `sourceToProject` is held in Float64, CPU work applies it in
+   Float64, and the GPU renders camera-relative or high/low-split.
+
+   **Measured surface, so the estimate is not a guess:** 154 direct reads of
+   `.positions` across 42 files — picking, terrain gather, lasso, profiles,
+   volumes, clipping, colour modes, downsampling, conversion and export bounds.
+
+   **Why it is one change and not several.** The transform has to land in every
+   one of those readers together. Migrate half and rendering sees project space
+   while the rest sees source-local — which is precisely the render/CPU split
+   the data rebase was introduced to close, reintroduced deliberately. A
+   partially-migrated tree is worse than the current one: today every consumer
+   agrees and the error is a bounded, refused-past-1 mm quantisation; mid-
+   migration they disagree and the error is unbounded and silent.
+
+   Sequence when it is taken on: (a) `LayerSpatialState` holding source-local
+   positions plus Float64 `sourceToProject` / `projectToSource`; (b) a
+   world-space accessor every CPU consumer moves to, one file at a time behind
+   a lint that fails on a raw `.positions` read outside the model; (c) the GPU
+   path last, since it is the only one that genuinely needs Float32 and the
+   only one where camera-relative rendering is a real design choice. The
+   property suite in `tests/frameGateProperties.test.ts` — world-position
+   invariance, source-origin immutability, restore round-trips — is the
+   regression net for (a) and (b).
+
 3. **Replace regex WKT parsing with an AST parser.** The current parser survives
    realistic WKT1 and WKT2 (verified against six shapes including `PROJCRS` with
    nested `BASEGEOGCRS`, `COMPD_CS`, and bracketed names), so this is
