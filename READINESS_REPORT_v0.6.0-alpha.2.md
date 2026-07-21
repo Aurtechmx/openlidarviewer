@@ -9,10 +9,10 @@ A sober account of what is ready and what remains before this alpha is published
 
 ## Test and build gate
 
-Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate runner now reports why it failed" for how much that is worth:
+Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate runner terminates, verified" for the evidence behind that:
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
-- unit 2,935 (16 skipped) · export 602 · terrain 1,218 (18 skipped) · ui 429 · slow 508.
+- unit 2,940 (16 skipped) · export 605 · terrain 1,218 (18 skipped) · ui 429 · slow 508.
 - Build-contract 11; plain build and live/obfuscated build pass. Live entry **715 KiB / 720 KiB** — inside the hard ceiling, above the 680 KiB warning line, and **reproduced byte-identically across two clean builds**. The margin is 5 KiB: treat the ceiling as effectively reached and shed weight before adding any, rather than raising it.
 - Full e2e (`npm run test:e2e`): 161 passed, 4 fixture-skipped (autzen COPC not on disk), 0 failed — **locally**. The gating browser evidence is the green GitHub Actions run required below, not this local run.
 - Documentation build (`npm run docs:build`) passes.
@@ -30,8 +30,10 @@ Run locally at the alpha head commit (**not yet a Git tag** — the published ta
 ## Where the figures come from
 
 Every test count and the bundle size in this document are read out of a passing
-gate run into `release/test-evidence.json` and checked against it by
-`lint:evidence`, which runs inside `test:release`. They are not transcribed.
+gate run into `docs/validation/test-evidence.json` and checked against it by
+`lint:evidence`. They are not transcribed. The gate log they were read from is
+kept as `release/gate.log` with its SHA-256 recorded in the evidence, so the
+figures can be recomputed rather than trusted.
 
 That check exists because a previous candidate published unit, export and
 terrain counts that were all wrong while its total was right — the total came
@@ -80,6 +82,11 @@ These are publication-side steps this archive does not and cannot assert:
 ## Verdict
 
 **Not ready to tag — but the remaining reasons are no longer correctness reasons reachable in ordinary use.** Every suite passes, the gate terminates and has now gone green twice in a row, and the release date is enforced rather than trusted.
+
+**Physical multi-layer mounting is disabled** (`MULTI_LAYER_MOUNT_ENABLED = false`),
+and a stream is never merged with a static cloud, because their local
+coordinates are recentred about independent origins. Single-layer work — the
+overwhelming majority of use — is unaffected.
 
 Two things stand between this and a tag:
 
