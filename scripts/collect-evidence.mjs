@@ -106,7 +106,15 @@ function main() {
   // citation of one that no longer exists.
   mkdirSync(resolve(ROOT, 'release'), { recursive: true });
   const keptLog = resolve(ROOT, 'release/gate.log');
-  if (resolve(logPath) !== keptLog) copyFileSync(logPath, keptLog);
+  // Scrub absolute paths before keeping it. This log is a release artefact —
+  // it may be attached to a published release — and a build log reproduces
+  // whatever the machine's directory layout happens to be. The counts, the
+  // shard banners and the exit lines are what a reviewer needs; the operator's
+  // home directory is not.
+  const scrubbed = readFileSync(logPath, 'utf8')
+    .split(ROOT).join('.')
+    .replace(/\/(?:Users|home)\/[^/\s"']+/g, '~');
+  writeFileSync(keptLog, scrubbed);
   const gateLogSha256 = createHash('sha256').update(readFileSync(keptLog)).digest('hex');
   writeFileSync(`${keptLog}.sha256`, `${gateLogSha256}  gate.log\n`);
 
