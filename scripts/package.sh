@@ -121,6 +121,40 @@ fi
 find "$TMP/source" -type d -exec chmod 755 {} +
 find "$TMP/source" -type f -exec chmod 644 {} +
 
+# ── Internal-material guard ────────────────────────────────────────────────
+# The archive must carry what the release IS, not the reasoning about whether
+# to ship it. `.gitattributes` export-ignore is what actually excludes these,
+# but export-ignore fails silently: add a file that matches no rule, or mistype
+# a pattern, and it ships with nothing to say so. Three readiness reports for
+# three different versions reached a published archive that way.
+#
+# So this asserts the OUTCOME over the assembled tree rather than trusting the
+# rules. A new internal document is caught the first time it is packaged.
+INTERNAL_PATTERNS='READINESS_REPORT|/_audit/|-plan\.md$|HANDOFF|ROADMAP-INTERNAL|_PRIVATE|GITHUB-PUBLISH-CHECKLIST'
+LEAKED="$(cd "$TMP/source" && find . -type f | sed 's|^\./||' | grep -E "$INTERNAL_PATTERNS" || true)"
+if [ -n "$LEAKED" ]; then
+  echo "✗ internal material in the source archive:" >&2
+  echo "$LEAKED" | sed 's/^/    /' >&2
+  echo "  Add an export-ignore rule in .gitattributes, or move the file under docs/_audit/." >&2
+  exit 1
+fi
+
+# Superseded per-release reports: the archive should not accumulate evidence
+# documents for versions this is not. Checked by comparing against the version
+# being packaged rather than by listing old ones, so it stays true next release.
+STALE="$(cd "$TMP/source" && ls 2>/dev/null \
+  | grep -E '^(VALIDATION_REPORT|REPRODUCIBILITY)_v' \
+  | grep -v -- "_v${VERSION}\.md$" \
+  | grep -v '^VALIDATION_REPORT_v0\.5\.9\.md$' || true)"
+if [ -n "$STALE" ]; then
+  echo "✗ superseded release reports in the source archive:" >&2
+  echo "$STALE" | sed 's/^/    /' >&2
+  echo "  Add an export-ignore rule, or if a report is inherited evidence the" >&2
+  echo "  current release depends on, allow it explicitly in this check." >&2
+  exit 1
+fi
+echo "  ✓ archive carries no internal or superseded release material"
+
 SOURCE="openlidarviewer-v${VERSION}-source-${TS}.zip"
 ( cd "$TMP/source" && zip -rqX "$TMP/$SOURCE" . )
 cp "$TMP/$SOURCE" "$OUT_DIR/$SOURCE"

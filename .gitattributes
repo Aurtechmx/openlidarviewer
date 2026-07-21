@@ -11,3 +11,22 @@ docs/architecture/v0.5.8-cleanup-plan.md export-ignore
 docs/gate2-per-cloud-filter-plan.md export-ignore
 docs/v0.5.7-plan.md export-ignore
 docs/v0.5.7-object-e57-capture-lens.md export-ignore
+
+# Exclude release-process deliberation from `git archive` source exports.
+#
+# READINESS_REPORT_* is the go/no-go record for a cut: open blockers, what is
+# not ready, what must happen before tagging. That is internal reasoning about
+# whether to ship, not documentation of what shipped, and nothing public links
+# to it. The public honesty surface is KNOWN_LIMITATIONS + VALIDATION_REPORT,
+# which state what the release does and does not establish.
+READINESS_REPORT_*.md export-ignore
+
+# Superseded per-release evidence. The archive should carry the reports for the
+# version it IS, not a pile of prior ones a reader has to date-sort. Kept in
+# the repository and in history.
+#
+# NOT excluded: VALIDATION_REPORT_v0.5.9.md, which this release inherits its
+# terrain/measurement claims from and which README, ARTIFACT_EVALUATION and
+# AI_ASSISTANCE all link to. It is load-bearing evidence, not clutter.
+VALIDATION_REPORT_v0.6.0-alpha.1.md export-ignore
+REPRODUCIBILITY_v0.6.0-alpha.1.md export-ignore
