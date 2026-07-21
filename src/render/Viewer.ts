@@ -115,12 +115,9 @@ import {
   GAUSSIAN_SPLAT_SHARPNESS,
 } from './splatShader';
 import type { SplatMode } from './splatShader';
-import {
-  filterSelectionToVisible,
-  selectByLasso,
-  volumeFromLassoWithFootprint,
-} from './measure/lassoVolume';
+import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
+import { computeLassoVolume as computeLassoVolumeWalk } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -132,10 +129,7 @@ export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
 import type { VolumeResult } from './measure/volume';
-import {
-  decideVolumeBudget,
-  type VolumeBudgetDecision,
-} from './measure/volumeBudget';
+import type { VolumeBudgetDecision } from './measure/volumeBudget';
 
 /** Return shape from {@link Viewer.computeLassoVolume}. */
 export interface LassoVolumeReturn {
@@ -642,27 +636,6 @@ const BYTES_PER_GPU_POINT = 24;
  * approximation — matches three.js's `Color.SRGBToLinear` and PNG
  * exports stay in lock-step with the on-screen image.
  */
-/**
- * Build a strided copy of an interleaved xyz position buffer — keeps
- * every `stride`-th point. Used by `computeLassoVolume` when the
- * adaptive budget downsamples a heavy workload. O(n / stride) on the
- * source length; allocates one new Float32Array. The selection's
- * indices are remapped back to source space at the call site so the
- * highlight pipeline still points at real per-cloud points.
- */
-function stridePositions(src: Float32Array, stride: number): Float32Array {
-  if (stride <= 1) return src;
-  const points = Math.floor(src.length / 3);
-  const kept = Math.floor(points / stride);
-  const out = new Float32Array(kept * 3);
-  for (let i = 0; i < kept; i++) {
-    const srcIdx = i * stride * 3;
-    out[i * 3] = src[srcIdx];
-    out[i * 3 + 1] = src[srcIdx + 1];
-    out[i * 3 + 2] = src[srcIdx + 2];
-  }
-  return out;
-}
 
 function toFloatColors(u8: Uint8Array): Float32Array {
   const f = new Float32Array(u8.length);
@@ -4168,15 +4141,15 @@ export class Viewer {
      */
     vert: number = lin,
   ): LassoVolumeReturn | null {
-    if (lasso.length < 3) return null;
-
     const canvas = this._canvas;
     if (!canvas) return null;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return null;
 
-    // ── Build projector once, reuse per cloud. ──────────────────────
+    // Build the projector from the live camera. This is the only part of the
+    // walk that needs three.js, which is why it stays here and the rest moved
+    // to a module that can be tested without a WebGL context.
     this._camera.updateMatrixWorld(true);
     const projMatrix = this._camera.projectionMatrix;
     const viewMatrix = this._camera.matrixWorldInverse;
@@ -4184,142 +4157,46 @@ export class Viewer {
     const project = (x: number, y: number, z: number) => {
       tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
       if (tmp.z < -1 || tmp.z > 1) return null;
-      const sx = (tmp.x * 0.5 + 0.5) * w;
-      const sy = (1 - (tmp.y * 0.5 + 0.5)) * h;
-      return { x: sx, y: sy };
+      return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
     };
 
-    // ── Adaptive-degradation budget ─────────────────────────────────
-    // Count candidate points BEFORE walking — every static cloud
-    // plus every streaming-resident node — so the budget can decide
-    // whether to stride or walk exhaustively. The decision is
-    // attached to the result so the inspector caption reads
-    // "estimated (sampled — n%)" when the stride > 1.
-    let candidatePointCount = 0;
-    for (const entry of integrableClouds(this._clouds.values())) {
-      candidatePointCount += entry.cloud.positions.length / 3;
-    }
-    if (this._streaming) {
-      for (const positions of this._streaming.renderer.positionArrays()) {
-        candidatePointCount += positions.length / 3;
-      }
-    }
-    const budget = decideVolumeBudget({
-      candidatePointCount,
-      // Footprint area isn't known until selection; pass 0 so the
-      // density branch sits out. Ceiling branch still fires on cloud
-      // size alone, which is the bigger lever in practice.
-      footprintAreaM2: 0,
-    });
-    const stride = budget.stride;
-
-    // ── Walk each static cloud INDEPENDENTLY so we can report per-
-    //    cloud indices to the highlight pipeline. Concatenate the
-    //    selected XYZ subset for the volume math. ──────────────────
-    const selectionByCloudId = new Map<string, ReadonlyArray<number>>();
-    const subsetParts: Float32Array[] = [];
-    let totalSelected = 0;
-    // True once any cloud that contributes selected points was voxel-reduced to
-    // fit the device budget — the volume's honesty caveat reflects the thinner
-    // sample. (See `_cloudWasReduced`.)
-    let anySourceReduced = false;
+    const integrable: Array<readonly [string, { readonly cloud: PointCloud }]> = [];
     for (const [id, entry] of this._clouds) {
-      // Skip hidden / locked layers — the picker won't place vertices on them,
-      // so the lasso volume must not select through them either.
-      if (!isIntegrable(entry)) continue;
-      const positions =
-        stride === 1
-          ? entry.cloud.positions
-          : stridePositions(entry.cloud.positions, stride);
-      const localIndices = selectByLasso({
-        positions,
-        lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
-        project,
-      });
-      if (localIndices.length === 0) continue;
-      // When strided, translate indices back to the source cloud's
-      // index space so the highlight pipeline still lights up the
-      // right points.
-      const sourceIndices =
-        stride === 1
-          ? localIndices
-          : localIndices.map((i) => i * stride);
-      selectionByCloudId.set(id, sourceIndices);
-      if (this._cloudWasReduced(entry.cloud)) anySourceReduced = true;
-      totalSelected += localIndices.length;
-      // Pack the selected points' xyz into a contiguous buffer for
-      // the volume math.
-      const part = new Float32Array(localIndices.length * 3);
-      for (let i = 0; i < localIndices.length; i++) {
-        const idx = localIndices[i];
-        part[i * 3] = positions[idx * 3];
-        part[i * 3 + 1] = positions[idx * 3 + 1];
-        part[i * 3 + 2] = positions[idx * 3 + 2];
-      }
-      subsetParts.push(part);
+      // Hidden and locked layers are skipped: the picker won't place vertices
+      // on them, so the lasso must not select through them either.
+      if (isIntegrable(entry)) integrable.push([id, entry]);
     }
-    // Streaming clouds — still selected, but indices aren't returned
-    // (the streaming highlight surface is a follow-up cut). The
-    // volume math still consumes their positions.
-    if (this._streaming) {
-      for (const sourcePositions of this._streaming.renderer.positionArrays()) {
-        const positions =
-          stride === 1
-            ? sourcePositions
-            : stridePositions(sourcePositions, stride);
-        const indices = selectByLasso({
-          positions,
-          lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
-          project,
-        });
-        if (indices.length === 0) continue;
-        totalSelected += indices.length;
-        const part = new Float32Array(indices.length * 3);
-        for (let i = 0; i < indices.length; i++) {
-          const idx = indices[i];
-          part[i * 3] = positions[idx * 3];
-          part[i * 3 + 1] = positions[idx * 3 + 1];
-          part[i * 3 + 2] = positions[idx * 3 + 2];
-        }
-        subsetParts.push(part);
-      }
-    }
-    if (totalSelected < 3) return null;
 
-    // Concatenate the per-cloud subset parts into one buffer for
-    // volumeFromLasso, then call it with indices 0..N-1 (since the
-    // buffer already contains ONLY selected points).
-    let len = 0;
-    for (const p of subsetParts) len += p.length;
-    const selectedPositions = new Float32Array(len);
-    let off = 0;
-    for (const p of subsetParts) {
-      selectedPositions.set(p, off);
-      off += p.length;
-    }
-    const allIndices = new Array(totalSelected);
-    for (let i = 0; i < totalSelected; i++) allIndices[i] = i;
-    const lassoOut = volumeFromLassoWithFootprint({
-      positions: selectedPositions,
-      selected: allIndices,
+    const out = computeLassoVolumeWalk({
+      host: {
+        project,
+        integrable,
+        streamingPositions: this._streaming
+          ? [...this._streaming.renderer.positionArrays()]
+          : [],
+        wasReduced: (cloud) => this._cloudWasReduced(cloud),
+      },
+      lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
       referencePercentile: percentile,
     });
+    if (!out) return null;
+
     return {
-      result: lassoOut.result,
+      result: out.result,
       stockpileSuffix: stockpileToastSuffix(
-        lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
-        selectedPositions,
+        out.polygon3D,
+        out.selectedPositions,
         lin,
-        anySourceReduced,
+        out.anySourceReduced,
         densityUnitKnown,
         vert,
       ),
-      selectedCount: totalSelected,
+      selectedCount: out.selectedCount,
       lasso,
-      selectionByCloudId,
-      budget,
-      polygon3D: lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
-      referenceZ: lassoOut.referenceZ,
+      selectionByCloudId: out.selectionByCloudId,
+      budget: out.budget,
+      polygon3D: out.polygon3D,
+      referenceZ: out.referenceZ,
     };
   }
 

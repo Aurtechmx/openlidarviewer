@@ -86,7 +86,6 @@ been extracted, and both errors pointed the decomposition at the wrong work.
 | Block | Lines | Extraction target |
 |---|---:|---|
 | `constructor` | 564 | staged scene/pipeline builders |
-| `computeLassoVolume` | 159 | `src/render/measure/` |
 | `snapshot` | 143 | `src/render/snapshot.ts` *(planned)* |
 | `_startLoop` | 107 | `src/render/renderLoop.ts` *(planned)* |
 
@@ -99,7 +98,7 @@ Each extraction is one gated step: move the block, have it take its collaborator
 as parameters, keep the deterministic e2e project green, and re-run the coverage
 ratchet. Behaviour does not change; only where the code lives.
 
-**The four blocks left total ~973 lines**, so extracting all of them leaves
+**The three blocks left total ~814 lines**, so extracting all of them leaves
 `Viewer.ts` near 6,060 — the file is long because of breadth (roughly 110 fields
 and 200 methods), not because a few blocks are large. A sub-2,000 target needs
 whole *clusters* to move, not the largest methods. The cohesive candidates, by
