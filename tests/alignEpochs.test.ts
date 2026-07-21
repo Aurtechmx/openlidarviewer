@@ -294,3 +294,42 @@ describe('spatial preflight precedes the fit', () => {
     expect(r.alignment.frameIncompatible).not.toBe(true);
   });
 });
+
+/**
+ * An alignment over undeclared frames must say so in its own summary.
+ *
+ * The preflight lets two silent epochs through on purpose — comparing local
+ * scans is a real workflow — but the summary then reported "Aligned the after
+ * cloud horizontally (0.03 m shift, 0.01 m residual)" with no hint that
+ * neither epoch had ever declared a frame. Those figures describe the fit
+ * accurately and describe the RELATIONSHIP not at all, and a reader takes a
+ * residual in metres as evidence of georeferenced agreement.
+ */
+describe('undeclared frames are labelled indicative', () => {
+  const local = (): EpochCloud => ({
+    positions: Float32Array.from([0, 0, 0, 10, 0, 0.1, 0, 10, 0.2, 5, 5, 1]),
+    origin: [0, 0, 0],
+    crs: null,
+    verticalDatum: null,
+  });
+  const referenced = (over: Partial<EpochCloud> = {}): EpochCloud => ({
+    ...local(), crs: 'EPSG:32612', verticalDatum: 'EPSG:5703', ...over,
+  });
+
+  test('flags a pair where neither epoch declared a frame', () => {
+    const r = alignEpochClouds(local(), local());
+    expect(r.alignment.frameUnverified).toBe(true);
+    expect(summarizeAlignment(r.alignment)).toMatch(/indicative|local frame|not georeferenced/i);
+  });
+
+  test('flags a pair where only one epoch declared a frame', () => {
+    const r = alignEpochClouds(referenced(), local());
+    expect(r.alignment.frameUnverified).toBe(true);
+  });
+
+  test('does NOT flag a pair that both declared and agreed', () => {
+    const r = alignEpochClouds(referenced(), referenced());
+    expect(r.alignment.frameUnverified).not.toBe(true);
+    expect(summarizeAlignment(r.alignment)).not.toMatch(/indicative/i);
+  });
+});

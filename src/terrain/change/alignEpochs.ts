@@ -93,6 +93,15 @@ export interface EpochAlignment {
   readonly frameIncompatible?: boolean;
   /** Why the frames were refused, in plain language, for the summary. */
   readonly frameReason?: string;
+  /**
+   * True when the fit ran but the two epochs never PROVED a shared frame —
+   * one or both declared no CRS or no vertical datum. The preflight lets that
+   * pair through deliberately (comparing local scans is a real workflow), but
+   * the resulting shift and residual describe the fit and say nothing about
+   * the relationship. Without this flag a reader takes a residual in metres as
+   * evidence of georeferenced agreement.
+   */
+  readonly frameUnverified?: boolean;
 }
 
 const NO_ALIGNMENT: EpochAlignment = {
@@ -220,6 +229,11 @@ export function alignEpochClouds(
 
   // Spatial preflight, before any sampling or fitting. A refused pair gets no
   // residual, because there is no fit to score.
+  const frameUnverified =
+    !before.crs || !after.crs
+    || verticalReferenceKey({ id: 'b', verticalDatum: before.verticalDatum }) === null
+    || verticalReferenceKey({ id: 'a', verticalDatum: after.verticalDatum }) === null;
+
   const frameReason = epochFrameFailure(before, after);
   if (frameReason !== null) {
     return {
@@ -272,6 +286,7 @@ export function alignEpochClouds(
         yawDeg,
         translation: toMetres(fit.translation),
         sampleCount,
+        frameUnverified,
       },
     };
   }
@@ -309,6 +324,7 @@ export function alignEpochClouds(
       // actually moved the points.
       translation: toMetres(applied.translation),
       sampleCount,
+      frameUnverified,
     },
   };
 }
@@ -329,5 +345,11 @@ export function summarizeAlignment(a: EpochAlignment): string {
     return `Alignment: refused — residual ${a.rmsResidualM.toFixed(2)} m exceeds the limit; comparing as-is.`;
   }
   const shift = Math.hypot(a.translation[0], a.translation[1]);
-  return `Aligned the after cloud horizontally (${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw, ${a.rmsResidualM.toFixed(2)} m residual over ${a.sampleCount} sampled points); vertical change preserved.`;
+  const base = `Aligned the after cloud horizontally (${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw, ${a.rmsResidualM.toFixed(2)} m residual over ${a.sampleCount} sampled points); vertical change preserved.`;
+  // The figures above describe the FIT. Without a declared frame on both sides
+  // they say nothing about the relationship between the epochs, and a residual
+  // quoted in metres reads as evidence of georeferenced agreement.
+  return a.frameUnverified
+    ? `${base} Indicative local-frame result — one or both epochs declare no CRS or vertical datum, so this is not a georeferenced agreement.`
+    : base;
 }
