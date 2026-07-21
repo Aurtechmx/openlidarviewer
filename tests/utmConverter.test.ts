@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { utmConverter } from '../src/geo/UtmConverter';
+import { utmConverter, utmZoneFor, utmLatitudeFailure } from '../src/geo/UtmConverter';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -390,5 +390,63 @@ describe('utmConverter — convertBounds', () => {
       WGS84_LATLON,
     );
     expect(result.ok).toBe(false);
+  });
+});
+
+/**
+ * UTM is not defined everywhere, and two regions do not follow the formula.
+ *
+ * The zone came straight from longitude, so the grid was reported for
+ * latitudes UTM does not cover — a point at 85°N got a finite easting and
+ * northing that no other tool would agree with — and the two documented
+ * irregular zones were computed wrong:
+ *
+ *   - South-west Norway: zone 32 is widened to cover 3°E–12°E at 56°–64°N,
+ *     so a point at 60°N 5°E belongs to 32V, not the 31 the formula gives.
+ *   - Svalbard: zones 31, 33, 35 and 37 are widened at 72°–84°N, so 78°N 15°E
+ *     belongs to 33X, not 33 by luck and 34 by formula.
+ *
+ * These are in the EPSG/UTM definition, not local convention, so a tool that
+ * ignores them silently disagrees with PROJ over real survey areas.
+ */
+describe('UTM zone irregularities and validity', () => {
+  it('refuses latitudes outside the UTM band', () => {
+    expect(utmLatitudeFailure(85)).not.toBeNull();
+    expect(utmLatitudeFailure(-81)).not.toBeNull();
+    expect(utmLatitudeFailure(90)).not.toBeNull();
+  });
+
+  it('accepts the band UTM actually covers', () => {
+    expect(utmLatitudeFailure(84)).toBeNull();
+    expect(utmLatitudeFailure(-80)).toBeNull();
+    expect(utmLatitudeFailure(0)).toBeNull();
+  });
+
+  it('says WHY it refused, naming the band', () => {
+    expect(utmLatitudeFailure(85)).toMatch(/84|80|UTM/i);
+  });
+
+  it('widens zone 32 over south-west Norway', () => {
+    expect(utmZoneFor(60, 5).zone).toBe(32);   // would be 31 by formula
+    expect(utmZoneFor(62, 11).zone).toBe(32);
+    // Just outside the exception, the formula stands.
+    expect(utmZoneFor(55, 5).zone).toBe(31);
+    expect(utmZoneFor(60, 13).zone).toBe(33);
+  });
+
+  it('applies the Svalbard zone widenings', () => {
+    expect(utmZoneFor(78, 5).zone).toBe(31);
+    expect(utmZoneFor(78, 15).zone).toBe(33);
+    expect(utmZoneFor(78, 25).zone).toBe(35);
+    expect(utmZoneFor(78, 35).zone).toBe(37);
+    // Below 72°N the widenings do not apply.
+    expect(utmZoneFor(70, 15).zone).toBe(33);
+    expect(utmZoneFor(70, 20).zone).toBe(34);
+  });
+
+  it('leaves ordinary zones untouched', () => {
+    expect(utmZoneFor(40, -111).zone).toBe(12);
+    expect(utmZoneFor(-33, 151).zone).toBe(56);
+    expect(utmZoneFor(41.9, -8.5).zone).toBe(29);
   });
 });

@@ -305,9 +305,48 @@ export function utmZoneFor(lat: number, lon: number): {
   // well-defined at the antimeridian.
   let normLon = ((lon + 180) % 360 + 360) % 360 - 180;
   if (normLon === 180) normLon = -180;
-  const zone = clamp(Math.floor((normLon + 180) / 6) + 1, 1, 60);
+  let zone = clamp(Math.floor((normLon + 180) / 6) + 1, 1, 60);
+
+  // Two regions do not follow the formula, and both are in the UTM/EPSG
+  // definition rather than local convention — so computing them by longitude
+  // alone puts real survey areas in a zone PROJ and every other tool disagree
+  // with, by a whole 6° of grid.
+  //
+  // South-west Norway: zone 32 is widened to 3°E–12°E between 56°N and 64°N.
+  if (lat >= 56 && lat < 64 && normLon >= 3 && normLon < 12) zone = 32;
+  // Svalbard: zones 31, 33, 35 and 37 are widened between 72°N and 84°N,
+  // and zones 32, 34 and 36 do not exist there.
+  else if (lat >= 72 && lat < 84) {
+    if (normLon >= 0 && normLon < 9) zone = 31;
+    else if (normLon >= 9 && normLon < 21) zone = 33;
+    else if (normLon >= 21 && normLon < 33) zone = 35;
+    else if (normLon >= 33 && normLon < 42) zone = 37;
+  }
+
   const hemisphere: 'N' | 'S' = lat >= 0 ? 'N' : 'S';
   return { zone, hemisphere };
+}
+
+/** Southern and northern limits of the UTM system, in degrees. */
+const UTM_MIN_LAT = -80;
+const UTM_MAX_LAT = 84;
+
+/**
+ * Why a latitude is outside UTM's domain, or null when it is inside.
+ *
+ * UTM covers 80°S to 84°N; the poles are UPS. The zone maths happily returns
+ * finite numbers past those limits, so a point at 85°N came back with an
+ * easting and northing that look ordinary and match no other tool. A grid
+ * coordinate outside the system's own domain is not an approximation, it is
+ * a different answer to a different question.
+ */
+export function utmLatitudeFailure(lat: number): string | null {
+  if (!Number.isFinite(lat)) return 'Latitude is not a finite number.';
+  if (lat < UTM_MIN_LAT || lat > UTM_MAX_LAT) {
+    return `Latitude ${lat.toFixed(4)}° is outside the UTM system, which covers `
+      + `${UTM_MIN_LAT}° to ${UTM_MAX_LAT}°. Polar coordinates use UPS, not UTM.`;
+  }
+  return null;
 }
 
 /**
