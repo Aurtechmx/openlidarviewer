@@ -224,6 +224,7 @@ import {
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
+import { RenderActivityGate } from './renderActivityGate';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
 import type { SavedCameraState } from './annotate/types';
@@ -563,7 +564,6 @@ const MAX_PIXEL_RATIO = 1.5;
  * the streaming scheduler keeps its cadence — only the actual
  * GPU `render()` call is gated.
  */
-const RENDER_HOLDOVER_MS = 350;
 /**
  * P6 proxy (until the P4 scheduler emits real coverage / spacing signals): ms
  * after the camera parks at which the center is treated as "refined", so the
@@ -571,7 +571,6 @@ const RENDER_HOLDOVER_MS = 350;
  * Kept short so the view re-sharpens promptly after navigation stops.
  */
 const PHASE_CENTER_PROXY_MS = 250;
-const IDLE_HEARTBEAT_FRAMES = 6;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
@@ -856,7 +855,7 @@ export class Viewer {
    * rAF rate. Bumped on every user input via `_bumpRenderActivity`.
    * Past this point, the loop falls back to a heartbeat render.
    */
-  private _renderActivityUntilMs: number = 0;
+  private readonly _renderGate = new RenderActivityGate();
   /**
    * Counter for the idle-render heartbeat. Increments when the loop
    * skips a render; reaches `IDLE_HEARTBEAT_FRAMES` and forces a
@@ -864,7 +863,7 @@ export class Viewer {
    * to commit any newly-resident nodes). Reset to 0 on every actual
    * render so the next heartbeat window starts clean.
    */
-  private _idleRenderHeartbeat: number = IDLE_HEARTBEAT_FRAMES;
+
 
   // ── Frame timing (debug overlay) ─────────────────────────────────────────
   /** Rolling buffer of recent frame times, in ms — feeds {@link frameStats}. */
@@ -6550,7 +6549,7 @@ export class Viewer {
     const now = (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-    this._renderActivityUntilMs = now + RENDER_HOLDOVER_MS;
+    this._renderGate.bump(now);
   }
 
   /**
@@ -6567,21 +6566,20 @@ export class Viewer {
    * orbit-pivot maintenance) so resume-on-input is glitch-free.
    */
   private _shouldRenderFrame(): boolean {
-    if (this._nav.isTweening) return true;
     const now = (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-    if (now < this._renderActivityUntilMs) return true;
-    // Streaming activity check — scheduler reports `loading > 0` when
-    // there are in-flight node fetches. We render full-rate during
-    // load bursts so freshly-decoded nodes appear without latency,
-    // then the heartbeat takes over when the scheduler is quiet.
+    // Streaming counts as busy when the scheduler has in-flight or queued
+    // fetches, so freshly-decoded nodes reach the screen without latency.
+    let streamingBusy = false;
     if (this._streaming) {
       const stats = this._streaming.scheduler.stats();
-      if (stats.loading > 0 || stats.queued > 0) return true;
+      streamingBusy = stats.loading > 0 || stats.queued > 0;
     }
-    if (this._idleRenderHeartbeat >= IDLE_HEARTBEAT_FRAMES) return true;
-    return false;
+    return this._renderGate.shouldRender(now, {
+      tweening: this._nav.isTweening,
+      streamingBusy,
+    });
   }
 
   /**
@@ -6678,12 +6676,12 @@ export class Viewer {
       const nowMs = (typeof performance !== 'undefined' && performance.now)
         ? performance.now()
         : Date.now();
-      const moving = cameraIsMoving(this._nav.isTweening, nowMs, this._renderActivityUntilMs);
+      const moving = cameraIsMoving(this._nav.isTweening, nowMs, this._renderGate.activityUntilMs);
       const wantEdl = edlActiveThisFrame(this._edlEnabled, moving);
       // P5 — pick this frame's DPR before rendering so the render uses it.
       this._applyAdaptiveDpr(moving, delta, nowMs, rendered);
       if (rendered) {
-        this._idleRenderHeartbeat = 0;
+        this._renderGate.noteRendered();
         // EDL when parked → render through the post-processing pipeline; moving
         // or EDL off → render the scene directly for zero post-processing cost.
         if (wantEdl) this._post.render();
@@ -6692,11 +6690,11 @@ export class Viewer {
       } else if (wantEdl && !this._edlPaintedAtRest) {
         // Motion just settled and the last paint had EDL off — force one EDL
         // repaint so the depth cue snaps back, then resume idle throttling.
-        this._idleRenderHeartbeat = 0;
+        this._renderGate.noteRendered();
         this._post.render();
         this._edlPaintedAtRest = true;
       } else {
-        this._idleRenderHeartbeat++;
+        this._renderGate.noteSkipped();
       }
       // Streaming COPC — run the view-dependent scheduler on a throttled
       // cadence (~10 Hz at 60 fps), never every frame.
