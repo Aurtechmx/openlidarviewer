@@ -1,7 +1,7 @@
 {
   "version": "0.6.0-alpha.2",
-  "commit": "cd72db84dc131d08260cf42bf6d052030cd2669a",
-  "collectedFrom": "/tmp/gQ1.log",
+  "commit": "865b4d1e78d4b89c9cc756199f3dcfa73befc582",
+  "collectedFrom": "/tmp/gFINAL.log",
   "buckets": {
     "unit": {
       "passed": 2935,
