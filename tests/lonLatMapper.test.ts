@@ -77,3 +77,24 @@ describe('makeLocalToLonLat', () => {
     expect(() => map!([450_000, 0, 0])).toThrow(/easting/i);
   });
 });
+
+/**
+ * The third ordinate is source Z, not an altitude.
+ *
+ * A horizontal reprojection proves nothing about the vertical axis, so this
+ * mapper must not appear to convert one. The KML writer used to take this
+ * value into a geometry tagged `absolute` — metres above mean sea level —
+ * for heights that were never placed on that reference.
+ */
+describe('makeLocalToLonLat — vertical passthrough is explicit', () => {
+  it('returns the SOURCE height unchanged when reprojecting horizontally', () => {
+    const map = makeLocalToLonLat(utm12, [500_000, 4_400_000, 1_234.5]);
+    expect(map!([0, 0, 10])[2]).toBe(1_244.5);
+  });
+
+  it('does not convert a foot height into metres', () => {
+    const feet: ResolvedCrs = { ...utm12, linearUnit: 'foot', linearUnitToMetres: 0.3048 };
+    const map = makeLocalToLonLat(feet, [500_000, 4_400_000, 0]);
+    expect(map!([0, 0, 100])[2]).toBe(100);
+  });
+});

@@ -124,19 +124,23 @@ describe('buildKml — structure', () => {
 });
 
 describe('buildKml — coordinates', () => {
+  // These fix coordinate ORDER, which needs a third ordinate present to be
+  // observable — so they declare a proven metric orthometric datum. Without
+  // one the geometry is 2D by policy; that case is covered by the
+  // "omits the third ordinate" test below.
   it('annotation coordinates are lon,lat,alt in that order', () => {
-    const kml = buildKml(input({ measurements: [], viewpoints: [], annotations: [annotation()] }));
+    const kml = buildKml(input({ measurements: [], viewpoints: [], annotations: [annotation()], verticalDatum: 'EPSG:5703' }));
     // local (1,2,3) → (101, 52, 3) = lon,lat,alt.
     expect(kml).toContain('<coordinates>101,52,3</coordinates>');
   });
 
   it('polyline coordinates are a space-separated lon,lat,alt list, closed not applied', () => {
-    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline] }));
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline], verticalDatum: 'EPSG:5703' }));
     expect(kml).toContain('<coordinates>100,50,0 110,50,0 110,60,0</coordinates>');
   });
 
   it('area polygon ring is closed (first vertex repeated last)', () => {
-    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [area] }));
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [area], verticalDatum: 'EPSG:5703' }));
     expect(kml).toContain(
       '<coordinates>100,50,0 110,50,0 110,60,0 100,60,0 100,50,0</coordinates>',
     );
@@ -162,7 +166,7 @@ describe('buildKml — measured values', () => {
   });
 
   it('reports raw metres for a metric scan (unitToMetres = 1)', () => {
-    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline] }));
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline], verticalDatum: 'EPSG:5703' }));
     expect(kml).toContain('length_m=20');
   });
 });
@@ -292,5 +296,68 @@ describe('KML viewpoint follows the same altitude policy', () => {
     }
     // Geometry and camera must never disagree about the same file.
     expect(clamped).not.toContain('<altitudeMode>absolute</altitudeMode>');
+  });
+});
+
+/**
+ * `absolute` is a claim about MEAN SEA LEVEL, not about "a datum exists".
+ *
+ * The gate used to be "some vertical datum string is present AND the unit
+ * factor is 1", which a WGS 84 ellipsoidal height passes — and an ellipsoidal
+ * height is not a sea-level height, it differs from one by the geoid
+ * separation, tens of metres in places. A depth axis passes the same gate and
+ * is sign-flipped on top of that. Only a recognised metric orthometric
+ * reference may be claimed, and everything else must not merely be labelled
+ * clamped: the unproven altitude must not be written into the geometry at all.
+ */
+describe('KML altitude — only proven sea-level heights are claimed', () => {
+  it('accepts the metric orthometric allow-list', () => {
+    for (const d of ['EPSG:5703', 'NAVD88', 'EPSG:5714', 'EPSG:3855', 'EPSG:5773']) {
+      expect(kmlAltitudeMode(d, 1).mode).toBe('absolute');
+    }
+  });
+
+  it('does NOT claim absolute for a WGS 84 ellipsoidal height', () => {
+    expect(kmlAltitudeMode('EPSG:4979', 1).mode).toBe('clampToGround');
+  });
+
+  it('does NOT claim absolute for a depth axis', () => {
+    expect(kmlAltitudeMode('EPSG:5715', 1).mode).toBe('clampToGround');
+  });
+
+  it('does NOT claim absolute for an unrecognised datum label', () => {
+    expect(kmlAltitudeMode('Site benchmark A', 1).mode).toBe('clampToGround');
+  });
+
+  it('omits the third ordinate entirely when the vertical reference is unproven', () => {
+    const kml = buildKml(input({ verticalDatum: null }));
+    expect(kml).toContain('<altitudeMode>clampToGround</altitudeMode>');
+    // 2D geometry: "lon,lat" pairs only, never a third ordinate.
+    for (const m of kml.matchAll(/<coordinates>([^<]*)<\/coordinates>/g)) {
+      for (const tuple of m[1].split(' ')) {
+        expect(tuple.split(',').length).toBe(2);
+      }
+    }
+  });
+
+  it('keeps the third ordinate only for a proven metric orthometric datum', () => {
+    const kml = buildKml(input({ verticalDatum: 'EPSG:5703' }));
+    expect(kml).toContain('<altitudeMode>absolute</altitudeMode>');
+    expect(kml).toContain('<coordinates>101,52,3</coordinates>');
+  });
+
+  it('discloses the source elevation with its unit and datum in every description', () => {
+    const undeclared = buildKml(input({ verticalDatum: null }));
+    expect(undeclared).toMatch(/Source elevation/);
+    expect(undeclared).toMatch(/undeclared/i);
+
+    const feet = buildKml(input({ verticalDatum: 'EPSG:6360', verticalUnitToMetres: 0.3048 }));
+    expect(feet).toMatch(/Source elevation/);
+    expect(feet).toContain('0.3048');
+    expect(feet).toContain('EPSG:6360');
+
+    const ortho = buildKml(input({ verticalDatum: 'EPSG:5703' }));
+    expect(ortho).toMatch(/Source elevation/);
+    expect(ortho).toContain('EPSG:5703');
   });
 });

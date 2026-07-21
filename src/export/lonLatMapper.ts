@@ -21,6 +21,23 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 export class LonLatConversionError extends Error {}
 
 /**
+ * A mapper from LOCAL render space to `[lon, lat, sourceZ]`.
+ *
+ * The name states the whole contract: the first two ordinates are CONVERTED,
+ * the third is NOT. A horizontal reprojection establishes nothing about the
+ * vertical axis, so the height that comes out is the height that went in —
+ * possibly feet, possibly a local engineering height, possibly an ellipsoidal
+ * height, possibly a sign-flipped depth. It was previously returned in an
+ * `[lon, lat, alt]` tuple, and the KML writer put it straight into a geometry
+ * tagged `absolute`, which asserts metres above mean sea level about a number
+ * nothing in this pipeline ever placed on that reference. Consumers must
+ * either prove the vertical reference themselves or decline to publish it.
+ */
+export type LocalToLonLatSourceZ = (
+  p: readonly [number, number, number],
+) => [number, number, number];
+
+/**
  * A LOCAL render-space → [lon, lat, alt] mapper for the resolved CRS, or null
  * when no honest mapping exists (unknown/local CRS, or a projected CRS the
  * vendored converter does not handle — those decline rather than approximate).
@@ -34,7 +51,7 @@ export class LonLatConversionError extends Error {}
 export function makeLocalToLonLat(
   resolved: ResolvedCrs | null,
   origin: readonly number[],
-): ((p: readonly [number, number, number]) => [number, number, number]) | null {
+): LocalToLonLatSourceZ | null {
   if (!resolved) return null;
   const ox = origin[0] ?? 0;
   const oy = origin[1] ?? 0;
@@ -51,7 +68,10 @@ export function makeLocalToLonLat(
         resolved,
       );
       if (!r.ok) throw new LonLatConversionError(r.reason);
-      return [r.value.lon, r.value.lat, r.value.elevation ?? p[2] + oz];
+      // Source Z, deliberately UNCONVERTED and deliberately not called an
+      // altitude. The converter's `elevation` is the same value passed back
+      // out, so preferring it only made the passthrough harder to see.
+      return [r.value.lon, r.value.lat, p[2] + oz];
     };
   }
   return null;
