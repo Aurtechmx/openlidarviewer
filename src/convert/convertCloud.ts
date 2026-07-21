@@ -12,6 +12,7 @@
 import type { PointCloud } from '../model/PointCloud';
 import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
+import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
 import { writeLas, writeLas14 } from './writeLas';
 import { writeXyz, writeAsc } from './writeAscii';
@@ -176,7 +177,13 @@ export function convertCloud(
     // exists when the source carried one AND nothing changed (keep mode) —
     // after assign/reproject the source WKT would describe the wrong CRS,
     // so those modes fall back to a GeoKey tag built from the EPSG.
-    const wkt = opts.format === 'las14' && mode === 'keep' ? (srcCrs?.wkt ?? null) : null;
+    const sourceWkt = opts.format === 'las14' && mode === 'keep' ? (srcCrs?.wkt ?? null) : null;
+    // Falling back to a WKT derived from the OUTPUT code covers the modes the
+    // source WKT cannot: after assign or reproject the source WKT describes
+    // the wrong CRS, but a derived one describes outEpsg by construction. It
+    // also covers keep mode for the common case of a source georeferenced by
+    // GeoKeys alone, which is what left LAS 1.4 files with bit 4 clear.
+    const wkt = opts.format === 'las14' ? (sourceWkt ?? wktForEpsg(outEpsg)) : null;
     if (outEpsg != null && outEpsg > 65535 && wkt == null) {
       log.push({
         level: 'warn',

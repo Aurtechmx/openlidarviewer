@@ -113,6 +113,25 @@ The live entry chunk measures 710 KiB against a hard 720 KiB ceiling — **10 Ki
 
 `npm run coverage` and `npm run mutation` both pass locally (the numeric-core mutation score was 87.23 % at the time of writing), but neither runs in CI and neither retains an artifact. Treat the figures as a working measurement, not a preserved claim, until a job publishes the reports. `terrainRunnerDensityWiring.test.ts` is excluded from the coverage run only — v8 instrumentation makes it take about 75 s per test — and still runs in the release buckets.
 
+## LAS 1.4 CRS encoding depends on the source
+
+LAS 1.4 requires the CRS as OGC WKT for point data record formats 6-10. The
+writer emits a `LASF_Projection` record 2112 with global-encoding bit 4 set
+whenever a WKT is available, and a WKT is now derived for WGS 84 UTM zones and
+WGS 84 geographic, whose parameters follow exactly from the code.
+
+Codes outside that set — ETRS89 or NAD83 UTM zones, national grids — still fall
+back to a GeoTIFF `GeoKeyDirectoryTag` with bit 4 clear. Those share a
+projection with a derivable zone but not a datum, and a datum is not something
+to infer when the difference is metres on the ground. Such a file records its
+code faithfully and every common reader resolves it, but a strict 1.4 reader
+may decline to take the CRS from it. The conversion log says which encoding was
+used.
+
+An earlier build derived nothing, so a scan georeferenced by GeoKeys alone -
+what LAS 1.2 carries, and what PDAL commonly writes - came back out as a 1.4
+file with the right code in the wrong encoding.
+
 ## Evidence ceiling: internal self-consistency
 
 Scientific evidence tops out at E3 — synthetic known-truth checks against our own implementation. No terrain product has been compared against an independent implementation (PDAL / GDAL / CloudCompare); every `REFERENCE_SLOT` in `docs/validation/cross-implementation.md` still ships `pending`. This alpha does not claim survey-grade accuracy, standards compliance, or independent field validation.

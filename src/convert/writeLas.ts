@@ -80,10 +80,15 @@ export interface WriteLas14Options extends WriteLasOptions {
   /**
    * OGC WKT describing the CRS. LAS 1.4 requires the CRS as WKT for point
    * formats 6+ (global-encoding bit 4); when this is present it is written
-   * as a LASF_Projection/2112 VLR and the bit is set. When only an EPSG code
-   * is known we fall back to the same GeoKey VLR the 1.2 writer emits (bit 4
-   * clear) — honest about the encoding actually in the file, rather than
-   * fabricating a parameterless WKT downstream tools could not use.
+   * as a LASF_Projection/2112 VLR and the bit is set. Callers should pass the
+   * source's WKT when there is one and otherwise try `wktForEpsg`, which
+   * derives it for the codes whose parameters are exactly determined; a scan
+   * georeferenced by GeoKeys alone used to arrive here with nothing and
+   * produce a file no strict 1.4 reader would accept the CRS from.
+   *
+   * A null WKT still falls back to the same GeoKey VLR the 1.2 writer emits
+   * (bit 4 clear) — honest about the encoding actually in the file, rather
+   * than fabricating a parameterless WKT downstream tools could not use.
    */
   readonly wkt?: string | null;
 }
