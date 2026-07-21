@@ -163,3 +163,60 @@ describe('vertical reference is order-independent', () => {
     expect(s).toEqual({ a: 'horizontal-only', b: 'horizontal-only' });
   });
 });
+
+/**
+ * The same vertical datum has more than one spelling.
+ *
+ * Vertical references arrive from different resolution paths: a GeoTIFF key
+ * yields the catalog NAME ("NAVD88"), a WKT or an unmapped code yields
+ * "EPSG:5703". Comparing those as raw strings meant one datum failed to match
+ * itself, so two scans genuinely on NAVD88 were demoted to horizontal-only —
+ * refusing work that is perfectly valid. Fails safe, but wrongly.
+ *
+ * Matching is on IDENTITY, not spelling: an EPSG code when one is known,
+ * otherwise a normalised name. What must never collapse is a genuine
+ * difference — height and depth are opposite axes, not a formatting variant.
+ */
+describe('vertical reference identity', () => {
+  const withVertical = (id: string, verticalDatum: string | null, verticalEpsg?: number) =>
+    layer({ id, verticalDatum, verticalEpsg });
+
+  const at = (ls: CompatibilityInput[]) => {
+    const m = classifyLayerCompatibility(ls);
+    return (id: string) => m.get(id)!;
+  };
+
+  it('matches the catalog name against its EPSG code', () => {
+    const s = at([withVertical('a', 'NAVD88'), withVertical('b', 'EPSG:5703')]);
+    expect(s('a')).toBe('verified');
+    expect(s('b')).toBe('verified');
+  });
+
+  it('matches a code carried alongside a name', () => {
+    const s = at([withVertical('a', 'NAVD88', 5703), withVertical('b', 'EPSG:5703')]);
+    expect(s('a')).toBe('verified');
+  });
+
+  it('ignores case and surrounding whitespace', () => {
+    const s = at([withVertical('a', '  navd88 '), withVertical('b', 'NAVD88')]);
+    expect(s('a')).toBe('verified');
+  });
+
+  it('keeps HEIGHT and DEPTH apart — they are opposite axes', () => {
+    // EPSG:5714 is mean sea level height, 5715 is mean sea level depth. A
+    // formatter could make these look alike; they differ by a sign.
+    const s = at([withVertical('a', 'MSL height', 5714), withVertical('b', 'MSL depth', 5715)]);
+    expect(s('a')).toBe('horizontal-only');
+    expect(s('b')).toBe('horizontal-only');
+  });
+
+  it('keeps genuinely different datums apart', () => {
+    const s = at([withVertical('a', 'NAVD88'), withVertical('b', 'EGM2008 height')]);
+    expect(s('a')).toBe('horizontal-only');
+  });
+
+  it('an unrecognised name still matches itself', () => {
+    const s = at([withVertical('a', 'Site benchmark A'), withVertical('b', 'Site benchmark A')]);
+    expect(s('a')).toBe('verified');
+  });
+});

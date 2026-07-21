@@ -36,6 +36,56 @@ export interface CompatibilityInput {
   readonly crsName?: string;
   /** Vertical datum identifier as declared, or null when undeclared. */
   readonly verticalDatum?: string | null;
+  /** Vertical CRS EPSG code, when the source declared one. Authoritative. */
+  readonly verticalEpsg?: number;
+}
+
+/**
+ * The catalog names the CRS layer prints for known vertical codes, inverted.
+ *
+ * A vertical reference reaches this module by more than one route: a GeoTIFF
+ * key resolves through the catalog and yields "NAVD88", while a WKT or an
+ * unmapped code yields "EPSG:5703". Comparing those as raw strings meant one
+ * datum did not match itself, and two scans genuinely on NAVD88 were demoted
+ * to horizontal-only — refusing valid work rather than permitting invalid
+ * work, but wrong either way.
+ *
+ * Kept deliberately small and explicit. Height and depth codes stay separate
+ * because they are opposite axes, not spellings of one thing.
+ */
+const VERTICAL_NAME_TO_EPSG: Readonly<Record<string, number>> = {
+  'navd88': 5703,
+  'odn (newlyn)': 5701,
+  'msl height': 5714,
+  'msl depth': 5715,
+  'egm2008 height': 3855,
+  'egm96 height': 5773,
+  'cgvd2013': 6647,
+  'baltic 1977': 5705,
+  'egm84 height': 5612,
+};
+
+/**
+ * A comparable identity for a layer's vertical reference, or null when it
+ * declared none.
+ *
+ * An EPSG code is authoritative and wins. Failing that, a name recognised in
+ * the catalog resolves to its code, so the two spellings of one datum agree.
+ * An unrecognised name normalises to itself — it still matches another layer
+ * carrying the same name, which is the most that can honestly be concluded
+ * from free text.
+ */
+export function verticalReferenceKey(l: CompatibilityInput): string | null {
+  if (l.verticalEpsg !== undefined && Number.isFinite(l.verticalEpsg) && l.verticalEpsg > 0) {
+    return `epsg:${l.verticalEpsg}`;
+  }
+  const raw = l.verticalDatum?.trim().toLowerCase();
+  if (!raw) return null;
+  const viaName = VERTICAL_NAME_TO_EPSG[raw];
+  if (viaName !== undefined) return `epsg:${viaName}`;
+  const viaCode = /^epsg:(\d{4,6})$/.exec(raw);
+  if (viaCode) return `epsg:${Number(viaCode[1])}`;
+  return `name:${raw}`;
 }
 
 /**
@@ -114,7 +164,7 @@ export function classifyLayerCompatibility(
   // reordered cannot be published. Unresolved therefore means unresolved for
   // the whole group: the same answer in any order.
   const group = declared.filter((e) => e.key === referenceKey);
-  const groupVerticals = group.map((e) => e.l.verticalDatum?.trim() || null);
+  const groupVerticals = group.map((e) => verticalReferenceKey(e.l));
   const referenceVertical =
     groupVerticals.length > 0
     && groupVerticals.every((v) => v !== null && v === groupVerticals[0])
@@ -131,7 +181,7 @@ export function classifyLayerCompatibility(
       out.set(l.id, 'incompatible');
       continue;
     }
-    const vertical = l.verticalDatum?.trim() || null;
+    const vertical = verticalReferenceKey(l);
     // Both sides must state the SAME vertical datum. Undeclared is not
     // agreement — it is the absence of a claim, and heights derived across it
     // would be plausible and unfounded.

@@ -29,6 +29,8 @@ export interface LayerInfo {
   /** Vertical datum label or `EPSG:<code>`, when the source declares one. */
   readonly verticalDatum?: string;
   /** True when the CRS is geographic (lat/lon). */
+  /** Vertical CRS EPSG code, when declared — authoritative over the label. */
+  readonly verticalEpsg?: number;
   readonly isGeographic?: boolean;
   /**
    * Metres per horizontal linear unit, when the CRS declares one. The frame's

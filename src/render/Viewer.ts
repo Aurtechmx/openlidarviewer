@@ -2237,11 +2237,15 @@ export class Viewer {
       epsg: cloud.metadata?.crs?.epsg,
       crsName: cloud.metadata?.crs?.name,
       verticalDatum: cloud.metadata?.crs?.verticalDatum,
+      verticalEpsg: cloud.metadata?.crs?.verticalEpsg,
     }));
     const STREAM_ID = '\u0000stream';
     const states = classifyLayerCompatibility([
       ...statics,
-      { id: STREAM_ID, epsg: scrs?.epsg, crsName: scrs?.name, verticalDatum: scrs?.verticalDatum },
+      {
+        id: STREAM_ID, epsg: scrs?.epsg, crsName: scrs?.name,
+        verticalDatum: scrs?.verticalDatum, verticalEpsg: scrs?.verticalEpsg,
+      },
     ]);
     return states.get(STREAM_ID) ?? 'unknown';
   }

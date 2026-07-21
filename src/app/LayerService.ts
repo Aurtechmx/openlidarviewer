@@ -110,6 +110,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         epsg: crs?.epsg,
         crsName: crs?.name,
         verticalDatum: crs?.verticalDatum,
+        verticalEpsg: crs?.verticalEpsg,
         isGeographic: crs?.isGeographic,
         linearUnitToMetres: crs?.linearUnitToMetres,
       };
@@ -151,7 +152,8 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // doubt now gates the product instead of only annotating it.
     const compat = classifyLayerCompatibility(
       infos.map((i) => ({
-        id: i.id, epsg: i.epsg, crsName: i.crsName, verticalDatum: i.verticalDatum,
+        id: i.id, epsg: i.epsg, crsName: i.crsName,
+        verticalDatum: i.verticalDatum, verticalEpsg: i.verticalEpsg,
       })),
     );
     lastCompatibility = compat;

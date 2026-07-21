@@ -23,6 +23,7 @@
  */
 
 import { icpRegister, applyIcp, type Vec3, type IcpResult } from './icpRegister';
+import { verticalReferenceKey } from '../../model/layerCompatibility';
 import type { EpochCloud } from './compareEpochs';
 
 const ZERO: readonly [number, number, number] = [0, 0, 0];
@@ -84,6 +85,14 @@ export interface EpochAlignment {
    * thresholds. Reproject to a projected CRS to align epochs.
    */
   readonly geographicSkipped?: boolean;
+  /**
+   * True when the two epochs were not shown to share a spatial frame, so no
+   * fit was attempted. Distinct from `degenerate`, which means a fit ran and
+   * produced nothing usable — here there is nothing meaningful to fit.
+   */
+  readonly frameIncompatible?: boolean;
+  /** Why the frames were refused, in plain language, for the summary. */
+  readonly frameReason?: string;
 }
 
 const NO_ALIGNMENT: EpochAlignment = {
@@ -103,6 +112,39 @@ const GEOGRAPHIC_SKIP: EpochAlignment = {
   degenerate: false,
   geographicSkipped: true,
 };
+
+/**
+ * Whether two epochs have been shown to share a spatial frame, and why not.
+ *
+ * ICP fits a rigid transform between two point sets and reports a residual.
+ * Given two epochs in different CRSs, or on different vertical datums, it
+ * still converges on something and still reports a number — because the
+ * residual describes the fit, not whether fitting was meaningful. That number
+ * then reads as a quality figure for a comparison that never had a common
+ * frame. The check therefore runs BEFORE any sampling, inside this function
+ * rather than at a call site, so no caller can reach the fit without it.
+ */
+function epochFrameFailure(before: EpochCloud, after: EpochCloud): string | null {
+  // Refused ONLY on a proven contradiction — the same rule `compareDtms`
+  // already applies downstream. Silence on both sides is not a contradiction:
+  // two undeclared local scans are a real workflow, and the comparison path
+  // treats that pair as indicative-with-caveats rather than measured. Refusing
+  // them here would forbid the case rather than qualify it, and would put this
+  // gate at odds with the one that follows it.
+  if (before.crs && after.crs && before.crs.trim() !== after.crs.trim()) {
+    return `The epochs declare different horizontal reference systems `
+      + `(${before.crs} vs ${after.crs}). They must be reprojected to a common `
+      + 'CRS before they can be aligned or compared.';
+  }
+  const bv = verticalReferenceKey({ id: 'b', verticalDatum: before.verticalDatum });
+  const av = verticalReferenceKey({ id: 'a', verticalDatum: after.verticalDatum });
+  if (bv !== null && av !== null && bv !== av) {
+    return `The epochs declare different vertical datums `
+      + `(${before.verticalDatum} vs ${after.verticalDatum}), so height differences `
+      + 'between them have no defined meaning.';
+  }
+  return null;
+}
 
 /** Stride-sample an interleaved xyz buffer into world-frame points (local + origin). */
 function sampleWorld(
@@ -174,6 +216,16 @@ export function alignEpochClouds(
   // alignment must not silently apply transforms in one.
   if (before.isGeographic === true || after.isGeographic === true) {
     return { after, alignment: GEOGRAPHIC_SKIP };
+  }
+
+  // Spatial preflight, before any sampling or fitting. A refused pair gets no
+  // residual, because there is no fit to score.
+  const frameReason = epochFrameFailure(before, after);
+  if (frameReason !== null) {
+    return {
+      after,
+      alignment: { ...NO_ALIGNMENT, degenerate: false, frameIncompatible: true, frameReason },
+    };
   }
 
   const maxSamples = options.maxSamples ?? 1500;
@@ -263,6 +315,9 @@ export function alignEpochClouds(
 
 /** A one-line, human-readable summary of an alignment outcome for the UI. */
 export function summarizeAlignment(a: EpochAlignment): string {
+  if (a.frameIncompatible) {
+    return `Alignment not attempted. ${a.frameReason ?? 'The epochs do not share a proven spatial frame.'}`;
+  }
   if (a.geographicSkipped) {
     return (
       'Alignment: skipped — geographic (degree) coordinates cannot be rigidly ' +

@@ -25,6 +25,7 @@ import {
   participatesInSharedAnalysis,
   alignsVertically,
   alignsHorizontally,
+  verticalReferenceKey,
   type CompatibilityInput,
   type LayerCompatibility,
 } from '../src/model/layerCompatibility';
@@ -148,9 +149,11 @@ describe('classifyLayerCompatibility — invariants', () => {
   it('agrees with itself: verified layers all share one vertical datum', () => {
     forAll('verified set is vertically unanimous', genLayers, (layers) => {
       const m = classifyLayerCompatibility(layers);
+      // Compared on IDENTITY, not spelling: "NAVD88" and "EPSG:5703" are one
+      // datum reached by two resolution paths, and both may verify.
       const verticals = layers
         .filter((l) => m.get(l.id) === 'verified')
-        .map((l) => l.verticalDatum?.trim() ?? null);
+        .map((l) => verticalReferenceKey(l));
       if (verticals.length > 1) {
         expect(new Set(verticals).size).toBe(1);
       }
