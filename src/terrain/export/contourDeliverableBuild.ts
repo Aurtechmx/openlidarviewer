@@ -55,6 +55,8 @@ export interface DeliverableBuildOptions {
    * unit is never inferred from the horizontal unit.
    */
   readonly verticalUnitToMetres?: number | null;
+  /** Source frame → WGS 84 lon/lat, for the RFC 7946 contour GeoJSON. */
+  readonly toLonLat?: (p: readonly [number, number, number]) => [number, number, number];
   /** True when the horizontal CRS is geographic. */
   readonly isGeographic?: boolean;
   readonly softwareVersion: string;
@@ -143,6 +145,7 @@ function gatherDeliverable(
   const model = result.model ?? null;
   const style = result.generationParams?.contourStyle ?? model?.contourStyle ?? null;
   const isAnalytical = style === 'crisp';
+  const nativeGeojsonRole: PackageRole = 'contours-native-geojson';
   const geojsonRole: PackageRole = isAnalytical
     ? 'contours-analytical-geojson'
     : 'contours-cartographic-geojson';
@@ -160,14 +163,27 @@ function gatherDeliverable(
   const bytes = new Map<PackageRole, Uint8Array>();
 
   if (hasContours && model) {
-    const gj = serializeContours(model, 'geojson', {
+    // A `.geojson` in the package makes the same promise as one on disk: RFC
+    // 7946, WGS 84 degrees. Written that way whenever the CRS can be
+    // converted; otherwise the native frame ships instead, since projected
+    // numbers in a degrees field would be worse than an unconverted file.
+    const gj = serializeContours(model, opts.toLonLat ? 'geojson' : 'geojson-native', {
       basename,
       labels: result.labels,
       provenance,
       worldOrigin: opts.worldOrigin ?? null,
       linearUnit: opts.linearUnit,
+      toLonLat: opts.toLonLat,
     });
     bytes.set(geojsonRole, enc(gj.content));
+    if (opts.toLonLat) {
+      // The survey grid ships alongside, for GIS that wants it.
+      const native = serializeContours(model, 'geojson-native', {
+        basename, labels: result.labels, provenance,
+        worldOrigin: opts.worldOrigin ?? null, linearUnit: opts.linearUnit,
+      });
+      bytes.set(nativeGeojsonRole, enc(native.content));
+    }
   }
 
   if (dtm != null) {

@@ -2816,6 +2816,22 @@ function newAnalysePanel(
         // "unitless" rather than asserting metres. Undefined before a CRS
         // resolves ⇒ serializeContours keeps its standing metre default.
         linearUnit: cur?.linearUnit,
+        // Source frame → WGS 84 lon/lat, for the RFC 7946 contour GeoJSON.
+        // Built from the SAME resolved CRS and world origin the rest of this
+        // context uses, so the standard export and the native one describe one
+        // scan. Null when the CRS cannot be converted — the export then refuses
+        // rather than writing eastings into a longitude field.
+        // Anchored at the scan's own origin, because the converter probes the
+        // anchor to decide whether it can work at all — probing (0,0) would
+        // fail every UTM grid. Contour coordinates arrive already shifted to
+        // world, so they are re-localised against that same anchor here.
+        toLonLat: (() => {
+          if (!origin || !cur) return undefined;
+          const m = makeLocalToLonLat(cur, [origin[0], origin[1], origin[2]]);
+          if (!m) return undefined;
+          return (p: readonly [number, number, number]): [number, number, number] =>
+            m([p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]]);
+        })(),
         // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
         // it declares one, else the horizontal linear factor when the frame is
         // actually resolved (GeoTIFF default: vertical follows the model's linear

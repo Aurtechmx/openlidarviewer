@@ -59,7 +59,7 @@ place.
 These are the decomposition targets. `main.ts` must reach < 2,500 lines and
 `Viewer.ts` < 2,000, each with a lint guard once achieved.
 
-**`src/main.ts` (7,611)** — the largest blocks, which are the extraction
+**`src/main.ts` (7,627)** — the largest blocks, which are the extraction
 candidates:
 
 | Block | ~Lines | Extraction target |

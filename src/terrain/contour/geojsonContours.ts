@@ -130,3 +130,63 @@ export function geojsonString(
 ): string {
   return JSON.stringify(toGeoJSON(model, provenance), null, pretty ? 2 : 0);
 }
+
+/** Thrown when a standards-compliant GeoJSON cannot be produced honestly. */
+export class GeoJsonFrameError extends Error {}
+
+/**
+ * A point in the source frame → WGS 84 `[lon, lat, elevation]`.
+ * Throws (rather than approximating) for a point it cannot convert.
+ */
+export type ToLonLat = (p: readonly [number, number, number]) => [number, number, number];
+
+/**
+ * Build an RFC 7946 GeoJSON: WGS 84 longitude/latitude, and NO `crs` member.
+ *
+ * The native writer above emits projected coordinates and declares them with
+ * the pre-RFC top-level `crs` member. RFC 7946 requires WGS 84 lon/lat and
+ * REMOVED that member, so a compliant reader discards the only thing naming
+ * the frame and then reads an easting of 517,047 as a longitude — it does not
+ * error, it just puts the data somewhere impossible. Since the member cannot
+ * carry the source frame any more, the source CRS is recorded in `metadata`
+ * instead, where it is provenance rather than a positioning instruction.
+ */
+export function toGeoJSONWgs84(
+  model: ContourFeatureModel,
+  toLonLat: ToLonLat,
+  provenance?: ExportProvenance,
+): Record<string, unknown> {
+  const obj = toGeoJSON(model, provenance);
+  // The frame is degrees now, so the projected stamp would be a lie.
+  delete obj.crs;
+  const metadata = { ...(obj.metadata as Record<string, unknown>) };
+  metadata.sourceCrs = model.crs ?? null;
+  metadata.coordinateFrame =
+    'WGS 84 longitude/latitude (RFC 7946). Reprojected from the source CRS named in sourceCrs; '
+    + 'the native projected coordinates ship in the companion -native file.';
+  obj.metadata = metadata;
+
+  obj.features = (obj.features as Array<Record<string, unknown>>).map((f) => {
+    const geom = f.geometry as { type: string; coordinates: number[][] };
+    return {
+      ...f,
+      geometry: {
+        ...geom,
+        coordinates: geom.coordinates.map((c) =>
+          toLonLat([c[0], c[1], c[2] ?? 0]),
+        ),
+      },
+    };
+  });
+  return obj;
+}
+
+/** Serialise the model as RFC 7946 GeoJSON (WGS 84 degrees). */
+export function geojsonStringWgs84(
+  model: ContourFeatureModel,
+  toLonLat: ToLonLat,
+  pretty = true,
+  provenance?: ExportProvenance,
+): string {
+  return JSON.stringify(toGeoJSONWgs84(model, toLonLat, provenance), null, pretty ? 2 : 0);
+}

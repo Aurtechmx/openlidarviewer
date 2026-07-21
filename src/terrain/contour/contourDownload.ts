@@ -16,14 +16,21 @@ import {
   type ContourWorldOrigin,
 } from './contourFeatureModel';
 import type { ContourLabel } from './labelPlacement';
-import { geojsonString } from './geojsonContours';
+import { geojsonString, geojsonStringWgs84, GeoJsonFrameError, type ToLonLat } from './geojsonContours';
+import { epsgFromCrsLabel } from '../../export/crsIdentifier';
 import { svgContours } from './svgContours';
 import { dxfContours, type DxfLinearUnit } from './dxfContours';
 import type { ExportProvenance } from '../export/exportProvenance';
 import { triggerDownload } from '../../io/download';
 
 /** Supported pure-data export formats. */
-export type ContourFormat = 'geojson' | 'svg' | 'dxf';
+/**
+ * `geojson` is RFC 7946 — WGS 84 degrees, no `crs` member — because that is
+ * what the extension promises a reader. `geojson-native` keeps the source
+ * projected frame and the pre-RFC `crs` member for GIS that wants the survey
+ * grid, under a filename that says so.
+ */
+export type ContourFormat = 'geojson' | 'geojson-native' | 'svg' | 'dxf';
 
 /** A serialised file ready to download. */
 export interface ContourFile {
@@ -32,9 +39,10 @@ export interface ContourFile {
   readonly content: string;
 }
 
-const EXT: Record<ContourFormat, string> = { geojson: 'geojson', svg: 'svg', dxf: 'dxf' };
+const EXT: Record<ContourFormat, string> = { geojson: 'geojson', 'geojson-native': 'geojson', svg: 'svg', dxf: 'dxf' };
 const MIME: Record<ContourFormat, string> = {
   geojson: 'application/geo+json',
+  'geojson-native': 'application/geo+json',
   svg: 'image/svg+xml',
   dxf: 'application/dxf',
 };
@@ -72,6 +80,12 @@ export function serializeContours(
      * assumption); pass the resolved unit for feet-based CRSs.
      */
     linearUnit?: DxfLinearUnit;
+    /**
+     * Source frame → WGS 84 lon/lat. REQUIRED by the RFC 7946 `geojson`
+     * format, which cannot be written honestly without it. Absent means the
+     * export refuses rather than emitting projected numbers as degrees.
+     */
+    toLonLat?: ToLonLat;
   } = {},
 ): ContourFile {
   const basename = opts.basename ?? 'contours';
@@ -110,6 +124,15 @@ export function serializeContours(
   let content: string;
   switch (format) {
     case 'geojson':
+      if (!opts.toLonLat) {
+        throw new GeoJsonFrameError(
+          'Cannot write RFC 7946 GeoJSON: no conversion to WGS 84 longitude/latitude is '
+          + 'available for this CRS. Export the native-frame GeoJSON instead.',
+        );
+      }
+      content = geojsonStringWgs84(exportModel, opts.toLonLat, true, opts.provenance);
+      break;
+    case 'geojson-native':
       content = geojsonString(exportModel, true, opts.provenance);
       break;
     case 'svg':
@@ -129,7 +152,12 @@ export function serializeContours(
       });
       break;
   }
-  return { filename: `${basename}.${EXT[format]}`, mime: MIME[format], content };
+  // The native file must be distinguishable at a glance from the RFC one —
+  // two files with the same extension in one folder is how the wrong frame
+  // gets loaded.
+  const code = format === 'geojson-native' ? epsgFromCrsLabel(exportModel.crs ?? '') : null;
+  const stem = format === 'geojson-native' ? `${basename}-native${code ? `-EPSG${code}` : ''}` : basename;
+  return { filename: `${stem}.${EXT[format]}`, mime: MIME[format], content };
 }
 
 /**
