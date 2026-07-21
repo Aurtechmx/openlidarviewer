@@ -7,11 +7,34 @@ The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](
 - Node.js ≥ 22 (CI uses 22); dependencies pinned by `package-lock.json`.
 - Install from a clean clone with `npm ci` (not `npm install`).
 
+## Running the gate
+
+```
+npm run gate          # the whole battery, then a literal "GATE EXIT: <code>"
+npm run test:release:tag   # the gate plus the full Playwright suite; run before tagging
+```
+
+`npm run gate` is the only command whose result should be quoted. It writes
+`release/gate.log`, prints its own exit status, and regenerates
+`docs/validation/test-evidence.json` from that log — but only when the run
+passed, so a failing gate cannot refresh the figures it failed to earn.
+
+Every test count in these documents is read out of that evidence file and
+checked by `npm run lint:evidence`. Do not type the numbers in. The check is
+not ceremonial: removing one test file during this release cycle moved the
+terrain bucket by a single test, the documents still said the old figure, and
+this is what caught it.
+
+Take the exit status from the `GATE EXIT:` line, not from the last lines of
+output. Piping the gate into `tee` or `tail` reports the exit code of `tee`,
+which is essentially always 0 — the summary above it can read entirely green
+while the run failed.
+
 ## Regenerate each reported figure
 
 | Reported figure | Command |
 |---|---|
-| unit 2,943 (16 skipped) · export 605 · terrain 1,218 (18 skipped) · ui 429 · slow 508 — 5,703 passed / 34 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
+| unit 2,943 (16 skipped) · export 605 · terrain 1,217 · ui 429 · slow 508 — 5,703 passed / 34 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
