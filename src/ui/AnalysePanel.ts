@@ -1470,9 +1470,20 @@ export class AnalysePanel {
    * Returns null when there are too few cells to be meaningful.
    */
   private _elevationHistogram(dtm: { z: Float32Array; coverage: Uint8Array }): HTMLElement | null {
+    // The analysis runs in the cloud's RECENTRED frame, so `dtm.z` is local —
+    // the DEM package adds the load-time vertical origin back before writing
+    // absolute grids, and this panel must do the same or it labels a local
+    // residual "Bare-earth elevation … m". On a Swiss LV95 scan whose true
+    // ground sits at 330–467 m, the un-restored read showed −498.9 – −388.8:
+    // the right SHAPE at the wrong datum, which is exactly the kind of wrong
+    // that survives a glance. No origin ⇒ the frame is local anyway, so the
+    // caption says so rather than implying an elevation.
+    const oz = this._cb.getMapContext?.()?.worldOrigin?.z;
+    const shift = Number.isFinite(oz) ? (oz as number) : 0;
+    const absolute = shift !== 0;
     const covered: number[] = [];
     for (let i = 0; i < dtm.z.length; i++) {
-      if (dtm.coverage[i] !== 0 && Number.isFinite(dtm.z[i])) covered.push(dtm.z[i]);
+      if (dtm.coverage[i] !== 0 && Number.isFinite(dtm.z[i])) covered.push(dtm.z[i] + shift);
     }
     if (covered.length < 16) return null;
     const hist = histogramBins(covered, 24);
@@ -1484,7 +1495,9 @@ export class AnalysePanel {
     const fmt = (v: number): string => (Number.isFinite(v) ? v.toFixed(1) : '—');
     wrap.append(el('div', {
       className: 'olv-analyse-caption',
-      text: `${fmt(hist.min)} – ${fmt(hist.max)} m · ${hist.total.toLocaleString()} cells`,
+      text:
+        `${fmt(hist.min)} – ${fmt(hist.max)} m · ${hist.total.toLocaleString()} cells` +
+        (absolute ? '' : ' · local frame (no vertical origin)'),
     }));
     return wrap;
   }
