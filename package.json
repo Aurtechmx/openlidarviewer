@@ -87,14 +87,14 @@
     "laz-perf": "^0.0.7",
     "pdf-lib": "^1.17.1",
     "proj4": "^2.20.8",
-    "three": "^0.184.0"
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/proj4": "^2.19.0",
-    "@types/three": "^0.184.1",
+    "@types/three": "^0.185.1",
     "@vitest/coverage-v8": "^4.1.10",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "~6.0.2",
