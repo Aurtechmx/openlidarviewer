@@ -26,7 +26,7 @@
  */
 
 import { readdirSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -125,15 +125,64 @@ const bucketArgs = BUCKET_ARGS[arg] ?? [...WORKERS];
 // gate reports as a nondescript failure ten minutes later.
 const SHARD_TIMEOUT_MS = Number(process.env.OLV_SHARD_TIMEOUT_MS ?? 8 * 60 * 1000);
 
-/** Run one vitest invocation over this bucket's files. */
-function runVitest(extra) {
-  return spawnSync('npx', ['vitest', 'run', ...files, ...bucketArgs, ...extra, ...passthrough], {
-    cwd: ROOT,
-    stdio: 'inherit',
-    timeout: SHARD_TIMEOUT_MS,
-    // The pool can wedge at shutdown with its workers still alive; SIGTERM
-    // then leaves them behind. SIGKILL is what actually reclaims the group.
-    killSignal: 'SIGKILL',
+// Run the LOCAL vitest binary, never `npx vitest`: npx interposes an extra
+// process, so a kill lands on the wrapper while the real vitest and its whole
+// worker pool survive, holding the inherited stdio pipe open forever. That is
+// the shape of the release-gate hang where every shard printed "N passed" and
+// the run still never returned.
+const VITEST_BIN = resolve(ROOT, 'node_modules/.bin/vitest');
+
+/**
+ * Run one vitest invocation over this bucket's files.
+ *
+ * Async `spawn` + `detached` makes each shard its own PROCESS GROUP LEADER, so
+ * a timeout can kill the group (-pid) and reclaim the orphaned workers.
+ * `spawnSync`'s own `timeout` only ever signalled the direct child, which is
+ * why wedged workers kept the pipe open and the parent waited forever.
+ * Resolves the same {status, signal, error} shape `resolveExit` expects.
+ */
+function runVitest(extra, label) {
+  return new Promise((res) => {
+    const started = Date.now();
+    const child = spawn(
+      VITEST_BIN,
+      ['run', ...files, ...bucketArgs, ...extra, ...passthrough],
+      { cwd: ROOT, stdio: 'inherit', detached: true },
+    );
+
+    let timedOut = false;
+    let settled = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        // Negative pid = the whole group. The group may already be gone (the
+        // race between the timer firing and a normal exit), hence the guard.
+        process.kill(-child.pid, 'SIGKILL');
+      } catch {
+        /* group already reaped */
+      }
+    }, SHARD_TIMEOUT_MS);
+
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const secs = ((Date.now() - started) / 1000).toFixed(1);
+      console.log(
+        `[${label}] pid=${child.pid} elapsed=${secs}s code=${r.status ?? '-'} signal=${r.signal ?? '-'}`,
+      );
+      res(r);
+    };
+
+    child.on('error', (error) => finish({ error, status: null, signal: null }));
+    // `close` (not `exit`) so inherited stdio is fully drained before we move on.
+    child.on('close', (status, signal) => {
+      if (timedOut) {
+        finish({ error: Object.assign(new Error('shard timed out'), { code: 'ETIMEDOUT' }), status: null, signal: null });
+        return;
+      }
+      finish({ status, signal, error: undefined });
+    });
   });
 }
 
@@ -192,12 +241,12 @@ if (multiShard && !singleShard) {
   let worst = 0;
   for (let i = 1; i <= n; i++) {
     console.log(`\n──── ${arg} shard ${i}/${n} ────`);
-    const r = runVitest([`--shard=${i}/${n}`]);
+    const r = await runVitest([`--shard=${i}/${n}`], `${arg} shard ${i}/${n}`);
     const code = resolveExit(r, `${arg} shard ${i}/${n}`);
     if (code !== 0) worst = code;
   }
   process.exit(worst);
 }
 
-const result = runVitest([]);
+const result = await runVitest([], `${arg} bucket`);
 process.exit(resolveExit(result, `${arg} bucket`));
