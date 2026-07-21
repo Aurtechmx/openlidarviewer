@@ -12,7 +12,7 @@ A sober account of what is ready and what remains before this alpha is published
 Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate runner now reports why it failed" for how much that is worth:
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
-- Unit 2,927 (16 skipped) · export 598 · terrain 1,218 (18 skipped) · ui 429 · slow 508.
+- Unit 2,927 (16 skipped) · export 602 · terrain 1,218 (18 skipped) · ui 429 · slow 508.
 - Build-contract 11; plain build and live/obfuscated build pass. Live entry **715 KiB / 720 KiB** — inside the hard ceiling, above the 680 KiB warning line, and **reproduced byte-identically across two clean builds**. The margin is 5 KiB: treat the ceiling as effectively reached and shed weight before adding any, rather than raising it.
 - Full e2e (`npm run test:e2e`): 161 passed, 4 fixture-skipped (autzen COPC not on disk), 0 failed — **locally**. The gating browser evidence is the green GitHub Actions run required below, not this local run.
 - Documentation build (`npm run docs:build`) passes.
@@ -26,6 +26,19 @@ Run locally at the alpha head commit (**not yet a Git tag** — the published ta
 
 - `CITATION.cff` declares `0.6.0-alpha.2`. Its `date-released` must be set to the **actual GitHub publication date** immediately before tagging.
 - `AI_ASSISTANCE.md` updated for the alpha and linked to this release's validation report.
+
+## Where the figures come from
+
+Every test count and the bundle size in this document are read out of a passing
+gate run into `release/test-evidence.json` and checked against it by
+`lint:evidence`, which runs inside `test:release`. They are not transcribed.
+
+That check exists because a previous candidate published unit, export and
+terrain counts that were all wrong while its total was right — the total came
+from a script, the components were typed in — and `lint:release-sync` could not
+see it, because it only checks that the documents agree with each other. Three
+documents copying one wrong number agree perfectly. An external reviewer found
+it by adding them up.
 
 ## Claims and evidence
 
