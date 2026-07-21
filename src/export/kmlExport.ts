@@ -288,7 +288,10 @@ function viewpointPlacemark(v: KmlViewpoint, input: KmlExportInput): string {
     '<heading>0</heading>',
     '<tilt>45</tilt>',
     `<range>${fmt(range)}</range>`,
-    '<altitudeMode>absolute</altitudeMode>',
+    // The same policy the geometry uses. Hardcoding `absolute` here put the
+    // camera on a sea-level altitude in the very files whose features were
+    // deliberately clamped because their vertical reference was unproven.
+    `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
     '</LookAt>',
     '</Placemark>',
   ].join('');

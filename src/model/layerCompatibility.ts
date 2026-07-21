@@ -95,8 +95,21 @@ export function classifyLayerCompatibility(
     if ((counts.get(key) ?? 0) > (counts.get(referenceKey) ?? 0)) referenceKey = key;
   }
 
+  // The project's vertical reference is established by UNANIMITY among the
+  // layers sharing the horizontal frame, never by whichever one happens to be
+  // first. Taking it from the first match made the same three files classify
+  // differently on reorder — an undeclared layer leading dropped everyone to
+  // horizontal-only, a declared one leading verified two of them. Load order
+  // is not evidence about datums, and a verdict that moves when inputs are
+  // reordered cannot be published. Unresolved therefore means unresolved for
+  // the whole group: the same answer in any order.
+  const group = declared.filter((e) => e.key === referenceKey);
+  const groupVerticals = group.map((e) => e.l.verticalDatum?.trim() || null);
   const referenceVertical =
-    declared.find((e) => e.key === referenceKey)?.l.verticalDatum?.trim() || null;
+    groupVerticals.length > 0
+    && groupVerticals.every((v) => v !== null && v === groupVerticals[0])
+      ? groupVerticals[0]
+      : null;
 
   for (const l of layers) {
     const key = horizontalKey(l);

@@ -144,11 +144,14 @@ export function geojsonString(
 function isWgs84EllipsoidalHeight(verticalDatum: string | null | undefined): boolean {
   const v = verticalDatum?.trim().toLowerCase();
   if (!v) return false;
-  return (
-    v === 'epsg:4979' || v === '4979'
-    || v === 'epsg:7662' || v === '7662'
-    || v === 'wgs 84 (ellipsoid)' || v === 'wgs84 ellipsoidal height'
-  );
+  // EPSG:4979 only. An earlier version of this list also accepted 7662, which
+  // is a GEOCENTRIC Cartesian CRS, not a geographic 3D one — its "height" is a
+  // Z axis from the Earth's centre, roughly 6,371 km from the ellipsoidal
+  // height RFC 7946 asks for. That was a guess dressed as an allow-list, and a
+  // guess in the permissive direction is exactly what this function exists to
+  // prevent. Free-text names are gone for the same reason: "WGS 84
+  // (ellipsoid)" is written by humans and means whatever they meant.
+  return v === 'epsg:4979' || v === '4979';
 }
 
 /** Thrown when a standards-compliant GeoJSON cannot be produced honestly. */

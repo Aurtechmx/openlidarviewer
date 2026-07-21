@@ -34,11 +34,14 @@ export interface IntegrableEntry {
  * Whether one entry is eligible to feed an integration walk.
  *
  * Visibility and lock decide what the user is working with; compatibility
- * decides whether the points are even in the same space. Both matter: a
- * visible layer in an unproven frame contributes coordinates that mean
- * something else, and an estimator cannot average across that. Refusing is
- * the honest result — a warning printed beside a computed figure is not,
- * because the figure is what leaves the building.
+ * decides whether the points are even in the same space. Both matter when
+ * layers are merged: a visible layer in an unproven frame contributes
+ * coordinates that mean something else, and an estimator cannot average
+ * across that. Refusing is the honest result — a warning printed beside a
+ * computed figure is not, because the figure is what leaves the building.
+ *
+ * This is the per-entry question, which assumes the entry would be COMBINED
+ * with others. {@link integrableClouds} applies the single-layer carve-out.
  */
 export function isIntegrable(entry: IntegrableEntry): boolean {
   if (!entry.mesh.visible || entry.locked) return false;
@@ -47,7 +50,17 @@ export function isIntegrable(entry: IntegrableEntry): boolean {
 
 /** The subset of `entries` an integration walk may feed to its estimator. */
 export function integrableClouds<T extends IntegrableEntry>(entries: Iterable<T>): T[] {
-  const out: T[] = [];
-  for (const entry of entries) if (isIntegrable(entry)) out.push(entry);
-  return out;
+  // Eligibility is decided in two stages, because the compatibility question
+  // only exists when layers are COMBINED. First take everything the user is
+  // working with — visible and unlocked. If that is a single layer, it is
+  // analysed in its own frame and there is no cross-frame relationship to
+  // prove; gating it made the tool refuse to measure one file because of a
+  // relationship it was not using. Only when several layers would be merged
+  // into one estimator does each have to have proven it shares the frame.
+  const available: T[] = [];
+  for (const entry of entries) {
+    if (entry.mesh.visible && !entry.locked) available.push(entry);
+  }
+  if (available.length <= 1) return available;
+  return available.filter((e) => participatesInSharedAnalysis(e.compatibility ?? 'verified'));
 }

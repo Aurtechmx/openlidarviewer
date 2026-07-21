@@ -93,3 +93,55 @@ describe('what each state is allowed to do', () => {
     expect(alignsVertically('incompatible')).toBe(false);
   });
 });
+
+/**
+ * The project's vertical reference cannot depend on load order.
+ *
+ * The reference datum was taken from the FIRST layer found in the reference
+ * horizontal group, so the same three files classified differently depending
+ * on which one happened to be listed first — with an undeclared layer leading,
+ * every layer fell to horizontal-only; with a declared one leading, two became
+ * verified. Nothing about the data changed. Array order is not evidence about
+ * datums, and a result that moves when you reorder your inputs is not one you
+ * can publish.
+ *
+ * The rule is unanimity among the group: a project vertical reference exists
+ * only when EVERY layer sharing the horizontal frame declares the SAME datum.
+ * Anything else is unresolved, and unresolved means horizontal-only for all —
+ * the same answer whichever order they arrive in.
+ */
+describe('vertical reference is order-independent', () => {
+  const v = (id: string, verticalDatum: string | null) =>
+    layer({ id, verticalDatum });
+
+  const states = (ls: CompatibilityInput[]) => {
+    const m = classifyLayerCompatibility(ls);
+    return Object.fromEntries([...m.entries()].sort(([a], [b]) => a.localeCompare(b)));
+  };
+
+  it('gives the same verdict whichever layer is listed first', () => {
+    const none = v('none', null);
+    const v1 = v('v1', 'EPSG:5703');
+    const v2 = v('v2', 'EPSG:5703');
+    const a = states([none, v1, v2]);
+    const b = states([v1, v2, none]);
+    const c = states([v2, none, v1]);
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
+  });
+
+  it('one undeclared layer leaves the whole group unresolved', () => {
+    const s = states([v('v1', 'EPSG:5703'), v('v2', 'EPSG:5703'), v('none', null)]);
+    expect(s).toEqual({ none: 'horizontal-only', v1: 'horizontal-only', v2: 'horizontal-only' });
+  });
+
+  it('unanimous declarations verify the whole group', () => {
+    const s = states([v('v1', 'EPSG:5703'), v('v2', 'EPSG:5703')]);
+    expect(s).toEqual({ v1: 'verified', v2: 'verified' });
+  });
+
+  it('two different declared datums leave everyone horizontal-only', () => {
+    const s = states([v('a', 'EPSG:5703'), v('b', 'EPSG:4979')]);
+    expect(s).toEqual({ a: 'horizontal-only', b: 'horizontal-only' });
+  });
+});

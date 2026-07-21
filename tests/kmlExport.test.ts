@@ -279,3 +279,18 @@ describe('KML altitude mode', () => {
     expect(kmlAltitudeMode('EPSG:5703', 1).reason).toContain('EPSG:5703');
   });
 });
+
+describe('KML viewpoint follows the same altitude policy', () => {
+  it('does not claim absolute for the camera when the features are clamped', () => {
+    // A file whose measurements are clamped because the vertical reference is
+    // unproven must not place its camera on a sea-level altitude.
+    const clamped = buildKml(input({ verticalDatum: null }));
+    const declared = buildKml(input({ verticalDatum: 'EPSG:5703' }));
+    if (clamped.includes('<LookAt>')) {
+      expect(clamped.split('<LookAt>')[1]).toContain('clampToGround');
+      expect(declared.split('<LookAt>')[1]).toContain('absolute');
+    }
+    // Geometry and camera must never disagree about the same file.
+    expect(clamped).not.toContain('<altitudeMode>absolute</altitudeMode>');
+  });
+});

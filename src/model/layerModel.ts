@@ -30,6 +30,13 @@ export interface LayerInfo {
   readonly verticalDatum?: string;
   /** True when the CRS is geographic (lat/lon). */
   readonly isGeographic?: boolean;
+  /**
+   * Metres per horizontal linear unit, when the CRS declares one. The frame's
+   * precision gate converts the Float32 quantum through this before judging it
+   * against a budget in metres; absent means the cost cannot be bounded, and
+   * an unbounded cost refuses the mount rather than assuming metres.
+   */
+  readonly linearUnitToMetres?: number;
 }
 
 /**

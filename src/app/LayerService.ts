@@ -55,13 +55,42 @@ export interface LayerService {
 }
 
 /**
- * Largest Float32 step a mount may land the geometry on, in source units.
+ * Largest Float32 step a mount may land the geometry on, IN METRES.
  *
  * 1 mm is the resolution survey LiDAR is specified at, so a mount that cannot
- * hold a millimetre is not preserving the measurement. Layers further apart
- * than roughly 100 km trip this and stay in their own frames.
+ * hold a millimetre is not preserving the measurement. The source quantum is
+ * converted through the CRS's linear unit before it is compared here — the
+ * two were once compared directly, which made a gate named for a millimetre
+ * accept 9.5e-7 degrees, about 10.6 cm.
  */
 export const REBASE_QUANTUM_BUDGET_M = 0.001;
+
+/**
+ * What a mount would cost this layer, expressed in metres — or null when that
+ * question has no linear answer.
+ *
+ * The quantum comes back in the source's own units. A projected frame converts
+ * through its linear unit; a GEOGRAPHIC frame does not convert at all, because
+ * a degree is not a length and the metres it stands for depend on latitude and
+ * axis. Rather than approximate, geographic sources are reported as having no
+ * safe linear budget, which refuses the destructive mount.
+ */
+function mountPrecision(
+  info: LayerInfo,
+  cloud: { rebaseQuantum(t: readonly [number, number, number]): number } | null | undefined,
+  frame: { projectOrigin: readonly [number, number, number] } | null,
+): { errorMetres: number | null; basis: 'projected-linear-unit' | 'geographic' | 'unknown' } {
+  if (!cloud || !frame) return { errorMetres: 0, basis: 'projected-linear-unit' };
+  if (info.isGeographic) return { errorMetres: null, basis: 'geographic' };
+  const scale = info.linearUnitToMetres;
+  if (scale === undefined || !Number.isFinite(scale) || scale <= 0) {
+    return { errorMetres: null, basis: 'unknown' };
+  }
+  return {
+    errorMetres: cloud.rebaseQuantum(frame.projectOrigin) * scale,
+    basis: 'projected-linear-unit',
+  };
+}
 
 export function createLayerService(deps: LayerServiceDeps): LayerService {
   const { getViewer, getInspector, context, refreshCompass } = deps;
@@ -82,6 +111,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         crsName: crs?.name,
         verticalDatum: crs?.verticalDatum,
         isGeographic: crs?.isGeographic,
+        linearUnitToMetres: crs?.linearUnitToMetres,
       };
     });
   }
@@ -164,11 +194,18 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       // A mount is only worth making if it survives Float32. The offset is
       // written into the position array, so a distant layer spends the
       // mantissa its residual was using — at 100 km apart a millimetre is
-      // simply gone. Past the budget the layer keeps its own frame and says
-      // so, which is a truthful placement rather than a quietly rounded one.
-      const quantum =
-        aligned && cloud ? cloud.rebaseQuantum(frame!.projectOrigin) : 0;
-      const precisionSafe = quantum <= REBASE_QUANTUM_BUDGET_M;
+      // simply gone.
+      //
+      // `rebaseQuantum` reports that step in the SOURCE's own units, so it has
+      // to be converted before it can be judged against a budget in metres.
+      // Comparing it raw meant a gate named for a millimetre accepted 9.5e-7
+      // DEGREES — about 10.6 cm — and was three times too lenient on foot
+      // data. Degrees are not a linear metre frame at all, so a destructive
+      // mount on geographic coordinates is refused outright rather than
+      // converted through a latitude-dependent approximation.
+      const precision = mountPrecision(info, cloud, aligned ? frame : null);
+      const precisionSafe = precision.errorMetres !== null
+        && precision.errorMetres <= REBASE_QUANTUM_BUDGET_M;
 
       if (aligned && precisionSafe && deps.projectFrame.transformFor(info.id)) {
         // A horizontal-only layer is placed in X/Y and keeps its OWN vertical
@@ -176,7 +213,16 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         // established — the heights would line up on screen and mean nothing.
         const target: [number, number, number] = alignsVertically(state)
           ? [frame!.projectOrigin[0], frame!.projectOrigin[1], frame!.projectOrigin[2]]
-          : [frame!.projectOrigin[0], frame!.projectOrigin[1], cloud?.origin[2] ?? frame!.projectOrigin[2]];
+          // The FILE's height, never the live one. Reading `cloud.origin[2]`
+          // here meant a layer that had already mounted as verified — and so
+          // had the project's Z written into it — stayed pinned to that datum
+          // when it was later demoted, while the panel declared its vertical
+          // frame unverified. Same live-versus-source trap as the frame seed.
+          : [
+              frame!.projectOrigin[0],
+              frame!.projectOrigin[1],
+              cloud?.sourceOrigin[2] ?? frame!.projectOrigin[2],
+            ];
         viewer.rebaseCloudToOrigin(info.id, target);
       } else {
         // Membership is reversible. A layer that is not (or is no longer) in

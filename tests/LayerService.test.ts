@@ -17,6 +17,8 @@ import type { Inspector } from '../src/ui/Inspector';
 
 interface FakeCrs {
   epsg?: number;
+  /** Real resolved CRSs always carry this; the precision gate needs it. */
+  linearUnitToMetres?: number;
   name?: string;
   verticalDatum?: string | null;
   isGeographic?: boolean;
@@ -39,6 +41,13 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
   // keeps every fixture honest about the real object's shape.
   for (const c of Object.values(clouds)) {
     if (c.origin && !c.sourceOrigin) c.sourceOrigin = [c.origin[0], c.origin[1], c.origin[2]];
+    // A resolved projected CRS always states its linear unit — the resolver
+    // defaults it to metre. Fixtures must carry it too, or they would be
+    // testing the "unit unknown" refusal rather than the case they describe.
+    const crs = c.metadata?.crs;
+    if (crs && !crs.isGeographic && crs.linearUnitToMetres === undefined) {
+      crs.linearUnitToMetres = 1;
+    }
   }
   const context = createAppContext();
   const visibleCalls: Array<[string, boolean]> = [];
@@ -472,5 +481,72 @@ describe('LayerService project-frame reversibility', () => {
     t.service.refreshCrsFlags();
     t.service.refreshCrsFlags();
     expect(t.restoreCalls).toEqual([]);
+  });
+});
+
+/**
+ * Two defects in the frame gates I introduced, both reproduced.
+ */
+describe('LayerService frame gate corrections', () => {
+  const navd = { epsg: 32612, verticalDatum: 'EPSG:5703' };
+
+  it('restores the FILE height when a verified layer is demoted to horizontal-only', () => {
+    // The reproduction: B mounts as verified and its live Z becomes the
+    // project's. Its CRS then changes so the pair is only horizontal-only —
+    // and the demotion read `cloud.origin[2]`, the Z the mount had already
+    // overwritten, so B stayed pinned to a vertical datum the panel now says
+    // is unverified. It must go back to the height its FILE declared.
+    const clouds: Record<string, FakeCloud> = {
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: { ...navd } } },
+      b: { origin: [500_100, 4_500_000, 200], metadata: { crs: { ...navd } } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    expect(t.compatCalls.get('b')).toBe('verified');
+    expect(clouds.b.origin![2]).toBe(100); // mounted onto the project Z
+
+    // Now B declares a different vertical datum → horizontal-only.
+    clouds.b.metadata = { crs: { epsg: 32612, verticalDatum: 'EPSG:4979', linearUnitToMetres: 1 } };
+    t.service.refreshCrsFlags();
+
+    expect(t.compatCalls.get('b')).toBe('horizontal-only');
+    expect(t.rebaseCalls.get('b')![2]).toBe(200); // the FILE's height, not 100
+  });
+
+  it('refuses a destructive mount on GEOGRAPHIC coordinates outright', () => {
+    // The budget is in metres; the quantum is in source units. On degrees a
+    // Float32 step of 9.5e-7 is ~10.6 cm and sailed through a gate named for
+    // a millimetre. Degrees are not a linear metre frame, so the mount is
+    // refused rather than converted.
+    const geo = { epsg: 4326, verticalDatum: 'EPSG:5703', isGeographic: true };
+    const t = setup({
+      a: { origin: [-8, 41, 0], metadata: { crs: { ...geo } } },
+      b: { origin: [-8.5, 41.5, 0], metadata: { crs: { ...geo } }, rebaseQuantum: 9.5367431640625e-7 },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.has('b')).toBe(false);
+    expect(t.compatCalls.get('b')).toBe('incompatible');
+  });
+
+  it('converts the quantum through the CRS unit before judging it', () => {
+    // A foot-based CRS: 0.004 ft is 1.2 mm, over budget, even though the raw
+    // number looks comfortably under 0.001 "metres".
+    const feet = { epsg: 2231, verticalDatum: 'EPSG:6360', linearUnitToMetres: 0.3048 };
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 0], metadata: { crs: { ...feet } } },
+      b: { origin: [500_100, 4_500_000, 0], metadata: { crs: { ...feet } }, rebaseQuantum: 0.004 },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.has('b')).toBe(false);
+  });
+
+  it('still allows a foot mount comfortably inside the budget', () => {
+    const feet = { epsg: 2231, verticalDatum: 'EPSG:6360', linearUnitToMetres: 0.3048 };
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 0], metadata: { crs: { ...feet } } },
+      b: { origin: [500_100, 4_500_000, 0], metadata: { crs: { ...feet } }, rebaseQuantum: 0.001 },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.has('b')).toBe(true);
   });
 });

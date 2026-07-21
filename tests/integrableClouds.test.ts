@@ -92,3 +92,48 @@ describe('frame compatibility gates the integration walk', () => {
     expect(isIntegrable({ mesh: { visible: true } })).toBe(true);
   });
 });
+
+/**
+ * One layer on its own is always analysable, whatever its compatibility.
+ *
+ * Requiring `verified` is right when several layers are merged into one
+ * estimator. It is wrong when there is only one: a horizontal-only, unknown or
+ * purely local scan analysed BY ITSELF involves no cross-frame combination at
+ * all, so there is nothing to prove. Gating it produced a terrain run with no
+ * points — the tool refusing to measure a single file because of a
+ * relationship that was not being used.
+ */
+describe('single-layer analysis needs no cross-frame proof', () => {
+  const one = (compatibility: string) => [
+    { mesh: { visible: true }, compatibility: compatibility as never },
+  ];
+
+  it.each(['verified', 'horizontal-only', 'unknown', 'incompatible'])(
+    'analyses a lone %s layer in its own frame',
+    (state) => {
+      expect(integrableClouds(one(state))).toHaveLength(1);
+    },
+  );
+
+  it('still refuses to MERGE an unproven layer with a verified one', () => {
+    const set = [
+      { mesh: { visible: true }, compatibility: 'verified' as never },
+      { mesh: { visible: true }, compatibility: 'unknown' as never },
+    ];
+    expect(integrableClouds(set)).toHaveLength(1);
+  });
+
+  it('a lone layer that is hidden or locked is still excluded', () => {
+    expect(integrableClouds([{ mesh: { visible: false }, compatibility: 'unknown' as never }])).toHaveLength(0);
+    expect(integrableClouds([{ mesh: { visible: true }, locked: true, compatibility: 'unknown' as never }])).toHaveLength(0);
+  });
+
+  it('soloing an unproven layer leaves exactly that layer analysable', () => {
+    // The reported workflow: two layers loaded, the horizontal-only one soloed.
+    const set = [
+      { mesh: { visible: false }, compatibility: 'verified' as never },
+      { mesh: { visible: true }, compatibility: 'horizontal-only' as never },
+    ];
+    expect(integrableClouds(set)).toHaveLength(1);
+  });
+});
