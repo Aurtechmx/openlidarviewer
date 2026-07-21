@@ -24,6 +24,23 @@ For this alpha:
 - Integrated Spatial Workflows are **not** claimed complete.
 - A layer whose declared CRS disagrees with the project's is excluded from the shared origin and reported as unaligned; it is never silently reprojected. Reprojection remains a downstream tool's job.
 
+## Contour GeoJSON ships in two frames
+
+`<name>.geojson` is RFC 7946: WGS 84 longitude/latitude, no `crs` member, with
+the source CRS recorded in `metadata` as provenance. `<name>-native-EPSG<code>.geojson`
+carries the scan's own projected coordinates and the pre-RFC `crs` member for
+GIS that wants the survey grid — it is deliberately NOT RFC 7946, and its
+filename says so.
+
+Earlier builds wrote projected coordinates into `<name>.geojson` and declared
+them with the `crs` member. A compliant reader discards that member and reads
+an easting as a longitude without erroring, so files exported before this
+change should be treated as native-frame regardless of their name.
+
+When the source CRS cannot be converted to lon/lat, the RFC file is refused
+rather than written with projected numbers in degree fields, and only the
+native file is produced.
+
 ## Residual streaming flicker at the budget boundary
 
 An anti-thrash resident-stickiness option exists in the budget selector and is unit-tested, but it is **opt-in and not wired** into the live scheduler — enabling it must first reconcile with the scheduler's ancestor-protection and be verified visually in a browser. Some budget-boundary "regions pulsing" may remain in this build.

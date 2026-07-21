@@ -79,7 +79,7 @@ describe('shiftFeatureModelToWorld', () => {
 
 describe('serializeContours — world origin threading', () => {
   it('GeoJSON: a nonzero origin shifts coordinates and elevations, CRS kept', () => {
-    const f = serializeContours(model(), 'geojson', { worldOrigin: ORIGIN });
+    const f = serializeContours(model(), 'geojson-native', { worldOrigin: ORIGIN });
     const gj = JSON.parse(f.content) as {
       crs?: { properties: { name: string } };
       features: Array<{
@@ -95,7 +95,7 @@ describe('serializeContours — world origin threading', () => {
   });
 
   it('GeoJSON: no origin → local coordinates, NO CRS stamp, local-frame note', () => {
-    const f = serializeContours(model(), 'geojson');
+    const f = serializeContours(model(), 'geojson-native');
     const gj = JSON.parse(f.content) as {
       crs?: unknown;
       metadata: { warnings: string[] };
@@ -126,7 +126,7 @@ describe('serializeContours — world origin threading', () => {
   });
 
   it('an explicit zero origin keeps geometry AND the CRS stamp (world == local)', () => {
-    const f = serializeContours(model(), 'geojson', { worldOrigin: { x: 0, y: 0 } });
+    const f = serializeContours(model(), 'geojson-native', { worldOrigin: { x: 0, y: 0 } });
     const gj = JSON.parse(f.content) as {
       crs?: { properties: { name: string } };
       features: Array<{ geometry: { coordinates: number[][] } }>;
