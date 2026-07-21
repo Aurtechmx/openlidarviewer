@@ -43,11 +43,13 @@ function makeRunner(
   positions: Float32Array,
   totalPoints: number,
   onResult: (r: AnalyseContoursResult) => void,
+  opts: { classificationIsDerived?: boolean; onFrame?: (f: unknown) => void } = {},
 ) {
   const fakeViewer = {
     gatherTerrainPositions: () => ({
       positions,
       classification: undefined,
+      classificationIsDerived: opts.classificationIsDerived ?? false,
       residentOnly: false,
       sampled: totalPoints > positions.length / 3,
       totalPoints,
@@ -58,7 +60,7 @@ function makeRunner(
     setBusy: () => {},
     setStatus: () => {},
     update: () => {},
-    setContourFrame: () => {},
+    setContourFrame: (f: unknown) => opts.onFrame?.(f),
   } as unknown as AnalysePanel;
   const fakeCrs = { current: () => null } as unknown as CrsService;
   return createTerrainAnalysisRunner({
@@ -129,5 +131,35 @@ describe('terrainAnalysisRunner density wiring (samplePointScale)', () => {
       unscaled.cellMetrics.meanDensity,
       6,
     );
+  });
+});
+
+/**
+ * Ground provenance survives the trip from the gather to the review panel.
+ *
+ * The review row said "Classified ground" from cell counts alone, so a scan
+ * whose ground the viewer DERIVED was presented as a producer's survey
+ * classification. The label logic is unit-tested next to the row; this pins
+ * the wire that feeds it, which is the part that silently goes missing.
+ */
+describe('terrainAnalysisRunner ground provenance wiring', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
+  const plane = densePlane();
+
+  it.each([[true], [false]])('forwards classificationIsDerived=%s to the contour frame', async (derived) => {
+    clearTerrainCoreCache();
+    let frame: { groundIsDerived?: boolean } | null = null;
+    const runner = makeRunner(plane, plane.length / 3, () => {}, {
+      classificationIsDerived: derived,
+      onFrame: (f) => { frame = f as { groundIsDerived?: boolean }; },
+    });
+    await runner.run();
+    expect(frame).not.toBeNull();
+    expect((frame as unknown as { groundIsDerived?: boolean }).groundIsDerived).toBe(derived);
   });
 });

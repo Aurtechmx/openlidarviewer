@@ -40,6 +40,12 @@ export interface LaunchFrameContext {
   readonly verticalUnitToMetres?: number | null;
   /** Display label for the source vertical unit ('m' | 'ft' | 'units'), or null when unknown. */
   readonly verticalUnitLabel?: string | null;
+  /**
+   * Whether the ground classification was DERIVED by the viewer rather than
+   * read from the source file. Omitted counts as derived downstream, so an
+   * unwired path understates provenance instead of overstating it.
+   */
+  readonly groundIsDerived?: boolean;
 }
 
 /**

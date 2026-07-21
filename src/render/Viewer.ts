@@ -2467,6 +2467,13 @@ export class Viewer {
   ): {
     positions: Float32Array;
     classification?: Uint8Array;
+    /**
+     * Whether any contributing classification was DERIVED by the viewer rather
+     * than read from the source file. The review panel keys the ground-source
+     * label off this so derived ground is never presented as a producer's
+     * survey classification.
+     */
+    classificationIsDerived: boolean;
     residentOnly: boolean;
     sampled: boolean;
     totalPoints: number;
@@ -2493,6 +2500,11 @@ export class Viewer {
     let staticPoints = 0;
     let streamingPoints = 0;
     let anyClass = false;
+    // True when ANY contributing cloud's classification came from the viewer's
+    // heuristic classifier rather than its file. Deliberately pessimistic: one
+    // derived source is enough to stop the review panel calling the resulting
+    // ground a producer's survey classification.
+    let anyDerivedClass = false;
     const staticFormats: SourceFormat[] = [];
     const alignedClass = (
       cls: ArrayLike<number> | null | undefined,
@@ -2503,7 +2515,10 @@ export class Viewer {
     for (const { cloud } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
         const cls = alignedClass(cloud.classification, cloud.positions);
-        if (cls) anyClass = true;
+        if (cls) {
+          anyClass = true;
+          if (cloud.classificationIsDerived) anyDerivedClass = true;
+        }
         staticBuffers.push({ pos: cloud.positions, cls });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
@@ -2576,6 +2591,7 @@ export class Viewer {
     return {
       positions: sample.positions,
       classification: sample.classification,
+      classificationIsDerived: anyDerivedClass,
       residentOnly,
       sampled: sample.sampled,
       totalPoints,

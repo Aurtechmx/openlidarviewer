@@ -40,9 +40,35 @@ export interface ContourReviewInput {
   readonly verticalUnit: LinearUnitScale;
   readonly sourceUnitLabel: string;
   readonly crsProjected: boolean;
+  /**
+   * Whether the ground classification was DERIVED by the viewer's heuristic
+   * classifier rather than read from the source file. Absent is treated as
+   * derived: the Source row must not upgrade unknown provenance into a
+   * producer's survey classification.
+   */
+  readonly groundIsDerived?: boolean;
 }
 
 const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
+
+/**
+ * Render parts as whole percentages that sum to exactly 100 (largest
+ * remainder). Independent rounding lets a row read 33/33/33 or 34/33/34, and
+ * a support row whose own numbers do not add up invites the reader to
+ * distrust every other number on the panel.
+ */
+function wholePercents(parts: readonly number[], total: number): number[] {
+  if (total <= 0) return parts.map(() => 0);
+  const exact = parts.map((p) => (p / total) * 100);
+  const floors = exact.map(Math.floor);
+  let remainder = 100 - floors.reduce((a, b) => a + b, 0);
+  const order = exact
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  const out = [...floors];
+  for (let k = 0; k < order.length && remainder > 0; k++, remainder--) out[order[k].i]++;
+  return out;
+}
 
 function num(n: number): string {
   return Number.parseFloat(n.toFixed(3)).toString();
@@ -56,22 +82,42 @@ export function buildContourReviewSummary(
   const tally = result.cellStatusTally;
   const total = tally.total > 0 ? tally.total : 1;
   const measuredFrac = tally.measured / total;
-  const interpFrac = tally.interpolated / total;
-  const unsupportedFrac = tally.empty / total;
-  const covered = tally.measured + tally.interpolated;
+  // "Covered" means every cell that carries a value, matching
+  // `terrainAssessment` and the Analyse panel. This counted only
+  // measured + interpolated, so the same grid was reported as two different
+  // coverages depending on which panel the reader was looking at.
+  const covered = tally.measured + tally.interpolated + tally.lowConfidence + tally.edgeRisk;
 
   const rows: ReviewRow[] = [];
 
   // ── Source ──────────────────────────────────────────────────────────────
+  // Provenance, not just presence. This row said "Classified ground" whenever
+  // a measured cell existed, so a scan with 0% classification coverage — whose
+  // ground came from the viewer's geometric filter — presented a derived
+  // estimate as a producer's survey classification. Unknown counts as derived:
+  // silence must not be upgraded into a claim.
+  const groundDerived = input.groundIsDerived !== false;
   rows.push({
     key: 'source',
     label: 'Source',
-    value: tally.measured > 0 ? 'Classified ground' : 'No ground source',
+    value:
+      tally.measured === 0 ? 'No ground source'
+      : groundDerived ? 'Derived ground (not from the source file)'
+      : 'Classified ground',
     rationale: [
       `${tally.measured.toLocaleString()} measured ground cells`,
       `${pct(covered / total)} of the grid is covered`,
+      ...(tally.measured > 0 && groundDerived
+        ? ['Ground was derived by the viewer’s classifier, not read from the source file. Validate before using it as survey ground.']
+        : []),
     ],
-    confidence: measuredFrac >= 0.5 ? 'high' : measuredFrac > 0 ? 'medium' : 'low',
+    // Derived ground caps at medium however dense it is: density is not
+    // provenance, and a confident-looking wrong surface is the failure mode.
+    confidence:
+      tally.measured === 0 ? 'low'
+      : groundDerived ? 'medium'
+      : measuredFrac >= 0.5 ? 'high'
+      : 'medium',
   });
 
   // ── Grid ────────────────────────────────────────────────────────────────
@@ -131,12 +177,30 @@ export function buildContourReviewSummary(
   }
 
   // ── Support ───────────────────────────────────────────────────────────────
+  // Every bucket, always, summing to 100. This row used to print only
+  // measured / interpolated / empty out of a five-bucket tally, so a surface
+  // that was 64% low-confidence read "0% unsupported" — the reader saw no
+  // weakness at all where two thirds of it was weak. Weak cells are the ones
+  // a reviewer most needs to see, so they are named rather than folded away.
+  const [pMeasured, pInterp, pLow, pEdge, pVoid] = wholePercents(
+    [tally.measured, tally.interpolated, tally.lowConfidence, tally.edgeRisk, tally.empty],
+    total,
+  );
+  const weakFrac = (tally.lowConfidence + tally.edgeRisk + tally.empty) / total;
   rows.push({
     key: 'support',
     label: 'Support',
-    value: `${pct(measuredFrac)} measured · ${pct(interpFrac)} interpolated · ${pct(unsupportedFrac)} unsupported`,
-    rationale: ['Measured cells are surveyed ground; interpolated cells are modelled; unsupported cells are void.'],
-    confidence: unsupportedFrac < 0.1 ? 'high' : unsupportedFrac < 0.3 ? 'medium' : 'low',
+    value:
+      `${pMeasured}% measured · ${pInterp}% interpolated · ${pLow}% low confidence · ` +
+      `${pEdge}% edge risk · ${pVoid}% void`,
+    rationale: [
+      'Measured cells are surveyed ground; interpolated cells are modelled from nearby ground.',
+      'Low-confidence and edge-risk cells are covered but weakly supported; void cells have no data at all.',
+    ],
+    // Keyed off everything that is not strong. Keying it off `empty` alone
+    // rated a mostly-low-confidence surface 'high' simply because no cell was
+    // strictly void.
+    confidence: weakFrac < 0.1 ? 'high' : weakFrac < 0.3 ? 'medium' : 'low',
   });
 
   // ── Validation ────────────────────────────────────────────────────────────
