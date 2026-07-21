@@ -86,6 +86,13 @@ export interface SessionScanSummary {
   height: number;
   /** CRS label, when known. */
   crs?: string;
+  /**
+   * Horizontal EPSG code, when known. Labels vary for one CRS, so the label
+   * comparison is disclosure-only; CODES are canonical, so a difference here
+   * is a conflict — a session made in one frame must not restore onto a scan
+   * declaring another.
+   */
+  epsg?: number;
   /** Linear unit label, when known. */
   crsUnit?: string;
 }
@@ -525,6 +532,8 @@ export interface ScanFacts {
   readonly height?: number;
   /** CRS label, when known. */
   readonly crs?: string;
+  /** Horizontal EPSG code, when known — canonical where the label is not. */
+  readonly epsg?: number;
 }
 
 /**
@@ -595,7 +604,19 @@ export function matchSessionToScan(
   ) {
     reasons.push(`the session's scan was “${summary.fileName}”, the loaded scan is “${loaded.fileName}”`);
   }
-  if (summary.crs && loaded.crs && summary.crs !== loaded.crs) {
+  // EPSG codes are canonical where labels are not: a differing code means the
+  // session's geometry was authored in a different frame, and no amount of
+  // matching extents makes rebasing it here honest — the shapes coincide, the
+  // coordinates' MEANING does not.
+  let crsCodeConflict = false;
+  if (
+    isFiniteNumber(summary.epsg) &&
+    isFiniteNumber(loaded.epsg) &&
+    summary.epsg !== loaded.epsg
+  ) {
+    crsCodeConflict = true;
+    reasons.push(`CRS differs (session EPSG:${summary.epsg}, loaded EPSG:${loaded.epsg})`);
+  } else if (summary.crs && loaded.crs && summary.crs !== loaded.crs) {
     // Textual CRS labels vary for the same system, so this is disclosure only —
     // never a verdict — but worth surfacing alongside a stronger signal.
     reasons.push(`CRS label differs (session “${summary.crs}”, loaded “${loaded.crs}”)`);
@@ -620,6 +641,9 @@ export function matchSessionToScan(
     }
   }
 
+  if (crsCodeConflict) {
+    return { verdict: 'conflict', reasons };
+  }
   if (rel === null) {
     // No comparable extents — fall back to whatever softer evidence we have.
     return { verdict: 'partial', reasons };
@@ -1014,6 +1038,7 @@ function parseScanSummary(v: unknown): SessionScanSummary | null {
     height: v.height,
   };
   if (typeof v.crs === 'string' && v.crs.length > 0) out.crs = v.crs;
+  if (isFiniteNumber(v.epsg)) out.epsg = v.epsg;
   if (typeof v.crsUnit === 'string' && v.crsUnit.length > 0) out.crsUnit = v.crsUnit;
   return out;
 }
@@ -1060,6 +1085,20 @@ function parseResolvedCrs(v: unknown): ResolvedCrs | null {
     userConfirmed: v.userConfirmed,
     ...(isFiniteNumber(v.epsg) ? { epsg: v.epsg } : {}),
     ...(typeof v.wkt === 'string' && v.wkt.length > 0 ? { wkt: v.wkt } : {}),
+    // The vertical + datum fields. The serializer has always written the whole
+    // ResolvedCrs; only these were dropped on the way back in, so a
+    // compound-CRS session reopened with its geometry intact and the metadata
+    // needed to interpret its heights silently gone.
+    ...(isFiniteNumber(v.verticalEpsg) ? { verticalEpsg: v.verticalEpsg } : {}),
+    ...(typeof v.verticalDatum === 'string' && v.verticalDatum.length > 0
+      ? { verticalDatum: v.verticalDatum }
+      : {}),
+    ...(isFiniteNumber(v.verticalUnitToMetres) && v.verticalUnitToMetres > 0
+      ? { verticalUnitToMetres: v.verticalUnitToMetres }
+      : {}),
+    ...(typeof v.horizontalDatum === 'string' && v.horizontalDatum.length > 0
+      ? { horizontalDatum: v.horizontalDatum }
+      : {}),
   };
   return out;
 }

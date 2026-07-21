@@ -353,8 +353,20 @@ export function buildDemPackage(
   const xll = ox + dtm.originH1;
   const yll = oy + dtm.originH2;
   const cellSize = dtm.cellSizeM;
-  const epsg = parseEpsg(dtm.crs);
-  const verticalEpsg = parseEpsg(dtm.verticalDatum);
+  // Numeric codes from the resolver are authoritative; the label parse is the
+  // defensive fallback for grids built before the codes travelled.
+  const epsg = dtm.horizontalEpsg ?? parseEpsg(dtm.crs);
+  const verticalEpsg = dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum);
+  // GeoTIFF unit code for the Z values, from the factor the analysis carried.
+  // Matched by value (1e-9 tolerance separates the two foot definitions);
+  // an unrecognised factor writes NO unit key rather than a wrong one.
+  const vUm = dtm.verticalUnitToMetres;
+  const verticalUnitCode =
+    vUm == null ? null
+    : Math.abs(vUm - 1) < 1e-9 ? 9001
+    : Math.abs(vUm - 0.3048) < 1e-9 ? 9002
+    : Math.abs(vUm - 1200 / 3937) < 1e-9 ? 9003
+    : null;
   const isGeographic = options.isGeographic ?? false;
 
   // Bounds extent in CRS units: lower-left corner of the lower-left cell to the
@@ -410,7 +422,7 @@ export function buildDemPackage(
     });
     entries.push({
       name: `${basename}-${g.key}.tif`,
-      bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg }),
+      bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg, verticalUnitCode: g.verticalEpsg != null ? verticalUnitCode : null }),
     });
   }
 

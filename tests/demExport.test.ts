@@ -111,8 +111,8 @@ function readTiffCrsEpsg(bytes: Uint8Array): number | null {
   return null;
 }
 
-/** Read VerticalCSTypeGeoKey (4096) from a TIFF's GeoKeyDirectory, or null. */
-function readTiffVerticalEpsg(bytes: Uint8Array): number | null {
+/** Read an arbitrary GeoKey from a TIFF's GeoKeyDirectory, or null. */
+function readTiffGeoKey(bytes: Uint8Array, wantKey: number): number | null {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const ifd = dv.getUint32(4, true);
   const n = dv.getUint16(ifd, true);
@@ -130,9 +130,14 @@ function readTiffVerticalEpsg(bytes: Uint8Array): number | null {
   for (let i = 4; i + 4 <= geoDirCount; i += 4) {
     const keyId = dv.getUint16(geoDirOffset + i * 2, true);
     const value = dv.getUint16(geoDirOffset + (i + 3) * 2, true);
-    if (keyId === 4096) return value;
+    if (keyId === wantKey) return value;
   }
   return null;
+}
+
+/** Read VerticalCSTypeGeoKey (4096), the original narrow helper. */
+function readTiffVerticalEpsg(bytes: Uint8Array): number | null {
+  return readTiffGeoKey(bytes, 4096);
 }
 
 describe('writeGeoTiff (Float32 GeoTIFF)', () => {
@@ -463,6 +468,34 @@ describe('buildDemPackage', () => {
    * keep the stamp; the relative one must not carry it. The fixture's DTM
    * declares `verticalDatum: 'EPSG:5703'`, so the stamp path is the real one.
    */
+  it('carries the numeric EPSG codes when the grid supplies them, ignoring the label', () => {
+    // The label parse is the fallback only. A grid whose resolver supplied
+    // codes must never have them second-guessed from prose — that path once
+    // read CH1903+ / LV95 as EPSG:1903.
+    const r = fixtureResult();
+    const d = r.dtm as { crs: string | null; horizontalEpsg?: number | null; verticalEpsg?: number | null };
+    // The label PARSES here (to a different code), so this test can tell the
+    // preference order apart — a codeless label cannot.
+    d.crs = 'EPSG:32612';
+    d.horizontalEpsg = 2056;
+    d.verticalEpsg = 5729;
+    const zip = buildDemPackage(r, { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
+    expect(readTiffCrsEpsg(extractEntry(zip, 'site-dtm.tif')!)).toBe(2056);
+    expect(readTiffVerticalEpsg(extractEntry(zip, 'site-dtm.tif')!)).toBe(5729);
+  });
+
+  it('writes the vertical UNIT key (4099) beside the vertical CRS when the factor is known', () => {
+    const r = fixtureResult();
+    const d = r.dtm as { verticalUnitToMetres?: number | null };
+    d.verticalUnitToMetres = 1200 / 3937;
+    const zip = buildDemPackage(r, { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
+    const bytes = extractEntry(zip, 'site-dtm.tif')!;
+    expect(readTiffGeoKey(bytes, 4099)).toBe(9003);
+    // CHM carries neither the vertical CRS nor its unit — it is a height
+    // difference, not a coordinate.
+    expect(readTiffGeoKey(extractEntry(zip, 'site-chm.tif')!, 4099)).toBeNull();
+  });
+
   it('stamps the DTM and DSM with the vertical CRS but leaves the CHM unstamped', () => {
     const zip = buildDemPackage(fixtureResult(), {
       worldOrigin: { x: 600000, y: 4000000 }, basename: 'site',

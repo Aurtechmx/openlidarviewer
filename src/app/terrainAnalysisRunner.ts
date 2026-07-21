@@ -105,6 +105,10 @@ export function deriveCoreParams(
   return {
     cellSizeM,
     crs: crsName,
+    // Numeric codes travel beside the label so no export ever recovers a code
+    // from display prose again.
+    horizontalEpsg: cur?.epsg ?? null,
+    verticalEpsg: cur?.verticalEpsg ?? null,
     isGeographic,
     latitudeDeg,
     // Elevation converts by the Z-axis's OWN unit when the file declares one

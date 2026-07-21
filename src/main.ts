@@ -5764,7 +5764,7 @@ async function exportSession(): Promise<void> {
       width: b[3] - b[0],
       depth: b[4] - b[1],
       height: b[5] - b[2],
-      ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit } : {}),
+      ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit, ...(crs.epsg != null ? { epsg: crs.epsg } : {}) } : {}),
     };
   } else if (cloud) {
     const b = cloud.bounds();
@@ -5775,7 +5775,11 @@ async function exportSession(): Promise<void> {
       depth: b.max[1] - b.min[1],
       height: b.max[2] - b.min[2],
       ...(cloud.metadata?.crs
-        ? { crs: cloud.metadata.crs.name, crsUnit: cloud.metadata.crs.linearUnit }
+        ? {
+            crs: cloud.metadata.crs.name,
+            crsUnit: cloud.metadata.crs.linearUnit,
+            ...(cloud.metadata.crs.epsg != null ? { epsg: cloud.metadata.crs.epsg } : {}),
+          }
         : {}),
     };
   }
@@ -5896,6 +5900,7 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {
           depth: b[4] - b[1],
           height: b[5] - b[2],
           crs: streamingCloud.crs()?.name,
+          epsg: streamingCloud.crs()?.epsg,
         };
       } else if (staticCloud) {
         const b = staticCloud.bounds();
@@ -5906,6 +5911,7 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {
           depth: b.max[1] - b.min[1],
           height: b.max[2] - b.min[2],
           crs: staticCloud.metadata?.crs?.name,
+          epsg: staticCloud.metadata?.crs?.epsg,
         };
       }
       if (loadedFacts) {
@@ -5981,13 +5987,26 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {
       (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
     ) {
       // Restore the author's CRS override so a capsule round-trips without
-      // re-prompting. Best-effort: applies only when a scan is loaded (the
-      // service needs an active dataset); a clean re-resolve from the EPSG.
-      crsService.setOverride({
-        override: { epsg: session.crs.epsg, kind: session.crs.kind },
-        detected: undefined,
-        source: 'user-override',
-      });
+      // re-prompting — but NEVER over a scan that declares a DIFFERENT code.
+      // The scan-identity match already conflicts on differing codes; this
+      // guard covers the remaining hole, a scan whose declaration exists but
+      // was absent from the session summary. A file that states its own CRS is
+      // stronger evidence than a session written who-knows-where, so the
+      // declaration wins and the session's choice is dropped with a note.
+      const declared =
+        viewer.streamingCloud?.crs()?.epsg ??
+        (scans.activeId ? viewer.getCloud(scans.activeId)?.metadata?.crs?.epsg : undefined);
+      if (declared != null && declared !== session.crs.epsg) {
+        showLassoToast(
+          `The session's CRS (EPSG:${session.crs.epsg}) was not applied — this scan declares EPSG:${declared}, and a file's own declaration wins.`,
+        );
+      } else {
+        crsService.setOverride({
+          override: { epsg: session.crs.epsg, kind: session.crs.kind },
+          detected: scans.activeId ? viewer.getCloud(scans.activeId)?.metadata?.crs ?? undefined : undefined,
+          source: 'user-override',
+        });
+      }
     }
 
     // Honest disclosure: the session carries the saved analysis, not the scan

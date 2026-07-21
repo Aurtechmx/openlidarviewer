@@ -10,6 +10,7 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
 import { cloudToGlobal } from './globalPoints';
 import { writeLas, writeLas14 } from './writeLas';
@@ -83,7 +84,12 @@ export function convertCloud(
   // at the boundary, (x, y, z) → (x, −z, y), so every writer stays
   // axis-ignorant. Disclosed in the report because the written coordinates no
   // longer match the source bytes.
-  if (!isZUpFormat(cloud.sourceFormat)) {
+  // Mesh formats carry no mandated up-axis (photogrammetry writes Y-up,
+  // CloudCompare/PDAL-style tools write Z-up PLYs), so the DATA decides via the
+  // same detection the terrain gather uses — a format table alone rotated
+  // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
+  // identically here. Survey formats skip detection: Z-up by spec.
+  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(cloud.positions).up === 'y') {
     const { y, z } = g;
     for (let i = 0; i < g.count; i++) {
       const yv = y[i];

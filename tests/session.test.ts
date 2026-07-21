@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { serializeSession, parseSession, SESSION_VERSION, isSessionFile, SESSION_EXTENSION } from '../src/io/session';
+import { serializeSession, parseSession, SESSION_VERSION, isSessionFile, SESSION_EXTENSION, matchSessionToScan } from '../src/io/session';
 import type { InspectionSession, SavedView } from '../src/io/session';
 import {
   buildProcessingManifest,
@@ -1138,5 +1138,77 @@ describe('parseSession — the up-axis is read, never assumed', () => {
 
   it('names the offending value so the file can be repaired', () => {
     expect(parse('up')).toThrow(/up/);
+  });
+});
+
+/**
+ * The session's spatial metadata must survive the round-trip WHOLE. The
+ * serializer emits the full ResolvedCrs, but the parser rebuilt only the
+ * horizontal fields — a compound-CRS session reopened with its geometry intact
+ * and its vertical datum, vertical EPSG and vertical unit silently gone, so
+ * nothing downstream could interpret the heights it restored.
+ */
+describe('session CRS round-trip — vertical metadata survives', () => {
+  const compound = {
+    kind: 'projected',
+    name: 'NAD83(2011) / UTM zone 12N + NAVD88 (ftUS)',
+    epsg: 6341,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    verticalEpsg: 6360,
+    verticalDatum: 'NAVD88',
+    verticalUnitToMetres: 1200 / 3937,
+    horizontalDatum: 'NAD83(2011)',
+    wkt: 'COMPD_CS["…"]',
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: true,
+  };
+
+  it('restores the vertical EPSG, datum and unit', () => {
+    const text = serializeSession({ upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric', views: [], measurements: [], annotations: [], crs: compound as never });
+    const back = parseSession(text);
+    expect(back.crs?.verticalEpsg).toBe(6360);
+    expect(back.crs?.verticalDatum).toBe('NAVD88');
+    expect(back.crs?.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 9);
+  });
+
+  it('restores the horizontal datum realization', () => {
+    const text = serializeSession({ upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric', views: [], measurements: [], annotations: [], crs: compound as never });
+    expect(parseSession(text).crs?.horizontalDatum).toBe('NAD83(2011)');
+  });
+});
+
+/**
+ * A differing EPSG CODE is a conflict, not a disclosure. Labels legitimately
+ * vary for one CRS, so the label check stays advisory — but codes are
+ * canonical, and a session written against 32612 matched "strong" onto a scan
+ * declaring 2276 would rebase measurements into a frame they were never made
+ * in, then install the wrong CRS as an override.
+ */
+describe('matchSessionToScan — a differing EPSG code caps the verdict', () => {
+  const base = { fileName: 's.laz', sourcePoints: 1000, width: 100, depth: 100, height: 10 };
+
+  it('conflicts on different codes even when the geometry matches exactly', () => {
+    const m = matchSessionToScan(
+      { ...base, crs: 'A', epsg: 32612 },
+      { ...base, crs: 'B', epsg: 2276 },
+    );
+    expect(m.verdict).toBe('conflict');
+    expect(m.reasons.join(' ')).toMatch(/EPSG/);
+  });
+
+  it('stays strong when the codes agree and geometry matches', () => {
+    const m = matchSessionToScan(
+      { ...base, crs: 'label one', epsg: 32612 },
+      { ...base, crs: 'label two', epsg: 32612 },
+    );
+    expect(m.verdict).toBe('strong');
+  });
+
+  it('a label-only difference remains disclosure, not a verdict', () => {
+    const m = matchSessionToScan({ ...base, crs: 'A' }, { ...base, crs: 'B' });
+    expect(m.verdict).toBe('strong');
+    expect(m.reasons.join(' ')).toContain('CRS label differs');
   });
 });

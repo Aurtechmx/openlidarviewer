@@ -124,6 +124,9 @@ export interface TerrainCoreParams {
   >;
   /** Horizontal CRS (required for usable exports; warns when null). */
   readonly crs?: string | null;
+  /** Numeric EPSG codes from the resolver — see DtmGrid. */
+  horizontalEpsg?: number | null;
+  verticalEpsg?: number | null;
   /**
    * True when the horizontal frame is geographic (degrees), so slope and
    * hillshade can convert the cell size to metres. Default false (projected).
@@ -588,7 +591,9 @@ export function computeTerrainCore(
   const despikeApplied = true;
   const built = buildSurfaceFromRaster(raster, {
     crs,
+    horizontalEpsg: params.horizontalEpsg,
     verticalDatum,
+    verticalEpsg: params.verticalEpsg,
     isGeographic: params.isGeographic,
     // WORLD grid-centre latitude for the confidence roughness slope's cos φ
     // E–W correction (the grid's own originH2 is render-recentred, ≈ 0).

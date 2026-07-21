@@ -5192,6 +5192,12 @@ export class Viewer {
     heightPx: number;
     extent: { minX: number; minY: number; maxX: number; maxY: number };
   } | null> {
+    // A "top-down" framed render points the ortho camera down −Z and pairs the
+    // raster with a north-up world file — X easting, Y northing. In a Y-up
+    // scene −Z is HORIZONTAL, so the same code would render a side elevation
+    // and georeference it as a map: structurally valid, spatially nonsense.
+    // Refusing here kills both the raster and its sidecar in one place.
+    if (this._worldUp.y === 1) return null;
     await this.ready;
     // All numbers come from the pure, unit-tested framing planner — the
     // extent it returns is DERIVED from the camera pose + frustum

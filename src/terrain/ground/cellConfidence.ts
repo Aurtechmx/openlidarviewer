@@ -90,8 +90,18 @@ export interface DtmGrid {
   readonly originH2: number;
   /** Horizontal CRS identifier (e.g. "EPSG:32610") or null when unknown. */
   readonly crs: string | null;
+  /**
+   * Numeric horizontal EPSG, carried from the resolver so exports never
+   * recover a code from the display label — `CH1903+ / LV95` once became
+   * EPSG:1903 that way. Null = the resolver had none.
+   */
+  readonly horizontalEpsg?: number | null;
   /** Vertical datum identifier (e.g. "EPSG:5703") or null when unknown. */
   readonly verticalDatum: string | null;
+  /** Numeric vertical EPSG from the resolver; null = none declared. */
+  readonly verticalEpsg?: number | null;
+  /** Vertical unit factor the analysis ran with (metres per Z unit). */
+  readonly verticalUnitToMetres?: number | null;
   // ── honesty contract (whole-grid summary) ─────────────────────────
   readonly coverageMode: TerrainCoverageMode;
   readonly sourcePointCount: number;
@@ -117,6 +127,8 @@ export interface CellConfidenceParams {
   readonly roughnessFullPenaltySlope?: number;
   /** Horizontal CRS, passed through to the grid (no export without it). */
   readonly crs?: string | null;
+  readonly horizontalEpsg?: number | null;
+  readonly verticalEpsg?: number | null;
   /** Vertical datum, passed through to the grid. */
   readonly verticalDatum?: string | null;
   /**
@@ -216,7 +228,10 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       originH1,
       originH2,
       crs: params.crs ?? null,
+      horizontalEpsg: params.horizontalEpsg ?? null,
       verticalDatum: params.verticalDatum ?? null,
+      verticalEpsg: params.verticalEpsg ?? null,
+      verticalUnitToMetres: params.verticalUnitToMetres ?? null,
       coverageMode: 'full',
       sourcePointCount: raster.sourcePointCount,
       analyzedPointCount: raster.analyzedPointCount,
@@ -356,7 +371,9 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
     originH1,
     originH2,
     crs: params.crs ?? null,
+    horizontalEpsg: params.horizontalEpsg ?? null,
     verticalDatum: params.verticalDatum ?? null,
+    verticalEpsg: params.verticalEpsg ?? null,
     coverageMode: raster.coverage,
     sourcePointCount: raster.sourcePointCount,
     analyzedPointCount: raster.analyzedPointCount,

@@ -195,9 +195,9 @@ function gatherDeliverable(
         xllCorner: ox + dtm.originH1,
         yllCorner: oy + dtm.originH2,
         noData: NO_DATA,
-        epsg: parseEpsg(dtm.crs),
+        epsg: dtm.horizontalEpsg ?? parseEpsg(dtm.crs),
         isGeographic: opts.isGeographic ?? false,
-        verticalEpsg: parseEpsg(dtm.verticalDatum),
+        verticalEpsg: dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum),
       }),
     );
   }
