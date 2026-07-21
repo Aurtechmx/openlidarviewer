@@ -32,7 +32,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:live": "tsc --noEmit && vite build --mode live",
+    "build:live": "bash -c 'set -o pipefail; s=$(date +%s); tsc --noEmit && vite build --mode live; c=$?; e=$(( $(date +%s) - s )); echo \"[build:live] elapsed=${e}s exit=${c}\"; if [ $c -eq 0 ] && [ $e -gt 120 ]; then echo \"[build:live] WARNING: took ${e}s. A healthy live build is well under a minute; \" \"the obfuscator transform is the usual cause. Re-run and compare before trusting a timing-sensitive result.\" >&2; fi; exit $c'",
     "package": "bash scripts/package.sh",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:deps": "node scripts/check-dep-singletons.mjs",

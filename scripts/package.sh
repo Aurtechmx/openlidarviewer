@@ -148,6 +148,52 @@ else
   DIRTY=null
   SOURCE_KIND="source-archive"
 fi
+# ── Release-integrity gate ────────────────────────────────────────────────
+#
+# A published archive makes three claims a reader cannot check for themselves:
+# that it was built from a clean tree, that the tests described in its evidence
+# describe THIS code, and that the commit named is the one tagged. Each was
+# previously left to whoever ran the command.
+#
+# Enforced only when OLV_RELEASE_GATE=1 — a development cut should not need a
+# tag — so the strict path is the one deliberately taken for a real release.
+if [ "${OLV_RELEASE_GATE:-0}" = "1" ]; then
+  fail=0
+  if [ "$DIRTY" != "false" ]; then
+    echo "✗ release gate: working tree is not clean (tracked or untracked changes)." >&2
+    fail=1
+  fi
+  EV="$ROOT/docs/validation/test-evidence.json"
+  if [ ! -f "$EV" ]; then
+    echo "✗ release gate: $EV is missing; run npm run evidence." >&2
+    fail=1
+  else
+    EV_COMMIT="$(node -e "process.stdout.write(require('$EV').commit||'')" 2>/dev/null || echo '')"
+    HEAD_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo '')"
+    # Exact equality is impossible by construction: evidence is collected FROM
+    # a commit, and committing the evidence file necessarily moves HEAD past
+    # it. What must hold is that nothing which could change a test result
+    # changed in between — so the diff is allowed to contain the evidence file
+    # and the documents that quote it, and nothing else.
+    if [ "$EV_COMMIT" != "$HEAD_COMMIT" ]; then
+      DRIFT="$(git diff --name-only "$EV_COMMIT" "$HEAD_COMMIT" 2>/dev/null \
+        | grep -vE '^(docs/validation/test-evidence\.json|(REPRODUCIBILITY|VALIDATION_REPORT|READINESS_REPORT|KNOWN_LIMITATIONS)_v[0-9].*\.md)$' || true)"
+      if [ -n "$DRIFT" ]; then
+        echo "✗ release gate: code changed after the evidence was collected (${EV_COMMIT:0:7} → ${HEAD_COMMIT:0:7}):" >&2
+        echo "$DRIFT" | sed 's/^/    /' >&2
+        echo "  The published figures would describe different code than the archive. Re-run npm run evidence." >&2
+        fail=1
+      fi
+    fi
+  fi
+  if ! git describe --exact-match --tags HEAD >/dev/null 2>&1; then
+    echo "✗ release gate: HEAD is not tagged. Tag the release commit before packaging." >&2
+    fail=1
+  fi
+  [ "$fail" = "0" ] || { echo "Release gate failed. Unset OLV_RELEASE_GATE for a development cut." >&2; exit 1; }
+  echo "→ Release gate: clean tree, evidence matches HEAD, HEAD is tagged."
+fi
+
 NODE_V="$(node -v 2>/dev/null || echo unknown)"
 (
   cd "$OUT_DIR"
