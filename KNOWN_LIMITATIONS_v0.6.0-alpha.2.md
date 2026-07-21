@@ -24,6 +24,35 @@ For this alpha:
 - Integrated Spatial Workflows are **not** claimed complete.
 - A layer whose declared CRS disagrees with the project's is excluded from the shared origin and reported as unaligned; it is never silently reprojected. Reprojection remains a downstream tool's job.
 
+## Cross-layer results require PROVEN frame compatibility
+
+Each layer carries what it has established about the project frame:
+`verified` (horizontal and vertical both proven), `horizontal-only`
+(horizontal proven; vertical undeclared or different), `unknown` (no declared
+CRS), or `incompatible` (a different frame).
+
+Only `verified` layers are merged into a combined estimator — terrain/DTM,
+profile, cut/fill volume, lasso — and only `verified` layers are aligned in Z.
+A `horizontal-only` pair is placed in plan, where the agreement is real, and
+keeps its own heights, because orthometric and ellipsoidal references differ by
+tens of metres and metre against foot by a factor of three. Undeclared is
+treated as unproven, not as agreement.
+
+**This is a deliberate refusal, not a limitation of the maths.** Loading an
+unreferenced mesh (PLY/OBJ/GLB) beside a georeferenced scan will now leave it
+out of combined results rather than merging frames that were never shown to
+correspond. A single layer is `verified` by definition, so single-scan work is
+unaffected.
+
+A mount is additionally refused when it would cost more than a millimetre of
+Float32 resolution — roughly 100 km of separation — and the layer keeps its own
+frame instead.
+
+**Still open:** the transform is applied by rewriting the Float32 positions
+rather than held in Float64 beside source-local vertices. Within the gates
+above that is bounded and disclosed, but it is not the end state; see
+coordinate-integrity roadmap P1 item 2.
+
 ## Contour GeoJSON ships in two frames
 
 `<name>.geojson` is RFC 7946: WGS 84 longitude/latitude, no `crs` member, with
@@ -40,6 +69,13 @@ change should be treated as native-frame regardless of their name.
 When the source CRS cannot be converted to lon/lat, the RFC file is refused
 rather than written with projected numbers in degree fields, and only the
 native file is produced.
+
+The RFC file's geometry is **2D unless the vertical reference is proven to be
+WGS 84 ellipsoidal height**, which is the only thing RFC 7946 permits in a
+position's third element. Elevations always ride as `elevation`,
+`elevationUnit` and `elevationDatum` properties. KML geometries likewise
+declare an explicit `altitudeMode`, and claim `absolute` only for a declared
+metric vertical datum.
 
 ## Residual streaming flicker at the budget boundary
 
