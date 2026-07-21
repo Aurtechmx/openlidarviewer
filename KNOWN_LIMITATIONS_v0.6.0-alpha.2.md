@@ -45,8 +45,14 @@ correspond. A single layer is `verified` by definition, so single-scan work is
 unaffected.
 
 A mount is additionally refused when it would cost more than a millimetre of
-Float32 resolution — roughly 100 km of separation — and the layer keeps its own
-frame instead.
+Float32 resolution. The source quantum is converted through the CRS's linear
+unit before that judgement, an undeclared unit refuses rather than assuming
+metres, and **geographic (degree) frames are refused outright** — a degree is
+not a length, and what it stands for depends on latitude.
+
+**Single layers are exempt.** Proof of a shared frame is required to MERGE
+layers; one visible layer is analysed in its own frame, whatever its
+compatibility state, because no combination is taking place.
 
 **Still open:** the transform is applied by rewriting the Float32 positions
 rather than held in Float64 beside source-local vertices. Within the gates
