@@ -278,3 +278,63 @@ describe('crsFromWkt — the CRS authority, not a nested one', () => {
     expect(crs.epsg).toBeUndefined();
   });
 });
+
+/**
+ * A projected CRS must not be NAMED by its base geographic CRS.
+ *
+ * GeoTIFF citations are free text and writers fill them in loosely. When a
+ * file carries ProjectedCSTypeGeoKey 32629 but only a GeogCitation of
+ * "WGS 84", the resolver used that citation as the CRS name — so a UTM zone
+ * 29N scan displayed as "WGS 84 (EPSG:32629)". A reader who sees "WGS 84"
+ * reasonably concludes EPSG:4326 and degrees, which is the wrong frame, the
+ * wrong units, and the wrong idea of what the numbers mean. Observed on a
+ * PDAL-written survey with eastings around 517,000.
+ */
+function geoKeyBytesWithAscii(
+  keys: Array<[number, number, number?, number?]>,
+): Uint8Array {
+  const u16 = new Uint16Array(4 + keys.length * 4);
+  u16[0] = 1; u16[1] = 1; u16[2] = 0; u16[3] = keys.length;
+  keys.forEach(([k, v, loc, count], i) => {
+    const o = 4 + i * 4;
+    u16[o] = k; u16[o + 1] = loc ?? 0; u16[o + 2] = count ?? 1; u16[o + 3] = v;
+  });
+  return new Uint8Array(u16.buffer);
+}
+const ascii = (s: string) => new TextEncoder().encode(s);
+
+describe('crsFromGeoTiff — projected CRS naming', () => {
+  it('does not adopt a geographic citation as a projected CRS’s name', () => {
+    // 3072 = 32629 (projected), and the ONLY citation is 2049 = "WGS 84".
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [3072, 32629], [2049, 0, 34737, 7]]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84|'), null);
+    expect(crs.epsg).toBe(32629);
+    expect(crs.isGeographic).toBe(false);
+    expect(crs.name).not.toBe('WGS 84');
+    expect(crs.name).not.toBe('WGS 84 (EPSG:32629)');
+  });
+
+  it('names a WGS 84 UTM zone from its code, which fully determines it', () => {
+    // The app's convention is "Name (EPSG:code)" — both halves must be there.
+    const north = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 32629]]), null, null);
+    expect(north.name).toBe('WGS 84 / UTM zone 29N (EPSG:32629)');
+    const south = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 32733]]), null, null);
+    expect(south.name).toBe('WGS 84 / UTM zone 33S (EPSG:32733)');
+    // A code outside the systematic ranges must NOT be invented into a name.
+    const other = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 2056]]), null, null);
+    expect(other.name).toBe('EPSG:2056');
+  });
+
+  it('still prefers a PROJECTED citation, which does describe this CRS', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [3072, 32629], [3073, 0, 34737, 22]]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84 / UTM zone 29N|'), null);
+    expect(crs.name).toContain('UTM zone 29N');
+  });
+
+  it('leaves a geographic CRS free to use its geographic citation', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 2], [2048, 4326], [2049, 0, 34737, 7]]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84|'), null);
+    expect(crs.isGeographic).toBe(true);
+    expect(crs.name).toContain('WGS 84');
+  });
+});

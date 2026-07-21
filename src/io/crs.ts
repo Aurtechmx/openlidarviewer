@@ -574,20 +574,33 @@ export function crsFromGeoTiff(
       ? modelType === 2
       : projected === undefined && geodetic !== undefined;
   const epsg = projected ?? geodetic;
-  const citation = readGeoTiffCitation(
+  const projectedCitation = readGeoTiffCitation(
     geoAsciiBytes,
-    projectedCitationOffset ?? geodeticCitationOffset,
-    projectedCitationCount ?? geodeticCitationCount,
+    projectedCitationOffset,
+    projectedCitationCount,
+  );
+  const citation = projectedCitation ?? readGeoTiffCitation(
+    geoAsciiBytes,
+    geodeticCitationOffset,
+    geodeticCitationCount,
   );
 
   const mappedUnit = linearUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[linearUnitCode] : undefined;
   const linearUnit: CrsLinearUnit = mappedUnit ?? (isGeographic ? 'unknown' : 'metre');
   const linearUnitToMetres = unitScaleForCode(linearUnit);
 
-  const baseName = citation
-    || (epsg ? `EPSG:${epsg}` : 'Unknown CRS')
-    || 'Unknown CRS';
-  const name = epsg && !citation ? `EPSG:${epsg}` : (epsg ? `${baseName} (EPSG:${epsg})` : baseName);
+  // A citation only names THIS CRS when it is the projected one. GeoTIFF
+  // citations are free text, and a projected file that carries only a
+  // GeogCitation ("WGS 84") was taking it as the CRS's own name — so a UTM
+  // zone 29N survey displayed as "WGS 84 (EPSG:32629)", which a reader is
+  // entitled to read as EPSG:4326 and degrees. A geographic CRS is still free
+  // to use its geographic citation, because there it does describe the CRS.
+  const ownCitation = isGeographic ? citation : projectedCitation;
+  const baseName = ownCitation ?? wellKnownCrsName(epsg) ?? (epsg ? `EPSG:${epsg}` : 'Unknown CRS');
+  const name =
+    epsg && !ownCitation && !wellKnownCrsName(epsg) ? `EPSG:${epsg}`
+    : epsg ? `${baseName} (EPSG:${epsg})`
+    : baseName;
 
   // Vertical datum: a real EPSG (verticalDatumLabel rejects the 0 / 32767
   // placeholders), else fall back to the citation text when present.
@@ -660,6 +673,25 @@ export function crsFromEpsg(horizontalEpsg: number, params: EpsgCrsParams = {}):
     verticalEpsg,
     verticalDatum,
   };
+}
+
+/**
+ * The name a well-known EPSG code fully determines, or undefined.
+ *
+ * The WGS 84 UTM ranges are systematic — 326zz is zone zz north, 327zz is
+ * zone zz south — so the code names the CRS exactly, with no catalog and no
+ * guesswork. Worth stating outright because the alternative was a writer's
+ * free-text citation, which is how a projected scan came to be labelled with
+ * its base geographic CRS.
+ */
+function wellKnownCrsName(epsg: number | undefined): string | undefined {
+  if (epsg === undefined) return undefined;
+  const zone = epsg % 100;
+  if (zone < 1 || zone > 60) return undefined;
+  const band = Math.floor(epsg / 100);
+  if (band === 326) return `WGS 84 / UTM zone ${zone}N`;
+  if (band === 327) return `WGS 84 / UTM zone ${zone}S`;
+  return undefined;
 }
 
 function readGeoTiffCitation(
