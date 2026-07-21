@@ -30,3 +30,7 @@ READINESS_REPORT_*.md export-ignore
 # AI_ASSISTANCE all link to. It is load-bearing evidence, not clutter.
 VALIDATION_REPORT_v0.6.0-alpha.1.md export-ignore
 REPRODUCIBILITY_v0.6.0-alpha.1.md export-ignore
+
+# Release planning: goals, baselines and sequencing for a cut. Same class as
+# a readiness report - what we intend to do and why, not what the release is.
+docs/architecture/stabilization-release-plan.md export-ignore

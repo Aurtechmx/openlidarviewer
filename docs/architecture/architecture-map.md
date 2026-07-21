@@ -1,8 +1,8 @@
 # Architecture map
 
 The module graph as it stands, and the shape the decomposition is moving it
-toward. Companion to [stabilization-release-plan.md](./stabilization-release-plan.md);
-`scripts/lint-layer-boundaries.mjs` enforces the dependency direction below.
+toward. `scripts/lint-layer-boundaries.mjs` enforces the dependency direction
+below.
 
 ## Dependency direction
 

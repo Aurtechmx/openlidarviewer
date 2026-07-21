@@ -54,9 +54,10 @@ before v0.6.0.
 
 ### Internal
 
-- The stabilization plan (`docs/architecture/stabilization-release-plan.md`)
-  records the goals, the measured baselines, and which work is provable in a
-  sandbox versus needing a browser or a workstation.
+- The stabilization work is tracked against measured baselines, separating
+  what is provable in a sandbox from what needs a browser or a workstation.
+  `docs/architecture/architecture-map.md` carries the module graph and the
+  decomposition targets.
 
 ## [0.6.0-alpha.1] - 2026-07-18
 
