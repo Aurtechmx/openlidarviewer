@@ -104,8 +104,8 @@ and 200 methods), not because a few blocks are large. A sub-2,000 target needs
 whole *clusters* to move, not the largest methods. The cohesive candidates, by
 field prefix, are streaming (`_streaming*`), filters (`_classFiltered`,
 `_elevFilter*`, `_intenFilter*`, `_materialsWith*`), EDL (`_edl*`),
-classification (`_classEpochs`, `_classHistory`), input (`_pointer*`,
-`_activeTouches`, `_onCanvas*`), and the render loop (`_rafId`, `_frame*`,
+classification (`_classEpochs`, `_classHistory`), input (`_pointer*`, `_onCanvas*`; the two-finger
+tracking state machine now lives in `src/render/touchTracker.ts`), and the render loop (`_rafId`, `_frame*`,
 `_adaptiveDpr`). Note that the streaming cluster is cohesive in *state* but not
 in *behaviour*: `attachStreamingCloud` passes the Viewer itself to
 `StreamingRenderer` as host and reaches into nav, camera, measure-datum and

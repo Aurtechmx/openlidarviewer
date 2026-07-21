@@ -223,11 +223,7 @@ import {
 } from './rgbAppearance';
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
-import {
-  decompose2Pointer,
-  isZero as gestureIsZero,
-  type Pointer as TouchPointer,
-} from './touchGesture';
+import { TouchTracker } from './touchTracker';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
 import type { SavedCameraState } from './annotate/types';
@@ -1154,7 +1150,7 @@ export class Viewer {
   private _onCanvasPointerUp!: (e: PointerEvent) => void;
   private _onCanvasPointerCancel!: (e: PointerEvent) => void;
   /** Active touch pointers, keyed by pointerId. */
-  private readonly _activeTouches = new Map<number, TouchPointer>();
+  private readonly _touchTracker = new TouchTracker();
   /**
    * If true, the multi-touch recogniser will route 2-pointer gestures to
    * twist + pinch + pan decomposition (Maps / Procreate model). Defaults
@@ -1616,31 +1612,10 @@ export class Viewer {
       ) {
         return;
       }
-      const prev = this._activeTouches.get(e.pointerId);
-      if (!prev) return;
-      const cur: TouchPointer = { x: e.offsetX, y: e.offsetY };
-      // Need exactly 2 pointers for the 2-finger gesture model.
-      if (this._activeTouches.size === 2) {
-        // Pull the OTHER pointer out of the map — it stays put for this
-        // frame (its own pointermove will run later in the same tick).
-        let otherId = -1;
-        let other: TouchPointer | null = null;
-        for (const [id, p] of this._activeTouches) {
-          if (id !== e.pointerId) {
-            otherId = id;
-            other = p;
-            break;
-          }
-        }
-        if (other) {
-          const delta = decompose2Pointer(prev, other, cur, other);
-          if (!gestureIsZero(delta)) {
-            this._applyTouchGesture(delta);
-          }
-        }
-        void otherId;
-      }
-      this._activeTouches.set(e.pointerId, cur);
+      // The tracker owns the two-pointer state machine and the recogniser;
+      // this handler keeps only the DOM concerns above it.
+      const delta = this._touchTracker.move(e.pointerId, e.offsetX, e.offsetY);
+      if (delta) this._applyTouchGesture(delta);
     };
     this._onCanvasPointerLeave = () => {
       this._pointerOnCanvas = false;
@@ -1656,7 +1631,7 @@ export class Viewer {
       this._bumpRenderActivity();
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
-      this._activeTouches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
       // Capture so we keep getting moves even if the finger slides off
       // the canvas before lift.
       try {
@@ -1668,7 +1643,7 @@ export class Viewer {
     };
     this._onCanvasPointerUp = (e) => {
       if (e.pointerType !== 'touch') return;
-      this._activeTouches.delete(e.pointerId);
+      this._touchTracker.up(e.pointerId);
       try {
         canvas.releasePointerCapture(e.pointerId);
       } catch {
@@ -4302,7 +4277,7 @@ export class Viewer {
         ONE: THREE.TOUCH.ROTATE,
         TWO: THREE.TOUCH.DOLLY_PAN,
       };
-      this._activeTouches.clear();
+      this._touchTracker.clear();
     } else {
       this._controls.touches = {
         ONE: THREE.TOUCH.ROTATE,
@@ -5408,7 +5383,7 @@ export class Viewer {
     this._canvas.removeEventListener('pointerdown', this._onCanvasPointerDown);
     this._canvas.removeEventListener('pointerup', this._onCanvasPointerUp);
     this._canvas.removeEventListener('pointercancel', this._onCanvasPointerCancel);
-    this._activeTouches.clear();
+    this._touchTracker.clear();
     window.removeEventListener('keydown', this._onWindowKeyDown);
     if (typeof document !== 'undefined' && this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
