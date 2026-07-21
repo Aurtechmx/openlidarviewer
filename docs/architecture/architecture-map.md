@@ -56,8 +56,45 @@ place.
 
 ## The two monoliths, and the target shape
 
-These are the decomposition targets. `main.ts` must reach < 2,500 lines and
-`Viewer.ts` < 2,000, each with a lint guard once achieved.
+The exit condition is NOT a line count. A hard line target rewards the wrong
+move: you can hit it by relocating view-bound glue into a "host" module that
+re-exposes the whole class, which lowers the number without decoupling anything
+or gaining a single test. That is the trap this decomposition exists to avoid.
+
+The real condition: **every cluster with a genuine boundary and a Node-test
+payoff is extracted and tested, and the irreducibly view-bound remainder is
+enumerated below.** A cluster earns extraction when its logic can be decided
+without three.js or the DOM. When the only thing left is GPU material setup,
+scene-graph wiring, camera manipulation and event plumbing, the file is as
+small as it should be, whatever the line count says.
+
+`< 2,500` for `main.ts` and `< 2,000` for `Viewer.ts` remain recorded as a
+directional `goal` in `docs/validation/monolith-size-baseline.json`, but no
+guard enforces them. What IS enforced (`lint:monolith-size`) is that neither
+file may GROW: the counts ratchet down only, so a decomposition step cannot be
+quietly undone, and no vanity extraction is forced to chase a number.
+
+### Extracted this cycle, each with Node tests it could not have before
+
+- `computeLassoVolume` → `src/render/measure/lassoVolumeCompute.ts` (8 tests)
+- the two-finger tracker → `src/render/touchTracker.ts` (11 tests)
+- the render-frame decision → `src/render/renderActivityGate.ts` (9 tests)
+
+### Checked and deliberately NOT extracted
+
+Recorded so the next pass does not re-derive them:
+
+- **`snapshot`** — canvas compositing. Reaches into twelve Viewer internals and
+  twelve DOM/GL calls; the pure overlay maths (scale bar, colorbar, inspector
+  card) is already in its own modules. A host would expose the whole class for
+  no testable gain.
+- **The filter cluster** (`_classFiltered`, `_elevFilter*`, `_intenFilter*`) —
+  not CPU predicates. They are three.js shader uniforms folded in a TSL pass;
+  there is no Node-testable logic to lift.
+- **Classification history** (`_classEpochs`, `_classHistory`) — its substance
+  (`ClassEditHistory`, `ClassificationEpochs`, `applyClassSwap`,
+  `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
+  Viewer is a thin GPU-upload wrapper.
 
 **`src/main.ts` (7,630)** — the largest blocks, which are the extraction
 candidates:
@@ -98,18 +135,20 @@ Each extraction is one gated step: move the block, have it take its collaborator
 as parameters, keep the deterministic e2e project green, and re-run the coverage
 ratchet. Behaviour does not change; only where the code lives.
 
-**The three blocks left total ~814 lines**, so extracting all of them leaves
-`Viewer.ts` near 6,060 — the file is long because of breadth (roughly 110 fields
-and 200 methods), not because a few blocks are large. A sub-2,000 target needs
-whole *clusters* to move, not the largest methods. The cohesive candidates, by
-field prefix, are streaming (`_streaming*`), filters (`_classFiltered`,
-`_elevFilter*`, `_intenFilter*`, `_materialsWith*`), EDL (`_edl*`),
-classification (`_classEpochs`, `_classHistory`), input (`_pointer*`, `_onCanvas*`; the two-finger
-tracking state machine now lives in `src/render/touchTracker.ts`), and the render loop (`_rafId`, `_frame*`,
-`_adaptiveDpr`). Note that the streaming cluster is cohesive in *state* but not
-in *behaviour*: `attachStreamingCloud` passes the Viewer itself to
-`StreamingRenderer` as host and reaches into nav, camera, measure-datum and
-colour-context, so it cannot move without an explicit host interface.
+The file is long because of breadth (roughly 110 fields and 200 methods), not
+because a few blocks are large, so the line count falls slowly even as the
+testable logic leaves. That is expected and fine: the goal is the extractions
+above, not the number.
+
+**One substantial cluster with a real boundary remains: streaming**
+(`_streaming*`). It is cohesive in *state* but not yet in *behaviour* —
+`attachStreamingCloud` passes the Viewer itself to `StreamingRenderer` as host
+and reaches into nav, camera, measure-datum and colour-context, so it moves
+only behind an explicit host interface, the same shape used for the export
+adapter and the lasso walk. That is the next decomposition step worth taking.
+The EDL cluster (`_edl*`) is a smaller follow-on. Everything else on the class
+— the constructor's scene/pipeline build, `snapshot`, the render loop body,
+event wiring — is the irreducibly view-bound remainder, and belongs here.
 
 ## Test and gate topology
 
