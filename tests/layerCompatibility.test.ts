@@ -52,9 +52,27 @@ describe('classifyLayerCompatibility', () => {
     expect(at('b')).toBe('unknown');
   });
 
-  it('a different horizontal CRS is incompatible', () => {
+  it('two different horizontal CRSs cannot both be in the frame', () => {
+    // WHICH of a tied pair becomes the reference is arbitrary — the tie is
+    // broken on the key so the answer is stable, not on array order so it is
+    // reproducible. What must hold is that they are not both in the project
+    // frame, because they are not in the same frame.
     const at = classify([layer(), layer({ id: 'b', epsg: 25829, crsName: 'ETRS89 / UTM zone 29N' })]);
-    expect(at('b')).toBe('incompatible');
+    const states = [at('a'), at('b')];
+    expect(states).toContain('incompatible');
+    expect(states.filter((s) => s === 'incompatible')).toHaveLength(1);
+  });
+
+  it('a MINORITY horizontal CRS is the incompatible one', () => {
+    // With a real majority there is no arbitrariness left: two layers agree,
+    // the odd one out is the one excluded.
+    const at = classify([
+      layer({ id: 'a' }), layer({ id: 'b' }),
+      layer({ id: 'odd', epsg: 25829, crsName: 'ETRS89 / UTM zone 29N' }),
+    ]);
+    expect(at('odd')).toBe('incompatible');
+    expect(at('a')).not.toBe('incompatible');
+    expect(at('b')).not.toBe('incompatible');
   });
 
   it('same horizontal, DIFFERENT vertical datum is horizontal-only', () => {

@@ -84,15 +84,25 @@ export function classifyLayerCompatibility(
     return out;
   }
 
+  // The reference is the most common declared horizontal key. Ties are broken
+  // by the KEY itself, not by first-seen order: with no majority — four layers
+  // in four different CRSs, or the ordinary two-layer disagreement — whichever
+  // happened to be listed first became "the project" and the rest turned
+  // incompatible, so the same files classified differently on reorder. The
+  // choice among tied keys is arbitrary either way; what matters is that it is
+  // a property of the data rather than of the array. A property test found
+  // this after the same defect had been fixed one level down, in the vertical
+  // reference.
   const counts = new Map<string, number>();
-  const order: string[] = [];
-  for (const { key } of declared) {
-    if (!counts.has(key)) order.push(key);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  let referenceKey = order[0];
-  for (const key of order) {
-    if ((counts.get(key) ?? 0) > (counts.get(referenceKey) ?? 0)) referenceKey = key;
+  for (const { key } of declared) counts.set(key, (counts.get(key) ?? 0) + 1);
+  let referenceKey = '';
+  let best = -1;
+  for (const key of [...counts.keys()].sort()) {
+    const n = counts.get(key) ?? 0;
+    if (n > best) {
+      best = n;
+      referenceKey = key;
+    }
   }
 
   // The project's vertical reference is established by UNANIMITY among the
