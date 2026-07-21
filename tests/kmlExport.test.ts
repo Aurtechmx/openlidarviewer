@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildKml, type KmlExportInput, type KmlViewpoint } from '../src/export/kmlExport';
+import { buildKml, type KmlExportInput, type KmlViewpoint, kmlAltitudeMode } from '../src/export/kmlExport';
 import type { Annotation } from '../src/render/annotate/types';
 import type { Measurement } from '../src/render/measure/types';
 
@@ -242,5 +242,40 @@ describe('buildKml — a coordinate it cannot express is refused', () => {
 
   it('refuses a latitude outside the geographic domain', () => {
     expect(() => buildKml(input({ toLonLat: () => [-111, 4400000, 0] }))).toThrow(/latitude/i);
+  });
+});
+
+/**
+ * KML geometries must state how their altitude is treated.
+ *
+ * With no `<altitudeMode>` a reader applies the default — `clampToGround` —
+ * and the altitude in `<coordinates>` is silently discarded onto whatever
+ * terrain the viewer happens to have. Nothing told the reader the heights
+ * were dropped. And `absolute` is a specific claim: metres above sea level.
+ * Claiming it for an undeclared datum, or for heights in feet, places every
+ * feature at a height it does not have.
+ */
+describe('KML altitude mode', () => {
+  it('claims absolute only for a declared metric vertical datum', () => {
+    expect(kmlAltitudeMode('EPSG:5703', 1).mode).toBe('absolute');
+    expect(kmlAltitudeMode('EPSG:5703', undefined).mode).toBe('absolute');
+  });
+
+  it('clamps when no vertical datum is declared', () => {
+    expect(kmlAltitudeMode(null, 1).mode).toBe('clampToGround');
+    expect(kmlAltitudeMode(undefined, 1).mode).toBe('clampToGround');
+    expect(kmlAltitudeMode('   ', 1).mode).toBe('clampToGround');
+  });
+
+  it('clamps when the vertical unit is not metres', () => {
+    // KML absolute altitude is defined in metres; a foot height written as
+    // absolute is out by a factor of three.
+    expect(kmlAltitudeMode('EPSG:6360', 0.3048).mode).toBe('clampToGround');
+  });
+
+  it('always explains the treatment in words', () => {
+    expect(kmlAltitudeMode(null, 1).reason).toMatch(/no vertical datum|not authoritative/i);
+    expect(kmlAltitudeMode('EPSG:6360', 0.3048).reason).toMatch(/metres/i);
+    expect(kmlAltitudeMode('EPSG:5703', 1).reason).toContain('EPSG:5703');
   });
 });

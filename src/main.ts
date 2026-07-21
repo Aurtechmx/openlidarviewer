@@ -3536,6 +3536,9 @@ const exportPanel = new ExportPanel({
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
       verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
+      // Drives the geometry's altitudeMode: absolute only for a declared
+      // metric vertical datum, otherwise clamped with the reason stated.
+      verticalDatum: crsService.current()?.verticalDatum ?? null,
       toLonLat,
       notSurveyGradeNote:
         'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',

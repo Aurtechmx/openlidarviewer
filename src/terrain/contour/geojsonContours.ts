@@ -131,6 +131,26 @@ export function geojsonString(
   return JSON.stringify(toGeoJSON(model, provenance), null, pretty ? 2 : 0);
 }
 
+/**
+ * Whether a declared vertical datum IS WGS 84 ellipsoidal height — the only
+ * thing RFC 7946 allows in a position's third element.
+ *
+ * Deliberately a short allow-list rather than a pattern: EPSG:4979 is WGS 84
+ * 3D and EPSG:7662 / "WGS 84 (ellipsoid)" name the same surface. Anything
+ * else — an orthometric datum, a local one, or silence — is NOT this, and
+ * guessing in the permissive direction is what puts a contour tens of metres
+ * out with nothing in the file to reveal it.
+ */
+function isWgs84EllipsoidalHeight(verticalDatum: string | null | undefined): boolean {
+  const v = verticalDatum?.trim().toLowerCase();
+  if (!v) return false;
+  return (
+    v === 'epsg:4979' || v === '4979'
+    || v === 'epsg:7662' || v === '7662'
+    || v === 'wgs 84 (ellipsoid)' || v === 'wgs84 ellipsoidal height'
+  );
+}
+
 /** Thrown when a standards-compliant GeoJSON cannot be produced honestly. */
 export class GeoJsonFrameError extends Error {}
 
@@ -166,15 +186,42 @@ export function toGeoJSONWgs84(
     + 'the native projected coordinates ship in the companion -native file.';
   obj.metadata = metadata;
 
+  // RFC 7946 §3.1.1 defines the third position element as height in metres
+  // above the WGS 84 ellipsoid. A contour elevation is almost never that: it
+  // is an orthometric height on a local vertical datum, sometimes in feet,
+  // often on no declared datum at all. Writing it there tells every reader it
+  // IS ellipsoidal metres and nothing in the file says otherwise, so a 65 m
+  // orthometric contour quietly becomes a 65 m ellipsoidal one — tens of
+  // metres from where it belongs. The ordinate is written only when the
+  // vertical reference is proven to be WGS 84 ellipsoidal height; otherwise
+  // the geometry is 2D and the elevation survives as a property that states
+  // its own unit and reference, which cannot be mistaken for a coordinate.
+  const ellipsoidal = isWgs84EllipsoidalHeight(model.verticalDatum);
+  metadata.elevationIn3d = ellipsoidal;
+  if (!ellipsoidal) {
+    metadata.elevationNote =
+      'Geometry is 2D: the source vertical reference is not WGS 84 ellipsoidal height, '
+      + 'which is the only thing RFC 7946 permits in the third position element. '
+      + 'Elevations are carried per feature as elevation / elevationUnit / elevationDatum.';
+  }
+
   obj.features = (obj.features as Array<Record<string, unknown>>).map((f) => {
     const geom = f.geometry as { type: string; coordinates: number[][] };
     return {
       ...f,
+      properties: {
+        ...(f.properties as Record<string, unknown>),
+        // Stated on every feature, so the height cannot be read without its
+        // reference — including when a reader keeps only the properties.
+        elevationUnit: 'metre',
+        elevationDatum: model.verticalDatum ?? null,
+      },
       geometry: {
         ...geom,
-        coordinates: geom.coordinates.map((c) =>
-          toLonLat([c[0], c[1], c[2] ?? 0]),
-        ),
+        coordinates: geom.coordinates.map((c) => {
+          const p = toLonLat([c[0], c[1], c[2] ?? 0]);
+          return ellipsoidal ? p : [p[0], p[1]];
+        }),
       },
     };
   });

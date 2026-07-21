@@ -63,6 +63,51 @@ export interface KmlExportInput {
   readonly toLonLat: (local: readonly [number, number, number]) => [number, number, number];
   /** The "not survey-grade" caveat, embedded in every description. */
   readonly notSurveyGradeNote: string;
+  /**
+   * Declared vertical datum of the source heights, or null when undeclared.
+   * Decides the geometry's `<altitudeMode>`: KML's `absolute` means metres
+   * above mean sea level, so it may only be claimed for a metric orthometric
+   * datum. Anything else clamps to ground and says why.
+   */
+  readonly verticalDatum?: string | null;
+}
+
+/**
+ * KML altitude mode for a set of heights, and the reason for it.
+ *
+ * With no `<altitudeMode>` a reader applies the default, `clampToGround`, and
+ * the altitude in `<coordinates>` is silently discarded — the geometry drapes
+ * onto whatever terrain the viewer has. That is not wrong, but it is invisible:
+ * nothing tells the reader the heights were dropped. Declaring the mode makes
+ * the treatment explicit either way, and `absolute` is claimed only for a
+ * vertical reference that actually means metres above sea level.
+ */
+export function kmlAltitudeMode(
+  verticalDatum: string | null | undefined,
+  verticalUnitToMetres: number | undefined,
+): { mode: 'absolute' | 'clampToGround'; reason: string } {
+  const metric = verticalUnitToMetres === undefined || Math.abs(verticalUnitToMetres - 1) < 1e-9;
+  const declared = verticalDatum?.trim();
+  if (!declared) {
+    return {
+      mode: 'clampToGround',
+      reason:
+        'Heights are clamped to ground: the source declares no vertical datum, so no absolute '
+        + 'elevation can be claimed. Altitudes in this file are not authoritative.',
+    };
+  }
+  if (!metric) {
+    return {
+      mode: 'clampToGround',
+      reason:
+        'Heights are clamped to ground: the source vertical unit is not metres, and KML absolute '
+        + 'altitude is defined in metres. Altitudes in this file are not authoritative.',
+    };
+  }
+  return {
+    mode: 'absolute',
+    reason: `Altitudes are absolute metres on ${declared}.`,
+  };
 }
 
 /** Escape text for XML content / attribute values (& < > " '). */
@@ -127,9 +172,16 @@ function coordsOf(
 }
 
 /** The shared provenance + caveat block appended to every description. */
+function altMode(input: KmlExportInput) {
+  return kmlAltitudeMode(input.verticalDatum, input.verticalUnitToMetres);
+}
+
 function caveatBlock(input: KmlExportInput): string {
+  // The altitude treatment belongs in the human-readable block too — a mode
+  // tag is invisible in Google Earth's UI, and a dropped height should not be
+  // something the reader has to open the XML to discover.
   const crs = input.crsName ?? 'unknown CRS';
-  return `CRS: ${crs}. Units: ${input.unitLabel}. ${input.notSurveyGradeNote}`;
+  return `CRS: ${crs}. Units: ${input.unitLabel}. ${altMode(input).reason} ${input.notSurveyGradeNote}`;
 }
 
 /** Build an escaped <description> from plain text lines. */
@@ -151,6 +203,7 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
     `<name>${esc(a.title)}</name>`,
     description(lines),
     '<Point>',
+    `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
     `<coordinates>${coord(lonLatAlt)}</coordinates>`,
     '</Point>',
     '</Placemark>',
@@ -191,6 +244,7 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
       '<Polygon>',
       '<outerBoundaryIs>',
       '<LinearRing>',
+      `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
       `<coordinates>${coordsOf(ring, input.toLonLat)}</coordinates>`,
       '</LinearRing>',
       '</outerBoundaryIs>',
@@ -205,6 +259,7 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
     `<name>${esc(m.name)}</name>`,
     desc,
     '<LineString>',
+    `<altitudeMode>${altMode(input).mode}</altitudeMode>`,
     `<coordinates>${coordsOf(m.points, input.toLonLat)}</coordinates>`,
     '</LineString>',
     '</Placemark>',

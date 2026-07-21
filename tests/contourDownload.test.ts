@@ -196,3 +196,61 @@ describe('serializeContours — RFC 7946 vs native frame', () => {
     expect(() => serializeContours(utmModel(), 'geojson-native', { worldOrigin: WORLD })).not.toThrow();
   });
 });
+
+/**
+ * RFC 7946's third ordinate is a specific claim, not a spare slot.
+ *
+ * The spec defines it as height in metres above the WGS 84 ellipsoid. Contour
+ * elevations are almost never that: they are orthometric heights on a local
+ * vertical datum, sometimes in feet, often on no declared datum at all.
+ * Writing them into position[2] tells every reader they are ellipsoidal
+ * metres, and nothing in the file contradicts it — a 65 m orthometric contour
+ * silently becomes a 65 m ellipsoidal one, tens of metres from where it is.
+ *
+ * So the ordinate is written only when the vertical reference is proven, and
+ * the elevation always survives as a property carrying its own unit and datum.
+ */
+describe('RFC 7946 third ordinate', () => {
+  const withVertical = (verticalDatum: string | null) => ({
+    ...utmModel(), verticalDatum,
+  });
+
+  it('omits the Z ordinate when the vertical datum is undeclared', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical(null), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(2);
+  });
+
+  it('omits it for an orthometric datum, which is not ellipsoidal height', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:5703'), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(2);
+  });
+
+  it('keeps the elevation as a property with its unit and reference', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:5703'), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    const p = gj.features[0].properties;
+    expect(p.elevation).toBeCloseTo(65.5, 6);
+    expect(p.elevationDatum).toBe('EPSG:5703');
+    expect(p.elevationUnit).toBe('metre');
+  });
+
+  it('writes the Z ordinate for a proven WGS 84 ellipsoidal height', () => {
+    // EPSG:4979 IS WGS 84 3D — ellipsoidal metres, exactly what RFC 7946 means.
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:4979'), 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(3);
+  });
+
+  it('leaves the NATIVE file 3D — it is not making an RFC claim', () => {
+    const gj = JSON.parse(
+      serializeContours(withVertical('EPSG:5703'), 'geojson-native', { worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].geometry.coordinates[0]).toHaveLength(3);
+  });
+});
