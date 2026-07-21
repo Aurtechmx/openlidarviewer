@@ -136,7 +136,11 @@ echo "→ Writing checksums + release manifest…"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   GIT_AVAILABLE=true
   COMMIT="\"$(git rev-parse HEAD)\""
-  if git diff --quiet 2>/dev/null; then DIRTY=false; else DIRTY=true; fi
+  # --untracked-files=all, because `git diff` sees only TRACKED changes. The
+  # deploy bundle is built from the working tree while the source archive comes
+  # from `git archive HEAD`, so an untracked file could ship in the deployment,
+  # be absent from the scholarly source, and still report dirtyWorkingTree:false.
+  if [ -z "$(git status --porcelain --untracked-files=all 2>/dev/null)" ]; then DIRTY=false; else DIRTY=true; fi
   SOURCE_KIND="git-checkout"
 else
   GIT_AVAILABLE=false

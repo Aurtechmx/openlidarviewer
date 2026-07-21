@@ -2275,7 +2275,12 @@ export class Viewer {
    * `staticCount` static clouds the walk has already accepted.
    */
   private _streamingMayCombine(staticCount: number): boolean {
-    return streamingMayCombine(staticCount, this._streamingCompatibility());
+    // Streaming sources are never mounted into the project frame in this
+    // alpha — `MULTI_LAYER_MOUNT_ENABLED` is off and no mount path exists for
+    // resident nodes at all — so this is `false` today and the predicate
+    // refuses. It is passed rather than hardcoded so that turning mounting on
+    // does not silently re-open the gap.
+    return streamingMayCombine(staticCount, this._streamingCompatibility(), false);
   }
 
   /** Whether a streaming COPC cloud is currently open. */

@@ -230,13 +230,28 @@ describe('integrableClouds — invariants', () => {
   });
 
   it('streaming clears the same bar static layers do', () => {
+    // Both halves of the bar: proven compatibility AND an actual mount. A CRS
+    // match says the two frames are the same KIND; only a mount says the two
+    // local arrays are in the same SPACE.
     forAll('streaming parity', (r) => ({
       staticCount: Math.floor(r() * 4),
       state: STATES[Math.floor(r() * STATES.length)],
-    }), ({ staticCount, state }) => {
-      const allowed = streamingMayCombine(staticCount, state);
+      mounted: r() > 0.5,
+    }), ({ staticCount, state, mounted }) => {
+      const allowed = streamingMayCombine(staticCount, state, mounted);
       if (staticCount === 0) expect(allowed).toBe(true);
-      else expect(allowed).toBe(participatesInSharedAnalysis(state));
+      else expect(allowed).toBe(participatesInSharedAnalysis(state) && mounted);
+    });
+  });
+
+  it('never merges a stream with static layers while nothing is mounted', () => {
+    // The shipped configuration: mounting is off, so this must hold for every
+    // compatibility state and every number of static layers.
+    forAll('unmounted streams never merge', (r) => ({
+      staticCount: 1 + Math.floor(r() * 5),
+      state: STATES[Math.floor(r() * STATES.length)],
+    }), ({ staticCount, state }) => {
+      expect(streamingMayCombine(staticCount, state, false)).toBe(false);
     });
   });
 });

@@ -95,10 +95,20 @@ export function integrableClouds<T extends IntegrableEntry>(entries: Iterable<T>
 export function streamingMayCombine(
   staticIntegrableCount: number,
   streamingCompatibility: LayerCompatibility | null,
+  streamingMounted: boolean,
 ): boolean {
   if (streamingCompatibility === null) return false;
+  // The stream alone: nothing is being combined, so there is no second origin
+  // for it to disagree with.
   if (staticIntegrableCount === 0) return true;
-  return participatesInSharedAnalysis(streamingCompatibility);
+  // Sharing a CRS is not sharing a coordinate space. Static points are local
+  // to `cloud.origin` and resident streaming nodes are local to
+  // `streaming.renderOrigin` — independent numbers. Two sources can agree
+  // exactly on CRS and vertical datum, both classify `verified`, and still
+  // have local arrays that mean places a kilometre apart. The static path
+  // already demands an actual mount; this one was judged on compatibility
+  // alone, so the requirement covered one source type and not the other.
+  return participatesInSharedAnalysis(streamingCompatibility) && streamingMounted;
 }
 
 /** ASPRS class 2. Class 0 means "created, never classified" — not ground. */

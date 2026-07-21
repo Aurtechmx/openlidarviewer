@@ -237,10 +237,15 @@ function altMode(input: KmlExportInput) {
  */
 function sourceElevationLine(input: KmlExportInput, sourceZ: number): string {
   const f = input.verticalUnitToMetres;
+  // Unknown is its own answer. Folding it in with "metres" meant the one case
+  // where the scale is NOT known printed the height as metres — beside
+  // geometry that had correctly refused to carry an altitude at all. The
+  // reader takes the number and its unit together, so an honest ordinate and
+  // a guessed unit is not half right.
   const unit =
-    f === undefined || Math.abs(f - 1) < 1e-9
-      ? 'metres'
-      : `source vertical units (1 unit = ${fmt(f)} m)`;
+    f === undefined ? 'source vertical units (scale unknown)'
+    : Math.abs(f - 1) < 1e-9 ? 'metres'
+    : `source vertical units (1 unit = ${fmt(f)} m)`;
   const datum = input.verticalDatum?.trim() || 'undeclared';
   return `Source elevation: ${fmt(sourceZ)} ${unit}, vertical datum: ${datum}.`;
 }

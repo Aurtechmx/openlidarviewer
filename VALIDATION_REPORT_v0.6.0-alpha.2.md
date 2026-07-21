@@ -26,7 +26,7 @@ Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): 
 
 ## What was NOT tested (and is staged, not claimed)
 
-- **Project-frame placement is Node-verified, not browser-verified.** Static layers now mount through the shared frame (the lone-layer identity keeps the single-scan path unchanged, and the full e2e suite passes), but two-scan relative placement has not been confirmed in a browser with real georeferenced fixtures, and Compare Studio / cross-layer measurement / elevation ramps do not read the offsets yet. See [KNOWN_LIMITATIONS_v0.6.0-alpha.2.md](KNOWN_LIMITATIONS_v0.6.0-alpha.2.md).
+- **Physical multi-layer mounting is DISABLED in alpha.2.** The shared project frame and the compatibility model are present and tested; layers are not co-registered and are not merged into one estimator. Multi-layer placement is therefore unverified in a browser by construction — nothing places them. Compare Studio, cross-layer measurement and elevation ramps do not read frame offsets. See [KNOWN_LIMITATIONS_v0.6.0-alpha.2.md](KNOWN_LIMITATIONS_v0.6.0-alpha.2.md).
 - **The anti-thrash streaming-selection option is opt-in and unwired.** Its logic is unit-tested; its visual effect on flicker is unverified because it needs a browser and is not enabled in this build.
 - **Browser behaviour on GitHub CI is not part of this archive's evidence.** The e2e suite passed locally; a green GitHub Actions run on the exact tagged commit is required before publication and is not asserted here.
 

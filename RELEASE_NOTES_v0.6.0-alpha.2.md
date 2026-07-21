@@ -53,7 +53,7 @@ Static files. Host on GitHub Pages, Netlify, a static CDN, or any conventional w
 Cite OpenLiDARViewer with the metadata in `CITATION.cff`:
 
 * Version: 0.6.0-alpha.2
-* Release date: 2026-07-19
+* Release date: 2026-07-21
 * License: MIT
 
 When the tagged release is archived on Zenodo, cite the version DOI assigned to that snapshot.

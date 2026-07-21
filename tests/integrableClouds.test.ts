@@ -154,25 +154,25 @@ describe('single-layer analysis needs no cross-frame proof', () => {
 describe('streamingMayCombine', () => {
   it('lets a lone stream be analysed in its own frame', () => {
     for (const s of ['verified', 'horizontal-only', 'unknown', 'incompatible'] as const) {
-      expect(streamingMayCombine(0, s)).toBe(true);
+      expect(streamingMayCombine(0, s, false)).toBe(true);
     }
   });
 
   it('requires proof once a static layer is also in the walk', () => {
-    expect(streamingMayCombine(1, 'verified')).toBe(true);
-    expect(streamingMayCombine(1, 'horizontal-only')).toBe(false);
-    expect(streamingMayCombine(1, 'unknown')).toBe(false);
-    expect(streamingMayCombine(1, 'incompatible')).toBe(false);
+    expect(streamingMayCombine(1, 'verified', true)).toBe(true);
+    expect(streamingMayCombine(1, 'horizontal-only', true)).toBe(false);
+    expect(streamingMayCombine(1, 'unknown', true)).toBe(false);
+    expect(streamingMayCombine(1, 'incompatible', true)).toBe(false);
   });
 
   it('has nothing to contribute when no stream is open', () => {
-    expect(streamingMayCombine(0, null)).toBe(false);
-    expect(streamingMayCombine(3, null)).toBe(false);
+    expect(streamingMayCombine(0, null, false)).toBe(false);
+    expect(streamingMayCombine(3, null, true)).toBe(false);
   });
 
   it('scales past a single static layer', () => {
-    expect(streamingMayCombine(5, 'unknown')).toBe(false);
-    expect(streamingMayCombine(5, 'verified')).toBe(true);
+    expect(streamingMayCombine(5, 'unknown', true)).toBe(false);
+    expect(streamingMayCombine(5, 'verified', true)).toBe(true);
   });
 });
 
@@ -249,5 +249,44 @@ describe('merging requires an actual mount', () => {
   it('still analyses a lone unmounted layer in its own frame', () => {
     // Nothing is being combined, so there is nothing to be in one frame with.
     expect(integrableClouds([layer({ mounted: false })])).toHaveLength(1);
+  });
+});
+
+/**
+ * A stream and a static cloud are recentred about DIFFERENT origins.
+ *
+ * Static points are local to `cloud.origin`; resident streaming nodes are
+ * local to `streaming.renderOrigin`. Those are independent numbers. Two
+ * sources can therefore agree perfectly on CRS and vertical datum — both
+ * classify `verified` — and still have local arrays that mean different
+ * places: a point at local [10, 10, 2] in each is 1,000 m apart in the world
+ * if their origins differ by that much.
+ *
+ * The static path already refuses this: merging needs a layer to be MOUNTED,
+ * not merely compatible. Streaming bypassed `integrableClouds` entirely and
+ * was judged on compatibility alone, so the check landed on one source type
+ * and not the other. Mounting is disabled in this alpha, so nothing is in a
+ * shared frame and the honest answer is that a stream never joins a static
+ * estimator.
+ */
+describe('streaming must share a MOUNTED frame, not just a CRS', () => {
+  it('refuses a verified stream when a static layer is present but unmounted', () => {
+    expect(streamingMayCombine(1, 'verified', false)).toBe(false);
+  });
+
+  it('refuses regardless of how many static layers there are', () => {
+    expect(streamingMayCombine(4, 'verified', false)).toBe(false);
+  });
+
+  it('still allows a stream analysed entirely on its own', () => {
+    // Nothing is being combined, so there is no second origin to disagree with.
+    expect(streamingMayCombine(0, 'verified', false)).toBe(true);
+    expect(streamingMayCombine(0, 'unknown', false)).toBe(true);
+  });
+
+  it('would allow it again once both are genuinely mounted', () => {
+    // The rule is about frames, not about the alpha. When mounting returns,
+    // a verified AND mounted stream joins without this needing to change.
+    expect(streamingMayCombine(1, 'verified', true)).toBe(true);
   });
 });

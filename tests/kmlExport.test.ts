@@ -396,3 +396,35 @@ describe('KML absolute requires a stated metric vertical unit', () => {
     expect(kmlAltitudeMode('EPSG:5703', undefined).reason).toMatch(/unit/i);
   });
 });
+
+/**
+ * An unknown vertical scale must not become "metres" in the description.
+ *
+ * The altitude MODE already fails closed for an undeclared unit — geometry
+ * goes 2D and clamps. But the description that discloses the omitted height
+ * ran `f === undefined || ≈1 ? 'metres' : ...`, so the very case where the
+ * scale is unknown printed "Source elevation: 12.5 metres". The geometry was
+ * honest and the prose beside it was not, which is worse than either alone:
+ * a reader takes the number and the unit together.
+ */
+describe('KML description never invents a vertical unit', () => {
+  it('says the scale is unknown when it is', () => {
+    const kml = buildKml(input({ verticalDatum: 'EPSG:5703', verticalUnitToMetres: undefined }));
+    expect(kml).toMatch(/scale unknown/i);
+    // Scoped to the elevation clause itself. The clamp REASON legitimately
+    // says "absolute altitude is defined in metres", and a looser pattern
+    // reached across into it — the test would have failed on correct code.
+    const clause = /Source elevation:[^.]*\./i.exec(kml)?.[0] ?? '';
+    expect(clause).not.toMatch(/\bmetres\b/i);
+  });
+
+  it('says metres only when metres are stated', () => {
+    const kml = buildKml(input({ verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    expect(kml).toMatch(/Source elevation:[^<]*metres/i);
+  });
+
+  it('states the conversion factor for a non-metre unit', () => {
+    const kml = buildKml(input({ verticalDatum: 'EPSG:6360', verticalUnitToMetres: 0.3048 }));
+    expect(kml).toMatch(/1 unit = 0\.3048 m/);
+  });
+});

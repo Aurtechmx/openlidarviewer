@@ -24,8 +24,9 @@
  * protection. Writes `docs/validation/test-evidence.json`.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -99,12 +100,27 @@ function main() {
   const totalPassed = BUCKETS.reduce((n, b) => n + buckets[b].passed, 0);
   const totalSkipped = BUCKETS.reduce((n, b) => n + buckets[b].skipped, 0);
 
+  // Preserve the log this was derived from, and hash it. Naming a path under
+  // /tmp told a reader where the numbers came from and gave them no way to
+  // check: the file was not in the package. A recomputable artefact beats a
+  // citation of one that no longer exists.
+  mkdirSync(resolve(ROOT, 'release'), { recursive: true });
+  const keptLog = resolve(ROOT, 'release/gate.log');
+  if (resolve(logPath) !== keptLog) copyFileSync(logPath, keptLog);
+  const gateLogSha256 = createHash('sha256').update(readFileSync(keptLog)).digest('hex');
+  writeFileSync(`${keptLog}.sha256`, `${gateLogSha256}  gate.log\n`);
+
   const evidence = {
     version,
     commit,
-    // The source log is named so a reader can re-derive this file rather than
-    // take it on trust.
-    collectedFrom: logPath,
+    gateExit: 0,
+    generatedAt: new Date().toISOString(),
+    nodeVersion: process.version,
+    platform: `${process.platform}-${process.arch}`,
+    // Kept beside the package as release/gate.log, with this hash, so the
+    // figures can be recomputed rather than trusted.
+    gateLog: 'release/gate.log',
+    gateLogSha256,
     buckets,
     total: { passed: totalPassed, skipped: totalSkipped },
     bundle: { liveEntryKiB, ceilingKiB },

@@ -54,6 +54,26 @@ if (summed !== evidence.total.passed) {
     `${EVIDENCE} is internally inconsistent: buckets sum to ${summed} but total says ${evidence.total.passed}.`,
   );
 }
+// Skipped counts were never checked, only passed ones — the same arithmetic
+// left unguarded on the other column.
+const summedSkipped = Object.values(evidence.buckets).reduce((a, b) => a + b.skipped, 0);
+if (summedSkipped !== evidence.total.skipped) {
+  problems.push(
+    `${EVIDENCE}: skipped counts sum to ${summedSkipped} but total says ${evidence.total.skipped}.`,
+  );
+}
+// A bucket that never ran contributes zero and looks like a pass.
+for (const [name, b] of Object.entries(evidence.buckets)) {
+  if (!(b.runs > 0)) problems.push(`${EVIDENCE}: bucket "${name}" records no runs — the gate did not execute it.`);
+  if (!(b.passed > 0)) problems.push(`${EVIDENCE}: bucket "${name}" passed ${b.passed} tests.`);
+}
+if (evidence.gateExit !== 0) {
+  problems.push(`${EVIDENCE} records gateExit ${evidence.gateExit}; figures may only come from a passing run.`);
+}
+for (const k of ['liveEntryKiB', 'ceilingKiB']) {
+  const v = evidence.bundle?.[k];
+  if (!Number.isFinite(v) || v <= 0) problems.push(`${EVIDENCE}: bundle.${k} is ${v}, expected a positive number.`);
+}
 
 /**
  * Documents that quote the figures, and the bucket each label refers to.

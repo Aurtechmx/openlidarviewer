@@ -4,50 +4,25 @@ This is an alpha for evaluation. The items below are known and deliberate — re
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 7,574 lines and `src/render/Viewer.ts` is 7,297, against stated targets of 2,500 and 2,000. alpha.2 finished the composition root (no module-level mutable application state remains in `main.ts`) and wrote the architecture down with a drift check, but that is the scaffolding for the decomposition, not the decomposition. The ten blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
+`src/main.ts` is 7,635 lines and `src/render/Viewer.ts` is 7,279, against stated targets of 2,500 and 2,000. alpha.2 finished the composition root (no module-level mutable application state remains in `main.ts`) and wrote the architecture down with a drift check, but that is the scaffolding for the decomposition, not the decomposition. The ten blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
 
-## Shared project frame is applied to static layers; browser confirmation pending
+## The shared project frame is carried, not applied
 
 `ProjectSpatialFrame` / `LayerSpatialTransform` (value types + pure transform math) are tested and documented (`docs/architecture/project-spatial-frame.md`). alpha.2 lands **step 1** of the wiring plan: the app now owns a live project frame (`src/app/projectFrame.ts`, on `AppContext`), reseeded from the loaded layer set on every change, choosing one shared origin and deriving each layer's translation into it. A single layer anchors the frame at its own origin, so its transform is the identity and the single-scan path is unchanged.
 
-Static layers now mount by REBASING THEIR DATA onto the shared project origin (`PointCloud.rebaseOrigin`), so rendering, picking, terrain analysis, lasso, profiles, volumes, combined bounds and exports all read the same project-local coordinates — one mechanism, no render/CPU split. An earlier mesh-translation mount had exactly that split (layers looked aligned while calculations used cloud-local frames); an external audit caught it and the mount was rebuilt at the data level. A lone layer rebases to its own origin — the identity — so the single-scan path is unchanged by construction and the full e2e suite passes untouched. Still staged for this alpha:
+**Physical multi-layer mounting is DISABLED in alpha.2** (`MULTI_LAYER_MOUNT_ENABLED = false`). The mount mechanism exists and is tested — layers would rebase their data onto the shared origin so rendering, picking, terrain, lasso, profiles, volumes and exports all read one frame — but it is not the shipped behaviour. Multiple layers may be loaded and analysed individually; they are not co-registered and are not merged into one estimator. Active mounting is reserved for the stable cycle, after a non-destructive Float64 transform architecture replaces the in-place Float32 rebase. Still staged for this alpha:
 
-- **Two-scan placement is verified in Node, not yet in a browser** with real georeferenced fixtures — treat multi-layer placement as needing that one visual confirmation.
-- **Mounting spends Float32 precision in proportion to how far apart layers sit.** Positions are Float32, and the mount adds the project offset to them, so the residual precision a layer keeps depends on its distance from the shared anchor — not on its absolute coordinate. Measured via `PointCloud.rebaseQuantum`: a single georeferenced scan anchors on its own origin and loses nothing (~1e-8 m); two tiles 1 km apart cost ~0.02 mm; 100 km apart costs a full millimetre. Millimetre-critical work across widely separated tiles should be done per-layer for this alpha. Keeping vertices source-local behind a Float64 transform is the tracked fix (coordinate-integrity roadmap, P1 item 2).
+- **Two-scan placement is unverified in a browser** — and cannot be verified while mounting is off, because nothing places them. That confirmation belongs to the cycle that turns mounting on.
+- **When mounting is enabled, it spends Float32 precision in proportion to how far apart layers sit.** Positions are Float32, and the mount adds the project offset to them, so the residual precision a layer keeps depends on its distance from the shared anchor — not on its absolute coordinate. Measured via `PointCloud.rebaseQuantum`: a single georeferenced scan anchors on its own origin and loses nothing (~1e-8 m); two tiles 1 km apart cost ~0.02 mm; 100 km apart costs a full millimetre. Millimetre-critical work across widely separated tiles should be done per-layer for this alpha. Keeping vertices source-local behind a Float64 transform is the tracked fix (coordinate-integrity roadmap, P1 item 2).
 - Elevation colour ramps are normalised PER LAYER (each layer's own min/max), so a frame offset cancels in the normalisation and per-layer colours are correct — verified empirically. What ramps do NOT do is share one scale across layers, so the same colour on two layers does not mean the same absolute height; that is a pre-frame design choice, and a scene-shared ramp is the open step-5 decision. The measurement datum DOES follow the frame when every loaded layer is in it (step 4), and falls back to the pre-frame unanimity rule otherwise.
 
 For this alpha:
 
-- Cross-layer operations still require a shared CRS: a layer whose declared CRS disagrees is excluded from the frame and mounts where it always did.
+- Cross-layer operations require a shared CRS, and no layer is moved: every layer stays in the frame its file declared.
 - **Multi-dataset comparison is experimental.** Compare Studio, cross-layer measurement, shared clipping and elevation ramps do not yet read the frame's offsets (steps 3–5 of the plan).
 - Results that depend on a common frame should be treated as indicative when common-frame compatibility can't be established.
 - Integrated Spatial Workflows are **not** claimed complete.
 - A layer whose declared CRS disagrees with the project's is excluded from the shared origin and reported as unaligned; it is never silently reprojected. Reprojection remains a downstream tool's job.
-
-## Multi-layer mounting is OFF in this alpha
-
-`MULTI_LAYER_MOUNT_ENABLED` is `false`. Layers are classified, the project
-frame is computed, and every transform is tested — but no layer's geometry is
-physically moved onto a shared origin.
-
-The mount writes the project offset into the Float32 position array, which
-permanently edits the only copy of the source values. The precision gate below
-bounds that and refuses anything past a millimetre, but bounding a destructive
-edit is not the same as not making one, and it is the wrong default for a
-research tool before the transform is held in Float64 beside source-local
-vertices (coordinate-integrity roadmap, P1 item 2).
-
-Turning it off is only safe because a combined estimator requires BOTH proven
-compatibility and an actual mount. Without that second condition, disabling the
-mount would have left two `verified` layers sitting at their own origins and
-still eligible to be averaged together — a worse error than the precision cost
-being avoided.
-
-**What this means in practice:** single-scan work is completely unaffected — a
-lone layer's mount was always the identity. Multiple layers load, display and
-can each be analysed on their own; they are not co-registered and are not
-combined into one estimate. Treat the project frame as a tested foundation
-being carried, not a feature being claimed.
 
 ## Cross-layer results require PROVEN frame compatibility
 
@@ -78,8 +53,11 @@ undeclared unit refuses rather than borrowing the other axis's, and
 **geographic (degree) frames are refused outright** — a degree is not a length,
 and what it stands for depends on latitude.
 
-**Streaming sources meet the same bar.** COPC/EPT resident nodes are gated
-exactly as static clouds are, with the same single-source carve-out.
+**Streaming sources meet the same bar, and are never merged with static ones
+in this alpha.** A stream's points are local to its own render origin and a
+static cloud's to its own — independent numbers — so agreeing on CRS is not
+occupying the same space. Merging requires a shared MOUNTED frame, and nothing
+is mounted here, so a stream is analysed on its own. Alone, it is fully usable.
 
 **The vertical anchor comes only from verified layers.** A horizontal-only
 layer helps set the horizontal origin and never the Z origin.

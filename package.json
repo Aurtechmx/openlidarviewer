@@ -53,7 +53,7 @@
     "test:smoke": "playwright test --project=deterministic tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:live": "SMOKE_LIVE=1 playwright test --project=deterministic tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:mobile": "playwright test --project=deterministic tests/e2e/visualsStudioMobile.spec.ts",
-    "test:release": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:release-sync && npm run lint:evidence && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:layer-boundaries && npm run lint:claim-register && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile",
+    "test:release": "npm run test:release:execute && npm run lint:evidence",
     "lint:main-deferral": "node scripts/lint-main-deferral.mjs",
     "lint:inline-imports": "node scripts/lint-inline-imports.mjs",
     "lint:unsafe-html": "node scripts/lint-unsafe-html.mjs",
@@ -69,9 +69,10 @@
     "test:e2e:gpu": "playwright test --project=gpu",
     "coverage": "vitest run --coverage --testTimeout=60000 --exclude='tests/terrainRunnerDensityWiring.test.ts'",
     "mutation": "stryker run",
-    "evidence": "bash -c 'set -o pipefail; npm run test:release > release/gate.log 2>&1; code=$?; node scripts/collect-evidence.mjs release/gate.log \"$code\"'",
+    "evidence": "bash -c 'set -o pipefail; mkdir -p release; npm run test:release:execute > release/gate.log 2>&1; code=$?; node scripts/collect-evidence.mjs release/gate.log \"$code\" && npm run lint:evidence'",
     "lint:evidence": "node scripts/lint-evidence.mjs",
-    "package:source": "bash scripts/package.sh --source-only"
+    "package:source": "bash scripts/package.sh --source-only",
+    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:layer-boundaries && npm run lint:claim-register && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
