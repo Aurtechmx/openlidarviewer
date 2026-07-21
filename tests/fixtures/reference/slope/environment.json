@@ -1,0 +1,8 @@
+{
+  "status": "pending",
+  "note": "Replace with the real environment once slope-gdal.asc is produced. gdalVersion must be the exact output of `gdalinfo --version`.",
+  "gdalVersion": null,
+  "gdalBinary": null,
+  "platform": null,
+  "producedOn": null
+}

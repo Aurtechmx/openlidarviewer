@@ -1,0 +1,5 @@
+# Replace this file with the command you actually ran, verbatim, including
+# which binary. `gdal raster slope` (3.11+) and `gdaldem slope` differ in
+# their edge defaults, so the flags alone do not identify the run.
+#
+# Not yet produced.
