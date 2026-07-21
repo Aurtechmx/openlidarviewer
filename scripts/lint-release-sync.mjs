@@ -21,6 +21,7 @@
  * wired into `test:release` and CI).
  */
 
+import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -90,6 +91,38 @@ try {
   else if (changelogDate && cffDate[1] !== changelogDate) problems.push(`CITATION.cff date-released ${cffDate[1]} does not match CHANGELOG's ${changelogDate} for v${version}.`);
 } catch {
   problems.push('CITATION.cff missing or unreadable.');
+}
+
+// 5b. A release date that predates the code it ships is a stale date.
+//
+// The version and the changelog agreement were already checked, but nothing
+// noticed when `date-released` simply went out of date: a candidate carried
+// 2026-07-19 while HEAD was two days newer, so the archive claimed to have
+// been released before some of the commits inside it existed. A reviewer
+// caught that, not the gate.
+//
+// Checking "is it today" would be wrong — a genuinely published release has a
+// past date forever. What cannot be true is a release date EARLIER than the
+// newest commit it contains. Skipped when git is unavailable (building from a
+// source archive), where there is nothing to compare against.
+try {
+  const cff = read('CITATION.cff');
+  const cffDate = cff.match(/^date-released:\s*["']?(\d{4}-\d{2}-\d{2})["']?\s*$/m);
+  if (cffDate) {
+    const headDate = execSync('git log -1 --format=%cs', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(headDate) && cffDate[1] < headDate) {
+      problems.push(
+        `Release date ${cffDate[1]} predates the newest commit (${headDate}) — the archive would claim `
+        + 'to have been released before some of the code in it existed. Set the real publication date '
+        + 'in CITATION.cff and CHANGELOG.md before tagging.',
+      );
+    }
+  }
+} catch {
+  // No git, or no readable CITATION.cff — earlier checks already report the
+  // latter, and the former is a legitimate way to build.
 }
 
 // 6. An UNVERSIONED readiness report is a claim about the current tree, so it

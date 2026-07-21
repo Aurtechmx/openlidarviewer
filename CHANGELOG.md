@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.6.0-alpha.2] - 2026-07-19
+## [0.6.0-alpha.2] - 2026-07-21
 
 A stabilization cut. Almost nothing here is visible in the viewer: it makes the
 test gates mean what they claim, starts the decomposition of the two monoliths,
