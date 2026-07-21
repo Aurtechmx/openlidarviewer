@@ -64,3 +64,25 @@ export function integrableClouds<T extends IntegrableEntry>(entries: Iterable<T>
   if (available.length <= 1) return available;
   return available.filter((e) => participatesInSharedAnalysis(e.compatibility ?? 'verified'));
 }
+
+/**
+ * Whether an open streaming source may be merged into a combined estimator.
+ *
+ * Streaming resident nodes used to be appended to terrain, profile, volume and
+ * count walks unconditionally, so a streamed scan joined a static one with
+ * nothing proved about their frames — the same defect the static gate closes,
+ * in the source type it did not reach.
+ *
+ * `staticIntegrableCount` is how many static clouds the walk has already
+ * accepted. Zero means the stream is the only source, so nothing is being
+ * combined and it is analysed in its own frame, exactly as a lone static layer
+ * is. Otherwise it has to have proven it shares the frame.
+ */
+export function streamingMayCombine(
+  staticIntegrableCount: number,
+  streamingCompatibility: LayerCompatibility | null,
+): boolean {
+  if (streamingCompatibility === null) return false;
+  if (staticIntegrableCount === 0) return true;
+  return participatesInSharedAnalysis(streamingCompatibility);
+}

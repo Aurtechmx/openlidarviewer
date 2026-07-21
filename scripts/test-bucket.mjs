@@ -119,12 +119,56 @@ const BUCKET_ARGS = {
 };
 const bucketArgs = BUCKET_ARGS[arg] ?? [...WORKERS];
 
+// A shard that has not finished in this long is wedged, not slow: the whole
+// unit bucket runs in seconds and the slowest (streaming) in a couple of
+// minutes. Killing it with a message beats inheriting a hang that the release
+// gate reports as a nondescript failure ten minutes later.
+const SHARD_TIMEOUT_MS = Number(process.env.OLV_SHARD_TIMEOUT_MS ?? 8 * 60 * 1000);
+
 /** Run one vitest invocation over this bucket's files. */
 function runVitest(extra) {
   return spawnSync('npx', ['vitest', 'run', ...files, ...bucketArgs, ...extra, ...passthrough], {
     cwd: ROOT,
     stdio: 'inherit',
+    timeout: SHARD_TIMEOUT_MS,
+    // The pool can wedge at shutdown with its workers still alive; SIGTERM
+    // then leaves them behind. SIGKILL is what actually reclaims the group.
+    killSignal: 'SIGKILL',
   });
+}
+
+/**
+ * Turn a spawn result into an exit code, SAYING what happened.
+ *
+ * `spawnSync` reports a signal death as `status: null`, and collapsing that
+ * with `?? 1` produced the exact failure this runner was accused of: an exit
+ * 1 with no output and no reason, indistinguishable from a test failure. A
+ * release gate has to either succeed or state why it did not.
+ */
+function resolveExit(r, label) {
+  if (r.error) {
+    const timedOut = r.error.code === 'ETIMEDOUT';
+    console.error(
+      timedOut
+        ? `\n✗ ${label} exceeded ${Math.round(SHARD_TIMEOUT_MS / 1000)}s and was killed. `
+          + 'The assertions may all pass; this is the runner failing to terminate. '
+          + 'Re-run that bucket alone to confirm, and raise OLV_SHARD_TIMEOUT_MS if the machine is slow.'
+        : `\n✗ ${label} could not be started: ${r.error.message}`,
+    );
+    return timedOut ? 124 : 2;
+  }
+  if (r.signal) {
+    console.error(
+      `\n✗ ${label} was killed by ${r.signal} — no test failure was reported. `
+      + 'This is a runner/environment fault, not a red suite.',
+    );
+    return 137;
+  }
+  if (r.status === null || r.status === undefined) {
+    console.error(`\n✗ ${label} exited without a status code.`);
+    return 1;
+  }
+  return r.status;
 }
 
 // `--shards=N` (plural) runs the bucket as N SEQUENTIAL sub-shards, each a fresh
@@ -149,11 +193,11 @@ if (multiShard && !singleShard) {
   for (let i = 1; i <= n; i++) {
     console.log(`\n──── ${arg} shard ${i}/${n} ────`);
     const r = runVitest([`--shard=${i}/${n}`]);
-    const code = r.status ?? 1;
+    const code = resolveExit(r, `${arg} shard ${i}/${n}`);
     if (code !== 0) worst = code;
   }
   process.exit(worst);
 }
 
 const result = runVitest([]);
-process.exit(result.status ?? 1);
+process.exit(resolveExit(result, `${arg} bucket`));

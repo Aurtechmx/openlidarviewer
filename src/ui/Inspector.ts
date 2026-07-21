@@ -1,4 +1,8 @@
 import { el, formatCount } from './dom';
+import {
+  compatibilityNote,
+  type LayerCompatibility,
+} from '../model/layerCompatibility';
 import { openConfirm } from './Modal';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
 import type {
@@ -1376,11 +1380,25 @@ export class Inspector {
    * Flag layers whose CRS doesn't match the others and show a one-line note.
    * Honest overlay guard: a silently mismatched frame is called out, not trusted.
    */
-  setLayerCrsFlags(mismatched: ReadonlySet<string>, summary: string): void {
+  setLayerCrsFlags(
+    mismatched: ReadonlySet<string>,
+    summary: string,
+    compatibility?: ReadonlyMap<string, LayerCompatibility>,
+  ): void {
     for (const [id, row] of this._layerRows) {
       const bad = mismatched.has(id);
       row.classList.toggle('olv-layer-crs-mismatch', bad);
-      if (bad) row.title = 'This layer does not share the others’ coordinate system.';
+      // A layer excluded from combined results has to SAY it is excluded.
+      // Dropping it silently means the user reads a figure computed from
+      // fewer inputs than they believe, which is worse than the merge the
+      // exclusion prevents — that at least looked wrong eventually.
+      const state = compatibility?.get(id);
+      row.classList.toggle(
+        'olv-layer-frame-excluded',
+        state !== undefined && state !== 'verified',
+      );
+      if (state !== undefined && state !== 'verified') row.title = compatibilityNote(state);
+      else if (bad) row.title = 'This layer does not share the others’ coordinate system.';
       else row.removeAttribute('title');
     }
     if (!this._layerNote) {

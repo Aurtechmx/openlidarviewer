@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { integrableClouds, isIntegrable } from '../src/render/integrableClouds';
+import { integrableClouds, isIntegrable, streamingMayCombine } from '../src/render/integrableClouds';
 
 const entry = (visible: boolean, locked?: boolean) => ({
   mesh: { visible },
@@ -135,5 +135,43 @@ describe('single-layer analysis needs no cross-frame proof', () => {
       { mesh: { visible: true }, compatibility: 'horizontal-only' as never },
     ];
     expect(integrableClouds(set)).toHaveLength(1);
+  });
+});
+
+/**
+ * Streaming sources must clear the same bar as static ones.
+ *
+ * Static clouds go through `integrableClouds`; COPC/EPT resident nodes were
+ * appended straight into terrain, profile, volume and count walks with no
+ * check at all. So a streamed scan and a static one in different CRSs — or on
+ * different vertical datums — still merged into one estimator, which is the
+ * defect the static gate exists to prevent, in the one source type it did not
+ * cover.
+ *
+ * The single-source carve-out applies here too: a stream on its own is
+ * analysed in its own frame, because nothing is being combined.
+ */
+describe('streamingMayCombine', () => {
+  it('lets a lone stream be analysed in its own frame', () => {
+    for (const s of ['verified', 'horizontal-only', 'unknown', 'incompatible'] as const) {
+      expect(streamingMayCombine(0, s)).toBe(true);
+    }
+  });
+
+  it('requires proof once a static layer is also in the walk', () => {
+    expect(streamingMayCombine(1, 'verified')).toBe(true);
+    expect(streamingMayCombine(1, 'horizontal-only')).toBe(false);
+    expect(streamingMayCombine(1, 'unknown')).toBe(false);
+    expect(streamingMayCombine(1, 'incompatible')).toBe(false);
+  });
+
+  it('has nothing to contribute when no stream is open', () => {
+    expect(streamingMayCombine(0, null)).toBe(false);
+    expect(streamingMayCombine(3, null)).toBe(false);
+  });
+
+  it('scales past a single static layer', () => {
+    expect(streamingMayCombine(5, 'unknown')).toBe(false);
+    expect(streamingMayCombine(5, 'verified')).toBe(true);
   });
 });

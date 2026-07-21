@@ -194,8 +194,8 @@ import {
   DEFAULT_PROFILE_SAMPLE_COUNT,
 } from './measure/profileSampler';
 import { volumeCutFill } from './measure/volume';
-import { integrableClouds, isIntegrable } from './integrableClouds';
-import type { LayerCompatibility } from '../model/layerCompatibility';
+import { integrableClouds, isIntegrable, streamingMayCombine } from './integrableClouds';
+import { classifyLayerCompatibility, type LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
@@ -1406,7 +1406,11 @@ export class Viewer {
             staticPoints += cloud.positions.length;
           }
         }
-        for (const { decoded } of this._streamingPickData.values()) {
+        // A stream joins the estimate only on the terms a static cloud would
+        // have to meet. Appending it unconditionally merged frames that were
+        // never shown to correspond.
+        const streamOk = this._streamingMayCombine(buffers.length);
+        for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
           if (decoded.positions && decoded.positions.length > 0) {
             const cls = aligned(decoded.classification, decoded.positions);
             if (cls) anyClass = true;
@@ -1485,7 +1489,8 @@ export class Viewer {
             staticPoints += cloud.positions.length;
           }
         }
-        for (const { decoded } of this._streamingPickData.values()) {
+        const streamOk = this._streamingMayCombine(buffers.length);
+        for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
           if (decoded.positions && decoded.positions.length > 0) {
             buffers.push(decoded.positions);
             total += decoded.positions.length;
@@ -2216,6 +2221,39 @@ export class Viewer {
     this.requestFrame();
   }
 
+  /**
+   * What the open streaming source has proven about the project frame.
+   *
+   * Classified against the same static layers it would be merged with, using
+   * the same rule, so a stream cannot get into a combined estimate on terms a
+   * static cloud would be refused on. Null when nothing is streaming.
+   */
+  private _streamingCompatibility(): LayerCompatibility | null {
+    const stream = this._streaming?.cloud;
+    if (!stream) return null;
+    const scrs = stream.crs?.() ?? null;
+    const statics = integrableClouds(this._clouds.values()).map(({ cloud }) => ({
+      id: cloud.name,
+      epsg: cloud.metadata?.crs?.epsg,
+      crsName: cloud.metadata?.crs?.name,
+      verticalDatum: cloud.metadata?.crs?.verticalDatum,
+    }));
+    const STREAM_ID = '\u0000stream';
+    const states = classifyLayerCompatibility([
+      ...statics,
+      { id: STREAM_ID, epsg: scrs?.epsg, crsName: scrs?.name, verticalDatum: scrs?.verticalDatum },
+    ]);
+    return states.get(STREAM_ID) ?? 'unknown';
+  }
+
+  /**
+   * Whether resident streaming nodes may join a combined estimator alongside
+   * `staticCount` static clouds the walk has already accepted.
+   */
+  private _streamingMayCombine(staticCount: number): boolean {
+    return streamingMayCombine(staticCount, this._streamingCompatibility());
+  }
+
   /** Whether a streaming COPC cloud is currently open. */
   get hasStreamingCloud(): boolean {
     return this._streaming !== null;
@@ -2561,7 +2599,11 @@ export class Viewer {
         staticFormats.push(cloud.sourceFormat);
       }
     }
-    for (const { decoded, key } of this._streamingPickData.values()) {
+    // Terrain is the estimator with the most to lose from a frame it cannot
+    // vouch for: a surface averaged across two unrelated frames looks like a
+    // surface. The stream joins only on the terms a static cloud would meet.
+    const streamOk = this._streamingMayCombine(staticBuffers.length);
+    for (const { decoded, key } of streamOk ? this._streamingPickData.values() : []) {
       if (decoded.positions && decoded.positions.length > 0) {
         const cls = alignedClass(decoded.classification, decoded.positions);
         if (cls) anyClass = true;

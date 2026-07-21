@@ -259,3 +259,62 @@ describe('project frame — writes through to the shared context', () => {
     expect(ctx.projectFrame.transforms.get('a')).toBe(s.transformFor('a'));
   });
 });
+
+/**
+ * The vertical anchor comes only from layers whose height reference is proven.
+ *
+ * A `horizontal-only` layer is one we have explicitly said we cannot trust in
+ * Z — and it was still eligible to supply the project's Z origin, the datum
+ * every VERIFIED layer then gets rebased onto. So an unproven height could
+ * silently define the reference for the proven ones, which is the exact
+ * inversion the compatibility states exist to prevent.
+ *
+ * X/Y and Z are therefore anchored separately: the horizontal origin from
+ * every aligned layer, the vertical origin from the verified ones alone.
+ */
+describe('vertical anchor is drawn only from verified layers', () => {
+  const svc = () => createProjectFrameService(createAppContext());
+
+  it('takes Z from the verified layer, not the lower horizontal-only one', () => {
+    const s = svc();
+    s.reconcile([
+      { id: 'verified', sourceOrigin: [500_000, 4_500_000, 100], crsKey: 'epsg:32612', alignedToProject: true, alignsVertically: true },
+      { id: 'horizOnly', sourceOrigin: [499_000, 4_500_000, 10], crsKey: 'epsg:32612', alignedToProject: true, alignsVertically: false },
+    ]);
+    // X/Y still come from the full aligned set — that agreement is real.
+    expect(s.frame!.projectOrigin[0]).toBe(499_000);
+    expect(s.frame!.projectOrigin[1]).toBe(4_500_000);
+    // Z comes only from the layer whose vertical reference was proven.
+    expect(s.frame!.projectOrigin[2]).toBe(100);
+  });
+
+  it('takes the lowest Z across several verified layers', () => {
+    const s = svc();
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], crsKey: 'epsg:32612', alignedToProject: true, alignsVertically: true },
+      { id: 'b', sourceOrigin: [501_000, 4_500_000, 40], crsKey: 'epsg:32612', alignedToProject: true, alignsVertically: true },
+      { id: 'c', sourceOrigin: [499_000, 4_500_000, 5], crsKey: 'epsg:32612', alignedToProject: true, alignsVertically: false },
+    ]);
+    expect(s.frame!.projectOrigin[2]).toBe(40);
+  });
+
+  it('falls back to the aligned set when nothing is vertically verified', () => {
+    // No layer will be rebased in Z in this state, so the value is unused —
+    // but it must still be a real number from the data, not an invented zero.
+    const s = svc();
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 70], crsKey: 'epsg:32612', alignedToProject: true, alignsVertically: false },
+      { id: 'b', sourceOrigin: [501_000, 4_500_000, 90], crsKey: 'epsg:32612', alignedToProject: true, alignsVertically: false },
+    ]);
+    expect(s.frame!.projectOrigin[2]).toBe(70);
+  });
+
+  it('treats an omitted alignsVertically as verified, keeping old callers intact', () => {
+    const s = svc();
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], crsKey: 'epsg:32612', alignedToProject: true },
+      { id: 'b', sourceOrigin: [499_000, 4_500_000, 20], crsKey: 'epsg:32612', alignedToProject: true },
+    ]);
+    expect(s.frame!.projectOrigin[2]).toBe(20);
+  });
+});

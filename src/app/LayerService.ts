@@ -136,6 +136,8 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
    * push a georeferenced scan hundreds of kilometres out. Such a layer is not in
    * a shared spatial frame at all, which is exactly what "skip" says.
    */
+  let lastCompatibility = new Map<string, LayerCompatibility>();
+
   function syncProjectFrame(infos: readonly LayerInfo[]): void {
     const viewer = getViewer();
     // Compatibility is an explicit four-state fact per layer, not the absence
@@ -152,6 +154,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         id: i.id, epsg: i.epsg, crsName: i.crsName, verticalDatum: i.verticalDatum,
       })),
     );
+    lastCompatibility = compat;
     const stateOf = (id: string): LayerCompatibility => compat.get(id) ?? 'unknown';
     const layers: ProjectFrameLayer[] = [];
     for (const info of infos) {
@@ -170,6 +173,11 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         // nothing contradicted it, which let an unreferenced mesh drag the
         // anchor and mount beside a georeferenced scan.
         alignedToProject: alignsHorizontally(stateOf(info.id)),
+        // Only a vertically-verified layer may choose the project's Z origin.
+        // A horizontal-only layer is one we have said we cannot trust in
+        // height; letting it set the datum the verified layers are rebased
+        // onto would invert the distinction entirely.
+        alignsVertically: alignsVertically(stateOf(info.id)),
       });
     }
     deps.projectFrame.reconcile(layers);
@@ -247,7 +255,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     const m = detectCrsMismatch(infos);
     syncProjectFrame(infos);
     const inspector = getInspector();
-    inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary);
+    // The compatibility map rides along so the panel can say WHY a layer is
+    // out of the combined results, instead of it just quietly not being there.
+    inspector.setLayerCrsFlags(new Set(m.mismatched.map((x) => x.id)), m.summary, lastCompatibility);
     // The two-epoch compare needs exactly two loaded layers.
     inspector.setLayerCompareAvailable(getViewer().clouds().length === 2);
     // Show the compass once a scan is open; hide it again when the last layer goes.

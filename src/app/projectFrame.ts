@@ -44,6 +44,13 @@ export interface ProjectFrameLayer {
    */
   readonly crsKey?: string | null;
   /**
+   * False when this layer shares the horizontal frame but its VERTICAL
+   * reference is unproven. Such a layer is placed in X/Y and is excluded from
+   * choosing the project's Z origin. Omitted counts as verified, so callers
+   * that predate the distinction behave as before.
+   */
+  readonly alignsVertically?: boolean;
+  /**
    * False when the caller has determined this layer does not share the
    * project's coordinate frame.
    *
@@ -168,10 +175,22 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     const stillDescribed = aligned.some(
       (l) => anchoredFrom.get(l.id) === originKey(l.sourceOrigin),
     );
+    // X/Y and Z are anchored from DIFFERENT sets. Every aligned layer shares
+    // the horizontal frame, so all of them may set the horizontal origin. Only
+    // a vertically-verified layer may set the Z origin: a horizontal-only
+    // layer is one we have explicitly said we cannot trust in height, and
+    // letting it choose the datum that verified layers are then rebased onto
+    // inverts the whole point of the distinction. With nothing verified, no
+    // layer's Z is rebased at all, so the value falls back to the aligned set
+    // and goes unused rather than being invented.
+    const verticallyVerified = aligned.filter((l) => l.alignsVertically !== false);
+    const zSource = verticallyVerified.length > 0 ? verticallyVerified : aligned;
+    const horizontal = chooseProjectOrigin(aligned.map((l) => l.sourceOrigin));
+    const vertical = chooseProjectOrigin(zSource.map((l) => l.sourceOrigin));
     const origin =
       stillDescribed && state.frame
         ? state.frame.projectOrigin
-        : chooseProjectOrigin(aligned.map((l) => l.sourceOrigin));
+        : ([horizontal[0], horizontal[1], vertical[2]] as Vec3);
     if (!stillDescribed) {
       anchoredFrom = new Map(aligned.map((l) => [l.id, originKey(l.sourceOrigin)]));
     }
