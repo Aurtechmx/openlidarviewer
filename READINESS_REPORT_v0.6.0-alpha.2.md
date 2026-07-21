@@ -9,7 +9,7 @@ A sober account of what is ready and what remains before this alpha is published
 
 ## Test and build gate
 
-Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate command is not reliably green" for why that is not the whole story:
+Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate runner now reports why it failed" for how much that is worth:
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
 - Unit 2,882 (16 skipped) · export 591 · terrain 1,218 (18 skipped) · ui 429 · slow 508.
@@ -58,4 +58,4 @@ These are publication-side steps this archive does not and cannot assert:
 
 ## Verdict
 
-**Not ready to tag.** Application code and packaging hygiene are in place and every suite passes on a completing run, but the release gate itself only completes about half the time, and that has to be fixed before its result can gate anything. Publication additionally needs a green CI run on the tagged commit and the tag-time metadata steps above. When those are closed, publish as a GitHub **pre-release**.
+**Not ready to tag.** Application code and packaging hygiene are in place, every suite passes, and the gate now reports its own failures distinctly rather than collapsing them into a bare exit 1. Two things still stand between this and a tag: the project transform is applied by rewriting Float32 positions rather than held in Float64 beside source-local vertices (bounded and disclosed, but not the end state — coordinate-integrity roadmap P1 item 2), and the gating browser evidence must be a green GitHub Actions run on the tagged commit, not a local one. With those closed, publish as a GitHub **pre-release**.
