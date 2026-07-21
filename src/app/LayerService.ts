@@ -69,25 +69,42 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
  * What a mount would cost this layer, expressed in metres — or null when that
  * question has no linear answer.
  *
- * The quantum comes back in the source's own units. A projected frame converts
- * through its linear unit; a GEOGRAPHIC frame does not convert at all, because
- * a degree is not a length and the metres it stands for depend on latitude and
- * axis. Rather than approximate, geographic sources are reported as having no
- * safe linear budget, which refuses the destructive mount.
+ * The quantum comes back in the source's own units, split into horizontal and
+ * vertical. A projected frame converts each through ITS OWN unit — a compound
+ * CRS can be feet across and metres up, and putting the Z step through the
+ * horizontal factor understated a 1.95 mm height error as 0.6 mm, admitting a
+ * mount the millimetre budget exists to refuse. The reported error is the worse
+ * of the two once both are in metres, so either axis alone can refuse.
+ *
+ * A GEOGRAPHIC frame does not convert at all, because a degree is not a length
+ * and the metres it stands for depend on latitude and axis. Rather than
+ * approximate, geographic sources are reported as having no safe linear budget,
+ * which refuses the destructive mount. An undeclared unit is the same answer:
+ * unknown, refuse — and specifically the vertical unit does NOT borrow the
+ * horizontal one, which would be the same error in a quieter form.
  */
 function mountPrecision(
   info: LayerInfo,
-  cloud: { rebaseQuantum(t: readonly [number, number, number]): number } | null | undefined,
+  cloud: {
+    rebaseQuantum(t: readonly [number, number, number]): {
+      horizontal: number;
+      vertical: number;
+    };
+  } | null | undefined,
   frame: { projectOrigin: readonly [number, number, number] } | null,
 ): { errorMetres: number | null; basis: 'projected-linear-unit' | 'geographic' | 'unknown' } {
   if (!cloud || !frame) return { errorMetres: 0, basis: 'projected-linear-unit' };
   if (info.isGeographic) return { errorMetres: null, basis: 'geographic' };
-  const scale = info.linearUnitToMetres;
-  if (scale === undefined || !Number.isFinite(scale) || scale <= 0) {
+  const usable = (s: number | undefined): s is number =>
+    s !== undefined && Number.isFinite(s) && s > 0;
+  const horizontalScale = info.linearUnitToMetres;
+  const verticalScale = info.verticalUnitToMetres;
+  if (!usable(horizontalScale) || !usable(verticalScale)) {
     return { errorMetres: null, basis: 'unknown' };
   }
+  const q = cloud.rebaseQuantum(frame.projectOrigin);
   return {
-    errorMetres: cloud.rebaseQuantum(frame.projectOrigin) * scale,
+    errorMetres: Math.max(q.horizontal * horizontalScale, q.vertical * verticalScale),
     basis: 'projected-linear-unit',
   };
 }
@@ -113,6 +130,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         verticalEpsg: crs?.verticalEpsg,
         isGeographic: crs?.isGeographic,
         linearUnitToMetres: crs?.linearUnitToMetres,
+        verticalUnitToMetres: crs?.verticalUnitToMetres,
       };
     });
   }

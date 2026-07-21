@@ -39,6 +39,14 @@ export interface LayerInfo {
    * an unbounded cost refuses the mount rather than assuming metres.
    */
   readonly linearUnitToMetres?: number;
+  /**
+   * Metres per VERTICAL unit, when the CRS declares one. A compound CRS can
+   * measure height in a different unit from the horizontal plane, so the Z
+   * quantum has to be converted through this one. Absent means the vertical
+   * cost cannot be bounded and the mount is refused — it must NOT fall back to
+   * `linearUnitToMetres`, which would restate a feet-scaled error as metres.
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 /**

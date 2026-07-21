@@ -264,7 +264,10 @@ describe('PointCloud frame transitions — invariants', () => {
     forAll('world invariance', genCloud, ({ positions, origin, target }) => {
       const c = make(Float32Array.from(positions), origin);
       const worldBefore = Array.from(c.positions).map((v, i) => v + c.origin[i % 3]);
-      const quantum = c.rebaseQuantum(target);
+      const q = c.rebaseQuantum(target);
+      // World invariance is per-axis now; the bound a point must respect is the
+      // step on the axis it moved along, so take the worse of the two.
+      const quantum = Math.max(q.horizontal, q.vertical);
       c.rebaseOrigin(target);
       const worldAfter = Array.from(c.positions).map((v, i) => v + c.origin[i % 3]);
       for (let i = 0; i < worldBefore.length; i++) {
@@ -303,8 +306,12 @@ describe('PointCloud frame transitions — invariants', () => {
       const c = make(Float32Array.from(positions), origin);
       const near = c.rebaseQuantum([origin[0], origin[1], origin[2]]);
       const far = c.rebaseQuantum([origin[0] - 500000, origin[1], origin[2]]);
-      expect(near).toBeGreaterThanOrEqual(0);
-      expect(far).toBeGreaterThanOrEqual(near);
+      // Same invariant, now held per axis group: never negative, and moving
+      // 500 km in X never makes either reported cost smaller.
+      expect(near.horizontal).toBeGreaterThanOrEqual(0);
+      expect(near.vertical).toBeGreaterThanOrEqual(0);
+      expect(far.horizontal).toBeGreaterThanOrEqual(near.horizontal);
+      expect(far.vertical).toBeGreaterThanOrEqual(near.vertical);
     });
   });
 });

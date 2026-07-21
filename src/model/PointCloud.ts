@@ -359,7 +359,7 @@ export class PointCloud {
 
   /**
    * The worst-case Float32 step size this cloud's coordinates would land on
-   * if rebased onto `target`, in source units.
+   * if rebased onto `target`, in source units, split by axis group.
    *
    * Positions are Float32, so an offset written into them spends mantissa the
    * residual was using. The cost is set by how far the layer moves plus its
@@ -367,18 +367,29 @@ export class PointCloud {
    * scan anchored on its own origin pays nothing, while layers 100 km apart
    * give up a millimetre. Callers disclose this rather than let a research
    * tool quietly round survey data.
+   *
+   * Horizontal (worst of X/Y) and vertical (Z) are reported SEPARATELY because
+   * a compound CRS measures them in different units — feet across, metres up.
+   * Collapsing them to one worst number left the caller converting a Z step
+   * through the horizontal unit: on feet-over-metres a 1.95 mm height error
+   * read as 0.6 mm and passed a gate named for a millimetre.
    */
-  rebaseQuantum(target: readonly [number, number, number]): number {
+  rebaseQuantum(target: readonly [number, number, number]): {
+    horizontal: number;
+    vertical: number;
+  } {
     const b = this.bounds();
-    let worst = 0;
-    for (let a = 0; a < 3; a++) {
+    const stepOn = (a: number): number => {
       const shift = this.origin[a] - target[a];
       const reach = Math.max(Math.abs(b.min[a] + shift), Math.abs(b.max[a] + shift));
       // Float32 carries a 24-bit significand: the step at magnitude m is
       // 2^(floor(log2 m) - 23). Zero magnitude has no step to speak of.
-      if (reach > 0) worst = Math.max(worst, 2 ** (Math.floor(Math.log2(reach)) - 23));
-    }
-    return worst;
+      return reach > 0 ? 2 ** (Math.floor(Math.log2(reach)) - 23) : 0;
+    };
+    return {
+      horizontal: Math.max(stepOn(0), stepOn(1)),
+      vertical: stepOn(2),
+    };
   }
 
   bounds(): { min: [number, number, number]; max: [number, number, number] } {

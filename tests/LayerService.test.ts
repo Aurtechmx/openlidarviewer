@@ -19,6 +19,11 @@ interface FakeCrs {
   epsg?: number;
   /** Real resolved CRSs always carry this; the precision gate needs it. */
   linearUnitToMetres?: number;
+  /**
+   * Metres per VERTICAL unit. `null` means the fixture deliberately leaves it
+   * undeclared (the gate must refuse); leaving it off lets `setup` default it.
+   */
+  verticalUnitToMetres?: number | null;
   name?: string;
   verticalDatum?: string | null;
   isGeographic?: boolean;
@@ -31,8 +36,12 @@ interface FakeCloud {
   origin?: readonly [number, number, number];
   /** The origin the FILE declared — fixed, whatever the frame does to `origin`. */
   sourceOrigin?: readonly [number, number, number];
-  /** Float32 step a mount would land on; fixtures are close together, so 0. */
-  rebaseQuantum?: number;
+  /**
+   * Float32 step a mount would land on; fixtures are close together, so 0.
+   * A bare number sets BOTH axes; the object form separates them, because
+   * horizontal and vertical are judged through different CRS units.
+   */
+  rebaseQuantum?: number | { horizontal: number; vertical: number };
 }
 
 function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set()) {
@@ -47,6 +56,12 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
     const crs = c.metadata?.crs;
     if (crs && !crs.isGeographic && crs.linearUnitToMetres === undefined) {
       crs.linearUnitToMetres = 1;
+    }
+    // Same reasoning for the vertical unit: a fixture that says nothing would
+    // be testing the "vertical unit unknown" refusal instead of its own case.
+    // `null` is how a fixture asks for that refusal on purpose.
+    if (crs && !crs.isGeographic && crs.verticalUnitToMetres === undefined) {
+      crs.verticalUnitToMetres = crs.linearUnitToMetres;
     }
   }
   const context = createAppContext();
@@ -66,7 +81,9 @@ function setup(clouds: Record<string, FakeCloud>, locked: Set<string> = new Set(
       if (!c) return null;
       // The real PointCloud exposes this; a mount consults it before moving
       // geometry. Tiny fixtures sit close together, so it is effectively zero.
-      return { ...c, rebaseQuantum: () => c.rebaseQuantum ?? 0 };
+      const q = c.rebaseQuantum ?? 0;
+      const quantum = typeof q === 'number' ? { horizontal: q, vertical: q } : q;
+      return { ...c, rebaseQuantum: () => quantum };
     },
     isCloudLocked: (id: string) => locked.has(id),
     setCloudVisible: (id: string, on: boolean) => {
@@ -506,7 +523,12 @@ describe('LayerService frame gate corrections', () => {
     expect(clouds.b.origin![2]).toBe(100); // mounted onto the project Z
 
     // Now B declares a different vertical datum → horizontal-only.
-    clouds.b.metadata = { crs: { epsg: 32612, verticalDatum: 'EPSG:4979', linearUnitToMetres: 1 } };
+    clouds.b.metadata = {
+      crs: {
+        epsg: 32612, verticalDatum: 'EPSG:4979',
+        linearUnitToMetres: 1, verticalUnitToMetres: 1,
+      },
+    };
     t.service.refreshCrsFlags();
 
     expect(t.compatCalls.get('b')).toBe('horizontal-only');
@@ -548,5 +570,75 @@ describe('LayerService frame gate corrections', () => {
     });
     t.service.refreshCrsFlags();
     expect(t.rebaseCalls.has('b')).toBe(true);
+  });
+
+  it('judges the VERTICAL quantum through the vertical unit, not the horizontal one', () => {
+    // A compound CRS: horizontal in feet, heights in metres. The worst step is
+    // on Z, 0.00195 — 1.95 mm of real height error, over budget. Converting it
+    // through the HORIZONTAL unit made it read 0.6 mm and let the mount through,
+    // silently rounding survey heights by twice the budget.
+    const compound = {
+      epsg: 2231, verticalDatum: 'EPSG:5703',
+      linearUnitToMetres: 0.3048, verticalUnitToMetres: 1,
+    };
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 0], metadata: { crs: { ...compound } } },
+      b: {
+        origin: [500_100, 4_500_000, 0], metadata: { crs: { ...compound } },
+        rebaseQuantum: { horizontal: 0.0009765625, vertical: 0.001953125 },
+      },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.has('b')).toBe(false);
+  });
+
+  it('still allows a compound mount when BOTH axes are inside the budget', () => {
+    const compound = {
+      epsg: 2231, verticalDatum: 'EPSG:5703',
+      linearUnitToMetres: 0.3048, verticalUnitToMetres: 1,
+    };
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 0], metadata: { crs: { ...compound } } },
+      b: {
+        origin: [500_100, 4_500_000, 0], metadata: { crs: { ...compound } },
+        // 0.002 ft = 0.61 mm horizontally; 0.0005 m = 0.5 mm vertically.
+        rebaseQuantum: { horizontal: 0.002, vertical: 0.0005 },
+      },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.has('b')).toBe(true);
+  });
+
+  it('refuses when the HORIZONTAL quantum is the one over budget', () => {
+    const compound = {
+      epsg: 2231, verticalDatum: 'EPSG:5703',
+      linearUnitToMetres: 0.3048, verticalUnitToMetres: 1,
+    };
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 0], metadata: { crs: { ...compound } } },
+      b: {
+        origin: [500_100, 4_500_000, 0], metadata: { crs: { ...compound } },
+        // 0.008 ft = 2.4 mm horizontally, while Z is comfortably fine.
+        rebaseQuantum: { horizontal: 0.008, vertical: 0.0001 },
+      },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.has('b')).toBe(false);
+  });
+
+  it('refuses when the vertical unit is undeclared, rather than borrowing the horizontal one', () => {
+    // The bug's cousin: falling back to the horizontal factor would state a
+    // height error the CRS never justified. An unknown unit has no budget.
+    const metres = { epsg: 32612, verticalDatum: 'EPSG:5703', linearUnitToMetres: 1 };
+    const t = setup({
+      a: { origin: [500_000, 4_500_000, 0], metadata: { crs: { ...metres, verticalUnitToMetres: null } } },
+      b: {
+        origin: [500_100, 4_500_000, 0],
+        metadata: { crs: { ...metres, verticalUnitToMetres: null } },
+        rebaseQuantum: 0.0001,
+      },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.has('b')).toBe(false);
   });
 });

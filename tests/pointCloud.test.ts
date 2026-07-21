@@ -302,13 +302,30 @@ describe('PointCloud.rebaseQuantum', () => {
 
   it('is sub-micron when a layer anchors on its own origin', () => {
     const c = make([2_485_000, 1_109_000, 330]);
-    expect(c.rebaseQuantum([2_485_000, 1_109_000, 330])).toBeLessThan(1e-6);
+    const q = c.rebaseQuantum([2_485_000, 1_109_000, 330]);
+    expect(q.horizontal).toBeLessThan(1e-6);
+    expect(q.vertical).toBeLessThan(1e-6);
   });
 
   it('grows with separation, not with absolute coordinate magnitude', () => {
     const near = make([2_485_000, 1_109_000, 330]).rebaseQuantum([2_484_000, 1_109_000, 330]);
     const far = make([600_000, 4_500_000, 0]).rebaseQuantum([500_000, 4_500_000, 0]);
-    expect(near).toBeLessThan(far);
-    expect(far).toBeGreaterThanOrEqual(0.001); // 100 km costs a millimetre
+    expect(near.horizontal).toBeLessThan(far.horizontal);
+    expect(far.horizontal).toBeGreaterThanOrEqual(0.001); // 100 km costs a millimetre
+  });
+
+  // Horizontal and vertical units can differ (compound CRS), so the two costs
+  // have to stay separable — collapsing them to one worst number meant a Z
+  // step was later converted through the HORIZONTAL unit and under-reported.
+  it('reports the X/Y worst and the Z cost separately', () => {
+    // Moved 100 km in X, not at all in Z: the cost is horizontal only.
+    const h = make([600_000, 4_500_000, 100]).rebaseQuantum([500_000, 4_500_000, 100]);
+    expect(h.horizontal).toBeGreaterThanOrEqual(0.001);
+    expect(h.vertical).toBeLessThan(1e-6);
+
+    // Moved only in Z: the cost is vertical, and X/Y stay free.
+    const v = make([600_000, 4_500_000, 100]).rebaseQuantum([600_000, 4_500_000, 100 - 20_000]);
+    expect(v.vertical).toBeGreaterThan(0.001);
+    expect(v.horizontal).toBeLessThan(1e-6);
   });
 });
