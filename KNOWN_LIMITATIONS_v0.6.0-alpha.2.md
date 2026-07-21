@@ -45,10 +45,13 @@ correspond. A single layer is `verified` by definition, so single-scan work is
 unaffected.
 
 A mount is additionally refused when it would cost more than a millimetre of
-Float32 resolution. The source quantum is converted through the CRS's linear
-unit before that judgement, an undeclared unit refuses rather than assuming
-metres, and **geographic (degree) frames are refused outright** — a degree is
-not a length, and what it stands for depends on latitude.
+Float32 resolution. The step is judged **per axis group** — horizontal through
+the horizontal unit, vertical through the vertical one — because a compound CRS
+can be feet across and metres up, and putting a Z step through the horizontal
+factor understated a 1.95 mm error as 0.6 mm. Either axis alone can refuse. An
+undeclared unit refuses rather than borrowing the other axis's, and
+**geographic (degree) frames are refused outright** — a degree is not a length,
+and what it stands for depends on latitude.
 
 **Streaming sources meet the same bar.** COPC/EPT resident nodes are gated
 exactly as static clouds are, with the same single-source carve-out.
@@ -88,9 +91,12 @@ native file is produced.
 The RFC file's geometry is **2D unless the vertical reference is proven to be
 WGS 84 ellipsoidal height**, which is the only thing RFC 7946 permits in a
 position's third element. Elevations always ride as `elevation`,
-`elevationUnit` and `elevationDatum` properties. KML geometries likewise
-declare an explicit `altitudeMode`, and claim `absolute` only for a declared
-metric vertical datum.
+`elevationUnit` and `elevationDatum` properties. KML geometry is **2D unless the vertical reference is a
+known metric orthometric one** (NAVD88, MSL height, EGM2008, EGM96), since
+KML `absolute` means metres above mean sea level specifically — a WGS 84
+ellipsoidal height is not that, and a depth axis is sign-flipped as well. The
+source elevation, its unit and its datum are disclosed in each placemark
+description, so the omitted ordinate is stated rather than lost.
 
 ## Residual streaming flicker at the budget boundary
 
