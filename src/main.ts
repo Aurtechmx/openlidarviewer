@@ -7353,7 +7353,7 @@ function compareLoadedLayers(): void {
       // The span is measured in SOURCE units (horizontalSpanXY is unit-agnostic)
       // while the gate option is metres, so convert by the CRS's linear factor —
       // geographic frames don't have one, but alignment refuses those outright.
-      const span = horizontalSpanXY(a.positions, a.origin);
+      const span = horizontalSpanXY(a.positions, a.sourceOrigin);
       const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
         maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined,
