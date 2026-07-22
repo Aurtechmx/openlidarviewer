@@ -194,7 +194,7 @@ import {
   streamingMayCombine,
   sourceClassifiesGround,
 } from './integrableClouds';
-import { classifyLayerCompatibility, type LayerCompatibility } from '../model/layerCompatibility';
+import type { LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
@@ -225,6 +225,7 @@ import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { RenderActivityGate } from './renderActivityGate';
+import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
 import type { SavedCameraState } from './annotate/types';
@@ -2200,21 +2201,17 @@ export class Viewer {
     if (!stream) return null;
     const scrs = stream.crs?.() ?? null;
     const statics = integrableClouds(this._clouds.values()).map(({ cloud }) => ({
-      id: cloud.name,
       epsg: cloud.metadata?.crs?.epsg,
       crsName: cloud.metadata?.crs?.name,
       verticalDatum: cloud.metadata?.crs?.verticalDatum,
       verticalEpsg: cloud.metadata?.crs?.verticalEpsg,
     }));
-    const STREAM_ID = '\u0000stream';
-    const states = classifyLayerCompatibility([
-      ...statics,
-      {
-        id: STREAM_ID, epsg: scrs?.epsg, crsName: scrs?.name,
-        verticalDatum: scrs?.verticalDatum, verticalEpsg: scrs?.verticalEpsg,
-      },
-    ]);
-    return states.get(STREAM_ID) ?? 'unknown';
+    return resolveStreamingCompatibility(statics, {
+      epsg: scrs?.epsg,
+      crsName: scrs?.name,
+      verticalDatum: scrs?.verticalDatum,
+      verticalEpsg: scrs?.verticalEpsg,
+    });
   }
 
   /**
