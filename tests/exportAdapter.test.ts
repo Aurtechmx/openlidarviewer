@@ -15,15 +15,21 @@ import type { ExportAdapterHost, ExportAdapterCloud } from '../src/render/export
 
 /** A static cloud entry — only the fields the adapter reads. */
 function cloud(over: Record<string, unknown> = {}): ExportAdapterCloud {
+  const cloudFields = {
+    name: 'scan',
+    pointCount: 100,
+    bounds: () => ({ min: [0, 0, 0], max: [1, 1, 1] }),
+    origin: [10, 20, 0],
+    metadata: undefined,
+    ...over,
+  };
   return {
     mode: 'rgb',
     cloud: {
-      name: 'scan',
-      pointCount: 100,
-      bounds: () => ({ min: [0, 0, 0], max: [1, 1, 1] }),
-      origin: [10, 20, 0],
-      metadata: undefined,
-      ...over,
+      ...cloudFields,
+      // A real PointCloud sets sourceOrigin from its load origin; the export
+      // world frame reads sourceOrigin, so the mock must carry it too.
+      sourceOrigin: cloudFields.origin,
     },
   } as unknown as ExportAdapterCloud;
 }

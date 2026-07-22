@@ -319,7 +319,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       let any = false;
       for (const { cloud } of host.clouds().values()) {
         any = true;
-        const o = cloud.origin;
+        const o = cloud.sourceOrigin;
         if (!o) return null;
         if (worldOrigin === null) {
           worldOrigin = { x: o[0], y: o[1] };

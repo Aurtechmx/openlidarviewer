@@ -13,7 +13,7 @@ Run locally at the alpha head commit (**not yet a Git tag** — the published ta
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
 - unit 3,017 (16 skipped) · export 605 · terrain 1,222 · ui 429 · slow 515.
-- Build-contract 11; plain build and live/obfuscated build pass. Live entry **713 KiB / 713 KiB** — inside the hard ceiling, above the 680 KiB warning line, and **reproduced byte-identically across two clean builds**. The margin is 10 KiB: treat the ceiling as effectively reached and shed weight before adding any, rather than raising it.
+- Build-contract 11; plain build and live/obfuscated build pass. Live entry **712 KiB / 712 KiB** — inside the hard ceiling, above the 680 KiB warning line, and **reproduced byte-identically across two clean builds**. The margin is 10 KiB: treat the ceiling as effectively reached and shed weight before adding any, rather than raising it.
 - Full e2e (`npm run test:e2e`): 161 passed, 4 fixture-skipped (autzen COPC not on disk), 0 failed — **locally**. The gating browser evidence is the green GitHub Actions run required below, not this local run.
 - Documentation build (`npm run docs:build`) passes.
 

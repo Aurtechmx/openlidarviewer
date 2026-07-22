@@ -2457,8 +2457,8 @@ export class Viewer {
     const display =
       mode === 'elevation'
         ? {
-            min: range.min + entry.cloud.origin[upAxis],
-            max: range.max + entry.cloud.origin[upAxis],
+            min: range.min + entry.cloud.sourceOrigin[upAxis],
+            max: range.max + entry.cloud.sourceOrigin[upAxis],
           }
         : range;
     return buildActiveColorbarSpec({
@@ -3709,7 +3709,7 @@ export class Viewer {
     const entry = this._clouds.values().next().value;
     if (entry) {
       const b = entry.cloud.bounds();
-      const o = entry.cloud.origin[axisIdx];
+      const o = entry.cloud.sourceOrigin[axisIdx];
       return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
     }
     // Streaming: the tight data bounds come from the file header (known at open,
@@ -6438,7 +6438,7 @@ export class Viewer {
       // `point` is in local space; the cloud's origin restores real-world
       // coordinates — the absolute survey position engineers expect.
       local: [point.x, point.y, point.z],
-      origin: cloud.origin,
+      origin: [cloud.sourceOrigin[0], cloud.sourceOrigin[1], cloud.sourceOrigin[2]],
       distance: this._camera.position.distanceTo(point),
       intensity: cloud.intensity ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null,

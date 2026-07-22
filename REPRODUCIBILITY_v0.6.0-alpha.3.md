@@ -38,7 +38,7 @@ while the run failed.
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
-| Live entry 713 KiB (within the 713 KiB ceiling, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
+| Live entry 712 KiB (within the 712 KiB ceiling, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
 | Coverage — lines 90.57 / statements 89.19 / functions 87.75 / branches 82.73 | `npm run coverage` |
 | Mutation score 87.23 % over the numeric core | `npm run mutation` |
 | Documentation build | `npm run docs:build` |

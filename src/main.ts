@@ -7331,7 +7331,7 @@ function compareLoadedLayers(): void {
       // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25.
       const beforeCloud = {
         positions: a.positions,
-        origin: a.origin,
+        origin: a.sourceOrigin, // source frame: the epoch world comparison, not the live project origin
         crs: a.metadata?.crs?.name ?? null,
         verticalDatum: a.metadata?.crs?.verticalDatum ?? null,
         isGeographic: a.metadata?.crs?.isGeographic ?? null,
@@ -7339,7 +7339,7 @@ function compareLoadedLayers(): void {
       };
       const afterCloud = {
         positions: b.positions,
-        origin: b.origin,
+        origin: b.sourceOrigin,
         crs: b.metadata?.crs?.name ?? null,
         verticalDatum: b.metadata?.crs?.verticalDatum ?? null,
         isGeographic: b.metadata?.crs?.isGeographic ?? null,
