@@ -185,6 +185,34 @@ for (const name of EVIDENCE) {
   }
 }
 
+// SBOM root identity. A stale SBOM shipped once identifying the app as the
+// previous release: `metadata.component` still said alpha.2 while package.json
+// was alpha.3. The SBOM is generated (regenerate with
+// `npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json`), so this
+// checks its ROOT identity against package.json rather than editing it by hand.
+if (existsSync(resolve(ROOT, 'sbom.json'))) {
+  try {
+    const sbom = JSON.parse(read('sbom.json'));
+    const root = sbom?.metadata?.component ?? {};
+    if (root.name !== 'openlidarviewer') {
+      problems.push(`sbom.json root component name is "${root.name}", expected "openlidarviewer".`);
+    }
+    if (root.version !== version) {
+      problems.push(`sbom.json root version is ${root.version}, expected ${version} — regenerate the SBOM from the alpha's lockfile.`);
+    }
+    if (root['bom-ref'] && !String(root['bom-ref']).includes(version)) {
+      problems.push(`sbom.json root bom-ref "${root['bom-ref']}" does not identify v${version}.`);
+    }
+    if (root.purl && !String(root.purl).includes(version)) {
+      problems.push(`sbom.json root purl "${root.purl}" does not identify v${version}.`);
+    }
+  } catch {
+    problems.push('sbom.json is present but not valid JSON — regenerate it.');
+  }
+} else {
+  problems.push('sbom.json is missing.');
+}
+
 // A docs-site release page per release; the site's release list stops dead
 // without one, so the newest release is the one a reader cannot find.
 const releasePage = `docs-site/releases/v${version}.md`;

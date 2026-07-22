@@ -4,7 +4,7 @@ This document is the architectural contract for every future analysis feature in
 
 The contract was written ahead of the implementations so that analysis features land cleanly onto a shared seam, instead of each one shipping its own ad-hoc cloud iteration.
 
-This document is also the source the contract tests in `tests/analysis-seam-contract.test.ts` are derived from. Those tests are intentionally skipped until each analysis implementation removes the `.skip` markers; they exist as a visible pre-commitment to the rules below.
+This document is the design specification for the analysis seam. An earlier revision expressed it as a `PointSampler` interface plus skipped contract tests in `tests/analysis-seam-contract.test.ts`; both were removed (see the status note in §8) because they read as enforcement while enforcing nothing. The rules below stand as the design for whoever builds the seam.
 
 ## Why a single seam matters
 
@@ -232,7 +232,7 @@ The worker implementation will live at `src/analysis/runtime/analysisWorker.ts` 
 
 ## §8 — Analysis contracts (testable, machine-checkable)
 
-The following contracts are encoded as skipped test cases in `tests/analysis-seam-contract.test.ts`. Each analysis must pass the relevant contracts (un-skip the tests) before it ships.
+The following are DESIGN contracts for the analysis seam. There is no sampler implementation and no contract-test file today (see the status note below); when analyses are built, they should honour the relevant contracts. This section is the specification, not a set of live gates.
 
 > **Implementation status.** These contracts are DESIGN, not shipped code.
 > There is no `PointSampler` implementation and no sampler seam in the
@@ -296,7 +296,7 @@ The test fakes an over-budget input and verifies one of these two paths.
 
 ## §9 — Module layout
 
-The seam lives under `src/analysis/`. The interface (`PointSampler`) and the skipped contract tests are the stable surface; concrete samplers and analysis functions land alongside the features that need them and have to un-skip the relevant contracts before they ship.
+Analysis code lives under `src/analysis/`. There is no `PointSampler` interface or sampler seam in the application today — analyses read cloud types directly. The contracts above are the design for a seam if one is introduced; concrete samplers and analysis functions would land alongside the features that need them and honour the relevant contracts.
 
 ## §10 — Why the seam exists
 

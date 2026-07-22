@@ -15,7 +15,7 @@ Six pieces of logic moved off the render class and the app entry into their own 
 - remote-source naming and error text,
 - two measure helpers (volume-record shaping and horizontal span).
 
-`Viewer.ts` went from 7,297 to 7,127 lines and `main.ts` from 7,636 to 7,520, but the line count is not the point. The exit condition is that every cluster with a real boundary and a test payoff is extracted; what remains is genuinely view-bound, and moving it would relocate glue without gaining a test.
+`Viewer.ts` went from 7,297 to 7,127 lines and `main.ts` from 7,636 to 7,521, but the line count is not the point. The exit condition is that every cluster with a real boundary and a test payoff is extracted; what remains is genuinely view-bound, and moving it would relocate glue without gaining a test.
 
 ## Guards so it cannot slip back
 
