@@ -1,15 +1,15 @@
 {
   "version": "0.6.0-alpha.2",
-  "commit": "9e3ef128eba3e3054b8f3e531afdc02b34bfc7ec",
+  "commit": "776c927576fd0697a6768561eac2237730c3a169",
   "gateExit": 0,
-  "generatedAt": "2026-07-22T00:06:49.339Z",
+  "generatedAt": "2026-07-22T00:19:33.727Z",
   "nodeVersion": "v26.0.0",
   "platform": "darwin-arm64",
   "gateLog": "release/gate.log",
-  "gateLogSha256": "73a8e221cebac70c62767058ae4157a5c5567e79c6a28508255ee5f04f0b90d9",
+  "gateLogSha256": "8dea9d122f700e32e61cdcc2e4ffd8b43364a4e9d4b7158fc3dfd59f0ee695a6",
   "buckets": {
     "unit": {
-      "passed": 2987,
+      "passed": 3004,
       "skipped": 16,
       "runs": 3
     },
@@ -35,11 +35,11 @@
     }
   },
   "total": {
-    "passed": 5757,
+    "passed": 5774,
     "skipped": 17
   },
   "bundle": {
-    "liveEntryKiB": 710,
+    "liveEntryKiB": 711,
     "ceilingKiB": 720
   }
 }

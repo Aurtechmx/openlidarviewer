@@ -172,11 +172,7 @@ import type { PointCloud } from './model/PointCloud';
 // imported (in `openStreamingCopc` and `handleRemoteCopc`), so it lands in a
 // lazy chunk fetched only when a COPC scan is actually opened.
 import { detectCopc } from './io/copc/copcDetect';
-import {
-  RangeReadError,
-  sanitizeUrlForDisplay,
-  validateRemoteCopcUrl,
-} from './io/range/RangeSource';
+import { validateRemoteCopcUrl } from './io/range/RangeSource';
 import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
 import type { EptLaszipWorkerClient } from './io/ept/worker/eptLaszipWorkerClient';
@@ -266,6 +262,7 @@ import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
+import { remoteEptName, remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { createAppRuntime } from './app/AppRuntime';
@@ -6884,16 +6881,6 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
   }
 }
 
-/** Display name for a remote EPT scan — the parent directory of ept.json. */
-function remoteEptName(url: string): string {
-  try {
-    const path = new URL(url).pathname.replace(/\/ept\.json$/i, '');
-    const last = path.slice(path.lastIndexOf('/') + 1);
-    return last ? `${decodeURIComponent(last)} (EPT)` : 'remote.ept';
-  } catch {
-    return 'remote.ept';
-  }
-}
 
 /**
  * Open a remote COPC scan over HTTP range requests. The host must allow
@@ -6971,58 +6958,8 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
   }
 }
 
-/** A short, readable form of a URL — its host — for progress and error text. */
-function shortUrl(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
 
-/** The display name for a remote COPC scan — the file name from its URL path. */
-function remoteCopcName(url: string): string {
-  try {
-    const path = new URL(url).pathname;
-    const last = path.slice(path.lastIndexOf('/') + 1);
-    return last ? decodeURIComponent(last) : 'remote.copc.laz';
-  } catch {
-    return 'remote.copc.laz';
-  }
-}
 
-/**
- * Turn a remote-COPC failure into a clear, honest message. `HttpRangeSource`
- * already classifies range-read failures (an unreachable or CORS-blocked host,
- * a host with no range support, a host that ignored the range); a non-range
- * error from the pipeline most often means the URL is reachable but the file
- * behind it is not a valid COPC.
- */
-function describeRemoteCopcError(err: unknown, url: string): string {
-  const safeUrl = sanitizeUrlForDisplay(url);
-  if (err instanceof RangeReadError) {
-    if (err.code === 'range-unsupported') {
-      return (
-        `${err.message} Try hosting the file on S3 or a static CDN — most support range requests by default.`
-      );
-    }
-    if (err.code === 'transport') {
-      return `${err.message} The host also needs to allow cross-origin (CORS) requests from this site.`;
-    }
-    if (err.code === 'timeout') {
-      return `${err.message} Try again in a moment, or pick a faster host.`;
-    }
-    if (err.code === 'content-mismatch') {
-      return `${err.message} This usually means a proxy or CDN ignored the byte-range request.`;
-    }
-    if (err.code === 'server-error') {
-      return `${err.message} The host returned a server-side error — wait a moment and try again.`;
-    }
-    return err.message;
-  }
-  const detail = err instanceof Error ? err.message : 'unknown error';
-  return `${shortUrl(safeUrl)} was reached, but it could not be read as a COPC scan — ${detail}.`;
-}
 
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
