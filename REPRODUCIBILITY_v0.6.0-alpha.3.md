@@ -34,11 +34,11 @@ while the run failed.
 
 | Reported figure | Command |
 |---|---|
-| unit 3,013 (16 skipped) · export 605 · terrain 1,221 · ui 429 · slow 515 — 5,703 passed / 34 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
+| unit 3,017 (16 skipped) · export 605 · terrain 1,222 · ui 429 · slow 515 — 5,703 passed / 34 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
-| Live entry 712 KiB (within the 712 KiB ceiling, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
+| Live entry 713 KiB (within the 713 KiB ceiling, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
 | Coverage — lines 90.57 / statements 89.19 / functions 87.75 / branches 82.73 | `npm run coverage` |
 | Mutation score 87.23 % over the numeric core | `npm run mutation` |
 | Documentation build | `npm run docs:build` |

@@ -332,6 +332,38 @@ export class PointCloud {
     return true;
   }
 
+  /**
+   * The world coordinate of point `index`, as `positions[index] + sourceOrigin`.
+   *
+   * This is the migration seam for holding the project transform in Float64.
+   * World-coordinate consumers today compute `positions[i] + origin`, which is
+   * correct only because `origin === sourceOrigin` for every loaded cloud —
+   * mounting is disabled, so nothing is ever rebased. `sourceOrigin` is fixed
+   * for the object's life, so this accessor stays correct once `rebaseOrigin`
+   * stops rewriting the Float32 buffer and `origin` begins to move. Consumers
+   * migrate onto it in gated batches (tracked by `lint:position-access`)
+   * BEFORE the rebase is made non-destructive; each swap is a no-op today.
+   *
+   * NOTE: while the rebase is still destructive, this is the world coordinate
+   * only for an UNREBASED cloud. That is every cloud in this release. The
+   * mounted case becomes correct in the same change that removes the rewrite.
+   *
+   * Pass `out` to avoid allocating a tuple per point in a hot loop.
+   */
+  worldXYZ(
+    index: number,
+    out: [number, number, number] = [0, 0, 0],
+  ): [number, number, number] {
+    const base = index * 3;
+    if (index < 0 || base + 2 >= this.positions.length) {
+      throw new RangeError(`worldXYZ: index ${index} out of range for ${this.positions.length / 3} points`);
+    }
+    out[0] = this.positions[base] + this.sourceOrigin[0];
+    out[1] = this.positions[base + 1] + this.sourceOrigin[1];
+    out[2] = this.positions[base + 2] + this.sourceOrigin[2];
+    return out;
+  }
+
   /** Whether this cloud currently sits on an origin other than its file's. */
   get isRebased(): boolean {
     return (
