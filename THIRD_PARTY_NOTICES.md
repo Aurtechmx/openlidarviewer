@@ -8,19 +8,19 @@ end of the file.
 
 ## Runtime dependencies (bundled into the shipped build)
 
-| Package | Version | License | Upstream |
-| --- | --- | --- | --- |
-| three | ^0.184.0 | MIT | https://github.com/mrdoob/three.js |
-| @loaders.gl/core | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/gltf | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/obj | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/ply | ^4.4.2 | MIT | https://github.com/visgl/loaders.gl |
-| laz-perf | ^0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
-| pdf-lib | ^1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
-| proj4 | ^2.20.8 | MIT | https://github.com/proj4js/proj4js |
-| @fontsource-variable/inter | ^5.2.8 | OFL-1.1 | https://github.com/rsms/inter |
-| @fontsource/manrope | ^5.2.8 | OFL-1.1 | https://github.com/sharanda/manrope |
-| @fontsource/jetbrains-mono | ^5.2.8 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
+| Package | Declared range | Resolved | License | Upstream |
+| --- | --- | --- | --- | --- |
+| three | ^0.184.0 | 0.184.0 | MIT | https://github.com/mrdoob/three.js |
+| @loaders.gl/core | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/ply | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
+| laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
+| pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
+| proj4 | ^2.20.8 | 2.20.9 | MIT | https://github.com/proj4js/proj4js |
+| @fontsource-variable/inter | ^5.2.8 | 5.2.8 | OFL-1.1 | https://github.com/rsms/inter |
+| @fontsource/manrope | ^5.2.8 | 5.2.8 | OFL-1.1 | https://github.com/sharanda/manrope |
+| @fontsource/jetbrains-mono | ^5.2.8 | 5.2.8 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
 
 ## Development-only dependencies (not bundled into the shipped build)
 
@@ -29,22 +29,24 @@ They are NOT distributed in `dist/` and do not need re-distribution
 of their license text alongside the shipped artifact. They are listed
 here for transparency.
 
-| Package | Version | License | Upstream |
-| --- | --- | --- | --- |
-| typescript | ~6.0.2 | Apache-2.0 | https://github.com/microsoft/TypeScript |
-| vite | ^8.0.12 | MIT | https://github.com/vitejs/vite |
-| vitest | ^4.1.7 | MIT | https://github.com/vitest-dev/vitest |
-| @playwright/test | ^1.60.0 | Apache-2.0 | https://github.com/microsoft/playwright |
-| @types/three | ^0.184.1 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
-| rollup-plugin-visualizer | ^7.0.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
-| @vitest/coverage-v8 | ^4.1.10 | MIT | https://github.com/vitest-dev/vitest |
-| @stryker-mutator/core | ^9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
-| @stryker-mutator/vitest-runner | ^9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
-| @types/proj4 | ^2.5.6 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
+| Package | Declared range | Resolved | License | Upstream |
+| --- | --- | --- | --- | --- |
+| typescript | ~6.0.2 | 6.0.3 | Apache-2.0 | https://github.com/microsoft/TypeScript |
+| vite | ^8.0.12 | 8.1.3 | MIT | https://github.com/vitejs/vite |
+| vitest | ^4.1.7 | 4.1.10 | MIT | https://github.com/vitest-dev/vitest |
+| vitepress | 1.6.4 | 1.6.4 | MIT | https://github.com/vuejs/vitepress |
+| vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT | https://github.com/elmesutupu/vite-plugin-javascript-obfuscator |
+| @playwright/test | ^1.60.0 | 1.61.1 | Apache-2.0 | https://github.com/microsoft/playwright |
+| @types/three | ^0.184.1 | 0.184.1 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
+| rollup-plugin-visualizer | ^7.0.1 | 7.0.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
+| @vitest/coverage-v8 | ^4.1.10 | 4.1.10 | MIT | https://github.com/vitest-dev/vitest |
+| @stryker-mutator/core | ^9.6.1 | 9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
+| @stryker-mutator/vitest-runner | ^9.6.1 | 9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
+| @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 
 ## License texts
 
-### MIT License (applies to: three, @loaders.gl/*, pdf-lib, proj4, vite, vitest, @vitest/coverage-v8, rollup-plugin-visualizer, @types/three, @types/proj4)
+### MIT License (applies to: three, @loaders.gl/*, pdf-lib, proj4, vite, vitest, vitepress, vite-plugin-javascript-obfuscator, @vitest/coverage-v8, rollup-plugin-visualizer, @types/three, @types/proj4)
 
 ```
 MIT License

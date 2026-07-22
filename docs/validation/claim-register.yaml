@@ -4,21 +4,26 @@
 # identifiers + gate logic.
 #
 # Honesty rules (do not violate when editing):
-#   - currentEvidence must reflect evidence that EXISTS today. Nothing here is
-#     E4+ yet: no independent cross-implementation or field validation has been
-#     run. Synthetic known-truth fixtures are E3, not accuracy.
+#   - currentEvidence must reflect evidence that EXISTS today. One claim
+#     currently reaches E4: SLOPE-RASTER, cross-implemented against GDAL 3.13.1
+#     on a frozen analytic fixture within the preregistered 0.5 degree tolerance.
+#     No claim reaches E5 (no field validation has been run). Synthetic
+#     known-truth fixtures alone remain E3, not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Never infer it from density / format / metadata.
+#     and unavailable. One independent GDAL reference slot is supplied; all
+#     remaining independent-reference slots are pending. Never infer it from
+#     density / format / metadata.
 #   - prohibitedClaim lists statements the current evidence does NOT support.
 #
 # This is a living document; update an entry in the same change that alters its
 # product. A product with no entry is treated as E0 / not exportable.
 #
-# Phase 3–4 tooling (v0.5.8) — mechanisms now exist to REACH the required
-# levels; running them is still pending, so no level below has changed:
+# Phase 3–4 tooling (v0.5.8) — mechanisms exist to REACH the required levels:
 #   - Cross-implementation harness: src/validation/crossCheck.ts +
-#     docs/validation/cross-implementation.md. Every reference slot is pending;
-#     an E4 promotion needs a real PDAL/GDAL/CloudCompare reference committed.
+#     docs/validation/cross-implementation.md. The SLOPE-RASTER GDAL reference
+#     slot is supplied and promotes that one claim to E4; all remaining
+#     reference slots are pending, each awaiting a real
+#     PDAL/GDAL/CloudCompare reference committed.
 #   - Honest estimators: src/terrain/validate/spatialBlockHoldout.ts
 #     (spatially-blocked hold-out, less optimistic than random point hold-out,
 #     with a bootstrap CI) and src/terrain/validate/reliabilitySplit.ts
@@ -35,6 +40,9 @@ schemaVersion: 1
 # alpha.2 DID correct two unit/axis defects at the reporting boundary — box height
 # now follows the scan up-axis, and the Horn slope guard rejects a non-positive
 # cell size — but neither alters an algorithm's evidence level.
+# alpha.3 changed the EVIDENCE STATE of one claim without changing any algorithm:
+# SLOPE-RASTER is promoted E3→E4 by a committed GDAL 3.13.1 cross-implementation
+# reference. All other terrain and measurement evidence is unchanged.
 softwareVersion: 0.6.0-alpha.3
 generated: 2026-07-19
 validationOwner: A. Urias / Aurtech
