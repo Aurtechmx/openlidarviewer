@@ -35,7 +35,7 @@ schemaVersion: 1
 # alpha.2 DID correct two unit/axis defects at the reporting boundary — box height
 # now follows the scan up-axis, and the Horn slope guard rejects a non-positive
 # cell size — but neither alters an algorithm's evidence level.
-softwareVersion: 0.6.0-alpha.2
+softwareVersion: 0.6.0-alpha.3
 generated: 2026-07-19
 validationOwner: A. Urias / Aurtech
 

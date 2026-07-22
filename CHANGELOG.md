@@ -2,6 +2,41 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.0-alpha.3] - 2026-07-21
+
+A decomposition and precision-groundwork cut, on the same footing as alpha.2:
+almost nothing changes in the viewer. It continues pulling testable logic out
+of the two monoliths, adds guards so that work cannot regress, and measures the
+one open coordinate-integrity item so the fix has a number to beat. Alpha
+caveat unchanged: for evaluation, and interfaces may still move before v0.6.0.
+
+### Changed
+
+- **The two monoliths shed more testable logic.** Extracted, each with Node
+  tests it could not have while on the class: the lasso-volume walk, the
+  two-finger tracking state machine, the render-frame decision, the streaming
+  compatibility boundary (`src/render/*`), and from `main.ts` the remote-source
+  naming/error text and two measure helpers (`src/app/remoteSourceNaming.ts`,
+  `src/render/measure/measureDerivations.ts`). `Viewer.ts` 7,297 to 7,127,
+  `main.ts` 7,636 to 7,520. The decomposition's exit condition is now the
+  extraction of every cluster with a real boundary and a test payoff, not a
+  line count — a hard line target rewards relocating glue.
+
+### Added
+
+- **Two shrink-only ratchets** (`lint:position-access`, `lint:monolith-size`):
+  the world-coordinate read surface and the two large files may fall, never
+  grow, so a decomposition step cannot be quietly undone and no vanity
+  extraction is forced. Both run in the release gate.
+- **A measured baseline for the in-place rebase** (`tests/rebasePrecisionBaseline`).
+  The open Float32-transform item is bounded and does not compound: a mount and
+  unmount moves a point 0.06 mm at 1 km, 3.9 mm at 100 km, and repeated cycles
+  do not add to it. The defect is exact reversibility, not drift, which is a
+  smaller problem than assumed and is what the Float64 migration will close.
+- **A slope cross-implementation harness** (`tests/slopeCrossCheck`), ready for
+  a GDAL reference to move `SLOPE-RASTER` from E3 to E4. The check stays skipped
+  and the claim stays `pending` until the reference file is supplied.
+
 ## [0.6.0-alpha.2] - 2026-07-21
 
 A stabilization cut. Almost nothing here is visible in the viewer: it makes the

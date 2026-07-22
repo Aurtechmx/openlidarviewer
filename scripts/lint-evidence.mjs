@@ -103,10 +103,10 @@ for (const k of ['liveEntryKiB', 'ceilingKiB']) {
  * no figure at all is fine; one that mentions a WRONG figure is not.
  */
 const DOCS = [
-  'REPRODUCIBILITY_v0.6.0-alpha.2.md',
-  'VALIDATION_REPORT_v0.6.0-alpha.2.md',
-  'READINESS_REPORT_v0.6.0-alpha.2.md',
-  'KNOWN_LIMITATIONS_v0.6.0-alpha.2.md',
+  'REPRODUCIBILITY_v0.6.0-alpha.3.md',
+  'VALIDATION_REPORT_v0.6.0-alpha.3.md',
+  'READINESS_REPORT_v0.6.0-alpha.3.md',
+  'KNOWN_LIMITATIONS_v0.6.0-alpha.3.md',
 ];
 
 const parseCount = (s) => Number(s.replace(/,/g, ''));

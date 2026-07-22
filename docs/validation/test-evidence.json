@@ -1,12 +1,12 @@
 {
-  "version": "0.6.0-alpha.2",
-  "commit": "9c28c88fe3eb2631830279e039acfb0cbca3575e",
+  "version": "0.6.0-alpha.3",
+  "commit": "ad24836ffcb3a57ce28fb4d7f7770de5a775ccb2",
   "gateExit": 0,
-  "generatedAt": "2026-07-22T00:29:36.887Z",
+  "generatedAt": "2026-07-22T00:45:46.725Z",
   "nodeVersion": "v26.0.0",
   "platform": "darwin-arm64",
   "gateLog": "release/gate.log",
-  "gateLogSha256": "aabb27f264368a5668b03d67c75b7b083c74ac2fa88865822ac955fabc02032c",
+  "gateLogSha256": "7d35901453b02f2ae71cc1e78971c05d81e59014574d661234e32eb41d9f440d",
   "buckets": {
     "unit": {
       "passed": 3013,
