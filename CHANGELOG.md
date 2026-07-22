@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.6.0-alpha.3] - 2026-07-21
+## [0.6.0-alpha.3] - 2026-07-22
 
 A decomposition and precision-groundwork cut, on the same footing as alpha.2:
 almost nothing changes in the viewer. It continues pulling testable logic out

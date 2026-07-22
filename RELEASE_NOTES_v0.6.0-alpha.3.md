@@ -44,7 +44,7 @@ Static files. GitHub Pages, Netlify, any CDN or conventional host.
 Metadata in `CITATION.cff`.
 
 * Version: 0.6.0-alpha.3
-* Release date: 2026-07-21
+* Release date: 2026-07-22
 * License: MIT
 
 Live demo: [lidar.aurtech.mx](https://lidar.aurtech.mx/)  
