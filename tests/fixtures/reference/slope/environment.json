@@ -1,8 +1,7 @@
 {
-  "status": "pending",
-  "note": "Replace with the real environment once slope-gdal.asc is produced. gdalVersion must be the exact output of `gdalinfo --version`.",
-  "gdalVersion": null,
-  "gdalBinary": null,
-  "platform": null,
-  "producedOn": null
+  "referenceTool": "GDAL",
+  "gdalVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+  "command": "gdal raster slope (Horn, degree, xscale 1, yscale 1, no-edges, AAIGrid)",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64"
 }

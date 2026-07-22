@@ -301,21 +301,21 @@ claims:
     algorithm: Horn 3x3 gradient
     algorithmVersion: v0.4.x
     claim: "Slope in degrees per Horn's method; cos-latitude / per-axis cell metres on geographic grids."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/terrainTruth.surface.test.ts]
-    supportingDatasets: [analytic planes]
+    supportingTests: [tests/terrainTruth.surface.test.ts, tests/slopeCrossCheck.test.ts]
+    supportingDatasets: [analytic planes, frozen quadratic DEM with GDAL Horn reference]
     units: [degrees]
     crsDatum: "Handles geographic grids via per-axis cell metres."
     assumptions: ["Horn convention documented"]
     failureModes: ["edge cells", "NoData islands"]
     exportAllowed: true
-    userLabel: "Analytically verified slope (Horn)"
+    userLabel: "Cross-implementation validated slope (Horn)"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
-    externalValidationStatus: pending
-    approvedClaim: "Slope = atan(gradient) verified on analytic planes."
-    prohibitedClaim: ["cross-validated against GDAL/SAGA (pending)"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Horn slope agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 0.5 degree tolerance (max difference under 0.001 degree)."
+    prohibitedClaim: ["field-validated slope accuracy", "survey-grade slope", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated", "slope validated on every terrain type"]
 
   - claimId: HILLSHADE
     product: Hillshade

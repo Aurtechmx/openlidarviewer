@@ -214,7 +214,7 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'pending' },
-  { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'pending' },
+  { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
   { claimId: 'HILLSHADE', referenceTool: 'GDAL', toleranceAbs: 1.0, unit: '(0–255)', status: 'pending' },
   { claimId: 'CONTOURS', referenceTool: 'GDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'GROUND-FILTER', referenceTool: 'PDAL', toleranceAbs: 0, unit: 'class', status: 'pending' },
