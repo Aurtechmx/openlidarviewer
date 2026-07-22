@@ -64,6 +64,8 @@
     "lint:release-sync": "node scripts/lint-release-sync.mjs",
     "lint:release-truth": "node scripts/lint-release-truth.mjs",
     "lint:sbom": "node scripts/lint-sbom.mjs",
+    "release:verify": "node scripts/verify-release-assets.mjs",
+    "release:manifest": "node scripts/create-release-manifest.mjs",
     "docs:render": "node scripts/render-claim-register.mjs",
     "docs:dev": "npm run docs:render && vitepress dev docs-site",
     "docs:build": "npm run docs:render && vitepress build docs-site && node scripts/lint-docs-site.mjs",
