@@ -7,7 +7,7 @@
  * a download.
  *
  * Coordinates are written in **global** space (the cloud's local positions
- * plus its `origin`), so an exported file carries real-world survey
+ * plus its `sourceOrigin`), so an exported file carries real-world survey
  * coordinates and round-trips back through the importers at the written
  * precision — each text importer re-reads coordinates in float64 and
  * recentres before narrowing to float32 (PLY declares `double` x/y/z so
@@ -176,7 +176,12 @@ function droppedChannelLines(
  * parsers must always see the header row first.
  */
 export function toXyz(cloud: PointCloud, delimiter = ' '): string {
-  const { positions, colors, origin } = cloud;
+  // World coordinates come from the SOURCE origin, which is fixed for the
+  // cloud's life. `origin` moves when a layer mounts into a project frame;
+  // sourceOrigin does not, so an export stays in the file's real-world frame
+  // regardless of project membership. (Today the two coincide — mounting is
+  // off — so this is a no-op that stays correct once mounting rebases layers.)
+  const { positions, colors, sourceOrigin } = cloud;
   const n = cloud.pointCount;
   const omitted = n - finitePointCount(positions, n);
   const lines: string[] = [];
@@ -221,9 +226,9 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
     const row: Array<string | number> = [
-      hcoord(positions[i * 3] + origin[0]),
-      hcoord(positions[i * 3 + 1] + origin[1]),
-      coord(positions[i * 3 + 2] + origin[2]),
+      hcoord(positions[i * 3] + sourceOrigin[0]),
+      hcoord(positions[i * 3 + 1] + sourceOrigin[1]),
+      coord(positions[i * 3 + 2] + sourceOrigin[2]),
     ];
     if (colors) row.push(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
     if (intensity) row.push(intensity[i]);
@@ -240,7 +245,12 @@ export function toCsv(cloud: PointCloud): string {
 
 /** Serialise to ASCII PLY, with `uchar` RGB when the cloud carries colour. */
 export function toPly(cloud: PointCloud): string {
-  const { positions, colors, origin } = cloud;
+  // World coordinates come from the SOURCE origin, which is fixed for the
+  // cloud's life. `origin` moves when a layer mounts into a project frame;
+  // sourceOrigin does not, so an export stays in the file's real-world frame
+  // regardless of project membership. (Today the two coincide — mounting is
+  // off — so this is a no-op that stays correct once mounting rebases layers.)
+  const { positions, colors, sourceOrigin } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
@@ -270,9 +280,9 @@ export function toPly(cloud: PointCloud): string {
   const lines: string[] = [header.join('\n')];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
-    const x = hcoord(positions[i * 3] + origin[0]);
-    const y = hcoord(positions[i * 3 + 1] + origin[1]);
-    const z = coord(positions[i * 3 + 2] + origin[2]);
+    const x = hcoord(positions[i * 3] + sourceOrigin[0]);
+    const y = hcoord(positions[i * 3 + 1] + sourceOrigin[1]);
+    const z = coord(positions[i * 3 + 2] + sourceOrigin[2]);
     if (colors) {
       lines.push(`${x} ${y} ${z} ${colors[i * 3]} ${colors[i * 3 + 1]} ${colors[i * 3 + 2]}`);
     } else {
@@ -289,7 +299,12 @@ export function toPly(cloud: PointCloud): string {
  * channels are disclosed as omitted rather than dropped silently.
  */
 export function toObj(cloud: PointCloud): string {
-  const { positions, colors, origin } = cloud;
+  // World coordinates come from the SOURCE origin, which is fixed for the
+  // cloud's life. `origin` moves when a layer mounts into a project frame;
+  // sourceOrigin does not, so an export stays in the file's real-world frame
+  // regardless of project membership. (Today the two coincide — mounting is
+  // off — so this is a no-op that stays correct once mounting rebases layers.)
+  const { positions, colors, sourceOrigin } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
@@ -304,9 +319,9 @@ export function toObj(cloud: PointCloud): string {
   ];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
-    const x = hcoord(positions[i * 3] + origin[0]);
-    const y = hcoord(positions[i * 3 + 1] + origin[1]);
-    const z = coord(positions[i * 3 + 2] + origin[2]);
+    const x = hcoord(positions[i * 3] + sourceOrigin[0]);
+    const y = hcoord(positions[i * 3 + 1] + sourceOrigin[1]);
+    const z = coord(positions[i * 3 + 2] + sourceOrigin[2]);
     if (colors) {
       const r = (colors[i * 3] / 255).toFixed(4);
       const g = (colors[i * 3 + 1] / 255).toFixed(4);
