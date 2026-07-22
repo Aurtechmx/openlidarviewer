@@ -128,20 +128,34 @@ for (const doc of DOCS) {
     }
   }
 
-  // The overall total, however it is phrased — but only where the sentence is
-  // about the unit-test gate. The e2e suite reports its own "161 passed / 4
-  // skipped" and a per-bucket line can use the same phrasing; flagging those
-  // as a wrong gate total would be a false alarm, and a linter that cries
-  // wolf gets switched off, which is how the original defect survives.
+  // Every "N passed / M skipped", classified by what precedes it.
+  //
+  // The e2e suite prints its own "161 passed / 4 skipped" and is skipped by
+  // context. A per-bucket figure — "unit 3,017 passed / 16 skipped" — is
+  // validated against THAT bucket; anything else is the gate total. An earlier
+  // version skipped any line that merely CONTAINED a bucket name, which let a
+  // stale total ride along on the same line as the (correct) per-bucket counts
+  // — "unit 3,017 (16 skipped) · … — 5,703 passed / 34 skipped" passed while
+  // the total was wrong. Classifying each match by its preceding token catches
+  // both a wrong total and a wrong per-bucket figure, without crying wolf.
+  const bucketNames = Object.keys(evidence.buckets);
   for (const line of text.split('\n')) {
-    if (/e2e|playwright|deterministic|gpu|fixture-skipped/i.test(line)) continue;
-    if (Object.keys(evidence.buckets).some((b) => new RegExp(`\\b${b}\\b`, 'i').test(line))) continue;
     for (const m of line.matchAll(/(\d{1,3}(?:,\d{3})*)\s+passed\s*\/\s*(\d+)\s+skipped/g)) {
       const passed = parseCount(m[1]);
       const skipped = parseCount(m[2]);
-      if (passed !== evidence.total.passed || skipped !== evidence.total.skipped) {
+      // Classify by the ~28 chars before the number, not by the whole line — a
+      // gate total and the e2e figure can share one line, and skipping the line
+      // for e2e context used to hide the total that rode along with it.
+      const before = line.slice(Math.max(0, m.index - 28), m.index);
+      // The e2e suite has its own passed/skipped and is not the gate total.
+      if (/e2e|playwright|deterministic|gpu/i.test(before)) continue;
+      const bucket = bucketNames.find((b) => new RegExp(`\\b${b}\\b[^\\w]*$`, 'i').test(before));
+      const expected = bucket
+        ? { passed: evidence.buckets[bucket].passed, skipped: evidence.buckets[bucket].skipped, label: bucket }
+        : { passed: evidence.total.passed, skipped: evidence.total.skipped, label: 'gate total' };
+      if (passed !== expected.passed || skipped !== expected.skipped) {
         problems.push(
-          `${doc}: "${m[0]}" — the gate ran ${n(evidence.total.passed)} passed / ${evidence.total.skipped} skipped.`,
+          `${doc}: "${m[0]}" — the ${expected.label} ran ${n(expected.passed)} passed / ${expected.skipped} skipped.`,
         );
       }
     }

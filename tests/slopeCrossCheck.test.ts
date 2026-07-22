@@ -1,8 +1,9 @@
 /**
  * slopeCrossCheck.test.ts — SLOPE-RASTER against an independent implementation.
  *
- * The evidence ladder tops out at E3: synthetic known-truth checks against our
- * own code. Every entry in `REFERENCE_SLOTS` ships `pending`, so nothing in
+ * Slope reached E4 here: this file compares our Horn slope against a committed
+ * GDAL reference AND the closed-form gradient. Every OTHER entry in
+ * `REFERENCE_SLOTS` still ships `pending`, so for those, nothing in
  * this project has been compared against an implementation we did not write.
  * This is the first slot that can move.
  *

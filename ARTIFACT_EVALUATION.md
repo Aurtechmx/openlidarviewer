@@ -27,7 +27,7 @@ npm run build:live && npm run check:bundle
 ## Claims and their evidence
 
 - Every scientific claim is registered in `docs/validation/claim-register.yaml` with its current evidence level, the level required to be called validated, the tests that support it, and the wording that is allowed or prohibited. `scripts/lint-claim-register.mjs` fails the build if the runtime registry drifts from that file or if prohibited wording appears.
-- The evidence ladder (E0–E6) is defined in `docs/validation/EVIDENCE_MODEL.md`. Nothing in this release is at or above E4 (cross-implementation independence). Synthetic known-truth checks are E3.
+- The evidence ladder (E0–E6) is defined in `docs/validation/EVIDENCE_MODEL.md`. One product is at E4: the slope raster was cross-implementation validated against GDAL 3.13.1 on the analytic fixture (see `tests/slopeCrossCheck.test.ts`). Every other product tops out at E3 (synthetic known-truth checks).
 - `VALIDATION_REPORT_v0.6.0-alpha.3.md` lists exactly what was and was not tested for this alpha (inheriting the terrain/measurement evidence from `VALIDATION_REPORT_v0.5.9.md`); `docs/validation/THREATS_TO_VALIDITY.md` aggregates the limitations.
 
 ## Integrity

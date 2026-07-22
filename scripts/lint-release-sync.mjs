@@ -168,11 +168,15 @@ try {
 // silent and points a reviewer at the wrong release's evidence. That is exactly
 // what happened at alpha.2: README, AI_ASSISTANCE, ARTIFACT_EVALUATION and the
 // docs-site include all still named the alpha.1 validation report.
+// READINESS_REPORT is deliberately NOT here. It is internal go/no-go
+// deliberation, export-ignored from the source archive, so requiring it would
+// make the archive fail its own release-sync — the packaged tree cannot
+// contain a file the packaging step strips. The public evidence set is the
+// three reports that DO ship.
 const EVIDENCE = [
   'VALIDATION_REPORT',
   'KNOWN_LIMITATIONS',
   'REPRODUCIBILITY',
-  'READINESS_REPORT',
 ];
 for (const name of EVIDENCE) {
   const path = `${name}_v${version}.md`;

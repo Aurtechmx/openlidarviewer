@@ -4,7 +4,7 @@ This page aggregates, in one place, the limitations that qualify every scientifi
 
 ## Evidence ceiling
 
-No product is validated above internal evidence. In the E0–E6 ladder, nothing is at or above **E4** (cross-implementation independence): no independent cross-implementation comparison and no field-grade validation have been run. Synthetic known-truth fixtures reach E3, which is *self-consistency against a known analytic surface*, not accuracy against an independent reference. The cross-implementation harness (`src/validation/crossCheck.ts`) exists but every reference slot is `pending`, awaiting external reference outputs that are not bundled.
+One product reached **E4**: the slope raster was cross-implemented against GDAL 3.13.1 on the analytic fixture and agreed with GDAL and the closed-form gradient within the preregistered 0.5 degree tolerance. That is cross-implementation independence for the slope ALGORITHM on this fixture — not field-grade validation (E5) and not the point-cloud-to-DTM pipeline. Every other product tops out at E3 (self-consistency against a known analytic surface), and every reference slot other than `SLOPE-RASTER` is still `pending`, awaiting external reference outputs that are not bundled.
 
 ## Construct threats (are we measuring the right thing?)
 

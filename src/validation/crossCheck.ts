@@ -204,9 +204,10 @@ export interface ReferenceSlot {
 }
 
 /**
- * The reference-fixture manifest. Every slot is `pending`: the harness is in
+ * The reference-fixture manifest. SLOPE-RASTER is `supplied` (compared against
+ * GDAL 3.13.1 on the analytic fixture); every other slot is `pending`: the harness is in
  * place and the procedure is documented, but no external reference output has
- * been generated and committed yet, so nothing here has reached E4. When a
+ * been generated and committed for those, so only slope has reached E4. When a
  * reference is produced per `docs/validation/cross-implementation.md`, flip its
  * `status` to `supplied` and wire the loaded grids into `crossCheck`.
  */

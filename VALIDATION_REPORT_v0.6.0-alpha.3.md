@@ -1,12 +1,12 @@
 # Validation report — OpenLiDARViewer v0.6.0-alpha.3
 
-This report states, soberly, what v0.6.0-alpha.3 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`) and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`).
+This report states, soberly, what v0.6.0-alpha.3 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
 The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, and a shared project-frame foundation. The terrain and contour correctness claims are **inherited unchanged from v0.5.9** — the alpha wave did not touch those algorithms — so their evidence remains as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers the alpha-specific surface on top of that.
 
 ## Evidence ceiling
 
-Unchanged from v0.5.9: no product is validated above internal evidence. On the E0–E6 ladder nothing is at or above E4 (cross-implementation independence); synthetic known-truth checks reach E3. The alpha's new correctness guards are validated at E2–E3 (unit tests against constructed inputs), not against an independent reference implementation.
+One product is at E4. The slope raster is cross-implementation validated: OpenLiDARViewer's Horn slope agreed with GDAL 3.13.1 and with the closed-form gradient over 11,564 interior cells on the analytic fixture, within the preregistered 0.5 degree tolerance (max difference under 0.001 degree). This is E4 for the slope algorithm on this fixture only — not the point-cloud-to-DTM pipeline, not field accuracy, not survey-grade. Every other terrain product tops out at E3 (synthetic known-truth against our own implementation); no product is field-validated (E5). The alpha's new correctness guards are validated at E2–E3 against constructed inputs.
 
 ## What was tested (alpha wave)
 
@@ -22,7 +22,7 @@ Run with `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, `test:sl
 - **Rebase precision is quantified, not assumed.** `PointCloud.rebaseQuantum` reports the Float32 step a mount would land on. Measured: a lone georeferenced scan anchors on its own origin and loses nothing (~1e-8 m); the cost scales with inter-layer separation, reaching 1 mm at 100 km apart. Positions remain Float32, so widely-separated layers trade residual precision for correct relative placement — see Known Limitations.
 - **Progressive EPT attach.** `tests/eptStreaming.test.ts` verifies first-paint-then-continue parity with the full walk and that a persistently-failing fetch terminates (no allocation loop).
 
-Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): unit 3,017 passed / 16 skipped, export 605, terrain 1,222 / 18 skipped, ui 429, slow 515 — 5,703 passed / 34 skipped; build-contract 11; live/obfuscated build passed; production dependency audit 0 vulnerabilities. The full e2e suite passed **locally** here (161 passed / 4 fixture-skipped / 0 failed) — the *gating* browser evidence is a green GitHub Actions run on the tagged commit, which is pending (see "What was NOT tested").
+Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): unit 3,017 passed / 16 skipped, export 605, terrain 1,222, ui 429, slow 515 — 5,788 passed / 16 skipped; build-contract 11; live/obfuscated build passed; production dependency audit 0 vulnerabilities. The full e2e suite passed **locally** here (161 passed / 4 fixture-skipped / 0 failed) — the *gating* browser evidence is a green GitHub Actions run on the tagged commit, which is pending (see "What was NOT tested").
 
 ## What was NOT tested (and is staged, not claimed)
 

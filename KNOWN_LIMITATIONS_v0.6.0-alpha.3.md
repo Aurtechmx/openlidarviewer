@@ -134,7 +134,7 @@ file with the right code in the wrong encoding.
 
 ## Evidence ceiling: internal self-consistency
 
-Scientific evidence tops out at E3 — synthetic known-truth checks against our own implementation. No terrain product has been compared against an independent implementation (PDAL / GDAL / CloudCompare); every `REFERENCE_SLOT` in `docs/validation/cross-implementation.md` still ships `pending`. This alpha does not claim survey-grade accuracy, standards compliance, or independent field validation.
+One product has been compared against an independent implementation: the slope raster agreed with GDAL 3.13.1 (and the closed-form gradient) on the analytic fixture within the preregistered 0.5 degree tolerance, so `SLOPE-RASTER` is at E4. Every OTHER `REFERENCE_SLOT` in `docs/validation/cross-implementation.md` still ships `pending`, and every other terrain product tops out at E3 — synthetic known-truth against our own implementation. This alpha does not claim survey-grade accuracy, standards compliance, or independent field validation, and the slope result validates the algorithm on the fixture, not the point-cloud-to-DTM pipeline.
 
 ## No cross-CRS reprojection
 

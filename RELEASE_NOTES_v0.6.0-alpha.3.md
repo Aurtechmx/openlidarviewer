@@ -25,11 +25,11 @@ Two shrink-only ratchets now run in the release gate. One holds the world-coordi
 
 The one coordinate-integrity item left is that the project transform rewrites Float32 positions in place. This cut measures exactly what that costs. A mount and unmount moves a point about 0.06 mm at 1 km of separation and 3.9 mm at 100 km, and repeated cycles do not add to it: the error saturates after the first. The defect is exact reversibility, not runaway drift, which is a smaller problem than the roadmap assumed and is what the Float64 transform will close.
 
-A slope cross-implementation harness is also in place, ready to move the `SLOPE-RASTER` claim from internal self-consistency to independent cross-implementation once a GDAL reference is supplied. Until then the check stays skipped and the claim stays pending.
+Slope reached E4. OpenLiDARViewer's Horn slope was independently cross-implemented against GDAL 3.13.1 on a frozen analytic DEM; OpenLiDARViewer, GDAL and the closed-form gradient agreed over 11,564 interior cells, with an OpenLiDARViewer-to-GDAL maximum difference of about 0.000037 degree, inside the preregistered 0.5 degree tolerance. This is E4 evidence for the slope-raster algorithm on this fixture only. Every other independent-reference slot remains pending, and it does not validate the point-cloud-to-DTM pipeline, other terrain products, field accuracy or survey-grade use.
 
 ## Known limitations
 
-Unchanged from alpha.2, and stated in full in `KNOWN_LIMITATIONS_v0.6.0-alpha.3.md`. In brief: multi-layer mounting is disabled, the project transform still rewrites Float32 positions, no cross-CRS reprojection, and evidence tops out at internal self-consistency with no independent or field validation and no survey-grade claim.
+Unchanged from alpha.2, and stated in full in `KNOWN_LIMITATIONS_v0.6.0-alpha.3.md`. In brief: multi-layer mounting is disabled, the project transform still rewrites Float32 positions, and there is no cross-CRS reprojection. Slope is cross-implementation validated (E4) against GDAL on the analytic fixture; every other terrain product tops out at internal self-consistency (E3), with no field validation and no survey-grade claim.
 
 ## Compatibility
 
