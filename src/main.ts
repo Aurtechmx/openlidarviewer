@@ -263,6 +263,7 @@ import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { remoteEptName, remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
+import { deriveVolumeRecord, horizontalSpanXY } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { createAppRuntime } from './app/AppRuntime';
@@ -681,36 +682,6 @@ function saveLassoVolumeIfPending(): void {
   }
 }
 
-/**
- * Translate a `VolumeResult` (from the lasso math) into the persisted
- * `VolumeRecord` shape used by Volume measurements. The two carry
- * almost identical fields; the record drops the sample-walk telemetry
- * and adds the confidence band derived from `pointsInPolygon`.
- */
-function deriveVolumeRecord(
-  result: import('./render/measure/volume').VolumeResult,
-  referenceZ: number,
-): import('./render/measure/types').VolumeRecord {
-  const inPoly = result.pointsInPolygon;
-  const confidence: 'high' | 'medium' | 'low' =
-    inPoly >= 1000 ? 'high' : inPoly >= 100 ? 'medium' : 'low';
-  const record: import('./render/measure/types').VolumeRecord = {
-    fill: result.fill,
-    cut: result.cut,
-    net: result.net,
-    referenceZ,
-    footprintArea: result.footprintArea,
-    pointsInPolygon: result.pointsInPolygon,
-    densityNative: result.densityNative,
-    confidence,
-  };
-  // Non-finite returns inside the footprint were excluded from the
-  // integration — keep the count on the record so the partial coverage
-  // stays disclosed.
-  const skippedNonFinite = result.skippedNonFinite ?? 0;
-  if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
-  return record;
-}
 
 // ── Lasso volume button in the measure dock ──────────────────────────────
 // Placed at the end of the measure-kind row, paired with Volume. The
@@ -7332,29 +7303,6 @@ function resetToEmptyState(): void {
  * clouds may take a moment.
  */
 
-/**
- * The larger of a cloud's X/Y world-frame spans, from a strided sample — a cheap
- * scale for the epoch-alignment refuse gate (residual ≫ a fraction of the scene
- * span means the fit never registered). Unit-agnostic (metres or feet).
- */
-function horizontalSpanXY(positions: Float32Array, origin?: readonly [number, number, number]): number {
-  const n = (positions.length / 3) | 0;
-  if (n === 0) return 0;
-  const ox = origin?.[0] ?? 0;
-  const oy = origin?.[1] ?? 0;
-  const stride = Math.max(1, Math.floor(n / 2000));
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (let i = 0; i < n; i += stride) {
-    const x = positions[i * 3] + ox;
-    const y = positions[i * 3 + 1] + oy;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  return minX <= maxX ? Math.max(maxX - minX, maxY - minY) : 0;
-}
 
 function compareLoadedLayers(): void {
   const ids = viewer.clouds();
