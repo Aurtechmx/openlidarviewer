@@ -27,6 +27,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # `npm ci` must not rewrite the lockfile. If it does, the resolved tree
+      # is not the one the SBOM, the audit, and the evidence describe.
+      - name: Lockfile is unchanged by a clean install
+        run: git diff --exit-code -- package-lock.json
       - name: Typecheck
         run: npm run typecheck
       - name: Main-deferral lint (no top-level viewer.* deref outside viewerLoaded)
@@ -47,6 +51,18 @@ jobs:
         run: npm run gen:claim-registry && git diff --exit-code
       - name: Bucket partition integrity (every test file in exactly one bucket)
         run: npm run test:buckets:verify
+      - name: Release-truth lint (public docs match the machine state)
+        run: npm run lint:release-truth
+      - name: SBOM lint (CycloneDX root + components match the lockfile)
+        run: npm run lint:sbom
+      - name: Position-access lint (world coordinates go through the accessor)
+        run: npm run lint:position-access
+      - name: Monolith size ratchet (main.ts / Viewer.ts may not grow)
+        run: npm run lint:monolith-size
+      - name: Evidence lint (documents match the recorded test evidence)
+        run: npm run lint:evidence
+      - name: Dependency singletons (one copy of each critical package)
+        run: npm run check:deps
       # Two DISTINCT size contracts, both enforced:
       #  • test:build  → PLAIN build + chunk-isolation (only vendor-three-webgpu
       #    may exceed the 500 KiB isolation threshold).
