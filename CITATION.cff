@@ -9,7 +9,7 @@ authors:
     affiliation: "Aurtech"
 
 version: "0.6.0-alpha.3"
-date-released: "2026-07-22"
+date-released: "2026-07-23"
 license: MIT
 repository-code: "https://github.com/Aurtechmx/openlidarviewer"
 url: "https://lidar.aurtech.mx/"

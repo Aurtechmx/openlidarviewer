@@ -364,6 +364,37 @@ export class PointCloud {
     return out;
   }
 
+  /**
+   * The project-local coordinate of point `index` under a layer transform:
+   * source-local position plus the Float64 `sourceToProject` translation,
+   * computed at read time. Step 1 of the flip sequence
+   * (docs/architecture/float64-transform.md): the buffer is never written,
+   * so with the identity transform — the single-layer case, and every mount
+   * while the destructive rebase remains — this is bit-identical to the raw
+   * source-local position, which is what makes each consumer migration a
+   * provable no-op.
+   *
+   * Takes the transform as an argument rather than storing it: placement is
+   * data ABOUT the layer, owned by the project frame, and a cloud must not
+   * carry a second copy that can drift from it.
+   *
+   * Pass `out` to avoid allocating a tuple per point in a hot loop.
+   */
+  projectXYZ(
+    index: number,
+    transform: { readonly sourceToProject: readonly [number, number, number] },
+    out: [number, number, number] = [0, 0, 0],
+  ): [number, number, number] {
+    const base = index * 3;
+    if (index < 0 || base + 2 >= this.positions.length) {
+      throw new RangeError(`projectXYZ: index ${index} out of range for ${this.positions.length / 3} points`);
+    }
+    out[0] = this.positions[base] + transform.sourceToProject[0];
+    out[1] = this.positions[base + 1] + transform.sourceToProject[1];
+    out[2] = this.positions[base + 2] + transform.sourceToProject[2];
+    return out;
+  }
+
   /** Whether this cloud currently sits on an origin other than its file's. */
   get isRebased(): boolean {
     return (

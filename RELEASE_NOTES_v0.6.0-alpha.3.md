@@ -41,7 +41,7 @@ Two shrink-only ratchets now run in the release gate. One holds the world-coordi
 
 ## Runtime validation
 
-The suite is partitioned across 492 test files: 254 unit, 43 export, 107 terrain, 29 UI and 59 slow. The recorded gate run reports 5,879 passing and 16 skipped.
+The suite is partitioned across 492 test files: 257 unit, 43 export, 107 terrain, 29 UI and 59 slow. The recorded gate run reports 5,888 passing and 16 skipped.
 
 That is software-validation coverage, not scientific evidence. The two are kept apart on purpose. A passing runtime suite shows the implementation behaves as specified; it does not validate a scientific result.
 
@@ -149,7 +149,7 @@ Static files. Host on GitHub Pages, Netlify, a static CDN, or any conventional w
 Cite OpenLiDARViewer with the metadata in `CITATION.cff`:
 
 * Version: 0.6.0-alpha.3
-* Release date: 2026-07-22
+* Release date: 2026-07-23
 * License: MIT
 
 Live demo: [lidar.aurtech.mx](https://lidar.aurtech.mx/)  

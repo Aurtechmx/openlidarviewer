@@ -1,5 +1,5 @@
 {
-  "total": 177,
+  "total": 182,
   "files": {
     "src/analysis/modules/healthCheck.ts": 7,
     "src/analysis/modules/scanReport.ts": 1,
@@ -19,7 +19,7 @@
     "src/io/loadXyz.ts": 1,
     "src/io/parseWorker.ts": 2,
     "src/main.ts": 17,
-    "src/model/PointCloud.ts": 13,
+    "src/model/PointCloud.ts": 18,
     "src/process/voxelDownsample.ts": 1,
     "src/render/InspectTool.ts": 1,
     "src/render/Viewer.ts": 52,
