@@ -2,4 +2,4 @@
 title: Validation report
 ---
 
-<!--@include: ../../VALIDATION_REPORT_v0.6.0-alpha.3.md-->
+<!--@include: ../../VALIDATION_REPORT_v0.6.0.md-->

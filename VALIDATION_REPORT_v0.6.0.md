@@ -1,12 +1,12 @@
-# Validation report — OpenLiDARViewer v0.6.0-alpha.3
+# Validation report — OpenLiDARViewer v0.6.0
 
-This report states, soberly, what v0.6.0-alpha.3 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
+This report states, soberly, what v0.6.0 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
-The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, and a shared project-frame foundation. The terrain and contour **algorithms** are inherited from v0.5.9 — the alpha wave did not touch them — but alpha.3 adds independent cross-implementation validation for the Horn slope raster, promoting `SLOPE-RASTER` to E4. Other terrain and contour claims retain their previous evidence levels, as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers the alpha-specific surface on top of that.
+The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, and a shared project-frame foundation. The terrain and contour **algorithms** are inherited from v0.5.9 — the v0.6 cycle did not touch them — but alpha.3 adds independent cross-implementation validation for the Horn slope raster, promoting `SLOPE-RASTER` to E4. Other terrain and contour claims retain their previous evidence levels, as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers the release-specific surface on top of that.
 
 ## Evidence ceiling
 
-One product is at E4. The slope raster is cross-implementation validated: OpenLiDARViewer's Horn slope agreed with GDAL 3.13.1 and with the closed-form gradient over 11,564 interior cells on the analytic fixture, within the preregistered 0.5 degree tolerance (max difference under 0.001 degree). This is E4 for the slope algorithm on this fixture only — not the point-cloud-to-DTM pipeline, not field accuracy, not survey-grade. Every other terrain product tops out at E3 (synthetic known-truth against our own implementation); no product is field-validated (E5). The alpha's new correctness guards are validated at E2–E3 against constructed inputs.
+One product is at E4. The slope raster is cross-implementation validated: OpenLiDARViewer's Horn slope agreed with GDAL 3.13.1 and with the closed-form gradient over 11,564 interior cells on the analytic fixture, within the preregistered 0.5 degree tolerance (max difference under 0.001 degree). This is E4 for the slope algorithm on this fixture only — not the point-cloud-to-DTM pipeline, not field accuracy, not survey-grade. Every other terrain product tops out at E3 (synthetic known-truth against our own implementation); no product is field-validated (E5). The release's correctness guards are validated at E2–E3 against constructed inputs.
 
 ## What was tested (alpha wave)
 
@@ -26,7 +26,7 @@ Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): 
 
 ## What was NOT tested (and is staged, not claimed)
 
-- **Physical multi-layer mounting is DISABLED in alpha.3.** The shared project frame and the compatibility model are present and tested; layers are not co-registered and are not merged into one estimator. Multi-layer placement is therefore unverified in a browser by construction — nothing places them. Compare Studio, cross-layer measurement and elevation ramps do not read frame offsets. See [KNOWN_LIMITATIONS_v0.6.0-alpha.3.md](KNOWN_LIMITATIONS_v0.6.0-alpha.3.md).
+- **Physical multi-layer mounting is DISABLED in v0.6.0.** The shared project frame and the compatibility model are present and tested; layers are not co-registered and are not merged into one estimator. Multi-layer placement is therefore unverified in a browser by construction — nothing places them. Compare Studio, cross-layer measurement and elevation ramps do not read frame offsets. See [KNOWN_LIMITATIONS_v0.6.0.md](KNOWN_LIMITATIONS_v0.6.0.md).
 - **The anti-thrash streaming-selection option is opt-in and unwired.** Its logic is unit-tested; its visual effect on flicker is unverified because it needs a browser and is not enabled in this build.
 - **Browser behaviour on GitHub CI is not part of this archive's evidence.** The e2e suite passed locally; a green GitHub Actions run on the exact tagged commit is required before publication and is not asserted here.
 
@@ -40,4 +40,4 @@ npm run test:e2e         # full Playwright suite
 
 ## Verdict
 
-The alpha's new correctness guards are validated at the internal-evidence ceiling; the inherited terrain/measurement claims stand as in v0.5.9. The project-frame runtime integration and the browser-verified items are explicitly out of scope for this archive's evidence and are documented as staged.
+The release's correctness guards are validated at the internal-evidence ceiling; the inherited terrain/measurement claims stand as in v0.5.9. The project-frame runtime integration and the browser-verified items are explicitly out of scope for this archive's evidence and are documented as staged.

@@ -1,7 +1,7 @@
 {
   "name": "openlidarviewer",
-  "version": "0.6.0-alpha.3",
-  "description": "Open any 3D scan \u2014 drone LiDAR, terrestrial laser scan, or phone scan \u2014 instantly and privately, in a browser tab. No install, no upload, no conversion.",
+  "version": "0.6.0",
+  "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
   "license": "MIT",
   "author": "A. Urias",
   "homepage": "https://lidar.aurtech.mx/",

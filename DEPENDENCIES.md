@@ -1,4 +1,4 @@
-# Dependency audit — v0.6.0-alpha.3
+# Dependency audit — v0.6.0
 
 This is the committed baseline for the alpha.3 release line, recorded
 2026-07-23 (UTC) from the committed `package-lock.json`. It is a baseline, not
@@ -12,12 +12,12 @@ No package was added, removed, or upgraded.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.0-alpha.3 |
+| Release line | v0.6.0 |
 | Baseline date (UTC) | 2026-07-23 |
 | Canonical Node | 22.17.1 (`.nvmrc`) |
 | Canonical npm | 10.9.2 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.0-alpha.3`, 59 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.0`, 59 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](sbom.json). Licences are credited in

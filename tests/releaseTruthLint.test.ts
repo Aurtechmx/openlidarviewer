@@ -46,7 +46,9 @@ describe('lint:release-truth', () => {
   });
 
   it('fails on a prior-release present-tense mounting claim', () => {
-    const doc = realRead(KNOWN)!.replace('DISABLED in alpha.3', 'DISABLED in alpha.2');
+    // Version-agnostic: corrupt whatever the CURRENT doc says into a stale
+    // prerelease identifier — the rule must flag it at stable versions too.
+    const doc = realRead(KNOWN)!.replace(/DISABLED in [\w.]+/, 'DISABLED in alpha.2');
     const problems = problemsFor(withOverride(KNOWN, doc));
     expect(problems.some((p) => p.includes('DISABLED in alpha.2'))).toBe(true);
   });

@@ -1,6 +1,6 @@
-# Known limitations — OpenLiDARViewer v0.6.0-alpha.3
+# Known limitations — OpenLiDARViewer v0.6.0
 
-This is an alpha for evaluation. The items below are known and deliberate — recorded here rather than hidden, in keeping with the project's honesty contract.
+This is the stable v0.6.0 release. The items below are known and deliberate — recorded here rather than hidden, in keeping with the project's honesty contract.
 
 ## The two monoliths are still monoliths
 
@@ -10,13 +10,13 @@ This is an alpha for evaluation. The items below are known and deliberate — re
 
 `ProjectSpatialFrame` / `LayerSpatialTransform` (value types + pure transform math) are tested and documented (`docs/architecture/project-spatial-frame.md`). This release carries **step 1** of the wiring plan: the app now owns a live project frame (`src/app/projectFrame.ts`, on `AppContext`), reseeded from the loaded layer set on every change, choosing one shared origin and deriving each layer's translation into it. A single layer anchors the frame at its own origin, so its transform is the identity and the single-scan path is unchanged.
 
-**Physical multi-layer mounting is DISABLED in alpha.3** (`MULTI_LAYER_MOUNT_ENABLED = false`). The mount mechanism exists and is tested — a layer's placement in the project frame is a per-layer Float64 translation held beside the cloud, applied per mesh by the renderer and per read by the analysis consumers, so rendering, picking, terrain, lasso, profiles, volumes and exports all read one frame — but it is not the shipped behaviour. Multiple layers may be loaded and analysed individually; they are not co-registered and are not merged into one estimator. Turning mounting on is reserved for the stable cycle, and waits on browser verification of two-layer placement (docs/architecture/float64-transform.md, step 6). Still staged for this alpha:
+**Physical multi-layer mounting is DISABLED in v0.6.0** (`MULTI_LAYER_MOUNT_ENABLED = false`). The mount mechanism exists and is tested — a layer's placement in the project frame is a per-layer Float64 translation held beside the cloud, applied per mesh by the renderer and per read by the analysis consumers, so rendering, picking, terrain, lasso, profiles, volumes and exports all read one frame — but it is not the shipped behaviour. Multiple layers may be loaded and analysed individually; they are not co-registered and are not merged into one estimator. Turning mounting on is reserved for the stable cycle, and waits on browser verification of two-layer placement (docs/architecture/float64-transform.md, step 6). Still staged for this release:
 
 - **Two-scan placement is unverified in a browser** — and cannot be verified while mounting is off, because nothing places them. That confirmation belongs to the cycle that turns mounting on.
 - **Mounting no longer rewrites the data.** Earlier alphas mounted by adding the project offset into the Float32 positions in place, which was lossy and made the round trip inexact. That mechanism is removed: source geometry is immutable (byte-identity pinned by `tests/sourceGeometryImmutable.test.ts`), and mount/unmount are exact inverses because setting and clearing a Float64 placement re-quantises nothing. The mm-precision refusal gates REMAIN as conservative admission rules — they model the retired mechanism's measured cost via `PointCloud.rebaseQuantum` (two tiles 1 km apart would have cost ~0.02 mm; 100 km a full millimetre) — until mounting is revisited with browser evidence.
 - Elevation colour ramps are normalised PER LAYER (each layer's own min/max), so a frame offset cancels in the normalisation and per-layer colours are correct — verified empirically. What ramps do NOT do is share one scale across layers, so the same colour on two layers does not mean the same absolute height; that is a pre-frame design choice, and a scene-shared ramp is the open step-5 decision. The measurement datum DOES follow the frame when every loaded layer is in it (step 4), and falls back to the pre-frame unanimity rule otherwise.
 
-For this alpha:
+For this release:
 
 - Cross-layer operations require a shared CRS, and no layer is moved: every layer stays in the frame its file declared.
 - **Multi-dataset comparison is experimental.** Compare Studio, cross-layer measurement, shared clipping and elevation ramps do not yet read the frame's offsets (steps 3–5 of the plan).
@@ -54,7 +54,7 @@ undeclared unit refuses rather than borrowing the other axis's, and
 and what it stands for depends on latitude.
 
 **Streaming sources meet the same bar, and are never merged with static ones
-in this alpha.** A stream's points are local to its own render origin and a
+in this release.** A stream's points are local to its own render origin and a
 static cloud's to its own — independent numbers — so agreeing on CRS is not
 occupying the same space. Merging requires a shared MOUNTED frame, and nothing
 is mounted here, so a stream is analysed on its own. Alone, it is fully usable.
@@ -138,7 +138,7 @@ file with the right code in the wrong encoding.
 
 ## Evidence ceiling: internal self-consistency
 
-One product has been compared against an independent implementation: the slope raster agreed with GDAL 3.13.1 (and the closed-form gradient) on the analytic fixture within the preregistered 0.5 degree tolerance, so `SLOPE-RASTER` is at E4. Every OTHER `REFERENCE_SLOT` in `docs/validation/cross-implementation.md` still ships `pending`, and every other terrain product tops out at E3 — synthetic known-truth against our own implementation. This alpha does not claim survey-grade accuracy, standards compliance, or independent field validation, and the slope result validates the algorithm on the fixture, not the point-cloud-to-DTM pipeline.
+One product has been compared against an independent implementation: the slope raster agreed with GDAL 3.13.1 (and the closed-form gradient) on the analytic fixture within the preregistered 0.5 degree tolerance, so `SLOPE-RASTER` is at E4. Every OTHER `REFERENCE_SLOT` in `docs/validation/cross-implementation.md` still ships `pending`, and every other terrain product tops out at E3 — synthetic known-truth against our own implementation. This release does not claim survey-grade accuracy, standards compliance, or independent field validation, and the slope result validates the algorithm on the fixture, not the point-cloud-to-DTM pipeline.
 
 ## No cross-CRS reprojection
 

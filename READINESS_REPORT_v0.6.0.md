@@ -1,10 +1,10 @@
-# v0.6.0-alpha.3 publication-readiness report
+# v0.6.0 publication-readiness report
 
 A sober account of what is ready and what remains before this alpha is published on GitHub.
 
 ## Release identity
 
-- Version `0.6.0-alpha.3` across `package.json`, lockfile, README, CHANGELOG, `RELEASE_NOTES_v0.6.0-alpha.3.md`, `CITATION.cff`, and the service-worker cache (`lint:release-sync` enforces this).
+- Version `0.6.0` across `package.json`, lockfile, README, CHANGELOG, `RELEASE_NOTES_v0.6.0.md`, `CITATION.cff`, and the service-worker cache (`lint:release-sync` enforces this).
 - This is a **pre-release / alpha** for evaluation; interfaces and internals may change before v0.6.0.
 
 ## Test and build gate
@@ -20,11 +20,11 @@ Run locally at the alpha head commit (**not yet a Git tag** — the published ta
 ## Dependency and license
 
 - Production dependency audit: **0 vulnerabilities**. (Dev-only tooling may carry advisories in nested VitePress/Vite/esbuild that are not in the deployed runtime.)
-- License: MIT (`LICENSE`, `package.json`). SBOM (`sbom.json`, CycloneDX) regenerated from the current lockfile at root component `openlidarviewer 0.6.0-alpha.3`.
+- License: MIT (`LICENSE`, `package.json`). SBOM (`sbom.json`, CycloneDX) regenerated from the current lockfile at root component `openlidarviewer 0.6.0`.
 
 ## Authorship and citation
 
-- `CITATION.cff` declares `0.6.0-alpha.3`. Its `date-released` must be set to the **actual GitHub publication date** immediately before tagging.
+- `CITATION.cff` declares `0.6.0`. Its `date-released` must be set to the **actual GitHub publication date** immediately before tagging.
 - `AI_ASSISTANCE.md` updated for the alpha and linked to this release's validation report.
 
 ## Where the figures come from
@@ -44,8 +44,8 @@ it by adding them up.
 
 ## Claims and evidence
 
-- Evidence package: [VALIDATION_REPORT_v0.6.0-alpha.3.md](VALIDATION_REPORT_v0.6.0-alpha.3.md), [KNOWN_LIMITATIONS_v0.6.0-alpha.3.md](KNOWN_LIMITATIONS_v0.6.0-alpha.3.md), and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`). Terrain/measurement claims inherited unchanged from v0.5.9.
-- Claim register (`docs/validation/claim-register.yaml`) version stamp advanced to `0.6.0-alpha.3` with the inheritance noted; `lint:claim-register` passes.
+- Evidence package: [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md), [KNOWN_LIMITATIONS_v0.6.0.md](KNOWN_LIMITATIONS_v0.6.0.md), and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`). Terrain/measurement claims inherited unchanged from v0.5.9.
+- Claim register (`docs/validation/claim-register.yaml`) version stamp advanced to `0.6.0` with the inheritance noted; `lint:claim-register` passes.
 
 ## The gate runner terminates, verified
 

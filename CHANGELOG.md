@@ -2,6 +2,18 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.0] - 2026-07-23
+
+The stable v0.6 release. Spatial operations are deterministic, explicit and
+non-destructive: the in-place Float32 rebase is removed and source geometry
+is immutable by proof; mounting is a Float64 placement. Measurements carry
+context lines and every layer gets a health card; streamed exports state
+their resident-of-source scope in the file; corrupt COPC input fails with
+structured errors (two real fixes: clamped past-EOF hierarchy ranges, raw
+decompressor aborts crossing the worker boundary). Claims, stability and
+language are governed by CLAIMS_AND_LIMITATIONS.md, STABILITY_POLICY.md and
+lint:claims-language. Full detail in RELEASE_NOTES_v0.6.0.md.
+
 ## [0.6.0-alpha.3] - 2026-07-23
 
 A decomposition and precision-groundwork cut, on the same footing as alpha.2:

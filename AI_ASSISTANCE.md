@@ -1,7 +1,7 @@
 # AI assistance
 
 Generative AI tools were used during development of OpenLiDARViewer, including
-v0.5.9 through v0.6.0-alpha.3: drafting and revising code and tests, reviewing changes for edge cases
+v0.5.9 through v0.6.0: drafting and revising code and tests, reviewing changes for edge cases
 and defects, editing documentation, and preparing release checks. Their output
 was treated as suggestions, not decisions — reviewed against the existing
 architecture, changed where needed, and validated through source inspection, the
@@ -21,7 +21,7 @@ No benchmark, test result, citation, compatibility statement, or scientific
 conclusion is presented as verified unless it is backed by the repository, an
 executed test, a documented measurement, or a reviewed primary source. Generated
 values were never accepted as evidence. What is and is not validated is recorded
-in [VALIDATION_REPORT_v0.6.0-alpha.3.md](VALIDATION_REPORT_v0.6.0-alpha.3.md)
+in [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md)
 (with the terrain/measurement claims inherited from
 [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md)).
 

@@ -22,7 +22,7 @@
 // Bump on every release: `activate` deletes any cache whose name !== VERSION,
 // so changing the name is what prunes the previous release's cached bundles.
 // Tied to the app version so a tagged release prunes automatically.
-const VERSION = 'olv-shell-0.6.0-alpha.3';
+const VERSION = 'olv-shell-0.6.0';
 const SHELL = [
   './',
   './index.html',

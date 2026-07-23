@@ -90,7 +90,12 @@ export function collectReleaseTruthProblems(read) {
   }
 
   // ── 2. Present-tense prior-release identifiers in current truth docs ───────
-  if (currentPre) {
+  // Runs for STABLE versions too: a stable doc saying "DISABLED in alpha.3"
+  // is a present-tense claim about a superseded release — the exact blind
+  // spot the v0.6.0 promotion exposed (rule was gated on currentPre, so it
+  // switched itself off at the release that needed it most).
+  {
+    const say = currentPre ?? `v${version}`;
     for (const doc of [KNOWN, VALREPORT]) {
       const text = read(doc);
       if (text == null) continue;
@@ -99,7 +104,7 @@ export function collectReleaseTruthProblems(read) {
         if (pre !== currentPre) {
           problems.push(
             `${doc} says "DISABLED in ${pre}" — this is a present-tense claim about ` +
-              `the current release, which is ${currentPre}. Say "${currentPre}".`,
+              `the current release, which is ${say}. Say "${say}".`,
           );
         }
       }
