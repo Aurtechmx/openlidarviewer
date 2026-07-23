@@ -95,6 +95,17 @@ function omittedPointsLine(omitted: number): string {
  * calling it one would be its own false statement.
  */
 function subsetLine(cloud: PointCloud): string | null {
+  // Streaming resident snapshot: the source's declared total rides its own
+  // field (the snapshot itself is internally consistent — see
+  // residentSnapshot.ts), and the cause is streaming, not a load stride.
+  const src = cloud.sourceDeclaredPointCount;
+  if (src !== undefined && Number.isFinite(src) && cloud.pointCount < src) {
+    return (
+      `SUBSET: ${cloud.pointCount.toLocaleString('en-US')} of ` +
+      `${src.toLocaleString('en-US')} points the source declared — streamed ` +
+      `resident set at display resolution, not the whole scan`
+    );
+  }
   const declared = cloud.declaredPointCount;
   if (declared === undefined || !Number.isFinite(declared)) return null;
   const held = cloud.pointCount;

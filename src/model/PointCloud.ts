@@ -123,6 +123,7 @@ export interface PointCloudOptions {
    * integrity check can compare it against the actually-loaded count.
    */
   declaredPointCount?: number;
+  sourceDeclaredPointCount?: number;
   /**
    * The point count actually decoded from the file, before any downsampling.
    * Survives voxel downsampling so the Health Check compares the file's
@@ -196,6 +197,13 @@ export class PointCloud {
   readonly declaredPointCount?: number;
   readonly decodedPointCount?: number;
   readonly loadStride?: number;
+  /**
+   * For a streaming resident snapshot: the SOURCE's declared total, distinct
+   * from `declaredPointCount` (which stays equal to the held count so the
+   * Health Check reads the snapshot as internally consistent). The exporters'
+   * scope disclosure reads this to state resident-of-source honestly.
+   */
+  readonly sourceDeclaredPointCount?: number;
   readonly metadata?: CloudMetadata;
 
   /**
@@ -260,6 +268,7 @@ export class PointCloud {
     this.declaredPointCount = options.declaredPointCount;
     this.decodedPointCount = options.decodedPointCount;
     this.loadStride = options.loadStride;
+    this.sourceDeclaredPointCount = options.sourceDeclaredPointCount;
     this.metadata = options.metadata;
   }
 

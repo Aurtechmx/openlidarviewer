@@ -3825,8 +3825,8 @@ export class Viewer {
     return buildResidentSnapshot(chunks, {
       origin: s.cloud.renderOrigin,
       name: s.cloud.name,
-      // COPC and EPT both decode LAZ point records — the honest source format.
-      sourceFormat: 'laz',
+      sourceFormat: 'laz', // COPC and EPT both decode LAZ point records
+      sourcePointCount: s.cloud.sourcePointCount,
       ...(crs ? { metadata: { crs } } : {}),
     });
   }
