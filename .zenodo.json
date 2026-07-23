@@ -1,0 +1,35 @@
+{
+  "title": "OpenLiDARViewer",
+  "upload_type": "software",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "Urias, A.",
+      "affiliation": "Aurtech"
+    }
+  ],
+  "description": "OpenLiDARViewer is an open-source, local-first, browser-native platform for LiDAR and point-cloud inspection, streaming visualization, measurement, terrain analysis, validation, and reproducible reporting. Each release ships with machine-generated test evidence, a release manifest binding the tag to the commit and to every attached artifact's hash, a CycloneDX SBOM, and versioned validation, limitations, and reproducibility documents. Scientific claims are bounded and recorded in a machine-checked claim register; the vocabulary and the claim set are defined in CLAIMS_AND_LIMITATIONS.md.",
+  "keywords": [
+    "LiDAR",
+    "point cloud",
+    "geospatial software",
+    "browser-native visualization",
+    "terrain analysis",
+    "COPC",
+    "EPT",
+    "WebGPU",
+    "research software"
+  ],
+  "related_identifiers": [
+    {
+      "relation": "isSupplementTo",
+      "identifier": "https://github.com/Aurtechmx/openlidarviewer",
+      "resource_type": "software"
+    },
+    {
+      "relation": "isDescribedBy",
+      "identifier": "https://lidar.aurtech.mx/",
+      "resource_type": "other"
+    }
+  ]
+}
