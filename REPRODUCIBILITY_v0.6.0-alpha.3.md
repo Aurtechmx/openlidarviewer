@@ -74,7 +74,7 @@ full asset set and how the hash chain closes.
 
 | Reported figure | Command |
 |---|---|
-| unit 3,132 (16 skipped) · export 616 · terrain 1,240 · ui 429 · slow 517 — 5,950 passed / 16 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
+| unit 3,132 (16 skipped) · export 618 · terrain 1,240 · ui 429 · slow 531 — 5,950 passed / 16 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
