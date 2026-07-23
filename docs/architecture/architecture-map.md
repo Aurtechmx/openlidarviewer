@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 7,521 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 7,510 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -96,7 +96,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (7,521)** — the largest blocks, which are the extraction
+**`src/main.ts` (7,510)** — the largest blocks, which are the extraction
 candidates:
 
 | Block | ~Lines | Extraction target |

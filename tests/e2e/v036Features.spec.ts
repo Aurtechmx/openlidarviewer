@@ -87,16 +87,18 @@ test('empty state shows three capture-kind chips with their labels', async ({
   await page.goto('/');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
 
-  // Three chips: Drone LiDAR · iPhone scans · Terrestrial laser.
+  // The chips live inside the compatible-data disclosure now — open it
+  // first, then expect the three acquisition kinds.
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await expect(page.locator('.olv-capture-chip')).toHaveCount(3);
   await expect(
-    page.locator('.olv-capture-chip', { hasText: 'Drone LiDAR' }),
+    page.locator('.olv-capture-chip', { hasText: 'Aerial LiDAR' }),
   ).toBeVisible();
   await expect(
-    page.locator('.olv-capture-chip', { hasText: 'iPhone scans' }),
+    page.locator('.olv-capture-chip', { hasText: 'Mobile LiDAR' }),
   ).toBeVisible();
   await expect(
-    page.locator('.olv-capture-chip', { hasText: 'Terrestrial laser' }),
+    page.locator('.olv-capture-chip', { hasText: 'Terrestrial scanning' }),
   ).toBeVisible();
 });
 

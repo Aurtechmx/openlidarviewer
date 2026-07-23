@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { SOURCE_FORMATS } from '../io/sniffFormat';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
@@ -57,6 +58,12 @@ export interface StageOptions {
    * opens the format converter without loading a scan into the 3D view.
    */
   onBatchConvert?: () => void;
+  /**
+   * Starts the onboarding tour. The tour used to auto-open on first visit,
+   * which put a modal over the product before the visitor had seen anything;
+   * it is now launched only from this quiet chip near the CTA.
+   */
+  onStartTour?: () => void;
   /**
    * Optional ready-made DOM node that the empty state mounts as the
    * verified-public-LiDAR-dataset picker. Built by main.ts so the
@@ -292,25 +299,35 @@ export class Stage {
     // mobile variant leads with the pick-from-device action.
     const mobile = isMobileDevice();
     // Hero: the official brand mark (public/brand-mark.svg, via <img> —
-    // the delivered logo asset, mark-only crop) above the text wordmark.
-    // The text stays as real text (not the asset's near-white raster
-    // wordmark band) so it remains legible on the light theme and to
-    // screen readers; the image itself is decorative (alt="").
+    // the delivered logo asset, mark-only crop). The product name already
+    // reads in the top-left nav wordmark; repeating it here made the hero
+    // carry the brand twice before saying anything, so the mark stands
+    // alone and the headline below is the first text. The image itself is
+    // decorative (alt="").
     const heroMark = el('div', { className: 'olv-empty-hero' }, [
       brandMarkImg('olv-empty-hero-mark'),
-      el('span', { className: 'olv-empty-hero-text', text: 'OpenLiDARViewer' }),
     ]);
-    const title = el('h1', { className: 'olv-empty-title', text: 'Open a scan' });
+    const eyebrow = el('div', {
+      className: 'olv-empty-eyebrow',
+      text: 'Browser-native point-cloud workspace',
+    });
+    const title = el('h1', {
+      className: 'olv-empty-title',
+      text: 'Inspect LiDAR and 3D scans in your browser',
+    });
     // v0.3.6 desktop-audit fix: one consolidated trust line. Replaces three
     // separate "verified at release time" / "verified at build time" / CORS
     // helper paragraphs that previously stacked across the empty state. The
     // privacy posture is the single most important first-paint signal — give
     // it one home, then let the actions speak for themselves.
+    // Precision over punch: "Nothing leaves your device" was not quite true
+    // of a product that can stream remote COPC when asked to. Say exactly
+    // what holds: local files stay local; remote data moves only on request.
     const sub = el('p', {
       className: 'olv-empty-sub',
       text: mobile
-        ? 'Pick a file. Nothing leaves your device.'
-        : 'Drag a file onto the page, or pick one below. Nothing leaves your device.',
+        ? 'Open, measure, and analyse a scan. Local files stay on this device.'
+        : 'Drag a file onto the page or open one below. Local files stay on this device; remote datasets stream only when you select them.',
     });
 
     // Top-of-empty-state status banner — used for offline (E4) and for the
@@ -343,23 +360,15 @@ export class Stage {
       if (file) void this._approveFile(file).then((ok) => { if (ok) options.onOpenFile?.(file); });
       fileInput.value = ''; // let the same file be re-picked
     });
-    // Item 12: idle CTA pulse — a CSS-only animation class kicks in 4 s
-    // after the empty state mounts and fades out as soon as the user hovers
-    // / focuses / scrolls the page. The class is only ever added once.
+    // No idle pulse: an instrument is still until you touch it. The CTA's
+    // size, colour and position carry the affordance on their own.
     const openButton = el('button', {
-      className: 'olv-open-btn olv-cta-pulse',
+      className: 'olv-open-btn',
       type: 'button',
       text: 'Open scan from device',
       title: 'Choose a point-cloud file from your device — or drag one onto the page',
     });
     openButton.addEventListener('click', () => fileInput.click());
-    // Suppress the pulse on first interaction anywhere — the affordance
-    // has done its job once the user touches the page.
-    const stopPulse = () => openButton.classList.remove('olv-cta-pulse');
-    openButton.addEventListener('pointerdown', stopPulse, { once: true });
-    if (typeof window !== 'undefined') {
-      window.addEventListener('scroll', stopPulse, { once: true, passive: true });
-    }
 
     // "Try a sample scan" — the zero-friction demo path, promoted from the
     // Explore card below the fold to a ghost button directly under the
@@ -373,7 +382,7 @@ export class Stage {
       ? el('button', {
           className: 'olv-try-sample',
           type: 'button',
-          text: `No file handy? Try a sample scan — ${demoSample.label}`,
+          text: `Launch a sample dataset — ${demoSample.label}`,
           title: `Open ${demoSample.label.toLowerCase()} — streams over your network, nothing uploaded`,
         })
       : null;
@@ -387,14 +396,17 @@ export class Stage {
 
     // Item 5: format list collapses to a one-line summary with a tap-to-
     // expand. Reads cleanly on mobile instead of a wall of 10 extensions.
+    // Both lines are generated from the sniffer's own registry, never typed:
+    // the hand-maintained version said "10 formats" beside an 11-format
+    // sniffer and silently omitted .xyz from the list.
     const formats = el('details', { className: 'olv-empty-formats' });
     const formatsSummary = el('summary', {
       className: 'olv-empty-formats-summary',
-      text: 'Supports 10 formats including .las, .laz, .ply',
+      text: `Compatible data — ${SOURCE_FORMATS.length} formats including .las, .laz, .e57`,
     });
     const formatsFull = el('p', {
       className: 'olv-empty-formats-full',
-      text: '.las · .laz · .ply · .obj · .glb · .gltf · .pcd · .pts · .ptx · .e57',
+      text: SOURCE_FORMATS.map((f) => `.${f}`).join(' · '),
     });
     formats.append(formatsSummary, formatsFull);
     // Three capture-type chips with monoline icons. Visual-hierarchy
@@ -416,7 +428,7 @@ export class Stage {
 <line x1="4.5" y1="4.5" x2="11.5" y2="11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <line x1="11.5" y1="4.5" x2="4.5" y2="11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>`,
-        label: 'Drone LiDAR',
+        label: 'Aerial LiDAR',
       },
       {
         // iPhone: rounded body, screen rim, speaker slit + home indicator.
@@ -424,7 +436,7 @@ export class Stage {
 <rect x="4" y="1" width="8" height="14" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/>
 <rect x="6.6" y="2.4" width="2.8" height="0.7" rx="0.35" fill="currentColor"/>
 <rect x="6" y="12.6" width="4" height="0.6" rx="0.3" fill="currentColor" opacity="0.55"/></svg>`,
-        label: 'iPhone scans',
+        label: 'Mobile LiDAR',
       },
       {
         // Terrestrial laser scanner on tripod: scanner body + 3-leg tripod.
@@ -435,13 +447,18 @@ export class Stage {
 <line x1="8" y1="8.6" x2="4" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <line x1="8" y1="8.6" x2="12" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <line x1="8" y1="8.6" x2="8" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
-        label: 'Terrestrial laser',
+        label: 'Terrestrial scanning',
       },
     ];
+    const CHIP_TITLES: Readonly<Record<string, string>> = {
+      'Aerial LiDAR': 'Drone and aircraft LiDAR surveys',
+      'Mobile LiDAR': 'iPhone, iPad and handheld scanner captures',
+      'Terrestrial scanning': 'Tripod-mounted terrestrial laser scanners',
+    };
     for (const k of KINDS) {
       const chip = el('span', {
         className: 'olv-capture-chip',
-        title: `Open a scan from a ${k.label.toLowerCase()} capture`,
+        title: CHIP_TITLES[k.label] ?? k.label,
       });
       // Wrap the inline SVG in its own span so we can target it
       // independently in CSS without parsing the SVG namespace.
@@ -449,6 +466,10 @@ export class Stage {
       chip.append(iconWrap, el('span', { text: k.label }));
       captureKinds.append(chip);
     }
+    // The chips live INSIDE the compatible-data disclosure: what capture
+    // kinds this opens is the same question as what formats it opens, and
+    // neither deserves a high-priority row on the launch surface.
+    formats.append(captureKinds);
 
     // ── "Explore public LiDAR" — one bounded card grouping the location
     // dropdown, the location search (inside the catalog panel), and the
@@ -483,87 +504,36 @@ export class Stage {
     // so it clusters with the curated dropdown.
     const urlRow = this._buildUrlRow(options);
 
-    // ── Get-Started workflow stepper ─────────────────────────────────────
-    // A four-step vertical timeline that previews the workflow before the
-    // user opens a scan. The active step pulses ("you are here"); the
-    // others read as muted previews of what comes next. Pattern lifted
-    // from an instrument-style screening tool and adapted to the existing
-    // calibrated palette. Listed BEFORE the open button so the first
-    // signal a visitor reads is "here's the shape of the work you're
-    // about to do", not "click this button".
-    const stepsEyebrow = el('div', {
-      className: 'olv-getstarted-eyebrow',
-      text: 'Get started',
-    });
-    type GsStep = { id: string; title: string; sub: string };
-    const GS_STEPS: ReadonlyArray<GsStep> = [
-      { id: 'open', title: 'Open a scan', sub: 'Drag a file in or pick one below' },
-      { id: 'move', title: 'Move around', sub: 'Orbit, walk, or fly through the cloud' },
-      { id: 'inspect', title: 'Inspect or measure', sub: 'Coordinates, distance, area, volume' },
-      { id: 'export', title: 'Export or share', sub: 'Image, PDF report, or share link' },
+    // ── Workflow rail ────────────────────────────────────────────────────
+    // The four-step "Get started" stepper is now a compact one-line rail:
+    // small numerals, short labels, a hairline connector, no interaction.
+    // The old vertical timeline read as a tutorial and owned the space
+    // between the headline and the CTA; worse, its "interactive" first step
+    // focused the remote-URL input — the wrong target for "Open a scan".
+    // The rail states the shape of the work and then gets out of the way.
+    const RAIL_STEPS: ReadonlyArray<string> = [
+      'Open a scan',
+      'Move around',
+      'Inspect or measure',
+      'Export or share',
     ];
-    const stepsList = el('ol', { className: 'olv-getstarted-steps' });
-    for (let i = 0; i < GS_STEPS.length; i++) {
-      const s = GS_STEPS[i];
-      const li = el('li', { className: 'olv-getstarted-step' });
-      li.dataset.step = s.id;
-      // First step is the active "you are here" — others are muted previews.
-      // `aria-current="step"` lets screen readers announce it as the current
-      // step in the workflow instead of just another list item.
-      //
-      // v0.3.10 — the active step pulses (`olv-getstarted-pulse`
-      // animation) and is announced as "current step" by screen readers,
-      // which sets an expectation of interactivity. Wiring step 1 to focus
-      // the URL-open input + adding `role="button"` and a keyboard handler
-      // turns that visual promise into a real affordance. Steps 2-4 stay
-      // non-interactive on purpose — they are a journey preview that only
-      // becomes possible after a scan loads, so they correctly read as
-      // muted descriptive list items with no `cursor: pointer` and no
-      // hover state in CSS.
+    const stepsList = el('ol', { className: 'olv-rail' });
+    for (let i = 0; i < RAIL_STEPS.length; i++) {
+      const li = el('li', { className: 'olv-rail-step' });
       if (i === 0) {
-        li.classList.add('olv-getstarted-step-active');
+        li.classList.add('olv-rail-step-active');
         li.setAttribute('aria-current', 'step');
-        li.setAttribute('role', 'button');
-        li.tabIndex = 0;
-        li.setAttribute(
-          'aria-label',
-          `${s.title}. ${s.sub}. Activate to focus the open-from-URL input.`,
-        );
-        const focusOpen = (): void => {
-          // Prefer the URL input if it's available (rendered). Otherwise
-          // fall back to the file picker — both fulfil "Open a scan".
-          const target =
-            this._urlInput ??
-            (this.root.querySelector('.olv-open-btn') as
-              | HTMLButtonElement
-              | null);
-          if (target) {
-            target.focus({ preventScroll: false });
-            // The URL input is hidden behind a section label on mobile;
-            // bring it into view so the focus actually shows.
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        };
-        li.addEventListener('click', focusOpen);
-        li.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            focusOpen();
-          }
-        });
       }
-      const dot = el('span', { className: 'olv-getstarted-dot', text: String(i + 1) });
-      const body = el('div', { className: 'olv-getstarted-body' }, [
-        el('b', { className: 'olv-getstarted-title', text: s.title }),
-        el('em', { className: 'olv-getstarted-sub', text: s.sub }),
-      ]);
-      li.append(dot, body);
+      li.append(
+        el('span', { className: 'olv-rail-num', text: String(i + 1).padStart(2, '0') }),
+        el('span', { className: 'olv-rail-label', text: RAIL_STEPS[i] }),
+      );
       stepsList.append(li);
     }
-    const getStarted = el('section', {
+    const getStarted = el('nav', {
       className: 'olv-getstarted',
-      ariaLabel: 'Get started — workflow steps',
-    }, [stepsEyebrow, stepsList]);
+      ariaLabel: 'Workflow: open, move, measure, export',
+    }, [stepsList]);
 
     // Convert: a small peer chip beside the primary "Open scan from device"
     // button (promoted from a buried text link). Clicking it opens the batch
@@ -586,18 +556,38 @@ export class Stage {
     if (options.catalogPanel) exploreCard.append(options.catalogPanel);
     exploreCard.append(samples);
 
+    // The tour is offered, never imposed: it used to auto-open on first
+    // visit, covering the product with a modal before the visitor had seen
+    // anything. The feature survives as this quiet chip.
+    const tourChip = options.onStartTour
+      ? el('button', {
+          className: 'olv-tour-chip',
+          type: 'button',
+          text: 'Take the 30-second tour',
+          title: 'A quick guided tour of the main tools',
+        })
+      : null;
+    if (tourChip) tourChip.addEventListener('click', () => options.onStartTour?.());
+
+    // One line for the claims the product actually stakes its identity on.
+    const trustStrip = el('div', {
+      className: 'olv-trust-strip',
+      text: 'Local processing · No account · WebGPU / WebGL 2 · Open source',
+    });
+
+    // Order is the hierarchy: identity → primary action → workflow shape →
+    // trust → compatibility disclosures → alternative data sources.
     const children: (Node | string)[] = [
       this._statusBanner,
       heroMark,
+      eyebrow,
       title,
       sub,
-      getStarted,
       openButton,
     ];
     if (tryButton) children.push(tryButton);
-    children.push(fileInput, formats, captureKinds);
-    // Convert sits with the capture-type chips — it's the "or work with files"
-    // companion to "what kinds of scans this opens".
+    if (tourChip) children.push(tourChip);
+    children.push(fileInput, getStarted, trustStrip, formats);
     if (options.onBatchConvert) children.push(convertChip);
     children.push(
       exploreCard,
@@ -620,9 +610,15 @@ export class Stage {
       className: 'olv-url-label olv-empty-section-label',
       text: 'Open from URL',
     });
-    const bullets = el('ul', { className: 'olv-url-rules' }, [
-      el('li', { text: 'File must be in COPC format (.copc.laz)' }),
-      el('li', { text: 'Server must allow CORS range requests' }),
+    // Connection requirements are real constraints, but stating them before
+    // the input made the section shout protocol at every visitor. They fold
+    // into a disclosure the person who actually needs them will open.
+    const bullets = el('details', { className: 'olv-url-reqs' }, [
+      el('summary', { className: 'olv-url-reqs-summary', text: 'Connection requirements' }),
+      el('ul', { className: 'olv-url-rules' }, [
+        el('li', { text: 'File must be in COPC format (.copc.laz)' }),
+        el('li', { text: 'Server must allow CORS range requests' }),
+      ]),
     ]);
 
     const input = el('input', {

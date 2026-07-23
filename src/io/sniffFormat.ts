@@ -23,6 +23,33 @@ export type DetectedFormat =
 export type SourceFormat = Exclude<DetectedFormat, 'unknown'>;
 
 /**
+ * Every loadable format, as a value — THE registry the UI's "supported
+ * formats" copy is generated from. The splash used to hand-maintain a
+ * "Supports 10 formats" line beside this 11-entry type, and it drifted
+ * exactly as a typed number does: the visible list omitted `.xyz`. The
+ * `satisfies` + the exhaustiveness assertion below make that impossible —
+ * adding a format to `DetectedFormat` without listing it here is a type
+ * error, so the UI count can never disagree with what the sniffer accepts.
+ * Order is display order: survey point clouds first, then mesh formats.
+ */
+export const SOURCE_FORMATS = [
+  'las',
+  'laz',
+  'e57',
+  'xyz',
+  'pcd',
+  'ptx',
+  'pts',
+  'ply',
+  'obj',
+  'glb',
+  'gltf',
+] as const satisfies readonly SourceFormat[];
+type _EveryFormatListed = SourceFormat extends (typeof SOURCE_FORMATS)[number] ? true : never;
+const _sourceFormatsExhaustive: _EveryFormatListed = true;
+void _sourceFormatsExhaustive;
+
+/**
  * Whether a format's native coordinate frame is Z-up. Survey and scanner
  * formats — LAS, LAZ, XYZ, E57, and PCD — are Z-up; phone-scan mesh formats
  * (PLY, OBJ, GLB/GLTF) are Y-up. Shared by the renderer and the session
