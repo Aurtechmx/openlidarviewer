@@ -91,5 +91,5 @@ full asset set and how the hash chain closes.
 - Four e2e specs skip when the optional autzen COPC fixture is not on disk — that is a conditional skip, not a failure.
 - The e2e suite is split into two Playwright projects. `deterministic` blocks; `gpu` (specs tagged `@gpu`) is advisory because its result depends on the WebGPU adapter a runner exposes. An untagged spec lands in the blocking project.
 - `npm run coverage` excludes `tests/terrainRunnerDensityWiring.test.ts` — under v8 instrumentation each of its cases takes about 75 s. It still runs in the release buckets, so nothing goes unexercised; only the coverage measurement omits it.
-- The coverage and mutation figures are produced locally and are **not** retained as CI artifacts in this release. Treat them as reproducible measurements, not preserved evidence.
+- Coverage and mutation run as blocking stages of the release-mode gate; their output ships inside `gate.log` and the attached evidence records each stage. Ordinary branch CI runs neither, so between releases treat the figures as reproducible measurements rather than preserved evidence.
 - Browser-observable behaviour (streaming visuals, GPU paths) is exercised by the e2e suite; a green GitHub Actions run on the tagged commit is the gating browser evidence for publication.
