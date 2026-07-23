@@ -282,7 +282,7 @@ export function detectRooms(
       // The kept rooms cover only a sliver of the floor — NOT a real schedule.
       // WHY: on a leaking open plan the open floor floods to the exterior, so
       // the only enclosed regions are micro-pockets between wall fragments
-      // (the user's 96 m² floor / 8.3 m² of pockets). Numbering those "Room
+      // (a 96 m² floor with 8.3 m² of pockets). Numbering those "Room
       // 1..5" fabricates partitions. If ONE enclosed region nonetheless
       // dominates the floor (≥ OPEN_SPACE_MIN_FRAC), the interior is
       // essentially one connected space → present "Open space"; otherwise the

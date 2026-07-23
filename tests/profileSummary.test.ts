@@ -314,7 +314,7 @@ describe('profileStationRows (v0.4.5, B5 — shared row model)', () => {
  * display boundary that applies the unit factor, so every printing surface
  * gets it and storage stays rebaseable.
  *
- * The fixture is the user's real streaming COPC: a LAS header Z range of
+ * The fixture is a real streaming COPC case: a LAS header Z range of
  * 330.030 .. 467.150 rendered against an octree-cube origin 830.03 m up the
  * Z axis, so the panel was reading elevations of −481.103 and −411.865.
  */

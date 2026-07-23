@@ -195,7 +195,7 @@ describe('exportCloud + round-trip', () => {
 // honest channel-drop disclosure.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The declared source metadata of the user's sample file, abridged. */
+/** The declared source metadata of a real-world sample file, abridged. */
 function sampleSourceMetadata(): SourceMetadata {
   return {
     standard: [

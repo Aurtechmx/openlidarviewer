@@ -446,7 +446,7 @@ describe('extractFloorPlan — stair-step wall straightened', () => {
 });
 
 describe('extent reconciliation — plan, clip bbox, and the Space panel agree', () => {
-  // The exact failure from the user's sheet: plan said 12.9 × 15.0 m while
+  // Regression case reproducing an observed sheet-layout failure: plan said 12.9 × 15.0 m while
   // the Space panel said 24.72 × 13.76 m — the panel's PCA footprint was
   // inflated by 360 noise arms the plan had clipped. Both now clip with the
   // same dense-footprint rule.

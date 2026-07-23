@@ -616,7 +616,7 @@ Fixed (Engineering Inspection PDF):
 
 ### Point-cloud export correctness and provenance (verified against real user exports)
 
-A user's actual CSV/OBJ exports of a metadata-rich E57 exposed one
+Real-world CSV/OBJ exports of a metadata-rich E57 exposed one
 data-destroying defect and two disclosure gaps, all fixed here:
 
 Data correctness:
@@ -1997,7 +1997,7 @@ onboarding tour.
   A realism pass (`floorplan/regularize.ts`) then makes the honest trace
   READ like a floor plan: compact off-wall islands in the wall mask —
   furniture, shelving, plants caught by the wall-height band (43 of the 70
-  poché subpaths on the user's real 360 sheet) — are lifted out of the wall
+  poché subpaths on a real 360 sheet) — are lifted out of the wall
   poché and drawn as light grey room-contents hints (the architectural
   convention; toggleable, and the sheet says so), with near-wall fragments
   kept as walls so a jamb return severed by a door gap is never erased;

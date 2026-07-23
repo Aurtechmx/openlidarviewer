@@ -417,7 +417,7 @@ describe('extractFloorPlan — sparse strided gather (the 360 multi-room case)',
 describe('extractFloorPlan — 360 noise arm (outlier tail)', () => {
   // A dense 10 × 8 room plus a sparse 20 m arm of stray returns trailing
   // east — the classic 360-scanner tail. Pre-fix the arm inflated the slice
-  // bbox (the user's sheet claimed 14 × 25 m for a ~14 × 10 m interior).
+  // bbox (an observed sheet claimed 14 × 25 m for a ~14 × 10 m interior).
   function roomWithArm(): Float32Array {
     const base = rectRoom({});
     const rnd = lcg(1234);

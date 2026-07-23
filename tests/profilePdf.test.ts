@@ -154,7 +154,7 @@ describe('unit system (v0.4.5, B9) — the sheet honours the active toggle end-t
 
 describe('the sheet prints the same source elevations as the panel', () => {
   it('the extremes row matches profileSummaryRows verbatim', async () => {
-    // The user's real streaming COPC: heights stored render-local against an
+    // Regression fixture from a real streaming COPC case: heights stored render-local against an
     // octree-cube origin 830.03 m up the Z axis. Both surfaces are fed from
     // the datum seam, exactly as the controller feeds them, and both are
     // asked for the same row model — so a reviewer checking the sheet against

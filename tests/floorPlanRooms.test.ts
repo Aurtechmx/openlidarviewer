@@ -263,7 +263,7 @@ describe('detectRooms — architectural min-room-area floor (ROOM_MIN_AREA_M2)',
 
 describe('detectRooms — coverage guard (open-space vs unsegmented)', () => {
   /**
-   * The user's real-sheet pathology, in miniature: a large open floor whose
+   * A real-world sheet pathology, in miniature: a large open floor whose
    * boundary LEAKS to the grid border (one wall run missing), so the flood
    * classifies the whole interior as exterior and the only enclosed regions
    * are tiny pockets between wall fragments. With a real floor area supplied,

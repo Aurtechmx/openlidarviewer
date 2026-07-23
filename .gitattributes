@@ -35,6 +35,16 @@ READINESS_REPORT_*.md export-ignore
 # AI_ASSISTANCE all link to. It is load-bearing evidence, not clutter.
 VALIDATION_REPORT_v0.6.0-alpha.1.md export-ignore
 REPRODUCIBILITY_v0.6.0-alpha.1.md export-ignore
+# The scholarly archive carries exactly one truth-document set — the shipped
+# version's. Every prerelease notes/limitations/reproducibility/validation
+# file stays in git history and on GitHub, but out of the deposit, so a
+# researcher is never unsure which evidence applies to v0.6.0 (and the alpha.2
+# validation report's link into docs/_audit/, itself export-ignored, cannot
+# dangle in the archive).
+RELEASE_NOTES_v0.6.0-alpha.*.md export-ignore
+KNOWN_LIMITATIONS_v0.6.0-alpha.*.md export-ignore
+REPRODUCIBILITY_v0.6.0-alpha.*.md export-ignore
+VALIDATION_REPORT_v0.6.0-alpha.*.md export-ignore
 
 # Release planning: goals, baselines and sequencing for a cut. Same class as
 # a readiness report - what we intend to do and why, not what the release is.
