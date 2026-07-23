@@ -86,12 +86,26 @@ if [ "$OVERALL" -ne 0 ]; then
 fi
 
 if [ "$MODE" = "release" ]; then
+  # The docsBuild stage re-renders docs-site/validation/claim-register.generated.md,
+  # a tracked file. The render is deterministic and a drift test inside
+  # staticGate asserts the committed copy already byte-equals it, so the tree
+  # stays clean in practice. "In practice" is not an invariant, so assert it:
+  # a future nondeterministic render fails HERE, in the same run that caused
+  # it, for local runs and CI alike.
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [ -n "$(git status --porcelain)" ]; then
+      echo "Release gate refused: the run left the working tree dirty:" >&2
+      git status --porcelain >&2
+      echo "A release gate must leave the checkout byte-identical; packaging would reject it anyway." >&2
+      exit 1
+    fi
+  fi
   node scripts/collect-evidence.mjs \
     --mode release \
     --gate-log "$LOG" \
     --gate-exit 0 \
     --output "release/test-evidence-v${VERSION}.json" || exit 1
-  echo "Release evidence written to release/test-evidence-v${VERSION}.json; tracked files untouched."
+  echo "Release evidence written to release/test-evidence-v${VERSION}.json; the tracked tree is byte-identical."
 else
   node scripts/collect-evidence.mjs "$LOG" 0 || exit 1
   echo "Evidence regenerated from this run."
