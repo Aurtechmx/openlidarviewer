@@ -48,6 +48,7 @@ const SOURCE_REQUIRED = [
   'DEPENDENCIES.md',
   'THIRD_PARTY_NOTICES.md',
   'docs/validation/claim-register.yaml',
+  'docs/release/RELEASE_ASSETS.md',
   'tests/fixtures/reference/slope/SHA256SUMS',
 ];
 

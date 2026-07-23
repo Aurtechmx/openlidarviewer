@@ -1,7 +1,12 @@
 # Exclude generated release artifacts from `git archive` source exports.
 # The release/ tree is npm-run-package output (checksums, manifest, deploy/
 # source zips); it must never ship inside the source zip.
-release/ export-ignore
+/release/ export-ignore
+# Anchored, and docs/release/ explicitly re-included. The unanchored form also
+# matched docs/release/, so RELEASE_ASSETS.md — documentation whose whole job is
+# to tell a reviewer how to verify the release — was stripped from the very
+# archive it ships in.
+docs/release/** -export-ignore
 
 # Exclude internal engineering docs (version-pinned plans, phase audits, PR
 # writeups) from `git archive` source exports. They stay tracked for developers
