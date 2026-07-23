@@ -74,11 +74,11 @@ full asset set and how the hash chain closes.
 
 | Reported figure | Command |
 |---|---|
-| unit 3,132 (16 skipped) · export 616 · terrain 1,240 · ui 429 · slow 517 — 5,934 passed / 16 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
+| unit 3,132 (16 skipped) · export 616 · terrain 1,240 · ui 429 · slow 517 — 5,950 passed / 16 skipped | `npm run test:unit` / `test:export` / `test:terrain` / `test:ui` / `test:slow` (the large buckets run sub-sharded — unit ×3, terrain ×2, slow ×2 — so a run prints per-shard totals that sum to the figures above) |
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
-| Live entry 717 KiB (within the 720 KiB ceiling, 3 KiB of headroom, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
+| Live entry 718 KiB (within the 720 KiB ceiling, 3 KiB of headroom, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
 | Coverage — lines 91.04 / statements 89.64 / functions 88.21 / branches 83.37 | `npm run coverage` (also a blocking stage of the release-mode gate; read the current figures from the coverage stage of `release/gate.log` rather than trusting this row) |
 | Mutation score 87.23 % over the numeric core | `npm run mutation` |
 | Documentation build | `npm run docs:build` |
