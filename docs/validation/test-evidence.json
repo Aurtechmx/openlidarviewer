@@ -5,9 +5,9 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "faaefad54046250f6491f711f1883bc5c1fd9348",
+  "commit": "a8bc1d730640016377d8e228d01add889f9d47d5",
   "repository": null,
-  "generatedAt": "2026-07-23T15:21:15.519Z",
+  "generatedAt": "2026-07-23T15:42:10.279Z",
   "nodeVersion": "v22.17.1",
   "npmVersion": "10.9.2",
   "platform": "darwin-arm64",
@@ -17,13 +17,13 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "468f286f130ab8d4622ee52878e6895d934d124dbd3f48a947369558e649f6eb",
+  "gateLogSha256": "2b6094e3e910373d5e984575b2f196152568e10a02a5bbaefeb27128c30a7eb2",
   "stages": {
     "staticGate": "passed"
   },
   "buckets": {
     "unit": {
-      "passed": 3099,
+      "passed": 3089,
       "skipped": 16,
       "runs": 3
     },
@@ -49,11 +49,11 @@
     }
   },
   "total": {
-    "passed": 5901,
+    "passed": 5891,
     "skipped": 16
   },
   "bundle": {
-    "liveEntryKiB": 714,
+    "liveEntryKiB": 713,
     "ceilingKiB": 720
   },
   "packageLockSha256": "d3729549ec5fb55b7af829994bd46e30f9b23a168efeb2cbb5aba1faf3094700",
