@@ -43,17 +43,21 @@ export class CopcSource {
   private readonly _metadata: CopcMetadata;
   private readonly _cube: OctreeCube;
   private readonly _rootPage: HierarchyPage;
+  /** Total file size, for refusing hierarchy ranges that point past EOF. */
+  private readonly _size: number;
 
   private constructor(
     range: RangeSource,
     metadata: CopcMetadata,
     cube: OctreeCube,
     rootPage: HierarchyPage,
+    size: number,
   ) {
     this._range = range;
     this._metadata = metadata;
     this._cube = cube;
     this._rootPage = rootPage;
+    this._size = size;
   }
 
   /**
@@ -79,6 +83,18 @@ export class CopcSource {
       halfsize: metadata.info.halfsize,
     };
 
+    // A range source clamps a read that runs past EOF to the bytes present, so
+    // a truncated file would otherwise be parsed silently short and fail far
+    // downstream. Refuse it here, where the failure can be named.
+    if (metadata.info.rootHierOffset + metadata.info.rootHierSize > size) {
+      throw new LoadError(
+        'malformed-file',
+        `COPC root hierarchy (offset ${metadata.info.rootHierOffset}, ` +
+          `${metadata.info.rootHierSize} bytes) runs past the end of the file ` +
+          `(${size} bytes) — the file appears truncated.`,
+      );
+    }
+
     const rootBuffer = await range.readRange(
       metadata.info.rootHierOffset,
       metadata.info.rootHierSize,
@@ -86,7 +102,7 @@ export class CopcSource {
     );
     const rootPage = parseHierarchyPage(rootBuffer, cube, metadata.info.spacing);
 
-    return new CopcSource(range, metadata, cube, rootPage);
+    return new CopcSource(range, metadata, cube, rootPage, size);
   }
 
   /** The parsed COPC metadata — LAS header facts and the `info` VLR. */
@@ -116,12 +132,30 @@ export class CopcSource {
 
   /** Load and parse a child hierarchy page referenced from a parent page. */
   async loadChildPage(ref: ChildPageRef, signal?: AbortSignal): Promise<HierarchyPage> {
+    if (ref.pageOffset + ref.pageSize > this._size) {
+      throw new LoadError(
+        'malformed-file',
+        `COPC child hierarchy page (offset ${ref.pageOffset}, ${ref.pageSize} bytes) ` +
+          `points past the end of the file (${this._size} bytes) — the file appears truncated.`,
+      );
+    }
     const buffer = await this._range.readRange(ref.pageOffset, ref.pageSize, signal);
     return parseHierarchyPage(buffer, this._cube, this._metadata.info.spacing);
   }
 
   /** Read a node's compressed LAZ chunk bytes — a single partial read. */
-  readNodeChunk(node: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> {
+  async readNodeChunk(node: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> {
+    // A hierarchy entry can be well-formed in isolation yet point outside the
+    // file; the range source would clamp the read and hand the decoder a short
+    // (or empty) buffer. Refuse the truncated node range with its name instead.
+    if (node.byteOffset + node.byteSize > this._size) {
+      throw new LoadError(
+        'malformed-file',
+        `COPC hierarchy entry for node ${node.id} (offset ${node.byteOffset}, ` +
+          `${node.byteSize} bytes) points past the end of the file (${this._size} bytes) — ` +
+          `the file appears truncated.`,
+      );
+    }
     return this._range.readRange(node.byteOffset, node.byteSize, signal);
   }
 
