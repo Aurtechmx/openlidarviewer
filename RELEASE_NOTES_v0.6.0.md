@@ -138,7 +138,10 @@ The asset set and hash chain are documented in
 
 ## Citing
 
-Metadata in `CITATION.cff` and `.zenodo.json`.
+Metadata in `CITATION.cff` and `.zenodo.json`
+(ORCID [0009-0007-3147-323X](https://orcid.org/0009-0007-3147-323X)).
+The author declares no competing interests; development is self-funded by
+Aurtech.
 
 * Version: 0.6.0
 * Release date: 2026-07-23
